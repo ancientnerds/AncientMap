@@ -113,6 +113,16 @@ def cmd_forward(module: str) -> Callable[[argparse.Namespace], tuple[int, Report
     return command
 
 
+def plan_line_sites(row: Mapping[str, Any], where: str) -> list[M.PlanSite]:
+    """The sites of one `PLAN4.jsonl` line, each read as a `PlanSite`; a line without a non-empty
+    `sites` list is refused (`where` names the line). `prepare` and `mass4.read_plan4` read a line
+    with this, before anything is written."""
+    sites = row.get("sites")
+    if not isinstance(sites, list) or not sites:
+        raise InputError(f"{where}: {row.get('batch_id')!r} carries no sites")
+    return [M.PlanSite.from_dict(site) for site in sites]
+
+
 def cmd_prepare(args: argparse.Namespace) -> tuple[int, Report]:
     """Copy one plan line to `<run>/<batch>/input.json`, write-once, after reading every site."""
     plan = Path(args.plan)
@@ -120,8 +130,7 @@ def cmd_prepare(args: argparse.Namespace) -> tuple[int, Report]:
     if len(lines) != 1:
         raise InputError(f"{plan}: {len(lines)} lines for {args.batch_id}, not one")
     batch = lines[0]
-    for site in batch.get("sites") or []:
-        M.PlanSite.from_dict(site)
+    plan_line_sites(batch, f"{plan} ({args.batch_id})")
     target = Path(args.run_dir) / args.batch_id / M.INPUT_FILE
     body = json.dumps(batch, ensure_ascii=False, sort_keys=True) + "\n"
     wrote = F.write_once(target, body.encode("utf-8"), source=f"{plan} ({args.batch_id})")

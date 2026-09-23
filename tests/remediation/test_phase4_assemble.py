@@ -10,6 +10,7 @@ which refuses a malformed record. Nothing here opens a socket or calls a model.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -349,6 +350,37 @@ def test_a_site_with_neither_a_selection_nor_a_hold_stops_the_batch(tmp_path: Pa
     batch_dir = _selected(tmp_path, [X.w_site("site-1")], {"site-1": GOOD})
     (batch_dir / B.SELECTIONS_FILE).write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="neither a selection nor a hold"):
+        A.assemble_batch(batch_dir)
+
+
+T_TEXT = "Le temple de pierre fut construit vers 2500 av. J.-C. par des paysans du village.\n"
+
+
+@pytest.mark.parametrize(
+    ("lane", "sources", "detail"),
+    [
+        (M.Lane.ZERO, {}, "site-1 is lane 0 and carries no hold"),
+        (
+            M.Lane.R,
+            {"R1": (X.page_doc("R1", "A page.", url="https://example.org/x"), "A page.")},
+            "site-1 (lane R) has no restatement",
+        ),
+        (
+            M.Lane.T,
+            {"T.fr": (X.wiki_doc("T.fr", T_TEXT, host="fr.wikipedia.org"), T_TEXT)},
+            "site-1 (lane T) has no translation",
+        ),
+    ],
+)
+def test_a_site_its_lane_stage_left_without_text_or_hold_stops_the_batch(
+    tmp_path: Path, lane: M.Lane, sources: dict, detail: str
+) -> None:
+    """Lane 0 is held by S1b, lane R's text is S3R's, lane T's is S3T's: a site that has neither
+    its text nor a hold means a stage did not finish, and assembling a smaller batch would hide it."""
+    setup = X.SiteSetup(site=X.plan_site("site-1"), lane=lane, sources=sources)
+    answers = {"site-1": "DESC: T.fr1\nCARD: T.fr1"} if lane is M.Lane.T else {}
+    batch_dir = _selected(tmp_path, [setup], answers)
+    with pytest.raises(ValueError, match=re.escape(detail)):
         A.assemble_batch(batch_dir)
 
 

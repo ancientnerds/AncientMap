@@ -165,6 +165,16 @@ def test_a_dash_pair_holding_a_semicolon_is_no_insertion() -> None:
     }
 
 
+def test_an_unspaced_dash_delimits_nothing() -> None:
+    """A range carries the space before its first dash; an unspaced dash has none to carry, and a
+    range from the letter before it would cut a word."""
+    assert _a_spans("The temple—the largest of its kind—stood on the hill above.") == set()
+
+
+def test_a_closing_parenthesis_before_its_opening_offers_nothing() -> None:
+    assert _spans("In 1900, the shrine) was added (later, on the hill top.") == {}
+
+
 def test_dashes_pair_in_order_and_an_odd_count_pairs_none() -> None:
     text = "The corridor – lined with limestone – rises gently – lined with granite – to its end."
     assert _a_spans(text) == {" – lined with limestone –", " – lined with granite –"}
@@ -338,6 +348,18 @@ def test_only_publishable_sentences_are_offered() -> None:
     long_one = "The temple " + "was very large and " * 30 + "old."
     text = f"Short one. The temple stands on the ridge above the sea. {long_one} and a fragment."
     sentences = S.split_source("W", text)
+    pool = S.candidate_pool(sentences, lane=M.Lane.W, names=["X"], text=text)
+    assert [S.sentence_text(text, s) for s in pool] == [
+        "The temple stands on the ridge above the sea."
+    ]
+
+
+def test_a_sentence_cut_at_an_initial_is_never_in_the_pool() -> None:
+    """Terminated and long enough, but `is_complete_sentence` refuses it: it ends on an initial."""
+    cut = "The finds were first published in a report by the excavator Kevin C."
+    text = f"The temple stands on the ridge above the sea.\n{cut}\n"
+    sentences = S.split_source("W", text)
+    assert cut in [S.sentence_text(text, s) for s in sentences]  # its own sentence
     pool = S.candidate_pool(sentences, lane=M.Lane.W, names=["X"], text=text)
     assert [S.sentence_text(text, s) for s in pool] == [
         "The temple stands on the ridge above the sea."

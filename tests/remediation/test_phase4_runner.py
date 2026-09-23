@@ -107,6 +107,48 @@ def test_prepare_refuses_a_malformed_plan_site(tmp_path: Path) -> None:
     assert not (tmp_path / "p4-0001" / M.INPUT_FILE).exists()  # refused before anything is written
 
 
+@pytest.mark.parametrize(
+    "line",
+    [{"batch_id": "p4-0001", "ordinal": 1}, {"batch_id": "p4-0001", "ordinal": 1, "sites": []}],
+)
+def test_prepare_refuses_a_plan_line_without_sites_before_writing(
+    tmp_path: Path, line: dict[str, Any]
+) -> None:
+    """Written first and refused after, the line would leave a write-once input.json that no
+    corrected plan line could replace (the review's R4)."""
+    plan = tmp_path / "PLAN4.jsonl"
+    plan.write_text(json.dumps(line) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="carries no sites"):
+        R4.main(
+            ["prepare", "--run-dir", str(tmp_path), "--batch-id", "p4-0001", "--plan", str(plan)]
+        )
+    assert not (tmp_path / "p4-0001" / M.INPUT_FILE).exists()
+
+
+def test_prepare_needs_exactly_one_plan_line_for_its_batch(tmp_path: Path) -> None:
+    plan = _plan(tmp_path, [X.plan_site("site-1")])
+    run_dir = tmp_path / "runs" / "pilot"
+    line = plan.read_text(encoding="utf-8")
+    plan.write_text(line + line, encoding="utf-8")
+
+    def prepare(batch_id: str) -> None:
+        R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", batch_id, "--plan", str(plan)])
+
+    with pytest.raises(ValueError, match="2 lines for p4-0001, not one"):
+        prepare("p4-0001")
+    with pytest.raises(ValueError, match="0 lines for p4-0002, not one"):
+        prepare("p4-0002")
+    assert not run_dir.exists()
+
+
+def test_an_unknown_argument_is_refused_before_the_command_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        R4.main(["assemble", "--run-dir", str(tmp_path), "--batch-id", "p4-0001", "--bogus", "1"])
+    assert "unrecognized arguments: --bogus 1" in capsys.readouterr().err
+
+
 def test_a_batch_command_refuses_a_foreign_or_unprepared_batch(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="not a Phase-4 batch"):
         R4.main(["assemble", "--run-dir", str(tmp_path), "--batch-id", "batch-0001"])
@@ -312,6 +354,22 @@ def test_review_re_verifies_through_verify_site_with_the_contracts_arguments(
     assert call["new_raw_data"] == {"description_citations": [], "k": 1, "made_by": "write4"}
 
 
+def test_a_review_that_could_not_call_names_the_error_for_the_spawn_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    batch_dir = _selected_batch(tmp_path)
+    _fake(monkeypatch, R4.VERIFY4, verify_site=lambda site, assembly, **kw: ())
+    _fake(monkeypatch, R4.WRITE4, new_raw_data=lambda old, assembly: {})
+    failed = MS.ModelCallFailed("site-1/review: 'pi.cmd' could not be started: [WinError 2]")
+    monkeypatch.setattr(
+        R4, "pi_runner", lambda timeout: X.ScriptedRunner({("site-1", "review"): failed})
+    )
+    argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--live"]
+    code, report, out = _run(capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl")])
+    assert code != 0 and report["error"] == str(failed)
+    assert MR.spawn_failure(code, out)  # mass_run's own reader finds the error
+
+
 def test_holds4_is_every_batch_hold_once(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -345,6 +403,55 @@ def test_read_plan4_refuses_what_is_not_a_phase4_plan(tmp_path: Path) -> None:
         good.write_text(json.dumps(broken) + "\n", encoding="utf-8")
         with pytest.raises(ValueError, match=match):
             M4.read_plan4(good)
+
+
+def test_read_plan4_refuses_an_empty_plan_and_a_batch_id_twice(tmp_path: Path) -> None:
+    plan = tmp_path / "PLAN4.jsonl"
+    plan.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="no batches"):
+        M4.read_plan4(plan)
+    rows = [
+        {"batch_id": "p4-0001", "ordinal": number, "sites": [X.plan_site(site).to_dict()]}
+        for number, site in ((1, "s1"), (2, "s2"))
+    ]
+    plan.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    with pytest.raises(ValueError, match="a batch id appears twice"):
+        M4.read_plan4(plan)
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        (
+            ["--only", "p4-0001,p4-0009"],
+            r"--only names batches the plan does not have: \['p4-0009'\]",
+        ),
+        (["--jobs", "0"], "at least 1"),
+        (["--failures-before-stop", "0"], "at least 1"),
+    ],
+)
+def test_the_mass_driver_refuses_an_unknown_batch_and_a_count_below_one(
+    tmp_path: Path, extra: list[str], match: str
+) -> None:
+    plan = _plan(tmp_path, [X.plan_site("s1")])
+    argv = ["--plan", str(plan), "--run-dir", str(tmp_path / "runs" / "r")]
+    with pytest.raises(ValueError, match=match):
+        M4.main([*argv, "--ledger", str(tmp_path / "L.jsonl"), *extra])
+
+
+def test_a_site_neither_assembled_nor_held_is_not_done(tmp_path: Path) -> None:
+    """The review finished over its file, but the batch has a site that file does not carry and no
+    hold names: a stage dropped it silently, so the batch is not done."""
+    batch_dir = _reviewed(tmp_path)
+    run_dir = batch_dir.parent
+    assert M4.batch_done(run_dir, "p4-0001")[0] is True
+    payload = json.loads((batch_dir / M.INPUT_FILE).read_text(encoding="utf-8"))
+    payload["sites"].append(X.plan_site("site-2").to_dict())
+    (batch_dir / M.INPUT_FILE).write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    assert M4.batch_done(run_dir, "p4-0001") == (
+        False,
+        "1 site(s) neither written nor held, first site-2",
+    )
 
 
 def test_the_exit_line_is_the_last_one_printed() -> None:

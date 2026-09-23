@@ -71,15 +71,12 @@ def read_plan4(path: Path) -> list[MR.PlannedBatch]:
     for number, row in enumerate(read_jsonl(path), start=1):
         batch_id = row.get("batch_id")
         ordinal = row.get("ordinal")
-        sites = row.get("sites")
         if not isinstance(batch_id, str) or not batch_id.startswith(R4.BATCH_PREFIX):
             raise MR.PlanError(f"{path}:{number}: {batch_id!r} is not a Phase-4 batch id")
         if not isinstance(ordinal, int) or isinstance(ordinal, bool):
             raise MR.PlanError(f"{path}:{number}: {batch_id} carries no integer ordinal")
-        if not isinstance(sites, list) or not sites:
-            raise MR.PlanError(f"{path}:{number}: {batch_id} carries no sites")
-        for site in sites:
-            plan_site = M.PlanSite.from_dict(site)
+        sites = R4.plan_line_sites(row, f"{path}:{number}")
+        for plan_site in sites:
             if plan_site.site_id in site_ids:
                 raise MR.PlanError(f"{path}:{number}: {plan_site.site_id} is planned twice")
             site_ids.add(plan_site.site_id)

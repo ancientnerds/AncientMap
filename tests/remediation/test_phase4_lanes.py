@@ -167,6 +167,35 @@ def test_a_quote_is_located_across_case_spacing_and_quote_marks() -> None:
     assert RS.locate_quote("the mound was built", PAGE_ONE) is None
 
 
+@pytest.mark.parametrize("quote", ["", "   ", "  \n"])
+def test_an_empty_quote_is_located_nowhere(quote: str) -> None:
+    """An empty fold would be found at 0 and stretch to the page's end: the whole page pinned as
+    one quote."""
+    assert RS.locate_quote(quote, PAGE_ONE) is None
+
+
+#: Two more pairs beside RESTATED's three, quoting the pages where no other quote is.
+TWO_MORE = (
+    "S4: The page greets its visitors.\n"
+    f'Q4: {URL_ONE} - "Welcome to the heritage page."\n'
+    "S5: The notes are about the circle.\n"
+    f'Q5: {URL_TWO} - "Notes:"\n'
+)
+
+
+def test_four_pairs_are_read_and_five_are_refused(tmp_path: Path) -> None:
+    four = RESTATED + TWO_MORE.split("S5:")[0]
+    assert (
+        len(RS.parse_restatement(four, {URL_ONE: ("R1", PAGE_ONE), URL_TWO: ("R2", PAGE_TWO)})) == 4
+    )
+    batch_dir = X.make_batch(tmp_path, [_r_setup()])
+    runner = X.ScriptedRunner({("site-r", "restricted"): RESTATED + TWO_MORE})
+    assert RS.restricted_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
+    (hold,) = X.holds_of(batch_dir)
+    assert hold.reason is M.HoldReason.RESTATEMENT_REFUSED
+    assert "10 lines; the contract is 2-4 S/Q pairs" in hold.detail
+
+
 def test_every_restated_sentence_carries_its_quote_range(tmp_path: Path) -> None:
     batch_dir = X.make_batch(tmp_path, [_r_setup()])
     runner = X.ScriptedRunner({("site-r", "restricted"): RESTATED})

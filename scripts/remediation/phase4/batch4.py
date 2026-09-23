@@ -19,7 +19,6 @@ Rules every stage keeps through these helpers:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sys
@@ -37,7 +36,14 @@ from phase3 import model_stage as MS  # noqa: E402  - the model seam
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError, read_jsonl  # noqa: E402
 
+#: The file hash `review4.json` records over `assembly.jsonl`: Phase 3's own.
+from phase3.run import _sha256 as sha256_file  # noqa: E402
+
 from phase4 import model4 as M  # noqa: E402
+
+#: `input.json`, the one reader of every phase-4 stage: the batch id is the directory's name, the
+#: record Phase 3's single batch (`phase3.run._single_batch`), the sites `PlanSite`s, at least one.
+from phase4.sources_stage import read_batch  # noqa: E402
 
 #: Track B's own files in a batch directory.
 POOLS_FILE = "pools.jsonl"  #: the candidate pool each selector prompt showed
@@ -59,30 +65,7 @@ RESTRICTED_FIELD = "restricted"
 REVIEW_FIELD = "review"
 
 
-def sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 # ------------------------------------------------------------------------------------ the inputs
-
-
-def read_batch(batch_dir: Path) -> tuple[str, list[M.PlanSite]]:
-    """`input.json`: one `phase3.run.Batch` whose sites are `PlanSite` dicts (contracts, 4)."""
-    records = read_jsonl(batch_dir / M.INPUT_FILE)
-    if len(records) != 1:
-        raise InputError(f"{batch_dir}: input.json holds {len(records)} batches, not one")
-    batch = records[0]
-    batch_id = batch.get("batch_id")
-    if not isinstance(batch_id, str) or batch_id != batch_dir.name:
-        raise InputError(f"{batch_dir}: input.json is batch {batch_id!r}, not {batch_dir.name!r}")
-    sites = batch.get("sites")
-    if not isinstance(sites, list) or not sites:
-        raise InputError(f"{batch_dir}: input.json carries no sites")
-    return batch_id, [M.PlanSite.from_dict(site) for site in sites]
 
 
 def run_name(batch_dir: Path) -> str:
@@ -314,8 +297,8 @@ def buy(
     return Bought(
         text=judged.answer.text,
         label=call.label,
-        prompt_sha256=sha256_text(rendered),
-        answer_sha256=sha256_text(judged.answer.text),
+        prompt_sha256=M.text_sha256(rendered),
+        answer_sha256=M.text_sha256(judged.answer.text),
         cost_usd=judged.answer.cost_usd,
         wrote=judged.wrote,
     )

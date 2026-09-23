@@ -118,6 +118,9 @@ def test_a_card_that_is_not_kept_exactly_once_is_dropped() -> None:
         ("R1: KEEP because it is supported", True, "no contract shape"),
         ("r1: keep", True, "no contract shape"),
         ("R1: KEEP\nR5: KEEP", True, "R5 names no shown sentence"),
+        # the numbering starts at 1: R0 and a zero-padded R01 name no shown sentence
+        ("R0: KEEP\nR1: KEEP", True, "no contract shape"),
+        ("R01: KEEP", True, "no contract shape"),
         ("R1: KEEP\nCARD: KEEP", False, "no card was shown"),
     ],
 )

@@ -15,6 +15,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -204,7 +205,7 @@ def test_one_call_per_selecting_site_one_ledger_line_and_the_answer_on_disk(tmp_
     assert [s.sid for s in pools["site-s"][1]] == ["W6"]  # lane S: the name-bearing sentence only
     report = json.loads((batch_dir / B.SELECT_REPORT).read_text(encoding="utf-8"))
     assert report["error"] is None
-    assert report["sites"][0]["prompt_sha256"] == B.sha256_text(runner.calls[0].prompt)
+    assert report["sites"][0]["prompt_sha256"] == M.text_sha256(runner.calls[0].prompt)
 
 
 def test_a_resumed_stage_buys_nothing_and_writes_no_second_hold(tmp_path: Path) -> None:
@@ -317,6 +318,105 @@ def test_a_batch_without_its_lane_file_is_refused(tmp_path: Path) -> None:
     (batch_dir / M.LANES_FILE).write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="exactly one line per site"):
         SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=X.ScriptedRunner({}))
+
+
+def _write_input(batch_dir: Path, *rows: dict) -> None:
+    body = "".join(json.dumps(row) + "\n" for row in rows)
+    (batch_dir / M.INPUT_FILE).write_text(body, encoding="utf-8")
+
+
+def test_input_json_is_one_batch_of_its_own_directory_with_sites(tmp_path: Path) -> None:
+    """One reader for every phase-4 stage (Track A's, on `phase3.run._single_batch`)."""
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1")])
+    good = json.loads((batch_dir / M.INPUT_FILE).read_text(encoding="utf-8"))
+    assert B.read_batch(batch_dir)[0] == "p4-0001"
+    _write_input(batch_dir, good, good)
+    with pytest.raises(ValueError, match="expected exactly one batch, found 2"):
+        B.read_batch(batch_dir)
+    _write_input(batch_dir, {**good, "batch_id": "p4-0002"})
+    with pytest.raises(ValueError, match="holds batch 'p4-0002', not 'p4-0001'"):
+        B.read_batch(batch_dir)
+    for sites in ([], None):
+        _write_input(batch_dir, {**good, "sites": sites})
+        with pytest.raises(ValueError, match="carries no sites"):
+            B.read_batch(batch_dir)
+
+
+def test_a_lane_file_with_two_lines_for_one_site_is_refused(tmp_path: Path) -> None:
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1")])
+    line = (batch_dir / M.LANES_FILE).read_text(encoding="utf-8")
+    (batch_dir / M.LANES_FILE).write_text(line + line, encoding="utf-8")
+    with pytest.raises(ValueError, match="site-1 has two lane assignments"):
+        B.read_lanes(batch_dir, B.read_batch(batch_dir)[1])
+
+
+def test_a_meta_filed_under_another_source_id_is_refused(tmp_path: Path) -> None:
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1")])
+    store = B.evidence_store(batch_dir)
+    for kind, body in (("meta", X.wiki_doc("W", X.ARTICLE).to_json()), ("txt", X.ARTICLE)):
+        store.write(
+            site_id="site-1", feature=M.source_feature("T.fr", kind), body=body.encode("utf-8")
+        )
+    with pytest.raises(ValueError, match=r"src\.T\.fr\.meta names W"):
+        B.read_source(batch_dir, "site-1", "T.fr")
+
+
+@pytest.mark.parametrize(
+    ("rows", "match"),
+    [
+        ([{"site_id": "s", "sentences": [], "extra": 1}], "a line carries"),
+        ([{"site_id": "s", "sentences": []}, {"site_id": "s", "sentences": []}], "listed twice"),
+        ([{"site_id": 7, "sentences": []}], "missing or listed twice"),
+    ],
+)
+def test_a_track_b_file_with_a_foreign_line_or_a_site_twice_is_refused(
+    tmp_path: Path, rows: list[dict], match: str
+) -> None:
+    B.write_records(tmp_path / B.TRANSLATIONS_FILE, rows)
+    with pytest.raises(ValueError, match=match):
+        B.read_records(tmp_path / B.TRANSLATIONS_FILE, B.TRANSLATION_KEYS)
+
+
+def test_two_selections_for_one_site_are_refused(tmp_path: Path) -> None:
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1")])
+    runner = X.ScriptedRunner({("site-1", "select"): "DESC: W1\nCARD: W1"})
+    SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner)
+    line = (batch_dir / B.SELECTIONS_FILE).read_text(encoding="utf-8")
+    (batch_dir / B.SELECTIONS_FILE).write_text(line + line, encoding="utf-8")
+    with pytest.raises(ValueError, match="site-1 has two selections"):
+        B.read_selections(batch_dir)
+
+
+@pytest.mark.parametrize(
+    "sentences",
+    [
+        [{"sid": "T.fr1", "text": "One.", "extra": 1}],
+        [{"sid": "T.fr1"}],
+        {"sid": "T.fr1", "text": "One."},
+    ],
+)
+def test_a_translation_that_is_not_sid_text_pairs_is_refused(
+    tmp_path: Path, sentences: Any
+) -> None:
+    B.write_records(tmp_path / B.TRANSLATIONS_FILE, [{"site_id": "s", "sentences": sentences}])
+    with pytest.raises(ValueError, match="not sid/text pairs"):
+        B.read_translations(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "sentences",
+    [
+        [{"text": "One.", "src": "R1", "start": 0, "end": 4, "extra": 1}],
+        [{"text": "One.", "src": "R1", "start": 0}],
+        {"text": "One.", "src": "R1", "start": 0, "end": 4},
+    ],
+)
+def test_a_restatement_that_is_not_text_src_start_end_is_refused(
+    tmp_path: Path, sentences: Any
+) -> None:
+    B.write_records(tmp_path / B.RESTATEMENTS_FILE, [{"site_id": "s", "sentences": sentences}])
+    with pytest.raises(ValueError, match="restatements are malformed"):
+        B.read_restatements(tmp_path)
 
 
 def test_append_holds_skips_a_line_that_is_already_there(tmp_path: Path) -> None:
