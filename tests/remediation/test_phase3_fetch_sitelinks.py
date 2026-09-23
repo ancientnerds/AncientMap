@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+import httpx
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -23,6 +24,7 @@ if str(PHASE3_PARENT) not in sys.path:
 
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
+from phase3 import model_stage as MS  # noqa: E402
 from phase3 import snapshot_plan as SP  # noqa: E402
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError  # noqa: E402
@@ -526,10 +528,6 @@ def test_a_failed_answer_is_retried_and_never_read_as_an_article(tmp_path: Path)
 def test_the_judge_reads_a_refused_article_as_that_targets_failure(tmp_path: Path) -> None:
     """collect_batch records the refusal in `fetch.json`; the finder's prompt then names the article
     as failed instead of raising on a missing file (`model_stage.read_fetch_failures`)."""
-    import httpx
-
-    from phase3 import model_stage as MS
-
     record = _record(**{F.WIKI_SITELINKS_KEY: [dict(DE), dict(ES)]})
 
     def handler(request: httpx.Request) -> httpx.Response:
