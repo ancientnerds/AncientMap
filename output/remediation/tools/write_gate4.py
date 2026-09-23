@@ -182,25 +182,6 @@ class Planned:
         return (self.out / STOPPED_FILE).exists()
 
 
-def plan_batch(
-    batch: W4.BatchInputs,
-    *,
-    group: W4.Group,
-    options: Mapping[str, Any],
-) -> W4.WritePlan4:
-    if group is W4.Group.P4:
-        return W4.plan_p4(
-            batch,
-            open_lanes=options["open_lanes"],
-            audited=options["audited"],
-            verify=options["verify"],
-            ledger=options["ledger"],
-        )
-    if group is W4.Group.L:
-        return W4.plan_legacy(batch, written=options["written"])
-    return W4.plan_cards(batch, written=options["written"], card_findings=options["card_findings"])
-
-
 def render(apply_root: pathlib.Path, plan: W4.WritePlan4, *, write_round: int) -> Planned:
     """Render one write batch into `<apply root>/<batch>/`. A batch already applied keeps its plan:
     a re-plan to other rows is refused, never written over the record of what was written."""
@@ -329,7 +310,7 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
             )
 
     planned = [
-        render(apply_root, plan_batch(batch, group=group, options=options), write_round=args.round)
+        render(apply_root, W4.plan_writes(batch, group=group, **options), write_round=args.round)
         for batch in batches
     ]
     rows = sum(len(item.plan.rows) for item in planned)

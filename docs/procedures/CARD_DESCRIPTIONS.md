@@ -1,147 +1,113 @@
-# Card Description Generator
+# Card descriptions: the extractive contract
 
-A procedure for generating punchy 200-character card descriptions for all Forgotten Worlds card sites. Claude Code follows this step-by-step when the user says "generate card descriptions".
+`card_stats.card_description` is the up-to-200-character text on a site's card (Forgotten Worlds,
+search previews, the shorts narration). Since the 2026-09 remediation (Phases 4 and 5, design entry
+[6] of `output/remediation/logs/design_texts_images_2026-09-22.json`, section card_texts; owner
+decision O3: "same run, extractive") a card is **an extractive condensation of the site's own
+published description, never a second free generation**. This file is that contract. It replaced
+the 10-agent generation procedure of 2026-03, whose rules are listed under "Retired" below.
 
-## Execution Procedure
+## What a card is
 
-**Step 0 — Run site enrichment first**
+- The selector call that picks the description's sentences (`scripts/remediation/phase4/`
+  `select_stage.py`, prompt in `prompts4.py`) also returns 1-2 `CARD:` items. Each is one of the
+  description's own `DESC:` sentence ids plus offered spans to drop. The model writes no word.
+- Code assembles the card (`phase4/assemble.py`): the source slice of each item minus its dropped
+  spans (the description's own drops included). No citation marker, no parentheses, no pronoun
+  opener.
+- The only edit that is not the source's own is the closed spoken-form rule `c.`/`ca.` ->
+  `circa`, so the narrator never reads a bare "c".
+- Hedges, negations and restrictions ("possibly", "not", "only", "according to", ...) survive by
+  construction: a span containing one is never offered for deletion
+  (`phase4/model4.py:PROTECTED_TOKENS`).
 
-Before generating descriptions, run the audit & enrichment pipeline to fetch Wikidata metadata and the best Wikipedia articles. See `docs/procedures/AUDIT_ENRICHMENT.md` for the full procedure.
+## Rules (verifier V10, hash V13, the reviewer's CARD line)
 
-Quick version:
-```bash
-python scripts/audit_enrich.py --phase enrich
-```
+| rule | why |
+| --- | --- |
+| 80-200 characters | the shorts floor, and the `varchar(200)` column |
+| no country name (`pipeline.utils.country_lookup` names plus the stored country's variants) | the card already shows it; cultural adjectives (Roman, Egyptian, Maya) are allowed |
+| no marker, no parentheses, no pronoun opener | the card stands alone |
+| no unattributed evaluative superlative: "one of the most", "most important", "most significant", "most famous", "most remarkable", "finest", "best-known" | fame and importance claims are refused; size and age superlatives survive only with the source's own scope words |
+| every glyph covered (`pipeline.video.shorts_brand.missing_glyphs`), every caption word fits `1080 - 2 x CAPTION_MARGIN` px | the card is narrated and captioned |
+| `sha256(card) == _description_provenance.card.text_sha256` | the card is the one the provenance names (V13; the shorts gate's S13) |
 
-Or run each enrichment step manually:
-```bash
-python scripts/export_card_sites.py
-python scripts/enrich_reconcile.py
-python scripts/enrich_fetch_claims.py
-python scripts/enrich_wiki_select.py
-```
+"Legend says ..." and "believed to be ..." appear only in the source's own attributed wording,
+because the verbatim sentence carries its attribution (the B5 cases of `HUMAN_ONLY.md` resolved by
+rule; pilot fixtures Midford Castle `32429f3c`, Bulls of Guisando `0529af31`, Arc de Berà
+`82f23c96`).
 
-This populates `output/enrichment_qids.json`, `output/enrichment_claims.json`, and `output/enrichment_wiki.json` — providing grounded context (dates, heritage status, multilingual wiki extracts) for description generation.
+## Selection preferences (what the old tone guide became)
 
-**Step 0b — Check prerequisites**
+Cards read flatter than the 2026-03 tone guide asked for. That is the price of having no
+unsupported claims: the guide's "age anchor", "one outstanding fact" and "hook" are now preferences
+of the selector among source sentences, not text anybody writes:
 
-1. Verify `output/card_sites.json` exists. If not, run: `python scripts/export_card_sites.py`
-2. Verify `card_stats.card_description` column exists (the migration in `orchestrator.py` adds it on deploy; for local dev, run the ALTER TABLE manually if needed).
+- prefer a sentence that carries a date;
+- prefer what the site is, where, when and by whom, and what was found there;
+- prefer the concrete over the evaluative.
 
-**Step 1 — Check progress**
+## How a card reaches production (the P5 sitting)
 
-1. Read `output/card_descriptions.json`. If missing, create it with content: `{"descriptions": {}}`
-2. Scan `output/card_descriptions_batch_*.json` for any batch files not yet merged. If found, merge them first (see Step 3c).
-3. Count completed descriptions vs total sites in `output/card_sites.json`.
-4. Report: `Progress: X / Y descriptions complete (Z% done)`
-5. If all done → skip to Step 4.
+`public/data/card_descriptions.json` is the authoritative copy of the column
+(`docs/procedures/FIELD_CONTRACT.md` section 2.3): every API boot upserts each key it carries into
+`card_stats` (`api/services/card_descriptions.py`, and it logs every non-empty value it replaces as
+`[STARTUP] Card description overwritten`). A normal blob, not LFS. Hence one order, in one sitting,
+and only once Martin confirms he pushes straight afterwards (design, production_write step 3):
 
-**Step 2 — Prepare parallel batches**
+1. backup drill: `scripts/remediation/00_backup_and_drill.sh` with `DO_DRILL=1` on the VPS, judged
+   by its printed `VERDICT` line;
+2. record `docker inspect -f '{{.State.StartedAt}}'` of `ancient_nerds_api` and `ancient_nerds_api2`;
+3. dry run of the P5 plan (`output/remediation/tools/write_gate4.py --group P5 --run <run>`), digest
+   pinned;
+4. `scripts/remediation/phase4/card_json.py --prerender` renders the file the plan leaves behind;
+   commit it locally (not pushed);
+5. `write_gate4.py --group P5 --run <run> --apply --step 100`, and `verify_writes4.py` after every
+   step (0 deviations);
+6. `card_json.py --regenerate` from a read-only production SELECT: `WRITE_EXIT=0` only when it is
+   byte for byte the pre-render;
+7. re-read `StartedAt` of both containers;
+8. Push #2 (owner);
+9. after the deploy: 0 `[STARTUP] Card description overwritten` lines in the logs of both API
+   containers, `card_json.py --check` (`ACCEPT_EXIT=0`) and `verify_writes4.py` in both directions.
 
-1. Read `output/card_sites.json` (full site list).
-2. Read `output/card_descriptions.json` (completed descriptions).
-3. Filter out sites whose `site_id` is already in the descriptions dict → get `remaining` list.
-4. Split `remaining` into **10 equal chunks** by index (chunk 0 = indices 0–N, chunk 1 = N+1–2N, etc.). No overlap.
-5. Write each chunk to `output/batch_input_NNN.json` (array of site objects, NNN = 001–010).
-6. Report: `Prepared 10 batches of ~M sites each. Total remaining: R`
+**Pushing the file before the database write is forbidden**: the boot import would write the cards
+without a journal, and the journalled write would then refuse every row with matched_0. If CI goes
+red and no deploy happens in the sitting, `scripts/remediation/phase4/revert4.py --stamp-like
+'phase5:%' --apply` and a `git revert` of the JSON commit bring the database back to the deployed
+file.
 
-**Step 3 — Generate descriptions (parallel agents)**
+The file's form is `json.dumps(obj, ensure_ascii=False, indent=2) + '\n'` (today's bytes); existing
+keys keep their order, new keys (sites without a card, the card that exists only in the database)
+are appended in UUID order, cleared keys are removed. Measured 2026-09-23 against production
+(read-only): the 4,996 keys of the file are curated sites and equal the database; one curated card
+exists only in the database (`95b33efa-d5eb-4cb8-ab61-746b3822762a`).
 
-Launch **10 agents in parallel** (subagent_type: `general-purpose`), each with:
-- Its own batch input file to read (`output/batch_input_NNN.json`)
-- Its own output file to write (`output/card_descriptions_batch_NNN.json`)
-- The full Tone & Style Guide (copy the guide into the agent prompt — agents don't share context)
-- Enrichment context files: `output/enrichment_claims.json` and `output/enrichment_wiki.json` (if available — agents should look up each site_id for grounded facts: Wikidata inception dates, heritage status, and multilingual wiki extracts to base descriptions on)
+## Held cards
 
-Each agent's prompt must include:
-1. Read `output/batch_input_NNN.json`
-2. For each site, look up enrichment data (Wikidata claims + wiki extract) and use it as primary source material
-3. If enrichment data has a non-English wiki extract, translate key facts into English for the description
-4. Write a **max 200-character** description following the Tone & Style Guide, grounded in the enrichment data
-5. Validate every description is <= 200 chars. If over, shorten it.
-6. Write the result to `output/card_descriptions_batch_NNN.json` as: `{"site_id": "description", ...}`
-7. Print a summary: `Batch NNN complete. Wrote X descriptions.`
+- A site whose card is held keeps its old card, with no card provenance; it is therefore not
+  shorts-eligible.
+- Exception: when that old card carries a Phase-3 reviewer-cleared defect (one of the 709 in
+  `logs/_write_dry/ALL_REFUSED.jsonl`, rule `report-only-field`), it is cleared (`P5/card-clear`,
+  new value NULL) and its key is removed from the file. The Phase-3 finding - the refusal record,
+  the finder's answer and the reviewer's verdict - is the journal evidence. Known-wrong narration
+  becomes absent.
 
-**Step 3b — Wait and verify**
+## Licence and disclosure
 
-After all agents finish:
-1. Read each `output/card_descriptions_batch_NNN.json`
-2. Check: total descriptions across all batch files == total sites in all input files
-3. Check: no duplicate `site_id` across batches (there shouldn't be, but verify)
-4. Check: every description is <= 200 chars and non-empty
-5. Report any gaps or issues
+Cards, and therefore the shorts narration, are CC BY-SA 4.0 snippets of Wikipedia text (lanes W, S,
+T) or AI-generated text (lanes T, R). The video description must carry the attribution line; that
+belongs to the shorts publishing step. On a SiteCard the card carries a machine-readable
+`data-card-ai` attribute only; the visible notice is on the site's page.
 
-**Step 3c — Merge**
+## Retired
 
-1. Read `output/card_descriptions.json` (existing descriptions)
-2. Read all `output/card_descriptions_batch_*.json` files
-3. Merge everything into `output/card_descriptions.json`
-4. Delete the batch input and output files (cleanup)
-5. Report: `Merged N new descriptions. Total: X / Y (Z%)`
+Never used for this work, and no longer a way to produce card texts:
 
-**Step 4 — Validate all descriptions**
-
-1. Read `output/card_descriptions.json`.
-2. Check every description:
-   - Length <= 200 characters? Flag any that exceed.
-   - Not empty/blank?
-3. If any fail: fix them in-place (rewrite to fit 200 chars), save the file.
-4. Report: `Validation: X passed, Y fixed`
-
-**Step 5 — Import to DB + deploy**
-
-1. Run: `python scripts/import_card_descriptions.py` (imports descriptions to `card_stats` **and** auto-copies `output/card_descriptions.json` → `public/data/card_descriptions.json`)
-2. Run: `python scripts/enrich_import.py` (imports enrichment metadata: QIDs, confidence, wiki URLs, heritage, etc.)
-3. Commit and push `public/data/card_descriptions.json` — the API loads this file on startup, so it must be deployed for descriptions to reach production.
-4. Report the result (how many rows updated, total with descriptions and enrichment metadata).
-
----
-
-## Tone & Style Guide
-
-**Voice**: Mix of documentary narrator and curiosity hook. Think National Geographic meets a trading card.
-
-**Structure** (aim for this pattern, adapt as needed):
-- **Start with an age/period anchor**: "Built 9,600 BC", "3rd-century fortress", "Active 6000–3000 BC"
-- **ONE outstanding fact**: the single most remarkable thing about this site
-- **Spark curiosity**: leave the reader wanting to know more
-
-**When age/period is unknown or vague** (`period_start` is null, `period_name` is "Unknown" or missing):
-- **Skip the date opener entirely.** Lead with the site's defining trait instead.
-- Good openers: the site type ("Hilltop fortress..."), a physical feature ("Carved from a single rock..."), what was found there ("Over 2,000 Bronze Age tools unearthed..."), or its scale/purpose ("A 3km tunnel system connecting...").
-- **Never write "Date unknown"** or "Undated" — just don't mention dates at all.
-- If `period_name` is a broad range like "< 4500 BC" or "1000 - 1500 AD", use that range loosely: "Predating 4500 BC" or "Medieval-era" — don't fake precision.
-
-**Rules**:
-- **Max 200 characters** (hard limit — this must fit on a card)
-- **Never mention the country** (it's already shown on the card)
-- **Factually accurate** — only use facts from the Wikipedia source text provided
-- **No generic filler** ("ancient ruins", "important site", "rich history")
-- **Prefer concrete details** over vague adjectives
-- If the wiki excerpt is empty/missing, write a brief factual description based on the site name, type, and period
-
-**Examples with known dates** (aim for 150-190 chars):
-```
-Göbekli Tepe: "Built 9,600 BC — 6,000 years before Stonehenge. Massive T-shaped pillars carved with lions, foxes, and vultures by people who hadn't yet invented pottery or farming." (170 chars)
-Pompeii: "Buried under 6 metres of volcanic ash when Vesuvius erupted in 79 AD. Bakeries still had loaves in the ovens. Election slogans and love notes survive on the walls." (167 chars)
-Petra: "Carved into rose-red sandstone cliffs around 300 BC by the Nabataeans. A lost trade capital that engineered flash-flood channels and cisterns to thrive in the desert." (168 chars)
-Angkor Wat: "Built in the 12th century as a Hindu temple, later converted to Buddhist. The world's largest religious monument, its moat alone spans 1.5 km on each side." (157 chars)
-Machu Picchu: "Built around 1450 AD at 2,430 m elevation. An Inca royal estate with 150+ buildings, astronomical observatories, and terraced farms — abandoned before the Spanish ever found it." (179 chars)
-Chichén Itzá: "Built around 600 AD. At each equinox, sunlight casts a feathered-serpent shadow slithering down the pyramid steps. Its sacred cenote held jade, gold, and human offerings." (172 chars)
-```
-
-**Examples with unknown/vague dates** (aim for 150-190 chars):
-```
-Yonaguni Monument: "A massive stepped structure 25 m below sea level off the coast. Flat terraces, right angles, and carved channels — still fiercely debated: natural geology or submerged ruins?" (177 chars)
-Adam's Calendar: "A stone circle aligned precisely to solstices, equinoxes, and cardinal points, hidden in the mountains near Mpumalanga. Claimed by some to be 75,000 years old." (161 chars)
-Gunung Padang: "Layers of buried columnar basalt construction stacked deep into a volcanic hill, each layer older than the last. Ground-penetrating radar hints at hidden chambers below." (170 chars)
-Rujm el-Hiri: "Five concentric stone rings and a central cairn, visible only from the air. No settlement, no water source anywhere nearby — yet 42,000 tonnes of basalt were hauled here." (172 chars)
-```
-
-**Anti-examples** (don't write like this):
-```
-BAD: "An important archaeological site with rich history." (generic, no facts)
-BAD: "Located in Turkey, this ancient temple..." (mentions country)
-BAD: "Göbekli Tepe is one of the most significant archaeological discoveries of the 20th century." (Wikipedia voice, no card punch)
-BAD: "Date unknown. A mysterious site in the desert." (says "date unknown", generic)
-```
+- the 10-agent generation flow of 2026-03 (batch inputs, parallel agents, merge) and its rule
+  "if the wiki excerpt is empty, write a brief factual description based on the site name, type
+  and period" - a card is never written from anything but its own description's sentences;
+- `scripts/import_card_descriptions.py`, `scripts/merge_rewrites.py` and the `audit_enrich.py`
+  Wave-4 merge - none of them journals, and the last two write the file the boot import reads;
+- `scripts/verify_descriptions.py` and `scripts/verify_agent.py` as gates: they penalise hedging
+  (plan section 5.3). The Phase-4 verifier (`phase4/verify4.py`, V1-V15) is the gate.

@@ -954,6 +954,18 @@ def _card_row(batch: BatchInputs, site: M.PlanSite, assembly: M.Assembly) -> Row
     )
 
 
+def plan_writes(batch: BatchInputs, *, group: Group, **inputs: Any) -> WritePlan4:
+    """The write plan of one row group for one plan batch (`docs/procedures/PHASE4_CONTRACTS.md`
+    section 5): `plan_p4`, `plan_legacy` or `plan_cards`, called with that planner's own keyword
+    inputs - a missing or foreign input is a `TypeError`, never a default."""
+    planners: Mapping[Group, Callable[..., WritePlan4]] = {
+        Group.P4: plan_p4,
+        Group.L: plan_legacy,
+        Group.P5: plan_cards,
+    }
+    return planners[group](batch, **inputs)
+
+
 # ------------------------------------------------------------------------------------------------
 # Chunks
 # ------------------------------------------------------------------------------------------------

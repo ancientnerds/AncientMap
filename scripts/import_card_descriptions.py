@@ -7,6 +7,13 @@ exist yet (e.g. for sites without hero images that haven't had stats generated).
 
 Usage:
     python scripts/import_card_descriptions.py
+
+NOT A REMEDIATION PATH (2026-09-23): the UPDATE at :51 writes card_stats.card_description with no
+old-value condition and no journal row, and the copy at :66 overwrites the file every API boot
+imports (public/data/card_descriptions.json). The 2026-09 remediation writes cards through
+apply_remediation_change() (scripts/remediation/phase4/write4.py, group P5) and renders the file
+byte for byte from the same plan (scripts/remediation/phase4/card_json.py) - in the order
+docs/procedures/CARD_DESCRIPTIONS.md ("How a card reaches production") prescribes.
 """
 
 import json

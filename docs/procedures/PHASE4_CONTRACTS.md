@@ -246,3 +246,41 @@ Provides:
 - `HoldReason` spells every hold the design names; `SelectionProblem` spells the parser's refusals
   plus `no-desc`, `no-card`, `abstain-with-other-lines` and `abstain-without-reason`, which the
   design implies (1-8 DESC, 1-2 CARD, ABSTAIN excludes all other lines and carries a reason).
+
+## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
+
+Track D (WB-D1 ... WB-D5, branch `wip/p4-write`) built against sections 1-6 unchanged; `model4.py`
+is untouched. What the design left open, and how the writer settled it:
+
+- **Write batches.** A write batch is the rows one row group takes from one plan batch: plan batch
+  `p4-0007` gives the write batches `p4-0007` (P4), `p4l-0007` (L) and `p5-0007` (P5), each written
+  as **one chunk** (at most 100 sites - the step - and at most 200/100/100 rows), stamped
+  `<family>:<batch>:chunk-NNNN`. The chunk number is the write round: 1, or 2 and up for a batch
+  written again after a revert (a reverted round's stamps stay in the journal). The step of 100
+  sites is `write_gate4.py --step 100`: one step per invocation, `verify_writes4.py` between steps.
+- **The group table lives in the writer** (`write4.GROUP_FAMILY`, `GROUP_PREFIX`), and
+  `output/remediation/tools/lanes.py` registers the lanes `p4`, `p4l`, `p5` from it (their
+  `family` and `stamp_like`; `run_dir` is `phase4_runner/runs`, the run is chosen with `--run`).
+- **The verifier runs inside the plan.** `write4.plan_p4` calls `verify4.verify_site` itself, on the
+  exact `new_raw_data`, texts, metas and quotes the rows write (with `card: null` where the card is
+  held), so no row is planned from a verification of other bytes. `write_gate4` imports
+  `phase4.verify4` when it plans P4.
+- **Entry points.** `write4.plan_writes(batch, *, group, **inputs)` dispatches to `plan_p4(batch,
+  *, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, written)` and `plan_cards(batch,
+  *, written, card_findings)`; `write4.load_batch(batch_dir)` reads the section-4 files strictly (a
+  site with neither an assembly nor a site hold is a hole and raises); `write4.render_apply(chunk,
+  *, rehearse=False)`, `render_rollback(chunk)`, `apply_chunk(chunk, *, out, rehearse, runner,
+  host)`; `write4.journal_evidence(assembly, *, texts, subject_gate, lane_detail, files, reviews,
+  labels)`; `write4.exit_line(tag, run)` prints every Track-D tool's `*_EXIT=` line.
+- **Lane gates are inputs, not guesses.** Which lanes passed their pilot (`--open-lanes`) and which
+  lane-T/R sites the independent audit cleared (`--audited`, one site id per line) are handed to
+  the plan; a site outside them is refused and counted, never written.
+
+**Needed from Track B (a contract addition, section 4): the prompts on disk.** The journal evidence
+of a written site records the sha256 of every file the model stages left for it - the answers
+(`answers/`), the reviewer's answers (`reviews/`) and **the exact prompt of every call
+(`prompts/`)** - plus its ledger labels (`<site_id>/<answer_key>`). `judge_site` stores answers but
+not prompts, so every model stage (select, review, translate, restricted) must also store the prompt
+it sends, write-once, through an `EvidenceStore` rooted at `<batch>/prompts/` under the same feature
+as its answer. `write4` refuses a site whose `answers/`, `reviews/` or `prompts/` file is missing
+(`journal-evidence-incomplete`), so without this addition no P4 row is planned.

@@ -123,7 +123,9 @@ inserting a duplicate name here is undone on the next start.
 
 `api/main.py:493-552`, an unconditional startup import:
 
-- Source: `public/data/card_descriptions.json` (git-LFS tracked), key `descriptions`.
+- Source: `public/data/card_descriptions.json`, key `descriptions`. A normal git blob, **not
+  LFS** (`.gitattributes` puts `public/data/sites/*`, `*.geojson` and `*.json.gz` into LFS,
+  not this file; `git check-attr filter` answers `unspecified`, verified 2026-09-23).
 - Upsert at `api/main.py:527-531`:
 
 ```sql
@@ -140,9 +142,26 @@ differing one — the JSON value overwrites the database value on every API star
 
 **Rule: never treat `card_stats.card_description` as the source of truth, and never fix a card text
 in the database alone. Any Phase 5 correction must be applied to `public/data/card_descriptions.json`
-*and* the database, or it is reverted at the next API restart.** The descriptions are generated and
-exported by the pipeline; the correct order is: fix the text, regenerate/export the JSON, then let
-the startup import carry it into the database.
+*and* the database, or it is reverted at the next API restart.**
+
+**The P5 order (2026-09 remediation, design entry [6], production_write step 3): the database
+first, journalled; then the file, byte for byte; then the push - in one sitting.**
+
+1. `scripts/remediation/phase4/card_json.py --prerender` renders the file the P5 plan leaves
+   behind, from the plan alone, and it is committed locally (not pushed);
+2. `output/remediation/tools/write_gate4.py --group P5 --apply --step 100` writes the cards through
+   `apply_remediation_change` (journal row, conditional old value, read-back, inverse proof), with
+   `verify_writes4.py` after every step;
+3. `card_json.py --regenerate` renders the file again from a read-only production SELECT and
+   passes only when it is byte for byte the pre-render;
+4. Push #2 (owner), then 0 `[STARTUP] Card description overwritten` lines on both API containers
+   and `card_json.py --check` (`ACCEPT_EXIT=0`).
+
+**Pushing the file before the database write is forbidden**: the boot import would write the cards
+without a journal, and the journalled write would then refuse every row with matched_0. A red CI
+inside the sitting is answered by `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'`
+plus a `git revert` of the JSON commit. The full sitting is in `docs/procedures/CARD_DESCRIPTIONS.md`
+("How a card reaches production").
 
 For contrast, `api/routes/sites.py:1743-1751` deliberately does **not** overwrite — it uses
 `card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description)`. Two write
@@ -167,6 +186,10 @@ generation -> output/card_descriptions.json          <- gitignored, DOES NOT EXI
 
 `scripts/merge_rewrites.py:2` ("Merge rewrite outputs into card_descriptions.json, then
 re-validate") is the other half of the same workflow.
+
+**Neither is a remediation path** (2026-09-23): the P5 sitting above writes the rows through the
+journal and renders the file with `card_json.py`; `import_card_descriptions.py` UPDATEs
+`card_stats` without a journal row, and both carry a docstring saying so.
 
 #### Step 1 does not exist by default - bootstrap it before Phase 5
 
@@ -211,8 +234,14 @@ Four defects of one kind - a command that reports success without having succeed
 3. **Validation errors are printed and then ignored.** The apply loop's only condition is
    `sid in descs and len(new_desc) <= 200` (`:78`); it never consults the `errors` list. A rewrite
    rejected as `BAD ENDING` is applied anyway. Only the >200 case is filtered, and only by accident.
-4. **Even the do-nothing run overwrites** the git-LFS-tracked, deploy-relevant
+4. **Even the do-nothing run overwrites** the deploy-relevant
    `public/data/card_descriptions.json`.
+
+**Status: fixed - `merge_rewrites.py` fails closed** (its docstring, "WHY THIS SCRIPT IS WRITTEN
+THIS WAY"; `tests/remediation/test_merge_rewrites_fails_closed.py`): all ten batches present, every
+rewrite valid, at least one applied, the count unchanged and the re-validation not worse - or it
+exits non-zero and writes nothing to `public/data/`. The table above is the defect as measured
+before the fix.
 
 **Consequence for the bootstrap above:** copying the public file back makes
 `import_card_descriptions.py` usable, and it also makes `merge_rewrites.py` runnable - which is what
@@ -281,8 +310,9 @@ read through this contract before it becomes a write:
 1. **`site_type` proposals** must be fixed points of `normalize_site_type()`. Anything else is a
    revert-on-restart edit — emit `REVIEW` instead. (Enforced in `t04_site_type.py`.)
 2. **`name_normalized` proposals** must equal `left(lower(unaccent(name)), 500)`.
-3. **`card_description` proposals** are not database fixes; they are JSON-file fixes that the DB
-   import then carries. A Phase-5 plan that only writes SQL is wrong.
+3. **`card_description` proposals** are never a database-only fix. Phase 5 writes the rows through
+   the journal *and* renders the file from the same plan, in the order of section 2.3 - a plan that
+   only writes SQL is reverted at the next boot, a file pushed first writes without a journal.
 4. **Value proposals must fit the column**, checked before the proposal is made, not at write time.
 5. **`country` and `site_type` are `varchar(100)`** — a compound value like `"Chile, Easter Island"`
    fits, but the replacement must also fit.

@@ -320,6 +320,16 @@ def test_only_a_card_clear_writes_null(tmp_path: Path) -> None:
         W4.validate_rows(W4.Group.P5, [null_card])
 
 
+def test_plan_writes_is_each_groups_own_planner_with_its_own_inputs(tmp_path: Path) -> None:
+    batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
+    legacy = W4.plan_writes(batch, group=W4.Group.L, written=[FX.SITE_A])
+    assert legacy.batch_id == "p4l-0003" and legacy.refusals[0].rule == W4.RULE_WRITTEN
+    with pytest.raises(TypeError):
+        W4.plan_writes(batch, group=W4.Group.L, written=[], open_lanes=OPEN_WS)
+    with pytest.raises(TypeError):
+        W4.plan_writes(batch, group=W4.Group.P5, written={})  # card_findings is required
+
+
 # ── chunks and stamps ────────────────────────────────────────────────────────────────────────────
 
 

@@ -49,6 +49,12 @@ run can never be read as another's (`lanes.py` has the table). The gap run is `-
 `runs/gap`, `logs/_write_dry_gap/`, `logs/_write_apply_gap/`, stamps `phase3:gap-%`. Individual paths
 can still be overridden (`--run-dir`, `--out`, `--rows`, `--apply-root`, `--hold`, `--stamp-like`).
 
+Phases 4 and 5 add three lanes, one per row group of `scripts/remediation/phase4/write4.py`, each
+with its own journal family: `p4` (descriptions, `phase4:p4-%`), `p4l` (legacy disclosure,
+`phase4l:p4l-%`) and `p5` (cards, `phase5:p5-%`); their plans, statements and markers live in
+`logs/_write_apply_p4|_p4l|_p5/<batch>/`. They are written by `write_gate4.py`, not by the phase-3
+gate.
+
 | script | what it does |
 | --- | --- |
 | `lanes.py` | the lanes' paths, the one JSON-lines reader, the database seam (the writer's `run_sql`, `_json_rows`, `_sql_text`) and the pins of written lanes' plans; no entry point |
@@ -64,6 +70,7 @@ can still be overridden (`--run-dir`, `--out`, `--rows`, `--apply-root`, `--hold
 | `batch_summary.py` | per-batch counts |
 | `gap_plan.py` | builds `PLAN.gap.jsonl` for the fields the mass run never judged, from a fresh read-only production export |
 | `qid_repair.py` | renders the reviewed `site_external_ids` repair (`output/remediation/qid_repair/`) - plan, apply, rehearsal, rollback; applies nothing |
+| `write_gate4.py` | the Phase-4/5 writer's driver: `--group P4|L|P5 --run <run>`; plans and renders every write batch (dry run by default), `--rehearse` runs each batch's statement ending in `ROLLBACK`, `--apply --step 100` writes one step of 100 sites per invocation with preflight, read-back and inverse proof, then stops for `verify_writes4.py`; prints `WRITE_EXIT=` |
 
 Each needs `PYTHONIOENCODING=utf-8`. The writer's child processes get the repository root and
 `scripts/remediation` on their `PYTHONPATH` from `write_dry_all.writer_env()`, and they run under the
