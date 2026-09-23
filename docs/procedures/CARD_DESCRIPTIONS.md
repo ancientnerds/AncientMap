@@ -84,7 +84,12 @@ red and no deploy happens in the sitting, `scripts/remediation/phase4/revert4.py
 file. Rehearse the reversal first (`--rehearse`): its PL/pgSQL has not yet run on PostgreSQL.
 `revert4` skips every write that already has its own reversal (its key and its stamp plus
 `-rollback`), so in a second sitting after such a revert the same pattern reverts only the live
-round; it refuses a pattern that matches no write, or only reverted ones.
+round; it refuses a pattern that matches no write, or only reverted ones. The second sitting
+writes the reverted batches again as round 2: first `write_gate4.py --group P5 --run <run>
+--close-reverted` when the reverted step had no acceptance yet (it closes the step on production's
+proof that every row is reverted), then `--apply --round 2 --step 100` for every step
+(`docs/procedures/PHASE4_CONTRACTS.md` section 7, "After a revert"). The acceptance of a lane that
+has seen a revert needs the Track-C change named there before it can read `ACCEPT_EXIT=0`.
 
 The file's form is `json.dumps(obj, ensure_ascii=False, indent=2) + '\n'` (today's bytes); existing
 keys keep their order, new keys (sites without a card, the card that exists only in the database)

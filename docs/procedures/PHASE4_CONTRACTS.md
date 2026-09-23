@@ -319,7 +319,8 @@ fields section 6 lists. What the design left open, and how the writer settled it
   `p4-0007` gives the write batches `p4-0007` (P4), `p4l-0007` (L) and `p5-0007` (P5), each written
   as **one chunk** (at most 100 sites - the step - and at most 200/100/100 rows), stamped
   `<family>:<batch>:chunk-NNNN`. The chunk number is the write round: 1, or 2 and up for a batch
-  written again after a revert (a reverted round's stamps stay in the journal). The step of 100
+  written again after a revert (a reverted round's stamps stay in the journal; `write_gate4.py
+  --round N`, see "After a revert" below). The step of 100
   sites is `write_gate4.py --apply --step 100`: one step per invocation, and a batch is written
   only while it still fits into the step (with 15-site batches a step writes 90 sites; a batch
   larger than the step is refused).
@@ -333,8 +334,9 @@ fields section 6 lists. What the design left open, and how the writer settled it
   records `ACCEPTED/step-NNNN.json` (the step, the output and its sha256) and removes `STEP.json`
   only when the output ends in `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has exactly one lane
   line for the step's lane whose stamp pattern covers every stamp the step wrote, read at least as
-  many lane journal rows as the apply root has written (so it ran after this step, not before),
-  and is not the output an earlier step was accepted on. The lane line is parsed in the print
+  many lane journal rows as the apply root has written under that pattern - every round, the
+  reverted ones too (so it ran after this step, not before) - and is not the output an earlier
+  step was accepted on. The lane line is parsed in the print
   format of `verify_writes4.py` (Track C, `wip/p4-verify`); a change of that line must change
   `write_gate4._ACCEPT_LANE` with it.
 - **Write rounds, and what the reversal skips** (supplement). A change key names a transition, not
@@ -352,6 +354,43 @@ fields section 6 lists. What the design left open, and how the writer settled it
   every guard, the loop and both invariants run over exactly that set. This PL/pgSQL has run only
   as pinned text and through SQLite evaluations of its set and post-read: rehearse it on
   production (`revert4.py --rehearse`) before relying on it.
+- **After a revert: what the operator does** (supplement, checker review of 2026-09-23). `revert4`
+  changes production only; the gate's `APPLIED.json` files are local records and learn of a revert
+  only through the steps below. The gate's proof that a round is reverted is `revert4`'s own read
+  (`revert4.reversal_read`, `write_gate4.prove_reverted`, read-only): the journal holds exactly as
+  many writes under the round's stamp as its `APPLIED.json` says it wrote, and each has its own
+  reversal kept (key and stamp plus `-rollback`).
+  1. If the reverted step had no acceptance yet (`STEP.json` pending - the P5 red-CI case, or any
+     revert of a step whose acceptance was red): `write_gate4.py --group <G> --run <run>
+     --close-reverted`. On the proof for every batch of the step it records the step in
+     `CLOSED/step-NNNN.json` with the proofs (never in `ACCEPTED/`: it was taken back, not
+     accepted), moves each batch's `APPLIED.json` to `chunks/chunk-NNNN/` beside a `REVERTED.json`
+     (the proof) and removes `STEP.json`. A row still live refuses the whole close. Until the step
+     is accepted or closed, its batches are frozen: `--round` does not re-open them.
+  2. `write_gate4.py --group <G> --run <run> --apply --round 2 --step 100` (the same `--round` for
+     every step of the second sitting). A batch applied in round 1 is re-opened on the proof (its
+     round-1 record kept as in 1), and chunk-0002 is rendered and written. A round the batch cannot
+     take is refused with `WRITE_EXIT=1`, never skipped: `--round 3` over a round-1 batch, `--round
+     2` for a batch never written (name the reverted batches with `--batch`, or write the others
+     as round 1), `--round 1` for a re-opened batch. A batch already applied in the named round is
+     done. Without `--round`, a reverted batch still reads as applied ("no open batch"): only
+     `--round` asks production.
+  3. The acceptance of every step after it: `--accept` counts every written round - live and
+     reverted, from the records kept in 1 and 2 - under the stamps the output read, so an output
+     taken between a revert and round 2 does not accept round 2.
+
+  **Open for the `wip/p4-verify` merge (orchestrator decision).** Track C's `verify_writes4.
+  accept4` reports a lane write followed by its own kept reversal as `CHANGED LATER`, and round 1
+  plus round 2 of a key as `WRITTEN TWICE`; so after any revert in a lane no acceptance of that
+  lane reaches `ACCEPT_EXIT=0` and `--apply` stays blocked (fail-closed). A round-scoped
+  `--stamp-like` does not cure it once a lane mixes rounds: with batch 1 reverted and written as
+  round 2 and batch 2 live in round 1, `phase5:%` gives `WRITTEN TWICE` and `CHANGED LATER` for
+  batch 1 and `phase5:%:chunk-0002` gives `MOVED` for batch 2 (checker probes of 2026-09-23 against
+  `wip/p4-verify` 6782fe3). What the gate needs from `accept4`: a lane link that has its own kept
+  reversal is closed - no `CHANGED LATER` for it, not counted in `WRITTEN TWICE`, and a planned row
+  whose only lane links are closed is judged like a row not written yet - plus a merged-branch test
+  (write, revert, `--close-reverted` or accept, `--round 2`, accept). The printed acceptance
+  command stays the lane's own pattern; the rows-read rule above is already scoped to it.
 - **The statements' guards are pinned byte for byte** (supplement). The fake psql of the tests
   cannot evaluate PL/pgSQL, so every guard's predicate and RAISE in `render_apply`,
   `render_rollback` and `render_revert` is pinned in `tests/remediation/phase4_write_pins.py`;
