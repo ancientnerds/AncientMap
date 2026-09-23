@@ -1194,6 +1194,956 @@ CASES: list[Case] = [
 ]
 
 
+# ------------------------------------------------------------------------------ the image lanes
+#: The Phase-2 image residue (design entry 7): the shared chunk writer, the hero repair's
+#: extracted invariant and transport, G0b, the attribution lane, and the code fixes W2/W3/W14/W15.
+#: Every label starts with "img" - `mutation_sweep.py img` runs exactly these.
+CHUNK = REPO / "scripts/remediation/gallery_audit/chunk_writer.py"
+HERO_APPLY = REPO / "scripts/remediation/hero_repair/apply.py"
+PERSIST = REPO / "scripts/remediation/gallery_audit/persist_verdicts.py"
+ATTRIB = REPO / "scripts/remediation/gallery_audit/attribution.py"
+DOWNLOADER = REPO / "pipeline/wiki_image_downloader.py"
+WIKI_ROUTE = REPO / "api/routes/wiki_images.py"
+SHORTS = REPO / "pipeline/video/shorts_select.py"
+EXPORTER = REPO / "pipeline/static_exporter.py"
+T09 = REPO / "scripts/remediation/census/tests/t09_commons_dimensions.py"
+CHUNK_TESTS = "tests/remediation/test_image_chunk_writer.py"
+GALLERY_TESTS = "tests/remediation/test_gallery_audit.py"
+ATTRIB_TESTS = "tests/remediation/test_gallery_attribution.py"
+DL_TESTS = "tests/pipeline/test_wiki_image_downloader_fetch.py"
+HERO_TESTS = "tests/api/test_wiki_images_hero.py"
+SHORTS_TESTS = "tests/pipeline/test_shorts_select_strict.py"
+EXPORT_TESTS = "tests/pipeline/test_static_exporter_served_image.py"
+T09_TESTS = "tests/remediation/test_t09.py"
+EXPRESS = "test_a_change_the_writer_cannot_express_exactly_is_refused"
+DO_BLOCK = "test_every_guard_of_the_transaction_is_rendered_with_its_exact_condition"
+INVARIANTS = "test_the_readback_names_every_broken_invariant"
+JOURNAL = "test_the_readback_compares_every_journal_column_with_the_plan"
+
+IMAGE_CASES: list[Case] = [
+    # -- the shared chunk writer (W4)
+    guard(
+        "img chunk: only the writable columns", CHUNK, "    if kind is None:", EXPRESS, CHUNK_TESTS
+    ),
+    guard(
+        "img chunk: a boolean is true or false",
+        CHUNK,
+        '        if kind == "boolean" and value not in ("true", "false"):',
+        EXPRESS,
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: a no-op is refused",
+        CHUNK,
+        "    if change.old_value == change.new_value:",
+        EXPRESS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: a unified_sites row is its site",
+        CHUNK,
+        "    elif change.row_key != change.site_id:",
+        "    elif False:",
+        EXPRESS,
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: a row planned twice",
+        CHUNK,
+        "        if ident in seen:",
+        "test_a_row_planned_twice_is_refused",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: 100 whole sites per chunk",
+        CHUNK,
+        "    for number, start in enumerate(range(0, len(order), sites_per_chunk), start=1):",
+        "    for number, start in enumerate(range(0, len(order), sites_per_chunk - 1), start=1):",
+        "test_chunks_hold_at_most_100_whole_sites_in_the_callers_order",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: key casts are guarded by CASE",
+        CHUNK,
+        "    return f\"CASE WHEN p.table_name = {L(table)} THEN {_key(table, 'p.row_key')} END\"",
+        '    return _key(table, "p.row_key")',
+        "test_every_key_cast_is_guarded_by_its_table",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: the lint reads the write verbs",
+        CHUNK,
+        '    for word in ("DELETE", "UPDATE", "TRUNCATE", "DROP", "ALTER"):',
+        "    for word in ():",
+        "test_the_lint_reads_code_and_not_literals_or_comments",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: the lint blanks literals",
+        CHUNK,
+        "    code = re.sub(r\"'(?:[^']|'')*'\", \"''\", sql)",
+        "    code = sql",
+        "test_the_lint_reads_code_and_not_literals_or_comments",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: the undo is written first",
+        CHUNK,
+        '    (directory / "ROLLBACK.sql").write_text(rollback_sql, encoding="utf-8", newline="\\n")\n'
+        '    (directory / "APPLY.sql").write_text(apply_sql, encoding="utf-8", newline="\\n")',
+        '    (directory / "APPLY.sql").write_text(apply_sql, encoding="utf-8", newline="\\n")\n'
+        '    (directory / "ROLLBACK.sql").write_text(rollback_sql, encoding="utf-8", newline="\\n")',
+        "test_the_undo_is_written_before_the_write",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: a delivered chunk is never replaced",
+        CHUNK,
+        '            raise ChunkError(\n                f"{directory} holds another chunk',
+        '            print(\n                f"{directory} holds another chunk',
+        "test_a_delivered_chunk_is_never_replaced",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: the delivered bytes are the render",
+        CHUNK,
+        "        if text != render_statement(chunk, rollback=rollback):",
+        "test_a_file_that_is_not_the_plans_is_refused_before_anything_is_sent",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: the pin names this plan",
+        CHUNK,
+        "        if pin is None or pin.group(1) != digest:",
+        "test_a_file_that_is_not_the_plans_is_refused_before_anything_is_sent",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: a CRLF checkout is still the plan",
+        CHUNK,
+        '    return path.read_text(encoding="utf-8")',
+        '    return path.read_bytes().decode("utf-8")',
+        "test_a_chunk_checked_out_with_crlf_is_still_the_plans",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: never apply twice",
+        CHUNK,
+        "    if already:",
+        "test_the_apply_writes_journals_and_reads_back_both_ways",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: only psql's exit 3 ends the session",
+        CHUNK,
+        "            session_ended=proc.returncode == PSQL_SCRIPT_ERROR,",
+        "            session_ended=True,",
+        "test_a_dropped_channel_with_an_empty_journal_is_unknown_not_uncommitted",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: an ended session with no journal",
+        CHUNK,
+        "    if count == 0 and session_ended:",
+        "test_data_changed_underneath_is_not_committed",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: readback journal -> plan",
+        CHUNK,
+        "    for ident in sorted(set(journal) - set(planned)):",
+        "    for ident in []:",
+        "test_the_readback_names_a_journal_row_the_plan_does_not_have",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: readback plan -> journal",
+        CHUNK,
+        '        if row is None:\n            problems.append(f"plan -> journal:',
+        "test_the_readback_names_a_planned_row_the_journal_does_not_have",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: readback of the data",
+        CHUNK,
+        "        elif now[ident] != want_value:",
+        "        elif False:",
+        "test_the_readback_names_a_row_that_does_not_hold_its_new_value",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: readback of the invariants",
+        CHUNK,
+        "            if value != 0:",
+        INVARIANTS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: a rehearsal shows read-back and ROLLBACK",
+        CHUNK,
+        '        READBACK_LABEL in proc_stdout and "ROLLBACK" in proc_stdout and "COMMIT" not in proc_stdout\n    )',
+        "        True\n    )",
+        "test_the_rehearsal_that_never_showed_its_read_back_and_rollback_fails",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: nothing survives a rehearsal",
+        CHUNK,
+        "    if left != 0:",
+        "test_the_rehearsal_fails_when_its_run_stamp_already_journals_rows",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: the scope guard names the source",
+        CHUNK,
+        "     WHERE u.id IS NULL OR u.source_id <> {L(CURATED_SOURCE)};",
+        "     WHERE u.id IS NULL;",
+        "test_the_scope_guard_refuses_every_site_outside_the_curated_source",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: may_empty sites are named",
+        CHUNK,
+        "        if may_empty\n        else",
+        "        if False\n        else",
+        "test_a_site_the_chunk_may_empty_is_named_in_the_statement",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: only named sites may lose their image",
+        CHUNK,
+        "       AND b.site_id NOT IN (SELECT site_id FROM _img_may_empty);",
+        "       AND true;",
+        "test_a_site_the_chunk_may_empty_is_named_in_the_statement",
+        CHUNK_TESTS,
+    ),
+    # -- the hero repair: extracted invariant and transport (W4)
+    Case(
+        "img hero: the transport is prod_write's",
+        HERO_APPLY,
+        "    proc = send(sql, host=host, timeout=timeout)",
+        '    proc = subprocess.run(["ssh", host], input=sql, capture_output=True, text=True, timeout=timeout)',
+        "test_the_hero_transport_reports_a_timeout_as_an_unknown_outcome",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img hero: the CLI reports an unknown outcome",
+        HERO_APPLY,
+        '    except OutcomeUnknown as exc:\n        print(\n            f"OUTCOME UNKNOWN',
+        '    except KeyError as exc:\n        print(\n            f"OUTCOME UNKNOWN',
+        "test_the_hero_transport_reports_a_timeout_as_an_unknown_outcome",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img hero: the at-most form compares > 1",
+        HERO_APPLY,
+        '"several rows", "> 1"',
+        '"several rows", "<> 1"',
+        "test_the_hero_invariant_is_the_hero_repairs_own_in_its_at_most_form",
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img hero: the exact form compares <> 1",
+        HERO_APPLY,
+        '"two rows", "<> 1"',
+        '"two rows", "> 1"',
+        "test_the_hero_statement_is_byte_identical_after_the_extraction",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img hero: the RAISE label is quote-safe",
+        HERO_APPLY,
+        "    if not LABEL_RE.fullmatch(label):",
+        "test_the_invariant_function_refuses_what_cannot_stand_in_its_sql",
+        CHUNK_TESTS,
+    ),
+    # -- G0b: the kinds stated in the rejections (W6)
+    guard(
+        "img g0b: only PROVEN is written",
+        PERSIST,
+        '        if mapping != "PROVEN":',
+        "test_a_mapping_that_is_not_proven_is_a_named_refusal",
+        GALLERY_TESTS,
+    ),
+    guard(
+        "img g0b: the stated kind is the reason's",
+        PERSIST,
+        "        if named != kind:",
+        "test_a_malformed_mapping_record_stops_the_lane",
+        GALLERY_TESTS,
+    ),
+    Case(
+        "img g0b: production still holds the proof's row",
+        PERSIST,
+        "        if v.site_id is not None and (",
+        "        if False and (",
+        "test_a_row_that_no_longer_matches_the_proof_is_refused",
+        GALLERY_TESTS,
+    ),
+    Case(
+        "img g0b: the stamp is decided against G0's plan",
+        PERSIST,
+        "    stamp = run_stamp if run_stamp is not None else run_stamp_for(write)",
+        "    stamp = run_stamp if run_stamp is not None else run_stamp_for(write, output=output)",
+        "test_g0b_never_journals_under_the_landed_g0_stamp",
+        GALLERY_TESTS,
+    ),
+    Case(
+        "img g0b: its own directory",
+        PERSIST,
+        '"rejected-kinds", "G0b", "rejected_kinds"',
+        '"rejected-kinds", "G0b", None',
+        "test_g0b_lives_in_its_own_directory_and_leaves_g0s_files_alone",
+        GALLERY_TESTS,
+    ),
+    Case(
+        "img g0b: its SQL raises as G0b",
+        PERSIST,
+        '"rejected-kinds", "G0b", "rejected_kinds"',
+        '"rejected-kinds", "G0", "rejected_kinds"',
+        "test_the_g0b_statement_raises_under_its_own_scope_and_writes_its_own_kinds",
+        GALLERY_TESTS,
+    ),
+    Case(
+        "img g0b: verify reads for the batch's kinds",
+        PERSIST,
+        "        unjournalled_label(kinds),",
+        '        unjournalled_label(("site_photo",)),',
+        "test_the_g0b_verify_reads_for_its_own_kinds",
+        GALLERY_TESTS,
+    ),
+    guard(
+        "img g0b: one image, one kind",
+        PERSIST,
+        '        if image_id in seen and seen[image_id] != kind:\n            raise PersistError(f"{where}: image',
+        "test_one_image_with_two_stated_kinds_stops_the_lane",
+        GALLERY_TESTS,
+    ),
+    guard(
+        "img g0b: a batch is one source",
+        PERSIST,
+        "    if len(sources) != 1:",
+        "test_a_batch_that_mixes_the_two_sources_is_refused",
+        GALLERY_TESTS,
+    ),
+    # -- the attribution lane (W7)
+    guard(
+        "img attrib: no fall-through past a present field",
+        ATTRIB,
+        "        if result is not None:\n            return result",
+        "test_a_present_field_that_cannot_be_read_exactly_ends_the_row",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: a replacement character",
+        ATTRIB,
+        '    if "\\N{REPLACEMENT CHARACTER}" in author:',
+        "test_a_present_field_that_cannot_be_read_exactly_ends_the_row",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: an undecoded HTML entity",
+        ATTRIB,
+        '    if any(_ENTITY.search(text) for text in (author, url or "")):',
+        "test_an_entity_parse_attribution_would_store_literally_is_refused",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: 200 characters",
+        ATTRIB,
+        "    if len(author) > MAX_AUTHOR:",
+        "test_a4_refuses_what_it_cannot_read_exactly",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: a non-name",
+        ATTRIB,
+        '    if author.strip().casefold().rstrip(".") in NOT_A_NAME:',
+        "test_a4_refuses_what_it_cannot_read_exactly",
+        ATTRIB_TESTS,
+    ),
+    Case(
+        "img attrib: A3 needs exactly one user link",
+        ATTRIB,
+        "    if len(users) != 1:",
+        "    if not users:",
+        "test_an_own_work_credit_without_exactly_one_user_link_ends_the_row",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: A3 needs the own-work marker",
+        ATTRIB,
+        "    if 'class=\"int-own-work\"' not in credit:",
+        "test_a_credit_without_the_own_work_marker_is_not_a3",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: A4 reads markup only as one link",
+        ATTRIB,
+        "    if re.search(r\"[\\[\\]{}<>|=]|''|~~~|https?://\", value):",
+        "test_a4_refuses_what_it_cannot_read_exactly",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: one {{Information}} only",
+        ATTRIB,
+        "    if len(starts) != 1:",
+        "test_an_empty_or_doubled_information_template_gives_no_route",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: one credit, one source",
+        ATTRIB,
+        '        if row.author_url not in (None, "") and row.author_url != found.author_url:',
+        "test_a_row_whose_url_is_another_sources_is_listed_not_mixed",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: an author already set stops the lane",
+        ATTRIB,
+        '        if row.author not in (None, ""):',
+        "test_a_row_that_already_has_an_author_stops_the_lane",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: author_url where the span names one",
+        ATTRIB,
+        '        if found.author_url is not None and row.author_url in (None, ""):',
+        "test_the_plan_writes_author_and_its_url_with_a_pointer_to_the_evidence_line",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: the recheck compares revids",
+        ATTRIB,
+        '        if page.revid != record["revid"]:',
+        "test_the_recheck_passes_on_the_same_page_and_names_every_drift",
+        ATTRIB_TESTS,
+    ),
+    Case(
+        "img attrib: maxlag is asked again",
+        ATTRIB,
+        '        if not answer.get("error"):\n            break',
+        "        if True:\n            break",
+        "test_a_maxlag_refusal_is_asked_again_and_then_raises",
+        ATTRIB_TESTS,
+    ),
+    # -- the downloader's fetch rule (W2)
+    guard(
+        "img downloader: a small original is fetched itself",
+        DOWNLOADER,
+        "    if original_width <= FETCH_BUCKET:",
+        "test_an_original_no_wider_than_the_bucket_is_fetched_itself",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: an upscale is refused",
+        DOWNLOADER,
+        "            if img.width > original_width:",
+        "test_an_image_wider_than_its_original_is_refused_as_an_upscale",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: a non-200 raises",
+        DOWNLOADER,
+        "    if resp.status_code != 200:\n        raise DownloadError",
+        "test_a_commons_400_is_an_error_and_not_a_skip",
+        DL_TESTS,
+    ),
+    Case(
+        "img downloader: never overwrite a file",
+        DOWNLOADER,
+        '        with dest_path.open("xb") as fh:',
+        '        with dest_path.open("wb") as fh:',
+        "test_an_existing_file_is_never_overwritten",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: downscale to LOCAL_MAX_WIDTH",
+        DOWNLOADER,
+        "            if target != img.size:",
+        "test_a_large_original_arrives_as_the_bucket_and_is_stored_at_1600",
+        DL_TESTS,
+    ),
+    Case(
+        "img downloader: failures are collected",
+        DOWNLOADER,
+        '                failures.append(FailedDownload(img.get("title", "?"), e.url, e.reason))',
+        "                pass",
+        "test_the_sequential_runner_returns_every_failure_by_name",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: the run exits non-zero",
+        DOWNLOADER,
+        "    if failures:\n        for failure in failures:",
+        "test_a_run_with_failures_exits_non_zero_and_lists_them",
+        DL_TESTS,
+    ),
+    # -- the set-hero endpoint (W3)
+    Case(
+        "img set-hero: 1600 px",
+        WIKI_ROUTE,
+        "HERO_WIDTH = 1600",
+        "HERO_WIDTH = 800",
+        "test_a_wide_source_becomes_a_1600_px_hero_with_its_aspect_kept",
+        HERO_TESTS,
+    ),
+    Case(
+        "img set-hero: never upscale",
+        WIKI_ROUTE,
+        "    if img.width > HERO_WIDTH:",
+        "    if img.width != HERO_WIDTH:",
+        "test_a_source_narrower_than_the_hero_width_is_never_upscaled",
+        HERO_TESTS,
+    ),
+    Case(
+        "img hero-status: the row's own file",
+        WIKI_ROUTE,
+        '            "path": f"/data/images/wiki/{sid_short}/{row[3]}",',
+        '            "path": f"/data/images/wiki/{sid_short}/hero.webp",',
+        "test_hero_status_names_the_hero_rows_own_file",
+        HERO_TESTS,
+    ),
+    # -- the shorts selector on the strict VLM call (W14)
+    Case(
+        "img shorts: auth and quota raise at once",
+        SHORTS,
+        "        except VLM_NOT_RETRIED:\n            raise\n",
+        "",
+        "test_a_dead_key_or_a_spent_budget_raises_at_once",
+        SHORTS_TESTS,
+    ),
+    guard(
+        "img shorts: the last failure raises",
+        SHORTS,
+        "            if attempt == VLM_ATTEMPTS:\n                exc.add_note(",
+        "test_a_failure_that_outlasts_the_retries_raises_and_names_the_image",
+        SHORTS_TESTS,
+    ),
+    guard(
+        "img shorts: no verdict raises",
+        SHORTS,
+        "        if attempt == VLM_ATTEMPTS:\n            raise NoVerdictError(",
+        "test_an_answer_that_never_carries_a_json_verdict_stops_the_run",
+        SHORTS_TESTS,
+    ),
+    Case(
+        "img shorts: the strict call",
+        SHORTS,
+        "            raw = mm.minimax_vlm_strict(client, vlm_bytes(path), prompt)",
+        "            raw = mm.minimax_vlm(client, vlm_bytes(path), prompt)",
+        "test_a_2xx_whose_base_resp_reports_an_error_is_an_error_not_a_verdict",
+        SHORTS_TESTS,
+    ),
+    # -- the static export's site image (W15)
+    Case(
+        "img export: an excluded image is never the site image",
+        EXPORTER,
+        "WHERE site_id = us.id AND is_excluded IS NOT TRUE",
+        "WHERE site_id = us.id",
+        "test_the_exported_site_image_is_never_an_excluded_row",
+        EXPORT_TESTS,
+    ),
+    # -- review of 2026-09-23: the DO block, condition by condition
+    Case(
+        "img chunk: guard 2, the image row lives on the named site",
+        CHUNK,
+        "     WHERE p.table_name = 'wiki_images' AND (w.id IS NULL OR w.site_id IS DISTINCT FROM"
+        " p.site_id);",
+        "     WHERE false;",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: guard 3 compares the old value",
+        CHUNK,
+        "       AND t.{column}::text IS DISTINCT FROM p.old_value;",
+        "       AND false;",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: exactly the planned rows moved",
+        CHUNK,
+        "    IF moved <> expected THEN",
+        "    IF false THEN",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: invariant 1 compares the new value",
+        CHUNK,
+        "       AND t.{column}::text IS DISTINCT FROM p.new_value;",
+        "       AND false;",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: invariant 2 compares values and keys",
+        CHUNK,
+        "     WHERE l.id IS NULL OR l.old_value IS DISTINCT FROM p.old_value\n"
+        "        OR l.new_value IS DISTINCT FROM p.new_value OR l.change_key IS DISTINCT FROM"
+        " p.change_key;",
+        "     WHERE l.id IS NULL;",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: invariant 3 counts the whole stamp",
+        CHUNK,
+        "    IF bad > 0 OR (SELECT count(*) FROM remediation_change_log WHERE run_stamp = {s})"
+        " <> expected THEN",
+        "    IF bad > 0 THEN",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: invariant 5 reads excluded heroes",
+        CHUNK,
+        "     WHERE w.site_id IN (SELECT site_id FROM {PLAN_TABLE}) AND w.is_hero AND"
+        " w.is_excluded IS TRUE;",
+        "     WHERE false;",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: invariant 6 knows the live sites",
+        CHUNK,
+        "   WHERE w.site_id IN (SELECT site_id FROM {PLAN_TABLE}) AND w.is_excluded IS NOT TRUE;",
+        "   WHERE false;",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: invariant 7 reads the vocabulary",
+        CHUNK,
+        "       AND w.image_kind IS NOT NULL AND w.image_kind NOT IN ({vocab});",
+        "       AND false;",
+        DO_BLOCK,
+        CHUNK_TESTS,
+    ),
+    # -- the read-back: the invariant read, the journal read, and the settling
+    Case(
+        "img chunk: after-read, two heroes",
+        CHUNK,
+        "     GROUP BY w.site_id HAVING count(*) FILTER (WHERE w.is_hero) > 1) x)::int AS"
+        " sites_with_two_heroes,",
+        "     GROUP BY w.site_id HAVING count(*) FILTER (WHERE w.is_hero) > 9) x)::int AS"
+        " sites_with_two_heroes,",
+        INVARIANTS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: after-read, excluded heroes",
+        CHUNK,
+        "     AND w.is_hero AND w.is_excluded IS TRUE)::int AS excluded_heroes,",
+        "     AND w.is_hero)::int AS excluded_heroes,",
+        INVARIANTS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: after-read, kinds",
+        CHUNK,
+        "     AND w.image_kind IS NOT NULL AND w.image_kind NOT IN ({vocab}))::int AS"
+        " kinds_outside_vocabulary,",
+        "     AND w.image_kind IS NOT NULL)::int AS kinds_outside_vocabulary,",
+        INVARIANTS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: after-read, the curated source",
+        CHUNK,
+        "     AND u.source_id <> {source})::int AS sites_outside_the_curated_source",
+        "     AND u.source_id <> 'lyra')::int AS sites_outside_the_curated_source",
+        INVARIANTS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: the journal read selects test id and confidence",
+        CHUNK,
+        '        " new_value, change_key, test_id, confidence FROM remediation_change_log"',
+        '        " new_value, change_key FROM remediation_change_log"',
+        JOURNAL,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: readback compares test id and confidence",
+        CHUNK,
+        '            "test_id": lane.test_id,\n            "confidence": lane.confidence,\n',
+        "",
+        JOURNAL,
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: a journal row held twice",
+        CHUNK,
+        "        if ident in journal:",
+        "test_the_readback_names_a_journal_row_it_holds_twice",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: a partial journal is unknown",
+        CHUNK,
+        "    if count != len(chunk.changes):",
+        "test_a_journal_that_holds_part_of_the_chunk_is_an_unknown_outcome",
+        CHUNK_TESTS,
+    ),
+    # -- the plan files and the change model
+    guard(
+        "img chunk: the change key is the lane's",
+        CHUNK,
+        '        if row["change_key"] != change_key(lane, change):',
+        "test_a_plan_record_whose_change_key_this_lane_does_not_make_is_refused",
+        CHUNK_TESTS,
+    ),
+    guard(
+        "img chunk: a rule is a rule id",
+        CHUNK,
+        "    if not TOKEN_RE.fullmatch(change.rule.lower()):",
+        EXPRESS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: a reason carries no control character",
+        CHUNK,
+        '    _no_control(change.reason, what="a reason")',
+        "    pass",
+        EXPRESS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: line separators are control characters",
+        CHUNK,
+        "    return any(ord(ch) < 32 or 127 <= ord(ch) <= 159 or ch in LINE_BREAKERS for ch in value)",
+        "    return any(ord(ch) < 32 or ord(ch) == 127 for ch in value)",
+        EXPRESS,
+        CHUNK_TESTS,
+    ),
+    Case(
+        "img chunk: a plan is split at newlines only",
+        CHUNK,
+        '    for lineno, line in enumerate(pv.jsonl_lines(plan_path.read_text(encoding="utf-8")),'
+        " start=1):",
+        '    for lineno, line in enumerate(plan_path.read_text(encoding="utf-8").splitlines(),'
+        " start=1):",
+        "test_a_delivered_value_with_a_line_separator_is_refused_by_name_not_by_traceback",
+        CHUNK_TESTS,
+    ),
+    # -- persist_verdicts: the kind test and the JSON-lines readers
+    guard(
+        "img pv: kind_test reads the vocabulary",
+        PERSIST,
+        "    if not kinds or any(kind not in VOCAB for kind in kinds):",
+        "test_kind_test_refuses_what_is_not_a_set_of_image_kinds",
+        GALLERY_TESTS,
+    ),
+    Case(
+        "img pv: JSON lines split at newlines only",
+        PERSIST,
+        '    return text.split("\\n")',
+        "    return text.splitlines()",
+        "test_a_plan_record_with_a_line_separator_is_read_whole",
+        GALLERY_TESTS,
+    ),
+    Case(
+        "img pv: production rows split at newlines only",
+        PERSIST,
+        "    for line in jsonl_lines(proc.stdout):",
+        "    for line in proc.stdout.splitlines():",
+        "test_a_production_row_with_a_line_separator_is_read_whole",
+        GALLERY_TESTS,
+    ),
+    # -- the attribution lane
+    guard(
+        "img attrib: wiki markup is not a name",
+        ATTRIB,
+        '    if any(mark in text for text in (author, url or "") for mark in WIKI_MARKUP):',
+        "test_wiki_markup_in_a_rendered_field_is_not_a_name",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: a Wikimedia link must be a user page",
+        ATTRIB,
+        "    if url is not None and names_the_platform(url):",
+        "test_a_link_into_wikimedia_that_is_not_a_user_page_names_the_platform",
+        ATTRIB_TESTS,
+    ),
+    Case(
+        "img attrib: a user page does not name the platform",
+        ATTRIB,
+        "    return not _USER_PATH.fullmatch(urllib.parse.unquote(parts.path))",
+        "    return True",
+        "test_a_user_page_or_the_authors_own_site_is_the_authors_link",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: only a Wikimedia host names the platform",
+        ATTRIB,
+        '    if not any(host == domain or host.endswith(f".{domain}") for domain in WIKIMEDIA_DOMAINS):',
+        "test_a_user_page_or_the_authors_own_site_is_the_authors_link",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: a control character or line separator",
+        ATTRIB,
+        '    if any(CW.has_control(text) for text in (author, url or "")):',
+        "test_a_control_character_or_line_separator_in_the_span_is_refused",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: a plain web address",
+        ATTRIB,
+        r"""    if url is not None and not re.fullmatch(r"https?://[^\s\"'<>]+", url):""",
+        "test_a_link_that_is_not_a_plain_web_address_is_refused",
+        ATTRIB_TESTS,
+    ),
+    Case(
+        "img attrib: A3 without one user link ends the row",
+        ATTRIB,
+        "        return Refused(\n"
+        '            "A3", f"the own-work credit carries {len(users)} user links, not exactly one",'
+        " credit\n"
+        "        )",
+        "        return None",
+        "test_an_own_work_credit_without_exactly_one_user_link_ends_the_row",
+        ATTRIB_TESTS,
+    ),
+    Case(
+        "img attrib: A3's refusal ends the row",
+        ATTRIB,
+        '    return _read("A3", "Credit", anchor, anchor)',
+        '    found = _read("A3", "Credit", anchor, anchor)\n'
+        "    return found if isinstance(found, Found) else None",
+        "test_an_own_work_user_link_that_cannot_be_read_ends_the_row",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: a batch answer carries its query",
+        ATTRIB,
+        '    if "query" not in answer:',
+        "test_a_batch_answer_without_a_query_stops_the_lane",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: one revision and its imageinfo",
+        ATTRIB,
+        "        if len(revisions) != 1 or info is None:",
+        "test_a_page_without_one_revision_and_its_imageinfo_is_named",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: the recheck hashes the stored span",
+        ATTRIB,
+        '        if sha256_text(str(record["span"])) != record["span_sha256"]:',
+        "test_the_recheck_passes_on_the_same_page_and_names_every_drift",
+        ATTRIB_TESTS,
+    ),
+    guard(
+        "img attrib: an unclosed template",
+        ATTRIB,
+        "    if body is None:",
+        "test_an_unclosed_information_template_gives_no_route",
+        ATTRIB_TESTS,
+    ),
+    Case(
+        "img attrib: evidence is split at newlines only",
+        ATTRIB,
+        '        json.loads(line) for line in pv.jsonl_lines(path.read_text(encoding="utf-8")) if'
+        " line.strip()",
+        '        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if'
+        " line.strip()",
+        "test_the_evidence_file_is_read_back_whole_when_a_span_carries_a_line_separator",
+        ATTRIB_TESTS,
+    ),
+    # -- the downloader's site run
+    Case(
+        "img downloader: answers keyed by the asked title",
+        DOWNLOADER,
+        "        page = pages.get(dereference(title, normalized))",
+        "        page = pages.get(title)",
+        "test_an_underscore_media_list_title_is_stored_with_its_width_and_a_bare_url",
+        DL_TESTS,
+    ),
+    Case(
+        "img downloader: the original URL is parse_attribution's",
+        DOWNLOADER,
+        '            "original_url": original["original_url"],',
+        '            "original_url": info.get("url"),',
+        "test_the_metadata_batch_answers_under_the_title_that_was_asked",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: an upload original has no query",
+        DOWNLOADER,
+        "    if parsed.query or parsed.fragment:",
+        "test_what_has_no_valid_fetch_is_refused_by_name",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: the byte cap",
+        DOWNLOADER,
+        "    if len(raw_bytes) > MAX_RAW_BYTES:",
+        "test_an_answer_over_the_byte_limit_is_refused",
+        DL_TESTS,
+    ),
+    Case(
+        "img downloader: the rows are read with --force too",
+        DOWNLOADER,
+        "        rows = session.execute(\n"
+        '            text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),',
+        "        rows = [] if force else session.execute(\n"
+        '            text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),',
+        "test_a_file_on_disk_that_a_row_names_is_done",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: a file no row names is a failure",
+        DOWNLOADER,
+        "        if on_disk and not registered:",
+        "test_a_file_on_disk_that_no_row_names_is_a_named_failure",
+        DL_TESTS,
+    ),
+    guard(
+        "img downloader: an insert failure is named",
+        DOWNLOADER,
+        '            if not (isinstance(exc, IntegrityError) and "uq_wiki_image_site_url" in str(exc)):',
+        "test_an_insert_that_fails_is_a_named_failure_and_moves_no_thumbnail",
+        DL_TESTS,
+    ),
+    Case(
+        "img downloader: no site-level catch",
+        DOWNLOADER,
+        "        count, failures = process_site(\n"
+        "            site, dry_run=dry_run, max_per_category=max_per_category, force=force\n"
+        "        )",
+        "        try:\n"
+        "            count, failures = process_site(\n"
+        "                site, dry_run=dry_run, max_per_category=max_per_category, force=force\n"
+        "            )\n"
+        "        except Exception:\n"
+        "            continue",
+        "test_an_error_that_is_not_an_image_failure_stops_the_run",
+        DL_TESTS,
+    ),
+    # -- T09's historic caps, bound to the snapshot they made
+    guard(
+        "img t09: the caps are bound to their snapshot",
+        T09,
+        "    if datetime.fromisoformat(exported_at) >= HISTORIC_CAPS_UNTIL:",
+        "test_the_800_and_1600_px_notes_are_refused_for_a_later_snapshot",
+        T09_TESTS,
+    ),
+    guard(
+        "img t09: a snapshot without an export time",
+        T09,
+        "    if exported_at is None:",
+        "test_the_800_and_1600_px_notes_are_refused_for_a_later_snapshot",
+        T09_TESTS,
+    ),
+]
+CASES += IMAGE_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""
@@ -1356,4 +2306,7 @@ def main(cases: Sequence[Case] = CASES) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # `mutation_sweep.py img` runs the cases whose label contains any argument; none runs all.
+    sys.exit(
+        main([c for c in CASES if not sys.argv[1:] or any(a in c.label for a in sys.argv[1:])])
+    )

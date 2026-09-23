@@ -23,8 +23,10 @@ What is pinned here, each by a test that goes red when its guard is removed:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -32,18 +34,21 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "output" / "remediation" / "tools"
-for path in (TOOLS, REPO / "scripts" / "remediation"):
+for path in (TOOLS, REPO / "scripts" / "remediation", REPO):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
 import lanes  # noqa: E402
 import make_holds  # noqa: E402
+import measure_review_holds  # noqa: E402
 import qid_repair  # noqa: E402
 import review_all  # noqa: E402
 import verify_writes as V  # noqa: E402
 import write_dry_all  # noqa: E402
 import write_gate  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
+
+from pipeline.utils.geo import haversine_distance  # noqa: E402
 
 SITE = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -1017,6 +1022,298 @@ def test_the_pre_flight_and_the_acceptance_compare_the_full_row() -> None:
     assert qid_repair.compare([row], {}, want="old")
 
 
+RESEARCH = REPO / "output" / "remediation" / "bcases" / "qid_research.jsonl"
+
+
+def test_wave_two_is_every_open_wrong_link_the_research_names_and_nothing_else() -> None:
+    research = {r["site_id"]: r["suggestion"] for r in lanes.read_jsonl(RESEARCH)}
+    wave2 = qid_repair.WAVE2_SITES
+    assert {site.site_id for site in wave2} == set(research)
+    assert not {site.site_id for site in wave2} & {site.site_id for site in qid_repair.SITES}
+    for site in wave2:
+        if site.rule != "unresolved":
+            assert (site.rule, site.new_qid) == (
+                research[site.site_id]["rule"],
+                research[site.site_id]["qid"],
+            )
+    # a research lead may be refused by hand, with its reason - never invented
+    refused = [
+        s.name
+        for s in wave2
+        if s.rule == "unresolved" and research[s.site_id]["rule"] != "unresolved"
+    ]
+    assert refused == ["Ramesses III Temple"]
+    assert all(site.evidence for site in wave2)
+
+
+def _research_distance(record: dict[str, Any], site: Any) -> float:
+    """The metres the research measured for a settled site's position proof: rule B's candidate
+    P625, rule A's candidate P625 or - where Wikidata points elsewhere - the article's coordinates."""
+    candidate = next(c for c in record["candidates"] if c["qid"] == site.new_qid)
+    if site.rule == "B" or (
+        candidate["distance_m"] is not None and candidate["distance_m"] <= 1000
+    ):
+        return float(candidate["distance_m"])
+    page = record["enwiki_page"]
+    lat, lon = record["stored_point"]
+    return haversine_distance(lat, lon, page["lat"], page["lon"]) * 1000.0
+
+
+def test_every_wave_two_gate_is_the_distance_the_research_measured() -> None:
+    """`gate_m` is typed by hand; the 1 km gate in `changes()` is only as good as that number, so it
+    is read back against the research record it was copied from (to the 0.1 m the record keeps)."""
+    research = {r["site_id"]: r for r in lanes.read_jsonl(RESEARCH)}
+    settled = [s for s in qid_repair.WAVE2_SITES if s.rule != "unresolved"]
+    assert len(settled) == 12
+    for site in settled:
+        measured = _research_distance(research[site.site_id], site)
+        assert site.gate_m == pytest.approx(measured, abs=0.05), (site.name, site.gate_m, measured)
+        assert measured <= qid_repair.GATE_M
+
+
+def test_the_delivered_wave_two_statements_are_the_rendered_ones() -> None:
+    wave = qid_repair.WAVE2
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    delivered = [
+        qid_repair.Change(**{**r, "evidence": tuple(r["evidence"])})
+        for r in lanes.read_jsonl(wave.out / "PLAN.jsonl")
+    ]
+    assert delivered == rows
+    rendered = qid_repair.statements(rows, wave)
+    for name in ("APPLY.sql", "ROLLBACK.sql"):
+        assert (wave.out / name).read_text(encoding="utf-8") == rendered[name], name
+    evidence_source = f'"source": "{wave.research}"'
+    assert evidence_source in rendered["APPLY.sql"]
+    assert f'"source": "{qid_repair.WAVE1.research}"' not in rendered["APPLY.sql"]
+
+
+def test_a_wave_two_replacement_without_its_position_proof_is_refused() -> None:
+    site = next(s for s in qid_repair.WAVE2_SITES if s.rule == "B")
+    for gate in (None, qid_repair.GATE_M + 1.0):
+        with pytest.raises(SystemExit, match="position proof"):
+            qid_repair.changes((replace(site, gate_m=gate),), gate_m=qid_repair.GATE_M)
+    assert qid_repair.changes((site,), gate_m=qid_repair.GATE_M)
+    # wave 1's rules predate the gate: its entries carry no distance and still render
+    assert qid_repair.changes() and all(s.gate_m is None for s in qid_repair.SITES)
+
+
+def test_wave_two_renders_under_its_own_stamp_and_wave_one_is_what_was_applied() -> None:
+    wave = qid_repair.WAVE2
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    sql = qid_repair.render(rows, reversal=False, wave=wave)
+    assert f"'{wave.run_stamp}'" in sql and f"'{qid_repair.RUN_STAMP}'" not in sql
+    assert f"{qid_repair.DIGEST_HEADER}{qid_repair.plan_digest(rows)}" in sql
+    undo = qid_repair.render(rows, reversal=True, wave=wave)
+    assert f"'{wave.rollback_stamp}'" in undo and f"'{wave.run_stamp}'" not in undo
+    applied = (REPO / "output" / "remediation" / "qid_repair" / "APPLY.sql").read_text(
+        encoding="utf-8"
+    )
+    assert applied == qid_repair.render(qid_repair.changes(), reversal=False)
+
+
+def test_wave_two_check_and_verify_read_their_own_rows_and_stamp(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    wave = qid_repair.WAVE2
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    out = ["--wave", "2", "--dir", str(tmp_path)]
+    assert qid_repair.main(["render", *out]) == 0
+
+    def database(*, state: str, journal: bool) -> None:
+        def psql(sql: str, *, host: str) -> str:
+            if "FROM remediation_change_log" in sql:
+                assert f"run_stamp = '{wave.run_stamp}'" in sql
+                keys = [row.change_key for row in rows] if journal else []
+                return "".join(json.dumps({"change_key": key}) + "\n" for key in keys)
+            asked = set(re.findall(r"'([0-9a-f-]{36})'", sql))
+            return "".join(
+                json.dumps(
+                    {
+                        "site_id": row.site_id,
+                        "kind": row.kind,
+                        "value": row.old_value if state == "old" else row.new_value,
+                    }
+                )
+                + "\n"
+                for row in rows
+                if row.site_id in asked
+            )
+
+        monkeypatch.setattr(lanes, "psql", psql)
+
+    database(state="old", journal=False)
+    assert qid_repair.main(["check", *out]) == 0
+    assert qid_repair.main(["verify", *out]) == 1
+    database(state="new", journal=True)
+    assert qid_repair.main(["verify", *out]) == 0
+    database(state="new", journal=False)
+    assert qid_repair.main(["verify", *out]) == 1
+
+
+# ── wave 3: the kept names on a generic or shared link ───────────────────────────────────────
+
+SUSPECTS = REPO / "output" / "remediation" / "bcases" / "qid_research_suspects.jsonl"
+
+
+def _as_committed(path: Path) -> bytes:
+    """A delivered file as git stores it: this Windows checkout writes the plan files that
+    `.gitattributes` does not pin to LF with CRLF, and their blobs hold LF (no CR of their own)."""
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
+def test_waves_one_and_two_still_render_byte_for_byte_what_is_committed(tmp_path: Path) -> None:
+    for wave in (qid_repair.WAVE1, qid_repair.WAVE2):
+        out = tmp_path / str(wave.number)
+        qid_repair.write_files(out, wave)
+        for name in ("PLAN.jsonl", "PLAN.md", "APPLY.sql", "ROLLBACK.sql"):
+            assert (out / name).read_bytes() == _as_committed(wave.out / name), (wave.number, name)
+        for name in ("APPLY.sql", "ROLLBACK.sql"):
+            assert (out / name).read_bytes() == (wave.out / name).read_bytes(), (wave.number, name)
+
+
+def test_wave_three_is_every_suspect_the_research_names_and_nothing_else() -> None:
+    research = {r["site_id"]: r for r in lanes.read_jsonl(SUSPECTS)}
+    wave3 = qid_repair.WAVE3_SITES
+    assert len(wave3) == 39 and {site.site_id for site in wave3} == set(research)
+    earlier = {site.site_id for site in (*qid_repair.SITES, *qid_repair.WAVE2_SITES)}
+    assert not {site.site_id for site in wave3} & earlier
+    for site in wave3:
+        suggestion = research[site.site_id]["suggestion"]
+        assert site.old_qid == research[site.site_id]["old_qid"], site.name
+        if site.rule in ("A", "B"):
+            assert (site.rule, site.new_qid) == (suggestion["rule"], suggestion["qid"])
+    # a research lead may be refused by hand, with its reason - never invented
+    refused = sorted(
+        s.name
+        for s in wave3
+        if s.rule not in ("A", "B") and research[s.site_id]["suggestion"]["rule"] != "unresolved"
+    )
+    assert refused == ["Caesarea Philippi", "Madain Saleh"]
+    assert all(site.evidence for site in wave3)
+    assert qid_repair.outcome_counts(wave3) == {
+        "replace": 2,
+        "keep-type": 3,
+        "duplicate-candidate": 23,
+        "link-right": 5,
+        "unresolved": 6,
+    }
+
+
+def test_every_wave_three_gate_is_the_distance_the_research_measured() -> None:
+    research = {r["site_id"]: r for r in lanes.read_jsonl(SUSPECTS)}
+    settled = [s for s in qid_repair.WAVE3_SITES if s.rule in ("A", "B")]
+    assert [s.name for s in settled] == ["Ancient Theatre of Megalopolis", "Siega Verde"]
+    for site in settled:
+        measured = _research_distance(research[site.site_id], site)
+        assert site.gate_m == pytest.approx(measured, abs=0.05), (site.name, site.gate_m, measured)
+        assert measured <= qid_repair.GATE_M
+
+
+def test_the_delivered_wave_three_files_are_the_rendered_ones(tmp_path: Path) -> None:
+    wave = qid_repair.WAVE3
+    assert wave.out == REPO / "output" / "remediation" / "qid_repair" / "wave3"
+    assert wave.research == "qid-repair research 2026-09-23 (wave 3)"
+    rows = qid_repair.write_files(tmp_path, wave)
+    assert [(r.name, r.kind, r.old_value, r.new_value) for r in rows] == [
+        ("Ancient Theatre of Megalopolis", "wikidata_qid", "Q823721", "Q22681531"),
+        ("Siega Verde", "wikidata_qid", "Q552106", "Q2717874"),
+    ]
+    for name in ("PLAN.jsonl", "PLAN.md", "APPLY.sql", "ROLLBACK.sql"):
+        assert (tmp_path / name).read_bytes() == _as_committed(wave.out / name), name
+    apply_sql = (wave.out / "APPLY.sql").read_text(encoding="utf-8")
+    assert f'"source": "{wave.research}"' in apply_sql
+    assert f'"source": "{qid_repair.WAVE2.research}"' not in apply_sql
+
+
+def test_the_wave_three_plan_names_every_site_once_under_its_outcome() -> None:
+    wave = qid_repair.WAVE3
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    markdown = qid_repair.MARKDOWN[3](rows)
+    assert markdown.startswith("# External-id repair, wave 3 (2026-09-23) - planned, not applied")
+    assert (
+        "2 row changes at 2 sites (run stamp `2026-09-23_external-id-repair-wave3`); the other 37 "
+        "sites keep their rows exactly as they are: 3 keep-type, 23 duplicate-candidate, "
+        "5 link-right, 6 unresolved."
+    ) in markdown
+    table = [line for line in markdown.splitlines() if line.startswith("| ") and "(`" in line]
+    assert len(table) == len(wave.sites)
+    for site in wave.sites:
+        [line] = [line for line in table if f"(`{site.site_id}`)" in line]
+        label = f"replace ({site.rule})" if site.rule in ("A", "B") else site.rule
+        assert line.split(" | ")[1] == label, site.name
+
+
+def test_a_kept_wave_three_site_carries_no_value_and_an_unknown_rule_is_refused() -> None:
+    site = next(s for s in qid_repair.WAVE3_SITES if s.rule == "keep-type")
+    for rule in qid_repair.UNCHANGED:
+        assert qid_repair.changes((replace(site, rule=rule),), gate_m=qid_repair.GATE_M) == []
+    with pytest.raises(SystemExit, match="cannot carry a new value"):
+        qid_repair.changes((replace(site, new_qid="Q1"),), gate_m=qid_repair.GATE_M)
+    with pytest.raises(SystemExit, match="rule 'keep'"):
+        qid_repair.changes((replace(site, rule="keep"),), gate_m=qid_repair.GATE_M)
+
+
+def test_a_wave_three_replacement_without_its_position_proof_is_refused() -> None:
+    wave = qid_repair.WAVE3
+    assert wave.gate_m == qid_repair.GATE_M
+    site = next(s for s in wave.sites if s.rule == "B")
+    for gate in (None, qid_repair.GATE_M + 1.0):
+        with pytest.raises(SystemExit, match="position proof"):
+            qid_repair.changes((replace(site, gate_m=gate),), gate_m=wave.gate_m)
+
+
+def test_wave_three_renders_under_its_own_stamp() -> None:
+    wave = qid_repair.WAVE3
+    assert (wave.run_stamp, wave.rollback_stamp) == (
+        "2026-09-23_external-id-repair-wave3",
+        "2026-09-23_external-id-repair-wave3-rollback",
+    )
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    sql = qid_repair.render(rows, reversal=False, wave=wave)
+    assert f"'{wave.run_stamp}'" in sql and f"{qid_repair.DIGEST_HEADER}" in sql
+    for earlier in (qid_repair.RUN_STAMP, qid_repair.WAVE2.run_stamp):
+        assert earlier not in sql
+    undo = qid_repair.render(rows, reversal=True, wave=wave)
+    assert f"'{wave.rollback_stamp}'" in undo and f"'{wave.run_stamp}'" not in undo
+
+
+def test_wave_three_check_and_verify_read_their_own_rows_and_stamp(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    wave = qid_repair.WAVE3
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    out = ["--wave", "3", "--dir", str(tmp_path)]
+    assert qid_repair.main(["render", *out]) == 0
+
+    def database(*, state: str, journal: bool) -> None:
+        def psql(sql: str, *, host: str) -> str:
+            if "FROM remediation_change_log" in sql:
+                assert f"run_stamp = '{wave.run_stamp}'" in sql
+                keys = [row.change_key for row in rows] if journal else []
+                return "".join(json.dumps({"change_key": key}) + "\n" for key in keys)
+            asked = set(re.findall(r"'([0-9a-f-]{36})'", sql))
+            assert asked == {row.site_id for row in rows}
+            return "".join(
+                json.dumps(
+                    {
+                        "site_id": row.site_id,
+                        "kind": row.kind,
+                        "value": row.old_value if state == "old" else row.new_value,
+                    }
+                )
+                + "\n"
+                for row in rows
+            )
+
+        monkeypatch.setattr(lanes, "psql", psql)
+
+    database(state="old", journal=False)
+    assert qid_repair.main(["check", *out]) == 0
+    assert qid_repair.main(["verify", *out]) == 1
+    database(state="new", journal=True)
+    assert qid_repair.main(["verify", *out]) == 0
+
+
 def _repair_database(monkeypatch: Any, *, state: str, journal: bool) -> None:
     rows = qid_repair.changes()
 
@@ -1062,3 +1359,84 @@ def test_check_and_verify_read_the_database_and_refuse_an_edited_statement(
     apply_sql.write_text(text, encoding="utf-8")
     with pytest.raises(SystemExit, match="REHEARSAL.sql does not exist"):
         qid_repair.main(["check", *out])
+
+
+# ── measure_review_holds: the two writer rules of 2026-09-23 on the rows already decided ─────
+
+
+def _decided(key: str, column: str, old: str, new: str, reason: str) -> dict[str, Any]:
+    """One row of a lane's plan, as far as the measurement reads it."""
+    return {
+        "change_key": key,
+        "batch_id": "batch-0001",
+        "site_id": SITE,
+        "site_name": f"Site {key}",
+        "column": column,
+        "old_value": old,
+        "new_value": new,
+        "verdict": {"reason": reason},
+    }
+
+
+def test_the_measurement_counts_holds_false_holds_and_bucket_moves_with_the_writers_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rows = [
+        # held by hand, and named by the rule: its own sentence says a half fails
+        _decided("k1", "site_type", "Temple", "Ruin", "Both halves fail: the stored type holds."),
+        # held by hand, a bucket nudge the rule cannot name but the bucket gate refuses
+        _decided("k2", "period_start", "-3000", "-2999", "Both halves hold - it moved a year."),
+        # held by hand, and named by the rule in the value half's words
+        _decided("k6", "site_type", "Tomb", "Dolmen", "The proposed `Dolmen` is contradicted."),
+        # written, cleanly cleared
+        _decided("k3", "period_start", "-1500", "-600", "Both halves hold - founded c. 600 BC."),
+        # written, and the rule would have held it
+        _decided("k4", "country", "Spain", "France", "The stored value is not shown wrong."),
+        # stopped at the boundary check
+        _decided("k5", "country", "Peru", "Chile", "Both halves hold - the page says Chile."),
+    ]
+    rows_path = tmp_path / "ALL_ROWS.jsonl"
+    lanes.write_jsonl(rows_path, rows)
+    holds = [{"change_key": key} for key in ("k1", "k2", "k6")]
+    lanes.write_jsonl(tmp_path / "HOLDS.jsonl", holds)
+    (tmp_path / "written.txt").write_text("k3\nk4\n", encoding="utf-8")
+    journal = [{"change_key": "k3", "old_value": "-1500", "new_value": "-600"}]
+    lanes.write_jsonl(tmp_path / "journal.jsonl", journal)
+    review = tmp_path / "run" / "batch-0001" / "reviews" / "s%2Fcountry.txt"
+    review.parent.mkdir(parents=True)
+    review.write_text("WHY: Neither half holds.\nREFUTED: NO\n", encoding="utf-8")
+    monkeypatch.setitem(lanes.REVIEWED_PLAN_KEYS_SHA256, lanes.MASS, lanes.keys_digest(rows))
+
+    argv = ["--rows", str(rows_path), "--holds", str(tmp_path / "HOLDS.jsonl")]
+    argv += ["--run-dir", str(tmp_path / "run"), "--written-keys", str(tmp_path / "written.txt")]
+    argv += ["--out-dir", str(tmp_path / "logs" / "review_holds")]
+    assert measure_review_holds.main([*argv, "--journal", str(tmp_path / "journal.jsonl")]) == 0
+    out = capsys.readouterr().out
+    assert "plan rows 6: held 3, written 2, boundary 1" in out
+    assert "recall on the hand holds: 2/3" in out
+    assert "false holds on written rows: 1/2" in out
+    assert "held: 1 of 1 period_start rows" in out  # -3000 -> -2999 stays in 4500 - 3000 BC
+    assert "written: 1 of 1 period_start rows" in out  # -1500 -> -600 stays in 1500 - 500 BC
+    assert "hand holds caught by the bucket gate or the contradiction hold: 3" in out
+    assert "production journal: 1 of 1 period_start rows inside the stored bucket" in out
+    assert "neither half holds" in out and "{'NO': 1}" in out
+    # the rows Martin decides on (HUMAN_ONLY.md B11): written rows the hold would hold, and written
+    # period_start rows that stayed in their bucket, each with its key, values and reason
+    out_dir = tmp_path / "logs" / "review_holds"
+    held = lanes.read_jsonl(out_dir / measure_review_holds.WRITTEN_HELD_FILE)
+    assert [(r["change_key"], r["phrase"], r["reason"]) for r in held] == [
+        ("k4", "the stored value is not shown wrong", "The stored value is not shown wrong.")
+    ]
+    bucket = lanes.read_jsonl(out_dir / measure_review_holds.WRITTEN_BUCKET_FILE)
+    assert [(r["change_key"], r["old_value"], r["new_value"], r["bucket"]) for r in bucket] == [
+        ("k3", "-1500", "-600", "1500 - 500 BC")
+    ]
+    table = (out_dir / measure_review_holds.WRITTEN_HELD_FILE).with_suffix(".md")
+    assert "| k4 |" in table.read_text(encoding="utf-8")
+    assert "| k3 |" in (out_dir / measure_review_holds.WRITTEN_BUCKET_FILE).with_suffix(
+        ".md"
+    ).read_text(encoding="utf-8")
+    # the measurement refuses a plan that is not the lane's reviewed one
+    monkeypatch.setitem(lanes.REVIEWED_PLAN_KEYS_SHA256, lanes.MASS, "0" * 64)
+    with pytest.raises(SystemExit, match="not the plan the production rows"):
+        measure_review_holds.main(argv)

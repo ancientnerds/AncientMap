@@ -213,7 +213,7 @@ as "checked and clean" (house rule). Nothing else belongs in the column — `sub
 a single enum.
 
 **Where the values come from.** `judge_all` returns one verdict dict per image
-(`shorts_select.py:213-248`), persisted **today only** to
+(`shorts_select.py:226-277`, `judge_one` and `judge_all`), persisted **today only** to
 `video-assets/shorts/<slug>/selection.json` (280 stored verdicts from 16 sites already sit
 there; plan §9.3). The stored entry carries `wiki_images.id`, so the mapping back to the
 row is exact.

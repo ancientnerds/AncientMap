@@ -48,6 +48,23 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   verlangt Node 22.22+). Nachweis vor einem Push: sauberer Worktree ohne gitignorierte Daten, ein
   venv mit exakt der CI-Installationszeile, vitest unter `npx -p node@20`. *(2026-09-22)*
 
+- **Agenten-Worktrees: keine Junctions auf geteilte Verzeichnisse, und vor dem Entfernen jede
+  Junction lösen (2026-09-23).** `git worktree remove --force` ist unter Windows durch eine
+  `.venv`-Junction (Worktree → Haupt-venv) in die echte venv gelaufen und hat sie bis zur ersten
+  gesperrten DLL gelöscht: aiohttp, aiohappyeyeballs, aiofiles, die mypyc-Bibliotheken von
+  black/mypy/tomli, pywin32 (`api` war nicht mehr importierbar). Repariert per
+  `pip install --force-reinstall --no-deps` in den exakten Versionen. Prüfen, bevor man einem
+  Worktree-Löschen traut: `Get-ChildItem -Attributes ReparsePoint` im Worktree, Junctions mit
+  `cmd /c rmdir <link>` lösen (löscht nur den Link). Die venv prüft man an den `RECORD`-Dateien
+  **und** mit `pip check` - ganz gelöschte Pakete sieht nur der zweite. Test- und
+  Mutations-Ergebnisse aus dem Schadensfenster sind ungültig (jede Mutation liest dort als
+  „gefangen“).
+- **Ein Worktree kostet ~4,2 GB** (davon 2,3 GB `public/data`, auch ohne LFS-Inhalt). 44 parallele
+  Worktrees haben C: am 2026-09-23 auf 0 Byte gebracht; Schreibvorgänge wurden abgeschnitten.
+  Worktrees fertiger Workflows sofort entfernen (Junctions zuerst lösen), die Platte mit
+  `df -h /c` beobachten, Mutation-Sweeps nie in einem Worktree laufen lassen, den ein anderer
+  Agent gleichzeitig benutzt.
+
 ## Datenbank
 
 - **Prod ist die einzige Wahrheit.** Es gibt keine lokale DB; Zugriff nur auf dem VPS über
