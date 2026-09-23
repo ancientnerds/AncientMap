@@ -3,12 +3,13 @@ import * as THREE from 'three'
 import { SiteData, getDataSource } from '../data/sites'
 import { FilterMode } from '../App'
 import { offlineFetch } from '../services/OfflineFetch'
+import { runMapboxLoadTask } from '../services/mapboxLoader'
 import { useOffline } from '../contexts/OfflineContext'
 import { track } from '../analytics'
 import { EMPIRES } from '../config/empireData'
 import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
-import { CAMERA } from '../config/globeConstants'
+import { MAPBOX_SWITCH_DISTANCE, orbitMinDistance } from '../config/globeConstants'
 import { fadeLabelIn, fadeLabelOut } from '../utils/LabelRenderer'
 import { createProximityCircle, createCenterMarker, disposeGroup, disposeSprite } from '../utils/proximityHelpers'
 import { CoordinateDisplay, ScaleBar, ContributePickerHint, HardwareWarning, TooltipOverlay, MapboxOfflineWarning } from './Globe/overlays'
@@ -33,7 +34,6 @@ import {
   type GlobeRenderContext,
 } from './Globe/rendering/empireRenderer'
 import {
-  createMapboxInitEffect,
   createAutoSwitchEffect,
   createModeSwitchEffect,
   createSitesSyncEffect,
@@ -41,7 +41,6 @@ import {
   createProximityCircleSyncEffect,
   createSelectedSitesSyncEffect,
   createEmpireBordersSyncEffect,
-  type MapboxInitEffectDeps,
   type AutoSwitchEffectDeps,
   type ModeSwitchEffectDeps,
   type SitesSyncEffectDeps,
@@ -292,6 +291,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   })
   // Destructure for convenient access (avoiding conflicts with local declarations)
   const {
+    mapboxState, setMapboxState, mapboxStateRef,
     showMapbox, setShowMapbox, showMapboxRef,
     mapboxTransitioningRef, prevShowMapboxRef,
     enterMapboxMode, exitMapboxMode,
@@ -819,14 +819,39 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [])
 
-  // Mapbox initialization
+  // Mapbox: mapbox-gl is imported on demand (services/mapboxLoader.ts).
+  // Interim trigger at mount; the background queue takes this task over (U10).
   useEffect(() => {
-    const deps: MapboxInitEffectDeps = {
-      mapboxContainerRef,
-      mapboxServiceRef,
+    let cancelled = false
+    const controller = new AbortController()
+    runMapboxLoadTask({
+      containerRef: mapboxContainerRef,
+      serviceRef: mapboxServiceRef,
+      satelliteRef: refs.satelliteMode,
+      dotSizeRef,
+      setState: setMapboxState,
+      isCancelled: () => cancelled,
+      signal: controller.signal,
+    }).catch((err: unknown) => {
+      // After cleanup the task settles with the abort reason: not a failure.
+      if (cancelled) return
+      console.error('[Mapbox] Failed to load:', err)
+    })
+    return () => {
+      cancelled = true
+      controller.abort(new Error('Globe unmounted'))
+      mapboxServiceRef.current?.dispose()
+      mapboxServiceRef.current = null
     }
-    return createMapboxInitEffect(deps)
   }, [])
+
+  // No orbit closer than the Mapbox switch distance until Mapbox is ready
+  // (or has failed): the Three.js globe was never shown closer than that.
+  useEffect(() => {
+    const sceneData = sceneRef.current
+    if (!sceneData) return
+    sceneData.controls.minDistance = orbitMinDistance(mapboxState)
+  }, [mapboxState])
 
   const labelsLoadedRef = refs.labelsLoaded
   const [labelsLoaded, setLabelsLoaded] = useState(false)
@@ -2180,11 +2205,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   useEffect(() => {
     const controls = sceneRef.current?.controls
     if (!controls) return
-    // INTEGRATION (U5): U5 owns the Mapbox load state and MAPBOX_SWITCH_DISTANCE; the merge
-    // points these two fields at mapboxStateRef.current and the constant.
     const gate: HiresCoastlineGate = {
-      getMapboxState: () => 'idle',
-      switchDistance: CAMERA.MAX_DISTANCE - 0.8 * (CAMERA.MAX_DISTANCE - CAMERA.MIN_DISTANCE),
+      getMapboxState: () => mapboxStateRef.current,
+      switchDistance: MAPBOX_SWITCH_DISTANCE,
     }
     const onChange = () => {
       ensureHiresCoastline(buildVectorRendererContext(), gate)?.catch((err: unknown) => {
@@ -2245,15 +2268,15 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     const deps: AutoSwitchEffectDeps = {
       zoom,
       showMapbox,
+      mapboxState,
       setShowMapbox,
-      mapboxServiceRef,
       justEnteredMapbox,
       contextIsOffline,
       hasMapboxTilesCached,
       setShowMapboxOfflineWarning,
     }
     createAutoSwitchEffect(deps)
-  }, [zoom, showMapbox, contextIsOffline, hasMapboxTilesCached])
+  }, [zoom, showMapbox, contextIsOffline, hasMapboxTilesCached, mapboxState])
 
   // Sync showMapbox state to ref for animation loop and handle mode switching
   // When showMapbox is true: Mapbox becomes the PRIMARY interactive view

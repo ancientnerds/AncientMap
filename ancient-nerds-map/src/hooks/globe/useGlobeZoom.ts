@@ -11,12 +11,11 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import type { GlobeRefs } from './types'
-import { CAMERA, type DetailLevel } from '../../config/globeConstants'
+import { CAMERA, THREEJS_CAMERA_MAX, type DetailLevel } from '../../config/globeConstants'
 
 // Zoom slider constants
 const THREEJS_MAX_ZOOM = 66    // Three.js controls 0-66% of slider (matches transition point)
 const MAPBOX_MIN_ZOOM = 66     // Mapbox controls 66-100% of slider
-const THREEJS_CAMERA_MAX = 80  // At 66% slider, camera is at 80% of range
 
 interface UseGlobeZoomOptions {
   refs: GlobeRefs

@@ -340,10 +340,10 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
     },
     enterMapbox: () => {
       return new Promise<void>((resolve) => {
-        const mapbox = refs.mapboxServiceRef.current
-        // Wait for Mapbox to be initialized (it loads asynchronously)
+        // Wait for Mapbox to be initialized. The service itself is created
+        // lazily (mapboxLoader), so read the ref on every poll.
         const waitForInit = () => {
-          if (mapbox?.getIsInitialized()) {
+          if (refs.mapboxServiceRef.current?.getIsInitialized()) {
             refs.enterMapboxMode()
             // Wait for the 300ms CSS transition + React state update
             setTimeout(resolve, 500)

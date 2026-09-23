@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SiteData } from '../../../data/sites'
-import { MapboxGlobeService } from '../../../services/MapboxGlobeService'
+import type { MapboxGlobeService } from '../../../services/MapboxGlobeService'
+import { THREEJS_CAMERA_MAX } from '../../../config/globeConstants'
 import {
   updateEmpireHoverState,
   clearEmpireHoverState,
@@ -113,7 +114,7 @@ export function createControlsChangeHandler(
     if (!isManualZoom.current && !showMapboxRef.current) {
       const dist = camera.position.length()
       const scaledZoom = ((maxDist - dist) / (maxDist - minDist)) * 100
-      const newZoom = Math.max(0, Math.min(66, Math.round((scaledZoom / 80) * 66)))
+      const newZoom = Math.max(0, Math.min(66, Math.round((scaledZoom / THREEJS_CAMERA_MAX) * 66)))
       setZoom(newZoom)
 
       // Update rotation speed based on zoom
@@ -150,9 +151,14 @@ export function createWheelHandler(
     const currentDist = camera.position.length()
 
     const scaleFactor = 1 + delta * zoomSpeed
-    const newDist = Math.max(minDist, Math.min(maxDist, currentDist * scaleFactor))
+    // Clamp with the controls' bound: the Mapbox switch distance until Mapbox
+    // is ready (orbitMinDistance). minDist stays the zoom formulas' range end.
+    const newDist = Math.max(controls.minDistance, Math.min(maxDist, currentDist * scaleFactor))
 
-    if (newDist === currentDist) return
+    // At the clamp, do nothing: steering toward the cursor before
+    // controls.update() snaps the distance back would slide the globe.
+    // Epsilon, because length() after a clamp is only ~minDistance.
+    if (Math.abs(newDist - currentDist) < 1e-6) return
 
     // Get cursor position on globe (accounts for CSS transform offset)
     const canvas = e.currentTarget as HTMLCanvasElement
@@ -755,7 +761,7 @@ export function createDoubleClickHandler(
 
       // Calculate target zoom - zoom in 3 steps toward clicked point
       const zoomStep = (maxDist - minDist) / 10 // Each step is 10% of total range
-      const newDist = Math.max(minDist, currentDist - zoomStep * 3)
+      const newDist = Math.max(controls.minDistance, currentDist - zoomStep * 3)
 
       const startPos = camera.position.clone()
       // Position camera so clicked point is centered on screen after zoom

@@ -6,6 +6,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type * as THREE from 'three'
 import type { MapboxGlobeService } from '../../services/MapboxGlobeService'
+import type { MapboxLoadState } from '../../services/mapboxLoader'
+import { THREEJS_CAMERA_MAX } from '../../config/globeConstants'
 
 interface MapboxSyncCallbacks {
   // Mode change notification
@@ -67,6 +69,11 @@ export function useMapboxSync(options: MapboxSyncOptions) {
     onShowOfflineWarning
   } = callbacks
 
+  // Mapbox load state (runMapboxLoadTask). State for effects that must re-run
+  // on it (auto-switch, orbit clamp); ref for the animation loop and handlers.
+  const [mapboxState, setMapboxState] = useState<MapboxLoadState>('idle')
+  const mapboxStateRef = useRef<MapboxLoadState>('idle')
+
   // Mapbox visibility
   const [showMapbox, setShowMapbox] = useState(false)
   const showMapboxRef = useRef(false)
@@ -106,6 +113,10 @@ export function useMapboxSync(options: MapboxSyncOptions) {
     onModeChange?.(showMapbox)
   }, [showMapbox, onModeChange])
 
+  useEffect(() => {
+    mapboxStateRef.current = mapboxState
+  }, [mapboxState])
+
   // Sync satellite mode state with ref
   useEffect(() => {
     satelliteModeRef.current = satelliteMode
@@ -130,7 +141,7 @@ export function useMapboxSync(options: MapboxSyncOptions) {
 
     const dist = camera.position.length()
     const scaledZoom = ((maxDist - dist) / (maxDist - minDist)) * 100
-    return Math.max(0, Math.min(66, (scaledZoom / 80) * 66))
+    return Math.max(0, Math.min(66, (scaledZoom / THREEJS_CAMERA_MAX) * 66))
   }, [camera, minDist, maxDist])
 
   // Sync Three.js camera to Mapbox
@@ -335,6 +346,11 @@ export function useMapboxSync(options: MapboxSyncOptions) {
   }, [onShowOfflineWarning])
 
   return {
+    // Load state
+    mapboxState,
+    setMapboxState,
+    mapboxStateRef,
+
     // State
     showMapbox,
     setShowMapbox,

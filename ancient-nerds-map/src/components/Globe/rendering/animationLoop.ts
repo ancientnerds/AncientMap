@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SiteData } from '../../../data/sites'
-import { MapboxGlobeService } from '../../../services/MapboxGlobeService'
+import type { MapboxGlobeService } from '../../../services/MapboxGlobeService'
 import { FadeManager } from '../../../utils/FadeManager'
 import {
   fadeLabelIn,
@@ -14,7 +14,7 @@ import {
   animateCuddleOffset,
   type GlobeLabelMesh,
 } from '../../../utils/LabelRenderer'
-import { GEO } from '../../../config/globeConstants'
+import { GEO, THREEJS_CAMERA_MAX } from '../../../config/globeConstants'
 
 const EARTH_RADIUS_KM = GEO.EARTH_RADIUS_KM
 
@@ -459,7 +459,7 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
     // So: scaledZoom = ((maxDist - cameraDist) / range) * 100, then zoom = (scaledZoom / 80) * 66
     if (!ctx.isManualZoom.current && !ctx.showMapboxRef.current) {
       const scaledZoom = ((maxDist - cameraDist) / (maxDist - minDist)) * 100
-      const zoomPct = Math.max(0, Math.min(66, (scaledZoom / 80) * 66))
+      const zoomPct = Math.max(0, Math.min(66, (scaledZoom / THREEJS_CAMERA_MAX) * 66))
       ctx.setZoom(Math.round(zoomPct))
     }
 
