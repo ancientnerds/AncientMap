@@ -3003,9 +3003,109 @@ SPLIT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         W_ONE_PARSER,
     ),
 ]
+
+# ── boot DDL asks the catalog first (ops, 2026-09-23) ───────────────────────────────────────────
+# Lyra's boot and the API's startup took an ACCESS EXCLUSIVE / SHARE lock per schema statement on
+# every start, even with nothing to add; the deploy's library refresh deadlocked on news_items
+# twice. Every guard of the fix, broken one at a time.
+BOOT_DDL_TEST = "tests/pipeline/test_boot_ddl.py"
+BOOT_DDL = "pipeline/utils/boot_ddl.py"
+API_BOOT_SCHEMA = "api/boot_schema.py"
+LYRA_ORCHESTRATOR = "pipeline/lyra/orchestrator.py"
+BD_LYRA_QUIET = "test_lyra_boot_on_an_up_to_date_schema_issues_no_ddl"
+BD_API_QUIET = "test_api_boot_on_an_up_to_date_schema_issues_no_ddl"
+BD_NAMES = "test_a_name_that_is_not_a_plain_lower_case_identifier_is_refused"
+BD_HANDLER = "test_a_constraint_handler_swallows_only_a_duplicate"
+BD_VARCHAR = "test_api_sets_grant_period_to_varchar_10_only_while_it_is_not"
+BD_CARD_STATS = "test_lyra_leaves_card_stats_alone_when_the_table_does_not_exist"
+BD_ONE_TX = "test_lyra_migrations_stay_one_transaction_committed_at_the_end"
+BD_API_TX = "test_each_api_step_checks_and_alters_in_its_own_transaction_under_the_lock_timeout"
+BOOT_DDL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "boot-ddl: ensure() runs the statement without asking the catalog",
+        BOOT_DDL,
+        "    if conn.execute(text(step.satisfied_sql), dict(step.params)).scalar_one():\n"
+        "        return False\n",
+        "    conn.execute(text(step.satisfied_sql), dict(step.params)).scalar_one()  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_LYRA_QUIET,
+    ),
+    (
+        "boot-ddl: a mixed-case or non-identifier name is accepted",
+        BOOT_DDL,
+        "    if not _IDENTIFIER.fullmatch(name):\n",
+        "    if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: an ADD CONSTRAINT handler may swallow any condition",
+        BOOT_DDL,
+        "    if not duplicate or unknown:\n",
+        "    if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_HANDLER,
+    ),
+    (
+        "boot-ddl: the varchar check compares a spelling format_type() never returns",
+        BOOT_DDL,
+        '            "column_type": f"character varying({length:d})",\n',
+        '            "column_type": f"varchar({length:d})",  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_VARCHAR,
+    ),
+    (
+        "boot-ddl: one Lyra column back to a bare ALTER TABLE",
+        LYRA_ORCHESTRATOR,
+        '        ensure(conn, add_column("news_items", "significance", "INTEGER"))\n',
+        '        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS significance'
+        ' INTEGER"))  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_LYRA_QUIET,
+    ),
+    (
+        "boot-ddl: Lyra alters card_stats without checking the table exists",
+        LYRA_ORCHESTRATOR,
+        '        if relation_exists(conn, "card_stats"):\n',
+        "        if True:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_CARD_STATS,
+    ),
+    (
+        "boot-ddl: Lyra commits inside the migration batch",
+        LYRA_ORCHESTRATOR,
+        '        ensure(conn, add_column("news_items", "speculative_tag", "VARCHAR(50)"))\n',
+        '        ensure(conn, add_column("news_items", "speculative_tag", "VARCHAR(50)"))\n'
+        "        conn.commit()  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_ONE_TX,
+    ),
+    (
+        "boot-ddl: the API runs its steps without asking the catalog",
+        API_BOOT_SCHEMA,
+        '        run_boot_step(engine, partial(ensure, step=step), label=f"Migration ({step.label})")\n',
+        "        run_boot_step(engine, lambda conn, s=step: conn.execute(text(s.ddl)),"
+        ' label=f"Migration ({step.label})")  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_QUIET,
+    ),
+    (
+        "boot-ddl: an API step reads the catalog before its lock timeout is set",
+        API_BOOT_SCHEMA,
+        "                conn.execute(text(\"SET LOCAL lock_timeout = '5s'\"))\n"
+        "                conn.execute(text(\"SET LOCAL statement_timeout = '30s'\"))\n"
+        "                work(conn)\n",
+        "                work(conn)  # mutant\n"
+        "                conn.execute(text(\"SET LOCAL lock_timeout = '5s'\"))\n"
+        "                conn.execute(text(\"SET LOCAL statement_timeout = '30s'\"))\n",
+        BOOT_DDL_TEST,
+        BD_API_TX,
+    ),
+]
 MUTATIONS += GAP_MUTATIONS
 MUTATIONS += REVIEW_MUTATIONS
 MUTATIONS += SPLIT_MUTATIONS
+MUTATIONS += BOOT_DDL_MUTATIONS
 
 
 def digest(path: Path) -> str:

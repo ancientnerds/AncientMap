@@ -21,6 +21,19 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 - **Lyra-Boot-Migrationen laufen als EIN Transaction-Batch.** Ein Fehler rollt alle Spalten
   des Releases zurück und wiederholt sich bei jedem Boot.
   *(`project_lyra_migration_transaction`, 2026-05-25)*
+- **"Idempotent" boot DDL still locks: ask the catalog first.** `ALTER TABLE … ADD COLUMN IF
+  NOT EXISTS` and `ADD CONSTRAINT` take ACCESS EXCLUSIVE, `CREATE INDEX IF NOT EXISTS` takes
+  SHARE — *before* PostgreSQL looks for the object. Lyra ran 76 schema statements on every
+  start, 68 of them lock-taking with nothing to do, inside its one transaction, and held every
+  lock until the final commit; the API ran 29 more (28 lock-taking) on api and api2 at every
+  deploy. That deadlocked the deploy's library refresh on `news_items` twice (2026-09-22/23). Since 2026-09-23 every boot schema statement goes through
+  `ensure()` (`pipeline/utils/boot_ddl.py`; lists in `_run_migrations` and `api/boot_schema.py`):
+  a pg_catalog query decides, and the unchanged statement (still `IF NOT EXISTS`, for two booters
+  racing) runs only when its object is missing. On an up-to-date schema a boot issues no DDL at
+  all; on 2026-09-23 all 108 checks answered "present" on production (read-only). Lyra is still
+  ONE transaction — the checks run inside it. New boot DDL goes through `ensure()`; a bare
+  `conn.execute(text("ALTER …"))` fails `tests/pipeline/test_boot_ddl.py` (second boot must
+  be DDL-free). *(2026-09-23)*
 - **LLM-SDK-Versionen deckeln** (z. B. `anthropic<1.0.0`). Ungepinnte Deploys ziehen Majors
   und brechen alle MiniMax-Aufrufe. *(`reference-deployment-lessons`, 2026-08-25)*
 - **Nie `… | tail` hinter `gh run watch --exit-status` oder `ruff check`** — die Pipe
