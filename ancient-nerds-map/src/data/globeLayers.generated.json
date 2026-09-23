@@ -1,0 +1,10 @@
+{
+  "coastlines": {
+    "detail": "/data/layers/globe/coast_detail.48d159fb.json",
+    "start": "/data/layers/globe/coast_start.0dce00e6.json"
+  },
+  "countryBorders": {
+    "detail": "/data/layers/globe/borders_detail.68fc8efb.json",
+    "start": "/data/layers/globe/borders_start.787780e8.json"
+  }
+}
