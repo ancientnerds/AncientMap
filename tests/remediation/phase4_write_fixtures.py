@@ -12,6 +12,7 @@ import copy
 import dataclasses
 import json
 import re
+import sqlite3
 import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
@@ -25,6 +26,7 @@ for _path in (REPO / "scripts" / "remediation", REPO / "output" / "remediation" 
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
+from phase4 import revert4 as R  # noqa: E402
 from phase4 import write4 as W4  # noqa: E402
 
 SITE_A = "4a5a324f-0000-4000-8000-000000000001"
@@ -311,6 +313,34 @@ def _literal(text: str) -> str | None:
     return None if text == "NULL" else text[1:-1].replace("''", "'")
 
 
+#: The journal columns the fake keeps, in `remediation_change_log`'s names.
+JOURNAL_COLUMNS = (
+    "id", "run_stamp", "change_key", "table_name", "column_name", "row_pk", "old_value",
+    "new_value", "test_id", "site_id_ref",
+)  # fmt: skip
+
+
+def journal_sqlite(entries: Iterable[Mapping[str, Any]]) -> sqlite3.Connection:
+    """The fake's journal as a real SQL table, so revert4's own set and its reversal read are
+    evaluated as rendered (SQLite has LIKE, EXISTS and `||`; `case_sensitive_like` makes LIKE
+    PostgreSQL's)."""
+    conn = sqlite3.connect(":memory:")
+    conn.execute("PRAGMA case_sensitive_like = ON")
+    conn.execute(f"CREATE TABLE remediation_change_log ({', '.join(JOURNAL_COLUMNS)})")
+    conn.executemany(
+        f"INSERT INTO remediation_change_log VALUES ({', '.join('?' * len(JOURNAL_COLUMNS))})",
+        [tuple(entry[name] for name in JOURNAL_COLUMNS) for entry in entries],
+    )
+    return conn
+
+
+def reversal_reads(sql: str, entries: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """`revert4.reversal_read` (alone, or after a reversal's transaction) evaluated over a journal:
+    metric -> count, in the order the read answers."""
+    query = R.REVERSAL_READ + sql.split(R.REVERSAL_READ, 1)[1].replace("::text", "")
+    return {metric: int(value) for metric, value in journal_sqlite(entries).execute(query)}
+
+
 class PsqlError(W.WriteRefused):
     """What `write_stage.run_sql` raises for a statement psql refused (a non-zero exit)."""
 
@@ -412,6 +442,8 @@ class FakeDb:
             return "".join(
                 json.dumps({k: entry[k] for k in entry if k != "id"}) + "\n" for entry in entries
             )
+        if sql.startswith(R.REVERSAL_READ):
+            return "".join(f"{m}|{n}\n" for m, n in reversal_reads(sql, self.journal).items())
         if "INSERT INTO _phase4_plan" in sql:
             return self._transaction(sql)
         raise AssertionError(f"the fake psql does not know this statement: {sql[:80]!r}")

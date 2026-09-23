@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -1015,35 +1014,11 @@ def test_revert_prints_its_own_exit_line(capsys: pytest.CaptureFixture[str]) -> 
 
 # ── write rounds: a batch written again after a revert ──────────────────────────────────────────
 
-_JOURNAL_COLUMNS = (
-    "id", "run_stamp", "change_key", "table_name", "column_name", "row_pk", "old_value",
-    "new_value", "test_id", "site_id_ref",
-)  # fmt: skip
 
-
-def _journal_sqlite(entries: list[dict]) -> sqlite3.Connection:
-    """The fake's journal as a real SQL table, so revert4's own set and post-read are evaluated as
-    rendered (SQLite has LIKE, NOT EXISTS and `||`; `case_sensitive_like` makes LIKE PostgreSQL's)."""
-    conn = sqlite3.connect(":memory:")
-    conn.execute("PRAGMA case_sensitive_like = ON")
-    conn.execute(f"CREATE TABLE remediation_change_log ({', '.join(_JOURNAL_COLUMNS)})")
-    conn.executemany(
-        f"INSERT INTO remediation_change_log VALUES ({', '.join('?' * len(_JOURNAL_COLUMNS))})",
-        [tuple(entry[name] for name in _JOURNAL_COLUMNS) for entry in entries],
-    )
-    return conn
-
-
-def _revert_set(sql: str, conn: sqlite3.Connection) -> list[int]:
+def _revert_set(sql: str, entries: list[dict]) -> list[int]:
     """The journal ids the rendered reversal would revert: its own set query, evaluated."""
     query = sql.split("ids := ARRAY(", 1)[1].split("ORDER BY l.id);", 1)[0] + "ORDER BY l.id"
-    return [row[0] for row in conn.execute(query)]
-
-
-def _revert_reads(sql: str, conn: sqlite3.Connection) -> dict[str, int]:
-    """The rendered reversal's read after its transaction, evaluated: metric -> count."""
-    query = sql.split("-- after the transaction", 1)[1].split("\n", 1)[1].replace("::text", "")
-    return {metric: int(value) for metric, value in conn.execute(query)}
+    return [row[0] for row in FX.journal_sqlite(entries).execute(query)]
 
 
 def _write_round(tmp_path: Path, plan: W4.WritePlan4, db: FX.FakeDb, write_round: int):
@@ -1086,24 +1061,44 @@ def test_revert4_reverts_the_live_round_and_refuses_the_reverted_one(tmp_path, p
     _keep_reversal(db, first)
     second, _ = _write_round(tmp_path, plan, db, 2)
     live = [e["id"] for e in db.journal if e["run_stamp"] == second.stamp]
-    journal = _journal_sqlite(db.journal)
+    journal = list(db.journal)
 
     assert _revert_set(R.render_revert(second.stamp), journal) == live
     assert _revert_set(R.render_revert("phase4:%"), journal) == live  # the family, too
     assert _revert_set(R.render_revert(first.stamp), journal) == []  # refused: reverted already
-    assert _revert_reads(R.render_revert(second.stamp), journal) == {
+    assert FX.reversal_reads(R.render_revert(second.stamp), journal) == {
         "journalled writes matched": 2,
         "reversals kept": 0,
     }
-    assert _revert_reads(R.render_revert(first.stamp), journal) == {
+    assert FX.reversal_reads(R.render_revert(first.stamp), journal) == {
         "journalled writes matched": 2,
         "reversals kept": 2,
     }
     _keep_reversal(db, second)  # the revert of round 2 commits
-    assert _revert_reads(R.render_revert("phase4:%"), _journal_sqlite(db.journal)) == {
+    assert FX.reversal_reads(R.render_revert("phase4:%"), db.journal) == {
         "journalled writes matched": 4,
         "reversals kept": 4,
     }
+    # the gate asks the same read on its own, and parses it strictly
+    assert R.reversal_counts(first.stamp, runner=db, host="fake") == (2, 2)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "",
+        "journalled writes matched|2\n",
+        "journalled writes matched|2\nrows|2\n",
+        "journalled writes matched|2\njournalled writes matched|2\n",
+        "journalled writes matched|2\nreversals kept|\n",
+    ],
+    ids=["empty", "one-metric", "another-metric", "twice", "no-count"],
+)
+def test_the_reversal_read_is_parsed_strictly(answer: str) -> None:
+    """The gate re-opens a written round on this answer: anything but exactly the two metric lines
+    is refused, never read as zero."""
+    with pytest.raises(W.WriteRefused, match="the reversal read of"):
+        R.reversal_counts("phase4:p4-0001:chunk-0001", runner=lambda sql, host: answer, host="h")
 
 
 # ── write_gate4 ──────────────────────────────────────────────────────────────────────────────────
@@ -1348,6 +1343,201 @@ def test_a_written_batch_keeps_the_plan_it_was_written_from(tmp_path, monkeypatc
             _hold("00000001-0000-4000-8000-000000000001", M.HoldReason.V9)]})
     )  # fmt: skip
     assert G.main(_gate_args(tmp_path, ledger), runner=db) == 1
+
+
+# ── write rounds through the gate: a reverted batch is written again as its next round ─────────
+
+GATE_SITE = "00000001-0000-4000-8000-000000000001"
+ROUND_1 = "phase4:p4-0001:chunk-0001"
+ROUND_2 = "phase4:p4-0001:chunk-0002"
+
+
+def _revert_round(db: FX.FakeDb, out: Path, write_round: int = 1) -> None:
+    """What `revert4` journals for one written round of a batch: the round's own ROLLBACK.sql,
+    committed - every row written back under the round's stamp and key plus `-rollback`."""
+    chunk = out / W4.CHUNKS_DIR / f"chunk-{write_round:04d}"
+    sql = (chunk / W4.ROLLBACK_FILE).read_text(encoding="utf-8")
+    db(sql.replace("\nROLLBACK;\n", "\nCOMMIT;\n"), host="fake")
+
+
+def _gate_written(tmp_path: Path, monkeypatch, *, accept: bool = True):
+    """One batch of one site written through the gate as round 1 (and its step accepted)."""
+    ledger = _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    assert G.main(_gate_args(tmp_path, ledger, "--apply"), runner=db) == 0
+    if accept:
+        output = _acceptance(tmp_path, journal_rows=2, name="round-1.log")
+        assert G.main(_gate_args(tmp_path, ledger, "--accept", str(output)), runner=db) == 0
+    return ledger, db, tmp_path / "apply" / "p4-0001"
+
+
+def _stamp_of(path: Path) -> str:
+    return json.loads(path.read_text(encoding="utf-8"))["run_stamp"]
+
+
+def test_a_reverted_batch_is_written_again_as_round_2(tmp_path, monkeypatch, capsys) -> None:
+    """The documented recovery - write, revert (`revert4`), `--apply --round 2` - writes chunk-0002.
+    The gate re-opens the batch on production's word that round 1 is reverted, and keeps round 1's
+    record beside its statements; it never answers 'no open batch' over a reverted batch."""
+    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    _revert_round(db, out, 1)
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 0
+    assert "STEP COMPLETE: 1 site(s) written in 1 batch(es)" in capsys.readouterr().out
+    assert [entry["run_stamp"] for entry in db.journal].count(ROUND_2) == 2
+    assert _stamp_of(out / G.APPLIED_FILE) == ROUND_2
+    kept = out / W4.CHUNKS_DIR / "chunk-0001"
+    assert _stamp_of(kept / G.APPLIED_FILE) == ROUND_1
+    proof = json.loads((kept / G.REVERTED_FILE).read_text(encoding="utf-8"))
+    assert (proof["run_stamp"], proof["write_round"], proof["reversals_kept"]) == (ROUND_1, 1, 2)
+    step = json.loads((tmp_path / "apply" / G.STEP_FILE).read_text(encoding="utf-8"))
+    assert step["stamps"] == [ROUND_2]
+
+
+def _drop_reversal_of_one_row(db: FX.FakeDb) -> None:
+    db.journal.remove(next(e for e in db.journal if e["run_stamp"] == ROUND_1 + "-rollback"))
+
+
+def _drop_round_1(db: FX.FakeDb) -> None:
+    db.journal[:] = [e for e in db.journal if not e["run_stamp"].startswith(ROUND_1)]
+
+
+@pytest.mark.parametrize(
+    ("revert", "damage"),
+    [(False, None), (True, _drop_reversal_of_one_row), (True, _drop_round_1)],
+    ids=["round-1-live", "half-reverted", "never-journalled"],
+)
+def test_a_batch_is_re_opened_only_when_production_holds_its_reversal(
+    tmp_path, monkeypatch, capsys, revert, damage
+) -> None:
+    """Round 2 needs every row of round 1's stamp journalled, as many as round 1 wrote, each with its
+    own reversal kept. Without that proof the record stays, nothing is rendered and nothing written."""
+    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    if revert:
+        _revert_round(db, out, 1)
+    if damage is not None:
+        damage(db)
+    journal = list(db.journal)
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 1
+    captured = capsys.readouterr()
+    assert "round 1 is not reverted in production" in captured.err
+    assert captured.out.rstrip().endswith("WRITE_EXIT=1")
+    assert _stamp_of(out / G.APPLIED_FILE) == ROUND_1
+    assert not (out / W4.CHUNKS_DIR / "chunk-0002").exists()
+    assert db.journal == journal
+
+
+def _reopened(tmp_path: Path, monkeypatch):
+    """Round 1 written, reverted, and the batch re-opened for round 2 by a dry run."""
+    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    _revert_round(db, out, 1)
+    assert G.main(_gate_args(tmp_path, ledger, "--round", "2"), runner=db) == 0
+    assert not (out / G.APPLIED_FILE).exists()
+    return ledger, db, out
+
+
+@pytest.mark.parametrize(
+    ("state", "write_round", "problem"),
+    [
+        ("reverted", "3", "was written in round 1; --round 3 re-writes a batch whose round 2"),
+        ("never-written", "2", "its next write is round 1, not --round 2"),
+        ("re-opened", "1", "its next write is round 2, not --round 1"),
+    ],
+)
+def test_a_round_the_batch_cannot_take_is_refused_loudly(
+    tmp_path, monkeypatch, capsys, state, write_round, problem
+) -> None:
+    """A write round follows the batch's reverted rounds one by one: round 3 needs a reverted
+    round 2, a batch never written starts at round 1, and a re-opened batch never writes round 1's
+    stamp again (its statements are the reverted round's record)."""
+    if state == "reverted":
+        ledger, db, out = _gate_written(tmp_path, monkeypatch)
+        _revert_round(db, out, 1)
+    elif state == "never-written":
+        ledger = _gate_run(tmp_path, 1)
+        monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+        db, out = _db(GATE_SITE), tmp_path / "apply" / "p4-0001"
+    else:
+        ledger, db, out = _reopened(tmp_path, monkeypatch)
+    journal = list(db.journal)
+    capsys.readouterr()
+    args = _gate_args(tmp_path, ledger, "--apply", "--round", write_round)
+    assert G.main(args, runner=db) == 1
+    assert problem in capsys.readouterr().err
+    assert db.journal == journal and not (out / G.STOPPED_FILE).exists()
+    if state == "re-opened":  # round 1's statements stay the reverted round's record
+        assert _stamp_of(out / W4.CHUNKS_DIR / "chunk-0001" / G.APPLIED_FILE) == ROUND_1
+    else:
+        assert not (out / W4.CHUNKS_DIR / f"chunk-{int(write_round):04d}").exists()
+
+
+def test_a_reverted_step_is_closed_on_its_reversal_and_written_again(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """A step whose acceptance was red and that `revert4` took back can never be accepted: every
+    link it wrote now has a later one. `--close-reverted` records it as closed on production's word
+    that every row of every stamp is reverted, and its batches are then written as round 2. Until
+    then the batch is frozen: `--round 2` does not re-open a batch of the pending step."""
+    ledger, db, out = _gate_written(tmp_path, monkeypatch, accept=False)
+    _revert_round(db, out, 1)
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 1
+    assert "belongs to the written step that awaits its acceptance" in capsys.readouterr().err
+    assert _stamp_of(out / G.APPLIED_FILE) == ROUND_1
+
+    assert G.main(_gate_args(tmp_path, ledger, "--close-reverted"), runner=db) == 0
+    assert "CLOSED step 1 by its reversal: 1 site(s) in 1 batch(es)" in capsys.readouterr().out
+    assert not (tmp_path / "apply" / G.STEP_FILE).exists()
+    assert not (tmp_path / "apply" / G.ACCEPTED_DIR).exists()  # closed, never accepted
+    closed = json.loads(
+        (tmp_path / "apply" / G.CLOSED_DIR / "step-0001.json").read_text(encoding="utf-8")
+    )
+    assert closed["stamps"] == [ROUND_1] and closed["proofs"][0]["reversals_kept"] == 2
+    assert _stamp_of(out / W4.CHUNKS_DIR / "chunk-0001" / G.APPLIED_FILE) == ROUND_1
+
+    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 0
+    assert [entry["run_stamp"] for entry in db.journal].count(ROUND_2) == 2
+
+
+def test_a_step_whose_rows_are_live_is_not_closed(tmp_path, monkeypatch, capsys) -> None:
+    ledger, db, out = _gate_written(tmp_path, monkeypatch, accept=False)
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, ledger, "--close-reverted"), runner=db) == 1
+    assert "round 1 is not reverted in production" in capsys.readouterr().err
+    assert (tmp_path / "apply" / G.STEP_FILE).exists()
+    assert _stamp_of(out / G.APPLIED_FILE) == ROUND_1
+    assert not (tmp_path / "apply" / G.CLOSED_DIR).exists()
+
+
+@pytest.mark.parametrize(
+    ("stamps", "journal_rows", "accepted"),
+    [
+        ("phase4:%", 2, False),  # read after the revert, before round 2: round 1's rows only
+        ("phase4:%", 4, True),  # every round's rows (a reversal is not a lane row)
+        ("phase4:%:chunk-0002", 2, True),  # a narrowed pattern reads the rounds it covers
+    ],
+)
+def test_the_acceptance_must_have_read_every_round_its_stamps_cover(
+    tmp_path, monkeypatch, capsys, stamps, journal_rows, accepted
+) -> None:
+    """'Read at least the rows written so far' counts every written round - the reverted one's
+    record is kept, not dropped - under the stamps the output read. Counting only the live rounds
+    would let an output taken after the revert, before round 2, accept round 2."""
+    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    _revert_round(db, out, 1)
+    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 0
+    head = (
+        f"lane p4 | stamps {stamps} | planned rows 2 | lane journal rows {journal_rows} | "
+        f"carried 2 | not yet written 0"
+    )
+    output = _acceptance(tmp_path, journal_rows=journal_rows, name="round-2.log", head=head)
+    capsys.readouterr()
+    code = G.main(_gate_args(tmp_path, ledger, "--accept", str(output)), runner=db)
+    printed = capsys.readouterr().out
+    assert code == (0 if accepted else 1)
+    assert ("it was run before this step" in printed) is not accepted
 
 
 def test_written_sites_counts_only_full_provenance(tmp_path: Path) -> None:

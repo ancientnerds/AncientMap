@@ -1649,6 +1649,7 @@ class ChunkOutcome4:
             "group": self.chunk.group.value,
             "batch_id": self.chunk.batch_id,
             "chunk": self.chunk.label,
+            "write_round": self.chunk.write_round,
             "run_stamp": self.chunk.stamp,
             "digest": self.chunk.digest,
             "rows_planned": len(self.chunk.rows),

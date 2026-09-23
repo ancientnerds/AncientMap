@@ -219,15 +219,52 @@ def render_revert(stamp_like: str, *, rehearse: bool = False) -> str:
         "",
         "ROLLBACK;" if rehearse else "COMMIT;",
         "",
-        "-- after the transaction: the write rows matched, and those with their own reversal kept",
-        "SELECT 'journalled writes matched' AS metric, count(*)::text AS value",
+        "-- after the transaction:",
+        reversal_read(stamp_like),
+    ]
+    return "\n".join(out)
+
+
+#: The first line of `reversal_read`: how the fake psql of the tests recognises the read.
+REVERSAL_READ = "-- the write rows matched, and those with their own reversal kept (read-only)"
+#: The two metrics `reversal_read` answers, one `metric|count` line each (`psql -t -A`).
+MATCHED = "journalled writes matched"
+KEPT = "reversals kept"
+
+
+def reversal_read(stamp_like: str) -> str:
+    """Read-only: how many journalled writes match `stamp_like`, and how many of them have their own
+    reversal kept (`_reversed`: the key **and** the stamp plus `-rollback`). The reversal prints it
+    after its transaction; `write_gate4` asks it before it re-opens a written round, so the gate and
+    the reversal cannot disagree about what "reverted" means."""
+    in_set = _set("l", W._sql_text(check_pattern(stamp_like)))
+    lines = [
+        REVERSAL_READ,
+        f"SELECT {W._sql_text(MATCHED)} AS metric, count(*)::text AS value",
         f"  FROM remediation_change_log l WHERE {in_set}",
         "UNION ALL",
-        "SELECT 'reversals kept', count(*)::text FROM remediation_change_log l",
+        f"SELECT {W._sql_text(KEPT)}, count(*)::text FROM remediation_change_log l",
         f" WHERE {in_set}",
-        f"   AND {_reversed('l')}",
+        f"   AND {_reversed('l')};",
     ]
-    return "\n".join(out) + "\n"
+    return "\n".join(lines) + "\n"
+
+
+def reversal_counts(stamp_like: str, *, runner: W.SqlRunner | None, host: str) -> tuple[int, int]:
+    """`reversal_read` asked and parsed: (journalled writes matched, reversals kept). An answer that
+    is not exactly the two metric lines is refused, never read as zero."""
+    text = W._exec(runner, reversal_read(stamp_like), host=host)
+    counts: dict[str, int] = {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        metric, _, value = line.strip().partition("|")
+        if metric not in (MATCHED, KEPT) or metric in counts or not value.isdigit():
+            raise W.WriteRefused(f"the reversal read of {stamp_like!r} answered {line!r}")
+        counts[metric] = int(value)
+    if len(counts) != 2:
+        raise W.WriteRefused(f"the reversal read of {stamp_like!r} answered {text!r}")
+    return counts[MATCHED], counts[KEPT]
 
 
 def build_parser() -> argparse.ArgumentParser:

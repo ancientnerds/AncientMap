@@ -303,7 +303,8 @@ END $$;
 
 COMMIT;
 
--- after the transaction: the write rows matched, and those with their own reversal kept
+-- after the transaction:
+-- the write rows matched, and those with their own reversal kept (read-only)
 SELECT 'journalled writes matched' AS metric, count(*)::text AS value
   FROM remediation_change_log l WHERE l.run_stamp LIKE 'phase5:%' AND l.run_stamp NOT LIKE '%-rollback'
 UNION ALL
@@ -311,5 +312,5 @@ SELECT 'reversals kept', count(*)::text FROM remediation_change_log l
  WHERE l.run_stamp LIKE 'phase5:%' AND l.run_stamp NOT LIKE '%-rollback'
    AND EXISTS (SELECT 1 FROM remediation_change_log k
                           WHERE k.change_key = l.change_key || '-rollback'
-                            AND k.run_stamp = l.run_stamp || '-rollback')
+                            AND k.run_stamp = l.run_stamp || '-rollback');
 """

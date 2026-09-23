@@ -5586,6 +5586,10 @@ P4_VALIDATE = "test_validate_rows_refuses_each_tampered_field"
 P4_RAW_DATA = "test_a_raw_data_row_is_refused_by_its_own_guard"
 P4_LOAD = "test_load_batch_refuses_a_file_that_names_a_site_wrongly"
 P4_ACCEPTANCE = "test_an_acceptance_that_does_not_accept_this_step_is_refused"
+P4_REOPEN_PROOF = "test_a_batch_is_re_opened_only_when_production_holds_its_reversal"
+P4_ROUND_REFUSED = "test_a_round_the_batch_cannot_take_is_refused_loudly"
+P4_CLOSE_REVERTED = "test_a_reverted_step_is_closed_on_its_reversal_and_written_again"
+P4_EVERY_ROUND = "test_the_acceptance_must_have_read_every_round_its_stamps_cover"
 #: Track D's supplement (branch wip/p4-write-sup): the guards a review found without a red test -
 #: the write rounds, the step acceptance, every predicate and RAISE inside the rendered statements
 #: (pinned in `tests/remediation/phase4_write_pins.py`, which the fake psql cannot evaluate), the
@@ -5619,8 +5623,8 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 revert4: the kept-reversals read counts other rounds",
         P4_REVERT,
-        "        f\"   AND {_reversed('l')}\",\n",
-        '        "   AND true",  # mutant\n',
+        "        f\"   AND {_reversed('l')};\",\n",
+        '        "   AND 1 = 1;",  # mutant\n',
         P4_WRITE_TEST,
         P4_REVERT_ROUNDS,
     ),
@@ -6503,6 +6507,120 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '        "(0 deviations), then --accept <its output>."  # mutant\n',
         P4_WRITE_TEST,
         "test_the_gate_prints_the_acceptance_command_it_will_accept",
+    ),
+    # -- write rounds through the gate: a reverted batch is written again, on production's proof
+    (
+        "p4 write_gate4: --round 2 skips a batch whose round 1 is reverted",
+        P4_GATE,
+        '        if record["write_round"] == write_round:\n',
+        "        if True:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_a_reverted_batch_is_written_again_as_round_2",
+    ),
+    (
+        "p4 write_gate4: a round is re-opened without the proof of its reversal",
+        P4_GATE,
+        '    if matched != record["rows_written"] or kept != matched:\n',
+        "    if False:  # mutant\n",
+        P4_WRITE_TEST,
+        P4_REOPEN_PROOF,
+    ),
+    (
+        "p4 write_gate4: a round with live rows counts as reverted",
+        P4_GATE,
+        '    if matched != record["rows_written"] or kept != matched:\n',
+        '    if matched != record["rows_written"]:  # mutant\n',
+        P4_WRITE_TEST,
+        P4_REOPEN_PROOF,
+    ),
+    (
+        "p4 write_gate4: a round the journal lacks counts as reverted",
+        P4_GATE,
+        '    if matched != record["rows_written"] or kept != matched:\n',
+        "    if kept != matched:  # mutant\n",
+        P4_WRITE_TEST,
+        P4_REOPEN_PROOF,
+    ),
+    (
+        "p4 write_gate4: a round that skips the one before is written",
+        P4_GATE,
+        '        if record["write_round"] != write_round - 1:\n',
+        "        if False:  # mutant\n",
+        P4_WRITE_TEST,
+        P4_ROUND_REFUSED,
+    ),
+    (
+        "p4 write_gate4: a batch is written out of its round order",
+        P4_GATE,
+        "    elif chunk is not None and write_round != reverted_round(out) + 1:\n",
+        "    elif False:  # mutant\n",
+        P4_WRITE_TEST,
+        P4_ROUND_REFUSED,
+    ),
+    (
+        "p4 write_gate4: a batch of the pending step is re-opened",
+        P4_GATE,
+        "        if out.name in frozen:\n",
+        "        if False:  # mutant\n",
+        P4_WRITE_TEST,
+        P4_CLOSE_REVERTED,
+    ),
+    (
+        "p4 write_gate4: a reverted round's record is dropped",
+        P4_GATE,
+        "    (out / APPLIED_FILE).replace(directory / APPLIED_FILE)\n",
+        "    (out / APPLIED_FILE).unlink()  # mutant\n",
+        P4_WRITE_TEST,
+        "test_a_reverted_batch_is_written_again_as_round_2",
+    ),
+    (
+        "p4 write_gate4: the acceptance counts only the live rounds",
+        P4_GATE,
+        '        *apply_root.glob(f"*/{W4.CHUNKS_DIR}/*/{APPLIED_FILE}"),\n',
+        "",
+        P4_WRITE_TEST,
+        P4_EVERY_ROUND,
+    ),
+    (
+        "p4 write_gate4: the acceptance counts rounds its stamps do not cover",
+        P4_GATE,
+        '        if like_matches(head["stamps"], record["run_stamp"])\n',
+        "        if True  # mutant\n",
+        P4_WRITE_TEST,
+        P4_EVERY_ROUND,
+    ),
+    (
+        "p4 write_gate4: a step is closed without the proof of its reversal",
+        P4_GATE,
+        "        rounds.append((out, record, prove_reverted(record, runner=runner, host=host)))\n",
+        "        rounds.append((out, record, {}))  # mutant\n",
+        P4_WRITE_TEST,
+        "test_a_step_whose_rows_are_live_is_not_closed",
+    ),
+    (
+        "p4 write_gate4: a closed step stays pending",
+        P4_GATE,
+        '    _mark(closed, f"step-{number:04d}.json", {**step, "proofs": [p for _, _, p in rounds]})\n'
+        "    (apply_root / STEP_FILE).unlink()\n",
+        '    _mark(closed, f"step-{number:04d}.json", {**step, "proofs": [p for _, _, p in rounds]})\n',
+        P4_WRITE_TEST,
+        P4_CLOSE_REVERTED,
+    ),
+    (
+        "p4 revert4: a reversal answer of other lines is read",
+        P4_REVERT,
+        "        if metric not in (MATCHED, KEPT) or metric in counts or not value.isdigit():\n",
+        "        if False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_the_reversal_read_is_parsed_strictly",
+    ),
+    (
+        "p4 revert4: a reversal answer without both metrics is read",
+        P4_REVERT,
+        "    if len(counts) != 2:\n",
+        "    if False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_the_reversal_read_is_parsed_strictly",
     ),
 ]
 MUTATIONS += GAP_MUTATIONS
