@@ -38,8 +38,8 @@ Belege: `snapshot/unified_sites.jsonl.gz` (eigene Zählung heute), `phase3_pilot
 
 | # | Was nur du kannst | Warum kein Agent | Umfang (gemessen) | Was ich von dir brauche |
 |---|---|---|---|---|
-| B1 | **Namens-/Koordinaten-Fälle** | Ein Wikidata-Name ≠ gespeicherter Name kann ein **Alias** sein — das ist eine Projekt- und Sprachfrage, keine Faktenfrage. | ~~285 Sites~~ — die 285 aus `COST.md:141` sind **reine Koordinatenfälle**; die Alias-Frage betrifft **631 Namensbefunde** (T01). Stand 2026-09-23: siehe Abschnitt „B1/B2 — was die Daten entschieden haben“ | **fast alles mechanisch entschieden** — offen: 46 Namen lesen, 1 Freigabe (17 Koordinaten), Einzelfälle unten |
-| B2 | **Land bei grenzwertiger Lage** | `lat/lon` außerhalb des beanspruchten Landes: Grenzfluss, Insel, Gebietsreform — topologisch richtig, inhaltlich falsch. | **117 Sites** (T02), mechanisch eingeteilt: siehe Abschnitt „B1/B2 — was die Daten entschieden haben“ | offen: 3 Länder (Weg: mechanische Lane), 1 Umkehr, `Baltic Sea`, ~15 Koordinaten ohne zweiten Zeugen |
+| B1 | **Namens-/Koordinaten-Fälle** | Ein Wikidata-Name ≠ gespeicherter Name kann ein **Alias** sein — das ist eine Projekt- und Sprachfrage, keine Faktenfrage. | ~~285 Sites~~ — die 285 aus `COST.md:141` sind **reine Koordinatenfälle**; die Alias-Frage betrifft **631 Namensbefunde** (T01). Stand 2026-09-23: siehe Abschnitt „B1/B2 — was die Daten entschieden haben“ | **fast alles mechanisch entschieden** — offen: 46 Namen lesen, 1 Freigabe (9 Koordinaten), 5 verdächtige Links hinter passenden Namen, Einzelfälle unten |
+| B2 | **Land bei grenzwertiger Lage** | `lat/lon` außerhalb des beanspruchten Landes: Grenzfluss, Insel, Gebietsreform — topologisch richtig, inhaltlich falsch. | **117 Sites** (T02), mechanisch eingeteilt: siehe Abschnitt „B1/B2 — was die Daten entschieden haben“ | offen: 2 Länder (Weg: mechanische Lane), 1 Umkehr, `Baltic Sea`, ~15 Koordinaten ohne zweiten Zeugen |
 | B3 | **Quelle für Sites ohne Textroute** | Braucht eine Quelle, die kein automatischer Endpunkt liefert. | **17 Sites** ohne Wikipedia/Prosa-Route; 385 ohne enwiki, davon 368 über `source_url` erreichbar; **42 Sites ohne `source_url`** | Quelle nennen oder „keine Quelle möglich" |
 | B4 | **Foto-Auswahl (Stichprobe)** | Der Bildprüfer ist **über-inklusiv** bei `site_photo` (gemessen) — nur Augen entscheiden, ob ein Foto die Site zeigt. | Stichprobe der 200 geprüften Bilder + Neuzugänge | Freigabe der Stichprobe |
 | B5 | **Stil-/Rubrikgrenzfälle** | „Legend says …", „among the most famous" — Fehler oder erlaubter Ton? Das ist eine Redaktionsfrage. | 3–4 Fälle je Prüfrunde | Regel: Fehler oder nicht |
@@ -64,8 +64,8 @@ Zeuge.
 
 | Ergebnis | Anzahl | Was passiert |
 |---|---|---|
-| gespeicherter Name ist ein Name des verlinkten Objekts (Label, Alias oder Sitelink in irgendeiner Sprache: 354; gleich ohne Gattungswörter: 50; beschreibende Form: 67; Transliteration: 37) | **508** | **bleibt**, kein Schreibvorgang |
-| der Wikidata-Link selbst ist falsch (Gattungsbegriff wie Q309 „history“: 21; geteiltes Eltern-/Geschwisterobjekt: 43; Objekt ohne Koordinate: 8; Objekt > 5 km entfernt: 5) | **77** | 18 davon hat die erste Reparaturwelle schon korrigiert (angewandt 2026-09-23, 26 Zeilen, heute nachgelesen: 0 Abweichungen). Die übrigen **59** einzeln recherchiert → **Welle 2: 12 Sites / 13 Zeilen geplant**, nicht angewandt (`qid_repair/wave2/`, Vorabprüfung gegen Produktion: 0 Abweichungen); 47 bleiben unverändert, jede mit Begründung |
+| gespeicherter Name ist ein Name des verlinkten Objekts (Label, Alias oder Sitelink in irgendeiner Sprache: 354; gleich ohne Gattungswörter: 50; beschreibende Form: 67; Transliteration: 37) | **508** | der **Name** bleibt, kein Schreibvorgang — aber ein passender Name beweist den **Link** nicht: bei **72** davon ist der Link für sich verdächtig (Gattungsbegriff 4, mit anderen Sites geteilt 36, Objekt > 5 km entfernt 35; Feld `link_suspect` in `names.jsonl`). Sie sind **nicht** in Welle 2 und nicht geschrieben — Kandidaten für eine spätere Recherche-Welle, 5 davon unten für dich |
+| der Name passt nicht, und der Wikidata-Link selbst ist falsch (Gattungsbegriff wie Q309 „history“: 21; geteiltes Eltern-/Geschwisterobjekt: 43; Objekt ohne Koordinate: 8; Objekt > 5 km entfernt: 5) | **77** | 18 davon hat die erste Reparaturwelle schon korrigiert (angewandt 2026-09-23, 26 Zeilen, heute nachgelesen: 0 Abweichungen). Die übrigen **59** einzeln recherchiert → **Welle 2: 12 Sites / 13 Zeilen geplant**, nicht angewandt (`qid_repair/wave2/`, Vorabprüfung gegen Produktion: 0 Abweichungen); 47 bleiben unverändert, jede mit Begründung |
 | Name weder Wikidata-Name noch Transliteration, Objekt in der Nähe | **46** | **Lesen** (19 an einer Ortschaft verankert, 27 an einer Site) |
 
 Von den 47 unverändert gelassenen Links: 24 Sites haben schlicht kein eigenes Wikidata-Objekt, 3 Einträge
@@ -82,49 +82,76 @@ Niuserre, Porta Nord, Cocoraque Butte, Minoan Modi, Petroglyphen von Arpa-Uzen).
 **B1/B2 Koordinaten (477 T01-Koordinatenbefunde + 11 weitere aus B2 = 488):** Ein Punkt wird nur
 versetzt, wenn **zwei unabhängige Zeugen** (Wikidata-`P625`, Koordinaten des englischen Artikels)
 innerhalb der Toleranz übereinstimmen (1 km, nach unten durch die Wikidata-Genauigkeit begrenzt) und der
-gespeicherte Punkt außerhalb liegt. Zwei Zeugen zählen einmal, wenn `P625` als aus der englischen
-Wikipedia importiert belegt ist oder beide exakt derselbe Punkt sind (Petroglyph Beach: beide in Juneau).
-Museumsobjekte bekommen den Fundort (`P189`) — aber nur, wenn der gespeicherte Punkt am Museum liegt.
+gespeicherte Punkt außerhalb liegt. Zwei Zeugen zählen **einmal**, wenn
+
+* `P625` als aus der englischen Wikipedia importiert belegt ist,
+* einer der beiden der andere ist, **gerundet oder abgeschnitten** auf das Raster, in dem seine Ziffern
+  stehen (Nachkommastellen, ganze Bogensekunden oder -minuten): Castro of Santa Trega hat im Artikel
+  41.8927, -8.8698 — den Wikidata-Punkt 41.89275, -8.869808 auf vier Stellen gekürzt; Taq Kasra hat im
+  Artikel 33°05'37", 44°34'51" — den Wikidata-Punkt auf ganze Sekunden gerundet; egal aus welcher
+  Wikipedia `P625` importiert wurde,
+* oder beide **derselbe Punkt** sind: näher als eine Bogensekunde (31 m), als ein Schritt ihres Rasters
+  oder als die Wikidata-Genauigkeit (Petroglyph Beach: beide in Juneau; Temple of Atargatis: 8 m).
+
+Die erste Fassung (2026-09-23 früh) zählte ein Paar erst unter 5 m Abstand als einen Zeugen; eine
+Nachprüfung fand darin Rundungskopien. Mit der Regel oben fallen **8 der 17** damals geplanten
+Versetzungen auf „offen“ zurück (El Kab, Bülövqaya, Khao Sam Kaeo, Eridu, Taq Kasra, Temple of Atargatis,
+Sialkot Fort, Castro of Santa Trega). Bei Wikidata-Objekten mit mehreren Koordinaten gilt jetzt die
+bevorzugte (`preferred`), nicht die erste. Museumsobjekte bekommen den Fundort (`P189`) — aber nur, wenn
+der gespeicherte Punkt am Museum liegt.
 
 | Ergebnis | alle 488 | davon die 285 |
 |---|---|---|
-| **versetzen** — Plan fertig, nicht angewandt (Calakmul 907 km, Yenikale 840 km, Temple of Atargatis 459 km, Guyaju 80 km, El Kab, Zempoala, Melgunov Kurgan …) | **17** (51 journalisierte Änderungen: `lat`, `lon`, `geom`) | 11 |
+| **versetzen** — Plan fertig, nicht angewandt (Calakmul 907 km, Yenikale 840 km, Guyaju 80 km, Zempoala 27 km, Melgunov Kurgan 21 km, Halamata 10 km, Iskanwaya, Las Médulas, Pamukkale) | **9** (27 journalisierte Änderungen: `lat`, `lon`, `geom`) | 5 |
 | gespeicherter Punkt = Punkt des Wikipedia-Artikels, nur Wikidata weicht ab — bleibt | 98 | 69 |
 | verlinktes Objekt kann nicht für den Punkt sprechen (Ortschaft/Region 115, Linie/Fläche 33, von mehreren Sites geteilt 30, anderer Name 32) — bleibt | 210 | 99 |
-| offen: nur ein Zeuge (102), beide Zeugen sind einer (45), Zeugen widersprechen sich (8), kein Zeuge (7), einer stützt den gespeicherten Punkt (1) | 163 | 106 |
+| offen: nur ein Zeuge (102), beide Zeugen sind einer (52), Zeugen widersprechen sich (9), kein Zeuge (7), einer stützt den gespeicherten Punkt (1) | 171 | 112 |
 
 Der Plan (`output/remediation/bcases/coords_plan/`) schreibt je Site drei journalisierte Änderungen über
 `apply_remediation_change()` — auch `geom`, weil es keinen Trigger gibt und die Umkreissuche auf `geom`
-rechnet. Vorabprüfung gegen Produktion heute: **51 Zeilen, 0 Abweichungen**. Pergamonaltar bleibt in
-Pergamon (Fundort-Regel), Tayma Stones bleiben offen (Wikidata nennt weder Fundort noch Koordinate).
+rechnet. Vorabprüfung gegen Produktion heute (nach der Nachprüfung): **27 Zeilen, 0 Abweichungen**.
+Knappster Fall: Yenikale, die beiden Zeugen liegen 34 m auseinander — knapp über einer Bogensekunde und
+keine Rundung des jeweils anderen, zählt also zweimal. Pergamonaltar bleibt in Pergamon (Fundort-Regel),
+Tayma Stones bleiben offen (Wikidata nennt weder Fundort noch Koordinate).
 
-**B2 Land (117):** 25 politische Linien (B10: so lassen) · 44 Küste/Insel/Grenze (so lassen) · 4 schon
-richtig `Northern Ireland` · 22 Irland→Nordirland (**alle 22 inzwischen geschrieben**, UK-Lane) ·
-6 falsches Land: 3 geschrieben, **3 offen** (Achladia Deutschland→Griechenland, Delphinion
-Griechenland→Türkei, Côa Spanien→Portugal; Weg: eine mechanische Länder-Lane, noch nicht gebaut) ·
-3 falsche Koordinate + 12 „braucht Zeugen“: davon 1 versetzt (Yenikale), der Rest offen · 1 kein Land
-(`Baltic Sea`).
+**B2 Land (117):** 25 politische Linien (B10: so lassen) · 45 Küste/Insel/Grenze oder grenzüberschreitend
+(so lassen; neu dabei die Felsbilder von Côa und Siega Verde — ihre eigene Beschreibung nennt Portugal
+**und** Spanien, eines allein zu schreiben wäre falsch) · 4 schon richtig `Northern Ireland` ·
+22 Irland→Nordirland (**alle 22 inzwischen geschrieben**, UK-Lane) · 5 falsches Land: 3 geschrieben,
+**2 offen** (Achladia Deutschland→Griechenland, Delphinion Griechenland→Türkei; Weg: eine mechanische
+Länder-Lane, noch nicht gebaut) · 3 falsche Koordinate + 12 „braucht Zeugen“: davon 1 versetzt
+(Yenikale), der Rest offen · 1 kein Land (`Baltic Sea`).
 
 **Dubletten:** 20 echte Paare (beide Namen sind Wikidata-Namen desselben Objekts, < 2 km) — der Plan
 schätzte ~8. Überlebensregel: mehr Content-Links, dann mehr Quellen, dann ältere Zeile, dann die kleinere
 ID (reiner Gleichstandsbrecher; bei 7 Paaren entscheidet er). Die Liste für die Scope-Lane:
-`output/remediation/bcases/DUPLICATES.jsonl` (`loser_id`, `survivor_id`, `evidence`, 20 Zeilen, keine
-Kette). Dazu 13 Punkte, auf denen 36 Sites übereinander liegen (`stacked.jsonl`) — keine Dubletten,
-sondern Platzhalterkoordinaten.
+`output/remediation/bcases/DUPLICATES.jsonl` (`loser_id`, `survivor_id`, `evidence`, **19** Zeilen, keine
+Kette). **Zurückgehalten** (`DUPLICATES_HELD.jsonl`): Banias (Syrien) / Caesarea Philippi (Israel) — eine
+Stätte, 290 m, aber auf den beiden Seiten der Golan-Linie, die du in B10 so gelassen hast; welche Zeile
+bleibt, entscheidet ein Land, und das ist deine Frage, nicht die der Scope-Lane. Dazu 13 Punkte, auf denen
+36 Sites übereinander liegen (`stacked.jsonl`) — keine Dubletten, sondern Platzhalterkoordinaten.
 
 **Was nur du entscheiden kannst:**
 
-1. **Die 17 Koordinaten schreiben?** FIELD_CONTRACT §4.6 verbietet automatische Koordinatenänderungen.
-   Der Plan erfüllt deine Regel „zwei unabhängige Zeugen“; ein „ja“ genügt, der Orchestrator fährt dann
-   Probe, Anwendung und Nachlesen. Folgefall: Temple of Atargatis landet in Syrien, gespeichert ist
-   Libanon — das Land muss danach nachgezogen werden.
-2. **Dubletten ausblenden:** Darf E4 `retired` (Grund `duplicate_of:<uuid>`) für die 20 Verlierer
-   genutzt werden? B6 verlangt die Freigabe je Site — die Liste nennt jede einzelne mit Beleg.
+1. **Die 9 Koordinaten schreiben?** FIELD_CONTRACT §4.6 verbietet automatische Koordinatenänderungen.
+   Der Plan erfüllt deine Regel „zwei unabhängige Zeugen“ in der strengen Form oben (kein Import, keine
+   Rundungskopie, nicht derselbe Punkt); ein „ja“ genügt, der Orchestrator fährt dann Probe, Anwendung
+   und Nachlesen. Keine der 9 landet in einem anderen Land als dem gespeicherten.
+2. **Dubletten ausblenden:** Darf E4 `retired` (Grund `duplicate_of:<uuid>`) für die 19 Verlierer
+   genutzt werden? B6 verlangt die Freigabe je Site — die Liste nennt jede einzelne mit Beleg. Und
+   Banias / Caesarea Philippi: welche Zeile, und damit welches Land (B10)?
 3. **`Baltic Sea`**: welches Land (oder keines) für eine Stätte in internationalen Gewässern?
 4. **Ahin Posh Tape**: Phase 3 schrieb `Afghanistan → Pakistan`; die eigene Beschreibung sagt „bei
    Jalalabad, Afghanistan“, der Wikidata-Link ist ein Dorf in Pakistan. Umkehr + Punkt prüfen.
-5. **Lesen, kein Rechnen mehr möglich:** 46 Namen (N7), 11 Link-Kandidaten ohne 1-km-Beweis,
-   2 widersprüchliche Einträge (+ Tikal aus Welle 1), 5 Dublettenkandidaten aus der Link-Recherche, 163
+5. **Verdächtige Links hinter passenden Namen** (aus den 72): „Milefortlet - Hadrians Wall“ →
+   Q1568283 „milecastle“, „Dolmens of Sardinia“ → Q101659 „dolmen“, „Nuraghes of Sardinia“ → Q688292
+   „nuraghe“ (jeweils der Gattungsbegriff, derselbe Fehler, den die Wellen 1 und 2 reparieren),
+   „Asklepion, Kos“ → Q731841 „Asclepeion“ (geteilt mit „Asklepieion - Pathos“ auf Zypern) und
+   „The Temple of Artemis“ — gespeichert in Griechenland bei 40.78, 24.72, verlinkt und beschrieben als
+   der Tempel in Ephesos, 388 km entfernt. „Themistoclean Wall“ → „walls of Themistocles“ ist ein
+   Fehlalarm des Kleinbuchstaben-Tests (ein bestimmtes Objekt).
+6. **Lesen, kein Rechnen mehr möglich:** 46 Namen (N7), 11 Link-Kandidaten ohne 1-km-Beweis,
+   2 widersprüchliche Einträge (+ Tikal aus Welle 1), 5 Dublettenkandidaten aus der Link-Recherche, 171
    offene Koordinaten (Liste mit Grund in `coords.jsonl`).
 
 ## C. Grenzen, die auch im autonomen Lauf gelten
