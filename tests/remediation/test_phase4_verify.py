@@ -20,6 +20,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import json
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -35,20 +36,27 @@ if str(PHASE4_PARENT) not in sys.path:
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3.run import Batch  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
+from phase4 import sentences as S  # noqa: E402 - only for the D3 parity test
 from phase4 import verify4 as V  # noqa: E402
 
 from pipeline.video import shorts_audit, shorts_brand  # noqa: E402
+from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 from tests.remediation.phase4_cases import (  # noqa: E402
     A1,
     CARD,
     EN1,
     EN2,
+    FR2,
+    FR_TEXT,
     HELD_SITE,
     L4,
     P2,
+    PAGE,
     PERMALINK,
     PUB2,
+    Q1,
     R1,
+    R_URL,
     S1,
     S2,
     S3,
@@ -146,8 +154,8 @@ def test_the_ast_scan_would_see_an_import_of_the_assembler() -> None:
 # ------------------------------------------------------------------------------------------------
 
 
-def _offered(sentence: str) -> list[str]:
-    return [sentence[a:b] for a, b in V.offered_spans(sentence, 0, len(sentence))]
+def _offered(sentence: str, source_id: str = "W") -> list[str]:
+    return [sentence[a:b] for a, b in V.offered_spans(source_id, sentence, 0, len(sentence))]
 
 
 def test_the_designs_own_example_is_offered_with_its_delimiter() -> None:
@@ -185,6 +193,14 @@ def test_an_unspaced_dash_pair_is_not_offered() -> None:
     assert _offered("The fort—built by the Romans—was abandoned in the 5th century AD.") == []
     # spaced after but not before: the range would start one character early and eat the 't'
     assert _offered("The fort— built by the Romans— was abandoned in the 5th century AD.") == []
+    # spaced before but not after: removing the pair would glue 'fort' to 'was' ('The fortwas')
+    assert _offered("The fort —built by the Romans —was abandoned in the 5th century AD.") == []
+
+
+def test_a_dash_pair_inside_a_parenthesis_is_no_insertion() -> None:
+    """Rule 3: only a top-level dash delimits; the parenthesis around the pair is the span."""
+    sentence = "The fort (built – by the Romans – in stone) was abandoned in the 5th century AD."
+    assert _offered(sentence) == [" (built – by the Romans – in stone)"]
 
 
 def test_a_leading_phrase_is_at_most_six_tokens() -> None:
@@ -192,6 +208,46 @@ def test_a_leading_phrase_is_at_most_six_tokens() -> None:
     assert "In the very late summer of 1920, " not in _offered(seven)
     six = "In the late summer of 1920, the site was excavated by a team."
     assert "In the late summer of 1920, " in _offered(six)
+
+
+@pytest.mark.parametrize(("source_id", "text", "spans"), SPAN_CASES)
+def test_the_span_cases_verify4_offers_exactly(source_id: str, text: str, spans: dict) -> None:
+    """D3: verify4's own finder offers exactly the ranges `SPAN_CASES` pins (section 7), the
+    fixture S2's finder is held to as well."""
+    offered = V.offered_spans(source_id, text, 0, len(text))
+    assert sorted(text[a:b] for a, b in offered) == sorted(spans.values())
+
+
+#: The verifier's own span texts above, run through both finders as well.
+VERIFIER_SPAN_TEXTS = (
+    "The temple was built c. 2500 BC by Khufu, whose tomb lies nearby.",
+    S1,
+    S2,
+    S4,
+    "The fort – built by the Romans – was abandoned in the 5th century.",
+    "The wall, which was not finished, stands (possibly) on older footings, suggesting reuse.",
+    "The hoard of 2,500 coins (found in 1920, near the gate) lies in the museum store.",
+    "The fort—built by the Romans—was abandoned in the 5th century AD.",
+    "The fort— built by the Romans— was abandoned in the 5th century AD.",
+    "The fort —built by the Romans —was abandoned in the 5th century AD.",
+    "The fort (built – by the Romans – in stone) was abandoned in the 5th century AD.",
+    "In the very late summer of 1920, the site was excavated by a team.",
+    "In the late summer of 1920, the site was excavated by a team.",
+)
+
+
+@pytest.mark.parametrize(
+    ("source_id", "text"),
+    [(source_id, text) for source_id, text, _ in SPAN_CASES]
+    + [("W", text) for text in VERIFIER_SPAN_TEXTS],
+)
+def test_both_finders_offer_the_same_ranges(source_id: str, text: str) -> None:
+    """D3 parity: S2's finder (`sentences.split_source`) and verify4's own offer the same ranges
+    over the shared fixture and the verifier's texts. Neither module imports the other; this test
+    imports both."""
+    (sentence,) = S.split_source(source_id, text)
+    s2 = sorted((span.start, span.end) for span in sentence.spans)
+    assert sorted(V.offered_spans(source_id, text, sentence.start, sentence.end)) == s2
 
 
 def test_the_edit_list_removes_repairs_restores_and_marks() -> None:
@@ -213,6 +269,22 @@ def test_the_card_speaks_circa_and_nothing_else() -> None:
         "Built circa 2500 BC and circa 300 AD, etc. in B.C. times."
     )
     assert V.spoken("C. 2500 BC it was built.") == "Circa 2500 BC it was built."
+    # D2: the era-first date and the {{circa}} thin space read as S4 reads them (model4's pattern)
+    assert (
+        V.spoken("It was built c. AD 79 on the shore.") == "It was built circa AD 79 on the shore."
+    )
+    assert (
+        V.spoken("It was built ca. BC 500 by farmers.") == "It was built circa BC 500 by farmers."
+    )
+    assert V.spoken("It was built c.\u2009300 BC.") == "It was built circa 300 BC."
+    assert V.spoken("A 5th c. BCE wall.") == "A 5th c. BCE wall."
+
+
+def test_the_card_speaks_through_the_one_circa_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D2: V10 reads `model4.CIRCA_PATTERN`, the one definition S4 imports too; a pattern of the
+    verifier's own would not follow it."""
+    monkeypatch.setattr(M, "CIRCA_PATTERN", re.compile(r"(?P<c>[Cc])irca-(?=\d)"))
+    assert V.spoken("Built circa-300 and Circa-400.") == "Built circa 300 and Circa 400."
 
 
 # ------------------------------------------------------------------------------------------------
@@ -293,6 +365,9 @@ def test_v1_a_url_that_is_not_an_oldid_permalink_is_held() -> None:
         "http://en.wikipedia.org/w/index.php?title=Tarxien_Temples&oldid=1234567",
         "https://en.wikipedia.org/w/index.php?title=&oldid=1234567",
         "https://en.wikipedia.org/w/index.php?title=X&oldid=1234567&action=raw",
+        "https://en.wikipedia.org/wiki/index.php?title=Tarxien_Temples&oldid=1234567",
+        "https://en.wikipedia.org/w/index.php?title=Tarxien_Temples&oldid=1234567#History",
+        "https://en.wikipedia.org/w/index.php?title=Tarxien_Temples&title=Paola&oldid=1234567",
     ):
         assert not V.is_permalink(url, lang="en", revid=1234567), url
     case = make_case()
@@ -330,6 +405,64 @@ def test_v1_the_attribution_names_the_article_it_links() -> None:
     assert "attribution names" in reprovenance(case, attribution=attribution).detail("V1")
 
 
+def _with_ref(case: Case, **over: Any) -> Case:
+    """The case whose (one) provenance source reference differs in `over`; the attribution follows
+    a changed URL (model4 wants it to be a cited source's)."""
+    provenance = case.assembly.provenance
+    ref = dataclasses.replace(provenance.sources[0], **over)
+    attribution = dataclasses.replace(provenance.attribution, url=ref.url)
+    return reprovenance(case, sources=(ref,), attribution=attribution)
+
+
+def test_v1_the_provenance_links_the_pinned_permalink() -> None:
+    """Another article's oldid permalink of the same revision number is a permalink, but not the
+    pinned one: only V1 compares the provenance's URL with the meta."""
+    other = "https://en.wikipedia.org/w/index.php?title=Hal_Tarxien&oldid=1234567"
+    held = _with_ref(make_case(), url=other)
+    assert "not the pinned permalink" in held.detail("V1")
+
+
+def test_v1_the_provenance_pins_the_metas_text_hash() -> None:
+    held = _with_ref(make_case(), text_sha256="0" * 64)
+    assert "provenance pins 0000000000000000, the meta another" in held.detail("V1")
+
+
+@pytest.mark.parametrize(
+    "over", [{"revid": 1234568}, {"rev_timestamp": "2026-09-02T10:00:00Z"}], ids=str
+)
+def test_v1_the_provenance_pins_the_metas_revision(over: dict[str, Any]) -> None:
+    assert "another revision than the meta" in _with_ref(make_case(), **over).detail("V1")
+
+
+def test_v1_the_meta_names_its_own_source() -> None:
+    case = make_case()
+    case.metas["W"]["id"] = "T.fr"
+    assert "the meta names source 'T.fr'" in case.detail("V1")
+
+
+def test_v1_the_provenance_licence_is_the_metas() -> None:
+    held = _with_ref(make_case(), licence=M.Licence.CC0)
+    assert "provenance says CC0, the meta otherwise" in held.detail("V1")
+
+
+def test_v1_a_lane_r_page_is_restricted(licences: None) -> None:
+    case = make_generated_case("R")
+    case.metas["R1"]["licence"] = M.Licence.CC_BY_SA_4.value
+    held = _with_ref(case, licence=M.Licence.CC_BY_SA_4)
+    assert "lane R pages are restricted" in held.detail("V1")
+
+
+def test_v1_a_lane_r_provenance_links_the_page_the_fetch_ended_at(licences: None) -> None:
+    case = make_generated_case("R")
+    case.metas["R1"]["final_url"] = R_URL + "visit/"
+    assert "the page ended at" in case.detail("V1")
+
+
+def test_v1_a_restricted_page_pins_no_revision(licences: None) -> None:
+    held = _with_ref(make_generated_case("R"), revid=5)
+    assert "a restricted page has no revision" in held.detail("V1")
+
+
 # ------------------------------------------------------------------------------------------------
 # V2 quote, V3 assembly, V4 drop legality
 # ------------------------------------------------------------------------------------------------
@@ -362,6 +495,37 @@ def test_v2_every_published_sentence_needs_its_quote() -> None:
     assert "2 quote(s) for 3 published sentence(s)" in case.detail("V2")
 
 
+HEDGED = "According to Zammit, Phoenician settlers raised the temples in 2500 BC."
+UNHEDGED = "Phoenician settlers raised the temples in 2500 BC."
+
+
+def test_v2_a_range_that_is_not_one_whole_sentence_is_held() -> None:
+    """C2: a range starting after 'According to Zammit, ' drops the attribution without a drop
+    V4 could see (`according` is protected, so no offered span carries it). The range must be
+    exactly one sentence of the pinned text's split (contract section 3)."""
+    text = f"{S1} {S2} {HEDGED}"
+    case = make_case(text=text, picks=(*W_PICKS[:2], Pick(UNHEDGED, (), UNHEDGED)))
+    assert "is not one whole sentence of W" in case.detail("V2")
+    # the whole sentence, hedge and all, passes the same check
+    whole = make_case(text=text, picks=(*W_PICKS[:2], Pick(HEDGED, (), HEDGED)))
+    assert "V2" not in whole.reasons()
+
+
+def test_v2_a_range_over_two_sentences_is_held() -> None:
+    joined = f"{S2} {S3}"
+    case = make_case(picks=(W_PICKS[0], Pick(joined, (), joined)))
+    assert "sentence 2: [" in case.detail("V2") and "not one whole sentence" in case.detail("V2")
+
+
+def test_v2_a_translated_range_is_one_whole_sentence_too() -> None:
+    case = make_generated_case("T")
+    first = case.assembly.provenance.sentences[0]
+    cut = dataclasses.replace(first, start=first.start + len("Le "))
+    held = reprovenance(case, sentences=(cut, *case.assembly.provenance.sentences[1:]))
+    held.quotes[0] = FR_TEXT[cut.start : cut.end]
+    assert "is not one whole sentence of T.fr" in held.detail("V2")
+
+
 def test_v3_a_published_sentence_the_edit_list_does_not_rebuild_is_held() -> None:
     case = make_case()
     changed = case.assembly.description.replace("four megalithic", "five megalithic")
@@ -374,6 +538,14 @@ def test_v3_a_description_that_does_not_split_into_its_sentences_is_held() -> No
     held = republish(case, glued)
     assert "marker-terminated sentence(s)" in held.detail("V3")
     assert "V8" in held.reasons()
+
+
+@pytest.mark.parametrize("tail", [" ", "  ", "\n"], ids=repr)
+def test_v3_a_description_that_ends_in_whitespace_is_held(tail: str) -> None:
+    """C5: every byte is re-derived, the space after the last marker too."""
+    case = make_case()
+    held = republish(case, case.assembly.description + tail)
+    assert "marker-terminated sentence(s)" in held.detail("V3")
 
 
 def test_v3_lane_r_drops_nothing_from_a_quote(licences: None) -> None:
@@ -445,6 +617,36 @@ def test_v5_unbalanced_quotes_are_held() -> None:
     assert V.balanced('He said "yes" and (then) left [1].')
 
 
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "The temple was called “the House of the Goddess by the villagers.",
+        "The temple was called «the House of the Goddess by the villagers.",
+    ],
+)
+def test_v5_an_unclosed_curly_or_guillemet_quote_is_held(bad: str) -> None:
+    text = f"{S1} {bad}"
+    case = make_case(text=text, picks=(W_PICKS[0], Pick(bad, (), bad)))
+    assert "unbalanced" in case.detail("V5")
+    assert V.balanced("He said “yes” and «no» [1].")
+
+
+@pytest.mark.parametrize(
+    ("label", "bad"),
+    [
+        ("'=='", "The temple was restored == History == after the storm of 1956."),
+        ("an empty '()'", "The temple () was restored after the storm damage of 1956."),
+        ("'( ;'", "The temple (; restored) was repaired after the storm of 1956."),
+        ("'displaystyle'", "The temple displaystyle was restored after the storm of 1956."),
+        ("doubled punctuation", "The temple, , was restored after the storm damage of 1956."),
+    ],
+)
+def test_v5_every_extract_artefact_is_held(label: str, bad: str) -> None:
+    text = f"{S1} {bad}"
+    case = make_case(text=text, picks=(W_PICKS[0], Pick(bad, (), bad)))
+    assert f"artefact {label}" in case.detail("V5")
+
+
 def test_v6_a_pronoun_without_its_source_predecessor_is_held() -> None:
     case = make_case(picks=(W_PICKS[0], W_PICKS[2]))
     assert "opens with a pronoun" in case.detail("V6")
@@ -466,11 +668,40 @@ def test_v6_the_name_match_is_directional() -> None:
     assert not V.name_in("Kilmartin Glen standing stones", "Kilmartin Glen.")
 
 
+def test_v6_the_name_match_is_bounded_by_tokens() -> None:
+    """C6: the name's tokens stand as whole tokens in the sentence; a short name inside a longer
+    word ('Ur' in 'during', 'Pod' in 'tripod') is no mention of the site."""
+    for name, sentence in (
+        ("Ur", "The ziggurat was restored during the 1930s."),
+        ("Ur", "The structure stands on a mound."),
+        ("Pod", "The tripod vessels were found in the pit."),
+        ("Vani", "Vanished walls were traced in the field."),
+        ("Nether Largie North Cairn", "Nether Largie South Cairn lies to the south."),
+    ):
+        assert not V.name_in(name, sentence), (name, sentence)
+    for name, sentence in (
+        ("Ur", "Ur was a city of Sumer."),
+        ("Tarxien Temples", "The Tarxien temples lie in Paola."),
+        ("Tarxien Temple", "The Tarxien Temples lie in Paola."),  # one letter off a long token
+        ("Chichén-Itzá", "The ruins of Chichen Itza lie in Yucatan."),
+    ):
+        assert V.name_in(name, sentence), (name, sentence)
+    ur = make_case(site=plan_site(name="Ur", aliases=()), card=None, subject_gate=gate(km=None))
+    assert "sentence 1 names none of ['Ur']" in ur.detail("V6")
+
+
 def test_v6_the_article_title_counts_only_for_a_strong_own_verdict() -> None:
     site = plan_site(name="Ħal Tarxien megaliths", aliases=())
     strong = make_case(site=site, card=None)
     assert "V6" not in strong.reasons()  # 'Tarxien Temples', the title, is in sentence 1
     weak = make_case(site=site, card=None, subject_gate=gate(km=None))
+    assert "sentence 1 names none" in weak.detail("V6")
+
+
+@pytest.mark.parametrize("over", [{"qid_match": False}, {"place_item": True}], ids=str)
+def test_v6_a_title_without_its_qid_or_of_a_place_item_is_no_strong_own(over: dict) -> None:
+    site = plan_site(name="Ħal Tarxien megaliths", aliases=())
+    weak = make_case(site=site, card=None, subject_gate=gate(**over))
     assert "sentence 1 names none" in weak.detail("V6")
 
 
@@ -482,14 +713,59 @@ def test_v7_a_verdict_that_does_not_allow_the_lane_is_held() -> None:
 def test_v7_lane_s_publishes_only_name_bearing_or_matching_section_sentences() -> None:
     case = make_case(lane="S", picks=(W_PICKS[0], W_PICKS[1]), card=None)
     assert "sentence 2: lane S" in case.detail("V7")
-    under_history = make_case(
-        lane="S",
-        picks=(W_PICKS[0], Pick(S5, (), S5)),
-        card=None,
-        site=plan_site(aliases=("Tarxien", "Tarxien history")),
-    )
-    assert "V7" not in under_history.reasons()
+    # a heading that carries a stored name: the section is the site's
+    text = TEXT.replace("== History ==", "== History of Tarxien ==")
+    under_own = make_case(lane="S", text=text, picks=(W_PICKS[0], Pick(S5, (), S5)), card=None)
+    assert "V7" not in under_own.reasons()
     assert V.heading_before(TEXT, TEXT.index(S5)) == "History"
+
+
+def _lane_s(name: str, heading: str, first: str, second: str) -> Case:
+    text = f"{first}\n\n\n== {heading} ==\n{second}"
+    site = plan_site(name=name, aliases=())
+    picks = (Pick(first, (), first), Pick(second, (), second))
+    return make_case(lane="S", text=text, picks=picks, card=None, site=site)
+
+
+@pytest.mark.parametrize(
+    ("name", "heading", "first", "second"),
+    [
+        # a sibling: the reverse direction read 'Nether Largie South Cairn' inside the stored name
+        (
+            "Nether Largie North Cairn, Kilmartin Glen",
+            "Nether Largie South Cairn",
+            "Nether Largie North Cairn, Kilmartin Glen, is a Bronze Age burial cairn in the "
+            "Kilmartin valley of Argyll.",
+            "The cairn was opened in 1864 and held a stone cist with a crouched burial and "
+            "sherds of a beaker of the early Bronze Age.",
+        ),
+        # a generic heading inside the stored name
+        (
+            "Pyramid of Neferhetepes",
+            "Pyramid",
+            "The Pyramid of Neferhetepes is a ruined pyramid built for a queen of the Fifth "
+            "Dynasty at Saqqara.",
+            "The core was built of local limestone blocks and cased with fine white limestone "
+            "from the Tura quarries across the river.",
+        ),
+        # a stored name that only carries the heading: 'History' in 'Tarxien history'
+        (
+            "Tarxien history",
+            "History",
+            "Tarxien history is the story of four megalithic structures near the village of "
+            "Tarxien in Malta.",
+            S5,
+        ),
+    ],
+)
+def test_v7_a_heading_counts_only_when_it_carries_the_stored_name(
+    name: str, heading: str, first: str, second: str
+) -> None:
+    """C1: one direction only, token by token - the stored name (or an alias) inside the heading,
+    as S2's pool reads it; never the heading inside the name."""
+    assert "sentence 2: lane S, no stored name and no matching section" in _lane_s(
+        name, heading, first, second
+    ).detail("V7")
 
 
 # ------------------------------------------------------------------------------------------------
@@ -524,6 +800,65 @@ def test_v8_a_citation_must_link_the_pinned_permalink() -> None:
         ),
     )
     assert "its source W is" in case.replace(citations=citations).detail("V8")
+
+
+@pytest.mark.parametrize(
+    ("over", "message"),
+    [
+        ({"title": "Wikipedia: Paola"}, "is titled 'Wikipedia: Paola', not 'Wikipedia: <title>'"),
+        ({"domain": "evil.example"}, "names the domain 'evil.example' of another URL"),
+        ({"license": M.Licence.CC0}, "[1] carries licence CC0, its source another"),
+    ],
+    ids=["title", "domain", "licence"],
+)
+def test_v8_a_citation_names_its_article_host_and_licence(over: dict, message: str) -> None:
+    case = make_case()
+    citations = (dataclasses.replace(case.assembly.citations[0], **over),)
+    assert message in case.replace(citations=citations).detail("V8")
+
+
+def test_v8_the_citation_domain_is_the_host_without_www(licences: None) -> None:
+    """The production form (`api/main.py`'s seeded citations; S4's `assemble.domain_of`):
+    `https://www.heritagemalta.mt/...` is cited as `heritagemalta.mt`."""
+    case = make_generated_case("R")
+    assert R_URL.startswith("https://www.") and case.assembly.citations[0].domain == (
+        "heritagemalta.mt"
+    )
+    assert "V8" not in case.reasons()
+    www = (dataclasses.replace(case.assembly.citations[0], domain="www.heritagemalta.mt"),)
+    assert "names the domain 'www.heritagemalta.mt'" in case.replace(citations=www).detail("V8")
+
+
+def test_v8_a_citation_no_marker_cites_is_held() -> None:
+    case = make_case()
+    extra = dataclasses.replace(case.assembly.citations[0], n=2)
+    held = case.replace(citations=(*case.assembly.citations, extra))
+    assert "citations [2] are cited by no marker" in held.detail("V8")
+
+
+def test_v8_the_citations_are_numbered_from_one() -> None:
+    case = make_case()
+    citations = (dataclasses.replace(case.assembly.citations[0], n=2),)
+    assert "the citations are numbered [2], not 1..1" in case.replace(citations=citations).detail(
+        "V8"
+    )
+
+
+def test_v8_a_sentence_carries_exactly_one_marker() -> None:
+    """Lane T: V3 does not rebuild a translation, so only V8 counts the markers of a sentence."""
+    case = make_generated_case("T")
+    case = _regenerate(case, 1, EN2.replace("statues,", "statues [1],"))
+    assert "sentence 2 carries 2 markers" in case.detail("V8")
+
+
+def test_v8_a_sentence_is_marked_with_its_provenance_number() -> None:
+    """Lane T: sentence 2 marked [2] while its provenance says [1], with a citation [2] that
+    exists, so no other marker check notices."""
+    case = make_generated_case("T")
+    second = dataclasses.replace(case.assembly.citations[0], n=2)
+    marked = case.assembly.description.replace("spirals [1].", "spirals [2].")
+    held = republish(case, marked).replace(citations=(*case.assembly.citations, second))
+    assert "sentence 2 is marked [2], provenance says [1]" in held.detail("V8")
 
 
 def test_v9_a_description_that_is_too_short_or_under_the_floor_is_held() -> None:
@@ -638,6 +973,26 @@ def test_v10_the_card_speaks_circa_where_the_description_writes_c() -> None:
     assert "is not its items" in held.detail("V10")
 
 
+@pytest.mark.parametrize(
+    ("lane", "card", "index"),
+    [
+        ("R", Q1, 0),  # the restricted page's own wording, verbatim
+        ("T", FR2, 1),  # the French source sentence
+        ("T", EN2, 1),  # the English translation: still no card in lane T
+    ],
+)
+def test_v10_lanes_t_and_r_build_no_card(licences: None, lane: str, card: str, index: int) -> None:
+    """C3: lanes T and R publish text that is not the source's, so no offered span applies and no
+    card is built (the design's 'extractive condensation'); a card there is held, whatever it
+    says - before, V10 passed exactly the verbatim restricted or French one."""
+    case = make_generated_case(lane)
+    record = M.Card(items=(M.CardItem(sentence=index, drop=()),), text_sha256=sha(card))
+    held = reprovenance(case, card=record).replace(card=card)
+    holds = [h for h in held.run() if h.reason is M.HoldReason.V10]
+    assert [h.scope for h in holds] == [M.HoldScope.CARD]
+    assert f"lane {lane} builds no card" in holds[0].detail
+
+
 def test_v10_measures_through_the_shorts_own_helpers_with_the_brand_fonts() -> None:
     fonts = [shorts_brand.FONT_DIR / name for name in shorts_brand.FONTS]
     if not all(path.exists() for path in fonts):
@@ -669,6 +1024,17 @@ def _regenerate(case: Case, index: int, sentence: str) -> Case:
 def test_v11_a_translated_number_that_is_not_in_its_quote_is_held() -> None:
     case = _regenerate(make_generated_case("T"), 0, EN1.replace("3600", "3700"))
     assert "the numbers ['3700'] are not in its quote" in case.detail("V11")
+
+
+def test_v11_lane_t_may_state_only_what_its_trimmed_sentence_says() -> None:
+    """A translation restoring the year a drop took out of its source sentence is held by V11
+    (V4 holds the drop itself: a lane-T sentence offers no span)."""
+    case = make_generated_case("T")
+    first = case.assembly.provenance.sentences[0]
+    low = FR_TEXT.index(" et fouillé en 1915")
+    trimmed = dataclasses.replace(first, drop=((low, low + len(" et fouillé en 1915")),))
+    held = reprovenance(case, sentences=(trimmed, *case.assembly.provenance.sentences[1:]))
+    assert "the numbers ['1915'] are not in its quote" in held.detail("V11")
 
 
 def test_v11_a_capitalised_word_that_is_not_in_its_quote_is_held() -> None:
@@ -714,6 +1080,23 @@ def test_v12_the_provenance_written_is_the_assemblys() -> None:
     assert "is not the assembly's provenance" in case.detail("V12")
 
 
+def test_v12_the_citations_written_are_the_assemblys() -> None:
+    case = make_case()
+    written = [dict(case.new_raw_data[M.CITATIONS_KEY][0], title="Wikipedia: Paola")]
+    case.new_raw_data[M.CITATIONS_KEY] = written
+    assert "description_citations is not the assembly's citations" in case.detail("V12")
+
+
+def test_v13_a_card_without_its_provenance_card_is_held() -> None:
+    """The run's card published while the provenance says there is none, and the reverse."""
+    case = make_case()
+    no_card = case.replace(card=None)
+    holds = [h for h in no_card.run() if h.reason is M.HoldReason.V13]
+    assert [(h.scope, h.detail) for h in holds] == [
+        (M.HoldScope.CARD, "the card and provenance.card disagree on whether there is one")
+    ]
+
+
 def test_v13_a_description_hash_that_is_not_its_text_is_held() -> None:
     case = reprovenance(make_case(), desc_sha256=sha("another text"))
     assert "desc_sha256 is not" in case.detail("V13")
@@ -751,6 +1134,26 @@ def test_v14_a_location_sentence_naming_another_country_is_held() -> None:
     assert "places the site in Italy" in case.detail("V14")
     england = plan_site(country="England")
     assert V._iso("United Kingdom") == V._iso(england.country)
+
+
+def test_v14_a_stored_country_of_comma_parts_is_read_part_by_part() -> None:
+    """C7: the 8 Rapa Nui sites store 'Chile, Easter Island', which is no single NAME_TO_ISO name;
+    a location sentence naming Easter Island or Chile agrees with it, Italy does not."""
+    site = plan_site(country="Chile, Easter Island")
+    sentence = (
+        "The Tarxien Temples lie on Easter Island, a Polynesian island in the Pacific Ocean that "
+        "belongs to Chile."
+    )
+    text = f"{sentence} {S2} {S3}"
+    picks = (Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2])
+    assert "V14" not in make_case(text=text, picks=picks, card=None, site=site).reasons()
+    italy = sentence.replace("Easter Island", "Sicily").replace("Chile", "Italy")
+    text = f"{italy} {S2} {S3}"
+    picks = (Pick(italy, (), italy), W_PICKS[1], W_PICKS[2])
+    held = make_case(text=text, picks=picks, card=None, site=site)
+    assert "places the site in Italy, the stored country is 'Chile, Easter Island'" in (
+        held.detail("V14")
+    )
 
 
 def test_v15_an_injection_tell_is_held() -> None:
@@ -814,6 +1217,16 @@ def test_the_batch_holds_a_site_whose_lane_is_not_the_assigned_one(
     assert V.verify_batch(batch_dir) == 0
     holds = M.load_jsonl(batch_dir / M.HOLDS_FILE, M.Hold)
     assert any("S1b assigned S" in hold.detail for hold in holds if hold.reason is M.HoldReason.V7)
+
+
+def test_the_batch_holds_a_site_that_cites_outside_its_lanes_sources(
+    tmp_path: Path, write4: None
+) -> None:
+    """S1b assigned the German article; the assembly translated the French one."""
+    batch_dir = write_batch(tmp_path, make_generated_case("T"), lane="T", sources=("T.de",))
+    assert V.verify_batch(batch_dir) == 0
+    holds = M.load_jsonl(batch_dir / M.HOLDS_FILE, M.Hold)
+    assert [h.detail for h in holds] == ["cites ['T.fr'], outside the lane's sources ['T.de']"]
 
 
 def test_the_batch_writes_v14_holds_to_the_field_conflicts_report(

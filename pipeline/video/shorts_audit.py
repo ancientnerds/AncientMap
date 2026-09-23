@@ -282,6 +282,17 @@ def card_sha256(card_text: str) -> str:
     return hashlib.sha256(card_text.encode("utf-8")).hexdigest()
 
 
+def card_trace(site: dict) -> dict:
+    """S13's two inputs out of `site.json`: the hash of the card the short narrates
+    (`card_text`), and the hash its `_description_provenance` pins (`card_text_sha256`, the
+    export's; `None` for a card without card provenance). Each from its own side: taking one from
+    the other would make S13 pass every card that has any pin."""
+    return {
+        "card_sha256": card_sha256(site["card_text"]),
+        "card_provenance_sha256": site["card_text_sha256"],
+    }
+
+
 def _frames(path: Path) -> int:
     return _ffprobe_stream(path)["frames"] if path.exists() else 0
 
@@ -472,8 +483,7 @@ def measure_site(site_dir: Path) -> dict:
         "card_words": len(site["card_text"].split()),
         "caption_words": len(captions),
         "captions_end": max((w["end"] for w in captions), default=0.0),
-        "card_sha256": card_sha256(site["card_text"]),
-        "card_provenance_sha256": site["card_text_sha256"],
+        **card_trace(site),
     }
 
 

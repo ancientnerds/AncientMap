@@ -412,7 +412,8 @@ def make_generated_case(lane: str) -> Case:
         card=None,
         desc_sha256=sha(description),
     )
-    domain = "fr.wikipedia.org" if lane == "T" else "www.heritagemalta.mt"
+    # the host without a leading `www.`: the production form (`api/main.py`'s seeded citations)
+    domain = "fr.wikipedia.org" if lane == "T" else "heritagemalta.mt"
     assembly = M.Assembly(
         site_id=site.site_id,
         description=description,
@@ -514,26 +515,33 @@ def other_track(monkeypatch: pytest.MonkeyPatch, name: str, stand_in: types.Modu
 HELD_SITE = "0529af31-2222-4222-8222-222222222222"
 
 
-def write_batch(parent: Path, case: Case, *, lane: str = "W") -> Path:
+def write_batch(
+    parent: Path, case: Case, *, lane: str = "W", sources: tuple[str, ...] = ("W",)
+) -> Path:
     """One batch directory `p4-0001` under `parent` as S0-S4 leave it: the plan's two sites
-    (the case's and one held in lane 0), their lanes, the case's assembly and its pinned
-    source in the evidence store."""
+    (the case's and one held in lane 0), their lanes (the case's with `sources`), the case's
+    assembly and every pinned source of the case in the evidence store."""
     batch_dir = parent / "p4-0001"
     batch_dir.mkdir(parents=True)
     held = plan_site(site_id=HELD_SITE, name="Bulls of Guisando")
     batch = Batch(batch_id="p4-0001", ordinal=1, sites=(case.site.to_dict(), held.to_dict()))
     (batch_dir / M.INPUT_FILE).write_text(batch.to_json() + "\n", encoding="utf-8")
     lanes = [
-        M.LaneAssignment(site_id=SITE_ID, lane=M.Lane(lane), sources=("W",), detail="own article"),
+        M.LaneAssignment(site_id=SITE_ID, lane=M.Lane(lane), sources=sources, detail="assigned"),
         M.LaneAssignment(site_id=HELD_SITE, lane=M.Lane.ZERO, sources=(), detail="nothing"),
     ]
     (batch_dir / M.LANES_FILE).write_text(M.dump_jsonl(lanes), encoding="utf-8")
     (batch_dir / M.ASSEMBLY_FILE).write_text(M.dump_jsonl([case.assembly]), encoding="utf-8")
     store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
-    store.write(
-        site_id=SITE_ID,
-        feature="src.W.meta",
-        body=json.dumps(case.metas["W"], ensure_ascii=False).encode("utf-8"),
-    )
-    store.write(site_id=SITE_ID, feature="src.W.txt", body=case.texts["W"].encode("utf-8"))
+    for source_id, meta in case.metas.items():
+        store.write(
+            site_id=SITE_ID,
+            feature=M.source_feature(source_id, "meta"),
+            body=json.dumps(meta, ensure_ascii=False).encode("utf-8"),
+        )
+        store.write(
+            site_id=SITE_ID,
+            feature=M.source_feature(source_id, "txt"),
+            body=case.texts[source_id].encode("utf-8"),
+        )
     return batch_dir

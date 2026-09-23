@@ -25,19 +25,21 @@ Deletable spans are exactly section 7's (`candidate_spans`, rules 1-8; `offered_
 every range with a protected token, rule 9). In short: only a sentence of an English source (`W`)
 whose last character is `.`, `!` or `?` and whose parentheses balance offers any; `p` is a
 top-level `( ... )` with the space before it (at the start, the space after it); `a` is a pair of
-delimiter commas (a top-level comma followed by a space) that is no list link and no conjunct, or
-a pair of spaced dashes taken in order (none on an odd count, no range dash, no top-level `;`
-between them); `l` is a leading phrase of 1-6 tokens before the first delimiter comma, unless that
-comma separates list items or conjuncts; `t` runs from the last delimiter comma up to the last
-character. Each range is exactly what is removed (contract section 3: "edit 1 is remove the
-range"); which kind letter it carries does not matter to V4, which compares ranges.
+delimiter commas (a top-level comma followed by a space) that is no list link and no conjunct and
+shares no comma with another such pair, or a pair of spaced dashes taken in order (none on an odd
+count, no range dash, no top-level `;` between them); `l` is a leading phrase of 1-6 tokens before
+the first delimiter comma, unless that comma separates list items or conjuncts; `t` runs from the
+last delimiter comma up to the last character. Each range is exactly what is removed (contract
+section 3: "edit 1 is remove the range"); which kind letter it carries does not matter to V4, which
+compares ranges. A published `W`/`T` range is one whole sentence of the pinned text's split
+(section 3; V2), so no hedge can be cut off in front of a sentence without a drop.
 
 The closed edit list: (1) remove every drop range, (2) collapse runs of spaces to one, (3) `' ,'`
 -> `','`, (4) when a drop starts at the sentence start, upper-case the first character, (5) insert
 `' [n]'` before the final punctuation. Edits 2 and 3 apply to the whole sentence, not only at a
 cut. Published sentences are joined by one space. A card item is edits 1-4 on its own (full)
-drop list, then the spoken form `c.`/`ca.` before a number -> `circa ` (`Circa ` for a capital);
-items are joined by one space and carry no marker.
+drop list, then the spoken edit: every `model4.CIRCA_PATTERN` match -> `circa ` (`Circa ` for a
+capital); items are joined by one space and carry no marker. Lanes T and R build no card (V10).
 
 What the verifier cannot see
 ----------------------------
@@ -78,9 +80,10 @@ from phase3.run import InputError, _single_batch
 from rapidfuzz import fuzz
 
 from phase4 import model4 as M
-from pipeline.lyra.text_sentences import is_complete_sentence
+from phase4 import subject_gate as SG
+from pipeline.lyra.text_sentences import is_complete_sentence, split_sentences
 from pipeline.utils.country_lookup import NAME_TO_ISO, country_name_variants
-from pipeline.utils.text import normalize_for_search, normalize_name
+from pipeline.utils.text import normalize_name
 from pipeline.video import shorts_audit, shorts_brand
 from pipeline.video.shorts_render import W as FRAME_WIDTH
 
@@ -271,10 +274,16 @@ def candidate_spans(source_id: str, text: str, start: int, end: int) -> tuple[tu
 
     commas = [i for i, ch in enumerate(s) if ch == "," and top[i] and s[i + 1 : i + 2] == " "]
     links = _list_links(s, commas)
-    for k, link in enumerate(links):  # rule 5, a (commas)
-        first, second = commas[k], commas[k + 1]
-        if s[first + 1 : second].strip() and not link:
-            found.add((first, second + 1))
+    # rule 5, a (commas): an insertion pair has text between its commas and is no list link; two
+    # insertion pairs that share a comma leave no reading of which two commas enclose the
+    # insertion, so neither is offered (decision of 2026-09-23)
+    insertion = [
+        bool(s[commas[k] + 1 : commas[k + 1]].strip()) and not link for k, link in enumerate(links)
+    ]
+    for k, is_insertion in enumerate(insertion):
+        beside = insertion[max(k - 1, 0) : k] + insertion[k + 1 : k + 2]
+        if is_insertion and not any(beside):
+            found.add((commas[k], commas[k + 1] + 1))
 
     dashes = [
         i
@@ -349,7 +358,6 @@ def offered_spans(source_id: str, text: str, start: int, end: int) -> tuple[tupl
 _SPACES = re.compile(r" {2,}")
 #: Edit 5's final punctuation: the trailing run `[.!?]+` plus any closing quotes after it.
 _FINAL = re.compile(r"[.!?]+[\"'”’»]*\Z")
-_CIRCA = re.compile(r"(?<![\w.])([Cc])a?\.\s*(?=\d)")
 
 
 def edited(text: str, start: int, end: int, drop: Sequence[tuple[int, int]]) -> str:
@@ -376,8 +384,10 @@ def marked(sentence: str, n: int) -> str | None:
 
 
 def spoken(text: str) -> str:
-    """The card's one non-source edit: `c.`/`ca.` before a number -> `circa ` (V10)."""
-    return _CIRCA.sub(lambda m: "Circa " if m.group(1) == "C" else "circa ", text)
+    """The card's one non-source edit (V10): every `model4.CIRCA_PATTERN` match -> `circa `
+    (`Circa ` for a capital `C`). The pattern is data both S4 and V10 import (decision D2); the
+    verifier compiles no circa pattern of its own."""
+    return M.CIRCA_PATTERN.sub(lambda m: "Circa " if m["c"] == "C" else "circa ", text)
 
 
 @dataclass(frozen=True)
@@ -410,7 +420,11 @@ def split_published(description: str) -> tuple[Segment, ...] | None:
         if match is None:
             return None
         segments.append(Segment(match["body"], int(match["n"]), match["final"]))
-        position = match.end() + (1 if match.end() < len(description) else 0)
+        position = match.end()
+        if position < len(description):
+            position += 1  # the one space that joins it to the next sentence
+            if position == len(description):
+                return None  # ... and no next sentence: a trailing space is not re-derived
     return tuple(segments) if segments else None
 
 
@@ -428,16 +442,42 @@ def without_markers(text: str) -> str:
 
 
 def name_in(name: str, text: str) -> bool:
-    """Directional: the normalised `name` lies inside the normalised `text` (partial_ratio >= 90
-    with the name the shorter side). `token_set_ratio` is never used: a bare 'Kilmartin' must
-    not match 'Kilmartin Glen standing stones' the other way round."""
-    needle, haystack = normalize_for_search(name), normalize_for_search(text)
-    if not needle or len(needle) > len(haystack):
-        return False
-    return fuzz.partial_ratio(needle, haystack) >= NAME_MATCH
+    """Directional and bounded by tokens (V6, V7): the tokens of `name`, after Phase 4's one name
+    fold (`subject_gate.fold`), stand as a run of whole tokens inside `text`, each pair at
+    `fuzz.ratio >= 90` (the design's threshold, taken per token: one letter off a long token, never
+    a short name inside a longer word - 'Ur' is not in 'during'). Never the other way round: a bare
+    'Kilmartin' must not match 'Kilmartin Glen standing stones'."""
+    needle, haystack = SG.fold(name).split(), SG.fold(text).split()
+    width = len(needle)
+    return width > 0 and any(
+        all(
+            fuzz.ratio(want, got) >= NAME_MATCH
+            for want, got in zip(needle, haystack[at : at + width], strict=True)
+        )
+        for at in range(len(haystack) - width + 1)
+    )
 
 
 _HEADING = re.compile(r"^(={2,})\s*(.+?)\s*\1\s*$", re.MULTILINE)
+
+
+def sentence_ranges(text: str) -> frozenset[tuple[int, int]]:
+    """Contract section 3: every sentence of a pinned `W`/`T.<lang>` text as its `[start, end)`.
+    Each line that is not a `== heading ==` is split by the shared splitter
+    (`text_sentences.split_sentences`), and each stripped piece is found again in its line, from
+    where the one before it ended."""
+    ranges: set[tuple[int, int]] = set()
+    line_start = 0
+    for line in text.split("\n"):
+        if _HEADING.fullmatch(line.strip()) is None:
+            cursor = 0
+            for piece in (part.strip() for part in split_sentences(line)):
+                if piece:
+                    at = line.index(piece, cursor)
+                    ranges.add((line_start + at, line_start + at + len(piece)))
+                    cursor = at + len(piece)
+        line_start += len(line) + 1
+    return frozenset(ranges)
 
 
 def heading_before(text: str, position: int) -> str | None:
@@ -463,6 +503,17 @@ def countries_named(text: str) -> list[str]:
 
 def _iso(name: str | None) -> str | None:
     return NAME_TO_ISO.get(name.strip().lower()) if name else None
+
+
+def stored_isos(country: str | None) -> frozenset[str]:
+    """V14: the ISO codes a stored country names - the whole value's, else each comma part's
+    (`Chile, Easter Island` -> CL, the 8 Rapa Nui sites). Empty when no part is a
+    `NAME_TO_ISO` name (`Baltic Sea`)."""
+    whole = _iso(country)
+    if whole is not None:
+        return frozenset({whole})
+    parts = (country or "").split(",")
+    return frozenset(code for code in (_iso(part) for part in parts) if code is not None)
 
 
 # --------------------------------------------------------------------------------------------
@@ -691,6 +742,7 @@ def _v2(c: _Case) -> list[Problem]:
     if len(c.quotes) != len(c.sentences):
         problems.append(f"{len(c.quotes)} quote(s) for {len(c.sentences)} published sentence(s)")
         return [(SITE, problem) for problem in problems]
+    split: dict[str, frozenset[tuple[int, int]]] = {}
     for index, (sentence, quote) in enumerate(zip(c.sentences, c.quotes, strict=True), 1):
         text = c.text_of(sentence.src)
         if text is None:
@@ -703,6 +755,17 @@ def _v2(c: _Case) -> list[Problem]:
             problems.append(f"sentence {index}: the source slice is not the quote {quote[:60]!r}")
         if not DS.quote_occurs(quote, text):
             problems.append(f"sentence {index}: the quote does not occur in {sentence.src}")
+        # A W or T range is one whole sentence of the split (contract section 3): a range that
+        # starts after 'According to X, ' would drop a protected phrase without a drop V4 sees.
+        # Lane R's quotes are located by code, not numbered.
+        if M.source_kind(sentence.src) is not M.SourceKind.R:
+            if sentence.src not in split:
+                split[sentence.src] = sentence_ranges(text)
+            if (sentence.start, sentence.end) not in split[sentence.src]:
+                problems.append(
+                    f"sentence {index}: [{sentence.start}:{sentence.end}) is not one whole "
+                    f"sentence of {sentence.src}"
+                )
     return [(SITE, problem) for problem in problems]
 
 
@@ -908,9 +971,10 @@ def _v7(c: _Case) -> list[Problem]:
                 continue
             text = c.text_of(sentence.src)
             heading = None if text is None else heading_before(text, sentence.start)
-            if heading is not None and any(
-                name_in(name, heading) or name_in(heading, name) for name in names
-            ):
+            # One direction only: a stored name inside the heading, as S2's pool reads it. The
+            # heading inside a name is a sibling ('Nether Largie South Cairn') or generic
+            # ('Pyramid') section.
+            if heading is not None and any(name_in(name, heading) for name in names):
                 continue
             problems.append(f"sentence {index}: lane S, no stored name and no matching section")
     return [(SITE, problem) for problem in problems]
@@ -967,7 +1031,9 @@ def _v8(c: _Case) -> list[Problem]:
             problems.append(f"[{n}] links {citation.url!r}, its source {source_id} is {pinned!r}")
         if kind is not M.SourceKind.R and citation.title != f"Wikipedia: {meta.get('title')}":
             problems.append(f"[{n}] is titled {citation.title!r}, not 'Wikipedia: <title>'")
-        if citation.domain != urlsplit(citation.url).netloc:
+        # the host without a leading `www.`: production's form (`api/main.py`'s seeded citations)
+        host = urlsplit(citation.url).hostname
+        if host is None or citation.domain != host.removeprefix("www."):
             problems.append(f"[{n}] names the domain {citation.domain!r} of another URL")
         if citation.license.value != meta.get("licence"):
             problems.append(f"[{n}] carries licence {citation.license.value}, its source another")
@@ -1018,6 +1084,11 @@ def _v10(c: _Case) -> list[Problem]:
     card = c.assembly.card
     if card is None:
         return []
+    if c.lane in (M.Lane.T, M.Lane.R):
+        # The card is an extractive condensation of the site's own published text; lanes T and R
+        # publish English that is not their source's, so no offered span applies and no card is
+        # built (S4's reading too). Rebuilt from the source, it would be French or restricted.
+        return [(CARD, f"lane {c.lane.value} builds no card: its text is not the source's")]
     problems: list[str] = []
     if not CARD_MIN <= len(card) <= CARD_MAX:
         problems.append(f"the card has {len(card)} characters, not {CARD_MIN}-{CARD_MAX}")
@@ -1210,15 +1281,13 @@ def _v14(c: _Case) -> list[Problem]:
     for finding in T03.run(_T03Context(sites=[row], snap=_Snapshot(cards))):
         if finding.severity is Severity.SEVERE:
             problems.append(f"T03 severe ({finding.test_id}): {finding.note}")
-    stored_iso = _iso(c.site.country)
+    stored = stored_isos(c.site.country)
     for index, segment in enumerate(c.published or (), 1):
         if not LOCATION_VERB.search(segment.text):
             continue
         for name in countries_named(segment.text):
             same = (
-                _iso(name) == stored_iso
-                if stored_iso
-                else name.lower() == (c.site.country or "").lower()
+                _iso(name) in stored if stored else name.lower() == (c.site.country or "").lower()
             )
             if not same:
                 problems.append(

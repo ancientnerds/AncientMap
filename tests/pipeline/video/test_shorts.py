@@ -11,6 +11,7 @@ from pipeline.video.__main__ import music_start_default, sfx
 from pipeline.video.media import ff_path
 from pipeline.video.shorts_audit import (
     card_sha256,
+    card_trace,
     evaluate,
     longest_frozen_run,
     passed,
@@ -700,6 +701,19 @@ def test_s13_a_card_without_card_provenance_is_not_shorts_eligible():
     failed = [c for c in checks if not c.ok]
     assert [c.name for c in failed] == ["card_traced"]
     assert "carries no card" in failed[0].value
+
+
+def test_s13_the_card_is_measured_from_the_narrated_text_and_the_pin_from_the_provenance():
+    """The two S13 inputs `measure_site` reads out of site.json: the hash of the card the short
+    narrates, and the hash its provenance pins. Taking either from the other side would make S13
+    pass every card that has any pin."""
+    pinned = card_sha256(CARD + " ")  # the card was edited after the write
+    trace = card_trace({"card_text": CARD, "card_text_sha256": pinned})
+    assert trace == {"card_sha256": CARD_SHA, "card_provenance_sha256": pinned}
+    checks = evaluate(_measurements(**trace))
+    assert {c.name for c in checks if not c.ok} == {"card_traced"}
+    held = card_trace({"card_text": CARD, "card_text_sha256": None})
+    assert held == {"card_sha256": CARD_SHA, "card_provenance_sha256": None}
 
 
 def test_s13_the_export_carries_the_pinned_hash_into_site_json():
