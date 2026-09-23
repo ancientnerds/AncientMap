@@ -738,8 +738,9 @@ SCOPE_READBACK = journal_readback(
 
 # ------------------------------------------------------------------ the journal-reversal lanes
 def reversal_residual(journal_ids: Sequence[int], cells: Sequence[Column]) -> Residual:
-    """Curated cells that still hold the value one of `journal_ids` wrote - what the reversal
-    exists to remove, read in each column's own type. The comparison is built from the lane's
+    """Curated sites with a cell that still holds the value one of `journal_ids` wrote - what
+    the reversal exists to remove, read in each column's own type; a site counts once, however
+    many of its cells the list undoes. The comparison is built from the lane's
     `cells` (`typed_case`): a journal row of a column the lane does not write reads as false."""
     listed = ", ".join(str(int(i)) for i in journal_ids)
     holds = typed_case(
@@ -751,7 +752,7 @@ def reversal_residual(journal_ids: Sequence[int], cells: Sequence[Column]) -> Re
         otherwise="false",
     )
     return Residual(
-        "curated cells still holding a value this reversal list undoes",
+        "curated sites still holding a value this reversal list undoes",
         "EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.id IN ("
         + listed
         + ") AND l.table_name = 'unified_sites' AND l.row_pk = unified_sites.id::text AND "

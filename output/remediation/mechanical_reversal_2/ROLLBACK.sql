@@ -198,7 +198,7 @@ SELECT 'planned rows now holding the new value', count(*)::text
                 WHEN 'period_name' THEN u.period_name IS NOT DISTINCT FROM l.new_value::character varying
                 ELSE false END)
 UNION ALL
-SELECT 'curated cells still holding a value this reversal list undoes', count(*)::text
+SELECT 'curated sites still holding a value this reversal list undoes', count(*)::text
   FROM unified_sites
  WHERE source_id = 'ancient_nerds' AND EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.id IN (27752, 27924, 28004, 28092, 28325, 28597, 28607, 28621, 28627, 28632, 28663, 28670, 28675, 28744, 28757, 28770, 28776, 28785, 28804, 28870, 28872, 28970, 28978, 28998, 29025, 29073, 29082, 29136, 29176, 29246, 29272, 29275, 29285, 29326, 29410, 29436, 29497, 29552, 29563, 29578, 29617, 29618, 29628, 29633, 29642, 30335, 30386, 30405, 30441, 30451, 30454, 30512, 30536) AND l.table_name = 'unified_sites' AND l.row_pk = unified_sites.id::text AND CASE l.column_name
                 WHEN 'site_type' THEN unified_sites.site_type IS NOT DISTINCT FROM l.new_value::character varying

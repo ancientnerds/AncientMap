@@ -780,3 +780,13 @@ def test_the_second_list_reads_back_the_period_pair_and_its_own_residual() -> No
     assert "curated rows whose period_name is not the bucket of period_start" in readback
     assert "journal rows of this list that a later write superseded" in readback
     assert L.REVERSAL_2_READBACK.count("30536") == 2, "the residual and the superseded count"
+
+
+def test_the_reversal_residual_says_it_counts_sites() -> None:
+    """The residual is a `FROM unified_sites WHERE ...` predicate: it counts sites, not cells.
+    Read on production 2026-09-23: 45 for the second list's 53 cells, which sit on 45 sites (8
+    carry a start and its label) - a metric named for cells would read as 8 cells missing."""
+    for lane in (L.REVERSAL_1, L.REVERSAL_2):
+        assert lane.post_commit_residual.metric == (
+            "curated sites still holding a value this reversal list undoes"
+        )
