@@ -113,15 +113,19 @@ WAVE2 = Wave(
     "the `move` verdicts of `coords3/VERDICTS.jsonl` (`web_witness.py reweigh`: the first wave's "
     "review cases weighed again with the web witnesses proven from the live page)",
     (
-        "A web witness is a page outside Wikipedia, Wikidata and their mirrors whose coordinates "
-        "`scripts/remediation/bcases/web_witness.py` read from the live page: the quoted text occurs "
-        "in the page, parses to exactly the stated numbers, and stands within 1,500 characters of a "
-        "distinctive word of the site's name. Pages of one publisher (a registered domain) are one "
-        "witness; two web witnesses pair only across publishers, under the same independence rule. "
-        "Where a web witness takes part, two witnesses that are each one with a third are one with "
-        "each other (`copy_groups`), and a P625 whose references name the page's publisher is that "
-        "page (`cited_publishers`). A move into another country than the stored one is not in this "
-        "plan (it is read first).",
+        "A web witness is a page outside Wikipedia, Wikidata, their mirrors, proxies and archives "
+        "whose coordinates `scripts/remediation/bcases/web_witness.py` read from the live page: the "
+        "quoted text occurs in the page, parses to exactly the stated numbers, and stands within "
+        "1,500 characters of a word of the site's name that is not a mere type word ('temple', "
+        "'dolmen', 'great'), or of the whole name. A precision the page states for its point "
+        "(DARE's 'precision 2000 m') is its own uncertainty: a witness within twice of it is one "
+        "point with it, and a stored point within it is where the page puts the site. Pages of one "
+        "publisher (a registered domain) are one witness; two web witnesses pair only across "
+        "publishers, under the same independence rule. Where a web witness takes part, two "
+        "witnesses that are each one with a third are one with each other (`copy_groups`), a P625 "
+        "whose references name the page's publisher is that page (`cited_publishers`), and an item "
+        "of a modern settlement by country ('settlement in Croatia') is a container, not the site. "
+        "A move into another country than the stored one is not in this plan (it is read first).",
     ),
     (PLAN_DIR,),
 )
