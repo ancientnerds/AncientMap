@@ -710,8 +710,9 @@ def search_batch(
         slots = SE.search_slots(site)
         if not site_id or not slots:
             raise InputError(
-                f"{batch_id}: site {site_id or '?'} carries no rerun_fields; a search batch reruns "
-                "named fields only"
+                f"{batch_id}: site {site_id or '?'} carries no {SE.SEARCH_FIELDS_KEY}; a search "
+                "batch buys searches for named fields only, and a record that only reruns fields "
+                "buys none"
             )
         report.sites.append(SiteSearch(site_id=site_id))
         plan.extend((site_id, slot, build_query(site, slot)) for slot in slots)

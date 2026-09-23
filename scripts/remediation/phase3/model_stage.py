@@ -756,7 +756,7 @@ def evidence_excerpts(
     failures: Mapping[str, str] | None = None,
 ) -> list[EvidenceExcerpt]:
     """The site's evidence, read once: one excerpt per target `fetch_stage` built for it, then one per
-    page the site's searches found (`_search_excerpts`; a site without `rerun_fields` has none).
+    page the site's searches found (`_search_excerpts`; a site without `search_fields` has none).
 
     Extracted from `prepare_call` for the discover pass, which builds one prompt per (site, field)
     from the same excerpts (`phase3/discover_stage.py`): the guard below is the thing that must not
@@ -812,8 +812,10 @@ def _search_excerpts(
 ) -> list[EvidenceExcerpt]:
     """One excerpt per page the site's searches found, after the fetched targets (the search lane).
 
-    A site without `rerun_fields` buys no search (`search_evidence.search_slots` is empty), so the
-    mass run's excerpts - and every prompt built from them - are exactly what they were.
+    A site without `search_fields` buys no search (`search_evidence.search_slots` is empty), so the
+    mass run's excerpts - and every prompt built from them - are exactly what they were, and a site
+    that only reruns fields (the gap run's `rerun_fields` without `search_fields`) is judged on its
+    fetched targets alone: no search file is required of it, because none was ever bought.
 
     For a site that has searches, each one is on disk, or recorded as failed by the search stage, or
     (in a preview) absent; anything else raises, the same rule as a fetched target. A stored hit

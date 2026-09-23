@@ -7,11 +7,16 @@ one module that both the writer of the record (`phase3/search_stage.py`) and its
 (`phase3/model_stage.evidence_excerpts`, behind the finder, the reviewer and the citation check) can
 import without importing each other:
 
-* **Which searches a site buys.** A site record of a search plan carries `rerun_fields`, a non-empty
-  subset of `snapshot_plan.DISCOVER_FIELDS`. Every rerun field maps to one search *key*;
-  `description` and `card_description` share the key `text`, so one query serves both texts
-  (brief W4). A record without `rerun_fields` buys no search at all - that is every record of
-  `runs/mass`, whose prompts therefore do not change by one byte.
+* **What a site is asked, and which searches it buys - two keys, two meanings.** `rerun_fields`
+  names the fields a run asks again: the discover pass asks only these, so only their answers reach
+  the reviewer, and the writer refuses every other field of the site (`write_stage.RULE_NOT_RERUN`).
+  `search_fields` names the fields a run buys a MiniMax search for, and must be a non-empty subset of
+  `rerun_fields`. The search plan (`phase3/search_plan.py`) writes both; the gap plan
+  (`output/remediation/tools/gap_plan.py`) writes `rerun_fields` only, because its levers are the
+  narrowed Wikidata evidence and the enwiki sitelink route, not a search. Every search field maps to
+  one search *key*; `description` and `card_description` share the key `text`, so one query serves
+  both texts (brief W4). A record without `search_fields` buys no search at all - every record of
+  `runs/mass`, whose prompts therefore do not change by one byte, and every record of the gap run.
 * **The stored record.** One file per (site, key) in the batch's own evidence store, under the
   feature `minimax_search.<key>`: sorted-key JSON `{hits: [{date, rank, snippet, title, url}],
   linkless, query}` with no timestamp, so the bytes are a function of the answer alone. Only results
@@ -54,16 +59,27 @@ from phase3.snapshot_plan import DISCOVER_FIELDS  # noqa: E402
 from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS, listed_domain_of  # noqa: E402
 from pipeline.lyra.minimax_shared import MINIMAX_SEARCH_PATH  # noqa: E402
 
-#: The key a search plan's site record carries its rerun fields under.
+#: The fields a run asks again (the gap plan and the search plan both name them): the discover pass
+#: asks only these, and the writer refuses every other field of the site.
 RERUN_FIELDS_KEY = "rerun_fields"
 
-#: The keys a search plan adds to a mass record besides `rerun_fields`: why each field is rerun, the
+#: The fields a run buys a MiniMax search for: a non-empty subset of `rerun_fields`, named by the
+#: search plan alone. A record without it buys no search, whatever it reruns.
+SEARCH_FIELDS_KEY = "search_fields"
+
+#: The keys a search plan adds to a mass record besides those two: why each field is rerun, the
 #: proposals the mass lane did not write, the values a query may read (production's, at plan time),
 #: and the mass batch the record was copied from.
 RERUN_WHY_KEY = "rerun_why"
 RERUN_UNWRITTEN_KEY = "rerun_unwritten"
 QUERY_VALUES_KEY = "query_values"
 SOURCE_BATCH_KEY = "source_batch"
+
+#: The keys the search plan writes and no other planner does (`source_batch` is the gap plan's too). A
+#: record that carries one of them without `search_fields` is a search-plan record built before that
+#: key existed, or one that lost it: `rerun_why` is on every search plan written since 2026-09-22,
+#: `rerun_unwritten` and `query_values` on the later ones.
+SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)
 
 #: Why a planned write was not written: held by hand (B7) or stopped by the boundary check (B8).
 UNWRITTEN_KINDS = ("held", "write_gate")
@@ -97,32 +113,77 @@ RECORD_KEYS = frozenset({"hits", "linkless", "query"})
 HIT_KEYS = frozenset({"date", "rank", "snippet", "title", "url"})
 
 
-def rerun_fields(site: Mapping[str, Any]) -> tuple[str, ...] | None:
-    """The fields a search plan reruns for this site, in `DISCOVER_FIELDS` order - or `None`.
+def _named_fields(site: Mapping[str, Any], key: str) -> tuple[str, ...]:
+    """The fields a record names under `key`, in `DISCOVER_FIELDS` order.
 
-    `None` means the record carries no `rerun_fields` key at all, which is the mass run's shape: every
-    field is asked. A key that is present must hold a non-empty list of known fields without repeats;
-    `null`, `[]`, a string or an unknown field raise, so a damaged plan can never quietly widen back to
-    "ask all five".
+    One reading for both keys: a non-empty list of known fields without repeats. `null`, `[]`, a
+    string, a mapping or an unknown field raise, so a damaged plan can never quietly widen back to
+    "all five" - nor narrow to "none".
     """
-    if RERUN_FIELDS_KEY not in site:
-        return None
     site_id = str(site.get("site_id") or "")
-    value = site[RERUN_FIELDS_KEY]
+    value = site[key]
     if not isinstance(value, list) or not value:
         raise InputError(
-            f"{site_id}: {RERUN_FIELDS_KEY}={value!r} is not a non-empty list of fields; a search "
-            "plan names the fields it reruns"
+            f"{site_id}: {key}={value!r} is not a non-empty list of fields; a plan names the fields "
+            "it means"
         )
     unknown = [name for name in value if name not in DISCOVER_FIELDS]
     if unknown:
         raise InputError(
-            f"{site_id}: {RERUN_FIELDS_KEY} names {unknown!r}, which the discover pass does not ask "
-            f"about (known: {list(DISCOVER_FIELDS)})"
+            f"{site_id}: {key} names {unknown!r}, which the discover pass does not ask about "
+            f"(known: {list(DISCOVER_FIELDS)})"
         )
     if len(set(value)) != len(value):
-        raise InputError(f"{site_id}: {RERUN_FIELDS_KEY}={value!r} names a field twice")
+        raise InputError(f"{site_id}: {key}={value!r} names a field twice")
     return tuple(name for name in DISCOVER_FIELDS if name in value)
+
+
+def rerun_fields(site: Mapping[str, Any]) -> tuple[str, ...] | None:
+    """The fields a run asks again at this site, in `DISCOVER_FIELDS` order - or `None`.
+
+    `None` means the record carries no `rerun_fields` key at all, which is the mass run's shape: every
+    field is asked. The discover pass, the search stage's query rules and the writer
+    (`write_stage.RULE_NOT_RERUN`) all read the fields through this one function; a present key is
+    read by `_named_fields`' rules.
+    """
+    if RERUN_FIELDS_KEY not in site:
+        return None
+    return _named_fields(site, RERUN_FIELDS_KEY)
+
+
+def search_fields(site: Mapping[str, Any]) -> tuple[str, ...] | None:
+    """The fields this site buys a MiniMax search for, in `DISCOVER_FIELDS` order - or `None`.
+
+    `None` means the record carries no `search_fields` key: it buys no search, whether it reruns
+    fields (the gap run) or not (the mass run). A present key is read by `_named_fields`' rules, and
+    every field it names must be one of the record's `rerun_fields`: a search is bought for a field
+    the run asks again, and it never widens what the run asks.
+
+    A record that carries one of `SEARCH_PLAN_KEYS` without `search_fields` raises: it is a
+    search-plan record built before the key existed, or one that lost it. Read as a rerun record it
+    would buy its finder calls on the evidence the mass run already had, and - with no
+    `rerun_unwritten` read - a held proposal could come back as a clean rerun answer.
+    """
+    site_id = str(site.get("site_id") or "")
+    if SEARCH_FIELDS_KEY not in site:
+        carried = [key for key in SEARCH_PLAN_KEYS if key in site]
+        if carried:
+            raise InputError(
+                f"{site_id}: carries {carried} but no {SEARCH_FIELDS_KEY}; only the search plan "
+                "writes those keys, so this is a search-plan record without the fields it searches "
+                "for - rebuild the plan instead of running it as a rerun without its searches"
+            )
+        return None
+    fields = _named_fields(site, SEARCH_FIELDS_KEY)
+    rerun = rerun_fields(site)
+    outside = [name for name in fields if rerun is None or name not in rerun]
+    if outside:
+        raise InputError(
+            f"{site_id}: {SEARCH_FIELDS_KEY} names {outside!r}, which {RERUN_FIELDS_KEY}="
+            f"{None if rerun is None else list(rerun)!r} does not ask again; a search is bought only "
+            "for a field the run asks again"
+        )
+    return fields
 
 
 def search_feature(key: str) -> str:
@@ -132,7 +193,7 @@ def search_feature(key: str) -> str:
 
 @dataclass(frozen=True)
 class SearchSlot:
-    """One search a site buys: its key, its evidence feature and the rerun fields it serves."""
+    """One search a site buys: its key, its evidence feature and the search fields it serves."""
 
     key: str
     feature: str
@@ -140,8 +201,12 @@ class SearchSlot:
 
 
 def search_slots(site: Mapping[str, Any]) -> tuple[SearchSlot, ...]:
-    """The searches this site's rerun fields buy, one per key, in field order. `()` for no search."""
-    fields = rerun_fields(site)
+    """The searches this site's search fields buy, one per key, in field order. `()` for no search.
+
+    Read from `search_fields` alone: `rerun_fields` says what is asked, not what is searched for, and
+    a record that reruns fields without naming a search field (the gap run's) buys none.
+    """
+    fields = search_fields(site)
     if fields is None:
         return ()
     served: dict[str, list[str]] = {}
@@ -165,13 +230,20 @@ class UnwrittenProposal:
 def unwritten_proposals(site: Mapping[str, Any]) -> dict[str, UnwrittenProposal]:
     """`field -> the proposal the mass lane did not write`, for this search-plan record.
 
-    A record without `rerun_fields` (the mass run's shape) has none. A search-plan record must carry
-    `rerun_unwritten` - `{}` when no rerun field was an unwritten row - and every entry must name a
-    rerun field, a change key, a non-empty proposed value and one of `UNWRITTEN_KINDS`. Anything else
-    raises: a damaged record must not quietly drop the one thing that keeps a held value out.
+    A record without `rerun_fields` (the mass run's shape) has none. A rerun record without
+    `search_fields` (the gap run's) has none either: it re-asks fields the mass run holds no readable
+    answer for, so no proposal of them can have been held back, and `search_fields` refuses such a
+    record that carries `rerun_unwritten` (a search-plan key). A search-plan record (one with
+    `search_fields`) must carry `rerun_unwritten` - `{}` when no rerun field was an unwritten row -
+    because its planner is the one that selects unwritten rows (`search_plan.unwritten_rows`). Every
+    entry must name a rerun field, a change key, a non-empty proposed value and one of
+    `UNWRITTEN_KINDS`. Anything else raises: a damaged record must not quietly drop the one thing
+    that keeps a held value out.
     """
     fields = rerun_fields(site)
     if fields is None:
+        return {}
+    if search_fields(site) is None:
         return {}
     site_id = str(site.get("site_id") or "")
     value = site.get(RERUN_UNWRITTEN_KEY)

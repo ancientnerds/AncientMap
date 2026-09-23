@@ -2748,10 +2748,12 @@ REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_an_export_that_misses_a_site_or_returns_a_foreign_one_is_refused",
     ),
     (
+        # Retargeted 2026-09-23: the writer's own parser is gone; it reads the list through
+        # `search_evidence.rerun_fields`, whose shared reader this breaks for every caller.
         "a rerun_fields mapping is read as its keys",
-        WRITE_STAGE,
-        "        not isinstance(value, list)\n",
-        "        False  # mutant\n",
+        SEARCH_EVIDENCE,
+        "    if not isinstance(value, list) or not value:\n",
+        "    if not value:  # mutant\n",
         WRITE_TEST,
         "test_a_malformed_rerun_list_is_refused_rather_than_read_generously",
     ),
@@ -2767,8 +2769,243 @@ REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_name_that_differs_only_in_case_is_not_the_file",
     ),
 ]
+
+#: Two keys, two meanings (2026-09-23). The merged tree gave `rerun_fields` both "what a run asks
+#: again" (the gap lane) and "what a run searches for" (the search lane): a gap run would have been
+#: driven as a search run, and the writer's rerun test failed on a search nobody bought. Every guard
+#: of the split - `search_fields` as its own key, the plan kinds, the one parser - has its test here.
+LANE_TEST = "tests/remediation/test_phase3_lane_shapes.py"
+L_KINDS = "test_mass_run_reads_each_plan_as_its_own_kind_and_runs_its_own_stages"
+L_MIXED_PLAN = "test_a_plan_whose_lines_are_of_two_kinds_is_refused"
+L_OLD_SEARCH_PLAN = "test_a_search_plan_built_before_search_fields_is_refused_not_run_as_a_rerun"
+L_ASKED = "test_the_finder_asks_exactly_the_fields_the_plan_reruns"
+L_GAP_EVIDENCE = "test_a_gap_record_is_judged_on_its_fetched_pages_and_buys_no_search"
+L_SEARCH_EVIDENCE = "test_a_search_record_is_judged_only_once_its_search_is_on_disk"
+L_REVIEWER = "test_the_reviewer_is_asked_about_a_rerun_finding"
+L_WRITER = "test_the_writer_writes_a_rerun_field_and_refuses_one_outside_rerun_fields"
+S_SUBSET = "test_search_fields_are_a_non_empty_subset_of_the_rerun_fields_and_never_widen_them"
+S_LOST_SEARCH = "test_a_search_record_without_search_fields_is_refused_not_run_without_searches"
+S_UNWRITTEN_KEY = (
+    "test_a_search_record_must_name_its_unwritten_proposals_a_rerun_only_record_names_none"
+)
+S_NOT_SEARCHED = "test_a_batch_whose_sites_name_no_search_fields_is_not_a_search_batch"
+S_ASKED_NOT_SEARCHED = "test_a_field_asked_again_but_not_searched_stays_out_of_every_query"
+W_ONE_PARSER = "test_the_writer_reads_the_rerun_list_with_the_discover_passs_own_parser"
+W_RERUN_ONLY = "test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared"
+G_RECORDS = "test_the_records_carry_the_fresh_values_the_fields_to_ask_and_the_routes"
+SPLIT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "the search slots are read from rerun_fields: a gap record is searched",
+        SEARCH_EVIDENCE,
+        "    fields = search_fields(site)\n",
+        "    fields = rerun_fields(site)  # mutant\n",
+        LANE_TEST,
+        L_GAP_EVIDENCE,
+    ),
+    (
+        "the search slots are read from rerun_fields: the writer wants a search",
+        SEARCH_EVIDENCE,
+        "    fields = search_fields(site)\n",
+        "    fields = rerun_fields(site)  # mutant\n",
+        WRITE_TEST,
+        W_RERUN_ONLY,
+    ),
+    (
+        "search_fields outside rerun_fields are accepted",
+        SEARCH_EVIDENCE,
+        "    if outside:\n",
+        "    if False:  # mutant\n",
+        SEARCH_TEST,
+        S_SUBSET,
+    ),
+    (
+        "a search_fields mapping is read as its keys",
+        SEARCH_EVIDENCE,
+        "    if not isinstance(value, list) or not value:\n",
+        "    if not value:  # mutant\n",
+        SEARCH_TEST,
+        S_SUBSET,
+    ),
+    (
+        "a search record that lost search_fields runs without searches",
+        SEARCH_EVIDENCE,
+        "        if carried:\n",
+        "        if False:  # mutant\n",
+        SEARCH_TEST,
+        S_LOST_SEARCH,
+    ),
+    (
+        "an old search plan is walked as a rerun plan",
+        SEARCH_EVIDENCE,
+        "        if carried:\n",
+        "        if False:  # mutant\n",
+        LANE_TEST,
+        L_OLD_SEARCH_PLAN,
+    ),
+    # One case per search-plan-only key (review 2026-09-23): the test used to take its cases from
+    # `SEARCH_PLAN_KEYS` itself, so a key dropped from the tuple dropped its own case with it.
+    (
+        "a search record carrying only rerun_why reads as a rerun record",
+        SEARCH_EVIDENCE,
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)\n",
+        "SEARCH_PLAN_KEYS = (RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)  # mutant\n",
+        SEARCH_TEST,
+        S_LOST_SEARCH,
+    ),
+    (
+        "a search record carrying only rerun_unwritten reads as a rerun record",
+        SEARCH_EVIDENCE,
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)\n",
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, QUERY_VALUES_KEY)  # mutant\n",
+        SEARCH_TEST,
+        S_LOST_SEARCH,
+    ),
+    (
+        "a search record carrying only query_values reads as a rerun record",
+        SEARCH_EVIDENCE,
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)\n",
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY)  # mutant\n",
+        SEARCH_TEST,
+        S_LOST_SEARCH,
+    ),
+    # A field asked again but not searched (search_fields strictly inside rerun_fields) is still
+    # judged on every search of its site, so the query rules read rerun_fields (review 2026-09-23).
+    (
+        "a field asked again but not searched keeps its name suffix",
+        SEARCH_STAGE,
+        "        name: text for name in SE.rerun_fields(site) or ()"
+        " if (text := _stored_text(site, name))\n",
+        "        name: text for name in SE.search_fields(site) or ()"
+        " if (text := _stored_text(site, name))  # mutant\n",
+        SEARCH_TEST,
+        S_ASKED_NOT_SEARCHED,
+    ),
+    (
+        "a field asked again but not searched fills its query slot",
+        SEARCH_STAGE,
+        "    rerun = set(SE.rerun_fields(site) or ())\n",
+        "    rerun = set(SE.search_fields(site) or ())  # mutant\n",
+        SEARCH_TEST,
+        S_ASKED_NOT_SEARCHED,
+    ),
+    (
+        "a search record without its unwritten proposals reads as none",
+        SEARCH_EVIDENCE,
+        "    if search_fields(site) is None:\n        return {}\n",
+        "    if True:  # mutant\n        return {}\n",
+        SEARCH_TEST,
+        S_UNWRITTEN_KEY,
+    ),
+    (
+        "the reviewer demands unwritten proposals of a gap record",
+        SEARCH_EVIDENCE,
+        "    if search_fields(site) is None:\n        return {}\n",
+        "    if False:  # mutant\n        return {}\n",
+        LANE_TEST,
+        L_REVIEWER,
+    ),
+    (
+        "mass_run classifies a rerun-only plan as a search plan",
+        MASS_RUN,
+        "        return SEARCH_PLAN if self.searches else RERUN_PLAN\n",
+        "        return SEARCH_PLAN  # mutant\n",
+        LANE_TEST,
+        L_KINDS,
+    ),
+    (
+        "mass_run runs a rerun plan under the search stages",
+        MASS_RUN,
+        "    RERUN_PLAN: STAGES,\n",
+        "    RERUN_PLAN: SEARCH_STAGES,  # mutant\n",
+        LANE_TEST,
+        L_KINDS,
+    ),
+    (
+        "mass_run lets either lane run under the other's stages",
+        MASS_RUN,
+        "    if mismatched:\n",
+        "    if False:  # mutant\n",
+        LANE_TEST,
+        L_KINDS,
+    ),
+    (
+        "mass_run takes a line whose sites disagree about search_fields",
+        MASS_RUN,
+        "        for key, named in ((SE.RERUN_FIELDS_KEY, rerun), (SE.SEARCH_FIELDS_KEY, searched)):\n",
+        "        for key, named in ((SE.RERUN_FIELDS_KEY, rerun),):  # mutant\n",
+        SEARCH_TEST,
+        S_PLAN_LINE,
+    ),
+    (
+        "mass_run walks a plan of two kinds",
+        MASS_RUN,
+        "    if len(kinds) > 1:\n",
+        "    if False:  # mutant\n",
+        LANE_TEST,
+        L_MIXED_PLAN,
+    ),
+    (
+        "the search stage searches for a rerun-only record",
+        SEARCH_STAGE,
+        "        if not site_id or not slots:\n",
+        "        if not site_id:  # mutant\n",
+        SEARCH_TEST,
+        S_NOT_SEARCHED,
+    ),
+    (
+        "a search record is judged without its search",
+        "scripts/remediation/phase3/model_stage.py",
+        "    for slot in SE.search_slots(site):\n",
+        "    for slot in ():  # mutant\n",
+        LANE_TEST,
+        L_SEARCH_EVIDENCE,
+    ),
+    (
+        "the finder asks a rerun record all five fields",
+        "scripts/remediation/phase3/discover_stage.py",
+        "    fields = DISCOVER_FIELDS if rerun is None else rerun\n",
+        "    fields = DISCOVER_FIELDS  # mutant\n",
+        LANE_TEST,
+        L_ASKED,
+    ),
+    (
+        "the search plan names no search_fields",
+        SEARCH_PLAN,
+        "    record[SE.SEARCH_FIELDS_KEY] = list(rerun)\n",
+        "",
+        LANE_TEST,
+        L_SEARCH_EVIDENCE,
+    ),
+    (
+        "the gap plan buys a search for every field it asks",
+        TOOLS + "gap_plan.py",
+        "        record[SE.RERUN_FIELDS_KEY] = [q.field for q in asked]\n",
+        "        record[SE.RERUN_FIELDS_KEY] = [q.field for q in asked]\n"
+        "        record[SE.SEARCH_FIELDS_KEY] = [q.field for q in asked]  # mutant\n",
+        GAP_TEST,
+        G_RECORDS,
+    ),
+    (
+        "the writer ignores the run's rerun_fields",
+        WRITE_STAGE,
+        "            asked = SE.rerun_fields(site)\n",
+        "            asked = None  # mutant\n",
+        LANE_TEST,
+        L_WRITER,
+    ),
+    (
+        "the writer parses rerun_fields a second time, its own way",
+        WRITE_STAGE,
+        "            asked = SE.rerun_fields(site)\n",
+        "            asked = tuple(site[SE.RERUN_FIELDS_KEY]) if SE.RERUN_FIELDS_KEY in site else None"
+        "  # mutant: a second parser\n",
+        WRITE_TEST,
+        W_ONE_PARSER,
+    ),
+]
 MUTATIONS += GAP_MUTATIONS
 MUTATIONS += REVIEW_MUTATIONS
+MUTATIONS += SPLIT_MUTATIONS
 
 
 def digest(path: Path) -> str:

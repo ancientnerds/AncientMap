@@ -37,7 +37,9 @@ report rather than dropped:
   mass run already decided and partly wrote) names them in the record's `rerun_fields`; a field outside
   that list is refused as `field-not-asked-in-this-run` even if the finder answered it and the
   reviewer cleared it, so a lane can never re-decide a field it was not planned for. A record without
-  the key is the whole site, as every record before 2026-09-22 was.
+  the key is the whole site, as every record before 2026-09-22 was. The list is read by
+  `search_evidence.rerun_fields`, the one parser the discover pass reads it with too, so the writer
+  and the finder cannot disagree about which fields a run asked.
 * the field has a table (`snapshot_plan.FIELD_STORED_IN`), the value is a **fixed point** of every
   producer that rewrites the column on a container start (below), and it is a real change in the
   column's own shape (`docs/procedures/FIELD_CONTRACT.md` §3).
@@ -151,6 +153,7 @@ from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import model as M  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402  - the finder's own evidence excerpts
 from phase3 import review_stage as RS  # noqa: E402  - the reviewer's own `applies`, not a copy
+from phase3 import search_evidence as SE  # noqa: E402  - the one parser of a run's `rerun_fields`
 from phase3 import snapshot_plan as SP  # noqa: E402
 from phase3.run import (
     DISCOVER_PASS,  # noqa: E402  - the batch marker this stage needs
@@ -258,9 +261,9 @@ RULE_MATCHED_0 = "matched-0"
 #: The reviewer may still have cleared it - the reviewer judges the claim, not the citation's bytes -
 #: which is why the writer checks it itself (`discover_stage.source_problems`, the finder's own rule).
 RULE_CITATION = "finder-citation-not-in-evidence"
-#: The field is not one the run was built to ask (the record's `rerun_fields`).
+#: The field is not one the run was built to ask (the record's `rerun_fields`, read by
+#: `search_evidence.rerun_fields`).
 RULE_NOT_RERUN = "field-not-asked-in-this-run"
-RERUN_FIELDS_KEY = "rerun_fields"
 
 
 class WriteRefused(ValueError):
@@ -697,28 +700,6 @@ def _row_for(
     )
 
 
-def rerun_fields(site: Mapping[str, Any], *, batch_id: str) -> frozenset[str] | None:
-    """The fields this run was built to ask about the site, or `None` for all of them.
-
-    A present key must be a non-empty list of distinct discover fields; anything else is refused,
-    because a mistyped list would silently re-open - or silently close - fields nobody chose.
-    """
-    if RERUN_FIELDS_KEY not in site:
-        return None
-    value = site[RERUN_FIELDS_KEY]
-    if (
-        not isinstance(value, list)
-        or not value
-        or len(set(value)) != len(value)
-        or not set(value) <= set(DS.DISCOVER_FIELDS)
-    ):
-        raise InputError(
-            f"batch {batch_id}: {site.get('site_id')} carries {RERUN_FIELDS_KEY}={value!r}; it is a "
-            f"non-empty list of distinct fields out of {list(DS.DISCOVER_FIELDS)}"
-        )
-    return frozenset(value)
-
-
 def build_plan(
     *,
     batch: Mapping[str, Any],
@@ -771,7 +752,11 @@ def build_plan(
         if not site_id:
             raise InputError(f"batch {batch_id}: a site record carries no site_id")
         site_name = str(site.get("name") or "")
-        asked = rerun_fields(site, batch_id=batch_id)
+        try:
+            # The discover pass's own parser: the writer and the finder read one list one way.
+            asked = SE.rerun_fields(site)
+        except InputError as exc:
+            raise InputError(f"batch {batch_id}: {exc}") from exc
         # Read once per site, and only when a finding reaches the citation check.
         pages = functools.cache(
             functools.partial(

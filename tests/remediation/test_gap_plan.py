@@ -23,6 +23,7 @@ import gap_plan as G  # noqa: E402
 import lanes  # noqa: E402
 import qid_repair  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import search_evidence as SE  # noqa: E402
 from phase3 import snapshot_plan as SP  # noqa: E402
 
 BIG = "aaaaaaaa-0000-4000-8000-000000000001"
@@ -156,6 +157,9 @@ def test_the_records_carry_the_fresh_values_the_fields_to_ask_and_the_routes(
     sitelinks = {SMALL: {"qid": "Q2000", "title": "Small Site (Greece)", "refused": None}}
     big, small = G.site_records(questions, export_dir=export, sitelinks=sitelinks)
     assert big["rerun_fields"] == FIELDS and small["rerun_fields"] == ["period_start", "country"]
+    # The gap run asks again; it buys no search - `search_fields` is the search lane's key alone.
+    for record in (big, small):
+        assert SE.SEARCH_FIELDS_KEY not in record and SE.search_slots(record) == ()
     assert small["source_batch"] == "batch-0007"
     assert small["gap_reasons"] == [G.EMPTY_STREAM, G.NO_VERDICT]
     values = {row["field"]: row["current_value"] for row in small["findings"]}

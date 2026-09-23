@@ -67,9 +67,11 @@ def _site(
     production: dict[str, Any] | None = None,
     unwritten: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """A discover record (one finding per field). With `rerun`, a search-plan record: its
-    `rerun_fields`, the proposals the mass lane did not write (`unwritten`, default none) and the
-    values a query reads (production's; default: the stored ones, changed by `production`)."""
+    """A discover record (one finding per field). With `rerun`, a search-plan record as
+    `search_plan._search_site` writes one: its `rerun_fields` and the same list as `search_fields`
+    (every field this lane reruns, it buys a search for), the proposals the mass lane did not write
+    (`unwritten`, default none) and the values a query reads (production's; default: the stored
+    ones, changed by `production`)."""
     actual: dict[str, Any] = {
         "description": "A cave with paintings.",
         "period_start": -3000,
@@ -87,6 +89,7 @@ def _site(
         record["wikidata_qid"] = qid
     if rerun is not None:
         record["rerun_fields"] = rerun
+        record["search_fields"] = list(rerun)
         record["rerun_unwritten"] = dict(unwritten or {})
         record["query_values"] = {
             slot: (production or {}).get(slot, actual[slot]) for slot in SS.SLOT_FIELDS
@@ -199,6 +202,7 @@ def _lines(path: Path) -> list[dict[str, Any]]:
 
 def test_a_record_without_rerun_fields_buys_no_search_and_asks_all_fields() -> None:
     assert SE.rerun_fields(_site()) is None
+    assert SE.search_fields(_site()) is None
     assert SE.search_slots(_site()) == ()
 
 
@@ -208,6 +212,116 @@ def test_a_damaged_rerun_fields_value_raises_and_never_widens_to_all_fields(valu
     site["rerun_fields"] = value
     with pytest.raises(R.InputError):
         SE.rerun_fields(site)
+
+
+# ── two keys, two meanings: what a run asks again, and what it buys a search for (2026-09-23) ────
+
+
+def test_a_rerun_record_without_search_fields_asks_its_fields_and_buys_no_search() -> None:
+    """The gap run's shape: `rerun_fields` alone. Until 2026-09-23 the two lanes gave that one key
+    two meanings, and a gap record was read as a search record: 802 searches nobody planned."""
+    site = _site()
+    site["rerun_fields"] = ["country", "period_start"]
+    assert SE.rerun_fields(site) == ("period_start", "country")
+    assert SE.search_fields(site) is None
+    assert SE.search_slots(site) == ()
+    assert SE.unwritten_proposals(site) == {}  # its planner selects no unwritten row
+
+
+@pytest.mark.parametrize(
+    ("rerun", "search", "match"),
+    [
+        (["country"], None, "not a non-empty list"),
+        (["country"], [], "not a non-empty list"),
+        (["country"], "country", "not a non-empty list"),
+        (["country"], {"country": 1}, "not a non-empty list"),
+        (["country"], ["period"], "does not ask about"),
+        (["country"], ["country", "country"], "names a field twice"),
+        (["country"], ["country", "period_start"], "does not ask again"),
+        (None, ["country"], "does not ask again"),
+    ],
+)
+def test_search_fields_are_a_non_empty_subset_of_the_rerun_fields_and_never_widen_them(
+    rerun: list[str] | None, search: Any, match: str
+) -> None:
+    """Read by the same rules as `rerun_fields`, plus one: a search is bought only for a field the
+    run asks again. Both readers - the slots and the key itself - refuse the same records."""
+    site = _site()
+    if rerun is not None:
+        site["rerun_fields"] = rerun
+    site["search_fields"] = search
+    with pytest.raises(R.InputError, match=match):
+        SE.search_fields(site)
+    with pytest.raises(R.InputError, match=match):
+        SE.search_slots(site)
+
+
+def test_a_search_subset_buys_only_its_own_searches_and_the_whole_rerun_is_asked(
+    tmp_path: Path,
+) -> None:
+    site = _site(rerun=["period_start", "country"])
+    site["search_fields"] = ["country"]
+    assert [(slot.key, slot.fields) for slot in SE.search_slots(site)] == [
+        ("country", ("country",))
+    ]
+    store = F.EvidenceStore(tmp_path / "evidence")
+    _enwiki(store, "site-1")
+    _store_search(store, "site-1", "country", _hit(1, "https://e.org/a"))
+    plan = DS.plan_site(batch_id="srch-0001", site=site, store=store, vocabulary=VOCAB)
+    assert [call.call.field for call in plan.calls] == ["period_start", "country"]
+
+
+#: The keys only the search plan writes, spelled out here rather than read from
+#: `SE.SEARCH_PLAN_KEYS`: a case taken from the tuple under test vanishes with the key it
+#: should hold.
+SEARCH_PLAN_ONLY_KEYS = ("rerun_why", "rerun_unwritten", "query_values")
+
+
+@pytest.mark.parametrize("key", SEARCH_PLAN_ONLY_KEYS)
+def test_a_search_record_without_search_fields_is_refused_not_run_without_searches(
+    key: str,
+) -> None:
+    """Only the search plan writes these keys: a record that carries one without `search_fields`
+    was built before the key existed (or lost it). Read as a rerun record, it would buy its calls on
+    the old evidence, and a held proposal would lose its guard. Measured 2026-09-23: the search plans
+    built on 2026-09-22 carry `rerun_fields` and `rerun_why` and nothing else of this lane's.
+
+    The cases are the literal key names (review 2026-09-23). Parametrized over
+    `SE.SEARCH_PLAN_KEYS` itself, a key dropped from that tuple dropped its own case too, and the
+    test stayed green while a record carrying only that key was read as a rerun record."""
+    site = _site(rerun=["country"])
+    del site["search_fields"]
+    with pytest.raises(R.InputError, match="but no search_fields"):
+        SE.search_slots(site)
+    for other in SEARCH_PLAN_ONLY_KEYS:
+        site.pop(other, None)
+    site[key] = {} if key != "rerun_why" else {"country": SPL.WHY_UNVERIFIABLE}
+    with pytest.raises(R.InputError, match=rf"carries \['{key}'\] but no search_fields"):
+        SE.search_fields(site)
+    del site[key]
+    assert SE.search_fields(site) is None  # rerun_fields alone: the gap run's shape
+
+
+def test_every_search_plan_only_key_has_its_own_case_above() -> None:
+    """A key added to `SE.SEARCH_PLAN_KEYS` is guarded only once the refusal test above has a
+    case for it."""
+    assert set(SE.SEARCH_PLAN_KEYS) == set(SEARCH_PLAN_ONLY_KEYS)
+
+
+def test_a_search_record_must_name_its_unwritten_proposals_a_rerun_only_record_names_none() -> None:
+    search = _site(rerun=["period_start"])
+    del search["rerun_unwritten"]
+    with pytest.raises(R.InputError, match="rerun_unwritten"):
+        SE.unwritten_proposals(search)
+    rerun = _site()
+    rerun["rerun_fields"] = ["period_start"]
+    assert SE.unwritten_proposals(rerun) == {}
+    # A rerun-only record that carries the search plan's key is refused, not read as "none".
+    rerun["rerun_unwritten"] = {
+        "period_start": {"change_key": "k", "kind": "held", "proposed": "-500"}
+    }
+    with pytest.raises(R.InputError, match="rerun_unwritten'] but no search_fields"):
+        SE.unwritten_proposals(rerun)
 
 
 def test_rerun_fields_come_back_in_plan_order_and_the_two_texts_share_one_search() -> None:
@@ -360,6 +474,27 @@ def test_a_name_ending_in_the_value_under_test_loses_it_and_one_that_carries_it_
     generic = _site(values={"site_type": "Archaeological site"}, rerun=["site_type"])
     (query,) = _queries(generic).values()
     assert SS.query_carries(generic, query) == ("site_type",)
+
+
+def test_a_field_asked_again_but_not_searched_stays_out_of_every_query() -> None:
+    """`search_fields` may be a strict subset of `rerun_fields` (the split of 2026-09-23). A field
+    asked again without a search of its own is still judged on every search of its site, so the
+    query rules read `rerun_fields`, not `search_fields`: that field's value stays out of every slot
+    and off the end of the name. `_site` writes one list under both keys, so the other query tests
+    cannot tell the two keys apart (review 2026-09-23)."""
+    stina = _site(name="Stina, Spain", rerun=["period_start", "country"])
+    stina["search_fields"] = ["period_start"]
+    assert [slot.key for slot in SE.search_slots(stina)] == ["period_start"]
+    assert SS.query_name(stina) == "Stina"
+    assert _queries(stina) == {"period_start": '"Stina" archaeological site date century BC built'}
+    assert SS.carried_by_queries(stina) == ()
+    # The slot is left out because the field is asked again, not because its value matches the one
+    # under test. With production's country different from the stored one (a record the search plan
+    # does not build: it never reruns a field production changed), a slot read from `search_fields`
+    # would pass the stored-value check and put that country into the period query.
+    moved = _site(production={"country": "Portugal"}, rerun=["period_start", "country"])
+    moved["search_fields"] = ["period_start"]
+    assert _queries(moved) == {"period_start": '"Cave 1" archaeological site date century BC built'}
 
 
 def test_a_site_without_a_name_cannot_be_searched() -> None:
@@ -742,9 +877,18 @@ def test_the_gate_refusing_buys_no_search_and_writes_no_ledger_line(tmp_path: Pa
     assert "not searched" in str(report.outcomes[0].failure)
 
 
-def test_a_batch_whose_sites_name_no_rerun_fields_is_not_a_search_batch(tmp_path: Path) -> None:
-    with pytest.raises(R.InputError, match="rerun_fields"):
-        _run_search(tmp_path, _batch(_site()), ScriptedSearcher())
+def test_a_batch_whose_sites_name_no_search_fields_is_not_a_search_batch(tmp_path: Path) -> None:
+    """Neither the mass run's record nor the gap run's (`rerun_fields` alone) is searched for.
+
+    Rewritten 2026-09-23 from `..._name_no_rerun_fields_...`, strictly stronger: the old test only
+    held the mass shape, and the rerun-only shape is the one that was being searched for."""
+    rerun_only = _site()
+    rerun_only["rerun_fields"] = ["country"]
+    for site in (_site(), rerun_only):
+        searcher = ScriptedSearcher()
+        with pytest.raises(R.InputError, match="carries no search_fields"):
+            _run_search(tmp_path, _batch(site), searcher)
+        assert searcher.queries == []
 
 
 def test_the_key_is_sent_in_a_header_and_written_nowhere(tmp_path: Path) -> None:
@@ -1093,6 +1237,8 @@ def test_the_plan_takes_only_undecided_fields_of_its_scope_verbatim_under_new_id
     assert first["source_run_dir"] == source.resolve().as_posix()
     (site,) = first["sites"]
     assert site["rerun_fields"] == ["period_start"]
+    # Every field this lane reruns, it buys a search for.
+    assert site["search_fields"] == ["period_start"]
     assert site["rerun_why"] == {"period_start": SPL.WHY_UNVERIFIABLE}
     assert site["rerun_unwritten"] == {}
     assert site["query_values"] == {"country": "Spain", "site_type": "Cave Structures"}
@@ -1670,14 +1816,21 @@ def test_a_plan_line_with_mixed_or_damaged_rerun_fields_is_refused_with_its_line
         "sites": [_site("a", rerun=["country"]), _site("b")],
     }
     path.write_text(json.dumps(mixed) + "\n", encoding="utf-8")
-    with pytest.raises(MR.PlanError, match=":1: some sites"):
+    with pytest.raises(MR.PlanError, match=":1: some sites name rerun_fields and some do not"):
+        MR.read_plan(path)
+    # Mixing is refused per key: both sites rerun, one of them buys no search (2026-09-23).
+    rerun_only = _site("b")
+    rerun_only["rerun_fields"] = ["country"]
+    mixed["sites"] = [_site("a", rerun=["country"]), rerun_only]
+    path.write_text(json.dumps(mixed) + "\n", encoding="utf-8")
+    with pytest.raises(MR.PlanError, match=":1: some sites name search_fields and some do not"):
         MR.read_plan(path)
     damaged = {"batch_id": "srch-0001", "ordinal": 1, "sites": [_site("a", rerun=[])]}
     path.write_text(json.dumps(damaged) + "\n", encoding="utf-8")
     with pytest.raises(MR.PlanError, match=":1: "):
         MR.read_plan(path)
     # A plan built before the search plan carried these keys is refused before anything is bought.
-    for key in ("query_values", "rerun_unwritten"):
+    for key in ("query_values", "rerun_unwritten", "search_fields"):
         stale = _site("a", rerun=["country"])
         del stale[key]
         line = {"batch_id": "srch-0001", "ordinal": 1, "sites": [stale]}
