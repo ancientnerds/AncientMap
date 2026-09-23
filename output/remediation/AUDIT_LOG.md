@@ -6275,7 +6275,7 @@ the Mexican state, Kintradwell Broch from Brora's, Kameishi from Asuka village's
 El Kseur's, the Roman Bridge (Elguentra) from El Kantara's, Ancient Thasos from the island's, Ahin Posh
 Tape (HUMAN_ONLY B1/B2 item 4, open) from a Pakistani village's. The check found none of them in the
 pilot; **one is**: Hebbariyeh Roman Temple (`slkg-0001`), whose item Q5695359 is the village of
-Hebbariye (N7 `anchor-is-locality`) - it was asked its period and card text from the village's
+Hebbariye (N7 `anchor-is-locality`) - its plan record put its period and card text to the village's
 arwiki, itwiki and fawiki articles.
 
 `classifier_verdicts` reads every verdict under its own rule name - `suspect-link`, `container-item`,
