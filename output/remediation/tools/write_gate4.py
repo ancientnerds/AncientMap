@@ -8,6 +8,7 @@ batch's statements, and runs them.
     write_gate4.py --group P4 --run pilot --open-lanes W,S                  # dry run: plan + render
     write_gate4.py --group P4 --run pilot --open-lanes W,S --rehearse       # APPLY ending in ROLLBACK
     write_gate4.py --group P4 --run pilot --open-lanes W,S --apply --step 100
+    write_gate4.py --group P4 --run pilot --accept accept-step-1.log         # after verify_writes4
 
 **Dry run by default**: nothing is sent to production except the read-only questions a group needs
 (L and P5: which sites carry a live Phase-4 provenance), and the report says so.
@@ -21,10 +22,17 @@ preflight (every row still holds its old value, the stamp journals nothing yet),
 per-row read-back with the journal in both directions and the two sha256 invariants, and the inverse
 proof (`ROLLBACK.sql` run as-is, ending in `ROLLBACK`). A batch that passes gets `APPLIED.json`; any
 disagreement leaves `STOPPED.json` and ends the run with `WRITE_EXIT=1`, and a later run refuses a
-stopped batch until a person has read it. **One step per invocation**: once `--step` sites are
-written the gate stops with `WRITE_EXIT=0` and names the acceptance to run (`verify_writes4.py`,
-0 deviations) before the next step is started - the owner's "after every hundred, a check, and only
-then continue" as a sequence of commands, not a promise inside one.
+stopped batch until a person has read it. **One step per invocation**: a batch is written only while
+it still fits into `--step` sites; then the gate stops with `WRITE_EXIT=0` and prints the acceptance
+command to run (`verify_writes4.py --lane --plan --run`, 0 deviations).
+
+**The next step needs that acceptance** - the owner's "after every hundred, a check, and only then
+continue" as a precondition, not a promise. Every written batch is recorded in `STEP.json` (and the
+lane's plan in `LANE_PLAN.jsonl`); while `STEP.json` exists, `--apply` writes nothing. `--accept
+<file>` reads the saved output of `verify_writes4.py` and records `ACCEPTED/step-NNNN.json` only when
+it ends in `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has one lane line of the step's lane
+whose stamps cover the step's, read at least the rows written so far, and accepted no earlier step
+(`acceptance_problems`).
 
 A written batch keeps the plan it was written from: re-planning it to different rows is refused.
 Which lanes may write (`--open-lanes`) is the pilot's verdict, and lanes T and R need the independent

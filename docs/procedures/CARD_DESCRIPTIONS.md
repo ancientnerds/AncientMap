@@ -62,8 +62,14 @@ and only once Martin confirms he pushes straight afterwards (design, production_
    pinned;
 4. `scripts/remediation/phase4/card_json.py --prerender` renders the file the plan leaves behind;
    commit it locally (not pushed);
-5. `write_gate4.py --group P5 --run <run> --apply --step 100`, and `verify_writes4.py` after every
-   step (0 deviations);
+5. `write_gate4.py --group P5 --run <run> --apply --step 100` writes one step and stops; then
+   `verify_writes4.py --lane p5 --plan <apply root>/LANE_PLAN.jsonl --run <run dir>` (the command
+   the gate prints), its output saved to a file and handed to
+   `write_gate4.py --group P5 --run <run> --accept <file>`. The gate refuses the next `--apply`
+   while the step it wrote (`STEP.json`) has no acceptance, and `--accept` records one
+   (`ACCEPTED/step-NNNN.json`) only for an output that ends in `ACCEPT_EXIT=0` with
+   `RESULT: 0 deviation(s)`, covers every stamp of the step, was run after it, and accepted no
+   earlier step (`docs/procedures/PHASE4_CONTRACTS.md` section 7). Repeat until no batch is open;
 6. `card_json.py --regenerate` from a read-only production SELECT: `WRITE_EXIT=0` only when it is
    byte for byte the pre-render;
 7. re-read `StartedAt` of both containers;
@@ -75,7 +81,10 @@ and only once Martin confirms he pushes straight afterwards (design, production_
 without a journal, and the journalled write would then refuse every row with matched_0. If CI goes
 red and no deploy happens in the sitting, `scripts/remediation/phase4/revert4.py --stamp-like
 'phase5:%' --apply` and a `git revert` of the JSON commit bring the database back to the deployed
-file.
+file. Rehearse the reversal first (`--rehearse`): its PL/pgSQL has not yet run on PostgreSQL.
+`revert4` skips every write that already has its own reversal (its key and its stamp plus
+`-rollback`), so in a second sitting after such a revert the same pattern reverts only the live
+round; it refuses a pattern that matches no write, or only reverted ones.
 
 The file's form is `json.dumps(obj, ensure_ascii=False, indent=2) + '\n'` (today's bytes); existing
 keys keep their order, new keys (sites without a card, the card that exists only in the database)

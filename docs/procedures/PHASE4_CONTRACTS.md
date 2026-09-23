@@ -273,10 +273,11 @@ Provides:
   whose `sentences[i].quote` C3 reads); `write4.plan_writes(...)` and `write4.render_apply(...)`
   (row groups P4, L, P5, guards 1-5, ROLLBACK.sql, pinned digests); `revert4.render_revert(
   stamp_like: str) -> str`; `write_gate4` (dry run by default, `--rehearse`, `--apply --step
-  100`, `WRITE_EXIT=`).
+  100`, `--accept <verify_writes4 output>`, `WRITE_EXIT=`).
 - `legacy4.legacy_provenance(site: M.PlanSite) -> M.LegacyProvenance | None` (`None` when the
-  held text equals snapshot d4526691: no claim, listed for HUMAN_ONLY); `card_json` with
-  `--check`, `--prerender`, `--regenerate`.
+  held text equals snapshot d4526691 or the snapshot does not have the site at all: no claim,
+  listed for HUMAN_ONLY under its `NoClaim` reason); `card_json` with `--check`, `--prerender`,
+  `--regenerate`.
 
 ## 6. What WB-00 decided where the design leaves room
 
@@ -289,18 +290,78 @@ Provides:
 - `HoldReason` spells every hold the design names; `SelectionProblem` spells the parser's refusals
   plus `no-desc`, `no-card`, `abstain-with-other-lines` and `abstain-without-reason`, which the
   design implies (1-8 DESC, 1-2 CARD, ABSTAIN excludes all other lines and carries a reason).
+- **`PlanSite.in_snapshot` - accepted by the orchestrator 2026-09-23 (decision D4, Track D
+  supplement).** A boolean: snapshot d4526691 has a row for the site (`plan4.PLAN_SQL` asks with
+  `EXISTS` on `snapshot_rows`). `snapshot_description` is `null` both for a site the snapshot does
+  not have and for one it holds without a description; only the second can carry the design's
+  basis "description differs from pre-March snapshot d4526691", so lane L (`legacy4`) makes no
+  claim for a site absent from the snapshot and lists it under the closed `NoClaim` reason
+  `not-in-snapshot` (8 curated sites were created after 2026-03-04, 7 of them on 2026-04-24).
+  `model4` refuses a snapshot text for a site not in the snapshot. Every producer and fixture of
+  `PlanSite` carries the key; Track B's `tests/remediation/p4_fixtures.py` and Track C's
+  `tests/remediation/phase4_cases.py` need the one line on their merge.
+- **The model-call features - accepted by the orchestrator 2026-09-23 (decision D5, Track D
+  supplement).** `SELECT_FEATURE` (`select`), `TRANSLATE_FEATURE` (`translate`),
+  `RESTRICTED_FEATURE` (`restricted`), `REVIEW_FEATURE` (`review`) and `LANE_ANSWERS`: the calls a
+  written site of each lane answered under `answers/` (W and S: select; T: select and translate;
+  R: restricted - lane R selects nothing). A call's feature names its answer file, its prompt file
+  and its ledger label (`<site_id>/<feature>`). These are the names Track B's `batch4` stores
+  under (`SELECT_FIELD` ... `REVIEW_FIELD` on `wip/p4-select`); on that merge `batch4` takes them
+  from `model4`, so there is one spelling.
 
 ## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
 
-Track D (WB-D1 ... WB-D5, branch `wip/p4-write`) built against sections 1-6 unchanged; `model4.py`
-is untouched. What the design left open, and how the writer settled it:
+Track D (WB-D1 ... WB-D5, branch `wip/p4-write`) built against sections 1-6 unchanged; its
+supplement (`wip/p4-write-sup`, the fixes of the two reviews of 2026-09-23) added the two `model4`
+fields section 6 lists. What the design left open, and how the writer settled it:
 
 - **Write batches.** A write batch is the rows one row group takes from one plan batch: plan batch
   `p4-0007` gives the write batches `p4-0007` (P4), `p4l-0007` (L) and `p5-0007` (P5), each written
   as **one chunk** (at most 100 sites - the step - and at most 200/100/100 rows), stamped
   `<family>:<batch>:chunk-NNNN`. The chunk number is the write round: 1, or 2 and up for a batch
   written again after a revert (a reverted round's stamps stay in the journal). The step of 100
-  sites is `write_gate4.py --step 100`: one step per invocation, `verify_writes4.py` between steps.
+  sites is `write_gate4.py --apply --step 100`: one step per invocation, and a batch is written
+  only while it still fits into the step (with 15-site batches a step writes 90 sites; a batch
+  larger than the step is refused).
+- **The acceptance between steps is a handshake, not a promise** (supplement). After every
+  written batch the gate records `STEP.json` in the apply root (the step's batches, stamps, sites
+  and rows) and `LANE_PLAN.jsonl` (every rendered batch's plan rows: the `--plan` the acceptance
+  reads). While `STEP.json` exists, `--apply` writes nothing and says why. The step is accepted by
+  running `verify_writes4.py --lane <lane> --plan <apply root>/LANE_PLAN.jsonl --run <run dir>`
+  (the command the gate prints; lanes p4 and p5 re-run V1-V15 and need `--run`), saving its
+  output, and handing it to `write_gate4.py --group <G> --run <run> --accept <file>`. `--accept`
+  records `ACCEPTED/step-NNNN.json` (the step, the output and its sha256) and removes `STEP.json`
+  only when the output ends in `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has exactly one lane
+  line for the step's lane whose stamp pattern covers every stamp the step wrote, read at least as
+  many lane journal rows as the apply root has written (so it ran after this step, not before),
+  and is not the output an earlier step was accepted on. The lane line is parsed in the print
+  format of `verify_writes4.py` (Track C, `wip/p4-verify`); a change of that line must change
+  `write_gate4._ACCEPT_LANE` with it.
+- **Write rounds, and what the reversal skips** (supplement). A change key names a transition, not
+  a write: round 2 of a batch journals the same keys as round 1 under its own stamp. Every journal
+  read is therefore scoped to the stamp as well - the read-back (`write_stage.journal_rows_sql(
+  change_keys, run_stamp)`, shared through `journal_mismatches`) and `revert4`'s "reverted
+  already" (the key **and** the stamp plus `-rollback`). `revert4` **skips** a matched write that
+  already has its own reversal instead of refusing the pattern, and raises only when the pattern
+  matches no write or every matched write is reverted already. Why: after one revert and one
+  re-write, `--stamp-like 'phase5:%'` matches both rounds. Refusing would leave the live round
+  revertable only by its exact stamp, so the red-CI answer of the P5 sitting would fail exactly
+  the second time it is needed; reverting the reverted round again would need its field to hold
+  its written value - which round 2 may have put back - and would undo round 2's write under round
+  1's stamp. The set is fixed inside the transaction before anything moves (`ids := ARRAY(...)`);
+  every guard, the loop and both invariants run over exactly that set. This PL/pgSQL has run only
+  as pinned text and through SQLite evaluations of its set and post-read: rehearse it on
+  production (`revert4.py --rehearse`) before relying on it.
+- **The statements' guards are pinned byte for byte** (supplement). The fake psql of the tests
+  cannot evaluate PL/pgSQL, so every guard's predicate and RAISE in `render_apply`,
+  `render_rollback` and `render_revert` is pinned in `tests/remediation/phase4_write_pins.py`;
+  33 mutation cases each break one predicate or RAISE and go red on those pins.
+- **The site page's lastmod** (WB-D4, supplement; decision D6). `pipeline/utils/public_sites.
+  PAGE_COLUMNS` - read by the sitemap and IndexNow - counts a journalled write of a column the
+  SSR page reads: 12 `unified_sites` columns (the design's six plus period_end, period_name, lat,
+  lon, source_url, parent_site_id), `card_stats.best_wiki_url` and `source_language`, and the
+  `wiki_images` columns that choose the page's one image or that it renders of it (a hero change
+  advances the page). The P5 card writes do not. A test derives the lists from the route's SQL.
 - **The group table lives in the writer** (`write4.GROUP_FAMILY`, `GROUP_PREFIX`), and
   `output/remediation/tools/lanes.py` registers the lanes `p4`, `p4l`, `p5` from it (their
   `family` and `stamp_like`; `run_dir` is `phase4_runner/runs`, the run is chosen with `--run`).
@@ -325,5 +386,9 @@ of a written site records the sha256 of every file the model stages left for it 
 (`prompts/`)** - plus its ledger labels (`<site_id>/<answer_key>`). `judge_site` stores answers but
 not prompts, so every model stage (select, review, translate, restricted) must also store the prompt
 it sends, write-once, through an `EvidenceStore` rooted at `<batch>/prompts/` under the same feature
-as its answer. `write4` refuses a site whose `answers/`, `reviews/` or `prompts/` file is missing
-(`journal-evidence-incomplete`), so without this addition no P4 row is planned.
+as its answer. `write4` requires a written site's calls **by name** (section 6, decision D5): the
+selector's answer for lanes W, S and T (the design's "selector-answer sha256"), T's translation
+beside it, lane R's restricted call, and the reviewer's answer for every lane; every answer needs
+its prompt of the same feature and its ledger line, and every ledger call of the site its answer.
+A site that lacks one is refused (`journal-evidence-incomplete`), so without this addition no P4
+row is planned.

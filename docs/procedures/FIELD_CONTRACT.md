@@ -150,8 +150,10 @@ first, journalled; then the file, byte for byte; then the push - in one sitting.
 1. `scripts/remediation/phase4/card_json.py --prerender` renders the file the P5 plan leaves
    behind, from the plan alone, and it is committed locally (not pushed);
 2. `output/remediation/tools/write_gate4.py --group P5 --apply --step 100` writes the cards through
-   `apply_remediation_change` (journal row, conditional old value, read-back, inverse proof), with
-   `verify_writes4.py` after every step;
+   `apply_remediation_change` (journal row, conditional old value, read-back, inverse proof), one
+   step per invocation; `verify_writes4.py` accepts each step, and its output handed to
+   `write_gate4.py --accept` is what unlocks the next `--apply` (the gate refuses to write while
+   the last step has no recorded acceptance - `docs/procedures/PHASE4_CONTRACTS.md` section 7);
 3. `card_json.py --regenerate` renders the file again from a read-only production SELECT and
    passes only when it is byte for byte the pre-render;
 4. Push #2 (owner), then 0 `[STARTUP] Card description overwritten` lines on both API containers
@@ -160,8 +162,9 @@ first, journalled; then the file, byte for byte; then the push - in one sitting.
 **Pushing the file before the database write is forbidden**: the boot import would write the cards
 without a journal, and the journalled write would then refuse every row with matched_0. A red CI
 inside the sitting is answered by `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'`
-plus a `git revert` of the JSON commit. The full sitting is in `docs/procedures/CARD_DESCRIPTIONS.md`
-("How a card reaches production").
+plus a `git revert` of the JSON commit (rehearsed first; `revert4` skips a write that already has
+its own reversal, so the same pattern reverts only the live round of a batch written again). The
+full sitting is in `docs/procedures/CARD_DESCRIPTIONS.md` ("How a card reaches production").
 
 For contrast, `api/routes/sites.py:1743-1751` deliberately does **not** overwrite — it uses
 `card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description)`. Two write
