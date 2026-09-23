@@ -24,17 +24,28 @@ What one batch does (`sources_batch`), in order:
 3. **English Wikipedia by `site_external_ids.enwiki_title`**, one request per site (`article_url`):
    the design's query plus `curtimestamp=1`, so the answer carries the server's own clock and the
    48 h rule is a function of the stored bytes (a resumed run judges exactly what the first run
-   saw, never a revision that aged on disk).
-4. **The P31 class labels**: one `wbgetentities props=labels` pass over the distinct P31 classes of
-   the batch's items, 50 ids a request, stored under the batch id.
-5. **The gate** (`subject_gate.subject_gate`) on every article. `own` and `shared` pin the article
+   saw, never a revision that aged on disk). A title Wikipedia calls `invalid` is an answer, not a
+   failure: the site is routed (`invalid-title`) like a title Wikipedia does not have.
+4. **The page's own item**, when the article names another item than the stored QID (a wrong
+   subject, a parent page, or the article of a site that stores no QID): the same entity request
+   at the wiki cap (`s1.wikidata.<item>`). The gate judges a page on its own item - the stored
+   item's P279, P31 and P625 say nothing about what a mismatched page is about.
+5. **The P31 class labels**: one `wbgetentities props=labels` pass over the distinct P31 classes of
+   the batch's items (stored and page items), 50 ids a request, stored under the batch id.
+6. **The gate** (`subject_gate.subject_gate`) on every article. `own` and `shared` pin the article
    as `src.W` (raw copy, `src.W.txt` - the extract, NFC, `\\n` line ends - and `src.W.meta`);
    before that, the two rules on the response hold it: `revisions[0].revid != lastrevid` is
    `moved-during-fetch`, a revision younger than 48 h is `revision-too-fresh`. Both are checked
    only on an article the gate would use: a wrong-subject article is rejected whatever its age,
    so its site still reaches the routes. `wrong`, `none`, a disambiguation page, a 'List of' title
    and a title Wikipedia does not have are recorded and not pinned: `src.W` stays free for the
-   article S1b may find.
+   article S1b may find. For a site that stores no QID the page's item is its witness and is
+   pinned as `src.D` before the article.
+
+A `revision-too-fresh` hold is final for its batch directory: `sources.json` is the completion mark
+and the stored answer is write-once, so a re-run judges the same answer again. The design's
+"deferred to a later batch" is the driver's to do (PHASE4_CONTRACTS.md, Track A): it re-queues such
+sites into a new batch directory once 48 h have passed.
 
 Every request is one `FETCH` ledger line through `fetch_stage.one_attempt`, each host is probed once
 per batch (`fetch_stage.probe_host`), and the failures go to `fetch.json` in the shape
@@ -98,6 +109,8 @@ TAG = "S1"
 
 FEATURE_ENWIKI = "s1.enwiki"
 FEATURE_CLASS_LABELS = "s1.p31_labels."
+#: The item an enwiki answer names when it is not the stored QID (`s1.wikidata.Q309`).
+FEATURE_PAGE_ITEM = "s1.wikidata."
 
 #: The site's S1 outcome, as `sources.json` records it for S1b.
 STATUS_SCOPE_PENDING = "scope-pending"
@@ -105,13 +118,27 @@ STATUS_HELD = "held"
 STATUS_PINNED = "pinned"
 STATUS_REJECTED = "rejected"
 STATUS_MISSING = "missing"
+#: Wikipedia answered that the stored title cannot be a title at all (`invalid`): one production
+#: row, Petra's, stores its title with a newline and a second URL (2026-09-23).
+STATUS_INVALID_TITLE = "invalid-title"
 STATUS_NO_TITLE = "no-title"
 #: The statuses that send a site to S1b.
-ROUTED_STATUSES = frozenset({STATUS_REJECTED, STATUS_MISSING, STATUS_NO_TITLE})
+ROUTED_STATUSES = frozenset(
+    {STATUS_REJECTED, STATUS_MISSING, STATUS_INVALID_TITLE, STATUS_NO_TITLE}
+)
 
 
 class ArticleUnreadable(ValueError):
     """A 2xx MediaWiki answer that is not the shape `article_url` asks for."""
+
+
+class TitleInvalid(ValueError):
+    """Wikipedia's answer that the asked title cannot be a page title (`invalid`, its reason).
+
+    An answer, not a failure: the request succeeded and asking again gets the same answer. S1 routes
+    such a site like a title Wikipedia does not have, so its `source_url` still gets its chance;
+    S1b records such a candidate and moves on.
+    """
 
 
 # ------------------------------------------------------------------------------------ the client
@@ -387,6 +414,11 @@ class Article:
     retrieved_at: str  #: the answer's `curtimestamp`
     extract: str | None
 
+    @property
+    def item(self) -> str | None:
+        """The Wikidata item the page names (`pageprops.wikibase_item`), or `None`."""
+        return (self.page.get("pageprops") or {}).get("wikibase_item")
+
 
 def _int(value: Any, what: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
@@ -405,7 +437,10 @@ def _utc(stamp: str, what: str) -> datetime:
 
 
 def parse_article(body: bytes) -> Article | None:
-    """The one page of an `article_url` answer, or `None` when Wikipedia has no such title."""
+    """The one page of an `article_url` answer, or `None` when Wikipedia has no such title.
+
+    A title Wikipedia calls `invalid` raises `TitleInvalid`; any other shape `ArticleUnreadable`.
+    """
     try:
         payload = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -417,7 +452,7 @@ def parse_article(body: bytes) -> Article | None:
     if page.get("missing") is True:
         return None
     if page.get("invalid") is True:
-        raise ArticleUnreadable(f"the title is invalid: {page.get('invalidreason')!r}")
+        raise TitleInvalid(str(page.get("invalidreason")))
     revisions = page.get("revisions")
     if not isinstance(revisions, list) or not revisions or not isinstance(revisions[0], dict):
         raise ArticleUnreadable("the page carries no revision")
@@ -462,7 +497,8 @@ def article_problem(article: Article) -> tuple[M.HoldReason, str] | None:
         return (
             M.HoldReason.REVISION_TOO_FRESH,
             f"revision {article.revid} of {article.title!r} was {hours:.1f} h old at "
-            f"{article.retrieved_at}; revisions younger than 48 h are deferred to a later batch",
+            f"{article.retrieved_at}; a revision younger than 48 h is not used, and the hold "
+            "stands for this batch directory (the stored answer is judged again on a re-run)",
         )
     return None
 
@@ -714,6 +750,40 @@ def _entity_meta(url: str, raw: bytes, route: M.Route, retrieved_at: str) -> M.S
     )
 
 
+@dataclass(frozen=True)
+class PageItem:
+    """The item an article names when it is not the stored QID, fetched to judge the article on it.
+
+    `subject_gate` reads a page's class, place level and fallback coordinate off the page's own item,
+    never off the site's (module docstring there). For a site that stores no QID this item is also
+    the witness pinned as `src.D` when its article is chosen (the gate's rule 7), so the answer is
+    kept whole.
+    """
+
+    qid: str
+    url: str
+    stored: Stored
+    entity: Mapping[str, Any] | None
+    failure: str | None
+
+
+def fetch_page_item(
+    site_id: str, qid: str, *, fetches: Fetches, feature: str, reason: str
+) -> PageItem:
+    """The page's own item through Phase 3's entity request at the wiki cap, or why it cannot be read."""
+    url = entity_url(qid)
+    stored = fetches.get(F.Target(site_id=site_id, feature=feature, url=url, reason=reason))
+    if not stored.ok:
+        cut = f" (cap {WIKI_MAX_BYTES:,} bytes)" if stored.truncated else ""
+        return PageItem(qid, url, stored, None, f"Wikidata {qid}: {stored.failure}{cut}")
+    entity = parse_entity(stored.body or b"", qid)
+    if entity is None:
+        return PageItem(
+            qid, url, stored, None, f"Wikidata {qid}: the answer carries no entity {qid}"
+        )
+    return PageItem(qid, url, stored, entity, None)
+
+
 def class_labels_for(
     entities: Sequence[Mapping[str, Any]], *, fetches: Fetches
 ) -> tuple[dict[str, str], dict[str, str]]:
@@ -765,6 +835,53 @@ class SiteFacts:
         }
 
 
+@dataclass(frozen=True)
+class Outcome:
+    """One site's S1 outcome and, when it is held, its hold."""
+
+    facts: SiteFacts
+    hold: M.Hold | None = None
+
+
+def _held(site_id: str, reason: M.HoldReason, detail: str, **facts: Any) -> Outcome:
+    return Outcome(SiteFacts(site_id, STATUS_HELD, detail, **facts), hold(site_id, reason, detail))
+
+
+@dataclass(frozen=True)
+class Answer:
+    """One site's enwiki answer as read: the article, or the site's outcome when there is none."""
+
+    target: F.Target
+    raw: bytes
+    result: Article | Outcome
+
+    @property
+    def article(self) -> Article | None:
+        return self.result if isinstance(self.result, Article) else None
+
+
+def read_answer(site: M.PlanSite, target: F.Target, stored: Stored) -> Answer:
+    """Read the answer for the stored title once: an article, or why the site has none."""
+    site_id = site.site_id
+    if not stored.ok:
+        cut = f" (cap {WIKI_MAX_BYTES:,} bytes)" if stored.truncated else ""
+        detail = f"enwiki {site.enwiki_title!r}: {stored.failure}{cut}"
+        return Answer(target, b"", _held(site_id, M.HoldReason.FETCH_FAILED, detail))
+    raw = stored.body or b""
+    try:
+        article = parse_article(raw)
+    except TitleInvalid as exc:
+        detail = f"English Wikipedia calls the stored title {site.enwiki_title!r} invalid: {exc}"
+        return Answer(target, raw, Outcome(SiteFacts(site_id, STATUS_INVALID_TITLE, detail)))
+    except ArticleUnreadable as exc:
+        detail = f"enwiki {site.enwiki_title!r}: an unreadable answer: {exc}"
+        return Answer(target, raw, _held(site_id, M.HoldReason.FETCH_FAILED, detail))
+    if article is None:
+        detail = f"English Wikipedia has no article {site.enwiki_title!r}"
+        return Answer(target, raw, Outcome(SiteFacts(site_id, STATUS_MISSING, detail)))
+    return Answer(target, raw, article)
+
+
 def sources_batch(
     batch_dir: Path,
     *,
@@ -806,7 +923,7 @@ def sources_batch(
     for site in active:
         if site.wikidata_qid is not None:
             witnesses[site.site_id] = _pin_entity(site=site, fetches=fetches, phase3_run=phase3_run)
-    articles: dict[str, tuple[F.Target, Stored]] = {}
+    answers: dict[str, Answer] = {}
     for site in active:
         if site.enwiki_title is not None:
             target = F.Target(
@@ -815,8 +932,28 @@ def sources_batch(
                 url=article_url("en", site.enwiki_title),
                 reason="S1 enwiki_title",
             )
-            articles[site.site_id] = (target, fetches.get(target))
-    entities = [w.entity for w in witnesses.values() if w.entity is not None]
+            answers[site.site_id] = read_answer(site, target, fetches.get(target))
+    # A page is judged on its own item (subject_gate): an article that names another item than the
+    # stored QID - a wrong subject, a parent page, or the article of a site without a QID - has its
+    # item fetched, and the label pass covers that item's classes too.
+    page_items: dict[str, PageItem] = {}
+    for site in active:
+        witness = witnesses.get(site.site_id)
+        if witness is not None and witness.failure is not None:
+            continue  # held for its witness whatever its article names
+        answer = answers.get(site.site_id)
+        item = None if answer is None or answer.article is None else answer.article.item
+        if item is not None and item != site.wikidata_qid:
+            page_items[site.site_id] = fetch_page_item(
+                site.site_id,
+                item,
+                fetches=fetches,
+                feature=f"{FEATURE_PAGE_ITEM}{item}",
+                reason=f"S1 the item of enwiki {site.enwiki_title!r}",
+            )
+    entities = [
+        w.entity for w in (*witnesses.values(), *page_items.values()) if w.entity is not None
+    ]
     labels, label_failures = class_labels_for(entities, fetches=fetches)
 
     if any(LIC.is_wiki_host(host) for host in fetches.unreachable()):
@@ -824,32 +961,18 @@ def sources_batch(
         return R.STOP_RUN_EXIT
 
     for site in active:
-        witness = witnesses.get(site.site_id)
-        if witness is not None and witness.failure is not None:
-            facts[site.site_id] = SiteFacts(site.site_id, STATUS_HELD, witness.failure)
-            holds.append(hold(site.site_id, M.HoldReason.FETCH_FAILED, witness.failure))
-            continue
-        entity = None if witness is None else witness.entity
-        classes = () if entity is None else SG.p31_classes(entity)
-        uncovered = [cls for cls in classes if cls in label_failures]
-        if uncovered:
-            detail = (
-                f"P31 class labels {uncovered} could not be read: {label_failures[uncovered[0]]}"
-            )
-            facts[site.site_id] = SiteFacts(site.site_id, STATUS_HELD, detail)
-            holds.append(hold(site.site_id, M.HoldReason.FETCH_FAILED, detail))
-            continue
-        if site.enwiki_title is None:
-            facts[site.site_id] = SiteFacts(
-                site.site_id, STATUS_NO_TITLE, "the site stores no enwiki_title"
-            )
-            continue
-        target, stored = articles[site.site_id]
-        facts[site.site_id], site_hold = _judge_article(
-            site, target, stored, entity=entity, labels=labels, store=store
+        outcome = _site_outcome(
+            site,
+            witness=witnesses.get(site.site_id),
+            answer=answers.get(site.site_id),
+            page_item=page_items.get(site.site_id),
+            labels=labels,
+            label_failures=label_failures,
+            store=store,
         )
-        if site_hold is not None:
-            holds.append(site_hold)
+        facts[site.site_id] = outcome.facts
+        if outcome.hold is not None:
+            holds.append(outcome.hold)
 
     F.write_report(batch_dir / M.FETCH_FAILURES_FILE, fetches.report)
     write_holds(batch_dir, holds, tag=TAG)
@@ -866,48 +989,99 @@ def sources_batch(
     return 0
 
 
+def _uncovered(entity: Mapping[str, Any] | None, label_failures: Mapping[str, str]) -> str | None:
+    """Why the gate could not read an item's P31 classes, or `None` when the labels cover them."""
+    classes = () if entity is None else SG.p31_classes(entity)
+    uncovered = [cls for cls in classes if cls in label_failures]
+    if not uncovered:
+        return None
+    return f"P31 class labels {uncovered} could not be read: {label_failures[uncovered[0]]}"
+
+
+def _site_outcome(
+    site: M.PlanSite,
+    *,
+    witness: Witness | None,
+    answer: Answer | None,
+    page_item: PageItem | None,
+    labels: Mapping[str, str],
+    label_failures: Mapping[str, str],
+    store: F.EvidenceStore,
+) -> Outcome:
+    """One site's S1 outcome, from its witness, its enwiki answer and the item that answer names."""
+    site_id = site.site_id
+    if witness is not None and witness.failure is not None:
+        return _held(site_id, M.HoldReason.FETCH_FAILED, witness.failure)
+    stored_entity = None if witness is None else witness.entity
+    # The stored item's classes must be covered for every site, titled or not: S1b judges every
+    # candidate that names the stored item on these labels.
+    problem = _uncovered(stored_entity, label_failures)
+    if problem is not None:
+        return _held(site_id, M.HoldReason.FETCH_FAILED, problem)
+    if answer is None:
+        return Outcome(SiteFacts(site_id, STATUS_NO_TITLE, "the site stores no enwiki_title"))
+    if isinstance(answer.result, Outcome):
+        return answer.result
+    article = answer.result
+    entity = stored_entity if article.item == site.wikidata_qid else None
+    if page_item is not None:
+        if page_item.failure is not None:
+            detail = f"enwiki {article.title!r} names another item: {page_item.failure}"
+            return _held(site_id, M.HoldReason.FETCH_FAILED, detail, title=article.title)
+        problem = _uncovered(page_item.entity, label_failures)
+        if problem is not None:
+            return _held(site_id, M.HoldReason.FETCH_FAILED, problem, title=article.title)
+        entity = page_item.entity
+    return _judge_article(
+        site,
+        answer.target,
+        answer.raw,
+        article,
+        entity=entity,
+        witness=page_item if site.wikidata_qid is None else None,
+        labels=labels,
+        store=store,
+    )
+
+
 def _judge_article(
     site: M.PlanSite,
     target: F.Target,
-    stored: Stored,
+    raw: bytes,
+    article: Article,
     *,
     entity: Mapping[str, Any] | None,
+    witness: PageItem | None,
     labels: Mapping[str, str],
     store: F.EvidenceStore,
-) -> tuple[SiteFacts, M.Hold | None]:
-    """One site's English article: pin it, reject it, or hold the site."""
+) -> Outcome:
+    """One site's English article, judged on its own item: pin it, reject it, or hold the site.
+
+    `witness` is the page's item of a site that stores no QID. It is pinned as the site's `src.D`
+    before the article (the gate's rule 7), so an article is never pinned without its witness.
+    """
     site_id = site.site_id
-    if not stored.ok:
-        cut = f" (cap {WIKI_MAX_BYTES:,} bytes)" if stored.truncated else ""
-        detail = f"enwiki {site.enwiki_title!r}: {stored.failure}{cut}"
-        return SiteFacts(site_id, STATUS_HELD, detail), hold(
-            site_id, M.HoldReason.FETCH_FAILED, detail
-        )
-    raw = stored.body or b""
-    try:
-        article = parse_article(raw)
-    except ArticleUnreadable as exc:
-        detail = f"enwiki {site.enwiki_title!r}: an unreadable answer: {exc}"
-        return SiteFacts(site_id, STATUS_HELD, detail), hold(
-            site_id, M.HoldReason.FETCH_FAILED, detail
-        )
-    if article is None:
-        return SiteFacts(
-            site_id, STATUS_MISSING, f"English Wikipedia has no article {site.enwiki_title!r}"
-        ), None
     gate = gate_for(site, article, entity=entity, class_labels=labels)
     if not usable_verdict(gate):
         detail = f"{article.title!r}: verdict {gate.verdict.value} ({_facts(gate)})"
-        return SiteFacts(site_id, STATUS_REJECTED, detail, article.title, gate.verdict), None
-    if article.extract is None or not article.extract.strip():
+        return Outcome(SiteFacts(site_id, STATUS_REJECTED, detail, article.title, gate.verdict))
+    if not (article.extract or "").strip():
         detail = f"{article.title!r}: verdict {gate.verdict.value}, but the answer has no text"
-        return SiteFacts(site_id, STATUS_REJECTED, detail, article.title, gate.verdict), None
+        return Outcome(SiteFacts(site_id, STATUS_REJECTED, detail, article.title, gate.verdict))
     problem = article_problem(article)
     if problem is not None:
         reason, detail = problem
-        return SiteFacts(site_id, STATUS_HELD, detail, article.title, gate.verdict), hold(
-            site_id, reason, detail
-        )
+        return _held(site_id, reason, detail, title=article.title, verdict=gate.verdict)
+    if witness is not None:
+        pinned = pin_witness(site_id, witness.qid, witness.stored, witness.url, store)
+        if pinned.failure is not None:
+            return _held(
+                site_id,
+                M.HoldReason.FETCH_FAILED,
+                pinned.failure,
+                title=article.title,
+                verdict=gate.verdict,
+            )
     meta, text = wiki_source(
         source_id="W",
         lang="en",
@@ -919,7 +1093,7 @@ def _judge_article(
     )
     write_source(store, site_id, meta, raw, text)
     detail = f"{article.title!r} revision {article.revid}: verdict {gate.verdict.value}"
-    return SiteFacts(site_id, STATUS_PINNED, detail, article.title, gate.verdict), None
+    return Outcome(SiteFacts(site_id, STATUS_PINNED, detail, article.title, gate.verdict))
 
 
 def _facts(gate: M.SubjectGate) -> str:

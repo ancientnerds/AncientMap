@@ -33,6 +33,7 @@ import re
 from collections.abc import Iterator
 from urllib.parse import urlsplit
 
+from phase3 import fetch_stage as F
 from phase3.search_evidence import OWN_DOMAINS
 
 from phase4 import model4 as M
@@ -79,12 +80,11 @@ _WORD = re.compile(r"\w+")
 
 
 def host_of(url: str) -> str:
-    """The lowercased host of an http(s) URL. Anything else raises: a licence needs a host."""
-    parts = urlsplit(url)
-    host = parts.hostname
-    if parts.scheme not in ("http", "https") or not host:
+    """`fetch_stage.host_of` for an http(s) URL: its lowercased host. Another scheme raises (a
+    licence is a web page's), and so does a URL without a host (`fetch_stage.host_of`'s refusal)."""
+    if urlsplit(url).scheme not in ("http", "https"):
         raise ValueError(f"{url!r} is not an http(s) URL with a host")
-    return host
+    return F.host_of(url)
 
 
 def _under(host: str, domain: str) -> bool:

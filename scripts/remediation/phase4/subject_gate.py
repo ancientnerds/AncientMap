@@ -5,6 +5,12 @@ pipeline ("SUBJECT GATE") and failure_modes ("Wrong-subject article", "Direction
 Work item WB-A2. The verdict and the facts it was made from are recorded in the source's meta
 (`model4.SubjectGate`); the verifier's V7 reads the verdict, the lane stage acts on it.
 
+Every fact is read off the page and the page's **own** item (`pageprops.wikibase_item`): for a page
+whose item is the stored QID that is the site's witness, for any other page the caller fetches the
+page's item. Judging a wrong-subject page on the stored item made it look like the site - 'History'
+(Q309, a class) was no concept, and a page without coordinates took the stored item's P625 and lay
+0 km away (a live S1 run on 2026-09-23 pinned 'History' and 'Theatre' as parent pages that way).
+
 The facts, each recorded:
 
 * `qid_match` - `pageprops.wikibase_item` equals the stored QID. Exact: a stored QID that Wikidata
@@ -16,8 +22,8 @@ The facts, each recorded:
   not deprecated. `Q309` 'history' is one the rule catches.
 * `place_item` - one of the item's P31 classes carries a place-level word in its English label
   (`PLACE_LEVEL_WORDS`, whole words: `ancient city`, `commune of France`, `human settlement`).
-* `km` - the distance from the stored point to the article's primary coordinates, or to the item's
-  P625 when the article has none. `None` when neither has coordinates.
+* `km` - the distance from the stored point to the article's primary coordinates, or to the page's
+  item's P625 when the article has none. `None` when neither has coordinates.
 * `name_score` - the directional name match: every stored name and alias against every Wikidata
   label and alias, rapidfuzz `token_sort_ratio`, the best pair. Never `token_set_ratio`, which
   reports 100 when one name's tokens are a subset of the other's ('Kilmartin' against 'Kilmartin
@@ -48,8 +54,9 @@ The verdict, in this order - the first rule that fires decides:
 
 `wrong` and `none` send the site to S1b (routes); `shared` sends it to lane S; `own` to lane W (or T
 for an article in another language). The gate never fetches: its caller hands it the page, the
-entity and the class labels, and a class the labels do not cover raises - the label pass must
-cover every class, or the place-level test would silently pass.
+page's item and the class labels. An entity that is not the page's item raises, and so does a
+page that names an item the caller did not hand over; a class the labels do not cover raises too -
+the label pass must cover every class, or the place-level test would silently pass.
 """
 
 from __future__ import annotations
@@ -59,7 +66,6 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from rapidfuzz import fuzz
-from rapidfuzz import utils as fuzz_utils
 
 from phase4 import model4 as M
 from pipeline.utils.geo import haversine_distance
@@ -117,18 +123,24 @@ def wrong_km(site_type: str | None) -> float:
     return WRONG_KM_LINEAR if _type_parts(site_type) & LINEAR_TYPE_PARTS else WRONG_KM
 
 
-def _fold(name: str) -> str:
-    """Accents stripped and lowercased (`pipeline.utils.text.normalize_name`, the catalogue's own
-    matching form), then rapidfuzz's default processing (non-alphanumerics to spaces)."""
-    return fuzz_utils.default_process(
-        normalize_name(name, remove_parentheses=False, remove_brackets=False)
-    )
+def fold(name: str) -> str:
+    """A name as Phase 4 compares names: accents stripped and lowercased
+    (`pipeline.utils.text.normalize_name`, the catalogue's own matching form, keeping what stands in
+    brackets), every character that is not alphanumeric (`str.isalnum`) a space, the spaces
+    collapsed. The one fold of the gate's name match, plan4's duplicate pairs and S1b's web identity.
+
+    It is rapidfuzz's `default_process` without its older Unicode table: over the 8,337 stored
+    names, aliases, titles and shared-item labels the two give the same string for every one
+    (measured 2026-09-23), so `name_score` is the value it was.
+    """
+    folded = normalize_name(name, remove_parentheses=False, remove_brackets=False)
+    return " ".join("".join(ch if ch.isalnum() else " " for ch in folded).split())
 
 
 def name_score(names: Iterable[str], labels: Iterable[str]) -> float | None:
     """The best `token_sort_ratio` of any stored name against any label. `None` for no pair."""
-    folded_names = [_fold(name) for name in names if _fold(name)]
-    folded_labels = [_fold(label) for label in labels if _fold(label)]
+    folded_names = [fold(name) for name in names if fold(name)]
+    folded_labels = [fold(label) for label in labels if fold(label)]
     if not folded_names or not folded_labels:
         return None
     return max(fuzz.token_sort_ratio(a, b) for a in folded_names for b in folded_labels)
@@ -206,15 +218,24 @@ def subject_gate(
     """The recorded facts and the verdict for one article of one site (module docstring).
 
     `page` is one page object of the MediaWiki query answer (`formatversion=2`); `entity` is the
-    stored QID's Wikidata entity - or, for a site that stores no QID, the page's own item (rule 7),
-    or `None` when the page names none. A page the answer marks `missing` has no subject to judge
-    and raises.
+    Wikidata entity of the page's **own** item (`pageprops.wikibase_item`), or `None` when the page
+    names none. For a page whose item is the stored QID that is the site's witness; for any other
+    page it is the page's item, which the caller fetches. Any other entity raises: a class, a
+    place-level item and the P625 that stands in for missing article coordinates are facts about
+    what the page is about, and the stored item's P625 would put a coordinate-less stranger (a
+    person, a film, 'History') right on the site. A page the answer marks `missing` has no subject
+    to judge and raises too.
     """
     if page.get("missing") or not isinstance(page.get("title"), str):
         raise ValueError(f"{site.site_id}: a missing page has no subject to judge: {page!r}")
     title = page["title"]
     pageprops = page.get("pageprops") or {}
     item = pageprops.get("wikibase_item")
+    judged_on = None if entity is None else entity.get("id")
+    if judged_on != item:
+        raise ValueError(
+            f"{site.site_id}: {title!r} is judged on its page's item {item}, not on {judged_on}"
+        )
     qid_match = site.wikidata_qid is not None and item == site.wikidata_qid
     shared = bool(
         {site.wikidata_qid, item} & shared_qids or {site.enwiki_title, title} & shared_titles
@@ -224,11 +245,6 @@ def subject_gate(
     p625 = None
     labels: tuple[str, ...] = ()
     if entity is not None:
-        if site.wikidata_qid is None and entity.get("id") != item:
-            raise ValueError(
-                f"{site.site_id}: a site without a QID is judged on its page's item {item}, "
-                f"not on {entity.get('id')}"
-            )
         uncovered = [cls for cls in p31_classes(entity) if cls not in class_labels]
         if uncovered:
             raise ValueError(f"{site.site_id}: no class label for P31 {uncovered}")

@@ -4,46 +4,66 @@ Source: entry [6] of `output/remediation/logs/design_texts_images_2026-09-22.jso
 pipeline ("S1b ROUTES", "Lane assignment"), source_store (DENY LIST) and licensing_and_ai_act (TDM).
 Work item WB-A3. No model is called; MiniMax is asked for search hits only.
 
-Scope: the sites without an `enwiki_title`, the titles English Wikipedia does not have, and the
-articles the subject gate called `wrong` or `none` (`sources.json`). A site S1 pinned goes straight
-to its lane; a site S1 held gets lane 0 and keeps S1's hold. For every routed site, in order:
+Scope: the sites without an `enwiki_title`, the titles English Wikipedia does not have (or calls
+invalid), and the articles the subject gate called `wrong` or `none` (`sources.json`). A site S1
+pinned goes straight to its lane; a site S1 held gets lane 0 and keeps S1's hold. For every routed
+site, in order:
 
 1. **The free routes**, each resolved and recorded: the title of an English Wikipedia `source_url`
    (every URL of it: some rows store several, one per line); for another-language `source_url`,
    its English langlink (and the article itself as a lane-T candidate); `list=geosearch` within
    2 km of the stored point, kept only at a directional name match >= 90
-   (`subject_gate.name_score`). Every English candidate goes back through S1's query and S1's gate
-   (`sources_stage.gate_for`); the first `own` wins lane W. All 385 sites without an
-   `enwiki_title` store no QID either (production, 2026-09-23), so for them the page's own item is
-   fetched as the witness and the gate's rule 7 (place **and** name) decides.
+   (`subject_gate.name_score`). Every candidate goes back through S1's query and S1's gate
+   (`sources_stage.gate_for`), judged on the page's own item: the stored item when the page names
+   it, otherwise the page's item, fetched (`sources_stage.fetch_page_item`). The first `own` wins
+   lane W. All 385 sites without an `enwiki_title` store no QID either (production, 2026-09-23), so
+   for them the page's item is also the witness pinned as `src.D`, and the gate's rule 7 (place
+   **and** name) decides.
 2. **MiniMax**, only while no candidate is `own`: at most `MAX_QUERIES_PER_SITE` queries, built from
    name + site_type + country (`route_queries`), through `search_stage.search_slot` behind
    `quota_stop_reason` (floors 25 % weekly, 20 % 5 h, Theo's window refused; a failed probe stops) and
    the run's `--max-searches` budget. Hits are URLs only - a snippet is never evidence. A Wikipedia
-   hit goes back through S1 and its gate; any other hit must pass, in order, the deny list
-   (`licences.deny_family`), the TDM opt-out check (`training_corpus.parse_robots`,
-   `parse_tdmrep`, `reservation_for` on the host's policy, then `html_reserves_tdm` on the page - a
-   check that could not be made counts as a reservation), the mirror detector against every
-   Wikipedia text the site's routes read, and web identity (the folded name in the text, and the
-   stored country or a coordinate within 25 km). Only then is it pinned, with the 60 KB cap, as a
-   lane-R candidate `src.R<k>`: its text through `content_fetch.extract_text_from_html`.
+   article hit goes back through S1 and its gate. Any other Wikipedia or Wikidata URL (Simple
+   English, an `index.php` link, a Wikidata page) is no article route and never a lane-R page: R
+   holds non-free pages only. Every other hit must pass, in order, the deny list
+   (`licences.deny_family`), the TDM opt-out check (`training_corpus.parse_robots`, `parse_tdmrep`,
+   `reservation_for` on the host's policy, then `html_reserves_tdm` on the page - a check that could
+   not be made counts as a reservation), the mirror detector against every Wikipedia text the
+   site's routes read, and web identity (the folded name in the text, and the stored country or a
+   coordinate within 25 km). Only then is it a lane-R candidate `src.R<k>`, fetched with the 60 KB
+   cap: its text through `content_fetch.extract_text_from_html`.
 3. **The lane**, exactly once, from those facts: W (an own English article), S (a shared or parent
    article), T (an own article only in another language), R (only non-free pages), 0 (nothing: held
-   `no-source`). A search that the quota gate, a stop-class error or the budget stopped holds the site
-   `search-stopped` with lane 0: its lane is decided when it can be searched, never from half the
-   facts. A site whose routes could not be asked at all (a failed request, not an empty answer) is
-   held `fetch-failed`, because "could not look" is not "found nothing".
+   `no-source`). A search the run's budget stopped holds the site `search-stopped` with lane 0. A
+   route that could not be asked - a Wikipedia request, an item, a langlink, the geosearch or a
+   search that failed, not an empty answer - holds the site `fetch-failed` unless an own English
+   article was found anyway: "could not look" is not "found nothing", and a lower lane assigned now
+   would be the site's lane for good.
+
+**Nothing is final before every site is decided.** The routes of every site are walked first and
+nothing is pinned; only when the walk finished without a stop are the chosen sources pinned and
+`lanes.jsonl`, the holds and `routes.json` written. A wiki host that did not answer its probe, a
+quota-gate refusal and a stop-class search error each stop the walk: the fetch and search reports
+are written, nothing else, and the run stops (`STOP_RUN_EXIT`). A resumed run walks the batch again
+over what is on disk - the searches already bought are read, not bought twice - so a stop never
+turns into a lane or a hold, and no pin of a first walk can contradict the second.
 
 A page whose own HTML reserves text and data mining is deleted from the store right after the check
 - the fetch that learned of the reservation is the one copy the law tolerates, and keeping it would
-be a reproduction the reservation forbids; the ledger line and `routes.json` keep the fact. A page
-that redirected to another host passes that host's policy too.
+be a reproduction the reservation forbids; the ledger line, a `<feature>.tdm_refused` record (so a
+resumed walk never fetches it again) and `routes.json` keep the fact. A page that cannot be decoded
+as UTF-8 counts as reserved: its HTML reservation could not be checked. A page that redirected
+passes the policy of the URL it landed on too - on another host, or on the same host, whose
+robots.txt or tdmrep.json may reserve that path.
 
 Outputs: `lanes.jsonl` (one `LaneAssignment` per site, in batch order), holds tagged `S1b: `, the
 fetch report `routes.fetch.json` and the search report `search.json` (the shapes
-`model_stage.read_fetch_failures` reads; `fetch.json` stays S1's), and `routes.json`, the stage's
-report and completion mark. Exit: 0 when every site has its lane or its hold; `STOP_RUN_EXIT` when
-the quota gate refused or a stop-class search error arrived - the sites are held, and the run stops.
+`model_stage.read_fetch_failures` reads; `fetch.json` stays S1's; the quota readings of earlier
+runs are carried forward), and `routes.json`, the stage's report and completion mark. Its
+`queries` and `search_requests` count every route query and request the batch sent over every run
+of the stage - the ledger's lines, which a stopped run cannot lose - while `max_searches` bounds
+what one run may still send. Exit: 0 when every site has its lane or its hold; `STOP_RUN_EXIT` when
+the walk was stopped.
 """
 
 from __future__ import annotations
@@ -53,7 +73,7 @@ import json
 import re
 import sys
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -85,7 +105,6 @@ from pipeline.lyra.training_corpus import (  # noqa: E402
 )
 from pipeline.utils.country_lookup import country_name_variants  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
-from pipeline.utils.text import normalize_name  # noqa: E402
 
 ROUTES_REPORT = "routes.json"
 ROUTES_FETCH_REPORT = "routes.fetch.json"
@@ -109,10 +128,11 @@ QUERY_TEMPLATES: tuple[str, ...] = ('"{name}" {rest}', "{name} {rest}")
 #: How a TDM refusal - a reservation, or a check that could not be made - opens its reason. A page
 #: fetched before the refusal was known is deleted (module docstring).
 TDM_REFUSED = "TDM refused"
+#: The record a deleted page leaves beside its feature: why it was refused (module docstring).
+TDM_REFUSED_SUFFIX = ".tdm_refused"
 
 #: A decimal coordinate pair as pages write it: `35.8696, 14.5068`.
 _COORDINATE = re.compile(r"(-?\d{1,2}\.\d{3,})\s*[,;/ ]\s*(-?\d{1,3}\.\d{3,})")
-_NON_WORD = re.compile(r"\W+")
 #: `<lang>.wikipedia.org` and its mobile twin `<lang>.m.wikipedia.org`.
 _WIKIPEDIA_HOST = re.compile(r"(?P<lang>[a-z]+(?:-[a-z]+)*)(?:\.m)?\.wikipedia\.org")
 
@@ -188,6 +208,15 @@ def route_queries(site: M.PlanSite) -> tuple[str, ...]:
     return tuple(" ".join(t.format(name=name, rest=rest).split()) for t in QUERY_TEMPLATES)
 
 
+def route_slot(number: int) -> SE.SearchSlot:
+    """The evidence slot of a site's `number`-th route query (1-based)."""
+    return SE.SearchSlot(
+        key=f"route{number}",
+        feature=SE.search_feature(f"route{number}"),
+        fields=("description", "card_description"),
+    )
+
+
 def policy_urls(url: str) -> tuple[str, str]:
     """The host's robots.txt and `/.well-known/tdmrep.json`, on the page's own scheme and host."""
     parts = urlsplit(url)
@@ -224,10 +253,9 @@ def parse_geosearch(body: bytes) -> list[str]:
     return titles
 
 
-def _fold_text(text: str) -> str:
-    """Accents stripped, lowercased, every run of non-word characters one space, padded."""
-    folded = normalize_name(text, remove_parentheses=False, remove_brackets=False)
-    return " " + " ".join(_NON_WORD.sub(" ", folded).split()) + " "
+def _padded(text: str) -> str:
+    """`subject_gate.fold`, padded with a space each side, so `in` matches whole words only."""
+    return f" {SG.fold(text)} "
 
 
 def web_identity(site: M.PlanSite, text: str) -> str | None:
@@ -236,12 +264,12 @@ def web_identity(site: M.PlanSite, text: str) -> str | None:
     The folded name (or an alias) must occur in the folded text as whole words, and so must the
     stored country (any of `country_name_variants`) or a coordinate within `IDENTITY_KM`.
     """
-    page = _fold_text(text)
-    names = [n for n in (site.name, *site.aliases) if _fold_text(n).strip()]
-    if not any(_fold_text(name) in page for name in names):
+    page = _padded(text)
+    names = [n for n in (site.name, *site.aliases) if SG.fold(n)]
+    if not any(_padded(name) in page for name in names):
         return "the stored name occurs nowhere in the page"
     countries = country_name_variants(site.country) if site.country else []
-    if any(_fold_text(variant) in page for variant in countries if _fold_text(variant).strip()):
+    if any(_padded(variant) in page for variant in countries if SG.fold(variant)):
         return None
     for match in _COORDINATE.finditer(text):
         lat, lon = float(match.group(1)), float(match.group(2))
@@ -251,8 +279,19 @@ def web_identity(site: M.PlanSite, text: str) -> str | None:
     return "the page names neither the stored country nor a point within 25 km"
 
 
-def _same_host(one: str, other: str) -> bool:
-    return one.removeprefix("www.") == other.removeprefix("www.")
+def web_denial(url: str) -> str | None:
+    """Why `url` can never be a lane-R page, or `None`: a denied family, or a wiki host.
+
+    Wikipedia and Wikidata are free sources with their own routes; a page of theirs that is no
+    article route (Simple English, an `index.php` link, a Wikidata page) is not a non-free page, and
+    R's licence (`restricted`) would mislabel it.
+    """
+    family = LIC.deny_family(url)
+    if family is not None:
+        return f"denied ({family})"
+    if LIC.is_wiki_host(LIC.host_of(url)):
+        return "a Wikipedia or Wikidata page that is no article route is never a lane-R page"
+    return None
 
 
 # ------------------------------------------------------------------------------------ one site
@@ -284,25 +323,29 @@ class WebPage:
 class Kept:
     """An article the gate accepted, with what it was judged on.
 
-    `item` and `witness` are set for a site that stores no QID: the page's own item, fetched to
-    judge it (`subject_gate`, rule 7), and pinned as the site's `src.D` when the article is chosen.
+    `witness` is set for a site that stores no QID: the page's own item, fetched to judge it
+    (`subject_gate`, rule 7), and pinned as the site's `src.D` when the article is chosen.
     """
 
     candidate: WikiCandidate
     article: S1.Article
     raw: bytes
     gate: M.SubjectGate
-    item: str | None = None
-    witness: S1.Stored | None = None
-    witness_url: str | None = None
+    witness: S1.PageItem | None = None
 
 
 @dataclass
 class Found:
-    """What the routes of one site found, as they found it."""
+    """What the routes of one site found, as they found it.
+
+    `failures` are routes that could not be asked and could have named the site's article (a
+    Wikipedia request, an item, a langlink, the geosearch, a search); `page_failures` are lane-R
+    pages that could not be fetched.
+    """
 
     notes: list[str] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
+    page_failures: list[str] = field(default_factory=list)
     own: Kept | None = None
     shared: Kept | None = None
     other: Kept | None = None
@@ -312,7 +355,6 @@ class Found:
     #: The web hits already considered for this site: two queries often return the same page.
     urls: set[str] = field(default_factory=set)
     web_fetches: int = 0
-    searched: bool = False
     stopped: str | None = None
 
 
@@ -329,16 +371,23 @@ class Routing:
     now: datetime
     budget: int
     entities: Mapping[str, Mapping[str, Any] | None]
-    #: S1's class labels, and those of the page items S1b fetches for QID-less sites.
+    #: S1's class labels, and those of the page items S1b fetches.
     class_labels: dict[str, str]
+    earlier_quota: list[dict[str, Any]] = field(default_factory=list)
+    #: The queries this run sent: what `max_searches` bounds (the driver counts earlier runs' from
+    #: the ledger before it passes the budget).
+    queries: int = 0
     search: SS.SearchReport = field(init=False)
     stopped: str | None = None
-    queries: int = 0
     policies: dict[str, tuple[DomainPolicy, str | None]] = field(default_factory=dict)
     deleted: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        self.search = SS.SearchReport(batch_id=self.batch_id, endpoint=self.searcher.endpoint)
+        self.search = SS.SearchReport(
+            batch_id=self.batch_id,
+            endpoint=self.searcher.endpoint,
+            earlier_quota=self.earlier_quota,
+        )
 
     @property
     def store(self) -> F.EvidenceStore:
@@ -347,6 +396,10 @@ class Routing:
     def outage(self) -> bool:
         """A wiki host did not answer its probe: nothing this batch decides can be final."""
         return any(LIC.is_wiki_host(host) for host in self.fetches.unreachable())
+
+    def halted(self) -> bool:
+        """The walk must stop: an outage, a quota refusal or a stop-class search error."""
+        return self.outage() or self.stopped is not None
 
 
 def _judge_wiki(site: M.PlanSite, candidate: WikiCandidate, found: Found, routing: Routing) -> None:
@@ -369,6 +422,9 @@ def _judge_wiki(site: M.PlanSite, candidate: WikiCandidate, found: Found, routin
     raw = stored.body or b""
     try:
         article = S1.parse_article(raw)
+    except S1.TitleInvalid as exc:
+        found.notes.append(f"{label}: an invalid title: {exc}")
+        return
     except S1.ArticleUnreadable as exc:
         found.failures.append(f"{label}: an unreadable answer: {exc}")
         return
@@ -381,34 +437,34 @@ def _judge_wiki(site: M.PlanSite, candidate: WikiCandidate, found: Found, routin
     if article.page.get("ns") != 0:
         found.notes.append(f"{label}: not an article (namespace {article.page.get('ns')})")
         return
-    entity = routing.entities.get(site.site_id)
-    item = (article.page.get("pageprops") or {}).get("wikibase_item")
-    witness: S1.Stored | None = None
-    witness_url: str | None = None
-    if site.wikidata_qid is None and item is not None:
-        witness_url = S1.entity_url(item)
-        witness = routing.fetches.get(
-            F.Target(
-                site_id=site.site_id,
-                feature=f"s1b.wikidata.{item}",
-                url=witness_url,
-                reason=f"S1b the item of {label}",
-            )
+    entity: Mapping[str, Any] | None = None
+    witness: S1.PageItem | None = None
+    if article.item is not None and article.item == site.wikidata_qid:
+        entity = routing.entities[site.site_id]
+    elif article.item is not None:
+        # The page names another item (subject_gate): the page is judged on that item.
+        page_item = S1.fetch_page_item(
+            site.site_id,
+            article.item,
+            fetches=routing.fetches,
+            feature=f"s1b.wikidata.{article.item}",
+            reason=f"S1b the item of {label}",
         )
-        entity = S1.parse_entity(witness.body or b"", item) if witness.ok else None
-        if entity is None:
-            why = witness.failure or "the answer carries no entity"
-            found.failures.append(f"{label}: its item {item}: {why}")
+        if page_item.entity is None:
+            found.failures.append(f"{label}: its item: {page_item.failure}")
             return
-        problem = _labels_for(entity, routing)
+        problem = _labels_for(page_item.entity, routing)
         if problem is not None:
-            found.failures.append(f"{label}: its item {item}: {problem}")
+            found.failures.append(f"{label}: its item {article.item}: {problem}")
             return
+        entity = page_item.entity
+        if site.wikidata_qid is None:
+            witness = page_item
     gate = S1.gate_for(site, article, entity=entity, class_labels=routing.class_labels)
     found.notes.append(f"{label} -> {article.title!r}: {gate.verdict.value}")
     if not S1.usable_verdict(gate) or not (article.extract or "").strip():
         return
-    kept = Kept(candidate, article, raw, gate, item, witness, witness_url)
+    kept = Kept(candidate, article, raw, gate, witness)
     if candidate.lang != "en":
         if gate.verdict is M.SubjectVerdict.OWN and found.other is None:
             found.other = kept
@@ -600,9 +656,9 @@ def _web_page(site: M.PlanSite, url: str, found: Found, routing: Routing) -> Non
     if url in found.urls:
         return
     found.urls.add(url)
-    family = LIC.deny_family(url)
-    if family is not None:
-        found.notes.append(f"{url}: denied ({family})")
+    denial = web_denial(url)
+    if denial is not None:
+        found.notes.append(f"{url}: {denial}")
         return
     if found.web_fetches >= MAX_WEB_FETCHES_PER_SITE:
         return
@@ -612,16 +668,27 @@ def _web_page(site: M.PlanSite, url: str, found: Found, routing: Routing) -> Non
         return
     found.web_fetches += 1
     feature = f"s1b.web.{_digest(url)}"
+    refusal = routing.store.path_for(site.site_id, f"{feature}{TDM_REFUSED_SUFFIX}")
+    if refusal.exists():
+        # Fetched and deleted by an earlier walk: the reservation is on record, the page is not.
+        routing.deleted.append(f"{site.site_id}/{feature}")
+        found.notes.append(f"{url}: {refusal.read_text(encoding='utf-8')}")
+        return
     stored = routing.fetches.get(
         F.Target(site_id=site.site_id, feature=feature, url=url, reason="S1b lane-R candidate")
     )
     if stored.body is None:
-        found.failures.append(f"{url}: {stored.failure}")
+        found.page_failures.append(f"{url}: {stored.failure}")
         return
     final, retrieved_at = _fetch_record(site.site_id, feature, url, routing)
     reason = _page_problem(site, url, final, stored, found, routing)
     if reason is not None and reason.startswith(TDM_REFUSED):
         routing.store.path_for(site.site_id, feature).unlink()
+        routing.store.write(
+            site_id=site.site_id,
+            feature=f"{feature}{TDM_REFUSED_SUFFIX}",
+            body=reason.encode("utf-8"),
+        )
         routing.deleted.append(f"{site.site_id}/{feature}")
     if reason is not None:
         found.notes.append(f"{url}: {reason}")
@@ -639,33 +706,36 @@ def _web_page(site: M.PlanSite, url: str, found: Found, routing: Routing) -> Non
     )
 
 
-def _page_text(body: bytes) -> str:
+def _html_bytes(body: bytes) -> bytes:
+    """A stored page without Phase 3's truncation marker."""
     marker = F.TRUNCATION_MARKER.encode("utf-8")
-    html = body[: -len(marker)] if body.endswith(marker) else body
-    return S1.pinned_text(extract_text_from_html(html.decode("utf-8")))
+    return body[: -len(marker)] if body.endswith(marker) else body
+
+
+def _page_text(body: bytes) -> str:
+    return S1.pinned_text(extract_text_from_html(_html_bytes(body).decode("utf-8")))
 
 
 def _page_problem(
     site: M.PlanSite, url: str, final: str, stored: S1.Stored, found: Found, routing: Routing
 ) -> str | None:
     """Why a fetched web page cannot be a lane-R candidate, or `None`."""
-    family = LIC.deny_family(final)
-    if family is not None:
-        return f"redirected to {final}: denied ({family})"
-    if not _same_host(LIC.host_of(final), LIC.host_of(url)):
+    denial = web_denial(final)
+    if denial is not None:
+        return f"redirected to {final}: {denial}"
+    if final != url:
+        # A redirect lands somewhere the check before the fetch never asked about: another host's
+        # policy, or a path of this host that its robots.txt or tdmrep.json reserves.
         problem = _tdm_problem(final, routing)
         if problem is not None:
             return problem
-    marker = F.TRUNCATION_MARKER.encode("utf-8")
-    body = stored.body or b""
-    html_bytes = body[: -len(marker)] if body.endswith(marker) else body
     try:
-        html = html_bytes.decode("utf-8")
+        html = _html_bytes(stored.body or b"").decode("utf-8")
     except UnicodeDecodeError:
-        return "the page is not UTF-8 text"
+        return f"{TDM_REFUSED}: the page is not UTF-8 text, so its HTML reservation is unknown"
     if html_reserves_tdm(html):
         return f"{TDM_REFUSED}: reserved (meta_tag)"
-    text = _page_text(body)
+    text = _page_text(stored.body or b"")
     if not text.strip():
         return "the page carries no text"
     for wiki_text in found.wiki_texts:
@@ -708,11 +778,7 @@ def _search(site: M.PlanSite, found: Found, routing: Routing) -> None:
     for number, query in enumerate(route_queries(site), start=1):
         if found.own is not None:
             return
-        slot = SE.SearchSlot(
-            key=f"route{number}",
-            feature=SE.search_feature(f"route{number}"),
-            fields=("description", "card_description"),
-        )
+        slot = route_slot(number)
         url = SS.search_ledger_url(routing.searcher.endpoint, query)
         path = routing.store.path_for(site.site_id, slot.feature)
         if path.exists():
@@ -769,14 +835,17 @@ def _search(site: M.PlanSite, found: Found, routing: Routing) -> None:
                 found.failures.append(f"search {query!r}: {outcome.failure}")
                 continue
             record = SE.read_record(path)
-        found.searched = True
         found.notes.append(f"search {query!r}: {len(record.hits)} hits")
         _hits(site, record, found, routing)
 
 
 def _search_stop(routing: Routing) -> str | None:
-    """Why no further query may be sent: the run's budget, a stop-class error earlier in the batch,
-    or the gate (probed once, before the first query the budget allows)."""
+    """Why no further query may be sent: a wiki host that stopped answering (the walk stops, and a
+    search bought now would serve a site this run cannot judge), the run's budget, a stop-class
+    error earlier in the batch, or the gate (probed once, before the first query the budget
+    allows)."""
+    if routing.outage():
+        return "a wiki host did not answer its probe"
     if routing.queries >= routing.budget:
         return f"the run's search budget is spent ({routing.budget} queries for this batch)"
     if routing.search.quota_before is None and routing.stopped is None:
@@ -785,8 +854,29 @@ def _search_stop(routing: Routing) -> str | None:
         refusal = SS.quota_stop_reason(reading, now_utc=routing.now)
         if refusal is not None:
             routing.stopped = f"the quota gate refused: {refusal}"
-            routing.search.stopped = routing.stopped
     return routing.stopped
+
+
+def queries_on_record(ledger: Path, batch_id: str, sites: Sequence[M.PlanSite]) -> tuple[int, int]:
+    """`(queries, requests)` the batch's route searches have cost over every run of this stage.
+
+    `search_slot` writes each request's ledger line before it reads the answer, so the ledger is the
+    one record a stopped or crashed run cannot lose: a query is its first attempt's line, a request
+    any line. No ledger file means nothing was ever sent.
+    """
+    if not ledger.exists():
+        return 0, 0
+    labels = {
+        f"{site.site_id}/{route_slot(number).feature}"
+        for site in sites
+        for number in range(1, MAX_QUERIES_PER_SITE + 1)
+    }
+    lines = [
+        entry
+        for entry in L.read_entries(ledger)
+        if entry.get("batch_id") == batch_id and entry.get("label") in labels
+    ]
+    return sum(1 for entry in lines if entry.get("attempt") == 1), len(lines)
 
 
 # --------------------------------------------------------------------------------------- pins
@@ -799,7 +889,7 @@ def _pin_wiki(site: M.PlanSite, kept: Kept, source_id: str, store: F.EvidenceSto
         raise _Held(problem[0], problem[1])
     if kept.witness is not None and S1.read_meta(store, site.site_id, "D") is None:
         witness = S1.pin_witness(
-            site.site_id, str(kept.item), kept.witness, str(kept.witness_url), store
+            site.site_id, kept.witness.qid, kept.witness.stored, kept.witness.url, store
         )
         if witness.failure is not None:
             raise _Held(M.HoldReason.FETCH_FAILED, witness.failure)
@@ -855,15 +945,40 @@ class _Held(Exception):
 # ------------------------------------------------------------------------------------- S1b
 
 
-def _existing_meta(store: F.EvidenceStore, site_id: str, source_id: str) -> M.SourceDoc | None:
-    return S1.read_meta(store, site_id, source_id)
+def _route(site: M.PlanSite, fact: Mapping[str, Any], routing: Routing) -> Found | None:
+    """Walk one routed site's routes; `None` for a site S1 already decided (pinned or held).
+
+    Nothing is pinned here (module docstring): the walk only finds, and the caller decides once
+    the whole batch was walked without a stop.
+    """
+    status = fact["status"]
+    if status in (S1.STATUS_SCOPE_PENDING, S1.STATUS_HELD, S1.STATUS_PINNED):
+        return None
+    if status not in S1.ROUTED_STATUSES:
+        raise R.InputError(f"{site.site_id}: S1 status {status!r} is not one this stage knows")
+    found = Found()
+    if fact.get("title"):
+        found.seen.add(("en", fact["title"]))
+    if status == S1.STATUS_REJECTED:
+        found.wiki_texts.append(_s1_extract(site.site_id, routing.store))
+    _free_routes(site, found, routing)
+    if found.own is None:
+        _search(site, found, routing)  # buys nothing once a wiki host stopped answering
+    return found
 
 
-def _route(
-    site: M.PlanSite, fact: Mapping[str, Any], routing: Routing
-) -> tuple[M.LaneAssignment, M.Hold | None] | None:
-    """One site's lane, from S1's outcome and, for a routed site, the routes' facts. `None` when
-    a wiki host stopped answering: then nothing about the site is decided, and nothing is pinned."""
+def _s1_extract(site_id: str, store: F.EvidenceStore) -> str:
+    """The text of the article S1 fetched and rejected, for the mirror detector."""
+    article = S1.parse_article(store.path_for(site_id, S1.FEATURE_ENWIKI).read_bytes())
+    if article is None:
+        raise R.InputError(f"{site_id}: S1 rejected an article its stored answer does not hold")
+    return article.extract or ""
+
+
+def _decide(
+    site: M.PlanSite, fact: Mapping[str, Any], found: Found | None, routing: Routing
+) -> tuple[M.LaneAssignment, M.Hold | None]:
+    """One site's lane: from S1's outcome, or from what its routes found."""
     site_id = site.site_id
     status = fact["status"]
     if status in (S1.STATUS_SCOPE_PENDING, S1.STATUS_HELD):
@@ -872,7 +987,7 @@ def _route(
         )
         return lane, None
     if status == S1.STATUS_PINNED:
-        meta = _existing_meta(routing.store, site_id, "W")
+        meta = S1.read_meta(routing.store, site_id, "W")
         if meta is None or meta.subject_gate is None:
             raise R.InputError(f"{site_id}: S1 says pinned, and src.W.meta is not there")
         lane_of = {M.SubjectVerdict.OWN: M.Lane.W, M.SubjectVerdict.SHARED: M.Lane.S}
@@ -883,41 +998,18 @@ def _route(
             detail=f"S1: {fact['detail']}",
         )
         return lane, None
-    if status not in S1.ROUTED_STATUSES:
-        raise R.InputError(f"{site_id}: S1 status {status!r} is not one this stage knows")
-    found = Found()
-    if fact.get("title"):
-        found.seen.add(("en", fact["title"]))
-    s1_text = _s1_extract(site_id, routing.store)
-    if s1_text:
-        found.wiki_texts.append(s1_text)
-    _free_routes(site, found, routing)
-    if routing.outage():
-        return None  # the batch stops before a search is bought for a site it cannot judge
-    if found.own is None:
-        _search(site, found, routing)
-    if routing.outage():
-        return None
+    if found is None:
+        raise R.InputError(f"{site_id}: a routed site reached its lane without its routes")
     return _assign(site, fact, found, routing)
-
-
-def _s1_extract(site_id: str, store: F.EvidenceStore) -> str | None:
-    """The text of the article S1 fetched and rejected, for the mirror detector."""
-    path = store.path_for(site_id, S1.FEATURE_ENWIKI)
-    if not path.exists():
-        return None
-    try:
-        article = S1.parse_article(path.read_bytes())
-    except S1.ArticleUnreadable:
-        return None
-    return None if article is None else article.extract
 
 
 def _assign(
     site: M.PlanSite, fact: Mapping[str, Any], found: Found, routing: Routing
 ) -> tuple[M.LaneAssignment, M.Hold | None]:
     site_id = site.site_id
-    facts = "; ".join([f"S1: {fact['detail']}", *found.notes, *found.failures])
+    facts = "; ".join(
+        [f"S1: {fact['detail']}", *found.notes, *found.failures, *found.page_failures]
+    )
 
     def zero(reason: M.HoldReason, why: str) -> tuple[M.LaneAssignment, M.Hold]:
         detail = f"{why}. {facts}"
@@ -930,6 +1022,11 @@ def _assign(
             return _lane(site_id, M.Lane.W, ("W",), facts), None
         if found.stopped is not None:
             return zero(M.HoldReason.SEARCH_STOPPED, f"its search was stopped: {found.stopped}")
+        if found.failures:
+            return zero(
+                M.HoldReason.FETCH_FAILED,
+                "a route that could have named its article could not be asked",
+            )
         if found.shared is not None:
             _pin_wiki(site, found.shared, "W", routing.store)
             return _lane(site_id, M.Lane.S, ("W",), facts), None
@@ -943,8 +1040,6 @@ def _assign(
         return lane, S1.hold(site_id, held.reason, detail, tag=TAG)
     if found.pages:
         return _lane(site_id, M.Lane.R, _pin_pages(site, found, routing), facts), None
-    if found.failures and not found.searched:
-        return zero(M.HoldReason.FETCH_FAILED, "its routes could not be asked")
     return zero(M.HoldReason.NO_SOURCE, "no route found a usable source")
 
 
@@ -984,8 +1079,9 @@ def routes_batch(
     wait: Callable[[], None],
     sleep: Callable[[float], None] = time.sleep,
 ) -> int:
-    """S1b over one batch (module docstring). `max_searches` is how many MiniMax queries this batch
-    may still send; `probe` is `probe_minimax_quota(force=True)`; `wait` paces the MiniMax host."""
+    """S1b over one batch (module docstring). `max_searches` is how many MiniMax queries this run
+    of the batch may still send; `probe` is `probe_minimax_quota(force=True)`; `wait` paces the
+    MiniMax host."""
     if not isinstance(max_searches, int) or isinstance(max_searches, bool) or max_searches < 0:
         raise R.InputError(f"max_searches={max_searches!r} is not a count")
     batch_id, sites = S1.read_batch(batch_dir)
@@ -1006,6 +1102,7 @@ def routes_batch(
         if site.wikidata_qid is not None and S1.read_meta(store, site.site_id, "D") is not None:
             raw = store.path_for(site.site_id, M.source_feature("D", "raw")).read_bytes()
             entities[site.site_id] = S1.parse_entity(raw, site.wikidata_qid)
+    search_report = batch_dir / SEARCH_REPORT_NAME
     routing = Routing(
         batch_id=batch_id,
         fetches=fetches,
@@ -1017,27 +1114,32 @@ def routes_batch(
         budget=max_searches,
         entities=entities,
         class_labels=dict(report["class_labels"]),
+        earlier_quota=SS.read_quota(search_report),
     )
-    lanes: list[M.LaneAssignment] = []
-    holds: list[M.Hold] = []
+    walked: list[tuple[M.PlanSite, Mapping[str, Any], Found | None]] = []
     for site in sites:
-        routed = _route(site, facts[site.site_id], routing)
-        if routed is None:
+        fact = facts[site.site_id]
+        walked.append((site, fact, _route(site, fact, routing)))
+        if routing.halted():
             break
-        lane, site_hold = routed
-        lanes.append(lane)
-        if site_hold is not None:
-            holds.append(site_hold)
     if routing.search.quota_before is not None:
         routing.search.quota_after = SS.quota_reading(probe())
     routing.search.stopped = routing.stopped
     F.write_report(batch_dir / ROUTES_FETCH_REPORT, fetches.report)
     if routing.search.sites:
-        SS.write_report(batch_dir / SEARCH_REPORT_NAME, routing.search)
-    if routing.outage():
-        # An outage is not a fact about the sites: nothing is final, and a re-run asks again (the
-        # searches already bought are on disk and are read, not bought twice).
+        SS.write_report(search_report, routing.search)
+    if routing.halted():
+        # Not a fact about the sites: nothing is pinned, no lane or hold is written, and a re-run
+        # walks the batch again over what is on disk (module docstring).
         return R.STOP_RUN_EXIT
+    lanes: list[M.LaneAssignment] = []
+    holds: list[M.Hold] = []
+    for site, fact, found in walked:
+        lane, site_hold = _decide(site, fact, found, routing)
+        lanes.append(lane)
+        if site_hold is not None:
+            holds.append(site_hold)
+    queries, requests = queries_on_record(ledger, batch_id, sites)
     (batch_dir / M.LANES_FILE).write_text(M.dump_jsonl(lanes), encoding="utf-8", newline="\n")
     S1.write_holds(batch_dir, holds, tag=TAG)
     S1.write_json(
@@ -1046,10 +1148,9 @@ def routes_batch(
             "batch_id": batch_id,
             "deleted_for_tdm": routing.deleted,
             "licences_version": LIC.LICENCES_VERSION,
-            "queries": routing.queries,
-            "search_requests": sum(len(o.attempts) for o in routing.search.outcomes),
-            "stopped": routing.stopped,
+            "queries": queries,
+            "search_requests": requests,
             "sites": [lane.to_dict() for lane in lanes],
         },
     )
-    return R.STOP_RUN_EXIT if routing.stopped is not None else 0
+    return 0

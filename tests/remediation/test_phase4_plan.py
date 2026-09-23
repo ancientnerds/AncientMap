@@ -9,6 +9,7 @@ The mutation cases are `PHASE4_SOURCES_MUTATIONS` in `scripts/remediation/phase3
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -26,6 +27,7 @@ if str(PHASE4_PARENT) not in sys.path:
 from phase3 import run as R  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import plan4 as P  # noqa: E402
+from phase4 import subject_gate as SG  # noqa: E402
 
 from tests.remediation.test_phase4_sources import Web  # noqa: E402
 
@@ -173,6 +175,9 @@ def test_a_row_of_another_shape_is_refused() -> None:
     del missing["names"]
     with pytest.raises(R.InputError, match="missing keys"):
         build([missing])
+    for names in ("Site 1", ["Site 1", None], None):
+        with pytest.raises(R.InputError, match="names is not a list of strings"):
+            build([row(1, names=names)])
 
 
 def test_the_aliases_are_the_other_stored_names_once_each_in_order() -> None:
@@ -270,7 +275,35 @@ def test_a_shared_item_beyond_2_km_or_under_another_name_is_no_pair() -> None:
 def test_the_pair_names_are_compared_folded() -> None:
     sites = build(_pair(1.0, second_name="templos de TARXIEN"), item_names=NAMES)
     assert all(M.SiteFlag.DUPLICATE_PAIR in site.flags for site in sites)
-    assert P.fold_name("Tempji ta' Ħal Tarxien") == "tempji ta ħal tarxien"
+    assert SG.fold("Tempji ta' Ħal Tarxien") == "tempji ta ħal tarxien"
+
+
+def test_one_fold_serves_the_gate_the_pairs_and_web_identity() -> None:
+    """The name fold is `subject_gate.fold`, imported - never a second copy (review 2026-09-23:
+    plan4, route_stage and subject_gate each carried their own)."""
+    for module in ("plan4", "route_stage"):
+        tree = ast.parse(
+            (REPO / "scripts" / "remediation" / "phase4" / f"{module}.py").read_text(
+                encoding="utf-8"
+            )
+        )
+        defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+        assert not {"fold_name", "_fold_text", "_fold", "fold"} & defined, module
+        calls = {
+            node.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "SG"
+        }
+        assert "fold" in calls, module
+        imported = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+        assert "normalize_name" not in imported, module
 
 
 def test_a_shared_item_without_its_names_stops_the_plan() -> None:
@@ -426,7 +459,7 @@ def test_an_item_the_answer_does_not_have_stops_the_plan() -> None:
 def test_build_writes_the_plan_and_prints_its_exit_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    rows = [row(1), row(2)]
+    rows = [row(1), row(2, enwiki_title="Site 2" + chr(10) + "https://example.org/2")]
     (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     (tmp_path / "names.json").write_text("{}")
     (tmp_path / "refused.jsonl").write_text(
@@ -453,6 +486,18 @@ def test_build_writes_the_plan_and_prints_its_exit_line(
     assert code == 0 and out.rstrip().endswith("STAGE_EXIT=0")
     (batch,) = R.read_jsonl(tmp_path / "PLAN4.jsonl")
     assert [s["site_id"] for s in batch["sites"]] == [uuid(1), uuid(2)]
+    summary = json.loads(out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
+    assert summary["invalid_titles"] == [uuid(2)]
+
+
+def test_a_stored_title_with_a_control_character_is_listed_for_the_repair() -> None:
+    """Petra's row stores `Petra`, a newline and a second URL as its enwiki_title (production,
+    2026-09-23): MediaWiki refuses the title. The plan is built anyway (S1 routes the site) and
+    names the row."""
+    petra = row(2, enwiki_title="Petra" + chr(10) + "https://www.khanacademy.org/a/petra")
+    rows = [row(1), petra, row(3, enwiki_title="Site" + chr(9) + "3"), row(4, enwiki_title=None)]
+    assert P.invalid_titles(rows) == [uuid(2), uuid(3)]
+    assert len(build(rows)) == 4
 
 
 def test_a_failing_step_still_prints_its_exit_line(

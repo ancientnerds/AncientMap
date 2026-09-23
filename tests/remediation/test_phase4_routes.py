@@ -29,6 +29,7 @@ if str(PHASE4_PARENT) not in sys.path:
 
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import run as R  # noqa: E402
+from phase3 import search_evidence as SE  # noqa: E402
 from phase3.model_stage import SEARCH_REPORT_NAME  # noqa: E402
 from phase4 import licences as LIC  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
@@ -38,6 +39,7 @@ from phase4 import sources_stage as S1  # noqa: E402
 from pipeline.lyra import minimax_shared as MX  # noqa: E402
 from pipeline.lyra.handlers import content_fetch as CF  # noqa: E402
 from tests.remediation.test_phase4_sources import (  # noqa: E402
+    CUR,
     NOW,
     POINT,
     QID,
@@ -46,6 +48,7 @@ from tests.remediation.test_phase4_sources import (  # noqa: E402
     article_answer,
     entity_answer,
     holds_of,
+    invalid_answer,
     labels_answer,
     make_batch,
     phase3_file,
@@ -118,11 +121,15 @@ def unanchored(**over: Any) -> M.PlanSite:
     return plan_site(**base)
 
 
-def through_s1(tmp_path: Path, sites: list[M.PlanSite], web: Web) -> Path:
+def through_s1(
+    tmp_path: Path, sites: list[M.PlanSite], web: Web, *, p625: tuple[float, float] | None = None
+) -> Path:
+    """S1 over `sites`; `p625` gives every stored item that point (the stored item has none)."""
     batch_dir = make_batch(tmp_path, sites)
+    point = None if p625 is None else (p625[0], p625[1], 1e-4)
     for site in sites:
         if site.wikidata_qid is not None:
-            phase3_file(tmp_path, site.site_id, entity_answer(site.wikidata_qid))
+            phase3_file(tmp_path, site.site_id, entity_answer(site.wikidata_qid, p625=point))
     web.add(S1.class_labels_url(["Q839954"]), labels_answer({"Q839954": "archaeological site"}))
     code = S1.sources_batch(
         batch_dir,
@@ -538,7 +545,7 @@ def test_a_page_that_redirects_to_a_denied_host_is_refused(tmp_path: Path) -> No
     robots, tdmrep = RS.policy_urls(PAGE)
     web.add(robots, b"User-agent: *\nAllow: /\n").add(tdmrep, b"[]")
     web.add(PAGE, redirect="https://grokipedia.com/page/Tarxien")
-    web.add("https://grokipedia.com/page/Tarxien", PAGE_HTML.encode("utf-8"))
+    open_host(web, "https://grokipedia.com/page/Tarxien")
     first, second = queries()
 
     run_routes(tmp_path, batch_dir, web, Searcher({first: [PAGE], second: [PAGE]}))
@@ -603,21 +610,38 @@ def test_at_most_two_queries_per_site(tmp_path: Path) -> None:
     assert only.detail.startswith("S1b: ")
 
 
-def test_a_quota_gate_refusal_holds_the_site_and_stops_the_run(tmp_path: Path) -> None:
+def assert_nothing_final(batch_dir: Path) -> None:
+    """A stopped walk leaves no lane, no hold and no completion mark - only its two reports."""
+    assert not (batch_dir / M.LANES_FILE).exists()
+    assert not (batch_dir / RS.ROUTES_REPORT).exists()
+    assert [h for h in holds_of(batch_dir) if h.detail.startswith("S1b: ")] == []
+    assert (batch_dir / RS.ROUTES_FETCH_REPORT).exists()
+
+
+def test_a_quota_gate_refusal_stops_the_run_and_a_resumed_run_searches(tmp_path: Path) -> None:
+    """Review 2026-09-23: a quota stop wrote the lanes, the holds and routes.json, so the resumed
+    run returned 0 and never searched the held sites - every floor hit lost up to 15 sites."""
     web = Web()
     batch_dir = through_s1(tmp_path, [unanchored()], web)
     empty_geosearch(web)
-    searcher = Searcher()
-    probe = Probe({**GOOD_QUOTA, "weekly_remaining_percent": 20})
+    refused = Probe({**GOOD_QUOTA, "weekly_remaining_percent": 20})
 
-    assert run_routes(tmp_path, batch_dir, web, searcher, probe=probe) == R.STOP_RUN_EXIT
+    assert run_routes(tmp_path, batch_dir, web, Searcher(), probe=refused) == R.STOP_RUN_EXIT
 
-    assert searcher.asked == []
-    (only,) = holds_of(batch_dir)
-    assert only.reason is M.HoldReason.SEARCH_STOPPED
-    assert lanes_of(batch_dir)[0].lane is M.Lane.ZERO
+    assert_nothing_final(batch_dir)
     report = json.loads((batch_dir / SEARCH_REPORT_NAME).read_text(encoding="utf-8"))
     assert report["stopped"].startswith("the quota gate refused")
+
+    first, second = queries()
+    searcher = Searcher({first: [], second: []})
+    assert run_routes(tmp_path, batch_dir, web, searcher, probe=Probe()) == 0
+
+    assert searcher.asked == [first, second]
+    (only,) = holds_of(batch_dir)
+    assert only.reason is M.HoldReason.NO_SOURCE
+    report = json.loads((batch_dir / SEARCH_REPORT_NAME).read_text(encoding="utf-8"))
+    assert report["stopped"] is None
+    assert len(report["quota"]) == 2  # the refused run's reading is carried forward
 
 
 def test_a_failed_quota_probe_stops_like_a_refusal(tmp_path: Path) -> None:
@@ -627,7 +651,7 @@ def test_a_failed_quota_probe_stops_like_a_refusal(tmp_path: Path) -> None:
     probe = Probe({"ok": False, "error": "HTTP 500"})
 
     assert run_routes(tmp_path, batch_dir, web, Searcher(), probe=probe) == R.STOP_RUN_EXIT
-    assert holds_of(batch_dir)[0].reason is M.HoldReason.SEARCH_STOPPED
+    assert_nothing_final(batch_dir)
 
 
 def test_a_spent_budget_holds_the_site_and_the_batch_still_completes(tmp_path: Path) -> None:
@@ -656,7 +680,16 @@ def test_a_stop_class_search_error_stops_the_run(tmp_path: Path) -> None:
     assert run_routes(tmp_path, batch_dir, web, searcher) == R.STOP_RUN_EXIT
 
     assert searcher.asked == [first]
-    assert holds_of(batch_dir)[0].reason is M.HoldReason.SEARCH_STOPPED
+    assert_nothing_final(batch_dir)
+
+    # The resumed run asks the query again (the failed one stored nothing) and counts every query
+    # the batch sent, the stopped run's included.
+    second = queries()[1]
+    searcher = Searcher({first: [], second: []})
+    assert run_routes(tmp_path, batch_dir, web, searcher) == 0
+    assert searcher.asked == [first, second]
+    report = json.loads((batch_dir / RS.ROUTES_REPORT).read_text(encoding="utf-8"))
+    assert (report["queries"], report["search_requests"]) == (3, 3)
 
 
 def test_searches_that_could_not_be_made_hold_fetch_failed_not_no_source(tmp_path: Path) -> None:
@@ -672,6 +705,8 @@ def test_searches_that_could_not_be_made_hold_fetch_failed_not_no_source(tmp_pat
     assert searcher.asked == [first] * F.MAX_ATTEMPTS + [second] * F.MAX_ATTEMPTS
     (only,) = holds_of(batch_dir)
     assert only.reason is M.HoldReason.FETCH_FAILED
+    report = json.loads((batch_dir / RS.ROUTES_REPORT).read_text(encoding="utf-8"))
+    assert (report["queries"], report["search_requests"]) == (2, 2 * F.MAX_ATTEMPTS)
 
 
 def test_the_budget_counts_queries_across_the_batch(tmp_path: Path) -> None:
@@ -729,11 +764,13 @@ def test_a_wiki_host_outage_in_s1b_stops_and_leaves_nothing_final(tmp_path: Path
     web = Web()
     batch_dir = through_s1(tmp_path, [unanchored()], web)
     web.down.add("en.wikipedia.org")
+    first, second = queries()
+    searcher = Searcher({first: [], second: []})
 
-    assert run_routes(tmp_path, batch_dir, web) == R.STOP_RUN_EXIT
+    assert run_routes(tmp_path, batch_dir, web, searcher) == R.STOP_RUN_EXIT
 
-    assert not (batch_dir / M.LANES_FILE).exists()
-    assert not (batch_dir / RS.ROUTES_REPORT).exists()
+    assert_nothing_final(batch_dir)
+    assert searcher.asked == []  # no search is bought for a site that cannot be judged
 
 
 def test_a_negative_or_boolean_budget_is_refused(tmp_path: Path) -> None:
@@ -815,3 +852,442 @@ def test_the_lane_r_text_comes_through_the_shared_function() -> None:
         for alias in node.names
     }
     assert ("pipeline.lyra.handlers.content_fetch", "extract_text_from_html") in imported
+
+
+# ====================================================================== review 2026-09-23
+
+
+def test_a_wrong_subject_candidate_is_judged_on_its_own_item_not_the_sites(tmp_path: Path) -> None:
+    """S1b judged every candidate of a QID site on the stored item: 'History' (a class) was no
+    concept and, without coordinates, lay at the stored item's point - a parent page, lane S."""
+    site = plan_site(enwiki_title=None, source_url="https://en.wikipedia.org/wiki/History")
+    web = Web()
+    batch_dir = through_s1(tmp_path, [site], web, p625=POINT)
+    web.add(
+        S1.article_url("en", "History"), article_answer(title="History", qid="Q309", coords=None)
+    )
+    web.add(
+        S1.entity_url("Q309"),
+        entity_answer("Q309", cur=CUR, p31=("Q1",), p279="Q1190554", labels={"en": "history"}),
+    )
+    web.add(S1.class_labels_url(["Q1"]), labels_answer({"Q1": "academic discipline"}))
+    empty_geosearch(web)
+    first, second = queries(site)
+
+    assert run_routes(tmp_path, batch_dir, web, Searcher({first: [], second: []})) == 0
+
+    (lane,) = lanes_of(batch_dir)
+    assert lane.lane is M.Lane.ZERO
+    assert "'History': wrong" in lane.detail
+    assert S1.read_meta(store_of(batch_dir), SITE_ID, "W") is None
+    d_meta = S1.read_meta(store_of(batch_dir), SITE_ID, "D")
+    assert d_meta is not None and d_meta.route is M.Route.PHASE3_EVIDENCE  # never the page's item
+
+
+def test_petras_invalid_title_reaches_its_source_url(tmp_path: Path) -> None:
+    """Petra (no QID) stores `Petra`, a newline and a second URL as its title; S1 routes it and its
+    source_url's first URL is its English article."""
+    title = "Petra" + chr(10) + "https://www.khanacademy.org/a/petra"
+    site = unanchored(
+        wikidata_qid=None,
+        name="Petra",
+        country="Jordan",
+        enwiki_title=title,
+        source_url="https://en.wikipedia.org/wiki/Petra"
+        + chr(10)
+        + "https://www.khanacademy.org/a/petra",
+    )
+    web = Web().add(S1.article_url("en", title), invalid_answer(title))
+    batch_dir = through_s1(tmp_path, [site], web)
+    web.add(S1.article_url("en", "Petra"), article_answer(title="Petra", qid="Q5788"))
+    web.add(S1.entity_url("Q5788"), entity_answer("Q5788", cur=CUR, labels={"en": "Petra"}))
+    empty_geosearch(web)
+
+    assert run_routes(tmp_path, batch_dir, web) == 0
+
+    (lane,) = lanes_of(batch_dir)
+    assert (lane.lane, lane.sources) == (M.Lane.W, ("W",))
+    assert S1.read_meta(store_of(batch_dir), SITE_ID, "D") is not None
+
+
+def test_an_invalid_candidate_title_is_an_answer_not_a_failure(tmp_path: Path) -> None:
+    site = unanchored(source_url="https://en.wikipedia.org/wiki/Tarxien%0ATemples")
+    web = Web()
+    batch_dir = through_s1(tmp_path, [site], web)
+    web.add(S1.article_url("en", "Tarxien" + chr(10) + "Temples"), invalid_answer("x"))
+    empty_geosearch(web)
+    first, second = queries(site)
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: [], second: []}))
+
+    (only,) = holds_of(batch_dir)
+    assert only.reason is M.HoldReason.NO_SOURCE
+    assert "an invalid title" in only.detail
+
+
+def test_a_failed_wikipedia_route_holds_the_site_instead_of_a_lower_lane(tmp_path: Path) -> None:
+    """Review 2026-09-23: the English article could not be asked (503 on every attempt), a web page
+    passed every check, and the site went to lane R for good - its lane W lost to one outage."""
+    site = unanchored(source_url="https://en.wikipedia.org/wiki/Tarxien_Temples")
+    web = Web()
+    batch_dir = through_s1(tmp_path, [site], web)
+    web.add(S1.article_url("en", "Tarxien Temples"), b"busy", status=503)
+    empty_geosearch(web)
+    open_host(web)
+    first, second = queries(site)
+
+    assert run_routes(tmp_path, batch_dir, web, Searcher({first: [PAGE], second: [PAGE]})) == 0
+
+    (lane,) = lanes_of(batch_dir)
+    assert (lane.lane, lane.sources) == (M.Lane.ZERO, ())
+    (only,) = holds_of(batch_dir)
+    assert only.reason is M.HoldReason.FETCH_FAILED
+    assert "HTTP 503" in only.detail
+    assert S1.read_meta(store_of(batch_dir), SITE_ID, "R1") is None
+
+
+def test_an_own_article_wins_lane_w_whatever_else_failed(tmp_path: Path) -> None:
+    site = unanchored(source_url="https://en.wikipedia.org/wiki/Tarxien_Temples")
+    web = Web()
+    batch_dir = through_s1(tmp_path, [site], web)
+    web.add(S1.article_url("en", "Tarxien Temples"), article_answer())
+    web.add(RS.geosearch_url(*POINT), b"busy", status=503)
+
+    assert run_routes(tmp_path, batch_dir, web) == 0
+
+    assert lanes_of(batch_dir)[0].lane is M.Lane.W
+
+
+def test_a_simple_english_hit_is_never_a_lane_r_page(tmp_path: Path) -> None:
+    """Review 2026-09-23: simple.wikipedia.org is no article route, and was pinned as a lane-R
+    'non-free' page under CC BY-SA 4.0 at the wiki cap."""
+    simple = "https://simple.wikipedia.org/wiki/Tarxien_Temples"
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    open_host(web, simple)
+    first, second = queries()
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: [simple], second: []}))
+
+    (lane,) = lanes_of(batch_dir)
+    assert lane.lane is M.Lane.ZERO
+    assert "never a lane-R page" in lane.detail
+    assert web.asked("simple.wikipedia.org") == []
+
+
+def test_a_page_that_redirects_into_wikipedia_is_never_a_lane_r_page(tmp_path: Path) -> None:
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    robots, tdmrep = RS.policy_urls(PAGE)
+    web.add(robots, b"User-agent: *\nAllow: /\n").add(tdmrep, b"[]")
+    wiki = "https://en.wikipedia.org/wiki/Tarxien_Temples"
+    web.add(PAGE, redirect=wiki)
+    open_host(web, wiki)
+    first, second = queries()
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: [PAGE], second: []}))
+
+    (lane,) = lanes_of(batch_dir)
+    assert lane.lane is M.Lane.ZERO
+    assert f"redirected to {wiki}" in lane.detail
+
+
+RESERVED = "https://heritage.example.org/private/tarxien"
+
+
+@pytest.mark.parametrize(
+    ("target", "target_policy"),
+    [
+        (RESERVED, None),  # same host: its tdmrep.json reserves /private/
+        ("https://reserved.example.net/tarxien", b'[{"location": "/", "tdm-reservation": 1}]'),
+    ],
+    ids=["same-host-path", "other-host"],
+)
+def test_a_redirect_into_a_reserved_path_is_refused_and_deleted(
+    tmp_path: Path, target: str, target_policy: bytes | None
+) -> None:
+    """Review 2026-09-23: the policy was checked again only when a redirect left the host; robots.txt
+    and tdmrep.json reserve by path."""
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    robots, tdmrep = RS.policy_urls(PAGE)
+    web.add(robots, b"User-agent: *\nAllow: /\n")
+    web.add(tdmrep, b'[{"location": "/private/", "tdm-reservation": 1}]')
+    web.add(PAGE, redirect=target)
+    web.add(target, PAGE_HTML.encode("utf-8"))
+    if target_policy is not None:
+        other_robots, other_tdmrep = RS.policy_urls(target)
+        web.add(other_robots, b"User-agent: *\nAllow: /\n").add(other_tdmrep, target_policy)
+    first, second = queries()
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: [PAGE], second: []}))
+
+    (lane,) = lanes_of(batch_dir)
+    assert lane.lane is M.Lane.ZERO
+    assert "TDM refused: reserved" in lane.detail
+    report = json.loads((batch_dir / RS.ROUTES_REPORT).read_text(encoding="utf-8"))
+    (deleted,) = report["deleted_for_tdm"]
+    assert not store_of(batch_dir).path_for(SITE_ID, deleted.split("/", 1)[1]).exists()
+
+
+def test_a_page_that_is_not_utf8_counts_as_reserved_and_is_deleted(tmp_path: Path) -> None:
+    """Review 2026-09-23: a latin-1 page with a reserving meta tag was never checked, never deleted."""
+    latin = PAGE_HTML.replace("<head>", '<head><meta name="tdm-reservation" content="1">')
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    open_host(web)
+    web.add(PAGE, latin.encode() + b" Tarxien Temples, Malta \xa6")  # a latin-1 byte
+    first, second = queries()
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: [PAGE], second: []}))
+
+    (lane,) = lanes_of(batch_dir)
+    assert lane.lane is M.Lane.ZERO and "not UTF-8" in lane.detail
+    report = json.loads((batch_dir / RS.ROUTES_REPORT).read_text(encoding="utf-8"))
+    (deleted,) = report["deleted_for_tdm"]
+    assert not store_of(batch_dir).path_for(SITE_ID, deleted.split("/", 1)[1]).exists()
+
+
+def _two_sites_one_down(tmp_path: Path, web: Web) -> tuple[Path, M.PlanSite, M.PlanSite]:
+    """Site A searches first; site B's French source_url sits on a host that does not answer."""
+    other = unanchored(
+        site_id="4a5a324f-5555-4000-8000-000000000005",
+        name="Hagar Qim",
+        source_url="https://fr.wikipedia.org/wiki/Hagar_Qim",
+    )
+    batch_dir = through_s1(tmp_path, [unanchored(), other], web)
+    empty_geosearch(web)
+    web.down.add("fr.wikipedia.org")
+    return batch_dir, unanchored(), other
+
+
+def test_an_outage_later_in_the_batch_pins_nothing_for_the_sites_before_it(tmp_path: Path) -> None:
+    """Review 2026-09-23: site A pinned R1 before site B hit the outage; the resumed run, where a page
+    that had failed now answered, chose another R1 and died on EvidenceConflict."""
+    second_page = "https://heritage.example.org/sites/tarxien-2"
+    web = Web()
+    batch_dir, site, _ = _two_sites_one_down(tmp_path, web)
+    open_host(web)
+    web.add(second_page, PAGE_HTML.encode("utf-8"))
+    web.dead.add(PAGE)  # the first page does not answer in the first run
+    first, second = queries(site)
+    searcher = Searcher({first: [PAGE, second_page], second: []})
+
+    assert run_routes(tmp_path, batch_dir, web, searcher) == R.STOP_RUN_EXIT
+
+    assert_nothing_final(batch_dir)
+    assert S1.read_meta(store_of(batch_dir), SITE_ID, "R1") is None
+
+    web.dead.clear()
+    web.down.clear()
+    links = {"query": {"pages": [{"title": "Hagar Qim"}]}}
+    web.add(RS.langlinks_url("fr", "Hagar Qim"), json.dumps(links).encode())
+    web.add(S1.article_url("fr", "Hagar Qim"), article_answer(missing_title="Hagar Qim"))
+    other_first, other_second = queries(unanchored(name="Hagar Qim"))
+    searcher.answers.update({other_first: [], other_second: []})
+
+    assert run_routes(tmp_path, batch_dir, web, searcher) == 0
+
+    lane = lanes_of(batch_dir)[0]
+    assert (lane.lane, lane.sources) == (M.Lane.R, ("R1", "R2"))
+    r1 = S1.read_meta(store_of(batch_dir), SITE_ID, "R1")
+    assert r1 is not None and r1.url == PAGE
+
+
+def test_queries_bought_before_an_outage_are_counted(tmp_path: Path) -> None:
+    """Review 2026-09-23: routes.json counted only the run that completed; the searches of the run an
+    outage stopped were read back as existing and never counted."""
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    first, second = queries()
+    searcher = Searcher({first: ["https://fr.wikipedia.org/wiki/Tarxien"], second: []})
+    web.down.add("fr.wikipedia.org")
+
+    assert run_routes(tmp_path, batch_dir, web, searcher) == R.STOP_RUN_EXIT
+    assert searcher.asked == [first]
+
+    web.down.clear()
+    links = {"query": {"pages": [{"title": "Tarxien"}]}}
+    web.add(RS.langlinks_url("fr", "Tarxien"), json.dumps(links).encode())
+    web.add(S1.article_url("fr", "Tarxien"), article_answer(missing_title="Tarxien"))
+    assert run_routes(tmp_path, batch_dir, web, searcher) == 0
+
+    assert searcher.asked == [first, second]
+    report = json.loads((batch_dir / RS.ROUTES_REPORT).read_text(encoding="utf-8"))
+    assert (report["queries"], report["search_requests"]) == (2, 2)
+
+
+def test_a_page_deleted_for_tdm_is_never_fetched_again_by_a_resumed_run(tmp_path: Path) -> None:
+    reserved = PAGE_HTML.replace("<head>", '<head><meta name="tdm-reservation" content="1">')
+    web = Web()
+    batch_dir, site, _ = _two_sites_one_down(tmp_path, web)
+    open_host(web, html=reserved)
+    first, second = queries(site)
+    searcher = Searcher({first: [PAGE], second: []})
+
+    assert run_routes(tmp_path, batch_dir, web, searcher) == R.STOP_RUN_EXIT
+    assert len(web.asked(PAGE)) == 1
+
+    web.down.clear()
+    links = {"query": {"pages": [{"title": "Hagar Qim"}]}}
+    web.add(RS.langlinks_url("fr", "Hagar Qim"), json.dumps(links).encode())
+    web.add(S1.article_url("fr", "Hagar Qim"), article_answer(missing_title="Hagar Qim"))
+    other_first, other_second = queries(unanchored(name="Hagar Qim"))
+    searcher.answers.update({other_first: [], other_second: []})
+
+    assert run_routes(tmp_path, batch_dir, web, searcher) == 0
+
+    assert len(web.asked(PAGE)) == 1
+    report = json.loads((batch_dir / RS.ROUTES_REPORT).read_text(encoding="utf-8"))
+    (deleted,) = report["deleted_for_tdm"]
+    assert deleted.startswith(SITE_ID)
+    assert "TDM refused: reserved (meta_tag)" in lanes_of(batch_dir)[0].detail
+
+
+@pytest.mark.parametrize(
+    ("page", "reason"),
+    [
+        ({"lastrevid": 101}, M.HoldReason.MOVED_DURING_FETCH),
+        ({"timestamp": "2026-09-21T12:00:00Z"}, M.HoldReason.REVISION_TOO_FRESH),
+    ],
+    ids=["moved", "fresh"],
+)
+def test_an_article_s1b_found_is_held_by_the_rules_on_its_response(
+    tmp_path: Path, page: dict[str, Any], reason: M.HoldReason
+) -> None:
+    site = unanchored(source_url="https://en.wikipedia.org/wiki/Tarxien_Temples")
+    web = Web()
+    batch_dir = through_s1(tmp_path, [site], web)
+    web.add(S1.article_url("en", "Tarxien Temples"), article_answer(**page))
+    empty_geosearch(web)
+
+    assert run_routes(tmp_path, batch_dir, web) == 0
+
+    (only,) = holds_of(batch_dir)
+    assert (only.reason, only.detail.startswith("S1b: ")) == (reason, True)
+    assert lanes_of(batch_dir)[0].lane is M.Lane.ZERO
+    assert S1.read_meta(store_of(batch_dir), SITE_ID, "W") is None
+
+
+def test_a_candidate_outside_the_article_namespace_is_never_kept(tmp_path: Path) -> None:
+    site = unanchored(source_url="https://en.wikipedia.org/wiki/Tarxien_Temples")
+    web = Web()
+    batch_dir = through_s1(tmp_path, [site], web)
+    web.add(S1.article_url("en", "Tarxien Temples"), article_answer(ns=4))
+    empty_geosearch(web)
+    first, second = queries(site)
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: [], second: []}))
+
+    (lane,) = lanes_of(batch_dir)
+    assert lane.lane is M.Lane.ZERO and "namespace 4" in lane.detail
+
+
+@pytest.mark.parametrize(
+    ("robots", "why"),
+    [
+        (b"User-agent: *\nAllow: /\n#" + b"x" * F.MAX_PAGE_BYTES, "cut at the page cap"),
+        (b"User-agent: *\nDisallow: /caf\xe9\n", "not UTF-8"),
+    ],
+    ids=["cut", "not-utf8"],
+)
+def test_a_policy_file_that_cannot_be_read_whole_refuses_the_page(
+    tmp_path: Path, robots: bytes, why: str
+) -> None:
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    robots_url, tdmrep_url = RS.policy_urls(PAGE)
+    web.add(robots_url, robots).add(tdmrep_url, b"[]")
+    web.add(PAGE, PAGE_HTML.encode("utf-8"))
+    first, second = queries()
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: [PAGE], second: []}))
+
+    (lane,) = lanes_of(batch_dir)
+    assert lane.lane is M.Lane.ZERO and why in lane.detail
+    assert web.asked(PAGE) == []
+
+
+def _pages(count: int) -> list[str]:
+    return [f"https://heritage.example.org/sites/tarxien-{n}" for n in range(1, count + 1)]
+
+
+def test_one_site_fetches_at_most_six_web_hits(tmp_path: Path) -> None:
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    robots, tdmrep = RS.policy_urls(PAGE)
+    web.add(robots, b"User-agent: *\nAllow: /\n").add(tdmrep, b"[]")
+    for url in _pages(8):
+        web.add(url, b"<p>Hagar Qim is a temple in Malta.</p>")  # every one fails web identity
+    first, second = queries()
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: _pages(8), second: []}))
+
+    assert sum(1 for url in _pages(8) if web.asked(url)) == RS.MAX_WEB_FETCHES_PER_SITE == 6
+
+
+def test_one_site_pins_at_most_three_lane_r_pages(tmp_path: Path) -> None:
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    robots, tdmrep = RS.policy_urls(PAGE)
+    web.add(robots, b"User-agent: *\nAllow: /\n").add(tdmrep, b"[]")
+    for url in _pages(5):
+        web.add(url, PAGE_HTML.encode("utf-8"))
+    first, second = queries()
+
+    run_routes(tmp_path, batch_dir, web, Searcher({first: _pages(5), second: []}))
+
+    (lane,) = lanes_of(batch_dir)
+    assert (lane.lane, lane.sources) == (M.Lane.R, ("R1", "R2", "R3"))
+    assert RS.MAX_R_PAGES_PER_SITE == 3
+
+
+def test_a_stored_search_for_another_query_stops_the_stage(tmp_path: Path) -> None:
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+    record = SE.SearchRecord(query="a query another template built", hits=(), linkless=0)
+    store_of(batch_dir).write(
+        site_id=SITE_ID, feature=RS.route_slot(1).feature, body=record.to_bytes()
+    )
+    searcher = Searcher()
+
+    with pytest.raises(R.InputError, match="a changed query needs a new run directory"):
+        run_routes(tmp_path, batch_dir, web, searcher)
+    assert searcher.asked == []
+
+
+def test_a_sources_report_without_a_site_of_the_batch_stops_the_stage(tmp_path: Path) -> None:
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    report_path = batch_dir / S1.SOURCES_REPORT
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["sites"] = []
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    with pytest.raises(R.InputError, match="has no outcome for"):
+        run_routes(tmp_path, batch_dir, web)
+
+
+def test_a_stopped_walk_asks_nothing_for_the_sites_after_it(tmp_path: Path) -> None:
+    """Once the run must stop, a later site's routes are not asked: nothing they found could count."""
+    later = unanchored(
+        site_id="4a5a324f-6666-4000-8000-000000000006", name="Hal Saflieni", lat=35.87, lon=14.51
+    )
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored(), later], web)
+    empty_geosearch(web)
+    empty_geosearch(web, later.lat, later.lon)
+    refused = Probe({**GOOD_QUOTA, "weekly_remaining_percent": 20})
+
+    assert run_routes(tmp_path, batch_dir, web, Searcher(), probe=refused) == R.STOP_RUN_EXIT
+
+    assert web.asked(RS.geosearch_url(later.lat, later.lon)) == []

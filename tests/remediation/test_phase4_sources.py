@@ -338,9 +338,13 @@ def test_the_licence_of_a_page_follows_its_host(url: str, licence: M.Licence) ->
 
 
 def test_a_url_without_an_http_host_has_no_licence() -> None:
-    for url in ("ftp://en.wikipedia.org/x", "wikipedia.org/wiki/X", "https:///x"):
+    for url in ("ftp://en.wikipedia.org/x", "wikipedia.org/wiki/X"):
         with pytest.raises(ValueError, match="not an http"):
             LIC.licence_of(url)
+    # The host itself is `fetch_stage.host_of`'s, refusal included: one spelling of the concept.
+    with pytest.raises(R.InputError, match="carries no host"):
+        LIC.licence_of("https:///x")
+    assert LIC.host_of("https://EN.Wikipedia.org/wiki/X") == F.host_of("https://en.wikipedia.org/")
 
 
 def test_only_wikipedia_and_wikidata_are_wiki_hosts() -> None:
@@ -464,8 +468,9 @@ def test_an_own_article_matches_the_qid_the_place_and_is_no_class() -> None:
 
 def test_a_qid_that_is_not_the_articles_item_is_no_own_article() -> None:
     far = page_dict(qid="Q999", coords=None)
-    assert gate(page=far).verdict is M.SubjectVerdict.NONE
-    assert gate(page=far).qid_match is False
+    its_item = entity_dict("Q999")  # labelled 'Tarxien Temples': the name alone decides nothing
+    assert gate(page=far, entity=its_item).verdict is M.SubjectVerdict.NONE
+    assert gate(page=far, entity=its_item).qid_match is False
 
 
 def test_a_shared_qid_or_title_makes_the_article_shared() -> None:
@@ -597,13 +602,45 @@ def test_a_disambiguation_page_or_a_list_is_refused() -> None:
 def test_a_parent_page_within_reach_is_shared_and_a_distant_stranger_is_not() -> None:
     parent = page_dict(title="Stonehenge", qid="Q39671", coords=(POINT[0] + 0.02, POINT[1]))
     stranger = page_dict(title="Mercury", qid="Q308", coords=None)
-    assert gate(page=parent).verdict is M.SubjectVerdict.SHARED
-    assert gate(page=stranger).verdict is M.SubjectVerdict.NONE
+    parent_item = entity_dict("Q39671", labels={"en": "Stonehenge"})
+    stranger_item = entity_dict("Q308", labels={"en": "Mercury"})
+    assert gate(page=parent, entity=parent_item).verdict is M.SubjectVerdict.SHARED
+    assert gate(page=stranger, entity=stranger_item).verdict is M.SubjectVerdict.NONE
+
+
+def test_a_parent_page_without_coordinates_takes_its_own_items_point_never_the_sites() -> None:
+    """Review 2026-09-23: the stored item's P625 put every coordinate-less stranger 0 km away."""
+    no_coords = page_dict(title="Stonehenge", qid="Q39671", coords=None)
+    near = entity_dict(
+        "Q39671", labels={"en": "Stonehenge"}, p625=(POINT[0] + 0.02, POINT[1], 1e-4)
+    )
+    far = entity_dict("Q39671", labels={"en": "Stonehenge"}, p625=(POINT[0] + 1, POINT[1], 1e-4))
+    nowhere = entity_dict("Q39671", labels={"en": "Stonehenge"})
+    assert gate(page=no_coords, entity=near).verdict is M.SubjectVerdict.SHARED
+    assert gate(page=no_coords, entity=far).verdict is M.SubjectVerdict.WRONG
+    result = gate(page=no_coords, entity=nowhere)
+    assert (result.km, result.verdict) == (None, M.SubjectVerdict.NONE)
+
+
+def test_a_wrong_subject_page_is_judged_on_its_own_item_never_on_the_stored_one() -> None:
+    """'History' (Q309, a class) on a site whose stored item is a temple with a point: judged on
+    the stored item it was no concept and lay 0 km away (a parent page, lane S)."""
+    history = page_dict(title="History", qid="Q309", coords=None)
+    stored = entity_dict(QID, p625=(POINT[0], POINT[1], 1e-4))
+    history_item = entity_dict("Q309", p31=("Q1",), p279="Q1190554", labels={"en": "history"})
+    labels = {"Q1": "academic discipline"}
+    result = gate(page=history, entity=history_item, labels=labels)
+    assert (result.concept, result.km, result.verdict) == (True, None, M.SubjectVerdict.WRONG)
+    for wrong_entity in (stored, None):
+        with pytest.raises(ValueError, match="judged on its page's item"):
+            gate(page=history, entity=wrong_entity)
+    with pytest.raises(ValueError, match="judged on its page's item"):
+        gate(page=page_dict(qid=None), entity=stored)
 
 
 def test_a_site_without_a_qid_and_without_its_pages_item_is_never_own() -> None:
     site = plan_site(wikidata_qid=None)
-    assert gate(site, entity=None).verdict is M.SubjectVerdict.NONE
+    assert gate(site, page=page_dict(qid=None), entity=None).verdict is M.SubjectVerdict.NONE
 
 
 def test_a_site_without_a_qid_is_own_only_by_place_and_name_together() -> None:
@@ -910,6 +947,167 @@ def test_a_title_wikipedia_does_not_have_is_missing_not_failed(tmp_path: Path) -
 
     assert report_of(batch_dir)[SITE_ID]["status"] == S1.STATUS_MISSING
     assert holds_of(batch_dir) == []
+
+
+def _mismatched_setup(
+    tmp_path: Path, page: bytes, qid: str, item: bytes, labels: Mapping[str, str], status: int = 200
+) -> Web:
+    """A site whose stored item carries a point, and whose stored title resolves to item `qid`."""
+    phase3_file(tmp_path, SITE_ID, entity_answer(QID, p625=(POINT[0], POINT[1], 1e-4)))
+    web = standard_web(article=page, labels={"Q839954": "archaeological site", **labels})
+    return web.add(S1.entity_url(qid), item, status=status)
+
+
+def test_a_wrong_subject_article_is_judged_on_its_own_item_and_rejected(tmp_path: Path) -> None:
+    """Live S1, 2026-09-23: enwiki 'History' (Q309) pinned as a parent page for two sites, because
+    the gate read the stored temple's P279 (none) and P625 (0 km away)."""
+    history = article_answer(title="History", qid="Q309", coords=None)
+    item = entity_answer("Q309", cur=CUR, p31=("Q1",), p279="Q1190554", labels={"en": "history"})
+    batch_dir = make_batch(tmp_path, [plan_site()])
+    web = _mismatched_setup(tmp_path, history, "Q309", item, {"Q1": "academic discipline"})
+
+    assert run_sources(tmp_path, batch_dir, web) == 0
+
+    row = report_of(batch_dir)[SITE_ID]
+    assert (row["status"], row["verdict"]) == (S1.STATUS_REJECTED, "wrong")
+    assert "concept=True" in row["detail"] and "km=None" in row["detail"]
+    assert not store_of(batch_dir).path_for(SITE_ID, "src.W").exists()
+    assert len(web.asked("ids=Q309")) == 1
+    assert store_of(batch_dir).path_for(SITE_ID, f"{S1.FEATURE_PAGE_ITEM}Q309").exists()
+
+
+def test_a_coordinate_less_stranger_stays_none_although_the_sites_item_has_a_point(
+    tmp_path: Path,
+) -> None:
+    mercury = article_answer(title="Mercury (film)", qid="Q308", coords=None)
+    item = entity_answer("Q308", cur=CUR, p31=("Q11424",), labels={"en": "Mercury"})
+    batch_dir = make_batch(tmp_path, [plan_site()])
+    web = _mismatched_setup(tmp_path, mercury, "Q308", item, {"Q11424": "film"})
+
+    run_sources(tmp_path, batch_dir, web)
+
+    row = report_of(batch_dir)[SITE_ID]
+    assert (row["status"], row["verdict"]) == (S1.STATUS_REJECTED, "none")
+    assert "km=None" in row["detail"]
+
+
+def test_a_parent_page_is_placed_by_its_own_items_point(tmp_path: Path) -> None:
+    parent = article_answer(title="Tarxien", qid="Q1000", coords=None)
+    item = entity_answer(
+        "Q1000", cur=CUR, p31=("Q2",), p625=(POINT[0] + 0.01, POINT[1], 1e-4), labels={"en": "x"}
+    )
+    batch_dir = make_batch(tmp_path, [plan_site()])
+    web = _mismatched_setup(tmp_path, parent, "Q1000", item, {"Q2": "archaeological complex"})
+
+    run_sources(tmp_path, batch_dir, web)
+
+    meta = S1.read_meta(store_of(batch_dir), SITE_ID, "W")
+    assert meta is not None and meta.subject_gate is not None
+    assert meta.subject_gate.verdict is M.SubjectVerdict.SHARED
+    assert meta.subject_gate.km is not None and 1.0 < meta.subject_gate.km < 1.2
+    d_meta = S1.read_meta(store_of(batch_dir), SITE_ID, "D")
+    assert d_meta is not None and d_meta.route is M.Route.PHASE3_EVIDENCE  # the page's item is no D
+
+
+def test_an_article_whose_own_item_cannot_be_read_holds_the_site(tmp_path: Path) -> None:
+    history = article_answer(title="History", qid="Q309", coords=None)
+    batch_dir = make_batch(tmp_path, [plan_site()])
+    web = _mismatched_setup(tmp_path, history, "Q309", b"gone", {}, status=404)
+
+    assert run_sources(tmp_path, batch_dir, web) == 0
+
+    (only,) = holds_of(batch_dir)
+    assert only.reason is M.HoldReason.FETCH_FAILED
+    assert "names another item" in only.detail and "Q309" in only.detail
+    assert not store_of(batch_dir).path_for(SITE_ID, "src.W").exists()
+
+
+def test_an_article_whose_own_items_classes_have_no_labels_holds_the_site(tmp_path: Path) -> None:
+    history = article_answer(title="History", qid="Q309", coords=None)
+    batch_dir = make_batch(tmp_path, [plan_site()])
+    phase3_file(tmp_path, SITE_ID, entity_answer(QID, p31=()))  # the stored item needs no label
+    web = Web().add(S1.article_url("en", "Tarxien Temples"), history)
+    web.add(S1.entity_url("Q309"), entity_answer("Q309", cur=CUR, p31=("Q1",)))
+    web.add(S1.class_labels_url(["Q1"]), b"busy", status=503)
+
+    assert run_sources(tmp_path, batch_dir, web) == 0
+
+    (only,) = holds_of(batch_dir)
+    assert only.reason is M.HoldReason.FETCH_FAILED
+    assert "P31 class labels ['Q1']" in only.detail
+
+
+def test_a_titled_site_without_a_qid_is_own_by_place_and_name_and_pins_its_witness(
+    tmp_path: Path,
+) -> None:
+    site = plan_site(wikidata_qid=None)
+    batch_dir = make_batch(tmp_path, [site])
+    web = standard_web()
+    web.add(S1.entity_url(QID), entity_answer(QID, cur="2026-09-22T12:00:07Z"))
+
+    assert run_sources(tmp_path, batch_dir, web) == 0
+
+    store = store_of(batch_dir)
+    w_meta, d_meta = S1.read_meta(store, SITE_ID, "W"), S1.read_meta(store, SITE_ID, "D")
+    assert w_meta is not None and w_meta.subject_gate is not None
+    assert (w_meta.subject_gate.verdict, w_meta.subject_gate.qid_match) == (
+        M.SubjectVerdict.OWN,
+        False,
+    )
+    assert d_meta is not None and d_meta.route is M.Route.WIKIDATA_ENTITY
+    assert d_meta.retrieved_at == "2026-09-22T12:00:07Z"
+
+
+def invalid_answer(title: str) -> bytes:
+    """MediaWiki's answer for a title with a control character (measured on Petra, 2026-09-23)."""
+    page = {
+        "title": title,
+        "invalidreason": 'The requested page title contains invalid characters: "\n".',
+        "invalid": True,
+    }
+    return json.dumps({"curtimestamp": CUR, "query": {"pages": [page]}}).encode("utf-8")
+
+
+def test_a_title_wikipedia_calls_invalid_is_routed_not_held(tmp_path: Path) -> None:
+    """Petra stores `Petra\\nhttps://www.khanacademy.org/...` as its enwiki_title: the request
+    succeeds, and the answer is that no page can have that title - an answer, not a failure."""
+    title = "Petra\nhttps://www.khanacademy.org/humanities/a/petra"
+    site = plan_site(wikidata_qid=None, enwiki_title=title)
+    batch_dir = make_batch(tmp_path, [site])
+    web = Web().add(S1.article_url("en", title), invalid_answer(title))
+
+    assert run_sources(tmp_path, batch_dir, web) == 0
+
+    row = report_of(batch_dir)[SITE_ID]
+    assert row["status"] == S1.STATUS_INVALID_TITLE
+    assert row["status"] in S1.ROUTED_STATUSES
+    assert "invalid characters" in row["detail"]
+    assert holds_of(batch_dir) == []
+    with pytest.raises(S1.TitleInvalid):
+        S1.parse_article(invalid_answer(title))
+
+
+def test_an_own_article_with_an_empty_extract_is_never_pinned(tmp_path: Path) -> None:
+    batch_dir, web = _setup(tmp_path, [plan_site()], article=article_answer(extract=" \n "))
+
+    run_sources(tmp_path, batch_dir, web)
+
+    row = report_of(batch_dir)[SITE_ID]
+    assert row["status"] == S1.STATUS_REJECTED and "no text" in row["detail"]
+    assert not store_of(batch_dir).path_for(SITE_ID, "src.W").exists()
+
+
+def test_the_label_pass_asks_1_to_50_classes_a_request() -> None:
+    fifty = [f"Q{n}" for n in range(1, 51)]
+    assert "ids=" + "%7C".join(fifty) in S1.class_labels_url(fifty)
+    for wrong in ([], [*fifty, "Q51"]):
+        with pytest.raises(R.InputError, match="1 to 50"):
+            S1.class_labels_url(wrong)
+
+
+def test_a_label_answer_without_an_asked_class_is_unreadable() -> None:
+    with pytest.raises(S1.ArticleUnreadable, match="absent"):
+        S1.parse_class_labels(labels_answer({"Q1": "temple"}), ["Q1", "Q2"])
 
 
 @pytest.mark.parametrize(("status", "retries"), [(500, 3), (404, 1)])

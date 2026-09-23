@@ -17,7 +17,8 @@ rebuilt from it offline, byte for byte:
 * `build` - offline: `build_plan` over the rows, the reviewer-cleared defects
             (`logs/_write_dry/ALL_REFUSED.jsonl`, rule `report-only-field`), the T03 findings
             (`run_t03/findings.jsonl`) and the pilot's site ids (`gold_standard/sites.json`), then
-            `write_plan`: `PLAN4.jsonl`, batches of 15 named `p4-NNNN`.
+            `write_plan`: `PLAN4.jsonl`, batches of 15 named `p4-NNNN`. Its summary lists the
+            stored titles MediaWiki refuses (`invalid_titles`) for the data repair.
 
 Derived here, from data and not from the B block's temp files (`SiteFlag`):
 
@@ -46,6 +47,7 @@ import hashlib
 import json
 import sys
 import time
+import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -64,7 +66,6 @@ from phase4 import sources_stage as S1  # noqa: E402
 from phase4 import subject_gate as SG  # noqa: E402
 from pipeline.normalizers.dates import passes_date_cutoff  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
-from pipeline.utils.text import normalize_name  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 RUNNER = REPO / "output" / "remediation" / "phase4_runner"
@@ -174,10 +175,20 @@ def t03_findings(rows: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, str]]
     return found
 
 
-def fold_name(name: str) -> str:
-    """A name as the duplicate rule compares it: accents, case, punctuation and spacing folded."""
-    folded = normalize_name(name, remove_parentheses=False, remove_brackets=False)
-    return " ".join("".join(ch if ch.isalnum() else " " for ch in folded).split())
+def invalid_titles(rows: Iterable[Mapping[str, Any]]) -> list[str]:
+    """The site ids whose stored `enwiki_title` carries a control character, sorted.
+
+    MediaWiki refuses such a title (`invalid`), so S1 routes the site like a title Wikipedia does
+    not have. The plan lists them for the data repair; it does not stop on them. Measured
+    2026-09-23: one row, Petra's (a06a95d0-35b4-44bb-a0c1-716cbf972b19), stores its title, a newline
+    and a second URL.
+    """
+    return sorted(
+        str(row["id"])
+        for row in rows
+        if row["enwiki_title"] is not None
+        and any(unicodedata.category(ch) == "Cc" for ch in row["enwiki_title"])
+    )
 
 
 # ------------------------------------------------------------------------------- the plan
@@ -219,8 +230,8 @@ def duplicate_pairs(
             by_qid.setdefault(row["wikidata_qid"], []).append(row)
     paired: set[str] = set()
     for qid, members in sorted(by_qid.items()):
-        names = {fold_name(name) for name in item_names[qid]}
-        named = [row for row in members if fold_name(row["name"]) in names]
+        names = {SG.fold(name) for name in item_names[qid]}
+        named = [row for row in members if SG.fold(row["name"]) in names]
         for index, one in enumerate(named):
             for other in named[index + 1 :]:
                 km = haversine_distance(one["lat"], one["lon"], other["lat"], other["lon"])
@@ -467,6 +478,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         "flags": dict(sorted(flags.items())),
         "out": str(out),
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
+        "invalid_titles": invalid_titles(rows),
         "sites": len(sites),
     }
     print(json.dumps(summary, indent=1, sort_keys=True))
