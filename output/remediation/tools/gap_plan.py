@@ -196,10 +196,18 @@ def export_sql(site_ids: list[str]) -> dict[str, str]:
     }
 
 
-def export(questions: list[Question], out: pathlib.Path, *, run=lanes.psql) -> dict[str, int]:
+def export(
+    questions: list[Question],
+    out: pathlib.Path,
+    *,
+    run=lanes.psql,
+    extra: Mapping[str, str] | None = None,
+) -> dict[str, int]:
+    """The export of the questions' sites (`export_sql`), plus the `extra` statements a lane adds
+    (the sitelink lane: the journal rows of those sites), each into `<name>.jsonl` with a manifest."""
     site_ids = sorted({q.site_id for q in questions})
     counts: dict[str, int] = {}
-    statements = export_sql(site_ids)
+    statements = {**export_sql(site_ids), **(extra or {})}
     for table, sql in statements.items():
         rows = lanes.json_rows(run(sql))
         lanes.write_jsonl(out / f"{table}.jsonl", rows)
@@ -263,13 +271,16 @@ def enwiki_missing(path: pathlib.Path) -> bool:
     return any("missing" in page for page in pages.values())
 
 
-def shared_counts(external: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+def shared_counts(
+    external: Iterable[Mapping[str, Any]], *, repairs: Iterable[qid_repair.Site] = qid_repair.SITES
+) -> dict[str, int]:
     """`{qid: curated sites carrying it}`, not counting a link the reviewed repair replaces.
 
     A link the repair has established as wrong (the Tomb of Artaxerxes III on Persepolis' Q129072)
-    does not make the item a shared one for the site it really belongs to (Persepolis).
+    does not make the item a shared one for the site it really belongs to (Persepolis). `repairs` is
+    the first wave by default; the sitelink lane passes both waves.
     """
-    wrong = {(site.site_id, site.old_qid) for site in qid_repair.SITES if site.rule != "unresolved"}
+    wrong = {(site.site_id, site.old_qid) for site in repairs if site.rule != "unresolved"}
     return dict(
         collections.Counter(
             str(row["value"])
@@ -280,12 +291,20 @@ def shared_counts(external: Iterable[Mapping[str, Any]]) -> dict[str, int]:
 
 
 def withheld_reason(
-    site_id: str, qid: str | None, *, shared: Mapping[str, int]
+    site_id: str,
+    qid: str | None,
+    *,
+    shared: Mapping[str, int],
+    repairs: Iterable[qid_repair.Site] = qid_repair.SITES,
 ) -> tuple[str | None, str | None]:
-    """(the item the run is given, or None; why an item is withheld, or None)."""
+    """(the item the run is given, or None; why an item is withheld, or None).
+
+    `repairs` is the reviewed external-id repair's first wave by default (the gap run's); the
+    sitelink lane passes both waves, whose site sets do not overlap.
+    """
     if qid is None:
         return None, None
-    repair = {site.site_id: site for site in qid_repair.SITES}.get(site_id)
+    repair = {site.site_id: site for site in repairs}.get(site_id)
     if repair is not None:
         if repair.rule == "unresolved":
             return None, (

@@ -28,12 +28,19 @@ asserted. On the first pilot: (a) alone refuses nothing, (b) alone refuses Ahu T
 `period_start` (both human WRONG); all three off is the writer before them, 5 rows - 3 agreeing, 1
 unsupported (Lake Mungo `site_type`), 1 harmful (Aubrey Holes).
 
+**Two lanes** (`--lane`, 2026-09-23). The sitelink lane's pilot
+(`phase3_runner/SITELINK_PILOT.md`) is measured against the same four thresholds, unchanged; the lane
+buys no search, so its transport is read off the fetch stage instead (`TRANSPORTS`): every sitelink
+article of every pilot site is on disk or recorded as failed in `fetch.json`. `--lane` sets the
+defaults of `--run-dir`, `--prefix` and `--progress`; the search lane's output is what it was.
+
 Read-only; no database, no network.
 
     ./.venv/Scripts/python.exe output/remediation/tools/score_search_pilot.py
     ./.venv/Scripts/python.exe output/remediation/tools/score_search_pilot.py \
         --run-dir output/remediation/phase3_runner/runs/search-gold2 --prefix srgdb \
         --progress output/remediation/logs/search_gold2/progress.json
+    ./.venv/Scripts/python.exe output/remediation/tools/score_search_pilot.py --lane sitelink
 """
 
 from __future__ import annotations
@@ -43,7 +50,8 @@ import collections
 import contextlib
 import json
 import sys
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -65,6 +73,27 @@ GOLD = REPO / "output/remediation/gold_standard/sites.json"
 PROGRESS = REPO / "output/remediation/logs/search_gold/progress.json"
 PREFIX = "srgd"
 AGREEMENT_FLOOR = 0.90
+
+
+@dataclass(frozen=True)
+class PilotLane:
+    """Where one lane's pilot runs by default; its transport is `TRANSPORTS[lane]`."""
+
+    run: Path
+    prefix: str
+    progress: Path
+
+
+#: The pilots this scorer reads. `search` is the MiniMax search pilot (W9, `SEARCH_PILOT.md`);
+#: `sitelink` the other-language articles' pilot (`SITELINK_PILOT.md`).
+PILOT_LANES: dict[str, PilotLane] = {
+    "search": PilotLane(RUN, PREFIX, PROGRESS),
+    "sitelink": PilotLane(
+        REPO / "output/remediation/phase3_runner/runs/sitelink-gold",
+        "slkg",
+        REPO / "output/remediation/logs/sitelink_gold/progress.json",
+    ),
+}
 
 
 def gold_verdicts(path: Path) -> dict[tuple[str, str], str]:
@@ -89,10 +118,52 @@ def batches_of(run: Path, prefix: str) -> list[Path]:
     return found
 
 
+def search_unaccounted(batch: Path) -> int:
+    """The search lane's transport: a search stage that stopped, and every search slot with neither
+    a stored result nor a recorded failure (`search.json`)."""
+    search = json.loads((batch / "search.json").read_text(encoding="utf-8"))
+    unaccounted = 1 if search.get("stopped") is not None else 0
+    for site in search["sites"]:
+        for outcome in site["outcomes"]:
+            if not (outcome["stored"] or outcome["existing"] or outcome["failure"]):
+                unaccounted += 1
+    return unaccounted
+
+
+def sitelink_unaccounted(batch: Path) -> int:
+    """The sitelink lane's transport: every sitelink article of the batch (`Target.sitelink`) with
+    neither an evidence file nor a failure the fetch stage recorded (`fetch.json`). A batch whose
+    fetch never ran has no `fetch.json`, and every one of its articles is unaccounted for."""
+    record = json.loads((batch / "input.json").read_text(encoding="utf-8"))
+    failures = MS.read_fetch_failures(batch / "fetch.json")
+    store = F.EvidenceStore(batch / "evidence")
+    return sum(
+        1
+        for site in record["sites"]
+        for target in F.targets_for_site(site)
+        if target.sitelink is not None
+        and not store.exists(target.site_id, target.feature)
+        and target.feature not in failures.get(target.site_id, {})
+    )
+
+
+#: How each lane's threshold 4 counts the slots nobody accounted for.
+TRANSPORTS: dict[str, Callable[[Path], int]] = {
+    "search": search_unaccounted,
+    "sitelink": sitelink_unaccounted,
+}
+
+
 def sealed(
-    batches: list[Path], human: dict[tuple[str, str], str], progress: dict[str, Any]
+    batches: list[Path],
+    human: dict[tuple[str, str], str],
+    progress: dict[str, Any],
+    *,
+    transport: Callable[[Path], int] = search_unaccounted,
 ) -> tuple[bool, list[str]]:
-    """The four sealed thresholds, as `SEARCH_PILOT.md` defines them. Returns (passed, lines)."""
+    """The four sealed thresholds, as `SEARCH_PILOT.md` defines them. Returns (passed, lines).
+
+    `transport` counts one batch's unaccounted slots for threshold 4 (`TRANSPORTS`)."""
     rows = []
     fabricated = []
     unaccounted = 0
@@ -101,13 +172,7 @@ def sealed(
         failures = MS.read_fetch_failures(batch / "fetch.json")  # reads search.json too
         store = F.EvidenceStore(batch / "evidence")
         reviewed = reviews(batch)
-        search = json.loads((batch / "search.json").read_text(encoding="utf-8"))
-        if search.get("stopped") is not None:
-            unaccounted += 1
-        for site in search["sites"]:
-            for outcome in site["outcomes"]:
-                if not (outcome["stored"] or outcome["existing"] or outcome["failure"]):
-                    unaccounted += 1
+        unaccounted += transport(batch)
         for site in record["sites"]:
             sid = site["site_id"]
             excerpts = MS.evidence_excerpts(
@@ -320,19 +385,23 @@ def rule_cost(batches: list[Path], human: dict[tuple[str, str], str]) -> list[st
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="score-search-pilot")
-    parser.add_argument("--run-dir", default=str(RUN), help="the pilot's run directory")
-    parser.add_argument("--prefix", default=PREFIX, help="the pilot plan's batch-id prefix")
-    parser.add_argument("--progress", default=str(PROGRESS), help="the mass driver's progress.json")
+    parser.add_argument(
+        "--lane", default="search", choices=sorted(PILOT_LANES), help="whose pilot (PILOT_LANES)"
+    )
+    parser.add_argument("--run-dir", default=None, help="the pilot's run directory")
+    parser.add_argument("--prefix", default=None, help="the pilot plan's batch-id prefix")
+    parser.add_argument("--progress", default=None, help="the mass driver's progress.json")
     parser.add_argument("--gold", default=str(GOLD), help="gold_standard/sites.json")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    lane = PILOT_LANES[args.lane]
     human = gold_verdicts(Path(args.gold))
-    batches = batches_of(Path(args.run_dir), args.prefix)
-    progress = json.loads(Path(args.progress).read_text(encoding="utf-8"))
-    passed, lines = sealed(batches, human, progress)
+    batches = batches_of(Path(args.run_dir or lane.run), args.prefix or lane.prefix)
+    progress = json.loads(Path(args.progress or lane.progress).read_text(encoding="utf-8"))
+    passed, lines = sealed(batches, human, progress, transport=TRANSPORTS[args.lane])
     for line in lines:
         print(line)
     decision = writer_decision(batches, human)

@@ -2646,8 +2646,8 @@ REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "a sitelink without badges is read as unbadged",
         FETCH_STAGE,
-        "        if not isinstance(title, str) or not title or not isinstance(badges, list):\n",
-        "        if False:  # mutant\n",
+        "            if not isinstance(title, str) or not title or not isinstance(badges, list):\n",
+        "            if False:  # mutant\n",
         FETCH_ROUTES_TEST,
         "test_a_sitelink_without_its_badges_list_is_refused_not_read_as_unbadged",
     ),
@@ -6591,7 +6591,8 @@ PHASE4_SOURCES_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
     (
         "p4 sources_stage: the permalink is no oldid link",
-        P4_SOURCES,
+        # `permalink` is `fetch_stage.wikipedia_permalink` since 2026-09-23 (the sitelink lane).
+        "scripts/remediation/phase3/fetch_stage.py",
         '    return f"https://{lang}.wikipedia.org/w/index.php?title={encoded}&oldid={revid}"\n',
         '    return f"https://{lang}.wikipedia.org/wiki/{encoded}"  # mutant\n',
         P4_SOURCES_TEST,
