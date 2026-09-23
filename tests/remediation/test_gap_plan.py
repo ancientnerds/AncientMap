@@ -118,6 +118,64 @@ def test_a_link_the_repair_replaces_does_not_make_an_item_shared() -> None:
     assert counts == {tomb.old_qid: 1}
 
 
+def _wave3(rule: str, name: str | None = None) -> qid_repair.Site:
+    return next(
+        site
+        for site in qid_repair.WAVE3_SITES
+        if site.rule == rule and (name is None or site.name == name)
+    )
+
+
+def test_a_link_wave_three_keeps_still_counts_toward_a_shared_item() -> None:
+    """Pandavleni Caves' Q7130537 is right (link-right), and 'Cave 20 - Pandavleni Caves' carries it
+    too: the item stays shared for both, so the one cave is not given the whole complex's articles.
+    Only a link the repair replaces (rule A or B) stops counting."""
+    kept = _wave3("link-right", "Pandavleni Caves")
+    replaced = _wave3("B", "Siega Verde")
+    counts = G.shared_counts(
+        [
+            {"site_id": kept.site_id, "value": kept.old_qid},
+            {"site_id": "cave-20", "value": kept.old_qid},
+            {"site_id": replaced.site_id, "value": replaced.old_qid},
+            {"site_id": "coa-valley", "value": replaced.old_qid},
+        ],
+        repairs=qid_repair.WAVE3_SITES,
+    )
+    assert counts == {kept.old_qid: 2, replaced.old_qid: 1}
+
+
+def test_wave_three_withholds_a_type_link_and_a_duplicate_and_keeps_a_right_link() -> None:
+    wave3 = qid_repair.WAVE3_SITES
+    keep_type = _wave3("keep-type", "Dolmens of Sardinia")
+    kept, why = G.withheld_reason(keep_type.site_id, "Q101659", shared={}, repairs=wave3)
+    assert kept is None and "a type" in str(why) and "wave3/PLAN.md" in str(why)
+    duplicate = _wave3("duplicate-candidate")
+    kept, why = G.withheld_reason(duplicate.site_id, duplicate.old_qid, shared={}, repairs=wave3)
+    assert kept is None and "duplicate candidate" in str(why)
+    right = _wave3("link-right", "Psychro Cave")
+    assert G.withheld_reason(right.site_id, right.old_qid, shared={}, repairs=wave3) == (
+        right.old_qid,
+        None,
+    )
+    unresolved = _wave3("unresolved")
+    kept, why = G.withheld_reason(unresolved.site_id, unresolved.old_qid, shared={}, repairs=wave3)
+    assert kept is None and "unresolved" in str(why) and "wave3/PLAN.md" in str(why)
+    replaced = _wave3("B", "Siega Verde")
+    assert G.withheld_reason(replaced.site_id, replaced.new_qid, shared={}, repairs=wave3) == (
+        replaced.new_qid,
+        None,
+    )
+
+
+def test_a_kept_link_production_no_longer_carries_stops_the_plan() -> None:
+    """A verdict that keeps a link was made about that link; another item in its place is news the
+    plan must not read past."""
+    for rule in ("keep-type", "duplicate-candidate", "link-right", "unresolved"):
+        site = _wave3(rule)
+        with pytest.raises(SystemExit, match="read the site again"):
+            G.withheld_reason(site.site_id, "Q1", shared={}, repairs=qid_repair.WAVE3_SITES)
+
+
 def _export(tmp_path: Path, rows: list[dict], external: list[dict]) -> Path:
     out = tmp_path / "export"
     lanes.write_jsonl(out / "unified_sites.jsonl", rows)
@@ -290,3 +348,10 @@ def test_an_export_that_misses_a_site_or_returns_a_foreign_one_is_refused(tmp_pa
     foreign = [full[0], _row(SMALL, "Small Site", source_id="lyra")]
     with pytest.raises(SystemExit, match="not curated"):
         G.export(questions, tmp_path / "foreign", run=_export_answers(foreign))
+
+
+def test_a_repair_rule_the_plan_does_not_read_stops_it() -> None:
+    """A rule added to the repair later must be read here before any site under it is planned."""
+    odd = qid_repair.Site(TIKAL.site_id, TIKAL.name, "keep-name", TIKAL.old_qid, None, "", None, ())
+    with pytest.raises(SystemExit, match="none this plan reads"):
+        G.withheld_reason(TIKAL.site_id, TIKAL.old_qid, shared={}, repairs=(odd,))

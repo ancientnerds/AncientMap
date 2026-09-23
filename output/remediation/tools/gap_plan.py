@@ -196,10 +196,18 @@ def export_sql(site_ids: list[str]) -> dict[str, str]:
     }
 
 
-def export(questions: list[Question], out: pathlib.Path, *, run=lanes.psql) -> dict[str, int]:
+def export(
+    questions: list[Question],
+    out: pathlib.Path,
+    *,
+    run=lanes.psql,
+    extra: Mapping[str, str] | None = None,
+) -> dict[str, int]:
+    """The export of the questions' sites (`export_sql`), plus the `extra` statements a lane adds
+    (the sitelink lane: the journal rows of those sites), each into `<name>.jsonl` with a manifest."""
     site_ids = sorted({q.site_id for q in questions})
     counts: dict[str, int] = {}
-    statements = export_sql(site_ids)
+    statements = {**export_sql(site_ids), **(extra or {})}
     for table, sql in statements.items():
         rows = lanes.json_rows(run(sql))
         lanes.write_jsonl(out / f"{table}.jsonl", rows)
@@ -263,13 +271,21 @@ def enwiki_missing(path: pathlib.Path) -> bool:
     return any("missing" in page for page in pages.values())
 
 
-def shared_counts(external: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+def shared_counts(
+    external: Iterable[Mapping[str, Any]], *, repairs: Iterable[qid_repair.Site] = qid_repair.SITES
+) -> dict[str, int]:
     """`{qid: curated sites carrying it}`, not counting a link the reviewed repair replaces.
 
     A link the repair has established as wrong (the Tomb of Artaxerxes III on Persepolis' Q129072)
-    does not make the item a shared one for the site it really belongs to (Persepolis).
+    does not make the item a shared one for the site it really belongs to (Persepolis). A link the
+    repair keeps (`qid_repair.UNCHANGED`: unresolved, and wave 3's keep-type, duplicate-candidate and
+    link-right) still counts: its item is still on that row. `repairs` is the first wave by default;
+    the sitelink lane passes every wave's sites (wave 4 names none: it plans from its resolution
+    record and only inserts an item where a site holds none).
     """
-    wrong = {(site.site_id, site.old_qid) for site in qid_repair.SITES if site.rule != "unresolved"}
+    wrong = {
+        (site.site_id, site.old_qid) for site in repairs if site.rule not in qid_repair.UNCHANGED
+    }
     return dict(
         collections.Counter(
             str(row["value"])
@@ -279,29 +295,74 @@ def shared_counts(external: Iterable[Mapping[str, Any]]) -> dict[str, int]:
     )
 
 
+#: Every rule of the reviewed external-id repair this plan reads (`withheld_reason`), named one by one:
+#: a rule the repair gains later is refused until someone decides what it means for the item.
+REPAIR_RULES = frozenset({"A", "B", "unresolved", "keep-type", "duplicate-candidate", "link-right"})
+
+
+def decision_record(site: qid_repair.Site) -> str:
+    """The decision record (`PLAN.md`) of the repair wave that researched `site`."""
+    for wave in qid_repair.WAVES.values():
+        if site in wave.sites:
+            return (wave.out / "PLAN.md").relative_to(lanes.REPO).as_posix()
+    raise SystemExit(f"{site.site_id}: in no wave of the reviewed external-id repair")
+
+
 def withheld_reason(
-    site_id: str, qid: str | None, *, shared: Mapping[str, int]
+    site_id: str,
+    qid: str | None,
+    *,
+    shared: Mapping[str, int],
+    repairs: Iterable[qid_repair.Site] = qid_repair.SITES,
 ) -> tuple[str | None, str | None]:
-    """(the item the run is given, or None; why an item is withheld, or None)."""
+    """(the item the run is given, or None; why an item is withheld, or None).
+
+    `repairs` is the reviewed external-id repair's first wave by default (the gap run's); the
+    sitelink lane passes every wave's, whose site sets do not overlap. A link the repair keeps
+    (`qid_repair.UNCHANGED`) was judged as that link, so production must still carry it: an
+    **unresolved** one is withheld, a **keep-type** one too (the item is the monument type the record
+    stands for, and its articles describe the type, not this site), a **duplicate-candidate** one too
+    (another curated row is the same site; the owner's merge comes first), and a **link-right** one
+    is given (the research found the suspicion does not hold).
+    """
     if qid is None:
         return None, None
-    repair = {site.site_id: site for site in qid_repair.SITES}.get(site_id)
+    repair = {site.site_id: site for site in repairs}.get(site_id)
     if repair is not None:
+        if repair.rule not in REPAIR_RULES:
+            raise SystemExit(f"{site_id}: repair rule {repair.rule!r} is none this plan reads")
+        record = decision_record(repair)
+        if repair.rule in qid_repair.UNCHANGED and qid != repair.old_qid:
+            raise SystemExit(
+                f"{site_id}: production carries {qid}, the reviewed repair kept {repair.old_qid} "
+                f"({repair.rule}, {record}) - read the site again before planning it"
+            )
         if repair.rule == "unresolved":
             return None, (
-                f"{qid} is unresolved in the reviewed external-id repair "
-                f"(output/remediation/qid_repair/PLAN.md): {repair.evidence[0]}"
+                f"{qid} is unresolved in the reviewed external-id repair ({record}): "
+                f"{repair.evidence[0]}"
             )
-        if qid == repair.old_qid:
+        if repair.rule == "keep-type":
             return None, (
-                f"{qid} is mis-resolved; the reviewed repair replaces it with {repair.new_qid}, "
-                "and it is not applied yet"
+                f"{qid} is a type the record stands for, kept as its link by the reviewed "
+                f"external-id repair ({record}): its articles describe the type, not this site"
             )
-        if qid != repair.new_qid:
-            raise SystemExit(
-                f"{site_id}: production carries {qid}, the repair plans {repair.old_qid} -> "
-                f"{repair.new_qid}; neither - read the site again before planning it"
+        if repair.rule == "duplicate-candidate":
+            return None, (
+                f"{qid} is right, and another curated row is the same site - a duplicate candidate "
+                f"for the owner's merge ({record})"
             )
+        if repair.rule in ("A", "B"):
+            if qid == repair.old_qid:
+                return None, (
+                    f"{qid} is mis-resolved; the reviewed repair replaces it with {repair.new_qid}, "
+                    "and it is not applied yet"
+                )
+            if qid != repair.new_qid:
+                raise SystemExit(
+                    f"{site_id}: production carries {qid}, the repair plans {repair.old_qid} -> "
+                    f"{repair.new_qid}; neither - read the site again before planning it"
+                )
     if shared.get(qid, 0) > 1:
         return None, (
             f"{qid} is carried by {shared[qid]} curated sites: a shared item describes a parent or a "

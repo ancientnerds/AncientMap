@@ -1115,6 +1115,15 @@ POLITICAL_PAIRS = frozenset(
 )
 
 
+def political_line(stored: str, contained: str) -> bool:
+    """Whether a stored country the boundary file contradicts lies on a line the owner decided to
+    leave (B10): a feature of `POLITICAL_FEATURES`, or a (stored, contained-in) pair of
+    `POLITICAL_PAIRS`. Read by `classify_b2` and by the sitelink lane, which asks no such country."""
+    return (
+        contained in POLITICAL_FEATURES or (CC.fold(stored), CC.fold(contained)) in POLITICAL_PAIRS
+    )
+
+
 def in_crimea(lat: float, lon: float) -> bool:
     """The Crimean peninsula's box - Natural Earth draws it inside Russia (B10: stays Ukraine)."""
     return 44.3 < lat < 46.3 and 32.4 < lon < 36.7
@@ -1190,8 +1199,7 @@ def classify_b2(
     )
     f = CC.fold(snap)
     if (
-        ne in POLITICAL_FEATURES
-        or (f, CC.fold(ne)) in POLITICAL_PAIRS
+        political_line(snap, ne)
         or (f == "ukraine" and in_crimea(site["lat"], site["lon"]))
         or (f == "cyprus" and "open water" in ne and len(p17) > 1)
     ):

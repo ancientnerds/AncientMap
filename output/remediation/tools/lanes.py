@@ -69,12 +69,15 @@ MASS = "mass"
 
 #: A lane's batch-id prefix, which is also its journal stamp's: `phase3:<prefix>-NNNN:chunk-NNNN`.
 #: `gap` is the re-run of the fields the mass run never judged (`gap_plan.py`); `search1` and
-#: `redecide` are the lanes the 2026-09-22 remaining-work map names (`srch-NNNN`, `rdc-NNNN`).
+#: `redecide` are the lanes the 2026-09-22 remaining-work map names (`srch-NNNN`, `rdc-NNNN`);
+#: `sitelink` re-asks the mass run's UNVERIFIABLE fields with the item's other-language articles
+#: (`sitelink_plan.py`, `slk-NNNN`; its pilot's batches are `slkg-NNNN` and never write).
 PHASE3_BATCH_PREFIX: dict[str, str] = {
     MASS: "batch",
     "gap": "gap",
     "search1": "srch",
     "redecide": "rdc",
+    "sitelink": "slk",
 }
 #: The phase-4/5 lanes, one per row group of the writer: the lane is named by its batch-id prefix.
 PHASE4_LANES: dict[str, W4.Group] = {W4.GROUP_PREFIX[group]: group for group in W4.Group}

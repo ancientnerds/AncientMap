@@ -360,14 +360,9 @@ def article_url(lang: str, title: str) -> str:
     )
 
 
-#: What a permalink's title may keep unencoded besides letters, digits and `_.-~`.
-_PERMALINK_SAFE = "/(),:'!*"
-
-
-def permalink(lang: str, title: str, revid: int) -> str:
-    """`https://<lang>.wikipedia.org/w/index.php?title=<T>&oldid=<revid>` (source_store)."""
-    encoded = quote(title.replace(" ", "_"), safe=_PERMALINK_SAFE)
-    return f"https://{lang}.wikipedia.org/w/index.php?title={encoded}&oldid={revid}"
+#: `https://<lang>.wikipedia.org/w/index.php?title=<T>&oldid=<revid>` (source_store). The one spelling
+#: lives in the fetch stage since 2026-09-23, because Phase 3's sitelink lane cites its articles by it.
+permalink = F.wikipedia_permalink
 
 
 def entity_url(qid: str) -> str:
