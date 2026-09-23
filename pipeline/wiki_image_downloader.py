@@ -27,6 +27,7 @@ from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from pipeline.commons_urls import commons_page_url_for
 from pipeline.database import WikiImage, get_session
 from pipeline.utils.mediawiki import dereference
 
@@ -231,7 +232,7 @@ def fetch_article_images(article_title: str) -> list[dict]:
                 "display_title": title.replace("File:", "").rsplit(".", 1)[0],
                 "thumb_url": thumb_url,
                 "full_url": full_url,
-                "commons_page_url": f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title, safe='')}",
+                "commons_page_url": commons_page_url_for(title),
                 "is_lead": item.get("leadImage") is True,
             }
         )
@@ -470,11 +471,6 @@ def parse_attribution(info: dict) -> dict:
     }
 
 
-def commons_page_url_for(file_title: str) -> str:
-    """Canonical Commons page URL for a File: title."""
-    return f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(file_title, safe='')}"
-
-
 def _parse_commons_file_page(page: dict) -> dict | None:
     """Parse a single Commons API page result into an image dict."""
     file_title = page.get("title", "")
@@ -625,14 +621,13 @@ def build_wikidata_image_entries(wikidata_images: dict[str, str]) -> list[dict]:
         encoded_name = filename.replace(" ", "_")
         md5 = hashlib.md5(encoded_name.encode()).hexdigest()
         original_url = f"https://upload.wikimedia.org/wikipedia/commons/{md5[0]}/{md5[:2]}/{urllib.parse.quote(encoded_name)}"
-        encoded_title = urllib.parse.quote(f"File:{encoded_name}", safe="")
 
         entries.append(
             {
                 "title": f"File:{filename}",
                 "display_title": filename.rsplit(".", 1)[0],
                 "original_url": original_url,
-                "commons_page_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
+                "commons_page_url": commons_page_url_for(f"File:{encoded_name}"),
                 "is_lead": False,
                 "source_type": source_type,
                 "_has_metadata": False,  # Need to fetch metadata separately

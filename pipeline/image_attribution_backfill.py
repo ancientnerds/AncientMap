@@ -32,13 +32,13 @@ from loguru import logger
 from PIL import Image
 from sqlalchemy import text
 
+from pipeline.commons_urls import commons_page_url_for
 from pipeline.database import get_session
 from pipeline.utils.imagehash import DHASH_MAX_DISTANCE, dhash, hamming
 from pipeline.wiki_image_downloader import (
     COMMONS_API_URL,
     _download_client,
     _http_client,
-    commons_page_url_for,
     extract_title_from_url,
     fetch_article_images,
     fetch_commons_category_images,
