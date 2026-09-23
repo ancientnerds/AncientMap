@@ -125,7 +125,7 @@ def flatten_lines(fc: dict) -> list[Line]:
 
 
 def is_artificial_antarctic(a: Sequence[float], b: Sequence[float]) -> bool:
-    """Port of `isArtificialAntarcticBoundary` (ancient-nerds-map/src/utils/geoUtils.ts).
+    """Port of `isArtificialAntarcticBoundary` (ancient-nerds-map/src/components/Globe/rendering/segmentBuilder.ts).
 
     The sector lines that cut the Antarctic ice sheet at 0, +-90 and +-180 degrees
     longitude, and the connections along the South Pole. The renderer skips them.

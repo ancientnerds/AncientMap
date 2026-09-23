@@ -4,6 +4,7 @@
  */
 
 import { OfflineStorage } from './OfflineStorage'
+import { LAYER_CONFIG, getLayerFiles, type VectorLayerKey } from '../config/vectorLayers'
 
 export interface VectorLayerInfo {
   id: string
@@ -11,90 +12,37 @@ export interface VectorLayerInfo {
   color: string
   fileCount: number
   estimatedSize: number
-  detailLevels: string[]
 }
 
 // 157 sea levels (-150 to 6) - only highest resolution needed
 const PALEOSHORELINE_FILE_COUNT = 157
 
-// Layer definitions
+function isVectorLayerKey(id: string): id is VectorLayerKey {
+  return id in LAYER_CONFIG
+}
+
+/** A globe vector layer: the files are exactly what the globe fetches (getLayerFiles). */
+function globeLayer(id: VectorLayerKey, name: string, color: string, estimatedSize: number): VectorLayerInfo {
+  return { id, name, color, fileCount: getLayerFiles(id).length, estimatedSize }
+}
+
+// Sizes are the sums of the files getLayerFiles lists (measured 2026-09-23).
 const VECTOR_LAYERS: VectorLayerInfo[] = [
-  {
-    id: 'coastlines',
-    name: 'Coastlines',
-    color: '#00e0d0',
-    fileCount: 1,  // Only hires
-    estimatedSize: 15 * 1024 * 1024,
-    detailLevels: ['hires']
-  },
-  {
-    id: 'countryBorders',
-    name: 'Country Borders',
-    color: '#00e0d0',
-    fileCount: 1,  // Only 10m from Natural Earth
-    estimatedSize: 5 * 1024 * 1024,
-    detailLevels: ['10m']
-  },
-  {
-    id: 'rivers',
-    name: 'Rivers',
-    color: '#2196f3',
-    fileCount: 3,  // LOD: 110m, 50m, 10m
-    estimatedSize: 30 * 1024 * 1024,
-    detailLevels: ['10m', '50m', '110m']
-  },
-  {
-    id: 'lakes',
-    name: 'Lakes',
-    color: '#1976d2',
-    fileCount: 3,  // LOD: 110m, 50m, 10m
-    estimatedSize: 20 * 1024 * 1024,
-    detailLevels: ['10m', '50m', '110m']
-  },
-  {
-    id: 'coralReefs',
-    name: 'Coral Reefs',
-    color: '#ff6b9d',
-    fileCount: 1,  // Only hires
-    estimatedSize: 5 * 1024 * 1024,
-    detailLevels: ['hires']
-  },
-  {
-    id: 'glaciers',
-    name: 'Glaciers',
-    color: '#88ddff',
-    fileCount: 1,  // Only hires
-    estimatedSize: 10 * 1024 * 1024,
-    detailLevels: ['hires']
-  },
+  globeLayer('coastlines', 'Coastlines', '#00e0d0', 36.6 * 1024 * 1024),   // start 1.7 + detail 9.8 + hires 25.0 MB
+  globeLayer('countryBorders', 'Country Borders', '#00e0d0', 1.8 * 1024 * 1024),  // start 0.4 + detail 1.4 MB
+  globeLayer('rivers', 'Rivers', '#2196f3', 8.2 * 1024 * 1024),    // Natural Earth 110m, 50m, 10m
+  globeLayer('lakes', 'Lakes', '#1976d2', 6.0 * 1024 * 1024),      // Natural Earth 110m, 50m, 10m
+  globeLayer('coralReefs', 'Coral Reefs', '#ff6b9d', 42.6 * 1024 * 1024),  // 110m, 50m, 10m + labels
+  globeLayer('glaciers', 'Glaciers', '#88ddff', 8.3 * 1024 * 1024),  // 110m, 50m, 10m + labels
   {
     id: 'paleoshorelines',
     name: 'Paleoshorelines',
     color: '#C2B280',
     fileCount: PALEOSHORELINE_FILE_COUNT,  // 157 sea levels
     estimatedSize: 2.3 * 1024 * 1024 * 1024,  // ~2.3 GB (50m resolution)
-    detailLevels: ['50m']
   },
-  {
-    id: 'plateBoundaries',
-    name: 'Plate Boundaries',
-    color: '#FF6B6B',
-    fileCount: 1,  // Single file
-    estimatedSize: 2 * 1024 * 1024,  // ~2 MB
-    detailLevels: ['hires']
-  },
+  globeLayer('plateBoundaries', 'Plate Boundaries', '#FF6B6B', 0.24 * 1024 * 1024),  // boundaries + labels
 ]
-
-// File mappings - local files use 'local' category, Natural Earth use 'natural-earth'
-const FILE_MAPPINGS: Record<string, { path: string; category: 'local' | 'natural-earth' }> = {
-  coastlines: { path: 'coast_hires', category: 'local' },
-  countryBorders: { path: 'admin_0_boundary_lines_land', category: 'natural-earth' },
-  rivers: { path: 'rivers_lake_centerlines', category: 'natural-earth' },
-  lakes: { path: 'lakes', category: 'natural-earth' },
-  coralReefs: { path: 'coral_reefs_hires', category: 'local' },
-  glaciers: { path: 'glaciers_hires', category: 'local' },
-  plateBoundaries: { path: 'plate_boundaries_hires', category: 'local' },
-}
 
 // Generate all sea levels from -150 to 6
 const SEA_LEVELS: number[] = []
@@ -124,22 +72,6 @@ class VectorLayerCacheClass {
    */
   getSeaLevels(): number[] {
     return SEA_LEVELS
-  }
-
-  /**
-   * Get URL for a layer file at a specific detail level
-   */
-  private getLayerUrl(layerId: string, detail: string): string {
-    const mapping = FILE_MAPPINGS[layerId]
-    if (!mapping) throw new Error(`Unknown layer: ${layerId}`)
-
-    if (mapping.category === 'natural-earth') {
-      // Natural Earth layers use external GitHub URLs with LOD
-      return `https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_${detail}_${mapping.path}.geojson`
-    } else {
-      // Local hires layers
-      return `/data/layers/${mapping.path}.geojson`
-    }
   }
 
   /**
@@ -190,24 +122,18 @@ class VectorLayerCacheClass {
         }
       }
     } else {
-      // Download layer at all detail levels (1 for hires, 3 for LOD layers)
-      for (const detail of layer.detailLevels) {
-        const url = this.getLayerUrl(layerId, detail)
-        try {
-          const response = await fetch(url)
-          if (response.ok) {
-            // Get size from Content-Length header, or estimate
-            const contentLength = response.headers.get('Content-Length')
-            const fileSize = contentLength ? parseInt(contentLength, 10) : (total / layer.detailLevels.length)
-
-            // Cache the response directly
-            await cache.put(url, response)
-
-            loadedBytes += fileSize
-          }
-        } catch (e) {
-          console.warn(`Failed to cache layer: ${url}`)
-        }
+      if (!isVectorLayerKey(layerId)) throw new Error(`Unknown layer: ${layerId}`)
+      // Exactly the URLs the globe fetches, so OfflineFetch's exact-URL match finds them.
+      // A file that fails fails the download: the layer is not marked downloaded.
+      const files = getLayerFiles(layerId)
+      for (const url of files) {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error(`Failed to download ${url}: HTTP ${response.status}`)
+        // Get size from Content-Length header, or estimate
+        const contentLength = response.headers.get('Content-Length')
+        const fileSize = contentLength ? parseInt(contentLength, 10) : (total / files.length)
+        await cache.put(url, response)
+        loadedBytes += fileSize
         onProgress?.(Math.min(loadedBytes, total), total)
       }
     }
@@ -248,8 +174,8 @@ class VectorLayerCacheClass {
         await cache.delete(url)
       }
     } else {
-      for (const detail of layer.detailLevels) {
-        const url = this.getLayerUrl(layerId, detail)
+      if (!isVectorLayerKey(layerId)) throw new Error(`Unknown layer: ${layerId}`)
+      for (const url of getLayerFiles(layerId)) {
         await cache.delete(url)
       }
     }

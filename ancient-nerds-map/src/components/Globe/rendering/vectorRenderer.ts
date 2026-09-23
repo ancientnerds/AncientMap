@@ -1,18 +1,33 @@
 /**
- * Vector layer rendering functions.
- * Handles loading and rendering vector layers (coastlines, borders, rivers, lakes,
- * glaciers, coral reefs, tectonic plate boundaries) on both the front and back of the globe.
+ * Vector layer rendering: coastlines, borders, rivers, lakes, glaciers, coral reefs and
+ * tectonic plate boundaries, each drawn twice (front of the globe, and dimmed through it).
+ *
+ * One fetch per layer file, one parse in the layer worker, and front and back built from that
+ * one result in the same synchronous step. Coastlines and borders start on their start tier;
+ * the background queue swaps in the detail tier in place (same line, same material, no fade).
+ * Nothing here depends on requestAnimationFrame, so a load in a hidden tab completes.
  */
 
 import * as THREE from 'three'
-import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../../../config/vectorLayers'
+import {
+  GLOBE_LAYER_KEYS,
+  LAYER_CONFIG,
+  getGlobeLayerUrl,
+  getLayerUrl,
+  isGlobeLayerKey,
+  tierRank,
+  type GlobeLayerKey,
+  type GlobeLayerTierState,
+  type VectorLayerKey,
+  type VectorLayerVisibility,
+} from '../../../config/vectorLayers'
 import type { DetailLevel } from '../../../config/globeConstants'
 import { LABEL_BASE_SCALE } from '../../../config/globeConstants'
-import { offlineFetch } from '../../../services/OfflineFetch'
+import { OfflineFetch, offlineFetch } from '../../../services/OfflineFetch'
 import { createFrontLineMaterial as createFrontMaterial, createBackLineMaterial as createBackMaterial } from '../../../shaders/globe'
 import { createLabelTexture, createGlobeTangentLabel, type GlobeLabelMesh } from '../../../utils/LabelRenderer'
-import { FadeManager } from '../../../utils/FadeManager'
-import { isArtificialAntarcticBoundary } from '../../../utils/geoUtils'
+import type { FadeManager } from '../../../utils/FadeManager'
+import { latLngTo3DArray, type LayerWorkerRequest, type LayerWorkerResponse, type LineLabel } from './segmentBuilder'
 
 export interface GeoLabel {
   name: string
@@ -33,7 +48,15 @@ export interface GlobeLabel {
   position: THREE.Vector3
 }
 
-/** Shared context required by the vector renderer functions. */
+/** What the worker hands back: one Float32Array per requested radius, river/lake names if asked. */
+export interface ParsedLayer {
+  positions: Float32Array[]
+  labels?: LineLabel[]
+}
+
+export type ParseLayer = (buffer: ArrayBuffer, radii: readonly number[], withLabels: boolean) => Promise<ParsedLayer>
+
+/** Shared context required by the vector renderer functions. Everything is read when used. */
 export interface VectorRendererContext {
   sceneRef: React.MutableRefObject<{
     renderer: THREE.WebGLRenderer
@@ -46,636 +69,459 @@ export interface VectorRendererContext {
     globe: THREE.Mesh
   } | null>
 
-  loadingRef: React.MutableRefObject<Record<string, boolean>>
   shaderMaterialsRef: React.MutableRefObject<THREE.ShaderMaterial[]>
   frontLineLayersRef: React.MutableRefObject<Record<VectorLayerKey, THREE.Line[]>>
   backLineLayersRef: React.MutableRefObject<Record<VectorLayerKey, THREE.Line[]>>
-  backLayersLoadedRef: React.MutableRefObject<Record<string, boolean>>
   fadeManagerRef: React.MutableRefObject<FadeManager>
   detailLevelRef: React.MutableRefObject<DetailLevel>
   layerLabelsRef: React.MutableRefObject<Record<string, GlobeLabel[]>>
   allLabelMeshesRef: React.MutableRefObject<GlobeLabelMesh[]>
   updateGeoLabelsRef: React.MutableRefObject<(() => void) | null>
 
-  /** Current vector layer visibility state */
-  vectorLayers: VectorLayerVisibility
-  /** Current tile layer visibility state (satellite mode) */
-  tileLayers: { satellite: boolean; streets: boolean }
+  /** Visibility and satellite mode, read when a load finishes: a toggle may land while it runs. */
+  vectorLayersRef: React.MutableRefObject<Record<VectorLayerKey, boolean>>
+  satelliteModeRef: React.MutableRefObject<boolean>
+  /** Newest load per layer: an older load that finishes later is discarded, never the newer one. */
+  layerLoadIdsRef: React.MutableRefObject<Record<string, number>>
+  globeLayerTiersRef: React.MutableRefObject<Record<GlobeLayerKey, GlobeLayerTierState>>
+  /** Layers whose load failed; the load effect does not pick them again (no retry loop). */
+  failedLayersRef: React.MutableRefObject<Partial<Record<VectorLayerKey, boolean>>>
 
   /** React state setters */
   setIsLoadingLayers: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
   setLayersLoaded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
 
-  /** Helper: convert lat/lng to 3D position on the globe */
-  latLngTo3DRef: (lat: number, lng: number, r: number) => THREE.Vector3
+  /** Parses a layer file off the main thread (createLayerParser). */
+  parseLayer: ParseLayer
+  /** Aborted when the Globe unmounts: loads still in flight are dropped, not reported. */
+  signal: AbortSignal
+  /** Contract C0: a critical layer that cannot load is reported here, once. */
+  onStartError: (phase: string, err: unknown) => void
 }
 
-/** Load FRONT layer (always high detail, visible on front of globe). */
-export async function loadFrontLayer(
-  layerKey: VectorLayerKey,
-  ctx: VectorRendererContext
-): Promise<void> {
-  const {
-    sceneRef,
-    loadingRef,
-    shaderMaterialsRef,
-    frontLineLayersRef,
-    fadeManagerRef,
-    detailLevelRef,
-    layerLabelsRef,
-    allLabelMeshesRef,
-    updateGeoLabelsRef,
-    vectorLayers,
-    setIsLoadingLayers,
-    setLayersLoaded,
-    latLngTo3DRef,
-  } = ctx
+/** When the hi-res coastline may load (plan U6.5): Mapbox cannot take over below the switch. */
+export interface HiresCoastlineGate {
+  getMapboxState: () => string
+  switchDistance: number
+}
 
-  if (!sceneRef.current) return
+// ---------------------------------------------------------------------------
+// Worker client
+// ---------------------------------------------------------------------------
 
-  // Prevent duplicate loads
-  const loadKey = `front_${layerKey}`
-  if (loadingRef.current[loadKey]) return
-  loadingRef.current[loadKey] = true
+export interface LayerParser {
+  parse: ParseLayer
+  dispose(): void
+}
 
-  const config = LAYER_CONFIG[layerKey]
-  setIsLoadingLayers(prev => ({ ...prev, [layerKey]: true }))
+function abortError(what: string): DOMException {
+  return new DOMException(what, 'AbortError')
+}
 
-  try {
-    // Use LOD detail level for rivers/lakes, high for others
-    const layerConfig = LAYER_CONFIG[layerKey]
-    const detail = ('hasLOD' in layerConfig && layerConfig.hasLOD) ? detailLevelRef.current : 'high'
-    const url = getLayerUrl(layerKey, detail)
-    const response = await offlineFetch(url)
-    const data = await response.json()
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
 
-    // Store old lines for transition (may be undefined on first load)
-    const oldLines = frontLineLayersRef.current[layerKey] ? [...frontLineLayersRef.current[layerKey]] : []
-    const oldMaterials = oldLines.map(line => line.material as THREE.ShaderMaterial)
+/**
+ * One layer worker per Globe, created on the first parse and terminated by dispose(). A worker
+ * that fails (its chunk does not load, it crashes) fails every pending and later parse with
+ * its message; it is not recreated.
+ */
+export function createLayerParser(
+  createWorker: () => Worker = () => new Worker(new URL('./layerWorker.ts', import.meta.url), { type: 'module' }),
+): LayerParser {
+  let worker: Worker | null = null
+  let broken: Error | null = null
+  let nextId = 0
+  const pending = new Map<number, { resolve: (parsed: ParsedLayer) => void; reject: (err: unknown) => void }>()
 
-    // Create front material (visible on front of globe)
-    const material = createFrontMaterial(config.color, 0)
-    shaderMaterialsRef.current.push(material)
-    if (sceneRef.current) {
-      material.uniforms.uCameraPos.value.copy(sceneRef.current.camera.position)
+  const rejectAll = (err: unknown) => {
+    pending.forEach(p => p.reject(err))
+    pending.clear()
+  }
+
+  const start = (): Worker => {
+    if (worker) return worker
+    const w = createWorker()
+    w.onmessage = (event: MessageEvent<LayerWorkerResponse>) => {
+      const data = event.data
+      const entry = pending.get(data.id)
+      if (!entry) return
+      pending.delete(data.id)
+      if ('error' in data) entry.reject(new Error(data.error))
+      else entry.resolve({ positions: data.positions, labels: data.labels })
     }
+    w.onerror = (event: ErrorEvent) => {
+      broken = new Error(`Layer worker failed: ${event.message}`)
+      w.terminate()
+      rejectAll(broken)
+    }
+    worker = w
+    return w
+  }
 
-    const { globe } = sceneRef.current
-
-    // Merge ALL features into ONE geometry for massive draw call reduction
-    const allPositions: number[] = []
-
-    // Process features in chunks to avoid blocking the main thread
-    const features = data.features || []
-    const CHUNK_SIZE = 500  // Process 500 features per frame
-    let featureIndex = 0
-
-    // Helper function to process a single feature
-    const processFeature = (feature: any) => {
-      const geometryType = feature.geometry.type
-      let coordSets: number[][][] = []
-
-      if (geometryType === 'LineString') {
-        coordSets = [feature.geometry.coordinates]
-      } else if (geometryType === 'MultiLineString') {
-        coordSets = feature.geometry.coordinates
-      } else if (geometryType === 'Polygon') {
-        coordSets = feature.geometry.coordinates
-      } else if (geometryType === 'MultiPolygon') {
-        coordSets = feature.geometry.coordinates.flat()
-      }
-
-      coordSets.forEach((coords: number[][]) => {
-        if (coords.length > 1) {
-          // Build explicit line segments (vertex pairs). We do NOT use NaN
-          // separators to break a LINE_STRIP: NaN vertices are undefined behavior
-          // in WebGL and corrupt geometry on some GPUs (ANGLE/Metal on macOS),
-          // rotating/displacing features. LineSegments needs no separator at all.
-          for (let i = 0; i < coords.length - 1; i++) {
-            const a = coords[i]
-            const b = coords[i + 1]
-            // Skip artificial Antarctic boundary segments (no line drawn)
-            if (isArtificialAntarcticBoundary(a, b)) continue
-            const pa = latLngTo3DRef(a[1], a[0], config.radius)
-            const pb = latLngTo3DRef(b[1], b[0], config.radius)
-            allPositions.push(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z)
-          }
-        }
+  return {
+    parse(buffer, radii, withLabels) {
+      if (broken) return Promise.reject(broken)
+      const id = ++nextId
+      return new Promise<ParsedLayer>((resolve, reject) => {
+        pending.set(id, { resolve, reject })
+        const request: LayerWorkerRequest = { id, buffer, radii, withLabels }
+        start().postMessage(request, { transfer: [buffer] })
       })
-    }
-
-    // Function called when all chunks are processed
-    const finishProcessing = () => {
-      // Create single merged geometry
-      const geometry = new THREE.BufferGeometry()
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3))
-      // Set bounding sphere manually (positions all sit near the unit sphere)
-      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), config.radius + 0.01)
-      const line = new THREE.LineSegments(geometry, material)
-      line.visible = vectorLayers[layerKey]
-      line.renderOrder = 10
-      globe.add(line)
-      const lines = [line] // Single line object instead of thousands
-
-      frontLineLayersRef.current[layerKey] = lines
-      setLayersLoaded(prev => ({ ...prev, [layerKey]: true }))
-
-      // Fade in immediately if layer is enabled (don't wait for visibility effect)
-      // This fixes coral reefs/glaciers showing only on backside (front opacity stuck at 0)
-      if (vectorLayers[layerKey]) {
-        fadeManagerRef.current.fadeTo(`${layerKey}_front`, [material], 1)
-      }
-
-      // Extract labels for lakes and rivers (always high detail now)
-      if ((layerKey === 'lakes' || layerKey === 'rivers') && sceneRef.current) {
-        const { scene } = sceneRef.current
-        const labelType = layerKey === 'lakes' ? 'lake' : 'river'
-
-        // Track existing label names to avoid duplicates
-        const existingNames = new Set(layerLabelsRef.current[layerKey].map(item => item.label.name))
-
-        // Extract labels from features with names
-        features.forEach((feature: any) => {
-          const name = feature.properties?.name || feature.properties?.NAME
-          if (!name) return
-
-          // Skip if label already exists
-          if (existingNames.has(name)) return
-
-          // Get scalerank (used for sorting)
-          const scalerank = feature.properties?.scalerank ?? feature.properties?.SCALERANK ?? 99
-
-          // Calculate centroid from coordinates
-          const geometryType = feature.geometry.type
-          let allCoords: number[][] = []
-
-          if (geometryType === 'LineString') {
-            allCoords = feature.geometry.coordinates
-          } else if (geometryType === 'MultiLineString') {
-            allCoords = feature.geometry.coordinates.flat()
-          } else if (geometryType === 'Polygon') {
-            allCoords = feature.geometry.coordinates[0] // Outer ring
-          } else if (geometryType === 'MultiPolygon') {
-            allCoords = feature.geometry.coordinates.flat(2)
-          }
-
-          if (allCoords.length === 0) return
-
-          // Calculate centroid
-          let sumLng = 0, sumLat = 0
-          allCoords.forEach((coord: number[]) => {
-            sumLng += coord[0]
-            sumLat += coord[1]
-          })
-          const centerLng = sumLng / allCoords.length
-          const centerLat = sumLat / allCoords.length
-
-          // Create globe-tangent label mesh
-          const { texture, width, height } = createLabelTexture(name, labelType)
-
-          // Position on globe
-          const phi = (90 - centerLat) * Math.PI / 180
-          const theta = (centerLng + 180) * Math.PI / 180
-          const r = 1.0045
-          const position = new THREE.Vector3(
-            -r * Math.sin(phi) * Math.cos(theta),
-            r * Math.cos(phi),
-            r * Math.sin(phi) * Math.sin(theta)
-          )
-
-          const baseScale = LABEL_BASE_SCALE[labelType] ?? 0.04
-          const aspect = width / height
-          // Lake/river labels render BELOW continent/country labels
-          const renderOrder = 950
-
-          const mesh = createGlobeTangentLabel(texture, position, baseScale, aspect, renderOrder)
-          mesh.visible = false
-
-          scene.add(mesh)
-          allLabelMeshesRef.current.push(mesh)
-
-          const geoLabel: GeoLabel = {
-            name,
-            lat: centerLat,
-            lng: centerLng,
-            type: labelType,
-            rank: scalerank,
-            layerBased: true,
-          }
-
-          layerLabelsRef.current[layerKey].push({ label: geoLabel, mesh, position })
-          existingNames.add(name)
-        })
-
-        // Trigger visibility update
-        setTimeout(() => updateGeoLabelsRef.current?.(), 0)
-      }
-
-      // Load tectonic plate labels from separate file (pre-computed centroids)
-      if (layerKey === 'plateBoundaries' && sceneRef.current) {
-        const currentScene = sceneRef.current
-
-        // Only load if not already loaded
-        if (layerLabelsRef.current.plateBoundaries.length === 0) {
-          offlineFetch('/data/layers/tectonic_plate_labels.geojson')
-            .then(response => response.json())
-            .then((labelsData: any) => {
-              if (!currentScene) return
-
-              const { scene } = currentScene
-
-              labelsData.features.forEach((feature: any) => {
-                const name = feature.properties?.name
-                if (!name) return
-
-                const [lng, lat] = feature.geometry.coordinates
-
-                // Create globe-tangent label mesh
-                const { texture, width, height } = createLabelTexture(name, 'plate')
-
-                // Position on globe
-                const phi = (90 - lat) * Math.PI / 180
-                const theta = (lng + 180) * Math.PI / 180
-                const r = 1.0045
-                const position = new THREE.Vector3(
-                  -r * Math.sin(phi) * Math.cos(theta),
-                  r * Math.cos(phi),
-                  r * Math.sin(phi) * Math.sin(theta)
-                )
-
-                const baseScale = 0.035 // Slightly smaller than ocean labels
-                const aspect = width / height
-                const renderOrder = 940 // Below lake/river labels
-
-                const mesh = createGlobeTangentLabel(texture, position, baseScale, aspect, renderOrder)
-                mesh.visible = false
-
-                scene.add(mesh)
-                allLabelMeshesRef.current.push(mesh)
-
-                const geoLabel: GeoLabel = {
-                  name,
-                  lat,
-                  lng,
-                  type: 'plate',
-                  rank: 1, // All plates have same priority
-                  layerBased: true,
-                }
-
-                layerLabelsRef.current.plateBoundaries.push({ label: geoLabel, mesh, position })
-              })
-
-              // Trigger visibility update
-              setTimeout(() => updateGeoLabelsRef.current?.(), 0)
-            })
-            .catch(err => {
-              console.error('[Loading] Failed to load plate labels:', err)
-            })
-        }
-      }
-
-      // Load glacier labels from separate file
-      if (layerKey === 'glaciers' && sceneRef.current) {
-        const currentScene = sceneRef.current
-
-        // Only load if not already loaded
-        if (layerLabelsRef.current.glaciers.length === 0) {
-          offlineFetch('/data/layers/glacier_labels.geojson')
-            .then(response => response.json())
-            .then((labelsData: any) => {
-              if (!currentScene) return
-
-              const { scene } = currentScene
-
-              labelsData.features.forEach((feature: any) => {
-                const name = feature.properties?.name
-                if (!name) return
-
-                const [lng, lat] = feature.geometry.coordinates
-
-                // Create globe-tangent label mesh
-                const { texture, width, height } = createLabelTexture(name, 'glacier')
-
-                // Position on globe
-                const phi = (90 - lat) * Math.PI / 180
-                const theta = (lng + 180) * Math.PI / 180
-                const r = 1.0045
-                const position = new THREE.Vector3(
-                  -r * Math.sin(phi) * Math.cos(theta),
-                  r * Math.cos(phi),
-                  r * Math.sin(phi) * Math.sin(theta)
-                )
-
-                const baseScale = 0.032
-                const aspect = width / height
-                const renderOrder = 935
-
-                const mesh = createGlobeTangentLabel(texture, position, baseScale, aspect, renderOrder)
-                mesh.visible = false
-
-                scene.add(mesh)
-                allLabelMeshesRef.current.push(mesh)
-
-                const geoLabel: GeoLabel = {
-                  name,
-                  lat,
-                  lng,
-                  type: 'glacier',
-                  rank: 1,
-                  layerBased: true,
-                }
-
-                layerLabelsRef.current.glaciers.push({ label: geoLabel, mesh, position })
-              })
-
-              // Trigger visibility update
-              setTimeout(() => updateGeoLabelsRef.current?.(), 0)
-            })
-            .catch(err => {
-              console.error('[Loading] Failed to load glacier labels:', err)
-            })
-        }
-      }
-
-      // Load coral reef labels from separate file
-      if (layerKey === 'coralReefs' && sceneRef.current) {
-        const currentScene = sceneRef.current
-
-        // Only load if not already loaded
-        if (layerLabelsRef.current.coralReefs.length === 0) {
-          offlineFetch('/data/layers/coral_reef_labels.geojson')
-            .then(response => response.json())
-            .then((labelsData: any) => {
-              if (!currentScene) return
-
-              const { scene } = currentScene
-
-              labelsData.features.forEach((feature: any) => {
-                const name = feature.properties?.name
-                if (!name) return
-
-                const [lng, lat] = feature.geometry.coordinates
-
-                // Create globe-tangent label mesh
-                const { texture, width, height } = createLabelTexture(name, 'coralReef')
-
-                // Position on globe
-                const phi = (90 - lat) * Math.PI / 180
-                const theta = (lng + 180) * Math.PI / 180
-                const r = 1.0045
-                const position = new THREE.Vector3(
-                  -r * Math.sin(phi) * Math.cos(theta),
-                  r * Math.cos(phi),
-                  r * Math.sin(phi) * Math.sin(theta)
-                )
-
-                const baseScale = 0.028
-                const aspect = width / height
-                const renderOrder = 930
-
-                const mesh = createGlobeTangentLabel(texture, position, baseScale, aspect, renderOrder)
-                mesh.visible = false
-
-                scene.add(mesh)
-                allLabelMeshesRef.current.push(mesh)
-
-                const geoLabel: GeoLabel = {
-                  name,
-                  lat,
-                  lng,
-                  type: 'coralReef',
-                  rank: 1,
-                  layerBased: true,
-                }
-
-                layerLabelsRef.current.coralReefs.push({ label: geoLabel, mesh, position })
-              })
-
-              // Trigger visibility update
-              setTimeout(() => updateGeoLabelsRef.current?.(), 0)
-            })
-            .catch(err => {
-              console.error('[Loading] Failed to load coral reef labels:', err)
-            })
-        }
-      }
-
-      // Use FadeManager for LOD transitions
-      const fm = fadeManagerRef.current
-      const globeRef = sceneRef.current!.globe
-
-      if (oldLines.length > 0) {
-        // Cross-fade: old fades out, new fades in
-        // Use unique key for old material disposal
-        fm.fadeTo(`${layerKey}_lod_old`, oldMaterials as THREE.Material[], 0, {
-          duration: 100,
-          onComplete: () => {
-            oldMaterials.forEach(mat => {
-              const idx = shaderMaterialsRef.current.indexOf(mat)
-              if (idx !== -1) shaderMaterialsRef.current.splice(idx, 1)
-            })
-            oldLines.forEach(line => {
-              globeRef.remove(line)
-              line.geometry.dispose()
-              ;(line.material as THREE.Material).dispose()
-            })
-          }
-        })
-        // Use same key as visibility effect so they don't conflict
-        material.uniforms.uOpacity.value = 0
-        fm.fadeTo(layerKey, [material], 1, { duration: 100 })
-      } else {
-        // Fresh load - fade from 0 to 1 (use same key as visibility effect)
-        material.uniforms.uOpacity.value = 0
-        fm.fadeTo(layerKey, [material], 1)
-      }
-
-      // Clean up loading state after finish
-      loadingRef.current[`front_${layerKey}`] = false
-      setIsLoadingLayers(prev => ({ ...prev, [layerKey]: false }))
-    }
-
-    // Process features in chunks using requestAnimationFrame
-    const processChunk = () => {
-      const endIndex = Math.min(featureIndex + CHUNK_SIZE, features.length)
-
-      for (let i = featureIndex; i < endIndex; i++) {
-        processFeature(features[i])
-      }
-
-      featureIndex = endIndex
-
-      if (featureIndex < features.length) {
-        // More work to do - yield to animation loop for smooth rendering
-        requestAnimationFrame(processChunk)
-      } else {
-        // All features processed - create geometry and finish
-        finishProcessing()
-      }
-    }
-
-    // Start chunked processing
-    processChunk()
-  } catch (error) {
-    console.error(`Failed to load front layer ${layerKey}:`, error)
-    // Only clean up loading state on error (success cleanup is in finishProcessing)
-    loadingRef.current[`front_${layerKey}`] = false
-    setIsLoadingLayers(prev => ({ ...prev, [layerKey]: false }))
+    },
+    dispose() {
+      broken = abortError('Layer parser disposed')
+      worker?.terminate()
+      worker = null
+      rejectAll(broken)
+    },
   }
 }
 
-/** Load BACK layer (same LOD as front, visible on back of globe). */
-export async function loadBackLayer(
-  layerKey: VectorLayerKey,
-  ctx: VectorRendererContext,
-  forceReload = false
-): Promise<void> {
-  const {
-    sceneRef,
-    loadingRef,
-    shaderMaterialsRef,
-    backLineLayersRef,
-    backLayersLoadedRef,
-    fadeManagerRef,
-    detailLevelRef,
-    vectorLayers,
-    tileLayers,
-    latLngTo3DRef,
-  } = ctx
+// ---------------------------------------------------------------------------
+// Fetch and parse
+// ---------------------------------------------------------------------------
 
-  if (!sceneRef.current) return
-  if (backLayersLoadedRef.current[layerKey] && !forceReload) return // Already loaded
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw abortError('Vector layer load aborted')
+}
 
-  const loadKey = `back_${layerKey}`
-  if (loadingRef.current[loadKey]) return
-  loadingRef.current[loadKey] = true
+/** A signal that aborts with either input; release() detaches it from both. */
+function linkSignals(a: AbortSignal, b: AbortSignal): { signal: AbortSignal; release: () => void } {
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  if (a.aborted || b.aborted) controller.abort()
+  a.addEventListener('abort', abort)
+  b.addEventListener('abort', abort)
+  return {
+    signal: controller.signal,
+    release: () => {
+      a.removeEventListener('abort', abort)
+      b.removeEventListener('abort', abort)
+    },
+  }
+}
 
-  const config = LAYER_CONFIG[layerKey]
+export async function fetchLayerBuffer(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
+  const response = await offlineFetch(url, { signal })
+  if (!response.ok) throw new Error(`Vector layer ${url}: HTTP ${response.status}`)
+  return response.arrayBuffer()
+}
 
+/** Front radius (LAYER_CONFIG) and back radius just inside it. */
+function layerRadii(layerKey: VectorLayerKey): [number, number] {
+  const radius = LAYER_CONFIG[layerKey].radius
+  return [radius, radius - 0.001]
+}
+
+async function fetchAndParse(url: string, layerKey: VectorLayerKey, ctx: VectorRendererContext, signal: AbortSignal): Promise<ParsedLayer> {
+  const buffer = await fetchLayerBuffer(url, signal)
+  throwIfAborted(signal)
+  const withLabels = layerKey === 'rivers' || layerKey === 'lakes'
   try {
-    // Use same LOD as front layer for consistency
-    const layerConfig = LAYER_CONFIG[layerKey]
-    const detail = ('hasLOD' in layerConfig && layerConfig.hasLOD) ? detailLevelRef.current : 'high'
-    const url = getLayerUrl(layerKey, detail)
-    const response = await offlineFetch(url)
-    const data = await response.json()
+    return await ctx.parseLayer(buffer, layerRadii(layerKey), withLabels)
+  } catch (err) {
+    if (isAbortError(err)) throw err
+    throw new Error(`Vector layer ${url}: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
 
-    if (!sceneRef.current) return
+/**
+ * Parsed rivers/lakes files from the background preload (queue task `rivers_lakes`), keyed by
+ * URL. Module level, so a Globe remount (the phone-gate resize) keeps them.
+ */
+const parsedLayerCache = new Map<string, Promise<ParsedLayer>>()
 
-    // Clean up old back layer lines if reloading (for LOD changes)
-    const oldLines = backLineLayersRef.current[layerKey]
-    if (oldLines && oldLines.length > 0) {
-      oldLines.forEach(line => {
-        sceneRef.current?.globe.remove(line)
+export function _resetParsedLayerCacheForTests(): void {
+  parsedLayerCache.clear()
+}
+
+// ---------------------------------------------------------------------------
+// Geometry
+// ---------------------------------------------------------------------------
+
+function segmentGeometry(positions: Float32Array, radius: number): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry()
+  // The CPU copy stays: a restored WebGL context re-uploads from it.
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  // Set bounding sphere manually (positions all sit near the unit sphere)
+  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), radius + 0.01)
+  return geometry
+}
+
+/**
+ * Replace a line's geometry in place: the same Line (pending fade-out callbacks and the
+ * satellite toggle hold it) and the same material, so no fade, no flash and no state change.
+ */
+function swapGeometry(line: THREE.Line, positions: Float32Array, radius: number): void {
+  const old = line.geometry
+  line.geometry = segmentGeometry(positions, radius)
+  old.dispose()
+}
+
+/** Fade retired LOD lines out, then remove them and release their materials. */
+function retireLines(key: string, lines: THREE.Line[], ctx: VectorRendererContext, globe: THREE.Mesh): void {
+  if (lines.length === 0) return
+  const materials = lines.map(line => line.material as THREE.ShaderMaterial)
+  ctx.fadeManagerRef.current.fadeTo(key, materials, 0, {
+    duration: 100,
+    onComplete: () => {
+      materials.forEach(mat => {
+        const idx = ctx.shaderMaterialsRef.current.indexOf(mat)
+        if (idx !== -1) ctx.shaderMaterialsRef.current.splice(idx, 1)
+      })
+      lines.forEach(line => {
+        globe.remove(line)
         line.geometry.dispose()
-        if (line.material instanceof THREE.Material) {
-          line.material.dispose()
-        }
+        ;(line.material as THREE.Material).dispose()
       })
-      backLineLayersRef.current[layerKey] = []
-    }
+    },
+  })
+}
 
-    // Create back material (visible on back of globe, dimmer)
-    const material = createBackMaterial(config.color, 1)
-    shaderMaterialsRef.current.push(material)
-    material.uniforms.uCameraPos.value.copy(sceneRef.current.camera.position)
+// ---------------------------------------------------------------------------
+// Labels
+// ---------------------------------------------------------------------------
 
-    const { globe } = sceneRef.current
+/** River and lake names from the worker, one label per name. */
+function addLineLabels(layerKey: 'rivers' | 'lakes', labels: LineLabel[], ctx: VectorRendererContext, scene: THREE.Scene): void {
+  const labelType = layerKey === 'lakes' ? 'lake' : 'river'
+  const existingNames = new Set(ctx.layerLabelsRef.current[layerKey].map(item => item.label.name))
+  for (const candidate of labels) {
+    if (existingNames.has(candidate.name)) continue
+    const { texture, width, height } = createLabelTexture(candidate.name, labelType)
+    const position = new THREE.Vector3(...latLngTo3DArray(candidate.lat, candidate.lng, 1.0045))
+    const baseScale = LABEL_BASE_SCALE[labelType] ?? 0.04
+    // Lake/river labels render BELOW continent/country labels
+    const mesh = createGlobeTangentLabel(texture, position, baseScale, width / height, 950)
+    mesh.visible = false
+    scene.add(mesh)
+    ctx.allLabelMeshesRef.current.push(mesh)
+    const label: GeoLabel = { name: candidate.name, lat: candidate.lat, lng: candidate.lng, type: labelType, rank: candidate.rank, layerBased: true }
+    ctx.layerLabelsRef.current[layerKey].push({ label, mesh, position })
+    existingNames.add(candidate.name)
+  }
+  // Trigger visibility update
+  setTimeout(() => ctx.updateGeoLabelsRef.current?.(), 0)
+}
 
-    // Merge ALL features into ONE geometry for massive draw call reduction
-    const allPositions: number[] = []
-    const backRadius = config.radius - 0.001 // Slightly inside front layer
+/** Point-label files (pre-computed centroids) of the plate, glacier and coral reef layers. */
+const POINT_LABELS = {
+  plateBoundaries: { type: 'plate', baseScale: 0.035, renderOrder: 940 },  // Slightly smaller than ocean labels
+  glaciers: { type: 'glacier', baseScale: 0.032, renderOrder: 935 },
+  coralReefs: { type: 'coralReef', baseScale: 0.028, renderOrder: 930 },
+} as const
 
-    // Process features in chunks to avoid blocking the main thread
-    const features = data.features || []
-    const CHUNK_SIZE = 500  // Process 500 features per frame
-    let featureIndex = 0
+type PointLabelLayer = keyof typeof POINT_LABELS
 
-    // Helper function to process a single feature
-    const processFeature = (feature: any) => {
-      const geometryType = feature.geometry.type
-      let coordSets: number[][][] = []
+async function loadPointLabels(layerKey: PointLabelLayer, ctx: VectorRendererContext): Promise<void> {
+  const url = LAYER_CONFIG[layerKey].labelsFile
+  const { type, baseScale, renderOrder } = POINT_LABELS[layerKey]
+  const response = await offlineFetch(url, { signal: ctx.signal })
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
+  const data = await response.json() as { features: Array<{ properties?: { name?: string }; geometry: { coordinates: [number, number] } }> }
+  const sceneData = ctx.sceneRef.current
+  if (ctx.signal.aborted || !sceneData) return
+  for (const feature of data.features) {
+    const name = feature.properties?.name
+    if (!name) continue
+    const [lng, lat] = feature.geometry.coordinates
+    const { texture, width, height } = createLabelTexture(name, type)
+    const position = new THREE.Vector3(...latLngTo3DArray(lat, lng, 1.0045))
+    const mesh = createGlobeTangentLabel(texture, position, baseScale, width / height, renderOrder)
+    mesh.visible = false
+    sceneData.scene.add(mesh)
+    ctx.allLabelMeshesRef.current.push(mesh)
+    // All plates, glaciers and reefs have the same priority
+    ctx.layerLabelsRef.current[layerKey].push({ label: { name, lat, lng, type, rank: 1, layerBased: true }, mesh, position })
+  }
+  // Trigger visibility update
+  setTimeout(() => ctx.updateGeoLabelsRef.current?.(), 0)
+}
 
-      if (geometryType === 'LineString') {
-        coordSets = [feature.geometry.coordinates]
-      } else if (geometryType === 'MultiLineString') {
-        coordSets = feature.geometry.coordinates
-      } else if (geometryType === 'Polygon') {
-        coordSets = feature.geometry.coordinates
-      } else if (geometryType === 'MultiPolygon') {
-        coordSets = feature.geometry.coordinates.flat()
-      }
+// ---------------------------------------------------------------------------
+// Loading
+// ---------------------------------------------------------------------------
 
-      coordSets.forEach((coords: number[][]) => {
-        if (coords.length > 1) {
-          // Build explicit line segments (vertex pairs). We do NOT use NaN
-          // separators to break a LINE_STRIP: NaN vertices are undefined behavior
-          // in WebGL and corrupt geometry on some GPUs (ANGLE/Metal on macOS),
-          // rotating/displacing features. LineSegments needs no separator at all.
-          for (let i = 0; i < coords.length - 1; i++) {
-            const a = coords[i]
-            const b = coords[i + 1]
-            // Skip artificial Antarctic boundary segments (no line drawn)
-            if (isArtificialAntarcticBoundary(a, b)) continue
-            const pa = latLngTo3DRef(a[1], a[0], backRadius)
-            const pb = latLngTo3DRef(b[1], b[0], backRadius)
-            allPositions.push(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z)
-          }
-        }
-      })
-    }
+/** The enabled layers the load effect should start: not loaded, not loading, not failed. */
+export function pickLayersToLoad(
+  visibility: VectorLayerVisibility,
+  loaded: Record<string, boolean>,
+  loading: Record<string, boolean>,
+  failed: Partial<Record<VectorLayerKey, boolean>>,
+): VectorLayerKey[] {
+  return (Object.keys(visibility) as VectorLayerKey[])
+    .filter(key => visibility[key] && !loaded[key] && !loading[key] && !failed[key])
+}
 
-    // Function called when all chunks are processed
-    const finishProcessing = () => {
-      // Create single merged geometry
-      const geometry = new THREE.BufferGeometry()
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3))
-      // Set bounding sphere manually (positions all sit near the unit sphere)
-      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), backRadius + 0.01)
-      const line = new THREE.LineSegments(geometry, material)
-      // Hide back lines in satellite mode (satellite is fully opaque)
-      line.visible = vectorLayers[layerKey] && !tileLayers.satellite
-      line.renderOrder = -10
-      globe.add(line)
-      const lines = [line] // Single line object instead of thousands
+/** Put a freshly parsed layer on the globe: front and back in one synchronous step. */
+function commitLayer(layerKey: VectorLayerKey, parsed: ParsedLayer, loadId: number, ctx: VectorRendererContext): void {
+  const sceneData = ctx.sceneRef.current
+  if (!sceneData) throw new Error(`${layerKey}: the scene is gone`)
+  const { globe, camera, scene } = sceneData
+  const config = LAYER_CONFIG[layerKey]
+  const [frontRadius, backRadius] = layerRadii(layerKey)
+  const visible = ctx.vectorLayersRef.current[layerKey]
+  const backVisible = visible && !ctx.satelliteModeRef.current  // satellite is opaque: no back lines
+  const fm = ctx.fadeManagerRef.current
 
-      backLineLayersRef.current[layerKey] = lines
-      backLayersLoadedRef.current[layerKey] = true
+  const frontMaterial = createFrontMaterial(config.color, 0)
+  const backMaterial = createBackMaterial(config.color, 0)
+  for (const material of [frontMaterial, backMaterial]) {
+    material.uniforms.uCameraPos.value.copy(camera.position)
+    ctx.shaderMaterialsRef.current.push(material)
+  }
+  const front = new THREE.LineSegments(segmentGeometry(parsed.positions[0], frontRadius), frontMaterial)
+  front.visible = visible
+  front.renderOrder = 10
+  const back = new THREE.LineSegments(segmentGeometry(parsed.positions[1], backRadius), backMaterial)
+  back.visible = backVisible
+  back.renderOrder = -10
 
-      // Use FadeManager for fade-in (only if not in satellite mode)
-      material.uniforms.uOpacity.value = 0
-      if (!tileLayers.satellite) {
-        fadeManagerRef.current.fadeTo(`${layerKey}_back`, [material], 1)
-      }
+  const oldFront = ctx.frontLineLayersRef.current[layerKey]
+  const oldBack = ctx.backLineLayersRef.current[layerKey]
+  globe.add(front)
+  globe.add(back)
+  ctx.frontLineLayersRef.current[layerKey] = [front]
+  ctx.backLineLayersRef.current[layerKey] = [back]
+  if (isGlobeLayerKey(layerKey)) {
+    const tiers = ctx.globeLayerTiersRef.current[layerKey]
+    tiers.committed = 'start'
+    if (tierRank(tiers.requested) < tierRank('start')) tiers.requested = 'start'
+  }
+  delete ctx.failedLayersRef.current[layerKey]
+  ctx.setLayersLoaded(prev => ({ ...prev, [layerKey]: true }))
+  ctx.setIsLoadingLayers(prev => ({ ...prev, [layerKey]: false }))
 
-      // Clean up loading state
-      loadingRef.current[`back_${layerKey}`] = false
-    }
+  if (oldFront.length > 0 || oldBack.length > 0) {
+    // LOD reload: cross-fade, front and back alike (keys carry the load id so a quick second
+    // reload cannot cancel the first one's clean-up)
+    retireLines(`${layerKey}_lod_old_${loadId}`, oldFront, ctx, globe)
+    if (visible) fm.fadeTo(layerKey, [frontMaterial], 1, { duration: 100 })
+    retireLines(`${layerKey}_back_lod_old_${loadId}`, oldBack, ctx, globe)
+    if (backVisible) fm.fadeTo(`${layerKey}_back`, [backMaterial], 1, { duration: 100 })
+  } else {
+    // First appearance - fade from 0 to 1 (same keys as the visibility effect)
+    if (visible) fm.fadeTo(layerKey, [frontMaterial], 1)
+    if (backVisible) fm.fadeTo(`${layerKey}_back`, [backMaterial], 1)
+  }
 
-    // Process features in chunks using requestAnimationFrame
-    const processChunk = () => {
-      const endIndex = Math.min(featureIndex + CHUNK_SIZE, features.length)
+  if ((layerKey === 'rivers' || layerKey === 'lakes') && parsed.labels) {
+    addLineLabels(layerKey, parsed.labels, ctx, scene)
+  }
+  if (layerKey in POINT_LABELS && ctx.layerLabelsRef.current[layerKey].length === 0) {
+    loadPointLabels(layerKey as PointLabelLayer, ctx).catch(err => {
+      if (!ctx.signal.aborted) console.error(`[Vector layers] ${layerKey} labels failed to load:`, err)
+    })
+  }
+}
 
-      for (let i = featureIndex; i < endIndex; i++) {
-        processFeature(features[i])
-      }
+/**
+ * Load a layer at the current detail level (coastlines and borders: their start tier) and
+ * show it. A newer call for the same layer supersedes this one. A failure is logged, marks the
+ * layer failed, and for coastlines and borders is reported through ctx.onStartError; it is
+ * never retried here. This function never rejects.
+ */
+export async function loadVectorLayer(layerKey: VectorLayerKey, ctx: VectorRendererContext): Promise<void> {
+  if (!ctx.sceneRef.current) return
+  const loadId = (ctx.layerLoadIdsRef.current[layerKey] ?? 0) + 1
+  ctx.layerLoadIdsRef.current[layerKey] = loadId
+  const isCurrent = () => ctx.layerLoadIdsRef.current[layerKey] === loadId
+  ctx.setIsLoadingLayers(prev => ({ ...prev, [layerKey]: true }))
+  const url = getLayerUrl(layerKey, ctx.detailLevelRef.current)
+  try {
+    const parsed = await (parsedLayerCache.get(url) ?? fetchAndParse(url, layerKey, ctx, ctx.signal))
+    if (ctx.signal.aborted || !isCurrent()) return
+    commitLayer(layerKey, parsed, loadId, ctx)
+  } catch (err) {
+    // The Globe unmounted: the load was cancelled, there is nothing to report
+    if (ctx.signal.aborted) return
+    console.error(`[Vector layers] ${layerKey} failed to load:`, err)
+    // A newer load of this layer owns its state now
+    if (!isCurrent()) return
+    ctx.failedLayersRef.current[layerKey] = true
+    ctx.setIsLoadingLayers(prev => ({ ...prev, [layerKey]: false }))
+    if (isGlobeLayerKey(layerKey)) ctx.onStartError(layerKey, err)
+  }
+}
 
-      featureIndex = endIndex
+/**
+ * Swap a coastline/border layer up to a higher tier in place. Never downgrades, never fetches a
+ * tier twice (a failed tier is not retried), rejects on failure and with an AbortError when
+ * `signal` or the Globe aborts.
+ */
+export async function upgradeLayerTier(
+  layerKey: GlobeLayerKey,
+  tier: 'detail' | 'hires',
+  ctx: VectorRendererContext,
+  signal: AbortSignal,
+): Promise<void> {
+  const state = ctx.globeLayerTiersRef.current[layerKey]
+  if (tierRank(state.requested) >= tierRank(tier)) return
+  if (ctx.frontLineLayersRef.current[layerKey].length === 0 || ctx.backLineLayersRef.current[layerKey].length === 0) {
+    throw new Error(`${layerKey}: the ${tier} tier needs the start tier on the globe first`)
+  }
+  state.requested = tier
+  const linked = linkSignals(signal, ctx.signal)
+  let parsed: ParsedLayer
+  try {
+    parsed = await fetchAndParse(getGlobeLayerUrl(layerKey, tier), layerKey, ctx, linked.signal)
+    throwIfAborted(linked.signal)
+  } catch (err) {
+    // Cancelled, not failed: the tier may be asked for again
+    if (linked.signal.aborted && state.requested === tier) state.requested = state.committed
+    throw err
+  } finally {
+    linked.release()
+  }
+  // A higher tier landed while this one was on its way
+  if (tierRank(state.committed) >= tierRank(tier)) return
+  const [frontRadius, backRadius] = layerRadii(layerKey)
+  swapGeometry(ctx.frontLineLayersRef.current[layerKey][0], parsed.positions[0], frontRadius)
+  swapGeometry(ctx.backLineLayersRef.current[layerKey][0], parsed.positions[1], backRadius)
+  state.committed = tier
+}
 
-      if (featureIndex < features.length) {
-        // More work to do - yield to animation loop for smooth rendering
-        requestAnimationFrame(processChunk)
-      } else {
-        // All features processed - create geometry and finish
-        finishProcessing()
-      }
-    }
+/** Background task `layers`: coastlines and borders to their detail tier. */
+export async function upgradeGlobeLayers(ctx: VectorRendererContext, signal: AbortSignal): Promise<void> {
+  for (const key of GLOBE_LAYER_KEYS) {
+    await upgradeLayerTier(key, 'detail', ctx, signal)
+  }
+}
 
-    // Start chunked processing
-    processChunk()
-  } catch (error) {
-    console.error(`Failed to load back layer ${layerKey}:`, error)
-    // Only clean up loading state on error (success cleanup is in finishProcessing)
-    loadingRef.current[`back_${layerKey}`] = false
+/**
+ * The hi-res coastline (today's coast_hires) where the Three.js globe is the only view closer
+ * than the Mapbox switch: Mapbox failed. Called on every camera change; returns the load when
+ * it starts one, null otherwise.
+ */
+export function ensureHiresCoastline(ctx: VectorRendererContext, gate: HiresCoastlineGate): Promise<void> | null {
+  if (gate.getMapboxState() !== 'failed') return null
+  const camera = ctx.sceneRef.current?.camera
+  if (!camera || camera.position.length() >= gate.switchDistance) return null
+  const tiers = ctx.globeLayerTiersRef.current.coastlines
+  if (tiers.committed === null || tierRank(tiers.requested) >= tierRank('hires')) return null
+  return upgradeLayerTier('coastlines', 'hires', ctx, ctx.signal)
+}
+
+/**
+ * Background task `rivers_lakes`: parse the rivers and lakes files a toggle at the current zoom
+ * would load (normally ne_110m, 38 kB each) into the parsed cache loadVectorLayer reads first.
+ * Offline, only files that are already cached are touched. Rejects on the first failure.
+ */
+export async function preloadRiversLakes(ctx: VectorRendererContext, signal: AbortSignal): Promise<void> {
+  for (const key of ['rivers', 'lakes'] as const) {
+    const url = getLayerUrl(key, ctx.detailLevelRef.current)
+    if (parsedLayerCache.has(url)) continue
+    if (OfflineFetch.isOffline && !(await OfflineFetch.isCached(url))) continue
+    const linked = linkSignals(signal, ctx.signal)
+    const pending = fetchAndParse(url, key, ctx, linked.signal)
+    parsedLayerCache.set(url, pending)
+    pending.then(linked.release, () => {
+      linked.release()
+      // A failed parse is not cached: a later toggle fetches the file itself
+      if (parsedLayerCache.get(url) === pending) parsedLayerCache.delete(url)
+    })
+    await pending
   }
 }

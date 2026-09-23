@@ -4,10 +4,11 @@
  */
 
 import { DETAIL_SCALE, type DetailLevel } from './globeConstants'
+import globeLayerManifest from '../data/globeLayers.generated.json'
 
 export const LAYER_CONFIG = {
   coastlines: {
-    file: 'coast_hires',  // High-res World Base Map data
+    file: 'coast_hires',  // High-res World Base Map data: the 'hires' tier; start/detail come from the manifest
     category: 'physical',
     color: 0x00e0d0, // Teal
     radius: 1.002,
@@ -15,7 +16,7 @@ export const LAYER_CONFIG = {
     custom: true
   },
   countryBorders: {
-    file: 'admin_0_boundary_lines_land',
+    file: 'admin_0_boundary_lines_land',  // Natural Earth 10 m, self-hosted in tiers (scripts/build_globe_layers.py)
     category: 'cultural',
     color: 0x00e0d0, // Teal (same as coastlines)
     radius: 1.002, // Same as all other layers - no parallax
@@ -47,7 +48,8 @@ export const LAYER_CONFIG = {
     radius: 1.002,
     label: 'Coral Reefs',
     custom: true,
-    hasLOD: true  // Enable 4-level LOD switching (ne_10m_, ne_50m_, ne_110m_)
+    hasLOD: true,  // Enable 4-level LOD switching (ne_10m_, ne_50m_, ne_110m_)
+    labelsFile: '/data/layers/coral_reef_labels.geojson',
   },
   glaciers: {
     file: 'glaciers',
@@ -56,7 +58,8 @@ export const LAYER_CONFIG = {
     radius: 1.002,
     label: 'Glaciers',
     custom: true,
-    hasLOD: true  // Enable 4-level LOD switching (ne_10m_, ne_50m_, ne_110m_)
+    hasLOD: true,  // Enable 4-level LOD switching (ne_10m_, ne_50m_, ne_110m_)
+    labelsFile: '/data/layers/glacier_labels.geojson',
   },
   plateBoundaries: {
     file: 'plate_boundaries_hires',
@@ -65,7 +68,8 @@ export const LAYER_CONFIG = {
     radius: 1.002,
     label: 'Tectonic Plates',
     custom: true,
-    hasLOD: false
+    hasLOD: false,
+    labelsFile: '/data/layers/tectonic_plate_labels.geojson',
   }
 } as const
 
@@ -82,36 +86,65 @@ export interface VectorLayerVisibility {
 }
 
 /**
- * Generate URL for a vector layer based on detail level
+ * Coastlines and borders come in tiers (plan U6, contract C1). The globe starts on `start`
+ * (0.5 device px at the start view), the background queue swaps in `detail` (0.5 device px at
+ * the Mapbox switch), and `hires` (today's coast_hires, coastlines only) loads when Mapbox
+ * failed and the camera goes closer than the switch. The file names carry a content hash, so
+ * the URLs need no cache-busting query.
+ */
+export type GlobeLayerKey = 'coastlines' | 'countryBorders'
+export type LayerTier = 'start' | 'detail' | 'hires'
+/** Which tier of a coastline/border layer is on the globe, and the highest one asked for. */
+export interface GlobeLayerTierState {
+  committed: LayerTier | null
+  requested: LayerTier | null
+}
+export const GLOBE_LAYER_KEYS: readonly GlobeLayerKey[] = ['coastlines', 'countryBorders']
+
+const COAST_HIRES_URL = `/data/layers/${LAYER_CONFIG.coastlines.file}.geojson`
+const TIER_RANK: Record<LayerTier, number> = { start: 0, detail: 1, hires: 2 }
+
+export function isGlobeLayerKey(key: VectorLayerKey): key is GlobeLayerKey {
+  return key === 'coastlines' || key === 'countryBorders'
+}
+
+/** Order of the tiers; `null` (nothing loaded yet) ranks below every tier. */
+export function tierRank(tier: LayerTier | null): number {
+  return tier === null ? -1 : TIER_RANK[tier]
+}
+
+export function getGlobeLayerUrl(key: GlobeLayerKey, tier: LayerTier): string {
+  if (tier !== 'hires') return globeLayerManifest[key][tier]
+  if (key !== 'coastlines') throw new Error(`${key} has no hires tier: its detail tier is the unsimplified source`)
+  return COAST_HIRES_URL
+}
+
+/**
+ * URL of a layer at a zoom detail level. Coastlines and borders always start at their start
+ * tier; the higher tiers go through getGlobeLayerUrl.
  */
 export function getLayerUrl(layerKey: VectorLayerKey, detail: DetailLevel): string {
+  if (isGlobeLayerKey(layerKey)) return getGlobeLayerUrl(layerKey, 'start')
   const config = LAYER_CONFIG[layerKey]
 
-  // Handle LOD-enabled layers (rivers, lakes, glaciers)
   if ('hasLOD' in config && config.hasLOD) {
-    // Cap rivers and lakes at 'medium' detail - hires files are too large (59MB rivers, 14MB lakes)
-    // This prevents browser crashes from JSON.parse() blocking main thread
-    const cappedDetail = (layerKey === 'rivers' || layerKey === 'lakes') && detail === 'high'
-      ? 'medium'
-      : detail
-
-    if (cappedDetail === 'high') {
-      return `/data/layers/${config.file}_hires.geojson`
-    }
-    const cappedScale = DETAIL_SCALE[cappedDetail]
-    return `/data/layers/ne_${cappedScale}_${config.file}.geojson`
+    // No LOD layer goes above the 10 m files: rivers_hires (59 MB) and lakes_hires (14 MB) would
+    // block the browser, and coral reefs and glaciers have no _hires file at all.
+    const cappedDetail = detail === 'high' ? 'medium' : detail
+    return `/data/layers/ne_${DETAIL_SCALE[cappedDetail]}_${config.file}.geojson`
   }
+  return `/data/layers/${config.file}.geojson`
+}
 
-  const scale = DETAIL_SCALE[detail]
-
-  if (config.custom) {
-    // High-res files don't have scale prefix, NE-derived files do
-    if (config.file.endsWith('_hires')) {
-      return `/data/layers/${config.file}.geojson`
-    }
-    return `/data/layers/ne_${scale}_${config.file}.geojson`
-  }
-  // Natural Earth layers from GitHub - 'hires' maps to '10m' for NE
-  const neScale = detail === 'high' ? '10m' : scale
-  return `https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_${neScale}_${config.file}.geojson`
+/**
+ * Every file the globe can fetch for a layer, each once: what the offline download must store
+ * (OfflineFetch matches the Cache API by exact URL).
+ */
+export function getLayerFiles(layerKey: VectorLayerKey): string[] {
+  const files = isGlobeLayerKey(layerKey)
+    ? [getGlobeLayerUrl(layerKey, 'start'), getGlobeLayerUrl(layerKey, 'detail'), ...(layerKey === 'coastlines' ? [COAST_HIRES_URL] : [])]
+    : (Object.keys(DETAIL_SCALE) as DetailLevel[]).map(detail => getLayerUrl(layerKey, detail))
+  const config = LAYER_CONFIG[layerKey]
+  if ('labelsFile' in config) files.push(config.labelsFile)
+  return [...new Set(files)]
 }
