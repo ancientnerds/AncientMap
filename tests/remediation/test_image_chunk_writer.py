@@ -440,6 +440,14 @@ def test_a_delivered_chunk_is_never_replaced(world, tmp_path):
     assert {p.name: p.read_bytes() for p in directory.iterdir()} == before
 
 
+def test_a_chunk_checked_out_with_crlf_is_still_the_plans(world):
+    """Chunks are versioned; with core.autocrlf=true every file comes back with CRLF."""
+    _, chunk, directory = world
+    for path in directory.iterdir():
+        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+    assert C.check_delivered(directory).run_stamp == chunk.run_stamp
+
+
 @pytest.mark.parametrize(
     ("name", "old", "new", "says"),
     [

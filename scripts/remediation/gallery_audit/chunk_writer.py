@@ -654,8 +654,13 @@ def emit_chunks(out: Path, chunks: Sequence[Chunk]) -> list[Path]:
 
 
 def _read(path: Path) -> str:
-    with path.open(encoding="utf-8", newline="") as fh:
-        return fh.read()
+    """A delivered file's text with universal newlines.
+
+    Chunks are versioned, and this checkout's `core.autocrlf=true` hands them back with CRLF. The
+    rendered statement holds no bare carriage return (`validate_change` refuses control characters),
+    so a line ending is the only difference that translation can hide.
+    """
+    return path.read_text(encoding="utf-8")
 
 
 def check_delivered(directory: Path) -> Chunk:
