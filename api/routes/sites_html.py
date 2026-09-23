@@ -56,8 +56,10 @@ _PARENT_SQL = text(
 # and both answered 404 on 2026-09-22 (the country corrections moved every Georgia and
 # Easter Island site). A 301 hands their link signals to the hub that replaced them.
 # /sites/united-kingdom is deliberately NOT here: the UK lane splits those rows into
-# England / Scotland / Wales / Northern Ireland, so no single hub replaces it and it
-# stays a 404 (tests/api/test_sites_html_scope.py pins this).
+# England / Scotland / Wales / Northern Ireland, so no single hub replaces it. Until that
+# lane has moved them it is a live hub (6 curated rows still carried 'United Kingdom' and
+# the page answered 200 on 2026-09-23); afterwards it answers 404, never a 301
+# (tests/api/test_sites_html_scope.py pins both).
 _RETIRED_HUBS = {
     "georgia-country": "georgia",
     "chile-easter-island": "chile",
@@ -257,10 +259,10 @@ def _site_by_prefix(prefix: str, db: Session):
     (lives on the globe only) or a retired one (answers 410). A retired row wins a
     prefix shared with another row - the URL asked for a page, and the page is gone.
 
-    Als Bereichsabfrage auf der Primärschlüssel-Spalte statt
-    `LEFT(REPLACE(id::text, '-', ''), 8) = :prefix`: die Präfixform ist
-    genau die erste UUID-Gruppe, aber als Ausdruck über 1,7 Mio. Zeilen
-    wäre sie ein Seq-Scan bei jedem 404 — und 404s kann jeder auslösen.
+    A range query on the primary-key column instead of
+    `LEFT(REPLACE(id::text, '-', ''), 8) = :prefix`: the prefix is exactly the first UUID
+    group, but as an expression over 1.7 million rows it would be a sequential scan on
+    every 404 - and anyone can trigger a 404.
     """
     return db.execute(
         text("""

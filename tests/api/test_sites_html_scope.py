@@ -73,7 +73,7 @@ def test_the_two_retired_hub_slugs_answer_301_to_the_hub_that_replaced_them(old,
     assert resp.headers["location"] == new
 
 
-def test_united_kingdom_stays_404():
+def test_united_kingdom_is_404_once_the_uk_lane_has_moved_its_rows():
     """Decision pinned 2026-09-22: /sites/united-kingdom is NOT redirected. The UK lane splits
     those rows into England / Scotland / Wales / Northern Ireland, so no single hub replaces
     the old one - a 301 to any of them would claim an equivalence that does not exist."""
@@ -81,6 +81,23 @@ def test_united_kingdom_stays_404():
     resp = _run(sh.sites_by_country("united-kingdom", db=db))
     assert resp.status_code == 404
     assert "united-kingdom" not in sh._RETIRED_HUBS
+
+
+def test_united_kingdom_is_a_live_hub_while_rows_still_carry_it():
+    """6 curated rows still carried 'United Kingdom' on 2026-09-23 and the page answered 200.
+    It stays a normal hub until the UK lane moves them - a deploy that serves it with 200 is
+    correct, not a failed redirect."""
+    db = RecordingSession(
+        {
+            "SELECT DISTINCT country": [
+                SimpleNamespace(country="England"),
+                SimpleNamespace(country="United Kingdom"),
+            ],
+            "LEFT JOIN LATERAL": [],
+        }
+    )
+    resp = _run(sh.sites_by_country("united-kingdom", db=db))
+    assert resp.status_code == 200
 
 
 def test_a_live_country_wins_over_a_retired_slug_of_the_same_name():

@@ -25,7 +25,8 @@ UNKNOWN_ID = "00000000-0000-4000-8000-000000000000"
 
 
 def _db(curated: SimpleNamespace | None, exists: bool) -> MagicMock:
-    """Erster execute(): kuratierte Zeile. Zweiter: Existenz überhaupt (mit scope_status)."""
+    """First execute(): the curated row. Second: whether the id exists at all, with its
+    scope_status."""
     db = MagicMock()
     db.execute.return_value.fetchone.side_effect = [
         curated,
@@ -121,4 +122,3 @@ def test_utm_parameter_ueberleben_die_weiterleitung():
         sh.legacy_site_redirect(id=BULK_ID, utm_source="discord", db=_db(None, exists=True))
     )
     assert resp.headers["location"] == f"/globe.html?utm_source=discord#focus={BULK_ID}"
-
