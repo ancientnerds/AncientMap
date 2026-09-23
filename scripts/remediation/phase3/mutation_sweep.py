@@ -3367,6 +3367,22 @@ GALLERY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         CALIBRATE_TEST,
         "test_the_strict_pass_is_not_admitted_without_eye_labels",
     ),
+    (
+        "gallery: a verdict about other bytes passes the evidence check",
+        GALLERY + "decide.py",
+        '        if digests[path] != line["image_sha256"]:\n',
+        "        if False:  # mutant\n",
+        VISION_TEST,
+        "test_a_planned_row_must_cite_a_ledger_verdict_about_todays_bytes",
+    ),
+    (
+        "gallery: a row citing no ledger verdict passes the evidence check",
+        GALLERY + "decide.py",
+        "        if entry is None:\n            problems.append(",
+        "        if entry is None:\n            continue  # mutant\n            problems.append(",
+        VISION_TEST,
+        "test_a_planned_row_must_cite_a_ledger_verdict_about_todays_bytes",
+    ),
 ]
 MUTATIONS += GALLERY_MUTATIONS
 

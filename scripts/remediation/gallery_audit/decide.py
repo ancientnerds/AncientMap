@@ -676,6 +676,54 @@ def load_kinds(paths: Iterable[Path]) -> dict[int, str]:
     return out
 
 
+def verify_evidence(
+    planned: Sequence[PlannedRow], ledger: Sequence[vision.LedgerLine], images: vision.Images
+) -> list[str]:
+    """Design verification 3, per vision-planned row: the verdict it cites is in the ledger, is an
+    ok verdict asked with today's frozen prompt of its id and answered by the pilot's model, the
+    row's evidence repeats that line's hashes, and the image bytes the verdict judged are the bytes
+    the offsite copy holds now. Returns every discrepancy; the caller refuses a plan with any."""
+    by_id = {entry.verdict_id: entry for entry in ledger}
+    templates = dict(vision.PROMPTS.values())
+    digests: dict[Path, str] = {}
+    problems: list[str] = []
+    for row in planned:
+        cited = row.evidence.get("verdict_id")
+        if row.rule in ("L1", "L2"):
+            continue  # a liveness row cites its store line, not a verdict
+        entry = by_id.get(str(cited))
+        if entry is None:
+            problems.append(f"image {row.key} ({row.rule}): verdict {cited!r} is not in the ledger")
+            continue
+        line = entry.line
+        if not entry.ok or line["model"] != vision.MODEL:
+            problems.append(
+                f"image {row.key} ({row.rule}): verdict {entry.verdict_id[:12]} is not an ok verdict of {vision.MODEL}"
+            )
+            continue
+        if line["prompt_sha256"] != vision.prompt_sha256(templates[line["prompt_id"]]):
+            problems.append(
+                f"image {row.key} ({row.rule}): verdict {entry.verdict_id[:12]} was asked with another {line['prompt_id']}"
+            )
+            continue
+        if (row.evidence.get("image_sha256"), row.evidence.get("prompt_sha256")) != (
+            line["image_sha256"],
+            line["prompt_sha256"],
+        ):
+            problems.append(
+                f"image {row.key} ({row.rule}): the evidence does not repeat its verdict's hashes"
+            )
+            continue
+        path = images.path_for(str(line["site_id"]), str(line["image_file"]).split("/", 1)[1])
+        if path not in digests:
+            digests[path] = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digests[path] != line["image_sha256"]:
+            problems.append(
+                f"image {row.key} ({row.rule}): the offsite file changed since the verdict judged it"
+            )
+    return problems
+
+
 def write_plan(path: Path, planned: Sequence[PlannedRow]) -> str:
     text = "".join(
         json.dumps(row.as_json(), ensure_ascii=False, sort_keys=True) + "\n" for row in planned
@@ -731,6 +779,11 @@ def main(argv: list[str] | None = None) -> int:
             truth,
         )
         report = check_plan(planned, rows)
+        problems = verify_evidence(planned, ledger, vision.Images())
+        if problems:
+            raise DecideError(
+                f"{len(problems)} planned row(s) fail the verdict check: {problems[:3]}"
+            )
         name = f"PLANNED-chunk-{args.chunk:03d}"
         digest = write_plan(run_dir / f"{name}.jsonl", planned)
         (run_dir / f"{name}.listed.json").write_text(

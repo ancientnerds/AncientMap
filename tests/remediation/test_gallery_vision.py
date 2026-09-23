@@ -1049,3 +1049,22 @@ def test_reselection_asks_the_next_question_of_the_top_three_static_candidates()
     ]
     passing = {1: _v(1)}
     assert decide.reselection_jobs(state, [SITE], passing, {1: _v(1, vision.HERO)}, truth) == []
+
+
+def test_a_planned_row_must_cite_a_ledger_verdict_about_todays_bytes(tmp_path: Path) -> None:
+    root = _image_tree(tmp_path / "wiki", "Temple.webp")
+    images = vision.Images((root,))
+    data = (root / SHARD / "Temple.webp").read_bytes()
+    line = {**_ok_line(1, kind="artifact"), "image_file": f"{SHARD}/Temple.webp"}
+    line["image_sha256"] = hashlib.sha256(data).hexdigest()
+    text = vision.line_text(line)
+    entry = vision.LedgerLine(vision.verdict_id(text), line)
+    verdict = vision.Verdict(entry.verdict_id, dict(line["verdict"]), line)
+    rows = {SITE: [_row(1, tier="B")]}
+    only_kind = decide.Admission(True, False, False, False, False, "t")
+    planned, _ = decide.plan_vision(rows, {}, {1: verdict}, {}, only_kind, {})
+    assert [p.rule for p in planned] == ["K1"]
+    assert decide.verify_evidence(planned, [entry], images) == []
+    assert "is not in the ledger" in decide.verify_evidence(planned, [], images)[0]
+    (root / SHARD / "Temple.webp").write_bytes(data + b"changed")
+    assert "offsite file changed" in decide.verify_evidence(planned, [entry], images)[0]
