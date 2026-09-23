@@ -6370,3 +6370,204 @@ candidate). With Petra corrected, no external-id value with a control character 
 * Tests: 2 new (Petra written with its entry and refused without it, on the delivered record; a hand
   entry must name the refusal it overrides - wrong reason, unrefused site, a sharer refusal, an
   unresolved site, no evidence). `mutation_sweep.py "source url: "`: **38/38 caught**.
+
+## 2026-09-23 - the cell lanes and journal-reversal-2: planned, not applied
+
+Branch `wip/mech2` (merged with `integrate/wave1` at `b6de246`, and with its tip `9046ef9` after
+this section was written). Four lanes of the mechanical write path
+(`scripts/remediation/mechanical/`) are planned and committed; **none of them has written anything**
+(read-only at 11:11 UTC: 0 journal rows for any of their stamps, 0 `card_stats` journal rows, 0
+curated rows with a `scope_status`). Production was only read (`SELECT`s, `BEGIN READ ONLY`): the
+reversal plans, their read-backs, the owned-card count and a re-read of the duplicate list. The
+apply order at the end of this section is the orchestrator's.
+
+### What each lane does
+
+* **`card-stats-<wave>`** (`card_stats.py`): recomputes the twelve `card_stats` columns of every
+  curated card whose inputs moved, with the generator's own code (`api/cardgame/generator.py`
+  `site_card_stats`/`content_stats`, extracted behaviour-neutrally and imported, never copied). It
+  plans only after a counterfactual proves the model: the journalled inputs put back must reproduce
+  every stored cell. Each wave is a lane of its own (stamp `<wave>_mechanical-card-stats`), carries
+  a premise per site (its inputs plus one digest of all curated `(site_type, period_name)` pairs)
+  and commits a `BASIS.json` the next wave's proof reads. Its `ROLLBACK.sql` expires at the next
+  write to any curated `site_type` or `period_name` (HANDOVER, "A card_stats wave's ROLLBACK.sql
+  expires").
+* **`scope-e4`** (`scope.py`): fills `scope_status` and `scope_reason` (E3/E4: out of the window,
+  undated, duplicate, museum) in one transaction, every decision conditioned on the date, point,
+  type, name and description it rests on (guard 5). It now also retires the owner-case duplicate
+  list `output/remediation/bcases/DUPLICATES.jsonl` (below).
+* **`journal-reversal-1`** and **`journal-reversal-2`** (`reversal.py --lane <name>`): each restores
+  the value a named list of journal rows replaced, conditioned on the live value being the value the
+  row wrote and on that row being the last write of its cell (guard 6). Every row needs a reason and
+  quotes that are checked where they say they are.
+
+### journal-reversal-2: the 45 rows the re-review reverses
+
+`output/remediation/phase3_runner/REREVIEW_1.md` fixed the rule before the call: each of the 77
+written rows whose reviewer answered `REFUTED: NO` while its own WHY named a failing half
+(`HUMAN_ONLY.md` B11) got one new reviewer call and was kept only on a clean clearance; a hand read
+then moved 8 rows from keep to reverse. Its result, `logs/review_holds/REREVIEW_1_FINAL.jsonl`
+(gitignored in the main checkout; sha256 `adc678ce...79063eb`), is copied unchanged into
+`output/remediation/mechanical_reversal_2/`: **45 reverse** (30 `site_type`, 15 `period_start`),
+**32 keep**. The 32 stay written.
+
+* **The period label.** 8 of the 15 `period_start` writes had moved a site into another bucket,
+  and the period-name lane (2026-09-22) had then relabelled it (journal rows 30335-30536).
+  Restoring the start alone would leave 8 sites whose label contradicts their date. The list
+  therefore also restores those 8 labels, and `reversal.py` checks the list as a whole
+  (`keep_the_period_label`): a restored label must be the bucket of the start the list leaves, and
+  a start must not leave behind a label that was its bucket - a refused start takes its label with
+  it and back. **53 cells over 45 sites.**
+* **Evidence.** Each of the 45 quotes the re-review's hand-read WHY and the reviewer's new WHY
+  (`rereview:<change_key>`; the lane accepts it only when that row decided `reverse` for exactly
+  the write the journal row made - same key, site, column, old and new value). Each label quotes the
+  period-name lane's own journal evidence ("... the write that left the label behind").
+* **The Trundle** is among the 45 (`period_start` -500 -> -1000, and its label back to
+  '1500 - 500 BC'). Its residual keeps the hand read's note: both values miss the Neolithic
+  causewayed enclosure (c. 3500 BC), the field stays open. Every reversed field is open again, not
+  corrected (REREVIEW_1.md).
+* **Planned from production** (`reversal.py --lane journal-reversal-2 --write`, read-only, 10:53
+  UTC): 53 of 53 planned, 0 refused - every journal row is the last write of its cell, every live
+  value is the value its row wrote, every restored `site_type` is canonical. Read-back before the
+  apply (read-only, about 11:00 UTC): `curated sites still holding a value this reversal list
+  undoes` 45, `curated rows whose period_name is not the bucket of period_start` 11 (none of them
+  among the 45; the list leaves the count as it is).
+
+### scope-e4 reads the owner-case duplicate list
+
+`DUPLICATES.jsonl` (19 losers, each with its survivor and evidence, "for the scope lane") was not
+read by the lane: its own 100 m rule found 3 of them. It is now: each listed loser is retired
+with `duplicate_of:<survivor>` after its claim is re-read in the export - both rows curated (else
+the plan is refused), both still carrying the one item the line names, still within the list's 2 km
+(`bcases.classify.DUP_MAX_M`, imported). A pair the lane finds itself and the list names too is one
+retirement with both evidences (the 3: Tarxien Temples, Bishop's Basilica of Philippopolis, Dooey's
+Cairn); a loser the two name with different survivors is refused. No duplicate touches a site of
+`DUPLICATES_HELD.jsonl` (Banias / Caesarea Philippi, B10), whoever found it.
+
+Re-planned offline from the same export as before (07:41:01 UTC): **115 sites, 230 cells: 79
+retired (55 rule a, 2 rule b, 19 duplicates, 3 museums), 19 pending, 17 in_scope, 0 refused**
+(before: 99 sites, 198 cells, 63 retired). All 19 listed pairs held in that export and still hold
+in production (read-only re-read, 11:00 UTC: same item on both rows, within 2 km, both curated and
+unassessed). The plan is stale on arrival and is re-planned in the apply order below: Yenikale's
+point moved at 07:45 UTC (guard 5 would refuse the whole transaction), and the reversals change
+`period_start`/`site_type` of sites the scope premise holds.
+
+### card-stats-2026-09-23, as committed
+
+Planned from the 03:59:54 UTC export: 6,104 cells over 1,566 of 5,004 cards; the counterfactual put
+back 1,275 journalled inputs and reproduced all 60,048 stored cells; `BASIS.json` horizon
+`journal_max_id` 30815. Stale by design: 35 journalled input rows at 25 curated sites since
+(the inventory's read, 09:21 UTC), and both reversals and the scope lane write before it. **Owned cards**
+(read-only, about 11:00 UTC, `card_collections` on the planned sites): **12 rows of 4 users on 11
+sites** change stats; **3 rows of 2 users on 3 sites** change rarity (the 502 sites whose
+`rarity_tier` moves). The re-plan will move these numbers.
+
+### Corrections to the builder's report (review findings R0-5, R1-5)
+
+The operator list in the builder's report of `1ad071a` is not versioned; these are the facts as the
+code and the data give them, each re-checked here:
+
+* **Step 3d names the wrong metrics.** The card_stats read-back prints `curated rows whose
+  card_stats civilization differs from the site country` (`card_stats.py:207`; 62 today, read as
+  journal-reversal-1's equivalent count, one card per site) and `card_stats rows whose total_power
+  is not the sum of the five stats`
+  (`card_stats.py:268`). `card_stats rows whose civilization differs from the site country` is
+  journal-reversal-1's read-back, not the card_stats wave's.
+* `DECISIONS.json` holds **41** decisions, not 42: a/pending 8, b/pending 11, b/retired 2,
+  d/in_scope 17, d/retired 3.
+* The builder re-pointed **11** existing sweep needles, not 12 (sweep `c186008` vs `1ad071a`: 167 ->
+  267 cases, 11 changed, 0 removed, 100 added).
+* **Owned cards**: 12 rows / 4 users / 11 sites change stats, 3 of them (2 users, 3 sites) in rarity
+  - not "3 card_collections rows (2 users, 3 sites)".
+* `card_stats.py --wave` is checked against `CARD_STATS_LANE` (`card_stats_lane` raises for a label
+  `apply.py --lane card-stats-<label>` could not resolve; `main` exits 2,
+  `test_a_wave_label_nothing_could_apply_is_refused`), and the `apply.py` docstring example is
+  `card-stats-2026-09-24` (`apply.py:1708`), not the unresolvable `card-stats-w2`.
+* The scope counts of the builder report (196 cells, 62 retired) are outdated twice over: the
+  fixer's re-plan made them 198/63 (+Prambanan Temple), the duplicate list makes them 230/79.
+* The reversal read-back counted sites under the name "curated cells ...": it is now `curated sites
+  still holding a value this reversal list undoes` (45 for the 53 cells of reversal-2).
+
+### Tests, sweep, gates
+
+* Red first: 18 of the new scope tests fail on the previous `scope.py`, 46 of the new and adapted
+  reversal tests on the previous `reversal.py`, the residual-name test on the previous `lane.py`.
+* Mechanical tests (`tests/remediation/test_mechanical*.py`,
+  `tests/api/test_cardgame_generator_stats.py`, with the map-units cache copied into the worktree):
+  **716 passed, 0 skipped** (84 s).
+* Mechanical sweep, all cases, run in this worktree after the merge, 11:03-11:59 UTC:
+  **`cases: 469  fired: 469  skipped: 0  survived: 0  invalid: 0  unproven: 0  errored: 0`**,
+  exit 0 (`mechanical/evidence/21_mutation_sweep_merged.txt`); 33 of the cases are new. One more
+  case came after that run (`reversal: --lane names a reversal lane`); the reversal cases, run again
+  with it after the second merge: **38 of 38 fired**
+  (`mechanical/evidence/22_mutation_sweep_reversal.txt`), 470 cases in all. The fixer's run of 820358c (319 of 319 fired) is kept as
+  `mechanical/evidence/20_mutation_sweep_fix.txt`.
+* Full DB-less suite (`-m "not integration and not live_llm"`, timeout 300): **4569 passed, 32
+  skipped** (gitignored data and fonts only), 57 deselected, exit 0, 297 s; after the second merge
+  **4609 passed, 32 skipped**, exit 0, 306 s. `ruff check api/
+  pipeline/ scripts/remediation tests/ output/remediation/tools/` clean, `ruff format --check` clean
+  on every file this branch touches, lint-imports 2 kept / 0 broken, vulture exit 0.
+* gitleaks over `integrate/wave1..HEAD`: clean after the 9 premise digests of `1984834` were
+  triaged in `.gitleaksignore` (md5 premises after a site name containing "api"/"key"; a re-plan
+  of a card_stats wave writes new ones - scan its commit).
+
+### The apply order (the orchestrator runs it; nothing here was applied)
+
+Owner gates first (`HUMAN_ONLY.md`): **"Was nur du entscheiden kannst" item 4** under B1/B2
+(Ahin Posh Tape: the reversal and its point) before step 1; **B11** (keep or reverse the written
+rows the new rules would not write: REREVIEW_1 decided 45 reverse / 32 keep - confirm the owner's
+go covers applying it) before step 2; **item 2 / B6**, the per-site go for the 19 duplicate
+retirements (`mechanical_scope/REVIEW.md`, rule c), before step 3. Each step: rehearse, probe,
+apply, read back. Commands from the repo root with `PYTHONIOENCODING=utf-8`;
+`A=scripts/remediation/mechanical/apply.py`.
+
+0. `./.venv/Scripts/python.exe $A --check-primitive` -> the 0022 body.
+1. **journal-reversal-1** (3 cells on 3 sites).
+   `./.venv/Scripts/python.exe scripts/remediation/mechanical/reversal.py --lane journal-reversal-1 --collect --write`
+   -> `PLAN.jsonl` unchanged (re-rendered byte for byte at 10:53 UTC); if it changed, `$A --lane
+   journal-reversal-1 --emit` and read the diff. Then `$A --lane journal-reversal-1` with
+   `--verify` (before: `curated sites still holding a value this reversal list undoes` 3) and
+   `--interests`; `--rehearse` (NOTICE `journal reversal: 3 of 3 planned cell(s) changed and
+   journalled over 3 curated site(s)`); `--probe-guards` -> exit 0, 7 probes each refused by its
+   own guard: guard3-foreign-old-value, guard2-no-op, guard2-foreign-column, guard2-too-long,
+   guard1-other-source, guard6-journal-row, guard6-not-the-inverse; `--rehearse-rollback`;
+   `--apply` -> APPLY OK, 3 journal rows; `--verify` -> the residual 0.
+2. **journal-reversal-2** (53 cells on 45 sites), the same sequence with `--lane
+   journal-reversal-2` (`reversal.py --lane journal-reversal-2 --collect --write`, NOTICE `53 of 53
+   planned cell(s) ... over 45 curated site(s)`, the same 7 probes). After: `curated sites still
+   holding a value this reversal list undoes` 0, `curated rows whose period_name is not the bucket
+   of period_start` unchanged (11 on 2026-09-23), 53 journal rows. Then the acceptance:
+   `./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py --allow-stamp
+   2026-09-22_mechanical-uk-parts --allow-stamp 2026-09-23_mechanical-journal-reversal-1
+   --allow-stamp 2026-09-23_mechanical-journal-reversal-2` -> 0 deviations (48 more rows
+   superseded: 3 + 45; the 8 label rows are the period-name lane's, not phase 3's). In the
+   period-name lane's own read-back, `journal rows for this run whose value is not the row's
+   bucket` rises by 8: its 8 labels are undone together with the starts they came from - by
+   design.
+3. **scope-e4**, re-planned: `./.venv/Scripts/python.exe scripts/remediation/mechanical/scope.py
+   --export --collect`, then `scope.py --write` (T11 needs geopandas and Natural Earth in
+   `output/remediation/cache/naturalearth/`; every DECISIONS quote and every DUPLICATES line is
+   re-checked; expect about 115 sites / 230 cells, Yenikale re-read), `$A --lane scope-e4 --emit`,
+   commit the lane directory. Then `--verify` / `--interests` / `--rehearse` (NOTICE `E4 scope
+   decision: <n> of <n> planned cell(s) ...`) / `--probe-guards` (6: guard3-foreign-old-value,
+   guard2-no-op, guard2-foreign-column, guard1-other-source, guard4-not-owned, guard5-premise) /
+   `--rehearse-rollback` / `--apply`. After: `curated rows with scope_status retired` = the plan's
+   retired count (79 at the 07:41 export), `curated rows retired as a duplicate` 19, and 0 for
+   `curated rows outside the E3 window with no scope decision`, `curated rows without a date and
+   no scope decision`, `curated rows with a scope_status but no scope_reason` and `retired
+   duplicates whose survivor is retired or not curated`. `/api/sites/all` serves from a 30-minute
+   Redis cache.
+4. **card-stats-2026-09-23, last**, re-planned: `./.venv/Scripts/python.exe
+   scripts/remediation/mechanical/card_stats.py --wave 2026-09-23 --export`, then `--write`
+   (refuses unless the counterfactual reproduces every stored cell), `$A --lane
+   card-stats-2026-09-23 --emit`; commit `PLAN.md`, `SKIPPED.jsonl`, `ROLLBACK.sql` and
+   `BASIS.json` (the next wave's proof reads it) and run gitleaks over that commit. Then `--verify`
+   / `--interests` / `--rehearse` (about 6,100 `apply_remediation_change` calls in one DO block
+   under `statement_timeout` 120 s - watch the time; a timeout is psql exit 3, NOT COMMITTED) /
+   `--probe-guards` (7: guard3-foreign-old-value, guard2-no-op, guard2-foreign-column,
+   guard2-too-long, guard1-other-source, guard4-not-owned, guard5-premise) / `--rehearse-rollback` /
+   `--apply`. **Straight after the apply** `--verify`: `curated rows whose card_stats civilization
+   differs from the site country` 0 (62 before), `card_stats rows whose total_power is not the sum
+   of the five stats` 0, `journal rows for this run whose row is not a card_stats row` 0, plus the
+   tier counts. Completion: `card_stats.py --wave 2026-09-23b --export --write` must print
+   `"cells": 0` and write no statement (a read-back, not a wave: do not apply or commit it).

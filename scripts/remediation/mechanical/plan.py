@@ -138,7 +138,7 @@ from census.tests.t05_country_values import (  # noqa: E402
     _vocabulary,
 )
 from journal_chain import first_break  # noqa: E402
-from prod_write import DIGEST_RE, pin_line  # noqa: E402
+from prod_write import DIGEST_RE, SSH_HOST, pin_line, send  # noqa: E402
 
 from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
@@ -229,6 +229,10 @@ class Verdict:
     evidence: tuple[dict[str, Any], ...] = ()
     #: The live input the value was derived from, as text, for a lane with `premise_sql`.
     premise: str | None = None
+    #: The cell's column on a cell lane (`lane.cells`); None on a column lane.
+    column: str | None = None
+    #: The journal row a reversal lane undoes.
+    journal_id: int | None = None
 
 
 def load_findings(path: Path) -> list[Finding]:
@@ -1023,21 +1027,29 @@ _quoted = sql_literal
 
 
 def plan_record(change: Verdict, plan: Plan) -> dict[str, Any]:
-    """One `PLAN.jsonl` line: the row, its lane's journal identity, and its evidence."""
+    """One `PLAN.jsonl` line: the row, its lane's journal identity, and its evidence.
+
+    On a cell lane the line names the cell's column and table, and the change key names the cell;
+    on a column lane every line is exactly what it was before cell lanes existed.
+    """
     lane = plan.lane
+    column = change.column if lane.cells else lane.column
+    if lane.cells:
+        lane.cell(column)
+    target = lane.target
     record: dict[str, Any] = {
         "site_id": change.site_id,
         "site_name": change.site_name,
-        "table": "unified_sites",
-        "column": lane.column,
-        "key_column": "id",
+        "table": target.table,
+        "column": column,
+        "key_column": target.key_column,
         "old_value": change.old_value,
         "new_value": change.new_value,
         "rule": change.rule,
-        "condition": f"id = {change.site_id} AND {lane.column} IS NOT DISTINCT FROM "
+        "condition": f"{target.key_column} = {change.site_id} AND {column} IS NOT DISTINCT FROM "
         f"{_quoted(change.old_value)}",
         "reason": f"{lane.key_prefix} ({change.rule}): {change.note}",
-        "change_key": lane.change_key(change.site_id),
+        "change_key": lane.change_key(change.site_id, change.column if lane.cells else None),
         "test_id": plan.test_id,
         "run_stamp": plan.run_stamp,
         "confidence": lane.confidence,
@@ -1049,8 +1061,17 @@ def plan_record(change: Verdict, plan: Plan) -> dict[str, Any]:
     if lane.premise_sql is not None:
         if change.premise is None:
             raise PlanError(f"{change.site_id}: the {lane.name} lane needs the row's premise")
-        record["premise_sql"] = lane.premise_sql
+        if not lane.cells:
+            # A cell lane's premise expression is the lane's, named once in its PLAN.md: repeated
+            # on each of 6,000 card_stats cells it was 6 MB of the same kilobyte.
+            record["premise_sql"] = lane.premise_sql
         record["premise"] = change.premise
+    if lane.reverses_journal:
+        if change.journal_id is None:
+            raise PlanError(
+                f"{change.site_id}: the {lane.name} lane needs the journal row it undoes"
+            )
+        record["journal_id"] = change.journal_id
     return record
 
 
@@ -1075,8 +1096,8 @@ def write_skipped_jsonl(plan: Plan, path: Path) -> int:
                     {
                         "site_id": verdict.site_id,
                         "site_name": verdict.site_name,
-                        "table": "unified_sites",
-                        "column": plan.lane.column,
+                        "table": plan.lane.target.table,
+                        "column": verdict.column if plan.lane.cells else plan.lane.column,
                         "current_value": verdict.old_value,
                         "proposed_value": verdict.new_value,
                         "reason": verdict.reason,
@@ -1173,6 +1194,28 @@ def reversed_records(records: Sequence[Any], lane: Lane = T05) -> list[Any]:
     """
     from mechanical import apply as apply_mod
 
+    if lane.cells:
+        # A cell's reversal restores its old value in its own column - NULL too, where the lane
+        # filled an empty cell. The journal row it undoes is the write's own, unknown until the
+        # write has run, so the reversal names none (guard 6 checks a forward reversal only).
+        return [
+            apply_mod.ChangeRecord(
+                site_id=r.site_id,
+                site_name=r.site_name,
+                old_value=r.new_value,
+                new_value=r.old_value,
+                rule=f"rollback-{r.rule}",
+                condition=f"{lane.target.key_column} = {r.site_id} AND {r.column} IS NOT "
+                f"DISTINCT FROM {_quoted(r.new_value)}",
+                reason=f"rollback of {lane.key_prefix}: {r.column} {r.old_value!r} restored on "
+                f"{r.site_name}",
+                evidence=tuple(r.evidence),
+                phase3=r.phase3,
+                premise=r.premise,
+                column=r.column,
+            )
+            for r in reversed(list(records))
+        ]
     return [
         apply_mod.ChangeRecord(
             site_id=r.site_id,
@@ -1342,6 +1385,69 @@ def sql_ids(ids: Iterable[str]) -> str:
         if not UUID_RE.match(sid):
             raise PlanError(f"{sid!r} is not a UUID - refusing to interpolate it")
     return ", ".join(sql_literal(sid) for sid in wanted)
+
+
+# ------------------------------------------------------------------------- the tagged export
+#: The kind of the one line a tagged export ends with: the snapshot's own clock.
+SNAPSHOT_KIND = "snapshot"
+#: A kind is spliced into a SQL string literal: lowercase letters and underscores, nothing else.
+_EXPORT_KIND = re.compile(r"^[a-z_]+$")
+
+
+def tagged_export_script(parts: Sequence[tuple[str, str]]) -> str:
+    """One read-only, repeatable-read transaction: every row of each `(kind, sql)` part as one
+    JSON object tagged with its kind, then one `snapshot` line with the transaction's `now()`.
+
+    One snapshot, so the parts are read at the same instant; `QUIET` keeps psql's `BEGIN`/`COMMIT`
+    tags out of the output. The cell lanes read production this way (`card_stats.py`, `scope.py`).
+    """
+    for kind, _sql in parts:
+        if not _EXPORT_KIND.match(kind) or kind == SNAPSHOT_KIND:
+            raise PlanError(f"{kind!r} is not a kind a tagged export can carry")
+    return (
+        "\\set QUIET on\nBEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
+        + "".join(
+            f"SELECT json_build_object('kind', '{kind}', 'row', row_to_json(t)) FROM ({sql}) t;\n"
+            for kind, sql in parts
+        )
+        + f"SELECT json_build_object('kind', '{SNAPSHOT_KIND}', 'row', json_build_object("
+        "'exported_at', now()::text));\nCOMMIT;\n"
+    )
+
+
+def parse_tagged_export(text: str, kinds: Iterable[str]) -> tuple[dict[str, list[dict]], str]:
+    """The rows of each kind and the snapshot's `exported_at`, from `tagged_export_script`'s output.
+
+    A line of a kind the caller did not ask for is refused, and so is an export without exactly
+    one snapshot line: psql stops at the first error, so a missing snapshot line is an export
+    that did not finish.
+    """
+    rows: dict[str, list[dict]] = {kind: [] for kind in kinds}
+    stamps: list[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        kind = payload.get("kind")
+        if kind == SNAPSHOT_KIND:
+            stamps.append(str(payload["row"]["exported_at"]))
+        elif kind in rows:
+            rows[kind].append(payload["row"])
+        else:
+            raise PlanError(f"the export holds a line of kind {kind!r}: {line[:80]!r}")
+    if len(stamps) != 1:
+        raise PlanError(f"the export must hold one snapshot line, it has {len(stamps)}")
+    return rows, stamps[0]
+
+
+def write_tagged_export(script: str, path: Path, *, host: str = SSH_HOST) -> Path:
+    """Send a tagged export to production (read-only) and keep its output as it came."""
+    proc = send(script, host=host, rows=True, timeout=900)
+    if proc.returncode != 0:
+        raise PlanError(f"the export failed (psql exit {proc.returncode}): {proc.stderr.strip()}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(proc.stdout, encoding="utf-8", newline="\n")
+    return path
 
 
 # ------------------------------------------------------------------------------- the journal
