@@ -1,12 +1,12 @@
 # E4 scope decisions - per-site review
 
-Built 2026-09-23T04:45:27+00:00 from the production export of 2026-09-23 04:13:08.925379+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
+Built 2026-09-23T07:41:10+00:00 from the production export of 2026-09-23 07:41:01.276622+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
 
 What this lane does not do: it moves nothing. A retired duplicate keeps its images and content links; where the survivor has fewer (the counts are on each line below), moving them is a follow-up before the survivor's page is relied on. A `pending` row stays shown until its date or scope is settled - the evidence says what to settle.
 
-## (a) outside the E3 window by the current period_start - 62 site(s)
+## (a) outside the E3 window by the current period_start - 63 site(s)
 
-### retired (54)
+### retired (55)
 
 * **Ali Masjid Fort** (`8c159d7f-d954-44fc-aab9-6b7841d68a35`) - Pakistan, Fortress/citadel, period_start 1837, 4 link(s), 8 image(s)
   * reason: E3: period_start 1837 is 1337 years past the rest of world cutoff of 500 AD
@@ -206,6 +206,12 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 88.52799249140432, date = 1989]
   * snapshot:unified_sites.period_start: period_start = 1989, period_end = None, period_name = '1500+ AD', lat = 52.66634033939385, lon = 88.52799249140432
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Russia; CONTINENT = Europe; region agrees with the longitude window (rest of world)
+* **Prambanan Temple** (`21bd525e-fe10-40dd-96be-32d3c8d36d26`) - Indonesia, Temple complex, period_start 850, 0 link(s), 18 image(s)
+  * reason: E3: period_start 850 is 350 years past the rest of world cutoff of 500 AD
+  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 110.49200920619666, date = 850]
+  * snapshot:unified_sites.period_start: period_start = 850, period_end = None, period_name = '1 - 500 AD', lat = -7.751765461045863, lon = 110.49200920619666
+  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Indonesia; CONTINENT = Asia; region agrees with the longitude window (rest of world)
+  * remediation_change_log:30897: phase3:gap-0006:chunk-0001: period_start 1 -> 850
 * **Preah Palilay** (`41705e94-8ffd-45f3-943e-df6fac317144`) - Cambodia, Temple, period_start 1100, 5 link(s), 15 image(s)
   * reason: E3: period_start 1100 is 600 years past the rest of world cutoff of 500 AD
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 103.85504291268045, date = 1100]

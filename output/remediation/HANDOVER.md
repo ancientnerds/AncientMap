@@ -173,6 +173,15 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
 - **The journal table is project-wide.** `remediation_change_log` carries rows from other phases
   (`is_hero` 5,438, `image_kind` 105, `mechanical-country` 35); this action's rows are stamped
   `phase3:batch-…`. Never present the table's total as this action's count.
+- **A card_stats wave's `ROLLBACK.sql` expires.** It carries the write's premise guard (guard 5),
+  which hashes every curated `(site_type, period_name)` pair and each planned site's inputs
+  (fields, content links, images, likes, bookmarks). The undo refuses as soon as any curated
+  `site_type` or `period_name` is written anywhere, or any input of a planned site moves - in
+  practice at the next field-write wave. From then on the wave is not undone from its file: the
+  next card_stats wave recomputes the cards from the inputs as they are, or a reversal is planned
+  from the journal as a new decision (no lane does that for card_stats today). Each wave's
+  `BASIS.json` must be committed with the plan that is applied: the next wave's proof reads it
+  (`scripts/remediation/mechanical/card_stats.py`, "The basis a wave's proof stands on").
 - **Never point the integration tests at production.** They INSERT test rows into `unified_sites`.
 - **Never weaken a check to make it green**, and never edit a test to match prose - if a test really
   encodes a superseded defect, rewrite it strictly stronger and say why.

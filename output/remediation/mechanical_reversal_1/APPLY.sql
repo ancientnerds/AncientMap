@@ -164,7 +164,10 @@ SELECT 'planned rows now holding the new value', count(*)::text
 UNION ALL
 SELECT 'curated cells still holding a value this reversal list undoes', count(*)::text
   FROM unified_sites
- WHERE source_id = 'ancient_nerds' AND EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.id IN (28018, 28384, 28638) AND l.table_name = 'unified_sites' AND l.row_pk = unified_sites.id::text AND CASE l.column_name WHEN 'country' THEN unified_sites.country IS NOT DISTINCT FROM l.new_value WHEN 'period_start' THEN unified_sites.period_start IS NOT DISTINCT FROM l.new_value::integer ELSE false END)
+ WHERE source_id = 'ancient_nerds' AND EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.id IN (28018, 28384, 28638) AND l.table_name = 'unified_sites' AND l.row_pk = unified_sites.id::text AND CASE l.column_name
+                WHEN 'country' THEN unified_sites.country IS NOT DISTINCT FROM l.new_value::character varying
+                WHEN 'period_start' THEN unified_sites.period_start IS NOT DISTINCT FROM l.new_value::integer
+                ELSE false END)
 UNION ALL
 SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = 'ancient_nerds';

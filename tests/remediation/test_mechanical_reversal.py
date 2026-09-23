@@ -164,6 +164,33 @@ class TestTheDecision:
         v = decide(r=reason(quotes=quotes), pages=pages)
         assert v.reason == "evidence-not-found"
 
+    def test_a_quote_of_a_source_this_lane_cannot_check_refuses(self) -> None:
+        v = decide(r=reason(quotes=(R.Quote("twitter:x", "near Jalalabad, Afghanistan"),)))
+        assert (v.reason, v.note) == (
+            "evidence-not-found",
+            "'twitter:x' is not a source this lane can check",
+        )
+
+    def test_a_restored_value_the_column_cannot_read_is_refused(self) -> None:
+        """The journal records text; a value `period_start` would not print the same way is not
+        the value that row replaced, whatever the evidence says."""
+        v = decide(
+            r=reason(
+                journal_id=28018,
+                column="period_start",
+                quotes=(R.Quote("description", "near Jalalabad, Afghanistan"),),
+            ),
+            c=cell(
+                entry=entry(
+                    id=28018, column_name="period_start", old_value="-03000", new_value="1"
+                ),
+                chain=(P.JournalLink(28018, "phase3:b", "P3/period_start", "-03000", "1"),),
+                live="1",
+            ),
+        )
+        assert (v.ok, v.reason) == (False, "restored-value-unreadable")
+        assert "is not how the database prints -3000" in v.note
+
 
 def gold(verdict: str = "CORRECT", value: int = -3000) -> dict[str, Any]:
     return {
@@ -293,6 +320,22 @@ class TestTheList:
             R.load_reasons(self.write(tmp_path, [1]), L.REVERSAL_1, [1, 2])
         with pytest.raises(P.PlanError, match="must agree"):
             R.load_reasons(self.write(tmp_path, [1, 1]), L.REVERSAL_1, [1, 1])
+
+    def test_a_missing_reasons_file_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(P.PlanError, match="the reviewed reasons are part of the plan"):
+            R.load_reasons(tmp_path / "REASONS.json", L.REVERSAL_1, [1])
+
+    @pytest.mark.parametrize("over", [{"quotes": []}, {"reason": ""}])
+    def test_a_reversal_without_a_reason_or_evidence_is_refused(
+        self, tmp_path: Path, over: dict[str, Any]
+    ) -> None:
+        """Without the refusal an empty quote list passes 'every quote verified' vacuously."""
+        path = self.write(tmp_path, [1])
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw["reversals"][0].update(over)
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(P.PlanError, match="a reversal needs a reason and evidence"):
+            R.load_reasons(path, L.REVERSAL_1, [1])
 
     def test_the_delivered_list_is_the_lane_s(self) -> None:
         reasons = R.load_reasons(

@@ -254,6 +254,123 @@ class TestRuleC:
         assert S.fold("Tarxien Temples") != S.fold("Tarxien Temple")
 
 
+class TestTheRefusals:
+    """Each refusal the review of 2026-09-23 found without a test: removing its guard turns the
+    test red (`mechanical/mutation_sweep.py "scope:"`)."""
+
+    def test_a_t11_kind_this_lane_does_not_decide_is_refused(self) -> None:
+        """Without the refusal an unknown kind fell through to rule (b) and became `pending` with
+        a reason ('no date') that is false for a dated row - and every SQL guard accepts it."""
+        result = build(
+            export(site(FORT)), {FORT: finding(FORT, "T11/ambiguous-region", "two regions")}
+        )
+        assert not result.decisions
+        assert [(r[0]["id"], r[1]) for r in result.refused] == [(FORT, "t11-kind-not-decided-here")]
+
+    def test_an_undated_row_cannot_be_kept_in_scope_by_rule_b(self) -> None:
+        undated = site(UNDATED, period_start=None, description="A sanctuary notified in 1974.")
+        keep = {UNDATED: decision(UNDATED, "a site", "b", "in_scope", "notified in 1974")}
+        result = build(export(undated), {UNDATED: finding(UNDATED, S.UNDATED, "no date")}, keep)
+        assert not result.decisions and result.refused[0][1] == "decision-not-allowed"
+
+    def test_a_duplicate_loser_another_rule_decided_is_refused(self) -> None:
+        a, b = TestRuleC().sites()
+        names = {"Q1242421": entity("Dooey's Cairn", "Ballymacaldrack Court Tomb", "x")}
+        result = build(
+            export(a, b, pairs=(TestRuleC.PAIR,)),
+            {DUP_B: finding(DUP_B, S.OUT_OF_WINDOW, WINDOW_NOTE)},
+            entities=names,
+        )
+        assert [(d.site["id"], d.rule) for d in result.decisions] == [(DUP_B, "a")]
+        assert (DUP_B, "two-decisions") in {(r[0]["id"], r[1]) for r in result.refused}
+
+    def test_a_duplicate_chain_never_retires_a_survivor(self) -> None:
+        """NEW loses to MID, MID loses to OLD, in that order: MID must not be retired while NEW
+        names it as its survivor (the read-back's 'survivor is retired' invariant)."""
+        old, mid, new = DUP_A, DUP_B, UNDATED
+        rows = (
+            site(old, name="Tomb", created_at="2026-01-01 00:00:00"),
+            site(mid, name="Cairn", created_at="2026-02-01 00:00:00"),
+            site(new, name="Court tomb", created_at="2026-03-01 00:00:00"),
+        )
+        pairs = (
+            {"a": mid, "b": new, "qid": "Q1", "metres": 5.0},
+            {"a": old, "b": mid, "qid": "Q1", "metres": 5.0},
+        )
+        result = build(
+            export(*rows, pairs=pairs), {}, entities={"Q1": entity("Tomb", "Cairn", "Court tomb")}
+        )
+        assert [(d.site["id"], d.reason) for d in result.decisions] == [
+            (new, f"duplicate_of:{mid}")
+        ]
+        assert (mid, "two-decisions") in {(r[0]["id"], r[1]) for r in result.refused}
+
+    def test_t11_reporting_a_site_twice_is_refused(self) -> None:
+        once = S.index_findings([finding(FORT, S.OUT_OF_WINDOW, "x")])
+        assert set(once) == {FORT}
+        with pytest.raises(P.PlanError, match="T11 reported .* twice"):
+            S.index_findings([finding(FORT, S.OUT_OF_WINDOW, "x"), finding(FORT, S.UNDATED, "y")])
+
+    def test_a_pair_whose_item_was_not_collected_is_refused(self) -> None:
+        a, b = TestRuleC().sites()
+        with pytest.raises(P.PlanError, match="Q1242421 was not collected - run --collect"):
+            build(export(a, b, pairs=(TestRuleC.PAIR,)), {}, entities={})
+
+    def test_wikidata_answering_no_entity_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        def get_json(endpoint: str, params: dict[str, str], *, timeout: int = 60) -> dict:
+            assert endpoint == P.WIKIDATA_API and params["action"] == "wbgetentities"
+            assert params["ids"] == "Q1|Q2"
+            return {"entities": {"Q1": entity("Tomb", "Tomb")}}
+
+        monkeypatch.setattr(S, "get_json", get_json)
+        path = tmp_path / "wikidata_names.json"
+        with pytest.raises(P.PlanError, match=r"Wikidata answered no entity for \['Q2'\]"):
+            S.collect_names([{"qid": "Q2"}, {"qid": "Q1"}], path)
+        assert not path.exists()
+
+    def test_a_decision_for_a_site_that_is_not_curated_is_refused(self) -> None:
+        with pytest.raises(P.PlanError, match="which is not a curated site"):
+            build(
+                export(site(FORT)),
+                {},
+                {GATE: decision(GATE, "Damascus Gate", "a", "pending", "A Roman gate")},
+            )
+
+    def test_a_missing_decisions_file_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(P.PlanError, match="the reviewed decisions are part of the plan"):
+            S.load_decisions(tmp_path / "DECISIONS.json")
+
+
+class TestTheExport:
+    SNAPSHOT = '{"kind": "snapshot", "row": {"exported_at": "t"}}\n'
+    SITE = '{"kind": "site", "row": {"id": "x"}}\n'
+
+    def test_an_export_is_its_one_snapshot_and_at_least_one_site(self) -> None:
+        got = S.parse_export(self.SITE + '{"kind": "pair", "row": {"a": 1}}\n' + self.SNAPSHOT)
+        assert (got.sites, got.pairs, got.journal, got.exported_at) == (
+            ({"id": "x"},),
+            ({"a": 1},),
+            (),
+            "t",
+        )
+        with pytest.raises(P.PlanError, match="one snapshot line, it has 0"):
+            S.parse_export(self.SITE)
+        with pytest.raises(P.PlanError, match="one snapshot line, it has 2"):
+            S.parse_export(self.SITE + self.SNAPSHOT + self.SNAPSHOT)
+        with pytest.raises(P.PlanError, match="no curated site"):
+            S.parse_export(self.SNAPSHOT)
+        with pytest.raises(P.PlanError, match="kind 'oops'"):
+            S.parse_export(self.SITE + self.SNAPSHOT + '{"kind": "oops", "row": {}}\n')
+
+    def test_the_premise_holds_the_description_a_quote_rests_on(self) -> None:
+        """A reviewed decision quotes the description; if it changes between the export and the
+        apply, guard 5 must refuse the site instead of journalling a quote the row lost."""
+        assert L.SCOPE.premise_sql.endswith(", u.name, md5(coalesce(u.description, '')))")
+        assert f"{L.SCOPE.premise_sql} AS premise" in S.EXPORT_SITES_SQL
+
+
 class TestTheWindowPredicate:
     def test_the_residual_is_the_project_s_own_rule_negated(self) -> None:
         """`passes_date_cutoff` includes a row without a date or a longitude; the SQL must too, or

@@ -162,6 +162,31 @@ class Column:
         return f"{expression}::{self.sql_type}"
 
 
+def typed_case(
+    cells: Sequence[Column],
+    value: str,
+    *,
+    alias: str,
+    compare: str,
+    column_expr: str,
+    otherwise: str,
+) -> str:
+    """`CASE <column> WHEN 'c' THEN <alias>.c <compare> <value>::<type> ... ELSE <otherwise> END`.
+
+    One comparison per cell, each in its column's own type, built from the cells themselves - the
+    guards (`apply.cell_case`) and a reversal's residual (`reversal_residual`) alike, so a column
+    added to a lane's cells is compared everywhere at once. CASE because only CASE fixes the
+    evaluation order: in an `OR` of `(column = 'mystery' AND x::integer ...)` terms Postgres may
+    cast a `category_group` text to integer first and raise.
+    """
+    whens = "".join(
+        f"\n                WHEN {sql_literal(cell.name)} THEN {alias}.{cell.name} {compare} "
+        f"{cell.cast(value)}"
+        for cell in cells
+    )
+    return f"CASE {column_expr}{whens}\n                ELSE {otherwise} END"
+
+
 def _check_column_lane(lane: Lane) -> None:
     """A column lane writes one `unified_sites` column named on the lane."""
     if not _IDENTIFIER.match(lane.column):
@@ -637,8 +662,10 @@ _UNDECIDED_OUT_OF_WINDOW = Residual(
 #: E4 (owner decision 2026-09-19, migration 0020): flag an out-of-scope site AND hide it
 #: platform-wide - never DELETE it. The lane fills `scope_status` and `scope_reason`, both NULL on
 #: every curated row until now (read on production 2026-09-23), in one transaction, so no site is
-#: ever retired without its reason. Every decision rests on the row's date, place, type and name
-#: (`scope.py`), and is conditioned on them: the premise is those inputs as the database prints it.
+#: ever retired without its reason. Every decision rests on the row's date, place, type and name,
+#: and a reviewed one on a quote of its description (`scope.py`), and is conditioned on them: the
+#: premise is those inputs as the database prints it, the description as its md5. A duplicate's
+#: ranking against its survivor is not in it - the survivor is not a planned row (`scope.py`).
 SCOPE = Lane(
     name="scope-e4",
     key_prefix="scope-e4",
@@ -653,7 +680,7 @@ SCOPE = Lane(
     premise_sql=(
         "concat_ws(' | ', coalesce(u.period_start::text, 'NULL'), "
         "coalesce(u.period_end::text, 'NULL'), u.lat::text, u.lon::text, "
-        "coalesce(u.site_type, 'NULL'), u.name)"
+        "coalesce(u.site_type, 'NULL'), u.name, md5(coalesce(u.description, '')))"
     ),
     lock_timeout=LOCK_TIMEOUT,
     statement_timeout=STATEMENT_TIMEOUT,
@@ -710,18 +737,26 @@ SCOPE_READBACK = journal_readback(
 
 
 # ------------------------------------------------------------------ the journal-reversal lanes
-def reversal_residual(journal_ids: Sequence[int]) -> Residual:
+def reversal_residual(journal_ids: Sequence[int], cells: Sequence[Column]) -> Residual:
     """Curated cells that still hold the value one of `journal_ids` wrote - what the reversal
-    exists to remove, read in each column's own type."""
+    exists to remove, read in each column's own type. The comparison is built from the lane's
+    `cells` (`typed_case`): a journal row of a column the lane does not write reads as false."""
     listed = ", ".join(str(int(i)) for i in journal_ids)
+    holds = typed_case(
+        cells,
+        "l.new_value",
+        alias="unified_sites",
+        compare="IS NOT DISTINCT FROM",
+        column_expr="l.column_name",
+        otherwise="false",
+    )
     return Residual(
         "curated cells still holding a value this reversal list undoes",
         "EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.id IN ("
         + listed
         + ") AND l.table_name = 'unified_sites' AND l.row_pk = unified_sites.id::text AND "
-        "CASE l.column_name WHEN 'country' THEN unified_sites.country IS NOT DISTINCT FROM "
-        "l.new_value WHEN 'period_start' THEN unified_sites.period_start IS NOT DISTINCT FROM "
-        "l.new_value::integer ELSE false END)",
+        + holds
+        + ")",
     )
 
 
@@ -730,7 +765,11 @@ def reversal_residual(journal_ids: Sequence[int]) -> Residual:
 #: Afghanistan -> Pakistan; 28018 Stanydale Temple and 28638 Agri Bavnehøj period_start -3000 ->
 #: -2500 / -1800, values the gold standard had judged CORRECT.
 REVERSAL_1_JOURNAL_IDS: tuple[int, ...] = (28018, 28384, 28638)
-_REVERSAL_1_RESIDUAL = reversal_residual(REVERSAL_1_JOURNAL_IDS)
+_REVERSAL_1_CELLS = (
+    Column("country", "character varying", max_chars=100),
+    Column("period_start", "integer"),
+)
+_REVERSAL_1_RESIDUAL = reversal_residual(REVERSAL_1_JOURNAL_IDS, _REVERSAL_1_CELLS)
 
 REVERSAL_1 = Lane(
     name="journal-reversal-1",
@@ -745,10 +784,7 @@ REVERSAL_1 = Lane(
     rehearsal_residual=_REVERSAL_1_RESIDUAL,
     lock_timeout=LOCK_TIMEOUT,
     statement_timeout=STATEMENT_TIMEOUT,
-    cells=(
-        Column("country", "character varying", max_chars=100),
-        Column("period_start", "integer"),
-    ),
+    cells=_REVERSAL_1_CELLS,
     reverses_journal=True,
 )
 

@@ -70,6 +70,7 @@ from mechanical.lane import (  # noqa: E402
     Lane,
     outside,
     resolve_lane,
+    typed_case,
     written_where,
 )
 from mechanical.lane import sql_literal as _literal  # noqa: E402
@@ -377,19 +378,16 @@ def cell_case(
     column_expr: str = "p.column_name",
     otherwise: str = "true",
 ) -> str:
-    """`CASE <column> WHEN 'c' THEN <alias>.c <compare> <value>::<type> ... ELSE <otherwise> END`.
-
-    One comparison per column of a cell lane, each in the column's own type. CASE because only
-    CASE fixes the evaluation order: in an `OR` of `(column = 'mystery' AND x::integer ...)` terms
-    Postgres may cast a `category_group` text to integer first and raise.
-    """
-    alias = lane.target.alias if alias is None else alias
-    whens = "".join(
-        f"\n                WHEN {_literal(cell.name)} THEN {alias}.{cell.name} {compare} "
-        f"{cell.cast(value)}"
-        for cell in lane.cells
+    """`lane.typed_case` over a cell lane's own cells, on the row it writes (`t`, or `u` on
+    `unified_sites`) unless `alias` names another."""
+    return typed_case(
+        lane.cells,
+        value,
+        alias=lane.target.alias if alias is None else alias,
+        compare=compare,
+        column_expr=column_expr,
+        otherwise=otherwise,
     )
-    return f"CASE {column_expr}{whens}\n                ELSE {otherwise} END"
 
 
 def _differs(lane: Lane, value: str) -> str:
@@ -1535,7 +1533,8 @@ def _cell_probe_cases(
 ) -> list[tuple[str, str, list[ChangeRecord], str]]:
     """`probe_cases` for a cell lane: each corrupted value is valid in its column's type, so the
     probe reaches the guard it is meant for; guard 2 also refuses a column the lane does not own,
-    and a reversal lane's guard 6 a cell that names another journal row."""
+    and a reversal lane's guard 6 a cell that names another journal row or restores a value other
+    than the one its journal row replaced."""
     first = records[0]
     first_cell = lane.cell(first.column)
 
@@ -1624,6 +1623,16 @@ def _cell_probe_cases(
                 refusal(GUARD6_SAYS),
             )
         )
+        # the row it names is its own, so only guard 6's inverse clause can refuse it: journal
+        # id 0 above is refused by the lookup alone and never reaches that clause
+        probes.append(
+            (
+                "guard6-not-the-inverse",
+                "guard 6 - a cell that names its journal row but restores another value",
+                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),
+                refusal(GUARD6_SAYS),
+            )
+        )
     return probes
 
 
@@ -1696,8 +1705,8 @@ def readback_for(lane: Lane) -> str:
 
 
 def _lane_argument(name: str) -> str:
-    """`--lane`: a registered lane or a card_stats wave (`card-stats-w2`); anything else is
-    argparse's "invalid choice", as it was when the names were a fixed `choices` list."""
+    """`--lane`: a registered lane or a card_stats wave (`card-stats-2026-09-24`); anything else
+    is argparse's "invalid choice", as it was when the names were a fixed `choices` list."""
     try:
         resolve_lane(name)
     except KeyError as exc:

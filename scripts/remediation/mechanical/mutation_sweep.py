@@ -1594,6 +1594,107 @@ CASES: list[Case] = [
                 "            if new is None:",
                 "test_a_cell_the_generator_would_clear_is_reported_not_written",
             ),
+            # ---- 2026-09-23 review: the guards it found without a case, and the basis
+            (
+                "a wave label nothing could apply",
+                '    if CARD_STATS_LANE.match(f"card-stats-{wave}") is None:',
+                "test_a_wave_label_nothing_could_apply_is_refused",
+            ),
+            (
+                "an export without sites",
+                '    if not rows["site"]:',
+                "test_an_export_without_its_snapshot_line_or_sites_is_refused",
+            ),
+            (
+                "an export without an empire order",
+                "    if not empire_order:",
+                "test_an_export_without_an_empire_order_is_refused",
+            ),
+            (
+                "a failed empire listing",
+                "    if proc.returncode != 0:",
+                "test_the_empire_order_is_production_s_listing_or_a_refusal",
+            ),
+            (
+                "an empty empire listing",
+                "    if not names:",
+                "test_the_empire_order_is_production_s_listing_or_a_refusal",
+            ),
+            (
+                "an incomplete export on disk",
+                "        if not needed.exists():",
+                "test_the_empire_order_file_is_a_list_of_names",
+            ),
+            (
+                "a tagger that finds no empire",
+                "    if not empires:",
+                "test_a_tagger_that_finds_no_empire_is_refused",
+            ),
+            (
+                "a row the generator skips",
+                "        if stats is None:",
+                "test_a_row_the_generator_skips_is_left_as_the_generator_leaves_it",
+            ),
+            (
+                "a row of another source",
+                '        if row["source_id"] != CURATED_SOURCE:',
+                "test_a_row_of_another_source_is_reported_not_written",
+            ),
+            (
+                "a wave's write names its after-side",
+                "        if stamp == lane.run_stamp:",
+                "test_the_write_and_the_undo_name_their_own_sides",
+            ),
+            (
+                "a wave's undo names its before-side",
+                "        if stamp == lane.rollback_run_stamp:",
+                "test_the_write_and_the_undo_name_their_own_sides",
+            ),
+            (
+                "a missing basis file",
+                "    if not path.exists():",
+                "test_a_missing_basis_file_refuses",
+            ),
+            (
+                "the basis file is the applied plan's",
+                '    if cells_digest(wrote) != record["cells_sha256"]:',
+                "test_a_basis_file_that_is_not_the_applied_plan_s_refuses",
+            ),
+            (
+                "an undo is the exact inverse of its write",
+                '        if cells_digest(undone) != record["cells_sha256"]:',
+                "test_an_undo_that_is_not_the_exact_inverse_refuses",
+            ),
+            (
+                "a basis of another wave",
+                '    if record["wave"] != wave:',
+                "test_a_basis_of_another_wave_refuses",
+            ),
+            (
+                "after a wave, its own export is the basis",
+                '    if side == "after":',
+                "test_a_like_after_a_wave_s_export_is_put_back",
+            ),
+            (
+                "the curated sites are the basis's",
+                "    if set(by_id) != set(basis.unjournalled):",
+                "test_a_site_the_basis_does_not_know_refuses",
+            ),
+            (
+                "a row committed below the horizon",
+                "    if seen != basis.journal_rows:",
+                "test_a_row_committed_below_the_horizon_after_the_export_refuses",
+            ),
+            (
+                "a cell the basis wave refused is not compared",
+                '            if (row["id"], column) in excluded:',
+                "test_a_cell_the_basis_wave_refused_is_not_compared",
+            ),
+            (
+                "an applied wave is never re-planned",
+                "    if applied:",
+                "test_an_applied_wave_is_never_re_planned",
+            ),
         )
     ),
     *(
@@ -1612,16 +1713,46 @@ CASES: list[Case] = [
                 "test_mystery_counts_every_curated_row_with_a_description_or_not",
             ),
             (
-                "only writes after the last card write are put back",
-                "    since = max(card_ids) if card_ids else 0",
-                "    since = 0",
-                "test_only_what_was_written_after_the_last_card_write_is_put_back",
+                "only writes past the basis horizon are put back",
+                '        if entry["table_name"] != "unified_sites" or int(entry["id"]) <= basis.since:',
+                '        if entry["table_name"] != "unified_sites" or int(entry["id"]) <= 0:',
+                "test_only_what_was_written_after_the_basis_horizon_is_put_back",
             ),
             (
                 "the journal is put back newest first",
                 '    for entry in sorted(journal, key=lambda j: int(j["id"]), reverse=True):',
                 '    for entry in sorted(journal, key=lambda j: int(j["id"])):',
                 "test_journalled_inputs_are_put_back_newest_first",
+            ),
+            (
+                "the unjournalled inputs are the basis's",
+                '        row.update(basis.unjournalled[row["id"]])',
+                "        pass",
+                "test_a_like_after_a_wave_s_export_is_put_back",
+            ),
+            (
+                "a card_stats row no wave wrote refuses",
+                "    raise PlanError(\n        f\"card_stats journal row {last['id']} was written by",
+                "    return None\n    raise PlanError(\n        f\"card_stats journal row {last['id']} was written by",
+                "test_a_card_stats_row_no_wave_wrote_refuses",
+            ),
+            (
+                "an undo restores the basis its wave's proof stood on",
+                '    inner = record["proof_basis"]',
+                "    inner = None",
+                "test_an_undo_of_a_later_wave_restores_the_earlier_wave_s_basis",
+            ),
+            (
+                "--wave is checked before a plan is written",
+                "        card_stats_lane(value)\n    except ValueError",
+                "        pass\n    except ValueError",
+                "test_a_wave_label_nothing_could_apply_is_refused",
+            ),
+            (
+                "--write keeps the wave's basis",
+                "            write_basis_json(basis_record(result, export, args.wave), out / BASIS_FILE)\n",
+                "",
+                "test_main_writes_the_wave_s_basis_next_to_its_plan",
             ),
         )
     ),
@@ -1692,6 +1823,47 @@ CASES: list[Case] = [
                 "        if not decision.quote or not decision.note:",
                 "test_a_malformed_entry_is_refused",
             ),
+            # ---- 2026-09-23 review: the guards it found without a test or a case
+            (
+                "a T11 kind this lane does not decide",
+                "        if rule is None:",
+                "test_a_t11_kind_this_lane_does_not_decide_is_refused",
+            ),
+            (
+                "T11 reports a site once",
+                "        if finding.site_id in by_site:",
+                "test_t11_reporting_a_site_twice_is_refused",
+            ),
+            (
+                "a pair's item was collected",
+                "        if entity is None:",
+                "test_a_pair_whose_item_was_not_collected_is_refused",
+            ),
+            (
+                "Wikidata answered every item",
+                "    if missing:",
+                "test_wikidata_answering_no_entity_is_refused",
+            ),
+            (
+                "a decision names a curated site",
+                "        if site is None:",
+                "test_a_decision_for_a_site_that_is_not_curated_is_refused",
+            ),
+            (
+                "the decisions file exists",
+                "    if not path.exists():",
+                "test_a_missing_decisions_file_is_refused",
+            ),
+            (
+                "a decision names a UUID",
+                "        if not UUID_RE.match(decision.site_id):",
+                "test_a_malformed_entry_is_refused",
+            ),
+            (
+                "an export holds a curated site",
+                '    if not rows["site"]:',
+                "test_an_export_is_its_one_snapshot_and_at_least_one_site",
+            ),
         )
     ),
     *(
@@ -1733,7 +1905,33 @@ CASES: list[Case] = [
                 '    return " ".join(name.casefold().split())',
                 "test_names_fold_case_width_and_spaces_but_nothing_else",
             ),
+            (
+                "rule (b) retires or keeps pending, nothing else",
+                '        elif decision.rule == "b" and decision.status in (RETIRED, PENDING):',
+                '        elif decision.rule == "b":',
+                "test_an_undated_row_cannot_be_kept_in_scope_by_rule_b",
+            ),
+            (
+                "a duplicate loser another rule decided",
+                "        if dup.loser in decided or dup.loser in retired_survivors - {dup.survivor}:",
+                "        if dup.loser in retired_survivors - {dup.survivor}:",
+                "test_a_duplicate_loser_another_rule_decided_is_refused",
+            ),
+            (
+                "a duplicate loser that is another pair's survivor",
+                "        if dup.loser in decided or dup.loser in retired_survivors - {dup.survivor}:",
+                "        if dup.loser in decided:",
+                "test_a_duplicate_chain_never_retires_a_survivor",
+            ),
         )
+    ),
+    Case(
+        "scope: the premise holds the description",
+        LANE,
+        "        \"coalesce(u.site_type, 'NULL'), u.name, md5(coalesce(u.description, '')))\"",
+        "        \"coalesce(u.site_type, 'NULL'), u.name)\"",
+        "test_the_premise_holds_the_description_a_quote_rests_on",
+        SCOPE_TESTS,
     ),
     # ------------------------------------------------------------------- the reversal planner
     *(
@@ -1789,6 +1987,117 @@ CASES: list[Case] = [
                 "the gold record is the site's",
                 "        if record is None or ref != reason.site_id:",
                 "test_a_gold_record_of_another_site_does_not_count",
+            ),
+            # ---- 2026-09-23 review: the guards it found without a test or a case
+            (
+                "the reasons file exists",
+                "    if not path.exists():",
+                "test_a_missing_reasons_file_is_refused",
+            ),
+            (
+                "a reversal needs a reason and quotes",
+                "        if not r.reason or not r.quotes:",
+                "test_a_reversal_without_a_reason_or_evidence_is_refused",
+            ),
+            (
+                "a quoted page was collected",
+                "        if quote.source not in pages:",
+                "test_evidence_that_is_not_where_it_says_refuses",
+            ),
+            (
+                "the quote is in its source",
+                "    if quote.text not in text:",
+                "test_evidence_that_is_not_where_it_says_refuses",
+            ),
+        )
+    ),
+    *(
+        Case(f"reversal: {label}", REVERSAL, old, new, test, REVERSAL_TESTS)
+        for label, old, new, test in (
+            (
+                "the named row is the reason's cell",
+                '    if (\n        entry["table_name"] != "unified_sites"',
+                '    if False and (\n        entry["table_name"] != "unified_sites"',
+                "test_each_check_refuses_with_its_reason",
+            ),
+            (
+                "the restored value reads in its column",
+                "    try:\n        typed_value(lane.cell(reason.column), str(restored))",
+                "    try:\n        pass",
+                "test_a_restored_value_the_column_cannot_read_is_refused",
+            ),
+            (
+                "a source this lane cannot check",
+                '        return f"{quote.source!r} is not a source this lane can check"',
+                "        text = quote.text",
+                "test_a_quote_of_a_source_this_lane_cannot_check_refuses",
+            ),
+        )
+    ),
+    # ------------------------------------------ the tagged export the cell lanes share (plan.py)
+    *(
+        guard(f"tagged export: {label}", PLAN, needle, test, CELL_TESTS)
+        for label, needle, test in (
+            (
+                "a kind is a plain word",
+                "        if not _EXPORT_KIND.match(kind) or kind == SNAPSHOT_KIND:",
+                "test_a_kind_that_is_not_a_plain_word_is_refused",
+            ),
+            (
+                "one snapshot line",
+                "    if len(stamps) != 1:",
+                "test_the_rows_of_each_kind_and_one_snapshot",
+            ),
+        )
+    ),
+    *(
+        Case(f"tagged export: {label}", PLAN, old, new, test, CELL_TESTS)
+        for label, old, new, test in (
+            (
+                "a line of a kind nobody asked for",
+                '            raise PlanError(f"the export holds a line of kind {kind!r}: {line[:80]!r}")',
+                "            continue",
+                "test_the_rows_of_each_kind_and_one_snapshot",
+            ),
+            (
+                "a failed export",
+                '    if proc.returncode != 0:\n        raise PlanError(f"the export failed',
+                '    if False:\n        raise PlanError(f"the export failed',
+                "test_a_failed_export_is_refused_and_keeps_nothing",
+            ),
+        )
+    ),
+    # ------------------------------------------ guard 6's inverse clause, its probe, the residual
+    *(
+        Case(f"cells: {label}", path, old, new, test, CELL_TESTS)
+        for label, path, old, new, test in (
+            (
+                "guard 6: the named row wrote the planned old value",
+                APPLY,
+                '        add("               AND l.new_value IS NOT DISTINCT FROM p.old_value")\n',
+                "",
+                "test_guard_6_requires_the_exact_inverse_of_the_named_row",
+            ),
+            (
+                "guard 6: the named row replaced the planned new value",
+                APPLY,
+                '        add("               AND l.old_value IS NOT DISTINCT FROM p.new_value)")',
+                '        add("               )")',
+                "test_guard_6_requires_the_exact_inverse_of_the_named_row",
+            ),
+            (
+                "the inverse probe restores another value from its own row",
+                APPLY,
+                "                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),",
+                "                corrupt(0, journal_id=0),",
+                "test_the_inverse_probe_names_its_own_row_and_restores_another_value",
+            ),
+            (
+                "the reversal residual covers every cell",
+                LANE,
+                '    holds = typed_case(\n        cells,\n        "l.new_value",',
+                '    holds = typed_case(\n        cells[:1],\n        "l.new_value",',
+                "test_the_residual_compares_each_cell_of_the_lane_in_its_type",
             ),
         )
     ),

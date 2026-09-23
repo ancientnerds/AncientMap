@@ -11,6 +11,7 @@ proves that for each one).
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -313,6 +314,16 @@ class TestTheCellStatement:
         assert "scope guard 6" not in undo and "journal_id" not in undo
         assert "scope guard 6" not in rendered(CARD, [card_cell()])
 
+    def test_guard_6_requires_the_exact_inverse_of_the_named_row(self) -> None:
+        """The named row must have written the planned old value and replaced the planned new one:
+        a cell that names its own row but restores anything else is not that row's undo."""
+        write = rendered(L.REVERSAL_1, [reversal_cell()])
+        guard = write.split("-- scope guard 6", 1)[1].split("IF bad > 0", 1)[0]
+        lookup = guard.split("OR EXISTS", 1)[0]
+        assert "WHERE l.id = p.journal_id AND l.table_name = 'unified_sites'" in lookup
+        assert "AND l.new_value IS NOT DISTINCT FROM p.old_value\n" in lookup
+        assert "AND l.old_value IS NOT DISTINCT FROM p.new_value)" in lookup
+
     def test_the_writer_names_the_target_and_each_cell_s_column(self) -> None:
         sql = rendered(CARD, [card_cell()])
         assert "'card_stats', r.column_name, 'site_id', r.site_id::text," in sql
@@ -499,9 +510,9 @@ class TestTheCellProbes:
             )
         }
         assert {"guard4-not-owned", "guard5-premise", "guard2-foreign-column"} <= card
-        assert "guard6-journal-row" not in card
+        assert not {"guard6-journal-row", "guard6-not-the-inverse"} & card
         reversal = {c[0] for c in A.probe_cases([reversal_cell()], L.REVERSAL_1, FOREIGN)}
-        assert "guard6-journal-row" in reversal and "guard2-too-long" in reversal
+        assert {"guard6-journal-row", "guard6-not-the-inverse", "guard2-too-long"} <= reversal
         assert "guard5-premise" not in reversal and "guard4-not-owned" not in reversal
         scope = {c[0] for c in A.probe_cases([cell()], L.SCOPE, FOREIGN)}
         assert "guard2-too-long" not in scope, "neither scope column has a width"
@@ -514,9 +525,127 @@ class TestTheCellProbes:
         )
         assert mutated[0].column not in CARD.columns and says == A.refusal(A.GUARD2_SAYS)
 
+    @pytest.mark.parametrize("column", ["country", "period_start"])
+    def test_the_inverse_probe_names_its_own_row_and_restores_another_value(
+        self, column: str
+    ) -> None:
+        """`guard6-journal-row` names journal id 0, which the lookup alone refuses; this probe
+        keeps the cell's own row and changes only the value it restores, so on production only
+        guard 6's inverse clause can refuse it."""
+        first = (
+            reversal_cell()
+            if column == "country"
+            else reversal_cell(
+                column="period_start",
+                old_value="-2500",
+                new_value="-3000",
+                site_id=SITE_A,
+                journal_id=28018,
+            )
+        )
+        records = [first, reversal_cell(site_id=SITE_A, journal_id=28638)]
+        (_, _, mutated, says) = next(
+            c
+            for c in A.probe_cases(records, L.REVERSAL_1, FOREIGN)
+            if c[0] == "guard6-not-the-inverse"
+        )
+        assert says == A.refusal(A.GUARD6_SAYS) and mutated[1:] == records[1:]
+        probe = mutated[0]
+        assert (probe.journal_id, probe.old_value, probe.column) == (
+            first.journal_id,
+            first.old_value,
+            first.column,
+        )
+        assert probe.new_value not in (first.new_value, first.old_value)
+        # the plan-side mirror of guards 1 to 5 lets it through: nothing refuses it before guard 6
+        A.validate_records(mutated, lane=L.REVERSAL_1)
+
     def test_the_other_source_probe_keeps_the_cell_and_swaps_the_site(self) -> None:
         (_, _, mutated, _) = next(
             c for c in A.probe_cases([card_cell()], CARD, FOREIGN) if c[0] == "guard1-other-source"
         )
         assert mutated[0].site_id == FOREIGN["id"] and mutated[0].column == "mystery"
         assert mutated[0].premise == "p"
+
+
+# ---------------------------------------------------------------------- the reversal residual
+class TestTheReversalResidual:
+    def test_the_residual_compares_each_cell_of_the_lane_in_its_type(self) -> None:
+        """Built from the lane's cells (`typed_case`), not from a second column-to-type map: a
+        column added to the cells is counted, a journal row of another column reads as false."""
+        predicate = L.REVERSAL_1.post_commit_residual.predicate
+        assert (
+            "WHEN 'country' THEN unified_sites.country IS NOT DISTINCT FROM "
+            "l.new_value::character varying" in predicate
+        )
+        assert (
+            "WHEN 'period_start' THEN unified_sites.period_start IS NOT DISTINCT FROM "
+            "l.new_value::integer" in predicate
+        )
+        assert predicate.count("WHEN '") == len(L.REVERSAL_1.cells)
+        assert predicate.endswith("ELSE false END)")
+        assert L.REVERSAL_1.rehearsal_residual == L.REVERSAL_1.post_commit_residual
+        wider = L.reversal_residual(
+            [1], (*L.REVERSAL_1.cells, L.Column("site_type", "character varying", max_chars=100))
+        )
+        assert (
+            "WHEN 'site_type' THEN unified_sites.site_type IS NOT DISTINCT FROM "
+            "l.new_value::character varying" in wider.predicate
+        )
+
+
+# ------------------------------------------------------------------------- the tagged export
+class TestTheTaggedExport:
+    """The one read-only export the cell lanes share (`plan.tagged_export_script`)."""
+
+    SNAPSHOT = '{"kind": "snapshot", "row": {"exported_at": "t"}}\n'
+
+    def test_the_script_is_one_read_only_snapshot(self) -> None:
+        sql = P.tagged_export_script((("site", "SELECT 1"), ("pair", "SELECT 2")))
+        assert sql.startswith("\\set QUIET on\nBEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n")
+        assert (
+            "SELECT json_build_object('kind', 'pair', 'row', row_to_json(t)) FROM (SELECT 2) t;\n"
+            in sql
+        )
+        assert sql.endswith(
+            "SELECT json_build_object('kind', 'snapshot', 'row', json_build_object("
+            "'exported_at', now()::text));\nCOMMIT;\n"
+        )
+
+    @pytest.mark.parametrize("kind", ["site'; DROP TABLE x; --", "snapshot", "", "Site"])
+    def test_a_kind_that_is_not_a_plain_word_is_refused(self, kind: str) -> None:
+        with pytest.raises(P.PlanError, match="is not a kind a tagged export can carry"):
+            P.tagged_export_script(((kind, "SELECT 1"),))
+
+    def test_the_rows_of_each_kind_and_one_snapshot(self) -> None:
+        text = '{"kind": "site", "row": {"a": 1}}\n\n' + self.SNAPSHOT
+        assert P.parse_tagged_export(text, ("site", "pair")) == (
+            {"site": [{"a": 1}], "pair": []},
+            "t",
+        )
+        with pytest.raises(P.PlanError, match="kind 'pair'"):
+            P.parse_tagged_export('{"kind": "pair", "row": {}}\n' + self.SNAPSHOT, ("site",))
+        with pytest.raises(P.PlanError, match="one snapshot line, it has 0"):
+            P.parse_tagged_export('{"kind": "site", "row": {}}\n', ("site",))
+        with pytest.raises(P.PlanError, match="one snapshot line, it has 2"):
+            P.parse_tagged_export(self.SNAPSHOT + self.SNAPSHOT, ("site",))
+
+    def test_a_failed_export_is_refused_and_keeps_nothing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        answers: list[subprocess.CompletedProcess[str]] = []
+
+        def send(sql: str, *, host: str, rows: bool, timeout: int) -> Any:
+            assert host == P.SSH_HOST and rows is True and timeout > 0
+            assert "READ ONLY" in sql and sql.endswith("COMMIT;\n")
+            return answers.pop(0)
+
+        monkeypatch.setattr(P, "send", send)
+        script = P.tagged_export_script((("site", "SELECT 1"),))
+        answers.append(subprocess.CompletedProcess(["ssh"], 2, "", "psql: FATAL: starting up\n"))
+        with pytest.raises(P.PlanError, match=r"the export failed \(psql exit 2\): psql: FATAL"):
+            P.write_tagged_export(script, tmp_path / "export" / "export.jsonl")
+        assert not (tmp_path / "export").exists()
+        answers.append(subprocess.CompletedProcess(["ssh"], 0, self.SNAPSHOT, ""))
+        path = P.write_tagged_export(script, tmp_path / "export" / "export.jsonl")
+        assert path.read_text(encoding="utf-8") == self.SNAPSHOT

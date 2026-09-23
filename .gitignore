@@ -310,8 +310,9 @@ output/remediation/mechanical_site_type/REHEARSAL.sql
 # The cell lanes (2026-09-23): versioned the same way. A card_stats wave follows the hero repair's
 # rule instead: its production export (every curated description, ~7 MB), PLAN.jsonl (~8 MB) and
 # APPLY.sql (~5 MB) are bulk that `card_stats.py --export/--write` and `apply.py --emit` rebuild;
-# PLAN.md, SKIPPED.jsonl and the undo (ROLLBACK.sql) are versioned. A wave is re-planned from a
-# fresh export right before it is applied, so the versioned undo is the applied plan's only then.
+# PLAN.md, SKIPPED.jsonl, the undo (ROLLBACK.sql) and the basis the next wave's proof reads
+# (BASIS.json, ~0.4 MB) are versioned. A wave is re-planned from a fresh export right before it is
+# applied, so the versioned undo and basis are the applied plan's only then.
 # The scope lane's fetched pages are bulk and regenerable (`scope.py --collect`).
 !output/remediation/mechanical_card_stats/
 output/remediation/mechanical_card_stats/*/export/

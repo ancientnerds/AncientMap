@@ -33,8 +33,12 @@ never re-typed (`census/tests/t11_scope_window.py`) - plus the duplicate pairs.
 
 Every quote must appear verbatim in the live description, or the decision is refused. A row whose
 `scope_status` is already set is left alone (the lane fills an unassessed column), and a site with
-two decisions is refused. Every write carries its premise - the date, point, type and name the
-decision rests on - so the transaction refuses a site that changed after the export (guard 5).
+two decisions is refused. Every write carries its premise - the date, point, type, name and
+description (as an md5) the decision rests on - so the transaction refuses a site that changed
+after the export (guard 5): a reviewed decision quotes the description, and a quote the row no
+longer holds is no evidence. What the premise does not hold is a duplicate's ranking (`created_at`
+and the link, citation and image counts of both rows): the survivor is not a planned row, so no
+per-row guard can condition on it - the counts are the export's, printed in `REVIEW.md`.
 
 `--export` reads production (read-only, one `READ ONLY` transaction) into
 `output/remediation/mechanical_scope/export/`; `--collect` fetches the Wikidata names of the items
@@ -63,8 +67,6 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from prod_write import send  # noqa: E402
-
 from mechanical.lane import SCOPE, sql_literal  # noqa: E402
 from mechanical.plan import (  # noqa: E402
     CURATED_SOURCE,
@@ -75,9 +77,12 @@ from mechanical.plan import (  # noqa: E402
     Verdict,
     _now,
     get_json,
+    parse_tagged_export,
+    tagged_export_script,
     write_plan_jsonl,
     write_rollback_sql,
     write_skipped_jsonl,
+    write_tagged_export,
 )
 from pipeline.utils.public_sites import RETIRED, SCOPE_STATUSES  # noqa: E402
 
@@ -130,22 +135,16 @@ EXPORT_JOURNAL_SQL = (
 )
 
 
+EXPORT_PARTS = (
+    ("site", EXPORT_SITES_SQL),
+    ("pair", EXPORT_PAIRS_SQL),
+    ("journal", EXPORT_JOURNAL_SQL),
+)
+
+
 def export_script() -> str:
     """The sites, the pairs and the journal from one read-only snapshot, tagged by kind."""
-    parts = (
-        ("site", EXPORT_SITES_SQL),
-        ("pair", EXPORT_PAIRS_SQL),
-        ("journal", EXPORT_JOURNAL_SQL),
-    )
-    return (
-        "\\set QUIET on\nBEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
-        + "".join(
-            f"SELECT json_build_object('kind', '{kind}', 'row', row_to_json(t)) FROM ({sql}) t;\n"
-            for kind, sql in parts
-        )
-        + "SELECT json_build_object('kind', 'snapshot', 'row', json_build_object('exported_at', "
-        "now()::text));\nCOMMIT;\n"
-    )
+    return tagged_export_script(EXPORT_PARTS)
 
 
 @dataclass(frozen=True)
@@ -157,35 +156,21 @@ class Export:
 
 
 def parse_export(text: str) -> Export:
-    """The export's tagged lines; a line of any other kind is refused."""
-    kinds: dict[str, list[dict[str, Any]]] = {"site": [], "pair": [], "journal": [], "snapshot": []}
-    for line in text.splitlines():
-        if not line.strip():
-            continue
-        payload = json.loads(line)
-        if payload.get("kind") not in kinds:
-            raise PlanError(f"the export holds a line of kind {payload.get('kind')!r}")
-        kinds[payload["kind"]].append(payload["row"])
-    if len(kinds["snapshot"]) != 1:
-        raise PlanError(f"the export must hold one snapshot line, it has {len(kinds['snapshot'])}")
-    if not kinds["site"]:
+    """The export's tagged lines (`plan.parse_tagged_export` refuses a line of another kind and an
+    export without its one snapshot line)."""
+    rows, exported_at = parse_tagged_export(text, (kind for kind, _sql in EXPORT_PARTS))
+    if not rows["site"]:
         raise PlanError("the export holds no curated site")
     return Export(
-        sites=tuple(kinds["site"]),
-        pairs=tuple(kinds["pair"]),
-        journal=tuple(kinds["journal"]),
-        exported_at=str(kinds["snapshot"][0]["exported_at"]),
+        sites=tuple(rows["site"]),
+        pairs=tuple(rows["pair"]),
+        journal=tuple(rows["journal"]),
+        exported_at=exported_at,
     )
 
 
 def write_export(directory: Path) -> Path:
-    proc = send(export_script(), rows=True, timeout=900)
-    if proc.returncode != 0:
-        raise PlanError(f"the export failed (psql exit {proc.returncode}): {proc.stderr.strip()}")
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "export.jsonl"
-    path.write_text(proc.stdout, encoding="utf-8", newline="\n")
-    return path
+    return write_tagged_export(export_script(), directory / "export.jsonl")
 
 
 # ------------------------------------------------------------------------ the Wikidata names
@@ -238,7 +223,13 @@ def t11_findings(sites: Sequence[Mapping[str, Any]], cache: Path) -> dict[str, A
     """
     from census.tests import t11_scope_window as t11
 
-    findings = t11.run(SimpleNamespace(cache=Path(cache), sites=[dict(s) for s in sites]))
+    return index_findings(
+        t11.run(SimpleNamespace(cache=Path(cache), sites=[dict(s) for s in sites]))
+    )
+
+
+def index_findings(findings: Iterable[Any]) -> dict[str, Any]:
+    """T11's findings by site id - one per site, or the site would get two decisions."""
     by_site: dict[str, Any] = {}
     for finding in findings:
         if finding.site_id in by_site:

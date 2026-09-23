@@ -138,7 +138,7 @@ from census.tests.t05_country_values import (  # noqa: E402
     _vocabulary,
 )
 from journal_chain import first_break  # noqa: E402
-from prod_write import DIGEST_RE, pin_line  # noqa: E402
+from prod_write import DIGEST_RE, SSH_HOST, pin_line, send  # noqa: E402
 
 from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
@@ -1385,6 +1385,69 @@ def sql_ids(ids: Iterable[str]) -> str:
         if not UUID_RE.match(sid):
             raise PlanError(f"{sid!r} is not a UUID - refusing to interpolate it")
     return ", ".join(sql_literal(sid) for sid in wanted)
+
+
+# ------------------------------------------------------------------------- the tagged export
+#: The kind of the one line a tagged export ends with: the snapshot's own clock.
+SNAPSHOT_KIND = "snapshot"
+#: A kind is spliced into a SQL string literal: lowercase letters and underscores, nothing else.
+_EXPORT_KIND = re.compile(r"^[a-z_]+$")
+
+
+def tagged_export_script(parts: Sequence[tuple[str, str]]) -> str:
+    """One read-only, repeatable-read transaction: every row of each `(kind, sql)` part as one
+    JSON object tagged with its kind, then one `snapshot` line with the transaction's `now()`.
+
+    One snapshot, so the parts are read at the same instant; `QUIET` keeps psql's `BEGIN`/`COMMIT`
+    tags out of the output. The cell lanes read production this way (`card_stats.py`, `scope.py`).
+    """
+    for kind, _sql in parts:
+        if not _EXPORT_KIND.match(kind) or kind == SNAPSHOT_KIND:
+            raise PlanError(f"{kind!r} is not a kind a tagged export can carry")
+    return (
+        "\\set QUIET on\nBEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
+        + "".join(
+            f"SELECT json_build_object('kind', '{kind}', 'row', row_to_json(t)) FROM ({sql}) t;\n"
+            for kind, sql in parts
+        )
+        + f"SELECT json_build_object('kind', '{SNAPSHOT_KIND}', 'row', json_build_object("
+        "'exported_at', now()::text));\nCOMMIT;\n"
+    )
+
+
+def parse_tagged_export(text: str, kinds: Iterable[str]) -> tuple[dict[str, list[dict]], str]:
+    """The rows of each kind and the snapshot's `exported_at`, from `tagged_export_script`'s output.
+
+    A line of a kind the caller did not ask for is refused, and so is an export without exactly
+    one snapshot line: psql stops at the first error, so a missing snapshot line is an export
+    that did not finish.
+    """
+    rows: dict[str, list[dict]] = {kind: [] for kind in kinds}
+    stamps: list[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        kind = payload.get("kind")
+        if kind == SNAPSHOT_KIND:
+            stamps.append(str(payload["row"]["exported_at"]))
+        elif kind in rows:
+            rows[kind].append(payload["row"])
+        else:
+            raise PlanError(f"the export holds a line of kind {kind!r}: {line[:80]!r}")
+    if len(stamps) != 1:
+        raise PlanError(f"the export must hold one snapshot line, it has {len(stamps)}")
+    return rows, stamps[0]
+
+
+def write_tagged_export(script: str, path: Path, *, host: str = SSH_HOST) -> Path:
+    """Send a tagged export to production (read-only) and keep its output as it came."""
+    proc = send(script, host=host, rows=True, timeout=900)
+    if proc.returncode != 0:
+        raise PlanError(f"the export failed (psql exit {proc.returncode}): {proc.stderr.strip()}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(proc.stdout, encoding="utf-8", newline="\n")
+    return path
 
 
 # ------------------------------------------------------------------------------- the journal
