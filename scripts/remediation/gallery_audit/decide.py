@@ -755,7 +755,12 @@ def verify_evidence(
 
 def main(argv: list[str] | None = None) -> int:
     """`decide.py liveness --store DIR --hero-moves PLAN.jsonl`: the L1/L2 rows of a liveness store,
-    written next to it as PLANNED.jsonl (+ LISTED.json). Offline; the chunk writer applies them."""
+    written next to it as PLANNED.jsonl (+ LISTED.json). Offline; the chunk writer applies them.
+
+    `decide.py vision --run-dir DIR --calibration C1-DIR --liveness-store DIR --chunk N
+    --kinds-from G0-PLAN.jsonl ... --applied <store>/PLANNED.jsonl ...`: the K/X/H rows of one
+    chunk, on the state with every applied plan folded in (the liveness write first), under the
+    admission re-derived from the C1 directory."""
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     live = sub.add_parser("liveness")

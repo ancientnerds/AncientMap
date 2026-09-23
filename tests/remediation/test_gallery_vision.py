@@ -1444,6 +1444,9 @@ def test_l1_leaves_a_row_that_is_already_excluded_alone() -> None:
     rows = {SITE: [_row(1, is_excluded=True), _row(2)]}
     line = _live_line("File_1.jpg", liveness.DELETED_OTHER, [1], log={"logid": 3})
     assert decide.plan_liveness([line], rows, {}) == ([], [])
+    stranger = _live_line("X.jpg", liveness.DELETED_OTHER, [99], log={"logid": 4})
+    with pytest.raises(worklist.WorklistError, match="which the state does not hold"):
+        decide.plan_liveness([stranger], rows, {})
 
 
 def test_h1_never_promotes_a_row_outside_the_accepted_tiers() -> None:
