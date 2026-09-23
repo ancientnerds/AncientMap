@@ -2,7 +2,7 @@
 fields are still open, which item a site is given, which of its other-language articles are read,
 and the records the fetch stage buys them through.
 
-No test here reads production, Pi or the network: the mass run, the export, the census and every
+No test here reads production, a model or the network: the mass run, the export, the census and every
 lookup answer are small fabricated files and fetchers in the shape the real ones had on 2026-09-23.
 """
 

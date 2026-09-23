@@ -1,6 +1,8 @@
 """Build the sitelink lane's plan: the fields the mass finder called UNVERIFIABLE, asked again with the
-site's own other-language Wikipedia articles as new evidence. Zero MiniMax; the finder and reviewer are
-the mass run's (`opencode-go/deepseek-v4.1-flash`, the frozen round-5 prompts).
+site's own other-language Wikipedia articles as new evidence. Zero MiniMax; the finder and reviewer ask
+the mass run's frozen round-5 prompts, answered since 2026-09-23 by Opus agents through the handoff
+(owner order: no DeepSeek any more; `scripts/remediation/opus_handoff.py`, `mass_run.py
+--handoff-export|--handoff-import`, `review_all.py` the same) - this module asks no model.
 
 **Why.** The mass run's finder answered `UNVERIFIABLE` on 7,761 fields, 4,342 of them writable
 (`period_start` 3,028, `site_type` 887, `country` 427, counted with `discover_stage.parse_answer`).
