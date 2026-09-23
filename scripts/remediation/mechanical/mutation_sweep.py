@@ -1851,7 +1851,7 @@ CASES: list[Case] = [
             ),
             (
                 "the decisions file exists",
-                "    if not path.exists():",
+                '    if not path.exists():\n        raise PlanError(f"{path} is missing - the reviewed decisions',
                 "test_a_missing_decisions_file_is_refused",
             ),
             (
@@ -1863,6 +1863,58 @@ CASES: list[Case] = [
                 "an export holds a curated site",
                 '    if not rows["site"]:',
                 "test_an_export_is_its_one_snapshot_and_at_least_one_site",
+            ),
+            # ---- 2026-09-23: the owner-case duplicate list (bcases/DUPLICATES.jsonl)
+            (
+                "the duplicate list exists",
+                '    if not path.exists():\n        raise PlanError(f"{path} is missing - the owner-case',
+                "test_a_missing_list_is_refused",
+            ),
+            (
+                "a listed row is a UUID",
+                "            if not UUID_RE.match(sid):",
+                "test_a_malformed_list_is_refused",
+            ),
+            (
+                "a listed loser has another row as survivor and evidence",
+                "        if listed.loser == listed.survivor or not listed.evidence:",
+                "test_a_malformed_list_is_refused",
+            ),
+            ("a loser is listed once", "    if twice:", "test_a_malformed_list_is_refused"),
+            (
+                "the held file exists",
+                '    if not path.exists():\n        raise PlanError(f"{path} is missing - the pairs held',
+                "test_the_held_file_names_every_site_of_its_groups",
+            ),
+            (
+                "a held site is a UUID",
+                "            if not UUID_RE.match(str(sid)):",
+                "test_the_held_file_names_every_site_of_its_groups",
+            ),
+            (
+                "a listed row is curated",
+                "        if loser is None or survivor is None:",
+                "test_a_listed_site_that_is_not_curated_is_refused",
+            ),
+            (
+                "a listed pair still shares the item it names",
+                '        if qid is None or _item_of(survivor) != qid or f"both rows carry {qid};" not in claim:',
+                "test_a_listed_pair_that_no_longer_shares_its_item_is_refused",
+            ),
+            (
+                "a listed pair is within the list's 2 km",
+                "        if metres > DUP_MAX_M:",
+                "test_a_listed_pair_now_further_apart_than_the_list_allows_is_refused",
+            ),
+            (
+                "no pair held for the owner",
+                "        if {dup.loser, dup.survivor} & held:",
+                "test_a_pair_held_for_the_owner_is_never_retired",
+            ),
+            (
+                "the listed evidence goes into the journal",
+                "        if dup.listed:",
+                "test_a_listed_loser_is_retired_as_a_duplicate_of_its_survivor",
             ),
         )
     ),
@@ -1922,6 +1974,30 @@ CASES: list[Case] = [
                 "        if dup.loser in decided or dup.loser in retired_survivors - {dup.survivor}:",
                 "        if dup.loser in decided:",
                 "test_a_duplicate_chain_never_retires_a_survivor",
+            ),
+            (
+                "a pair found and listed is one retirement",
+                "        elif own.survivor == dup.survivor:",
+                "        elif False:",
+                "test_a_pair_found_and_listed_is_one_retirement_with_both_evidences",
+            ),
+            (
+                "a disputed loser is not retired",
+                "    for loser in sorted(set(by_loser) - disputed):",
+                "    for loser in sorted(set(by_loser)):",
+                "test_a_loser_the_two_name_with_different_survivors_is_refused",
+            ),
+            (
+                "the planner reads the list",
+                "                listed=load_listed_duplicates(DUPLICATES_LIST),",
+                "                listed=(),",
+                "test_the_planner_reads_the_list_and_the_held_pairs",
+            ),
+            (
+                "the planner reads the held pairs",
+                "                held=load_held_sites(DUPLICATES_HELD),",
+                "                held=frozenset(),",
+                "test_the_planner_reads_the_list_and_the_held_pairs",
             ),
         )
     ),

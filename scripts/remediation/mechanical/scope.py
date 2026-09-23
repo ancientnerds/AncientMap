@@ -25,7 +25,14 @@ never re-typed (`census/tests/t11_scope_window.py`) - plus the duplicate pairs.
   *both* names of that item (label, alias or sitelink title in any language, compared after NFKC,
   case-fold and whitespace folding). The survivor is the older row, then the one with more
   content links, more description citations, more images, then the lower id; the other is retired
-  with the reason `duplicate_of:<survivor id>`.
+  with the reason `duplicate_of:<survivor id>`. The owner-case list
+  `output/remediation/bcases/DUPLICATES.jsonl` (2026-09-23, `bcases/classify.py`: the same two-names
+  test within 2 km, its own survivor rule, each line a loser, its survivor and the evidence) is
+  retired the same way. Each listed pair is re-read in the export first - both rows curated, both
+  still carrying the one item the line names, still within the list's 2 km - and a pair the lane
+  finds itself and the list names too is one retirement with both evidences, never two; a loser
+  the two name with different survivors is refused. No duplicate touches a site held for the owner
+  (`DUPLICATES_HELD.jsonl`: Banias / Caesarea Philippi, B10), whoever found it.
 * **(d) `T11/museum-past-cutoff`** (and an undated Museum row): the `period_start` of a museum is its
   founding year. Plan section 8.2 reviewed all 51 Museum rows: 41 stay, 3 leave. Every such row
   needs a `DECISIONS.json` entry quoting its description: `in_scope` for ancient material, `retired`
@@ -56,7 +63,7 @@ import sys
 import unicodedata
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -66,6 +73,8 @@ REPO = _HERE.parents[3]
 for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
+
+from bcases.classify import DUP_MAX_M  # noqa: E402
 
 from mechanical.lane import SCOPE, sql_literal  # noqa: E402
 from mechanical.plan import (  # noqa: E402
@@ -84,6 +93,7 @@ from mechanical.plan import (  # noqa: E402
     write_skipped_jsonl,
     write_tagged_export,
 )
+from pipeline.utils.geo import haversine_distance  # noqa: E402
 from pipeline.utils.public_sites import RETIRED, SCOPE_STATUSES  # noqa: E402
 
 log = logging.getLogger("mechanical.scope")
@@ -91,6 +101,11 @@ log = logging.getLogger("mechanical.scope")
 LANE = SCOPE
 DEFAULT_OUT = REPO / "output" / "remediation" / LANE.out_dir_name
 DEFAULT_CACHE = REPO / "output" / "remediation" / "cache"
+#: The owner-case duplicate list and the pairs it holds back for the owner (`bcases/classify.py`).
+BCASES = REPO / "output" / "remediation" / "bcases"
+DUPLICATES_LIST = BCASES / "DUPLICATES.jsonl"
+DUPLICATES_HELD = BCASES / "DUPLICATES_HELD.jsonl"
+LISTED_URL = "output/remediation/bcases/DUPLICATES.jsonl"
 DUPLICATE_METRES = 100
 DUPLICATE_PREFIX = "duplicate_of:"
 PENDING, IN_SCOPE = "pending", "in_scope"
@@ -283,11 +298,66 @@ def survivor_rank(site: Mapping[str, Any]) -> tuple[Any, ...]:
 
 @dataclass(frozen=True)
 class Duplicate:
+    """A loser and its survivor. `found`: this lane's own 100 m rule found the pair; `listed`: the
+    evidence of its `DUPLICATES.jsonl` line, when the owner-case list names it."""
+
     loser: str
     survivor: str
     qid: str
     metres: float
     names: tuple[str, str]
+    found: bool = True
+    listed: tuple[dict[str, Any], ...] = ()
+
+
+@dataclass(frozen=True)
+class ListedDuplicate:
+    """One line of `DUPLICATES.jsonl`: `loser_id`, `survivor_id`, `evidence`."""
+
+    loser: str
+    survivor: str
+    evidence: tuple[dict[str, Any], ...]
+
+
+def load_listed_duplicates(path: Path) -> list[ListedDuplicate]:
+    """The owner-case duplicate list, refused unless every line is a loser, its survivor and the
+    evidence, and no loser is listed twice."""
+    if not path.exists():
+        raise PlanError(f"{path} is missing - the owner-case duplicate list is part of the plan")
+    out: list[ListedDuplicate] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        raw = json.loads(line)
+        listed = ListedDuplicate(
+            loser=str(raw["loser_id"]),
+            survivor=str(raw["survivor_id"]),
+            evidence=tuple(dict(e) for e in raw["evidence"]),
+        )
+        for sid in (listed.loser, listed.survivor):
+            if not UUID_RE.match(sid):
+                raise PlanError(f"{path.name}: {sid!r} is not a UUID")
+        if listed.loser == listed.survivor or not listed.evidence:
+            raise PlanError(
+                f"{path.name}: {listed.loser} needs another row as survivor and evidence"
+            )
+        out.append(listed)
+    losers = Counter(d.loser for d in out)
+    twice = sorted(sid for sid, n in losers.items() if n > 1)
+    if twice:
+        raise PlanError(f"{path.name} lists {twice} as a loser more than once")
+    return out
+
+
+def load_held_sites(path: Path) -> frozenset[str]:
+    """Every site of a duplicate group held for the owner (`DUPLICATES_HELD.jsonl`)."""
+    if not path.exists():
+        raise PlanError(f"{path} is missing - the pairs held for the owner are part of the plan")
+    held: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        for sid in json.loads(line)["site_ids"]:
+            if not UUID_RE.match(str(sid)):
+                raise PlanError(f"{path.name}: {sid!r} is not a UUID")
+            held.add(str(sid))
+    return frozenset(held)
 
 
 def find_duplicates(
@@ -318,6 +388,117 @@ def find_duplicates(
             )
         )
     return dups, others
+
+
+Refusal = tuple[Mapping[str, Any], str, str]
+
+
+def _item_of(site: Mapping[str, Any]) -> str | None:
+    """The site's Wikidata item as the export read it from `site_external_ids`."""
+    ext = site["ext"]
+    return None if ext is None else ext.get("wikidata_qid")
+
+
+def check_listed(
+    export: Export, listed: Sequence[ListedDuplicate]
+) -> tuple[list[Duplicate], list[Refusal]]:
+    """The listed pairs that still hold in the export, and the ones that no longer do.
+
+    A line is a claim about the rows as `bcases` read them: both carry one item, within 2 km. The
+    coordinate and item waves of 2026-09-23 wrote after that read, so each claim is re-read here:
+    the item both rows carry today must be the one the line names, and the rows must still lie
+    within the list's own 2 km (`bcases.classify.DUP_MAX_M`).
+    """
+    by_id = {s["id"]: s for s in export.sites}
+    dups: list[Duplicate] = []
+    refused: list[Refusal] = []
+    for line in listed:
+        loser, survivor = by_id.get(line.loser), by_id.get(line.survivor)
+        if loser is None or survivor is None:
+            missing = line.loser if loser is None else line.survivor
+            raise PlanError(f"DUPLICATES.jsonl names {missing}, which is not a curated site")
+        qid = _item_of(loser)
+        claim = str(line.evidence[0].get("quote", ""))
+        if qid is None or _item_of(survivor) != qid or f"both rows carry {qid};" not in claim:
+            refused.append(
+                (
+                    loser,
+                    "listed-item-moved",
+                    f"the rows carry {qid} and {_item_of(survivor)} today; the list says {claim!r}",
+                )
+            )
+            continue
+        metres = 1000.0 * haversine_distance(
+            float(loser["lat"]), float(loser["lon"]), float(survivor["lat"]), float(survivor["lon"])
+        )
+        if metres > DUP_MAX_M:
+            refused.append(
+                (
+                    loser,
+                    "listed-pair-too-far",
+                    f"{metres:.1f} m from its survivor today, past the list's {DUP_MAX_M:.0f} m",
+                )
+            )
+            continue
+        dups.append(
+            Duplicate(
+                loser=line.loser,
+                survivor=line.survivor,
+                qid=qid,
+                metres=metres,
+                names=(str(survivor["name"]), str(loser["name"])),
+                found=False,
+                listed=line.evidence,
+            )
+        )
+    return dups, refused
+
+
+def resolve_duplicates(
+    export: Export,
+    found: Sequence[Duplicate],
+    listed: Sequence[Duplicate],
+    held: frozenset[str],
+) -> tuple[list[Duplicate], list[Refusal]]:
+    """The lane's own duplicates and the listed ones as one set, one retirement per loser.
+
+    A loser both name with the same survivor is one duplicate carrying both evidences; with two
+    different survivors it is refused - which row stays is then a question, not a rule. A pair
+    touching a site held for the owner is refused whoever found it.
+    """
+    by_id = {s["id"]: s for s in export.sites}
+    by_loser: dict[str, Duplicate] = {d.loser: d for d in found}
+    refused: list[Refusal] = []
+    disputed: set[str] = set()
+    for dup in listed:
+        own = by_loser.get(dup.loser)
+        if own is None:
+            by_loser[dup.loser] = dup
+        elif own.survivor == dup.survivor:
+            by_loser[dup.loser] = replace(own, listed=dup.listed)
+        else:
+            disputed.add(dup.loser)
+            refused.append(
+                (
+                    by_id[dup.loser],
+                    "survivors-disagree",
+                    f"this lane's rule keeps {own.survivor}, DUPLICATES.jsonl keeps {dup.survivor}",
+                )
+            )
+    out: list[Duplicate] = []
+    for loser in sorted(set(by_loser) - disputed):
+        dup = by_loser[loser]
+        if {dup.loser, dup.survivor} & held:
+            refused.append(
+                (
+                    by_id[dup.loser],
+                    "held-for-the-owner",
+                    f"DUPLICATES_HELD.jsonl holds this pair for the owner (survivor {dup.survivor})",
+                )
+            )
+            continue
+        out.append(dup)
+    return out, refused
 
 
 # ------------------------------------------------------------------------------ the decision
@@ -523,25 +704,43 @@ def classify_scope(
                 (loser, "survivor-retired", f"the survivor {dup.survivor} is or would be retired")
             )
             continue
-        evidence = (
-            {
-                "source": f"wikidata:{dup.qid}",
-                "url": f"https://www.wikidata.org/wiki/{dup.qid}",
-                "quote": f"both {dup.names[0]!r} and {dup.names[1]!r} are names of {dup.qid}, "
-                f"and the two rows are {dup.metres:.1f} m apart",
-            },
-            {
-                "source": "survivor rule",
-                "url": "scripts/remediation/mechanical/scope.py:survivor_rank",
-                "quote": "older row, then more content links, description citations, images: "
-                f"survivor {survivor['name']} ({survivor['links']} links, {survivor['citations']} "
-                f"citations, {survivor['images']} images) over {loser['name']} ({loser['links']} "
-                f"links, {loser['citations']} citations, {loser['images']} images)",
-            },
-        )
+        evidence: list[dict[str, Any]] = []
+        if dup.found:
+            evidence += [
+                {
+                    "source": f"wikidata:{dup.qid}",
+                    "url": f"https://www.wikidata.org/wiki/{dup.qid}",
+                    "quote": f"both {dup.names[0]!r} and {dup.names[1]!r} are names of {dup.qid}, "
+                    f"and the two rows are {dup.metres:.1f} m apart",
+                },
+                {
+                    "source": "survivor rule",
+                    "url": "scripts/remediation/mechanical/scope.py:survivor_rank",
+                    "quote": "older row, then more content links, description citations, images: "
+                    f"survivor {survivor['name']} ({survivor['links']} links, "
+                    f"{survivor['citations']} citations, {survivor['images']} images) over "
+                    f"{loser['name']} ({loser['links']} links, {loser['citations']} citations, "
+                    f"{loser['images']} images)",
+                },
+            ]
+        if dup.listed:
+            evidence.append(
+                {
+                    "source": "bcases:DUPLICATES.jsonl",
+                    "url": LISTED_URL,
+                    "quote": f"listed for the scope lane; re-read in the export: both rows carry "
+                    f"{dup.qid}, {dup.metres:.1f} m apart",
+                }
+            )
+            evidence += [{**e, "url": e.get("url") or LISTED_URL} for e in dup.listed]
         out.append(
             SiteDecision(
-                loser, "c", RETIRED, f"{DUPLICATE_PREFIX}{dup.survivor}", evidence, "duplicate"
+                loser,
+                "c",
+                RETIRED,
+                f"{DUPLICATE_PREFIX}{dup.survivor}",
+                tuple(evidence),
+                "duplicate",
             )
         )
         decided.add(dup.loser)
@@ -589,11 +788,19 @@ def build_scope_plan(
     decisions: Mapping[str, Decision],
     entities: Mapping[str, Any],
     *,
+    listed: Sequence[ListedDuplicate],
+    held: frozenset[str],
     built_at: str,
 ) -> ScopePlan:
-    """A pure function of its inputs: no network, no database, no clock of its own."""
-    duplicates, others = find_duplicates(export, entities)
+    """A pure function of its inputs: no network, no database, no clock of its own.
+
+    `listed` is `DUPLICATES.jsonl`, `held` every site of `DUPLICATES_HELD.jsonl`.
+    """
+    found, others = find_duplicates(export, entities)
+    still_listed, gone = check_listed(export, listed)
+    duplicates, disputed = resolve_duplicates(export, found, still_listed, held)
     decided, refused = classify_scope(export, findings, decisions, duplicates)
+    refused = [*gone, *disputed, *refused]
     skipped = tuple(
         Verdict(
             site_id=site["id"],
@@ -614,7 +821,11 @@ def build_scope_plan(
     counters = {
         "t11_findings": len(findings),
         "duplicate_pairs_within_100m_sharing_an_item": len(export.pairs),
-        "duplicate_pairs_both_names_known": len(duplicates),
+        "duplicate_pairs_both_names_known": len(found),
+        "duplicates_listed": len(listed),
+        "duplicates_listed_still_holding": len(still_listed),
+        "duplicates_found_and_listed": sum(1 for d in duplicates if d.found and d.listed),
+        "duplicates": len(duplicates),
         "sites": len(decided),
         "cells": 2 * len(decided),
         "refused": len(refused),
@@ -733,7 +944,11 @@ def write_plan_md(result: ScopePlan, export: Export, path: Path) -> None:
         f"{c['status:pending']} pending, {c['status:in_scope']} in_scope; {c['refused']} refused.** "
         f"T11 found {c['t11_findings']} site(s); {c['duplicate_pairs_within_100m_sharing_an_item']} "
         f"curated pair(s) within {DUPLICATE_METRES} m share a Wikidata item, "
-        f"{c['duplicate_pairs_both_names_known']} of them under two of its names."
+        f"{c['duplicate_pairs_both_names_known']} of them under two of its names. "
+        f"`{LISTED_URL}` lists {c['duplicates_listed']} loser(s), "
+        f"{c['duplicates_listed_still_holding']} of them still holding in the export, "
+        f"{c['duplicates_found_and_listed']} also found by this lane's own rule: "
+        f"{c['duplicates']} duplicate(s) in all, each loser counted once."
     )
     add("")
     add("| rule | status | sites |")
@@ -797,6 +1012,8 @@ def main(argv: list[str] | None = None) -> int:
                 t11_findings(export.sites, args.cache),
                 load_decisions(args.out / "DECISIONS.json"),
                 entities,
+                listed=load_listed_duplicates(DUPLICATES_LIST),
+                held=load_held_sites(DUPLICATES_HELD),
                 built_at=_now(),
             )
             write_plan_jsonl(result.plan, args.out / "PLAN.jsonl")

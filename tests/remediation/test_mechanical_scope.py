@@ -102,8 +102,12 @@ def build(
     findings: dict[str, Finding],
     decisions: dict[str, S.Decision] | None = None,
     entities: dict[str, Any] | None = None,
+    listed: tuple[S.ListedDuplicate, ...] = (),
+    held: frozenset[str] = frozenset(),
 ) -> S.ScopePlan:
-    return S.build_scope_plan(ex, findings, decisions or {}, entities or {}, built_at="t")
+    return S.build_scope_plan(
+        ex, findings, decisions or {}, entities or {}, listed=listed, held=held, built_at="t"
+    )
 
 
 def status_of(result: S.ScopePlan) -> dict[str, tuple[str, str]]:
@@ -252,6 +256,230 @@ class TestRuleC:
     def test_names_fold_case_width_and_spaces_but_nothing_else(self) -> None:
         assert S.fold("Ｔarxien  TEMPLES ") == "tarxien temples"
         assert S.fold("Tarxien Temples") != S.fold("Tarxien Temple")
+
+
+OTHER = "4a9b3802-1067-4f6b-a144-4c2ffe9619a4"
+BANIAS = "ae2ca7b1-89da-46cb-8924-f9d04dd5da2e"
+CAESAREA = "ce7db300-8777-425d-917a-2f6d9f325b58"
+
+
+def listed(loser: str, survivor: str, qid: str = "Q1242421") -> S.ListedDuplicate:
+    """A `DUPLICATES.jsonl` line as `bcases/classify.py` writes it."""
+    return S.ListedDuplicate(
+        loser=loser,
+        survivor=survivor,
+        evidence=(
+            {
+                "source": "production:site_external_ids",
+                "url": f"https://www.wikidata.org/wiki/{qid}",
+                "quote": f"both rows carry {qid}; 'x' and 'y' are both names of it; 7.0 m apart",
+            },
+            {"source": "survivor rule", "url": None, "quote": "survives by more content links"},
+        ),
+    )
+
+
+def item(qid: str = "Q1242421") -> dict[str, str]:
+    return {"wikidata_qid": qid}
+
+
+class TestTheListedDuplicates:
+    """`bcases/DUPLICATES.jsonl` retires its losers too - re-read in the export, one retirement per
+    loser whoever found it, and never a pair held for the owner."""
+
+    NAMES = {"Q1242421": entity("Dooey's Cairn", "Ballymacaldrack Court Tomb", "x")}
+
+    def sites(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        a, b = TestRuleC().sites()
+        return {**a, "ext": item()}, {**b, "ext": item()}
+
+    def test_a_listed_loser_is_retired_as_a_duplicate_of_its_survivor(self) -> None:
+        """A pair the lane's own 100 m rule does not see (no pair in the export) is retired on the
+        list alone, with the list's evidence and today's reading of it."""
+        a, b = self.sites()
+        b = {**b, "lat": b["lat"] + 0.0001}  # 11.1 m north
+        result = build(export(a, b), {}, listed=(listed(DUP_B, DUP_A),))
+        (d,) = result.decisions
+        assert (d.site["id"], d.rule, d.status, d.reason) == (
+            DUP_B,
+            "c",
+            "retired",
+            f"duplicate_of:{DUP_A}",
+        )
+        sources = [e["source"] for e in d.evidence]
+        assert sources == [
+            "bcases:DUPLICATES.jsonl",
+            "production:site_external_ids",
+            "survivor rule",
+        ]
+        assert d.evidence[0]["quote"].endswith("both rows carry Q1242421, 11.1 m apart")
+        assert d.evidence[2]["url"] == S.LISTED_URL
+        assert (result.counters["duplicates_listed"], result.counters["duplicates"]) == (1, 1)
+
+    def test_a_pair_found_and_listed_is_one_retirement_with_both_evidences(self) -> None:
+        a, b = self.sites()
+        result = build(
+            export(a, b, pairs=(TestRuleC.PAIR,)),
+            {},
+            entities=self.NAMES,
+            listed=(listed(DUP_B, DUP_A),),
+        )
+        assert [(d.site["id"], d.reason) for d in result.decisions] == [
+            (DUP_B, f"duplicate_of:{DUP_A}")
+        ]
+        assert not result.refused
+        sources = {e["source"] for e in result.decisions[0].evidence}
+        assert {"wikidata:Q1242421", "bcases:DUPLICATES.jsonl", "survivor rule"} <= sources
+        assert result.counters["duplicates_found_and_listed"] == 1
+        assert result.counters["duplicates"] == 1 and result.counters["cells"] == 2
+
+    def test_a_loser_the_two_name_with_different_survivors_is_refused(self) -> None:
+        a, b = self.sites()
+        third = site(OTHER, name="Ballymacaldrack", ext=item())
+        result = build(
+            export(a, b, third, pairs=(TestRuleC.PAIR,)),
+            {},
+            entities=self.NAMES,
+            listed=(listed(DUP_B, OTHER),),
+        )
+        assert not result.decisions
+        assert [(r[0]["id"], r[1]) for r in result.refused] == [(DUP_B, "survivors-disagree")]
+
+    @pytest.mark.parametrize("found", [True, False])
+    def test_a_pair_held_for_the_owner_is_never_retired(self, found: bool) -> None:
+        """Banias / Caesarea Philippi (B10) stays out whoever finds the pair: the list, or this
+        lane's own rule should the two rows ever lie within 100 m."""
+        banias = site(BANIAS, name="Banias", ext=item("Q606295"))
+        caesarea = site(CAESAREA, name="Caesarea Philippi", ext=item("Q606295"), links=5)
+        pair = {"a": BANIAS, "b": CAESAREA, "qid": "Q606295", "metres": 89.5}
+        result = build(
+            export(banias, caesarea, pairs=(pair,) if found else ()),
+            {},
+            entities={"Q606295": entity("Banias", "Caesarea Philippi", "Banias")},
+            listed=() if found else (listed(BANIAS, CAESAREA, "Q606295"),),
+            held=frozenset({BANIAS, CAESAREA}),
+        )
+        assert not result.decisions
+        assert [(r[0]["id"], r[1]) for r in result.refused] == [(BANIAS, "held-for-the-owner")]
+
+    @pytest.mark.parametrize(
+        ("loser_item", "claimed"),
+        [("Q9", "Q1242421"), ("Q1242421", "Q9"), (None, "Q1242421")],
+    )
+    def test_a_listed_pair_that_no_longer_shares_its_item_is_refused(
+        self, loser_item: str | None, claimed: str
+    ) -> None:
+        """The item waves of 2026-09-23 rewrote site_external_ids after the list was read."""
+        a, b = self.sites()
+        b = {**b, "ext": None if loser_item is None else item(loser_item)}
+        result = build(export(a, b), {}, listed=(listed(DUP_B, DUP_A, claimed),))
+        assert not result.decisions
+        assert [(r[0]["id"], r[1]) for r in result.refused] == [(DUP_B, "listed-item-moved")]
+
+    def test_a_listed_pair_now_further_apart_than_the_list_allows_is_refused(self) -> None:
+        """The coordinate wave of 2026-09-23 moved points after the list was read."""
+        a, b = self.sites()
+        moved = {**b, "lat": b["lat"] + 0.05}
+        result = build(export(a, moved), {}, listed=(listed(DUP_B, DUP_A),))
+        assert not result.decisions
+        ((row, why, note),) = result.refused
+        assert (row["id"], why) == (DUP_B, "listed-pair-too-far") and "2000 m" in note
+
+    def test_a_listed_site_that_is_not_curated_is_refused(self) -> None:
+        a, _ = self.sites()
+        with pytest.raises(P.PlanError, match=f"names {DUP_B}, which is not a curated site"):
+            build(export(a), {}, listed=(listed(DUP_B, DUP_A),))
+
+
+class TestTheDuplicateFiles:
+    def write(self, tmp_path: Path, lines: list[dict[str, Any]], name: str) -> Path:
+        path = tmp_path / name
+        path.write_text("\n".join(json.dumps(line) for line in lines), encoding="utf-8")
+        return path
+
+    def line(self, **over: Any) -> dict[str, Any]:
+        base = {
+            "loser_id": DUP_B,
+            "survivor_id": DUP_A,
+            "evidence": [{"source": "s", "url": None, "quote": "q"}],
+        }
+        base.update(over)
+        return base
+
+    def test_the_list_reads_each_loser_its_survivor_and_the_evidence(self, tmp_path: Path) -> None:
+        (got,) = S.load_listed_duplicates(self.write(tmp_path, [self.line()], "D.jsonl"))
+        assert (got.loser, got.survivor, got.evidence[0]["quote"]) == (DUP_B, DUP_A, "q")
+
+    @pytest.mark.parametrize(
+        ("lines", "message"),
+        [
+            ([{"loser_id": "x"}], "'x' is not a UUID"),
+            ([{"survivor_id": DUP_B}], "needs another row as survivor"),
+            ([{"evidence": []}], "needs another row as survivor and evidence"),
+            ([{}, {"survivor_id": OTHER}], "as a loser more than once"),
+        ],
+    )
+    def test_a_malformed_list_is_refused(
+        self, tmp_path: Path, lines: list[dict[str, Any]], message: str
+    ) -> None:
+        path = self.write(tmp_path, [self.line(**over) for over in lines], "D.jsonl")
+        with pytest.raises(P.PlanError, match=message):
+            S.load_listed_duplicates(path)
+
+    def test_a_missing_list_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(P.PlanError, match="the owner-case duplicate list is part of the plan"):
+            S.load_listed_duplicates(tmp_path / "DUPLICATES.jsonl")
+
+    def test_the_held_file_names_every_site_of_its_groups(self, tmp_path: Path) -> None:
+        path = self.write(tmp_path, [{"site_ids": [BANIAS, CAESAREA]}], "H.jsonl")
+        assert S.load_held_sites(path) == frozenset({BANIAS, CAESAREA})
+        with pytest.raises(P.PlanError, match="'Banias' is not a UUID"):
+            S.load_held_sites(self.write(tmp_path, [{"site_ids": ["Banias"]}], "H.jsonl"))
+        with pytest.raises(P.PlanError, match="the pairs held for the owner are part of the plan"):
+            S.load_held_sites(tmp_path / "missing.jsonl")
+
+    def test_the_planner_reads_the_list_and_the_held_pairs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`scope.py --write` plans the listed losers and leaves the held pair alone."""
+        a, b = TestTheListedDuplicates().sites()
+        banias = site(BANIAS, name="Banias", ext=item("Q606295"))
+        caesarea = site(CAESAREA, name="Caesarea Philippi", ext=item("Q606295"))
+        export_dir = tmp_path / "export"
+        export_dir.mkdir()
+        rows = [{"kind": "site", "row": row} for row in (a, b, banias, caesarea)]
+        rows.append({"kind": "snapshot", "row": {"exported_at": "t"}})
+        (export_dir / "export.jsonl").write_text(
+            "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8"
+        )
+        (export_dir / "wikidata_names.json").write_text('{"entities": {}}', encoding="utf-8")
+        (tmp_path / "DECISIONS.json").write_text('{"decisions": []}', encoding="utf-8")
+        lines = [
+            {"loser_id": line.loser, "survivor_id": line.survivor, "evidence": line.evidence}
+            for line in (listed(DUP_B, DUP_A), listed(BANIAS, CAESAREA, "Q606295"))
+        ]
+        monkeypatch.setattr(S, "DUPLICATES_LIST", self.write(tmp_path, lines, "D.jsonl"))
+        monkeypatch.setattr(
+            S,
+            "DUPLICATES_HELD",
+            self.write(tmp_path, [{"site_ids": [BANIAS, CAESAREA]}], "H.jsonl"),
+        )
+        monkeypatch.setattr(S, "t11_findings", lambda sites, cache: {})
+        assert S.main(["--out", str(tmp_path), "--write"]) == 0
+        records = A.load_records(tmp_path / "PLAN.jsonl")
+        assert {(r.site_id, r.column, r.new_value) for r in records} == {
+            (DUP_B, "scope_status", "retired"),
+            (DUP_B, "scope_reason", f"duplicate_of:{DUP_A}"),
+        }
+        skipped = (tmp_path / "SKIPPED.jsonl").read_text(encoding="utf-8")
+        assert "held-for-the-owner" in skipped and BANIAS in skipped
+
+    def test_the_delivered_list_is_19_losers_and_the_held_pair_is_not_among_them(self) -> None:
+        losers = S.load_listed_duplicates(S.DUPLICATES_LIST)
+        held = S.load_held_sites(S.DUPLICATES_HELD)
+        assert len(losers) == 19 and held == {BANIAS, CAESAREA}
+        assert not {d.loser for d in losers} & held
+        assert not {d.survivor for d in losers} & held
 
 
 class TestTheRefusals:
@@ -464,6 +692,19 @@ class TestTheDeliveredPlan:
         review = (self.DIR / "REVIEW.md").read_text(encoding="utf-8")
         for r in A.load_records(self.DIR / "PLAN.jsonl"):
             assert f"`{r.site_id}`" in review
+
+    def test_every_listed_loser_is_retired_as_a_duplicate_of_its_listed_survivor(self) -> None:
+        """The delivered plan carries the whole owner-case list, each loser once, and nothing of
+        the pair held for the owner."""
+        records = A.load_records(self.DIR / "PLAN.jsonl")
+        reasons = {r.site_id: r.new_value for r in records if r.column == "scope_reason"}
+        duplicates = {s: v for s, v in reasons.items() if str(v).startswith(S.DUPLICATE_PREFIX)}
+        listed = {
+            d.loser: f"{S.DUPLICATE_PREFIX}{d.survivor}"
+            for d in S.load_listed_duplicates(S.DUPLICATES_LIST)
+        }
+        assert duplicates == listed
+        assert not set(reasons) & S.load_held_sites(S.DUPLICATES_HELD)
 
     def test_every_reviewed_decision_is_loadable(self) -> None:
         decisions = S.load_decisions(self.DIR / "DECISIONS.json")
