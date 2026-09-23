@@ -6282,3 +6282,52 @@ refusal, the record gate, `chr(n)` spelling, the statement's guards and writes, 
 control-character refusal, the plan line of waves 1-3, waves 1-3 byte for byte, the delivered files,
 `resolve`, check/verify over both tables, NULL as "no row"), 6 in the new `test_migration_0023.py`.
 `mutation_sweep.py "source url: "`: **28/28 caught**.
+
+### B, revised the same day: no link to a place-level item (orchestrator decision) - supersedes the 56-row plan
+
+The orchestrator's decision: wave 4 writes no link to a town or municipality - the defect waves 1-3
+repaired - as a rule, not a hand exception. The rule is the gate waves 2 and 3 applied,
+`bcases.qid_research.is_site_kind` (`classify.is_container_class`: a P31 class naming a settlement,
+an administrative unit or a natural feature, unless a site word such as "ancient" or "archaeological"
+makes it a site again; or a Wikimedia page), imported, not copied. `phase4/subject_gate.py`'s
+place-level list was not taken: its verdict accepts a place-level item for a site whose own type is a
+settlement type, and Acanceh, Atzompa and Cerro De Trincheras are all `City/town/settlement` in the
+catalogue, so it would have let exactly these three through. A refused item refuses **both**
+`enwiki_title` and `wikidata_qid` of the site; its `source_url` is split all the same.
+
+`resolve --wave 4` now also records each resolved item's P31 class labels, read the way the bcases
+research reads them (`bcases.collect.fetch_claims` + `fetch_labels`, the census Fetcher, the bcases
+cache; a class without an English label stops the read). Re-resolved 2026-09-23 11:38Z; production
+and Wikipedia answered as before. PLAN.md gains a duplicate-candidate table built from the plan.
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL (primitive) | 20 |
+| `site_external_ids` new rows (14 sites x 2) | 28 |
+| corrected | 0 |
+| **total** | **48** (digest `8da78ba0...`) |
+
+Left, each with its reason in PLAN.md: **Acanceh** (Q8186545, P31 locality of Mexico), **Atzompa**
+(Q3846612, municipality of Mexico), **Cerro De Trincheras** (Q1434929, locality of Mexico) - a place,
+not the site; **Petra** (Q5788, P31 ancient city, **city**, archaeological site) - the canonical gate
+reads the plain class "city" (Q515) as a container, so Petra's ids are refused too, and **Petra's
+stored `enwiki_title` keeps its newline** (the wave has no replacement to write; a removal is a
+`DELETE`, the owner's call) - PLAN.md says so, and says that the manual `--all` refresh would write
+Petra's refused ids; **Cantil de las animas** (no article); **Chiapa de Corzo** (Q4384315 carried by
+Zoque Culture Archaeological Zone). Duplicate candidate, in PLAN.md with its evidence: Chiapa de Corzo
+(`24aa135d`) / Zoque Culture Archaeological Zone (`ed186ea9`) - this site's article
+`Chiapa_de_Corzo_(Mesoamerican_site)` resolves to Q4384315, the item the other row carries, and the
+other row's `source_url` is the same article.
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 48 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 28`, `DO`,
+  `NOTICE: source-url split: 48 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 0 journal rows, 20 control-character values.
+* Apply-then-undo rehearsal (one transaction, rolled back): 48 + 48 journal rows, then 20
+  control-character values, 1 external-id row among the 20 sites and Petra's broken title - the
+  pre-state exactly.
+* Tests: the wave-4 fixture gains a municipality item and the real Petra class set; 3 new tests (the
+  place gate for both kinds with the split kept, the duplicate candidates with their evidence, the
+  class read's refusal of an unlabelled class). `mutation_sweep.py "source url: "`: **33/33 caught**.
+
+The apply commands above are unchanged; `check` now reads 48 rows.

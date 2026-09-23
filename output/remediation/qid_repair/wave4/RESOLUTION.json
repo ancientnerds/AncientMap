@@ -1,4 +1,68 @@
 {
+ "p31": {
+  "Q1024995": [
+   "archaeological site"
+  ],
+  "Q1046912": [
+   "tablet"
+  ],
+  "Q1058412": [
+   "archaeological site"
+  ],
+  "Q1059465": [
+   "archaeological site"
+  ],
+  "Q1156198": [
+   "cave",
+   "archaeological site",
+   "Maya site in Mexico"
+  ],
+  "Q13518345": [
+   "archaeological site"
+  ],
+  "Q1434929": [
+   "locality of Mexico"
+  ],
+  "Q2725918": [
+   "archaeological site"
+  ],
+  "Q3846612": [
+   "municipality of Mexico"
+  ],
+  "Q4384315": [
+   "archaeological site"
+  ],
+  "Q4850276": [
+   "archaeological site"
+  ],
+  "Q4936130": [
+   "archaeological site"
+  ],
+  "Q5055568": [
+   "archaeological site"
+  ],
+  "Q5788": [
+   "ancient city",
+   "city",
+   "archaeological site"
+  ],
+  "Q605455": [
+   "archaeological site"
+  ],
+  "Q804617": [
+   "archaeological site",
+   "Maya site in Mexico"
+  ],
+  "Q813784": [
+   "archaeological site"
+  ],
+  "Q8186545": [
+   "locality of Mexico"
+  ],
+  "Q928886": [
+   "archaeological site"
+  ]
+ },
  "qid_holders": {
   "Q1024995": [],
   "Q1046912": [],
@@ -12,7 +76,8 @@
   "Q4384315": [
    {
     "name": "Zoque Culture Archaeological Zone",
-    "site_id": "ed186ea9-9ed1-415d-828b-97d9f21401d2"
+    "site_id": "ed186ea9-9ed1-415d-828b-97d9f21401d2",
+    "source_url": "https://en.wikipedia.org/wiki/Chiapa_de_Corzo_(Mesoamerican_site)"
    }
   ],
   "Q4850276": [],
@@ -25,7 +90,7 @@
   "Q8186545": [],
   "Q928886": []
  },
- "read_at": "2026-09-23T10:52:11Z",
+ "read_at": "2026-09-23T11:38:12Z",
  "resolutions": {
   "Acanceh": {
    "canonical_title": "Acanceh",
@@ -142,7 +207,7 @@
    "redirected": false
   }
  },
- "resolved_at": "2026-09-23T10:52:14Z",
+ "resolved_at": "2026-09-23T11:38:14Z",
  "scope": "SELECT to_jsonb(t)::text FROM (SELECT id::text AS site_id, name, source_id, source_url, created_at::date::text AS created FROM unified_sites WHERE source_url ~ '[\\x00-\\x1f\\x7f]' ORDER BY id) t;",
  "sites": [
   {

@@ -122,8 +122,11 @@ title, the API answered it as `invalid`, and `_parse_query` stored it (both fixe
 * the English Wikipedia URL (second for 18 Mesoamerican sites, first for Petra) becomes
   `enwiki_title` + `wikidata_qid` through the **same path** the boot refresh takes
   (`enwiki_title_from_url` + `resolve_titles`: the canonical title after redirects, the page's item);
-  Petra's broken title is corrected. A resolution that finds no page, a disambiguation page, or an
-  item another curated site already carries is not written; it is listed with its reason.
+  Petra's broken title is corrected. A resolution that finds no page, a disambiguation page, an
+  item that is a place (a settlement, an administrative unit or a natural feature - P31 judged by
+  `bcases.qid_research.is_site_kind`, the gate of waves 2 and 3; orchestrator decision
+  2026-09-23), or an item another curated site already carries is not written, for both kinds;
+  it is listed with its reason, and a shared item as a duplicate candidate.
 * a new `(site, kind)` row is an `INSERT` with old value `NULL` ("no row"), guarded by "no row of
   that kind exists"; its reversal deletes exactly that row, conditional on its value, and journals it.
 
@@ -149,6 +152,10 @@ from typing import Any
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import lanes  # noqa: E402 - paths, the JSON-lines reader and the read-only psql seam
+from bcases import collect as bcases_collect  # noqa: E402 - the research's Wikidata reads
+from bcases import inputs as bcases_inputs  # noqa: E402
+from bcases.qid_research import is_site_kind  # noqa: E402 - waves 2-3's gate
+from census.fetch import Fetcher  # noqa: E402
 
 from pipeline.lyra.prospector.wiki import (  # noqa: E402
     CONTROL_RE,
@@ -2068,7 +2075,8 @@ EXTERNAL_SQL = (
     f"FROM {TABLE} WHERE site_id::text IN ({{ids}}) ORDER BY site_id, kind, value) t;"
 )
 HOLDERS_SQL = (
-    "SELECT to_jsonb(t)::text FROM (SELECT e.value AS qid, e.site_id::text AS site_id, u.name "
+    "SELECT to_jsonb(t)::text FROM (SELECT e.value AS qid, e.site_id::text AS site_id, u.name, "
+    "u.source_url "
     f"FROM {TABLE} e JOIN unified_sites u ON u.id = e.site_id WHERE e.kind = 'wikidata_qid' "
     f"AND u.source_id = '{CURATED}' AND e.value IN ({{qids}}) ORDER BY e.value, e.site_id) t;"
 )
@@ -2093,16 +2101,33 @@ class SplitPlan:
     rows: list[Change]
     left: list[Left]
     record: Mapping[str, Any]
+    #: Sites whose article's item another curated site carries: the owner's merge, not a link.
+    duplicates: list[dict[str, Any]]
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def item_classes(qids: list[str]) -> dict[str, list[str]]:
+    """The English labels of each item's P31 classes, read the way the bcases research reads them
+    (`bcases.collect.fetch_claims` + `fetch_labels`, the census Fetcher and the bcases cache). A
+    class without an English label stops the read: the place-level test could not judge it."""
+    with Fetcher(root=bcases_inputs.CACHE / "http", workers=1) as net:
+        claims = bcases_collect.fetch_claims(net, qids)
+        classes = sorted({c for qid in qids for c in claims[qid]["p31"]})
+        labels = bcases_collect.fetch_labels(net, classes) if classes else {}
+    unlabelled = [c for c in classes if not labels.get(c)]
+    if unlabelled:
+        raise SystemExit(f"no English label for the P31 class(es) {unlabelled}")
+    return {qid: [str(labels[c]) for c in claims[qid]["p31"]] for qid in qids}
+
+
 def resolve_split(
     run: Callable[[str], str],
     *,
     resolve: Callable[[list[str]], dict[str, TitleResolution]] = resolve_titles,
+    classes: Callable[[list[str]], dict[str, list[str]]] = item_classes,
     now: Callable[[], str] = _utc_now,
 ) -> dict[str, Any]:
     """Wave 4's input: production (read-only) and the boot refresh's own Wikipedia resolution."""
@@ -2130,7 +2155,10 @@ def resolve_split(
     holders: dict[str, list[dict[str, str]]] = {qid: [] for qid in qids}
     if qids:
         for row in lanes.json_rows(run(HOLDERS_SQL.format(qids=lanes.sql_literals(qids)))):
-            holders[row["qid"]].append({"site_id": row["site_id"], "name": row["name"]})
+            holders[row["qid"]].append(
+                {"site_id": row["site_id"], "name": row["name"], "source_url": row["source_url"]}
+            )
+    p31 = classes(qids) if qids else {}
     return {
         "read_at": read_at,
         "resolved_at": resolved_at,
@@ -2146,6 +2174,7 @@ def resolve_split(
             for title, r in sorted(resolutions.items())
         },
         "qid_holders": holders,
+        "p31": p31,
     }
 
 
@@ -2163,7 +2192,7 @@ def load_resolution(out: pathlib.Path) -> dict[str, Any]:
     if not path.exists():
         raise SystemExit(f"{path} does not exist; run `resolve --wave {SPLIT_WAVE}` first")
     record = json.loads(path.read_text(encoding="utf-8"))
-    missing = {"read_at", "resolved_at", "sites", "resolutions", "qid_holders"} - set(record)
+    missing = {"read_at", "resolved_at", "sites", "resolutions", "qid_holders", "p31"} - set(record)
     if missing:
         raise SystemExit(f"{path} is not a wave-4 resolution record (missing {sorted(missing)})")
     return record
@@ -2194,14 +2223,10 @@ def _split_change(
     )
 
 
-def _not_written(
-    sid: str,
-    res: Mapping[str, Any],
-    by_qid: Mapping[str, list[str]],
-    holders: Mapping[str, list[Mapping[str, str]]],
-    names: Mapping[str, str],
-) -> str | None:
-    """Why a resolution is not written (no page, a disambiguation page, a taken item), or None."""
+def _not_the_site(res: Mapping[str, Any], p31: Mapping[str, list[str]]) -> str | None:
+    """Why the article's resolution names no page of the site: no page, a disambiguation page, or
+    an item that is a place - a settlement, an administrative unit or a natural feature that
+    contains a site (`bcases.qid_research.is_site_kind`, the gate of waves 2 and 3). Or None."""
     if not res["canonical_title"]:
         return "no English Wikipedia page by that title"
     if res["disambiguation"]:
@@ -2209,13 +2234,34 @@ def _not_written(
     qid = res["qid"]
     if qid is None:
         return None
-    others = [h for h in holders.get(qid, []) if h["site_id"] != sid]
+    if qid not in p31:
+        raise SystemExit(f"the record holds no P31 of {qid}; run `resolve` again")
+    if not is_site_kind({"p31": p31[qid]}):
+        return f"{qid} is a place, not the site (P31: {', '.join(p31[qid])})"
+    return None
+
+
+def _sharers(
+    sid: str,
+    qid: str,
+    by_qid: Mapping[str, list[str]],
+    holders: Mapping[str, list[Mapping[str, str]]],
+    sites: Mapping[str, Mapping[str, Any]],
+) -> tuple[str, list[dict[str, str]]] | None:
+    """The other curated sites on this item - production's holders first, then this wave's own
+    sites that resolve to it - with the reason the ids are not written, or None."""
+    others = [dict(h) for h in holders.get(qid, []) if h["site_id"] != sid]
     if others:
         carried = ", ".join(f"{h['name']} ({h['site_id']})" for h in others)
-        return f"{qid} is already carried by the curated site {carried}"
-    twins = [other for other in by_qid[qid] if other != sid]
+        return f"{qid} is already carried by the curated site {carried}", others
+    twins = [
+        {"site_id": t, "name": str(sites[t]["name"]), "source_url": str(sites[t]["source_url"])}
+        for t in by_qid[qid]
+        if t != sid
+    ]
     if twins:
-        return f"{qid} is the item of " + ", ".join(f"{names[t]} ({t})" for t in twins) + " too"
+        named = ", ".join(f"{t['name']} ({t['site_id']})" for t in twins)
+        return f"{qid} is the item of {named} too", twins
     return None
 
 
@@ -2240,7 +2286,7 @@ def split_plan(record: Mapping[str, Any]) -> SplitPlan:
     sites = sorted(record["sites"], key=lambda s: (str(s["name"]).casefold(), str(s["site_id"])))
     if len({s["site_id"] for s in sites}) != len(sites):
         raise SystemExit("the resolution record names a site twice")
-    names = {str(s["site_id"]): str(s["name"]) for s in sites}
+    by_id = {str(s["site_id"]): s for s in sites}
     # the article of every site whose source_url this wave splits (one English Wikipedia URL)
     articles: dict[str, tuple[str, Mapping[str, Any]]] = {}
     for site in sites:
@@ -2262,6 +2308,7 @@ def split_plan(record: Mapping[str, Any]) -> SplitPlan:
 
     rows: list[Change] = []
     left: list[Left] = []
+    duplicates: list[dict[str, Any]] = []
     for site in sites:
         sid, name, value = str(site["site_id"]), str(site["name"]), str(site["source_url"])
         problem = _shape_problem(site)
@@ -2300,7 +2347,20 @@ def split_plan(record: Mapping[str, Any]) -> SplitPlan:
             )
             continue
         url, res = articles[sid]
-        why = _not_written(sid, res, by_qid, record["qid_holders"], names)
+        why = _not_the_site(res, record["p31"])
+        if why is None and res["qid"] is not None:
+            shared = _sharers(sid, res["qid"], by_qid, record["qid_holders"], by_id)
+            if shared is not None:
+                why, others = shared
+                duplicates.append(
+                    {
+                        "site_id": sid,
+                        "name": name,
+                        "qid": res["qid"],
+                        "article": url,
+                        "others": others,
+                    }
+                )
         if why is not None:
             left.append(Left(sid, name, "external ids", f"{url}: {why}"))
             continue
@@ -2332,7 +2392,7 @@ def split_plan(record: Mapping[str, Any]) -> SplitPlan:
                     f"no other curated site carries {new} (production, {record['read_at']})"
                 )
             rows.append(_split_change(site, kind, old, new, "two_source", tuple(evidence)))
-    return SplitPlan(rows, left, record)
+    return SplitPlan(rows, left, record, duplicates)
 
 
 def sql_value(value: str | None) -> str:
@@ -2590,12 +2650,46 @@ def _cell(value: str | None) -> str:
     return "<br>".join(f"`{part}`" for part in value.split(SEPARATOR))
 
 
+def _duplicate_evidence(dup: Mapping[str, Any], other: Mapping[str, str]) -> str:
+    same = " - the same article" if other["source_url"] == dup["article"] else ""
+    return (
+        f"this site's article {dup['article']} resolves to `{dup['qid']}`, the item the other "
+        f"row carries; the other row's source_url is {_cell(other['source_url'])}{same}"
+    )
+
+
 def wave4_markdown(plan: SplitPlan) -> str:
     """Wave 4's decision record: every row, every value left and why, and how to run it."""
     wave, record, rows = WAVE4, plan.record, plan.rows
     urls = [row for row in rows if row.table == SITES_TABLE]
     new = [row for row in rows if row.table == TABLE and row.old_value is None]
     corrected = [row for row in rows if row.table == TABLE and row.old_value is not None]
+    # the state the apply leaves: each site's source_url, the kinds it holds, the values kept
+    after_url = {str(s["site_id"]): str(s["source_url"]) for s in record["sites"]}
+    after_url.update({row.site_id: row.new_value for row in urls})
+    kinds = {
+        str(s["site_id"]): {k for k, v in s["external_ids"].items() if v} for s in record["sites"]
+    }
+    for row in rows:
+        if row.table == TABLE:
+            kinds[row.site_id].add(row.kind)
+    refused = {item.site_id for item in plan.left if item.what == "external ids"}
+    wiki_after = [
+        str(s["site_id"])
+        for s in record["sites"]
+        if after_url[str(s["site_id"])].startswith(ENWIKI)
+    ]
+    names = {str(s["site_id"]): str(s["name"]) for s in record["sites"]}
+    reread = sorted(names[sid] for sid in wiki_after if not kinds[sid])
+    refused_wiki = sorted(names[sid] for sid in wiki_after if sid in refused)
+    fixed = {(row.site_id, row.kind) for row in corrected}
+    broken_kept = sorted(
+        (str(s["name"]), kind)
+        for s in record["sites"]
+        for kind, values in s["external_ids"].items()
+        for value in values
+        if CONTROL_RE.search(value) and (str(s["site_id"]), kind) not in fixed
+    )
     lines = [
         "# Source-url split, wave 4 (2026-09-23) - planned, not applied",
         "",
@@ -2627,11 +2721,32 @@ def wave4_markdown(plan: SplitPlan) -> str:
             for item in plan.left
         ),
         "",
+        "## Duplicate candidates (the owner's merge, not a link)",
+        "",
+        "| site | the other curated site | shared item | evidence |",
+        "| --- | --- | --- | --- |",
+        *(
+            f"| {dup['name']} (`{dup['site_id']}`) | {other['name']} (`{other['site_id']}`) | "
+            f"`{dup['qid']}` | {_duplicate_evidence(dup, other)} |"
+            for dup in plan.duplicates
+            for other in dup["others"]
+        ),
+        "",
         "## Order and fixed point",
         "",
-        "* After the apply the boot refresh (`refresh_site_external_ids(only_missing=True)`) reads none "
-        "of these sites again (each either has rows or no longer has an English Wikipedia "
-        "`source_url`), and the `--all` path resolves Petra's single URL to the rows written here.",
+        "* After the apply the boot refresh (`refresh_site_external_ids(only_missing=True)`) reads "
+        "only a site with no external-id row and an English Wikipedia `source_url`: "
+        + (", ".join(reread) if reread else "none of these sites")
+        + ". The manual `--all` path reads every curated site whose `source_url` is an English "
+        "Wikipedia article, and would write the ids this wave refuses for "
+        + (", ".join(refused_wiki) if refused_wiki else "none of them")
+        + " - the fixed point waves 1-3 name for their own rows.",
+        *(
+            f"* {name} keeps its stored {kind} value with a control character: the wave refuses the "
+            "article's resolution, so it has no replacement to write, and a removal is a `DELETE` - "
+            "the owner's call."
+            for name, kind in broken_kept
+        ),
         "* `migrations/0023_source_url_no_control_chars.sql` may reach the deploy only after this "
         "wave is applied and verified: it fails while any `source_url` carries a control character, "
         "and a failing migration stops the deploy. Once it is applied, the `source_url` half of "
