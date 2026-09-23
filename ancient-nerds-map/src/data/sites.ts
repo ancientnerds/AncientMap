@@ -135,6 +135,17 @@ export async function fetchSites(fields: SiteFields = 'all'): Promise<SiteData[]
   return DataStore.getSites().map(toSiteData)
 }
 
+/**
+ * The payload the globe starts on. A focus deep link (#focus= / ?focus=) searches for its
+ * site's title as soon as the sites arrive; on the globe payload that search would wait
+ * for the details, showing every dot and "Searching..." until then. So a focus load takes
+ * the full payload, whose details are ready at once, and its first frame shows only the
+ * matches, as before. A plain globe load takes the slim payload and the details after.
+ */
+export function globeSiteFields(focusSiteId: string | null): SiteFields {
+  return focusSiteId ? 'all' : 'globe'
+}
+
 /** One details map per DataStore result, so every caller merges the same objects. */
 const detailsByResult = new WeakMap<Site[], Map<string, SiteDetails>>()
 
@@ -171,10 +182,12 @@ export function mergeSiteDetails(prev: SiteData[], byId: ReadonlyMap<string, Sit
 
 /**
  * A site from the bulk payload with its detail fields, for the paths that open a popup
- * from bulk data. Waits for the detail load (and starts it when it has not started yet);
- * rejects when it failed. A site the store does not hold comes back unchanged.
+ * from bulk data. A default-source site waits for the detail load (and starts it when it
+ * has not started yet) and rejects when that failed. Any other site (an opt-in source,
+ * an API search result) already carries its details and comes back unchanged at once.
  */
 export async function withSiteDetails(site: SiteData): Promise<SiteData> {
+  if (!DataStore.detailsCover(site.id)) return site
   await DataStore.loadSiteDetails()
   const stored = DataStore.getSiteById(site.id)
   return stored ? { ...site, ...siteDetailsOf(stored) } : site

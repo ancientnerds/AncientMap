@@ -214,7 +214,8 @@ class DataStoreClass {
    *
    * Memoised: every caller shares one request, and a failure stays a failure (the
    * caller reports it; there is no retry). Nothing to fetch after `initialize('all')`
-   * or in offline mode, which has no details and no network.
+   * or in offline mode, which has no network to fetch from (its records carry whatever
+   * DownloadManager downloaded).
    */
   loadSiteDetails(): Promise<Site[]> {
     const init = this.initPromise
@@ -273,7 +274,8 @@ class DataStoreClass {
     }
 
     // Load sites from IndexedDB
-    // The compact offline records are the API's site keys without details.
+    // DownloadManager stores each source's /sites/all records as the API sent them
+    // (normally the full payload, details included), so they map like the API payload.
     const allSites: CompactSite[] = await OfflineStorage.getAllSites()
     const sites = allSites.map(toSite)
     this._storeSitesBySource(sites)
@@ -283,7 +285,8 @@ class DataStoreClass {
     this.stats.dataSource = 'offline'
     this._updateBySourceStats()
 
-    // Offline data never had details and there is no network to fetch them.
+    // The offline records carry whatever DownloadManager downloaded, and there is no
+    // network to fetch more.
     this.hasSiteDetails = true
     this.isInitialized = true
     this.isOfflineMode = true
@@ -347,6 +350,14 @@ class DataStoreClass {
 
   getSiteById(id: string): Site | undefined {
     return this.sitesById.get(id)
+  }
+
+  /**
+   * Whether loadSiteDetails() fills in this site's details: the store holds it under
+   * the default source. Opt-in sources and API search results arrive with theirs.
+   */
+  detailsCover(id: string): boolean {
+    return this.sitesById.get(id)?.sourceId === DEFAULT_SOURCE
   }
 
   getSources(): SourceMeta[] {

@@ -4,7 +4,9 @@
  * DataStore.loadSiteDetails() is that second step: one fetch of the full
  * payload, merged onto the sites it already holds, never moving or adding a
  * dot. SearchPage keeps the full payload from the start (`initialize()`), and
- * offline mode has no details to fetch, so both count as ready at once.
+ * offline mode has no network to fetch them from (its records carry whatever
+ * DownloadManager downloaded, normally the full payload), so both count as
+ * ready at once.
  *
  * Node 20 (CI) has no global `navigator`, and OfflineStorage opens IndexedDB,
  * which neither node nor jsdom has: both are stubbed per test.
@@ -13,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DataStoreClass } from '../DataStore'
-import { OfflineStorage, type CompactSite, type DownloadState } from '../../services/OfflineStorage'
+import { OfflineStorage, type DownloadState } from '../../services/OfflineStorage'
 
 const SOURCES = { sources: [{ id: 'ancient_nerds', name: 'Ancient Nerds', color: '#fff', count: 2, enabledByDefault: true }] }
 
@@ -110,14 +112,17 @@ describe('DataStore.initialize(fields)', () => {
     expect(beta.location).toBeUndefined()
   })
 
-  it('counts details as ready in offline mode, where there are none to fetch', async () => {
+  it('counts details as ready in offline mode, where there is no network to fetch them', async () => {
     vi.stubGlobal('navigator', { onLine: false })
     vi.spyOn(OfflineStorage, 'isOfflineEnabled').mockResolvedValue(true)
     vi.spyOn(OfflineStorage, 'getDownloadState').mockResolvedValue({
       sources: { ancient_nerds: { cached: true, downloadedAt: '', siteCount: 1 } },
       lastUpdated: '2026-09-01',
     } as unknown as DownloadState)
-    const offlineSites: CompactSite[] = [{ id: 'a', n: 'Alpha', la: 10, lo: 20, s: 'ancient_nerds' }]
+    // DownloadManager stores the full /sites/all records: period name and description included.
+    const offlineSites = [
+      { id: 'a', n: 'Alpha', la: 10, lo: 20, s: 'ancient_nerds', pn: 'Iron Age', d: 'Stored offline' },
+    ]
     vi.spyOn(OfflineStorage, 'getAllSites').mockResolvedValue(offlineSites)
     fetchMock = vi.spyOn(globalThis, 'fetch')
 
@@ -126,6 +131,8 @@ describe('DataStore.initialize(fields)', () => {
 
     expect(store.isOffline()).toBe(true)
     expect(store.detailsReady).toBe(true)
+    // Mapped like the API payload, so offline uses the stored period name and description.
+    expect(store.getSiteById('a')).toMatchObject({ period: 'Iron Age', description: 'Stored offline', periodStart: null })
     await expect(store.loadSiteDetails()).resolves.toEqual([])
     expect(fetchMock).not.toHaveBeenCalled()
   })

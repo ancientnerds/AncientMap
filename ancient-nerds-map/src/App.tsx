@@ -36,7 +36,7 @@ const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
 const LyraChatModal = lazy(() => import('./components/LyraChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
-import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, loadSiteDetails, mergeSiteDetails, withSiteDetails } from './data/sites'
+import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, loadSiteDetails, mergeSiteDetails, withSiteDetails, globeSiteFields } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { config } from './config'
@@ -776,8 +776,10 @@ function AppContent() {
       setLoadingProgress(20)
       let data: SiteData[] = []
       try {
-        data = await fetchSites('globe')
+        data = await fetchSites(globeSiteFields(focusSiteId))
         setSites(data)
+        // A focus load (full payload) and offline mode start with their details
+        if (DataStore.detailsReady) setDetailsStatus('ready')
 
         // Get source metadata from DataStore (already loaded in parallel with sites)
         const sources = DataStore.getSources()
