@@ -674,71 +674,80 @@ class TestAudit:
         assert not passed(evaluate(_measurements(loop_seam=5.0)))
 
 
-class TestCardTrace:
-    """S13: the narrated card is the card its `_description_provenance` pins (Phase 5)."""
-
-    def test_the_card_hash_is_the_provenance_form(self):
-        assert card_sha256(CARD) == CARD_SHA
-        assert card_sha256("Ávila") == hashlib.sha256("Ávila".encode()).hexdigest()
-
-    def test_a_card_its_provenance_pins_passes(self):
-        checks = {c.name: c.ok for c in evaluate(_measurements())}
-        assert checks["card_traced"] is True
-
-    def test_a_card_that_is_not_the_pinned_one_fails(self):
-        other = card_sha256(CARD + " ")  # one byte off: the file was edited after the write
-        checks = evaluate(_measurements(card_sha256=other))
-        assert not passed(checks)
-        assert {c.name for c in checks if not c.ok} == {"card_traced"}
-
-    def test_a_card_without_card_provenance_is_not_shorts_eligible(self):
-        """A held card, or one written before Phase 5, carries no pinned hash."""
-        checks = evaluate(_measurements(card_provenance_sha256=None))
-        failed = [c for c in checks if not c.ok]
-        assert [c.name for c in failed] == ["card_traced"]
-        assert "carries no card" in failed[0].value
-
-    def test_the_export_carries_the_pinned_hash_into_site_json(self):
-        row = dict(_EXPORT_ROW, card_text_sha256=CARD_SHA)
-        assert assemble_site(row, [])["card_text_sha256"] == CARD_SHA
-        assert assemble_site(dict(_EXPORT_ROW), [])["card_text_sha256"] is None
-
-    def test_the_export_reads_the_hash_from_the_card_provenance(self):
-        from pipeline.video.shorts_export import _SITE_SQL
-
-        sql = " ".join(str(_SITE_SQL).split())
-        assert (
-            "s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256' "
-            "AS card_text_sha256" in sql
-        )
+# S13: the narrated card is the card its `_description_provenance` pins (Phase 5).
 
 
-class TestWidestWord:
-    """S3 and the Phase-4 card check (V10) measure a caption word with one function."""
+def test_s13_the_card_hash_is_the_provenance_form():
+    assert card_sha256(CARD) == CARD_SHA
+    assert card_sha256("Ávila") == hashlib.sha256("Ávila".encode()).hexdigest()
 
-    FONT = ImageFont.load_default(size=shorts_audit.CAPTION_SIZE)
 
-    def test_the_widest_word_is_measured_as_shown_with_its_outline(self):
-        word, px = widest_word_px(["An", "Intihuatana,", "stone"], self.FONT)
-        assert word == "Intihuatana"  # the trailing comma is not drawn
-        expected = int(self.FONT.getlength("Intihuatana")) + 2 * shorts_audit.CAPTION_BORDER
-        assert px == expected
+def test_s13_a_card_its_provenance_pins_passes():
+    checks = {c.name: c.ok for c in evaluate(_measurements())}
+    assert checks["card_traced"] is True
 
-    def test_a_punctuation_only_token_has_no_width(self):
-        assert widest_word_px(["-", "—"], self.FONT) == ("", 0)
 
-    def test_the_caption_audit_measures_through_the_public_helper(self, monkeypatch):
-        seen = []
+def test_s13_a_card_that_is_not_the_pinned_one_fails():
+    other = card_sha256(CARD + " ")  # one byte off: the file was edited after the write
+    checks = evaluate(_measurements(card_sha256=other))
+    assert not passed(checks)
+    assert {c.name for c in checks if not c.ok} == {"card_traced"}
 
-        def spy(words, font):
-            seen.append((list(words), font))
-            return "x", 7
 
-        monkeypatch.setattr(shorts_audit, "widest_word_px", spy)
-        monkeypatch.setattr(shorts_audit, "caption_font", lambda path: self.FONT)
-        got = shorts_audit._widest_caption([{"text": "Inca"}, {"text": "citadel."}], Path("f"))
-        assert got == ("x", 7)
-        assert seen == [(["Inca", "citadel."], self.FONT)]
+def test_s13_a_card_without_card_provenance_is_not_shorts_eligible():
+    """A held card, or one written before Phase 5, carries no pinned hash."""
+    checks = evaluate(_measurements(card_provenance_sha256=None))
+    failed = [c for c in checks if not c.ok]
+    assert [c.name for c in failed] == ["card_traced"]
+    assert "carries no card" in failed[0].value
+
+
+def test_s13_the_export_carries_the_pinned_hash_into_site_json():
+    row = dict(_EXPORT_ROW, card_text_sha256=CARD_SHA)
+    assert assemble_site(row, [])["card_text_sha256"] == CARD_SHA
+    assert assemble_site(dict(_EXPORT_ROW), [])["card_text_sha256"] is None
+
+
+def test_s13_the_export_reads_the_hash_from_the_card_provenance():
+    from pipeline.video.shorts_export import _SITE_SQL
+
+    sql = " ".join(str(_SITE_SQL).split())
+    assert (
+        "s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256' "
+        "AS card_text_sha256" in sql
+    )
+
+
+#: A real FreeType face (Pillow's own) at the caption size, for the width tests.
+CAPTION_FACE = ImageFont.load_default(size=shorts_audit.CAPTION_SIZE)
+
+
+# S3 and the Phase-4 card check (V10) measure a caption word with one function.
+
+
+def test_the_widest_word_is_measured_as_shown_with_its_outline():
+    word, px = widest_word_px(["An", "Intihuatana,", "stone"], CAPTION_FACE)
+    assert word == "Intihuatana"  # the trailing comma is not drawn
+    expected = int(CAPTION_FACE.getlength("Intihuatana")) + 2 * shorts_audit.CAPTION_BORDER
+    assert px == expected
+
+
+def test_a_punctuation_only_token_has_no_width():
+    assert widest_word_px(["-", "—"], CAPTION_FACE) == ("", 0)
+
+
+def test_the_caption_audit_measures_through_the_public_helper(monkeypatch):
+    seen = []
+
+    def spy(words, font):
+        seen.append((list(words), font))
+        return "x", 7
+
+    monkeypatch.setattr(shorts_audit, "widest_word_px", spy)
+    monkeypatch.setattr(shorts_audit, "caption_font", lambda path: CAPTION_FACE)
+    got = shorts_audit._widest_caption([{"text": "Inca"}, {"text": "citadel."}], Path("f"))
+    assert got == ("x", 7)
+    assert seen == [(["Inca", "citadel."], CAPTION_FACE)]
 
 
 class TestSpokenName:

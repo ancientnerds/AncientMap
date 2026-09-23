@@ -761,7 +761,9 @@ def _v5(c: _Case) -> list[Problem]:
     for index, segment in enumerate(c.published, 1):
         text = segment.text
         where = f"sentence {index}"
-        if not is_complete_sentence(segment.body + f" [{segment.n}]" + segment.final):
+        # Without the marker: `... near Mt [1].` would hide the abbreviation the sentence
+        # really ends on.
+        if not is_complete_sentence(text):
             problems.append(f"{where}: not a complete sentence: {text[:60]!r}")
         if not balanced(text):
             problems.append(f"{where}: unbalanced brackets or quotes")

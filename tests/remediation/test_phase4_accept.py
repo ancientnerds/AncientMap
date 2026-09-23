@@ -531,6 +531,24 @@ def test_the_legacy_lane_needs_its_provenance_and_the_invariant(tmp_path: Path) 
     assert any("desc_sha256 is not" in d for d in accept(written, tmp_path, "p4l"))
 
 
+def test_a_legacy_provenance_that_does_not_read_is_a_deviation(tmp_path: Path) -> None:
+    production = A.Production(
+        lane_links=[],
+        chains={},
+        live={},
+        present=set(),
+        rows={
+            SITE_ID: {
+                "desc_invariant": True,
+                "raw_data": {M.PROVENANCE_KEY: {"lane": "L", "basis": "a guess"}},
+            }
+        },
+    )
+    carried = {("unified_sites", "raw_data", SITE_ID)}
+    deviations = A.invariant_deviations(lane="p4l", carried=carried, production=production)
+    assert any("the legacy provenance does not read" in d for d in deviations)
+
+
 def test_t08_runs_over_the_written_sites() -> None:
     production = A.Production(
         lane_links=[],

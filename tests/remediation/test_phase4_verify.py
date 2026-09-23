@@ -183,6 +183,8 @@ def test_a_number_comma_and_a_bracketed_comma_are_no_delimiters() -> None:
 
 def test_an_unspaced_dash_pair_is_not_offered() -> None:
     assert _offered("The fort—built by the Romans—was abandoned in the 5th century AD.") == []
+    # spaced after but not before: the range would start one character early and eat the 't'
+    assert _offered("The fort— built by the Romans— was abandoned in the 5th century AD.") == []
 
 
 def test_a_leading_phrase_is_at_most_six_tokens() -> None:
@@ -419,6 +421,15 @@ def test_v5_a_sentence_that_is_too_short_or_opens_small_is_held() -> None:
     assert "not a capital, digit or quote" in case.detail("V5")
 
 
+def test_v5_a_sentence_that_ends_on_an_abbreviation_is_held() -> None:
+    """The splitter keeps `Mt.` inside a sentence; a published sentence ending on it is a
+    fragment, and its marker must not hide that (`... Mt [1].`)."""
+    cut = "The temples stand on a low ridge above the harbour, facing Mt."
+    text = f"{S1} {cut}"
+    case = make_case(text=text, picks=(W_PICKS[0], Pick(cut, (), cut)))
+    assert "not a complete sentence" in case.detail("V5")
+
+
 def test_v5_an_extract_artefact_is_held() -> None:
     bad = "The temple (listen) was restored after the storm damage of 1956."
     text = f"{S1} {bad}"
@@ -451,6 +462,8 @@ def test_v6_the_name_match_is_directional() -> None:
     assert V.name_in("Tarxien Temples", "The Tarxien temples lie in Paola.")
     assert not V.name_in("Kilmartin Glen standing stones", "Kilmartin is a village.")
     assert V.name_in("Kilmartin", "Kilmartin Glen standing stones are old.")
+    # the name is never the haystack: a sentence shorter than the name cannot carry it
+    assert not V.name_in("Kilmartin Glen standing stones", "Kilmartin Glen.")
 
 
 def test_v6_the_article_title_counts_only_for_a_strong_own_verdict() -> None:
@@ -541,6 +554,21 @@ def test_v10_a_card_out_of_its_length_is_held() -> None:
     short = "The site was excavated in 1915 by Themistocles Zammit."
     case = make_case(card=short, card_items=((1, (P2, T2)),))
     assert "not 80-200" in case.detail("V10")
+
+
+def test_v10_a_card_with_parentheses_or_a_marker_is_held() -> None:
+    card = "The site was excavated in 1915 by Themistocles Zammit (the director of the museum)."
+    case = make_case(card=card, card_items=((1, (T2,)),))
+    assert "the card carries parentheses" in case.detail("V10")
+    sentence = "The Tarxien Temples [3] are a complex of four megalithic structures near Paola."
+    text = f"{sentence} {S2} {S3}"
+    case = make_case(
+        text=text,
+        picks=(Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2]),
+        card=sentence,
+        card_items=((0, ()),),
+    )
+    assert "the card carries a citation marker" in case.detail("V10")
 
 
 def test_v10_a_card_that_names_a_country_is_held() -> None:
