@@ -660,12 +660,14 @@ def test_the_candidates_are_the_items_wikipedias_their_language_read_off_the_url
 
 
 #: Sitelinks of the shapes the lane met on 2026-09-23: a CheWikibot page (Żukczyn), an AWB stub on
-#: the Ladin Wikipedia (Castle Crag), a Taigiholic.bot page (Sollentuna) and an Lsjbot page on the
-#: Swedish Wikipedia (Tibradden Mountain, "Botskapande Irland").
+#: the Ladin Wikipedia (Castle Crag), a Taigiholic.bot page (Sollentuna), a page of the Corsican
+#: Wikipedia's 2005 "Automated import of articles" (Cauria) and an Lsjbot page on the Swedish
+#: Wikipedia (Tibradden Mountain, "Botskapande Irland").
 GENERATED = {
     "cewiki": _sl("Жукчин", "https://ce.wikipedia.org/wiki/A"),
     "lldwiki": _sl("Castle Crag", "https://lld.wikipedia.org/wiki/A"),
     "zh_min_nanwiki": _sl("Sollentuna Kàu-khu", "https://zh-min-nan.wikipedia.org/wiki/A"),
+    "cowiki": _sl("Cauria", "https://co.wikipedia.org/wiki/A"),
     "svwiki": _sl("Tibradden Mountain", "https://sv.wikipedia.org/wiki/A"),
     "dewiki": _sl("Tibradden", "https://de.wikipedia.org/wiki/A"),
 }
@@ -678,6 +680,7 @@ def test_the_wikis_programs_wrote_are_refused_and_swedish_is_read_only_at_home()
         "cewiki": "bot-generated",
         "lldwiki": "bot-generated",
         "zh_min_nanwiki": "bot-generated",
+        "cowiki": "bot-generated",
         "svwiki": "home-only",
     }
     assert "read only for a site in a country whose language it is" in next(

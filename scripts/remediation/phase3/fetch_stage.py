@@ -350,7 +350,7 @@ MAX_WIKI_SITELINKS = 3
 #: generated from a database says what that database said, not what a source says about the site, so
 #: these three are refused as evidence.
 #:
-#: Three more, read the same day after an independent check of the lane's plan found their pages among
+#: Four more, read the same day after an independent check of the lane's plan found their pages among
 #: its chosen articles (the first revision of each chosen page, asked of the wiki's own API): Chechen,
 #: "in November 2022, thanks to bot uploads, the number of articles passed 500 thousand" ("В ноябре
 #: 2022 года благодаря ботозаливкам число статей в разделе превысило 500 тысяч", ru.wikipedia.org
@@ -361,6 +361,9 @@ MAX_WIKI_SITELINKS = 3
 #: bytes; Min Nan, "from early June 2015 bots were used to create large numbers of articles, more than
 #: ten thousand a month" ("其時開始使用機器人建立大量條目，以每月逾一萬條目的速度增長", zh.wikipedia.org
 #: "閩南語維基百科", oldid 93375724), and its one chosen page was created by `Taigiholic.bot`.
+#: Corsican, measured only - no article on it says how it was written: of the 15 pages the lane chose,
+#: 13 are Botu's "Automated import of articles" of 2005-10-18 and a 14th came the same day, 220-253
+#: bytes each, 12 of them still under 400 bytes; 8 sites had nothing else.
 #:
 #: Swedish is not in this set: Lsjbot wrote much of it too ("In 2014 about half of its articles were
 #: created by a single bot, Lsjbot", Swedish Wikipedia, en.wikipedia.org oldid 1375728913), but it is
@@ -375,6 +378,7 @@ BOT_GENERATED_WIKIS: frozenset[str] = frozenset(
         "cewiki",
         "lldwiki",
         "zh_min_nanwiki",
+        "cowiki",
     }
 )
 #: The English Wikipedias. The lane's point is evidence the mass run did not have, and the mass run

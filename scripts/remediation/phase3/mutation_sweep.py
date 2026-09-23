@@ -7723,6 +7723,14 @@ SITELINK_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         _SL_DAMAGED,
     ),
     (
+        "sitelink: Corsican is not a bot-generated wiki",
+        _SLF,
+        '        "cowiki",\n',
+        "",
+        _SLF_TEST,
+        _SL_DAMAGED,
+    ),
+    (
         "sitelink: Min Nan is not a bot-generated wiki",
         _SLF,
         '        "zh_min_nanwiki",\n',

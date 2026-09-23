@@ -227,6 +227,7 @@ def test_the_articles_come_after_the_english_sitelink_and_before_the_narrowed_cl
         ([{**DE, "wiki": "cewiki", "lang": "ce"}], "bot-generated"),
         ([{**DE, "wiki": "lldwiki", "lang": "lld"}], "bot-generated"),
         ([{**DE, "wiki": "zh_min_nanwiki", "lang": "zh-min-nan"}], "bot-generated"),
+        ([{**DE, "wiki": "cowiki", "lang": "co"}], "bot-generated"),
         ([{**DE, "lang": "de.example.org"}], "not a Wikipedia language subdomain"),
         ([{**DE, "lang": "DE"}], "not a Wikipedia language subdomain"),
         ([{**DE, "title": "  "}], "carries no title"),
@@ -262,6 +263,7 @@ def test_the_bot_generated_and_english_wikis_are_the_named_ones() -> None:
         "cewiki",
         "lldwiki",
         "zh_min_nanwiki",
+        "cowiki",
     }
     assert F.ENGLISH_WIKIS == {"enwiki", "simplewiki"}
     assert F.MAX_WIKI_SITELINKS == 3
