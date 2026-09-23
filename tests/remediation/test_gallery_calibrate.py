@@ -530,6 +530,14 @@ CALIBRATION = REPO / "output" / "remediation" / "gallery_audit" / "calibration-2
 def test_the_versioned_c1_directory_is_sealed_with_the_pinned_thresholds() -> None:
     thresholds, digest, sealed_at = calibrate.sealed(CALIBRATION)
     assert digest == THRESHOLDS_SHA and thresholds == calibrate.THRESHOLDS
+    # the bytes on disk, not only the text: `.gitattributes` pins calibration-*/* to LF, so a
+    # sha256sum of the checkout agrees with the seal and with the reported jobs digest
+    assert hashlib.sha256((CALIBRATION / "THRESHOLDS.json").read_bytes()).hexdigest() == (
+        THRESHOLDS_SHA
+    )
+    assert hashlib.sha256((CALIBRATION / "JOBS.jsonl").read_bytes()).hexdigest() == (
+        "f0c4ccd6833f2de456e2d1ca110d2520ae6772cd9c3ebd4ec789a032de70e5c9"
+    )
     jobs = vision.read_jobs(CALIBRATION / "JOBS.jsonl")
     assert len(jobs) == 939 and sum(job.pass_ == vision.HERO for job in jobs) == 50
     assert {job.stage for job in jobs} == {calibrate.C1}

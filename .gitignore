@@ -337,8 +337,11 @@ output/remediation/phase3_pilot/evidence/
 !output/remediation/gallery_audit/
 # S1 liveness stores: COMMONS.jsonl holds one line per referenced Commons file (46,070 lines, about
 # 30 MB) and stays on the workstation; SUMMARY.json pins its sha256, and NOT_LIVE.jsonl - the lines
-# every L1/L2 write cites - is versioned with the plan. The vision ledgers (VERDICTS.jsonl, raw
-# responses, 150-250 MB for a full G run) are archived by the HANDOVER section 3 rule, not versioned.
+# every L1/L2 write cites - is versioned with the plan. The vision ledgers of the G runs
+# (run-*/VERDICTS.jsonl, raw responses, 150-250 MB for a full run) are archived by the HANDOVER
+# section 3 rule, not versioned. The C1 ledger is: calibration-*/VERDICTS.jsonl (about 940 lines,
+# about 4 MB at the pilot's 4 kB per line) is what `calibrate.verify_admission` re-derives
+# ADMISSION.json from before any vision write, so its exact bytes are versioned with the seal.
 output/remediation/gallery_audit/liveness-*/COMMONS.jsonl
 output/remediation/gallery_audit/run-*/VERDICTS.jsonl
 
