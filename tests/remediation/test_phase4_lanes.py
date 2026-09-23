@@ -40,7 +40,8 @@ FR = X.wiki_doc("T.fr", FR_TEXT, title="Temple de pierre", host="fr.wikipedia.or
 def _t_batch(tmp_path: Path) -> Path:
     setup = X.SiteSetup(site=X.plan_site("site-t"), lane=M.Lane.T, sources={"T.fr": (FR, FR_TEXT)})
     batch_dir = X.make_batch(tmp_path, [setup])
-    runner = X.ScriptedRunner({("site-t", "select"): "DESC: T.fr1\nDESC: T.fr2\nCARD: T.fr2"})
+    # The answer names the sentences out of source order; the translator is shown them in order.
+    runner = X.ScriptedRunner({("site-t", "select"): "DESC: T.fr2\nDESC: T.fr1\nCARD: T.fr2"})
     assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
     return batch_dir
 

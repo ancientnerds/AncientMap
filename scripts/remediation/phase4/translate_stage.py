@@ -44,18 +44,19 @@ class TranslationRefused(ValueError):
     """The translation answer is not one terminated English line per shown sentence."""
 
 
-def trimmed_sentences(
+def shown_sentences(
     selection: M.Selection, pool: Sequence[M.Sentence], text: str
 ) -> list[tuple[str, str]]:
-    """`(sid, trimmed source sentence)` for every DESC pick, in source order."""
+    """`(sid, source sentence)` for every DESC pick, in source order, with edits 2-3.
+
+    A `T.<lang>` sentence offers no span, so `parse_selection` refuses any drop on it and every
+    pick is its whole sentence.
+    """
     by_sid = {sentence.sid: sentence for sentence in pool}
-    rows: list[tuple[str, str]] = []
-    for pick in sorted(selection.desc, key=lambda p: by_sid[p.sid].index):
-        sentence = by_sid[pick.sid]
-        spans = {span.id: span for span in sentence.spans}
-        drops = A.maximal([(spans[i].start, spans[i].end) for i in pick.drop])
-        rows.append((pick.sid, A.trim(text, sentence.start, sentence.end, drops)))
-    return rows
+    return [
+        (pick.sid, A.trim(text, by_sid[pick.sid].start, by_sid[pick.sid].end, ()))
+        for pick in sorted(selection.desc, key=lambda p: by_sid[p.sid].index)
+    ]
 
 
 def parse_translation(answer: str, sids: Sequence[str]) -> dict[str, str]:
@@ -107,7 +108,7 @@ def translate_batch(batch_dir: Path, *, ledger: Path, runner: MS.ModelRunner) ->
         selection = selections[site.site_id]
         source_id, pool = pools[site.site_id]
         meta, text = B.read_source(batch_dir, site.site_id, source_id)
-        shown = trimmed_sentences(selection, pool, text)
+        shown = shown_sentences(selection, pool, text)
         row: dict[str, Any] = {"site_id": site.site_id, "source": source_id, "shown": len(shown)}
         rows.append(row)
         prompt = MS.Prompt(

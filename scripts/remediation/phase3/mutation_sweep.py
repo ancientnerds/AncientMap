@@ -5452,7 +5452,7 @@ PHASE4_SELECT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 assemble: a card reads c. aloud",
         P4B_ASSEMBLE,
-        '    return _SPOKEN_CIRCA.sub("circa ", card_sentence)\n',
+        "    return _SPOKEN_CIRCA.sub(lambda m: f\"{'Circa' if m['c'] == 'C' else 'circa'} \", card_sentence)\n",
         "    return card_sentence  # mutant\n",
         P4B_ASSEMBLE_TEST,
         "test_the_card_is_its_desc_sentence_with_the_spoken_edit_and_no_marker",
@@ -5563,12 +5563,12 @@ PHASE4_SELECT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_translation_the_contract_refuses_holds_the_site",
     ),
     (
-        "p4 translate: the dropped span is shown for translation",
+        "p4 translate: the translator is shown the sentences in the answer's order",
         P4B_TRANSLATE,
-        "        drops = A.maximal([(spans[i].start, spans[i].end) for i in pick.drop])\n",
-        "        drops = ()  # mutant\n",
+        "        for pick in sorted(selection.desc, key=lambda p: by_sid[p.sid].index)\n",
+        "        for pick in selection.desc  # mutant\n",
         P4B_LANES_TEST,
-        "test_the_translator_sees_the_trimmed_sentences_numbered_in_source_order",
+        "test_the_translator_sees_the_whole_sentences_numbered_in_source_order",
     ),
     (
         "p4 restricted: a whitespace run does not fold",
