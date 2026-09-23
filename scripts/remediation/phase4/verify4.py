@@ -11,35 +11,26 @@ Independence
 ------------
 This module never imports `phase4/assemble.py` and was written without reading it (an AST scan in
 `tests/remediation/test_phase4_verify.py` proves the first half). The span finder and the closed
-edit list below are this module's own reading of the design text; `phase4/sentences.py` (WB-B2)
-and `phase4/assemble.py` (WB-B3) hold the other reading. Before the pilot the orchestrator runs
-both finders over the same pools (`offered_spans` here); any difference is a contract bug, fixed
-in the reading, never by importing one from the other.
+edit list below are this module's own code; `phase4/sentences.py` (WB-B2) and
+`phase4/assemble.py` (WB-B3) hold the other implementation. Both finders implement the rules of
+PHASE4_CONTRACTS.md section 7 (decision D3, 2026-09-23), each in its own code, and a parity test
+runs both over the same fixture texts (`tests/remediation/p4_span_cases.py` and the verifier's own
+texts) and asserts identical span sets. Any difference is a contract bug, fixed in the reading,
+never by importing one from the other. What both import is data: `model4.PROTECTED_TOKENS` and
+`model4.CIRCA_PATTERN`.
 
 The reading, spelled out (offsets are `str` indices into the pinned text, ranges half-open)
 ------------------------------------------------------------------------------------------
-Final punctuation of a sentence: the trailing run `[.!?]+` plus any closing quotes after it.
-
-Deletable spans, each range exactly what is removed (contract section 3: "edit 1 is remove the
-range"), only at bracket depth 0 for the comma and dash kinds:
-
-* `p` - a balanced `( ... )`, with the one space before it; at the sentence start, with the one
-  space after it; with neither, the bare parenthesis.
-* `a` - a paired-comma insertion `, X,` between two consecutive delimiter commas (a comma followed
-  by whitespace, so `2,500` is no delimiter), both commas included: `S, X, lies` -> `S lies`.
-  A paired-dash insertion ` - X -` (en or em dash, spaced on both sides), from the space before
-  the first dash through the second dash. An unspaced `-X-` pair is not offered: removing it
-  cannot leave a space between the words it joined.
-* `t` - the last comma segment: from the last delimiter comma to the final punctuation, which
-  stays. The design's own example, `a1=", whose tomb lies nearby"`, is this range; which kind
-  letter it carries does not matter to V4, which compares ranges.
-* `l` - a leading phrase of at most 6 whitespace tokens before the first delimiter comma, with
-  that comma and the one whitespace character after it.
-
-A span that contains a protected token (`model4.PROTECTED_TOKENS`) is never offered. A token
-matches case-insensitively as a whole word (`(?<!\\w)` before, `(?!\\w)` after); `stem*` matches
-any word that starts with the stem; a phrase matches its words separated by whitespace; `c.` and
-`ca.` match with their full stop and no word character before them, so `B.C.` carries `c.`.
+Deletable spans are exactly section 7's (`candidate_spans`, rules 1-8; `offered_spans` then drops
+every range with a protected token, rule 9). In short: only a sentence of an English source (`W`)
+whose last character is `.`, `!` or `?` and whose parentheses balance offers any; `p` is a
+top-level `( ... )` with the space before it (at the start, the space after it); `a` is a pair of
+delimiter commas (a top-level comma followed by a space) that is no list link and no conjunct, or
+a pair of spaced dashes taken in order (none on an odd count, no range dash, no top-level `;`
+between them); `l` is a leading phrase of 1-6 tokens before the first delimiter comma, unless that
+comma separates list items or conjuncts; `t` runs from the last delimiter comma up to the last
+character. Each range is exactly what is removed (contract section 3: "edit 1 is remove the
+range"); which kind letter it carries does not matter to V4, which compares ranges.
 
 The closed edit list: (1) remove every drop range, (2) collapse runs of spaces to one, (3) `' ,'`
 -> `','`, (4) when a drop starts at the sentence start, upper-case the first character, (5) insert
@@ -177,96 +168,156 @@ SITE = M.HoldScope.SITE
 CARD = M.HoldScope.CARD
 
 # --------------------------------------------------------------------------------------------
-# The span finder (this module's own; see the module docstring)
+# The span finder: this module's own code for the rules of PHASE4_CONTRACTS.md section 7
 # --------------------------------------------------------------------------------------------
 
-_FINAL = re.compile(r"[.!?]+[\"'”’»]*\Z")
-_DASHES = "–—"
+#: Section 7, rule 1: the last character a sentence that offers spans ends on.
+TERMINALS = ".!?"
+#: Section 7, rule 3: the dashes an insertion can stand between (en dash, em dash).
+DASHES = "–—"
+#: Section 7, rule 5: a list item is at most this many whitespace tokens, a list's tail at most
+#: `LIST_TAIL_TOKENS`.
+LIST_ITEM_TOKENS = 3
+LIST_TAIL_TOKENS = 6
+#: Section 7, rule 7: a leading phrase is 1 to this many whitespace tokens.
+LEADING_TOKENS = 6
+#: `and`/`or` as the first word, and as any whole word (rules 5 and 7).
+_OPENS_AND_OR = re.compile(r"(?:and|or)\b", re.IGNORECASE)
+_HAS_AND_OR = re.compile(r"\b(?:and|or)\b", re.IGNORECASE)
 
 
-def final_start(text: str, start: int, end: int) -> int:
-    """Where the final punctuation of `text[start:end]` begins; `end` when it has none."""
-    match = _FINAL.search(text, start, end)
-    return match.start() if match else end
+def _top_level(s: str) -> tuple[list[tuple[int, int]], list[bool]] | None:
+    """Rules 1 and 2: the top-level groups `( ... )` of `s` as `[low, high)`, and per character
+    whether it is top level (the parentheses themselves are not); `None` when the parentheses do
+    not balance - a `)` before its `(`, or a `(` never closed."""
+    groups: list[tuple[int, int]] = []
+    top: list[bool] = []
+    depth = 0
+    opened = 0
+    for i, ch in enumerate(s):
+        if ch == "(":
+            if depth == 0:
+                opened = i
+            depth += 1
+            top.append(False)
+        elif ch == ")":
+            if depth == 0:
+                return None
+            depth -= 1
+            if depth == 0:
+                groups.append((opened, i + 1))
+            top.append(False)
+        else:
+            top.append(depth == 0)
+    if depth != 0:
+        return None
+    return groups, top
 
 
-def _parentheses_and_depth(
-    text: str, start: int, end: int
-) -> tuple[list[tuple[int, int]], list[int]]:
-    """The balanced `(`...`)` pairs of the sentence, and the bracket depth at every index.
+def _list_links(s: str, commas: Sequence[int]) -> list[bool]:
+    """Rule 5: per pair `k` of consecutive delimiter commas, whether it is a list link (or a
+    conjunct) rather than an insertion. Judged from the last pair to the first, since (iii) reads
+    the next pair's answer."""
+    pairs = len(commas) - 1
+    links = [False] * max(pairs, 0)
+    for k in reversed(range(pairs)):
+        inner = s[commas[k] + 1 : commas[k + 1]]
+        tail_end = commas[k + 2] if k + 2 < len(commas) else len(s) - 1
+        tail = s[commas[k + 1] + 1 : tail_end]
+        item = len(inner.split()) <= LIST_ITEM_TOKENS
+        last = k == pairs - 1
+        links[k] = (
+            _OPENS_AND_OR.match(tail.lstrip()) is not None  # (i)
+            or (
+                item
+                and len(tail.split()) <= LIST_TAIL_TOKENS
+                and _HAS_AND_OR.search(tail) is not None
+            )  # (ii)
+            or (item and not last and links[k + 1])  # (iii)
+            or (item and last and len(tail.split()) <= LIST_ITEM_TOKENS)  # (iv)
+            or _OPENS_AND_OR.match(inner.lstrip()) is not None  # (v)
+        )
+    return links
 
-    `[` and `]` count for the depth but offer no span. A closing bracket without its opener is
-    ignored, so an unbalanced sentence offers fewer spans, never a range that cuts a bracket.
-    """
-    pairs: list[tuple[int, int]] = []
-    depth: list[int] = []
-    stack: list[tuple[str, int]] = []
-    for index in range(start, end):
-        char = text[index]
-        if char in "([":
-            stack.append((char, index))
-        elif char in ")]" and stack and stack[-1][0] == ("(" if char == ")" else "["):
-            opener, at = stack.pop()
-            if opener == "(":
-                pairs.append((at, index))
-        depth.append(len(stack))
-    return pairs, depth
+
+def _range_dash(s: str, at: int) -> bool:
+    """Rule 6: the nearest character before or after the dash that is not whitespace
+    (`str.isspace`, so an NBSP or a thin space too) is a digit: `1800 – 500`."""
+    before, after = s[:at].rstrip(), s[at + 1 :].lstrip()
+    return before[-1:].isdigit() or after[:1].isdigit()
 
 
-def candidate_spans(text: str, start: int, end: int) -> tuple[tuple[int, int], ...]:
-    """Every p/a/t/l range of the sentence `text[start:end]`, protected or not, sorted."""
-    final = final_start(text, start, end)
-    pairs, depth = _parentheses_and_depth(text, start, end)
+def candidate_spans(source_id: str, text: str, start: int, end: int) -> tuple[tuple[int, int], ...]:
+    """Every range rules 1-8 give the sentence `text[start:end]` of source `source_id`, protected
+    or not, absolute and sorted. Only an English source (`W`) offers any."""
+    if M.source_kind(source_id) is not M.SourceKind.W:
+        return ()
+    s = text[start:end]
+    if not s or s[-1] not in TERMINALS:
+        return ()
+    parsed = _top_level(s)
+    if parsed is None:
+        return ()
+    groups, top = parsed
     found: set[tuple[int, int]] = set()
 
-    for opener, closer in pairs:
-        if opener > start and text[opener - 1] == " ":
-            found.add((opener - 1, closer + 1))
-        elif opener == start and closer + 1 < end and text[closer + 1] == " ":
-            found.add((opener, closer + 2))
+    for low, high in groups:  # rule 4, p
+        if low > 0 and s[low - 1] == " ":
+            found.add((low - 1, high))
+        elif low == 0 and s[high : high + 1] == " ":
+            found.add((0, high + 1))
         else:
-            found.add((opener, closer + 1))
+            found.add((low, high))
 
-    commas = [
-        i
-        for i in range(start, final)
-        if text[i] == "," and i + 1 < end and text[i + 1].isspace() and depth[i - start] == 0
-    ]
-    for first, second in zip(commas, commas[1:], strict=False):
-        if text[first + 1 : second].strip():
+    commas = [i for i, ch in enumerate(s) if ch == "," and top[i] and s[i + 1 : i + 2] == " "]
+    links = _list_links(s, commas)
+    for k, link in enumerate(links):  # rule 5, a (commas)
+        first, second = commas[k], commas[k + 1]
+        if s[first + 1 : second].strip() and not link:
             found.add((first, second + 1))
 
     dashes = [
         i
-        for i in range(start + 1, final - 1)
-        if text[i] in _DASHES
-        and text[i - 1] == " "
-        and text[i + 1] == " "
-        and depth[i - start] == 0
+        for i, ch in enumerate(s)
+        if ch in DASHES and top[i] and 0 < i < len(s) - 1 and s[i - 1] == " " and s[i + 1] == " "
     ]
-    for first, second in zip(dashes, dashes[1:], strict=False):
-        if text[first + 1 : second].strip():
-            found.add((first - 1, second + 1))
+    if len(dashes) % 2 == 0:  # rule 6, a (dashes): paired in order, none on an odd count
+        for first, second in zip(dashes[0::2], dashes[1::2], strict=True):
+            semicolon = any(s[i] == ";" and top[i] for i in range(first + 1, second))
+            if (
+                s[first + 1 : second - 1].strip()
+                and not _range_dash(s, first)
+                and not _range_dash(s, second)
+                and not semicolon
+            ):
+                found.add((first - 1, second + 1))
 
     if commas:
+        lead = commas[0]
+        separates = bool(links) and links[0]
+        coordinated = _OPENS_AND_OR.match(s[lead + 1 :].lstrip()) is not None
+        leading = 1 <= len(s[:lead].split()) <= LEADING_TOKENS
+        if leading and s[lead + 2 :].strip() and not separates and not coordinated:  # rule 7, l
+            found.add((0, lead + 2))
         last = commas[-1]
-        if text[last + 1 : final].strip():
-            found.add((last, final))
-        first = commas[0]
-        tokens = text[start:first].split()
-        if 1 <= len(tokens) <= 6 and first + 2 < final:
-            found.add((start, first + 2))
-    return tuple(sorted(found))
+        if s[last + 1 : len(s) - 1].strip():  # rule 8, t
+            found.add((last, len(s) - 1))
+    return tuple(sorted((start + low, start + high) for low, high in found))
 
 
 def _protected_pattern(entry: str) -> re.Pattern[str]:
+    """Rule 9: `word*` is `\\bword\\w*`, `*end` is `\\b\\w*end\\b`, an entry ending in `.` is
+    `\\bc\\.` (no boundary after the stop), any other entry its words joined by `\\s+` between
+    `\\b` and `\\b`; all case-insensitive."""
     if entry.endswith("*"):
-        body, tail = re.escape(entry[:-1]) + r"\w*", ""
+        body = r"\b" + re.escape(entry[:-1]) + r"\w*"
+    elif entry.startswith("*"):
+        body = r"\b\w*" + re.escape(entry[1:]) + r"\b"
     elif entry.endswith("."):
-        body, tail = re.escape(entry), ""
+        body = r"\b" + re.escape(entry)
     else:
-        body, tail = r"\s+".join(re.escape(word) for word in entry.split()), r"(?!\w)"
-    return re.compile(r"(?<!\w)" + body + tail, re.IGNORECASE)
+        body = r"\b" + r"\s+".join(re.escape(word) for word in entry.split()) + r"\b"
+    return re.compile(body, re.IGNORECASE)
 
 
 _PROTECTED: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
@@ -281,12 +332,12 @@ def protected_in(span_text: str) -> tuple[str, ...]:
     return tuple(entry for entry, pattern in _PROTECTED if pattern.search(span_text))
 
 
-def offered_spans(text: str, start: int, end: int) -> tuple[tuple[int, int], ...]:
-    """The ranges the selector may drop from the sentence `text[start:end]`: the parity surface
-    the orchestrator compares with `phase4/sentences.py` before the pilot."""
+def offered_spans(source_id: str, text: str, start: int, end: int) -> tuple[tuple[int, int], ...]:
+    """The ranges the selector may drop from the sentence `text[start:end]` of `source_id`: the
+    parity surface with `phase4/sentences.py` (section 7; the parity test compares both)."""
     return tuple(
         (low, high)
-        for low, high in candidate_spans(text, start, end)
+        for low, high in candidate_spans(source_id, text, start, end)
         if not protected_in(text[low:high])
     )
 
@@ -296,6 +347,8 @@ def offered_spans(text: str, start: int, end: int) -> tuple[tuple[int, int], ...
 # --------------------------------------------------------------------------------------------
 
 _SPACES = re.compile(r" {2,}")
+#: Edit 5's final punctuation: the trailing run `[.!?]+` plus any closing quotes after it.
+_FINAL = re.compile(r"[.!?]+[\"'”’»]*\Z")
 _CIRCA = re.compile(r"(?<![\w.])([Cc])a?\.\s*(?=\d)")
 
 
@@ -694,7 +747,7 @@ def _drop_problems(
     text: str, sentence: M.PublishedSentence, drop: Sequence[tuple[int, int]], what: str
 ) -> list[str]:
     problems: list[str] = []
-    candidates = candidate_spans(text, sentence.start, sentence.end)
+    candidates = candidate_spans(sentence.src, text, sentence.start, sentence.end)
     for low, high in drop:
         if (low, high) not in candidates:
             problems.append(
