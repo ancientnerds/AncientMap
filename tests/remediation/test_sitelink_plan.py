@@ -323,3 +323,665 @@ def test_a_resolution_made_under_other_inputs_is_named_stale() -> None:
     ):
         assert SL.stale_sites(inputs, {**fresh, site_id: changed}) == [site_id]
     assert SL.stale_sites(inputs, {A: fresh[A]}) == [B]
+
+
+# ── the census of the mass run's UNVERIFIABLE answers ─────────────────────────────────────────
+
+
+def _mass_site(site_id: str, **values: Any) -> dict[str, Any]:
+    return SP.discover_site_record(
+        site=_site(site_id, **values), card={"card_description": "A card."}, qid=None
+    )
+
+
+def _mass_run(tmp_path: Path, answers: dict[str, dict[str, str]]) -> Path:
+    """One mass batch holding A and B, one finder answer per (site, field) in `answers`."""
+    batch = tmp_path / "mass" / "batch-0007"
+    payload = {
+        "batch_id": "batch-0007",
+        "ordinal": 7,
+        "pass": "discover",
+        "sites": [_mass_site(A), _mass_site(B, period_start=-300)],
+    }
+    batch.mkdir(parents=True)
+    (batch / "input.json").write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    store = F.EvidenceStore(batch / "answers")
+    for site_id, fields in answers.items():
+        for field, verdict in fields.items():
+            store.write(
+                site_id=site_id,
+                feature=field,
+                body=f"The page is silent.\nVERDICT: {verdict}\n".encode(),
+            )
+    return tmp_path / "mass"
+
+
+def test_the_census_takes_the_unverifiable_answers_of_its_scope_in_the_runs_order(
+    tmp_path: Path,
+) -> None:
+    run = _mass_run(
+        tmp_path,
+        {
+            A: {"card_description": "UNVERIFIABLE", "period_start": "UNVERIFIABLE"},
+            B: {"country": "UNVERIFIABLE", "site_type": "CORRECT", "description": "UNVERIFIABLE"},
+        },
+    )
+    writable = SL.census(run, scope="writable")
+    assert [(q.site_id, q.field) for q in writable] == [(A, "period_start"), (B, "country")]
+    assert {(q.source_batch, q.why) for q in writable} == {("batch-0007", SL.WHY)}
+    everything = SL.census(run, scope="all", site_ids=[B])
+    assert [(q.site_id, q.field) for q in everything] == [(B, "description"), (B, "country")]
+
+
+def test_the_census_refuses_an_unknown_scope_a_missing_site_and_an_empty_answer(
+    tmp_path: Path,
+) -> None:
+    run = _mass_run(tmp_path, {A: {"period_start": "UNVERIFIABLE"}})
+    with pytest.raises(SystemExit, match="scope 'writeable'"):
+        SL.census(run, scope="writeable")
+    with pytest.raises(SystemExit, match="sites the mass run does not hold"):
+        SL.census(run, scope="all", site_ids=[A, "not-a-site"])
+    with pytest.raises(SystemExit, match="no UNVERIFIABLE answer"):
+        SL.census(run, scope="all", site_ids=[B])
+
+
+def test_the_judged_value_is_the_one_each_batch_record_carried(tmp_path: Path) -> None:
+    judged = SL.judged_values(_mass_run(tmp_path, {}))
+    assert judged[(B, "period_start")] == -300 and judged[(A, "country")] == "Greece"
+    assert judged[(A, "card_description")] == "A card."
+
+
+# ── the export ────────────────────────────────────────────────────────────────────────────────
+
+
+def test_the_journal_query_reads_every_stamp_of_the_five_fields_by_site_and_by_row() -> None:
+    sql = SL.journal_sql([A, B])
+    assert "remediation_change_log" in sql and "run_stamp" in sql and "LIKE" not in sql
+    assert f"site_id_ref::text IN ('{A}', '{B}')" in sql and f"row_pk IN ('{A}', '{B}')" in sql
+    assert (
+        "(table_name = 'unified_sites' AND column_name IN "
+        "('description', 'period_start', 'site_type', 'country'))" in sql
+    )
+    assert "(table_name = 'card_stats' AND column_name IN ('card_description'))" in sql
+
+
+def test_the_export_writes_the_gap_lanes_tables_and_the_journal(tmp_path: Path) -> None:
+    asked: list[str] = []
+    answers = {
+        "FROM unified_sites WHERE": [{**_site(A), "source_id": "ancient_nerds"}],
+        "FROM card_stats": [{"site_id": A, "card_description": "A card."}],
+        "FROM site_external_ids": [{"site_id": A, "kind": "wikidata_qid", "value": "Q1"}],
+        "FROM remediation_change_log": [_journal(A, "country")],
+    }
+
+    def run(sql: str) -> str:
+        asked.append(sql)
+        rows = next(rows for marker, rows in answers.items() if marker in sql)
+        return "\n".join(json.dumps(row) for row in rows) + "\n"
+
+    counts = SL.export([_q(A, "country")], tmp_path / "export", run=run)
+    assert counts == {"unified_sites": 1, "card_stats": 1, "site_external_ids": 1, "journal": 1}
+    assert any("remediation_change_log" in sql for sql in asked)
+    exported = SL.Export.read(tmp_path / "export")
+    assert exported.journal[0]["column_name"] == "country" and A in exported.sites
+
+
+def test_a_journal_row_without_its_site_is_refused(tmp_path: Path) -> None:
+    root = tmp_path / "export"
+    lanes.write_jsonl(root / "unified_sites.jsonl", [_site(A)])
+    lanes.write_jsonl(root / "card_stats.jsonl", [])
+    lanes.write_jsonl(root / "site_external_ids.jsonl", [])
+    lanes.write_jsonl(root / "journal.jsonl", [{**_journal(A, "country"), "site_id": None}])
+    with pytest.raises(SystemExit, match="without the site they belong to"):
+        SL.Export.read(root)
+
+
+def test_a_suspect_link_is_read_from_the_classifiers_class_or_its_link_suspect_list(
+    tmp_path: Path,
+) -> None:
+    lanes.write_jsonl(
+        tmp_path / "names.jsonl",
+        [
+            {"site_id": A, "class": "Q2", "qid_now": "Q10"},
+            {"site_id": B, "class": "N1", "link_suspect": ["Q4", "Q1"], "qid_now": "Q11"},
+            {"site_id": "c", "class": "N1", "link_suspect": [], "qid_now": "Q12"},
+            {"site_id": "d", "class": "Q3", "qid_now": None},
+        ],
+    )
+    assert SL.suspect_links(tmp_path) == {A: ("Q10", "Q2"), B: ("Q11", "Q1/Q4")}
+
+
+# ── which of the item's articles are read ─────────────────────────────────────────────────────
+
+
+def _sl(title: str, url: str | None, *badges: str) -> F.Sitelink:
+    return F.Sitelink(title=title, badges=tuple(badges), url=url)
+
+
+def test_the_candidates_are_the_items_wikipedias_their_language_read_off_the_url() -> None:
+    usable, refused = SL.candidates(
+        {
+            "be_x_oldwiki": _sl("Арэні-1", "https://be-tarask.wikipedia.org/wiki/A"),
+            "dewiki": _sl("Areni-1", "https://de.wikipedia.org/wiki/Areni-1"),
+            "commonswiki": _sl("Category:Areni-1", "https://commons.wikimedia.org/wiki/C"),
+            "enwiki": _sl("Areni-1 cave", "https://en.wikipedia.org/wiki/A"),
+            "simplewiki": _sl("Areni-1", "https://simple.wikipedia.org/wiki/A"),
+            "cebwiki": _sl("Areni-1", "https://ceb.wikipedia.org/wiki/A"),
+            "frwiki": _sl("Areni", "https://fr.wikipedia.org/wiki/A", "Q70893996"),
+            "itwiki": _sl("Areni", "https://it.wikipedia.org/wiki/A", "Q70894304"),
+            "eswiki": _sl("Areni-1", "https://es.wikipedia.org/wiki/A", "Q17437796"),
+        }
+    )
+    assert usable == [
+        SL.Candidate("be_x_oldwiki", "be-tarask", "Арэні-1"),
+        SL.Candidate("dewiki", "de", "Areni-1"),
+        SL.Candidate("eswiki", "es", "Areni-1"),
+    ]
+    assert {row["wiki"]: row["rule"] for row in refused} == {
+        "cebwiki": "bot-generated",
+        "enwiki": "english",
+        "frwiki": "redirect-badge",
+        "itwiki": "redirect-badge",
+        "simplewiki": "english",
+    }
+    assert "Q70893996 sitelink to redirect" in next(
+        row["reason"] for row in refused if row["wiki"] == "frwiki"
+    )
+
+
+def test_a_sitelink_without_url_or_with_a_foreign_shape_stops_the_build() -> None:
+    with pytest.raises(SystemExit, match="without its url"):
+        SL.candidates({"dewiki": _sl("Areni-1", None)})
+    with pytest.raises(SystemExit, match="not a Wikipedia site id and subdomain"):
+        SL.candidates({"de": _sl("Areni-1", "https://de.wikipedia.org/wiki/A")})
+    with pytest.raises(SystemExit, match="not a Wikipedia site id and subdomain"):
+        SL.candidates({"dewiki": _sl("Areni-1", "https://de_x.wikipedia.org/wiki/A")})
+
+
+def _c(wiki: str) -> SL.Candidate:
+    return SL.Candidate(wiki, wiki.removesuffix("wiki"), f"T {wiki}")
+
+
+def test_the_order_is_the_countrys_own_wikis_then_the_fixed_order_then_the_rest_by_id() -> None:
+    usable = [_c(w) for w in ("zuwiki", "frwiki", "elwiki", "aawiki", "dewiki", "trwiki")]
+    assert [c.wiki for c in SL.order(usable, "Greece")] == [
+        "elwiki",
+        "dewiki",
+        "frwiki",
+        "trwiki",
+        "aawiki",
+        "zuwiki",
+    ]
+    assert [c.wiki for c in SL.order(usable, "Cyprus")][:2] == ["elwiki", "trwiki"]
+    assert [c.wiki for c in SL.order(usable, "England")][:2] == ["dewiki", "frwiki"]
+
+
+def test_a_stored_country_the_table_lacks_stops_the_build() -> None:
+    assert SL.country_key("Türkiye") == "TR" and SL.country_key("Baltic Sea") == "baltic sea"
+    with pytest.raises(SystemExit, match="not in COUNTRY_WIKIS"):
+        SL.country_key("Atlantis")
+
+
+def _pin(wiki: str, length: int, title: str | None = None) -> SL.Pin:
+    return SL.Pin(wiki, wiki.removesuffix("wiki"), title or f"T {wiki}", 100, length)
+
+
+def test_an_article_costs_its_source_line_its_capped_length_and_the_marker() -> None:
+    small, big = _pin("dewiki", 5_000), _pin("dewiki", 10 * F.MAX_PAGE_BYTES)
+    header = len(F.wiki_article_header(small.sitelink()))
+    tail = 1 + len(F.TRUNCATION_MARKER)
+    assert SL.article_estimate(small) == header + 5_000 + tail
+    assert SL.article_estimate(big) == header + F.MAX_PAGE_BYTES + tail
+
+
+def test_the_room_is_the_bound_less_the_stored_english_page_and_the_narrow_reserve(
+    tmp_path: Path,
+) -> None:
+    store = F.EvidenceStore(tmp_path / "batch-0007" / "evidence")
+    store.write(site_id=A, feature=F.FEATURE_ENWIKI, body=b"e" * 12_345)
+    room = SL.evidence_room(A, "batch-0007", mass_run=tmp_path)
+    assert room == SL.MS.MAX_EVIDENCE_CHARS - 12_345 - SL.NARROW_RESERVE_CHARS
+    unfetched = SL.evidence_room(B, "batch-0007", mass_run=tmp_path)
+    full = F.MAX_PAGE_BYTES + len(F.TRUNCATION_MARKER)
+    assert unfetched == SL.MS.MAX_EVIDENCE_CHARS - full - SL.NARROW_RESERVE_CHARS
+
+
+def test_the_walk_takes_what_fits_skips_the_rest_with_its_reason_and_stops_at_three() -> None:
+    order = [_c(w) for w in ("elwiki", "dewiki", "frwiki", "itwiki", "eswiki", "nlwiki")]
+    pins: dict[tuple[str, str], SL.Pin | str] = {
+        order[0].key: "'T elwiki' is a redirect, not an article",
+        order[1].key: _pin("dewiki", 1_000, "T dewiki"),
+        order[2].key: _pin("frwiki", 50_000, "T frwiki"),
+        order[3].key: _pin("itwiki", 1_000, "T itwiki"),
+        order[4].key: _pin("eswiki", 1_000, "T eswiki"),
+        order[5].key: _pin("nlwiki", 1_000, "T nlwiki"),
+    }
+    selection = SL.select(order, pins, room=20_000)
+    assert [pin.wiki for pin in selection.chosen] == ["dewiki", "itwiki", "eswiki"]
+    assert [(row["wiki"], row["rule"]) for row in selection.skipped] == [
+        ("elwiki", "not-the-items-article"),
+        ("frwiki", "room"),
+        ("nlwiki", "cap"),
+    ]
+    assert selection.need == ()
+    spent = sum(SL.article_estimate(pin) for pin in selection.chosen)
+    assert spent <= 20_000
+
+
+def test_an_unpinned_candidate_stops_the_walk_and_names_what_to_pin_next() -> None:
+    order = [_c(w) for w in ("elwiki", "dewiki", "frwiki", "itwiki", "eswiki")]
+    selection = SL.select(order, {order[0].key: _pin("elwiki", 10, "T elwiki")}, room=90_000)
+    assert selection.chosen == () and selection.skipped == ()
+    assert [c.wiki for c in selection.need] == ["dewiki", "frwiki"]
+    assert SL.select(order, {}, room=90_000).need == tuple(order[:3])
+
+
+# ── the lookups the plan makes ────────────────────────────────────────────────────────────────
+
+
+class _Pages:
+    """A `Fetcher` answering each request with the next (status, body, retry_after) of a list."""
+
+    def __init__(self, *answers: tuple[int, bytes, float | None], truncated: bool = False) -> None:
+        self.answers = list(answers)
+        self.truncated = truncated
+        self.asked: list[str] = []
+
+    def get(self, url: str) -> F.FetchedPage:
+        self.asked.append(url)
+        status, body, retry_after = self.answers.pop(0)
+        return F.FetchedPage(status, url, body, self.truncated, retry_after)
+
+
+def test_a_lookup_the_host_refused_for_now_is_asked_again_after_the_backoff() -> None:
+    slept: list[float] = []
+    fetcher = _Pages((429, b"", 40.0), (503, b"", None), (200, b"ok", None))
+    assert SL.lookup(fetcher, "u", sleep=slept.append).body == b"ok"
+    assert slept == [40.0, SL.LOOKUP_BACKOFF_SECONDS[1]]  # the host's longer ask, then ours
+
+
+def test_a_lookup_that_cannot_answer_stops_the_build() -> None:
+    slept: list[float] = []
+    with pytest.raises(SystemExit, match="HTTP 404"):
+        SL.lookup(_Pages((404, b"", None)), "u", sleep=slept.append)
+    with pytest.raises(SystemExit, match="HTTP 503"):
+        SL.lookup(_Pages(*[(503, b"", None)] * F.MAX_ATTEMPTS), "u", sleep=slept.append)
+    with pytest.raises(SystemExit, match="truncated=True"):
+        SL.lookup(_Pages((200, b"{", None), truncated=True), "u", sleep=slept.append)
+    long_wait = F.RETRY_AFTER_CAP_SECONDS + 1
+    with pytest.raises(SystemExit, match="HTTP 429"):
+        SL.lookup(_Pages((429, b"", long_wait), (200, b"ok", None)), "u", sleep=slept.append)
+    assert slept == list(SL.LOOKUP_BACKOFF_SECONDS)
+
+
+def _pages_answer(*pages: dict[str, Any], normalized: tuple = ()) -> bytes:
+    query: dict[str, Any] = {"pages": list(pages)}
+    if normalized:
+        query["normalized"] = [{"from": a, "to": b} for a, b in normalized]
+    return json.dumps({"batchcomplete": True, "query": query}).encode()
+
+
+def _meta(title: str, qid: str, revid: int = 7, **changes: Any) -> dict[str, Any]:
+    page = {
+        "title": title,
+        "lastrevid": revid,
+        "length": 4_000,
+        "revisions": [{"revid": revid}],
+        "pageprops": {"wikibase_item": qid},
+    }
+    page.update(changes)
+    return {key: value for key, value in page.items() if value is not None}
+
+
+def test_a_pin_is_the_items_own_article_at_its_latest_revision() -> None:
+    """A title the wiki normalises is found under its new spelling and refused: the fetch asks for
+    the pinned title, and an answer under another title is refused there too
+    (`fetch_stage.wiki_page_refusal`)."""
+    fetcher = _Pages(
+        (
+            200,
+            _pages_answer(
+                _meta("Areni 1", "Q1", 11),
+                _meta("Areni-2", "Q2", redirect=True),
+                _meta("Areni-3", "Q3", 12),
+                normalized=(("Areni_1", "Areni 1"),),
+            ),
+            None,
+        )
+    )
+    pins = SL.pin_titles(
+        {
+            ("de", "Areni_1"): ("dewiki", "Q1"),
+            ("de", "Areni-2"): ("dewiki", "Q2"),
+            ("de", "Areni-3"): ("dewiki", "Q3"),
+        },
+        fetcher=fetcher,
+        sleep=lambda _s: None,
+    )
+    assert pins[("de", "Areni-3")] == SL.Pin("dewiki", "de", "Areni-3", 12, 4_000)
+    assert pins[("de", "Areni_1")] == "the answer is for 'Areni 1', not 'Areni_1'"
+    assert pins[("de", "Areni-2")] == "'Areni-2' is a redirect, not an article"
+    assert len(fetcher.asked) == 1
+
+
+def test_a_pin_answer_that_omits_a_title_or_names_no_latest_revision_stops_the_build() -> None:
+    wanted = {("de", "Areni-1"): ("dewiki", "Q1")}
+    for answer, message in (
+        (_pages_answer(), "was asked for and is absent"),
+        (_pages_answer(_meta("Areni-1", "Q1", lastrevid=9)), "revision 7/9"),
+        (_pages_answer(_meta("Areni-1", "Q1", length=None)), "length None"),
+        (_pages_answer(_meta("Areni-1", "Q1", length=True)), "length True"),
+    ):
+        with pytest.raises(SystemExit, match=message):
+            SL.pin_titles(wanted, fetcher=_Pages((200, answer, None)), sleep=lambda _s: None)
+
+
+def test_the_pins_are_asked_fifty_titles_at_a_time_per_wiki() -> None:
+    wanted = {("de", f"T{n:02d}"): ("dewiki", "Q1") for n in range(51)}
+    wanted[("fr", "T")] = ("frwiki", "Q1")
+
+    class _Echo:
+        asked: list[str] = []
+
+        def get(self, url: str) -> F.FetchedPage:
+            self.asked.append(url)
+            titles = parse_qs(urlsplit(url).query)["titles"][0].split("|")
+            body = _pages_answer(*(_meta(t, "Q1") for t in titles))
+            return F.FetchedPage(200, url, body, False)
+
+    echo = _Echo()
+    pins = SL.pin_titles(wanted, fetcher=echo, sleep=lambda _s: None)
+    assert len(pins) == 52 and len(echo.asked) == 3
+    assert [urlsplit(u).netloc for u in echo.asked] == ["de.wikipedia.org"] * 2 + [
+        "fr.wikipedia.org"
+    ]
+
+
+def test_the_items_sitelinks_are_asked_ten_at_a_time_and_every_one_must_answer() -> None:
+    class _Items:
+        asked: list[str] = []
+
+        def get(self, url: str) -> F.FetchedPage:
+            self.asked.append(url)
+            ids = parse_qs(urlsplit(url).query)["ids"][0].split("|")
+            body = json.dumps({"entities": {q: {"sitelinks": {}} for q in ids if q != "Q13"}})
+            return F.FetchedPage(200, url, body.encode(), False)
+
+    items = _Items()
+    qids = [f"Q{n}" for n in range(100, 112)]
+    assert set(SL.item_sitelinks([*qids, qids[0]], fetcher=items, sleep=lambda _s: None)) == set(
+        qids
+    )
+    assert len(items.asked) == 2 and "sitelinks%2Furls" in items.asked[0]
+    with pytest.raises(SystemExit, match="Q13: asked for, and absent"):
+        SL.item_sitelinks(["Q12", "Q13"], fetcher=_Items(), sleep=lambda _s: None)
+
+
+class _Wiki:
+    """Wikidata and the Wikipedias of a small world: the items' sitelinks and every page's pin."""
+
+    def __init__(self, items: dict[str, dict[str, Any]], pages: dict[tuple[str, str], dict]):
+        self.items = items
+        self.pages = pages
+        self.asked: list[str] = []
+
+    def get(self, url: str) -> F.FetchedPage:
+        self.asked.append(url)
+        parts = urlsplit(url)
+        query = parse_qs(parts.query)
+        if parts.netloc == "www.wikidata.org":
+            ids = query["ids"][0].split("|")
+            body = {"entities": {q: {"sitelinks": self.items[q]} for q in ids}}
+        else:
+            lang = parts.netloc.split(".")[0]
+            titles = query["titles"][0].split("|")
+            body = {"query": {"pages": [self.pages[(lang, t)] for t in titles]}}
+        return F.FetchedPage(200, url, json.dumps(body).encode(), False)
+
+
+def _wd(lang: str, title: str) -> dict[str, Any]:
+    return {"title": title, "badges": [], "url": f"https://{lang}.wikipedia.org/wiki/{title}"}
+
+
+def test_resolution_orders_pins_and_selects_every_kept_site_and_records_the_withheld() -> None:
+    world = _Wiki(
+        items={
+            "Q1": {
+                "elwiki": _wd("el", "Ναός"),
+                "dewiki": _wd("de", "Tempel"),
+                "frwiki": _wd("fr", "Temple"),
+                "itwiki": _wd("it", "Tempio"),
+                "enwiki": _wd("en", "Temple"),
+            }
+        },
+        pages={
+            ("el", "Ναός"): _meta("Ναός", "Q1", 1),
+            ("de", "Tempel"): _meta("Tempel", "Q9", 2),  # another item's article
+            ("fr", "Temple"): _meta("Temple", "Q1", 3),
+            ("it", "Tempio"): _meta("Tempio", "Q1", 4),
+        },
+    )
+    decided = SL.resolve(
+        {
+            A: {"qid": "Q1", "withheld": None, "country": "Greece", "room": 60_000},
+            B: {"qid": None, "withheld": "Q2 is carried by 2 curated sites", "country": "Italy"},
+        },
+        fetcher=world,
+        sleep=lambda _s: None,
+    )
+    assert [pin["wiki"] for pin in decided[A].chosen] == ["elwiki", "frwiki", "itwiki"]
+    assert decided[A].chosen[0]["estimate"] == SL.article_estimate(
+        SL.Pin("elwiki", "el", "Ναός", 1, 4_000)
+    )
+    assert {(row["wiki"], row["rule"]) for row in decided[A].skipped} == {
+        ("enwiki", "english"),
+        ("dewiki", "not-the-items-article"),
+    }
+    assert decided[B] == SL.SiteLinks(None, "Q2 is carried by 2 curated sites", None, None, (), ())
+    assert not any("Q2" in url for url in world.asked)
+
+
+def test_one_article_claimed_by_two_items_stops_the_resolution() -> None:
+    world = _Wiki(
+        items={"Q1": {"dewiki": _wd("de", "T")}, "Q2": {"dewiki": _wd("de", "T")}}, pages={}
+    )
+    sites = {
+        A: {"qid": "Q1", "withheld": None, "country": "Greece", "room": 60_000},
+        B: {"qid": "Q2", "withheld": None, "country": "Greece", "room": 60_000},
+    }
+    with pytest.raises(SystemExit, match="is linked by"):
+        SL.resolve(sites, fetcher=world, sleep=lambda _s: None)
+
+
+# ── the records ───────────────────────────────────────────────────────────────────────────────
+
+
+def _chosen(wiki: str, title: str, revid: int) -> dict[str, Any]:
+    pin = SL.Pin(wiki, wiki.removesuffix("wiki"), title, revid, 4_000)
+    return {**SL.asdict(pin), "estimate": SL.article_estimate(pin)}
+
+
+def _external(*pairs: tuple[str, str]) -> list[dict[str, str]]:
+    return [{"site_id": site, "kind": "wikidata_qid", "value": qid} for site, qid in pairs]
+
+
+def test_a_record_asks_its_open_fields_with_its_pinned_articles_and_says_what_it_skipped() -> None:
+    exported = SL.Export(
+        sites={A: _site(A), B: _site(B)},
+        cards={A: {"card_description": "A card."}},
+        external=_external((A, "Q1"), (B, "Q2")),
+        journal=[],
+    )
+    skipped = ({"wiki": "enwiki", "rule": "english", "title": "T", "reason": "English"},)
+    sitelinks = {
+        A: _links("Q1", chosen=(_chosen("elwiki", "Ναός", 5),), skipped=skipped),
+        B: _links(None, "Q2 is carried by 2 curated sites"),
+    }
+    questions = [_q(A, "period_start"), _q(A, "country"), _q(B, "site_type")]
+    records, unlinked = SL.site_records(questions, exported=exported, sitelinks=sitelinks)
+    assert unlinked == [
+        {
+            "site_id": B,
+            "field": "site_type",
+            "rule": "item-withheld",
+            "reason": "Q2 is carried by 2 curated sites",
+        }
+    ]
+    (record,) = records
+    assert record[SE.RERUN_FIELDS_KEY] == ["period_start", "country"]
+    assert record["source_batch"] == "batch-0007" and record["wikidata_qid"] == "Q1"
+    assert record[F.WIKIDATA_ROUTE_KEY] == F.WIKIDATA_ROUTE_NARROW
+    assert record[F.WIKI_SITELINKS_KEY] == [
+        {"lang": "el", "revid": 5, "title": "Ναός", "wiki": "elwiki"}
+    ]
+    assert record["wiki_sitelinks_skipped"] == [dict(skipped[0])]
+    assert "sitelink.elwiki" in [t.feature for t in F.targets_for_site(record)]
+
+
+def test_a_site_with_no_usable_article_is_left_out_under_its_own_rule() -> None:
+    exported = SL.Export(sites={A: _site(A)}, cards={}, external=_external((A, "Q1")), journal=[])
+    records, unlinked = SL.site_records(
+        [_q(A, "country")], exported=exported, sitelinks={A: _links("Q1")}
+    )
+    assert records == [] and unlinked[0]["rule"] == "no-article"
+
+
+def test_a_record_is_refused_for_an_unresolved_site_or_a_stale_item() -> None:
+    exported = SL.Export(sites={A: _site(A)}, cards={}, external=_external((A, "Q1")), journal=[])
+    with pytest.raises(SystemExit, match="not in sitelinks.json"):
+        SL.site_records([_q(A, "country")], exported=exported, sitelinks={})
+    stale = {A: _links("Q7", chosen=(_chosen("elwiki", "Ναός", 5),))}
+    with pytest.raises(SystemExit, match="resolved for Q7, the export carries Q1"):
+        SL.site_records([_q(A, "country")], exported=exported, sitelinks=stale)
+
+
+def test_the_batches_are_the_lanes_own_or_its_pilots() -> None:
+    records = [{"site_id": f"s{n}"} for n in range(SL.BATCH_SIZE + 1)]
+    lane = SL.batches(records, prefix=lanes.BATCH_PREFIX["sitelink"])
+    assert [batch.batch_id for batch in lane] == ["slk-0001", "slk-0002"]
+    assert [b.batch_id for b in SL.batches(records, prefix="slkg")] == ["slkg-0001", "slkg-0002"]
+    with pytest.raises(SystemExit, match="the lane writes slk-NNNN"):
+        SL.batches(records, prefix="gap")
+
+
+# ── the country the stored point already verifies ─────────────────────────────────────────────
+
+
+def _census_data(tmp_path: Path, status: dict[str, str], snapshot: list[dict[str, Any]]) -> Path:
+    import gzip
+
+    (tmp_path / "run_t02").mkdir(parents=True)
+    rows = [{"site_id": s, "status": v, "test_id": "T02"} for s, v in status.items()]
+    rows.append({"site_id": A, "status": "fail", "test_id": "T01"})
+    (tmp_path / "run_t02" / "census.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+    (tmp_path / "snapshot").mkdir()
+    with gzip.open(tmp_path / "snapshot" / SP.UNIFIED_SITES_FILE, "wt", encoding="utf-8") as out:
+        out.writelines(json.dumps(row) + "\n" for row in snapshot)
+    return tmp_path
+
+
+def test_a_country_is_verified_by_geometry_only_on_a_t02_pass_nobody_moved_since(
+    tmp_path: Path,
+) -> None:
+    c, d = "cccccccc", "dddddddd"
+    sites = [_site(A), _site(B), _site(c), _site(d, lat=37.5)]
+    data = _census_data(
+        tmp_path,
+        {A: "pass", B: "flag", c: "pass", d: "pass"},
+        [_site(A), _site(B), _site(c, country="Italy"), _site(d)],
+    )
+    questions = [_q(s["id"], "country") for s in sites] + [_q(A, "period_start")]
+    result = SL.geometry(questions, exported=_exported(*sites), data=data)
+    assert result["counts"] == {
+        "asked": 4,
+        "t02_flagged": 1,
+        "t02_pass_but_country_or_point_changed_since": 2,
+        "verified_by_geometry": 1,
+    }
+    assert result["verified_site_ids"] == [A]
+    with pytest.raises(SystemExit, match="not in the T02 census"):
+        SL.geometry([_q("eeeeeeee", "country")], exported=_exported(_site("eeeeeeee")), data=data)
+
+
+# ── the pilot's scorer: the same four thresholds, the lane's own transport ───────────────────
+
+
+def _pilot_batch(tmp_path: Path) -> Path:
+    """One `slkg` batch: A with two articles, the German one stored, the Spanish one refused."""
+    record = SP.discover_site_record(site=_site(A), card={"card_description": "A card."}, qid="Q1")
+    record[F.WIKI_SITELINKS_KEY] = [
+        {"wiki": "dewiki", "lang": "de", "title": "Tempel", "revid": 5},
+        {"wiki": "eswiki", "lang": "es", "title": "Templo", "revid": 6},
+    ]
+    batch = tmp_path / "slkg-0001"
+    batch.mkdir(parents=True)
+    (batch / "input.json").write_text(
+        json.dumps({"batch_id": "slkg-0001", "sites": [record]}), encoding="utf-8"
+    )
+    F.EvidenceStore(batch / "evidence").write(site_id=A, feature="sitelink.dewiki", body=b"text")
+    report = {
+        "sites": [
+            {
+                "site_id": A,
+                "outcomes": [
+                    {"feature": "sitelink.eswiki", "failure": "HTTP 200, answer refused: edited"}
+                ],
+            }
+        ]
+    }
+    (batch / "fetch.json").write_text(json.dumps(report), encoding="utf-8")
+    return batch
+
+
+def test_the_sitelink_transport_counts_every_article_with_neither_a_file_nor_a_failure(
+    tmp_path: Path,
+) -> None:
+    import score_search_pilot as SSP
+
+    batch = _pilot_batch(tmp_path)
+    assert SSP.sitelink_unaccounted(batch) == 0
+    (batch / "fetch.json").write_text(json.dumps({"sites": []}), encoding="utf-8")
+    assert SSP.sitelink_unaccounted(batch) == 1
+    (batch / "fetch.json").unlink()
+    F.EvidenceStore(batch / "evidence").path_for(A, "sitelink.dewiki").unlink()
+    assert SSP.sitelink_unaccounted(batch) == 2
+
+
+def test_each_lane_scores_its_own_pilot_with_its_own_transport() -> None:
+    import score_search_pilot as SSP
+
+    assert SSP.TRANSPORTS == {
+        "search": SSP.search_unaccounted,
+        "sitelink": SSP.sitelink_unaccounted,
+    }
+    assert SSP.PILOT_LANES["search"] == SSP.PilotLane(SSP.RUN, SSP.PREFIX, SSP.PROGRESS)
+    sitelink = SSP.PILOT_LANES["sitelink"]
+    assert sitelink.prefix == SL.PILOT_PREFIX and sitelink.run.name == "sitelink-gold"
+    assert SSP.build_parser().parse_args([]).lane == "search"
+
+
+def test_the_scorer_reads_the_sitelink_pilot_with_the_sitelink_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import score_search_pilot as SSP
+
+    seen: list[Any] = []
+
+    def sealed(batches, human, progress, *, transport):  # noqa: ANN001, ANN202
+        seen.append((batches, transport))
+        return True, ["sealed"]
+
+    monkeypatch.setattr(SSP, "sealed", sealed)
+    monkeypatch.setattr(
+        SSP, "writer_decision", lambda batches, human: ["WRITER RESULT: NOT AVAILABLE"]
+    )
+    batch = _pilot_batch(tmp_path / "runs")
+    gold = tmp_path / "gold.json"
+    gold.write_text(json.dumps({"records": []}), encoding="utf-8")
+    progress = tmp_path / "progress.json"
+    progress.write_text(json.dumps({"stopped": None, "failed": {}}), encoding="utf-8")
+    argv = ["--lane", "sitelink", "--run-dir", str(tmp_path / "runs"), "--gold", str(gold)]
+    assert SSP.main([*argv, "--progress", str(progress)]) == 0
+    assert seen == [([batch], SSP.sitelink_unaccounted)]
