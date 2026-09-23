@@ -776,6 +776,33 @@ def test_two_witnesses_that_are_each_one_with_a_third_do_not_pair() -> None:
     assert verdict["verdict"] == "move" and verdict["agreeing"] == ["wikidata", "enwiki"]
 
 
+def test_a_p625_that_cites_the_web_pages_publisher_is_one_with_it() -> None:
+    """Measured on the live run: Pusilha's P625 was imported from the Cebuano Wikipedia, whose
+    geographic articles were generated from GeoNames, and its web witness is geonames.org; Mersinaki's
+    P625 cites phrc.it by URL, and its web witness is phrc.it. Each pair is one source, however far
+    GeoNames has drifted since - never a move."""
+    assert C.cited_publishers({"P143": ["Q837615"]}) == ("geonames.org",)
+    assert C.cited_publishers({"P248": ["Q830106"]}) == ("geonames.org",)
+    assert C.cited_publishers({"P854": ["http://phrc.it/index.php?module=content"]}) == ("phrc.it",)
+    assert C.cited_publishers({"P143": ["Q328"], "P4656": ["https://en.wikipedia.org/x"]}) == ()
+    near = (WD_POINT[0] + 0.0006, WD_POINT[1])  # 67 m: two points, not one by distance
+    wd, web = _wd(cites=("geonames.org",)), _web("www.geonames.org", near)
+    assert not C.independent(wd, web) and not C.independent(web, wd)
+    assert C.independent(_wd(), web)
+    verdict = C.weigh(STORED, [wd, web])
+    assert verdict["verdict"] == "review", verdict["reason"]
+    assert verdict["reason"] == (
+        "the two witnesses are one: P625 cites geonames.org, the web page's publisher"
+    )
+    # read from the cache as `witnesses` reads it
+    claim = _claim(WD_POINT)
+    claim["p625"]["references"] = {"P143": ["Q837615"]}
+    ws, _ = C.witnesses("Q1", claims={"Q1": claim}, enwiki={})
+    assert ws[0].cites == ("geonames.org",)
+    row = _reweigh([_web("www.geonames.org", near)], claims={"Q1": claim})
+    assert row["verdict"] == "review" and "P625 cites geonames.org" in row["reason"]
+
+
 def test_two_agreeing_pairs_on_two_points_are_read_not_moved() -> None:
     far = (WD_POINT[0] + 0.03, WD_POINT[1])  # 3.3 km north
     ws = [_wd(), _web("maya.example"), _en(far), _web("heritage.example", (far[0] + 0.004, far[1]))]

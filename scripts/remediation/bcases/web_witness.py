@@ -55,8 +55,11 @@ page was read at, `coord_text` as the quote and `classify.grid_of` of the number
 Each of the 171 cases is classified again exactly as `classify.write_all` did - the same cache, the
 same `classify_coordinate` - once without web witnesses, which must reproduce the delivered
 `coords.jsonl` row (else the cache is not the one the first wave was decided from, and nothing is
-written), and once with its accepted web witnesses, under the unchanged rule (`classify.weigh`: two
-independent witnesses agree within the tolerance and the stored point lies outside it). A move whose
+written), and once with its accepted web witnesses, under the first wave's rule (`classify.weigh`: two
+independent witnesses agree within the tolerance and the stored point lies outside it). Where a web
+witness takes part the independence test is read strictly: one publisher is one witness, "are one"
+is followed through chains (`classify.copy_groups`), and a P625 whose references name the page's
+publisher is that page (`classify.cited_publishers`). A move whose
 new point lies in another country than the stored one (`classify.country_after_move`) becomes
 `review`: the country is a question for the country lanes, not something a coordinate write may
 settle silently. A site of the first wave's plan is never in the second.

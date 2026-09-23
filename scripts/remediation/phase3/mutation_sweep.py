@@ -7536,6 +7536,7 @@ _WW_WAVE2 = "test_wave_two_renders_under_its_own_stamp_and_directory"
 _WW_WAVE1_SITE = "test_wave_two_refuses_a_site_of_wave_one"
 _WW_WHOLE = "test_the_quote_must_stand_whole_in_the_page"
 _WW_CHAIN = "test_two_witnesses_that_are_each_one_with_a_third_do_not_pair"
+_WW_CITES = "test_a_p625_that_cites_the_web_pages_publisher_is_one_with_it"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -8091,6 +8092,46 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    reason = re.sub(r"web:[^\\s,;]+", "web", reason)  # mutant\n',
         _WW_TEST,
         "test_the_counted_reason_drops_the_publisher_and_the_numbers_only",
+    ),
+    (
+        "bcases web: a P625 citing the web page's publisher pairs with it",
+        _CL,
+        "    if _cites(a, b) or _cites(b, a):\n        return False\n",
+        "    if False:  # mutant\n        return False\n",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: the Cebuano Wikipedia is not read as GeoNames",
+        _CL,
+        '    ("P143", "Q837615"): "geonames.org",\n',
+        "",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: a reference URL names no publisher",
+        _CL,
+        '    out |= {web_host(url) for url in references.get("P854") or () if urlsplit(url).hostname}\n',
+        "    pass  # mutant\n",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: the item's witness forgets what its P625 cites",
+        _CL,
+        "                cites=cited_publishers(refs),\n",
+        "",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: the reason calls a cited source a disagreement",
+        _CL,
+        "    if cited:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        _WW_CITES,
     ),
     (
         "bcases web: the two ends of a chain of copies pair",

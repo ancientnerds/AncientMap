@@ -61,7 +61,9 @@ different publishers may pair under the same independence test, a web witness co
 `PRIORITY`, and when two agreeing pairs name points further apart than the tolerance the case is
 read, not moved. With three or more witnesses "are one" is followed through chains (`copy_groups`):
 two pages that are each the item's point are one with each other too, so they never pair. With two
-witnesses the chain is the pair itself, and the first wave's verdicts are unchanged.
+witnesses the chain is the pair itself, and the first wave's verdicts are unchanged. A P625 whose
+references name a web witness's publisher (`cited_publishers`: a reference URL, or GeoNames behind an
+import from the Cebuano Wikipedia) is one with that witness: it is where the value came from.
 
 ## B2 countries (the 117 `T02` findings)
 
@@ -480,6 +482,9 @@ class Witness:
     #: The grid the value's digits are written on, in degrees (`grid_of`): what a copy of it may have
     #: been rounded to. 0 when the digits lie on no grid of `GRIDS`.
     step: float = 0.0
+    #: The web publishers this value's references name (`cited_publishers`): a web page of one of them
+    #: is its source, not a second witness. Not part of a verdict's record (`_witness_json`).
+    cites: tuple[str, ...] = ()
 
     @property
     def label(self) -> str:
@@ -581,6 +586,36 @@ def same_point_m(a: Witness, b: Witness) -> float:
     )
 
 
+#: References that name a web publisher without its URL. The Cebuano Wikipedia's geographic
+#: articles were generated from GeoNames (Lsjbot), so a P625 imported from it (P143 Q837615) is
+#: GeoNames' point, as is one stated in GeoNames (P248 Q830106).
+REFERENCE_PUBLISHERS = {
+    ("P143", "Q837615"): "geonames.org",
+    ("P248", "Q830106"): "geonames.org",
+}
+
+
+def cited_publishers(references: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
+    """The web publishers a P625's references name (`web_host`): a reference URL's (P854) and those of
+    `REFERENCE_PUBLISHERS`. A web witness of one of them is where the P625 came from."""
+    out = {
+        REFERENCE_PUBLISHERS[(prop, str(value))]
+        for prop, values in references.items()
+        for value in values
+        if (prop, str(value)) in REFERENCE_PUBLISHERS
+    }
+    out |= {web_host(url) for url in references.get("P854") or () if urlsplit(url).hostname}
+    return tuple(sorted(out))
+
+
+def _cites(a: Witness, b: Witness) -> str | None:
+    """The publisher of web witness `b` when `a`'s references name it, else None."""
+    if b.kind != "web":
+        return None
+    publisher = web_host(b.url)
+    return publisher if publisher in a.cites else None
+
+
 def _p625_from_enwiki(references: Mapping[str, Sequence[str]]) -> bool:
     """Whether a P625 says it was imported from English Wikipedia (P143 Q328, or its import URL)."""
     if "Q328" in (references.get("P143") or ()):
@@ -626,6 +661,7 @@ def witnesses(
                 precision_m(p625.get("precision")),
                 "enwiki" if from_en else None,
                 grid_of(p625["lat"], p625["lon"]),
+                cites=cited_publishers(refs),
             )
         )
     titles = [t for t in (record.get("enwiki"), *extra_titles) if t]
@@ -671,6 +707,8 @@ def independent(a: Witness, b: Witness) -> bool:
         return False
     if a.derived_from == b.kind or b.derived_from == a.kind:
         return False
+    if _cites(a, b) or _cites(b, a):
+        return False
     if rounded_copy(a, b) is not None:
         return False
     return _m(a, b) > same_point_m(a, b)
@@ -709,6 +747,9 @@ def _pair_state(a: Witness, b: Witness, tol: float, via: Sequence[Witness] = ())
         return f"are one: both are {a.label}"
     if a.derived_from == b.kind or b.derived_from == a.kind:
         return "are one: P625 says it was imported from English Wikipedia"
+    cited = _cites(a, b) or _cites(b, a)
+    if cited:
+        return f"are one: P625 cites {cited}, the web page's publisher"
     copy = rounded_copy(a, b)
     if copy is not None:
         return f"are one: {copy}"
