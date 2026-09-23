@@ -547,8 +547,8 @@ _PLAN_SITE_KEYS = frozenset(
     {
         "site_id", "name", "aliases", "country", "site_type", "period_start", "period_end", "lat",
         "lon", "description", "description_sha256", "raw_data", "raw_data_sha256", "card",
-        "card_sha256", "source_url", "wikidata_qid", "enwiki_title", "snapshot_description",
-        "flags",
+        "card_sha256", "source_url", "wikidata_qid", "enwiki_title", "in_snapshot",
+        "snapshot_description", "flags",
     }
 )  # fmt: skip
 
@@ -580,6 +580,10 @@ class PlanSite(_JsonRecord):
     source_url: str | None
     wikidata_qid: str | None
     enwiki_title: str | None
+    #: The site has a row in pre-March snapshot d4526691. `False` for a site created after it: then
+    #: `snapshot_description` is `None` because there is nothing to compare, not because the
+    #: snapshot held no text - lane L tells the two apart (accepted by the orchestrator 2026-09-23).
+    in_snapshot: bool
     snapshot_description: str | None  #: the description in pre-March snapshot d4526691
     flags: frozenset[SiteFlag]
 
@@ -595,6 +599,11 @@ class PlanSite(_JsonRecord):
         _need_opt_int(self.period_end, f"{self.site_id}: period_end", minimum=None)
         _need_number(self.lat, f"{self.site_id}: lat", low=-90.0, high=90.0)
         _need_number(self.lon, f"{self.site_id}: lon", low=-180.0, high=180.0)
+        _need_bool(self.in_snapshot, f"{self.site_id}: in_snapshot")
+        if not self.in_snapshot and self.snapshot_description is not None:
+            raise ValueError(
+                f"{self.site_id}: a snapshot description for a site not in the snapshot"
+            )
         for text_field in ("description", "card", "snapshot_description"):
             value = getattr(self, text_field)
             if value is not None and not isinstance(value, str):
@@ -638,6 +647,7 @@ class PlanSite(_JsonRecord):
             "source_url": self.source_url,
             "wikidata_qid": self.wikidata_qid,
             "enwiki_title": self.enwiki_title,
+            "in_snapshot": self.in_snapshot,
             "snapshot_description": self.snapshot_description,
             "flags": sorted(flag.value for flag in self.flags),
         }
@@ -667,6 +677,7 @@ class PlanSite(_JsonRecord):
             source_url=d["source_url"],
             wikidata_qid=d["wikidata_qid"],
             enwiki_title=d["enwiki_title"],
+            in_snapshot=d["in_snapshot"],
             snapshot_description=d["snapshot_description"],
             flags=frozenset(_coerce(SiteFlag, flag, "plan_site.flag") for flag in flags),
         )

@@ -42,9 +42,26 @@ def test_a_held_text_that_differs_from_the_snapshot_is_marked_generated() -> Non
     }
 
 
-def test_a_text_the_snapshot_does_not_have_was_written_after_it() -> None:
-    site = FX.plan_site(description="Added in March.", snapshot=None)
+def test_a_text_the_snapshot_holds_as_null_was_written_after_it() -> None:
+    """The site is in d4526691 with no description there: the text it carries now was written
+    after the snapshot, which is the claim's basis."""
+    site = FX.plan_site(description="Added in March.", snapshot=None, in_snapshot=True)
     assert L.legacy_provenance(site) is not None and L.no_claim_reason(site) is None
+
+
+def test_a_site_the_snapshot_does_not_have_gets_no_claim_and_is_listed() -> None:
+    """A site created after 2026-03-04 is not in d4526691 at all (8 curated sites, 7 of them from
+    2026-04-24): there is nothing to compare its text with, so nothing proves the March chain wrote
+    it - it gets no claim, under its own reason, never the 'differs from the snapshot' basis."""
+    site = FX.plan_site(description="Added in April.", snapshot=None, in_snapshot=False)
+    assert L.legacy_provenance(site) is None
+    assert L.no_claim_reason(site) is L.NoClaim.NOT_IN_SNAPSHOT
+    assert L.unclaimed([site]) == [L.Unclaimed(FX.SITE_A, FX.TITLE, L.NoClaim.NOT_IN_SNAPSHOT)]
+
+
+def test_a_site_the_snapshot_does_not_have_and_without_text_has_nothing_to_mark() -> None:
+    site = FX.plan_site(description=None, snapshot=None, in_snapshot=False)
+    assert L.no_claim_reason(site) is L.NoClaim.NO_DESCRIPTION
 
 
 def test_a_held_text_equal_to_the_snapshot_gets_no_claim_and_is_listed() -> None:
@@ -110,6 +127,16 @@ def test_an_unprovable_text_is_refused_and_listed_for_human_only(tmp_path: Path)
     plan = W4.plan_legacy(_batch(tmp_path, [site]), written=[])
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_NO_CLAIM
     assert [u.reason for u in plan.unclaimed] == [L.NoClaim.SAME_AS_SNAPSHOT]
+
+
+def test_a_site_absent_from_the_snapshot_is_refused_and_listed_for_human_only(
+    tmp_path: Path,
+) -> None:
+    site = FX.plan_site(description="Added in April.", snapshot=None, in_snapshot=False)
+    plan = W4.plan_legacy(_batch(tmp_path, [site]), written=[])
+    assert not plan.rows and plan.refusals[0].rule == W4.RULE_NO_CLAIM
+    assert [u.reason for u in plan.unclaimed] == [L.NoClaim.NOT_IN_SNAPSHOT]
+    assert "not-in-snapshot" in plan.refusals[0].detail
 
 
 def test_a_provenance_that_is_already_there_is_never_overwritten(tmp_path: Path) -> None:

@@ -9,8 +9,11 @@ which the API and the pages render as the existing AI footnote.
 
 Where the held description is byte for byte the snapshot's, nothing proves where it came from, so
 nothing is claimed: the site gets no row and is listed for `HUMAN_ONLY.md` (the closing report counts
-them). A held site without a description has no text to mark and is listed the same way, under its
-own reason, so the two counts never merge.
+them). The same holds for a site the snapshot does not have at all (`PlanSite.in_snapshot` false: 8
+curated sites were created after 2026-03-04, 7 of them on 2026-04-24): its text has nothing to
+differ from, and claiming the March chain for a site that did not exist then would be a false
+disclosure. A held site without a description has no text to mark. Each is listed under its own
+reason, so the counts never merge.
 
 This module decides; `phase4/write4.py` turns a decision into a journalled row (test_id
 `P4/legacy-provenance`, change-key lane `phase4l`) and renders the transaction. Pure: no file, no
@@ -39,19 +42,21 @@ class NoClaim(StrEnum):
     """Why a held site gets no legacy provenance. Each is listed for HUMAN_ONLY, never written."""
 
     SAME_AS_SNAPSHOT = "same-as-snapshot"  #: the text is the pre-March one: no provable origin
+    NOT_IN_SNAPSHOT = "not-in-snapshot"  #: created after d4526691: nothing to compare with
     NO_DESCRIPTION = "no-description"  #: nothing is published, so there is nothing to mark
 
 
 def legacy_provenance(site: M.PlanSite) -> M.LegacyProvenance | None:
     """The lane-L provenance of one held site, or `None` when no claim can be made.
 
-    `None` when the stored description equals the snapshot's (no claim: its origin is unprovable)
-    or when there is no stored description (nothing to mark); `no_claim_reason` says which. A
-    description that differs from the snapshot - including one the snapshot does not have at all -
-    was written after it, by the March chain, and is marked 'generated'.
+    `None` when the stored description equals the snapshot's (no claim: its origin is unprovable),
+    when the site is not in the snapshot at all (nothing to compare with), or when there is no
+    stored description (nothing to mark); `no_claim_reason` says which. A description that differs
+    from the snapshot's - including a text where the snapshot's row holds none - was written after
+    it, by the March chain, and is marked 'generated'.
     """
     text = site.description
-    if text is None or text == site.snapshot_description:
+    if text is None or not site.in_snapshot or text == site.snapshot_description:
         return None
     return M.LegacyProvenance(desc_sha256=M.text_sha256(text))
 
@@ -62,7 +67,7 @@ def no_claim_reason(site: M.PlanSite) -> NoClaim | None:
     if site.description is None:
         return NoClaim.NO_DESCRIPTION
     if legacy_provenance(site) is None:
-        return NoClaim.SAME_AS_SNAPSHOT
+        return NoClaim.SAME_AS_SNAPSHOT if site.in_snapshot else NoClaim.NOT_IN_SNAPSHOT
     return None
 
 

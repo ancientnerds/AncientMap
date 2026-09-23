@@ -61,6 +61,7 @@ def row(n: int, **over: Any) -> dict[str, Any]:
         "wikidata_qid": f"Q{1000 + n}",
         "enwiki_title": f"Site {n}",
         "names": [f"Site {n}"],
+        "in_snapshot": True,
         "snapshot_description": None,
     }
     base.update(over)
@@ -155,8 +156,21 @@ def test_every_row_becomes_a_plan_site_with_its_old_values() -> None:
     assert site.site_id == uuid(1)
     assert site.raw_data == raw and site.raw_data_sha256 == "a" * 64
     assert site.card == "A card." and site.card_sha256 == M.text_sha256("A card.")
-    assert site.snapshot_description == "old"
+    assert site.in_snapshot is True and site.snapshot_description == "old"
     assert site.flags == frozenset()
+
+
+def test_the_read_tells_a_site_absent_from_the_snapshot_from_a_null_text_in_it() -> None:
+    """`snapshot_description` is NULL both for a site d4526691 does not have and for one it holds
+    without a description; lane L may claim the second and never the first, so the read asks for
+    the row itself (`in_snapshot`) and the plan carries it."""
+    assert (
+        "EXISTS (SELECT 1 FROM snapshot_rows s "
+        f"WHERE s.snapshot_id = '{P.SNAPSHOT_ID}' AND s.site_id = u.id) AS in_snapshot"
+    ) in P.PLAN_SQL
+    absent, null_text = build([row(1, in_snapshot=False), row(2)])
+    assert (absent.in_snapshot, absent.snapshot_description) == (False, None)
+    assert (null_text.in_snapshot, null_text.snapshot_description) == (True, None)
 
 
 def test_a_digest_that_is_not_the_texts_is_refused() -> None:

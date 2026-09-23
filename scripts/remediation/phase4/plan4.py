@@ -113,6 +113,7 @@ ROW_KEYS = frozenset(
         "wikidata_qid",
         "enwiki_title",
         "names",
+        "in_snapshot",
         "snapshot_description",
     }
 )
@@ -133,6 +134,8 @@ PLAN_SQL = (
     "AND e.kind = 'enwiki_title') AS enwiki_title, "
     "COALESCE((SELECT array_agg(n.name ORDER BY n.name) FROM unified_site_names n "
     "WHERE n.site_id = u.id), '{}') AS names, "
+    "EXISTS (SELECT 1 FROM snapshot_rows s "
+    f"WHERE s.snapshot_id = '{SNAPSHOT_ID}' AND s.site_id = u.id) AS in_snapshot, "
     "(SELECT s.old_data->>'description' FROM snapshot_rows s "
     f"WHERE s.snapshot_id = '{SNAPSHOT_ID}' AND s.site_id = u.id) AS snapshot_description "
     "FROM unified_sites u LEFT JOIN card_stats c ON c.site_id = u.id "
@@ -334,6 +337,7 @@ def _site(
         source_url=row["source_url"],
         wikidata_qid=row["wikidata_qid"],
         enwiki_title=row["enwiki_title"],
+        in_snapshot=row["in_snapshot"],
         snapshot_description=row["snapshot_description"],
         flags=frozenset(flags),
     )

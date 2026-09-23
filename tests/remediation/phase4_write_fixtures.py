@@ -59,6 +59,7 @@ def plan_site(
     card: str | None = OLD_CARD,
     raw_data: dict[str, Any] | None = None,
     snapshot: str | None = "The pre-March text.",
+    in_snapshot: bool = True,
     flags: Iterable[M.SiteFlag] = (),
 ) -> M.PlanSite:
     raw = copy.deepcopy(OLD_RAW) if raw_data is None else raw_data
@@ -81,6 +82,7 @@ def plan_site(
         source_url="https://en.wikipedia.org/wiki/Tarxien_Temples",
         wikidata_qid="Q1195938",
         enwiki_title=TITLE,
+        in_snapshot=in_snapshot,
         snapshot_description=snapshot,
         flags=frozenset(flags),
     )

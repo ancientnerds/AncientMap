@@ -80,6 +80,7 @@ def plan_site(**over: Any) -> M.PlanSite:
         "source_url": "https://en.wikipedia.org/wiki/Tarxien_Temples",
         "wikidata_qid": QID,
         "enwiki_title": "Tarxien Temples",
+        "in_snapshot": True,
         "snapshot_description": None,
         "flags": frozenset(),
     }
