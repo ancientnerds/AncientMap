@@ -48,6 +48,15 @@ Usage:
         --run-dir output/remediation/phase3_runner/runs/search1 --stages prepare,search,judge \
         --max-calls 4500 --max-usd 8 --max-searches 4600
 
+    # the gap run: a rerun plan, the default stages, one call per rerun field and no search
+    ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
+        --plan output/remediation/phase3_runner/PLAN.gap.jsonl \
+        --run-dir output/remediation/phase3_runner/runs/gap --max-calls 1000 --max-usd 5
+
+A plan is one of three kinds, read from its site records (`read_plan`, `STAGES_OF_KIND`): a snapshot
+plan names neither `rerun_fields` nor `search_fields`; a rerun plan names `rerun_fields` only; a search
+plan names both. `--stages` must be the kind's own sequence, or the run is refused before it starts.
+
 A search batch's `search` stage gates itself on the MiniMax quota and exits `run.STOP_RUN_EXIT` when
 the gate refuses or a stop-class error arrives; the driver then stops the whole run (`stop_of`), with
 the reason the stage printed at the top level of its own report. The quota readings each batch's
@@ -83,7 +92,7 @@ if __package__ in (None, ""):
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402  - one spelling for a named failure's shape
-from phase3 import search_evidence as SE  # noqa: E402  - a search plan's rerun fields
+from phase3 import search_evidence as SE  # noqa: E402  - a plan's rerun and search fields
 from phase3 import search_stage as SS  # noqa: E402  - the search report's quota readings
 from phase3.run import STOP_RUN_EXIT, InputError  # noqa: E402  - search's "stop the run" exit
 
@@ -135,6 +144,19 @@ STAGE_SEQUENCES: dict[str, tuple[str, ...]] = {
     ",".join(STAGES): STAGES,
     ",".join(SEARCH_STAGES): SEARCH_STAGES,
 }
+#: The three kinds of plan, told apart by the keys their site records carry (`read_plan`): a
+#: snapshot plan names neither key and asks all five fields; a rerun plan (the gap run,
+#: `output/remediation/tools/gap_plan.py`) names `rerun_fields` only and asks just those; a search
+#: plan (`phase3/search_plan.py`) names `search_fields` as well and buys a search for each.
+SNAPSHOT_PLAN, RERUN_PLAN, SEARCH_PLAN = "snapshot", "rerun", "search"
+#: The stages each kind runs. A rerun plan fetches its own evidence - its levers are the narrowed
+#: Wikidata route and the enwiki sitelink route (`output/remediation/gap/GAP_PLAN.md`) - and buys no
+#: search; only a search plan runs `search` in `fetch`'s place.
+STAGES_OF_KIND: dict[str, tuple[str, ...]] = {
+    SNAPSHOT_PLAN: STAGES,
+    RERUN_PLAN: STAGES,
+    SEARCH_PLAN: SEARCH_STAGES,
+}
 DONE, PARTIAL, BROKEN, ABSENT = "done", "partial", "broken", "absent"
 
 
@@ -165,9 +187,10 @@ def python_executable() -> Path:
 class PlannedBatch:
     """One line of the plan, as `snapshot_plan` writes it: `{batch_id, ordinal, sites}`.
 
-    A search plan's line (`phase3/search_plan.py`) names the fields it reruns per site; then
-    `rerun_fields` is their count and `searches` the searches they buy. `None` is the snapshot plan,
-    whose every site is asked all five fields.
+    A rerun plan's line (the gap run's, or the search lane's) names the fields it asks again per site;
+    then `rerun_fields` is their count. `searches` is the searches the line's `search_fields` buy -
+    zero for every line that names none. `rerun_fields=None` is the snapshot plan, whose every site
+    is asked all five fields.
     """
 
     batch_id: str
@@ -177,8 +200,22 @@ class PlannedBatch:
     searches: int = 0
 
     @property
+    def kind(self) -> str:
+        """`snapshot`, `rerun` or `search`. `read_plan` counts a search for every site's
+        `search_fields` (non-empty by `search_evidence.search_fields`, every field one search key) and
+        refuses a line that names them for some sites only, so `searches > 0` is "the sites name
+        `search_fields`" - and a line that names `rerun_fields` without them is a rerun line."""
+        if self.rerun_fields is None:
+            return SNAPSHOT_PLAN
+        return SEARCH_PLAN if self.searches else RERUN_PLAN
+
+    @property
     def search(self) -> bool:
-        return self.rerun_fields is not None
+        return self.kind == SEARCH_PLAN
+
+    @property
+    def stages(self) -> tuple[str, ...]:
+        return STAGES_OF_KIND[self.kind]
 
     @property
     def expected_calls(self) -> int:
@@ -212,17 +249,24 @@ def read_plan(path: Path) -> list[PlannedBatch]:
             raise PlanError(f"{path}:{number}: a batch with no sites is not a batch")
         try:
             rerun = [SE.rerun_fields(site) for site in sites]
+            searched = [SE.search_fields(site) for site in sites]
             searches = sum(len(SE.search_slots(site)) for site in sites)
             for site, fields in zip(sites, rerun, strict=True):
                 if fields is not None:
-                    # What the search stage and the reviewer read, checked before anything is
-                    # bought: a plan built before these keys existed is refused here, not later.
+                    # What the reviewer reads, checked before anything is bought.
                     SE.unwritten_proposals(site)
+            for site, fields in zip(sites, searched, strict=True):
+                if fields is not None:
+                    # What the search stage reads: a search plan built before these keys existed is
+                    # refused here, not later.
                     SS.query_values(site)
         except InputError as exc:
             raise PlanError(f"{path}:{number}: {exc}") from None
-        if any(fields is None for fields in rerun) and any(fields is not None for fields in rerun):
-            raise PlanError(f"{path}:{number}: some sites name rerun_fields and some do not")
+        # One question per key: a line whose sites disagree about either would run some of them as
+        # the wrong kind - a search bought for a rerun site, or none for a search site.
+        for key, named in ((SE.RERUN_FIELDS_KEY, rerun), (SE.SEARCH_FIELDS_KEY, searched)):
+            if len({fields is None for fields in named}) > 1:
+                raise PlanError(f"{path}:{number}: some sites name {key} and some do not")
         batches.append(
             PlannedBatch(
                 batch_id=batch_id,
@@ -236,6 +280,12 @@ def read_plan(path: Path) -> list[PlannedBatch]:
         )
     if not batches:
         raise PlanError(f"{path}: no batches")
+    kinds = sorted({batch.kind for batch in batches})
+    if len(kinds) > 1:
+        raise PlanError(
+            f"{path}: the plan mixes {kinds} batches; a plan is one kind, and its kind decides the "
+            "stages every batch runs"
+        )
     seen = {batch.batch_id for batch in batches}
     if len(seen) != len(batches):
         raise PlanError(f"{path}: a batch id appears twice; the progress file keys on it")
@@ -884,16 +934,18 @@ def main(argv: list[str] | None = None) -> int:
         raise PlanError("--failures-before-stop 0 would stop before the first batch")
     stages = STAGE_SEQUENCES[args.stages]
     searching = "search" in stages
-    mismatched = [b.batch_id for b in batches if b.search != searching]
+    mismatched = [b.batch_id for b in batches if b.stages != stages]
     if mismatched:
         raise PlanError(
             f"--stages {args.stages} does not fit {len(mismatched)} batch(es) of this plan (first: "
-            f"{mismatched[0]}): a search plan names rerun_fields and runs prepare,search,judge; a "
-            "snapshot plan names none and runs prepare,fetch,judge"
+            f"{mismatched[0]}, a {batches[0].kind} plan): a search plan names search_fields and "
+            "runs prepare,search,judge; a rerun plan names rerun_fields only, a snapshot plan "
+            "neither, and both run prepare,fetch,judge"
         )
 
     sites = sum(b.sites for b in batches)
     calls = sum(b.expected_calls for b in batches)
+    rerun = any(b.rerun_fields is not None for b in batches)
     spend = Spend.from_ledger(ledger)
     digest = None if args.no_digest_guard else package_digest()
     budget = Budget(args.max_calls, args.max_usd, args.max_searches)
@@ -902,11 +954,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"ledger        {ledger}")
     print(f"stages        {args.stages}")
     print(f"batches       {len(batches)} ({sites} sites)")
-    if searching:
+    if rerun:
         print(f"expected      {calls} calls, one per rerun field")
-        print(f"searches      {sum(b.searches for b in batches)} (before retries)")
     else:
         print(f"expected      {sites * FIELDS_PER_SITE} calls at {FIELDS_PER_SITE} per site")
+    if searching:
+        print(f"searches      {sum(b.searches for b in batches)} (before retries)")
     print(
         f"projected     ${calls * MEASURED_COST_PER_CALL:.4f} "
         f"at the measured ${MEASURED_COST_PER_CALL} per call"

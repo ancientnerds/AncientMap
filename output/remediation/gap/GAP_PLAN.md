@@ -23,7 +23,9 @@ Every record comes from a **fresh read-only export** (2026-09-22T21:46:19Z: 194 
 snapshot: 2 asked fields moved since (Easter Island and Kutaisi `country`, the mechanical lane), and 7
 fields that are *not* asked were written by phase 3 (e.g. Chalkotheke `period_start` -1500 -> -450).
 Each record names the fields it asks (`rerun_fields`: all five for the 152, one or two for the 42), and
-the writer refuses every other field of the site (`write_stage.RULE_NOT_RERUN`).
+the writer refuses every other field of the site (`write_stage.RULE_NOT_RERUN`). No record names
+`search_fields` - the search lane's key for the fields a MiniMax search is bought for - so the run buys
+no search (see "What the run needs from code this lane does not own").
 
 ## The evidence routes
 
@@ -86,10 +88,23 @@ affected batches filled all seven: 0 failed targets.
 
 ## What the run needs from code this lane does not own
 
-`discover_stage.plan_site` asks all five fields of every site; it does not read `rerun_fields`. Until it
-does, the 42 partly-asked sites buy 5 calls each instead of their 1-2: 970 finder calls instead of 802
-(about $0.2 more at the measured $0.00096 a call). The extra answers can never be written - the writer
-refuses them (`field-not-asked-in-this-run`) - but the reviewer would review their `WRONG` findings too.
+Written 2026-09-22, when `discover_stage.plan_site` still asked all five fields of every site: the 42
+partly-asked sites would then have bought 5 calls each instead of their 1-2 (970 finder calls instead
+of 802). **Settled on 2026-09-23, in the tree that merges this lane with the search lane:**
+
+* `discover_stage.plan_site` asks only a record's `rerun_fields` (the search lane's change), so the run
+  buys one finder call per asked field.
+* The two lanes had given `rerun_fields` two meanings: the search lane derived its MiniMax searches
+  from it, so a gap record would have been searched for (802 searches nobody planned) or refused -
+  its judge demanded a `minimax_search.*` file for every asked field, and its reviewer a
+  `rerun_unwritten` key. They are now two keys (`scripts/remediation/phase3/search_evidence.py`):
+  `rerun_fields` is what a run asks again, `search_fields` what it buys a search for (a subset). A gap
+  record names no `search_fields`, buys no search and needs no search file; the writer reads
+  `rerun_fields` through the discover pass's own parser.
+* `mass_run.py` reads a plan whose records name `rerun_fields` only as a **rerun** plan and runs it
+  through `prepare,fetch,judge`, its default `--stages` (a search plan needs `prepare,search,judge`
+  and is refused under these). Measured on the plan of 2026-09-22 (sha256 `34df97e2...`, in the gap
+  lane's worktree): 13 batches, kind `rerun`, 802 expected calls, 0 searches.
 
 ## The sequence (orchestrator; production is only read until step 8)
 

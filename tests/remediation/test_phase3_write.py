@@ -42,6 +42,7 @@ if str(PHASE3_PARENT) not in sys.path:
     sys.path.insert(0, str(PHASE3_PARENT))
 
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import search_evidence as SE  # noqa: E402
 from phase3 import snapshot_plan as SP  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
 from phase3.run import InputError  # noqa: E402
@@ -769,8 +770,9 @@ def test_evidence_missing_with_nothing_recorded_about_it_stops_the_plan(tmp_path
 
 
 def _with_rerun_fields(batch_dir: Path, fields: Any) -> Path:
+    """The gap run's record shape: `rerun_fields` alone - what the run asks again, and no search."""
     payload = json.loads((batch_dir / W.INPUT_FILE).read_text(encoding="utf-8"))
-    payload["sites"][0][W.RERUN_FIELDS_KEY] = fields
+    payload["sites"][0][SE.RERUN_FIELDS_KEY] = fields
     (batch_dir / W.INPUT_FILE).write_text(json.dumps(payload), encoding="utf-8", newline="\n")
     return batch_dir
 
@@ -778,7 +780,13 @@ def _with_rerun_fields(batch_dir: Path, fields: Any) -> Path:
 def test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared(
     tmp_path: Path,
 ) -> None:
-    """The gap run re-asks one field of 42 sites; their other fields were decided (and written)."""
+    """The gap run re-asks one field of 42 sites; their other fields were decided (and written).
+
+    The record has the gap run's shape - `rerun_fields` without `search_fields` - so it bought no
+    search and the citation check reads its fetched page alone. While the two lanes gave
+    `rerun_fields` both meanings (2026-09-23, the merged tree), this raised `EvidenceUnusable` for a
+    `minimax_search.period_start` file nobody had bought.
+    """
     batch_dir = _batch(
         tmp_path,
         cleared={
@@ -795,6 +803,8 @@ def test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared(
         "period_start",
     ]
     plan = W.load_plan(_with_rerun_fields(batch_dir, ["period_start"]))
+    (site,) = json.loads((batch_dir / W.INPUT_FILE).read_text(encoding="utf-8"))["sites"]
+    assert SE.SEARCH_FIELDS_KEY not in site and SE.search_slots(site) == ()
     assert [row.column for row in plan.rows] == ["period_start"]
     refused = {refusal.field for refusal in plan.refused_fields(W.RULE_NOT_RERUN)}
     assert refused == set(SP.DISCOVER_FIELDS) - {"period_start"}
@@ -802,11 +812,31 @@ def test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared(
 
 def test_a_malformed_rerun_list_is_refused_rather_than_read_generously(tmp_path: Path) -> None:
     # `{"country": 1}` is the one only the list check catches: a mapping's keys are distinct field
-    # names, so every other test of the clause would read it as the list ["country"].
+    # names, so every other test of the clause would read it as the list ["country"]. The refusal
+    # names the batch it came from (the writer wraps the one parser's error, 2026-09-23).
     for bad in ([], ["country", "country"], ["name"], "country", None, {"country": 1}):
         batch_dir = _with_rerun_fields(_cleared_batch(tmp_path / str(len(str(bad)))), bad)
-        with pytest.raises(InputError, match="rerun_fields"):
+        with pytest.raises(InputError, match=f"^batch {BATCH}: .*rerun_fields"):
             W.load_plan(batch_dir)
+
+
+def test_the_writer_reads_the_rerun_list_with_the_discover_passs_own_parser(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One parser: which fields a run asked is `search_evidence.rerun_fields`' answer, the function
+    the discover pass asked the finder with. Until 2026-09-23 the writer carried a second
+    implementation, which could read one list differently from the finder.
+
+    The stand-in answers `period_start` for a record that says `country`: a writer that parsed the
+    list itself would plan the cleared `country` row; this one refuses it."""
+    batch_dir = _with_rerun_fields(_cleared_batch(tmp_path), ["country"])
+    assert [row.column for row in W.load_plan(batch_dir).rows] == ["country"]
+    monkeypatch.setattr(SE, "rerun_fields", lambda site: ("period_start",))
+    plan = W.load_plan(batch_dir)
+    assert plan.rows == []
+    refused = {refusal.field for refusal in plan.refused_fields(W.RULE_NOT_RERUN)}
+    assert refused == set(SP.DISCOVER_FIELDS) - {"period_start"}
+    assert not hasattr(W, "rerun_fields") and not hasattr(W, "RERUN_FIELDS_KEY")
 
 
 def _texts(tmp_path: Path, texts: dict[tuple[str, str], str]) -> F.EvidenceStore:

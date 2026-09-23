@@ -19,8 +19,12 @@ mechanical lane since, and several had other fields written by phase 3.
 
 What a record carries beyond the mass run's shape (`snapshot_plan.discover_site_record`):
 
-* `rerun_fields` - the fields this run was built to ask; the writer refuses any other field of the site
-  (`write_stage.RULE_NOT_RERUN`), so the 42 partly-decided sites cannot re-decide what is already done;
+* `rerun_fields` - the fields this run was built to ask; the discover pass asks only these and the
+  writer refuses any other field of the site (`write_stage.RULE_NOT_RERUN`), so the 42 partly-decided
+  sites cannot re-decide what is already done. **No `search_fields`**: that key is the search lane's
+  (`search_evidence.search_fields`), and a record without it buys no MiniMax search - this run's
+  levers are the narrowed Wikidata evidence and the enwiki sitelink route below. `mass_run.py` reads
+  such a plan as a *rerun* plan and runs it through `prepare,fetch,judge`;
 * `source_batch` - the mass batch the question comes from;
 * `wikidata_route: "narrow"` - the narrowed Wikidata evidence (`fetch_stage`), for every kept item;
 * `withheld_wikidata_qid` - an item that is not given to the run, with the reason: an id the reviewed
@@ -63,6 +67,7 @@ from phase3 import discover_stage as DS  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
 from phase3 import run as R  # noqa: E402
+from phase3 import search_evidence as SE  # noqa: E402 - the key a rerun record names fields under
 from phase3 import snapshot_plan as SP  # noqa: E402
 
 GAP = lanes.REMEDIATION / "gap"
@@ -324,7 +329,7 @@ def site_records(
     for site_id, asked in by_site.items():
         qid, withheld = withheld_reason(site_id, qids.get(site_id), shared=shared)
         record = SP.discover_site_record(site=sites[site_id], card=cards.get(site_id), qid=qid)
-        record["rerun_fields"] = [q.field for q in asked]
+        record[SE.RERUN_FIELDS_KEY] = [q.field for q in asked]
         record["source_batch"] = asked[0].source_batch
         record["gap_reasons"] = sorted({q.why for q in asked})
         if qid is not None:
@@ -440,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
         records = site_records(questions, export_dir=pathlib.Path(args.export), sitelinks=sitelinks)
         planned = batches(records)
         R.write_batches(pathlib.Path(args.out), planned)
-        asked = sum(len(record["rerun_fields"]) for record in records)
+        asked = sum(len(record[SE.RERUN_FIELDS_KEY]) for record in records)
         routes = collections.Counter(
             "narrow"
             if F.WIKIDATA_ROUTE_KEY in record

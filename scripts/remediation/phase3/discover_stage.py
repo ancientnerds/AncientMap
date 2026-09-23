@@ -64,7 +64,7 @@ from phase3 import fetch_stage as F  # noqa: E402  - the evidence store this sta
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model as M  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402  - the seam this stage builds its calls through
-from phase3 import search_evidence as SE  # noqa: E402  - a search plan's `rerun_fields`
+from phase3 import search_evidence as SE  # noqa: E402  - a rerun record's `rerun_fields`
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
 from phase3.snapshot_plan import DISCOVER_FIELDS  # noqa: E402  - the fields the plan was built for
 
@@ -335,11 +335,13 @@ def plan_site(
     `vocabulary` is the catalogue's own `site_type` list, which one field's question cannot be built
     without; it is a required keyword so that no caller can ask that question unarmed.
 
-    A site record of a search plan carries `rerun_fields` (`search_evidence.rerun_fields` validates
-    them: a non-empty subset of `DISCOVER_FIELDS`), and only those fields buy a call - and only those
-    are recorded unverifiable when the site's evidence, search hits included, is over the bound. The
-    fields a search plan does not rerun were decided in the mass run and must not lose that decision
-    to a bigger evidence set. A record without `rerun_fields` asks all five, as before.
+    A site record of a rerun plan - the gap run's, or the search lane's - carries `rerun_fields`
+    (`search_evidence.rerun_fields` validates them: a non-empty subset of `DISCOVER_FIELDS`), and
+    only those fields buy a call - and only those are recorded unverifiable when the site's evidence,
+    search hits included, is over the bound. The fields a plan does not rerun were decided in the
+    mass run and must not lose that decision to a different evidence set. Whether the site also buys
+    searches is `search_fields`' question, not this one's. A record without `rerun_fields` asks all
+    five, as before.
     """
     site_id = str(site.get("site_id") or "")
     if not site_id:

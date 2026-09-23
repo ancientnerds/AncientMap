@@ -27,7 +27,9 @@ their own.
 journal stamps `phase3:srch-0011:chunk-NNNN` cannot collide with the 428 `phase3:batch-*` stamps
 already in production), `pass: "discover"`, and the site records copied **verbatim** from the mass
 batch's `input.json` - all five findings, name, qid - plus `rerun_fields` (what is asked again),
-`rerun_why` (why, per field), `rerun_unwritten` (the proposals the mass lane did not write, per
+`search_fields` (what a MiniMax search is bought for: here the same fields, since every field this
+lane reruns is rerun *because* the search adds evidence; `search_evidence.search_fields` requires it
+to be a subset of `rerun_fields`), `rerun_why` (why, per field), `rerun_unwritten` (the proposals the mass lane did not write, per
 field; `{}` for none), `query_values` (production's value of every field a query reads -
 `search_stage.SLOT_FIELDS` - because the snapshot is older than the corrections production holds)
 and `source_batch`. The batch names the run directory it came from in `source_run_dir`.
@@ -89,6 +91,7 @@ PREFIX_RE = re.compile(r"[a-z]{2,8}")
 #: produced by the mass run, and planning from it would stack one rerun on another.
 ADDED_SITE_KEYS = (
     SE.RERUN_FIELDS_KEY,
+    SE.SEARCH_FIELDS_KEY,
     SE.RERUN_WHY_KEY,
     SE.RERUN_UNWRITTEN_KEY,
     SE.QUERY_VALUES_KEY,
@@ -280,8 +283,8 @@ def _search_site(
     production: Mapping[str, Any],
     source_batch: str,
 ) -> dict[str, Any]:
-    """The mass record verbatim, plus what is rerun and why, the proposals that were not written,
-    the values a query reads, and where the record came from."""
+    """The mass record verbatim, plus what is rerun and searched for and why, the proposals that were
+    not written, the values a query reads, and where the record came from."""
     site_id = str(site.get("site_id") or "")
     present = [key for key in ADDED_SITE_KEYS if key in site]
     if present:
@@ -289,6 +292,7 @@ def _search_site(
     record = dict(site)
     rerun = [name for name in DISCOVER_FIELDS if name in fields]
     record[SE.RERUN_FIELDS_KEY] = rerun
+    record[SE.SEARCH_FIELDS_KEY] = list(rerun)
     record[SE.RERUN_WHY_KEY] = {name: fields[name] for name in rerun}
     record[SE.RERUN_UNWRITTEN_KEY] = {
         name: {"change_key": row.change_key, "kind": row.kind, "proposed": row.proposed}
