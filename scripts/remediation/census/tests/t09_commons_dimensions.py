@@ -61,7 +61,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
@@ -83,9 +82,6 @@ IIPROP = "size|url|extmetadata"
 CACHE_NS = "commons"
 INDEX_NAME = "commons_imageinfo.json"
 
-REPO = Path(__file__).resolve().parents[4]
-DOWNLOADER = REPO / "pipeline" / "wiki_image_downloader.py"
-
 #: Phase 2 item 1 ("an already-local 1600 px gallery image") and §6.1's "too small" class
 #: (short side under 900). Not free parameters: this pair reproduces the plan's 3,264
 #: locally-repairable heroes exactly.
@@ -94,24 +90,18 @@ HERO_MIN_HEIGHT = 900
 
 log = logging.getLogger("census.t09")
 
-_WIDTH_RE = re.compile(r"^(THUMB_WIDTH|GALLERY_WIDTH)\s*=\s*(\d+)", re.M)
+#: The export caps every row of the 2026-09-20 snapshot was downloaded under. Until 2026-09-23
+#: this module read them from the downloader's source, so that a changed value could not make its
+#: explanation stale. That day the downloader replaced both with a fetch rule over Commons' fixed
+#: thumbnail buckets (`LOCAL_MAX_WIDTH`, `fetch_plan` in `pipeline/wiki_image_downloader.py`):
+#: 800 and 1600 are not buckets and answer HTTP 400. The rows this module explains were made under
+#: these two values and no others, so they are pinned here as the history they are.
+HISTORIC_CAPS = {"THUMB_WIDTH": 800, "GALLERY_WIDTH": 1600}
 
 
 def _pipeline_widths() -> dict[str, int]:
-    """The downloader's own caps, read from its source.
-
-    They are the reason a hero row can only ever be 800 px wide, so a changed value would make
-    this module's explanation wrong. Fail loudly instead of quoting a stale number.
-    """
-    text = DOWNLOADER.read_text(encoding="utf-8")
-    got = {k: int(v) for k, v in _WIDTH_RE.findall(text)}
-    for name in ("THUMB_WIDTH", "GALLERY_WIDTH"):
-        if name not in got:
-            raise AssertionError(
-                f"{name} not found in {DOWNLOADER} - the export caps this check explains no "
-                "longer exist under that name"
-            )
-    return got
+    """The caps the census's rows were downloaded under (see `HISTORIC_CAPS`)."""
+    return dict(HISTORIC_CAPS)
 
 
 # --------------------------------------------------------------------------- Commons names
