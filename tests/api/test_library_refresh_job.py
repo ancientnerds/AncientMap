@@ -7,6 +7,7 @@ refresh took longer - which it did, the site scan alone took 112 s (2026-09-22).
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -16,6 +17,8 @@ from fastapi import HTTPException
 from api.routes import library
 from api.services.background_jobs import JobAlreadyRunning
 from tests.fake_sql import RecordingSession
+
+REPO = Path(__file__).resolve().parents[2]
 
 
 def _req(key: str | None) -> SimpleNamespace:
@@ -83,3 +86,46 @@ def test_status_reads_the_shared_job_row():
     with patch.object(library, "read_status", return_value={"state": "ok"}) as read:
         assert library.refresh_library_status(_req("k3y"), db=db) == {"state": "ok"}
     assert read.call_args.args == (db, library.LIBRARY_REFRESH_JOB)
+
+
+# --------------------------------------------------------------------------------------
+# the deploy's library step (.github/workflows/ci.yml)
+# --------------------------------------------------------------------------------------
+
+
+def _deploy_library_step() -> str:
+    ci = (REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    start = ci.index('echo "==> Refreshing library data..."')
+    end = ci.index('echo "==> Restarting log streaming..."')
+    return ci[start:end]
+
+
+def _code(block: str) -> str:
+    return "\n".join(line for line in block.splitlines() if not line.strip().startswith("#"))
+
+
+def test_the_deploy_reports_the_refresh_outcome_not_its_start():
+    """The POST answers 202 as soon as the job starts. The deploy printed 'Library
+    refreshed' on that alone, so a refresh that failed a minute later looked like a
+    success in every deploy log. It now polls the status endpoint and reports the state
+    the job ended in, with the job's error."""
+    code = _code(_deploy_library_step())
+    assert "curl -sf --max-time 30 -X POST" in code and "/api/library/refresh >" in code
+    assert "http://localhost:8000/api/library/refresh/status" in code
+    assert '[ "$LIB_STATE" = "running" ] || break' in code
+    assert code.count("Library refreshed") == 1
+    assert code.index('if [ "$LIB_STATE" = "ok" ]; then') < code.index("Library refreshed")
+    assert ".error // empty" in code
+    assert "WARNING: Library refresh did not start (non-fatal)" in code
+
+
+def test_the_deploy_library_step_survives_set_e_and_the_ssh_quoting():
+    """The deploy body runs under `set -e` inside ONE single-quoted ssh argument: a bare
+    single quote ends that argument early (the 2026-08-08 truncation), and a failing
+    command substitution in an assignment aborts the whole deploy."""
+    block = _deploy_library_step()
+    assert "'" not in block
+    polls = [line for line in _code(block).splitlines() if "LIB_" in line and "=$(" in line]
+    assert len(polls) == 2
+    for line in polls:
+        assert line.rstrip().endswith((' || echo "{}")', " || echo unreadable)")), line

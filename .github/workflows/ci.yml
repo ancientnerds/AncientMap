@@ -551,10 +551,28 @@ jobs:
 
             echo "==> Refreshing library data..."
             REFRESH_KEY=$(grep "^LIBRARY_REFRESH_KEY=" .env | cut -d= -f2- | tr -d "\r")
-            if curl -sf --max-time 120 -X POST -H "X-Internal-Key: $REFRESH_KEY" http://localhost:8000/api/library/refresh > /dev/null; then
-              echo "    Library refreshed"
+            # The POST answers 202 once the refresh has STARTED (a background job,
+            # api/routes/library.py); the outcome is read from the status endpoint,
+            # never assumed. Non-fatal either way, as before. Every command below
+            # survives set -e: a failed curl or jq yields a state, not an abort.
+            if curl -sf --max-time 30 -X POST -H "X-Internal-Key: $REFRESH_KEY" http://localhost:8000/api/library/refresh > /dev/null; then
+              LIB_STATE=running
+              LIB_STATUS="{}"
+              for LIB_TRY in $(seq 1 60); do
+                sleep 5
+                LIB_STATUS=$(curl -sf --max-time 10 -H "X-Internal-Key: $REFRESH_KEY" http://localhost:8000/api/library/refresh/status || echo "{}")
+                LIB_STATE=$(echo "$LIB_STATUS" | jq -r ".state // \"unreadable\"" 2>/dev/null || echo unreadable)
+                [ "$LIB_STATE" = "running" ] || break
+              done
+              if [ "$LIB_STATE" = "ok" ]; then
+                echo "    Library refreshed: $(echo "$LIB_STATUS" | jq -c ".result" 2>/dev/null || true)"
+              elif [ "$LIB_STATE" = "running" ]; then
+                echo "    WARNING: Library refresh still running after 300 s (non-fatal; see /api/library/refresh/status)"
+              else
+                echo "    WARNING: Library refresh $LIB_STATE (non-fatal): $(echo "$LIB_STATUS" | jq -r ".error // empty" 2>/dev/null || true)"
+              fi
             else
-              echo "    WARNING: Library refresh failed (non-fatal)"
+              echo "    WARNING: Library refresh did not start (non-fatal)"
             fi
 
             echo "==> Restarting log streaming..."
