@@ -47,8 +47,9 @@ that holds the site, not the site - `container-item` and `item-is-not-the-site`
 
 1. every sitelink of the item whose url is on `*.wikipedia.org` - the host, and so the language
    subdomain, read off Wikidata's own url, never off a table; English (`enwiki`, `simplewiki`) and the
-   bot-generated wikis (`fetch_stage.BOT_GENERATED_WIKIS`) are refused, and so is a sitelink badged as
-   a redirect (`fetch_stage.REDIRECT_BADGES`); a sitelink without its `badges` list stops the build;
+   bot-generated wikis (`fetch_stage.BOT_GENERATED_WIKIS`) are refused, Swedish outside Sweden and
+   Finland (`HOME_ONLY_WIKIS`: Lsjbot wrote much of it) too, and so is a sitelink badged as a
+   redirect (`fetch_stage.REDIRECT_BADGES`); a sitelink without its `badges` list stops the build;
 2. in this order: the language(s) of the site's stored country (`COUNTRY_WIKIS`, keyed by the
    project's own `normalize_country`), then `FIXED_ORDER`, then every other wiki by site id;
 3. walking that order, each candidate is pinned (`wikipedia_pages_url`: it exists, is the item's own
@@ -157,7 +158,9 @@ LOOKUP_BACKOFF_SECONDS: tuple[float, ...] = (15.0, 60.0)
 #: The order after the site's own language(s): the wikis in the order of how many of the lane's
 #: writable fields they reach, measured 2026-09-23 on the bcases sitelink cache (dewiki 1,437 fields,
 #: eswiki 1,418, frwiki 1,337, itwiki 1,038, cawiki 848, ruwiki 834), then by the sites they reach
-#: (nlwiki 575 sites ... huwiki 285). Every wiki not named here comes after, by site id.
+#: (nlwiki 575 sites ... huwiki 285). Every wiki not named here comes after, by site id. `svwiki`,
+#: tenth by that count, is not here: it is read only where it is the site's own (`HOME_ONLY_WIKIS`),
+#: and there it comes first anyway.
 FIXED_ORDER: tuple[str, ...] = (
     "dewiki",
     "eswiki",
@@ -168,7 +171,6 @@ FIXED_ORDER: tuple[str, ...] = (
     "nlwiki",
     "ptwiki",
     "plwiki",
-    "svwiki",
     "ukwiki",
     "fawiki",
     "trwiki",
@@ -281,6 +283,14 @@ COUNTRY_WIKIS: dict[str, tuple[str, ...]] = {
     "baltic sea": (),
     "northern mariana islands": (),
 }
+
+#: Wikipedias a program wrote much of, which are also the language of some countries' own sites: read
+#: only for a site whose stored country speaks them (`COUNTRY_WIKIS`), refused for every other site.
+#: Swedish: Lsjbot wrote about half of it (`fetch_stage.BOT_GENERATED_WIKIS` has the citation), and of
+#: the 75 Swedish pages the first lane plan chose for sites outside Sweden and Finland, 53 were
+#: Lsjbot's (the first revision of each, read 2026-09-23: "Botskapande Storbritannien", "Botskapande
+#: Irland", ...), while none of the 22 it chose for Swedish and Finnish sites was.
+HOME_ONLY_WIKIS: frozenset[str] = frozenset({"svwiki"})
 
 #: The reasons an article is not taken, as the summary counts them.
 CAP_REASON = f"the site already has {F.MAX_WIKI_SITELINKS} articles (the lane's cap)"
@@ -647,13 +657,15 @@ class Pin:
 
 
 def candidates(
-    links: Mapping[str, F.Sitelink],
+    links: Mapping[str, F.Sitelink], *, country: Any
 ) -> tuple[list[Candidate], list[dict[str, str]]]:
     """`(the item's Wikipedia sitelinks that may be read, every other Wikipedia sitelink with why)`.
 
     A sitelink is a Wikipedia's when its url is on `*.wikipedia.org`; the language subdomain is read
     off that url. Other projects (Commons, Wikivoyage, Wikisource) are not languages and not listed.
+    `country` is the site's stored country: a `HOME_ONLY_WIKIS` wiki is read only where it is its own.
     """
+    home = COUNTRY_WIKIS[country_key(country)]
     usable: list[Candidate] = []
     refused: list[dict[str, str]] = []
     for wiki, link in sorted(links.items()):
@@ -670,6 +682,12 @@ def candidates(
             rule, why = "english", "English: the mass run had the English article"
         elif wiki in F.BOT_GENERATED_WIKIS:
             rule, why = "bot-generated", "a bot-generated wiki (fetch_stage.BOT_GENERATED_WIKIS)"
+        elif wiki in HOME_ONLY_WIKIS and wiki not in home:
+            rule = "home-only"
+            why = (
+                "a wiki a program wrote much of, read only for a site in a country whose language "
+                "it is (HOME_ONLY_WIKIS)"
+            )
         elif redirect:
             rule, why = "redirect-badge", f"a sitelink to a redirect ({', '.join(redirect)})"
         else:
@@ -876,7 +894,7 @@ def resolve(
     refused: dict[str, list[dict[str, str]]] = {}
     owner: dict[tuple[str, str], tuple[str, str]] = {}
     for site_id, row in sorted(kept.items()):
-        usable, refused[site_id] = candidates(links[row["qid"]])
+        usable, refused[site_id] = candidates(links[row["qid"]], country=row["country"])
         orders[site_id] = order(usable, row["country"])
         for candidate in usable:
             known = owner.setdefault(candidate.key, (candidate.wiki, row["qid"]))

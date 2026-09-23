@@ -348,9 +348,35 @@ MAX_WIKI_SITELINKS = 3
 #: for Egyptian Arabic "a substantial proportion of biographies and geographical entries were
 #: automatically generated from templates" (Egyptian Arabic Wikipedia, oldid 1376125926). A page
 #: generated from a database says what that database said, not what a source says about the site, so
-#: these three are refused as evidence. Swedish is kept on purpose: Lsjbot wrote part of it too, but
-#: it is also the language of the Swedish sites' own articles.
-BOT_GENERATED_WIKIS: frozenset[str] = frozenset({"cebwiki", "warwiki", "arzwiki"})
+#: these three are refused as evidence.
+#:
+#: Three more, read the same day after an independent check of the lane's plan found their pages among
+#: its chosen articles (the first revision of each chosen page, asked of the wiki's own API): Chechen,
+#: "in November 2022, thanks to bot uploads, the number of articles passed 500 thousand" ("В ноябре
+#: 2022 года благодаря ботозаливкам число статей в разделе превысило 500 тысяч", ru.wikipedia.org
+#: "Чеченская Википедия", oldid 153105098), and all 3 chosen pages were created by `CheWikibot`;
+#: Ladin, "183,223 articles as of September 2026 and 45 active registered users" (Ladin Wikipedia,
+#: en.wikipedia.org oldid 1375555468), and all 30 chosen pages were created by one account with AWB
+#: between 2023-05-24 and 2023-06-03 ("creps using [[Project:AWB|AWB]]"), one-line stubs of 509-650
+#: bytes; Min Nan, "from early June 2015 bots were used to create large numbers of articles, more than
+#: ten thousand a month" ("其時開始使用機器人建立大量條目，以每月逾一萬條目的速度增長", zh.wikipedia.org
+#: "閩南語維基百科", oldid 93375724), and its one chosen page was created by `Taigiholic.bot`.
+#:
+#: Swedish is not in this set: Lsjbot wrote much of it too ("In 2014 about half of its articles were
+#: created by a single bot, Lsjbot", Swedish Wikipedia, en.wikipedia.org oldid 1375728913), but it is
+#: also the language of the Swedish and Finnish sites' own articles. The sitelink plan reads it only
+#: for those (`sitelink_plan.HOME_ONLY_WIKIS`): of the 75 Swedish pages the first plan chose for sites
+#: elsewhere, 53 were created by Lsjbot ("Botskapande Storbritannien", "Botskapande Irland", ...).
+BOT_GENERATED_WIKIS: frozenset[str] = frozenset(
+    {
+        "cebwiki",
+        "warwiki",
+        "arzwiki",
+        "cewiki",
+        "lldwiki",
+        "zh_min_nanwiki",
+    }
+)
 #: The English Wikipedias. The lane's point is evidence the mass run did not have, and the mass run
 #: had the English article; Simple English is English too.
 ENGLISH_WIKIS: frozenset[str] = frozenset({"enwiki", "simplewiki"})

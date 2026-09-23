@@ -639,7 +639,8 @@ def test_the_candidates_are_the_items_wikipedias_their_language_read_off_the_url
             "frwiki": _sl("Areni", "https://fr.wikipedia.org/wiki/A", "Q70893996"),
             "itwiki": _sl("Areni", "https://it.wikipedia.org/wiki/A", "Q70894304"),
             "eswiki": _sl("Areni-1", "https://es.wikipedia.org/wiki/A", "Q17437796"),
-        }
+        },
+        country="Armenia",
     )
     assert usable == [
         SL.Candidate("be_x_oldwiki", "be-tarask", "Арэні-1"),
@@ -658,13 +659,51 @@ def test_the_candidates_are_the_items_wikipedias_their_language_read_off_the_url
     )
 
 
+#: Sitelinks of the shapes the lane met on 2026-09-23: a CheWikibot page (Żukczyn), an AWB stub on
+#: the Ladin Wikipedia (Castle Crag), a Taigiholic.bot page (Sollentuna) and an Lsjbot page on the
+#: Swedish Wikipedia (Tibradden Mountain, "Botskapande Irland").
+GENERATED = {
+    "cewiki": _sl("Жукчин", "https://ce.wikipedia.org/wiki/A"),
+    "lldwiki": _sl("Castle Crag", "https://lld.wikipedia.org/wiki/A"),
+    "zh_min_nanwiki": _sl("Sollentuna Kàu-khu", "https://zh-min-nan.wikipedia.org/wiki/A"),
+    "svwiki": _sl("Tibradden Mountain", "https://sv.wikipedia.org/wiki/A"),
+    "dewiki": _sl("Tibradden", "https://de.wikipedia.org/wiki/A"),
+}
+
+
+def test_the_wikis_programs_wrote_are_refused_and_swedish_is_read_only_at_home() -> None:
+    usable, refused = SL.candidates(GENERATED, country="Ireland")
+    assert [c.wiki for c in usable] == ["dewiki"]
+    assert {row["wiki"]: row["rule"] for row in refused} == {
+        "cewiki": "bot-generated",
+        "lldwiki": "bot-generated",
+        "zh_min_nanwiki": "bot-generated",
+        "svwiki": "home-only",
+    }
+    assert "read only for a site in a country whose language it is" in next(
+        row["reason"] for row in refused if row["wiki"] == "svwiki"
+    )
+    for country in ("Sweden", "Finland"):
+        usable, _ = SL.candidates(GENERATED, country=country)
+        assert [c.wiki for c in usable] == ["dewiki", "svwiki"], country
+
+
+def test_a_home_only_wiki_is_one_the_country_table_names_as_a_countrys_own() -> None:
+    """A home-only wiki no country speaks would be refused everywhere without a word."""
+    for wiki in SL.HOME_ONLY_WIKIS:
+        assert any(wiki in wikis for wikis in SL.COUNTRY_WIKIS.values()), wiki
+        assert wiki not in SL.FIXED_ORDER, wiki
+
+
 def test_a_sitelink_without_url_or_with_a_foreign_shape_stops_the_build() -> None:
     with pytest.raises(SystemExit, match="without its url"):
-        SL.candidates({"dewiki": _sl("Areni-1", None)})
+        SL.candidates({"dewiki": _sl("Areni-1", None)}, country="Germany")
     with pytest.raises(SystemExit, match="not a Wikipedia site id and subdomain"):
-        SL.candidates({"de": _sl("Areni-1", "https://de.wikipedia.org/wiki/A")})
+        SL.candidates({"de": _sl("Areni-1", "https://de.wikipedia.org/wiki/A")}, country="Germany")
     with pytest.raises(SystemExit, match="not a Wikipedia site id and subdomain"):
-        SL.candidates({"dewiki": _sl("Areni-1", "https://de_x.wikipedia.org/wiki/A")})
+        SL.candidates(
+            {"dewiki": _sl("Areni-1", "https://de_x.wikipedia.org/wiki/A")}, country="Germany"
+        )
 
 
 def _c(wiki: str) -> SL.Candidate:
@@ -921,6 +960,7 @@ def test_resolution_orders_pins_and_selects_every_kept_site_and_records_the_with
                 "frwiki": _wd("fr", "Temple"),
                 "itwiki": _wd("it", "Tempio"),
                 "enwiki": _wd("en", "Temple"),
+                "svwiki": _wd("sv", "Tempel"),  # Lsjbot's language, and a Greek site
             }
         },
         pages={
@@ -944,6 +984,7 @@ def test_resolution_orders_pins_and_selects_every_kept_site_and_records_the_with
     )
     assert {(row["wiki"], row["rule"]) for row in decided[A].skipped} == {
         ("enwiki", "english"),
+        ("svwiki", "home-only"),
         ("dewiki", "not-the-items-article"),
     }
     assert decided[B] == SL.SiteLinks(None, "Q2 is carried by 2 curated sites", None, None, (), ())

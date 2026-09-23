@@ -224,6 +224,9 @@ def test_the_articles_come_after_the_english_sitelink_and_before_the_narrowed_cl
         ([{**DE, "wiki": "cebwiki", "lang": "ceb"}], "bot-generated"),
         ([{**DE, "wiki": "warwiki", "lang": "war"}], "bot-generated"),
         ([{**DE, "wiki": "arzwiki", "lang": "arz"}], "bot-generated"),
+        ([{**DE, "wiki": "cewiki", "lang": "ce"}], "bot-generated"),
+        ([{**DE, "wiki": "lldwiki", "lang": "lld"}], "bot-generated"),
+        ([{**DE, "wiki": "zh_min_nanwiki", "lang": "zh-min-nan"}], "bot-generated"),
         ([{**DE, "lang": "de.example.org"}], "not a Wikipedia language subdomain"),
         ([{**DE, "lang": "DE"}], "not a Wikipedia language subdomain"),
         ([{**DE, "title": "  "}], "carries no title"),
@@ -252,7 +255,14 @@ def test_articles_on_a_record_without_an_item_are_refused() -> None:
 
 
 def test_the_bot_generated_and_english_wikis_are_the_named_ones() -> None:
-    assert F.BOT_GENERATED_WIKIS == {"cebwiki", "warwiki", "arzwiki"}
+    assert F.BOT_GENERATED_WIKIS == {
+        "cebwiki",
+        "warwiki",
+        "arzwiki",
+        "cewiki",
+        "lldwiki",
+        "zh_min_nanwiki",
+    }
     assert F.ENGLISH_WIKIS == {"enwiki", "simplewiki"}
     assert F.MAX_WIKI_SITELINKS == 3
 
