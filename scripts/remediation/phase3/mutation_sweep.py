@@ -4065,6 +4065,14 @@ GALLERY_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         CALIBRATE_TEST,
         "test_each_threshold_leg_alone_refuses_its_trigger",
     ),
+    (
+        "gallery: L2 derives a page URL from a title that is no file title",
+        GALLERY + "decide.py",
+        '    if not file_title.startswith("File:"):\n',
+        "    if False:  # mutant\n",
+        VISION_TEST,
+        "test_the_l2_page_url_is_the_projects_own_spelling_of_a_file_title",
+    ),
 ]
 MUTATIONS += GALLERY_REVIEW_MUTATIONS
 

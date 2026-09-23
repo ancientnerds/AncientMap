@@ -42,14 +42,12 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[3]
 _REMEDIATION = ROOT / "scripts" / "remediation"
 if str(_REMEDIATION) not in sys.path:
     sys.path.insert(0, str(_REMEDIATION))
 
-from census.tests.t06_url_shape import COMMONS_PAGE_PREFIX  # noqa: E402
 from census.tests.t09_commons_dimensions import _as_derivative, _hero_ready  # noqa: E402
 from hero_repair.plan import (  # noqa: E402
     TIERS_ACCEPTED,
@@ -63,6 +61,7 @@ from gallery_audit import calibrate, liveness, vision, worklist  # noqa: E402
 from gallery_audit.persist_verdicts import VOCAB  # noqa: E402
 from gallery_audit.planned import PlannedRow, write_plan  # noqa: E402
 from gallery_audit.worklist import served_row  # noqa: E402
+from pipeline.commons_urls import commons_page_url_for  # noqa: E402
 
 RULES: dict[str, str] = {
     "K1": "image_kind := the first-pass kind when it is artifact, map_or_document, painting_or_artwork, people or other, only if C1 admitted kind writes and the row carries no kind yet",
@@ -612,17 +611,13 @@ def plan_liveness(
 
 
 def commons_page_url(file_title: str) -> str:
-    """The page URL the downloader stores for a `File:` title
-    (`pipeline/wiki_image_downloader.py:459-461` `commons_page_url_for`, spaces quoted as %20).
-
-    Spelled here rather than imported: that module opens a database engine on import
-    (`pipeline.database`), and this lane never touches a database. `census.tests.t06_url_shape`
-    uses the same prefix for the same shape; T06's own derivation starts from an upload URL and
-    would spell the title with underscores instead of the stored spaces.
+    """The page URL the downloader stores for a move target's `File:` title - the project's
+    own spelling (`pipeline.commons_urls.commons_page_url_for`, spaces quoted as %20) - for a
+    title the liveness store holds as a file title; anything else is refused.
     """
     if not file_title.startswith("File:"):
         raise DecideError(f"{file_title!r} is not a File: title")
-    return COMMONS_PAGE_PREFIX + quote(file_title, safe="")
+    return commons_page_url_for(file_title)
 
 
 def _replace_hero(

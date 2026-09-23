@@ -1513,6 +1513,17 @@ def test_a_row_without_a_title_is_no_wildcard_for_the_loose_match() -> None:
     assert labels.match(rows, "Temple front, east side")["id"] == 1  # a real prefix still counts
 
 
+def test_the_l2_page_url_is_the_projects_own_spelling_of_a_file_title() -> None:
+    from census.tests import t06_url_shape
+
+    from pipeline import commons_urls
+
+    assert decide.commons_page_url_for is commons_urls.commons_page_url_for
+    assert t06_url_shape.commons_page_url_for is commons_urls.commons_page_url_for
+    with pytest.raises(decide.DecideError, match="is not a File: title"):
+        decide.commons_page_url("Forum Romanum - panoramio (3).jpg")
+
+
 def test_an_empty_hero_plan_and_a_row_without_a_census_tier_are_refused(tmp_path: Path) -> None:
     path = tmp_path / "PLAN.jsonl"
     path.write_text("\n", encoding="utf-8")
