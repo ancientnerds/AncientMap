@@ -950,9 +950,16 @@ def test_a_done_batch_starts_no_stage(tmp_path: Path) -> None:
 LIVE_ROUND = ("--live", "--stages", "prepare,sources,routes")
 
 
-def test_a_live_round_holds_one_model_stage_placed_by_its_half(tmp_path: Path) -> None:
+def test_a_live_round_holds_one_model_stage_placed_by_its_half(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Each model stage is one half of a handoff round; what follows an export needs the answers,
     and what precedes an import ran with the export."""
+
+    def no_run(**kwargs: Any) -> int:
+        raise AssertionError("a refused round started the loop")
+
+    monkeypatch.setattr(MR, "run_mass", no_run)  # a stage would fetch: never from a test
     assert M4.read_stages("select") == ("select",)
     with pytest.raises(MR.PlanError, match="not a contiguous part"):
         M4.read_stages("prepare,select")

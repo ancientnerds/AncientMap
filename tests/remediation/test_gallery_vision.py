@@ -344,7 +344,7 @@ def test_the_export_hands_off_the_exact_jpeg_the_pilot_sent_and_the_import_write
     assert [e.line["status"] for e in ledger.lines] == ["ok", "ok"]
     assert set(vision.verdicts_by_image(ledger.lines, vision.HERO_PROMPT_ID)) == {1}
     assert vision.main(["export", *base]) == vision.EXIT_OK  # nothing left to hand off
-    assert "0 handed off" in capsys.readouterr().out.splitlines()[-1]
+    assert "2 already in the ledger, 0 handed off" in capsys.readouterr().out.splitlines()[-1]
 
 
 # ======================================================================= ledger and run

@@ -936,8 +936,15 @@ def _handoff_runner(
     )
 
 
-def test_a_live_run_is_one_half_of_a_handoff_round_and_never_neither(tmp_path: Path) -> None:
+def test_a_live_run_is_one_half_of_a_handoff_round_and_never_neither(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The judge has no transport of its own: a live run without a handoff half would only preview."""
+
+    def no_stage(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("a refused run started a stage")
+
+    monkeypatch.setattr(M.subprocess, "run", no_stage)  # a stage would fetch: never from a test
     plan = _plan(tmp_path, [("batch-0001", 1)])
     argv = ["--plan", str(plan), "--run-dir", str(tmp_path / "runs"), "--log-dir", str(tmp_path)]
     with pytest.raises(M.PlanError, match="only through the Opus handoff"):
