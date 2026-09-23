@@ -1804,6 +1804,14 @@ def targets_for_site(site: Mapping[str, Any]) -> list[Target]:
                     ),
                     sitelink=pin,
                 )
+    dropped = sorted(set(pins) - set(targets))
+    if dropped:
+        # The articles ride on the `enwiki` slot. A record none of whose findings reaches it would
+        # buy none of them, and every count read off these targets would agree with the loss.
+        raise InputError(
+            f"{site_id}: {WIKI_SITELINKS_KEY} names articles no finding buys ({', '.join(dropped)}); "
+            "a record that names articles must ask a field whose route reads them"
+        )
     return list(targets.values())
 
 
@@ -2341,29 +2349,40 @@ def one_attempt(
         else:
             refusal = None
         outcome.given_up_reason = refusal
-        # A 2xx answer that is not this target's evidence (a sitelink article edited since its pin)
-        # is decided before the line goes down, because it ends the target without evidence: the
-        # same answer would come back, so it is not re-asked, and the line says it was given up.
-        rejected = answer_refusal(target, page) if page is not None and page.ok else None
-        outcome.answer_refused = rejected
-        ledger.append(
-            L.Entry(
-                kind=L.LedgerKind.FETCH,
-                stage=stage,
-                batch_id=batch_id,
-                label=target.label,
-                url=target.request_url,
-                http_status=attempt.http_status,
-                bytes=attempt.bytes,
-                outcome=attempt.outcome,
-                attempt=number,
-                # No `error` here: a request that got a response is recorded by its status (the
-                # ledger refuses an error string on an answered attempt). The refusal - ours, not
-                # the host's - travels on `outcome.given_up_reason` for the judge to read.
-                error=attempt.error,
-                given_up=last and (not attempt.ok or rejected is not None),
+
+        def line(given_up: bool) -> None:
+            ledger.append(
+                L.Entry(
+                    kind=L.LedgerKind.FETCH,
+                    stage=stage,
+                    batch_id=batch_id,
+                    label=target.label,
+                    url=target.request_url,
+                    http_status=attempt.http_status,
+                    bytes=attempt.bytes,
+                    outcome=attempt.outcome,
+                    attempt=number,
+                    # No `error` here: a request that got a response is recorded by its status (the
+                    # ledger refuses an error string on an answered attempt). The refusal - ours, not
+                    # the host's - travels on `outcome.given_up_reason` for the judge to read.
+                    error=attempt.error,
+                    given_up=given_up,
+                )
             )
-        )
+
+        # A 2xx answer that is not this target's evidence (a sitelink article edited since its pin)
+        # ends the target without evidence: the same answer would come back, so it is not re-asked,
+        # and its line says it was given up - so the refusal is read before the line is written.
+        # Reading it can raise (an answer nobody can read is a contract break and stops the run),
+        # and the request has happened by then: its line goes down first, as an answered attempt,
+        # exactly as for a rendered feature whose answer `stored_body` cannot read.
+        try:
+            rejected = answer_refusal(target, page) if page is not None and page.ok else None
+        except EvidenceUnrenderable:
+            line(given_up=False)
+            raise
+        outcome.answer_refused = rejected
+        line(given_up=last and (not attempt.ok or rejected is not None))
         if page is not None and page.ok and rejected is None:
             # A valid *empty* answer (Overpass `"elements": []`) is an OK attempt like any other:
             # the file is the record that the question was asked *and answered with nothing*.
