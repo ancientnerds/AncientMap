@@ -120,7 +120,10 @@ def match(
             if marked:
                 pool = marked
         return pool[0] if len(pool) == 1 else None
-    loose = [r for r in rows if any(k.startswith(key) or key.startswith(k) for k in r["_keys"])]
+    # An empty key (a row without a title) is a prefix of every hint, so it is no key at all here.
+    loose = [
+        r for r in rows if any(k and (k.startswith(key) or key.startswith(k)) for k in r["_keys"])
+    ]
     return loose[0] if len(loose) == 1 else None
 
 

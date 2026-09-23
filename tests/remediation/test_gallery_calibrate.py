@@ -77,6 +77,18 @@ def test_thresholds_changed_after_the_seal_are_refused(tmp_path: Path) -> None:
         calibrate.seal(tmp_path)
 
 
+def test_the_first_seal_counts_and_a_log_with_two_hashes_is_refused(tmp_path: Path) -> None:
+    calibrate.seal(tmp_path, now=lambda: "2026-09-23T10:00:00Z")
+    calibrate.seal(tmp_path, now=lambda: "2026-09-23T10:05:00Z")  # the same thresholds again
+    assert calibrate.sealed(tmp_path)[2] == "2026-09-23T10:00:00Z"
+    with open(tmp_path / "SEAL.jsonl", "a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps({"thresholds_sha256": "0" * 64, "sealed_at": "2026-09-23T10:06:00Z"}) + "\n"
+        )
+    with pytest.raises(calibrate.CalibrationError, match="more than one thresholds hash"):
+        calibrate.sealed(tmp_path)
+
+
 def test_nothing_runs_on_an_unsealed_directory(tmp_path: Path) -> None:
     with pytest.raises(calibrate.CalibrationError, match="is not sealed"):
         calibrate.sealed(tmp_path)
@@ -215,6 +227,80 @@ def test_each_trigger_is_admitted_only_by_its_own_numbers() -> None:
     assert m["T-X3"]["precision"]["k"] == 1 and m["T-X3"]["precision"]["n"] == 2
     lo, hi = m["T-X1"]["precision"]["ci95"]
     assert lo < 1.0 == hi  # an interval, never a bare 5/5 = 100 %
+
+
+BASE = {"kind": True, "strict": True, "x1": True, "x2": True, "x3": False}
+
+
+def _with(s: dict[str, Any], image_id: int, prompt: str = vision.GALLERY, **verdict: Any) -> None:
+    """Replace one verdict of the scenario's ledger."""
+    prompt_id = vision.PROMPTS[prompt][0]
+    s["ledger"] = [
+        e for e in s["ledger"] if (e.line["image_id"], e.line["prompt_id"]) != (image_id, prompt_id)
+    ] + [_line(image_id, prompt, **verdict)]
+
+
+def _pilot_disagrees(s: dict[str, Any]) -> None:
+    _with(s, 4, kind="other")  # 3 of 4 pilot kinds agree: 0.75 < 0.90
+
+
+def _a_map_that_is_none(s: dict[str, Any]) -> None:
+    _with(s, 20, kind="map_or_document")  # 3 of 4 called maps are maps: 0.75 < 0.90
+
+
+def _too_few_foreign_rows(s: dict[str, Any]) -> None:
+    s["thresholds"]["T-X1"]["foreign_rows_resolved_min"] = 6  # 5 resolve
+
+
+def _a_clean_row_flagged(s: dict[str, Any]) -> None:
+    _with(s, 25, other_site=True)  # precision 5 of 6: 0.83 < 0.85
+
+
+def _two_foreign_rows_missed(s: dict[str, Any]) -> None:
+    _with(s, 14)
+    _with(s, 15)  # recall 3 of 5: 0.60 < 0.70
+
+
+def _both_gold_correct_rows_flagged(s: dict[str, Any]) -> None:
+    _with(s, 43, other_site=True)
+    _with(s, 44, other_site=True)  # 2 > 1
+
+
+def _too_few_people(s: dict[str, Any]) -> None:
+    s["thresholds"]["T-X2"]["flags_min"] = 3  # 2 people flags
+
+
+def _a_person_on_a_clean_row(s: dict[str, Any]) -> None:
+    _with(s, 20, kind="people")  # X2 precision 2 of 3: 0.67 < 0.85
+
+
+def _strict_says_yes_to_a_no(s: dict[str, Any]) -> None:
+    _with(s, 2, vision.HERO, shows_archaeology=True)  # precision 1 of 2 < 0.90
+
+
+def _strict_misses_a_yes(s: dict[str, Any]) -> None:
+    s["eye"][2] = labels.EyeLabel(2, "site_photo", True, None)  # recall 1 of 2 < 0.60
+
+
+@pytest.mark.parametrize(
+    ("change", "dropped"),
+    [
+        (_pilot_disagrees, "kind"),
+        (_a_map_that_is_none, "kind"),
+        (_too_few_foreign_rows, "x1"),
+        (_a_clean_row_flagged, "x1"),
+        (_two_foreign_rows_missed, "x1"),
+        (_both_gold_correct_rows_flagged, "x1"),
+        (_too_few_people, "x2"),
+        (_a_person_on_a_clean_row, "x2"),
+        (_strict_says_yes_to_a_no, "strict"),
+        (_strict_misses_a_yes, "strict"),
+    ],
+)
+def test_each_threshold_leg_alone_refuses_its_trigger(change: Any, dropped: str) -> None:
+    scenario = _scenario()
+    change(scenario)
+    assert _evaluate(scenario)["admitted"] == {**BASE, dropped: False}
 
 
 def test_a_job_without_a_verdict_admits_nothing() -> None:

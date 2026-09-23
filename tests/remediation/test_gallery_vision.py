@@ -156,6 +156,10 @@ def test_a_job_survives_its_json_line_and_a_file_that_asks_twice_is_refused(tmp_
             "not a boolean",
         ),
         ({"kind": "other", "other_site": False, "subject": "x"}, "'other_place' is not a string"),
+        (
+            {"kind": "other", "other_site": False, "other_place": "", "subject": 5},
+            "'subject' is not a string",
+        ),
     ],
 )
 def test_a_gallery_answer_that_is_not_exactly_a_verdict_is_no_verdict(
@@ -175,6 +179,10 @@ def test_a_hero_answer_needs_real_booleans() -> None:
         vision.HERO, {"shows_archaeology": 1, "structure": "", "generic_landscape": False}
     )
     assert bad is None and "not a boolean" in str(why)
+    bad, why = vision.validate(
+        vision.HERO, {"shows_archaeology": True, "structure": None, "generic_landscape": False}
+    )
+    assert bad is None and "'structure' is not a string" in str(why)
 
 
 # ======================================================================= the judge
@@ -932,6 +940,33 @@ def test_the_hero_moves_to_the_best_strict_confirmed_candidate() -> None:
     decide.check_plan(planned, rows)
 
 
+def test_no_hero_moves_unless_calibration_admitted_the_strict_pass() -> None:
+    rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2, tier="D")]}
+    gallery = {1: _v(1, kind="painting_or_artwork"), 2: _v(2)}
+    hero = {2: _v(2, vision.HERO)}  # G3-strict writes hero verdicts whether or not T-strict passed
+    planned_rows, _ = decide.plan_vision(
+        rows, {}, gallery, hero, _admission(kind=True), _truth(1, 2), {}
+    )
+    assert [p for p in planned_rows if p.column == "is_hero"] == []
+    assert decide.plan_vision(
+        rows, {}, gallery, hero, _admission(kind=True, strict=True), _truth(1, 2), {}
+    )[0]  # the same verdicts move the hero once T-strict is admitted
+
+
+def test_h1_never_promotes_a_photo_the_first_pass_placed_elsewhere() -> None:
+    # X1 is not admitted, so the neighbour's mound (other_site=true) stays live - the Agri case
+    rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2, tier="D"), _row(3, tier="C")]}
+    gallery = {1: _v(1, kind="painting_or_artwork"), 2: _v(2, other_site=True), 3: _v(3)}
+    hero = {2: _v(2, vision.HERO), 3: _v(3, vision.HERO)}
+    planned_rows, _ = decide.plan_vision(
+        rows, {}, gallery, hero, _admission(kind=True, strict=True), _truth(1, 2, 3), {}
+    )
+    assert [(p.key, p.new) for p in planned_rows if p.column == "is_hero"] == [
+        (1, False),
+        (3, True),
+    ]
+
+
 def test_a_failing_served_image_without_a_candidate_keeps_its_hero_and_is_listed() -> None:
     rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2, tier="C")]}
     gallery = {1: _v(1), 2: _v(2)}
@@ -1013,6 +1048,18 @@ def test_a_moved_file_gets_both_urls_of_its_live_target_unless_a_sibling_holds_t
         move_target={"title": "File:X.jpg", "class": "missing", "url": None},
     )
     assert "is not a live file" in decide.plan_liveness([dead], {SITE: [_row(1)]}, {})[1][0]["why"]
+    redirected = _live_line(
+        "Old.jpg",
+        liveness.MOVED_WITHOUT_REDIRECT,
+        [1],
+        move_target={
+            "title": "File:X.jpg",
+            "class": liveness.MOVED_WITH_REDIRECT,  # the target itself only redirects now
+            "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Y.jpg",
+        },
+    )
+    planned, listed = decide.plan_liveness([redirected], {SITE: [_row(1)]}, {})
+    assert planned == [] and "is not a live file" in listed[0]["why"]
 
 
 def test_a_plan_that_breaks_the_hero_invariants_is_refused() -> None:
@@ -1290,3 +1337,186 @@ def test_decide_refuses_to_plan_vision_on_a_state_behind_the_liveness_write(
     argv += ["--liveness-store", str(store), "--chunk", "0"]
     with pytest.raises(worklist.WorklistError, match="fold the liveness write in"):
         decide.main(argv)
+
+
+# ======================================================================= guards, one test each
+def test_a_job_line_with_other_keys_or_an_unknown_pass_is_no_job() -> None:
+    line = _job().as_json()
+    with pytest.raises(vision.VisionError, match="is not a job"):
+        vision.Job.from_json({**line, "prompt": "an extra key"})
+    with pytest.raises(vision.VisionError, match="unknown pass 'strict'"):
+        vision.Job.from_json({**line, "pass": "strict"})
+
+
+def test_a_ledger_line_that_is_no_verdict_line_stops_the_reader(tmp_path: Path) -> None:
+    path = tmp_path / "VERDICTS.jsonl"
+    for line in ({"image_id": 1, "verdict": None}, {"image_id": 1, "status": "ok"}):
+        path.write_text(json.dumps(line) + "\n", encoding="utf-8")
+        with pytest.raises(vision.VisionError, match="not a verdict line"):
+            vision.Ledger(path)
+
+
+def test_a_judgement_that_crashes_is_raised_not_swallowed(tmp_path: Path) -> None:
+    ledger = vision.Ledger(tmp_path / "VERDICTS.jsonl")
+
+    def judge(job: vision.Job) -> dict[str, Any]:
+        raise RuntimeError("a bug inside a judgement, e.g. PIL's DecompressionBombError")
+
+    with pytest.raises(RuntimeError, match="a bug inside a judgement"):
+        vision.run_jobs([_job(1), _job(2)], ledger, judge, workers=1, budget_usd=75)
+    assert ledger.lines == []
+
+
+def test_the_dry_run_exits_3_when_an_image_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _image_tree(tmp_path / "wiki", "Temple.webp")
+    real = vision.Images
+    monkeypatch.setattr(vision, "Images", lambda: real((root,)))
+    jobs = tmp_path / "JOBS.jsonl"
+    argv = ["run", "--jobs", str(jobs), "--run-dir", str(tmp_path / "run"), "--dry-run"]
+    vision.write_jobs(jobs, [_job(1)])
+    assert vision.main(argv) == vision.EXIT_OK
+    vision.write_jobs(jobs, [_job(1), _job(2, filename="Missing.webp")])
+    assert vision.main(argv) == vision.EXIT_NO_VERDICT
+
+
+def test_a_plan_row_without_a_change_or_outside_the_table_is_refused() -> None:
+    rows = {SITE: [_row(1), _row(2)]}
+    same = decide.PlannedRow("wiki_images", 2, SITE, "is_excluded", False, False, "X1", "x", {})
+    with pytest.raises(decide.DecideError, match="planned without a change"):
+        decide.check_plan([same], rows)
+    unknown = decide.PlannedRow("wiki_images", 2, SITE, "is_excluded", False, True, "Z9", "x", {})
+    with pytest.raises(decide.DecideError, match="rule 'Z9' is not in the table"):
+        decide.check_plan([unknown], rows)
+
+
+def _cited_verdict(tmp_path: Path) -> tuple[vision.Images, vision.LedgerLine, decide.PlannedRow]:
+    """A K1 row planned from a verdict about the offsite file as it is now."""
+    root = _image_tree(tmp_path / "wiki", "Temple.webp")
+    data = (root / SHARD / "Temple.webp").read_bytes()
+    line = {**_ok_line(1, kind="artifact"), "image_file": f"{SHARD}/Temple.webp"}
+    line["image_sha256"] = hashlib.sha256(data).hexdigest()
+    entry = vision.LedgerLine(vision.verdict_id(vision.line_text(line)), line)
+    verdict = vision.Verdict(entry.verdict_id, dict(line["verdict"]), line)
+    rows = {SITE: [_row(1, tier="B")]}
+    (row,) = decide.plan_vision(rows, {}, {1: verdict}, {}, _admission(kind=True), {}, {})[0]
+    return vision.Images((root,)), entry, row
+
+
+@pytest.mark.parametrize(
+    ("change", "problem"),
+    [
+        ({"status": "failed"}, "is not an ok verdict of"),
+        ({"model": "another-vision-model"}, "is not an ok verdict of"),
+        ({"prompt_sha256": "0" * 64}, "was asked with another gallery-v1"),
+    ],
+)
+def test_a_cited_verdict_must_be_an_ok_verdict_of_the_frozen_question(
+    tmp_path: Path, change: dict[str, Any], problem: str
+) -> None:
+    images, entry, row = _cited_verdict(tmp_path)
+    assert decide.verify_evidence([row], [entry], images) == []
+    altered = vision.LedgerLine(entry.verdict_id, {**entry.line, **change})
+    (found,) = decide.verify_evidence([row], [altered], images)
+    assert problem in found
+
+
+def test_a_planned_row_must_repeat_the_hashes_of_the_verdict_it_cites(tmp_path: Path) -> None:
+    images, entry, row = _cited_verdict(tmp_path)
+    other = decide.PlannedRow(
+        **{**row.as_json(), "evidence": {**row.evidence, "image_sha256": "0" * 64}}
+    )
+    (found,) = decide.verify_evidence([other], [entry], images)
+    assert "does not repeat its verdict's hashes" in found
+
+
+def test_an_excluded_row_is_not_excluded_again() -> None:
+    rows = {SITE: [_row(1, is_excluded=True), _row(2)]}
+    gallery = {1: _v(1, other_site=True, kind="people"), 2: _v(2)}
+    planned_rows, _ = decide.plan_vision(
+        rows, {}, gallery, {}, _admission(x1=True, x2=True), {}, {}
+    )
+    assert planned_rows == []
+
+
+def test_l1_leaves_a_row_that_is_already_excluded_alone() -> None:
+    rows = {SITE: [_row(1, is_excluded=True), _row(2)]}
+    line = _live_line("File_1.jpg", liveness.DELETED_OTHER, [1], log={"logid": 3})
+    assert decide.plan_liveness([line], rows, {}) == ([], [])
+
+
+def test_h1_never_promotes_a_row_outside_the_accepted_tiers() -> None:
+    rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2, tier="B")]}
+    gallery = {1: _v(1, kind="painting_or_artwork"), 2: _v(2)}
+    hero = {2: _v(2, vision.HERO)}
+    planned_rows, listed = decide.plan_vision(rows, {}, gallery, hero, ALL, _truth(1, 2), {})
+    assert [p for p in planned_rows if p.column == "is_hero"] == []
+    assert any("no strict-confirmed candidate qualifies" in item["why"] for item in listed)
+
+
+def test_the_labelled_set_is_refused_with_an_unknown_class_or_an_image_twice(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "labels.jsonl"
+    line = {"site_id": SITE, "image_id": 1, "labels": ["fremde_staette"]}
+    path.write_text(json.dumps(line) + "\n" + json.dumps(line) + "\n", encoding="utf-8")
+    with pytest.raises(labels.LabelError, match="image 1 twice"):
+        labels.load_labelled(path)
+    path.write_text(json.dumps({**line, "labels": ["kaputt"]}) + "\n", encoding="utf-8")
+    with pytest.raises(labels.LabelError, match="unknown label class"):
+        labels.load_labelled(path)
+
+
+def test_an_image_labelled_twice_by_eye_is_refused(tmp_path: Path) -> None:
+    tiles = labels.pilot_tiles()
+    path = tmp_path / "LABELS.jsonl"
+    line = json.dumps({"image_id": tiles[0].image_id, "human_kind": "site_photo"})
+    path.write_text(line + "\n" + line + "\n", encoding="utf-8")
+    with pytest.raises(labels.LabelError, match="labelled twice"):
+        labels.load_eye_labels(path, tiles)
+
+
+def test_the_pilot_tiles_need_a_kind_and_a_verdict_each_and_no_image_twice(
+    tmp_path: Path,
+) -> None:
+    sample, vlm = tmp_path / "SAMPLE.jsonl", tmp_path / "VLM.jsonl"
+    tile = json.dumps({"image_id": 1, "site_id": SITE, "tier": "A"})
+    sample.write_text(tile + "\n", encoding="utf-8")
+    vlm.write_text(json.dumps({"image_id": 1, "kind": "site_photo"}) + "\n", encoding="utf-8")
+    assert labels.pilot_tiles(sample, vlm) == [labels.PilotTile(1, SITE, "A", "site_photo")]
+    vlm.write_text(json.dumps({"image_id": 1, "kind": "photo"}) + "\n", encoding="utf-8")
+    with pytest.raises(labels.LabelError, match="has no pilot kind"):
+        labels.pilot_tiles(sample, vlm)
+    vlm.write_text(json.dumps({"image_id": 2, "kind": "site_photo"}) + "\n", encoding="utf-8")
+    with pytest.raises(labels.LabelError, match="has no verdict for sampled image 1"):
+        labels.pilot_tiles(sample, vlm)
+    vlm.write_text(json.dumps({"image_id": 1, "kind": "site_photo"}) + "\n", encoding="utf-8")
+    sample.write_text(tile + "\n" + tile + "\n", encoding="utf-8")
+    with pytest.raises(labels.LabelError, match="samples one image twice"):
+        labels.pilot_tiles(sample, vlm)
+
+
+def test_derive_refuses_an_unknown_class_and_a_site_name_it_cannot_place(tmp_path: Path) -> None:
+    source, snap = _cobata(tmp_path, ["gibt_es_nicht: Olmec2.webp - x"], 2)
+    with pytest.raises(labels.LabelError, match="unknown label class 'gibt_es_nicht'"):
+        labels.derive(source, snap)
+    source, snap = _cobata(tmp_path, [], 2)
+    snap.sites.append({"id": "ffffffff-0000-4000-8000-000000000000", "name": "La Cobata"})
+    with pytest.raises(labels.LabelError, match="names 2 snapshot sites"):
+        labels.derive(source, snap)
+
+
+def test_a_row_without_a_title_is_no_wildcard_for_the_loose_match() -> None:
+    rows = _keyed(_row(1, filename="Temple front.webp", title=None), _row(2, filename="Altar.webp"))
+    assert labels.match(rows, "Completely unrelated file name.webp") is None
+    assert labels.match(rows, "Temple front, east side")["id"] == 1  # a real prefix still counts
+
+
+def test_an_empty_hero_plan_and_a_row_without_a_census_tier_are_refused(tmp_path: Path) -> None:
+    path = tmp_path / "PLAN.jsonl"
+    path.write_text("\n", encoding="utf-8")
+    with pytest.raises(worklist.WorklistError, match="holds no hero move"):
+        worklist.load_hero_moves(path)
+    with pytest.raises(worklist.WorklistError, match="image 2 has no census tier"):
+        _retier([_row(1), _row(2)], {}, {1: "C"}, {1: "C", 2: "C"})
