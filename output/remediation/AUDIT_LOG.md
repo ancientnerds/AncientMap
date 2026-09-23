@@ -7699,3 +7699,36 @@ ledger: 186 `fetch` rows, 0 `model_call` rows (commit `2718e2b`). The first expo
   to the handoff module during the lane's run is not caught by the digest guard.
 * From the section above: the page-level bot pages inside editor-written wikis (18 pages of the first
   plan).
+
+## 2026-09-24 - the sitelink pilot, answered by Opus: FAIL, the mass run does not start
+
+`SITELINK_PILOT.md` (thresholds sealed before any model call; addendum: answering model Opus by owner
+order) was run through the Opus handoff: 39 finder questions exported from the pinned pilot plan
+(sha256 `d8a78e58...8b81`), answered by four Opus agents one after another (about 450k subagent
+tokens), validated (39/39), imported through the unchanged parser and gates; the 16 WRONG findings
+went to the reviewer the same way (two agents, 16/16). Result (`phase3_runner/SITELINK_PILOT_RESULT_1.txt`,
+`score_search_pilot.py --lane sitelink`):
+
+| threshold | result |
+|---|---|
+| 1 no fabricated citation | PASS (0) |
+| 2 no harmful decision | **FAIL** (8 fields) |
+| 3 agreement >= 90 % | **FAIL** (18/32 = 56.2 %) |
+| 4 transport | PASS |
+
+32 of the 39 fields moved from UNVERIFIABLE to a decision - the lever is real - but the decisions
+disagree with the human gold too often. What the writer itself would have written: 7 rows, 4
+agreeing with the gold, 2 harmful, 1 unverifiable. The two harmful writes show the cause:
+
+* **Las Labradas** `period_start` 500 -> -1000: the finder followed the other-language article's
+  "1000 BC - 300 AD" - the very dating the gold standard lists as a human-found prose error (LS-1).
+* **Metsamor** `period_start` -4000 -> -5000: a different bucket on a reading the English article
+  and the site's own record (4th millennium BC) do not support.
+
+Other-language Wikipedias carry their own errors, and a finder that takes them as evidence imports
+them. The search pilot (DeepSeek, MiniMax hits) failed on the same class. Under the sealed rule the
+mass run does not start and nothing is written; the thresholds are not moved. The writable fields
+the mass run answered UNVERIFIABLE stay **unverifiable** (the outcome the remediation defined for a
+field no source decides), listed per field in the mass run's answers. A future route needs a source
+the gold standard can trust more than a Wikipedia of another language (national registers,
+excavation reports) - it is not built.
