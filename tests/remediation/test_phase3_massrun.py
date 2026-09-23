@@ -583,19 +583,6 @@ def test_a_batch_that_ends_incomplete_is_a_failure_even_though_every_stage_exite
 
 #: `STATUS_DLL_INIT_FAILED`, as the driver saw it on 2026-09-21: `prepare exited 3221225794`.
 NTSTATUS_DLL_INIT_FAILED = 0xC0000142
-#: `run.py` prints this to stdout when a model program *it* started never came up. The driver sends
-#: that stdout to the stage log, so the log is the only place a failed spawn inside the child shows.
-UNSTARTABLE_REPORT = json.dumps(
-    {
-        "batch_id": "batch-0001",
-        "error": "'pi.cmd' could not be started: [WinError 2] The system cannot find the file",
-        "live": True,
-        "model": "pi",
-        "run_dir": "runs/batch-0001",
-    },
-    indent=1,
-    sort_keys=True,
-)
 
 
 def _stage_runner(
@@ -645,28 +632,6 @@ def test_a_start_failure_is_retried_and_the_stage_then_succeeds(
     assert log.count("$ python run.py prepare") == 2  # both starts are in the log
 
 
-def test_a_child_that_names_a_program_it_could_not_start_is_retried(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The spawn that failed can be *inside* the child: the measured `judge exited 2`."""
-    codes = iter([2, 0])
-    starts: list[int] = []
-
-    def fake_run(argv: list[str], **kwargs: Any) -> Any:
-        starts.append(1)
-        kwargs["stdout"].write(UNSTARTABLE_REPORT + "\n")
-        return types.SimpleNamespace(returncode=next(codes))
-
-    monkeypatch.setattr(M.subprocess, "run", fake_run)
-    monkeypatch.setattr(M.time, "sleep", lambda _: None)
-
-    runner = _stage_runner(tmp_path)
-    assert runner.call("judge", "batch-0001") == 0
-
-    assert len(starts) == 2
-    assert runner.spawn_retries == 1
-
-
 def test_the_retry_budget_is_bounded_and_the_failure_then_stands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -694,8 +659,8 @@ def test_an_ordinary_failure_is_started_exactly_once(
 ) -> None:
     """The teeth: a failed model call is the work's own outcome, and a retry would hide it.
 
-    The child's own report names a program that *did* run and exited 1. That is a real breakage: one
-    start, no wait, no retry line - a retry here is worse than the stop it would paper over.
+    The child ran and reports why it stopped - an answer the handoff does not hold. That is a real
+    stop: one start, no wait, no retry line - a retry here is worse than the stop it would paper over.
     """
     starts: list[int] = []
 
@@ -705,7 +670,7 @@ def test_an_ordinary_failure_is_started_exactly_once(
             json.dumps(
                 {
                     "batch_id": "batch-0001",
-                    "error": "call 3: 'pi.cmd' exited 1; stderr tail: 'boom'",
+                    "error": "site-3/description: no answer at <handoff> - export it first",
                 },
                 indent=1,
                 sort_keys=True,
@@ -742,34 +707,6 @@ def test_a_timeout_is_started_exactly_once(tmp_path: Path, monkeypatch: pytest.M
 
     assert len(starts) == 1
     assert runner.spawn_retries == 0
-
-
-def test_only_the_current_attempts_own_report_is_read(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A repaired start failure must not make the *next* attempt's real failure retryable.
-
-    The second start writes no report at all (an argv refusal looks like that). Reading the log
-    rather than what this attempt wrote would find the first attempt's report and start the stage a
-    third time - on a failure that was never a start failure.
-    """
-    reports = [UNSTARTABLE_REPORT, "", ""]
-    starts: list[int] = []
-
-    def fake_run(argv: list[str], **kwargs: Any) -> Any:
-        starts.append(1)
-        if reports[len(starts) - 1]:
-            kwargs["stdout"].write(reports[len(starts) - 1] + "\n")
-        return types.SimpleNamespace(returncode=2)
-
-    monkeypatch.setattr(M.subprocess, "run", fake_run)
-    monkeypatch.setattr(M.time, "sleep", lambda _: None)
-
-    runner = _stage_runner(tmp_path)
-    assert runner.call("judge", "batch-0001") == 2
-
-    assert len(starts) == 2
-    assert runner.spawn_retries == 1
 
 
 def test_a_recovered_start_failure_is_no_failed_batch_and_leaves_the_breaker_alone(
@@ -940,6 +877,12 @@ def test_every_stage_argv_is_accepted_by_the_real_cli(tmp_path: Path) -> None:
     assert parser.parse_args(runner.argv("prepare", "batch-0001")[2:]).batch_id == ["batch-0001"]
     assert parser.parse_args(runner.argv("fetch", "batch-0001")[2:]).batch_id == "batch-0001"
     assert parser.parse_args(runner.argv("judge", "batch-0001")[2:]).batch_id == "batch-0001"
+    # Each half of a handoff round tells the judge its directory, and the real CLI takes it.
+    for mode in (M.EXPORT, M.IMPORT):
+        half = _handoff_runner(tmp_path, mode, request_timeout=30.0)
+        judged = parser.parse_args(half.argv("judge", "batch-0001")[2:])
+        assert getattr(judged, f"handoff_{mode}") == str(tmp_path / "handoff")
+        assert parser.parse_args(half.argv("fetch", "batch-0001")[2:]).timeout == 30.0
 
 
 def test_prepare_is_given_the_plan_and_neither_the_ledger_nor_live(tmp_path: Path) -> None:
@@ -967,6 +910,101 @@ def test_prepare_is_given_the_plan_and_neither_the_ledger_nor_live(tmp_path: Pat
     assert not hasattr(prepared, "live")
     assert "--ledger" not in argv
     assert "--live" not in argv
+
+
+# ── the Opus handoff: a live run is one half of a round ─────────────────────────────────────
+
+
+def _handoff_runner(
+    tmp_path: Path,
+    mode: str,
+    *,
+    stages: tuple[str, ...] = M.STAGES,
+    request_timeout: float | None = None,
+) -> M.StageRunner:
+    return M.StageRunner(
+        plan=tmp_path / "PLAN.jsonl",
+        run_dir=tmp_path / "runs",
+        ledger=tmp_path / "L.jsonl",
+        log_dir=tmp_path / "logs",
+        live=True,
+        request_timeout=request_timeout,
+        python=Path("python"),
+        runner=Path("run.py"),
+        stages=stages,
+        handoff=M.Handoff(mode, tmp_path / "handoff"),
+    )
+
+
+def test_a_live_run_is_one_half_of_a_handoff_round_and_never_neither(tmp_path: Path) -> None:
+    """The judge has no transport of its own: a live run without a handoff half would only preview."""
+    plan = _plan(tmp_path, [("batch-0001", 1)])
+    argv = ["--plan", str(plan), "--run-dir", str(tmp_path / "runs"), "--log-dir", str(tmp_path)]
+    with pytest.raises(M.PlanError, match="only through the Opus handoff"):
+        M.main([*argv, "--live"])
+    with pytest.raises(SystemExit):
+        M.main([*argv, "--handoff-export", "a", "--handoff-import", "b"])
+    with pytest.raises(M.PlanError, match="neither"):
+        M.Handoff("both", tmp_path)
+
+
+def test_the_export_half_runs_up_to_the_judge_and_the_judge_hands_its_questions_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exported batch is handed off, not done: its judge wrote questions, and no model.json."""
+    seen: list[list[str]] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        seen.append(list(argv))
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    runner = _handoff_runner(tmp_path, M.EXPORT, request_timeout=30.0)
+
+    ok, detail = runner.batch(M.PlannedBatch("batch-0001", 1, 1))
+
+    assert ok and detail.startswith("handed off to")
+    assert [argv[2] for argv in seen] == ["prepare", "fetch", "judge"]
+    judge = seen[-1]
+    assert judge[judge.index("--handoff-export") + 1] == str(tmp_path / "handoff")
+    assert "--live" not in judge and "--timeout" not in judge
+    assert "--live" in seen[1]  # the evidence is still fetched live
+    search = _handoff_runner(tmp_path, M.EXPORT, stages=M.SEARCH_STAGES)
+    assert search.stages_for("srch-0001") == ("prepare", "search", "judge")
+
+
+def test_the_import_half_runs_the_judge_and_what_follows_and_then_checks_done(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The evidence the questions were asked on is the evidence the answers are read on: no
+    `prepare`, `fetch` or `search` again, and the batch is done only by its artefacts."""
+    seen: list[list[str]] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        seen.append(list(argv))
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(M.subprocess, "run", fake_run)
+    runner = _handoff_runner(tmp_path, M.IMPORT)
+
+    ok, detail = runner.batch(M.PlannedBatch("batch-0001", 1, 1))
+
+    assert [argv[2] for argv in seen] == ["judge"]
+    assert seen[0][seen[0].index("--handoff-import") + 1] == str(tmp_path / "handoff")
+    assert not ok and detail.startswith("after every stage: absent")
+    search = _handoff_runner(tmp_path, M.IMPORT, stages=M.SEARCH_STAGES)
+    assert search.stages_for("srch-0001") == ("judge", "verify-hits")
+
+
+def test_a_judged_search_batch_has_nothing_left_to_hand_off(tmp_path: Path) -> None:
+    _artefacts(tmp_path / "runs", "srch-0001", calls=1)
+    (tmp_path / "runs" / "srch-0001" / "search.json").write_text(
+        json.dumps({"totals": {"failed": 0}, "stopped": None}), encoding="utf-8"
+    )
+    exporting = _handoff_runner(tmp_path, M.EXPORT, stages=M.SEARCH_STAGES)
+    importing = _handoff_runner(tmp_path, M.IMPORT, stages=M.SEARCH_STAGES)
+    assert exporting.stages_for("srch-0001") == ()
+    assert importing.stages_for("srch-0001") == ("verify-hits",)
 
 
 # ── a named failure is a settled call, and "settled" is not "ignore what is missing" ──────────

@@ -6,6 +6,20 @@ A **script**, not a subagent lane, and that is a measured decision rather than a
 ceiling while the workflow receipt reported work they had not done. A script writing to files it owns
 cannot lose its evidence that way.
 
+**The judge answers through the Opus handoff** (owner order 2026-09-23: "no DeepSeek any more -
+everything with Opus"; `scripts/remediation/opus_handoff.py`). The answers are written by Opus agents
+of the orchestrating session, between two runs of this driver, so a live run is one half of a round:
+
+* `--handoff-export DIR` runs a batch's stages **up to and including the judge**, and the judge hands
+  its questions to DIR instead of buying them. A batch is then handed off, not done: nothing is
+  judged yet. A batch whose judge is already done has nothing to hand off and is left alone.
+* `--handoff-import DIR` - after the agents answered and `opus_handoff.py validate --dir DIR` is
+  clean - runs **the judge and what follows it** (`verify-hits` for a search plan) on those answers,
+  and a batch counts as done by the same artefact check as ever. `prepare`, `fetch` and `search` are
+  not run again: the evidence the questions were asked on is the evidence the answers are read on.
+
+A live run without either is refused before it starts: the judge has no other way to answer.
+
 What it is careful about - every one of these has a test and a mutation behind it:
 
 * **Resumable by construction.** `fetch` and `judge` both skip what is already on disk (the evidence
@@ -19,8 +33,9 @@ What it is careful about - every one of these has a test and a mutation behind i
 * **A circuit breaker**: N consecutive batch failures stop the run instead of burning 300 batches
   against a broken assumption.
 * **A *start* failure is retried, bounded and loud.** Measured 2026-09-21: twice the host had a few
-  seconds in which no process could be started at all - `judge exited 2` with the child's own report
-  saying `'pi.cmd' could not be started`, and `prepare exited 3221225794` (`STATUS_DLL_INIT_FAILED`).
+  seconds in which no process could be started at all - `prepare exited 3221225794`
+  (`STATUS_DLL_INIT_FAILED`), and a judge whose Pi process could not be started (that second shape
+  went with the Pi transport on 2026-09-23: no stage starts a program of its own any more).
   Up to `MAX_SPAWN_ATTEMPTS` starts, one line per retry in the stage log, the count in
   `progress.json`, and a stage that recovers is neither a failed batch nor a circuit-breaker count.
   Every other failure - a failed call, a timeout, a parse error - is returned on its first exit.
@@ -39,21 +54,24 @@ Usage:
     # what would happen - buys nothing
     ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --jobs 4
 
-    # for real, with ceilings
+    # for real: fetch and hand the questions off, then (answered, validated) import them
     ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
-        --max-calls 25020 --max-usd 25
+        --handoff-export output/remediation/handoff/mass-finder --max-calls 25020
+    ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
+        --handoff-import output/remediation/handoff/mass-finder --max-calls 25020
 
     # the search lane (block A3): a search plan, its own run directory, a search ceiling
     ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
         --plan output/remediation/phase3_runner/PLAN.search.jsonl \
         --run-dir output/remediation/phase3_runner/runs/search1 \
-        --stages prepare,search,judge,verify-hits \
-        --max-calls 4500 --max-usd 8 --max-searches 4600
+        --stages prepare,search,judge,verify-hits --max-searches 4600 \
+        --handoff-export output/remediation/handoff/search1-finder     # then --handoff-import
 
     # the gap run: a rerun plan, the default stages, one call per rerun field and no search
     ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
         --plan output/remediation/phase3_runner/PLAN.gap.jsonl \
-        --run-dir output/remediation/phase3_runner/runs/gap --max-calls 1000 --max-usd 5
+        --run-dir output/remediation/phase3_runner/runs/gap \
+        --handoff-export output/remediation/handoff/gap-finder         # then --handoff-import
 
 A plan is one of three kinds, read from its site records (`read_plan`, `STAGES_OF_KIND`): a snapshot
 plan names neither `rerun_fields` nor `search_fields`; a rerun plan names `rerun_fields` only; a search
@@ -120,9 +138,6 @@ DEFAULT_JOBS = 4
 DEFAULT_FAILURES_BEFORE_STOP = 3
 DEFAULT_STAGE_TIMEOUT = 5400.0
 FIELDS_PER_SITE = 5
-#: The measured cost of a discover call (round 6, `model.json` of `runs/gold6`). A projection, not a
-#: ceiling: the ceilings are read from the ledger's provider-reported numbers.
-MEASURED_COST_PER_CALL = 0.000825
 #: The first NTSTATUS value. An exit code at or above it means Windows never gave the child a process:
 #: `0xC0000142` (`STATUS_DLL_INIT_FAILED`) and its neighbours arrive here as the unsigned DWORD
 #: measured on 2026-09-21 as `prepare exited 3221225794`. The runner's own codes sit far below it, and
@@ -136,13 +151,11 @@ MAX_SPAWN_ATTEMPTS = 6
 #: How long to wait between those starts. Long enough to outlast the measured hiccup: six starts fifteen
 #: seconds apart cover 75 s. Everything that is *not* a start failure still returns on its first exit.
 SPAWN_RETRY_WAIT_SECONDS = 15.0
-#: The child's own words when a program *it* started never came up (`model_stage.ModelCallFailed`,
-#: its `OSError` branch). A child that did run says so in the `error` of its own JSON report.
-UNSTARTABLE_PROGRAM = "could not be started"
 #: How a child report's own `error` line opens: `run.py` prints its reports with `indent=1`, so a
 #: top-level key sits behind exactly one space and a nested one behind more (`report_error`).
 TOP_LEVEL_ERROR = ' "error":'
-STAGES = ("prepare", "fetch", "judge")
+JUDGE = "judge"
+STAGES = ("prepare", "fetch", JUDGE)
 #: The search lane's sequence (block A3): the evidence is the mass run's, copied by `prepare`, plus
 #: MiniMax search hits - so `search` takes `fetch`'s place - and, once the finder has answered, the
 #: page behind every hit an answer cites (`verify-hits`, `phase3/hit_stage.py`, 2026-09-23): the
@@ -167,10 +180,34 @@ STAGES_OF_KIND: dict[str, tuple[str, ...]] = {
     SEARCH_PLAN: SEARCH_STAGES,
 }
 DONE, PARTIAL, BROKEN, ABSENT = "done", "partial", "broken", "absent"
+#: The two halves of a judge through the Opus handoff (`opus_handoff.py`, owner order 2026-09-23).
+EXPORT, IMPORT = "export", "import"
 
 
 class PlanError(ValueError):
     """The plan is not a plan: refusing beats walking half of it."""
+
+
+@dataclass(frozen=True)
+class Handoff:
+    """Which half of an Opus handoff round a live run is, and the directory of the round."""
+
+    mode: str
+    directory: Path
+
+    def __post_init__(self) -> None:
+        if self.mode not in (EXPORT, IMPORT):
+            raise PlanError(f"handoff mode {self.mode!r} is neither {EXPORT!r} nor {IMPORT!r}")
+
+    @property
+    def flag(self) -> list[str]:
+        """What `run.py judge` is told: `--handoff-export DIR` or `--handoff-import DIR`."""
+        return [f"--handoff-{self.mode}", str(self.directory)]
+
+    def stages(self, sequence: tuple[str, ...]) -> tuple[str, ...]:
+        """The part of a plan's sequence this half runs: up to the judge, or from the judge on."""
+        at = sequence.index(JUDGE)
+        return sequence[: at + 1] if self.mode == EXPORT else sequence[at:]
 
 
 class LedgerDamage(ValueError):
@@ -646,18 +683,17 @@ def report_error(text: str) -> str | None:
     return None
 
 
-def spawn_failure(code: int, output: str) -> bool:
+def spawn_failure(code: int) -> bool:
     """Did the process fail to *start*, rather than fail at the work?
 
-    Two shapes, and only these two: (a) the exit code is an NTSTATUS, so Windows never ran the child;
-    (b) the child ran and its own report names a program that "could not be started" - the spawn that
-    failed was inside the child. A failed model call, a parse error and a timeout are the work's own
-    outcomes and are **not** retried.
+    One shape: the exit code is an NTSTATUS, so Windows never ran the child. The second shape - a
+    child whose own report named a program *it* could not start, the judge's Pi process - went with
+    the Pi transport (2026-09-23): no stage starts a program of its own any more. A failed call, a
+    parse error and a timeout are the work's own outcomes and are **not** retried.
     """
     if code >= NTSTATUS_START_FAILURE:
         return True
-    error = report_error(output)
-    return error is not None and UNSTARTABLE_PROGRAM in error
+    return False
 
 
 class BatchRunner(Protocol):
@@ -692,9 +728,12 @@ class StageRunner:
         python: Path | None = None,
         runner: Path = RUNNER,
         stages: tuple[str, ...] = STAGES,
+        handoff: Handoff | None = None,
     ) -> None:
         if stages not in STAGE_SEQUENCES.values():
             raise PlanError(f"stages {stages!r} are not one of {sorted(STAGE_SEQUENCES)}")
+        #: Which half of an Opus handoff round the judge runs (`None`: the judge only previews).
+        self.handoff = handoff
         self.plan = plan
         self.run_dir = run_dir
         self.ledger = ledger
@@ -736,6 +775,10 @@ class StageRunner:
         if stage == "prepare":
             return [*argv, "--plan", str(self.plan)]
         argv += ["--ledger", str(self.ledger)]
+        if stage == JUDGE:
+            # The judge buys nothing itself: it hands its questions to the Opus handoff or reads the
+            # validated answers (`opus_handoff.py`). It takes neither `--live` nor `--timeout`.
+            return argv if self.handoff is None else [*argv, *self.handoff.flag]
         if self.live:
             argv.append("--live")
         if stage == "fetch" and self.pacing_dir is not None:
@@ -774,9 +817,6 @@ class StageRunner:
             while True:
                 log.write(f"\n$ {' '.join(argv)}\n")
                 log.flush()
-                # A byte count, taken after the flush: only what *this* attempt writes is read back,
-                # so a report an earlier attempt left in the log is never mistaken for this one's.
-                attempted_at = log_path.stat().st_size
                 try:
                     done = subprocess.run(  # noqa: S603 - our own runner, our own argv, no shell
                         argv,
@@ -794,8 +834,7 @@ class StageRunner:
                 code = done.returncode
                 if code == 0 or attempt >= MAX_SPAWN_ATTEMPTS:
                     return code
-                written = log_path.read_bytes()[attempted_at:].decode("utf-8", errors="replace")
-                if not spawn_failure(code, written):
+                if not spawn_failure(code):
                     return code
                 self.spawn_retries += 1
                 log.write(
@@ -807,24 +846,32 @@ class StageRunner:
                 attempt += 1
 
     def stages_for(self, batch_id: str) -> tuple[str, ...]:
-        """The stages one batch still needs: all of them, or `verify-hits` alone.
+        """The stages one batch still needs: its half of the sequence, or `verify-hits` alone.
 
         A search batch whose judge is complete (`judged_state`) and whose hit report is missing or
         damaged (`hit_state`) was stopped inside `verify-hits`. Only that stage runs again: the pages
         already stored are kept (`hit_stage` never fetches a page on disk twice), and nothing a
-        finder call bought is bought again. Any other state runs the whole sequence, as it always
-        did. A runner whose sequence has no `verify-hits` meeting such a batch raises: the plan's
-        kind and the stage sequence disagree, which `main` refuses before a run starts.
+        finder call bought is bought again - and an export has nothing left to hand off for it. Any
+        other state runs the handoff's half of the sequence (`Handoff.stages`), or the whole
+        sequence when no handoff is named. A runner whose sequence has no `verify-hits` meeting such
+        a batch raises: the plan's kind and the stage sequence disagree, which `main` refuses before
+        a run starts.
         """
         root = self.run_dir / batch_id
         if judged_state(root)[0] == DONE and hit_state(root) is not None:
+            if self.handoff is not None and self.handoff.mode == EXPORT:
+                return ()
             return self.stages[self.stages.index(VERIFY_HITS) :]
-        return self.stages
+        if self.handoff is None:
+            return self.stages
+        return self.handoff.stages(self.stages)
 
     def batch(self, planned: PlannedBatch) -> tuple[bool, str]:
         """Every stage one batch still needs (`stages_for`). Returns `(ok, detail)`; `detail` says
-        where it stands."""
-        for stage in self.stages_for(planned.batch_id):
+        where it stands. An export's batch is handed off, not done: its judge exited 0 having
+        written its questions, and the answers do not exist yet."""
+        stages = self.stages_for(planned.batch_id)
+        for stage in stages:
             log = self.log_dir / f"{planned.batch_id}.{stage}.log"
             # The log is appended to across runs; only what this call writes may name its stop.
             start = log.stat().st_size if log.exists() else 0
@@ -835,6 +882,11 @@ class StageRunner:
                 self.stop_reason = f"{planned.batch_id}: {stage} stopped the run: {why}"
             if code != 0:
                 return False, f"{stage} exited {code}"
+        if self.handoff is not None and self.handoff.mode == EXPORT:
+            return (
+                True,
+                f"handed off to {self.handoff.directory} after {', '.join(stages) or 'no stage'}",
+            )
         state, reason = batch_state(self.run_dir, planned.batch_id)
         if state != DONE:
             return False, f"after every stage: {state} - {reason}"
@@ -959,6 +1011,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--progress", default=None, help="default: <log-dir>/progress.json")
     parser.add_argument("--jobs", type=int, default=DEFAULT_JOBS)
     parser.add_argument("--live", action="store_true", help="actually run the stages")
+    handoff = parser.add_mutually_exclusive_group()
+    handoff.add_argument(
+        "--handoff-export",
+        metavar="DIR",
+        default=None,
+        help="run each batch up to the judge and hand the judge's questions to DIR (opus_handoff)",
+    )
+    handoff.add_argument(
+        "--handoff-import",
+        metavar="DIR",
+        default=None,
+        help="run the judge (and verify-hits) of each batch on the validated Opus answers in DIR",
+    )
     parser.add_argument("--max-calls", type=int, default=None)
     parser.add_argument("--max-usd", type=float, default=None)
     parser.add_argument(
@@ -1009,6 +1074,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.failures_before_stop < 1:
         raise PlanError("--failures-before-stop 0 would stop before the first batch")
     stages = STAGE_SEQUENCES[args.stages]
+    handoff = None
+    if args.handoff_export:
+        handoff = Handoff(EXPORT, Path(args.handoff_export))
+    elif args.handoff_import:
+        handoff = Handoff(IMPORT, Path(args.handoff_import))
+    if args.live and handoff is None:
+        raise PlanError(
+            "the judge answers only through the Opus handoff: a live run is --handoff-export DIR "
+            "(each batch up to the judge, its questions handed to DIR) or --handoff-import DIR (the "
+            "judge on the validated answers in DIR, and what follows it)"
+        )
     searching = "search" in stages
     mismatched = [b.batch_id for b in batches if b.stages != stages]
     if mismatched:
@@ -1037,9 +1113,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"expected      {sites * FIELDS_PER_SITE} calls at {FIELDS_PER_SITE} per site")
     if searching:
         print(f"searches      {sum(b.searches for b in batches)} (before retries)")
+    print(f"model         {MS.MODEL} (unmetered: an Opus answer carries no dollar figure)")
     print(
-        f"projected     ${calls * MEASURED_COST_PER_CALL:.4f} "
-        f"at the measured ${MEASURED_COST_PER_CALL} per call"
+        f"handoff       {handoff.mode} {handoff.directory} - stages "
+        f"{','.join(handoff.stages(stages))}"
+        if handoff is not None
+        else "handoff       none (the judge previews; nothing is handed off)"
     )
     print(f"budget        {budget.as_text()}")
     print(
@@ -1073,6 +1152,7 @@ def main(argv: list[str] | None = None) -> int:
         stage_timeout=args.stage_timeout,
         request_timeout=args.request_timeout,
         stages=stages,
+        handoff=handoff,
     )
     return run_mass(
         batches=batches,
