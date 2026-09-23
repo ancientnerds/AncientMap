@@ -371,7 +371,11 @@ def measure(run_dir: pathlib.Path) -> list[dict[str, Any]]:
         for site in payload["sites"]:
             site_id = str(site["site_id"])
             excerpts = MS.evidence_excerpts(
-                site_id=site_id, site=site, store=store, failures=failures.get(site_id)
+                site_id=site_id,
+                site=site,
+                store=store,
+                hit_pages=False,
+                failures=failures.get(site_id),
             )
             total = sum(excerpt.chars for excerpt in excerpts)
             rows.append(
@@ -382,11 +386,7 @@ def measure(run_dir: pathlib.Path) -> list[dict[str, Any]]:
                     "total": total,
                     "fits": total <= MS.MAX_EVIDENCE_CHARS,
                     "features": {excerpt.feature: excerpt.chars for excerpt in excerpts},
-                    "cut": sorted(
-                        excerpt.feature
-                        for excerpt in excerpts
-                        if excerpt.text is not None and excerpt.text.endswith(F.TRUNCATION_MARKER)
-                    ),
+                    "cut": sorted(excerpt.feature for excerpt in excerpts if excerpt.truncated),
                     "failed": sorted(e.feature for e in excerpts if e.failure is not None),
                 }
             )

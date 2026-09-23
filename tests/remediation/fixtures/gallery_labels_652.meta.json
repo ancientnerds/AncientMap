@@ -1,0 +1,57 @@
+{
+ "fixture_sha256": "86cabc6d890e371ebf49b564486e4683c72894406860c7b626c64cbc38a07ea0",
+ "matched": {
+  "collection": 24,
+  "single": 285
+ },
+ "plan_foreign_reference": 65,
+ "rows": 652,
+ "rows_labelled": 281,
+ "rows_per_class": {
+  "diagramm_oder_text": 19,
+  "duplikat": 36,
+  "fehlende_attribution": 17,
+  "fremde_staette": 64,
+  "gemaelde_oder_zeichnung": 23,
+  "karte_oder_plan": 22,
+  "modernes_umfeld": 13,
+  "sonstiges": 31,
+  "zu_klein": 84
+ },
+ "sites": 40,
+ "snapshot_exported_at": "2026-09-20T20:20:01+02:00",
+ "source": "output/audit_inventory/_labeled_images.json",
+ "source_sha256": "218d31dc46202ff3b86982f3c96a208b66c9d5a2f658c54b8ad0a5ef0da4deaa",
+ "unresolved_entries": [
+  {
+   "entry": "sonstiges: (alle 4 Bilder) - Die Site hat KEIN Titelbild: keines der vier Bilder ist is_hero oder is_lead. Einzige Site im Batch ohne Hero.",
+   "site": "Gog Magog Hills",
+   "why": "no unique row"
+  },
+  {
+   "entry": "sonstiges: (gesamtes Set, 5 Bilder) - Alle fuenf Bilder sind Nahaufnahmen einzelner Felsflaechen. Es gibt keine einzige Totale des Gobustan-Plateaus, keinen Lan",
+   "site": "Gobustan Rock Art",
+   "why": "no unique row"
+  },
+  {
+   "entry": "sonstiges: SET (alle 20 Bilder) - site_type ist 'Museum' (Federseemuseum Bad Buchau) und die Site-Beschreibung stellt die neolithischen/bronzezeitlichen Pfahlba",
+   "site": "Federsee",
+   "why": "no unique row"
+  },
+  {
+   "entry": "sonstiges: SET (alle 13 Bilder) - Kein einziges Bild hat is_hero oder is_lead gesetzt - ausgerechnet die bekannteste Staette des Batches hat kein Titelbild. All",
+   "site": "Machu Picchu",
+   "why": "no unique row"
+  },
+  {
+   "entry": "sonstiges: SET (alle 20 Bilder) - 13 der 20 Bilder stammen aus einer einzigen Flickr-Serie des ISAW/AWIB: 'Artifacts at Felix Romuliana' II, III, IV, IX, L, LI,",
+   "site": "Gamzigrad",
+   "why": "no unique row"
+  },
+  {
+   "entry": "sonstiges: SET (alle 4 Bilder) - Nur 4 Bilder insgesamt. Nach Abzug der beiden zu kleinen bleibt genau EIN verwendbares Ortsfoto ('Llyn Cerrig Bach, view from t",
+   "site": "Llyn Cerrig Bach",
+   "why": "no unique row"
+  }
+ ]
+}

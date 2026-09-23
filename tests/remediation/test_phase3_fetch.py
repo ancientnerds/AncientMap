@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import email.utils
 import hashlib
+import inspect
 import json
 import os
 import sys
@@ -193,6 +194,66 @@ def test_a_page_below_the_cap_is_kept_whole_and_not_called_truncated() -> None:
 
     assert page.body == body
     assert page.truncated is False
+
+
+# ── WB-A1 of the Phase-4 design (2026-09-23): the cap is a parameter, its default the 60 KB cap ──
+
+#: The cap Phase 4 gives its client for `*.wikipedia.org` and `wikidata.org` (design, S1).
+WIKI_CAP = 1024 * 1024
+
+
+def test_the_cap_parameter_defaults_to_the_60_kb_cap_on_the_client_and_the_reader() -> None:
+    """Byte-neutral: a caller that names no cap reads exactly what every caller read before."""
+    assert inspect.signature(F.HttpFetcher).parameters["max_bytes"].default == F.MAX_PAGE_BYTES
+    assert inspect.signature(F._read_capped).parameters["max_bytes"].default == F.MAX_PAGE_BYTES
+    pulled = [0]
+    body, truncated = F._read_capped(iter(CountingStream(614_400, pulled)))
+    assert (len(body), truncated) == (F.MAX_PAGE_BYTES, True)
+    assert pulled[0] <= F.MAX_PAGE_BYTES + CHUNK
+
+
+def test_a_1_mib_cap_stops_the_stream_at_1_mib_and_not_before() -> None:
+    total = 3 * WIKI_CAP
+    pulled = [0]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=CountingStream(total, pulled))
+
+    with F.HttpFetcher(transport=httpx.MockTransport(handler), max_bytes=WIKI_CAP) as fetcher:
+        page = fetcher.get("https://en.wikipedia.org/w/api.php?action=query")
+
+    assert page.truncated is True
+    assert len(page.body) == WIKI_CAP
+    # Still a stop, not a slice: the transport never yielded the other two MiB.
+    assert pulled[0] < total
+    assert pulled[0] <= WIKI_CAP + CHUNK
+
+
+def test_a_page_between_the_two_caps_is_whole_under_1_mib_and_cut_under_the_default() -> None:
+    body = b"z" * (900 * 1024)
+
+    with F.HttpFetcher(transport=_ok_transport(body), max_bytes=WIKI_CAP) as fetcher:
+        whole = fetcher.get("https://www.wikidata.org/w/api.php?action=wbgetentities")
+    with F.HttpFetcher(transport=_ok_transport(body)) as fetcher:
+        cut = fetcher.get("https://www.wikidata.org/w/api.php?action=wbgetentities")
+
+    assert (whole.body, whole.truncated) == (body, False)
+    assert (len(cut.body), cut.truncated) == (F.MAX_PAGE_BYTES, True)
+
+
+def test_a_body_of_exactly_60_kb_is_not_called_cut_under_a_1_mib_cap() -> None:
+    """The exact-cap stop compares against the cap it was given, not against the 60 KB constant."""
+    chunks = [b"x" * F.MAX_PAGE_BYTES, b"y" * 10]
+
+    body, truncated = F._read_capped(iter(chunks), WIKI_CAP)
+
+    assert (len(body), truncated) == (F.MAX_PAGE_BYTES + 10, False)
+
+
+@pytest.mark.parametrize("cap", [0, -1, True, 1.5, None])
+def test_a_cap_that_is_not_a_positive_byte_count_is_refused(cap: Any) -> None:
+    with pytest.raises(ValueError, match="not a positive byte count"):
+        F.HttpFetcher(transport=_ok_transport(), max_bytes=cap)
 
 
 # ── decision 12, rule 2: named features, never raw geometry ──────────────────────────────────

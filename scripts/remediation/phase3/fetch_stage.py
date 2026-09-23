@@ -131,6 +131,7 @@ import email.utils
 import json
 import os
 import re
+import sys
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -145,15 +146,19 @@ import httpx
 # The package is not installed, so the parent directory must be importable first (same shim as
 # `run.py`); `census` is the sibling package that solved HTTP fetching for this project already.
 if __package__ in (None, ""):
-    import sys
-
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# The repository root for `pipeline.utils.http`, appended as in `search_evidence`, so nothing under
+# the root can shadow a phase-3 module.
+REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.append(str(REPO))
 
 from census.fetch import USER_AGENT  # noqa: E402  - the project's one User-Agent string
 
 from phase3 import ledger as L  # noqa: E402
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
+from pipeline.utils.http import is_public_http_url  # noqa: E402  - Lyra's own SSRF check
 
 #: The binding per-page cap (decision 12; `COST.md` §7 item 1). **The sources say "60 KB" and
 #: never a byte count.** 60 x 1024 = **61,440 bytes** is my reading of "60 KB" (binary KB);
@@ -359,6 +364,19 @@ class RawGeometryRefused(ValueError):
     """A URL asks for raw geometry. Decision 12 forbids it; see `assert_named_feature`."""
 
 
+class NonPublicAddressRefused(ValueError):
+    """A URL names a host that is not a public http(s) address; see `assert_public_address`."""
+
+
+class NonPublicRedirect(httpx.RequestError):
+    """A redirect hop to a host that is not a public http(s) address, refused before it is asked.
+
+    An `httpx` error on purpose: the hop is refused inside the client, after the first request was
+    sent and answered, so `HttpFetcher.get` records it as that attempt's `TransportFailure` - the
+    request happened and keeps its ledger line - rather than as a caller's bug.
+    """
+
+
 class EvidenceConflict(RuntimeError):
     """An evidence file for this (site, feature) exists and holds *different* bytes."""
 
@@ -491,26 +509,27 @@ class Fetcher(Protocol):
         ...
 
 
-def _read_capped(chunks: Iterable[bytes]) -> tuple[bytes, bool]:
-    """Read at most `MAX_PAGE_BYTES`, **stopping the stream** at the cap.
+def _read_capped(chunks: Iterable[bytes], max_bytes: int = MAX_PAGE_BYTES) -> tuple[bytes, bool]:
+    """Read at most `max_bytes` (`MAX_PAGE_BYTES` unless a caller says otherwise), **stopping the
+    stream** at the cap.
 
     Truncation is a stop, not a slice: the body is never buffered in full and then cut. The
     pilot's two dumps (598 KB, 400 KB) are exactly the pages that must not be pulled over the
     wire to be thrown away, and a test that counts the bytes the transport actually yielded
     fails if this ever becomes read-then-slice.
 
-    A page whose body is exactly `MAX_PAGE_BYTES` is reported `truncated=True`: telling an
+    A page whose body is exactly `max_bytes` is reported `truncated=True`: telling an
     exactly-capped page from a cut one requires reading past the cap, which is the thing the
     cap forbids.
     """
     body = bytearray()
     for chunk in chunks:
-        room = MAX_PAGE_BYTES - len(body)
+        room = max_bytes - len(body)
         if len(chunk) > room:
             body.extend(chunk[:room])
             return bytes(body), True
         body.extend(chunk)
-        if len(body) == MAX_PAGE_BYTES:
+        if len(body) == max_bytes:
             return bytes(body), True
     return bytes(body), False
 
@@ -520,6 +539,14 @@ class HttpFetcher:
 
     `transport` is the injectable seam (`census/fetch.py` takes an `httpx.BaseTransport` the
     same way): tests pass `httpx.MockTransport` or a counting stream and never open a socket.
+
+    `max_bytes` is the page cap this client stops every stream at. The default is
+    `MAX_PAGE_BYTES`, so every Phase-3 caller reads exactly what it read before (2026-09-23, WB-A1
+    of the Phase-4 design). Phase 4 builds a second client with 1 MiB for `*.wikipedia.org` and
+    `wikidata.org` only: at 60 KB, 18 of the mass run's 5,004 enwiki answers and 115 of its 4,618
+    `wikidata_entity` answers stopped at exactly 61,440 bytes, JSON nobody can parse (measured
+    2026-09-23; five of the cut entities re-measured at 64-146 KB). Which host gets which client
+    is Phase 4's decision (`phase4/sources_stage.py`), not this class's.
     """
 
     def __init__(
@@ -528,22 +555,29 @@ class HttpFetcher:
         timeout: float = 40.0,
         user_agent: str = USER_AGENT,
         clock: Callable[[], float] = time.time,
+        max_bytes: int = MAX_PAGE_BYTES,
     ) -> None:
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+            raise ValueError(f"max_bytes={max_bytes!r} is not a positive byte count")
+        self._max_bytes = max_bytes
         self._clock = clock
         self._client = httpx.Client(
             transport=transport,
             timeout=timeout,
             follow_redirects=True,
             headers={"User-Agent": user_agent, "Accept": "*/*"},
+            event_hooks={"request": [_refuse_non_public_hop]},
         )
 
     def get(self, url: str) -> FetchedPage:
-        """GET `url`. Every URL is checked against decision 12 before a socket is opened."""
+        """GET `url`. Every URL is checked against decision 12 and for a public address before a
+        socket is opened; every redirect hop is checked for a public address before it is asked."""
         assert_named_feature(url)
+        assert_public_address(url)
         timeout = self._timeout(url)
         try:
             with self._client.stream("GET", url, timeout=timeout) as response:
-                body, truncated = _read_capped(response.iter_bytes())
+                body, truncated = _read_capped(response.iter_bytes(), self._max_bytes)
                 return FetchedPage(
                     status=response.status_code,
                     final_url=str(response.url),
@@ -765,6 +799,36 @@ def assert_named_feature(url: str) -> None:
         raise RawGeometryRefused(
             f"{url!r} asks for raw geometry ({marker!r}); decision 12 wants named features "
             "(COST.md §3: two OSM bbox dumps were 1.0 MB of 2.34 MB)"
+        )
+
+
+def assert_public_address(url: str) -> None:
+    """Refuse a URL whose host is not a public http(s) address, before a socket is opened.
+
+    The check is Lyra's own (`pipeline.utils.http.is_public_http_url`: loopback, private and
+    link-local addresses, the metadata endpoints, any scheme but http(s)). It matters for the one
+    kind of URL this module is handed from outside: a search hit's link (`phase3/hit_stage.py`) is a
+    search engine's text, and the workstation that runs the phase-3 stages carries the production
+    tunnels on localhost (psql 15432, API 18000). Every target the fetch stage builds is a fixed
+    public endpoint. `HttpFetcher` applies the same check to every redirect hop.
+    """
+    if not is_public_http_url(url):
+        raise NonPublicAddressRefused(
+            f"{url!r} is not a public http(s) address (pipeline.utils.http.is_public_http_url); "
+            "a loopback, private or link-local host is never asked"
+        )
+
+
+def _refuse_non_public_hop(request: httpx.Request) -> None:
+    """`HttpFetcher`'s request hook: `httpx` calls it before every request, each redirect hop
+    included. The first request has passed `assert_public_address` already, so what this refuses is
+    a hop - a public page redirecting into a private address."""
+    url = str(request.url)
+    if not is_public_http_url(url):
+        raise NonPublicRedirect(
+            f"redirect to {url!r} refused: not a public http(s) address "
+            "(pipeline.utils.http.is_public_http_url)",
+            request=request,
         )
 
 
@@ -1913,6 +1977,51 @@ def one_attempt(
     raise AssertionError("unreachable: the loop returns on its last attempt")  # pragma: no cover
 
 
+def record_not_attempted(
+    *, target: Target, probe: HostProbe, ledger: L.Ledger, batch_id: str, stage: Stage
+) -> TargetOutcome:
+    """Record a target whose host did not answer the run's probe, and make no request for it.
+
+    One line, and no request to this target's URL: nothing was asked, so there is no attempt to
+    number (`attempt=0`) and the reason is the probe's own. Extracted from `collect_batch` on
+    2026-09-23 so Phase 4's stages record such a target with this one spelling of the line.
+    """
+    ledger.append(
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=stage,
+            batch_id=batch_id,
+            label=target.label,
+            url=target.request_url,
+            http_status=None,
+            bytes=0,
+            outcome=L.FetchOutcome.HOST_UNREACHABLE,
+            attempt=0,
+            error=probe.reason,
+            given_up=False,
+        )
+    )
+    return TargetOutcome(
+        feature=target.feature,
+        url=target.request_url,
+        bought_by=target.reason,
+        not_attempted=probe.reason,
+    )
+
+
+def tally(result: SiteEvidence, target: Target, outcome: TargetOutcome) -> None:
+    """Add one attempted target's outcome to its site's counts (extracted from `collect_batch`)."""
+    result.outcomes.append(outcome)
+    if outcome.stored:
+        result.fetched += 1
+        result.bytes += outcome.final.bytes
+        result.truncated += int(outcome.truncated)
+    for attempt in outcome.attempts:
+        if not attempt.ok and attempt.http_status is not None:
+            # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
+            result.non_2xx.append((target.request_url, attempt.http_status))
+
+
 def _complete_utf8(body: bytes) -> bytes:
     """`body` without the incomplete UTF-8 sequence a cut can leave at its very end.
 
@@ -2036,29 +2145,9 @@ def collect_batch(
                 )
                 probes[host] = probe
             if not probe.reachable:
-                # One line, and no request to this target's URL: nothing was asked, so there is no
-                # attempt to number (`attempt=0`) and the reason is the probe's own.
-                ledger.append(
-                    L.Entry(
-                        kind=L.LedgerKind.FETCH,
-                        stage=stage,
-                        batch_id=batch_id,
-                        label=target.label,
-                        url=target.request_url,
-                        http_status=None,
-                        bytes=0,
-                        outcome=L.FetchOutcome.HOST_UNREACHABLE,
-                        attempt=0,
-                        error=probe.reason,
-                        given_up=False,
-                    )
-                )
                 result.outcomes.append(
-                    TargetOutcome(
-                        feature=target.feature,
-                        url=target.request_url,
-                        bought_by=target.reason,
-                        not_attempted=probe.reason,
+                    record_not_attempted(
+                        target=target, probe=probe, ledger=ledger, batch_id=batch_id, stage=stage
                     )
                 )
                 continue
@@ -2071,15 +2160,7 @@ def collect_batch(
                 stage=stage,
                 sleep=sleep,
             )
-            result.outcomes.append(outcome)
-            if outcome.stored:
-                result.fetched += 1
-                result.bytes += outcome.final.bytes
-                result.truncated += int(outcome.truncated)
-            for attempt in outcome.attempts:
-                if not attempt.ok and attempt.http_status is not None:
-                    # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
-                    result.non_2xx.append((target.request_url, attempt.http_status))
+            tally(result, target, outcome)
     report.probes = list(probes.values())
     return report
 

@@ -1,0 +1,18 @@
+fields rerun: 59  finder: {'CORRECT': 13, 'UNVERIFIABLE': 27, 'WRONG': 19}
+moved from UNVERIFIABLE to a decision: 20 of 59
+human verdicts of the rerun fields: {'CORRECT': 35, 'WRONG': 14, 'UNVERIFIABLE': 10}
+  FAIL  1 no fabricated citation: 1 answer(s)
+  FAIL  2 no harmful decision: 3 field(s)
+  FAIL  3 agreement >= 90 %: 14/20 = 70.0%
+  PASS  4 transport: unaccounted slots 0, stopped None, failed {}
+    fabricated: 58a2be59-ec1e-4667-96b9-3313ce406bc1 site_type: ("quote does not occur in https://zenodo.org/record/6511714: 'Font dels Coms archaeological site, located in the western Pyrenees of Catalonia. The site consists of a megalithic tomb that was extensively excavated in 2003 and 2004, including its tumulus.'", 'cited page was not fetched by this run: https://www.degruyterbrill.com/document/doi/10.1515/opar-2020-0193/html')
+    harmful: {'batch': 'srgd-0081', 'site_id': 'f12d3b76-a0e0-44e6-94cb-5dedd8203b90', 'field': 'period_start', 'finder': 'WRONG', 'refuted': False, 'decided': 'WRONG', 'human': 'CORRECT'}
+    harmful: {'batch': 'srgd-0182', 'site_id': '3a28b216-d9f2-410d-a12e-050fc4759a98', 'field': 'card_description', 'finder': 'WRONG', 'refuted': False, 'decided': 'WRONG', 'human': 'CORRECT'}
+    harmful: {'batch': 'srgd-0297', 'site_id': '758dd394-0b33-4f82-821d-5b6de5058afe', 'field': 'period_start', 'finder': 'WRONG', 'refuted': False, 'decided': 'WRONG', 'human': 'CORRECT'}
+    disagrees: {'batch': 'srgd-0081', 'site_id': 'f12d3b76-a0e0-44e6-94cb-5dedd8203b90', 'field': 'description', 'finder': 'CORRECT', 'refuted': None, 'decided': 'CORRECT', 'human': 'WRONG'}
+    disagrees: {'batch': 'srgd-0081', 'site_id': 'f12d3b76-a0e0-44e6-94cb-5dedd8203b90', 'field': 'period_start', 'finder': 'WRONG', 'refuted': False, 'decided': 'WRONG', 'human': 'CORRECT'}
+    disagrees: {'batch': 'srgd-0162', 'site_id': '68677772-b461-49a3-bf2b-376e2b0e970b', 'field': 'site_type', 'finder': 'WRONG', 'refuted': False, 'decided': 'WRONG', 'human': 'UNVERIFIABLE'}
+    disagrees: {'batch': 'srgd-0182', 'site_id': '3a28b216-d9f2-410d-a12e-050fc4759a98', 'field': 'card_description', 'finder': 'WRONG', 'refuted': False, 'decided': 'WRONG', 'human': 'CORRECT'}
+    disagrees: {'batch': 'srgd-0297', 'site_id': '758dd394-0b33-4f82-821d-5b6de5058afe', 'field': 'period_start', 'finder': 'WRONG', 'refuted': False, 'decided': 'WRONG', 'human': 'CORRECT'}
+    disagrees: {'batch': 'srgd-0331', 'site_id': 'e19f7af0-539c-474c-9404-b11f22f48846', 'field': 'card_description', 'finder': 'CORRECT', 'refuted': None, 'decided': 'CORRECT', 'human': 'WRONG'}
+PILOT RESULT: FAIL

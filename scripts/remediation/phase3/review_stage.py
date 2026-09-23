@@ -99,6 +99,189 @@ REFUTED_VALUES: dict[str, bool | None] = {"YES": True, "NO": False, "UNRESOLVED"
 
 REFUTED_SHAPE = ", ".join(REFUTED_VALUES)
 
+#: A run of up to four words between a subject ("stored", "proposed") and its verb, none of which
+#: starts a second clause or names the other half: "the stored `Temple complex` is not shown wrong"
+#: matches, "the stored -1500 is contradicted and -1000 is not contradicted" does not.
+_SAME_CLAUSE = (
+    r"(?: (?!(?:is|was|are|and|or|but|while|so|whereas|proposed|proposal|stored|not|also)\b)"
+    r"[^\s,;:.\u2014\u2013]+){0,4}"
+)
+
+#: A half's name may stand in quotes or backticks: `the "reason" half fails` (batch-0053, a hand hold,
+#: `REFUTED: NO`; the run's two other such sentences are `YES` answers).
+_OPEN_QUOTE = r"[`\"'\u201c\u2018]?"
+_CLOSE_QUOTE = r"[`\"'\u201d\u2019]?"
+
+#: Whose proposal a "neither the reason nor <owner> proposed value is contradicted" sentence names -
+#: the half that **holds** (batch-0237: "neither the finding's reason nor its proposed value is
+#: contradicted"). Each is one fixed-width lookbehind, because `re` allows no other kind.
+_NOR_OWNERS: tuple[str, ...] = (
+    "its",
+    "the finding['\u2019]s",
+    "the finder['\u2019]s",
+    "finding['\u2019]s",
+    "finder['\u2019]s",
+)
+
+#: The phrases by which a `WHY:` line names a half of the finding that **fails**. The frozen question
+#: (`model_stage.REVIEWER_QUESTION`) asks for "one sentence naming the half that fails, or that both
+#: hold", and `REFUTED: NO` is defined there as "both halves hold" - so a `NO` whose own sentence
+#: names a failing half contradicts itself, and the writer holds it
+#: (`write_stage.RULE_REVIEW_CONTRADICTS`). The search pilot met the class twice (Lake Mungo:
+#: "Neither half holds ...", Odeon: "the stored text is not shown wrong", both `REFUTED: NO`), and the
+#: mass lane met it by hand in the 72 held rows.
+#:
+#: Derived from the reviewer's own answers, not from a grammar: every phrase below is how the 4,579
+#: answers in `runs/mass/batch-*/reviews` (2,202 `YES`, 2,204 `NO`, 173 other) say that a half fails.
+#: Fourteen of the eighteen turn up mostly in `YES` answers, which is what makes them a refutation's
+#: words in a `NO`; four do not ("neither half holds" 75 `NO` / 33 `YES`, "the evidence supports the
+#: stored value" 13 / 9, "neither half is established" 7 / 2, "the proposal fails" 2 / 2) - the
+#: reviewer uses them against its own verdict line, and they are kept because what they say is a
+#: failing half, which is all a `NO` may not say. Each is bound to its subject: a phrase about the
+#: *stored* value failing names the reason half, one about the *proposed* value failing names the
+#: value half, and the same words about the other value ("the proposed -1000 is not contradicted",
+#: "neither the reason nor the proposal fails") are the half that holds and are not matched.
+#:
+#: Measured 2026-09-23 with `output/remediation/tools/measure_review_holds.py` on the mass lane:
+#: it holds 51 of the 72 hand-held rows and 77 of the 994 rows that were written and accepted. Read
+#: one by one, about 10 of those 77 use a phrase against their own content (the sentence goes on to
+#: say the stored value is wrong), 5 to 8 say both, and 60 to 62 do say the stored value is not shown
+#: wrong or the proposal is contradicted - the class the hand-read held 72 of and missed there (three
+#: readings: the builder's 62/10/5, the review's about 61/8/8, the fixer's 60/10/7). The false holds
+#: sit under four phrases, and a row those four hold goes to the hand-read (`HAND_READ_PHRASES`).
+#: Deterministic and deliberately literal: a sentence that says the same thing in other words is not
+#: caught, and the hand holds also hold rows for reasons no phrase names (a finer stored type, a
+#: bucket nudge), so this is a floor under the hand-read, not a replacement for it.
+#:
+#: Narrowed 2026-09-23 by the fixer's review, with the count unchanged: "the proposed value is
+#: contradicted" matched three `NO` sentences that say the value half **holds** ("neither the
+#: finding's reason nor its proposed value is contradicted", "contradicted neither by Wikipedia nor
+#: Wikidata", "contradicted by the evidence? No") and one conditional ("contradicted only if"); and a
+#: half's name may stand in quotes (`the "reason" half fails`, batch-0053, whose hand hold that phrase
+#: had caught by the misreading). Recall stays 51 of 72, written holds 77 of 994.
+FAILING_HALF_PHRASES: tuple[tuple[str, str], ...] = (
+    ("neither half holds", r"\bneither half holds\b"),
+    ("neither half is established", r"\bneither half is (?:established|shown|supported)\b"),
+    ("both halves fail", r"\bboth halves fail\b"),
+    (
+        "the half that fails is named",
+        r"\bthe half that fails is the (?:reason|value|proposal|proposed value)\b",
+    ),
+    (
+        "the reason half fails",
+        r"\bthe " + _OPEN_QUOTE + r"(?:reason|first)" + _CLOSE_QUOTE + r" half fails\b(?! only if)",
+    ),
+    (
+        "the value half fails",
+        r"\bthe "
+        + _OPEN_QUOTE
+        + r"(?:value|second|proposal|proposed[- ]value)"
+        + _CLOSE_QUOTE
+        + r" half fails\b(?! only if)",
+    ),
+    (
+        "the reason fails",
+        r"(?<!nor )\bthe (?:finding'?s |finder'?s )?reason(?:ing)? fails\b(?! only if)",
+    ),
+    ("the proposal fails", r"(?<!nor )\bthe proposal fails\b(?! only if)"),
+    (
+        "the reason does not hold",
+        r"\breason(?:ing)? (?:half )?(?:does not|doesn't|did not) hold\b",
+    ),
+    (
+        "the stored value is not shown wrong",
+        r"\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not shown (?:to be )?wrong\b",
+    ),
+    (
+        # Added 2026-09-23 from the re-review of the 77 contradicting rows: Huandacareo's WHY opened
+        # "The stored value is not wrong" under REFUTED: NO. Over the mass run's reviewer answers it
+        # occurs 23 times under YES (consistent) and 4 under NO, each of the 4 a contradiction.
+        "the stored value is not wrong",
+        r"\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not wrong\b",
+    ),
+    (
+        "does not show the stored value wrong",
+        r"\b(?:does|do|did) not show (?!(?:that )?the propos)[^.;:\u2014\u2013]{0,50}?\bwrong\b",
+    ),
+    (
+        "nothing shows the stored value wrong",
+        r"\bnothing (?:in the evidence |here )?shows (?:that )?(?:the stored|-?\d)"
+        r"[^.;:\u2014\u2013]{0,40}?\bwrong\b",
+    ),
+    (
+        "does not make the stored value wrong",
+        r"\b(?:does|do) not make the (?:finer |more specific )?stored\b"
+        r"[^.;:\u2014\u2013]{0,30}?\bwrong\b",
+    ),
+    (
+        "does not establish that the stored value is wrong",
+        r"\b(?:does|do) not (?:establish|support) (?:that )?the stored\b"
+        r"[^.;:\u2014\u2013]{0,30}?\bwrong\b",
+    ),
+    (
+        "the stored value is not contradicted",
+        r"\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not contradicted\b",
+    ),
+    (
+        "does not contradict the stored value",
+        r"\b(?:does|do) not contradict the (?:finer |more specific )?stored\b",
+    ),
+    (
+        "the evidence supports the stored value",
+        r"(?<!no )(?<!nothing in the )(?<!nor )\bevidence supports the stored "
+        r"(?:value|[`\"'\u201c][^`\"'\u201d]+[`\"'\u201d])(?!'s? being| being| is wrong| was wrong)",
+    ),
+    (
+        "the proposed value is contradicted",
+        r"(?<!nor the )(?<!nor )(?<!if the )(?<!whether the )"
+        + "".join(f"(?<!nor {owner} )" for owner in _NOR_OWNERS)
+        + r"\bpropos(?:ed|al)"
+        + _SAME_CLAUSE
+        + r" (?:is|was|are) "
+        r"contradicted\b(?! (?:by|in) (?:neither|nothing|none|no)\b)"
+        r"(?! neither\b)"
+        r"(?! only if\b)"
+        r"(?![^.,;:!?\u2014\u2013]{0,40}\?)",
+    ),
+)
+_FAILING_HALF_RE: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (name, re.compile(pattern, re.IGNORECASE)) for name, pattern in FAILING_HALF_PHRASES
+)
+
+#: The phrases whose hold the mass lane's **written** rows showed misfiring: `phrase -> (false holds,
+#: written rows it would hold)`. A false hold is a sentence that uses the phrase against its own
+#: content and goes on to argue for the write ("Neither half holds - ... the stored `Settlement` is
+#: contradicted and `Archaeological site` is supported", Presa-Tusiu). Read one by one on 2026-09-23
+#: by the fixer's review, from `measure_review_holds.py`'s list of the 77 written rows the hold would
+#: hold: 10 false holds, all under these four phrases; 7 more say both, 60 do name a failing half.
+#: The hold stays - weakening a check is not the answer to a measured false-hold rate - but a row
+#: held by one of these phrases is not a settled refusal: the writer marks it for the hand-read
+#: (`write_stage.HAND_READ_NOTE`, `HUMAN_ONLY.md` B12). The other fourteen phrases held no written
+#: row falsely (mixed: "the proposed value is contradicted" 4 of 12, "the stored value is not shown
+#: wrong" 2 of 12, "the reason half fails" 1 of 3).
+#: Every key is a `FAILING_HALF_PHRASES` name (`test_phase3_review.py` pins it; a check at import time
+#: would keep the mutation sweep from deleting a phrase and watching its own test fail).
+HAND_READ_PHRASES: dict[str, tuple[int, int]] = {
+    "neither half holds": (4, 7),
+    "the stored value is not contradicted": (4, 9),
+    "the reason fails": (1, 4),
+    "does not show the stored value wrong": (1, 10),
+}
+
+
+def failing_half(reason: str) -> str | None:
+    """The first `FAILING_HALF_PHRASES` entry the `WHY:` sentence carries, or `None`.
+
+    Read by the writer for a verdict that cleared the finding (`REFUTED: NO`): a name here means the
+    reviewer's own sentence says a half of the finding fails, so the verdict line and the reason
+    disagree and the row is not written. Only the reason is read - the sentence the frozen question
+    asks for - and it is read as the parser stored it.
+    """
+    for name, pattern in _FAILING_HALF_RE:
+        if pattern.search(reason):
+            return name
+    return None
+
 
 @dataclass(frozen=True)
 class ReviewAnswer:
@@ -308,13 +491,17 @@ def plan_site(
 
     The evidence and its bound are the finder's own (`evidence_excerpts`, `check_evidence_bound`):
     the reviewer must not see more of a page than the finder did, or it would be answering a
-    question the finder could not have answered.
+    question the finder could not have answered. The one addition is the page behind a search hit a
+    finding cites (`phase3/hit_stage.py`, 2026-09-23): the finder saw the hit's snippet, and a
+    snippet is not a page - the pilot's finder quoted a snippet about another site. Such a page must
+    have been fetched or recorded as failed before a finding that cites it is reviewed
+    (`model_stage.cited_hit_pages` raises otherwise), and it is shown within the same bound.
     """
     site_id = str(site.get("site_id") or "")
     if not site_id:
         raise InputError(f"batch {batch_id}: a site record carries no site_id")
     plan = ReviewPlan()
-    findings: list[tuple[str, str]] = []
+    findings: list[tuple[str, str, DS.DiscoverAnswer]] = []
     unwritten = SE.unwritten_proposals(site)
     for name in DS.DISCOVER_FIELDS:
         path = answers.path_for(site_id, name)
@@ -362,18 +549,29 @@ def plan_site(
                 )
             )
             continue
-        findings.append((name, text))
+        findings.append((name, text, answer))
     if not findings:
         return plan
 
     excerpts = MS.evidence_excerpts(
-        site_id=site_id, site=site, store=store, allow_absent=allow_absent, failures=failures
+        site_id=site_id,
+        site=site,
+        store=store,
+        hit_pages=True,
+        allow_absent=allow_absent,
+        failures=failures,
     )
     # Raises `EvidenceOverBound` rather than recording a skip: a site with finder answers cannot be
     # over the bound (the finder would not have been asked either), so this firing means the two
     # stages disagree about what the evidence is - and a disagreement is not a batch outcome.
     MS.check_evidence_bound(site_id, excerpts)
-    for name, text in findings:
+    for name, _, answer in findings:
+        # Raises when a cited search hit's page was never fetched or recorded: the reviewer is not
+        # asked about a hit nobody tried to verify.
+        MS.cited_hit_pages(
+            [claim.url for claim in answer.sources], excerpts, where=f"{site_id}/{name}"
+        )
+    for name, text, _ in findings:
         plan.calls.append(
             MS.PreparedCall(
                 call=MS.ModelCall(

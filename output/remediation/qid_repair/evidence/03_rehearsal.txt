@@ -1,0 +1,11 @@
+BEGIN
+CREATE TABLE
+INSERT 0 26
+DO
+ROLLBACK
+           metric            | value 
+-----------------------------+-------
+ journal rows for this stamp | 0
+(1 row)
+
+NOTICE:  external-id repair: 26 row(s) changed and journalled

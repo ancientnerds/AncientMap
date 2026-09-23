@@ -32,8 +32,8 @@ from typing import TypeVar
 
 from PIL import Image
 
+from pipeline.lyra import minimax_shared as mm
 from pipeline.lyra.config import _get_settings
-from pipeline.lyra.minimax_shared import create_minimax_client, minimax_vlm, parse_fenced_json
 from pipeline.utils.imagehash import DHASH_MAX_DISTANCE, dhash, hamming
 
 logger = logging.getLogger(__name__)
@@ -203,6 +203,19 @@ def vlm_bytes(path: Path) -> bytes:
 VLM_ATTEMPTS = 3
 VLM_RETRY_WAIT_S = 8.0
 
+#: Failures no retry can change: a dead key or a missing verification (auth) and a spent plan
+#: budget (quota). `minimax_shared` names both; asking again only burns the wait.
+VLM_NOT_RETRIED = (mm.CodingPlanAuthError, mm.CodingPlanQuotaError)
+
+
+class NoVerdictError(RuntimeError):
+    """An image the VLM gave no usable verdict for, after every attempt.
+
+    The run stops here: a short selected from the images that happened to get a verdict is a
+    different short, and it used to be made silently (the 16 selection.json files carry 32
+    'no VLM verdict' rejections from exactly that).
+    """
+
 
 def image_title(image: dict) -> str:
     """The Commons title as the VLM should read it (spaces, no extension)."""
@@ -210,39 +223,55 @@ def image_title(image: dict) -> str:
     return raw.replace("_", " ").strip()
 
 
+def judge_one(client, path: Path, prompt: str) -> dict:
+    """The verdict for one image, or a raised error - never None.
+
+    Uses the strict coding-plan call: every failure is a typed `CodingPlanError`. A transport,
+    HTTP, throttle or shape failure and an answer without a JSON object are retried
+    VLM_ATTEMPTS times with a pause; auth and quota failures (`VLM_NOT_RETRIED`) raise at once.
+    After the last attempt the last `CodingPlanError` propagates unchanged (its type tells the
+    caller whether the key, the budget or the transport failed), and an unparsable answer
+    raises `NoVerdictError`.
+    """
+    for attempt in range(1, VLM_ATTEMPTS + 1):
+        try:
+            raw = mm.minimax_vlm_strict(client, vlm_bytes(path), prompt)
+        except VLM_NOT_RETRIED:
+            raise
+        except mm.CodingPlanError as exc:
+            if attempt == VLM_ATTEMPTS:
+                exc.add_note(f"shorts_select: {path.name}, attempt {attempt}/{VLM_ATTEMPTS}")
+                raise
+            logger.warning("vlm %s: %s (attempt %d/%d)", path.name, exc, attempt, VLM_ATTEMPTS)
+            time.sleep(VLM_RETRY_WAIT_S)
+            continue
+        parsed = mm.parse_fenced_json(raw, default=None, extract_object=True)
+        if isinstance(parsed, dict):
+            return parsed
+        if attempt == VLM_ATTEMPTS:
+            raise NoVerdictError(
+                f"{path.name}: no JSON verdict in {VLM_ATTEMPTS} answers (last: {raw[:200]!r})"
+            )
+        logger.warning("vlm %s: no verdict (attempt %d/%d)", path.name, attempt, VLM_ATTEMPTS)
+        time.sleep(VLM_RETRY_WAIT_S)
+    raise AssertionError("unreachable: every attempt returns or raises")
+
+
 def judge_all(
     paths: list[Path], site_name: str, card_text: str, titles: list[str] | None = None
-) -> list[dict | None]:
-    """One verdict per image. A call that returns nothing (HTTP error, SSL
-    reset, unparsable JSON) is retried VLM_ATTEMPTS times with a pause; an
-    image that still has no verdict stays None and is rejected downstream.
-    If *no* image got a verdict the VLM is unreachable and we stop instead of
-    silently selecting nothing."""
+) -> list[dict]:
+    """One verdict per image, or a raised error (see `judge_one`). No image is ever left
+    without a verdict to be rejected downstream as 'no VLM verdict'."""
     settings = _get_settings()
-    client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
+    client = mm.create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
     titles = titles or [p.stem.replace("_", " ") for p in paths]
-    verdicts: list[dict | None] = []
+    verdicts: list[dict] = []
     try:
         for path, title in zip(paths, titles, strict=True):
             prompt = VLM_PROMPT.format(site=site_name, card_text=card_text, title=title)
-            verdict: dict | None = None
-            for attempt in range(1, VLM_ATTEMPTS + 1):
-                raw = minimax_vlm(client, vlm_bytes(path), prompt)
-                parsed = parse_fenced_json(raw, default=None, extract_object=True)
-                if isinstance(parsed, dict):
-                    verdict = parsed
-                    break
-                logger.warning(
-                    "vlm %s: no verdict (attempt %d/%d)", path.name, attempt, VLM_ATTEMPTS
-                )
-                if attempt < VLM_ATTEMPTS:
-                    time.sleep(VLM_RETRY_WAIT_S)
+            verdict = judge_one(client, path, prompt)
             verdicts.append(verdict)
             logger.info("vlm %s → %s", path.name, verdict)
     finally:
         client.close()
-    if paths and all(v is None for v in verdicts):
-        raise RuntimeError(
-            f"MiniMax VLM returned no verdict for any of {len(paths)} images — network or quota"
-        )
     return verdicts
