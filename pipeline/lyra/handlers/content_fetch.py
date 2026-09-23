@@ -107,8 +107,13 @@ def _is_safe_url(url: str) -> bool:
         return False
 
 
-def _extract_text_from_html(html: str) -> str:
-    """Extract readable text from HTML, strip tags."""
+def extract_text_from_html(html: str) -> str:
+    """Extract readable text from HTML, strip tags.
+
+    Public since 2026-09-23: the sites remediation's lane R stores the text of a non-free page
+    through this same function (`scripts/remediation/phase4/route_stage.py`), so there is one
+    spelling of "the text of a page" in the repository, not two.
+    """
     text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -352,7 +357,7 @@ class ContentFetchHandler(BaseHandler):
                     content_type = resp.headers.get("content-type", "")
                     if "html" in content_type or not content_type:
                         html = resp.text[:MAX_HTML_CHARS]
-                        text = _extract_text_from_html(html)
+                        text = extract_text_from_html(html)
                         if text:
                             return _Page(
                                 sid=sid,

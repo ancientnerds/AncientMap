@@ -134,24 +134,47 @@ Provides:
 - `fetch_stage.HttpFetcher(..., max_bytes: int = MAX_PAGE_BYTES)` and the same parameter on
   `_read_capped`; 1 MiB only for `*.wikipedia.org` and `wikidata.org`. The default is byte-neutral.
 - `licences.LICENCES_VERSION: str`; `licences.licence_of(url: str) -> M.Licence`;
-  `licences.deny_family(url: str) -> str | None` (AI aggregator, Wikipedia mirror or
-  `BLOCKED_DOMAINS`; `None` = not denied); `licences.is_mirror(page_text: str, wiki_text: str) ->
-  bool` (a shared run of 25 or more words).
+  `licences.deny_family(url: str) -> str | None` (AI aggregator, Wikipedia mirror,
+  `BLOCKED_DOMAINS` or this project's own site; `None` = not denied); `licences.is_mirror(page_text:
+  str, wiki_text: str) -> bool` (a shared run of 25 or more words).
 - `subject_gate.subject_gate(site: M.PlanSite, *, page: Mapping[str, Any], entity: Mapping[str,
   Any] | None, class_labels: Mapping[str, str], shared_qids: frozenset[str], shared_titles:
-  frozenset[str]) -> M.SubjectGate` - pure.
-- `sources_stage.sources_batch(batch_dir, *, ledger, fetcher, now: datetime) -> int`: writes
-  `src.W*` and `src.D*` through `EvidenceStore`, `fetch.json`, and holds `moved-during-fetch`,
-  `revision-too-fresh`, `fetch-failed`, `scope-pending`.
+  frozenset[str]) -> M.SubjectGate` - pure. For a site that stores no QID, `entity` is the page's
+  own item and `own` needs place **and** name (the gate's rule 7; `qid_match` stays `false`).
+- `sources_stage.open_fetcher(*, pacing_dir: Path, timeout: float = 40.0)` - the live fetcher
+  (a context manager): the 1 MiB client for the wiki hosts, the 60 KB client for every other host,
+  paced per host. The driver passes it to both stages.
+- `sources_stage.sources_batch(batch_dir, *, ledger, fetcher, now: datetime, phase3_run: Path,
+  sleep=time.sleep) -> int`: writes `src.W*` and `src.D*` through `EvidenceStore`, `fetch.json`,
+  `sources.json` (its report and completion mark: each site's status, verdict and the class labels)
+  and holds `moved-during-fetch`, `revision-too-fresh`, `fetch-failed`, `scope-pending`.
+  `phase3_run` is the Phase-3 mass run whose `wikidata_entity` files are reused
+  (`output/remediation/phase3_runner/runs/mass`). Returns `phase3.run.STOP_RUN_EXIT` when a wiki
+  host did not answer (then nothing is final and a re-run retries).
 - `route_stage.routes_batch(batch_dir, *, ledger, fetcher, searcher, max_searches: int, now:
-  datetime) -> int`: writes `src.T.*` and `src.R*`, then `lanes.jsonl` (one `LaneAssignment` per
-  site, lane 0 included) and holds `no-source`, `search-stopped`.
+  datetime, probe, wait, sleep=time.sleep) -> int`: writes `src.T.*`, `src.R*` (and `src.W`, `src.D`
+  for the sites S1b anchors), then `lanes.jsonl` (one `LaneAssignment` per site, lane 0 included),
+  `routes.fetch.json`, `search.json`, `routes.json` (its report and completion mark; `queries` is
+  what the batch spent of `max_searches`) and holds `no-source`, `search-stopped`, `fetch-failed`
+  (a route that could not be asked), `moved-during-fetch` and `revision-too-fresh` (an article S1b
+  found). `probe` is `minimax_shared.probe_minimax_quota(force=True)`, `wait` paces the MiniMax host
+  (`route_stage.open_search` builds the three live seams). Returns `STOP_RUN_EXIT` when the quota
+  gate refused, a stop-class search error arrived, or a wiki host did not answer.
+- Every hold detail a Track-A stage writes opens with its tag (`S1: `, `S1b: `), and
+  `sources_stage.write_holds(batch_dir, holds, *, tag)` replaces only the lines of that tag.
 - `plan4.build_plan(rows: Sequence[Mapping[str, Any]], *, cleared: Mapping[str, set[str]], t03:
-  Mapping[str, str], gold: Sequence[str]) -> list[M.PlanSite]` and `plan4.write_plan(path: Path,
-  sites: Sequence[M.PlanSite]) -> None` (order: pilot, cleared defects, T03, the rest; batches of 15
-  through `assign_batches(prefix="p4")`).
-- `content_fetch.extract_text_from_html(html: str) -> str` (the renamed `_extract_text_from_html`,
+  Mapping[str, Mapping[str, str]], gold: Sequence[str], item_names: Mapping[str, Collection[str]])
+  -> list[M.PlanSite]` (`t03` is `{site: {text field: worst severity}}`, because `t03-severe`
+  waives V9's floor only for a severe finding on the description; `item_names` are the labels and
+  aliases of the shared items, for the duplicate pairs) and `plan4.write_plan(path: Path, sites:
+  Sequence[M.PlanSite]) -> None` (order: pilot, cleared defects, T03, the rest; batches of 15
+  through `assign_batches(prefix="p4")`). `plan4.main` runs `read` (the one read-only production
+  SELECT), `names` and `build`, each printing `STAGE_EXIT=`.
+- `content_fetch.extract_text_from_html(html: str) -> str` (the renamed private function,
   callers updated).
+- `model4.Route.WIKIDATA_ENTITY` (added by Track A): an item refetched through Phase 3's entity
+  request at the 1 MiB cap. The design's narrow route carries neither P279 nor the precision of
+  P625, which the subject gate reads.
 
 ### Track B - selection (WB-B1, WB-B2, WB-B3, WB-B4)
 
