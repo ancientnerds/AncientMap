@@ -10,12 +10,14 @@ page itself or rejects it, and only a proven one becomes a witness.
 ## `web-verify` (network): one row per candidate in `coords3/WEB_WITNESSES.jsonl`
 
 A candidate is accepted only if every check holds; the first that fails is its reason, and the reason
-starts with the check's code (`wiki-host: ...`), so the counts group by it:
+starts with the check's code (`wiki-host: ...`), so the counts group by it. The three host checks
+(`wiki-host`, `refused-host`, `not-public`) run on the URL given and again on the URL a redirect
+ends at:
 
 * `malformed` - the candidate is not a URL, two finite numbers and a non-empty `coord_text`;
 * `wiki-host` - the page is on Wikipedia, Wikimedia, Wikidata or a mirror of them (`WIKI_HOSTS`,
   matched by host and parent domain): their coordinates are the two witnesses already asked, and a
-  mirror is a copy, not a third statement. Checked on the URL given and on the URL a redirect ends at;
+  mirror is a copy, not a third statement;
 * `refused-host` - the project's own site (it publishes the stored point: circular) or a host on
   `pipeline/lyra/blocked_domains.txt` - the search lane's own policy, `search_evidence.excluded_because`;
 * `not-public` - a loopback, private or link-local address is never asked (`is_public_http_url`, the
@@ -438,20 +440,24 @@ def _host(url: str) -> str | None:
     return parts.hostname.rstrip(".")
 
 
-def _refuse_host(url: str) -> None:
+def _refuse_host(url: str, *, asked: str | None = None) -> None:
     """The host checks that need no request: a wiki or a mirror, our own site or a blocked host, an
-    address that is not public."""
+    address that is not public. `asked` is the URL the request was sent to when `url` is the one a
+    redirect ended at: the same checks hold for the page read, and the reason names both."""
+    how = "" if asked is None else f"{asked} redirected to {url}: "
     host = _host(url)
     if host is None:
-        raise Rejected("malformed", f"{url!r} is not an http(s) URL with a host")
+        raise Rejected("malformed", f"{how}{url!r} is not an http(s) URL with a host")
     wiki = listed_domain_of(host, WIKI_HOSTS)
     if wiki is not None:
-        raise Rejected("wiki-host", f"{host} is {wiki}: Wikipedia, Wikidata or a mirror of them")
+        raise Rejected(
+            "wiki-host", f"{how}{host} is {wiki}: Wikipedia, Wikidata or a mirror of them"
+        )
     refused = excluded_because(url)
     if refused is not None:
-        raise Rejected("refused-host", refused)
+        raise Rejected("refused-host", f"{how}{refused}")
     if not is_public_http_url(url):
-        raise Rejected("not-public", f"{url!r} is not a public http(s) address: never asked")
+        raise Rejected("not-public", f"{how}{url!r} is not a public http(s) address: never asked")
 
 
 def candidate_url(candidate: Any) -> str | None:
@@ -482,8 +488,9 @@ def _candidate_fields(candidate: Any) -> tuple[str, float, float, str]:
 
 
 def _read_page(net: Any, url: str, row: dict[str, Any]) -> tuple[str, str]:
-    """(the URL the page was read at, its markup), or `Rejected` (`http`, `wiki-host`, `not-html`,
-    `bot-wall`); an answered request records its URL in `row` either way. `net` is
+    """(the URL the page was read at, its markup), or `Rejected` (`http`, a host check failing on the
+    URL a redirect ended at, `not-html`, `bot-wall`); an answered request records its URL in `row`
+    either way. `net` is
     `census.fetch.Fetcher` (`open_fetcher`): `get_text` raises `FetchError` on every error status
     but 404, which it returns as a value."""
     try:
@@ -494,10 +501,8 @@ def _read_page(net: Any, url: str, row: dict[str, Any]) -> tuple[str, str]:
     row["final_url"] = final
     if payload["error"]:
         raise Rejected("http", f"{final}: {payload['error']}")
-    host = _host(final)
-    wiki = listed_domain_of(host, WIKI_HOSTS) if host else None
-    if wiki is not None:
-        raise Rejected("wiki-host", f"{url} redirected to {final}, on {wiki}")
+    if final != url:
+        _refuse_host(final, asked=url)
     headers = {str(k).lower(): str(v) for k, v in payload["headers"].items()}
     media = headers.get("content-type", "").split(";")[0].strip().lower()
     if media not in HTML_TYPES:

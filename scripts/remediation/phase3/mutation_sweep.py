@@ -7538,18 +7538,27 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
         _WW,
-        '    if wiki is not None:\n        raise Rejected("wiki-host", f"{host} is {wiki}',
-        '    if False:  # mutant\n        raise Rejected("wiki-host", f"{host} is {wiki}',
+        '    if wiki is not None:\n        raise Rejected(\n            "wiki-host", f"{how}{host} is',
+        '    if False:  # mutant\n        raise Rejected(\n            "wiki-host", f"{how}{host} is',
         _WW_TEST,
         _WW_HOST,
     ),
     (
         "bcases web: a redirect into Wikipedia is read as the page",
         _WW,
-        '    if wiki is not None:\n        raise Rejected("wiki-host", f"{url} redirected',
-        '    if False:  # mutant\n        raise Rejected("wiki-host", f"{url} redirected',
+        "    if final != url:\n        _refuse_host(final, asked=url)\n",
+        "    if False:  # mutant\n        _refuse_host(final, asked=url)\n",
         _WW_TEST,
         "test_a_redirect_into_wikipedia_is_rejected",
+    ),
+    (
+        "bcases web: a redirect is checked against the wiki list only",
+        _WW,
+        "    if final != url:\n        _refuse_host(final, asked=url)\n",
+        '    if final != url and listed_domain_of(_host(final) or "", WIKI_HOSTS):  # mutant\n'
+        "        _refuse_host(final, asked=url)\n",
+        _WW_TEST,
+        "test_a_redirect_to_our_own_site_a_blocked_host_or_a_private_address_is_refused",
     ),
     (
         "bcases web: a named mirror drops off the list",

@@ -208,6 +208,20 @@ def test_a_redirect_into_wikipedia_is_rejected() -> None:
     assert row["final_url"] == "https://en.wikipedia.org/wiki/El_Tintal"
 
 
+def test_a_redirect_to_our_own_site_a_blocked_host_or_a_private_address_is_refused() -> None:
+    """The page read is the one a redirect ends at: every host check runs on it again, not only the
+    wiki list - our own site publishes the stored point, and a blocked host is blocked wherever the
+    link started."""
+    for final, code in (
+        ("https://ancientnerds.com/sites/guatemala/el-tintal", "refused-host"),
+        ("https://www.ancient-origins.net/x", "refused-host"),
+        ("http://127.0.0.1:18000/api/sites", "not-public"),
+    ):
+        row, _ = _verify(Page(final=final))
+        assert _code(row) == code and f"{URL} redirected to {final}" in row["reason"], row["reason"]
+        assert row["final_url"] == final
+
+
 def test_our_own_site_and_a_blocked_host_are_refused() -> None:
     for url in (
         "https://ancientnerds.com/sites/guatemala/el-tintal",
