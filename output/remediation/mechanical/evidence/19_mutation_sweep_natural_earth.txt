@@ -1,0 +1,21 @@
+guard removed                      test asked to fail                                               result
+finding not applicable             test_a_review_finding_is_refused                                 fired (pytest exit 1: ['FAILED'])
+curated source only                test_a_row_of_another_source_is_refused                          fired (pytest exit 1: ['FAILED'])
+snapshot matches live              test_a_snapshot_value_the_database_no_longer_holds_is_refused    fired (pytest exit 1: ['FAILED'])
+finding not stale                  test_a_stale_finding_is_refused                                  fired (pytest exit 1: ['FAILED'])
+canonical equals proposal          test_a_canonical_form_that_disagrees_with_the_proposal_is_refused fired (pytest exit 1: ['FAILED'])
+ISO code unchanged                 test_a_write_that_would_change_the_iso_code_is_refused           fired (pytest exit 1: ['FAILED'])
+value is a frontend key            test_a_frontend_map_that_carries_another_code_is_refused         fired (pytest exit 1: ['FAILED'])
+point inside the polygon           test_a_point_in_another_country_is_refused                       fired (pytest exit 1: ['FAILED'])
+wikidata non-contradicting         test_an_external_contradiction_refuses                           fired (pytest exit 1: ['FAILED'])
+fixed point                        test_a_value_the_census_would_flag_again_is_refused              fired (pytest exit 1: ['FAILED'])
+the value is a change              test_a_reduction_that_changes_nothing_is_refused                 fired (pytest exit 1: ['FAILED'])
+compound needs a state             test_compound_reduces_to_the_state_not_the_territory             fired (pytest exit 1: ['FAILED'])
+Natural Earth names the state      test_both_vocabularies_know_the_territory_as_chile               fired (pytest exit 1: ['FAILED'])
+compound refuses two countries     test_two_candidate_countries_refuse                              fired (pytest exit 1: ['FAILED'])
+uk: curated source only            test_schematic_a_row_of_another_source_is_refused                fired (pytest exit 1: ['FAILED'])
+uk: fixed point                    test_schematic_a_value_the_census_would_flag_again_is_refused    fired (pytest exit 1: ['FAILED'])
+period: curated source only        test_a_row_of_another_source_is_refused                          fired (pytest exit 1: ['FAILED'])
+site_type: curated source only     test_a_row_of_another_source_is_refused                          fired (pytest exit 1: ['FAILED'])
+
+cases: 18  fired: 18  skipped: 0  survived: 0  invalid: 0  unproven: 0  errored: 0
