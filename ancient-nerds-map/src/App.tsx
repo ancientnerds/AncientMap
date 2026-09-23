@@ -6,6 +6,7 @@ import { EmpirePolygonData, computeBoundingBox, isSiteInEmpirePolygons } from '.
 import SitePopup, { EmpirePopupData } from './components/SitePopup'
 import LazyErrorBoundary from './components/LazyErrorBoundary'
 import { EMPIRES } from './config/empireData'
+import { isPhoneOrSmallScreen } from './utils/deviceTier'
 
 // Lazy-load modals for faster initial load
 const ContributeModal = lazy(() => import('./components/ContributeModal'))
@@ -108,24 +109,13 @@ function AppContent() {
   // Phone detection - block phones but allow tablets
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false
-
-    // Check screen size - phones typically have smaller screens
-    const isSmallScreen = window.innerWidth < 768 || window.innerHeight < 500
-
-    // Check for phone user agents (NOT tablets - iPad, Tablet, etc. are allowed)
-    const isPhone = /iPhone|iPod|Android.*Mobile|webOS|BlackBerry|IEMobile|Opera Mini|Windows Phone/i.test(navigator.userAgent)
-
-    // Android without "Mobile" = tablet, Android with "Mobile" = phone
-    // iPad user agent doesn't contain "Mobile"
-    return isSmallScreen || isPhone
+    return isPhoneOrSmallScreen()
   })
   const [mobileWarningDismissed, setMobileWarningDismissed] = useState(false)
 
   useEffect(() => {
     const checkMobile = () => {
-      const isSmallScreen = window.innerWidth < 768 || window.innerHeight < 500
-      const isPhone = /iPhone|iPod|Android.*Mobile|webOS|BlackBerry|IEMobile|Opera Mini|Windows Phone/i.test(navigator.userAgent)
-      setIsMobile(isSmallScreen || isPhone)
+      setIsMobile(isPhoneOrSmallScreen())
     }
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)

@@ -29,7 +29,8 @@ export function useSatelliteMode({
   showMapbox,
   mapboxServiceRef,
 }: UseSatelliteModeOptions): void {
-  // Handle satellite mode toggle (textures already loaded by LOD effect)
+  // Handle satellite mode toggle. `satellite` is the active state: switched on
+  // AND its texture on the GPU (useTextureLoading's satelliteReady).
   useEffect(() => {
     // Sync ref for useCallback closures
     refs.satelliteMode.current = satellite
@@ -56,9 +57,8 @@ export function useSatelliteMode({
     const sectionMaterials = refs.basemapSectionMeshes.current.map(m => m.material as THREE.ShaderMaterial)
     const allMaterials = [material, ...sectionMaterials]
 
-    // FORCE basemap visible if textures are loaded (fixes initial load issue)
-    const cache = refs.textureCache.current
-    if (cache.grayBasemap && cache.satellite && !basemapMesh.visible) {
+    // FORCE basemap visible once the start-tier gray is on the GPU (fixes initial load issue)
+    if (refs.texturesReady.current && !basemapMesh.visible) {
       basemapMesh.visible = true
     }
 
@@ -131,5 +131,5 @@ export function useSatelliteMode({
         mat.uniforms.uSatelliteMode.value = satellite ? 1.0 : 0.0
       }
     }
-  }, [satellite, vectorLayers, showMapbox, refs.satelliteMode, refs.basemapMesh, refs.basemapBackMesh, refs.basemapSectionMeshes, refs.textureCache, refs.backLineLayers, refs.scene, refs.stars])
+  }, [satellite, vectorLayers, showMapbox, refs.satelliteMode, refs.basemapMesh, refs.basemapBackMesh, refs.basemapSectionMeshes, refs.texturesReady, refs.backLineLayers, refs.scene, refs.stars])
 }

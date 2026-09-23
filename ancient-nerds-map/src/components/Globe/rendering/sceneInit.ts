@@ -232,7 +232,9 @@ export function initializeScene(
       const z = basemapRadius * Math.sin(phi) * Math.sin(theta)
 
       positions.push(x, y, z)
-      uvs.push(u, 1 - v) // Flip v for correct texture orientation
+      // v = 0 at the north pole: basemap textures are ImageBitmaps, whose row 0 is the
+      // image top (UNPACK_FLIP_Y does not apply to them; services/basemapUpgrade.ts)
+      uvs.push(u, v)
     }
   }
 
@@ -497,7 +499,7 @@ export function initializeScene(
         const z = basemapRadius * Math.sin(phi) * Math.sin(theta)
 
         sectionPositions.push(x, y, z)
-        sectionUvs.push(u, 1 - v)
+        sectionUvs.push(u, v) // same orientation as the main basemap
       }
     }
 

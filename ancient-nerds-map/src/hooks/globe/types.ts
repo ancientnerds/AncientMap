@@ -109,10 +109,7 @@ export interface GlobeRefs {
   // ========== Basemap Refs ==========
   basemapMesh: React.MutableRefObject<THREE.Mesh | null>
   basemapBackMesh: React.MutableRefObject<THREE.Mesh | null>
-  basemapTexture: React.MutableRefObject<THREE.Texture | null>
-  currentBasemap: React.MutableRefObject<string>
   basemapSectionMeshes: React.MutableRefObject<THREE.Mesh[]>
-  landMaskMesh: React.MutableRefObject<THREE.Mesh | null>
 
   // ========== Stars and Visual Effects ==========
   stars: React.MutableRefObject<THREE.Group | null>
@@ -268,8 +265,6 @@ export interface GlobeRefs {
 
   // ========== Satellite Mode Refs ==========
   satelliteMode: React.MutableRefObject<boolean>
-  highResGrayLoaded: React.MutableRefObject<boolean>
-  highResSatelliteLoaded: React.MutableRefObject<boolean>
 
   // ========== Loading State Refs ==========
   texturesReady: React.MutableRefObject<boolean>
@@ -329,12 +324,6 @@ export interface GlobeRefs {
   prevSeaLevel: React.MutableRefObject<number>
   prevReplaceCoastlines: React.MutableRefObject<boolean>
   prevPaleoshorelineVisible: React.MutableRefObject<boolean>
-
-  // ========== Texture Cache Refs ==========
-  textureCache: React.MutableRefObject<{
-    grayBasemap: THREE.Texture | null
-    satellite: THREE.Texture | null
-  }>
 
   // ========== Additional Callback Refs ==========
   onEmpireYearsChange: React.MutableRefObject<((years: Record<string, number>) => void) | undefined>

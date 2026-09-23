@@ -14,8 +14,10 @@ interface MapLayersPanelProps {
   minimized: boolean
   onToggleMinimize: () => void
 
-  // Tile layers (satellite/streets)
+  // Tile layers (satellite/streets): what the visitor switched on
   tileLayers: { satellite: boolean; streets: boolean }
+  /** Satellite switched on, its texture not on the GPU yet */
+  satellitePending: boolean
   onTileLayerToggle: (layer: 'satellite' | 'streets') => void
 
   // Vector layers
@@ -44,6 +46,7 @@ export function MapLayersPanel({
   minimized,
   onToggleMinimize,
   tileLayers,
+  satellitePending,
   onTileLayerToggle,
   vectorLayers,
   onVectorLayerToggle,
@@ -95,6 +98,7 @@ export function MapLayersPanel({
                   style={{ backgroundColor: '#2d5a27' }}
                 />
                 <span className="layer-label">Satellite</span>
+                {satellitePending && <span className="loading-indicator">...</span>}
               </label>
               <div className="labels-row">
                 <label className={`layer-toggle ${showMapbox ? 'mapbox-unavailable' : ''}`} title={showMapbox ? 'Labels not available in Mapbox mode' : ''}>
