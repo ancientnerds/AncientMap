@@ -95,7 +95,11 @@ the world (a text, a marker, a hash), not a shape `model4` would refuse first.
   exact spans) and asserts identical span sets. Before the pilot the orchestrator also runs both
   finders over the same pools: any difference is a contract bug, fixed in the design reading, not
   by making one import the other. What both import is data, never a matcher of the other's:
-  `model4.PROTECTED_TOKENS` and `model4.CIRCA_PATTERN`.
+  `model4.PROTECTED_TOKENS` and `model4.CIRCA_PATTERN`. Measured on wip/p4-verify-sup
+  (2026-09-23, section 7 with the shared-comma refusal), read-only over the 3,661 local enwiki
+  extracts: 170,528 sentences (81,979 of them in a lane-W pool, 144,272 spans offered by S2),
+  **0** sentences on which the two finders differ, and every S2 sentence range is one sentence
+  of verify4's own split (V2).
 
 ## 4. Records and run directory
 
@@ -260,6 +264,30 @@ Provides:
   `verify4.verify_batch(batch_dir) -> int`. Never imports `assemble.py`; one mutation case per rule.
 - `verify_writes4`: the acceptance CLI (`ACCEPT_EXIT=`), reusing `verify_writes`' journal-chain
   reader and re-running `verify4.verify_site` on production read-back with the journal quotes.
+
+How verify4 reads what the design leaves open (the p4-verify reviews, closed on
+wip/p4-verify-sup, 2026-09-23):
+
+- **V2**: a published `W`/`T.<lang>` range `[start, end)` is exactly one sentence of the pinned
+  text's split (section 3: each non-heading line through `text_sentences.split_sentences`, each
+  stripped piece found again in its line). A range that starts after `According to X, ` is held,
+  although no drop names it. Lane R quotes are located by code and not checked this way.
+- **V6/V7 names**: `name_in` folds with `subject_gate.fold` (Phase 4's one name fold) and wants
+  the name's tokens as a run of whole tokens, each pair at `fuzz.ratio >= 90` (`Ur` is not in
+  `during`). V7's lane-S heading counts only with a stored name or alias **inside** the heading,
+  the direction S2's pool reads; the heading inside the name (a sibling `Nether Largie South
+  Cairn`, a generic `Pyramid`) does not.
+- **V8**: a citation's `domain` is its URL's host without a leading `www.` - the production form
+  (`api/main.py`'s seeded citations) and what S4's `assemble.domain_of` writes.
+- **V10**: lanes T and R build no card; any card there is held (card scope).
+- **V14**: a stored country that is no single `NAME_TO_ISO` name is read part by part
+  (`Chile, Easter Island` -> CL); one with no code at all agrees with no named country.
+- **The acceptance** re-verifies a `p4` site with the run's card only where production's
+  `provenance.card` pins one (a card-held site is written with `card: null`). A lane row whose
+  field chain holds a row under its change key **and** its run stamp, each plus `-rollback`
+  (revert4 `_reversed`), is reverted: not "changed later", not a second write of its row; a
+  planned row whose lane rows are all reverted is judged like one not yet written. So write,
+  revert and write round 2 is accepted on the round-2 rows.
 
 ### Track D - write and ship (WB-D1 ... WB-D5)
 
@@ -525,4 +553,6 @@ with exactly the sites that passed; it counts as reviewed only when `review4.jso
 - **Open, for WB-00:** lanes T and R build no card (their text is not the source's, so no offered
   span applies) and write no hold for it, because no `HoldReason` fits. `Assembly.card is None` is
   the signal meanwhile; a card-scope reason such as `card-not-extractive` would let the writer
-  treat a T/R site's cleared-defect card like any held card (P5/card-clear).
+  treat a T/R site's cleared-defect card like any held card (P5/card-clear). verify4's V10 holds
+  any card an assembly of lane T or R does carry (card scope, 2026-09-23), so an assembler bug
+  cannot publish French or restricted wording as a card.
