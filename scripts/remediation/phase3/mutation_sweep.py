@@ -3872,7 +3872,8 @@ BCASES_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases: a village speaks for the site's point",
         BCASES + "classify.py",
-        '    if any(map(is_container_class, p31)):\n        return "container-item", p31\n',
+        "    if any(is_container_class(label, strict=strict) for label in p31):\n"
+        '        return "container-item", p31\n',
         '    if False:  # mutant\n        return "container-item", p31\n',
         BCASES_TEST,
         "test_an_item_that_is_not_the_site_is_never_a_witness",
@@ -3904,8 +3905,8 @@ BCASES_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases: an ancient city is a container",
         BCASES + "classify.py",
-        "    return _has_word(label, CONTAINER_WORDS) and not _has_word(label, SITE_WORDS)\n",
-        "    return _has_word(label, CONTAINER_WORDS)  # mutant\n",
+        "    if _has_word(label, SITE_WORDS):\n        return False\n",
+        "    if False:  # mutant\n        return False\n",
         BCASES_TEST,
         "test_a_modern_place_contains_a_site_and_an_ancient_one_is_the_site",
     ),
@@ -4279,7 +4280,7 @@ BCASES_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases: a coarse P625 does not widen the tolerance",
         _CL,
-        "    return max([TOLERANCE_M, *(w.precision_m for w in ws)])\n",
+        '    return max([TOLERANCE_M, *(w.precision_m for w in ws if w.kind != "web")])\n',
         "    return TOLERANCE_M  # mutant\n",
         BCASES_TEST,
         "test_the_tolerance_widens_with_a_coarse_wikidata_precision",
@@ -8065,16 +8066,17 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a short word of the name identifies it",
         _WW,
-        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN)\n",
-        "    return sorted(C.tokens(name))  # mutant\n",
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.tokens(name) if t not in TYPE_WORDS)  # mutant\n",
         _WW_TEST,
         _WW_WORDS,
     ),
     (
         "bcases web: a generic word of the name identifies it",
         _WW,
-        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN)\n",
-        "    return sorted(t for t in C.fold(name).split() if len(t) >= MIN_TOKEN)  # mutant\n",
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.fold(name).split() if len(t) >= MIN_TOKEN"
+        " and t not in TYPE_WORDS)  # mutant\n",
         _WW_TEST,
         _WW_WORDS,
     ),
@@ -8130,7 +8132,7 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a forged witness on a wiki host is weighed",
         _WW,
-        "        if listed_domain_of(host, WIKI_HOSTS) is not None:\n",
+        "        if listed_domain_of(host, WIKI_HOSTS | COPY_HOSTS) is not None:\n",
         "        if False:  # mutant\n",
         _WW_TEST,
         _WW_FORGED,
@@ -8633,14 +8635,6 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         _CL,
         'SETTLEMENT_IN_COUNTRY = re.compile(r"(?<![\\w-])settlement(?: formation)? in [A-Z]")\n',
         'SETTLEMENT_IN_COUNTRY = re.compile(r"(?<![\\w-])settlement(?: formation)? in \\w")  # mutant\n',
-        _WW_TEST,
-        _WW_SETTLEMENT,
-    ),
-    (
-        "bcases web: a site class by country counts as a modern settlement",
-        _CL,
-        "    if _has_word(label, SITE_WORDS):\n        return False\n",
-        "    if False:  # mutant\n        return False\n",
         _WW_TEST,
         _WW_SETTLEMENT,
     ),
