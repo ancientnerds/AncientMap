@@ -365,3 +365,6 @@ output/remediation/vlm_pilot/contact_sheet_*.png
 output/remediation/vlm_pilot/__pycache__/
 output/remediation/vlm_pilot/*.log
 output/remediation/vlm_pilot/*.partial.jsonl
+# The Opus re-verification of every DeepSeek-decided production row (2026-09-23): its sealed rules,
+# its input and every verdict are the proof behind any reversal it leads to.
+!output/remediation/opus_audit/
