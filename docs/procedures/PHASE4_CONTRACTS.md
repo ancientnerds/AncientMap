@@ -373,8 +373,20 @@ is the sentence text (`text[start:end]`), offsets are relative to it until the l
    empty, **neither dash is a range dash** - the nearest non-space character before it or after
    it is a digit (`1800 – 500`) - and **no top-level `;` lies between them** (Varna W32:
    `type 1 – long; type 2 –`). A `;` inside a parenthesis between them does not refuse the pair.
-7. **`l`**: with a first delimiter comma `c_1`, `[0, c_1 + 2)` when `s[:c_1]` is 1-6 tokens and
-   `s[c_1 + 2:]` stripped is not empty (`"In 1900, "`); edit 4 restores the capital.
+7. **`l`**: with a first delimiter comma `c_1`, `[0, c_1 + 2)` when `s[:c_1]` is 1-6 tokens,
+   `s[c_1 + 2:]` stripped is not empty (`"In 1900, "`; edit 4 restores the capital), and `c_1`
+   separates no list items or conjuncts: **pair 1 is no list link** (rule 5, any of (i)-(v)) and
+   **`s[c_1 + 1:]`, left-stripped, does not open with `and` or `or`** (`(?:and|or)\b`,
+   case-insensitive; this matters when `c_1` is the only delimiter comma). Before such a comma
+   stands a list's head and its first item, and dropping it makes the rest the subject (Babylon
+   W204: "Sasanian, and Arabic periods excavated in Babylon demonstrate ..." from "Coins from the
+   Parthian, "; Sparta W105: "Strategy, and bronze armour ..."). Decided under D7 (safety over
+   coverage) on the independent check of wip/p4-select-sup, 2026-09-23: over the 3,661 local
+   enwiki pools it took 1,951 of the 15,261 offered `l` spans (1,746 by the list link, 205 by the
+   opening coordinator), some of them genuine leading phrases before a coordinated clause (Babylon
+   W161: "Under Nabopolassar, Babylon escaped Assyrian rule, and ..."). **The orchestrator
+   confirms or reverses this refusal** (it was not among decisions D1-D7); a reversal must also
+   restore the `l1` of the list cases in `SPAN_CASES`.
 8. **`t`**: with a last delimiter comma `c_n`, `[c_n, len(s) - 1)` when
    `s[c_n + 1 : len(s) - 1]` stripped is not empty (`", whose tomb lies nearby"`).
 9. **Protected tokens.** A candidate whose range text contains an entry of

@@ -220,6 +220,23 @@ def test_a_leading_phrase_takes_its_comma_and_the_space_after_it() -> None:
     assert _spans("In 1900, the site was cleared of rubble by the governor.")["l1"] == "In 1900, "
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        # the list's head and its first item (Babylon W204: dropping "Coins from the Parthian, "
+        # read "Sasanian, and Arabic periods excavated in Babylon demonstrate ...")
+        "The temples of Asclepius, Aphrodite, Apollo, and Artemis stood on the hill.",
+        "Coins from the Parthian, Sasanian, and Arabic periods lie in the museum.",
+        "Finds from the ditch included pottery, coins, tools and bones from the pit.",
+        # the first of two conjuncts, with no second delimiter comma
+        "The shrine was abandoned, and the temple was used as a barn.",
+        "The stones came from the river, or they were cut on the hill above.",
+    ],
+)
+def test_a_leading_phrase_that_opens_a_list_or_a_conjunct_is_not_offered(text: str) -> None:
+    assert "l1" not in _spans(text)
+
+
 def test_a_leading_phrase_of_seven_tokens_is_not_offered() -> None:
     text = "In the first year of the war, the site was cleared by the army."
     assert "l1" not in _spans(text)

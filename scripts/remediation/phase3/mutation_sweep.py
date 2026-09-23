@@ -8766,6 +8766,22 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4B_SENT_TEST,
         "test_a_comma_pair_inside_a_list_is_no_insertion",
     ),
+    (
+        "p4 sentences: a list's head and first item is a leading phrase",
+        P4B_SENT,
+        "        opens_list = bool(links) and links[0]\n",
+        "        opens_list = False  # mutant\n",
+        P4B_SENT_TEST,
+        "test_a_leading_phrase_that_opens_a_list_or_a_conjunct_is_not_offered",
+    ),
+    (
+        "p4 sentences: the first of two conjuncts is a leading phrase",
+        P4B_SENT,
+        "        opens_conjunct = _OPENS_WITH_COORDINATOR.match(s[lead + 1 :].lstrip()) is not None\n",
+        "        opens_conjunct = False  # mutant\n",
+        P4B_SENT_TEST,
+        "test_a_leading_phrase_that_opens_a_list_or_a_conjunct_is_not_offered",
+    ),
     # -- C3: lane T selects whole sentences; foreign apparatus is excluded
     (
         "p4 sentences: a translated sentence offers spans",

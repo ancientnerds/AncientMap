@@ -59,10 +59,11 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
         {"a1": " – lined with slabs (granite; basalt) –", "p1": " (granite; basalt)"},
     ),
     ("W", "The temple—the largest of its kind—stood on the hill above.", {}),
+    # a list's head and first item is no leading phrase (rule 7; Babylon W204)
     (
         "W",
         "The temples of Asclepius, Aphrodite, Apollo, and Artemis stood on the hill.",
-        {"l1": "The temples of Asclepius, ", "t1": ", and Artemis stood on the hill"},
+        {"t1": ", and Artemis stood on the hill"},
     ),
     (
         "W",
@@ -72,7 +73,7 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
     (
         "W",
         "Finds from the ditch included pottery, coins, tools and bones from the pit.",
-        {"l1": "Finds from the ditch included pottery, ", "t1": ", tools and bones from the pit"},
+        {"t1": ", tools and bones from the pit"},
     ),
     (
         "W",
@@ -100,6 +101,12 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
             "a1": ", now ruined,",
             "t1": ", held statues of the gods of the river and of the sky",
         },
+    ),
+    # the first of two conjuncts is no leading phrase either (rule 7)
+    (
+        "W",
+        "The shrine was abandoned, and the temple was used as a barn.",
+        {"t1": ", and the temple was used as a barn"},
     ),
     (
         "W",

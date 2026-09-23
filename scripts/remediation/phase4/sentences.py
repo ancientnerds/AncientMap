@@ -34,7 +34,9 @@ marker in front of; a `T.<lang>` sentence offers none (the protected tokens are 
   digit beside it) or a top-level `;` between them. The pair is the insertion's delimiter, so both
   marks go: `A, X, B` becomes `A B`, never the broken `A, B` that removing one comma would leave.
 * `l` - a leading phrase of at most 6 tokens before the first delimiter comma, with that comma and
-  the space after it: `"In 1900, "`. Edit 4 restores the capital of what follows.
+  the space after it: `"In 1900, "`. Edit 4 restores the capital of what follows. Never when that
+  comma separates list items or conjuncts (the first comma pair is a list link, or the text after
+  the comma opens with `and`/`or`): what stands before it is a list's head and first item.
 * `t` - the last comma segment: from the last delimiter comma up to, not including, the final
   punctuation: `", whose tomb lies nearby"`.
 
@@ -318,7 +320,16 @@ def _candidates(s: str) -> list[tuple[M.SpanKind, int, int]]:
                 found.append((M.SpanKind.A, first - 1, second + 1))
     if commas:
         lead = commas[0]
-        if 1 <= len(s[:lead].split()) <= MAX_LEADING_TOKENS and s[lead + 2 :].strip():
+        # A first comma that separates list items or conjuncts has a list's head and its first
+        # item before it, not a leading phrase (Babylon W204: "Coins from the Parthian, ").
+        opens_list = bool(links) and links[0]
+        opens_conjunct = _OPENS_WITH_COORDINATOR.match(s[lead + 1 :].lstrip()) is not None
+        if (
+            1 <= len(s[:lead].split()) <= MAX_LEADING_TOKENS
+            and s[lead + 2 :].strip()
+            and not opens_list
+            and not opens_conjunct
+        ):
             found.append((M.SpanKind.L, 0, lead + 2))
         last = commas[-1]
         if s[last + 1 : len(s) - 1].strip():
