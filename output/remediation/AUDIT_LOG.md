@@ -6121,14 +6121,265 @@ Thasos-Artemis queries.
   worktree has no `.venv` of its own, so the sweep ran through a wrapper that points its `PY` at the
   main checkout's interpreter (no junction).
 
+## 2026-09-23 - the liveness write as a chunk, and the 20 two-URL `source_url` values (planned, not applied)
+
+Branch `wip/ops2`. **Nothing was written to production.** Production contacts, all read-only or
+rolled back: the reads named below, `chunk_writer.py --rehearse` of the liveness chunk, the
+rehearsal of external-id wave 4 (and of wave 4 followed by its reversal), and migration 0023 inside
+`BEGIN; ... ROLLBACK;`. Network reads: English Wikipedia (`resolve_titles`, the project user agent)
+for 19 titles, and one `wbgetentities` read of the 19 items for the notes below.
+
+### A. The liveness lane gets its write (`liveness.py chunk`)
+
+`liveness.py` could sweep and recheck; nothing turned the store's `PLANNED.jsonl` (the L1/L2 rows
+`decide.py liveness` makes) into something that can reach production. The new `chunk` command builds
+`chunk_writer.Change` records from it: old and new values exactly as planned (booleans in their text
+form `'true'`/`'false'`), the rule (L1/L2), a reason from the Commons log class ("Commons deleted
+File:X as a copyright violation (log N, time); the row is excluded"), and the planned evidence
+pointers plus the store they point into. Lane `img-liveness`, test id `T09/liveness`, confidence
+`authoritative`, stamp `img-liveness-<store date>` (here `img-liveness-2026-09-23`, run stamp
+`...-001`).
+
+It refuses: a planned row whose `liveness_sha256` names no line of `NOT_LIVE.jsonl`, or whose line
+does not state the row's class, file, log id and rule, or does not reference the row; a role that
+writes a column or acts on a class it does not own; an L2 value that is not the store's live move
+target; a hero promotion without the hero drop L1 made on its site; and a store whose `RECHECK.json`
+is not a clean recheck of every logged line. The one production read is the live rows of the touched
+sites: the chunk is emitted only when the sites the plan leaves without a live image are exactly the
+ones named with `--may-empty`.
+
+**`may_empty` = the Lion Tombs of Dedan (`9a9a0dca-52c8-44c2-94f6-adb655db17dd`), and only it.**
+Production, read 2026-09-23: Dedan has exactly two image rows (87351 `Dedan_tomb_1`, 87352 the hero,
+both files deleted as copyright violations), both planned excluded -> 0 live after. The other five
+sites keep live images: Chesterfield 13 -> 12, Stadium at Olympia 18 -> 17, Theatre of Dionysus
+18 -> 17, Stoa of Eumenes 20 -> 19, Roman Forum 20 -> 20 (L2 only). Without `--may-empty` the command
+stopped: `the plan leaves ['9a9a0dca-...'] without a live image, --may-empty names []`.
+
+`chunk-001`: **9 rows over 6 sites** - `is_excluded` false -> true on 107331 (deleted-other: the
+Minecraft/McDonald's promotion photo on Chesterfield), 97070, 80453, 87352, 87351, 70233
+(deleted-copyvio); `is_hero` true -> false on 87352; `commons_page_url` and `original_url` of 75145
+(Roman Forum) to the live target `File:Forum Romanum - panoramio (3).jpg`.
+
+* `chunk_writer.py <chunk> --check` (offline): `CHECK OK: ... chunk-001 is the plan's, 9 row(s)`.
+* `--rehearse` (production, COMMIT -> ROLLBACK): `INSERT 0 9`, `INSERT 0 1` (may_empty), `SELECT 6`,
+  `DO`, journal rows for this run 9, planned rows 9, `ROLLBACK`, then
+  `REHEARSAL OK: chunk 001, 9 row(s), rolled back` (0 journal rows survive).
+* Open after the write (not this lane's rule): Dedan's `unified_sites.thumbnail_url` is
+  `/data/images/wiki/9a9a0dca/hero.webp`, the local derivative of the deleted hero; no replacement
+  hero exists (`LISTED.json`), so the page falls back to `is_lead`/`sort_order` over no live image.
+  The thumbnail lane (T1) or the owner decides what the site shows.
+* Tests: 8 new in `test_gallery_liveness.py` (the sweep -> `decide.plan_liveness` -> chunk path over
+  the fake Commons, every refusal, the recheck gate, the stamp, the emptied-site computation, the
+  command's `--may-empty` gate, and the delivered chunk re-derived from the versioned store).
+  `mutation_sweep.py "liveness chunk: "`: **19/19 caught**.
+
+Apply, in this order (the orchestrator):
+
+```bash
+PY=./.venv/Scripts/python.exe
+$PY scripts/remediation/gallery_audit/liveness.py recheck --store output/remediation/gallery_audit/liveness-2026-09-23   # the day of the write; must report no problem
+C=output/remediation/gallery_audit/liveness-2026-09-23/chunk-001
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --check
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --rehearse
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --apply        # reads back plan <-> journal <-> data
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --rehearse-rollback
+```
+
+### B. The 20 curated `source_url` values that hold two URLs
+
+Measured (read-only): exactly 20 `unified_sites` rows carry a control character in `source_url`, all
+`ancient_nerds`, all created 2026-03-04, each `'<url1>\n<url2>'` (one `\n`, no `\r`, no whitespace in
+either URL). 19 Mesoamerican sites carry a megalithic.co.uk URL first and an English Wikipedia URL
+second (Cantil de las animas: a blogspot URL); none of them had a `site_external_ids` row, because
+`refresh_site_external_ids` reads only `source_url LIKE 'https://en.wikipedia.org/wiki/%'`. Petra has
+the article first and a Khan Academy page second, and its `enwiki_title` row held
+`'Petra\nhttps://www.khanacademy.org/...'` (the only external-id value with a control character); no
+`wikidata_qid` row.
+
+**Root cause, two defects in `pipeline/lyra/prospector/wiki.py`, both fixed:** `enwiki_title_from_url`
+turned the whole two-URL value into a title, and `_parse_query` stored it - the API answers such a
+title with `invalid: true` and no `missing` (measured live), and `_parse_query` took an invalid title
+for the canonical one. `enwiki_title_from_url` now raises `ValueError` for a URL or a decoded title
+with a C0 control or DEL (`CONTROL_RE`, the class migration 0023 enforces), and an `invalid` page is
+no page. The Lyra import check passes. The boot refresh (`only_missing=True`) reads none of the 20
+rows today (Petra has a row, the others no Wikipedia prefix), so the new raise cannot stop a boot;
+`--all` would raise on Petra until wave 4 is applied - by design.
+
+**Data fix: external-id repair wave 4** (`qid_repair.py --wave 4`, `output/remediation/qid_repair/
+wave4/`, run stamp `2026-09-23_source-url-split-wave4`). `resolve --wave 4` wrote the versioned
+`RESOLUTION.json` (production read 10:52:11Z, Wikipedia 10:52:14Z); `render` plans from it alone:
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL, through `apply_remediation_change()` (its allow-list names the table `unified_sites`, so the primitive allows the column - no migration needed) | 20 |
+| `site_external_ids` new rows (`INSERT`, old value NULL = no row; guarded: no row of that (site, kind) exists) | 35 (17 Mesoamerican sites x 2, Petra's `wikidata_qid` `Q5788`) |
+| `site_external_ids` corrected (Petra `enwiki_title` -> `Petra`) | 1 |
+| **total** | **56** |
+
+Left, with their reasons: **Cantil de las animas** - neither URL is an English Wikipedia article (its
+`source_url` is split all the same); **Chiapa de Corzo** (`24aa135d`) - `Q4384315` is already carried by the
+curated site **Zoque Culture Archaeological Zone** (`ed186ea9`, whose own `source_url` is the same
+article): a duplicate candidate for the owner, not a link. No title redirected, none is a
+disambiguation page.
+
+Flagged, written under the rule (the boot refresh would have stored the same had the URL stood
+alone), for the orchestrator to keep or drop before the apply: three curator articles are about the
+place, not the site - `Acanceh` -> Q8186545 (locality, the municipal seat), `Santa María Atzompa` ->
+Q3846612 (municipality), `Trincheras` -> Q1434929 (locality in Sonora; the site is Cerro de
+Trincheras). Wave 2's rule A refused settlements; the orchestrator's rule for this wave does not.
+`Cascajal Block` -> Q1046912 is the block itself (P31 tablet), as the record is.
+
+The statement: guards (curated sites; every `source_url` still the old value; an external-id row with
+an old value is the one row of its kind and holds it; a new row is new; no other curated site carries
+a planned item), the writes (primitive for `source_url`, a conditional `UPDATE` or an `INSERT` for
+the ids, exactly one row each, one journal row each, `row_pk` `site/kind` as in waves 1-3), and
+invariants (new values held, one row per kind, the journal equal to the plan both ways). A value with a
+control character is spelled `'a' || chr(10) || 'b'` so no raw line break stands in the file. The
+reversal deletes exactly the inserted rows by their value, puts Petra's title back, restores every
+two-URL `source_url` through the primitive, and journals all of it under `...-wave4-rollback`.
+Waves 1-3 render byte for byte what is committed (test).
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 56 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 36`, `DO`,
+  `NOTICE: source-url split: 56 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 20 control-character values, Petra 1 external-id row, 0 journal rows.
+* Rehearsal of the undo (APPLY and ROLLBACK.sql in one transaction, then `ROLLBACK`): both DO blocks
+  56 rows; inside, before the rollback: 56 + 56 journal rows, 20 control-character values again, 1
+  external-id row among the 20 sites, Petra's title broken again - the pre-state exactly.
+
+**Migration `0023_source_url_no_control_chars.sql`**: a first transaction counts the offending rows
+with a plain read and raises if any, then adds `CHECK (source_url !~ '[\x00-\x1f\x7f]') NOT VALID`
+only if `pg_constraint` lacks `unified_sites_source_url_no_control_chars`; the `VALIDATE` runs in its
+own transaction (the 0020 pattern); a catalog selftest follows. The selftest compares with `strpos`:
+a first draft used `LIKE`, which reads the pattern's backslashes as its own escapes - measured on a
+temp table, it would have failed a correct migration and stopped the deploy.
+
+* Rehearsed on production inside `BEGIN; ... ROLLBACK;` (its first transaction):
+  `ERROR: 0023: 20 unified_sites row(s) carry a control character in source_url - apply the data fix
+  (output/remediation/qid_repair/wave4) before this migration`, psql exit 3; no constraint exists
+  afterwards. **Expected until the data fix is applied.**
+* The success path, run verbatim twice against a session temp table that shadows `unified_sites`
+  (the script stops unless the name resolves to the temp table): added, validated, selftest
+  `CHECK ((source_url !~ '[\x00-\x1f\x7f]'::text))`, the second run `already exists - no ALTER`, and
+  the CHECK refuses a newline. The real catalog is untouched.
+
+Apply, in this order (the orchestrator) - the migration must not reach `main` before step 5:
+
+```bash
+PY=./.venv/Scripts/python.exe
+$PY output/remediation/tools/qid_repair.py render --wave 4   # REHEARSAL.sql is not versioned
+$PY output/remediation/tools/qid_repair.py check --wave 4    # read-only: 56 rows, 0 deviations
+ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" < output/remediation/qid_repair/wave4/REHEARSAL.sql
+ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" < output/remediation/qid_repair/wave4/APPLY.sql
+$PY output/remediation/tools/qid_repair.py verify --wave 4   # read-only
+# only now may migrations/0023_source_url_no_control_chars.sql reach main (the deploy applies it);
+# from then on the source_url half of wave4/ROLLBACK.sql cannot run - the CHECK refuses it
+```
+
+Tests: 3 new in `tests/pipeline/test_prospector_units.py` (control character in the URL, after
+decoding, the invalid page), 14 new in `test_remediation_tools.py` (wave 4 plan, Petra, every
+refusal, the record gate, `chr(n)` spelling, the statement's guards and writes, the reversal, the
+control-character refusal, the plan line of waves 1-3, waves 1-3 byte for byte, the delivered files,
+`resolve`, check/verify over both tables, NULL as "no row"), 6 in the new `test_migration_0023.py`.
+`mutation_sweep.py "source url: "`: **28/28 caught**.
+
+### B, revised the same day: no link to a place-level item (orchestrator decision) - supersedes the 56-row plan
+
+The orchestrator's decision: wave 4 writes no link to a town or municipality - the defect waves 1-3
+repaired - as a rule, not a hand exception. The rule is the gate waves 2 and 3 applied,
+`bcases.qid_research.is_site_kind` (`classify.is_container_class`: a P31 class naming a settlement,
+an administrative unit or a natural feature, unless a site word such as "ancient" or "archaeological"
+makes it a site again; or a Wikimedia page), imported, not copied. `phase4/subject_gate.py`'s
+place-level list was not taken: its verdict accepts a place-level item for a site whose own type is a
+settlement type, and Acanceh, Atzompa and Cerro De Trincheras are all `City/town/settlement` in the
+catalogue, so it would have let exactly these three through. A refused item refuses **both**
+`enwiki_title` and `wikidata_qid` of the site; its `source_url` is split all the same.
+
+`resolve --wave 4` now also records each resolved item's P31 class labels, read the way the bcases
+research reads them (`bcases.collect.fetch_claims` + `fetch_labels`, the census Fetcher, the bcases
+cache; a class without an English label stops the read). Re-resolved 2026-09-23 11:38Z; production
+and Wikipedia answered as before. PLAN.md gains a duplicate-candidate table built from the plan.
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL (primitive) | 20 |
+| `site_external_ids` new rows (14 sites x 2) | 28 |
+| corrected | 0 |
+| **total** | **48** (digest `8da78ba0...`) |
+
+Left, each with its reason in PLAN.md: **Acanceh** (Q8186545, P31 locality of Mexico), **Atzompa**
+(Q3846612, municipality of Mexico), **Cerro De Trincheras** (Q1434929, locality of Mexico) - a place,
+not the site; **Petra** (Q5788, P31 ancient city, **city**, archaeological site) - the canonical gate
+reads the plain class "city" (Q515) as a container, so Petra's ids are refused too, and **Petra's
+stored `enwiki_title` keeps its newline** (the wave has no replacement to write; a removal is a
+`DELETE`, the owner's call) - PLAN.md says so, and says that the manual `--all` refresh would write
+Petra's refused ids; **Cantil de las animas** (no article); **Chiapa de Corzo** (Q4384315 carried by
+Zoque Culture Archaeological Zone). Duplicate candidate, in PLAN.md with its evidence: Chiapa de Corzo
+(`24aa135d`) / Zoque Culture Archaeological Zone (`ed186ea9`) - this site's article
+`Chiapa_de_Corzo_(Mesoamerican_site)` resolves to Q4384315, the item the other row carries, and the
+other row's `source_url` is the same article.
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 48 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 28`, `DO`,
+  `NOTICE: source-url split: 48 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 0 journal rows, 20 control-character values.
+* Apply-then-undo rehearsal (one transaction, rolled back): 48 + 48 journal rows, then 20
+  control-character values, 1 external-id row among the 20 sites and Petra's broken title - the
+  pre-state exactly.
+* Tests: the wave-4 fixture gains a municipality item and the real Petra class set; 3 new tests (the
+  place gate for both kinds with the split kept, the duplicate candidates with their evidence, the
+  class read's refusal of an unlabelled class). `mutation_sweep.py "source url: "`: **33/33 caught**.
+
+The apply commands above are unchanged; `check` now reads 48 rows.
+
+### B, revised again: Petra as a hand-read entry (orchestrator decision) - supersedes the 48-row plan
+
+The place gate stays as it is; Petra is written as a **hand-read entry**, the way wave 2's hand
+entries carry quoted evidence. `qid_repair.WAVE4_HAND_READ` holds one entry; its guard: a hand entry
+must name, verbatim, the refusal the rule made for that site, and it overrides only that one - a
+different reason, a site the rule did not refuse, a refusal that is not the place gate's (an item
+another curated site carries) or a site whose article the wave never resolves stops the plan, and so
+does an entry without evidence. PLAN.md lists the entry under "Hand-read" with the refusal it
+overrides and its evidence; each of Petra's rows carries both.
+
+Evidence, verified read-only on 2026-09-23 (`wbgetentities` Q5788 with its class labels,
+`resolve_titles(['Petra'])`, the production row): Q5788 'Petra' - 'ancient rock-cut historical city
+in Jordan', P31 archaeological site (Q839954), ancient city (Q15661340) and city (Q515), all normal
+rank; P1435 heritage designation World Heritage Site (Q9259); P757 World Heritage Site ID 326; its
+enwiki sitelink is 'Petra', and `resolve_titles` answers 'Petra' -> 'Petra', Q5788, no redirect, not a
+disambiguation page; the stored name is 'Petra' (Jordan).
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL (primitive) | 20 |
+| `site_external_ids` new rows (14 sites x 2, Petra's `wikidata_qid` Q5788) | 29 |
+| corrected (Petra `enwiki_title` `'Petra\nhttps://www.khanacademy.org/...'` -> `Petra`) | 1 |
+| **total** | **50** (digest `a5f3503d...`) |
+
+Left: Acanceh, Atzompa, Cerro De Trincheras (a place, not the site), Cantil de las animas (no
+article), Chiapa de Corzo (Q4384315 carried by Zoque Culture Archaeological Zone; duplicate
+candidate). With Petra corrected, no external-id value with a control character is left, and the
+`--all` refresh would write none of the refused ids back (both PLAN.md bullets are computed).
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 50 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 30`, `DO`,
+  `NOTICE: source-url split: 50 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 0 journal rows, 20 control-character values, Petra's broken title unchanged.
+* Apply-then-undo rehearsal (one transaction, rolled back): 50 + 50 journal rows, then the pre-state
+  exactly (20 control-character values, 1 external-id row among the 20 sites, Petra's title broken).
+* Tests: 2 new (Petra written with its entry and refused without it, on the delivered record; a hand
+  entry must name the refusal it overrides - wrong reason, unrefused site, a sharer refusal, an
+  unresolved site, no evidence). `mutation_sweep.py "source url: "`: **38/38 caught**.
+
 ## 2026-09-23 - the cell lanes and journal-reversal-2: planned, not applied
 
-Branch `wip/mech2` (merged with `integrate/wave1` at `b6de246`). Four lanes of the mechanical write
-path (`scripts/remediation/mechanical/`) are planned and committed; **none of them has written
-anything** (read-only at 11:11 UTC: 0 journal rows for any of their stamps, 0 `card_stats` journal
-rows, 0 curated rows with a `scope_status`). Production was only read (`SELECT`s, `BEGIN READ ONLY`): the reversal plans, their
-read-backs, the owned-card count and a re-read of the duplicate list. The apply order at the end of
-this section is the orchestrator's.
+Branch `wip/mech2` (merged with `integrate/wave1` at `b6de246`, and with its tip `9046ef9` after
+this section was written). Four lanes of the mechanical write path
+(`scripts/remediation/mechanical/`) are planned and committed; **none of them has written anything**
+(read-only at 11:11 UTC: 0 journal rows for any of their stamps, 0 `card_stats` journal rows, 0
+curated rows with a `scope_status`). Production was only read (`SELECT`s, `BEGIN READ ONLY`): the
+reversal plans, their read-backs, the owned-card count and a re-read of the duplicate list. The
+apply order at the end of this section is the orchestrator's.
 
 ### What each lane does
 

@@ -10,12 +10,14 @@ Caves" both land on "Barabar Caves" (verified live 2026-09-14).
 Endpoint contract (verified live, formatversion=2):
   action=query&redirects=1&prop=coordinates|pageprops&ppprop=wikibase_item|disambiguation
 returns `normalized` (underscore/encoding fixes), `redirects` (from→to
-chains) and `pages` with `missing`, `pageprops.wikibase_item`,
-`pageprops.disambiguation` and `coordinates[0].{lat,lon}` when present.
+chains) and `pages` with `missing`, `invalid` (a title MediaWiki refuses,
+with `invalidreason`), `pageprops.wikibase_item`, `pageprops.disambiguation`
+and `coordinates[0].{lat,lon}` when present.
 """
 
 from __future__ import annotations
 
+import re
 import urllib.parse
 from dataclasses import dataclass
 
@@ -43,15 +45,28 @@ class TitleResolution:
         return self.canonical_title is not None
 
 
+#: C0 controls and DEL - the set migration 0023 keeps out of unified_sites.source_url.
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
 def enwiki_title_from_url(url: str | None) -> str | None:
-    """'https://en.wikipedia.org/wiki/Sudama_Cave#Section' -> 'Sudama Cave'."""
+    """'https://en.wikipedia.org/wiki/Sudama_Cave#Section' -> 'Sudama Cave'.
+
+    A URL or a decoded title that carries a control character raises ValueError. Measured
+    2026-09-23: 20 curated source_url values held two URLs joined by a newline, and Petra's became
+    the "title" 'Petra\\nhttps://www.khanacademy.org/...' - no page can be named that way.
+    """
     if not url:
         return None
+    if CONTROL_RE.search(url):
+        raise ValueError(f"a URL with a control character names no page: {url!r}")
     prefix = "https://en.wikipedia.org/wiki/"
     if not url.startswith(prefix):
         return None
     tail = url[len(prefix) :].split("#", 1)[0].split("?", 1)[0]
     title = urllib.parse.unquote(tail).replace("_", " ").strip()
+    if CONTROL_RE.search(title):
+        raise ValueError(f"{url!r} decodes to a title with a control character: {title!r}")
     return title or None
 
 
@@ -100,7 +115,10 @@ def _parse_query(chunk: list[str], query: dict) -> dict[str, TitleResolution]:
             current = redirects[current]
             redirected = True
         page = pages.get(current)
-        if page is None or page.get("missing"):
+        # An `invalid` page is a title MediaWiki refuses (it answers with `invalidreason`, no
+        # `missing`): no page exists under it. Taking its title as canonical is how Petra's
+        # enwiki_title became 'Petra\nhttps://...' (measured live 2026-09-23).
+        if page is None or page.get("missing") or page.get("invalid"):
             result[title] = TitleResolution(title, None, None, None, None, False, redirected)
             continue
         props = page.get("pageprops", {}) or {}
