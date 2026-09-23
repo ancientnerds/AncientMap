@@ -118,7 +118,10 @@ WAVE2 = Wave(
         "in the page, parses to exactly the stated numbers, and stands within 1,500 characters of a "
         "distinctive word of the site's name. Pages of one publisher (a registered domain) are one "
         "witness; two web witnesses pair only across publishers, under the same independence rule. "
-        "A move into another country than the stored one is not in this plan (it is read first).",
+        "Where a web witness takes part, two witnesses that are each one with a third are one with "
+        "each other (`copy_groups`), and a P625 whose references name the page's publisher is that "
+        "page (`cited_publishers`). A move into another country than the stored one is not in this "
+        "plan (it is read first).",
     ),
     (PLAN_DIR,),
 )
