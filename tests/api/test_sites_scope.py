@@ -48,10 +48,12 @@ def _where(sql: str) -> str:
 # --------------------------------------------------------------------------------------
 
 
-def _all(db, **kw):
-    params = {"source": None, "site_type": None, "period_max": None, "skip": 0, "limit": 100000}
+def _all(db, source=None, **kw):
+    """The /all payload dict (the route itself serves it as cached gzip bytes, see
+    tests/api/test_sites_all_fields.py)."""
+    params = {"site_type": None, "period_max": None, "skip": 0, "limit": 100000}
     params.update(kw)
-    return sr.get_all_sites(req=None, db=db, **params)
+    return sr._build_sites_payload(db, sr._plan_sources(db, source), **params)
 
 
 def test_all_filters_retired_sites_in_the_live_query():
