@@ -3386,6 +3386,105 @@ GALLERY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 ]
 MUTATIONS += GALLERY_MUTATIONS
 
+#: The gallery guards the 2026-09-23 review found unproven, and the guards its fixes added (the
+#: liveness pre-flight, the applied-plan overlay, the liveness gate, the sealed admission, explicit
+#: eye labels, the loose matcher). Same "gallery:" prefix, so `mutation_sweep.py gallery:` runs
+#: them with the others.
+GALLERY_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "gallery: the recheck does not ask whether a file is back",
+        GALLERY + "liveness.py",
+        '            if answered[title]["class"] is not None:\n',
+        "            if False:  # mutant\n",
+        LIVENESS_TEST,
+        "test_recheck_asks_imageinfo_again_even_when_the_log_says_nothing_new",
+    ),
+    (
+        "gallery: the recheck reads only deletions and moves",
+        GALLERY + "liveness.py",
+        '                if (e.get("type"), e.get("action")) in RECHECK_LOG\n',
+        '                if (e.get("type"), e.get("action")) in RELEVANT_LOG  # mutant\n',
+        LIVENESS_TEST,
+        "test_recheck_names_an_upload_newer_than_the_deletion_while_the_file_is_still_missing",
+    ),
+    (
+        "gallery: the recheck names entries older than the stored one",
+        GALLERY + "liveness.py",
+        "                and log_order(e) > log_order(stored)\n",
+        "",
+        LIVENESS_TEST,
+        "test_recheck_names_a_vanished_entry_a_newer_entry_and_a_dead_move_target",
+    ),
+    (
+        "gallery: the recheck command exits 0 on a problem",
+        GALLERY + "liveness.py",
+        "    return 0 if not problems else 4\n",
+        "    return 0  # mutant\n",
+        LIVENESS_TEST,
+        "test_the_recheck_command_exits_4_on_a_problem_and_0_on_none",
+    ),
+    (
+        "gallery: a non-200 Commons answer is read",
+        GALLERY + "liveness.py",
+        '        if payload.get("status") != 200:\n',
+        "        if False:  # mutant\n",
+        LIVENESS_TEST,
+        "test_an_answer_that_is_not_a_query_answer_stops_the_sweep",
+    ),
+    (
+        "gallery: a Commons answer that is not JSON escapes as a crash",
+        GALLERY + "liveness.py",
+        "        try:\n            body = json.loads(text)\n        except json.JSONDecodeError as exc:\n"
+        "            raise LivenessError(\n"
+        '                f"{COMMONS_API} answered something that is not JSON: {exc}"\n'
+        "            ) from exc\n",
+        "        body = json.loads(text)  # mutant\n",
+        LIVENESS_TEST,
+        "test_an_answer_that_is_not_a_query_answer_stops_the_sweep",
+    ),
+    (
+        "gallery: a Commons answer that is no object is read",
+        GALLERY + "liveness.py",
+        "        if not isinstance(body, dict):\n",
+        "        if False:  # mutant\n",
+        LIVENESS_TEST,
+        "test_an_answer_that_is_not_a_query_answer_stops_the_sweep",
+    ),
+    (
+        "gallery: a Commons answer without query is read",
+        GALLERY + "liveness.py",
+        '            if "query" not in body:\n',
+        "            if False:  # mutant\n",
+        LIVENESS_TEST,
+        "test_an_answer_that_is_not_a_query_answer_stops_the_sweep",
+    ),
+    (
+        "gallery: a line without a known class is stored",
+        GALLERY + "liveness.py",
+        "    if unclassified:\n",
+        "    if False:  # mutant\n",
+        LIVENESS_TEST,
+        "test_a_line_left_without_a_known_class_stops_the_sweep",
+    ),
+    (
+        "gallery: a file without a pixel size reads as live",
+        GALLERY + "liveness.py",
+        '            if not info or not info.get("width") or not info.get("height"):\n',
+        "            if not info:  # mutant\n",
+        LIVENESS_TEST,
+        "test_a_file_without_a_pixel_size_is_a_page_without_file",
+    ),
+    (
+        "gallery: a missing move target is stored without a class",
+        GALLERY + "liveness.py",
+        '            if summary["class"] is None:\n                summary["class"] = "missing"\n',
+        "",
+        LIVENESS_TEST,
+        "test_a_move_target_that_is_missing_too_is_stored_as_missing",
+    ),
+]
+MUTATIONS += GALLERY_REVIEW_MUTATIONS
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()

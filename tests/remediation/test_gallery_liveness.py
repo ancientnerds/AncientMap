@@ -63,6 +63,8 @@ class FakeCommons:
         self.maxlag_answers = 0
         self.drop_titles: set[str] = set()
         self.truncate_logs = False
+        #: answers given verbatim before any parsed one: (status, body text)
+        self.raw_answers: list[tuple[int, str]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         if len(str(request.url)) > self.max_uri:
@@ -71,6 +73,9 @@ class FakeCommons:
         self.requests.append(params)
         assert params["action"] == ["query"] and params["format"] == ["json"]
         assert params["formatversion"] == ["2"]
+        if self.raw_answers:
+            status, text = self.raw_answers.pop(0)
+            return httpx.Response(status, text=text)
         if self.maxlag_answers:
             self.maxlag_answers -= 1
             return httpx.Response(
@@ -342,6 +347,49 @@ def test_a_truncated_log_without_a_deletion_or_move_is_refused(tmp_path: Path) -
         _sweep(tmp_path, commons, {"Never_logged.jpg": [1]})
 
 
+@pytest.mark.parametrize(
+    ("status", "text", "why"),
+    [
+        (404, "Not Found", "answered HTTP 404"),
+        (200, "<html><body>Wikimedia Error</body></html>", "answered something that is not JSON"),
+        (200, "[1, 2]", "answered a list, not an object"),
+        (200, '{"batchcomplete": true}', "an answer without 'query'"),
+    ],
+)
+def test_an_answer_that_is_not_a_query_answer_stops_the_sweep(
+    tmp_path: Path, status: int, text: str, why: str
+) -> None:
+    commons = _commons()
+    commons.raw_answers = [(status, text)]
+    with pytest.raises(L.LivenessError, match=why):
+        _sweep(tmp_path, commons, {"Alive_one.jpg": [1]})
+
+
+def test_a_line_left_without_a_known_class_stops_the_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(L, "classify_log", lambda answer: ("vanished", None))
+    with pytest.raises(L.LivenessError, match="left without a class"):
+        _sweep(tmp_path, _commons(), {"Never_logged.jpg": [1]})
+
+
+def test_a_file_without_a_pixel_size_is_a_page_without_file(tmp_path: Path) -> None:
+    commons = _commons()
+    # Commons answers width 0 and height 0 for a file that has no pixel size (audio)
+    commons.files["File:Chant.ogg"] = {**_upload("Chant.ogg"), "width": 0, "height": 0}
+    lines, _, _ = _sweep(tmp_path, commons, {"Chant.ogg": [1]})
+    assert lines["Chant.ogg"]["class"] == L.PAGE_WITHOUT_FILE
+    assert lines["Chant.ogg"]["width"] is None
+
+
+def test_a_move_target_that_is_missing_too_is_stored_as_missing(tmp_path: Path) -> None:
+    commons = _commons()
+    del commons.files["File:Forum Romanum - panoramio (3).jpg"]
+    lines, _, _ = _sweep(tmp_path, commons, {"-_panoramio_(1931).jpg": [16]})
+    target = lines["-_panoramio_(1931).jpg"]["move_target"]
+    assert target["class"] == "missing" and target["url"] is None
+
+
 def test_a_title_the_answer_does_not_mention_stops_the_sweep(tmp_path: Path) -> None:
     commons = _commons()
     commons.drop_titles = {"File:Alive_one.jpg"}
@@ -527,6 +575,88 @@ def test_recheck_names_a_vanished_entry_a_newer_entry_and_a_dead_move_target(
 def _recheck(root: Path, commons: FakeCommons, lines: list[dict[str, Any]]) -> list[str]:
     with Fetcher(root, workers=1, transport=httpx.MockTransport(commons)) as fetcher:
         return L.recheck(lines, fetcher, ns="recheck", pace=L.Pace(0))
+
+
+def test_recheck_names_a_restored_copyvio_and_a_file_uploaded_anew(tmp_path: Path) -> None:
+    lines, _, _ = _sweep(tmp_path, _commons())
+    later = _commons()
+    # a copyvio restored after a VRT permission: the file answers imageinfo again, the log gains
+    # a restore newer than the stored deletion
+    later.files["File:Copyvio.jpg"] = _upload("Copyvio.jpg")
+    later.logs["File:Copyvio.jpg"].append(
+        _event(42, "delete", "restore", "2026-09-24T09:00:00Z", "VRT ticket")
+    )
+    # a deleted file uploaded again under its old name
+    later.files["File:Deletion request.jpg"] = _upload("Deletion request.jpg")
+    later.logs["File:Deletion request.jpg"].append(
+        _event(43, "upload", "upload", "2026-09-25T10:00:00Z", "own work, new photo")
+    )
+    problems = _recheck(tmp_path / "later", later, list(lines.values()))
+    assert any(
+        "Copyvio.jpg: Commons answers 'File:Copyvio.jpg' as live again" in p for p in problems
+    )
+    assert any("Copyvio.jpg: a newer entry 42 (delete/restore" in p for p in problems)
+    assert any(
+        "Deletion_request.jpg: Commons answers" in p and "as live again" in p for p in problems
+    )
+    assert any("Deletion_request.jpg: a newer entry 43 (upload/upload" in p for p in problems)
+
+
+def test_recheck_asks_imageinfo_again_even_when_the_log_says_nothing_new(tmp_path: Path) -> None:
+    lines, _, _ = _sweep(tmp_path, _commons())
+    later = _commons()
+    later.files["File:Copyvio.jpg"] = _upload("Copyvio.jpg")  # live again, the log unchanged
+    problems = _recheck(tmp_path / "later", later, list(lines.values()))
+    assert problems == [
+        "Copyvio.jpg: Commons answers 'File:Copyvio.jpg' as live again - it is no longer missing"
+    ]
+
+
+def test_recheck_names_an_upload_newer_than_the_deletion_while_the_file_is_still_missing(
+    tmp_path: Path,
+) -> None:
+    lines, _, _ = _sweep(tmp_path, _commons())
+    later = _commons()
+    later.logs["File:Copyvio.jpg"].append(_event(44, "upload", "overwrite", "2026-09-24T09:00:00Z"))
+    problems = _recheck(tmp_path / "later", later, list(lines.values()))
+    assert problems == [
+        "Copyvio.jpg: a newer entry 44 (upload/overwrite, 2026-09-24T09:00:00Z) is in the log after 9"
+    ]
+
+
+def test_the_recheck_command_exits_4_on_a_problem_and_0_on_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lines, _, _ = _sweep(tmp_path, _commons())
+    store = tmp_path / "store"
+    L.write_store(store, list(lines.values()), {"snapshot_exported_at": "x"})
+    answers = {"commons": _commons()}
+    monkeypatch.setattr(
+        L,
+        "Fetcher",
+        lambda cache, workers: Fetcher(
+            cache, workers=workers, transport=httpx.MockTransport(answers["commons"])
+        ),
+    )
+
+    def argv(cache: str) -> list[str]:
+        # the command's cache namespace is dated to the second: a separate cache per run
+        return [
+            "recheck",
+            "--store",
+            str(store),
+            "--cache",
+            str(tmp_path / cache),
+            "--interval",
+            "0",
+        ]
+
+    assert L.main(argv("c1")) == 0
+    assert json.loads((store / "RECHECK.json").read_text(encoding="utf-8"))["problems"] == []
+    answers["commons"] = _commons()
+    answers["commons"].files["File:Copyvio.jpg"] = _upload("Copyvio.jpg")
+    assert L.main(argv("c2")) == 4
+    assert json.loads((store / "RECHECK.json").read_text(encoding="utf-8"))["problems"]
 
 
 @needs_snapshot

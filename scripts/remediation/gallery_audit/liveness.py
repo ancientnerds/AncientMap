@@ -47,7 +47,8 @@ Output (``output/remediation/gallery_audit/liveness-<date>/``)
 ``COMMONS.jsonl``   one line per referenced file (about 46,070), sorted by file name
 ``NOT_LIVE.jsonl``  the lines whose class is not ``live``
 ``SUMMARY.json``    counts per class, the sha256 of both JSONL files, the snapshot it read
-``RECHECK.json``    (``recheck``) the re-query of every non-live line's log entry
+``RECHECK.json``    (``recheck``) the re-query of every logged line: its title still missing, its
+                    log entry unchanged and nothing newer, its move target still live
 
 Usage:
     liveness.py sweep [--date YYYY-MM-DD] [--snapshot DIR] [--cache DIR] [--out DIR]
@@ -126,6 +127,13 @@ LOGGED = (MOVED_WITHOUT_REDIRECT, DELETED_COPYVIO, DELETED_OTHER)
 COPYVIO_RE = re.compile(r"copyright[ _-]violation|copyvio", re.IGNORECASE)
 #: (type, action) of the log entries that can explain a missing file.
 RELEVANT_LOG = frozenset({("delete", "delete"), ("move", "move"), ("move", "move_redir")})
+#: (type, action) of the log entries that can bring a logged file back or replace it: a restore
+#: (after a VRT permission, a normal Commons event), a new upload under the name, an overwrite or a
+#: revert - besides the deletions and moves that decide the class. `recheck` reports any of them
+#: that is newer than the stored entry.
+RECHECK_LOG = RELEVANT_LOG | frozenset(
+    {("delete", "restore"), ("upload", "upload"), ("upload", "overwrite"), ("upload", "revert")}
+)
 
 #: The fields every store line carries, so a reader never has to guess whether a key is absent
 #: because it does not apply or because it was forgotten.
@@ -376,12 +384,17 @@ def ask_pages(
         return out
 
 
+def log_order(entry: Mapping[str, Any]) -> tuple[str, int]:
+    """The order of two log entries: their timestamp, then their log id."""
+    return (str(entry.get("timestamp") or ""), int(entry.get("logid") or 0))
+
+
 def latest_relevant(events: Iterable[Mapping[str, Any]]) -> Mapping[str, Any] | None:
     """The newest deletion or move of a title, or None when the log holds neither."""
     relevant = [e for e in events if (e.get("type"), e.get("action")) in RELEVANT_LOG]
     if not relevant:
         return None
-    return max(relevant, key=lambda e: (str(e.get("timestamp") or ""), int(e.get("logid") or 0)))
+    return max(relevant, key=log_order)
 
 
 def classify_log(answer: Answer) -> tuple[str, dict[str, Any] | None]:
@@ -547,11 +560,16 @@ def recheck(
 ) -> list[str]:
     """Re-query every logged line (design: verification 7). Returns the discrepancies.
 
-    The log entry must still be there with the same id, type, action and timestamp, and a move
-    target must still be a live file.
+    This is the day-of-write pre-flight of the L1/L2 write, so it re-proves the class itself, not
+    only the entry that gave it: the title must still be missing (`imageinfo` again - a file
+    restored after a VRT permission, or uploaded anew under the name, is live and must not be
+    excluded), the stored log entry must still be there with the same id, type, action and
+    timestamp, no restore, upload, overwrite, revert, deletion or move may be newer than it, and a
+    move target must still be a live file.
     """
     problems: list[str] = []
     targets: dict[str, str] = {}
+    titles: dict[str, str] = {}
     for line in lines:
         if line["class"] not in LOGGED:
             continue
@@ -567,14 +585,34 @@ def recheck(
         ]
         if not same:
             problems.append(f"{line['file']}: log entry {stored['logid']} is no longer in the log")
-        newest = latest_relevant(events)
-        if newest is not None and newest.get("logid") != stored["logid"]:
+        newer = sorted(
+            (
+                e
+                for e in events
+                if (e.get("type"), e.get("action")) in RECHECK_LOG
+                and log_order(e) > log_order(stored)
+            ),
+            key=log_order,
+        )
+        for entry in newer:
             problems.append(
-                f"{line['file']}: a newer entry {newest.get('logid')} "
-                f"({newest.get('type')}/{newest.get('action')}) now decides the class"
+                f"{line['file']}: a newer entry {entry.get('logid')} "
+                f"({entry.get('type')}/{entry.get('action')}, {entry.get('timestamp')}) "
+                f"is in the log after {stored['logid']}"
             )
+        titles[str(line["requested_title"])] = str(line["file"])
         if line["class"] == MOVED_WITHOUT_REDIRECT:
             targets[str(stored["params"]["target_title"])] = str(line["file"])
+    asked = sorted(titles)
+    for start in range(0, len(asked), BATCH):
+        batch = asked[start : start + BATCH]
+        answered = ask_pages(fetcher, batch, ns=ns, pace=pace)
+        for title in batch:
+            if answered[title]["class"] is not None:
+                problems.append(
+                    f"{titles[title]}: Commons answers {title!r} as "
+                    f"{answered[title]['class']} again - it is no longer missing"
+                )
     ordered = sorted(targets)
     for start in range(0, len(ordered), BATCH):
         batch = ordered[start : start + BATCH]
