@@ -9,7 +9,7 @@
  */
 
 import type { FilterMode } from '../App'
-import type { SiteData } from '../data/sites'
+import { withSiteDetails, type SiteData } from '../data/sites'
 
 export interface CameraState {
   distance: number
@@ -157,16 +157,16 @@ export function registerAppDemoApi(setters: AppDemoSetters): void {
     showUI: () => setters.setDemoMode(false),
     setSelectedSources: (ids) => setters.setSelectedSources(ids),
     loadSources: (ids) => setters.handleLoadSources(ids),
-    openSitePopup: (name) => {
+    openSitePopup: async (name) => {
       const site = setters.sitesRef.current.find(s =>
         s.title.toLowerCase().includes(name.toLowerCase())
       )
       if (!site) {
         console.warn(`[DemoAPI] Site not found: "${name}"`)
-        return Promise.resolve()
+        return
       }
-      setters.openSitePopup(site)
-      return Promise.resolve()
+      // The bulk site lacks its detail fields until they have loaded; wait for them
+      setters.openSitePopup(await withSiteDetails(site))
     },
     closeAllPopups: () => setters.closeAllPopups(),
     setDemoTooltips: (visible) => {

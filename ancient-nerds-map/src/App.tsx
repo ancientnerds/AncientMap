@@ -36,7 +36,7 @@ const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
 const LyraChatModal = lazy(() => import('./components/LyraChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
-import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError } from './data/sites'
+import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, loadSiteDetails, mergeSiteDetails, withSiteDetails, globeSiteFields } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { config } from './config'
@@ -168,6 +168,8 @@ function AppContent() {
   const [sites, setSites] = useState<SiteData[]>([])
   const sitesRef = useRef<SiteData[]>([])
   sitesRef.current = sites
+  // The globe starts on the slim site payload; search waits for the detail fields
+  const [detailsStatus, setDetailsStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [filteredSites, setFilteredSites] = useState<SiteData[]>([])
   const [_categories, setCategories] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -537,10 +539,10 @@ function AppContent() {
 
     setIsLoadingDetail(true)
 
+    let siteData: SiteData | null = null
     try {
       // Fetch full site details (fast API call)
       const response = await offlineFetch(`${config.api.baseUrl}/sites/${site.id}`)
-      let siteData = site
 
       if (response.ok) {
         const detail = await response.json()
@@ -556,13 +558,17 @@ function AppContent() {
           }
         }
       }
-
-      // Use unified popup opener
-      openSitePopup(siteData)
     } catch (error) {
       console.warn('Could not fetch site data:', error)
-      // Fallback: open with basic data
-      openSitePopup(site)
+    }
+
+    // Without the detail answer the popup opens from the bulk data, once that
+    // carries its detail fields (the globe payload has no description or image)
+    try {
+      openSitePopup(siteData ?? await withSiteDetails(site))
+    } catch (error) {
+      console.error('Could not open the site: its details failed to load', error)
+      setIsLoadingDetail(false)
     }
   }, [openSitePopup, openPopups])
 
@@ -662,6 +668,20 @@ function AppContent() {
     })
   }, [])
 
+  // Detail fields (description, card, image, links) the globe payload leaves out.
+  // Merged into the sites already on screen; search waits for them. A failure is
+  // shown in the search header and rethrown to the caller, which reports it.
+  const loadDetails = useCallback(async (): Promise<void> => {
+    try {
+      const byId = await loadSiteDetails()
+      setSites(prev => mergeSiteDetails(prev, byId))
+      setDetailsStatus('ready')
+    } catch (err) {
+      setDetailsStatus('failed')
+      throw err
+    }
+  }, [])
+
   useEffect(() => {
     // Standalone mode: fetch only the single site, skip everything else
     if (standaloneSiteId) {
@@ -669,7 +689,7 @@ function AppContent() {
         try {
           // Initialize DataStore to load source metadata (needed for display names)
           // This loads sources.json which populates getSourceInfo()
-          await fetchSites()
+          await fetchSites('globe')
 
           // Fetch site details directly from API
           const response = await offlineFetch(`${config.api.baseUrl}/sites/${standaloneSiteId}`)
@@ -756,8 +776,10 @@ function AppContent() {
       setLoadingProgress(20)
       let data: SiteData[] = []
       try {
-        data = await fetchSites()
+        data = await fetchSites(globeSiteFields(focusSiteId))
         setSites(data)
+        // A focus load (full payload) and offline mode start with their details
+        if (DataStore.detailsReady) setDetailsStatus('ready')
 
         // Get source metadata from DataStore (already loaded in parallel with sites)
         const sources = DataStore.getSources()
@@ -813,9 +835,15 @@ function AppContent() {
       setIsLoading(false)
       setLoadingProgress(65)
       // Note: Additional sources are NOT loaded automatically - user must click "Load Sources" button
+
+      // Interim until the background queue (U10) runs this as its `details` task
+      loadDetails().catch((err: unknown) => {
+        console.error('[globe bg] details', err)
+        track('globe_error', { phase: 'bg:details', message: err instanceof Error ? err.message : String(err) })
+      })
     }
     loadData()
-  }, [standaloneSiteId, openSitePopup])
+  }, [standaloneSiteId, openSitePopup, loadDetails])
 
   // Load specific sources when user clicks on them or "Load All"
   const handleLoadSources = useCallback((sourceIdsToLoad: string[]) => {
@@ -1005,6 +1033,7 @@ function AppContent() {
     ageRange,
     searchAllSources,
     applyFiltersToSearch,
+    detailsReady: detailsStatus === 'ready',
     spatialFilter: searchWithinProximity && proximityCenter
       ? { center: proximityCenter, radius: proximityRadius }
       : null,
@@ -1012,7 +1041,7 @@ function AppContent() {
       ? { visibleEmpireIds, empireSliderYears, empirePolygons }
       : null,
   })
-  const { searchResults, apiSearchResults, searchQuery, setSearchQuery, debouncedQuery: debouncedSearchQuery } = siteSearch
+  const { searchResults, apiSearchResults, searchQuery, setSearchQuery, debouncedQuery: debouncedSearchQuery, isSearching } = siteSearch
 
   // Typing in the filter panel's search box or toggling a source counts as
   // globe activity (disarms globe_idle); programmatic setSearchQuery calls
@@ -1480,6 +1509,9 @@ function AppContent() {
   useEffect(() => {
     let result = sites
     const isSearching = debouncedSearchQuery.trim().length > 0
+    // A query needs the detail fields (it matches descriptions): until they are in,
+    // the dots keep their previous filter instead of a match on half the data
+    if (isSearching && detailsStatus !== 'ready') return
 
     // When searching with "search all sources" enabled, skip source filter
     const skipSourceFilter = searchAllSources && isSearching
@@ -1590,7 +1622,7 @@ function AppContent() {
     }
 
     setFilteredSites(result)
-  }, [sites, selectedSources, selectedCategories, categoriesFromActiveSources, selectedCountries, countriesFromActiveSources, debouncedSearchQuery, searchAllSources, ageRange, applyFiltersToSearch, searchWithinProximity, proximityCenter, proximityRadius, searchWithinEmpires, visibleEmpireIds, empireSliderYears, empirePolygons, listFrozenSiteIds])
+  }, [sites, detailsStatus, selectedSources, selectedCategories, categoriesFromActiveSources, selectedCountries, countriesFromActiveSources, debouncedSearchQuery, searchAllSources, ageRange, applyFiltersToSearch, searchWithinProximity, proximityCenter, proximityRadius, searchWithinEmpires, visibleEmpireIds, empireSliderYears, empirePolygons, listFrozenSiteIds])
 
   // Crawl progress bar from 65→90% while globe layers are loading (unknown duration)
   useEffect(() => {
@@ -1914,6 +1946,8 @@ function AppContent() {
         searchQuery={searchQuery}
         searchAllSources={searchAllSources}
         searchResults={searchResults}
+        isSearching={isSearching}
+        searchError={detailsStatus === 'failed' ? 'Search unavailable: site details failed to load. Reload the page.' : null}
         filterMode={filterMode}
         ageRange={ageRange}
         onCategoryChange={handleCategoryChange}

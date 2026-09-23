@@ -1,5 +1,5 @@
-import { DataStore } from './DataStore'
-import { SourceMeta } from '../types/data'
+import { DataStore, type SiteFields } from './DataStore'
+import type { Site, SourceMeta } from '../types/data'
 import type { DescriptionAi, DescriptionAttribution, DescriptionCitation } from '../types/anRoute'
 import {
   SOURCE_COLORS,
@@ -86,26 +86,22 @@ export function resolvePeriod(periodName?: string | null, periodStart?: number |
   return periodName || categorizePeriod(periodStart) || 'Unknown'
 }
 
-/**
- * Fetch sites from API via DataStore.
- */
-export async function fetchSites(): Promise<SiteData[]> {
-  await DataStore.initialize()
+/** The SiteData fields the globe payload (`fields=globe`) leaves out. */
+export type SiteDetails = Pick<SiteData,
+  'description' | 'cardDescription' | 'image' | 'sourceUrl' | 'altNames' |
+  'bestWikiUrl' | 'sourceLanguage' | 'referenceLinks' | 'descriptionCitations'>
 
-  const sites = DataStore.getSites()
-  return sites.map(site => ({
-    id: site.id,
-    title: site.name,
-    location: site.location || '',
-    category: normalizeSiteType(site.type),
-    period: resolvePeriod(site.period, site.periodStart),
-    periodStart: site.periodStart,
+const DETAIL_KEYS = [
+  'description', 'cardDescription', 'image', 'sourceUrl', 'altNames',
+  'bestWikiUrl', 'sourceLanguage', 'referenceLinks', 'descriptionCitations',
+] as const satisfies ReadonlyArray<keyof SiteDetails>
+
+function siteDetailsOf(site: Site): SiteDetails {
+  return {
     description: site.description || '',
     cardDescription: site.cardDescription,
     image: site.imageUrl || site.image || undefined,
     sourceUrl: site.sourceUrl,
-    sourceId: site.sourceId,
-    coordinates: [site.lon, site.lat] as [number, number],
     altNames: site.altNames,
     bestWikiUrl: site.bestWikiUrl,
     sourceLanguage: site.sourceLanguage,
@@ -113,7 +109,88 @@ export async function fetchSites(): Promise<SiteData[]> {
       url: r.u, title: r.t, domain: r.d, kind: r.k,
     })),
     descriptionCitations: site.descriptionCitations,
-  }))
+  }
+}
+
+function toSiteData(site: Site): SiteData {
+  return {
+    id: site.id,
+    title: site.name,
+    location: site.location || '',
+    category: normalizeSiteType(site.type),
+    period: resolvePeriod(site.period, site.periodStart),
+    periodStart: site.periodStart,
+    sourceId: site.sourceId,
+    coordinates: [site.lon, site.lat] as [number, number],
+    ...siteDetailsOf(site),
+  }
+}
+
+/**
+ * Fetch sites from API via DataStore. `'globe'` loads only the fields the globe draws;
+ * the details follow through loadSiteDetails().
+ */
+export async function fetchSites(fields: SiteFields = 'all'): Promise<SiteData[]> {
+  await DataStore.initialize(fields)
+  return DataStore.getSites().map(toSiteData)
+}
+
+/**
+ * The payload the globe starts on. A focus deep link (#focus= / ?focus=) searches for its
+ * site's title as soon as the sites arrive; on the globe payload that search would wait
+ * for the details, showing every dot and "Searching..." until then. So a focus load takes
+ * the full payload, whose details are ready at once, and its first frame shows only the
+ * matches, as before. A plain globe load takes the slim payload and the details after.
+ */
+export function globeSiteFields(focusSiteId: string | null): SiteFields {
+  return focusSiteId ? 'all' : 'globe'
+}
+
+/** One details map per DataStore result, so every caller merges the same objects. */
+const detailsByResult = new WeakMap<Site[], Map<string, SiteDetails>>()
+
+/**
+ * Load the detail fields the globe payload left out (one shared request, see
+ * DataStore.loadSiteDetails) and resolve with them per site id, for mergeSiteDetails.
+ * Every caller gets the same map, so merging it twice changes nothing the second time.
+ */
+export async function loadSiteDetails(): Promise<Map<string, SiteDetails>> {
+  const updated = await DataStore.loadSiteDetails()
+  let byId = detailsByResult.get(updated)
+  if (!byId) {
+    byId = new Map(updated.map(site => [site.id, siteDetailsOf(site)]))
+    detailsByResult.set(updated, byId)
+  }
+  return byId
+}
+
+/**
+ * Merge loaded details into App's site list. Sites whose details did not change keep
+ * their object (and the array stays the same when none changed); changed sites become
+ * new objects that keep their `coordinates` array; no site is added or dropped.
+ */
+export function mergeSiteDetails(prev: SiteData[], byId: ReadonlyMap<string, SiteDetails>): SiteData[] {
+  let changed = false
+  const next = prev.map(site => {
+    const details = byId.get(site.id)
+    if (!details || DETAIL_KEYS.every(key => site[key] === details[key])) return site
+    changed = true
+    return { ...site, ...details }
+  })
+  return changed ? next : prev
+}
+
+/**
+ * A site from the bulk payload with its detail fields, for the paths that open a popup
+ * from bulk data. A default-source site waits for the detail load (and starts it when it
+ * has not started yet) and rejects when that failed. Any other site (an opt-in source,
+ * an API search result) already carries its details and comes back unchanged at once.
+ */
+export async function withSiteDetails(site: SiteData): Promise<SiteData> {
+  if (!DataStore.detailsCover(site.id)) return site
+  await DataStore.loadSiteDetails()
+  const stored = DataStore.getSiteById(site.id)
+  return stored ? { ...site, ...siteDetailsOf(stored) } : site
 }
 
 export function getSources(): SourceMeta[] {
@@ -144,33 +221,12 @@ export function setDataSourceError(): void {
   DataStore.setDataSourceError()
 }
 
-export function addSourceSites(sourceId: string, sites: import('../types/data').Site[]): void {
+export function addSourceSites(sourceId: string, sites: Site[]): void {
   DataStore.addSourceSites(sourceId, sites)
 }
 
 export function getCurrentSites(): SiteData[] {
-  const sites = DataStore.getSites()
-  return sites.map(site => ({
-    id: site.id,
-    title: site.name,
-    location: site.location || '',
-    category: normalizeSiteType(site.type),
-    period: resolvePeriod(site.period, site.periodStart),
-    periodStart: site.periodStart,
-    description: site.description || '',
-    cardDescription: site.cardDescription,
-    image: site.imageUrl || site.image || undefined,
-    sourceUrl: site.sourceUrl,
-    sourceId: site.sourceId,
-    coordinates: [site.lon, site.lat] as [number, number],
-    altNames: site.altNames,
-    bestWikiUrl: site.bestWikiUrl,
-    sourceLanguage: site.sourceLanguage,
-    referenceLinks: site.referenceLinks?.map(r => ({
-      url: r.u, title: r.t, domain: r.d, kind: r.k,
-    })),
-    descriptionCitations: site.descriptionCitations,
-  }))
+  return DataStore.getSites().map(toSiteData)
 }
 
 interface GeoJSONFeature {

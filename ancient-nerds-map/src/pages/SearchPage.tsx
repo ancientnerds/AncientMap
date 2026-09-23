@@ -139,6 +139,7 @@ export default function SearchPage() {
     sites, sourceNameMap, selectedSources, selectedCategories,
     allCategories: categoriesFromActiveSources, selectedCountries,
     allCountries: countries, ageRange, searchAllSources, applyFiltersToSearch: true,
+    detailsReady: true, // fetchSites() loads the full payload
   })
 
   // Card click — show popup overlay

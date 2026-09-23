@@ -62,6 +62,12 @@ export interface UseSiteSearchOptions {
   ageRange: [number, number]
   searchAllSources: boolean
   applyFiltersToSearch: boolean
+  /**
+   * The sites carry their detail fields (description etc.). The globe starts without
+   * them; until they arrive a query answers nothing and reports `isSearching` instead of
+   * results matched on half the data. The search page loads them up front: `true`.
+   */
+  detailsReady: boolean
   // Globe-only (optional — search page omits)
   spatialFilter?: SpatialFilter | null
   empireFilter?: EmpireFilter | null
@@ -89,6 +95,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     ageRange,
     searchAllSources,
     applyFiltersToSearch,
+    detailsReady,
     spatialFilter,
     empireFilter,
   } = options
@@ -97,6 +104,8 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [apiSearchResults, setApiSearchResults] = useState<SiteData[]>([])
+  // The query the API last answered (with or without sites); pending while it differs.
+  const [apiAnsweredQuery, setApiAnsweredQuery] = useState<string | null>(null)
   const apiSearchAbortRef = useRef<AbortController | null>(null)
 
   // Debounce search query (200ms)
@@ -118,6 +127,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   useEffect(() => {
     if (!searchAllSources || debouncedQuery.trim().length < 3) {
       setApiSearchResults([])
+      setApiAnsweredQuery(null)
       return
     }
 
@@ -125,7 +135,8 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     const controller = new AbortController()
     apiSearchAbortRef.current = controller
 
-    const encoded = encodeURIComponent(debouncedQuery.trim())
+    const query = debouncedQuery.trim()
+    const encoded = encodeURIComponent(query)
     fetch(`${config.api.baseUrl}/sites/search?q=${encoded}&limit=50`, { signal: controller.signal })
       .then(res => res.json())
       .then(data => {
@@ -144,11 +155,13 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           sourceUrl: s.u,
         }))
         setApiSearchResults(parsed)
+        setApiAnsweredQuery(query)
       })
       .catch(err => {
         if (err.name !== 'AbortError') {
           console.warn('API search failed:', err)
           setApiSearchResults([])
+          setApiAnsweredQuery(query)
         }
       })
 
@@ -156,8 +169,11 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   }, [searchAllSources, debouncedQuery])
 
   // Generate search results
+  const detailsPending = !detailsReady && debouncedQuery.trim().length > 0
+
   const searchResults = useMemo((): SearchResult[] => {
     if (!debouncedQuery.trim()) return []
+    if (detailsPending) return []
 
     // When "All sources" is checked and API results have arrived, use them.
     if (searchAllSources && apiSearchResults.length > 0) {
@@ -315,7 +331,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           coordinates: site.coordinates,
         }
       })
-  }, [debouncedQuery, searchAllSources, apiSearchResults, sites, selectedSources, sourceNameMap, applyFiltersToSearch, ageRange, selectedCategories, allCategories, selectedCountries, allCountries, spatialFilter, empireFilter])
+  }, [debouncedQuery, detailsPending, searchAllSources, apiSearchResults, sites, selectedSources, sourceNameMap, applyFiltersToSearch, ageRange, selectedCategories, allCategories, selectedCountries, allCountries, spatialFilter, empireFilter])
 
   // Handle search result selection — resolves site data and calls the provided click handler
   const handleSearchResultSelect = async (siteId: string, openPopup: boolean, onSiteClick: (site: SiteData) => void) => {
@@ -341,23 +357,23 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     }
   }
 
-  const isSearching = searchAllSources && debouncedQuery.trim().length >= 3 && apiSearchResults.length === 0
+  const apiPending = searchAllSources && debouncedQuery.trim().length >= 3 && apiAnsweredQuery !== debouncedQuery.trim()
+  const isSearching = detailsPending || apiPending
 
   // One `search` event per query the user actually settled on (1.2 s without
   // further typing), with the result count; `search_empty` on top when
   // nothing matched — the clearest "did not find it" signal we have.
-  // Refs, not deps: results and the API flag keep changing while data loads,
-  // and every change would restart the timer and swallow the event.
+  // The count is read through a ref, not a dep: results keep changing while data
+  // loads, and every change would restart the timer and swallow the event. While
+  // details or API results are pending there is no count to report; the timer
+  // starts once `isSearching` turns false.
   const trackedQueryRef = useRef('')
   const resultCountRef = useRef(0)
   resultCountRef.current = searchResults.length
-  const searchingRef = useRef(false)
-  searchingRef.current = isSearching
   useEffect(() => {
     const q = debouncedQuery.trim()
-    if (q.length < 2 || trackedQueryRef.current === q) return
+    if (isSearching || q.length < 2 || trackedQueryRef.current === q) return
     const timer = setTimeout(() => {
-      if (searchingRef.current) return // API results still pending: no count to report
       trackedQueryRef.current = q
       const results = resultCountRef.current
       const props = { q: searchTerm(q), chars: q.length, results, context: pageType(window.location.pathname) }
@@ -365,7 +381,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
       if (results === 0) track('search_empty', props)
     }, 1200)
     return () => clearTimeout(timer)
-  }, [debouncedQuery])
+  }, [debouncedQuery, isSearching])
 
   return {
     searchQuery,
