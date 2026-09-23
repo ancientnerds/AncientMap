@@ -1687,7 +1687,7 @@ function AppContent() {
   // Loading watchdog: while the globe starts, 20 s of visible time without any
   // critical item progressing offers a reload in the hint box. Loading goes on.
   const startWatched = !standaloneSiteId && !gateShowing && globeSupport?.ok === true
-    && !globeFailure && !layersReady && !webglLost
+    && !globeFailure && !loadingComplete && !webglLost
   useEffect(() => {
     if (!startWatched) return
     const dog = createStallWatchdog({

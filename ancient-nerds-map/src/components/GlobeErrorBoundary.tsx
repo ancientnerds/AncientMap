@@ -58,7 +58,7 @@ export function useStartErrorBridge(isLive: () => boolean): ReportStartError {
       track('globe_error', { phase: LIVE_PHASE, message: errorProps(`${phase}: ${message}`).message })
       return
     }
-    console.error(`[globe start] ${phase}`, err)
+    // App logs and reports what the boundary hands over (failGlobe)
     setStartError(prev => prev ?? new GlobeStartError(phase, err))
   }, [])
   if (startError) throw startError
