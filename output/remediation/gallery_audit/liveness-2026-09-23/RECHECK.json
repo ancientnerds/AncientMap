@@ -1,0 +1,7 @@
+{
+ "cache_namespace": "liveness-recheck-2026-09-23T115935",
+ "checked": 7,
+ "problems": [],
+ "rechecked_at": "2026-09-23T11:59:43Z",
+ "store": "output\\remediation\\gallery_audit\\liveness-2026-09-23"
+}

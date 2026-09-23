@@ -5655,3 +5655,718 @@ and a full sweep would have died on its anchor assert (the gap branch ran only i
 The anchor is corrected (1/1 caught), and `test_phase3_sweep.py` now reads every entry's anchor and
 test name against the tree in the gate suite, so the next such drift is red before anyone runs a
 sweep: 176 entries, 0 stale.
+
+
+### 2026-09-23 - applied today, and the search pilot that failed
+
+**Applied to production, each with rehearsal, guard probes on production, journal and a rehearsed
+reversal** (evidence under each lane's `evidence/`):
+
+| lane | rows | stamp | read-back |
+|---|---|---|---|
+| site_type shape repair | 3 | `2026-09-22_mechanical-site-type-shape` | APPLY OK; 5/5 guards refused |
+| migration 0022 (key lookup) | - | deploy `c3564e3` | function body replaced; 0018 selftest 12 ok / 0 failed against it |
+| period_name derivation | 220 | `2026-09-22_mechanical-period-name` | APPLY OK; 0 of 5,004 off their bucket; 6/6 guards |
+| UK country parts (B9) | 23 | `2026-09-22_mechanical-uk-parts` | APPLY OK; NI 4 -> 26, UK 6 -> 0; 6/6 guards |
+| external-id repair | 26 at 19 sites | `2026-09-22_external-id-repair` | `verify: 26 rows, 0 deviation(s)` |
+
+The phase-3 acceptance after them: 994 journalled, 80 not written, 1,022 sites, **0 deviations**, with 5
+fields superseded by the UK lane and 3 by the site_type lane.
+
+**Why 0022 exists.** `apply_remediation_change()` located its row with `WHERE %I::text = $2`, which
+casts the key column and makes the primary-key index unusable: EXPLAIN on production, Seq Scan cost
+232,500 against an Index Scan at 8.45, twice per call. The period_name lane's 220-row rehearsal hit
+its 120 s statement timeout; after 0022 the same statement ran in 116 ms.
+
+**The gap run.** 13 batches, 194 sites, 802 questions (152 over-bound sites x 5, 5 empty streams, 37
+unreadable verdicts), built from a fresh export after the external-id repair: all 194 fit the evidence
+bound with the narrowed Wikidata claims (0 before), 802 answers, 0 failures. Its reviewer and writes
+wait for the fixes below.
+
+**The search pilot failed** (thresholds sealed beforehand in `phase3_runner/SEARCH_PILOT.md`, sha256
+`fa0287afde951b7d1e12901954ac444dd51c7e79b30c439d048dbfaf3b64d2e5`; scorer
+`output/remediation/tools/score_search_pilot.py`; result `phase3_runner/SEARCH_PILOT_RESULT_1.txt`).
+59 fields the mass finder called UNVERIFIABLE on 26 gold sites, 48 MiniMax searches, 59 finder calls:
+the search moved 20 of 59 to a decision, and three of the four thresholds failed - 1 answer cites a
+quote that is not in its evidence (Font dels Coms), 3 decided WRONG where the human says CORRECT
+(Las Labradas and Aubrey Holes period_start, Odeon card_description), agreement 14/20 = 70 %.
+Transport passed (0 unaccounted slots). Quota: about 1,900 weekly tokens per search (per-batch
+median; 19,230 as an upper bound that charges Lyra's concurrent use to the search).
+
+The thresholds stay as sealed; the definitions are not loosened after the fact. What the cases show:
+
+1. **Bucket arithmetic at the boundary.** The finder wrote "-4500 falls in `< 4500 BC`" and "500 falls
+   in `1 - 500 AD`"; by `categorize_period` (lower bound inclusive) both are in the bucket the
+   proposal is in or next to. Aubrey Holes' -4500 -> -4000 is a same-bucket change, which the gold
+   standard and the reviewer's own brief say is not an error - and the reviewer cleared it.
+2. **A snippet is not a page.** Las Labradas' "1000 B.C. - 300 A.D." came from a travel page about
+   another site (Toro Muerto); the Font dels Coms quote is not in the Zenodo snippet and its other
+   citation was never fetched.
+3. **The reviewer's flag contradicts its own WHY line.** Lake Mungo: "Neither half holds ..." with
+   `REFUTED: NO`; Odeon: "the stored text is not shown wrong" with `REFUTED: NO`. The mass lane met
+   the same class by hand (the 72 held rows).
+
+Under the writer's own rule (`applies`: asked, refuted is False, no problems) Las Labradas would not
+have been written and the Odeon card text is report-only; Aubrey Holes would have been. No search-lane
+row is written until (a) a deterministic period-bucket gate in the writer, (b) a search hit counts only
+when its quote occurs on the fetched page, and (c) a reviewer whose WHY line names a failing half
+while `REFUTED: NO` holds the row - and a new pilot in a new run directory passes.
+
+
+### 2026-09-23 - the three writer fixes the failed pilot asked for
+
+Branch `wip/search-fixes`. All three apply to every phase-3 write lane (mass, gap, search); the frozen
+prompts (`QUESTION_TEMPLATE`, `FIELD_CLAUSE`, `REVIEWER_QUESTION`, `PARTIAL_EVIDENCE_NOTE`) are
+byte-identical (`test_phase3_frozen.py`), and the sealed pilot thresholds are unchanged.
+
+**(a) The period-bucket gate** (`write_stage.RULE_SAME_BUCKET`, `period-start-inside-the-stored-bucket`).
+A `period_start` row whose proposed value lies in the stored value's bucket - `pipeline.utils.text.
+categorize_period`, the card's own function, lower bound inclusive - is refused. Re-measured read-only
+from the production journal (`remediation_change_log`, `run_stamp LIKE 'phase3:batch-%'`,
+`column_name = 'period_start'`): **170 of the 389 `period_start` rows the mass lane wrote are
+same-bucket moves** - the critic's 170, key for key the same rows as the pinned plan gives. They are
+not changed. 19 of the 35 held `period_start` rows are same-bucket too.
+
+**(b) A search hit counts only through its fetched page** (`phase3/hit_stage.py`, `run.py verify-hits`,
+the fourth stage of a search plan: `prepare,search,judge,verify-hits`). After the finder, the page
+behind every hit a finder answer cites is fetched (per-site cap 8, per-host pace, one ledger line per
+attempt, write-once under `hitpage.<sha1(url)[:12]>`, failures in `hitpages.json` in `fetch.json`'s
+shape). The reviewer is shown it (bounded: 6,000 characters per page within the room the evidence
+bound leaves, with a cut marker), and a citation of a hit is checked against the whole fetched page,
+never the snippet (`discover_stage.pages_from_excerpts`). A hit page that could not be fetched or is
+not text refuses the row (`RULE_HIT_UNVERIFIED`, `search-hit-page-not-verified`); a cited hit nobody
+tried to fetch raises in the reviewer and the writer. The page reader is Lyra's own, moved unchanged
+from `pipeline/lyra/handlers/content_fetch.py` to `pipeline.utils.text.extract_text_from_html`, plus
+`html.unescape`. Measured on a copy of `runs/search-gold`, the stage run live with the project
+User-Agent: 20 cited hits in 25 citations, 20 requests, 13 HTML, 2 PDFs (unreadable), 5 x 403 (four
+Cloudflare, one CloudFront); 8 of the 25 quotes occur on the fetched page, 24 in the snippet the
+finder was shown (17 in the snippet only). *Corrected by the fixer's review:* the page cap governs
+nearly every result, not only the three Wikipedia articles - **14 of the 15 stored pages were cut at
+the 60 KB cap** (only comusantjulia.ad came back whole), and **all 9 citations whose readable page
+does not carry the quote are on cut pages** (pathere.org x2, nilecruisetrips.com, travelshelper.com
+x2, andbeyond.com, and the Wikipedia articles on Lake Mungo, the Odeon and Ahu Tongariki, each
+2,400-4,100 characters of mostly navigation). Such a row was refused as
+`finder-citation-not-in-evidence`, which reads like a fabricated quote; it is now refused as
+`search-hit-page-not-verified` with a reason naming the cut (`write_stage._hit_page_refusal`). The
+cap binds and is not raised.
+
+**(c) The reviewer contradiction hold** (`write_stage.RULE_REVIEW_CONTRADICTS`,
+`reviewer-why-names-a-failing-half`; the phrases are `review_stage.FAILING_HALF_PHRASES`, 18 of them,
+each bound to its subject). Measured with `output/remediation/tools/measure_review_holds.py` on the
+mass lane's pinned plan: **recall 51 of the 72 hand holds**; **77 of the 994 written and accepted rows
+would have been held**. Read one by one, 10 of those 77 use the phrase against their own content (a
+false hold), 5 say both, and 62 do say the stored value is not shown wrong or the proposal is
+contradicted - the class the hand-read held 72 of and missed there. They stay as they are (and are
+listed for Martin: `HUMAN_ONLY.md` B11). The bucket gate and the hold together catch 57 of the 72
+hand holds; what neither names is the finer-type and the unverifiable-quote class, which stays the
+hand-read's. *Added by the fixer's review:* the false holds are not spread evenly. Per phrase, on the
+written rows: **"neither half holds" 4 of 7** (Presa-Tusiu, Annaghmare, Chacamarca, La Almoloya -
+each goes on to say the stored value is wrong or the proposal supported), **"the stored value is not
+contradicted" 4 of 9** (Apollonia, Ashley, Court Hill, Erebuni), "the reason fails" 1 of 4 (Pen
+Dinas), "does not show the stored value wrong" 1 of 10 (Asclepieion of Athens); the other fourteen
+phrases hold no written row falsely. A row one of those four holds goes to the hand-read
+(`review_stage.HAND_READ_PHRASES`, `HUMAN_ONLY.md` B12) rather than counting as a settled refusal.
+
+**The first pilot under the new writer** (*corrected by the fixer's review*; the first version named two
+lost human-WRONG fields where there are three, and counted Lake Mungo `period_start` as a catch).
+`score_search_pilot.py` prints the sealed block exactly as sealed (it reproduces
+`SEARCH_PILOT_RESULT_1.txt` byte for byte, threshold 1 over what the finder was shown:
+`discover_stage.finder_pages`), beside it what the writer itself would write, and - since the review -
+what each rule refuses on its own (`rule_cost`: each rule switched off alone at its one entry point).
+On the verified copy of `runs/search-gold`: **0 rows written, 0 harmful**. The writer *before* the
+three rules (`git archive 59f21bb`, run read-only over the real `runs/search-gold`; `rule_cost`'s
+all-off line gives the same rows) writes **5 rows: 3 agree** with a human WRONG (Lake Mungo
+`period_start` -500 -> -50000, Ahu Tongariki `period_start` 1 -> 1000, Cueva de los Murcielagos
+`period_start` 1 -> -6000), **1 is unsupported** (Lake Mungo `site_type` Geological interest ->
+Archaeological site, human UNVERIFIABLE) and **1 harmful** (Aubrey Holes `period_start` -4500 ->
+-4000, human CORRECT). What each rule changes on its own:
+
+| rule switched off alone | rows it alone refuses | human verdict |
+|---|---|---|
+| (a) period-bucket gate | none (Aubrey Holes falls to (b): its hit is a cut PDF; (a) refuses it only with (b) off) | - |
+| (b) hit page | Ahu Tongariki `period_start` (its scispace hit answered 403) | WRONG |
+| (c) contradiction hold | Lake Mungo `period_start` ("Both halves fail: the evidence actually supports a value around -500"), Cueva `period_start` ("The stored value 1 is not shown wrong") | WRONG, WRONG |
+
+Lake Mungo `site_type` is refused by both (c) and (b) (its Britannica hit answered 403), so no single
+switch releases it. The Odeon card text is report-only and was never writable; Las Labradas
+`period_start` is not cleared (the reviewer's `SOURCE:` on a `NO`). **Net: all 3 agreeing writes are
+lost, to stop 1 harmful and 1 unsupported write.** Lake Mungo `period_start` is not a catch by (c):
+the gold standard calls the stored -500 WRONG, the finder was right and the reviewer's sentence was
+not. On this pilot (c) blocks no write that (b) or the older rules would not already block, and costs
+two correct ones - the rules' price, measured, and the next pilot's `rule_cost` prints its own.
+
+**Mutation proofs.** `mutation_sweep.PILOT_FIX_MUTATIONS` (38 new) plus the two entries whose anchors
+moved, through the sweep's own `main` with the main venv: **40/40 caught**, the tree byte-identical for
+11 files. Gate: 3349 passed, 98 skipped (data a worktree does not carry), 57 deselected.
+
+
+### 2026-09-23 - the review of the three writer fixes, and what it changed
+
+Branch `wip/search-fixes`. Eleven findings of an independent review, each checked against the code and
+the real data before anything was changed - read-only: the main tree's `runs/mass`, `runs/search-gold`
+and gold standard, and the review's own copy of `runs/search-gold` after a live `verify-hits` (project
+User-Agent). No production query, no model call, no new fetch. **All eleven held; none was rejected.**
+The corrections to the section above are marked in place; what changed:
+
+1. **The first pilot's cost** (the one major finding) - three human-WRONG writes are lost, not two, and
+   Lake Mungo `period_start` is a cost of (c), not a catch. Reproduced both ways: `git archive 59f21bb`
+   over the real run writes the 5 rows named above, the new writer 0, and switching each rule off
+   alone gives the table above. `score_search_pilot.py` now prints that table itself (`rule_cost`,
+   each rule off at its one entry point, inside the scorer only - the writer has no switch); its
+   sealed block still reproduces `SEARCH_PILOT_RESULT_1.txt` byte for byte.
+2. **"the proposed value is contradicted" matched sentences that say the value half holds** - "neither
+   the finding's reason nor its proposed value is contradicted" (batch-0237), "contradicted neither by
+   Wikipedia nor Wikidata" (batch-0053), "contradicted by the evidence? No" (batch-0151), and a
+   conditional, "contradicted only if" (batch-0171). Narrowed by five `nor <owner>` lookbehinds and
+   three lookaheads; a half's name in quotes (`the "reason" half fails`, the sentence batch-0053's hand
+   hold really turns on) is read now. Recall stays **51 of 72**, written holds **77 of 994**; the `NO`
+   answers whose first phrase it is fall from 38 to 35.
+3. **Per-phrase false holds** - recorded in the phrase block and above; the four phrases that held
+   written rows falsely route their holds to the hand-read (`review_stage.HAND_READ_PHRASES`, the
+   refusal carries `write_stage.HAND_READ_NOTE`; `HUMAN_ONLY.md` B12). The hold itself is unchanged.
+4. **The page cap** - see (b) above: 14 of 15 pages cut, all 9 missing quotes on cut pages. A readable
+   hit page that was cut and does not carry the quote is refused as `search-hit-page-not-verified`
+   naming the cap (`write_stage._hit_page_refusal`); the excerpt knows it was cut
+   (`EvidenceExcerpt.truncated`, read off `fetch_stage.TRUNCATION_MARKER`, which `gap_plan.py` now reads
+   too instead of its own check).
+5. **An interrupted `verify-hits` re-ran every stage** - the judge would re-buy each named failure (an
+   unreadable stream leaves no answer file). `mass_run.judged_state` is the judge's part of
+   `batch_state`, and `StageRunner.stages_for` resumes such a batch at `verify-hits` alone.
+6. **The finder could be shown hit pages** - once they were on disk, every caller of
+   `evidence_excerpts` got them, the discover stage included. `hit_pages` is now a required keyword:
+   `False` for the finder and everything that stands for what it was shown (discover, search and gap
+   plans, the sealed threshold, the hit stage's own url lookup), `True` for the reviewer and the writer.
+7. **A search hit could point into the workstation's tunnels** - `verify-hits` fetched search-result
+   urls with redirects followed and no address check (psql 15432 and the API on 18000 sit on localhost
+   here). Lyra's check moved unchanged to `pipeline.utils.http.is_public_http_url`, used by Lyra, by
+   `fetch_stage.assert_public_address` (in `HttpFetcher.get` and before the hit stage's request: 0
+   requests, `not fetched: ...`) and by a request hook that refuses a redirect hop into a non-public
+   address before it is asked. It reads the url as written and resolves no name, like Lyra's: a public
+   name that resolves to a private address is not caught.
+8. **Guards without a test or a sweep case** - the empty-bucket branch and the `period_start`-only check
+   of the bucket gate got writer tests; every exclusion of the phrase set got a negative sentence (real
+   where the run has one). Two of them needed more than the review named: "nothing in the evidence
+   supports the stored" and "nor evidence supports the stored" were protected by no test at all - the
+   Cadbury Hill negative names a bare year, which that phrase never reads.
+9. **The rows Martin decides on** - `measure_review_holds.py --out-dir` writes the 77 written rows the
+   hold would hold and the 170 written same-bucket `period_start` rows, with key, values and `WHY:`
+   line (`HUMAN_ONLY.md` B11). My reading of the 77: 60 name a failing half, 10 are false holds, 7 say
+   both.
+
+**Mutation proofs.** `mutation_sweep.REVIEW_FIX_MUTATIONS` (51 new) and the four entries whose anchors
+moved, through the sweep's own `main` with the main venv: **55/55 caught**; the builder's 38
+`PILOT_FIX_MUTATIONS` again: **38/38 caught**; the tree byte-identical afterwards (10 and 11 files).
+A consistency check at import time (every hand-read phrase is a failing-half phrase) was moved into a
+test, because it made the module unimportable under the sweep's phrase deletions and the sweep then
+proves nothing (pytest exit 4). Gate: **3397 passed, 98 skipped** (data a worktree does not carry),
+**57 deselected**; `ruff check`, `ruff format --check api/ pipeline/`, `lint-imports`, `vulture` clean.
+## 2026-09-23 - the owner cases B1/B2: decided from data, planned, not applied
+
+The owner's instruction for HUMAN_ONLY section B was "implement the recommendations" of the
+remaining-work map (`logs/remaining_map_2026-09-22.json`, block "B - owner cases"). Delivered: the
+classifier `scripts/remediation/bcases/` (collect, classify, qid_research, coord_plan, run), its
+per-site verdicts in `output/remediation/bcases/`, wave 2 of `tools/qid_repair.py` and the German
+section in HUMAN_ONLY. **Nothing was written to production.** Every production contact was a read:
+one export `SELECT` of the 5,004 curated rows, three schema/journal counts, `bcases/run.py check`
+(51 rows, 0 deviations), `qid_repair.py check --wave 2` (13 rows, 0 deviations) and
+`qid_repair.py verify` of wave 1 (26 rows, 0 deviations).
+
+**Superseded in part the same day** by the review below ("the owner cases, reviewed"): the independence
+rule, the coordinate plan (17 moves became 9), the B2 class of the Côa Valley row, the duplicate list
+(20 losers became 19 plus one held pair) and the wave-2 wording. The numbers in this section are the
+first version's.
+
+### What production held when this started
+
+* Wave 1 of the external-id repair had been applied at 03:25 UTC (`2026-09-22_external-id-repair`,
+  26 journal rows). Its plan, statements and rules are unchanged; wave 1 still renders its versioned
+  `APPLY.sql`, `ROLLBACK.sql`, `PLAN.jsonl` and `PLAN.md` byte for byte, and `verify` reads 0 deviations.
+* `unified_sites.scope_status` exists (migration 0020); 0 curated rows carry a value.
+* `geom`: 5,003 of 5,004 curated rows hold exactly `ST_SetSRID(ST_MakePoint(lon, lat), 4326)`, one holds
+  NULL; `h3_index` is NULL on all of them. There is no trigger, so a coordinate write writes `geom`
+  as a third journalled change next to `lat` and `lon`.
+
+### Measured
+
+* **B1 names** (631 T01 name findings, classified against the links the census compared - the
+  snapshot's `site_external_ids` - with fresh Wikidata names of all 4,515 linked items): 508 keep
+  (354 exact name, 50 same without generic words, 67 descriptive subset, 37 transliteration), 77 wrong
+  link (21 generic concept, 43 shared parent or sibling, 8 no coordinate, 5 more than 5 km), 46 to read.
+  The remaining-work map's 508/77/46 is reproduced exactly. 18 of the 77 are wave-1 sites.
+* **Wave 2**: the other 59 researched one at a time (`bcases/qid_research.jsonl`: the exact-title
+  article, every item within 1 km by `list=geosearch`, ten `wbsearchentities` hits). 13 research
+  suggestions; 12 taken (1 rule A, 11 rule B: 13 row changes), 1 refused by hand (Ramesses III Temple:
+  name and point Karnak, description and source Medinet Habu). 47 stay as they are, each with its
+  reason - 24 have no item of their own, 11 have a candidate that cannot prove the 1 km gate, 5 are
+  right links shared with a second curated row of the same site, 3 are type records, 2 are right links
+  on a wrong point, 2 contradict themselves.
+* **Coordinates** (477 T01 findings + 11 B2 rows = 488): 17 move (51 journalled changes; 11 of them
+  among the 285 coordinate-only sites), 98 where the stored point is the English article's point,
+  210 whose item cannot speak for the point (115 container, 33 linear/areal, 30 shared, 32 other name),
+  163 open (102 one witness, 45 two witnesses that are one, 8 disagreeing, 7 none, 1 split). One move
+  (Temple of Atargatis, 459 km) lands outside its stored country, Lebanon: a country follow-up.
+* **B2** (117): 25 political (B10), 44 coastline/island/border, 4 `Northern Ireland` right, 22 Ireland
+  in Northern Ireland (all written since by the UK lane), 6 wrong country (3 written, 3 open), 3 wrong
+  coordinate, 12 need a witness, 1 not a country. Identical to the map's classification.
+* **Duplicates**: 20 DUP pairs (the plan estimated about 8; plan rule 1 - the measurement is recorded,
+  not the estimate overwritten), 20 losers in `DUPLICATES.jsonl`, 0 unresolved groups; 13 stacked
+  points carrying 36 sites. PART-OF 59, NEITHER 83, WRONG-ID 19 differ from the map's 65/93/44 because
+  wave 1 has since replaced the shared generic anchors.
+* Two full re-runs of the classifier with different hash seeds produce byte-identical files.
+
+### Traps found on the way
+
+* en.wikipedia `prop=coordinates` returns at most ten coordinates per request unless `colimit` is set:
+  131 of 614 pages came back without coordinates and with a `continue`. The fetch now asks for
+  `colimit=max` and refuses any answer that carries `continue`.
+* Wikidata answered "cirrussearch-too-busy-error" inside an HTTP 200, and `census.fetch.Fetcher` caches
+  every 2xx - the refusal would have been read back from the cache forever. `collect.api_json` asks
+  again, bounded, with the cache bypassed; any other API error raises.
+* Overpass (`overpass-api.de`) answered five queries from this workstation and then reset every
+  connection (`WinError 10054` six times, `curl` exit 35 on `/api/status`). OpenStreetMap is therefore
+  not a witness in this run; asking it from the VPS would use production for more than a read.
+* The map's K classes matched class words as substrings ("hill" in "hillfort", "city" in "ancient
+  city"). Whole-word matching with a site-word exemption gives, on the 285: container 60 (map 88),
+  linear/areal 20 (26), shared 7 (7), 1-10 km 135 (105), over 10 km 63 (59). The K classes are a report;
+  a write is decided by the witness rule and the name identity. The N7 split moves the same way
+  (27 site / 19 locality, map 22/24).
+* A first version of the plan rendered the evidence in dict order and its own `check` refused it after
+  the round trip through `PLAN.jsonl` (sorted keys). The statement now renders sorted keys; a mutation
+  case keeps it that way.
+
+### Decisions taken under "implement the recommendations"
+
+* Coordinates are written as three journalled changes (`lat`, `lon`, `geom`), not two: `geom` has no
+  trigger and the prospector's dedup measures on it.
+* Two witnesses count once when `P625` is referenced to English Wikipedia (`P143` Q328 or an import
+  URL) or when the points are the same within max(5 m, the P625 precision) - anti-pattern 9.
+* Name identity (N1/N2) gates a move: a part-of name ("Temple of Apollo, Delphi" on Delphi) would
+  otherwise move a temple to its sanctuary's centre.
+* Museum objects move to the `P189` find-spot only when stored at the holding museum.
+* Survivor rule as the task stated it (content links, sources, older `created_at`) plus the lower id
+  as a tie-break, reported as such: the 5,004 curated rows carry only three distinct `created_at`
+  values, and the tie-break decides 7 of the 20 pairs.
+* The external-id repair's wave 2 keeps rules A/B and adds the map's gate (1 km, a site kind, the
+  article's coordinates as rule A's position proof); a research lead is never taken unread.
+* `gap_plan.py` still withholds wave-1 links only; the gap lane's plan is built, so wave 2 is named for
+  its next re-plan rather than changing a plan in flight.
+
+### Mutation proof
+
+`scripts/remediation/phase3/mutation_sweep.py bcases`: **32/32 caught**, the tree byte-identical to
+the sweep's start for 5 files. The older repair and gap-plan entries, re-run after the wave-2 change:
+8/8 caught.
+
+## 2026-09-23 - the owner cases, reviewed: 12 findings, what they changed
+
+Two reviews of `wip/bcases` raised 12 findings. Each was checked against the data before anything was
+changed; nothing was written to production (every production contact below is a read).
+
+### The cache had to be rebuilt first
+
+The builder's derived cache (`cache/bcases/`, 46 MB) lived only in its worktree, and that worktree had
+been removed before the fix started - the re-classification the findings ask for had no input. It was
+rebuilt: `bcases/run.py export` (one read-only `SELECT`, 5,004 rows) and `collect` (Wikidata and
+Wikipedia with the project `USER_AGENT`, 90 s). With the **unchanged** code the rebuilt cache
+reproduces every delivered file (`names`, `coords`, `b2`, `dup_pairs`, `stacked`, `DUPLICATES`,
+`COUNTS`) exactly, so the changes below are the code's, not the day's data drifting. The rebuilt cache
+sits in the fixer's worktree (`output/remediation/cache/bcases/`, gitignored); the main checkout still
+has none, so `test_a_full_reclassification_reproduces_the_delivered_verdicts` skips there until it is
+copied or rebuilt. That test could never have passed: it compared `write_all`'s counts, whose
+`b2_state` keys were booleans, with `COUNTS.json`, where JSON had turned them into `"false"`/`"true"`.
+The keys are now `"open"` / `"written since the census"` (`classify.summarise`, with a test that
+needs no cache); the same comparison, run by hand against the main checkout's census data, passes for
+the counts and all seven files.
+
+### Findings confirmed and fixed
+
+* **Rounded copies counted as two witnesses (two findings, major).** Confirmed: Castro of Santa Trega's
+  article value is its P625 cut to four decimals (5.6 m), Khao Sam Kaeo's likewise (10.7 m), Taq
+  Kasra's article is the P625 rounded to whole arcseconds (16.1 m); the 5 m `COPY_M` called all three
+  independent and PLAN.md journalled them "(independent)". The Wikipedia witness had no precision at
+  all. Now (`classify.independent`): two witnesses are one when either says it was imported from the
+  other; when one is the other rounded, truncated, floored or ceiled to the grid its own digits are
+  written on (`grid_of`: whole degrees, tenths, arcminutes, hundredths, thousandths, arcseconds,
+  4-8 decimals; a value lies on a grid within a thousandth of a step, never more than 1e-8 degrees);
+  or when they lie within one arcsecond (30.9 m), one step of either grid, or the P625's declared
+  precision. Result: **8 of the 17 moves are open again** - El Kab (its P625 is the article's point
+  cut to whole arcminutes, 333 m), Bülövqaya (14 m), Khao Sam Kaeo, Eridu (27 m), Taq Kasra, Temple of
+  Atargatis (8 m), Sialkot Fort (P625 = the article truncated to whole arcseconds), Castro of Santa
+  Trega. **9 moves, 27 journalled changes** remain; the closest is Yenikale at 34 m (no rounding of
+  either, just over one arcsecond). The Temple of Atargatis country follow-up is gone with its move.
+  The reviewer's 35 m experiment also caught Yenikale; the principled floor (one arcsecond) does not,
+  and El Kab - 333 m apart, caught only by the rounding rule - shows why a distance alone is not the
+  rule. On the real data the rounding rule changes wording only (every rounded pair is also within the
+  distance), except El Kab; a constructed equator case (a 0.9" truncation on both axes, 39 m) is the
+  test that only the rounding rule catches.
+* **Guards without a failing test (two findings, major).** Confirmed with a harness that applied each
+  mutation and ran both test files whole: 32 of 34 guard mutations survived (97 passed, 1 skipped each
+  time; the two SQL-line mutations failed one test each). Every one now has a test that goes red
+  without it:
+  the linear/areal gate (Via Egnatia), an article of another item / a missing article / a point on
+  another globe, a P625 on another globe, a museum object with two find-spots, the tolerance floor
+  (precision 0.1 degrees; 0.01 degrees would not widen it - its half is 556 m), the P4656 import URL,
+  Q3, the UUID / planned-twice / whole-site / read-UUID checks of the plan, `compare`'s lat, old-geom
+  and geom-is-point checks, the statement's `statement_timeout`, every clause of guard 3 and of
+  invariant 1, the `entities` / answered-id / JSON / `query` / answered-title checks of the fetch, the
+  cache and census-link checks of `inputs`, rule A's redirect / missing / same-item conditions, rule
+  B's old-item / N1-N2 / Wikimedia-page conditions, and both research list checks.
+* **A matching name hid a wrong link (major).** Confirmed: 72 of the 508 kept names meet Q1 (4), Q2
+  (36) or Q4 (35). Every name record now carries `link_suspect` (the tests the link meets on its own,
+  with their evidence); `COUNTS.names_keep_link_suspect` = Q1 4, Q2 36, Q4 35, any 72. They are not in
+  wave 2 and nothing is written; the class-item links (milecastle, dolmen, nuraghe), Asklepion Kos on
+  the shared Asclepeion and The Temple of Artemis (stored in Greece, linked and described as Ephesus,
+  388 km) are named for the owner; "Themistoclean Wall" is the lower-case test's false positive.
+  HUMAN_ONLY, the qid_repair wave-2 docstring and its PLAN.md now say wave 2 is the rows whose *name*
+  did not match.
+* **Côa Valley and Siega Verde classed "wrong country" (minor).** Confirmed: its description spans
+  Portugal and Spain. In `classify_b2`, a row whose point and P625 agree on the neighbour is
+  transboundary (c2, leave) when its own description names both countries; only this row changes
+  (b 6 -> 5, c2 44 -> 45). The wider rule "any description naming both" was measured and rejected: it
+  would have made Glubochek (51 km inside Moldova, described as in Ukraine) a border straddle.
+* **Banias / Caesarea Philippi retired a Golan row (minor).** Confirmed: the only DUP pair whose rows
+  name different countries (Syria / Israel). A group whose rows name different countries is now held
+  (`DUPLICATES_HELD.jsonl`, with the lines the survivor rule would have written) instead of listed for
+  the scope lane: 19 losers, 1 held group.
+* **The first P625 instead of the preferred one (minor).** Confirmed on the rebuilt cache: Charax
+  Spasinu (Q1063054) holds a preferred P625 1.07 km from the first; Demetrias (Q1150349) likewise.
+  `collect.claims_record` now takes the truthy statements (preferred when any, else non-deprecated) and
+  records the rank and the count; the witness quote names the rank when there are several. Charax
+  Spasinu's reason changes from "the same point" to "disagree, 1.07 km"; no verdict changes. The
+  wave-2 research was re-run with the fixed record: one candidate distance moves (Milecastles'
+  Q4916035, 102.8 -> 106.6 m), no suggestion changes, and wave 2's statements are byte-identical
+  (`qid_repair.py check --wave 2`, read-only: 13 rows, 0 deviations).
+* **SQL clauses pinned only by a byte comparison, wave 2 not pinned at all (minor).** The statement
+  test now asserts the `statement_timeout` line and every clause of guard 3 and invariant 1; a new test
+  compares `qid_repair/wave2/PLAN.jsonl`, `APPLY.sql` and `ROLLBACK.sql` with the renderer and asserts
+  the evidence source is wave 2's research.
+* **`gate_m` not tied to the research (minor).** A test recomputes each of the 12 settled distances
+  from `qid_research.jsonl` (rule B: the candidate's P625; rule A: the P625, or the article's point
+  where the P625 is beyond the gate - Harzhorn) and compares to 0.05 m. All 12 match.
+* **Duplicated utilities (minor).** `coord_plan` imports `phase3.write_stage.plan_digest` (same
+  bytes, so the pin is unchanged); `collect` imports `mechanical.plan._claims`; `classify.fold` is
+  built on `pipeline.utils.text.normalize_name` (square brackets kept, as the verdicts were measured -
+  the re-classification is identical).
+
+### Measured after the fixes
+
+* Coordinates: move 9 (5 of the 285), stored-agrees 98, not-comparable 210, review 171 (one witness
+  102, two that are one 52, disagreeing 9, none 7, split 1). `bcases/run.py check`, read-only against
+  production: **27 rows, 0 deviations**.
+* Names 508 / 77 / 46 unchanged; B2 c2 45, b 5; duplicates 19 + 1 held; stacked 13 / 36.
+* Mutation proof: `mutation_sweep.py bcases` **86/86 caught** (the builder's 32, one anchor moved to
+  the new independence line, and 54 new), the tree byte-identical to the sweep's start for 7 files;
+  the repair and gap-plan entries re-run after the wave-2 wording change: 8/8.
+
+## 2026-09-23 - external-id repair, wave 3: the kept names on a suspect link (planned, not applied)
+
+Waves 1 (26 rows) and 2 (13 rows at 12 sites, stamp `2026-09-23_external-id-repair-wave2`) are
+applied. Wave 3 took the 39 B1 name findings whose name matched (`group` keep) while their link met
+Q1 (generic concept) or Q2 (item shared with other curated rows) on its own - `link_suspect` in
+`bcases/names.jsonl`: Q2 33, Q1 3, Q1+Q2 1, Q2+Q4 2. The 33 with Q4 alone (item only far away) are a
+coordinate question first and stay out. **Nothing was written to production.** Production contacts,
+all reads: one `site_external_ids` read of who links each of the 33 linked items today (after wave 2)
+and the 3 candidate items (Q22681531, Q2717874 and Q22987223 are linked by no row), and
+`qid_repair.py check --wave 3`.
+
+### Research
+
+`bcases/run.py research --suspects` (new flag; same `qid_research.research` and `suggest`, rule for
+rule, same 1 km gate) wrote `bcases/qid_research_suspects.jsonl`: per site the exact-title article,
+every item within 1 km (`list=geosearch`), ten `wbsearchentities` hits, plus `link_suspect`,
+`shared_with` (the export's other curated rows on the same item, with distances), country and
+description. Suggestions: rule A 0, rule B 4, unresolved 35. Every record was read by hand; two ad-hoc
+`wbsearchentities` lookups (cached, project user agent) were added as evidence: "milefortlet" and four
+Thasos-Artemis queries.
+
+### Outcomes (`qid_repair.py --wave 3`, `output/remediation/qid_repair/wave3/`)
+
+| outcome | sites | what it means |
+| --- | --- | --- |
+| replace | 2 | rule B under the gate: Ancient Theatre of Megalopolis `Q823721` (the modern town) -> `Q22681531` (the theatre, 31 m); Siega Verde `Q552106` (the Côa Valley, Portugal, 53.5 km) -> `Q2717874` (Siega Verde, 16 m). Titles unchanged (no own English article; `Siega_Verde` redirects to the joint Côa article). 2 row changes |
+| keep-type | 3 | Dolmens of Sardinia, Nuraghes of Sardinia, Milefortlet - Hadrians Wall: the record is the type. Wikidata has no milefortlet class - its milefortlets are instances of Q1568283 and `Milefortlet` redirects to `Milecastle` - so the task's "different type" does not hold |
+| duplicate-candidate | 23 | the link is right and another curated row is the same site: 12 pairs already in `DUPLICATES.jsonl`, Caesarea Philippi is the held Golan pair, the rest (Twin Gates/Porta Gemina, Birdoswald, Biniai Nou, Killarumiyoq, Obelisk of Ark, Madain Saleh/Hegra, Enkomi/Engomi, Amyntas) are named in the plan |
+| link-right | 5 | Themistoclean Wall (Q1 misread a specific wall without P625), Psychro Cave and Locmariaquer Megaliths (their other row's link was replaced by wave 2 - production holds each item on one row now), Pandavleni Caves (the other row is one of its caves), The Temple of Artemis-Selçuk (the other row is the Thasos record) |
+| unresolved | 6 | The Temple of Artemis, Asklepion Kos, Asklepieion - Pathos, Caunos Tombs of The Kings, Bosnian Pyramid of the Sun, Bosnian Pyramid of Love |
+
+* **Two rule-B leads refused by hand:** Madain Saleh's Q12239409 is the Hejaz railway station named
+  after the site; Caesarea Philippi's Q2484244 would split the held Banias/Caesarea Philippi pair by
+  link and settle what the owner holds by country (B10).
+* **The Temple of Artemis (a939e800):** point and country are Limenas on Thasos (40.7802, 24.7156),
+  description and link are the Ephesus temple (Q43018, 388 km), which the Selçuk row carries too. No
+  Thasos Artemis item passes rule B: none of the 15 items within 1 km names Artemis, and
+  `wbsearchentities` finds nothing for "Artemision Thasos", "Sanctuary of Artemis Thasos", "Temple of
+  Artemis Thasos" or "Artemision (Thasos)". Unresolved: Ephesus makes it a duplicate of e60fc487,
+  Thasos leaves it with no item to link - the owner's decision.
+* **The two Asklepieia** stay on the class Q731841 although each has an obvious item (Q2655433 at Kos,
+  258 m; Q82073722 at Paphos, 20 m): the names match only descriptively ("Asklepion (Kos)", N3) or not
+  at all ("Pathos" for Paphos), and wave 2 refused the same kind of spelling lead (Sun Temple of
+  Niuserre). They are the strongest leads for the owner.
+* **Enkomi / Engomi:** both rows describe the one Bronze Age city and link the village item Q1343280.
+  The site's own item Q22987223 holds two normal-rank P625 1.9 km apart; the one the research reads is
+  2.07 km from "Enkomi" (beyond the gate) and 93 m from "Engomi Ancient City Ruins", for which
+  Wikidata's geosearch (indexing the other point) returned no candidate at all.
+
+### Check, render, proofs
+
+* `qid_repair.py check --wave 3`, read-only against production: **2 rows, 0 deviations**.
+* Waves 1 and 2 render byte for byte what is committed (`PLAN.jsonl`, `PLAN.md`, `APPLY.sql`,
+  `ROLLBACK.sql`; a new test compares all four, CRLF of this checkout normalised).
+* Tests: 6 new in `test_bcases.py` (selection, sharers, the suspect record with a scripted fetcher,
+  the `--suspects` file and flag, the delivered research re-judged by `suggest`), 9 new in
+  `test_remediation_tools.py` (wave-3 sites vs research, gates vs research, delivered files, the plan's
+  outcome table, kept rules carry no value, the gate, the stamp, check/verify).
+* `mutation_sweep.py "qid wave3"`: **22/22 caught**, the tree byte-identical to the sweep's start for
+  3 files; the older `bcases` and repair entries re-run after the change: **92/92 caught**. The
+  worktree has no `.venv` of its own, so the sweep ran through a wrapper that points its `PY` at the
+  main checkout's interpreter (no junction).
+
+## 2026-09-23 - the liveness write as a chunk, and the 20 two-URL `source_url` values (planned, not applied)
+
+Branch `wip/ops2`. **Nothing was written to production.** Production contacts, all read-only or
+rolled back: the reads named below, `chunk_writer.py --rehearse` of the liveness chunk, the
+rehearsal of external-id wave 4 (and of wave 4 followed by its reversal), and migration 0023 inside
+`BEGIN; ... ROLLBACK;`. Network reads: English Wikipedia (`resolve_titles`, the project user agent)
+for 19 titles, and one `wbgetentities` read of the 19 items for the notes below.
+
+### A. The liveness lane gets its write (`liveness.py chunk`)
+
+`liveness.py` could sweep and recheck; nothing turned the store's `PLANNED.jsonl` (the L1/L2 rows
+`decide.py liveness` makes) into something that can reach production. The new `chunk` command builds
+`chunk_writer.Change` records from it: old and new values exactly as planned (booleans in their text
+form `'true'`/`'false'`), the rule (L1/L2), a reason from the Commons log class ("Commons deleted
+File:X as a copyright violation (log N, time); the row is excluded"), and the planned evidence
+pointers plus the store they point into. Lane `img-liveness`, test id `T09/liveness`, confidence
+`authoritative`, stamp `img-liveness-<store date>` (here `img-liveness-2026-09-23`, run stamp
+`...-001`).
+
+It refuses: a planned row whose `liveness_sha256` names no line of `NOT_LIVE.jsonl`, or whose line
+does not state the row's class, file, log id and rule, or does not reference the row; a role that
+writes a column or acts on a class it does not own; an L2 value that is not the store's live move
+target; a hero promotion without the hero drop L1 made on its site; and a store whose `RECHECK.json`
+is not a clean recheck of every logged line. The one production read is the live rows of the touched
+sites: the chunk is emitted only when the sites the plan leaves without a live image are exactly the
+ones named with `--may-empty`.
+
+**`may_empty` = the Lion Tombs of Dedan (`9a9a0dca-52c8-44c2-94f6-adb655db17dd`), and only it.**
+Production, read 2026-09-23: Dedan has exactly two image rows (87351 `Dedan_tomb_1`, 87352 the hero,
+both files deleted as copyright violations), both planned excluded -> 0 live after. The other five
+sites keep live images: Chesterfield 13 -> 12, Stadium at Olympia 18 -> 17, Theatre of Dionysus
+18 -> 17, Stoa of Eumenes 20 -> 19, Roman Forum 20 -> 20 (L2 only). Without `--may-empty` the command
+stopped: `the plan leaves ['9a9a0dca-...'] without a live image, --may-empty names []`.
+
+`chunk-001`: **9 rows over 6 sites** - `is_excluded` false -> true on 107331 (deleted-other: the
+Minecraft/McDonald's promotion photo on Chesterfield), 97070, 80453, 87352, 87351, 70233
+(deleted-copyvio); `is_hero` true -> false on 87352; `commons_page_url` and `original_url` of 75145
+(Roman Forum) to the live target `File:Forum Romanum - panoramio (3).jpg`.
+
+* `chunk_writer.py <chunk> --check` (offline): `CHECK OK: ... chunk-001 is the plan's, 9 row(s)`.
+* `--rehearse` (production, COMMIT -> ROLLBACK): `INSERT 0 9`, `INSERT 0 1` (may_empty), `SELECT 6`,
+  `DO`, journal rows for this run 9, planned rows 9, `ROLLBACK`, then
+  `REHEARSAL OK: chunk 001, 9 row(s), rolled back` (0 journal rows survive).
+* Open after the write (not this lane's rule): Dedan's `unified_sites.thumbnail_url` is
+  `/data/images/wiki/9a9a0dca/hero.webp`, the local derivative of the deleted hero; no replacement
+  hero exists (`LISTED.json`), so the page falls back to `is_lead`/`sort_order` over no live image.
+  The thumbnail lane (T1) or the owner decides what the site shows.
+* Tests: 8 new in `test_gallery_liveness.py` (the sweep -> `decide.plan_liveness` -> chunk path over
+  the fake Commons, every refusal, the recheck gate, the stamp, the emptied-site computation, the
+  command's `--may-empty` gate, and the delivered chunk re-derived from the versioned store).
+  `mutation_sweep.py "liveness chunk: "`: **19/19 caught**.
+
+Apply, in this order (the orchestrator):
+
+```bash
+PY=./.venv/Scripts/python.exe
+$PY scripts/remediation/gallery_audit/liveness.py recheck --store output/remediation/gallery_audit/liveness-2026-09-23   # the day of the write; must report no problem
+C=output/remediation/gallery_audit/liveness-2026-09-23/chunk-001
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --check
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --rehearse
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --apply        # reads back plan <-> journal <-> data
+$PY scripts/remediation/gallery_audit/chunk_writer.py $C --rehearse-rollback
+```
+
+### B. The 20 curated `source_url` values that hold two URLs
+
+Measured (read-only): exactly 20 `unified_sites` rows carry a control character in `source_url`, all
+`ancient_nerds`, all created 2026-03-04, each `'<url1>\n<url2>'` (one `\n`, no `\r`, no whitespace in
+either URL). 19 Mesoamerican sites carry a megalithic.co.uk URL first and an English Wikipedia URL
+second (Cantil de las animas: a blogspot URL); none of them had a `site_external_ids` row, because
+`refresh_site_external_ids` reads only `source_url LIKE 'https://en.wikipedia.org/wiki/%'`. Petra has
+the article first and a Khan Academy page second, and its `enwiki_title` row held
+`'Petra\nhttps://www.khanacademy.org/...'` (the only external-id value with a control character); no
+`wikidata_qid` row.
+
+**Root cause, two defects in `pipeline/lyra/prospector/wiki.py`, both fixed:** `enwiki_title_from_url`
+turned the whole two-URL value into a title, and `_parse_query` stored it - the API answers such a
+title with `invalid: true` and no `missing` (measured live), and `_parse_query` took an invalid title
+for the canonical one. `enwiki_title_from_url` now raises `ValueError` for a URL or a decoded title
+with a C0 control or DEL (`CONTROL_RE`, the class migration 0023 enforces), and an `invalid` page is
+no page. The Lyra import check passes. The boot refresh (`only_missing=True`) reads none of the 20
+rows today (Petra has a row, the others no Wikipedia prefix), so the new raise cannot stop a boot;
+`--all` would raise on Petra until wave 4 is applied - by design.
+
+**Data fix: external-id repair wave 4** (`qid_repair.py --wave 4`, `output/remediation/qid_repair/
+wave4/`, run stamp `2026-09-23_source-url-split-wave4`). `resolve --wave 4` wrote the versioned
+`RESOLUTION.json` (production read 10:52:11Z, Wikipedia 10:52:14Z); `render` plans from it alone:
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL, through `apply_remediation_change()` (its allow-list names the table `unified_sites`, so the primitive allows the column - no migration needed) | 20 |
+| `site_external_ids` new rows (`INSERT`, old value NULL = no row; guarded: no row of that (site, kind) exists) | 35 (17 Mesoamerican sites x 2, Petra's `wikidata_qid` `Q5788`) |
+| `site_external_ids` corrected (Petra `enwiki_title` -> `Petra`) | 1 |
+| **total** | **56** |
+
+Left, with their reasons: **Cantil de las animas** - neither URL is an English Wikipedia article (its
+`source_url` is split all the same); **Chiapa de Corzo** (`24aa135d`) - `Q4384315` is already carried by the
+curated site **Zoque Culture Archaeological Zone** (`ed186ea9`, whose own `source_url` is the same
+article): a duplicate candidate for the owner, not a link. No title redirected, none is a
+disambiguation page.
+
+Flagged, written under the rule (the boot refresh would have stored the same had the URL stood
+alone), for the orchestrator to keep or drop before the apply: three curator articles are about the
+place, not the site - `Acanceh` -> Q8186545 (locality, the municipal seat), `Santa María Atzompa` ->
+Q3846612 (municipality), `Trincheras` -> Q1434929 (locality in Sonora; the site is Cerro de
+Trincheras). Wave 2's rule A refused settlements; the orchestrator's rule for this wave does not.
+`Cascajal Block` -> Q1046912 is the block itself (P31 tablet), as the record is.
+
+The statement: guards (curated sites; every `source_url` still the old value; an external-id row with
+an old value is the one row of its kind and holds it; a new row is new; no other curated site carries
+a planned item), the writes (primitive for `source_url`, a conditional `UPDATE` or an `INSERT` for
+the ids, exactly one row each, one journal row each, `row_pk` `site/kind` as in waves 1-3), and
+invariants (new values held, one row per kind, the journal equal to the plan both ways). A value with a
+control character is spelled `'a' || chr(10) || 'b'` so no raw line break stands in the file. The
+reversal deletes exactly the inserted rows by their value, puts Petra's title back, restores every
+two-URL `source_url` through the primitive, and journals all of it under `...-wave4-rollback`.
+Waves 1-3 render byte for byte what is committed (test).
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 56 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 36`, `DO`,
+  `NOTICE: source-url split: 56 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 20 control-character values, Petra 1 external-id row, 0 journal rows.
+* Rehearsal of the undo (APPLY and ROLLBACK.sql in one transaction, then `ROLLBACK`): both DO blocks
+  56 rows; inside, before the rollback: 56 + 56 journal rows, 20 control-character values again, 1
+  external-id row among the 20 sites, Petra's title broken again - the pre-state exactly.
+
+**Migration `0023_source_url_no_control_chars.sql`**: a first transaction counts the offending rows
+with a plain read and raises if any, then adds `CHECK (source_url !~ '[\x00-\x1f\x7f]') NOT VALID`
+only if `pg_constraint` lacks `unified_sites_source_url_no_control_chars`; the `VALIDATE` runs in its
+own transaction (the 0020 pattern); a catalog selftest follows. The selftest compares with `strpos`:
+a first draft used `LIKE`, which reads the pattern's backslashes as its own escapes - measured on a
+temp table, it would have failed a correct migration and stopped the deploy.
+
+* Rehearsed on production inside `BEGIN; ... ROLLBACK;` (its first transaction):
+  `ERROR: 0023: 20 unified_sites row(s) carry a control character in source_url - apply the data fix
+  (output/remediation/qid_repair/wave4) before this migration`, psql exit 3; no constraint exists
+  afterwards. **Expected until the data fix is applied.**
+* The success path, run verbatim twice against a session temp table that shadows `unified_sites`
+  (the script stops unless the name resolves to the temp table): added, validated, selftest
+  `CHECK ((source_url !~ '[\x00-\x1f\x7f]'::text))`, the second run `already exists - no ALTER`, and
+  the CHECK refuses a newline. The real catalog is untouched.
+
+Apply, in this order (the orchestrator) - the migration must not reach `main` before step 5:
+
+```bash
+PY=./.venv/Scripts/python.exe
+$PY output/remediation/tools/qid_repair.py render --wave 4   # REHEARSAL.sql is not versioned
+$PY output/remediation/tools/qid_repair.py check --wave 4    # read-only: 56 rows, 0 deviations
+ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" < output/remediation/qid_repair/wave4/REHEARSAL.sql
+ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" < output/remediation/qid_repair/wave4/APPLY.sql
+$PY output/remediation/tools/qid_repair.py verify --wave 4   # read-only
+# only now may migrations/0023_source_url_no_control_chars.sql reach main (the deploy applies it);
+# from then on the source_url half of wave4/ROLLBACK.sql cannot run - the CHECK refuses it
+```
+
+Tests: 3 new in `tests/pipeline/test_prospector_units.py` (control character in the URL, after
+decoding, the invalid page), 14 new in `test_remediation_tools.py` (wave 4 plan, Petra, every
+refusal, the record gate, `chr(n)` spelling, the statement's guards and writes, the reversal, the
+control-character refusal, the plan line of waves 1-3, waves 1-3 byte for byte, the delivered files,
+`resolve`, check/verify over both tables, NULL as "no row"), 6 in the new `test_migration_0023.py`.
+`mutation_sweep.py "source url: "`: **28/28 caught**.
+
+### B, revised the same day: no link to a place-level item (orchestrator decision) - supersedes the 56-row plan
+
+The orchestrator's decision: wave 4 writes no link to a town or municipality - the defect waves 1-3
+repaired - as a rule, not a hand exception. The rule is the gate waves 2 and 3 applied,
+`bcases.qid_research.is_site_kind` (`classify.is_container_class`: a P31 class naming a settlement,
+an administrative unit or a natural feature, unless a site word such as "ancient" or "archaeological"
+makes it a site again; or a Wikimedia page), imported, not copied. `phase4/subject_gate.py`'s
+place-level list was not taken: its verdict accepts a place-level item for a site whose own type is a
+settlement type, and Acanceh, Atzompa and Cerro De Trincheras are all `City/town/settlement` in the
+catalogue, so it would have let exactly these three through. A refused item refuses **both**
+`enwiki_title` and `wikidata_qid` of the site; its `source_url` is split all the same.
+
+`resolve --wave 4` now also records each resolved item's P31 class labels, read the way the bcases
+research reads them (`bcases.collect.fetch_claims` + `fetch_labels`, the census Fetcher, the bcases
+cache; a class without an English label stops the read). Re-resolved 2026-09-23 11:38Z; production
+and Wikipedia answered as before. PLAN.md gains a duplicate-candidate table built from the plan.
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL (primitive) | 20 |
+| `site_external_ids` new rows (14 sites x 2) | 28 |
+| corrected | 0 |
+| **total** | **48** (digest `8da78ba0...`) |
+
+Left, each with its reason in PLAN.md: **Acanceh** (Q8186545, P31 locality of Mexico), **Atzompa**
+(Q3846612, municipality of Mexico), **Cerro De Trincheras** (Q1434929, locality of Mexico) - a place,
+not the site; **Petra** (Q5788, P31 ancient city, **city**, archaeological site) - the canonical gate
+reads the plain class "city" (Q515) as a container, so Petra's ids are refused too, and **Petra's
+stored `enwiki_title` keeps its newline** (the wave has no replacement to write; a removal is a
+`DELETE`, the owner's call) - PLAN.md says so, and says that the manual `--all` refresh would write
+Petra's refused ids; **Cantil de las animas** (no article); **Chiapa de Corzo** (Q4384315 carried by
+Zoque Culture Archaeological Zone). Duplicate candidate, in PLAN.md with its evidence: Chiapa de Corzo
+(`24aa135d`) / Zoque Culture Archaeological Zone (`ed186ea9`) - this site's article
+`Chiapa_de_Corzo_(Mesoamerican_site)` resolves to Q4384315, the item the other row carries, and the
+other row's `source_url` is the same article.
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 48 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 28`, `DO`,
+  `NOTICE: source-url split: 48 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 0 journal rows, 20 control-character values.
+* Apply-then-undo rehearsal (one transaction, rolled back): 48 + 48 journal rows, then 20
+  control-character values, 1 external-id row among the 20 sites and Petra's broken title - the
+  pre-state exactly.
+* Tests: the wave-4 fixture gains a municipality item and the real Petra class set; 3 new tests (the
+  place gate for both kinds with the split kept, the duplicate candidates with their evidence, the
+  class read's refusal of an unlabelled class). `mutation_sweep.py "source url: "`: **33/33 caught**.
+
+The apply commands above are unchanged; `check` now reads 48 rows.
+
+### B, revised again: Petra as a hand-read entry (orchestrator decision) - supersedes the 48-row plan
+
+The place gate stays as it is; Petra is written as a **hand-read entry**, the way wave 2's hand
+entries carry quoted evidence. `qid_repair.WAVE4_HAND_READ` holds one entry; its guard: a hand entry
+must name, verbatim, the refusal the rule made for that site, and it overrides only that one - a
+different reason, a site the rule did not refuse, a refusal that is not the place gate's (an item
+another curated site carries) or a site whose article the wave never resolves stops the plan, and so
+does an entry without evidence. PLAN.md lists the entry under "Hand-read" with the refusal it
+overrides and its evidence; each of Petra's rows carries both.
+
+Evidence, verified read-only on 2026-09-23 (`wbgetentities` Q5788 with its class labels,
+`resolve_titles(['Petra'])`, the production row): Q5788 'Petra' - 'ancient rock-cut historical city
+in Jordan', P31 archaeological site (Q839954), ancient city (Q15661340) and city (Q515), all normal
+rank; P1435 heritage designation World Heritage Site (Q9259); P757 World Heritage Site ID 326; its
+enwiki sitelink is 'Petra', and `resolve_titles` answers 'Petra' -> 'Petra', Q5788, no redirect, not a
+disambiguation page; the stored name is 'Petra' (Jordan).
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL (primitive) | 20 |
+| `site_external_ids` new rows (14 sites x 2, Petra's `wikidata_qid` Q5788) | 29 |
+| corrected (Petra `enwiki_title` `'Petra\nhttps://www.khanacademy.org/...'` -> `Petra`) | 1 |
+| **total** | **50** (digest `a5f3503d...`) |
+
+Left: Acanceh, Atzompa, Cerro De Trincheras (a place, not the site), Cantil de las animas (no
+article), Chiapa de Corzo (Q4384315 carried by Zoque Culture Archaeological Zone; duplicate
+candidate). With Petra corrected, no external-id value with a control character is left, and the
+`--all` refresh would write none of the refused ids back (both PLAN.md bullets are computed).
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 50 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 30`, `DO`,
+  `NOTICE: source-url split: 50 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 0 journal rows, 20 control-character values, Petra's broken title unchanged.
+* Apply-then-undo rehearsal (one transaction, rolled back): 50 + 50 journal rows, then the pre-state
+  exactly (20 control-character values, 1 external-id row among the 20 sites, Petra's title broken).
+* Tests: 2 new (Petra written with its entry and refused without it, on the delivered record; a hand
+  entry must name the refusal it overrides - wrong reason, unrefused site, a sharer refusal, an
+  unresolved site, no evidence). `mutation_sweep.py "source url: "`: **38/38 caught**.

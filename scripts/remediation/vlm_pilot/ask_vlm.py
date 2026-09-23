@@ -12,7 +12,7 @@ WHAT IS SENT
 ------------
 * The prompt is `pipeline.video.shorts_select.VLM_PROMPT` **imported**, not
   copied, and filled exactly as `judge_all` fills it
-  (`pipeline/video/shorts_select.py:227`): `site` = the site's name,
+  (`pipeline/video/shorts_select.py:271`): `site` = the site's name,
   `card_text` = `card_stats.card_description` - the same column
   `pipeline/video/shorts_export.py:230` turns into `card_text` for the shorts
   selector - and `title` = `vlm_pilot.common.image_title` equivalent, i.e.

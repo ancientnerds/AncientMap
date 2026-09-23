@@ -312,6 +312,16 @@ output/remediation/mechanical_site_type/REHEARSAL.sql
 # nothing and is rendered again by `qid_repair.py render`.
 !output/remediation/qid_repair/
 output/remediation/qid_repair/REHEARSAL.sql
+output/remediation/qid_repair/wave2/REHEARSAL.sql
+output/remediation/qid_repair/wave3/REHEARSAL.sql
+output/remediation/qid_repair/wave4/REHEARSAL.sql
+# The owner cases of HUMAN_ONLY section B (2026-09-23): the per-site verdicts with their evidence, the
+# duplicate list the scope lane reads, the research behind the external-id repair's second wave and the
+# coordinate plan. Rendered from Wikidata and Wikipedia answers of one day, so not regenerable byte for
+# byte later - versioned like the qid_repair plan. The production export and the HTTP answers
+# (`cache/bcases/`) stay out; the rehearsal keeps nothing.
+!output/remediation/bcases/
+output/remediation/bcases/coords_plan/REHEARSAL.sql
 # The gap run's decision record is versioned; its production export is bulk and regenerable
 # (`gap_plan.py export`), and PLAN.gap.jsonl is covered by the phase3_runner PLAN*.jsonl rule.
 !output/remediation/gap/
@@ -335,6 +345,15 @@ output/remediation/phase3_pilot/evidence/
 # describe is already in `remediation_change_log` (run_stamp 2026-09-21_gallery-verdicts-persist,
 # 105 rows). The plan and the two scripts are the record and the undo of that write, not a cache.
 !output/remediation/gallery_audit/
+# S1 liveness stores: COMMONS.jsonl holds one line per referenced Commons file (46,070 lines, about
+# 30 MB) and stays on the workstation; SUMMARY.json pins its sha256, and NOT_LIVE.jsonl - the lines
+# every L1/L2 write cites - is versioned with the plan. The vision ledgers of the G runs
+# (run-*/VERDICTS.jsonl, raw responses, 150-250 MB for a full run) are archived by the HANDOVER
+# section 3 rule, not versioned. The C1 ledger is: calibration-*/VERDICTS.jsonl (about 940 lines,
+# about 4 MB at the pilot's 4 kB per line) is what `calibrate.verify_admission` re-derives
+# ADMISSION.json from before any vision write, so its exact bytes are versioned with the seal.
+output/remediation/gallery_audit/liveness-*/COMMONS.jsonl
+output/remediation/gallery_audit/run-*/VERDICTS.jsonl
 
 # VLM competence pilot. The measurement and its generators are versioned: VLM.jsonl cost 200
 # billed vision calls and cannot be regenerated identically, and the scripts are the method.
@@ -346,3 +365,6 @@ output/remediation/vlm_pilot/contact_sheet_*.png
 output/remediation/vlm_pilot/__pycache__/
 output/remediation/vlm_pilot/*.log
 output/remediation/vlm_pilot/*.partial.jsonl
+# The Opus re-verification of every DeepSeek-decided production row (2026-09-23): its sealed rules,
+# its input and every verdict are the proof behind any reversal it leads to.
+!output/remediation/opus_audit/

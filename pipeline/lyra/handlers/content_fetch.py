@@ -12,9 +12,7 @@ effect on what is archived, and the archive has no effect on the prompt.
 """
 
 import asyncio
-import ipaddress
 import logging
-import re
 import urllib.parse
 from dataclasses import dataclass
 
@@ -33,6 +31,8 @@ from pipeline.lyra.training_corpus import (
     parse_tdmrep,
     reservation_for,
 )
+from pipeline.utils.http import is_public_http_url
+from pipeline.utils.text import extract_text_from_html
 
 logger = logging.getLogger(__name__)
 
@@ -85,36 +85,6 @@ def _resolve_max_content_chars() -> int:
         return _MAX_CONTENT_CHARS
 
 
-def _is_safe_url(url: str) -> bool:
-    """Block SSRF: reject internal IPs, non-HTTP schemes, metadata endpoints."""
-    try:
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
-        hostname = parsed.hostname or ""
-        if hostname in ("169.254.169.254", "metadata.google.internal"):
-            return False
-        if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-            return False
-        try:
-            ip = ipaddress.ip_address(hostname)
-            if ip.is_private or ip.is_loopback or ip.is_link_local:
-                return False
-        except ValueError:
-            pass  # hostname is a domain, not an IP
-        return True
-    except Exception:
-        return False
-
-
-def _extract_text_from_html(html: str) -> str:
-    """Extract readable text from HTML, strip tags."""
-    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
-
 @dataclass
 class _Page:
     """One fetched page, before it is split into prompt text and archive row."""
@@ -151,7 +121,7 @@ class ContentFetchHandler(BaseHandler):
             # Skip domains where fetching is pointless
             if any(skip in source.url for skip in _SKIP_DOMAINS):
                 continue
-            if not _is_safe_url(source.url):
+            if not is_public_http_url(source.url):
                 continue
             llm_candidates.append((sid, source.url))
 
@@ -230,7 +200,7 @@ class ContentFetchHandler(BaseHandler):
                     continue
                 if any(skip in source.url for skip in _ARCHIVE_SKIP_DOMAINS):
                     continue
-                if not _is_safe_url(source.url):
+                if not is_public_http_url(source.url):
                     continue
                 candidates.append((sid, source.url))
 
@@ -352,7 +322,7 @@ class ContentFetchHandler(BaseHandler):
                     content_type = resp.headers.get("content-type", "")
                     if "html" in content_type or not content_type:
                         html = resp.text[:MAX_HTML_CHARS]
-                        text = _extract_text_from_html(html)
+                        text = extract_text_from_html(html)
                         if text:
                             return _Page(
                                 sid=sid,
