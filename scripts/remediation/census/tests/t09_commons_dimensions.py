@@ -61,7 +61,7 @@ from __future__ import annotations
 
 import json
 import logging
-import re
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
@@ -83,9 +83,6 @@ IIPROP = "size|url|extmetadata"
 CACHE_NS = "commons"
 INDEX_NAME = "commons_imageinfo.json"
 
-REPO = Path(__file__).resolve().parents[4]
-DOWNLOADER = REPO / "pipeline" / "wiki_image_downloader.py"
-
 #: Phase 2 item 1 ("an already-local 1600 px gallery image") and §6.1's "too small" class
 #: (short side under 900). Not free parameters: this pair reproduces the plan's 3,264
 #: locally-repairable heroes exactly.
@@ -94,24 +91,37 @@ HERO_MIN_HEIGHT = 900
 
 log = logging.getLogger("census.t09")
 
-_WIDTH_RE = re.compile(r"^(THUMB_WIDTH|GALLERY_WIDTH)\s*=\s*(\d+)", re.M)
+#: The export caps every row of the 2026-09-20 snapshot was downloaded under. Until 2026-09-23
+#: this module read them from the downloader's source, so that a changed value could not make its
+#: explanation stale. That day the downloader replaced both with a fetch rule over Commons' fixed
+#: thumbnail buckets (`LOCAL_MAX_WIDTH`, `fetch_plan` in `pipeline/wiki_image_downloader.py`):
+#: 800 and 1600 are not buckets and answer HTTP 400. The rows this module explains were made under
+#: these two values and no others, so they are pinned here as the history they are - and bound to
+#: it: a snapshot exported from `HISTORIC_CAPS_UNTIL` on may hold rows the new rule stored (a hero
+#: at its own width up to 1600 px, never an upscale), which a note quoting "the THUMB_WIDTH=800 px
+#: derivative" or "GALLERY_WIDTH=1600 px forced the crop up" would explain wrongly.
+HISTORIC_CAPS = {"THUMB_WIDTH": 800, "GALLERY_WIDTH": 1600}
+HISTORIC_CAPS_UNTIL = datetime.fromisoformat("2026-09-23T00:00:00+02:00")
 
 
-def _pipeline_widths() -> dict[str, int]:
-    """The downloader's own caps, read from its source.
+def _pipeline_widths(exported_at: str | None) -> dict[str, int]:
+    """The caps the snapshot's rows were downloaded under (`HISTORIC_CAPS`), or a refusal.
 
-    They are the reason a hero row can only ever be 800 px wide, so a changed value would make
-    this module's explanation wrong. Fail loudly instead of quoting a stale number.
+    Refuses a snapshot that names no export time and one exported from the day the downloader
+    changed on: its notes would quote caps that no longer made its rows.
     """
-    text = DOWNLOADER.read_text(encoding="utf-8")
-    got = {k: int(v) for k, v in _WIDTH_RE.findall(text)}
-    for name in ("THUMB_WIDTH", "GALLERY_WIDTH"):
-        if name not in got:
-            raise AssertionError(
-                f"{name} not found in {DOWNLOADER} - the export caps this check explains no "
-                "longer exist under that name"
-            )
-    return got
+    if exported_at is None:
+        raise RuntimeError(
+            "T09: the snapshot names no export time, so the 800/1600 px caps its notes quote "
+            "cannot be tied to its rows"
+        )
+    if datetime.fromisoformat(exported_at) >= HISTORIC_CAPS_UNTIL:
+        raise RuntimeError(
+            f"T09: snapshot {exported_at} was exported after the downloader stopped storing 800 px "
+            f"heroes and 1600 px crops ({HISTORIC_CAPS_UNTIL.date()}); its rows may be stored "
+            "under the new rule, which these notes do not describe - reword them first"
+        )
+    return dict(HISTORIC_CAPS)
 
 
 # --------------------------------------------------------------------------- Commons names
@@ -208,16 +218,6 @@ def _fetch_batch(ctx: Context, batch: list[str]) -> dict[str, Any]:
     raise RuntimeError(f"commons imageinfo refused a batch (first title {batch[0]!r}): {last}")
 
 
-def _dereference(title: str, mapping: dict[str, str]) -> str:
-    """Apply the API's own `normalized`/`redirects` chains (bounded, in case of a loop)."""
-    for _ in range(4):
-        nxt = mapping.get(title)
-        if nxt is None or nxt == title:
-            break
-        title = nxt
-    return title
-
-
 def _read_batch(batch: list[str], payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Map every title of one batch to its own status - never assume the answers align.
 
@@ -226,6 +226,8 @@ def _read_batch(batch: list[str], payload: dict[str, Any]) -> dict[str, dict[str
     record: `ok` with the original's pixel size, `missing` (the canonical source itself says
     the file does not exist), or `unresolved` (no answer - we could not find out).
     """
+    from pipeline.utils.mediawiki import dereference
+
     query = payload.get("query") or {}
     pages: dict[str, dict[str, Any]] = {p["title"]: p for p in query.get("pages") or []}
     normalized = {e["from"]: e["to"] for e in query.get("normalized") or []}
@@ -233,7 +235,7 @@ def _read_batch(batch: list[str], payload: dict[str, Any]) -> dict[str, dict[str
 
     out: dict[str, dict[str, Any]] = {}
     for name in batch:
-        title = _dereference(_dereference(f"File:{name}", normalized), redirects)
+        title = dereference(dereference(f"File:{name}", normalized), redirects)
         page = pages.get(title)
         if page is None:
             out[name] = {"status": "unresolved", "canonical": None}
@@ -821,8 +823,8 @@ def _hero_finding(
 
 
 def run(ctx: Context) -> list[Finding]:
+    caps = _pipeline_widths(ctx.snap.exported_at())
     index = _read_index(ctx)
-    caps = _pipeline_widths()
 
     findings: list[Finding] = []
     for site in ctx.sites:
