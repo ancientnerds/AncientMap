@@ -16271,6 +16271,8 @@ P4P_ROUTES_TEST = "tests/remediation/test_phase4_routes.py"
 P4P_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
 P4P_PLAN_TEST = "tests/remediation/test_phase4_plan.py"
 P4P_PILOT_TEST = "tests/remediation/test_phase4_pilot.py"
+P4P_FETCH = "scripts/remediation/phase3/fetch_stage.py"
+P4P_FETCH_TEST = "tests/remediation/test_phase3_fetch.py"
 
 P4_PILOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── searches off ─────────────────────────────────────────────────────────────────────────
@@ -16340,6 +16342,29 @@ P4_PILOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    searches = parser  # mutant\n",
         P4P_RUNNER_TEST,
         "test_searches_off_and_a_search_allowance_are_never_asked_together",
+    ),
+    # ── the pacer, measured by the census (one S1 batch of 335 died of it) ─────────────────────
+    (
+        "p4 pilot: a lock its holder is deleting crashes the pacer",
+        P4P_FETCH,
+        "            except PermissionError:\n"
+        "                # Windows: a lock its holder is deleting",
+        "            except ZeroDivisionError:  # mutant\n"
+        "                # Windows: a lock its holder is deleting",
+        P4P_FETCH_TEST,
+        "test_a_lock_its_holder_is_deleting_is_waited_for_not_a_crash",
+    ),
+    (
+        "p4 pilot: a lock creation that is always refused is waited on past the deadline",
+        P4P_FETCH,
+        "                if self._clock() > deadline:\n"
+        "                    raise PacerTimeout(\n"
+        '                        f"{lock} could not be created for',
+        "                if False:  # mutant\n"
+        "                    raise PacerTimeout(\n"
+        '                        f"{lock} could not be created for',
+        P4P_FETCH_TEST,
+        "test_a_lock_that_is_never_granted_ends_as_a_timeout_naming_the_refusal",
     ),
     # ── the pilot's own batches ──────────────────────────────────────────────────────────────
     (
