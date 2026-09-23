@@ -8964,6 +8964,23 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4B_RUNNER_TEST,
         "test_prepare_refuses_a_plan_line_without_sites_before_writing",
     ),
+    # -- R6: lane S finds a name by the fold the subject gate accepted it by
+    (
+        "p4 sentences: a text is folded without the phase-4 fold",
+        P4B_SENT,
+        "    folded = SG.fold(value)\n",
+        '    folded = " ".join(value.casefold().split())  # mutant\n',
+        P4B_SENT_TEST,
+        "test_a_name_matches_by_the_one_phase4_fold",
+    ),
+    (
+        "p4 sentences: a name is folded without the phase-4 fold",
+        P4B_SENT,
+        "        needle = SG.fold(name)\n",
+        '        needle = " ".join(name.casefold().split())  # mutant\n',
+        P4B_SENT_TEST,
+        "test_a_name_matches_by_the_one_phase4_fold",
+    ),
 ]
 MUTATIONS += PHASE4_SELECT_SUP_MUTATIONS
 

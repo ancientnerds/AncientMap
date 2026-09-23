@@ -51,7 +51,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-import unicodedata
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -60,6 +59,7 @@ if __package__ in (None, ""):
 
 # `phase4` appends the repository root to the path, so `pipeline.*` resolves after it.
 from phase4 import model4 as M  # noqa: E402
+from phase4 import subject_gate as SG  # noqa: E402
 from pipeline.lyra.text_sentences import is_complete_sentence, split_sentences  # noqa: E402
 
 #: A heading line of a TextExtracts plain-text extract: `== History ==`, `=== Middle Ages ===`.
@@ -344,18 +344,14 @@ def span_text(text: str, span: M.Span) -> str:
 # ------------------------------------------------------------------------------------- the pool
 
 
-def fold(value: str) -> str:
-    """Casefolded, accents stripped, whitespace collapsed: how a name is looked for in a text."""
-    decomposed = unicodedata.normalize("NFKD", value)
-    bare = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
-    return " ".join(bare.casefold().split())
-
-
 def names_in(value: str, names: Sequence[str]) -> bool:
-    """True when one of `names` occurs in `value` as whole words (both folded)."""
-    folded = fold(value)
+    """True when one of `names` occurs in `value` as whole words, both folded by Phase 4's one name
+    fold (`subject_gate.fold`: accents stripped, lower case, every non-alphanumeric character a
+    space), the fold the subject gate accepted the article by: `Chichén-Itzá` is found in `Chichen
+    Itza`, `St. Kilda` in `St Kilda`."""
+    folded = SG.fold(value)
     for name in names:
-        needle = fold(name)
+        needle = SG.fold(name)
         if needle and re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", folded):
             return True
     return False

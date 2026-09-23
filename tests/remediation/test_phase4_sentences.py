@@ -23,6 +23,7 @@ if str(PHASE_PARENT) not in sys.path:
 
 from phase4 import model4 as M  # noqa: E402
 from phase4 import sentences as S  # noqa: E402
+from phase4 import subject_gate as SG  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
 
@@ -397,6 +398,22 @@ def test_lane_s_offers_only_name_bearing_sentences_or_their_section() -> None:
 def test_a_name_match_is_whole_words_and_ignores_accents() -> None:
     assert S.names_in("The Göbekli Tepe mound lies here.", ["Gobekli Tepe"])
     assert not S.names_in("The Kilmartinglen stones.", ["Kilmartin"])
+
+
+@pytest.mark.parametrize(
+    ("text", "name"),
+    [
+        ("The Chichen Itza complex lies in the north of the peninsula.", "Chichén-Itzá"),
+        ("The St Kilda cleits are stone storage huts on the island.", "St. Kilda"),
+        ("The Chichén-Itzá ball court is the largest of its kind.", "Chichen Itza"),
+    ],
+)
+def test_a_name_matches_by_the_one_phase4_fold(text: str, name: str) -> None:
+    """Lane S keeps the sentences that name the site; the subject gate accepted the article by the
+    same name with `subject_gate.fold` (punctuation a space). A second fold that keeps the hyphen or
+    the full stop would find no sentence and hold the site as no-source (the review's R6)."""
+    assert S.names_in(text, [name])
+    assert S.names_in(text, [name]) == (f" {SG.fold(name)} " in f" {SG.fold(text)} ")
 
 
 def test_lanes_without_selection_have_no_pool() -> None:
