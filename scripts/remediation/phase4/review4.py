@@ -273,10 +273,13 @@ def settle(
 def review_batch(
     batch_dir: Path, *, ledger: Path, runner: MS.ModelRunner, reverify: Reverify
 ) -> int:
-    """S6 over one batch. `reverify` is the driver's `verify4.verify_site` wiring (`run4`)."""
+    """S6 over one batch. `reverify` is the driver's `verify4.verify_site` wiring (`run4`).
+
+    `assemble.batch_inputs` leaves out every site a site-scope hold keeps (the verifier's
+    pre-review holds included), so a held site is never reviewed and buys no call.
+    """
     batch_id, inputs = A.batch_inputs(batch_dir)
     assembled = {a.site_id for a in M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly)}
-    held = B.site_held(B.read_holds(batch_dir))
     run = B.run_name(batch_dir)
     reviews = F.EvidenceStore(batch_dir / B.REVIEWS_DIR)
     book = L.Ledger(ledger)
@@ -286,7 +289,7 @@ def review_batch(
     error: str | None = None
     for site_inputs in inputs:
         site_id = site_inputs.site.site_id
-        if site_id not in assembled or site_id in held:
+        if site_id not in assembled:
             continue
         built = A.build_site(site_inputs, run=run)
         row: dict[str, Any] = {"site_id": site_id, "sentences": len(built.sentences)}

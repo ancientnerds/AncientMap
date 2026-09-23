@@ -124,88 +124,96 @@ class TestIsCompleteSentence:
         assert is_complete_sentence('"The chronology is in disarray," the authors wrote.')
 
 
-class TestDateAbbreviations:
-    """WB-B1 (Phases 4 and 5 design, failure_modes): a date abbreviation in front of a number or an
-    era word is never a sentence end. Before the fix "built c. 2500 BC" split after "c." and
-    is_complete_sentence passed both fragments. The sentences here are written for the test, in the
-    shapes the 3,681-extract probe found; no article text is copied into the repository."""
+# WB-B1 (Phases 4 and 5 design, failure_modes): a date abbreviation in front of a number or an era
+# word is never a sentence end. Before the fix "built c. 2500 BC" split after "c." and
+# is_complete_sentence passed both fragments. The sentences here are written for the test, in the
+# shapes the 3,681-extract probe found; no article text is copied into the repository.
 
-    def test_circa_before_a_year_is_not_a_boundary(self):
-        assert split_sentences("The temple was built c. 2500 BC by Khufu. It still stands.") == [
-            "The temple was built c. 2500 BC by Khufu.",
-            "It still stands.",
-        ]
 
-    def test_every_abbreviation_of_the_rule_before_a_digit(self):
-        for text in (
-            "The wall dates to c. 300 BC and later.",
-            "The wall dates to ca. 300 BC and later.",
-            "It was raised by Ramesses II (r. 1279-1213 BC) at the river.",
-            "The scribe Ahmose (fl. 1550 BC) copied the text.",
-            "The excavator (b. 1901) published the site.",
-            "The excavator (d. 1975) published the site.",
-            "The wall dates to c.300 BC and later.",
-            "The wall dates to C. 300 BC and later.",
-        ):
-            assert split_sentences(text) == [text], text
+def test_circa_before_a_year_is_not_a_boundary():
+    assert split_sentences("The temple was built c. 2500 BC by Khufu. It still stands.") == [
+        "The temple was built c. 2500 BC by Khufu.",
+        "It still stands.",
+    ]
 
-    def test_circa_before_an_era_word_is_not_a_boundary(self):
-        for text in (
-            "The town was populated c. AD 750-975 by traders.",
-            "The shrine was rebuilt c. BC 200 on the hill.",
-            "A necropolis dates from the 6th to the 1st c. BCE outside the gate.",
-            "The harbour was used c. CE 100 by the fleet.",
-        ):
-            assert split_sentences(text) == [text], text
 
-    def test_the_rule_stops_at_the_abbreviations_it_names(self):
-        # "b." before a word that is neither a number nor an era is an ordinary end: the grave
-        # letter here closes the sentence, and the next one opens with a capital.
-        assert split_sentences("The tomb held grave b. The next tomb was empty.") == [
-            "The tomb held grave b.",
-            "The next tomb was empty.",
-        ]
-        # A word that merely ends in one of the letters is not the abbreviation.
-        assert split_sentences("It was built by Kc. 2500 workers came later.") == [
-            "It was built by Kc.",
-            "2500 workers came later.",
-        ]
+def test_every_abbreviation_of_the_rule_before_a_digit():
+    for text in (
+        "The wall dates to c. 300 BC and later.",
+        "The wall dates to ca. 300 BC and later.",
+        "It was raised by Ramesses II (r. 1279-1213 BC) at the river.",
+        "The scribe Ahmose (fl. 1550 BC) copied the text.",
+        "The excavator (b. 1901) published the site.",
+        "The excavator (d. 1975) published the site.",
+        "The wall dates to c.300 BC and later.",
+        "The wall dates to C. 300 BC and later.",
+    ):
+        assert split_sentences(text) == [text], text
 
-    def test_an_era_word_in_lower_case_is_not_an_era(self):
-        assert split_sentences("They quoted grave d. Ad hoc repairs followed.") == [
-            "They quoted grave d.",
-            "Ad hoc repairs followed.",
-        ]
 
-    def test_the_era_forms_of_the_translated_languages_are_not_boundaries(self):
-        # Phase-4 lane T selects sentences from fr, de, es, it, tr and pt articles; each of these
-        # era forms cut a sentence in two before the rule.
-        for text in (
-            "Le temple fut construit vers 2500 av. J.-C. par des paysans.",
-            "La ville fut fondée en 52 apr. J.-C. sur la colline.",
-            "Der Tempel wurde um 2500 v. Chr. errichtet.",
-            "Die Stadt bestand bis 300 n. Chr. als Handelsplatz.",
-            "El templo fue construido hacia el 2500 a. C. por campesinos.",
-            "Fue abandonado en el 400 d. C. por sus habitantes.",
-            "Tapınak M.Ö. 2500 yılında inşa edildi.",
-            "Il tempio fu costruito nel 2500 a.C. dai contadini.",
-        ):
-            assert split_sentences(text + " Next one.") == [text, "Next one."], text
+def test_circa_before_an_era_word_is_not_a_boundary():
+    for text in (
+        "The town was populated c. AD 750-975 by traders.",
+        "The shrine was rebuilt c. BC 200 on the hill.",
+        "A necropolis dates from the 6th to the 1st c. BCE outside the gate.",
+        "The harbour was used c. CE 100 by the fleet.",
+    ):
+        assert split_sentences(text) == [text], text
 
-    def test_a_single_letter_before_another_name_still_ends_a_sentence(self):
-        assert split_sentences("They dug trench a. Carter found the gate.") == [
-            "They dug trench a.",
-            "Carter found the gate.",
-        ]
 
-    def test_the_span_of_a_dated_sentence_is_the_whole_sentence(self):
-        text = "The temple was built c. 2500 BC by Khufu. It still stands."
-        start, end = sentence_span(text, text.index("2500"))
-        assert text[start:end] == "The temple was built c. 2500 BC by Khufu."
+def test_the_rule_stops_at_the_abbreviations_it_names():
+    # "b." before a word that is neither a number nor an era is an ordinary end: the grave
+    # letter here closes the sentence, and the next one opens with a capital.
+    assert split_sentences("The tomb held grave b. The next tomb was empty.") == [
+        "The tomb held grave b.",
+        "The next tomb was empty.",
+    ]
+    # A word that merely ends in one of the letters is not the abbreviation.
+    assert split_sentences("It was built by Kc. 2500 workers came later.") == [
+        "It was built by Kc.",
+        "2500 workers came later.",
+    ]
 
-    def test_a_dated_sentence_is_complete(self):
-        assert is_complete_sentence("The temple was built c. 2500 BC by Khufu.")
-        assert is_complete_sentence("It was raised by Ramesses II (r. 1279-1213 BC) at the river.")
+
+def test_an_era_word_in_lower_case_is_not_an_era():
+    assert split_sentences("They quoted grave d. Ad hoc repairs followed.") == [
+        "They quoted grave d.",
+        "Ad hoc repairs followed.",
+    ]
+
+
+def test_the_era_forms_of_the_translated_languages_are_not_boundaries():
+    # Phase-4 lane T selects sentences from fr, de, es, it, tr and pt articles; each of these
+    # era forms cut a sentence in two before the rule.
+    for text in (
+        "Le temple fut construit vers 2500 av. J.-C. par des paysans.",
+        "La ville fut fondée en 52 apr. J.-C. sur la colline.",
+        "Der Tempel wurde um 2500 v. Chr. errichtet.",
+        "Die Stadt bestand bis 300 n. Chr. als Handelsplatz.",
+        "El templo fue construido hacia el 2500 a. C. por campesinos.",
+        "Fue abandonado en el 400 d. C. por sus habitantes.",
+        "Tapınak M.Ö. 2500 yılında inşa edildi.",
+        "Il tempio fu costruito nel 2500 a.C. dai contadini.",
+    ):
+        assert split_sentences(text + " Next one.") == [text, "Next one."], text
+
+
+def test_a_single_letter_before_another_name_still_ends_a_sentence():
+    assert split_sentences("They dug trench a. Carter found the gate.") == [
+        "They dug trench a.",
+        "Carter found the gate.",
+    ]
+
+
+def test_the_span_of_a_dated_sentence_is_the_whole_sentence():
+    text = "The temple was built c. 2500 BC by Khufu. It still stands."
+    start, end = sentence_span(text, text.index("2500"))
+    assert text[start:end] == "The temple was built c. 2500 BC by Khufu."
+
+
+def test_a_dated_sentence_is_complete():
+    assert is_complete_sentence("The temple was built c. 2500 BC by Khufu.")
+    assert is_complete_sentence("It was raised by Ramesses II (r. 1279-1213 BC) at the river.")
 
 
 #: The Phase-3 mass run's stored Wikipedia extracts (gitignored, local only): the 366-article probe

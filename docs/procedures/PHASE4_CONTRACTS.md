@@ -162,7 +162,7 @@ Owns `pipeline/lyra/text_sentences.py` and `tests/pipeline/test_text_sentences.p
 `test_phase4_select.py`, `test_phase4_assemble.py`, `test_phase4_review.py`,
 `test_phase4_lanes.py`, `test_phase4_runner.py`.
 
-Provides:
+Provides (section 7 records the signatures Track B had to change and its span reading):
 
 - `text_sentences.split_sentences` (unchanged signature) protecting `c.`, `ca.`, `r.`, `fl.`, `b.`,
   `d.` before a digit; its 10 importers' tests run unchanged.
@@ -246,3 +246,89 @@ Provides:
 - `HoldReason` spells every hold the design names; `SelectionProblem` spells the parser's refusals
   plus `no-desc`, `no-card`, `abstain-with-other-lines` and `abstain-without-reason`, which the
   design implies (1-8 DESC, 1-2 CARD, ABSTAIN excludes all other lines and carries a reason).
+
+## 7. What Track B built against these contracts (WB-B1 ... WB-B4)
+
+Recorded so Tracks C and D, and the parity check before the pilot, read the same thing. Where it
+changes a signature of section 5, the change is the smallest one the code needed.
+
+### Spans (section 3, Track B's reading; C2's finder must agree or the reading is fixed here)
+
+A span is offered only on a sentence that ends in `.`, `!` or `?` and whose parentheses balance;
+otherwise the sentence offers none. *Top level* is outside every parenthesis. A *delimiter comma*
+is a top-level comma followed by a space (so `4,500` delimits nothing). Every range carries the
+delimiter its removal must take, and edit 1 removes exactly the range:
+
+- `p`: a top-level `(...)` group plus the space in front of it (`" (c. 30 m)"`); at the sentence
+  start the space after it (`"(...) "`); with no space on either side, the group alone.
+- `a`: a paired insertion, from a delimiter comma through the next delimiter comma
+  (`", built by Khufu,"`), or from the space before a spaced en/em dash through the next one
+  (`" - near the road -"` with en dashes). The pair is the delimiter: `A, X, B` becomes `A B`,
+  never `A, B`. This departs from a literal "exactly one adjacent delimiter", which would leave
+  `Khufu, built it` after an appositive.
+- `l`: the text before the first delimiter comma when it is 1-6 whitespace tokens, plus that comma
+  and the space after it (`"In 1900, "`); edit 4 restores the capital.
+- `t`: from the last delimiter comma up to, not including, the final punctuation.
+
+A range containing a protected token (`PROTECTED_TOKENS`, whole words, case-insensitive, `*` a
+prefix, phrases as consecutive words, `c.`/`ca.` with their stop) is never offered. Identical ranges
+are offered once. Ids count per kind in text order (`p1`, `p2`, `a1`, `l1`, `t1`). Kinds may
+overlap (an `a` and the `t` after it share a comma): `select_stage.parse_selection` refuses a pick
+whose chosen spans overlap without one holding the other (`span-not-offered`: no offered span is
+their union), for a CARD pick together with its DESC pick's spans. A nested span is dropped with its
+outer one, and `drop` lists maximal ranges only; ranges that merely touch stay two ranges.
+
+Edits 2-4 apply to the whole trimmed slice (collapse runs of spaces, `' ,'` -> `','`, uppercase the
+first character when the first drop starts at the sentence start); edit 5 is `' [n]'` before the
+last character. The card's spoken edit is `c.`/`ca.` followed by an optional space before a digit
+-> `circa ` (lower case only). Card items are joined with one space.
+
+The pool offers only complete sentences (`is_complete_sentence`) of 25-400 characters that end in
+`.`, `!` or `?`, outside the sections `see also, references, notes, footnotes, citations, sources,
+bibliography, further reading, external links, gallery, literature, works cited, notes and
+references, references and notes, explanatory notes, in popular culture, popular culture`
+(case-insensitive, a subsection by its own title). Lane S filters by name before the 6-per-section
+count. Names match as folded whole words (NFKD without marks, casefold).
+
+### Signatures changed from section 5
+
+- `sentences.candidate_pool(sentences, *, lane, names, text)`: lane S cannot find a name without
+  the pinned text.
+- `assemble.assemble(..., run, translations=None)`: lane T passes `sid -> English sentence`.
+  Lane R is `assemble.build_restated(site, restatements, sources, *, run)`; `build_picks` builds
+  from DESC and 0-2 CARD picks (0 after a review drop). `assemble.quotes_of(assembly, texts)` is
+  the `quotes` argument of `verify4.verify_site` in a batch.
+- `review4.review_batch(batch_dir, *, ledger, runner, reverify)`: `reverify(site, assembly) ->
+  tuple[Hold, ...]` is the seam; `run4` builds it from `verify4.verify_site` with the raw metas, the
+  pinned texts, `quotes_of` and `write4.new_raw_data(site.raw_data, assembly)`, so Track B never
+  imports Track C or D at module level.
+- `run4` adds `prepare` (the plan line to `input.json`, write-once) and `holds` (`HOLDS4.jsonl`);
+  `select` runs S3, S3T and S3R in that order. `plan` and `writeplan` forward their arguments to
+  `plan4.main(argv: list[str]) -> int` and `write4.main(argv: list[str]) -> int`, which Tracks A and
+  D provide (each prints its own report). `routes` passes `max_searches` = the run's remaining
+  allowance; `sources` uses `HttpFetcher(max_bytes=1 MiB)` (WB-A1's parameter), `routes` sends only
+  `*.wikipedia.org` and `wikidata.org` to it and every other host to the 60 KB default.
+- A batch function's non-zero return stops the whole run (`mass4` reads `STAGE_EXIT=`); a stage
+  that prints no exit line fails its batch and counts for the circuit breaker.
+
+### Track B's files in a batch directory
+
+`pools.jsonl`, `selection.jsonl` (`Selection`), `translations.jsonl`, `restatements.jsonl`, and
+`prompts/`, `answers/`, `reviews/` (write-once, `EvidenceStore`); each LLM stage writes its file
+even when empty, and an absent one means the stage never ran. Reports: `select.json`,
+`translate.json`, `restricted.json` (per site: `label`, `prompt_sha256`, `answer_sha256`,
+`cost_usd`, `outcome`) and `review4.json` (per site: the reviewer's `lines`, `kept`, `card`, and at
+the top `assembly_sha256`). `assembly.jsonl` is written by `assemble` and rewritten by `review`
+with exactly the sites that passed; it counts as reviewed only when `review4.json` has
+`error: null` and its `assembly_sha256` is the file's (the design's "the reviewer answered").
+
+### Holds Track B writes, and one open vocabulary request
+
+- `no-source` also for a lane-W/S/T site whose pool is empty (lane S with no name-bearing
+  sentence), before any call.
+- `card-too-short-after-review` (card scope) also when the reviewer drops the card or writes no
+  CARD line.
+- **Open, for WB-00:** lanes T and R build no card (their text is not the source's, so no offered
+  span applies) and write no hold for it, because no `HoldReason` fits. `Assembly.card is None` is
+  the signal meanwhile; a card-scope reason such as `card-not-extractive` would let the writer
+  treat a T/R site's cleared-defect card like any held card (P5/card-clear).
