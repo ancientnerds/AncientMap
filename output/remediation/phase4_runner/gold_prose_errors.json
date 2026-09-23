@@ -1,0 +1,520 @@
+{
+ "version": 1,
+ "design": "entry [6] of output/remediation/logs/design_texts_images_2026-09-22.json, pilot_and_thresholds: gold_prose_errors.json lists forbidden anchors",
+ "inputs": {
+  "gold_standard": {
+   "path": "output/remediation/gold_standard/sites.json",
+   "sha256": "18653fc12607bc7b25c160ab022d114b86500c5dd15641979dc4cfdb72d2b756"
+  },
+  "export": {
+   "path": "output/remediation/phase4_runner/S0_ROWS.jsonl",
+   "sha256": "2c99f96f899447000659ad3ff6b24bc2dc9eddd2f96cdfe73afeabb1829272a8"
+  },
+  "plan": {
+   "path": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md",
+   "sha256": "abe4652963ab6a185dd9244c2c5006ae750a88b2b69a431b8198aa5c12769a7e"
+  },
+  "design": {
+   "path": "output/remediation/logs/design_texts_images_2026-09-22.json",
+   "sha256": "515601c3e91a770ce096ee001e6bfc1659c875d008f11d1b508d07a31d20e5af"
+  }
+ },
+ "errors": [
+  {
+   "id": "LS-1",
+   "kind": "gold",
+   "site_id": "f12d3b76-a0e0-44e6-94cb-5dedd8203b90",
+   "site_name": "Las Labradas",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "description dates the petroglyphs to 'late Archaic to Middle Formative (c. 1000 BC-300 AD)', contradicting its own citation (enwiki: 9th-10th c. AD) and the shipped card text; the Archaic reference belongs to nearby settlements, not the petroglyphs",
+   "source": "output/remediation/gold_standard/sites.json records[0].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "late Archaic to Middle Formative"
+    },
+    {
+     "field": "description",
+     "text": "1000 BC-300 AD"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "LM-2",
+   "kind": "gold",
+   "site_id": "68677772-b461-49a3-bf2b-376e2b0e970b",
+   "site_name": "Lake Mungo",
+   "field": "card_description",
+   "severity": "moderate",
+   "claim": "spoken text dates the remains to 48,000 BC; sources date them to 40,000-42,000 BP (48,000 BC is the start of occupation)",
+   "source": "output/remediation/gold_standard/sites.json records[1].errors_found[1]",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "48,000 BC"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "ABe-1",
+   "kind": "gold",
+   "site_id": "82f23c96-d8b2-41f0-a3e5-59ae9b89880c",
+   "site_name": "Arc de Berà",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "description states the arch was BUILT 'through the will of Lucius Licinius Sura'; the cited source says the will funded a 2nd-century RESTORATION of a 13 BC arch",
+   "source": "output/remediation/gold_standard/sites.json records[5].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "through the will of Lucius Licinius Sura"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "AT-1",
+   "kind": "gold",
+   "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+   "site_name": "Ahu Tongariki",
+   "field": "period_start + description",
+   "severity": "severe",
+   "claim": "ahu dated 1-500 AD; moai chronology is 1250-1500 AD (different bucket), and the '[1]' citation behind the date points at an article that contains no date",
+   "source": "output/remediation/gold_standard/sites.json records[6].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "constructed between 1-500 AD"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "GP-1",
+   "kind": "gold",
+   "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+   "site_name": "The Gop",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "dimensions wrong: '14 m high, 101 m diameter' against 12 m and 75-80 m in Coflein and enwiki",
+   "source": "output/remediation/gold_standard/sites.json records[7].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "14 m high"
+    },
+    {
+     "field": "description",
+     "text": "101 m"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "GP-3",
+   "kind": "gold",
+   "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+   "site_name": "The Gop",
+   "field": "period_start + card_description",
+   "severity": "moderate",
+   "claim": "5th-millennium BC dating for a Neolithic monument (bucket '< 4500 BC' instead of 4500-3000 BC)",
+   "source": "output/remediation/gold_standard/sites.json records[7].errors_found[2]",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "5th-4th millennium BC"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "BG-1",
+   "kind": "gold",
+   "site_id": "0529af31-7573-467e-88ff-12dbca48f94d",
+   "site_name": "Bulls of Guisando",
+   "field": "description",
+   "severity": "cosmetic",
+   "claim": "'El Tiémblo' misspells the municipality El Tiemblo",
+   "source": "output/remediation/gold_standard/sites.json records[8].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "El Tiémblo"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "PC-1",
+   "kind": "gold",
+   "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+   "site_name": "Pyramid of Caius Cestius",
+   "field": "card_description",
+   "severity": "cosmetic",
+   "claim": "card says the pyramid 'copied Egyptian style'; the cited source and the record's own description say Nubian",
+   "source": "output/remediation/gold_standard/sites.json records[10].errors_found[0]",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "copied Egyptian style"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "OV-1",
+   "kind": "gold",
+   "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+   "site_name": "Overstone Anglo-Saxon Cemetery",
+   "field": "card_description",
+   "severity": "severe",
+   "claim": "spoken text invents '70 square barrows of the Arras culture' (an Iron Age East Yorkshire culture, absent from all sources) and inflates 154 graves to 'over 160 skeletons'",
+   "source": "output/remediation/gold_standard/sites.json records[12].errors_found[0]",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "70 square barrows"
+    },
+    {
+     "field": "card_description",
+     "text": "Arras culture"
+    },
+    {
+     "field": "card_description",
+     "text": "Over 160 skeletons"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "MM-1",
+   "kind": "gold",
+   "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+   "site_name": "The Merry Maidens",
+   "field": "period_start + description",
+   "severity": "moderate",
+   "claim": "circle dated 4500-3000 BC; sources give late Neolithic-early Bronze Age c. 2500-1500 BC, one bucket later, and the record contradicts its own 'Late Neolithic' label",
+   "source": "output/remediation/gold_standard/sites.json records[13].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "4500-3000 BC"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "FC-2",
+   "kind": "gold",
+   "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+   "site_name": "Font dels Coms",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "the spring is placed in Andorra la Vella; its own cited source gives Sant Julia de Loria, a different parish 8 km away",
+   "source": "output/remediation/gold_standard/sites.json records[16].errors_found[1]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "is a spring in Andorra la Vella"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "AM-1",
+   "kind": "gold",
+   "site_id": "e19f7af0-539c-474c-9404-b11f22f48846",
+   "site_name": "Amyntas Rock Tombs",
+   "field": "card_description",
+   "severity": "moderate",
+   "claim": "card calls the tomb's owner 'King Amyntas'; the inscription names 'Amyntas, son of Hermagios', a private man, and the record's own description says 'local nobleman'",
+   "source": "output/remediation/gold_standard/sites.json records[21].errors_found[0]",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "King Amyntas"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "TD-1",
+   "kind": "gold",
+   "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+   "site_name": "Temple of Dedun",
+   "field": "description",
+   "severity": "severe",
+   "claim": "the description is about the god Dedun, not about the temple: it gives no location, builder, date or architecture for the site, and it opens with a bare '[1]' marker",
+   "source": "output/remediation/gold_standard/sites.json records[22].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "Dedun was a Kushite or Nehasi god"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "BH-1",
+   "kind": "gold",
+   "site_id": "9dcc1c87-49c7-44f9-9d09-13b9b2b6671f",
+   "site_name": "Beacon Hill, Burghclere, Hampshire",
+   "field": "card_description",
+   "severity": "moderate",
+   "claim": "'an 80-hectare fort' - the 80.7 ha in the source is the biological Site of Special Scientific Interest, not the hillfort",
+   "source": "output/remediation/gold_standard/sites.json records[29].errors_found[0]",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "80-hectare fort"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "OC-1",
+   "kind": "gold",
+   "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa",
+   "site_name": "Ocriticum",
+   "field": "description",
+   "severity": "moderate",
+   "claim": "Roman temple dated '1st c. AD' where the cited article says 'around the beginning of the 1st century BC'",
+   "source": "output/remediation/gold_standard/sites.json records[33].errors_found[0]",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "Roman temple to Jupiter (1st c. AD)"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "CANARY-01",
+   "kind": "canary",
+   "site_id": "2968fd35-9b61-4dfb-bb1b-cc4489827fd6",
+   "site_name": "Hatunmarka",
+   "field": "card_description",
+   "severity": "severe",
+   "claim": "Card text describes **Choquequirao**, 400 km away",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 4.2",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "Choquequirao"
+    },
+    {
+     "field": "card_description",
+     "text": "Apurimac gorge"
+    }
+   ],
+   "note": "Section 5.1 quotes the stored card; the design names the defect.",
+   "quotes": [
+    {
+     "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 5.1",
+     "text": "Hatunmarka … below Choquequirao, above the Apurímac gorge"
+    },
+    {
+     "source": "output/remediation/logs/design_texts_images_2026-09-22.json, entry [6]",
+     "text": "Choquequirao on Hatunmarka"
+    }
+   ]
+  },
+  {
+   "id": "CANARY-02",
+   "kind": "canary",
+   "site_id": "411cacb0-6312-4465-81f2-76417d209c17",
+   "site_name": "Kit Hill",
+   "field": "description",
+   "severity": "severe",
+   "claim": "Description asserts a hillfort — there is none",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 4.2",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "hillfort"
+    }
+   ],
+   "note": null,
+   "quotes": []
+  },
+  {
+   "id": "CANARY-03",
+   "kind": "canary",
+   "site_id": "c5747999-7851-403a-bc69-ab150fba0dd8",
+   "site_name": "Partiscum (Castra)",
+   "field": "description",
+   "severity": "severe",
+   "claim": "Description invents a fort in Dacia; it was a settlement / road station",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 4.2",
+   "anchors": [
+    {
+     "field": "description",
+     "text": "Roman fort in the province of Dacia"
+    },
+    {
+     "field": "description",
+     "text": "most western fort of Dacia"
+    },
+    {
+     "field": "card_description",
+     "text": "westernmost fort of Roman Dacia"
+    }
+   ],
+   "note": "The stored card repeats the description's fort.",
+   "quotes": []
+  },
+  {
+   "id": "CANARY-04",
+   "kind": "canary",
+   "site_id": "45ac8925-95ec-476a-9a36-9bbb650add84",
+   "site_name": "House of Taga",
+   "field": "card_description",
+   "severity": "severe",
+   "claim": "House of Taga … from a site occupied as early as 10,000 BC",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 5.1",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "10,000 BC"
+    }
+   ],
+   "note": "Section 5.1 gives the settlement of the Marianas; the design names the defect.",
+   "quotes": [
+    {
+     "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 5.1",
+     "text": "(the Marianas were settled around 1500 BC)"
+    },
+    {
+     "source": "output/remediation/logs/design_texts_images_2026-09-22.json, entry [6]",
+     "text": "'10,000 BC' on House of Taga"
+    }
+   ]
+  },
+  {
+   "id": "CANARY-05",
+   "kind": "canary",
+   "site_id": "3dd6b568-007f-4a95-877b-12324e031893",
+   "site_name": "Maray Qalla",
+   "field": "card_description",
+   "severity": "severe",
+   "claim": "Maray Qalla … Inca road system that stretched over 30,000 km",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 5.1",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "30,000 km"
+    }
+   ],
+   "note": "The design names the defect.",
+   "quotes": [
+    {
+     "source": "output/remediation/logs/design_texts_images_2026-09-22.json, entry [6]",
+     "text": "'30,000 km' on Maray Qalla"
+    }
+   ]
+  },
+  {
+   "id": "CANARY-06",
+   "kind": "canary",
+   "site_id": "0569a73d-875d-4d49-bc8a-74c9a7fa4704",
+   "site_name": "Justinianopolis (Epirus)",
+   "field": "period_start",
+   "severity": "severe",
+   "claim": "`period_start = -500`, actually 6th c. AD → off by 1,000 years and several buckets",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 4.2",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "3rd-century BC"
+    }
+   ],
+   "note": "The stored card dates the city to the 3rd century BC, the BC dating the claim refutes (the town took Justinian I's name in the 6th century AD, as the stored description says).",
+   "quotes": []
+  },
+  {
+   "id": "CANARY-07",
+   "kind": "canary",
+   "site_id": "09327f42-d9bb-438f-8e78-ebba2c24fa42",
+   "site_name": "Eileithyia Cave",
+   "field": "period_start",
+   "severity": "severe",
+   "claim": "`period_start = -500`, actually in use from the Neolithic",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 4.2",
+   "anchors": [],
+   "note": "A field defect: the stored description and card both say the cave was used from the Neolithic, so no stored text carries it. A text that starts the cave's use at c. 500 BC would be its recurrence; the audit judges it against the claim.",
+   "quotes": []
+  },
+  {
+   "id": "CANARY-08",
+   "kind": "canary",
+   "site_id": "d3b11ebc-593d-4f1f-bf1d-6a55902d93a6",
+   "site_name": "Neos Panteleimonas",
+   "field": "period_start",
+   "severity": "severe",
+   "claim": "A 20th-century village carrying `period_start = -1000`; does not belong in an archaeology database",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 4.2",
+   "anchors": [
+    {
+     "field": "card_description",
+     "text": "from the 1st millennium BC"
+    }
+   ],
+   "note": "The stored card dates the modern village to the 1st millennium BC.",
+   "quotes": []
+  },
+  {
+   "id": "CANARY-09",
+   "kind": "canary",
+   "site_id": "006294ae-548b-40ac-9271-03a017df7217",
+   "site_name": "El Tintal",
+   "field": "coordinates",
+   "severity": "severe",
+   "claim": "Coordinate sits 11–12 km off the actual site (correct: 17.5744 / −89.9958)",
+   "source": "docs/procedures/SITES_DB_REMEDIATION_2026-09.md, section 4.2",
+   "anchors": [],
+   "note": "A coordinate defect: Phase 4 writes no coordinate and no stored text carries it; listed because the design names the canary.",
+   "quotes": []
+  },
+  {
+   "id": "CANARY-10",
+   "kind": "canary",
+   "site_id": "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6",
+   "site_name": "Ahin Posh Tape",
+   "field": "wikidata_qid",
+   "severity": "severe",
+   "claim": "for example Ahin Posh -> a Pakistani village",
+   "source": "output/remediation/logs/design_texts_images_2026-09-22.json, entry [5]",
+   "anchors": [
+    {
+     "field": null,
+     "text": "Pakistan"
+    }
+   ],
+   "note": "The stored item Q4695118 is a village in Pakistan (output/remediation/bcases/coords.jsonl: container-item, P17 Pakistan); the site is the stupa near Jalalabad, Afghanistan, as the stored description says. Design entry [2] records the country the wrong item gave. A text about that village, or one that places the site in Pakistan, is the recurrence (WRONG_SITE).",
+   "quotes": [
+    {
+     "source": "output/remediation/logs/design_texts_images_2026-09-22.json, entry [2]",
+     "text": "Location fact contradicts the stored country (e.g. Ahin Posh 'Jalalabad, Afghanistan' vs stored Pakistan)"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,86 @@
+{
+ "read_at": "2026-09-23T22:50:08+00:00",
+ "sites": [
+  {
+   "id": "03ebb1eb-834c-46f9-a038-9231d40f8072",
+   "name": "Columbário Fenício"
+  },
+  {
+   "id": "06704996-075d-49e6-8374-32adb32d8f61",
+   "name": "Ruínas Romanas da Bobadela"
+  },
+  {
+   "id": "3315cd99-84ed-4e95-b743-fe75fb4c7654",
+   "name": "Torre de Almofala"
+  },
+  {
+   "id": "3ff78ce4-ac80-4902-9bb9-20eab8a16a4a",
+   "name": "Ayşepınar"
+  },
+  {
+   "id": "417b5d77-c70a-40ad-adad-7f92ef1a0544",
+   "name": "Roma Dönemi Agora Harabeleri"
+  },
+  {
+   "id": "56f32f70-ee56-4778-a3b3-d490a482f6c8",
+   "name": "Cras - Ring Cairn to North of"
+  },
+  {
+   "id": "5b66df99-d730-4aaa-aef0-2d6bf3c53d17",
+   "name": "Tapınak"
+  },
+  {
+   "id": "5f3d80f4-5f79-4dfc-b40f-4583a46d316d",
+   "name": "GOLOGOÇ VİRANŞEHİR ŞANLIURFA TARİHİ KEMER"
+  },
+  {
+   "id": "77b9b433-376a-468e-8af3-13197a31ed28",
+   "name": "Foel Dduarth Enclosure"
+  },
+  {
+   "id": "7bab6020-97a0-46a2-9d2b-a8f7d00332f7",
+   "name": "Cras  Round Cairn"
+  },
+  {
+   "id": "803f8912-22af-46a8-82e3-bde675d8e5f3",
+   "name": "Selinunte Archaeological Park"
+  },
+  {
+   "id": "a24e51aa-ecb6-4ba4-8d14-5ccabaf4aa56",
+   "name": "The Water Temple"
+  },
+  {
+   "id": "a2e28715-eafa-4ac4-9bb3-1deaf34864b5",
+   "name": "Selva di Malano"
+  },
+  {
+   "id": "acfdb5fb-0c3b-436e-811e-cd2385a0d203",
+   "name": "Cras -  Round Cairn to North of"
+  },
+  {
+   "id": "bdd4c703-8f60-419f-a2ef-d7181692d59f",
+   "name": "Chichén Viejo"
+  },
+  {
+   "id": "cc3e0e34-8532-41dd-9988-6c20e37be8e6",
+   "name": "Rocha da Mina"
+  },
+  {
+   "id": "ebf764c6-27e7-45d9-834a-3f660c82193b",
+   "name": "Sfireh Roman Temple"
+  },
+  {
+   "id": "ee94fe5e-d975-4ed9-940d-16056532293e",
+   "name": "Beşkardeşler Kaya Mezarları"
+  },
+  {
+   "id": "fb56e557-87f8-4675-881f-a6f8c0885649",
+   "name": "Enclosed Hut Circle Settlement - South-East of Bod Silin"
+  },
+  {
+   "id": "fe3d5d3e-fef4-4ae8-bda9-bc41909c732e",
+   "name": "Tempio di Poseidone"
+  }
+ ],
+ "sql": "SELECT to_jsonb(x)::text FROM (SELECT u.id::text AS id, u.name FROM unified_sites u WHERE u.source_id = 'ancient_nerds' AND NOT EXISTS (SELECT 1 FROM site_external_ids e WHERE e.site_id = u.id AND e.kind IN ('enwiki_title', 'wikidata_qid')) AND (u.source_url IS NULL OR u.source_url !~ 'https?://') AND NOT EXISTS (SELECT 1 FROM site_content_links l WHERE l.site_id = u.id AND l.content_url ~ '^https?://') ORDER BY u.id) x;"
+}
