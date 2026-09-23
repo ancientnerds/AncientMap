@@ -344,29 +344,48 @@ def _json_rows(text: str) -> list[dict[str, Any]]:
 
 
 # ------------------------------------------------------------------------------------- the plan
+#: The journal lanes a change key can name: this stage's own, and the three row groups of phases 4
+#: and 5 (design entry [6], production_write, JOURNAL: `change_key(..., lane='phase4'|'phase4l'|
+#: 'phase5')` - the descriptions, the legacy disclosure and the cards). Closed: a key prefixed with
+#: a lane nobody registered would name a family no acceptance reads.
+CHANGE_KEY_LANES: tuple[str, ...] = ("phase3", "phase4", "phase4l", "phase5")
+
+
 def change_key(
     *,
     site_id: str,
     table: str,
     column: str,
     old_value: str | None,
-    new_value: str,
+    new_value: str | None,
     test_id: str,
+    lane: str = "phase3",
 ) -> str:
     """The digest that names one transition: sha256 over the six parts, JSON-encoded.
 
     JSON rather than a joined string because the parts cannot then be re-split differently, and a
     digest rather than a readable label because two transitions of one row must be distinguishable
     (`old -> new` and `new -> old` are two) while the same transition re-derived is the same key. The
-    `phase3:` prefix says which lane produced it; the mechanical lane's keys are
-    `country-canonical:<uuid>` and the two lanes never name the same row.
+    `<lane>:` prefix says which lane produced it; the mechanical lane's keys are
+    `country-canonical:<uuid>` and the lanes never name the same row.
+
+    `lane` defaults to `phase3`, and for it the key is byte for byte the one this function returned
+    before the parameter existed (WB-D1; pinned by `test_the_phase3_change_key_is_byte_identical`),
+    so the 994 journalled phase-3 keys stay reproducible. `new_value` may be `None` only for a
+    phase-5 card clear (`P5/card-clear`, the one row group that writes NULL); this stage never
+    plans one (`validate_rows`).
     """
+    if lane not in CHANGE_KEY_LANES:
+        raise WriteRefused(
+            f"change_key lane {lane!r} is not one of {list(CHANGE_KEY_LANES)}: a key names the "
+            "journal family its acceptance reads"
+        )
     parts = json.dumps(
         [site_id, table, column, old_value, new_value, test_id],
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    return "phase3:" + hashlib.sha256(parts.encode("utf-8")).hexdigest()
+    return f"{lane}:" + hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)

@@ -873,6 +873,63 @@ def test_the_change_key_is_a_digest_of_the_transition_not_of_the_row() -> None:
     assert there != back
 
 
+def test_the_phase3_change_key_is_byte_identical() -> None:
+    """WB-D1: `change_key` gained a `lane` parameter; for the default it must return exactly the
+    key it returned before (computed on 2026-09-23 from the code of `wip/p4-contracts`), or the
+    994 journalled phase-3 keys could no longer be re-derived from their rows."""
+    common = {"site_id": SITE_A, "table": "unified_sites"}
+    assert (
+        W.change_key(
+            **common,
+            column="country",
+            old_value="Georgia",
+            new_value="Armenia",
+            test_id="P3/country",
+        )
+        == "phase3:bab25362d114d9dfffa0472fc410d4e3b58c34325f94428a508a98a1af3124e1"
+    )
+    assert (
+        W.change_key(
+            **common,
+            column="period_start",
+            old_value=None,
+            new_value="-1500",
+            test_id="P3/period_start",
+            lane="phase3",
+        )
+        == "phase3:3ab143d42bfc17203590b5007ddc2427628d86a76a35963c95fe257b9b16b447"
+    )
+
+
+def test_a_phase4_lane_prefixes_its_family_over_the_same_digest() -> None:
+    """The phase-4/5 lanes name their journal family; the digest over the six parts is the one
+    phase 3 computes, so only the prefix tells the families apart."""
+    parts = {
+        "site_id": SITE_A,
+        "table": "unified_sites",
+        "column": "description",
+        "old_value": "old",
+        "new_value": "new",
+        "test_id": "P4/description",
+    }
+    digest = W.change_key(**parts).split(":", 1)[1]
+    for lane in ("phase4", "phase4l", "phase5"):
+        assert W.change_key(**parts, lane=lane) == f"{lane}:{digest}"
+
+
+def test_a_change_key_lane_outside_the_four_is_refused() -> None:
+    with pytest.raises(W.WriteRefused, match="not one of"):
+        W.change_key(
+            site_id=SITE_A,
+            table="unified_sites",
+            column="description",
+            old_value="old",
+            new_value="new",
+            test_id="P4/description",
+            lane="phase6",
+        )
+
+
 def test_the_read_statement_names_the_row_its_column_and_refuses_an_unwritable_one() -> None:
     """The read splices the column into the statement, so it refuses a column it may not read."""
     sql = W.stored_values_sql(column="country", site_ids=[SITE_A, SITE_B])
