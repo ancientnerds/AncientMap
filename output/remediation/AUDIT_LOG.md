@@ -6723,3 +6723,80 @@ Tomb (allovergreece.com).
   hand) - 57 deselected; `ruff check` over api, pipeline, scripts/remediation, tests and
   output/remediation/tools clean; `ruff format --check` on the six touched Python files clean;
   `lint-imports` 2 kept, 0 broken; `vulture` clean.
+
+## 2026-09-23 - Track C's "every guard is proven" was not true; the p4-verify findings closed, with the real counts
+
+Commit `6782fe3` on wip/p4-verify is titled "Prove every Track C guard with a mutation case (100/100
+caught)" and says its sweep "breaks each guard of verify4 ... of verify_writes4 ... and of the
+shorts S13 card trace". The 100/100 was real for its 100 cases; the claim that they were every
+guard was not:
+
+* **Rules review** (wf_57d89c7d-7ac, read-only): 46 guard conditions that no case named, removed one
+  at a time, left the Phase-4 suite green in 42 cases; 34 of them were reachable gaps (V1's pin
+  checks, V8's citation checks, V12's citation equality, V13's card presence, S13's inputs, the
+  one-sided and bracketed dash, each V5 artefact, curly-quote balance, the strong-own conditions,
+  lane T's trimmed quote, the batch's lane sources, the acceptance's planned-outside-lane check).
+  The inventory re-checked 17 of them in memory: all green without the guard.
+* **Correctness review**: four majors and three minors the 100 cases did not touch - V7 matched a
+  lane-S heading in both directions (C1), nothing checked that a range is one whole sentence (C2),
+  V10 rebuilt T/R cards from French or restricted text (C3), the acceptance failed every card-held
+  site (C4), one trailing space passed (C5), `name_in` matched inside words (C6), V14 held the
+  eight `Chile, Easter Island` sites (C7).
+
+### What wip/p4-verify-sup changed (commits `21822ea` .. `be79b23`)
+
+* The interrupted fixer's verify4 finder (section 7 before the evening's decision) was committed as
+  found (`21822ea`), then finished: the shared-comma refusal (two insertion pairs that share a
+  comma offer neither), and D2 - V10's spoken edit is `model4.CIRCA_PATTERN`, no circa pattern of
+  verify4's own (`c. AD 79` now reads as S4 reads it).
+* C1-C7 as the reviews proposed; see PHASE4_CONTRACTS.md section 5, Track C, for each reading.
+* Found on the way: V8 compared a citation's domain with the URL's full netloc, while S4
+  (`assemble.domain_of`) and production (`api/main.py`'s seeded citations) write the host without
+  `www.`; every lane-R citation on a `www.` host would have been held. V8 now reads the production
+  form, and the lane-R fixture follows it.
+* V14's string-equality fallback was dead code (every name `countries_named` finds has a code) and
+  is gone; a stored country with no code agrees with no named country, as before.
+* The acceptance: C4, and the follow-up wip/p4-write-sup left for this merge - a lane row with its
+  own kept reversal (its change key **and** its run stamp, each plus `-rollback`, revert4's
+  `_reversed`) is reverted, not "changed later" and not a second write; a row whose lane rows are
+  all reverted is judged like one not yet written. Both journal reads now carry `change_key`.
+* R3: S13's two inputs come from `shorts_audit.card_trace`; `measure_site`'s use of it is pinned by
+  an AST test, because `measure_site` itself needs a rendered short (ffprobe).
+
+### The counts, measured on wip/p4-verify-sup at `be79b23`
+
+* **Tests.** `test_phase4_verify.py`: 112 test functions (76 at `6782fe3`), 242 collected, 241
+  passed, 1 skipped (the brand fonts, gitignored). `test_phase4_accept.py`: 34 (29). The S13 tests
+  in `tests/pipeline/video/test_shorts.py`: 8 (6). Every fix was red first: 25 failures in the two
+  Phase-4 files plus the shorts module's `card_trace` import error, before any code change.
+  The tests of guards that already existed (R1, R2, R4, R5) were green before; their sweep
+  cases are what shows each of them red without its guard.
+* **Sweep.** `PHASE4_VERIFY_MUTATIONS` (100) plus the new `PHASE4_VERIFY_SUP_MUTATIONS` (105, each
+  list registered once): **205 of 205 caught**, the four mutated files byte-identical afterwards,
+  `git status` clean, no `# mutant` line outside the sweep files. By family: 165 `p4 verify4:`, 32
+  `p4 verify_writes4:`, 7 `p4 shorts_audit:`, 1 `p4 shorts_export:`. Eight older cases were
+  re-anchored where the new code replaced their lines. The first run of the new list read
+  **204/205**: "a row without a change key has a reversal" survived, because the keyless test had
+  no row under the reversal stamp and `any()` never reached the null key; the test now also holds
+  a keyless write followed by its keyless reversal open (SQL `NULL || '-rollback'` equals nothing),
+  and the case is caught.
+* **D3 parity.** The parity test runs `sentences.split_source` and verify4's finder over the 50
+  `SPAN_CASES` and 17 texts of the verifier's own: identical ranges. Read-only over the 3,661 local
+  enwiki extracts (`phase3_runner/runs/mass`): 170,528 sentences, 81,979 of them in a lane-W pool,
+  144,272 spans offered by S2 - **0** sentences on which the two finders differ, and every S2
+  sentence range is one sentence of verify4's split, so V2's whole-sentence check holds no S2 pick.
+* **Gates** on the merged tree (integrate/wave1 `234e198` and wip/p4-select-sup `c5c4335` merged
+  in): `pytest -q -rs --timeout 300 -m "not integration and not live_llm"` **5,306 passed**, 116
+  skipped (gitignored data, caches and the brand fonts), 57 deselected; `ruff check` over api,
+  pipeline, scripts/remediation, tests and output/remediation/tools clean; `ruff format --check`
+  on the eight touched Python files clean; `lint-imports` 2 kept, 0 broken; `vulture` clean.
+
+### What 205/205 still does not prove
+
+The sweep proves that each listed case is caught; it cannot prove that the list is complete. Left
+without a case, on purpose: the `l` rule's "text after the comma" check (unreachable once the
+sentence must end in `.`, `!` or `?`), the split's `if piece:` and heading-line skip (equivalent:
+an empty range or a heading range is never a published sentence's), the lane read's key map
+(equivalent: the chain read records every lane row's key as well), and `change_key` in
+`JOURNAL_COLUMNS` (removing it raises `KeyError`; it never passes). The pre-pilot end-to-end run of write4, write_gate4 `--round 2`, revert4 and the
+acceptance together needs wip/p4-write-sup on the same tree; it is not on this branch.

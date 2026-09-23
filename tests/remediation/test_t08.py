@@ -73,13 +73,13 @@ class TestT08CleanRows:
 
     def test_range_markers_are_expanded_not_missed(self, t08):
         site = _site("a", "A hill [1-3].", [_entry(1), _entry(2), _entry(3)])
-        assert t08._marker_sequence(site["description"]) == [1, 2, 3]
+        assert t08.marker_sequence(site["description"]) == [1, 2, 3]
         assert t08.run(_ctx([site])) == []
 
     def test_thousands_numeral_is_not_a_marker(self, t08):
         """`[3,000]` is a number in prose; treating it as a citation invents a defect."""
         site = _site("a", "Occupied for [3,000] years.")
-        assert t08._marker_sequence(site["description"]) == []
+        assert t08.marker_sequence(site["description"]) == []
         assert t08.applies_to(site, None) is False
         assert t08.run(_ctx([site])) == []
 

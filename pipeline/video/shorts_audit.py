@@ -3,16 +3,20 @@
 Checks the things a viewer would notice and a batch would silently get wrong:
 container/format, clip completeness, black frames, the loop seam, the audio
 timeline (voice from 0, spoken name in its window, silence at the loop point),
-loudness, and the selection. Writes `audit.json` next to the short; the
-`evaluate` helpers are pure and unit tested, `audit_site` does the probing.
+loudness, the selection, and that the narrated card is the one its
+`_description_provenance` pins (S13, `card_traced`). Writes `audit.json` next
+to the short; the `evaluate` helpers are pure and unit tested, `audit_site`
+does the probing.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
 import subprocess
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -191,6 +195,18 @@ def evaluate(m: dict) -> list[Check]:
             f"{m['caption_words']}/{m['card_words']} words, last ends {m['captions_end']:.2f}s",
         )
     )
+    # S13 (plan §7, Phase-4 design card_texts "TRACEABILITY"): the narrated card
+    # is the card its provenance pins. A card without card provenance - a held
+    # card, or one written before Phase 5 - is not shorts-eligible.
+    pinned = m["card_provenance_sha256"]
+    checks.append(
+        Check(
+            "card_traced",
+            pinned is not None and m["card_sha256"] == pinned,
+            f"card sha256 {m['card_sha256'][:16]}, provenance "
+            + (pinned[:16] if pinned is not None else "carries no card"),
+        )
+    )
     return checks
 
 
@@ -232,17 +248,49 @@ def _ffprobe_stream(path: Path) -> dict:
     }
 
 
-def _widest_caption(captions: list[dict], font_path: Path) -> tuple[str, int]:
-    """The caption word that renders widest (as shown: edge punctuation off,
-    outline included) and its width in pixels."""
-    font = ImageFont.truetype(str(font_path), CAPTION_SIZE)
+def caption_font(font_path: Path) -> ImageFont.FreeTypeFont:
+    """The caption face as the render draws it: `font_path` at CAPTION_SIZE."""
+    return ImageFont.truetype(str(font_path), CAPTION_SIZE)
+
+
+def widest_word_px(words: Iterable[str], font: ImageFont.FreeTypeFont) -> tuple[str, int]:
+    """The word that renders widest as a caption (as shown: edge punctuation
+    off, outline included) and its width in pixels.
+
+    Public because it is the S3 gate ("every caption word fits the frame")
+    and the Phase-4 verifier (`scripts/remediation/phase4/verify4.py`, V10)
+    applies that gate to a card before it is written: one measurement, so
+    the card check and the short's audit cannot disagree about a word."""
     widest, max_w = "", 0
-    for word in captions:
-        shown = display_text(word["text"])
+    for word in words:
+        shown = display_text(word)
         w = int(font.getlength(shown)) + 2 * CAPTION_BORDER if shown else 0
         if w > max_w:
             widest, max_w = shown, w
     return widest, max_w
+
+
+def _widest_caption(captions: list[dict], font_path: Path) -> tuple[str, int]:
+    """The caption word that renders widest (as shown: edge punctuation off,
+    outline included) and its width in pixels."""
+    return widest_word_px((word["text"] for word in captions), caption_font(font_path))
+
+
+def card_sha256(card_text: str) -> str:
+    """sha256 of the card's UTF-8 bytes, lowercase hex: the form of
+    `_description_provenance.card.text_sha256` (S13)."""
+    return hashlib.sha256(card_text.encode("utf-8")).hexdigest()
+
+
+def card_trace(site: dict) -> dict:
+    """S13's two inputs out of `site.json`: the hash of the card the short narrates
+    (`card_text`), and the hash its `_description_provenance` pins (`card_text_sha256`, the
+    export's; `None` for a card without card provenance). Each from its own side: taking one from
+    the other would make S13 pass every card that has any pin."""
+    return {
+        "card_sha256": card_sha256(site["card_text"]),
+        "card_provenance_sha256": site["card_text_sha256"],
+    }
 
 
 def _frames(path: Path) -> int:
@@ -435,6 +483,7 @@ def measure_site(site_dir: Path) -> dict:
         "card_words": len(site["card_text"].split()),
         "caption_words": len(captions),
         "captions_end": max((w["end"] for w in captions), default=0.0),
+        **card_trace(site),
     }
 
 

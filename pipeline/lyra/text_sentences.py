@@ -42,6 +42,23 @@ _ABBREV_CI_RE = re.compile(
 )
 _ABBREV_CS_RE = re.compile(r"\b(?:St|Mt|Dr|Prof|Mr|Mrs|Ms|Jr|Sr|Ed|No|Nos|Vol|Fig|Op)\.")
 
+# Date abbreviations in front of a number or an era: "c. 2500 BC", "ca. 300", "r. 1279-1213
+# BC", "fl. 1200", "b. 1900", "d. 1950", "c. AD 750", "the 5th c. BCE". Without this rule "The
+# temple was built c. 2500 BC by Khufu." split after "c." - the next word opens like a sentence -
+# and is_complete_sentence passed both fragments (Phases 4 and 5 design, failure_modes). Measured
+# 2026-09-23 over the 3,681 local Wikipedia extracts: 1,249 such breaks in 490 articles before,
+# 26 in 14 after (mostly "b." for "bin" before a name, which is left alone). The era words
+# are matched in capitals only: "d." or "b." elsewhere stays an ordinary word end.
+_DATE_ABBREV_RE = re.compile(
+    r"\b(?:c|ca|r|fl|b|d)\.(?=\s?(?:\d|(?-i:AD|BC|BCE|CE)\b))", re.IGNORECASE
+)
+
+# The same break in the era forms of the other Wikipedia languages the Phase-4 lane T selects from
+# (fr, de, es, tr): "2500 av. J.-C. par", "um 2500 v. Chr. errichtet", "hacia el 2500 a. C. por",
+# "M.Ö. 2500". The word in front of the era is never a sentence end, and "M.Ö." is one abbreviation
+# (its "Ö" is outside the ASCII initial rule). Italian and Portuguese "a.C." are dotted forms already.
+_ERA_ABBREV_RE = re.compile(r"\b(?:av|apr|v|n|a|d)\.(?=\s(?:J\.-C\.|Chr\.|C\.))|\bM\.Ö\.")
+
 # Split only where a terminal mark is followed by whitespace AND the next
 # sentence opens the way a sentence does - capital, digit, quote or bracket.
 # A lowercase continuation means the period almost certainly belonged to an
@@ -51,7 +68,14 @@ _SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[\"'(\[«]?[A-Z0-9])")
 
 def _protect(text: str) -> str:
     """Replace periods that are not sentence ends with the sentinel."""
-    for pattern in (_DOTTED_RE, _ABBREV_CI_RE, _ABBREV_CS_RE, _INITIAL_RE):
+    for pattern in (
+        _DOTTED_RE,
+        _ABBREV_CI_RE,
+        _ABBREV_CS_RE,
+        _DATE_ABBREV_RE,
+        _ERA_ABBREV_RE,
+        _INITIAL_RE,
+    ):
         text = pattern.sub(lambda m: m.group(0).replace(".", _DOT), text)
     return text
 
