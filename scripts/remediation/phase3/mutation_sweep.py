@@ -7702,6 +7702,7 @@ _WW_WHOLE = "test_the_quote_must_stand_whole_in_the_page"
 _WW_CHAIN = "test_two_witnesses_that_are_each_one_with_a_third_do_not_pair"
 _WW_CITES = "test_a_p625_that_cites_the_web_pages_publisher_is_one_with_it"
 _WW_COPY = "test_a_proxy_or_an_archive_copy_is_never_a_web_witness"
+_WW_TYPE = "test_a_type_word_of_the_name_does_not_identify_it"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -8489,6 +8490,41 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    copy = next((d for d in COPY_HOSTS if d in host), None)  # mutant\n",
         _WW_TEST,
         _WW_COPY,
+    ),
+    (
+        "bcases web: a type word of the name identifies it",
+        _WW,
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN)  # mutant\n",
+        _WW_TEST,
+        _WW_TYPE,
+    ),
+    (
+        "bcases web: 'great' is read as a name of its own",
+        _WW,
+        "        great little small large",
+        "        little small large",
+        _WW_TEST,
+        _WW_TYPE,
+    ),
+    (
+        "bcases web: 'temple' is read as a name of its own",
+        _WW,
+        " sanctuary settlement settlements shelter shrine spring springs square stadium statue\n"
+        "        stele stone stones street stupa tomb tombs tower towers temple temples",
+        " sanctuary settlement settlements shelter shrine spring springs square stadium statue\n"
+        "        stele stone stones street stupa tomb tombs tower towers temples",
+        _WW_TEST,
+        _WW_TYPE,
+    ),
+    (
+        "bcases web: a name of type words only matches on one of them",
+        _WW,
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)"
+        " or sorted(C.tokens(name))  # mutant\n",
+        _WW_TEST,
+        "test_a_name_of_type_words_only_is_matched_whole",
     ),
     (
         "bcases web: a forged witness on an archive is weighed",

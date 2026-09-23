@@ -46,9 +46,10 @@ redirect ends at:
 * `mismatch` - the parsed numbers are not the candidate's `lat`/`lon` within `MATCH_DEGREES` (1e-6):
   the numbers are the page's, not the agent's;
 * `identity` - no distinctive word of the stored name (`classify.tokens`, words of at least
-  `MIN_TOKEN` letters) and not the whole folded name occurs within `IDENTITY_WINDOW` (1,500)
-  characters of the coordinates on the page: a list page's coordinate for another site is not this
-  site's.
+  `MIN_TOKEN` letters that do not merely say what kind of place it is, `TYPE_WORDS`: "great",
+  "dolmen", "temple", "grave", "field"...) and not the whole folded name occurs within
+  `IDENTITY_WINDOW` (1,500) characters of the coordinates on the page: a list page's coordinate for
+  another site is not this site's, nor is a page about another temple.
 
 An accepted row carries the witness: kind `web`, the page's numbers (the parsed values), the URL the
 page was read at, `coord_text` as the quote and `classify.grid_of` of the numbers as its step.
@@ -206,6 +207,61 @@ MATCH_DEGREES = 1e-6
 #: must stand, and how long a word of the name must be to count as distinctive.
 IDENTITY_WINDOW = 1500
 MIN_TOKEN = 4
+
+#: Words that say what kind of place a name is - its type, form, material, age, culture, size,
+#: colour, number or direction - not which place: a page about another one uses them beside its own
+#: coordinates as readily ("a great view over the harbour", "Luxor Temple"). They identify nothing
+#: (`distinctive_words`); a name made of them alone is matched whole. Drawn from the words the 5,004
+#: curated names use most (2026-09-23), in the languages the names are written in, and the English
+#: kinds of place beside them; place names among those words (Pompeii, Delphi, Kilmartin) and the
+#: names of persons and gods stay distinctive. Folded as `classify.fold` folds a name. The list errs
+#: towards more words: a word wrongly here makes the check ask for another word of the name or the
+#: whole name, a word wrongly missing lets another place's page through.
+TYPE_WORDS = frozenset(
+    C.fold(
+        """
+        abbey acropolis agora altar altars amphitheater amphitheatre aqueduct aqueducts arch arches
+        avenue barrow barrows basilica bath baths beach beacon bridge bridges broch burial burials
+        cairn cairns camp canal castle castles catacomb catacombs causeway cave caverns caves
+        cemetery chamber chambered chambers chapel church circle circles citadel cliff cliffs column
+        columns court cromlech cross crossing cursus ditch dolmen dolmens dyke dykes earthwork
+        earthworks enclosure enclosures field fields fort forts fortress fortification
+        fortifications forum fountain gate gates grave graves hall harbor harbour henge hill hills
+        hillfort hillforts house houses island islands lake library lighthouse mausoleum megalith
+        megaliths megalithic menhir menhirs mine mines monastery monument monuments mound mounds
+        mount mountain mountains museum necropolis obelisk oppidum palace passage pillar platform
+        pool port pyramid pyramids quarry quoit rampart ramparts reserve ring rings river road rock
+        rocks sanctuary settlement settlements shelter shrine spring springs square stadium statue
+        stele stone stones street stupa tomb tombs tower towers temple temples theater theatre
+        treasury tumulus tumuli valley village villa villas wall walls well wells wood woods forest
+        moor knoll glen bank belt hole shaft table edge ground farm close zone district state
+        carving carvings painting paintings petroglyph petroglyphs inscription inscriptions
+        mortuary funerary sacred holy royal giant giants king kings queen maiden maidens devil
+        devils historic historical heritage culture cultural monumental arrangement
+        great little small large long high upper lower nether north south east west northern
+        southern eastern western black white green blue grey gray brown golden round open standing
+        natural earthen three four five seven nine twelve regional provincial common
+        prehistoric neolithic bronze iron roman romano romain romaine romains gallo greek celtic
+        pictish norse viking saxon byzantine hellenistic punic thracian dacian nuragic mycenaean
+        minoan macedonian etruscan phoenician hittite egyptian british buddhist hindu inca inka
+        maya mayan aztec olmec bosnian pomeranian
+        castro castros anta antas cueva cuevas cova grotta grotte torre templo tempio tomba tombe
+        puente ponte pont porta porte monte cerro pedra piedra roca castillo castell castello
+        chateau vila velho velha viejo vieja alto alta gran grande verde blanca blanco negra negro
+        noire rouge santa santo sant saint sainte fonte fuente puerto portus aquae domus thermae
+        vicus macellum museo musee necropoli necropole giganti naveta navetas talaiot nuraghe menir
+        menires isla punta dels
+        caer gaer dinas bryn moel foel carn carnedd mynydd bedd craig stane howe knap tump burgh
+        bury berry borough combe down downs crag crags
+        kale kalesi tepe tepesi tapınağı tiyatrosu anıt anıtı mezarları mağara mağarası höyük
+        qasr qala qalat qalaat deir khan ksar tell wadi jebel jabal
+        huaca wasi machay pukara pucara llaqta marka tampu tambo usnu urqu muqu pirqa hatun wayna
+        mawk nawpa
+        għar borg tholos stoa odeon heraion kastro pyrgos aghios agios agia hagios grad gradina
+        burg stein steine takht dheri vihara
+        """
+    ).split()
+)
 
 #: The glyphs a coordinate is typed with, unified before NFKC (which would turn a masculine ordinal
 #: into "o", a superscript zero into "0" and a double prime into two primes) and again after it.
@@ -460,8 +516,8 @@ def parse_coordinates(coord_text: str) -> tuple[float, float]:
 # ----------------------------------------------------------------------------------- identity
 def distinctive_words(name: str) -> list[str]:
     """The words of the stored name that say which place it is: `classify.tokens` (the generic words
-    gone) of at least `MIN_TOKEN` letters."""
-    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN)
+    gone) of at least `MIN_TOKEN` letters that are not `TYPE_WORDS`."""
+    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)
 
 
 def _standalone_hemisphere(hay: str, at: int) -> bool:

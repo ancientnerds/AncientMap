@@ -607,6 +607,52 @@ def test_generic_and_short_words_of_the_name_do_not_identify_it() -> None:
     assert _verify(Page(text=own), name=name)[0]["accepted"]
 
 
+def _named(name: str, markup: str, coord_text: str, lat: float, lon: float) -> dict[str, Any]:
+    candidate = _candidate(coord_text=coord_text, lat=lat, lon=lon)
+    net = ScriptedNet({URL: Page(text=_html(markup))})
+    return W.verify_candidate(net, site_id=SITE, name=name, candidate=candidate)
+
+
+def test_a_type_word_of_the_name_does_not_identify_it() -> None:
+    """ "Great", "dolmen", "temple", "grave", "field" say what kind of place a name is, not which: a
+    page about another place uses them beside its own coordinates as readily - the Sassnitz town
+    hall's "great view" next to the Great Dolmen of Dwasieden's P625, Luxor Temple for Karnak Temple
+    Complex. Only the name's own words identify it."""
+    assert W.distinctive_words("Great Dolmen of Dwasieden") == ["dwasieden"]
+    assert W.distinctive_words("Karnak Temple Complex") == ["karnak"]
+    assert W.distinctive_words("Jordbro Grave Field") == ["jordbro"]
+    assert W.distinctive_words("Petroglyph Beach State Historic Park") == []
+    assert {"tomb", "gate", "forum", "cave", "caves", "tower", "arch", "rock", "shelter"} <= (
+        W.TYPE_WORDS
+    )
+    assert {"museum", "villa", "roman", "river", "menir"} <= W.TYPE_WORDS
+    dwasieden = ("Great Dolmen of Dwasieden", "54.51500, 13.64100", 54.515, 13.641)
+    sassnitz = (
+        "<h1>Sassnitz town hall</h1><p>A great view over the harbour.</p><p>Coordinates: {}</p>"
+    )
+    row = _named(dwasieden[0], sassnitz.format(dwasieden[1]), *dwasieden[1:])
+    assert _code(row) == "identity" and "['dwasieden']" in row["reason"], row["reason"]
+    own = "<h1>The dolmen of Dwasieden</h1><p>Coordinates: {}</p>"
+    assert _named(dwasieden[0], own.format(dwasieden[1]), *dwasieden[1:])["accepted"]
+    karnak = ("Karnak Temple Complex", "25.69950, 32.63910", 25.6995, 32.6391)
+    luxor = "<h1>Luxor Temple</h1> Coordinates: {}"
+    row = _named(karnak[0], luxor.format(karnak[1]), *karnak[1:])
+    assert _code(row) == "identity" and "['karnak']" in row["reason"], row["reason"]
+    assert _named(karnak[0], f"<h1>Karnak</h1> {karnak[1]}", *karnak[1:])["accepted"]
+
+
+def test_a_name_of_type_words_only_is_matched_whole() -> None:
+    """ "Petroglyph Beach State Historic Park" has no word of its own: the whole name must stand
+    beside the coordinates, not one of its words."""
+    park = ("Petroglyph Beach State Historic Park", "56.47500, -132.37000", 56.475, -132.37)
+    other = "<h1>Sandy Beach</h1><p>A state park with a historic cabin.</p><p>{}</p>"
+    row = _named(park[0], other.format(park[1]), *park[1:])
+    assert _code(row) == "identity" and "[]" in row["reason"], row["reason"]
+    own = "<h1>Petroglyph Beach State Historic Park</h1><p>{}</p>"
+    row = _named(park[0], own.format(park[1]), *park[1:])
+    assert row["accepted"] and "'petroglyph beach state historic park'" in row["reason"]
+
+
 def test_a_name_without_a_distinctive_word_is_matched_whole() -> None:
     """ "Ur" has no word of four letters: the whole folded name must stand there as a word, and
     "urban" is not "Ur"."""
