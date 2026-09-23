@@ -293,13 +293,22 @@ def cmd_review(args: argparse.Namespace) -> tuple[int, Report]:
 
 
 def aggregate_holds(run_dir: Path) -> list[M.Hold]:
-    """Every batch's holds, in batch order, each distinct line once: `HOLDS4.jsonl`."""
+    """Every batch's holds, in batch order, each distinct line once: `HOLDS4.jsonl`.
+
+    A site counts in its latest batch only: `mass4` re-queues a site held `revision-too-fresh` into
+    a later batch (`REQUEUE4.jsonl`), and the holds of the batch it left are no longer its state.
+    """
+    batch_dirs = sorted(p for p in run_dir.iterdir() if p.is_dir())
+    sites_of = {path.name: {site.site_id for site in B.read_batch(path)[1]} for path in batch_dirs}
+    latest = {site_id: name for name, site_ids in sites_of.items() for site_id in site_ids}
     seen: set[str] = set()
     out: list[M.Hold] = []
-    for batch_dir in sorted(p for p in run_dir.iterdir() if p.is_dir()):
+    for batch_dir in batch_dirs:
         for hold in B.read_holds(batch_dir):
+            if hold.site_id not in sites_of[batch_dir.name]:
+                raise InputError(f"{batch_dir}: a hold for {hold.site_id}, not a site of the batch")
             line = hold.to_json()
-            if line not in seen:
+            if latest[hold.site_id] == batch_dir.name and line not in seen:
                 seen.add(line)
                 out.append(hold)
     return out

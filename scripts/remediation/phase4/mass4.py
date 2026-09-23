@@ -21,9 +21,18 @@ stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4
 * **Searches** are bounded per run: each `routes` stage is told how many of the run's
   `--max-searches` are left, and the budget stops the run between batches. The routes stages of
   parallel batches take turns (`search_turn`), so no two are told the same remainder.
+* **A revision younger than 48 h defers the site to a later batch** (design S1). S1 and S1b hold
+  such a site `revision-too-fresh`, and the hold is final for its batch directory (the stored
+  answer is judged again on a re-run). The driver defers it: a site whose latest batch held it so is
+  re-queued, once 48 h have passed since the answer that held it (`sources_stage.fresh_until`),
+  into a new batch of `REQUEUE4.jsonl` in the run directory - PLAN4's line shape and numbering
+  (`p4-NNNN`, after the last ordinal of the plan and of earlier re-queues, 15 sites a batch), so
+  `run4 prepare` copies it like a plan line. The re-queued batches run after the plan's; a site not
+  ready yet is re-queued by a later invocation. Its latest batch is then the one that counts
+  (`run4.aggregate_holds` drops the holds of the batches it left).
 
-Dry by default: without `--live` nothing is started and no ledger line is written. At the end the
-driver writes `HOLDS4.jsonl` beside the batches (`run4.aggregate_holds`).
+Dry by default: without `--live` nothing is started, no ledger line and no re-queue is written. At
+the end the driver writes `HOLDS4.jsonl` beside the batches (`run4.aggregate_holds`).
 
     ./.venv/Scripts/python.exe scripts/remediation/phase4/mass4.py \\
         --run-dir output/remediation/phase4_runner/runs/pilot --live --jobs 4
@@ -36,17 +45,23 @@ import json
 import re
 import sys
 import threading
+from collections.abc import Collection, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from phase3 import mass_run as MR  # noqa: E402
+from phase3 import run as R3  # noqa: E402
 from phase3.run import InputError, read_jsonl  # noqa: E402
 
 from phase4 import batch4 as B  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
+from phase4 import plan4 as P4  # noqa: E402
 from phase4 import run4 as R4  # noqa: E402
+from phase4 import sources_stage as S1  # noqa: E402
 
 PHASE4_DIR = Path(__file__).resolve().parent
 RUN4 = PHASE4_DIR / "run4.py"
@@ -59,14 +74,33 @@ LIVE_STAGES = frozenset({"sources", "routes", "select", "review"})
 PACED_STAGES = frozenset({"sources", "routes"})
 DEFAULT_MAX_USD = 15.0
 DEFAULT_MAX_SEARCHES = 700
+#: The run directory's re-queue plan: the batches of sites deferred for a too fresh revision.
+REQUEUE_FILE = "REQUEUE4.jsonl"
 
 #: One exit line. The child writes its log in text mode, so on Windows the line ends in `\r\n`.
 _EXIT_LINE = re.compile(rf"^{R4.STAGE_EXIT}(?P<code>-?[0-9]+)\r?$", re.MULTILINE)
 
 
-def read_plan4(path: Path) -> list[MR.PlannedBatch]:
+@dataclass(frozen=True)
+class PlanLine:
+    """One line of `PLAN4.jsonl` or `REQUEUE4.jsonl`: a batch and its sites."""
+
+    batch_id: str
+    ordinal: int
+    sites: tuple[M.PlanSite, ...]
+
+    def planned(self) -> MR.PlannedBatch:
+        return MR.PlannedBatch(batch_id=self.batch_id, ordinal=self.ordinal, sites=len(self.sites))
+
+    def to_json(self) -> str:
+        """The plan's own line shape (`phase3.run.Batch`), which `run4 prepare` copies."""
+        sites = tuple(site.to_dict() for site in self.sites)
+        return R3.Batch(batch_id=self.batch_id, ordinal=self.ordinal, sites=sites).to_json()
+
+
+def read_plan4_lines(path: Path) -> list[PlanLine]:
     """The whole plan, or nothing: every line a `p4-` batch of `PlanSite`s, no id twice."""
-    batches: list[MR.PlannedBatch] = []
+    lines: list[PlanLine] = []
     site_ids: set[str] = set()
     for number, row in enumerate(read_jsonl(path), start=1):
         batch_id = row.get("batch_id")
@@ -80,12 +114,102 @@ def read_plan4(path: Path) -> list[MR.PlannedBatch]:
             if plan_site.site_id in site_ids:
                 raise MR.PlanError(f"{path}:{number}: {plan_site.site_id} is planned twice")
             site_ids.add(plan_site.site_id)
-        batches.append(MR.PlannedBatch(batch_id=batch_id, ordinal=ordinal, sites=len(sites)))
-    if not batches:
+        lines.append(PlanLine(batch_id=batch_id, ordinal=ordinal, sites=tuple(sites)))
+    if not lines:
         raise MR.PlanError(f"{path}: no batches")
-    if len({b.batch_id for b in batches}) != len(batches):
+    if len({line.batch_id for line in lines}) != len(lines):
         raise MR.PlanError(f"{path}: a batch id appears twice; the progress file keys on it")
-    return batches
+    return lines
+
+
+def read_plan4(path: Path) -> list[MR.PlannedBatch]:
+    return [line.planned() for line in read_plan4_lines(path)]
+
+
+# ---------------------------------------------------------------------------- the re-queue
+
+
+def read_requeue(run_dir: Path, plan: Sequence[PlanLine]) -> list[PlanLine]:
+    """The run's re-queued batches (`REQUEUE4.jsonl`; a run that never re-queued has none): each
+    the batch `p4-<ordinal>` of an ordinal after every line before it, of planned sites, each once."""
+    path = run_dir / REQUEUE_FILE
+    if not path.exists():
+        return []
+    planned = {site.site_id for line in plan for site in line.sites}
+    taken = {line.batch_id for line in plan}
+    last = max(line.ordinal for line in plan)
+    lines: list[PlanLine] = []
+    for number, row in enumerate(read_jsonl(path), start=1):
+        where = f"{path}:{number}"
+        ordinal = row.get("ordinal")
+        if not isinstance(ordinal, int) or isinstance(ordinal, bool) or ordinal <= last:
+            raise MR.PlanError(f"{where}: ordinal {ordinal!r} does not follow ordinal {last}")
+        batch_id = f"{P4.BATCH_PREFIX}-{ordinal:04d}"
+        if row.get("batch_id") != batch_id or batch_id in taken:
+            raise MR.PlanError(f"{where}: {row.get('batch_id')!r} is not the new batch {batch_id}")
+        sites = R4.plan_line_sites(row, where)
+        ids = [site.site_id for site in sites]
+        if len(set(ids)) != len(ids) or not set(ids) <= planned:
+            raise MR.PlanError(f"{where}: a re-queued batch carries planned sites, each once")
+        taken.add(batch_id)
+        last = ordinal
+        lines.append(PlanLine(batch_id=batch_id, ordinal=ordinal, sites=tuple(sites)))
+    return lines
+
+
+@dataclass(frozen=True)
+class Deferred:
+    """A site its latest batch held `revision-too-fresh`, and when it may be asked again."""
+
+    site: M.PlanSite
+    held_in: str
+    ready_at: datetime
+
+
+def deferred_sites(run_dir: Path, lines: Sequence[PlanLine]) -> list[Deferred]:
+    """Every site whose latest batch - the last line that lists it - held it `revision-too-fresh`:
+    48 h after the answer that held it, it goes into a later batch (design S1)."""
+    latest: dict[str, tuple[str, M.PlanSite]] = {}
+    for line in lines:
+        for site in line.sites:
+            latest[site.site_id] = (line.batch_id, site)
+    fresh: dict[str, dict[str, M.Hold]] = {}
+    deferred: list[Deferred] = []
+    for site_id, (batch_id, site) in latest.items():
+        if batch_id not in fresh:
+            fresh[batch_id] = {
+                hold.site_id: hold
+                for hold in B.read_holds(run_dir / batch_id)
+                if hold.scope is M.HoldScope.SITE and hold.reason is M.HoldReason.REVISION_TOO_FRESH
+            }
+        hold = fresh[batch_id].get(site_id)
+        if hold is not None:
+            deferred.append(Deferred(site, batch_id, S1.fresh_until(hold.detail)))
+    return deferred
+
+
+def requeue_lines(
+    lines: Sequence[PlanLine], deferred: Sequence[Deferred], *, now: datetime
+) -> list[PlanLine]:
+    """The deferred sites whose 48 h have passed, in new batches of `plan4.BATCH_SIZE` numbered
+    after every line of the plan and of earlier re-queues."""
+    ready = [item.site for item in deferred if item.ready_at <= now]
+    first = max(line.ordinal for line in lines) + 1
+    return [
+        PlanLine(
+            batch_id=f"{P4.BATCH_PREFIX}-{first + k:04d}",
+            ordinal=first + k,
+            sites=tuple(ready[start : start + P4.BATCH_SIZE]),
+        )
+        for k, start in enumerate(range(0, len(ready), P4.BATCH_SIZE))
+    ]
+
+
+def append_requeue(run_dir: Path, new: Sequence[PlanLine]) -> None:
+    """Append the new batches to `REQUEUE4.jsonl`; the lines already there are never rewritten."""
+    path = run_dir / REQUEUE_FILE
+    before = path.read_text(encoding="utf-8") if path.exists() else ""
+    B.write_text_atomic(path, before + "".join(line.to_json() + "\n" for line in new))
 
 
 def stage_exit(output: str) -> int | None:
@@ -137,6 +261,7 @@ class Phase4StageRunner(MR.StageRunner):
         stage_timeout: float = MR.DEFAULT_STAGE_TIMEOUT,
         pacing_dir: Path | None = MR.DEFAULT_PACING_DIR,
         python: Path | None = None,
+        requeued: Collection[str] = (),
     ) -> None:
         # `StageRunner` checks its stage names against Phase 3's sequences; its default passes, and
         # the stages this runner walks are `stages4`.
@@ -153,6 +278,8 @@ class Phase4StageRunner(MR.StageRunner):
         )
         self.stages4 = STAGES4
         self.budget = budget
+        #: The batches `prepare` copies from the run's `REQUEUE4.jsonl` instead of the plan.
+        self.requeued = frozenset(requeued)
         #: The ledger as it was when this run started: the search allowance counts from here.
         self.baseline = MR.Spend.from_ledger(ledger)
         #: Held by a routes stage from its argv to its exit, so the stages of parallel batches take
@@ -177,7 +304,8 @@ class Phase4StageRunner(MR.StageRunner):
             batch_id,
         ]
         if stage == "prepare":
-            return [*argv, "--plan", str(self.plan)]
+            plan = self.run_dir / REQUEUE_FILE if batch_id in self.requeued else self.plan
+            return [*argv, "--plan", str(plan)]
         argv += ["--ledger", str(self.ledger)]
         if self.live and stage in LIVE_STAGES:
             argv.append("--live")
@@ -243,7 +371,16 @@ def main(argv: list[str] | None = None) -> int:
 def drive(args: argparse.Namespace) -> int:
     plan, run_dir, ledger = Path(args.plan), Path(args.run_dir), Path(args.ledger)
     log_dir = Path(args.log_dir)
-    batches = read_plan4(plan)
+    planned = read_plan4_lines(plan)
+    requeued = read_requeue(run_dir, planned)
+    deferred = deferred_sites(run_dir, [*planned, *requeued])
+    now = datetime.now(UTC)
+    new = requeue_lines([*planned, *requeued], deferred, now=now)
+    waiting = sorted(item.ready_at for item in deferred if item.ready_at > now)
+    if args.live and new:
+        append_requeue(run_dir, new)
+        requeued += new
+    batches = [line.planned() for line in [*planned, *requeued]]
     if args.only:
         wanted = {name.strip() for name in args.only.split(",") if name.strip()}
         unknown = sorted(wanted - {b.batch_id for b in batches})
@@ -262,6 +399,12 @@ def drive(args: argparse.Namespace) -> int:
     print(f"ledger        {ledger}")
     print(f"stages        {','.join(STAGES4)}")
     print(f"batches       {len(batches)} ({sum(b.sites for b in batches)} sites)")
+    print(
+        f"re-queue      {len(requeued)} batch(es) in {REQUEUE_FILE}; "
+        f"{sum(len(line.sites) for line in new)} site(s) ready "
+        f"{'re-queued now' if args.live else '(written by a live run)'}, {len(waiting)} waiting"
+        + (f" (the first until {S1.iso_utc(waiting[0])})" if waiting else "")
+    )
     print(f"budget        {budget.as_text()}")
     print(f"already spent {spend.calls} calls, ${spend.cost_usd:.6f}, {spend.searches} searches")
     print(f"sources       phase4 {digest[:16]}")
@@ -287,6 +430,7 @@ def drive(args: argparse.Namespace) -> int:
         live=True,
         budget=budget,
         stage_timeout=args.stage_timeout,
+        requeued=[line.batch_id for line in requeued],
     )
     code = MR.run_mass(
         batches=batches,

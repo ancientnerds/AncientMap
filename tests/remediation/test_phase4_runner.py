@@ -21,6 +21,7 @@ import sys
 import threading
 import types
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -376,12 +377,170 @@ def test_holds4_is_every_batch_hold_once(
     run_dir = tmp_path / "runs" / "pilot"
     one = M.Hold(site_id="a", scope=M.HoldScope.SITE, reason=M.HoldReason.NO_SOURCE, detail="x")
     two = M.Hold(site_id="b", scope=M.HoldScope.CARD, reason=M.HoldReason.V10, detail="y")
-    for batch, holds in (("p4-0001", [one, two]), ("p4-0002", [one])):
-        (run_dir / batch).mkdir(parents=True)
-        B.append_holds(run_dir / batch, holds)
+    three = M.Hold(site_id="c", scope=M.HoldScope.SITE, reason=M.HoldReason.NO_SOURCE, detail="z")
+    for batch, sites, holds in (("p4-0001", "ab", [one, two]), ("p4-0002", "c", [three, three])):
+        X.make_batch(tmp_path, [X.w_site(site) for site in sites], batch=batch)
+        # written as a stage may write them: the same line twice in one file
+        (run_dir / batch / M.HOLDS_FILE).write_text(M.dump_jsonl(holds), encoding="utf-8")
     code, report, _ = _run(capsys, ["holds", "--run-dir", str(run_dir)])
-    assert code == 0 and report["holds"] == 2
-    assert M.load_jsonl(run_dir / R4.HOLDS4_FILE, M.Hold) == [one, two]
+    assert code == 0 and report["holds"] == 3
+    assert M.load_jsonl(run_dir / R4.HOLDS4_FILE, M.Hold) == [one, two, three]
+
+
+def _fresh_hold(site_id: str, retrieved_at: str, *, tag: str = "S1") -> M.Hold:
+    """The hold S1 (or S1b) writes for a revision 10 h old at `retrieved_at`."""
+    at = datetime.fromisoformat(retrieved_at.replace("Z", "+00:00"))
+    article = S1.Article(
+        page={}, title="Stone Temple", pageid=1, revid=7, lastrevid=7,
+        rev_timestamp=S1.iso_utc(at - timedelta(hours=10)).replace("+00:00", "Z"),
+        retrieved_at=retrieved_at, extract="The temple.",
+    )  # fmt: skip
+    problem = S1.article_problem(article)
+    assert problem is not None and problem[0] is M.HoldReason.REVISION_TOO_FRESH
+    detail = problem[1] if tag == "S1" else f"{problem[1]}. S1: English Wikipedia has no article"
+    return S1.hold(site_id, problem[0], detail, tag=tag)
+
+
+def test_a_too_fresh_hold_names_the_answer_clock_it_is_deferred_from() -> None:
+    for tag in ("S1", "S1b"):
+        hold = _fresh_hold("s", "2026-09-23T08:00:00Z", tag=tag)
+        assert S1.fresh_until(hold.detail) == datetime(2026, 9, 25, 8, 0, tzinfo=UTC)
+    with pytest.raises(ValueError, match="names no answer time"):
+        S1.fresh_until("S1: revision 7 of 'Stone Temple' was too fresh")
+
+
+def _deferring_run(
+    tmp_path: Path, answered: tuple[str, str] = ("2026-09-23T08:00:00Z", "2026-09-24T08:00:00Z")
+) -> tuple[Path, Path]:
+    """PLAN4 with p4-0001 (site-1, site-2) and p4-0002 (site-3); S1 held site-1 and S1b site-2 too
+    fresh, answered at `answered`."""
+    plan = tmp_path / "PLAN4.jsonl"
+    rows = [
+        {"batch_id": "p4-0001", "ordinal": 1, "sites": [X.plan_site(s).to_dict() for s in ("site-1", "site-2")]},
+        {"batch_id": "p4-0002", "ordinal": 2, "sites": [X.plan_site("site-3").to_dict()]},
+    ]  # fmt: skip
+    plan.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    run_dir = tmp_path / "runs" / "pilot"
+    for row in rows:
+        R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", row["batch_id"],
+                 "--plan", str(plan)])  # fmt: skip
+    B.append_holds(
+        run_dir / "p4-0001",
+        [
+            _fresh_hold("site-1", answered[0]),
+            _fresh_hold("site-2", answered[1], tag="S1b"),
+        ],
+    )
+    return plan, run_dir
+
+
+def test_a_too_fresh_site_is_re_queued_48_hours_after_its_answer(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plan, run_dir = _deferring_run(tmp_path)
+    capsys.readouterr()
+    # site-3 is held for another reason, and its card for a too fresh revision: neither defers it
+    card = M.Hold.from_dict(
+        {**_fresh_hold("site-3", "2026-09-23T08:00:00Z").to_dict(), "scope": "card"}
+    )
+    no_source = M.Hold(
+        site_id="site-3", scope=M.HoldScope.SITE, reason=M.HoldReason.NO_SOURCE, detail="S1b: none"
+    )
+    B.append_holds(run_dir / "p4-0002", [card, no_source])
+    lines = M4.read_plan4_lines(plan)
+    deferred = M4.deferred_sites(run_dir, lines)
+    assert [(d.site.site_id, d.held_in, d.ready_at) for d in deferred] == [
+        ("site-1", "p4-0001", datetime(2026, 9, 25, 8, 0, tzinfo=UTC)),
+        ("site-2", "p4-0001", datetime(2026, 9, 26, 8, 0, tzinfo=UTC)),
+    ]
+    assert M4.requeue_lines(lines, deferred, now=datetime(2026, 9, 25, 7, 59, tzinfo=UTC)) == []
+    (line,) = M4.requeue_lines(lines, deferred, now=datetime(2026, 9, 25, 8, 0, tzinfo=UTC))
+    assert (line.batch_id, line.ordinal) == ("p4-0003", 3)  # after the plan's last ordinal
+    assert [site.site_id for site in line.sites] == ["site-1"]
+    M4.append_requeue(run_dir, [line])
+    assert M4.read_requeue(run_dir, lines) == [line]
+    # prepared like a plan line, into a new batch directory
+    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0003",
+             "--plan", str(run_dir / M4.REQUEUE_FILE)])  # fmt: skip
+    assert B.read_batch(run_dir / "p4-0003")[1] == [X.plan_site("site-1")]
+    # the site's latest batch is the new one, which has not held it: it is deferred no more
+    again = M4.deferred_sites(run_dir, [*lines, line])
+    assert [d.site.site_id for d in again] == ["site-2"]
+    later = M4.requeue_lines([*lines, line], again, now=datetime(2026, 9, 27, tzinfo=UTC))
+    assert [(new.batch_id, [s.site_id for s in new.sites]) for new in later] == [
+        ("p4-0004", ["site-2"])
+    ]
+
+
+def test_re_queued_sites_go_in_batches_of_the_plans_size() -> None:
+    sites = tuple(X.plan_site(f"site-{i:02d}") for i in range(16))
+    lines = [M4.PlanLine(batch_id="p4-0007", ordinal=7, sites=sites)]
+    past = datetime(2026, 1, 1, tzinfo=UTC)
+    deferred = [M4.Deferred(site=site, held_in="p4-0007", ready_at=past) for site in sites]
+    new = M4.requeue_lines(lines, deferred, now=datetime(2026, 9, 23, tzinfo=UTC))
+    assert [(line.batch_id, len(line.sites)) for line in new] == [("p4-0008", 15), ("p4-0009", 1)]
+
+
+def test_a_re_queued_site_counts_in_its_latest_batch_only(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plan, run_dir = _deferring_run(tmp_path)
+    lines = M4.read_plan4_lines(plan)
+    new = M4.requeue_lines(
+        lines, M4.deferred_sites(run_dir, lines), now=datetime(2026, 9, 27, tzinfo=UTC)
+    )
+    M4.append_requeue(run_dir, new)
+    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0003",
+             "--plan", str(run_dir / M4.REQUEUE_FILE)])  # fmt: skip
+    capsys.readouterr()
+    assert R4.aggregate_holds(run_dir) == []  # both left p4-0001, and p4-0003 holds nothing
+    later = _fresh_hold("site-2", "2026-09-27T08:00:00Z")
+    B.append_holds(run_dir / "p4-0003", [later])
+    assert R4.aggregate_holds(run_dir) == [later]
+    B.append_holds(run_dir / "p4-0002", [_fresh_hold("site-9", "2026-09-27T08:00:00Z")])
+    with pytest.raises(ValueError, match="site-9, not a site of the batch"):
+        R4.aggregate_holds(run_dir)
+
+
+@pytest.mark.parametrize(
+    ("row", "match"),
+    [
+        ({"batch_id": "p4-0002", "ordinal": 2, "sites": ["site-1"]}, "does not follow ordinal 2"),
+        ({"batch_id": "p4-0009", "ordinal": 3, "sites": ["site-1"]}, "not the new batch p4-0003"),
+        ({"batch_id": "p4-0003", "ordinal": 3, "sites": ["site-9"]}, "planned sites, each once"),
+        (
+            {"batch_id": "p4-0003", "ordinal": 3, "sites": ["site-1", "site-1"]},
+            "planned sites, each once",
+        ),
+    ],
+)
+def test_a_re_queue_line_that_is_not_a_new_batch_of_planned_sites_is_refused(
+    tmp_path: Path, row: dict[str, Any], match: str
+) -> None:
+    plan, run_dir = _deferring_run(tmp_path)
+    line = {**row, "sites": [X.plan_site(site).to_dict() for site in row["sites"]]}
+    (run_dir / M4.REQUEUE_FILE).write_text(json.dumps(line) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=match):
+        M4.read_requeue(run_dir, M4.read_plan4_lines(plan))
+
+
+def test_the_driver_re_queues_when_live_and_prepares_from_the_re_queue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # the driver reads the clock: answers of 2020 are more than 48 h old
+    plan, run_dir = _deferring_run(tmp_path, ("2020-01-01T08:00:00Z", "2020-01-02T08:00:00Z"))
+    monkeypatch.setattr(MR, "run_mass", lambda **kw: seen.update(kw) or 0)
+    seen: dict[str, Any] = {}
+    assert M4.drive(_args(tmp_path, plan)) == 0  # dry: nothing is written
+    assert not (run_dir / M4.REQUEUE_FILE).exists()
+    assert "2 site(s) ready (written by a live run)" in capsys.readouterr().out
+    assert M4.drive(_args(tmp_path, plan, "--live")) == 0
+    assert [b.batch_id for b in seen["batches"]] == ["p4-0001", "p4-0002", "p4-0003"]
+    runner = seen["runner"]
+    assert runner.argv("prepare", "p4-0003")[-2:] == ["--plan", str(run_dir / M4.REQUEUE_FILE)]
+    assert runner.argv("prepare", "p4-0001")[-2:] == ["--plan", str(plan)]
+    assert M4.drive(_args(tmp_path, plan, "--live")) == 0  # nothing new: written once
+    assert len(M4.read_requeue(run_dir, M4.read_plan4_lines(plan))) == 1
 
 
 # ----------------------------------------------------------------------------------- mass4
