@@ -372,6 +372,18 @@ def test_the_quote_must_stand_whole_in_the_page() -> None:
     assert row["accepted"], row["reason"]
 
 
+def test_a_dash_before_a_lettered_quote_is_a_separator_not_its_sign() -> None:
+    """A quote whose numbers carry their hemisphere letters takes no sign from the page: "El Tintal –
+    17°34′28″N 89°59′45″W" is a separator (measured: cestenfrance.fr, 2026-09-23). A sign against its
+    first digit, or a digit continuing it, still makes it not the page's number."""
+    for shown in (f"El Tintal – {COORD}", f"El Tintal - {COORD}", f"El Tintal, zone E {COORD}"):
+        row, _ = _verify(Page(text=_html(f"<p>{shown}</p>")))
+        assert row["accepted"], (shown, row["reason"])
+    for shown in (f"El Tintal –{COORD}", f"El Tintal 1{COORD}"):
+        row, _ = _verify(Page(text=_html(f"<p>{shown}</p>")))
+        assert _code(row) == "not-on-page", (shown, row["reason"])
+
+
 def test_the_page_and_the_quote_are_compared_across_glyph_variants() -> None:
     """The page types the coordinate with entities, a masculine ordinal and two apostrophes, split
     across tags and non-breaking spaces; the quote with the degree sign, primes and a double prime."""

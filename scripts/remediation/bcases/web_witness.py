@@ -222,6 +222,9 @@ LON_WORDS = frozenset({"lon", "long", "lng", "longitude"})
 #: A sign or a dash left beside the two coordinates: one that stood apart from its number (a space
 #: between, or a dash `_GLYPHS` does not make a minus) - reading the number without it flips it.
 _SIGNS = re.compile(r"[+\-\u2010-\u2015\u2e3a\u2e3b\ufe58]")
+#: A hemisphere letter standing as a word of its own in a case-folded quote: the quote is lettered
+#: (a parsed quote holds no other one-letter word - `LABEL_WORDS` has none).
+_LONE_HEMISPHERE = re.compile(r"(?<![^\W\d_])[nsew](?![^\W\d_])")
 
 # One coordinate: degrees (decimal, or whole with minutes and seconds after a degree sign) with a
 # sign, or a hemisphere letter after it (`_SUFFIX`) or before it (`_PREFIX`).
@@ -437,18 +440,25 @@ def _standalone_hemisphere(hay: str, at: int) -> bool:
 
 def _whole(hay: str, start: int, end: int) -> bool:
     """Whether the quote at `hay[start:end]` states the page's numbers whole: a number it begins with
-    has no digit, point or letter against it and no sign, dash or lone hemisphere letter against it
-    or one space before it; a number or unit it ends with has no digit, letter or decimal after it and
-    no lone hemisphere letter one degree sign or space after it. Otherwise the page's number is
-    longer, signed or lettered where the quote is not, and the quote parses to what the page does
-    not state."""
+    has no digit, point, letter, sign or dash against it; a number or unit it ends with has no digit,
+    letter or decimal after it. A quote of two signed numbers (no hemisphere letter of its own,
+    `_LONE_HEMISPHERE`) takes its signs from the page as well, so it also has no sign, dash or lone
+    hemisphere letter one space before it and no lone hemisphere letter one degree sign or space
+    after it - a lettered quote is signed by its own letters, and a dash before it is a separator.
+    Otherwise the page's number is longer, signed or lettered where the quote is not, and the quote
+    parses to what the page does not state."""
     needle = hay[start:end]
+    signed = _LONE_HEMISPHERE.search(needle) is None
     if needle[0].isdigit() or needle[0] in ".+-":
         before = hay[start - 1] if start > 0 else " "
-        if before.isalnum() or before == ".":
+        if before.isalnum() or before == "." or _SIGNS.fullmatch(before):
             return False
-        gap = start - 1 if before == " " else start
-        if gap > 0 and (_SIGNS.fullmatch(hay[gap - 1]) or _standalone_hemisphere(hay, gap - 1)):
+        if (
+            signed
+            and before == " "
+            and start > 1
+            and (_SIGNS.fullmatch(hay[start - 2]) or _standalone_hemisphere(hay, start - 2))
+        ):
             return False
     if needle[-1].isdigit() or needle[-1] in "°'\"":
         after = hay[end] if end < len(hay) else " "
@@ -459,7 +469,7 @@ def _whole(hay: str, start: int, end: int) -> bool:
         at = end
         while at < len(hay) and at < end + 2 and hay[at] in "° ":
             at += 1
-        if _standalone_hemisphere(hay, at):
+        if signed and _standalone_hemisphere(hay, at):
             return False
     return True
 
