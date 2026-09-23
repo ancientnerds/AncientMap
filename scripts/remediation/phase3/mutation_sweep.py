@@ -8782,6 +8782,56 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4B_SENT_TEST,
         "test_a_leading_phrase_that_opens_a_list_or_a_conjunct_is_not_offered",
     ),
+    # -- D3: SPAN_CASES, the fixture verify4's parity test shares, pins every refusal of section 7
+    (
+        "p4 sentences: a range dash skips only U+0020 before it",
+        P4B_SENT,
+        "    before = s[:at].rstrip()\n",
+        '    before = s[:at].rstrip(" ")  # mutant\n',
+        P4B_SENT_TEST,
+        "test_the_span_cases_both_finders_share",
+    ),
+    (
+        "p4 sentences: a range dash skips only U+0020 after it",
+        P4B_SENT,
+        "    after = s[at + 1 :].lstrip()\n",
+        '    after = s[at + 1 :].lstrip(" ")  # mutant\n',
+        P4B_SENT_TEST,
+        "test_the_span_cases_both_finders_share",
+    ),
+    (
+        "p4 sentences: an unclosed parenthesis offers spans in the shared cases",
+        P4B_SENT,
+        "    if depth != 0:\n",
+        "    if False:  # mutant\n",
+        P4B_SENT_TEST,
+        "test_the_span_cases_both_finders_share",
+    ),
+    (
+        "p4 sentences: a phrase entry is not protected",
+        P4B_SENT,
+        "            else:\n                words = ",
+        '            elif " " in entry:  # mutant\n                continue\n'
+        "            else:\n                words = ",
+        P4B_SENT_TEST,
+        "test_the_span_cases_both_finders_share",
+    ),
+    (
+        "p4 sentences: a phrase entry matches only a single space",
+        P4B_SENT,
+        '                words = r"\\s+".join(re.escape(word) for word in entry.split())\n',
+        '                words = " ".join(re.escape(word) for word in entry.split())  # mutant\n',
+        P4B_SENT_TEST,
+        "test_the_span_cases_both_finders_share",
+    ),
+    (
+        "p4 sentences: a c. entry needs a boundary after its stop",
+        P4B_SENT,
+        '                alternatives.append(rf"\\b{re.escape(entry)}")\n',
+        '                alternatives.append(rf"\\b{re.escape(entry)}\\b")  # mutant\n',
+        P4B_SENT_TEST,
+        "test_the_span_cases_both_finders_share",
+    ),
     # -- C3: lane T selects whole sentences; foreign apparatus is excluded
     (
         "p4 sentences: a translated sentence offers spans",

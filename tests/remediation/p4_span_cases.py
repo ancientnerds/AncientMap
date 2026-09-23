@@ -52,6 +52,10 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
     ),
     ("W", "The mound – 12 m across – stands on the ridge above the ford.", {}),
     ("W", "The wall was built in 1200 – of local stone – on the ridge above.", {}),
+    # rule 6: the nearest character that is not whitespace (`str.isspace`), so an NBSP or a thin
+    # space between the digit and the dash's own space still makes a range dash
+    ("W", "The wall was built in 1200\u00a0 – of local stone – on the ridge above.", {}),
+    ("W", "The mound – \u200912 m across – stands on the ridge above the ford.", {}),
     ("W", "The beads are long – barrel-shaped; the pendants – round and flat.", {}),
     (
         "W",
@@ -163,6 +167,26 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
         "The temple was built c. 2500 BC by a farming community, whose tombs lie nearby.",
         {"t1": ", whose tombs lie nearby"},
     ),
+    # rule 9: a phrase entry is its words joined by `\s+` (`at least`, also across an NBSP), and
+    # `c.` has no boundary after its stop; each refuses the `a` between the commas
+    (
+        "W",
+        "The wall, at least 3 m high, ran along the ridge.",
+        {"l1": "The wall, ", "t1": ", ran along the ridge"},
+    ),
+    (
+        "W",
+        "The wall, at\u00a0least 3 m high, ran along the ridge.",
+        {"l1": "The wall, ", "t1": ", ran along the ridge"},
+    ),
+    (
+        "W",
+        "The hall, built c. 300 BC, stood on the hill above.",
+        {"l1": "The hall, ", "t1": ", stood on the hill above"},
+    ),
+    # rule 1: a parenthesis opened and never closed (depth ends above 0) offers nothing, not even
+    # the leading phrase and the last segment before and around it
+    ("W", "In 1900, the temple (built by giants stands on the hill above.", {}),
     ("W", "In 1900, the shrine) was added (later, on the hill top.", {}),
     ("W", "The temple, which stood on a low ridge, was used for a thousand years", {}),
     # a translated sentence offers no span (the protected tokens are English)

@@ -370,8 +370,10 @@ is the sentence text (`text[start:end]`), offsets are relative to it until the l
 6. **`a`, dash pairs.** With the spaced dashes `d_1 < ... < d_m`: none when `m` is odd; otherwise
    the pairs are `(d_1, d_2), (d_3, d_4), ...` in order (never `(d_2, d_3)`). A pair `(d, e)`
    offers `[d - 1, e + 1)` (`" – near the old road –"`) when `s[d + 1 : e - 1]` stripped is not
-   empty, **neither dash is a range dash** - the nearest non-space character before it or after
-   it is a digit (`1800 – 500`) - and **no top-level `;` lies between them** (Varna W32:
+   empty, **neither dash is a range dash** - the nearest character before it or after it that is
+   not whitespace is a digit (`str.isdigit`; whitespace is `str.isspace`, as `str.rstrip()` and
+   `str.lstrip()` strip it: U+0020, but also an NBSP or a thin space, so `1200` NBSP ` – ` is a
+   range dash too) (`1800 – 500`) - and **no top-level `;` lies between them** (Varna W32:
    `type 1 – long; type 2 –`). A `;` inside a parenthesis between them does not refuse the pair.
 7. **`l`**: with a first delimiter comma `c_1`, `[0, c_1 + 2)` when `s[:c_1]` is 1-6 tokens,
    `s[c_1 + 2:]` stripped is not empty (`"In 1900, "`; edit 4 restores the capital), and `c_1`

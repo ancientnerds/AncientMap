@@ -237,7 +237,8 @@ def _top_level(s: str) -> tuple[list[tuple[int, int]], list[bool]] | None:
 
 
 def _range_dash(s: str, at: int) -> bool:
-    """A dash with a digit as the nearest non-space character on either side: `1800 – 500`."""
+    """A dash with a digit as the nearest character that is not whitespace (`str.isspace`: also an
+    NBSP or a thin space) on either side: `1800 – 500`."""
     before = s[:at].rstrip()
     after = s[at + 1 :].lstrip()
     return bool(before and before[-1].isdigit()) or bool(after and after[0].isdigit())
