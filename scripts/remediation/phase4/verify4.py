@@ -1250,16 +1250,37 @@ def verify_site(
 # --------------------------------------------------------------------------------------------
 
 
-def _read_store(store: F.EvidenceStore, site_id: str, source_id: str) -> tuple[Any, str | None]:
+def read_store(store: F.EvidenceStore, site_id: str, source_id: str) -> tuple[Any, str | None]:
     """(the raw meta object, the pinned text) of one source; `None` for a file that is absent.
 
     The text is the file's bytes decoded as UTF-8, never read in text mode: offsets index into
-    exactly those characters, and a newline translation would move every one of them."""
+    exactly those characters, and a newline translation would move every one of them. Public for
+    the acceptance (`output/remediation/tools/verify_writes4.py`), which reads the same store."""
     meta_path = store.path_for(site_id, M.source_feature(source_id, "meta"))
     text_path = store.path_for(site_id, M.source_feature(source_id, "txt"))
     meta = M.parse_json(meta_path.read_bytes().decode("utf-8")) if meta_path.exists() else None
     text = text_path.read_bytes().decode("utf-8") if text_path.exists() else None
     return meta, text
+
+
+@dataclass(frozen=True)
+class BatchInputs:
+    """What S5 reads of one batch: the plan's sites, the lanes S1b assigned, the assemblies."""
+
+    sites: dict[str, M.PlanSite]
+    lanes: dict[str, M.LaneAssignment]
+    assemblies: list[M.Assembly]
+
+
+def read_batch(batch_dir: Path) -> BatchInputs:
+    """`input.json`, `lanes.jsonl` and `assembly.jsonl` of one batch, each record through its
+    `model4` reader. Raises `FileNotFoundError`, `InputError` or `ValueError`; never skips."""
+    batch = _single_batch(batch_dir / M.INPUT_FILE, batch_dir.name)
+    return BatchInputs(
+        sites={s.site_id: s for s in (M.PlanSite.from_dict(d) for d in batch["sites"])},
+        lanes={a.site_id: a for a in M.load_jsonl(batch_dir / M.LANES_FILE, M.LaneAssignment)},
+        assemblies=M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly),
+    )
 
 
 def _write_atomic(path: Path, body: str) -> None:
@@ -1301,13 +1322,11 @@ def verify_batch(batch_dir: Path) -> int:
     """
     batch_dir = Path(batch_dir)
     try:
-        batch = _single_batch(batch_dir / M.INPUT_FILE, batch_dir.name)
-        sites = {s.site_id: s for s in (M.PlanSite.from_dict(d) for d in batch["sites"])}
-        lanes = {a.site_id: a for a in M.load_jsonl(batch_dir / M.LANES_FILE, M.LaneAssignment)}
-        assemblies = M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly)
+        inputs = read_batch(batch_dir)
     except (FileNotFoundError, InputError, ValueError) as exc:
         print(f"verify4: {batch_dir}: {exc}", file=sys.stderr)
         return 2
+    sites, lanes, assemblies = inputs.sites, inputs.lanes, inputs.assemblies
     unknown = sorted({a.site_id for a in assemblies} - set(sites))
     unrouted = sorted({a.site_id for a in assemblies} - set(lanes))
     if unknown or unrouted:
@@ -1328,7 +1347,7 @@ def verify_batch(batch_dir: Path) -> int:
         metas: dict[str, Any] = {}
         texts: dict[str, str] = {}
         for ref in assembly.provenance.sources:
-            meta, text = _read_store(store, site.site_id, ref.id)
+            meta, text = read_store(store, site.site_id, ref.id)
             if meta is not None:
                 metas[ref.id] = meta
             if text is not None:
