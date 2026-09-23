@@ -7945,3 +7945,28 @@ $PY $M/tools/write_gate4.py --group P5 --run pilot-2026-09-24 --rehearse
 P5 plans cards only for sites that carry a live Phase-4 provenance (a read-only question the gate
 asks), so before the committed P4 write of step 5 of the design's PILOT RUN its rehearsal may plan
 no row; `--open-lanes` names only lanes whose pilot passed (W and S at most; T and R are closed).
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* New tests, each guard red before its code existed except `pilot4.py`'s (a new module, proven by its
+  mutation cases): `test_phase4_pilot.py` 41 (the fixed members, the draws, the census read, the
+  prose errors, the thresholds, the seal); `test_phase4_routes.py` +4 (`no_search`);
+  `test_phase4_runner.py` +4 (a zero allowance builds no client, `--searches-off`);
+  `test_phase4_plan.py` +5 (`--pilot`, the pilot's own batches) and one test rewritten stronger (the
+  gold pilot now fills its own batch); `test_phase3_fetch.py` +2 (the pacer).
+* `mutation_sweep.P4_PILOT_MUTATIONS`: 44 `"p4 pilot: "` cases (searches off 8, the pacer 2, the
+  pilot's batches 5, the fixed members 5, the draws 8, the census 3, the prose errors 7, the seal 3,
+  the thresholds 2), registered once; 1,939 labels, all unique, every anchor present. The sweep's
+  own `main` with the main venv over the label: **44/44 caught**, the tree byte-identical to the
+  sweep's start for its 9 files, no `# mutant` line left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **5,734 passed, 114 skipped, 57 deselected, 0 failed** (352 s); every skip names gitignored data
+  this worktree does not have (Natural Earth, the snapshot, the worklist, the fonts, the bcases
+  cache, ...) or an opt-in live test.
+* `ruff check` and `ruff format --check` clean on the 12 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean.
+* `phase3/fetch_stage.py` and `phase3/mutation_sweep.py` changed, so `mass_run.package_digest` over
+  `phase3/` changes with this branch: merge it while no Phase-3 mass run is in flight.
+  `docs/procedures/PHASE4_CONTRACTS.md` section 8 records the additions (`write_plan` now takes
+  `pilot`).

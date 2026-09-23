@@ -184,7 +184,9 @@ Provides:
   asked, whenever no own English article was found), `moved-during-fetch` and `revision-too-fresh`
   (an article S1b found). `max_searches` bounds the queries this run may still send. `probe` is
   `minimax_shared.probe_minimax_quota(force=True)`, `wait` paces the MiniMax host
-  (`route_stage.open_search` builds the three live seams). Returns `STOP_RUN_EXIT` when the quota
+  (`route_stage.open_search` builds the three live seams; `route_stage.no_search` the three of a
+  run that may send no search - no MiniMax client, and each seam raises `SearchesOff`, section 8).
+  Returns `STOP_RUN_EXIT` when the quota
   gate refused, a stop-class search error arrived, or a wiki host did not answer: then nothing is
   final - no pin, no `lanes.jsonl`, no hold, no `routes.json`; only `routes.fetch.json` and
   `search.json` are written, and a re-run walks the batch again over the searches on disk.
@@ -195,8 +197,9 @@ Provides:
   -> list[M.PlanSite]` (`t03` is `{site: {text field: worst severity}}`, because `t03-severe`
   waives V9's floor only for a severe finding on the description; `item_names` are the labels and
   aliases of the shared items, for the duplicate pairs) and `plan4.write_plan(path: Path, sites:
-  Sequence[M.PlanSite]) -> None` (order: pilot, cleared defects, T03, the rest; batches of 15
-  through `assign_batches(prefix="p4")`). `plan4.main` runs `read` (the one read-only production
+  Sequence[M.PlanSite], *, pilot: int) -> None` (order: pilot, cleared defects, T03, the rest;
+  batches of 15 through `assign_batches(prefix="p4")`; the first `pilot` sites fill batches of their
+  own, section 8). `plan4.main` runs `read` (the one read-only production
   SELECT), `names` and `build`, each printing `STAGE_EXIT=`; `build`'s summary lists the stored
   titles MediaWiki refuses (`invalid_titles`, a control character in `enwiki_title`) for the data
   repair.
@@ -528,7 +531,8 @@ Kilda` in `St Kilda`.
   fetcher: 1 MiB for the wiki hosts, 60 KB for every other, paced per host) and pass Track A's
   keywords: `sources_batch(..., phase3_run=--phase3-run)` (default the Phase-3 mass run,
   `phase3.run.DEFAULT_SOURCE_RUN_DIR`), and `routes_batch(..., max_searches=<the run's remaining
-  allowance>, probe=, wait=)` from `route_stage.open_search`.
+  allowance>, probe=, wait=)` from `route_stage.open_search` - or, when that allowance is 0, from
+  `route_stage.no_search` (section 8).
 - `batch4.read_batch` is Track A's `sources_stage.read_batch` (on `phase3.run._single_batch`), the
   one reader of `input.json`; `batch4.sha256_file` is `phase3.run._sha256`, and prompt and answer
   digests are `model4.text_sha256`.
@@ -722,3 +726,24 @@ beside it, lane R's restricted call, and the reviewer's answer for every lane; e
 its prompt of the same feature and its ledger line, and every ledger call of the site its answer.
 A site that lacks one is refused (`journal-evidence-incomplete`), so without this addition no P4
 row is planned.
+
+## 8. The pilot's additions (wip/p4-pilot, 2026-09-24)
+
+Owner order 2026-09-23, "everything with Opus": no model API and **no MiniMax search** is called from
+the pipeline. What the Phase-4 pilot added so it could run under that order and the design's pilot
+section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question"):
+
+- `route_stage.no_search()` - the searcher (`NoSearcher`, endpoint `SEARCHES_OFF_ENDPOINT`), the
+  quota probe and the MiniMax pace of a run that may send no search; each raises `SearchesOff` if
+  reached. `routes_batch` with `max_searches=0` never reaches them: a site only a search could anchor
+  is held `search-stopped`. `run4 routes --max-searches 0` builds these seams and no MiniMax client.
+- `mass4 --searches-off` (never with `--max-searches`): every routes stage is told 0, and the run
+  carries no search ceiling (a ceiling of 0 is reached before the first batch).
+- `plan4 build --pilot PILOT.jsonl` (never with `--gold`): the pilot is PILOT.jsonl's sites in its
+  order (`plan4.pilot_site_ids`), and `write_plan(..., pilot=N)` gives them batches of their own, so
+  the pilot's batches carry no other site into its model calls and audit.
+- `phase4/pilot4.py` - `routeless` (the B3 read, one read-only SELECT), `build` (PILOT.jsonl: the
+  seeded draw over a census run of the whole plan through S1 and S1b), `prose-errors`
+  (`gold_prose_errors.json`) and `thresholds` (`PILOT_THRESHOLDS.md`, verbatim from the design).
+- `phase3.fetch_stage.HostPacer.wait` waits for a lock its holder is deleting (Windows answers the
+  re-create with access denied while the file is "delete pending") instead of dying of it.
