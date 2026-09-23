@@ -5682,7 +5682,7 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: a row written twice passes",
         P4_ACCEPT,
-        "        if len(links) > 1:\n",
+        "        if len(open_links) > 1:\n",
         "        if False:  # mutant\n",
         P4_ACCEPT_TEST,
         "test_a_row_written_twice_or_changed_later_is_a_deviation",

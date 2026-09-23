@@ -196,12 +196,20 @@ def _evidence(case: Case) -> dict[str, Any]:
     }
 
 
-def written_p4(tmp_path: Path, *, cards: bool = False) -> Written:
-    """The P4 rows of one site applied and journalled; with `cards`, the P5 row after them."""
+def written_p4(tmp_path: Path, *, cards: bool = False, card_held: bool = False) -> Written:
+    """The P4 rows of one site applied and journalled; with `cards`, the P5 row after them. With
+    `card_held` the site is written as `write4.without_card` writes a site whose card a CARD-scope
+    hold keeps back: description and raw_data with `provenance.card: null`, while the run's
+    `assembly.jsonl` still carries the assembled card."""
     case = make_case()
     run_dir = tmp_path / "runs" / "pilot"
     write_batch(run_dir, case)
-    new = new_raw(case.site, case.assembly)
+    written = case.assembly
+    if card_held:
+        written = dataclasses.replace(
+            case.assembly, card=None, provenance=dataclasses.replace(written.provenance, card=None)
+        )
+    new = new_raw(case.site, written)
     plan = [
         _plan_row(
             SITE_ID, "unified_sites", "description", STORED, case.assembly.description, "k-desc"
@@ -217,6 +225,7 @@ def written_p4(tmp_path: Path, *, cards: bool = False) -> Written:
             "old_value": STORED,
             "new_value": case.assembly.description,
             "run_stamp": P4_STAMP,
+            "change_key": "k-desc",
             "evidence": _evidence(case),
         },
         {
@@ -227,6 +236,7 @@ def written_p4(tmp_path: Path, *, cards: bool = False) -> Written:
             "old_value": dumps(OLD_RAW),
             "new_value": dumps(new),
             "run_stamp": P4_STAMP,
+            "change_key": "k-raw",
             "evidence": _evidence(case),
         },
     ]
@@ -242,6 +252,7 @@ def written_p4(tmp_path: Path, *, cards: bool = False) -> Written:
                 "old_value": card,
                 "new_value": CARD,
                 "run_stamp": P5_STAMP,
+                "change_key": "k-card",
                 "evidence": {"lane": "W"},
             }
         )
@@ -362,6 +373,7 @@ def _accept4(written: Written, *, complete: bool = False, lane: str = "p4") -> A
         present=production.present,
         columns=columns,
         complete=complete,
+        change_keys=production.change_keys,
     )
 
 
@@ -405,6 +417,101 @@ def test_a_row_written_twice_or_changed_later_is_a_deviation(tmp_path: Path) -> 
     result = _accept4(written)
     assert any(d.startswith("CHANGED LATER") for d in result.deviations)
     assert ("unified_sites", "description", SITE_ID) not in result.carried
+
+
+P4_ROUND_2 = "phase4:p4-0001:chunk-0002"
+
+
+def _revert(
+    written: Written, *, key_suffix: str = "-rollback", reversal_stamp: str | None = None
+) -> None:
+    """revert4's reversal of the round-1 rows: each row's transition back, journalled under the
+    write's key and its stamp plus `-rollback` (or the key suffix / stamp given); the fields hold
+    their old values again."""
+    rows = [row for row in written.production.journal if row["run_stamp"] == P4_STAMP]
+    first = max(row["id"] for row in written.production.journal) + 1
+    for offset, row in enumerate(rows):
+        written.production.journal.append(
+            dict(
+                row,
+                id=first + offset,
+                old_value=row["new_value"],
+                new_value=row["old_value"],
+                run_stamp=P4_STAMP + "-rollback" if reversal_stamp is None else reversal_stamp,
+                change_key=row["change_key"] + key_suffix,
+                evidence={},
+            )
+        )
+    written.production.sites[SITE_ID].update(description=STORED, raw_data=OLD_RAW)
+
+
+def _write_round_2(written: Written) -> None:
+    """write_gate4 `--apply --round 2`: the same batch, the same keys, a new chunk stamp."""
+    rows = [row for row in written.production.journal if row["run_stamp"] == P4_STAMP]
+    first = max(row["id"] for row in written.production.journal) + 1
+    for offset, row in enumerate(rows):
+        written.production.journal.append(dict(row, id=first + offset, run_stamp=P4_ROUND_2))
+    written.production.sites[SITE_ID].update(
+        description=written.case.assembly.description,
+        raw_data=new_raw(written.case.site, written.case.assembly),
+    )
+
+
+def test_a_reverted_step_written_again_as_round_2_is_accepted(tmp_path: Path) -> None:
+    """Follow-up of wip/p4-write-sup: a lane row with its own kept reversal is reverted, not
+    'changed later', and the round-2 write of the same key is not 'written twice'."""
+    written = written_p4(tmp_path)
+    _revert(written)
+    _write_round_2(written)
+    result = _accept4(written)
+    assert result.deviations == [] and len(result.carried) == 2
+    assert accept(written, tmp_path) == []
+
+
+def test_a_reverted_step_counts_as_not_yet_written(tmp_path: Path) -> None:
+    written = written_p4(tmp_path)
+    _revert(written)
+    result = _accept4(written)
+    assert (result.deviations, result.carried, result.untouched) == ([], set(), 2)
+    assert (
+        sum(d.startswith("NOT WRITTEN") for d in _accept4(written, complete=True).deviations) == 2
+    )
+    assert accept(written, tmp_path) == []
+    written.production.sites[SITE_ID]["description"] = "Edited after the revert."
+    assert any(d.startswith("NOT NEW") for d in _accept4(written).deviations)
+
+
+def test_only_a_rows_own_reversal_closes_it(tmp_path: Path) -> None:
+    """The key **and** the stamp plus `-rollback` (revert4 `_reversed`): a reversal journalled
+    under another key, or under round 2's stamp, does not close a round-1 row."""
+    written = written_p4(tmp_path)
+    _revert(written, key_suffix="-other")
+    assert any(d.startswith("CHANGED LATER") for d in _accept4(written).deviations)
+    written = written_p4(tmp_path / "stamp")
+    _revert(written, reversal_stamp=P4_ROUND_2 + "-rollback")
+    assert any(d.startswith("CHANGED LATER") for d in _accept4(written).deviations)
+    # round 2 on top of a live round 1, no reversal between: two open writes of one row
+    written = written_p4(tmp_path / "twice")
+    _write_round_2(written)
+    assert any(d.startswith("WRITTEN TWICE") for d in _accept4(written).deviations)
+
+
+def test_a_planned_row_outside_the_lanes_columns_is_a_deviation(tmp_path: Path) -> None:
+    written = written_p4(tmp_path)
+    written.plan.append(
+        _plan_row(SITE_ID, "card_stats", "card_description", "An old card.", CARD, "k-card")
+    )
+    assert any(d.startswith("PLANNED OUTSIDE THE LANE") for d in _accept4(written).deviations)
+
+
+def test_a_site_written_with_its_card_held_is_accepted(tmp_path: Path) -> None:
+    """C4: write4 writes a card-held site with `provenance.card: null`; the run's assembly still
+    has its card. The re-verification takes the run's card only where production pins one."""
+    written = written_p4(tmp_path, card_held=True)
+    raw = written.production.sites[SITE_ID]["raw_data"]
+    assert raw[M.PROVENANCE_KEY]["card"] is None
+    assert A.index_run(written.run_dir)[SITE_ID].assembly.card == CARD
+    assert accept(written, tmp_path) == []
 
 
 def test_a_live_value_that_is_not_the_chains_last_is_a_deviation(tmp_path: Path) -> None:
@@ -537,6 +644,7 @@ def test_a_legacy_provenance_that_does_not_read_is_a_deviation(tmp_path: Path) -
         chains={},
         live={},
         present=set(),
+        change_keys={},
         rows={
             SITE_ID: {
                 "desc_invariant": True,
@@ -555,6 +663,7 @@ def test_t08_runs_over_the_written_sites() -> None:
         chains={},
         live={},
         present=set(),
+        change_keys={},
         rows={
             SITE_ID: {
                 "description": "A temple [1]. A wall [2].",

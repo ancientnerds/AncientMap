@@ -10,10 +10,16 @@ production directly, read-only, after every step of 100 sites and once more at t
    a lane row still holds its old value (a later step) - or, with `--complete`, is a deviation. A
    planned row that holds neither is a deviation too: that is how a `matched_0` shows here.
    `raw_data` is jsonb, so its old, new and live values are compared as JSON, not as text:
-   Postgres prints the keys in its own order.
+   Postgres prints the keys in its own order. A lane row with its own kept reversal - a journal
+   row of its field under its change key **and** its run stamp plus `-rollback`, revert4's
+   `_reversed` - is **reverted**: it is not "changed later" and not a second write of its row, and
+   a planned row whose lane rows are all reverted is judged like one not yet written. So a batch
+   reverted and written again as round 2 (`write_gate4 --round 2`) is accepted on its round-2 rows.
 2. **V1-V15 again** (`--run`, lanes `p4` and `p5`): every written site's description and
    `raw_data` read back from production, its card from production (`p5`) or from the run's
-   `assembly.jsonl` (`p4`, before the cards are written), the pinned texts from the run's store,
+   `assembly.jsonl` (`p4`, before the cards are written; only where production's
+   `provenance.card` pins one - a card-held site is written with `card: null`), the pinned texts
+   from the run's store,
    and the quotes from the journal's evidence (`evidence.sentences[i].quote`, which must name the
    provenance's own offsets), through `verify4.verify_site`. Any hold is a deviation.
 3. **The in-database hash invariants**: Postgres' own `sha256` of the description equals
@@ -124,6 +130,21 @@ class Acceptance4:
     deviations: list[str] = field(default_factory=list)
 
 
+def reverted(
+    link: VW.Link, chain: Sequence[VW.Link], change_keys: Mapping[int, str | None]
+) -> bool:
+    """The lane row `link` has its own kept reversal in its field's chain: a row under its change
+    key **and** its run stamp, each plus `-rollback` (revert4 `_reversed`). The key alone names a
+    transition, which a round-2 write journals again; only the stamp tells the rounds apart. A row
+    journalled without a change key has no reversal of its own (SQL: `NULL || '-rollback'`)."""
+    key = change_keys[link.id]
+    return key is not None and any(
+        other.stamp == link.stamp + ROLLBACK_SUFFIX
+        and change_keys[other.id] == key + ROLLBACK_SUFFIX
+        for other in chain
+    )
+
+
 def accept4(
     *,
     planned: Iterable[Mapping[str, Any]],
@@ -133,12 +154,14 @@ def accept4(
     present: set[tuple[str, str]],
     columns: frozenset[tuple[str, str]],
     complete: bool,
+    change_keys: Mapping[int, str | None],
 ) -> Acceptance4:
     """The chain acceptance as a pure function of what the database returned.
 
     `lane_links`, `chains` and `live` carry canonical values (`canonical`); `present` holds the
     `(table, pk)` rows the live read found; `columns` are the lane's; `complete` makes a planned row
-    that the lane did not write a deviation rather than a later step.
+    that the lane did not write a deviation rather than a later step; `change_keys` are the change
+    keys of every journal row read, by id (`reverted`).
     """
     result = Acceptance4()
     plan: dict[Key, Mapping[str, Any]] = {}
@@ -160,6 +183,7 @@ def accept4(
             continue
         lane_by_key[link.key].append(link)
 
+    written: set[Key] = set()  #: rows the lane wrote and did not revert
     for key, links in sorted(lane_by_key.items()):
         where = f"{key[2]} {key[0]}.{key[1]}"
         chain = chains.get(key, [])
@@ -170,11 +194,13 @@ def accept4(
         row = plan.get(key)
         if row is None:
             result.deviations.append(f"OUTSIDE THE PLAN {where}: journalled, never planned")
-        if len(links) > 1:
-            ids = ", ".join(str(link.id) for link in links)
+        closed = {link.id for link in links if reverted(link, chain, change_keys)}
+        open_links = [link for link in links if link.id not in closed]
+        if len(open_links) > 1:
+            ids = ", ".join(str(link.id) for link in open_links)
             result.deviations.append(f"WRITTEN TWICE {where}: journal rows {ids}")
         ids_in_chain = [link.id for link in chain]
-        sound = not problems and row is not None and len(links) == 1
+        sound = not problems and row is not None and len(open_links) == 1
         for link in links:
             if row is not None:
                 want = (
@@ -193,16 +219,20 @@ def accept4(
                     f"CHAIN INCOMPLETE {where}: journal row {link.id} is missing from the chain"
                 )
                 continue
+            if link.id in closed:
+                continue  # its own reversal wrote after it: reverted, not changed later
             later = chain[ids_in_chain.index(link.id) + 1 :]
             if later:
                 sound = False
                 stamps = list(dict.fromkeys(other.stamp for other in later))
                 result.deviations.append(f"CHANGED LATER {where}: {stamps} wrote after {link.id}")
+        if open_links:
+            written.add(key)
         if sound:
             result.carried.add(key)
 
     for key, row in sorted(plan.items()):
-        if key in lane_by_key:
+        if key in written:
             continue
         where = f"{key[2]} {key[0]}.{key[1]}"
         if (key[0], key[2]) not in present:
@@ -223,7 +253,7 @@ def accept4(
 # The reads (read-only; every statement a SELECT through the writer's seam)
 # ------------------------------------------------------------------------------------------------
 
-JOURNAL_COLUMNS = "id, table_name, column_name, row_pk, old_value, new_value, run_stamp"
+JOURNAL_COLUMNS = "id, table_name, column_name, row_pk, old_value, new_value, run_stamp, change_key"
 
 
 def _uuids(pks: Sequence[str]) -> str:
@@ -285,6 +315,7 @@ class Production:
     live: dict[Key, str | None]
     present: set[tuple[str, str]]
     rows: dict[str, dict[str, Any]]  #: the live row per site id
+    change_keys: dict[int, str | None]  #: every journal row read: its change key, by id
 
 
 def read_production(
@@ -294,10 +325,11 @@ def read_production(
     columns: frozenset[tuple[str, str]],
     run: Callable[[str], str],
 ) -> Production:
-    lane_links = [
-        _canonical_link(VW.Link.from_row(row))
-        for row in lanes.json_rows(run(lane_journal_sql(stamp_like)))
-    ]
+    change_keys: dict[int, str | None] = {}
+    lane_links: list[VW.Link] = []
+    for row in lanes.json_rows(run(lane_journal_sql(stamp_like))):
+        lane_links.append(_canonical_link(VW.Link.from_row(row)))
+        change_keys[int(row["id"])] = row["change_key"]
     everyone = sorted(set(pks) | {link.pk for link in lane_links})
     chains: dict[Key, list[VW.Link]] = collections.defaultdict(list)
     live: dict[Key, str | None] = {}
@@ -308,6 +340,7 @@ def read_production(
         for row in lanes.json_rows(run(chain_sql(window, columns))):
             link = _canonical_link(VW.Link.from_row(row))
             chains[link.key].append(link)
+            change_keys[link.id] = row["change_key"]
         for row in lanes.json_rows(run(live_sql(window))):
             site = row["id"]
             rows[site] = row
@@ -321,7 +354,7 @@ def read_production(
                 live[("card_stats", "card_description", site)] = row["card_description"]
     for chain in chains.values():
         chain.sort(key=lambda link: link.id)
-    return Production(lane_links, dict(chains), live, present, rows)
+    return Production(lane_links, dict(chains), live, present, rows, change_keys)
 
 
 # ------------------------------------------------------------------------------------------------
@@ -401,6 +434,10 @@ def reverify(
             continue
         if lane == "p5":
             card = row["card_description"]
+        elif provenance.card is None:
+            # A card-scope hold: write4 wrote the description with `card: null` (without_card),
+            # while the run's assembly.jsonl still carries the card it held back.
+            card = None
         else:
             card = entry.assembly.card if entry.assembly is not None else None
         quotes, why = journal_quotes(evidence_rows, provenance, site_id)
@@ -567,6 +604,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
         present=production.present,
         columns=columns,
         complete=args.complete,
+        change_keys=production.change_keys,
     )
     print(
         f"lane {lane} | stamps {stamp_like} | planned rows {len(planned)} | lane journal rows "
