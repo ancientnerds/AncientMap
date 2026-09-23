@@ -1,4 +1,5 @@
-"""Piece 7 of the runner: walk a plan and drive every batch through prepare, fetch and judge.
+"""Piece 7 of the runner: walk a plan and drive every batch through its stages (prepare, fetch,
+judge; or prepare, search, judge, verify-hits for a search plan).
 
 A **script**, not a subagent lane, and that is a measured decision rather than a preference: the
 30-minute ceiling binds lanes, not `bg_run` scripts, and two lanes this session were killed at that
@@ -45,7 +46,8 @@ Usage:
     # the search lane (block A3): a search plan, its own run directory, a search ceiling
     ./.venv/Scripts/python.exe scripts/remediation/phase3/mass_run.py --live --jobs 4 \
         --plan output/remediation/phase3_runner/PLAN.search.jsonl \
-        --run-dir output/remediation/phase3_runner/runs/search1 --stages prepare,search,judge \
+        --run-dir output/remediation/phase3_runner/runs/search1 \
+        --stages prepare,search,judge,verify-hits \
         --max-calls 4500 --max-usd 8 --max-searches 4600
 
     # the gap run: a rerun plan, the default stages, one call per rerun field and no search
@@ -56,6 +58,10 @@ Usage:
 A plan is one of three kinds, read from its site records (`read_plan`, `STAGES_OF_KIND`): a snapshot
 plan names neither `rerun_fields` nor `search_fields`; a rerun plan names `rerun_fields` only; a search
 plan names both. `--stages` must be the kind's own sequence, or the run is refused before it starts.
+A search plan's sequence ends in `verify-hits`: the page behind every search hit a finder answer
+cites is fetched before the reviewer (`phase3/hit_stage.py`), and a search batch is done only once
+its `hitpages.json` is written (`hit_state`). A batch stopped inside that stage resumes there and
+never at `prepare` (`StageRunner.stages_for`): the judge's named failures are not bought twice.
 
 A search batch's `search` stage gates itself on the MiniMax quota and exits `run.STOP_RUN_EXIT` when
 the gate refuses or a stop-class error arrives; the driver then stops the whole run (`stop_of`), with
@@ -138,8 +144,11 @@ UNSTARTABLE_PROGRAM = "could not be started"
 TOP_LEVEL_ERROR = ' "error":'
 STAGES = ("prepare", "fetch", "judge")
 #: The search lane's sequence (block A3): the evidence is the mass run's, copied by `prepare`, plus
-#: MiniMax search hits - so `search` takes `fetch`'s place.
-SEARCH_STAGES = ("prepare", "search", "judge")
+#: MiniMax search hits - so `search` takes `fetch`'s place - and, once the finder has answered, the
+#: page behind every hit an answer cites (`verify-hits`, `phase3/hit_stage.py`, 2026-09-23): the
+#: reviewer, run after this driver, is shown those pages and refuses to run without them.
+VERIFY_HITS = "verify-hits"
+SEARCH_STAGES = ("prepare", "search", "judge", VERIFY_HITS)
 STAGE_SEQUENCES: dict[str, tuple[str, ...]] = {
     ",".join(STAGES): STAGES,
     ",".join(SEARCH_STAGES): SEARCH_STAGES,
@@ -449,6 +458,28 @@ def search_state(root: Path) -> tuple[str, str] | None:
     return None
 
 
+def hit_state(root: Path) -> tuple[str, str] | None:
+    """What a search batch's `hitpages.json` says against "done", or `None` when it says nothing.
+
+    Only a search batch (one with `search.json`) has hit pages to verify, and it is done only once
+    `verify-hits` has written its report: the reviewer, run after this driver, refuses a batch whose
+    cited hits were never fetched. A hit that could not be fetched is recorded in the report and is
+    that row's refusal later, not a reason to re-run the batch.
+    """
+    if not (root / MS.SEARCH_REPORT_NAME).exists():
+        return None
+    path = root / MS.HIT_REPORT_NAME
+    if not path.exists():
+        return PARTIAL, f"no {MS.HIT_REPORT_NAME} (verify-hits has not run)"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return BROKEN, f"{MS.HIT_REPORT_NAME} does not parse: {exc}"
+    if not isinstance(payload, dict) or not isinstance(payload.get("sites"), list):
+        return BROKEN, f"{MS.HIT_REPORT_NAME} carries no sites list"
+    return None
+
+
 def search_quota(run_dir: Path, batch_id: str) -> list[dict[str, Any]] | None:
     """Every quota reading a search batch's `search.json` holds, or `None` when it has none yet.
 
@@ -462,8 +493,30 @@ def search_quota(run_dir: Path, batch_id: str) -> list[dict[str, Any]] | None:
 
 
 def batch_state(run_dir: Path, batch_id: str) -> tuple[str, str]:
-    """`(state, reason)`: `done` only when the artefacts parse and every written answer is on disk."""
+    """`(state, reason)`: `done` only when the artefacts parse and every written answer is on disk.
+
+    A search batch is done only once its hit pages are verified, too (`hit_state`); until then the
+    state is the hit report's, and `StageRunner.stages_for` resumes it at `verify-hits` alone.
+    """
     root = run_dir / batch_id
+    judged = judged_state(root)
+    if judged[0] != DONE:
+        return judged
+    hits = hit_state(root)
+    if hits is not None:
+        return hits
+    return judged
+
+
+def judged_state(root: Path) -> tuple[str, str]:
+    """`batch_state` up to and including the judge: the batch's own artefacts, not its hit pages.
+
+    Split out of `batch_state` on 2026-09-23 (the fixer's review): a search batch whose judge is
+    complete and whose `hitpages.json` is missing or damaged needs `verify-hits` and nothing else.
+    Re-running the judge would re-buy every named failure (an unreadable stream leaves no answer
+    file, and `model_stage.judge_site` asks again whenever none is on disk), which the `named`
+    branch below promises never happens.
+    """
     if not (root / "input.json").exists():
         return ABSENT, "no input.json (prepare has not run)"
     search = search_state(root)
@@ -623,7 +676,7 @@ class BatchRunner(Protocol):
 
 
 class StageRunner:
-    """Runs `prepare`, `fetch` and `judge` for one batch, with the logs in files the driver owns."""
+    """Runs one batch's stages (`STAGE_SEQUENCES`), with the logs in files the driver owns."""
 
     def __init__(
         self,
@@ -698,6 +751,10 @@ class StageRunner:
             if self.pacing_dir is not None:
                 argv += ["--pacing-dir", str(self.pacing_dir)]
             return argv
+        if stage == "verify-hits" and self.pacing_dir is not None:
+            # Hit pages are always paced too (`run.py verify-hits` defaults to the shared directory);
+            # the driver names the directory its batches share.
+            argv += ["--pacing-dir", str(self.pacing_dir)]
         if self.request_timeout is not None:
             argv += ["--timeout", f"{self.request_timeout:g}"]
         return argv
@@ -749,9 +806,25 @@ class StageRunner:
                 time.sleep(SPAWN_RETRY_WAIT_SECONDS)
                 attempt += 1
 
+    def stages_for(self, batch_id: str) -> tuple[str, ...]:
+        """The stages one batch still needs: all of them, or `verify-hits` alone.
+
+        A search batch whose judge is complete (`judged_state`) and whose hit report is missing or
+        damaged (`hit_state`) was stopped inside `verify-hits`. Only that stage runs again: the pages
+        already stored are kept (`hit_stage` never fetches a page on disk twice), and nothing a
+        finder call bought is bought again. Any other state runs the whole sequence, as it always
+        did. A runner whose sequence has no `verify-hits` meeting such a batch raises: the plan's
+        kind and the stage sequence disagree, which `main` refuses before a run starts.
+        """
+        root = self.run_dir / batch_id
+        if judged_state(root)[0] == DONE and hit_state(root) is not None:
+            return self.stages[self.stages.index(VERIFY_HITS) :]
+        return self.stages
+
     def batch(self, planned: PlannedBatch) -> tuple[bool, str]:
-        """All three stages for one batch. Returns `(ok, detail)`; `detail` says where it stands."""
-        for stage in self.stages:
+        """Every stage one batch still needs (`stages_for`). Returns `(ok, detail)`; `detail` says
+        where it stands."""
+        for stage in self.stages_for(planned.batch_id):
             log = self.log_dir / f"{planned.batch_id}.{stage}.log"
             # The log is appended to across runs; only what this call writes may name its stop.
             start = log.stat().st_size if log.exists() else 0
@@ -764,7 +837,7 @@ class StageRunner:
                 return False, f"{stage} exited {code}"
         state, reason = batch_state(self.run_dir, planned.batch_id)
         if state != DONE:
-            return False, f"after all three stages: {state} - {reason}"
+            return False, f"after every stage: {state} - {reason}"
         return True, reason
 
 
@@ -877,7 +950,7 @@ def run_mass(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="phase3-mass-run",
-        description="Drive every batch of a plan through prepare, fetch and judge (dry run default)",
+        description="Drive every batch of a plan through its stages (dry run by default)",
     )
     parser.add_argument("--plan", default=str(DEFAULT_PLAN))
     parser.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
@@ -900,7 +973,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(STAGE_SEQUENCES),
         help=(
             "prepare,fetch,judge for a snapshot or rerun plan; "
-            "prepare,search,judge for a search plan"
+            "prepare,search,judge,verify-hits for a search plan"
         ),
     )
     parser.add_argument("--failures-before-stop", type=int, default=DEFAULT_FAILURES_BEFORE_STOP)
@@ -942,7 +1015,8 @@ def main(argv: list[str] | None = None) -> int:
         raise PlanError(
             f"--stages {args.stages} does not fit {len(mismatched)} batch(es) of this plan (first: "
             f"{mismatched[0]}, a {batches[0].kind} plan): a search plan names search_fields and "
-            "runs prepare,search,judge; a rerun plan names rerun_fields only, a snapshot plan "
+            "runs prepare,search,judge,verify-hits; a rerun plan names rerun_fields only, a "
+            "snapshot plan "
             "neither, and both run prepare,fetch,judge"
         )
 

@@ -481,6 +481,28 @@ class TestIndexContract:
         with pytest.raises(FileNotFoundError, match="collect"):
             t09.run(ctx)
 
+    @pytest.mark.parametrize(
+        ("exported_at", "says"),
+        [
+            ("2026-09-23T00:00:00+02:00", "exported after the downloader"),
+            ("2026-10-01T09:00:00+02:00", "exported after the downloader"),
+            (None, "names no export time"),
+        ],
+    )
+    def test_the_800_and_1600_px_notes_are_refused_for_a_later_snapshot(
+        self, t09, tmp_path, exported_at, says
+    ):
+        """The caps T09 quotes made the 2026-09-20 rows; the new downloader stores other sizes."""
+        sid = "15151515-1515-1515-1515-151515151515"
+        images = [_img(1, sid, "hero.webp", width=800, height=600, hero=True)]
+        ctx = Harness(
+            tmp_path, images, _index([("hero.webp", _ok(4272, 2848))]), exported_at=exported_at
+        )
+        with pytest.raises(RuntimeError, match=says):
+            t09.run(ctx)
+        # the snapshot the census was built on still runs
+        assert t09._pipeline_widths(EXPORTED_AT) == {"THUMB_WIDTH": 800, "GALLERY_WIDTH": 1600}
+
     def test_run_refuses_an_index_from_another_snapshot(self, t09, tmp_path):
         """Collecting truth about snapshot A and applying it to snapshot B is a silent lie."""
         sid = "13131313-1313-1313-1313-131313131313"

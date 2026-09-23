@@ -50,9 +50,10 @@ HTML attribute without unescaping it (hence `&amp;` inside 8,218 stored URLs), a
 
 **Confidence ladder** - never inflated to make a finding apply:
 * `SET` + `AUTHORITATIVE`: the target value is what a project module already writes for that
-  exact shape (`wiki_image_downloader.py:439-441` for protocol-relative URLs, `:612-613` for
-  the md5 directory layout, `:459-461` for `commons_page_url_for`), or the scheme is settled
-  by our own data (an https URL for the same host already stored in the snapshot).
+  exact shape (`wiki_image_downloader.py:440-442` for protocol-relative URLs, `:608-609` for
+  the md5 directory layout, `pipeline/commons_urls.py:14-16` for `commons_page_url_for`), or
+  the scheme is settled by our own data (an https URL for the same host already stored in the
+  snapshot).
 * `SET` + `WEAK`: a mechanically obvious repair whose correctness still needs one request
   (percent-escape repair, collapsing `//`, decoding `&amp;`, adding a scheme that no stored
   URL corroborates). Proposed, not auto-applicable.
@@ -75,14 +76,25 @@ from __future__ import annotations
 import hashlib
 import html
 import re
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import unquote, urlsplit
 
 from census.model import Confidence, Evidence, Finding, Proposal, Severity
 
 if TYPE_CHECKING:
     from census.run import Context
+
+REPO = Path(__file__).resolve().parents[4]
+if str(REPO) not in sys.path:
+    # Appended, not prepended, as in t01: the repo's own `scripts/` must not shadow the
+    # top-level `scripts` package `run.py` warns about.
+    sys.path.append(str(REPO))
+
+# The page URL the downloader writes, imported: one spelling across the project.
+from pipeline.commons_urls import COMMONS_PAGE_PREFIX, commons_page_url_for  # noqa: E402
 
 TEST_ID = "T06"
 NAME = "URL shapes"
@@ -115,7 +127,6 @@ INNER_DOUBLE_SLASH_RE = re.compile(r"(?<!:)//")
 
 UPLOAD_HOST = "upload.wikimedia.org"
 COMMONS_HOST = "commons.wikimedia.org"
-COMMONS_PAGE_PREFIX = f"https://{COMMONS_HOST}/wiki/"
 CITATION_FIELD = "raw_data.description_citations[].url"
 
 #: the two kinds that legitimately carry a site-relative /data/... path
@@ -275,7 +286,7 @@ def _quote(text: str, limit: int = 300) -> str:
 def _md5_dirs(name: str) -> tuple[str, str]:
     """Wikimedia's upload layout: `md5(filename)[0]` and `md5(filename)[0:2]`.
 
-    `pipeline/wiki_image_downloader.py:612-613` computes exactly this, which is why a
+    `pipeline/wiki_image_downloader.py:608-609` computes exactly this, which is why a
     mismatch is repairable rather than merely reportable.
 
     MD5 IS LOAD-BEARING HERE - do not "upgrade" it. It is not a security hash, it is the
@@ -317,12 +328,12 @@ def _upload_name(value: str) -> str | None:
 def _derive_commons_page(original: str) -> str | None:
     """`https://commons.wikimedia.org/wiki/File:<name>`, quoted as the project quotes it.
 
-    Same output as `pipeline/wiki_image_downloader.py:459-461::commons_page_url_for`.
+    The project's own spelling (`pipeline.commons_urls.commons_page_url_for`).
     """
     name = _upload_name(original)
     if not name:
         return None
-    return COMMONS_PAGE_PREFIX + quote("File:" + unquote(name), safe="")
+    return commons_page_url_for("File:" + unquote(name))
 
 
 def _strip_thumb(url: str) -> str:
@@ -479,7 +490,7 @@ def _value_issues(fld: _Field, value: str, pool: dict[str, tuple[str, str]]) -> 
                 [
                     Evidence(source=f"snapshot:{fld.table}.{fld.column}", quote=_quote(value)),
                     Evidence(
-                        source="pipeline/wiki_image_downloader.py:435-438",
+                        source="pipeline/wiki_image_downloader.py:436-439",
                         quote='href_match = re.search(r\'href="([^"]+)"\', author_raw) / '
                         "author_url = href_match.group(1)  # verbatim, never unescaped",
                     ),
@@ -523,7 +534,7 @@ def _value_issues(fld: _Field, value: str, pool: dict[str, tuple[str, str]]) -> 
                     [
                         Evidence(source=f"snapshot:{fld.table}.{fld.column}", quote=_quote(value)),
                         Evidence(
-                            source="pipeline/wiki_image_downloader.py:439-440",
+                            source="pipeline/wiki_image_downloader.py:440-441",
                             quote='if author_url.startswith("//"): author_url = "https:" + author_url',
                         ),
                     ],
@@ -553,7 +564,7 @@ def _value_issues(fld: _Field, value: str, pool: dict[str, tuple[str, str]]) -> 
                             source=(
                                 f"snapshot:{known[1]} (same host over https)"
                                 if known
-                                else "pipeline/wiki_image_downloader.py:459-461 (project URLs are https)"
+                                else "pipeline/commons_urls.py:11 (project URLs are https)"
                             ),
                             url=known[0] if known else None,
                             quote=_quote(known[0]) if known else "https://<host>/...",
@@ -775,8 +786,8 @@ def _field_issues(fld: _Field, value: str, site_id: str) -> list[_Issue]:
                 [
                     Evidence(source=f"snapshot:{fld.table}.{fld.column}", quote=_quote(value)),
                     Evidence(
-                        source="pipeline/wiki_image_downloader.py:459-461",
-                        quote="return f\"https://commons.wikimedia.org/wiki/{urllib.parse.quote(file_title, safe='')}\"",
+                        source="pipeline/commons_urls.py:14-16",
+                        quote='return COMMONS_PAGE_PREFIX + quote(file_title, safe="")',
                     ),
                 ],
             )
@@ -798,7 +809,7 @@ def _field_issues(fld: _Field, value: str, site_id: str) -> list[_Issue]:
                 [
                     Evidence(source=f"snapshot:{fld.table}.{fld.column}", quote=_quote(value)),
                     Evidence(
-                        source="pipeline/wiki_image_downloader.py:140-151 (thumb_to_original)",
+                        source="pipeline/wiki_image_downloader.py:141-152 (thumb_to_original)",
                         quote='url = url.replace("/thumb/", "/") / url = url[:url.rfind("/")]',
                     ),
                 ],
@@ -834,7 +845,7 @@ def _field_issues(fld: _Field, value: str, site_id: str) -> list[_Issue]:
             [
                 Evidence(source=f"snapshot:{fld.table}.{fld.column}", quote=_quote(value)),
                 Evidence(
-                    source="pipeline/wiki_image_downloader.py:611-613",
+                    source="pipeline/wiki_image_downloader.py:607-609",
                     quote="md5 = hashlib.md5(encoded_name.encode()).hexdigest() / "
                     "original_url = f'https://upload.wikimedia.org/wikipedia/commons/"
                     "{md5[0]}/{md5[:2]}/{urllib.parse.quote(encoded_name)}'",
@@ -862,8 +873,8 @@ def _empty_repair(fld: _Field, row: dict[str, Any]) -> _Issue | None:
         [
             Evidence(source=f"snapshot:{fld.table}.original_url", quote=_quote(original)),
             Evidence(
-                source="pipeline/wiki_image_downloader.py:459-461",
-                quote="return f\"https://commons.wikimedia.org/wiki/{urllib.parse.quote(file_title, safe='')}\"",
+                source="pipeline/commons_urls.py:14-16",
+                quote='return COMMONS_PAGE_PREFIX + quote(file_title, safe="")',
             ),
         ],
         proposed_value=derived,

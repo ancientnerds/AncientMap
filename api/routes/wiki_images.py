@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 IMAGE_DIR = Path("/app/public/data/images/wiki")
-HERO_WIDTH = 800
+#: The widest hero this endpoint writes. 800 until 2026-09-23: every hero set here arrived as an
+#: 800 px file while the pages that show it (the detail page's LCP image, og:image, the hub) want
+#: 1600x900 - the same cap the downloader's LOCAL_MAX_WIDTH now applies to every new file. A
+#: narrower source is kept at its own width: an upscale adds pixels, not detail.
+HERO_WIDTH = 1600
 WEBP_QUALITY = 82
 
 #: The image's site is not retired (E4, migration 0020): a retired site shows no images,
@@ -31,7 +35,7 @@ _SITE_NOT_RETIRED = (
 )
 
 _HERO_STATUS_SQL = text(
-    "SELECT DISTINCT ON (site_id) site_id::text, original_url, commons_page_url "
+    "SELECT DISTINCT ON (site_id) site_id::text, original_url, commons_page_url, filename "
     "FROM wiki_images WHERE is_hero = true AND " + _SITE_NOT_RETIRED + " "
     "ORDER BY site_id, created_at DESC"
 )
@@ -51,15 +55,38 @@ class SetHeroRequest(BaseModel):
     attribution_url: str
 
 
+def render_hero_webp(image_bytes: bytes) -> tuple[bytes, int, int]:
+    """The hero file for `image_bytes`: WebP, at most HERO_WIDTH wide, and never upscaled.
+
+    Pure (bytes in, bytes and the stored size out), so the size rule is testable without a
+    database or a disk. The mode handling is the endpoint's as it was: RGBA and palette images
+    lose their alpha, every other mode is left to the WebP encoder.
+    """
+    img = Image.open(BytesIO(image_bytes))
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+    if img.width > HERO_WIDTH:
+        ratio = HERO_WIDTH / img.width
+        img = img.resize((HERO_WIDTH, int(img.height * ratio)), Image.LANCZOS)
+    buf = BytesIO()
+    img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
+    return buf.getvalue(), img.width, img.height
+
+
 @router.get("/hero-status")
 async def get_hero_status(db: Session = Depends(get_db)):
-    """Return hero image info for all sites that have one (retired sites have none)."""
+    """Return hero image info for all sites that have one (retired sites have none).
+
+    The path is the hero row's own file. It used to be the literal `hero.webp`, which since the
+    2026-09-20 hero repair names the *demoted* 800 px file on the 2,719 sites whose flag moved to
+    a gallery image - and a gallery image keeps its own filename.
+    """
     result = db.execute(_HERO_STATUS_SQL)
     out = {}
     for row in result:
         sid_short = row[0].replace("-", "")[:8]
         out[row[0]] = {
-            "path": f"/data/images/wiki/{sid_short}/hero.webp",
+            "path": f"/data/images/wiki/{sid_short}/{row[3]}",
             "original_url": row[1] or "",
             "attribution_url": row[2] or "",
         }
@@ -113,14 +140,7 @@ async def set_hero(
         print(f"[set-hero] Loaded {len(image_bytes)} bytes", flush=True)
 
         # Process with PIL: resize + convert to WebP
-        img = Image.open(BytesIO(image_bytes))
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        if img.width > HERO_WIDTH:
-            ratio = HERO_WIDTH / img.width
-            img = img.resize((HERO_WIDTH, int(img.height * ratio)), Image.LANCZOS)
-
-        final_width, final_height = img.size
+        webp, final_width, final_height = render_hero_webp(image_bytes)
         print(f"[set-hero] Processed image: {final_width}x{final_height}", flush=True)
 
         # Save to disk
@@ -129,9 +149,7 @@ async def set_hero(
         site_dir.mkdir(parents=True, exist_ok=True)
         hero_path = site_dir / "hero.webp"
 
-        buf = BytesIO()
-        img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
-        hero_path.write_bytes(buf.getvalue())
+        hero_path.write_bytes(webp)
         print(f"[set-hero] Saved hero to {hero_path}", flush=True)
 
         import time

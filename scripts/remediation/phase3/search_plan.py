@@ -536,6 +536,7 @@ def _site_evidence_chars(site: Mapping[str, Any], batch_dir: Path) -> int:
         site_id=str(site["site_id"]),
         site=plain,
         store=F.EvidenceStore(batch_dir / "evidence"),
+        hit_pages=False,
         failures=failures.get(str(site["site_id"])),
     )
     return sum(excerpt.chars for excerpt in excerpts)

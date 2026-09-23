@@ -21,6 +21,15 @@ forbids, so they are left alone. 30 of them do state a kind verbatim (`kind=arti
 persisting them needs a proven slug->site_id and filename->row match first; that is a recorded
 follow-up, not part of this lane.
 
+G0b (`--source rejected-kinds`, 2026-09-23) is that follow-up. `scripts/remediation/vlm_pilot/
+rejected_kinds.py` proved the match: `output/remediation/vlm_pilot/REJECTED_KINDS.jsonl` maps each
+of the 30 rejections to exactly one `wiki_images` row, by the short's own candidate pool and the
+snapshot agreeing (verdict `PROVEN`, 30 of 30). Only `PROVEN` records are written, only the kind
+the rejection states verbatim (`reason = "kind=<kind>"`), only where `image_kind` is NULL, and only
+where production still holds the row on the site and under the filename the proof names. The batch
+lives in `gallery_audit/rejected_kinds/` and journals under a stamp derived from its own identity
+set - never under the landed G0 stamp.
+
 Three rules this file follows, all of them paid for elsewhere in this project:
 
 * **NULL is not 'unknown'.** Migration 0019 reserves NULL for "no verdict was ever recorded" and
@@ -40,6 +49,9 @@ Usage:
     persist_verdicts.py --check-primitive # probe the journalled primitive itself on a scratch row
     persist_verdicts.py --apply           # the write (requires the rollout decision)
     persist_verdicts.py --verify          # read-only: prove the landed state
+
+Every command takes `--source stills` (the default: G0, `gallery_audit/`) or `--source
+rejected-kinds` (G0b, `gallery_audit/rejected_kinds/`).
 """
 
 from __future__ import annotations
@@ -50,7 +62,7 @@ import json
 import re
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,11 +71,16 @@ if str(ROOT / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts" / "remediation"))
 
 #: The production transport, the timeout rule and the pin format live in `prod_write.py` since
-#: 2026-09-22 - moved there from this module so the mechanical lanes use the same code.
+#: 2026-09-22 - moved there from this module so the mechanical lanes use the same code. The UUID
+#: pattern is the mechanical lanes' own, imported rather than copied.
+from mechanical.plan import UUID_RE  # noqa: E402
 from prod_write import DIGEST_RE, SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 OUTPUT = ROOT / "output" / "remediation" / "gallery_audit"
 SELECTION = ROOT / "video-assets" / "shorts"
+#: G0b's input: the proven filename -> row mapping of the 30 kind-labelled rejections. Versioned
+#: (`git ls-files output/remediation/vlm_pilot`), so a clean checkout carries it.
+REJECTED_KINDS = ROOT / "output" / "remediation" / "vlm_pilot" / "REJECTED_KINDS.jsonl"
 
 #: The vocabulary migration 0019 enforces with a CHECK constraint. Kept as a literal copy rather
 #: than imported. What keeps it honest is **not** `--verify`: `load_verdicts` refuses any kind
@@ -110,6 +127,32 @@ BATCH_STAMP_PREFIX = "gallery-verdicts-persist"
 #: batch, not a validated classifier. Recorded in evidence below and in the audit log.
 CONFIDENCE = "authoritative"
 
+
+
+@dataclass(frozen=True)
+class Source:
+    """Where a batch of verdicts comes from, the label its SQL raises under, and where it lives."""
+
+    name: str
+    scope: str
+    subdir: str | None
+
+
+#: `stills` is G0, already landed (105 rows under RUN_STAMP): its files stay where they are and
+#: render byte for byte as before. `rejected-kinds` is G0b, in its own directory, so its plan can
+#: never overwrite G0's APPLY.sql and ROLLBACK.sql - the record and the only undo of a landed write.
+SOURCES = {
+    "stills": Source("stills", "G0", None),
+    "rejected-kinds": Source("rejected-kinds", "G0b", "rejected_kinds"),
+}
+
+
+def output_for(source: str) -> Path:
+    """The directory a source's plan and scripts live in. `OUTPUT` is read at call time."""
+    sub = SOURCES[source].subdir
+    return OUTPUT if sub is None else OUTPUT / sub
+
+
 EXIT_OK = 0
 EXIT_INPUT = 1
 EXIT_NOTHING = 2
@@ -132,6 +175,10 @@ class Verdict:
     file: Path
     verdict: dict[str, object]
     entry: dict[str, object]
+    source: str = "stills"
+    #: The site the verdict's own record names for this image, when it names one (G0b's proof
+    #: does; a G0 still carries only the id). `build_plan` compares it with production.
+    site_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +258,100 @@ def load_verdicts(base: Path = SELECTION) -> list[Verdict]:
     return out
 
 
+MAPPING_VERDICTS = frozenset({"PROVEN", "AMBIGUOUS", "UNPROVABLE"})
+
+
+def record_sha256(record: Mapping[str, object]) -> str:
+    """sha256 of one mapping record in canonical JSON - the pointer the journal evidence carries."""
+    blob = json.dumps(record, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def jsonl_lines(text: str) -> list[str]:
+    """The lines of a JSON-lines text: split at '\\n' and nowhere else.
+
+    `str.splitlines()` also breaks at U+0085, U+2028 and U+2029, and `json.dumps(...,
+    ensure_ascii=False)` - like PostgreSQL's `row_to_json` - writes those three raw inside a
+    string, so one record would come apart into two broken ones. A file read with universal
+    newlines, and psql output read in text mode, already carry '\\n' for every CRLF.
+    """
+    return text.split("\n")
+
+
+def load_rejected_kinds(path: Path | None = None) -> tuple[list[Verdict], list[Skipped]]:
+    """G0b's verdicts: the PROVEN records of REJECTED_KINDS.jsonl, and a named refusal for the rest.
+
+    Raises on anything malformed - a record whose stated kind is not the kind its reason names, a
+    kind outside the vocabulary, an id that is not an integer, one image with two kinds. A record
+    that is not PROVEN is never a guess: it is returned as a `Skipped` with its own evidence.
+    """
+    path = REJECTED_KINDS if path is None else path
+    if not path.is_file():
+        raise PersistError(f"{path} does not exist - run vlm_pilot/rejected_kinds.py first")
+    out: list[Verdict] = []
+    skipped: list[Skipped] = []
+    seen: dict[int, str] = {}
+    for lineno, line in enumerate(jsonl_lines(path.read_text(encoding="utf-8")), start=1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise PersistError(f"{path}:{lineno} is not JSON: {exc}") from exc
+        if not isinstance(record, dict):
+            raise PersistError(f"{path}:{lineno} is {type(record).__name__}, expected an object")
+        where = f"{path.name}:{lineno}"
+        mapping = record.get("verdict")
+        if mapping not in MAPPING_VERDICTS:
+            raise PersistError(f"{where}: mapping verdict {mapping!r} is none of {sorted(MAPPING_VERDICTS)}")
+        slug = str(record.get("slug"))
+        kind = record.get("kind_stated")
+        reason = str(record.get("reason") or "")
+        if kind not in VOCAB:
+            raise PersistError(f"{where}: kind {kind!r} is not one of {sorted(VOCAB)}")
+        named = reason.split("kind=", 1)[1].split()[0].rstrip(",;)") if "kind=" in reason else None
+        if named != kind:
+            raise PersistError(f"{where}: kind_stated {kind!r} is not the kind the reason names ({reason!r})")
+        if mapping != "PROVEN":
+            skipped.append(
+                Skipped(
+                    record.get("image_id") if isinstance(record.get("image_id"), int) else None,
+                    slug,
+                    "mapping-not-proven",
+                    f"{mapping}: {'; '.join(str(e) for e in record.get('evidence') or [])}",
+                )
+            )
+            continue
+        image_id = _as_int(record.get("image_id"), what=f"{where} image_id")
+        site_id = record.get("site_id")
+        if not isinstance(site_id, str) or not UUID_RE.fullmatch(site_id):
+            raise PersistError(f"{where}: site_id {site_id!r} is not a UUID")
+        if image_id in seen and seen[image_id] != kind:
+            raise PersistError(f"{where}: image {image_id} was already stated {seen[image_id]!r}")
+        if image_id in seen:
+            continue
+        seen[image_id] = kind
+        out.append(
+            Verdict(
+                image_id=image_id,
+                kind=str(kind),
+                slug=slug,
+                file=path,
+                verdict={"kind": kind, "reason": reason},
+                entry={
+                    "filename": record.get("filename"),
+                    "mapping_evidence": list(record.get("evidence") or []),
+                    "record_sha256": record_sha256(record),
+                },
+                source="rejected-kinds",
+                site_id=site_id,
+            )
+        )
+    if not out:
+        raise PersistError(f"{path}: no PROVEN record - nothing G0b may write")
+    return out, skipped
+
+
 def _relative(path: Path) -> str:
     try:
         return path.relative_to(ROOT).as_posix()
@@ -220,6 +361,8 @@ def _relative(path: Path) -> str:
 
 def evidence_for(v: Verdict) -> list[dict[str, object]]:
     """The chain that lets a reader re-derive this write without trusting this script."""
+    if v.source == "rejected-kinds":
+        return rejected_evidence_for(v)
     keep = ("kind", "subject", "people_prominent", "text_or_overlay", "quality", "relevance")
     recorded = {k: v.verdict[k] for k in keep if k in v.verdict}
     return [
@@ -267,6 +410,51 @@ def evidence_for(v: Verdict) -> list[dict[str, object]]:
     ]
 
 
+def rejected_evidence_for(v: Verdict) -> list[dict[str, object]]:
+    """G0b's chain: the rejection, the proof that maps it to this row, the stage, the column."""
+    return [
+        {
+            "source": "shorts selection record (the rejection being persisted)",
+            "url": f"video-assets/shorts/{v.slug}/selection.json",
+            "quote": (
+                f"rejected[] entry filename={v.entry.get('filename')!r} "
+                f"reason={v.verdict.get('reason')!r}"
+            ),
+        },
+        {
+            "source": "filename -> wiki_images row mapping, verdict PROVEN",
+            "url": _relative(v.file),
+            "sha256": v.entry.get("record_sha256"),
+            "quote": f"image_id={v.image_id} site_id={v.site_id}: "
+            + "; ".join(str(e) for e in v.entry.get("mapping_evidence") or []),
+        },
+        {
+            "source": "pipeline/video/shorts_select.py (the stage that produced the verdict)",
+            "url": "pipeline/video/shorts_select.py",
+            "quote": (
+                "reject_reason returns 'kind=<kind>' for a verdict whose kind is not site_photo; "
+                "the reason carries the vision model's kind verbatim"
+            ),
+        },
+        {
+            "source": "migration 0019 (the column and its CHECK constraint)",
+            "url": "migrations/0019_wiki_images_image_kind.sql",
+            "quote": (
+                "image_kind is nullable; NULL means no verdict was ever recorded and is NOT the "
+                "same as 'unknown'. Only 'site_photo' may be treated as clean."
+            ),
+        },
+        {
+            "source": "caveat, recorded with the write rather than after it",
+            "url": "output/remediation/gallery_design/DESIGN.md",
+            "quote": (
+                "the vision model's semantic competence on archaeological imagery is unverified; "
+                "these rows record the pipeline's existing verdicts, not a validated classifier"
+            ),
+        },
+    ]
+
+
 # --------------------------------------------------------------------------------------
 # production reads
 # --------------------------------------------------------------------------------------
@@ -296,7 +484,7 @@ def read_rows(sql: str) -> list[dict[str, object]]:
     """
     proc = run_psql(sql, rows=True)
     out: list[dict[str, object]] = []
-    for line in proc.stdout.splitlines():
+    for line in jsonl_lines(proc.stdout):
         line = line.strip()
         if not line:
             continue
@@ -373,6 +561,20 @@ def build_plan(
                 )
             )
             continue
+        if v.site_id is not None and (
+            row.get("site_id") != v.site_id or row.get("filename") != v.entry.get("filename")
+        ):
+            skipped.append(
+                Skipped(
+                    v.image_id,
+                    v.slug,
+                    "row-no-longer-matches-the-proof",
+                    f"production holds site {row.get('site_id')!r} and filename "
+                    f"{row.get('filename')!r}; the proof names {v.site_id!r} and "
+                    f"{v.entry.get('filename')!r} - the mapping is not re-proven here",
+                )
+            )
+            continue
         current = row.get("image_kind")
         if current == v.kind:
             skipped.append(
@@ -438,11 +640,18 @@ def plan_records(
     ]
 
 
-def plan_digest(records: Iterable[Mapping[str, object]]) -> str:
+#: The fields a G0 record is identified by. `gallery_audit/chunk_writer.py` digests its own,
+#: wider rows (table, column, key, change key) through the same function.
+PLAN_DIGEST_KEYS = ("image_id", "site_id", "old_value", "new_value")
+
+
+def plan_digest(
+    records: Iterable[Mapping[str, object]], keys: Sequence[str] = PLAN_DIGEST_KEYS
+) -> str:
     """sha256 over a record set: order-independent, one canonical JSON line per row."""
     lines = [
         json.dumps(
-            {key: record.get(key) for key in ("image_id", "site_id", "old_value", "new_value")},
+            {key: record.get(key) for key in keys},
             sort_keys=True,
             ensure_ascii=False,
         )
@@ -465,7 +674,7 @@ def load_plan_records(path: Path) -> list[dict[str, object]]:
             "against the plan without it"
         )
     out: list[dict[str, object]] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for lineno, line in enumerate(jsonl_lines(path.read_text(encoding="utf-8")), start=1):
         if not line.strip():
             continue
         try:
@@ -653,10 +862,17 @@ def render_plan_table(write: list[Verdict], state: dict[int, dict[str, object]])
         current = row.get("image_kind")
         old_literal = "NULL" if current is None else _sql_literal(str(current))
         evidence = json.dumps(evidence_for(v), ensure_ascii=False)
-        reason = (
-            f"G0: the shorts pipeline judged image {v.image_id} ({v.entry.get('filename')!r}) "
-            f"{v.kind!r} on {v.slug!r}; recorded verbatim from its own selection record"
-        )
+        if v.source == "rejected-kinds":
+            reason = (
+                f"G0b: the shorts pipeline rejected image {v.image_id} "
+                f"({v.entry.get('filename')!r}) on {v.slug!r} as {v.verdict.get('reason')!r}; "
+                "the row is the one REJECTED_KINDS.jsonl proves"
+            )
+        else:
+            reason = (
+                f"G0: the shorts pipeline judged image {v.image_id} ({v.entry.get('filename')!r}) "
+                f"{v.kind!r} on {v.slug!r}; recorded verbatim from its own selection record"
+            )
         tuples.append(
             "    ({}, {}::uuid, {}, {}, {}, {}, {}::jsonb)".format(
                 v.image_id,
@@ -761,7 +977,7 @@ ROLLBACK_INVARIANTS = """
       FROM _kind_plan p JOIN wiki_images w ON w.id = p.image_id
      WHERE w.image_kind IS NOT NULL;
     IF bad > 0 THEN
-        RAISE EXCEPTION 'G0 rollback: % row(s) are still not NULL', bad;
+        RAISE EXCEPTION '{scope}: % row(s) are still not NULL', bad;
     END IF;
 
     -- invariant 2: the reversal's journal and the data agree, row for row, in both directions.
@@ -776,7 +992,7 @@ ROLLBACK_INVARIANTS = """
         OR l.new_value IS NOT NULL
         OR l.old_value IS DISTINCT FROM p.old_value;
     IF bad > 0 THEN
-        RAISE EXCEPTION 'G0 rollback: % planned row(s) disagree with the reversal journal', bad;
+        RAISE EXCEPTION '{scope}: % planned row(s) disagree with the reversal journal', bad;
     END IF;
 
     -- invariant 3: the reversal stamp journalled nothing outside wiki_images.image_kind
@@ -785,7 +1001,7 @@ ROLLBACK_INVARIANTS = """
        AND (l.table_name <> {tbl} OR l.column_name <> {col});
     IF bad > 0 THEN
         RAISE EXCEPTION
-            'G0 rollback: this run stamp journalled % row(s) outside wiki_images.image_kind',
+            '{scope}: this run stamp journalled % row(s) outside wiki_images.image_kind',
             bad;
     END IF;
 """
@@ -801,16 +1017,34 @@ def invariants_sql(template: str, scope: str, *, run_stamp: str) -> str:
     )
 
 
-def verify_in_tx_sql(run_stamp: str = RUN_STAMP) -> str:
+def kinds_of(records: Iterable[Mapping[str, object]]) -> tuple[str, ...]:
+    """The kinds a batch writes, sorted - the set its verification reads for."""
+    return tuple(sorted({str(r.get("new_value") if "new_value" in r else r.get("kind")) for r in records}))
+
+
+def kind_test(kinds: Sequence[str]) -> tuple[str, str]:
+    """(the SQL test for `kinds`, its label). One kind renders as G0 always rendered it."""
+    if not kinds or any(kind not in VOCAB for kind in kinds):
+        raise PersistError(f"{list(kinds)!r} is not a set of image kinds")
+    if len(kinds) == 1:
+        return f"= {_sql_literal(kinds[0])}", f"= {kinds[0]}"
+    return (
+        "IN (" + ", ".join(_sql_literal(k) for k in kinds) + ")",
+        "in (" + ", ".join(kinds) + ")",
+    )
+
+
+def verify_in_tx_sql(run_stamp: str = RUN_STAMP, kinds: Sequence[str] = ("site_photo",)) -> str:
     """The read-backs that run INSIDE the transaction, before COMMIT.
 
     These read `_kind_plan`, which is `ON COMMIT DROP`: after a COMMIT the table is gone, so these
     queries only ever work here.
     """
     vocab = ", ".join(_sql_literal(kind) for kind in sorted(VOCAB))
+    test, label = kind_test(kinds)
     return f"""
 SELECT 'planned rows written', count(*)::text FROM wiki_images
- WHERE image_kind = 'site_photo' AND id IN (SELECT image_id FROM _kind_plan);
+ WHERE image_kind {test} AND id IN (SELECT image_id FROM _kind_plan);
 SELECT 'rows still NULL among planned', count(*)::text
   FROM _kind_plan p JOIN wiki_images w ON w.id = p.image_id WHERE w.image_kind IS NULL;
 SELECT 'journal rows for this run', count(*)::text FROM remediation_change_log
@@ -822,8 +1056,8 @@ SELECT 'journal rows for this run outside wiki_images.image_kind', count(*)::tex
 SELECT 'journal rows for this run with no evidence', count(*)::text
   FROM remediation_change_log
  WHERE run_stamp = {_sql_literal(run_stamp)} AND (evidence IS NULL OR evidence = '[]'::jsonb);
-SELECT 'table-wide context: rows with image_kind = site_photo (never compared to the journal)',
-       count(*)::text FROM wiki_images WHERE image_kind = 'site_photo';
+SELECT 'table-wide context: rows with image_kind {label} (never compared to the journal)',
+       count(*)::text FROM wiki_images WHERE image_kind {test};
 SELECT 'context only: curated rows still without a kind', count(*)::text
   FROM wiki_images w JOIN unified_sites s ON s.id = w.site_id
  WHERE s.source_id = 'ancient_nerds' AND w.image_kind IS NULL;
@@ -835,7 +1069,12 @@ SELECT 'curated images', count(*)::text
 """
 
 
-def verify_sql(run_stamp: str = RUN_STAMP) -> str:
+def unjournalled_label(kinds: Sequence[str]) -> str:
+    """The must-be-zero metric: rows holding a kind this run writes, with no journal row of it."""
+    return f"rows with image_kind {kind_test(kinds)[1]} and no journal row for this run"
+
+
+def verify_sql(run_stamp: str = RUN_STAMP, kinds: Sequence[str] = ("site_photo",)) -> str:
     """Post-hoc verification, run as its own psql call.
 
     It must NOT reference `_kind_plan`: that table is `ON COMMIT DROP`, so once the write has
@@ -856,11 +1095,12 @@ def verify_sql(run_stamp: str = RUN_STAMP) -> str:
     here; the tie to it is the test, not a third hand-written copy of the list.)
     """
     vocab = ", ".join(_sql_literal(kind) for kind in sorted(VOCAB))
+    test, label = kind_test(kinds)
     return f"""
 SELECT 'journal rows for this run', count(*)::text FROM remediation_change_log
  WHERE run_stamp = {_sql_literal(run_stamp)};
-SELECT 'rows with image_kind = site_photo and no journal row for this run', count(*)::text
-  FROM wiki_images w WHERE w.image_kind = 'site_photo'
+SELECT '{unjournalled_label(kinds)}', count(*)::text
+  FROM wiki_images w WHERE w.image_kind {test}
    AND NOT EXISTS (SELECT 1 FROM remediation_change_log l
                     WHERE l.run_stamp = {_sql_literal(run_stamp)}
                       AND l.table_name = 'wiki_images' AND l.column_name = 'image_kind'
@@ -872,8 +1112,8 @@ SELECT 'journal rows for this run outside wiki_images.image_kind', count(*)::tex
 SELECT 'journal rows for this run with no evidence', count(*)::text
   FROM remediation_change_log
  WHERE run_stamp = {_sql_literal(run_stamp)} AND (evidence IS NULL OR evidence = '[]'::jsonb);
-SELECT 'table-wide context: rows with image_kind = site_photo (never compared to the journal)',
-       count(*)::text FROM wiki_images WHERE image_kind = 'site_photo';
+SELECT 'table-wide context: rows with image_kind {label} (never compared to the journal)',
+       count(*)::text FROM wiki_images WHERE image_kind {test};
 SELECT 'context only: curated rows still without a kind', count(*)::text
   FROM wiki_images w JOIN unified_sites s ON s.id = w.site_id
  WHERE s.source_id = 'ancient_nerds' AND w.image_kind IS NULL;
@@ -901,6 +1141,7 @@ def render_apply(
     """
     if not write:
         raise PersistError("refusing to render an APPLY.sql for an empty plan")
+    scope = scope_of(write)
     expected = len(write)
     digest = plan_digest(plan_records(write, state))
     head = f"""-- Generated by scripts/remediation/gallery_audit/persist_verdicts.py - do not edit by hand.
@@ -922,7 +1163,7 @@ DECLARE
     expected integer := {expected};
     r        RECORD;
 BEGIN
-{guards_sql("G0")}
+{guards_sql(scope)}
 
     -- the only writer: the conditional UPDATE and its journal row commit together, and the
     -- function raises unless exactly one row matched
@@ -935,15 +1176,23 @@ BEGIN
     END LOOP;
 
     IF moved <> expected THEN
-        RAISE EXCEPTION 'G0 image_kind: % row(s) changed, % planned', moved, expected;
+        RAISE EXCEPTION '{scope} image_kind: % row(s) changed, % planned', moved, expected;
     END IF;
-{invariants_sql(INVARIANTS, "G0", run_stamp=run_stamp)}
+{invariants_sql(INVARIANTS, scope, run_stamp=run_stamp)}
 END $$;
 
-{verify_in_tx_sql(run_stamp)}
+{verify_in_tx_sql(run_stamp, kinds_of(plan_records(write, state)))}
 COMMIT;
 """
     return head
+
+
+def scope_of(write: list[Verdict]) -> str:
+    """The one source a batch comes from, as the label its SQL raises under."""
+    sources = {v.source for v in write}
+    if len(sources) != 1:
+        raise PersistError(f"a batch mixes the sources {sorted(sources)} - that is not one batch")
+    return SOURCES[sources.pop()].scope
 
 
 def render_apply_verification(run_stamp: str = RUN_STAMP) -> str:
@@ -968,6 +1217,7 @@ def render_rollback(
     """
     if not write:
         raise PersistError("refusing to render a ROLLBACK.sql for an empty plan")
+    scope = scope_of(write)
     stamp = rollback_stamp(run_stamp)
     digest = plan_digest(plan_records(write, state))
     tuples = []
@@ -983,7 +1233,11 @@ def render_rollback(
                 {
                     "source": "the verdict this restores NULL over",
                     "url": _relative(v.file),
-                    "quote": f"stills[] id={v.image_id} verdict.kind={v.kind!r}",
+                    "quote": (
+                        f"PROVEN image_id={v.image_id} reason={v.verdict.get('reason')!r}"
+                        if v.source == "rejected-kinds"
+                        else f"stills[] id={v.image_id} verdict.kind={v.kind!r}"
+                    ),
                 },
                 {
                     "source": "the design rule being restored",
@@ -996,7 +1250,9 @@ def render_rollback(
             ],
             ensure_ascii=False,
         )
-        reason = f"rollback of G0: image_kind on {v.image_id} returned to NULL (was {v.kind!r})"
+        reason = (
+            f"rollback of {scope}: image_kind on {v.image_id} returned to NULL (was {v.kind!r})"
+        )
         tuples.append(
             "    ({}, {}::uuid, {}, NULL, {}, {}, {}::jsonb)".format(
                 v.image_id,
@@ -1037,7 +1293,7 @@ DECLARE
     expected integer := {len(write)};
     r        RECORD;
 BEGIN
-{guards_sql("G0 rollback")}
+{guards_sql(f"{scope} rollback")}
 
     FOR r IN SELECT * FROM _kind_plan ORDER BY image_id LOOP
         moved := moved + apply_remediation_change(
@@ -1048,9 +1304,9 @@ BEGIN
     END LOOP;
 
     IF moved <> expected THEN
-        RAISE EXCEPTION 'G0 rollback: % row(s) changed, % planned', moved, expected;
+        RAISE EXCEPTION '{scope} rollback: % row(s) changed, % planned', moved, expected;
     END IF;
-{invariants_sql(ROLLBACK_INVARIANTS, "G0 rollback", run_stamp=stamp)}
+{invariants_sql(ROLLBACK_INVARIANTS, f"{scope} rollback", run_stamp=stamp)}
 END $$;
 
 SELECT 'planned rows restored to NULL', count(*)::text
@@ -1064,6 +1320,8 @@ COMMIT;
 def render_plan_md(
     write: list[Verdict], skipped: list[Skipped], *, run_stamp: str = RUN_STAMP
 ) -> str:
+    if scope_of(write) == SOURCES["rejected-kinds"].scope:
+        return render_rejected_plan_md(write, skipped, run_stamp=run_stamp)
     by_reason: dict[str, list[Skipped]] = {}
     for s in skipped:
         by_reason.setdefault(s.reason, []).append(s)
@@ -1126,12 +1384,68 @@ def render_plan_md(
     return "\n".join(lines) + "\n"
 
 
+def _refusals_md(skipped: list[Skipped]) -> list[str]:
+    by_reason: dict[str, list[Skipped]] = {}
+    for s in skipped:
+        by_reason.setdefault(s.reason, []).append(s)
+    lines = ["## Named refusals", ""]
+    if not by_reason:
+        lines.append("None.")
+    for reason in sorted(by_reason):
+        lines += [f"### `{reason}` ({len(by_reason[reason])})", "", "| image_id | slug | detail |"]
+        lines.append("|---|---|---|")
+        lines += [f"| {s.image_id} | {s.slug} | {s.detail} |" for s in by_reason[reason]]
+        lines.append("")
+    return lines
+
+
+def render_rejected_plan_md(
+    write: list[Verdict], skipped: list[Skipped], *, run_stamp: str
+) -> str:
+    """G0b's PLAN.md: the proven rejections, one row each, and every refusal by name."""
+    script = "./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py"
+    lines = [
+        f"# G0b - persist the kinds the shorts pipeline stated in its rejections ({run_stamp})",
+        "",
+        f"{len(write)} row(s) to write, {len(skipped)} named refusal(s).",
+        "",
+        "Input: `output/remediation/vlm_pilot/REJECTED_KINDS.jsonl`, `PROVEN` records only. Each",
+        "names the row its rejection belongs to, proven by the short's candidate pool and the",
+        "snapshot agreeing; the kind is the one the rejection states verbatim (`kind=<kind>`).",
+        "`image_kind` is written only where it is NULL, only where production still holds the row",
+        "on the proof's site under the proof's filename, and only for `ancient_nerds` sites.",
+        "",
+        f"Run stamp `{run_stamp}` - derived from this batch's own ids, never G0's landed stamp.",
+        "",
+        "## Rows to write",
+        "",
+        "| image_id | slug | kind | filename |",
+        "|---|---|---|---|",
+    ]
+    for v in sorted(write, key=lambda v: v.image_id):
+        lines.append(f"| {v.image_id} | {v.slug} | `{v.kind}` | `{v.entry.get('filename')}` |")
+    lines += ["", *_refusals_md(skipped)]
+    lines += [
+        "## Verification",
+        "",
+        "```bash",
+        *(
+            f"{script} --source rejected-kinds --{step}"
+            for step in ("plan", "rehearse", "apply", "verify", "rehearse-rollback")
+        ),
+        "```",
+        "",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def emit(
     write: list[Verdict],
     skipped: list[Skipped],
     state: dict[int, dict[str, object]],
     *,
     run_stamp: str | None = None,
+    output: Path | None = None,
 ) -> dict[str, str]:
     """Write the deliverables. ROLLBACK.sql is written before APPLY.sql, deliberately.
 
@@ -1145,14 +1459,20 @@ def emit(
             "refusing to emit for an empty plan: it would overwrite APPLY.sql and ROLLBACK.sql - "
             "the record and the only undo of the write that is already in the journal"
         )
-    OUTPUT.mkdir(parents=True, exist_ok=True)
+    scope_of(write)
+    source = write[0].source
+    output = output_for(source) if output is None else output
+    output.mkdir(parents=True, exist_ok=True)
+    # The stamp is decided against G0's landed plan, wherever this batch lives: a batch whose ids
+    # are not that plan's derives its own. Asking this batch's own directory instead would hand
+    # RUN_STAMP to a re-emitted G0b plan and journal it under the landed write's name.
     stamp = run_stamp if run_stamp is not None else run_stamp_for(write)
     paths = {
-        "plan_md": OUTPUT / "PLAN.md",
-        "plan_jsonl": OUTPUT / "PLAN.jsonl",
-        "skipped": OUTPUT / "SKIPPED.jsonl",
-        "rollback": OUTPUT / "ROLLBACK.sql",
-        "apply": OUTPUT / "APPLY.sql",
+        "plan_md": output / "PLAN.md",
+        "plan_jsonl": output / "PLAN.jsonl",
+        "skipped": output / "SKIPPED.jsonl",
+        "rollback": output / "ROLLBACK.sql",
+        "apply": output / "APPLY.sql",
     }
 
     paths["plan_md"].write_text(render_plan_md(write, skipped, run_stamp=stamp), encoding="utf-8")
@@ -1173,14 +1493,24 @@ def emit(
                         "condition": (
                             f"{KEY_COLUMN} = {v.image_id} AND {COLUMN} IS NOT DISTINCT FROM NULL"
                         ),
-                        "reason": f"G0: pipeline verdict for {v.entry.get('filename')!r} on {v.slug}",
+                        "reason": (
+                            f"G0b: the rejection {v.verdict.get('reason')!r} of "
+                            f"{v.entry.get('filename')!r} on {v.slug}"
+                            if v.source == "rejected-kinds"
+                            else f"G0: pipeline verdict for {v.entry.get('filename')!r} on {v.slug}"
+                        ),
                         "change_key": change_key_of(v.image_id),
                         "test_id": TEST_ID,
                         "run_stamp": stamp,
                         "confidence": CONFIDENCE,
                         "source_id": row.get("source_id"),
                         "selection_file": _relative(v.file),
-                    },
+                    }
+                    | (
+                        {"record_sha256": v.entry.get("record_sha256"), "site_id_proven": v.site_id}
+                        if v.source == "rejected-kinds"
+                        else {}
+                    ),
                     ensure_ascii=False,
                     sort_keys=True,
                 )
@@ -1216,10 +1546,14 @@ def emit(
 # --------------------------------------------------------------------------------------
 
 
-def command_plan() -> int:
-    verdicts = load_verdicts()
+def command_plan(source: str = "stills") -> int:
+    if source == "rejected-kinds":
+        verdicts, refused = load_rejected_kinds()
+    else:
+        verdicts, refused = load_verdicts(), []
     state = read_state([v.image_id for v in verdicts])
     write, skipped = build_plan(verdicts, state)
+    skipped = refused + skipped
 
     print(f"selection records read : {len(verdicts)}")
     print(f"rows in the database   : {len(state)}")
@@ -1234,7 +1568,7 @@ def command_plan() -> int:
             "left exactly as they are"
         )
         return EXIT_NOTHING
-    paths = emit(write, skipped, state)
+    paths = emit(write, skipped, state, output=output_for(source))
     for name, path in paths.items():
         print(f"  {name:11} {_relative(Path(path))}")
     return EXIT_OK
@@ -1255,12 +1589,15 @@ def rehearsal_of(script: str) -> str:
     return script.rstrip()[: -len("COMMIT;")] + "ROLLBACK;\n"
 
 
-def command_rehearse() -> int:
-    apply_path = OUTPUT / "APPLY.sql"
+def command_rehearse(output: Path | None = None) -> int:
+    output = OUTPUT if output is None else output
+    apply_path = output / "APPLY.sql"
     if not apply_path.is_file():
         raise PersistError(f"{apply_path} does not exist - run --plan first")
     script = apply_path.read_text(encoding="utf-8")
-    digest = verify_delivered(apply_path, load_plan_records(OUTPUT / "PLAN.jsonl"))
+    records = load_plan_records(output / "PLAN.jsonl")
+    digest = verify_delivered(apply_path, records)
+    test, label = kind_test(kinds_of(records))
     rehearsal = rehearsal_of(script)
 
     print(f"rehearsing {_relative(apply_path)} ({len(script)} bytes, plan sha256 {digest})")
@@ -1283,9 +1620,9 @@ def command_rehearse() -> int:
         print("REHEARSAL INCONCLUSIVE: the statement that ran did not end in ROLLBACK")
         return EXIT_INCONSISTENT
     residue = run_psql(
-        "SELECT 'context only: curated rows holding site_photo', count(*)::text"
+        f"SELECT 'context only: curated rows holding {label.removeprefix('= ')}', count(*)::text"
         " FROM wiki_images w JOIN unified_sites s ON s.id = w.site_id"
-        " WHERE s.source_id = 'ancient_nerds' AND w.image_kind = 'site_photo';",
+        f" WHERE s.source_id = 'ancient_nerds' AND w.image_kind {test};",
         rows=True,
     ).stdout.strip()
     print(f"after the rehearsal: {residue}")
@@ -1293,7 +1630,7 @@ def command_rehearse() -> int:
     return EXIT_OK
 
 
-def command_rehearse_rollback() -> int:
+def command_rehearse_rollback(output: Path | None = None) -> int:
     """Run `ROLLBACK.sql` with `COMMIT` swapped for `ROLLBACK`, against the state the write left.
 
     The mechanical lane has had this for its own reversal since wave 4. G0 had none, and its
@@ -1301,10 +1638,11 @@ def command_rehearse_rollback() -> int:
     production rollback. No apply is needed first: the reversal starts from the state the landed
     write left behind, its guards and journal are exercised on the real rows, and nothing is kept.
     """
-    rollback_path = OUTPUT / "ROLLBACK.sql"
+    output = OUTPUT if output is None else output
+    rollback_path = output / "ROLLBACK.sql"
     if not rollback_path.is_file():
         raise PersistError(f"{rollback_path} does not exist - run --plan first")
-    plan_path = OUTPUT / "PLAN.jsonl"
+    plan_path = output / "PLAN.jsonl"
     records = load_plan_records(plan_path)
     digest = verify_delivered(rollback_path, records, invert=True)
     run_stamp = load_plan_stamp(records, path=plan_path)
@@ -1474,11 +1812,12 @@ def journalled_ids(run_stamp: str) -> tuple[set[int], int]:
     return out, _as_int(rows[0]["disagreeing"], what="journalled rows disagreeing with the data")
 
 
-def command_apply() -> int:
-    apply_path = OUTPUT / "APPLY.sql"
+def command_apply(output: Path | None = None) -> int:
+    output = OUTPUT if output is None else output
+    apply_path = output / "APPLY.sql"
     if not apply_path.is_file():
         raise PersistError(f"{apply_path} does not exist - run --plan first")
-    plan_path = OUTPUT / "PLAN.jsonl"
+    plan_path = output / "PLAN.jsonl"
     records = load_plan_records(plan_path)
     run_stamp = load_plan_stamp(records, path=plan_path)
     ids = planned_ids(records)
@@ -1518,7 +1857,7 @@ def command_apply() -> int:
         print(f"APPLY FAILED: psql exit={proc.returncode}")
         return EXIT_INCONSISTENT
     print("APPLY OK")
-    return command_verify()
+    return command_verify(output)
 
 
 def retry_already_applied(ids: set[int], run_stamp: str) -> bool:
@@ -1532,7 +1871,7 @@ def retry_already_applied(ids: set[int], run_stamp: str) -> bool:
     return journalled == ids and disagreeing == 0
 
 
-def command_verify() -> int:
+def command_verify(output: Path | None = None) -> int:
     """Re-read the landed state, identity by identity.
 
     The plan is an independent source - it was written before the write - so the journal's row set
@@ -1541,12 +1880,14 @@ def command_verify() -> int:
     because G0 was the first writer of `site_photo`. The table-wide number is printed by
     `verify_sql`, under a label that says what it is, and compared to nothing.
     """
-    plan_path = OUTPUT / "PLAN.jsonl"
+    output = OUTPUT if output is None else output
+    plan_path = output / "PLAN.jsonl"
     records = load_plan_records(plan_path)
     run_stamp = load_plan_stamp(records, path=plan_path)
     expected_ids = planned_ids(records)
+    kinds = kinds_of(records)
 
-    proc = run_psql(verify_sql(run_stamp), rows=True, check=False)
+    proc = run_psql(verify_sql(run_stamp, kinds), rows=True, check=False)
     print(proc.stdout)
     if proc.returncode != 0:
         print(proc.stderr, file=sys.stderr)
@@ -1564,7 +1905,7 @@ def command_verify() -> int:
         "journal rows for this run outside",
         "journal rows for this run with no evidence",
         "rows with a kind outside the vocabulary",
-        "rows with image_kind = site_photo and no journal row for this run",
+        unjournalled_label(kinds),
     )
     for name, value in metrics.items():
         if name.startswith(must_be_zero) and value != "0":
@@ -1621,20 +1962,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     group.add_argument("--apply", action="store_true", help="write the planned rows")
     group.add_argument("--verify", action="store_true", help="read-only: prove the landed state")
+    parser.add_argument(
+        "--source",
+        choices=sorted(SOURCES),
+        default="stills",
+        help="stills: G0, the landed batch (default); rejected-kinds: G0b",
+    )
     args = parser.parse_args(argv)
+    output = output_for(args.source)
 
     try:
         if args.plan:
-            return command_plan()
+            return command_plan(args.source)
         if args.rehearse:
-            return command_rehearse()
+            return command_rehearse(output)
         if args.rehearse_rollback:
-            return command_rehearse_rollback()
+            return command_rehearse_rollback(output)
         if args.check_primitive:
             return command_check_primitive()
         if args.apply:
-            return command_apply()
-        return command_verify()
+            return command_apply(output)
+        return command_verify(output)
     except OutcomeUnknown as exc:
         print(f"OUTCOME UNKNOWN: {exc}", file=sys.stderr)
         return EXIT_UNKNOWN

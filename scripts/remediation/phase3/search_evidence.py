@@ -31,10 +31,18 @@ import without importing each other:
   carries that proposal under `rerun_unwritten`. The field is open again, but that exact proposal
   is not: `review_stage.plan_site` refuses to clear a rerun answer that repeats it
   (`unwritten_proposals`, `same_value`), so the lane can never write a held value back.
+* **A snippet is not a page** (2026-09-23). The search pilot's finder quoted a travel page's snippet
+  about another site (Las Labradas) and a quote the snippet did not carry (Font dels Coms). A hit a
+  finder answer cites is therefore fetched after the finder (`phase3/hit_stage.py`, stored under
+  `hitpage.<sha1(url)[:12]>`, read as text by `hit_page_text`), the reviewer is shown that page, and
+  a citation of a hit counts only when its quote occurs in the fetched page's text
+  (`discover_stage.pages_from_excerpts`, `write_stage.RULE_HIT_UNVERIFIED`).
 """
 
 from __future__ import annotations
 
+import hashlib
+import html
 import json
 import sys
 from collections.abc import Mapping
@@ -58,6 +66,7 @@ from phase3.run import InputError  # noqa: E402  - one spelling per concept, not
 from phase3.snapshot_plan import DISCOVER_FIELDS  # noqa: E402
 from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS, listed_domain_of  # noqa: E402
 from pipeline.lyra.minimax_shared import MINIMAX_SEARCH_PATH  # noqa: E402
+from pipeline.utils.text import extract_text_from_html  # noqa: E402  - Lyra's own page reader
 
 #: The fields a run asks again (the gap plan and the search plan both name them): the discover pass
 #: asks only these, and the writer refuses every other field of the site.
@@ -364,6 +373,43 @@ def hit_text(hit: StoredHit) -> str:
     """
     body = f"{hit.snippet} ({hit.date})" if hit.date else hit.snippet
     return "\n".join(part for part in (hit.title, body.strip()) if part)
+
+
+#: The evidence feature of the page behind one search hit: `hitpage.<sha1(url)[:12]>`. The url is a
+#: search engine's, of any length and alphabet, so the feature names it by digest; the stage that
+#: fetches it (`phase3/hit_stage.py`) refuses two cited urls of one site whose digests collide.
+HIT_PAGE_FEATURE_PREFIX = "hitpage."
+
+
+def hit_page_feature(url: str) -> str:
+    """`hitpage.<the first 12 hex digits of sha1(url)>` - the feature one hit's page is stored under."""
+    digest = hashlib.sha1(url.encode("utf-8"), usedforsecurity=False).hexdigest()
+    return f"{HIT_PAGE_FEATURE_PREFIX}{digest[:12]}"
+
+
+class UnreadablePage(ValueError):
+    """A stored hit page holds bytes that are not text a quote could be found in (a PDF, say)."""
+
+
+def hit_page_text(body: bytes) -> str:
+    """The plain text of one stored hit page, the text a citation of it is checked against.
+
+    The page is read as UTF-8 and put through `pipeline.utils.text.extract_text_from_html` - Lyra's
+    own page reader, which drops script and style blocks and tags - and then its HTML entities are
+    undone, because a quote is copied from the rendered page (`&amp;`, `&#8217;`) and
+    `discover_stage.normalise_quote` folds typography, not markup. A page that is not UTF-8 - every
+    PDF the pilot's finder cited, both cut at the fetch stage's page cap - raises `UnreadablePage`:
+    no quote can be found in it, so a citation of it stays unverified rather than being read from
+    bytes nobody can quote. Plain text passes through unchanged but for the whitespace folding.
+    """
+    try:
+        markup = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise UnreadablePage(
+            f"the page is not UTF-8 text ({exc.reason} at byte {exc.start}; a PDF or another binary "
+            "file), so no quote can be found in it"
+        ) from None
+    return html.unescape(extract_text_from_html(markup))
 
 
 def excluded_because(url: str) -> str | None:

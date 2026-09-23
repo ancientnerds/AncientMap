@@ -1,0 +1,25 @@
+{
+ "api": "https://commons.wikimedia.org/w/api.php",
+ "batch": 50,
+ "cache_hits": 0,
+ "cache_namespace": "liveness-2026-09-23",
+ "classes": {
+  "deleted-copyvio": 5,
+  "deleted-other": 1,
+  "live": 46059,
+  "moved-with-redirect": 4,
+  "moved-without-redirect": 1
+ },
+ "commons_sha256": "6fd2a99b4b87318f696cd6f7799b33cebd3d9ee19dece8d9ba7f201925fc00e8",
+ "files": 46070,
+ "finished_at": "2026-09-23T03:49:03Z",
+ "iiprop": "timestamp|size|url",
+ "leprop": "ids|title|type|timestamp|comment|details",
+ "limited_to": null,
+ "network_requests": 934,
+ "not_live_sha256": "a319fb0a22b1b02344c9776aa3f7b54ca2960f15316f2ddc05f9eaee93eaecb0",
+ "rows": 49040,
+ "snapshot": "C:/PythonProjects/AncientMap/output/remediation/snapshot",
+ "snapshot_exported_at": "2026-09-20T20:20:01+02:00",
+ "started_at": "2026-09-23T03:33:11Z"
+}

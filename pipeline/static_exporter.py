@@ -486,7 +486,7 @@ class StaticExporter:
                 LEFT JOIN LATERAL (
                     SELECT filename
                     FROM wiki_images
-                    WHERE site_id = us.id
+                    WHERE site_id = us.id AND is_excluded IS NOT TRUE
                     ORDER BY is_hero DESC, is_lead DESC, sort_order
                     LIMIT 1
                 ) wi ON true

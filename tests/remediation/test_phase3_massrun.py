@@ -576,7 +576,7 @@ def test_a_batch_that_ends_incomplete_is_a_failure_even_though_every_stage_exite
     )
     ok, detail = runner.batch(M.PlannedBatch("batch-0001", 1, 1))
     assert not ok
-    assert detail.startswith("after all three stages: absent")
+    assert detail.startswith("after every stage: absent")
 
 
 # ── a failed *start* is retried, bounded and loud; nothing else is ──────────────────────────────
