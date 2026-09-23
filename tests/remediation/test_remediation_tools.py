@@ -76,6 +76,33 @@ def test_the_gap_lane_shares_no_path_and_no_stamp_with_the_mass_lane() -> None:
         assert getattr(gap, attribute) != getattr(mass, attribute), attribute
 
 
+def test_the_phase4_lanes_carry_the_three_journal_families_the_design_names() -> None:
+    """WB-D1: production_write names the stamps `phase4:p4-NNNN:chunk-NNNN`,
+    `phase4l:p4l-NNNN:chunk-NNNN` and `phase5:p5-NNNN:chunk-NNNN`, and their rollback files live in
+    `logs/_write_apply_p4|_p4l|_p5/`. The literals are the design's, not the module's."""
+    base = REPO / "output" / "remediation"
+    for name, family in (("p4", "phase4"), ("p4l", "phase4l"), ("p5", "phase5")):
+        paths = lanes.lane(name)
+        assert paths.family == family
+        assert paths.stamp_like == f"{family}:{name}-%"
+        assert paths.apply_root == base / "logs" / f"_write_apply_{name}"
+        assert paths.run_dir == base / "phase4_runner" / "runs"
+    assert lanes.lane().family == "phase3" and lanes.lane("gap").family == "phase3"
+
+
+def test_the_phase4_lanes_are_the_writers_row_groups_not_a_second_table() -> None:
+    """The lane name, its batch-id prefix and its family come from `write4`'s own table, so the
+    stamps the writer renders and the stamps the acceptance reads cannot disagree."""
+    from phase4 import write4 as W4
+
+    for group in W4.Group:
+        name = W4.GROUP_PREFIX[group]
+        assert lanes.BATCH_PREFIX[name] == name
+        assert lanes.STAMP_FAMILY[name] == W4.GROUP_FAMILY[group]
+        chunk = W4.Chunk4(group=group, batch_id=f"{name}-0007", write_round=1, rows=())
+        assert chunk.stamp.startswith(lanes.lane(name).stamp_like.rstrip("%"))
+
+
 def test_an_unknown_lane_is_refused_rather_than_given_a_guessed_prefix() -> None:
     with pytest.raises(SystemExit, match="unknown lane"):
         lanes.lane("gapp")
@@ -157,6 +184,7 @@ def _lane(tmp_path: Path, name: str = "gap") -> lanes.Lane:
         apply_root=tmp_path / f"_write_apply_{name}",
         review_logs=tmp_path / f"review_{name}",
         stamp_like=f"phase3:{name}-%",
+        family="phase3",
     )
 
 

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
 from api.services.background_jobs import JobAlreadyRunning, read_status, run_module, start_job
+from api.services.description_provenance import card_ai, description_disclosure, provenance_of
 from api.services.jwt_auth import require_founder
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
@@ -1190,6 +1191,16 @@ def get_site_detail(
         if "description_citations" in rd:
             resp["descriptionCitations"] = rd["description_citations"]
         resp["rawData"] = rd
+        # EU AI Act Art. 50 and CC BY-SA 4.0 section 3(a), graded by provenance: present only
+        # while the served description (and card) is the text the provenance hashes.
+        provenance = provenance_of(rd)
+        disclosure = description_disclosure(provenance, row.description)
+        if disclosure is not None:
+            resp["descriptionAi"] = disclosure["ai"]
+            resp["descriptionAttribution"] = disclosure["attribution"]
+        marked_card = card_ai(provenance, row.card_description)
+        if marked_card is not None:
+            resp["cardAi"] = marked_card
 
     # Reference links from site_content_links (web-discovered sources)
     ref_rows = db.execute(

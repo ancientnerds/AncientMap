@@ -499,9 +499,10 @@ A new column is approved (E4). Proposal: `unified_sites.scope_status`
 |---|---|---|
 | `audit_wikidata_batch.py` | `scripts/` | fetches P625/P17/P31/P571/P580/P582 in batches of 50. Because the 4,618 QIDs already live in `site_external_ids`, its expensive resolution step is unnecessary → **a 20-line adapter, ~4 minutes, $0** |
 | `generate_stats()` | `api/cardgame/generator.py` | recomputes `card_stats` completely and **leaves `card_description` untouched** |
-| Wave-4 chain | `scripts/audit_enrich.py:1608-2810` | 6 phases, **demonstrably executed once in March 2026** (2,217 sites received citations between 03-06 and 03-14) |
+| Wave-4 chain | `scripts/audit_enrich.py:1608-2810` | 6 phases, **demonstrably executed once in March 2026** (2,217 sites received citations between 03-06 and 03-14). **Not used by Phases 4/5** (2026-09-23): `sync_from_production` UPDATEs every row, `merge_verification` is an unconditional, unjournalled UPDATE, and `content_id` comes from a salted `hash()` - see the script's docstring and 12, Phase 4 |
 | Transport path to production | `audit_enrich.py:1528-1540` → `api/routes/sites.py:1560-1561, 1756-1836` | `description_citations` and `reference_links` **do** reach production |
-| Batch fan-out | `scripts/prepare_verify_batches.py`, `verify_agent.py`, `merge_rewrites.py` | ready-made scaffold |
+| Batch fan-out | `scripts/prepare_verify_batches.py`, `verify_agent.py`, `merge_rewrites.py` | ready-made scaffold - **retired for card texts** (2026-09-23): cards are extractive, `docs/procedures/CARD_DESCRIPTIONS.md` |
+| Phase-3 runner seams | `scripts/remediation/phase3/` (`model_stage.PiRunner`, `judge_site`, `fetch_stage.EvidenceStore`, `write_stage.run_sql`/`change_key`, `mass_run`) | what Phases 4/5 import instead of the Wave-4 chain; `scripts/remediation/phase4/` builds on them (`docs/procedures/PHASE4_CONTRACTS.md`) |
 | **Prospector `dedup.py`** | `pipeline/…/prospector/` | LLM-free four-rung ladder (hard identifier → exact name key → trigram/Levenshtein/PostGIS → gates for country/distance/rare token). Already adjudicated **5,260 candidates and written 26,515 verbatim evidence rows** in production |
 | Prospector `resolve.py` | same | exactly the rejection filters needed here: no P625 coordinate, P625 precision ≥ 0.1°, P31 region denylist, off-Earth, and `passes_date_cutoff()` carrying the project scope |
 | Theo citation integrity gate | `pipeline/lyra/theo_citations.py` (1,953 lines), `hallucination_gate.py`, `citation_verifier.py` | **deterministic, no LLM**, 206 green tests in 0.39 s, live in production. Built for markdown papers, so **not directly** applicable to sites — but its components are: `strip_orphan_citation_markers`, `normalize_grouped_markers`, `_collect_non_numeric_markers`, `detect_placeholder_markers`, `score_tier_by_domain` |
@@ -592,6 +593,7 @@ exactly that. There are **three parallel Wikidata time parsers** in the repo.
 |---|---|
 | `api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions` | imports `public/data/card_descriptions.json` into `card_stats` **on API startup** |
 | `pipeline/lyra/orchestrator.py::_run_migrations` | runs on **every** container restart, globally normalises `site_type`, rewrites `name_normalized`, and issues ALTER TABLE on `card_stats.card_description` (only while the catalog says the column is missing or not `varchar(200)`, `pipeline/utils/boot_ddl.py`) |
+| `api/main.py::lifespan` (until 2026-09-23) | a third boot writer this section first missed: it `jsonb_set` a hard-coded `description_citations` array (grokipedia among the sources) into the `raw_data` of 10 sites on every API start where the key was absent. A read-only check on 2026-09-23 found all 10 carrying the key, so it was removed with Push #1 (WB-D4); the Phase-4 verifier's V12 keeps the key non-empty, so it could never have fired again anyway |
 
 A deploy or container restart during or after the run can revert corrected values.
 **Resolve and lock this down for the duration of the run before any write.**
@@ -749,20 +751,57 @@ Only for sites Phase 1 could not conclusively settle. Method exactly as in the p
 
 **Batch size:** 5 sites per agent (pilot value, ~40,000 tokens per site across both stages).
 
-### Phase 4 — Sourced descriptions
+### Phase 4 — Sourced descriptions *(design of 2026-09-22; built 2026-09-23, tracks A-D)*
 
-The Wave-4 chain exists and has worked. Note: for the 2,217 sites already processed, descriptions shrank from
-an average of 818 to 436 characters — **that is the verifier removing unsupported sentences, i.e. intended
-behaviour**, not damage.
+The final design is entry [6] of `output/remediation/logs/design_texts_images_2026-09-22.json`
+("Phases 4 and 5, final design"); the contracts the four build tracks share are
+`docs/procedures/PHASE4_CONTRACTS.md`, the code is `scripts/remediation/phase4/`. It replaced the
+Wave-4 plan that stood here (`web-links` -> `cited-description` -> `verify-citations`), which is not
+used: its sync UPDATEs every row, its merge is an unconditional, unjournalled UPDATE, and its
+content ids come from a salted `hash()` (9.1, and the docstring of `scripts/audit_enrich.py`).
 
-Order: `web-links` → `cited-description` → `verify-citations`, each with its merge step.
-`verify-citations-merge` writes only at `verification_score >= 0.7`.
-Merge validation is thin (checks only length 200–1100 and a non-empty array) — tighten it.
+**Extractive-first.** A description is assembled by code, byte for byte, from sentences of a pinned
+Wikipedia revision (the oldid permalink plus the sha256 of the exact text). The model (one Pi call per
+site through `phase3/model_stage.PiRunner`) returns only sentence and span ids; code applies the closed
+edit list (drop an offered span with one delimiter, collapse spaces, repair `' ,'`, restore a capital,
+insert `' [n]'`); citation numbers are assigned by code. An independent verifier that never imports
+the assembler re-derives every byte (V1-V15), a drop-only reviewer in a separate context checks every
+sentence, and a Claude Code audit reads the whole pilot, every lane-T/R site and samples of the rest.
 
-### Phase 5 — Card texts *(deferred to the end per E5; see 5.4 for reconsideration)*
+**Lanes**, assigned once from recorded facts, never changed: W (own English article), S (a shared or
+parent article: name-bearing sentences only), T (own article only in another language: selected, then
+translated), R (only non-free pages: facts restated, wording never published), 0 (nothing: held).
+A site that fails inside its lane is held with a named reason.
 
-Regenerate the card text as an **extractive condensation of a sourced description sentence**, carrying a
-marker back to the source sentence. Retire `scripts/verify_descriptions.py` as a gate.
+**Written** through `apply_remediation_change()` in three row groups, each with its own journal family
+(`output/remediation/tools/lanes.py`: `p4`, `p4l`, `p5`): P4 `description` + `raw_data` (site-atomic,
+`raw_data._description_provenance` v1 added, `description_citations` replaced by permalink citations),
+L (legacy disclosure: `ai: 'generated'` provenance for held sites whose text differs from snapshot
+`d4526691`) and P5 (cards). `scripts/remediation/phase4/write4.py` renders each write batch as one
+transaction with guards before the loop, the journal agreement and two in-database sha256 invariants
+after it; `output/remediation/tools/write_gate4.py` runs one step of 100 sites per invocation
+(preflight, write, read-back, inverse proof), `verify_writes4.py` accepts each step, and
+`scripts/remediation/phase4/revert4.py` reverts from the journal alone. `unified_sites.updated_at` is
+not written; the sitemap lastmod reads the journal.
+
+**Disclosure** (O4, O5 resolved by design): the render key is `raw_data._description_provenance.ai`.
+'selected' text (W, S) shows the attribution line under the description; 'generated' text (T, R, L)
+shows the existing AI footnote; lane T shows both. `/api/sites/{id}`, the SSR payload and the public
+API carry the marking (`api/services/description_provenance.py`), the site JSON-LD carries
+`isBasedOn`/`license` and the IPTC type for generated text. Push #1 ships all of it before the first
+write.
+
+### Phase 5 — Card texts *(same run, extractive; O3 resolved)*
+
+A card is an extractive condensation of the site's own published description: 1-2 of its `DESC`
+sentences minus offered spans, assembled by code, the only non-source edit `c.`/`ca.` -> `circa`
+(`docs/procedures/CARD_DESCRIPTIONS.md`, the contract). V10 checks 80-200 characters, no country, no
+marker, no parentheses, no pronoun opener, no unattributed superlative, glyphs and caption width; V13
+and the shorts gate's S13 check `sha256(card) == provenance.card.text_sha256`. A held card keeps its
+old text; one with a Phase-3 reviewer-cleared defect is cleared (`P5/card-clear`). The P5 sitting
+writes the database first and the file (`scripts/remediation/phase4/card_json.py`, pre-rendered and
+regenerated byte for byte) second; pushing the file first is forbidden (`docs/procedures/FIELD_CONTRACT.md`
+2.3). `scripts/verify_descriptions.py` and `verify_agent.py` are retired as gates.
 
 ### Phase 6 — Follow-through
 
@@ -822,9 +861,9 @@ container restart (10.1).
 |---|---|---|
 | O1 | **Image licensing in video** | (a) PD/CC0/No-restrictions only = 7,719 images — pushes shorts-eligible sites well below 2,708 · (b) accept CC BY-SA with an attribution line and carry the adaptation risk |
 | O2 | **The 2,296 image-poor sites** | (a) acquire from Commons via the 1,448 sites with a missing/wrong P373 anchor · (b) a shorts format without stills · (c) no video for now |
-| O3 | **The 904 ungrounded card texts** | (a) reverse E5 and regenerate them with evidence in the same run *(recommended, see 5.4)* · (b) keep them deferred to the end |
-| O4 | EU AI Act disclosure for site pages and video | decision required |
-| O5 | Text provenance versus Wikipedia | legal question |
+| O3 | **The 904 ungrounded card texts** | **Resolved 2026-09-22 (design entry [6], card_texts):** same run, extractive - a card is condensed by code from the site's own published description (12, Phase 5) |
+| O4 | EU AI Act disclosure for site pages and video | **Resolved for site pages by design (entry [6], licensing_and_ai_act):** graded by `_description_provenance.ai` - attribution line for selected text, the AI footnote for generated text, IPTC type in the JSON-LD; built 2026-09-23 (WB-D4). The exact wording of the line and the video part stay with Martin (`HUMAN_ONLY.md` A1; the shorts publishing step) |
+| O5 | Text provenance versus Wikipedia | **Resolved by design:** W/S/T text is an adaptation of Wikipedia under CC BY-SA 4.0, the licence the curated layer already declares; per-site attribution (title, oldid permalink, licence link, change note); R wording is never published; quotes live only in the journal. The disclaimer/terms sentence awaits Martin's confirmation (`HUMAN_ONLY.md` A1) |
 
 ---
 

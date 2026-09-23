@@ -85,6 +85,7 @@ import {
 
 // Alternate sources
 import { useAlternateSources, alternateToSiteData } from './useAlternateSources'
+import { disclosureFor, type ApiDisclosure } from './descriptionDisclosure'
 
 // Types
 import type { SitePopupProps, EmpireSeshatTab, AlternateSource } from './types'
@@ -336,12 +337,15 @@ export default function SitePopup({
 
   // Raw metadata for source-specific fields
   const [rawData, setRawData] = useState<Record<string, unknown> | null>(null)
+  // The disclosure /api/sites/{id} gave for the description it served (see descriptionDisclosure)
+  const [apiDisclosure, setApiDisclosure] = useState<ApiDisclosure | null>(null)
   const [rawDataLoading, setRawDataLoading] = useState(false)
 
   // Track if tooltip was pinned by clicking minimized bar
   const tooltipPinnedRef = useRef(false)
 
   // Derived values
+  const descriptionDisclosure = disclosureFor(displaySite, apiDisclosure)
   const catColor = getCategoryColor(displaySite.category)
   const periodColor = PERIOD_COLORS[displaySite.period] || '#888'
   const sourceColor = getSourceColor(displaySite.sourceId)
@@ -391,6 +395,7 @@ export default function SitePopup({
     if (isEmpireMode) return
     setRawDataLoading(true)
     setApiReferenceLinks(undefined)
+    setApiDisclosure(null)
     fetch(`${config.api.baseUrl}/sites/${displaySite.id}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -399,6 +404,13 @@ export default function SitePopup({
         }
         if (data?.referenceLinks) {
           setApiReferenceLinks(data.referenceLinks)
+        }
+        if (data?.descriptionAi) {
+          setApiDisclosure({
+            description: data.description ?? undefined,
+            ai: data.descriptionAi,
+            attribution: data.descriptionAttribution ?? null,
+          })
         }
       })
       .catch(err => {
@@ -806,6 +818,8 @@ export default function SitePopup({
                 sourceLanguage={displaySite.sourceLanguage}
                 referenceLinks={apiReferenceLinks || displaySite.referenceLinks}
                 descriptionCitations={displaySite.descriptionCitations}
+                descriptionAi={descriptionDisclosure?.ai}
+                descriptionAttribution={descriptionDisclosure?.attribution}
               />
             )}
 

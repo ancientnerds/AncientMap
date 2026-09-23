@@ -8,7 +8,7 @@ remediation is about to write:
   `card_stats.card_description` from `public/data/card_descriptions.json`. It
   overwrites on purpose - the file is that column's authoritative copy and the
   import is the only path from a committed file to an existing row
-  (`docs/procedures/CARD_DESCRIPTIONS.md:95`) - so the tests here pin two things
+  (`docs/procedures/CARD_DESCRIPTIONS.md`, "How a card reaches production") - so the tests here pin two things
   at once: the overwrite survives (a fill-only variant would be a regression),
   and it can no longer be silent.
 * `pipeline/lyra/orchestrator.py::_run_migrations` reconciles

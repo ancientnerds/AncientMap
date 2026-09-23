@@ -35,6 +35,32 @@ export interface DescriptionCitation {
 }
 
 /**
+ * How an AI system took part in a site description: raw_data._description_provenance.ai,
+ * derived server-side by api/services/description_provenance.py (the one derivation of
+ * /api/sites/{id}, the SSR payload and the public API). 'selected': verbatim sentences of the
+ * cited Wikipedia revision, chosen and shortened by an AI system. 'generated': text an AI
+ * system wrote (translated, restated, or legacy March-2026 text). Absent without provenance.
+ */
+export type DescriptionAi = 'selected' | 'generated'
+
+/**
+ * The CC BY-SA 4.0 section 3(a) attribution of a description adapted from Wikipedia (lanes
+ * W, S and T of the 2026-09 remediation): the article, its pinned revision, the licence and
+ * the change note. Shown as the line under the description (DescriptionDisclosure).
+ */
+export interface DescriptionAttribution {
+  title: string
+  /** The oldid permalink of the pinned revision. */
+  url: string
+  licence: string
+  licenceUrl: string
+  /** 'sentences selected and shortened' or 'translated'. */
+  changes: string
+  /** YYYY-MM-DD of the pinned revision. */
+  revisionDate: string | null
+}
+
+/**
  * One news story — the raw row fields api/routes/articles_html.py::story_page
  * hands through (react-ssr Task 14): NewsItem columns verbatim plus the
  * video/site joins and _related_stories(). The http(s) source filter, the
@@ -119,6 +145,9 @@ export interface SiteRoute {
   best_wiki_url: string | null
   source_language: string | null
   description_citations: DescriptionCitation[] | null
+  /** The description's AI mark and attribution; null without provenance for this text. */
+  description_ai: DescriptionAi | null
+  description_attribution: DescriptionAttribution | null
   alt_names: string[]
   /** Hero from wiki_images with its Commons attribution (licence!). */
   image: {

@@ -2,11 +2,13 @@
 
 `public/data/card_descriptions.json` is the authoritative copy of
 `card_stats.card_description`. The chain that keeps it so is documented in
-`docs/procedures/CARD_DESCRIPTIONS.md:93-95` and it is a carrier, not a cache:
-the generator writes `output/card_descriptions.json`,
-`scripts/import_card_descriptions.py` copies that into `public/data/`, the file
-is committed and deployed, and this import is how a committed file reaches a row
-that already exists in production. Measured 2026-09-20: all 4,996 entries of the
+`docs/procedures/CARD_DESCRIPTIONS.md` ("How a card reaches production") and it
+is a carrier, not a cache: since the 2026-09 remediation the journalled P5 write
+changes the rows first, `scripts/remediation/phase4/card_json.py` renders the
+file byte for byte from the same plan, the file is committed and deployed, and
+this import is how a committed file reaches a row that already exists in
+production (until 2026-09 the generator wrote `output/card_descriptions.json`
+and `scripts/import_card_descriptions.py` copied it). Measured 2026-09-20: all 4,996 entries of the
 deployed file were byte-identical to their `card_stats` rows in production —
 because this import had already propagated them.
 

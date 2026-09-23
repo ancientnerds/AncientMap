@@ -1,6 +1,6 @@
 import { DataStore } from './DataStore'
 import { SourceMeta } from '../types/data'
-import type { DescriptionCitation } from '../types/anRoute'
+import type { DescriptionAi, DescriptionAttribution, DescriptionCitation } from '../types/anRoute'
 import {
   SOURCE_COLORS,
   CATEGORY_COLORS,
@@ -49,6 +49,15 @@ export interface SiteData {
   sourceLanguage?: string
   referenceLinks?: ReferenceLink[]
   descriptionCitations?: DescriptionCitation[]
+  /**
+   * The description's AI mark and attribution (api/services/description_provenance.py),
+   * where the record came from a live source - /api/sites/{id} or the SSR payload - whose
+   * description is the text they describe. The static export does not carry them.
+   */
+  descriptionAi?: DescriptionAi
+  descriptionAttribution?: DescriptionAttribution | null
+  /** The card's AI mark, where the card is the one its provenance hashes. */
+  cardAi?: DescriptionAi
 }
 
 // Period list derived from centralized PERIOD_COLORS

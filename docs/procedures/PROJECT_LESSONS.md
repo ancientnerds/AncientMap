@@ -98,6 +98,24 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   Python nachbauen. *(`reference-name-normalized-key`, 2026-09-15)*
 - **Prod-Writes nach `commit()` in der DB nachzählen.** `session.expire_all()` verwirft
   ungeflushte ORM-Änderungen still. *(`project-verify-db-writes-after-commit`, 2026-09-15)*
+- **Card texts: the database first, the file second, in one sitting - never the file first.**
+  Every API boot upserts `public/data/card_descriptions.json` into `card_stats`
+  (`api/services/card_descriptions.py`). Pushed first, the file would write the cards without a
+  journal and the journalled P5 write would then refuse every row with matched_0; written to the
+  database only, a card is reverted at the next boot. The order is the P5 sitting of
+  `docs/procedures/CARD_DESCRIPTIONS.md`: pre-render the file from the plan, write through the
+  journal in steps of 100, regenerate the file from production byte for byte, push, then 0
+  `[STARTUP] Card description overwritten` lines on both API containers. A red CI inside the
+  sitting: `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'` plus `git revert` of the
+  JSON commit. *(design entry [6], production_write, 2026-09-23)*
+- **A `db.html` batch upload from a stale export overwrites rewritten descriptions.**
+  `POST /api/sites/batch-upload` sets `description = COALESCE(:description, description)`
+  (`api/routes/sites.py:1686`) with no old-value condition and no journal row, so an export taken
+  before the Phase-4 writes puts the March texts back over the sourced ones - and the provenance in
+  `raw_data` then describes a text the row no longer holds (the pages stop disclosing it). The
+  conditional old values make a concurrent chunk abort, and `verify_writes4.py`'s journal chain finds
+  it afterwards; `db.html` is not used for curated sites until the Phase-6 export.
+  *(design entry [6], failure_modes, 2026-09-23)*
 
 ## Frontend
 

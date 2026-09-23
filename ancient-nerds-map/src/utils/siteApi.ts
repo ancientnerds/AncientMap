@@ -1,5 +1,6 @@
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
+import type { DescriptionAi, DescriptionAttribution } from '../types/anRoute'
 
 // API response shape from /api/sites/{id}
 export interface ApiSiteDetail {
@@ -20,6 +21,10 @@ export interface ApiSiteDetail {
   sourceLanguage?: string
   descriptionCitations?: { n: number; url: string; title: string; domain: string }[]
   referenceLinks?: { url: string; title: string; domain: string; kind: string }[]
+  /** Present only while the description is the text its provenance hashes. */
+  descriptionAi?: DescriptionAi
+  descriptionAttribution?: DescriptionAttribution | null
+  cardAi?: DescriptionAi
 }
 
 // Convert API detail response to SiteData - SINGLE SOURCE OF TRUTH
@@ -50,5 +55,8 @@ export function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     sourceLanguage: detail.sourceLanguage,
     descriptionCitations: detail.descriptionCitations,
     referenceLinks: detail.referenceLinks,
+    descriptionAi: detail.descriptionAi,
+    descriptionAttribution: detail.descriptionAttribution,
+    cardAi: detail.cardAi,
   }
 }

@@ -178,6 +178,7 @@ def _plan_site_dict() -> dict[str, Any]:
         "source_url": "https://en.wikipedia.org/wiki/Tarxien_Temples",
         "wikidata_qid": "Q1195938",
         "enwiki_title": "Tarxien Temples",
+        "in_snapshot": True,
         "snapshot_description": None,
         "flags": ["cleared-card-defect", "shared-title"],
     }
@@ -752,6 +753,19 @@ def test_a_plan_site_digest_is_the_sha256_of_its_text() -> None:
     data = _plan_site_dict()
     data["raw_data"] = None
     _refused(M.PlanSite.from_dict, data, "raw_data and raw_data_sha256 disagree on null")
+
+
+def test_a_plan_site_says_whether_the_snapshot_has_it() -> None:
+    """`in_snapshot` is a boolean, and a site the snapshot does not have carries no snapshot text
+    (accepted by the orchestrator 2026-09-23, decision D4)."""
+    _refused(M.PlanSite.from_dict, {**_plan_site_dict(), "in_snapshot": 1}, "not a boolean")
+    _refused(
+        M.PlanSite.from_dict,
+        {**_plan_site_dict(), "in_snapshot": False, "snapshot_description": "old"},
+        "a snapshot description for a site not in the snapshot",
+    )
+    absent = M.PlanSite.from_dict({**_plan_site_dict(), "in_snapshot": False})
+    assert M.PlanSite.from_json(absent.to_json()) == absent
 
 
 def test_a_plan_site_accepts_the_oldest_period_in_production() -> None:

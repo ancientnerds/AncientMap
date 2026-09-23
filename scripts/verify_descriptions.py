@@ -7,6 +7,13 @@ Produces output/verification_flags.json with:
 - country_list / demonym_map: country names and their adjective forms
 - flagged: per-site issues dict
 - clean_count / flagged_count: summary stats
+
+RETIRED AS A GATE (2026-09-23, docs/procedures/CARD_DESCRIPTIONS.md "Retired"; plan
+docs/procedures/SITES_DB_REMEDIATION_2026-09.md section 5.3): it checks no facts, and it penalises
+hedging (check_hedging, :281, applied at :370) - exactly the words the extractive cards must keep.
+It has no sys.exit, so its exit code carries nothing. merge_rewrites.py still uses its flagged count
+only to detect a regression of its own merge. The Phase-4/5 gate is scripts/remediation/phase4/
+verify4.py (V1-V15).
 """
 
 import json

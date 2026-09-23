@@ -342,6 +342,19 @@ def _exec(runner: SqlRunner | None, sql: str, *, host: str) -> str:
     return (runner or run_sql)(sql, host=host)
 
 
+def utf8_streams() -> None:
+    """Reconfigure stdout and stderr to UTF-8 (unencodable characters replaced) before anything is
+    printed. The writers' drivers print site names before they write the first row, so a console
+    that cannot encode one - measured 2026-09-22: a cp1252 console died on U+0259 with nothing
+    written - would otherwise kill a whole write wave. The one home of this for every writer tool
+    (`write_gate.py`, `phase4/write4.exit_line`); a stream without `reconfigure` (a test's capture)
+    is left as it is."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def _sql_text(value: str | None) -> str:
     """A text literal, or `NULL` for a value the row does not have.
 
@@ -376,29 +389,48 @@ def _json_rows(text: str) -> list[dict[str, Any]]:
 
 
 # ------------------------------------------------------------------------------------- the plan
+#: The journal lanes a change key can name: this stage's own, and the three row groups of phases 4
+#: and 5 (design entry [6], production_write, JOURNAL: `change_key(..., lane='phase4'|'phase4l'|
+#: 'phase5')` - the descriptions, the legacy disclosure and the cards). Closed: a key prefixed with
+#: a lane nobody registered would name a family no acceptance reads.
+CHANGE_KEY_LANES: tuple[str, ...] = ("phase3", "phase4", "phase4l", "phase5")
+
+
 def change_key(
     *,
     site_id: str,
     table: str,
     column: str,
     old_value: str | None,
-    new_value: str,
+    new_value: str | None,
     test_id: str,
+    lane: str = "phase3",
 ) -> str:
     """The digest that names one transition: sha256 over the six parts, JSON-encoded.
 
     JSON rather than a joined string because the parts cannot then be re-split differently, and a
     digest rather than a readable label because two transitions of one row must be distinguishable
     (`old -> new` and `new -> old` are two) while the same transition re-derived is the same key. The
-    `phase3:` prefix says which lane produced it; the mechanical lane's keys are
-    `country-canonical:<uuid>` and the two lanes never name the same row.
+    `<lane>:` prefix says which lane produced it; the mechanical lane's keys are
+    `country-canonical:<uuid>` and the lanes never name the same row.
+
+    `lane` defaults to `phase3`, and for it the key is byte for byte the one this function returned
+    before the parameter existed (WB-D1; pinned by `test_the_phase3_change_key_is_byte_identical`),
+    so the 994 journalled phase-3 keys stay reproducible. `new_value` may be `None` only for a
+    phase-5 card clear (`P5/card-clear`, the one row group that writes NULL); this stage never
+    plans one (`validate_rows`).
     """
+    if lane not in CHANGE_KEY_LANES:
+        raise WriteRefused(
+            f"change_key lane {lane!r} is not one of {list(CHANGE_KEY_LANES)}: a key names the "
+            "journal family its acceptance reads"
+        )
     parts = json.dumps(
         [site_id, table, column, old_value, new_value, test_id],
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    return "phase3:" + hashlib.sha256(parts.encode("utf-8")).hexdigest()
+    return f"{lane}:" + hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -1577,8 +1609,13 @@ def stored_values_sql(*, column: str, site_ids: Sequence[str]) -> str:
     )
 
 
-def journal_rows_sql(*, change_keys: Sequence[str]) -> str:
-    """This run's journal rows for the named changes, as JSON, one per change key."""
+def journal_rows_sql(*, change_keys: Sequence[str], run_stamp: str) -> str:
+    """The journal rows of the named changes written under one run stamp, as JSON.
+
+    The stamp is part of the question, not only of the comparison: a change key names a transition,
+    not a write, so a batch written again after a revert (a Phase-4/5 write round) journals the same
+    keys under a second stamp, and one round's read-back must never read the other round's row.
+    """
     keys = ", ".join(_sql_text(key) for key in change_keys)
     return (
         "-- the journal rows of this chunk's changes, one JSON object per row\n"
@@ -1587,9 +1624,57 @@ def journal_rows_sql(*, change_keys: Sequence[str]) -> str:
         "  SELECT l.row_pk, l.table_name, l.column_name, l.change_key, l.old_value, l.new_value,\n"
         "         l.test_id, l.run_stamp\n"
         "    FROM remediation_change_log l\n"
-        f"   WHERE l.change_key IN ({keys})\n"
+        f"   WHERE l.change_key IN ({keys}) AND l.run_stamp = {_sql_text(run_stamp)}\n"
         ") t ORDER BY 1"
     )
+
+
+def journal_mismatches(
+    rows: Sequence[WriteRow],
+    *,
+    run_stamp: str,
+    run_sql_runner: SqlRunner | None = None,
+    host: str = SSH_HOST,
+) -> list[str]:
+    """Every planned row against its journal row of `run_stamp`, field for field.
+
+    A row without a journal row, and a journal row whose table, column, key, values, test id or stamp
+    differ from the plan, is a mismatch. Shared by every writer's read-back (Phase 3's `read_back`,
+    Phase 4's `write4.read_back`), so the two cannot ask the journal different questions. The rows
+    are duck-typed: anything with `site_id`, `column`, `change_key`, `pk`, `table`, `old_value`,
+    `new_value` and `test_id`.
+    """
+    journal = {
+        str(entry["change_key"]): entry
+        for entry in _json_rows(
+            _exec(
+                run_sql_runner,
+                journal_rows_sql(change_keys=[row.change_key for row in rows], run_stamp=run_stamp),
+                host=host,
+            )
+        )
+    }
+    mismatches: list[str] = []
+    for row in rows:
+        entry = journal.get(row.change_key)
+        if entry is None:
+            mismatches.append(f"{row.site_id}/{row.column}: no journal row for {row.change_key}")
+            continue
+        for field_name, wanted in (
+            ("row_pk", row.pk),
+            ("table_name", row.table),
+            ("column_name", row.column),
+            ("old_value", row.old_value),
+            ("new_value", row.new_value),
+            ("test_id", row.test_id),
+            ("run_stamp", run_stamp),
+        ):
+            if entry.get(field_name) != wanted:
+                mismatches.append(
+                    f"{row.site_id}/{row.column}: the journal's {field_name} is "
+                    f"{entry.get(field_name)!r}, the plan says {wanted!r}"
+                )
+    return mismatches
 
 
 def journal_count_sql(*, run_stamp: str) -> str:
@@ -1739,35 +1824,9 @@ def read_back(
                 continue
             held += 1
 
-    journal = {
-        str(entry["change_key"]): entry
-        for entry in _json_rows(
-            _exec(
-                run_sql_runner,
-                journal_rows_sql(change_keys=[row.change_key for row in rows]),
-                host=host,
-            )
-        )
-    }
-    for row in rows:
-        entry = journal.get(row.change_key)
-        if entry is None:
-            mismatches.append(f"{row.site_id}/{row.column}: no journal row for {row.change_key}")
-            continue
-        for field_name, wanted in (
-            ("row_pk", row.pk),
-            ("table_name", row.table),
-            ("column_name", row.column),
-            ("old_value", row.old_value),
-            ("new_value", row.new_value),
-            ("test_id", row.test_id),
-            ("run_stamp", chunk.stamp),
-        ):
-            if entry.get(field_name) != wanted:
-                mismatches.append(
-                    f"{row.site_id}/{row.column}: the journal's {field_name} is "
-                    f"{entry.get(field_name)!r}, the plan says {wanted!r}"
-                )
+    mismatches.extend(
+        journal_mismatches(rows, run_stamp=chunk.stamp, run_sql_runner=run_sql_runner, host=host)
+    )
     total = journal_rows_for_stamp(chunk.stamp, run_sql_runner=run_sql_runner, host=host)
     if total != len(rows):
         mismatches.append(

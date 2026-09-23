@@ -22,6 +22,11 @@ Description rules:
 - End with punctuation (period, question mark, or closing quote)
 - Use an em dash (—) for asides, not parentheses
 - Prefer concrete numbers, dates, and measurements over vague descriptions
+
+RETIRED (2026-09-23, docs/procedures/CARD_DESCRIPTIONS.md "Retired"): its rewrite rules forbid
+hedging (:18, "No hedging ... possibly, probably") and ask a model to write new card text. Cards are
+extractive since the 2026-09 remediation - assembled by code from the site's own description, hedges
+kept by construction - so this agent is not a way to produce or check card texts any more.
 """
 
 import json

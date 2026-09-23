@@ -84,6 +84,7 @@ def plan_site(
         source_url=None,
         wikidata_qid="Q1",
         enwiki_title=name,
+        in_snapshot=True,
         snapshot_description=None,
         flags=flags,
     )
