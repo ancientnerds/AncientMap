@@ -5739,9 +5739,16 @@ tried to fetch raises in the reviewer and the writer. The page reader is Lyra's 
 from `pipeline/lyra/handlers/content_fetch.py` to `pipeline.utils.text.extract_text_from_html`, plus
 `html.unescape`. Measured on a copy of `runs/search-gold`, the stage run live with the project
 User-Agent: 20 cited hits in 25 citations, 20 requests, 13 HTML, 2 PDFs (unreadable), 5 x 403 (four
-Cloudflare, one CloudFront); 8 of the 25 quotes occur on the fetched page. The three Wikipedia article
-pages cited as hits are cut at the 60 KB page cap with 2,400-4,100 characters of mostly navigation,
-and none of their quotes is found - a limit of the binding cap, not worked around.
+Cloudflare, one CloudFront); 8 of the 25 quotes occur on the fetched page, 24 in the snippet the
+finder was shown (17 in the snippet only). *Corrected by the fixer's review:* the page cap governs
+nearly every result, not only the three Wikipedia articles - **14 of the 15 stored pages were cut at
+the 60 KB cap** (only comusantjulia.ad came back whole), and **all 9 citations whose readable page
+does not carry the quote are on cut pages** (pathere.org x2, nilecruisetrips.com, travelshelper.com
+x2, andbeyond.com, and the Wikipedia articles on Lake Mungo, the Odeon and Ahu Tongariki, each
+2,400-4,100 characters of mostly navigation). Such a row was refused as
+`finder-citation-not-in-evidence`, which reads like a fabricated quote; it is now refused as
+`search-hit-page-not-verified` with a reason naming the cut (`write_stage._hit_page_refusal`). The
+cap binds and is not raised.
 
 **(c) The reviewer contradiction hold** (`write_stage.RULE_REVIEW_CONTRADICTS`,
 `reviewer-why-names-a-failing-half`; the phrases are `review_stage.FAILING_HALF_PHRASES`, 18 of them,
@@ -5749,19 +5756,107 @@ each bound to its subject). Measured with `output/remediation/tools/measure_revi
 mass lane's pinned plan: **recall 51 of the 72 hand holds**; **77 of the 994 written and accepted rows
 would have been held**. Read one by one, 10 of those 77 use the phrase against their own content (a
 false hold), 5 say both, and 62 do say the stored value is not shown wrong or the proposal is
-contradicted - the class the hand-read held 72 of and missed there. They stay as they are. The bucket
-gate and the hold together catch 57 of the 72 hand holds; what neither names is the finer-type and
-the unverifiable-quote class, which stays the hand-read's.
+contradicted - the class the hand-read held 72 of and missed there. They stay as they are (and are
+listed for Martin: `HUMAN_ONLY.md` B11). The bucket gate and the hold together catch 57 of the 72
+hand holds; what neither names is the finer-type and the unverifiable-quote class, which stays the
+hand-read's. *Added by the fixer's review:* the false holds are not spread evenly. Per phrase, on the
+written rows: **"neither half holds" 4 of 7** (Presa-Tusiu, Annaghmare, Chacamarca, La Almoloya -
+each goes on to say the stored value is wrong or the proposal supported), **"the stored value is not
+contradicted" 4 of 9** (Apollonia, Ashley, Court Hill, Erebuni), "the reason fails" 1 of 4 (Pen
+Dinas), "does not show the stored value wrong" 1 of 10 (Asclepieion of Athens); the other fourteen
+phrases hold no written row falsely. A row one of those four holds goes to the hand-read
+(`review_stage.HAND_READ_PHRASES`, `HUMAN_ONLY.md` B12) rather than counting as a settled refusal.
 
-**The first pilot under the new writer.** `score_search_pilot.py` now prints the sealed block exactly as
-sealed (it reproduces `SEARCH_PILOT_RESULT_1.txt` byte for byte, threshold 1 over what the finder was
-shown: `discover_stage.finder_pages`) and, beside it, what the writer itself would write. On the
-verified copy of `runs/search-gold`: **0 rows written, 0 harmful**. Las Labradas `period_start` is not
-cleared (the reviewer's `SOURCE:` on a `NO`), Odeon and both Lake Mungo rows are held by (c), Aubrey
-Holes is refused by (b) (its hit is a PDF) and would be by (a). Two human-WRONG fields are lost too,
-and that is the rules' cost: Ahu Tongariki `period_start` by (b), its hit answered 403, and Cueva de
-los Murcielagos `period_start` by (c), its reviewer wrote "The stored value 1 is not shown wrong".
+**The first pilot under the new writer** (*corrected by the fixer's review*; the first version named two
+lost human-WRONG fields where there are three, and counted Lake Mungo `period_start` as a catch).
+`score_search_pilot.py` prints the sealed block exactly as sealed (it reproduces
+`SEARCH_PILOT_RESULT_1.txt` byte for byte, threshold 1 over what the finder was shown:
+`discover_stage.finder_pages`), beside it what the writer itself would write, and - since the review -
+what each rule refuses on its own (`rule_cost`: each rule switched off alone at its one entry point).
+On the verified copy of `runs/search-gold`: **0 rows written, 0 harmful**. The writer *before* the
+three rules (`git archive 59f21bb`, run read-only over the real `runs/search-gold`; `rule_cost`'s
+all-off line gives the same rows) writes **5 rows: 3 agree** with a human WRONG (Lake Mungo
+`period_start` -500 -> -50000, Ahu Tongariki `period_start` 1 -> 1000, Cueva de los Murcielagos
+`period_start` 1 -> -6000), **1 is unsupported** (Lake Mungo `site_type` Geological interest ->
+Archaeological site, human UNVERIFIABLE) and **1 harmful** (Aubrey Holes `period_start` -4500 ->
+-4000, human CORRECT). What each rule changes on its own:
+
+| rule switched off alone | rows it alone refuses | human verdict |
+|---|---|---|
+| (a) period-bucket gate | none (Aubrey Holes falls to (b): its hit is a cut PDF; (a) refuses it only with (b) off) | - |
+| (b) hit page | Ahu Tongariki `period_start` (its scispace hit answered 403) | WRONG |
+| (c) contradiction hold | Lake Mungo `period_start` ("Both halves fail: the evidence actually supports a value around -500"), Cueva `period_start` ("The stored value 1 is not shown wrong") | WRONG, WRONG |
+
+Lake Mungo `site_type` is refused by both (c) and (b) (its Britannica hit answered 403), so no single
+switch releases it. The Odeon card text is report-only and was never writable; Las Labradas
+`period_start` is not cleared (the reviewer's `SOURCE:` on a `NO`). **Net: all 3 agreeing writes are
+lost, to stop 1 harmful and 1 unsupported write.** Lake Mungo `period_start` is not a catch by (c):
+the gold standard calls the stored -500 WRONG, the finder was right and the reviewer's sentence was
+not. On this pilot (c) blocks no write that (b) or the older rules would not already block, and costs
+two correct ones - the rules' price, measured, and the next pilot's `rule_cost` prints its own.
 
 **Mutation proofs.** `mutation_sweep.PILOT_FIX_MUTATIONS` (38 new) plus the two entries whose anchors
 moved, through the sweep's own `main` with the main venv: **40/40 caught**, the tree byte-identical for
 11 files. Gate: 3349 passed, 98 skipped (data a worktree does not carry), 57 deselected.
+
+
+### 2026-09-23 - the review of the three writer fixes, and what it changed
+
+Branch `wip/search-fixes`. Eleven findings of an independent review, each checked against the code and
+the real data before anything was changed - read-only: the main tree's `runs/mass`, `runs/search-gold`
+and gold standard, and the review's own copy of `runs/search-gold` after a live `verify-hits` (project
+User-Agent). No production query, no model call, no new fetch. **All eleven held; none was rejected.**
+The corrections to the section above are marked in place; what changed:
+
+1. **The first pilot's cost** (the one major finding) - three human-WRONG writes are lost, not two, and
+   Lake Mungo `period_start` is a cost of (c), not a catch. Reproduced both ways: `git archive 59f21bb`
+   over the real run writes the 5 rows named above, the new writer 0, and switching each rule off
+   alone gives the table above. `score_search_pilot.py` now prints that table itself (`rule_cost`,
+   each rule off at its one entry point, inside the scorer only - the writer has no switch); its
+   sealed block still reproduces `SEARCH_PILOT_RESULT_1.txt` byte for byte.
+2. **"the proposed value is contradicted" matched sentences that say the value half holds** - "neither
+   the finding's reason nor its proposed value is contradicted" (batch-0237), "contradicted neither by
+   Wikipedia nor Wikidata" (batch-0053), "contradicted by the evidence? No" (batch-0151), and a
+   conditional, "contradicted only if" (batch-0171). Narrowed by five `nor <owner>` lookbehinds and
+   three lookaheads; a half's name in quotes (`the "reason" half fails`, the sentence batch-0053's hand
+   hold really turns on) is read now. Recall stays **51 of 72**, written holds **77 of 994**; the `NO`
+   answers whose first phrase it is fall from 38 to 35.
+3. **Per-phrase false holds** - recorded in the phrase block and above; the four phrases that held
+   written rows falsely route their holds to the hand-read (`review_stage.HAND_READ_PHRASES`, the
+   refusal carries `write_stage.HAND_READ_NOTE`; `HUMAN_ONLY.md` B12). The hold itself is unchanged.
+4. **The page cap** - see (b) above: 14 of 15 pages cut, all 9 missing quotes on cut pages. A readable
+   hit page that was cut and does not carry the quote is refused as `search-hit-page-not-verified`
+   naming the cap (`write_stage._hit_page_refusal`); the excerpt knows it was cut
+   (`EvidenceExcerpt.truncated`, read off `fetch_stage.TRUNCATION_MARKER`, which `gap_plan.py` now reads
+   too instead of its own check).
+5. **An interrupted `verify-hits` re-ran every stage** - the judge would re-buy each named failure (an
+   unreadable stream leaves no answer file). `mass_run.judged_state` is the judge's part of
+   `batch_state`, and `StageRunner.stages_for` resumes such a batch at `verify-hits` alone.
+6. **The finder could be shown hit pages** - once they were on disk, every caller of
+   `evidence_excerpts` got them, the discover stage included. `hit_pages` is now a required keyword:
+   `False` for the finder and everything that stands for what it was shown (discover, search and gap
+   plans, the sealed threshold, the hit stage's own url lookup), `True` for the reviewer and the writer.
+7. **A search hit could point into the workstation's tunnels** - `verify-hits` fetched search-result
+   urls with redirects followed and no address check (psql 15432 and the API on 18000 sit on localhost
+   here). Lyra's check moved unchanged to `pipeline.utils.http.is_public_http_url`, used by Lyra, by
+   `fetch_stage.assert_public_address` (in `HttpFetcher.get` and before the hit stage's request: 0
+   requests, `not fetched: ...`) and by a request hook that refuses a redirect hop into a non-public
+   address before it is asked. It reads the url as written and resolves no name, like Lyra's: a public
+   name that resolves to a private address is not caught.
+8. **Guards without a test or a sweep case** - the empty-bucket branch and the `period_start`-only check
+   of the bucket gate got writer tests; every exclusion of the phrase set got a negative sentence (real
+   where the run has one). Two of them needed more than the review named: "nothing in the evidence
+   supports the stored" and "nor evidence supports the stored" were protected by no test at all - the
+   Cadbury Hill negative names a bare year, which that phrase never reads.
+9. **The rows Martin decides on** - `measure_review_holds.py --out-dir` writes the 77 written rows the
+   hold would hold and the 170 written same-bucket `period_start` rows, with key, values and `WHY:`
+   line (`HUMAN_ONLY.md` B11). My reading of the 77: 60 name a failing half, 10 are false holds, 7 say
+   both.
+
+**Mutation proofs.** `mutation_sweep.REVIEW_FIX_MUTATIONS` (51 new) and the four entries whose anchors
+moved, through the sweep's own `main` with the main venv: **55/55 caught**; the builder's 38
+`PILOT_FIX_MUTATIONS` again: **38/38 caught**; the tree byte-identical afterwards (10 and 11 files).
+A consistency check at import time (every hand-read phrase is a failing-half phrase) was moved into a
+test, because it made the module unimportable under the sweep's phrase deletions and the sweep then
+proves nothing (pytest exit 4). Gate: **3397 passed, 98 skipped** (data a worktree does not carry),
+**57 deselected**; `ruff check`, `ruff format --check api/ pipeline/`, `lint-imports`, `vulture` clean.

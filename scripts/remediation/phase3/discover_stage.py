@@ -348,8 +348,15 @@ def plan_site(
         raise InputError(f"batch {batch_id}: a site record carries no site_id")
     rerun = SE.rerun_fields(site)
     fields = DISCOVER_FIELDS if rerun is None else rerun
+    # The finder is never shown a hit page: those are fetched from its answers, and a call bought
+    # after they are on disk must carry what the site's other finder calls carried.
     excerpts = MS.evidence_excerpts(
-        site_id=site_id, site=site, store=store, allow_absent=allow_absent, failures=failures
+        site_id=site_id,
+        site=site,
+        store=store,
+        hit_pages=False,
+        allow_absent=allow_absent,
+        failures=failures,
     )
     try:
         MS.check_evidence_bound(site_id, excerpts)

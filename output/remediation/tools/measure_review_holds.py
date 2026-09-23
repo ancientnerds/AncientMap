@@ -1,6 +1,11 @@
 """Measure two of the writer's rules of 2026-09-23 on the rows the mass lane already decided.
 
-Read-only; nothing here writes a database or a plan. It answers, with the writer's own functions:
+Read-only towards the database and the plans; the one thing it writes is the two row lists Martin
+decides on (`HUMAN_ONLY.md` B11), under `--out-dir` (`logs/review_holds/` by default): the written
+rows the contradiction hold would hold now (`WRITTEN_HELD_FILE`) and the written `period_start` rows
+that stayed inside their stored bucket (`WRITTEN_BUCKET_FILE`), each as JSON lines and as a table,
+with the change key, the values and the reviewer's own `WHY:` line. It answers, with the writer's own
+functions:
 
 * **the reviewer contradiction hold** (`review_stage.failing_half`,
   `write_stage.RULE_REVIEW_CONTRADICTS`): of the mass lane's 72 hand-held rows, how many does the rule
@@ -52,6 +57,11 @@ JOURNAL_PERIOD_START_SQL = (
 
 HELD, WRITTEN, BOUNDARY = "held", "written", "boundary"
 
+#: The two lists, JSON lines; each also as a Markdown table under the same name with `.md`.
+WRITTEN_HELD_FILE = "WRITTEN_HELD_BY_PHRASE.jsonl"
+WRITTEN_BUCKET_FILE = "WRITTEN_SAME_BUCKET.jsonl"
+DEFAULT_OUT_DIR = lanes.LOGS / "review_holds"
+
 
 def classify(
     rows: Iterable[Mapping[str, Any]], *, holds: set[str], written: set[str]
@@ -88,6 +98,55 @@ def same_bucket_rows(rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any
     ]
 
 
+def written_lists(
+    written: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The written rows the contradiction hold would hold, and the written `period_start` rows
+    inside their stored bucket - one record each, in plan order, with what Martin needs to decide."""
+
+    def record(row: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "change_key": row["change_key"],
+            "batch_id": row["batch_id"],
+            "site_id": row["site_id"],
+            "site_name": row["site_name"],
+            "column": row["column"],
+            "old_value": row["old_value"],
+            "new_value": row["new_value"],
+            "reason": row["verdict"]["reason"],
+        }
+
+    held = []
+    bucket = []
+    for row in written:
+        phrase = RS.failing_half(str(row["verdict"]["reason"]))
+        if phrase is not None:
+            held.append({**record(row), "phrase": phrase})
+        if row["column"] == "period_start":
+            inside = W.same_bucket(row["old_value"], str(row["new_value"]))
+            if inside is not None:
+                bucket.append({**record(row), "bucket": inside})
+    return held, bucket
+
+
+def _cell(value: Any) -> str:
+    """One Markdown table cell: pipes escaped, line breaks folded."""
+    return " ".join(str(value).split()).replace("|", "\\|")
+
+
+def write_table(path: pathlib.Path, title: str, intro: str, rows: list[dict[str, Any]]) -> None:
+    """`rows` as a Markdown table beside their JSON lines, for reading rather than for tools."""
+    columns = ("change_key", "site_name", "column", "old_value", "new_value")
+    extra = "phrase" if rows and "phrase" in rows[0] else "bucket"
+    lines = [f"# {title}", "", intro, ""]
+    lines.append("| # | " + " | ".join((*columns, extra, "reason")) + " |")
+    lines.append("|---" * (len(columns) + 3) + "|")
+    for number, row in enumerate(rows, start=1):
+        cells = [_cell(row[name]) for name in (*columns, extra, "reason")]
+        lines.append(f"| {number} | " + " | ".join(cells) + " |")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
 def answers_by_verdict(run_dir: pathlib.Path) -> dict[str, collections.Counter[str]]:
     """Per phrase, the reviewer answers of the run that carry it, by their `REFUTED:` value."""
     per: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
@@ -109,6 +168,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-dir", default=str(paths.run_dir))
     parser.add_argument("--written-keys", required=True, help=f"export of: {WRITTEN_KEYS_SQL}")
     parser.add_argument("--journal", default="", help=f"export of: {JOURNAL_PERIOD_START_SQL}")
+    parser.add_argument(
+        "--out-dir",
+        default=str(DEFAULT_OUT_DIR),
+        help="where the two row lists for HUMAN_ONLY.md B11 are written",
+    )
     return parser
 
 
@@ -155,6 +219,29 @@ def main(argv: list[str] | None = None) -> int:
             f"  production journal: {len(same_bucket_rows(journal))} of {len(journal)} "
             "period_start rows inside the stored bucket"
         )
+
+    out_dir = pathlib.Path(args.out_dir)
+    held, bucket = written_lists(groups[WRITTEN])
+    lanes.write_jsonl(out_dir / WRITTEN_HELD_FILE, held)
+    lanes.write_jsonl(out_dir / WRITTEN_BUCKET_FILE, bucket)
+    write_table(
+        (out_dir / WRITTEN_HELD_FILE).with_suffix(".md"),
+        "Geschriebene Zeilen, die die Widerspruchsregel heute zurueckhielte (HUMAN_ONLY.md B11)",
+        f"{len(held)} von {len(groups[WRITTEN])} geschriebenen Zeilen: der Pruefer schrieb "
+        "`REFUTED: NO`, seine eigene Begruendung nennt eine scheiternde Haelfte "
+        "(review_stage.failing_half). Je Zeile: behalten oder zuruecknehmen.",
+        held,
+    )
+    write_table(
+        (out_dir / WRITTEN_BUCKET_FILE).with_suffix(".md"),
+        "Geschriebene period_start-Zeilen innerhalb des gespeicherten Buckets (HUMAN_ONLY.md B11)",
+        f"{len(bucket)} geschriebene period_start-Zeilen blieben im Bucket des alten Werts "
+        "(write_stage.same_bucket). Je Zeile: behalten oder zuruecknehmen.",
+        bucket,
+    )
+    print(
+        f"\nwrote {len(held)} held-by-phrase and {len(bucket)} same-bucket written rows to {out_dir}"
+    )
     return 0
 
 

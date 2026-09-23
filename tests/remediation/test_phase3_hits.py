@@ -182,6 +182,7 @@ def _excerpts(root: Path) -> list[MS.EvidenceExcerpt]:
         site_id=SITE,
         site=site,
         store=F.EvidenceStore(root / "evidence"),
+        hit_pages=True,
         failures=MS.read_fetch_failures(root / "fetch.json").get(SITE),
     )
 
@@ -267,6 +268,62 @@ def test_a_hit_url_asking_for_raw_geometry_is_recorded_not_fetched(tmp_path: Pat
     (outcome,) = _verify(root, pages).outcomes
     assert pages.asked == []
     assert outcome.failure is not None and outcome.failure.startswith("not fetched:")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:18000/api/sites",  # the workstation's production API tunnel
+        "http://127.0.0.1:15432/",  # the production psql tunnel
+        "http://169.254.169.254/latest/meta-data/",  # a cloud metadata endpoint
+        "http://10.0.0.5/admin",
+    ],
+)
+def test_a_hit_url_on_a_non_public_host_is_recorded_not_fetched(tmp_path: Path, url: str) -> None:
+    """A search result is somebody else's text: a hit naming loopback, a private or a link-local
+    address is never asked - the workstation that runs this has production tunnels on localhost."""
+    root = _batch_dir(tmp_path, hits=((url, QUOTE),), answers={"period_start": _answer(url=url)})
+    pages = Pages({})
+    (outcome,) = _verify(root, pages).outcomes
+    assert pages.asked == [] and outcome.attempts == []
+    assert outcome.failure is not None and outcome.failure.startswith("not fetched:")
+    assert "not a public http(s) address" in outcome.failure
+    assert not (tmp_path / "LEDGER.jsonl").exists()
+    (refusal,) = W.load_plan(root).refused_fields(W.RULE_HIT_UNVERIFIED)
+    assert url in refusal.detail
+
+
+def test_a_redirect_to_a_non_public_host_is_refused_before_it_is_followed(tmp_path: Path) -> None:
+    """The hit's own host is public and answers with a redirect into the tunnel: the hop is never
+    requested. Each attempt did ask the public host, so each has its ledger line."""
+    inside = "http://localhost:18000/api/sites"
+    pages = Pages({HIT: httpx.Response(302, headers={"Location": inside})})
+    root = _batch_dir(tmp_path)
+    (outcome,) = _verify(root, pages).outcomes
+    assert inside not in pages.asked and pages.asked == [HIT] * F.MAX_ATTEMPTS
+    assert not outcome.stored and outcome.failure is not None
+    assert all("not a public http(s) address" in str(a.error) for a in outcome.attempts)
+    lines = _ledger_lines(tmp_path / "LEDGER.jsonl")
+    assert len(lines) == F.MAX_ATTEMPTS
+    assert not F.EvidenceStore(root / "evidence").exists(SITE, SE.hit_page_feature(HIT))
+
+
+def test_the_fetcher_itself_refuses_a_non_public_address_before_a_socket() -> None:
+    """The client is the last line: whoever hands it a loopback URL gets a refusal, not a request."""
+    pages = Pages({})
+    with pages.fetcher() as fetcher, pytest.raises(F.NonPublicAddressRefused, match="not a public"):
+        fetcher.get("http://localhost:18000/api/sites")
+    assert pages.asked == []
+
+
+def test_the_public_address_check_is_the_one_lyra_uses() -> None:
+    """One spelling of "a public http(s) address": Lyra's content fetch and this stage share it."""
+    from pipeline.lyra.handlers import content_fetch
+    from pipeline.utils import http as pipeline_http
+
+    assert content_fetch.is_public_http_url is pipeline_http.is_public_http_url
+    assert F.is_public_http_url is pipeline_http.is_public_http_url
+    assert not hasattr(content_fetch, "_is_safe_url")
 
 
 def test_a_batch_that_bought_no_search_is_refused(tmp_path: Path) -> None:
@@ -442,6 +499,49 @@ def test_a_hit_page_that_could_not_be_fetched_or_read_leaves_the_citation_unveri
     assert plan.refused_fields(W.RULE_CITATION) == []
 
 
+#: A page longer than the fetch stage's cap, whose quoted sentence lies past it: what 9 of the first
+#: pilot's 25 hit citations met (14 of its 15 stored pages were cut; `hit_stage` docstring).
+PAST_THE_CAP = "<html><body><p>" + "The site lies on the coast. " * 3_000 + f"</p><p>{QUOTE}</p>"
+
+
+def test_a_quote_past_the_page_cap_is_unverified_not_fabricated(tmp_path: Path) -> None:
+    """A cut page that does not carry the quote says nothing about the rest of the page: the row is
+    refused as unverified, naming the cut, and never reported as a citation that is not there."""
+    assert len(PAST_THE_CAP.encode("utf-8")) > F.MAX_PAGE_BYTES
+    root = _batch_dir(tmp_path)
+    (outcome,) = _verify(root, Pages({HIT: httpx.Response(200, text=PAST_THE_CAP)})).outcomes
+    assert outcome.truncated and outcome.stored
+    (page,) = [e for e in _excerpts(root) if e.kind == MS.KIND_HIT_PAGE]
+    assert page.truncated and page.citable is not None and QUOTE not in page.citable
+    plan = W.load_plan(root)
+    assert plan.rows == []
+    assert plan.refused_fields(W.RULE_CITATION) == []
+    (refusal,) = plan.refused_fields(W.RULE_HIT_UNVERIFIED)
+    assert HIT in refusal.detail and f"{F.MAX_PAGE_BYTES:,}-byte page cap" in refusal.detail
+
+
+def test_a_quote_inside_the_read_part_of_a_cut_page_is_planned(tmp_path: Path) -> None:
+    """The cut costs only what it hides: a quote the read part carries is verified as usual."""
+    page = f"<html><body><p>{QUOTE}</p><p>" + "The site lies on the coast. " * 3_000 + "</p>"
+    root = _batch_dir(tmp_path)
+    (outcome,) = _verify(root, Pages({HIT: httpx.Response(200, text=page)})).outcomes
+    assert outcome.truncated
+    plan = W.load_plan(root)
+    assert [(row.column, row.new_value) for row in plan.rows] == [("period_start", "-1000")]
+
+
+def test_a_fetched_target_knows_it_was_cut_too(tmp_path: Path) -> None:
+    """One spelling of "this stored page was cut": the excerpt's own, for targets and hit pages."""
+    root = _batch_dir(tmp_path)
+    target = F.targets_for_site(_site())[0]
+    path = F.EvidenceStore(root / "evidence").path_for(SITE, target.feature)
+    path.write_text('{"query": {"pages": {}}}' + F.TRUNCATION_MARKER, encoding="utf-8")
+    _verify(root, Pages({HIT: httpx.Response(200, text=CARRYING)}))
+    by_feature = {e.feature: e for e in _excerpts(root)}
+    assert by_feature[target.feature].truncated
+    assert not by_feature[SE.hit_page_feature(HIT)].truncated
+
+
 def test_the_writer_raises_when_nobody_tried_to_verify_a_cited_hit(tmp_path: Path) -> None:
     """No page and no record: `verify-hits` never ran, a hole in the record, not a row's refusal."""
     root = _batch_dir(tmp_path)
@@ -464,6 +564,33 @@ def test_a_citation_of_a_fetched_target_is_checked_as_it_always_was(tmp_path: Pa
 
 
 # ── what the finder was shown, for the sealed pilot threshold ────────────────────────────────
+
+
+def test_a_finder_asked_after_verify_hits_is_not_shown_the_hit_page(tmp_path: Path) -> None:
+    """The finder answers on targets and snippets; the hit pages are fetched from its answers. A
+    finder call planned once they are on disk - a batch re-run after an interrupted `verify-hits`
+    that re-asks an unreadable stream, or an answer deleted to ask again - must see what every
+    other finder call of the site saw, or `finder_pages` (sealed threshold 1) under-reports it."""
+    root = _batch_dir(tmp_path)
+    site = json.loads((root / "input.json").read_text(encoding="utf-8"))["sites"][0]
+    store = F.EvidenceStore(root / "evidence")
+
+    def finder_prompts() -> list[str]:
+        plan = DS.plan_site(
+            batch_id=BATCH,
+            site=site,
+            store=store,
+            vocabulary=("Rock art", "Settlement"),
+            failures=MS.read_fetch_failures(root / "fetch.json").get(SITE),
+        )
+        return [item.call.prompt for item in plan.calls]
+
+    before = finder_prompts()
+    _verify(root, Pages({HIT: httpx.Response(200, text=TORO_MUERTO)}))
+    after = finder_prompts()
+    assert after == before
+    assert all(SE.HIT_PAGE_FEATURE_PREFIX not in prompt for prompt in after)
+    assert all("Toro Muerto is a petroglyph site" not in prompt for prompt in after)
 
 
 def test_the_finders_pages_keep_the_snippet_and_leave_the_hit_page_out(tmp_path: Path) -> None:
@@ -518,11 +645,20 @@ def test_verify_hits_live_writes_its_report_through_the_real_command(
 # ── the pilot's scorer: the sealed thresholds, and the writer's decision beside them ─────────
 
 
-def _pilot(tmp_path: Path, page: str, human: str) -> list[str]:
-    """One pilot batch for `score_search_pilot.main`, the human verdict `human` on its field."""
+def _pilot(
+    tmp_path: Path,
+    page: str,
+    human: str,
+    *,
+    response: httpx.Response | None = None,
+    **batch: Any,
+) -> list[str]:
+    """One pilot batch for `score_search_pilot.main`, the human verdict `human` on its field.
+
+    `response` replaces the hit page's 200 answer, and `batch` goes to `_batch_dir`."""
     run = tmp_path / "runs"
-    root = _batch_dir(run)
-    _verify(root, Pages({HIT: httpx.Response(200, text=page)}))
+    root = _batch_dir(run, **batch)
+    _verify(root, Pages({HIT: response or httpx.Response(200, text=page)}))
     gold = tmp_path / "sites.json"
     verdicts = [{"field": "period_start", "verdict": human}]
     records = {"records": [{"site_id": SITE, "verdicts": verdicts}]}
@@ -556,6 +692,38 @@ def test_the_scorer_keeps_the_sealed_citation_definition_and_the_writer_refuses_
     assert "rows the writer would write: 0" in out
     assert f"'rule': '{W.RULE_CITATION}'" in out
     assert "WRITER RESULT: 0 row(s), 0 harmful" in out
+
+
+@pytest.mark.parametrize(
+    ("rule", "setup"),
+    [
+        # 500 -> 700 stays in `500 - 1000 AD`: only the bucket gate refuses it
+        ("(a) period-bucket gate", {"answers": {"period_start": _answer(proposed="700")}}),
+        # the hit page answered 403: only the hit-page check refuses it (the snippet carries QUOTE)
+        ("(b) hit-page check", {"response": httpx.Response(403, text="Just a moment...")}),
+        # the reviewer's WHY names a failing half: only the contradiction hold refuses it
+        ("(c) contradiction hold", {"reason": "Neither half holds - the page gives 1000 BC."}),
+    ],
+)
+def test_the_scorer_measures_what_each_rule_alone_refuses(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], rule: str, setup: dict[str, Any]
+) -> None:
+    """The first pilot's cost was stated, not measured (2026-09-23, the fixer's review): each rule
+    is switched off alone at its one entry point, and a row only that rule refuses shows up in its
+    line and in no other. A rule whose entry point stopped being the rule shows 0 and fails here."""
+    score_search_pilot.main(_pilot(tmp_path, CARRYING, "WRONG", **setup))
+    out = capsys.readouterr().out
+    assert "WRITER RESULT: 0 row(s), 0 harmful" in out
+    for name in score_search_pilot.RULE_SWITCHES:
+        more = 1 if name == rule else 0
+        assert f"  {name} off: {more} more row(s)" in out, name
+    assert (
+        "all three off (the writer before them): 1 more row(s), by human verdict {'WRONG': 1}"
+        in out
+    )
+    # the writer itself has no switch: outside the block every rule is back
+    plan = W.load_plan(tmp_path / "runs" / BATCH)
+    assert plan.rows == []
 
 
 def test_the_scorer_names_a_batch_the_writer_cannot_plan_yet(

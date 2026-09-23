@@ -634,6 +634,12 @@ class EvidenceExcerpt:
     `kind` says what the excerpt is (`KIND_*`), because the three kinds answer a citation
     differently (`citable`). A hit page's `text` is the part the prompt shows and `page_text` the
     whole page as stored and read.
+
+    `truncated` says the stored page stopped at the fetch stage's page cap: its bytes end in
+    `fetch_stage.TRUNCATION_MARKER`. For a fetched target the finder was shown that cut page, so a
+    quote missing from it is still not in the evidence; a **hit page** was fetched after the finder
+    answered, so a quote missing from its read part may sit in the part nobody read, and the writer
+    refuses it as unverified rather than as a fabricated citation (`write_stage.RULE_HIT_UNVERIFIED`).
     """
 
     feature: str
@@ -643,6 +649,7 @@ class EvidenceExcerpt:
     failure: str | None = None
     kind: str = KIND_TARGET
     page_text: str | None = None
+    truncated: bool = False
 
     @property
     def chars(self) -> int:
@@ -803,13 +810,23 @@ def evidence_excerpts(
     site_id: str,
     site: Mapping[str, Any],
     store: F.EvidenceStore,
+    hit_pages: bool,
     allow_absent: bool = False,
     failures: Mapping[str, str] | None = None,
 ) -> list[EvidenceExcerpt]:
     """The site's evidence, read once: one excerpt per target `fetch_stage` built for it, then one per
     page the site's searches found (`_search_excerpts`; a site without `search_fields` has none), then
-    one per search hit whose page `phase3/hit_stage.py` fetched or recorded as failed
-    (`_hit_page_excerpts`; there is none before that stage has run, which is the finder's view).
+    - with `hit_pages` - one per search hit whose page `phase3/hit_stage.py` fetched or recorded as
+    failed (`_hit_page_excerpts`).
+
+    `hit_pages` is required, not defaulted, because it is the line between the two roles. The finder
+    answers on the targets and the snippets, and the hit pages are fetched *from* its answers, so
+    every finder prompt - and everything that stands for what the finder was shown (the search and
+    gap plans' bound, the sealed pilot threshold) - passes `False`: a finder call bought after
+    `verify-hits` (an unreadable stream asked again, an answer deleted to ask again) then carries
+    exactly the evidence the site's other finder calls carried. The reviewer and the writer pass
+    `True`; they read the pages, and `cited_hit_pages` raises when a cited hit has none (found
+    2026-09-23 by the fixer's review: the pages reached the finder once they were on disk).
 
     Extracted from `prepare_call` for the discover pass, which builds one prompt per (site, field)
     from the same excerpts (`phase3/discover_stage.py`): the guard below is the thing that must not
@@ -838,7 +855,12 @@ def evidence_excerpts(
             )
         excerpts.append(
             EvidenceExcerpt(
-                feature=target.feature, url=target.url, path=path, text=text, failure=failure
+                feature=target.feature,
+                url=target.url,
+                path=path,
+                text=text,
+                failure=failure,
+                truncated=text is not None and text.endswith(F.TRUNCATION_MARKER),
             )
         )
     excerpts.extend(
@@ -851,9 +873,10 @@ def evidence_excerpts(
             taken={excerpt.url for excerpt in excerpts},
         )
     )
-    excerpts.extend(
-        _hit_page_excerpts(site_id=site_id, store=store, recorded=recorded, excerpts=excerpts)
-    )
+    if hit_pages:
+        excerpts.extend(
+            _hit_page_excerpts(site_id=site_id, store=store, recorded=recorded, excerpts=excerpts)
+        )
     return excerpts
 
 
@@ -962,28 +985,30 @@ def _hit_page_excerpts(
     `HIT_PAGE_CUT_MARKER`. The prompt therefore stays inside the evidence bound it had, unless the
     other evidence left less room than one marker per page - then `check_evidence_bound` refuses it,
     as it refuses any other site over the bound. `page_text` keeps the whole page for the citation
-    check, which never reads the cut.
+    check, which never reads the cut. `truncated` is read off the stored bytes: a page the fetch
+    stage cut at its cap ends in `fetch_stage.TRUNCATION_MARKER`.
     """
-    found: list[tuple[str, str, Path, str | None, str | None]] = []
+    marker = F.TRUNCATION_MARKER.encode("utf-8")
+    found: list[tuple[str, str, Path, str | None, str | None, bool]] = []
     for excerpt in excerpts:
         if excerpt.kind != KIND_SEARCH_HIT or excerpt.text is None:
             continue
         feature = SE.hit_page_feature(excerpt.url)
         path = store.path_for(site_id, feature)
         if path.exists():
+            body = path.read_bytes()
+            cut = body.endswith(marker)
             try:
-                found.append(
-                    (excerpt.url, feature, path, SE.hit_page_text(path.read_bytes()), None)
-                )
+                found.append((excerpt.url, feature, path, SE.hit_page_text(body), None, cut))
             except SE.UnreadablePage as exc:
-                found.append((excerpt.url, feature, path, None, f"{excerpt.url}: {exc}"))
+                found.append((excerpt.url, feature, path, None, f"{excerpt.url}: {exc}", cut))
         elif feature in recorded:
-            found.append((excerpt.url, feature, path, None, recorded[feature]))
-    readable = sum(1 for _, _, _, page, _ in found if page is not None)
+            found.append((excerpt.url, feature, path, None, recorded[feature], False))
+    readable = sum(1 for _, _, _, page, _, _ in found if page is not None)
     room = MAX_EVIDENCE_CHARS - sum(excerpt.chars for excerpt in excerpts)
     share = max(0, min(HIT_PAGE_PROMPT_CHARS, room // readable)) if readable else 0
     pages: list[EvidenceExcerpt] = []
-    for url, feature, path, page, failure in found:
+    for url, feature, path, page, failure, cut in found:
         if page is None:
             shown = None
         elif len(page) <= share:
@@ -999,6 +1024,7 @@ def _hit_page_excerpts(
                 failure=failure,
                 kind=KIND_HIT_PAGE,
                 page_text=page,
+                truncated=cut,
             )
         )
     return pages
@@ -1073,8 +1099,14 @@ def prepare_call(
     site_id = str(site.get("site_id") or "")
     if not site_id:
         raise InputError(f"batch {batch_id}: a site record carries no site_id")
+    # The finding-driven plan buys no search, so its sites have no hit and no hit page to show.
     excerpts = evidence_excerpts(
-        site_id=site_id, site=site, store=store, allow_absent=allow_absent, failures=failures
+        site_id=site_id,
+        site=site,
+        store=store,
+        hit_pages=False,
+        allow_absent=allow_absent,
+        failures=failures,
     )
     check_evidence_bound(site_id, excerpts)
     user = "\n".join(

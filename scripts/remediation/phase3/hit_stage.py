@@ -27,7 +27,11 @@ What one batch does (`verify_batch`):
    `<site>/hitpage.<sha1(url)[:12]>`, stage `reviewer`), and the store that never overwrites a page
    with other bytes (`fetch_stage.EvidenceStore`). The pace is `fetch_stage.PacedFetcher` over the
    shared pacing directory, so a `--jobs N` run asks each host one request at a time across processes.
-   A page already on disk is not fetched again; a re-run asks only for the pages that are not.
+   A page already on disk is not fetched again; a re-run asks only for the pages that are not. A
+   hit that asks for raw geometry, or names a host that is not a public http(s) address (loopback,
+   private, link-local: `fetch_stage.assert_public_address`, Lyra's own check), is recorded as not
+   fetched with 0 requests; a redirect hop into such a host is refused inside the client and
+   recorded on the attempt that met it.
 4. **The report**, `hitpages.json`, in `fetch.json`'s own `sites[].outcomes[].failure` shape, so
    `model_stage.read_fetch_failures` reads a hit that could not be fetched exactly like a failed
    target. A page that was stored but is not text a quote can be found in (a PDF: both PDFs the
@@ -37,10 +41,16 @@ Measured 2026-09-23 on a copy of the first pilot's run (`runs/search-gold`), thi
 the project User-Agent: its finder answers cite 20 distinct hits in 25 citations. 20 requests: 13
 answered HTML, 2 answered a PDF (both cut at the page cap, both `unreadable`), 5 answered 403 (four
 Cloudflare challenge pages, one CloudFront block). 8 of the 25 quoted sentences occur in the fetched
-page's text. The three Wikipedia article pages cited as hits came back cut at the 60 KB cap with
-2,400 to 4,100 characters of text, mostly the page's navigation, and none of their three quotes is
-found: a limit of the binding page cap (`fetch_stage.MAX_PAGE_BYTES`), stated here rather than worked
-around.
+page's text; 24 occur in the snippet the finder was shown, 17 of them in the snippet only.
+
+**The page cap decides most of it** (re-measured 2026-09-23 on the same copy by the fixer's review):
+14 of the 15 stored pages were cut at the 60 KB cap (`fetch_stage.MAX_PAGE_BYTES`; only
+comusantjulia.ad came back whole), and every citation whose readable page does not carry its quote
+is on a cut page - 9 of them: pathere.org twice, nilecruisetrips.com, travelshelper.com twice,
+andbeyond.com and the three Wikipedia articles (Lake Mungo, the Odeon, Ahu Tongariki, each 2,400 to
+4,100 characters of text, mostly navigation). The rest of such a page was never read, so its row is
+refused as unverified and the refusal names the cut (`write_stage._hit_page_refusal`), never as a
+fabricated citation. The cap binds and is not raised here.
 
 Nothing here judges, and nothing writes a database.
 """
@@ -103,7 +113,10 @@ def cited_hits(
     feature is one stored page, and a second url under it would be checked against the first's text.
     """
     site_id = str(site.get("site_id") or "")
-    excerpts = MS.evidence_excerpts(site_id=site_id, site=site, store=store, failures=failures)
+    # Which urls are hits is a fact of the search, not of the pages this stage stores from them.
+    excerpts = MS.evidence_excerpts(
+        site_id=site_id, site=site, store=store, hit_pages=False, failures=failures
+    )
     hits = MS.search_hit_urls(excerpts)
     fields_of: dict[str, list[str]] = {}
     for name in SE.rerun_fields(site) or DS.DISCOVER_FIELDS:
@@ -246,7 +259,8 @@ def verify_site(
         else:
             try:
                 F.assert_named_feature(hit.url)
-            except F.RawGeometryRefused as exc:
+                F.assert_public_address(hit.url)
+            except (F.RawGeometryRefused, F.NonPublicAddressRefused) as exc:
                 outcome.failure = f"not fetched: {exc}; 0 requests"
                 continue
             fetched = F.one_attempt(

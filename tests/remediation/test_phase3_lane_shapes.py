@@ -424,7 +424,9 @@ def test_a_gap_record_is_judged_on_its_fetched_pages_and_buys_no_search(tmp_path
         assert SE.rerun_fields(site) == lane.asked[site["site_id"]]
         assert SE.search_fields(site) is None and SE.search_slots(site) == ()
         # No search file is on disk and none is recorded as failed: none is asked for.
-        excerpts = MS.evidence_excerpts(site_id=site["site_id"], site=site, store=lane.store)
+        excerpts = MS.evidence_excerpts(
+            site_id=site["site_id"], site=site, store=lane.store, hit_pages=False
+        )
         assert [e.feature for e in excerpts] == [t.feature for t in F.targets_for_site(site)]
         assert all(e.present for e in excerpts)
     searcher = _Searcher()
@@ -439,11 +441,11 @@ def test_a_search_record_is_judged_only_once_its_search_is_on_disk(tmp_path: Pat
     assert SE.rerun_fields(site) == SE.search_fields(site) == ("country",)
     assert [slot.feature for slot in SE.search_slots(site)] == ["minimax_search.country"]
     with pytest.raises(MS.EvidenceUnusable, match="search report records no failure"):
-        MS.evidence_excerpts(site_id=CAVE, site=site, store=lane.store)
+        MS.evidence_excerpts(site_id=CAVE, site=site, store=lane.store, hit_pages=False)
     searcher = _search(lane, tmp_path / "LEDGER.jsonl")
     assert len(searcher.queries) == 1
     excerpts = MS.evidence_excerpts(
-        site_id=CAVE, site=site, store=lane.store, failures=lane.failures(CAVE)
+        site_id=CAVE, site=site, store=lane.store, hit_pages=False, failures=lane.failures(CAVE)
     )
     (hit,) = [e for e in excerpts if e.feature.startswith(SE.SEARCH_FEATURE_PREFIX)]
     assert hit.url == HIT_URL and HIT_SNIPPET in str(hit.text)

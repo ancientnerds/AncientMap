@@ -1044,6 +1044,9 @@ def _decided(key: str, column: str, old: str, new: str, reason: str) -> dict[str
     """One row of a lane's plan, as far as the measurement reads it."""
     return {
         "change_key": key,
+        "batch_id": "batch-0001",
+        "site_id": SITE,
+        "site_name": f"Site {key}",
         "column": column,
         "old_value": old,
         "new_value": new,
@@ -1082,6 +1085,7 @@ def test_the_measurement_counts_holds_false_holds_and_bucket_moves_with_the_writ
 
     argv = ["--rows", str(rows_path), "--holds", str(tmp_path / "HOLDS.jsonl")]
     argv += ["--run-dir", str(tmp_path / "run"), "--written-keys", str(tmp_path / "written.txt")]
+    argv += ["--out-dir", str(tmp_path / "logs" / "review_holds")]
     assert measure_review_holds.main([*argv, "--journal", str(tmp_path / "journal.jsonl")]) == 0
     out = capsys.readouterr().out
     assert "plan rows 6: held 3, written 2, boundary 1" in out
@@ -1092,6 +1096,22 @@ def test_the_measurement_counts_holds_false_holds_and_bucket_moves_with_the_writ
     assert "hand holds caught by the bucket gate or the contradiction hold: 3" in out
     assert "production journal: 1 of 1 period_start rows inside the stored bucket" in out
     assert "neither half holds" in out and "{'NO': 1}" in out
+    # the rows Martin decides on (HUMAN_ONLY.md B11): written rows the hold would hold, and written
+    # period_start rows that stayed in their bucket, each with its key, values and reason
+    out_dir = tmp_path / "logs" / "review_holds"
+    held = lanes.read_jsonl(out_dir / measure_review_holds.WRITTEN_HELD_FILE)
+    assert [(r["change_key"], r["phrase"], r["reason"]) for r in held] == [
+        ("k4", "the stored value is not shown wrong", "The stored value is not shown wrong.")
+    ]
+    bucket = lanes.read_jsonl(out_dir / measure_review_holds.WRITTEN_BUCKET_FILE)
+    assert [(r["change_key"], r["old_value"], r["new_value"], r["bucket"]) for r in bucket] == [
+        ("k3", "-1500", "-600", "1500 - 500 BC")
+    ]
+    table = (out_dir / measure_review_holds.WRITTEN_HELD_FILE).with_suffix(".md")
+    assert "| k4 |" in table.read_text(encoding="utf-8")
+    assert "| k3 |" in (out_dir / measure_review_holds.WRITTEN_BUCKET_FILE).with_suffix(
+        ".md"
+    ).read_text(encoding="utf-8")
     # the measurement refuses a plan that is not the lane's reviewed one
     monkeypatch.setitem(lanes.REVIEWED_PLAN_KEYS_SHA256, lanes.MASS, "0" * 64)
     with pytest.raises(SystemExit, match="not the plan the production rows"):

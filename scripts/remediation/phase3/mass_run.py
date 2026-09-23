@@ -60,7 +60,8 @@ plan names neither `rerun_fields` nor `search_fields`; a rerun plan names `rerun
 plan names both. `--stages` must be the kind's own sequence, or the run is refused before it starts.
 A search plan's sequence ends in `verify-hits`: the page behind every search hit a finder answer
 cites is fetched before the reviewer (`phase3/hit_stage.py`), and a search batch is done only once
-its `hitpages.json` is written (`hit_state`).
+its `hitpages.json` is written (`hit_state`). A batch stopped inside that stage resumes there and
+never at `prepare` (`StageRunner.stages_for`): the judge's named failures are not bought twice.
 
 A search batch's `search` stage gates itself on the MiniMax quota and exits `run.STOP_RUN_EXIT` when
 the gate refuses or a stop-class error arrives; the driver then stops the whole run (`stop_of`), with
@@ -146,7 +147,8 @@ STAGES = ("prepare", "fetch", "judge")
 #: MiniMax search hits - so `search` takes `fetch`'s place - and, once the finder has answered, the
 #: page behind every hit an answer cites (`verify-hits`, `phase3/hit_stage.py`, 2026-09-23): the
 #: reviewer, run after this driver, is shown those pages and refuses to run without them.
-SEARCH_STAGES = ("prepare", "search", "judge", "verify-hits")
+VERIFY_HITS = "verify-hits"
+SEARCH_STAGES = ("prepare", "search", "judge", VERIFY_HITS)
 STAGE_SEQUENCES: dict[str, tuple[str, ...]] = {
     ",".join(STAGES): STAGES,
     ",".join(SEARCH_STAGES): SEARCH_STAGES,
@@ -491,8 +493,30 @@ def search_quota(run_dir: Path, batch_id: str) -> list[dict[str, Any]] | None:
 
 
 def batch_state(run_dir: Path, batch_id: str) -> tuple[str, str]:
-    """`(state, reason)`: `done` only when the artefacts parse and every written answer is on disk."""
+    """`(state, reason)`: `done` only when the artefacts parse and every written answer is on disk.
+
+    A search batch is done only once its hit pages are verified, too (`hit_state`); until then the
+    state is the hit report's, and `StageRunner.stages_for` resumes it at `verify-hits` alone.
+    """
     root = run_dir / batch_id
+    judged = judged_state(root)
+    if judged[0] != DONE:
+        return judged
+    hits = hit_state(root)
+    if hits is not None:
+        return hits
+    return judged
+
+
+def judged_state(root: Path) -> tuple[str, str]:
+    """`batch_state` up to and including the judge: the batch's own artefacts, not its hit pages.
+
+    Split out of `batch_state` on 2026-09-23 (the fixer's review): a search batch whose judge is
+    complete and whose `hitpages.json` is missing or damaged needs `verify-hits` and nothing else.
+    Re-running the judge would re-buy every named failure (an unreadable stream leaves no answer
+    file, and `model_stage.judge_site` asks again whenever none is on disk), which the `named`
+    branch below promises never happens.
+    """
     if not (root / "input.json").exists():
         return ABSENT, "no input.json (prepare has not run)"
     search = search_state(root)
@@ -535,9 +559,6 @@ def batch_state(run_dir: Path, batch_id: str) -> tuple[str, str]:
         slug = F.EvidenceStore.slug(str(row["site_id"]), str(row["field"]))
         if not (answers / f"{slug}.txt").exists():
             return BROKEN, f"answer missing for {row['site_id']}/{row['field']}"
-    hits = hit_state(root)
-    if hits is not None:
-        return hits
     if named:
         # Done, and honest about the holes: the batch is never re-run for them (a re-run re-buys
         # every call of a discover batch and would only hit the recorded bytes as a conflict).
@@ -785,9 +806,25 @@ class StageRunner:
                 time.sleep(SPAWN_RETRY_WAIT_SECONDS)
                 attempt += 1
 
+    def stages_for(self, batch_id: str) -> tuple[str, ...]:
+        """The stages one batch still needs: all of them, or `verify-hits` alone.
+
+        A search batch whose judge is complete (`judged_state`) and whose hit report is missing or
+        damaged (`hit_state`) was stopped inside `verify-hits`. Only that stage runs again: the pages
+        already stored are kept (`hit_stage` never fetches a page on disk twice), and nothing a
+        finder call bought is bought again. Any other state runs the whole sequence, as it always
+        did. A runner whose sequence has no `verify-hits` meeting such a batch raises: the plan's
+        kind and the stage sequence disagree, which `main` refuses before a run starts.
+        """
+        root = self.run_dir / batch_id
+        if judged_state(root)[0] == DONE and hit_state(root) is not None:
+            return self.stages[self.stages.index(VERIFY_HITS) :]
+        return self.stages
+
     def batch(self, planned: PlannedBatch) -> tuple[bool, str]:
-        """Every stage for one batch. Returns `(ok, detail)`; `detail` says where it stands."""
-        for stage in self.stages:
+        """Every stage one batch still needs (`stages_for`). Returns `(ok, detail)`; `detail` says
+        where it stands."""
+        for stage in self.stages_for(planned.batch_id):
             log = self.log_dir / f"{planned.batch_id}.{stage}.log"
             # The log is appended to across runs; only what this call writes may name its stop.
             start = log.stat().st_size if log.exists() else 0

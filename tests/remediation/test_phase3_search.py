@@ -928,7 +928,7 @@ def test_a_site_without_rerun_fields_gets_exactly_the_evidence_it_had(tmp_path: 
     store = F.EvidenceStore(tmp_path / "evidence")
     _enwiki(store, "site-1")
     _store_search(store, "site-1", "country", _hit(1, "https://e.org/a"))  # a stray file
-    excerpts = MS.evidence_excerpts(site_id="site-1", site=_site(), store=store)
+    excerpts = MS.evidence_excerpts(site_id="site-1", site=_site(), store=store, hit_pages=False)
     assert [e.feature for e in excerpts] == [F.FEATURE_ENWIKI]
 
 
@@ -945,7 +945,9 @@ def test_a_hit_becomes_one_excerpt_and_the_filters_drop_our_own_and_blocked_host
         _hit(2, "https://ancientnerds.com/sites/es/cave-1", snippet="Spain"),
         _hit(3, "https://www.reddit.com/r/caves", snippet="Spain"),
     )
-    excerpts = MS.evidence_excerpts(site_id="site-1", site=_site(rerun=["country"]), store=store)
+    excerpts = MS.evidence_excerpts(
+        site_id="site-1", site=_site(rerun=["country"]), store=store, hit_pages=False
+    )
     (hit,) = [e for e in excerpts if e.feature.startswith("minimax_search")]
     assert (hit.url, hit.text) == ("https://e.org/a", "Cave 1\nThe cave lies in Spain. (2019)")
 
@@ -956,14 +958,14 @@ def test_one_url_found_by_two_searches_is_one_page_carrying_both_texts(tmp_path:
     _store_search(store, "site-1", "country", _hit(1, "https://e.org/a", snippet="In Spain."))
     _store_search(store, "site-1", "site_type", _hit(4, "https://e.org/a", snippet="A cave."))
     site = _site(rerun=["site_type", "country"])
-    excerpts = MS.evidence_excerpts(site_id="site-1", site=site, store=store)
+    excerpts = MS.evidence_excerpts(site_id="site-1", site=site, store=store, hit_pages=False)
     merged = [e for e in excerpts if e.url == "https://e.org/a"]
     assert len(merged) == 1
     assert merged[0].feature == "minimax_search.site_type+minimax_search.country"
     assert "In Spain." in str(merged[0].text) and "A cave." in str(merged[0].text)
     # One url is one page: its fetched page is one excerpt, and both quotes pass against it.
     _hit_page(store, "site-1", "https://e.org/a", "<p>In Spain.</p><p>A cave.</p>")
-    excerpts = MS.evidence_excerpts(site_id="site-1", site=site, store=store)
+    excerpts = MS.evidence_excerpts(site_id="site-1", site=site, store=store, hit_pages=True)
     assert [e.kind for e in excerpts if e.url == "https://e.org/a"] == [
         MS.KIND_SEARCH_HIT,
         MS.KIND_HIT_PAGE,
@@ -988,14 +990,16 @@ def test_a_quote_from_a_snippet_counts_only_once_the_fetched_page_carries_it(
     honest = DS.SourceClaim("https://e.org/a", "built c. 3000 BC.")
     invented = DS.SourceClaim("https://e.org/a", "Built c. 5000 BC.")
     snippet_only = DS.pages_from_excerpts(
-        MS.evidence_excerpts(site_id="site-1", site=site, store=store)
+        MS.evidence_excerpts(site_id="site-1", site=site, store=store, hit_pages=True)
     )
     assert "https://e.org/a" not in snippet_only
     assert DS.claim_problems([honest], snippet_only) == (
         "cited page was not fetched by this run: https://e.org/a",
     )
     _hit_page(store, "site-1", "https://e.org/a", "<html><p>It was built c. 3000 BC.</p></html>")
-    pages = DS.pages_from_excerpts(MS.evidence_excerpts(site_id="site-1", site=site, store=store))
+    pages = DS.pages_from_excerpts(
+        MS.evidence_excerpts(site_id="site-1", site=site, store=store, hit_pages=True)
+    )
     assert DS.claim_problems([honest], pages) == ()
     assert DS.claim_problems([invented], pages) != ()
 
@@ -1007,7 +1011,7 @@ def test_a_hit_on_a_fetched_targets_url_raises_instead_of_hiding_a_page(tmp_path
     enwiki_url = F.targets_for_site(site)[0].url
     _store_search(store, "site-1", "country", _hit(1, enwiki_url))
     with pytest.raises(MS.EvidenceUnusable, match="already a fetched target"):
-        MS.evidence_excerpts(site_id="site-1", site=site, store=store)
+        MS.evidence_excerpts(site_id="site-1", site=site, store=store, hit_pages=False)
 
 
 def test_a_search_missing_with_no_record_raises_a_recorded_failure_is_named(
@@ -1017,13 +1021,16 @@ def test_a_search_missing_with_no_record_raises_a_recorded_failure_is_named(
     store = F.EvidenceStore(tmp_path / "evidence")
     _enwiki(store, "site-1")
     with pytest.raises(MS.EvidenceUnusable, match="search report records no failure"):
-        MS.evidence_excerpts(site_id="site-1", site=site, store=store)
-    preview = MS.evidence_excerpts(site_id="site-1", site=site, store=store, allow_absent=True)
+        MS.evidence_excerpts(site_id="site-1", site=site, store=store, hit_pages=False)
+    preview = MS.evidence_excerpts(
+        site_id="site-1", site=site, store=store, hit_pages=False, allow_absent=True
+    )
     assert preview[-1].feature == "minimax_search.country" and not preview[-1].present
     failed = MS.evidence_excerpts(
         site_id="site-1",
         site=site,
         store=store,
+        hit_pages=False,
         failures={"minimax_search.country": "search failed: HTTP 503 (3 request(s) recorded)"},
     )
     assert failed[-1].failure is not None
@@ -1046,9 +1053,15 @@ def test_search_failed_and_no_hits_reach_the_judge_as_two_different_facts(tmp_pa
     failures = MS.read_fetch_failures(tmp_path / "fetch.json")
     assert list(failures) == ["site-2"]
     assert list(failures["site-2"]) == ["minimax_search.country"]
-    no_hits = MS.evidence_excerpts(site_id="site-1", site=batch["sites"][0], store=store)
+    no_hits = MS.evidence_excerpts(
+        site_id="site-1", site=batch["sites"][0], store=store, hit_pages=False
+    )
     failed = MS.evidence_excerpts(
-        site_id="site-2", site=batch["sites"][1], store=store, failures=failures["site-2"]
+        site_id="site-2",
+        site=batch["sites"][1],
+        store=store,
+        hit_pages=False,
+        failures=failures["site-2"],
     )
     assert [e.feature for e in no_hits] == [F.FEATURE_ENWIKI]
     assert [(e.feature, e.failure is not None) for e in failed][-1] == (
@@ -2104,6 +2117,50 @@ def test_a_search_batch_is_done_only_once_its_hit_pages_are_verified(tmp_path: P
     (root / "search.json").unlink()
     (root / MS.HIT_REPORT_NAME).unlink()
     assert MR.batch_state(tmp_path, "batch-0001")[0] == MR.DONE
+
+
+@pytest.mark.parametrize("report", [None, "{", json.dumps({"sites": {}})])
+def test_a_judged_search_batch_without_its_hit_report_resumes_at_verify_hits_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, report: str | None
+) -> None:
+    """`verify-hits` stopped before its report: the judge's work is complete, one of its calls a
+    named failure (an unreadable stream, no answer file). Re-running every stage would re-buy that
+    call - and, before the finder was kept off the hit pages, with pages in its prompt no other
+    finder call of the site saw. The driver runs `verify-hits` and nothing else (2026-09-23, the
+    fixer's review)."""
+    run_dir = tmp_path / "runs"
+    root = run_dir / "srch-0001"
+    _search_json(root, judged=True)
+    failure = {"site_id": "site-1", "field": "country", "reason": "unreadable stream"}
+    model = {"totals": {"calls": 1}, "judgements": [], "failures": [failure]}
+    (root / "model.json").write_text(json.dumps(model), encoding="utf-8")
+    if report is None:
+        (root / MS.HIT_REPORT_NAME).unlink()
+    else:
+        (root / MS.HIT_REPORT_NAME).write_text(report, encoding="utf-8")
+    assert MR.batch_state(run_dir, "srch-0001")[0] != MR.DONE
+    started: list[str] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> Any:
+        started.append(argv[2])
+        if argv[2] == "verify-hits":
+            (root / MS.HIT_REPORT_NAME).write_text('{"sites": []}', encoding="utf-8")
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(MR.subprocess, "run", fake_run)
+    runner = MR.StageRunner(
+        plan=tmp_path / "P", run_dir=run_dir, ledger=tmp_path / "L.jsonl", log_dir=tmp_path / "logs",
+        live=True, python=Path("python"), runner=Path("run.py"), stages=MR.SEARCH_STAGES,
+    )  # fmt: skip
+    ok, detail = runner.batch(MR.PlannedBatch("srch-0001", 1, 1, 1, 1))
+    assert started == ["verify-hits"]
+    assert ok and "1 unreadable stream" in detail
+    # A batch whose judge is not complete still runs every stage, as it always did.
+    (root / "model.json").unlink()
+    (root / MS.HIT_REPORT_NAME).unlink()
+    started.clear()
+    runner.batch(MR.PlannedBatch("srch-0001", 1, 1, 1, 1))
+    assert started == list(MR.SEARCH_STAGES)
 
 
 @pytest.mark.parametrize("done_before", [False, True])

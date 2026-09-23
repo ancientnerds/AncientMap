@@ -107,6 +107,22 @@ _SAME_CLAUSE = (
     r"[^\s,;:.\u2014\u2013]+){0,4}"
 )
 
+#: A half's name may stand in quotes or backticks: `the "reason" half fails` (batch-0053, a hand hold,
+#: `REFUTED: NO`; the run's two other such sentences are `YES` answers).
+_OPEN_QUOTE = r"[`\"'\u201c\u2018]?"
+_CLOSE_QUOTE = r"[`\"'\u201d\u2019]?"
+
+#: Whose proposal a "neither the reason nor <owner> proposed value is contradicted" sentence names -
+#: the half that **holds** (batch-0237: "neither the finding's reason nor its proposed value is
+#: contradicted"). Each is one fixed-width lookbehind, because `re` allows no other kind.
+_NOR_OWNERS: tuple[str, ...] = (
+    "its",
+    "the finding['\u2019]s",
+    "the finder['\u2019]s",
+    "finding['\u2019]s",
+    "finder['\u2019]s",
+)
+
 #: The phrases by which a `WHY:` line names a half of the finding that **fails**. The frozen question
 #: (`model_stage.REVIEWER_QUESTION`) asks for "one sentence naming the half that fails, or that both
 #: hold", and `REFUTED: NO` is defined there as "both halves hold" - so a `NO` whose own sentence
@@ -128,12 +144,21 @@ _SAME_CLAUSE = (
 #:
 #: Measured 2026-09-23 with `output/remediation/tools/measure_review_holds.py` on the mass lane:
 #: it holds 51 of the 72 hand-held rows and 77 of the 994 rows that were written and accepted. Read
-#: one by one, 10 of those 77 use a phrase against their own content (the sentence goes on to say the
-#: stored value is wrong), 5 say both, and 62 do say the stored value is not shown wrong or the
-#: proposal is contradicted - the class the hand-read held 72 of and missed there. Deterministic and
-#: deliberately literal: a sentence that says the same thing in other words is not caught, and the
-#: hand holds also hold rows for reasons no phrase names (a finer stored type, a bucket nudge), so
-#: this is a floor under the hand-read, not a replacement for it.
+#: one by one, about 10 of those 77 use a phrase against their own content (the sentence goes on to
+#: say the stored value is wrong), 5 to 8 say both, and 60 to 62 do say the stored value is not shown
+#: wrong or the proposal is contradicted - the class the hand-read held 72 of and missed there (three
+#: readings: the builder's 62/10/5, the review's about 61/8/8, the fixer's 60/10/7). The false holds
+#: sit under four phrases, and a row those four hold goes to the hand-read (`HAND_READ_PHRASES`).
+#: Deterministic and deliberately literal: a sentence that says the same thing in other words is not
+#: caught, and the hand holds also hold rows for reasons no phrase names (a finer stored type, a
+#: bucket nudge), so this is a floor under the hand-read, not a replacement for it.
+#:
+#: Narrowed 2026-09-23 by the fixer's review, with the count unchanged: "the proposed value is
+#: contradicted" matched three `NO` sentences that say the value half **holds** ("neither the
+#: finding's reason nor its proposed value is contradicted", "contradicted neither by Wikipedia nor
+#: Wikidata", "contradicted by the evidence? No") and one conditional ("contradicted only if"); and a
+#: half's name may stand in quotes (`the "reason" half fails`, batch-0053, whose hand hold that phrase
+#: had caught by the misreading). Recall stays 51 of 72, written holds 77 of 994.
 FAILING_HALF_PHRASES: tuple[tuple[str, str], ...] = (
     ("neither half holds", r"\bneither half holds\b"),
     ("neither half is established", r"\bneither half is (?:established|shown|supported)\b"),
@@ -142,10 +167,17 @@ FAILING_HALF_PHRASES: tuple[tuple[str, str], ...] = (
         "the half that fails is named",
         r"\bthe half that fails is the (?:reason|value|proposal|proposed value)\b",
     ),
-    ("the reason half fails", r"\bthe (?:reason|first) half fails\b(?! only if)"),
+    (
+        "the reason half fails",
+        r"\bthe " + _OPEN_QUOTE + r"(?:reason|first)" + _CLOSE_QUOTE + r" half fails\b(?! only if)",
+    ),
     (
         "the value half fails",
-        r"\bthe (?:value|second|proposal|proposed[- ]value) half fails\b(?! only if)",
+        r"\bthe "
+        + _OPEN_QUOTE
+        + r"(?:value|second|proposal|proposed[- ]value)"
+        + _CLOSE_QUOTE
+        + r" half fails\b(?! only if)",
     ),
     (
         "the reason fails",
@@ -194,15 +226,40 @@ FAILING_HALF_PHRASES: tuple[tuple[str, str], ...] = (
     ),
     (
         "the proposed value is contradicted",
-        r"(?<!nor the )(?<!nor )(?<!if the )(?<!whether the )\bpropos(?:ed|al)"
+        r"(?<!nor the )(?<!nor )(?<!if the )(?<!whether the )"
+        + "".join(f"(?<!nor {owner} )" for owner in _NOR_OWNERS)
+        + r"\bpropos(?:ed|al)"
         + _SAME_CLAUSE
         + r" (?:is|was|are) "
-        r"contradicted\b(?! (?:by|in) (?:neither|nothing|none|no)\b)",
+        r"contradicted\b(?! (?:by|in) (?:neither|nothing|none|no)\b)"
+        r"(?! neither\b)"
+        r"(?! only if\b)"
+        r"(?![^.,;:!?\u2014\u2013]{0,40}\?)",
     ),
 )
 _FAILING_HALF_RE: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (name, re.compile(pattern, re.IGNORECASE)) for name, pattern in FAILING_HALF_PHRASES
 )
+
+#: The phrases whose hold the mass lane's **written** rows showed misfiring: `phrase -> (false holds,
+#: written rows it would hold)`. A false hold is a sentence that uses the phrase against its own
+#: content and goes on to argue for the write ("Neither half holds - ... the stored `Settlement` is
+#: contradicted and `Archaeological site` is supported", Presa-Tusiu). Read one by one on 2026-09-23
+#: by the fixer's review, from `measure_review_holds.py`'s list of the 77 written rows the hold would
+#: hold: 10 false holds, all under these four phrases; 7 more say both, 60 do name a failing half.
+#: The hold stays - weakening a check is not the answer to a measured false-hold rate - but a row
+#: held by one of these phrases is not a settled refusal: the writer marks it for the hand-read
+#: (`write_stage.HAND_READ_NOTE`, `HUMAN_ONLY.md` B12). The other fourteen phrases held no written
+#: row falsely (mixed: "the proposed value is contradicted" 4 of 12, "the stored value is not shown
+#: wrong" 2 of 12, "the reason half fails" 1 of 3).
+#: Every key is a `FAILING_HALF_PHRASES` name (`test_phase3_review.py` pins it; a check at import time
+#: would keep the mutation sweep from deleting a phrase and watching its own test fail).
+HAND_READ_PHRASES: dict[str, tuple[int, int]] = {
+    "neither half holds": (4, 7),
+    "the stored value is not contradicted": (4, 9),
+    "the reason fails": (1, 4),
+    "does not show the stored value wrong": (1, 10),
+}
 
 
 def failing_half(reason: str) -> str | None:
@@ -490,7 +547,12 @@ def plan_site(
         return plan
 
     excerpts = MS.evidence_excerpts(
-        site_id=site_id, site=site, store=store, allow_absent=allow_absent, failures=failures
+        site_id=site_id,
+        site=site,
+        store=store,
+        hit_pages=True,
+        allow_absent=allow_absent,
+        failures=failures,
     )
     # Raises `EvidenceOverBound` rather than recording a skip: a site with finder answers cannot be
     # over the bound (the finder would not have been asked either), so this firing means the two

@@ -375,6 +375,20 @@ FAILING_HALF_WHY: tuple[tuple[str, str], ...] = (
         "for an inhabited site",
         "the proposal fails",
     ),
+    (  # a hand-held row of the mass lane (batch-0053, 50873aa8 period_start), `REFUTED: NO`: the
+        # half's name in quotes. Until 2026-09-23 only the value-half phrase caught it, and by its
+        # own misreading ("the proposed year 300 is contradicted neither by ...", the half that holds)
+        'The stored value 1 is the period_start year 1 (used as a sort key within the "1 - 500 AD" '
+        "bucket), and the finder supplies no evidence that the year 1 is what the project must "
+        'store; the "reason" half fails because the evidence shows an occupation beginning at 300 '
+        "AD, not a mis-stored 1, and the proposed year 300 is contradicted neither by Wikipedia nor "
+        "Wikidata's P580 +300.",
+        "the reason half fails",
+    ),
+    (  # the same quoted name for the value half, which no answer of the mass run uses yet
+        "the reason stands, but the `value` half fails because the page dates the site later",
+        "the value half fails",
+    ),
 )
 
 
@@ -420,12 +434,71 @@ BOTH_HALVES_HOLD_WHY: tuple[str, ...] = (
     # Roman Bridge of Cordoba, a mass-lane write: "stored" and "not contradicted" in one sentence,
     # about the two different values
     "so the stored -500 is wrong and the proposed -100 is not contradicted; both halves hold.",
+    # ── "the proposed value is contradicted" in a sentence that says the value half holds
+    # (2026-09-23, the fixer's review): the mass run's own NO answers
+    # batch-0237 34f1acbd card_description: "nor its proposed value"
+    'while "oldest military fort in the Timok Valley" is simply the English equivalent of "Valea '
+    "Timacului,\" so neither the finding's reason nor its proposed value is contradicted—both "
+    "halves hold.",
+    # batch-0053 50873aa8 period_start, the value half's clause alone: "contradicted neither by"
+    "and the proposed year 300 is contradicted neither by Wikipedia nor Wikidata's P580 +300.",
+    # batch-0151 1374c196 card_description: a question the sentence answers "No" to
+    "The evidence supports the finder's reason (eight stones survive: five standing, three "
+    'recumbent), but the proposed value\'s "sandstone" is contradicted by the evidence? No — the '
+    'source says the stones are sandstone boulders of the Bagshot Beds, so "sandstone" is '
+    'actually supported; the "eight surviving boulders" and "~26 m" both stand, so the reason '
+    "holds and the proposal is not contradicted.",
+    # batch-0171 44354857 period_start, the value half's clause alone: a conditional
+    "and the proposed -430 is contradicted only if the earlier dedication is ignored",
+    # the reviewer's own synthetic check of the same wording
+    "The proposed -1000 is contradicted neither by enwiki nor by Wikidata.",
+    # the other owners a "neither ... nor <owner> proposed value" sentence can name
+    "so neither the reason nor the finding's proposed value is contradicted.",
+    "so neither the reason nor the finder's proposed value is contradicted.",
+    "so neither the reason nor finding's proposed value is contradicted.",
+    "so neither the reason nor finder’s proposed value is contradicted.",
+    # ── one sentence per exclusion that had no negative of its own (2026-09-23, the fixer's
+    # review): without it, the exclusion could be deleted with every test green
+    # `(?<!no )` on "the evidence supports the stored value" - batch-0045 69fb2e9b site_type
+    "the enwiki extract and Wikidata description call it an archaeological site, while no "
+    'evidence supports the stored "City/town/settlement"',
+    # `(?<!nothing in the )` on the same phrase - batch-0114 6b730ea0 site_type (the Cadbury Hill line
+    # above names a bare year, which the phrase never reads, so it did not protect this exclusion)
+    "the enwiki extract both class the site only as an archaeological site, and nothing in the "
+    'evidence supports the stored "City/town/settlement"; the proposed "Archaeological site" '
+    "matches the sources.",
+    # `(?<!nor )` on the same phrase
+    'neither the extract nor evidence supports the stored "Temple complex" as a type',
+    # `(?! only if)` on "the reason / first half fails" - batch-0272 6a8bc59c card_description
+    'The first half fails only if "1st-century BC" is asserted as a dating',
+    # `(?! only if)` on "the reason fails"
+    "the reason fails only if the extract is wrong, and it is not",
+    # `(?<!nor )` on "the reason fails"
+    "so neither the proposal nor the reason fails.",
+    # `(?! only if)` on "the proposal fails"
+    "the proposal fails only if the page is misread, and it is not",
+    # `(?!(?:that )?the propos)` on "does not show ... wrong"
+    "the evidence does not show the proposed -1000 wrong",
+    # `(?<!if the )` on "the proposed value is contradicted"
+    "it would fail if the proposed -700 is contradicted by a dated source, and none is given",
+    # `(?<!whether the )` on the same phrase
+    "the question is whether the proposal is contradicted, and it is not",
+    # `(?<!nor )` on the same phrase: the owner-less "nor proposed"
+    "so neither the reason nor proposed -3500 is contradicted.",
 )
 
 
 @pytest.mark.parametrize("why", BOTH_HALVES_HOLD_WHY)
 def test_a_why_line_that_says_both_halves_hold_names_no_failing_half(why: str) -> None:
     assert RS.failing_half(why) is None
+
+
+def test_every_hand_read_phrase_is_a_failing_half_phrase() -> None:
+    """The writer looks a hold's phrase up by name: a hand-read key no phrase carries would route
+    nothing, silently. Each count is (false holds, written rows held), so false <= held."""
+    names = {name for name, _ in RS.FAILING_HALF_PHRASES}
+    assert set(RS.HAND_READ_PHRASES) <= names
+    assert all(0 < false <= held for false, held in RS.HAND_READ_PHRASES.values())
 
 
 # ── what gets reviewed at all ────────────────────────────────────────────────────────────────

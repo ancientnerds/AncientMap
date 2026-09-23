@@ -36,8 +36,9 @@ report rather than dropped:
   `finder-citation-not-in-evidence`; a batch whose evidence is missing *with nothing recorded about
   it* raises, because that is a hole in the record rather than a property of one row. A citation of
   a MiniMax **search hit** is checked against the page `phase3/hit_stage.py` fetched from the hit,
-  never against its snippet: a hit whose page could not be fetched or read is refused as
-  `RULE_HIT_UNVERIFIED`, and one the stage never tried raises (2026-09-23).
+  never against its snippet: a hit whose page could not be fetched or read, or whose page was cut at
+  the page cap before the quote, is refused as `RULE_HIT_UNVERIFIED`, and one the stage never tried
+  raises (2026-09-23).
 * a `period_start` change **leaves the stored value's bucket** (`categorize_period`, the card's own):
   a move inside it is refused as `RULE_SAME_BUCKET`, because the value is a bucket sort key.
 * the field is one the run was **built to ask**. A lane that re-asks only some fields of a site (the
@@ -282,14 +283,19 @@ RULE_NOT_RERUN = "field-not-asked-in-this-run"
 #: the 389 `period_start` rows the mass lane wrote are such moves (production journal, read-only).
 RULE_SAME_BUCKET = "period-start-inside-the-stored-bucket"
 #: The finder cited a MiniMax search hit whose page this batch could not verify: the page was not
-#: fetched, the fetch failed, or it is not text a quote can be found in. A snippet is not a page
-#: (2026-09-23: the pilot's Las Labradas quote was a travel page's snippet about another site), so
-#: such a citation is never accepted on the snippet.
+#: fetched, the fetch failed, it is not text a quote can be found in, or it was cut at the fetch
+#: stage's page cap and its read part does not carry the quote (`_hit_page_refusal`). A snippet is
+#: not a page (2026-09-23: the pilot's Las Labradas quote was a travel page's snippet about another
+#: site), so such a citation is never accepted on the snippet.
 RULE_HIT_UNVERIFIED = "search-hit-page-not-verified"
 #: The reviewer cleared the finding (`REFUTED: NO`, "both halves hold") while its own `WHY:` line
 #: names a half that fails (`review_stage.failing_half`). Added 2026-09-23 after the pilot's Lake
 #: Mungo and Odeon rows; the mass lane met the same class by hand in its 72 held rows.
 RULE_REVIEW_CONTRADICTS = "reviewer-why-names-a-failing-half"
+#: Carried by a `RULE_REVIEW_CONTRADICTS` refusal whose phrase held correctly cleared rows on the mass
+#: lane (`review_stage.HAND_READ_PHRASES`): the row is not written, and it is read by hand before it
+#: counts as refused.
+HAND_READ_NOTE = "hand-read before it counts as refused (HUMAN_ONLY.md B12)"
 
 
 class WriteRefused(ValueError):
@@ -644,7 +650,68 @@ def cited_evidence(
     as it does for the finder. A search hit is checked against the page `phase3/hit_stage.py`
     fetched from it (`discover_stage.pages_from_excerpts`), never against its snippet.
     """
-    return MS.evidence_excerpts(site_id=site_id, site=site, store=evidence, failures=failures)
+    return MS.evidence_excerpts(
+        site_id=site_id, site=site, store=evidence, hit_pages=True, failures=failures
+    )
+
+
+def _hand_read(phrase: str) -> str:
+    """The hand-read marker for a phrase that misfired on written rows, or nothing."""
+    if phrase not in RS.HAND_READ_PHRASES:
+        return ""
+    false, held = RS.HAND_READ_PHRASES[phrase]
+    return (
+        f" - {HAND_READ_NOTE}: on the mass lane this phrase held {false} of {held} written rows "
+        "whose own sentence argued for the write"
+    )
+
+
+def _hit_page_refusal(
+    *,
+    site_id: str,
+    field_name: str,
+    answer: DS.DiscoverAnswer,
+    evidence: Sequence[MS.EvidenceExcerpt],
+) -> Refusal | None:
+    """`RULE_HIT_UNVERIFIED` when a search hit the finder cites has no page that can verify its
+    quote, else `None` (then the citation check reads the page as it reads any other).
+
+    Two ways a hit page cannot verify: it could not be fetched or read (`citable is None`), or it was
+    cut at the fetch stage's page cap and its read part does not carry the quote. The second is not
+    a fabricated citation - the rest of the page was never read - and on the first pilot it was the
+    common case: 14 of the 15 stored hit pages were cut, and all 9 citations whose readable page did
+    not carry the quote were on cut pages (2026-09-23, the fixer's review). A cited hit nobody tried
+    to verify raises in `model_stage.cited_hit_pages`.
+    """
+    pages = {
+        page.url: page
+        for page in MS.cited_hit_pages(
+            [claim.url for claim in answer.sources], evidence, where=f"{site_id}/{field_name}"
+        )
+    }
+    for claim in answer.sources:
+        page = pages.get(claim.url)
+        if page is None:
+            continue
+        if page.citable is None:
+            return Refusal(
+                site_id,
+                field_name,
+                RULE_HIT_UNVERIFIED,
+                f"the finder cites the search hit {page.url}, and its page cannot verify the quote "
+                f"({page.failure}); a snippet is not a page, so the citation is not accepted on it",
+            )
+        if page.truncated and not DS.quote_occurs(claim.quote, page.citable):
+            return Refusal(
+                site_id,
+                field_name,
+                RULE_HIT_UNVERIFIED,
+                f"the finder cites the search hit {page.url}, whose page was cut at the fetch "
+                f"stage's {F.MAX_PAGE_BYTES:,}-byte page cap (fetch_stage.MAX_PAGE_BYTES), and the "
+                f"part that was read does not carry the quote {claim.quote!r}; the rest was never "
+                "read, so the citation is neither verified nor shown to be fabricated",
+            )
+    return None
 
 
 def _row_for(
@@ -699,18 +766,11 @@ def _row_for(
             "there is no value to write",
         )
     evidence = excerpts()
-    cited_hits = MS.cited_hit_pages(
-        [claim.url for claim in answer.sources], evidence, where=f"{site_id}/{field_name}"
+    unverified = _hit_page_refusal(
+        site_id=site_id, field_name=field_name, answer=answer, evidence=evidence
     )
-    for page in cited_hits:
-        if page.citable is None:
-            return Refusal(
-                site_id,
-                field_name,
-                RULE_HIT_UNVERIFIED,
-                f"the finder cites the search hit {page.url}, and its page cannot verify the quote "
-                f"({page.failure}); a snippet is not a page, so the citation is not accepted on it",
-            )
+    if unverified is not None:
+        return unverified
     citation = DS.source_problems(answer, DS.pages_from_excerpts(evidence))
     if citation:
         return Refusal(
@@ -881,7 +941,8 @@ def build_plan(
                         field_name,
                         RULE_REVIEW_CONTRADICTS,
                         f"the reviewer answered REFUTED: NO (both halves hold), and its own WHY "
-                        f"line names a failing half ({failing!r}); reason: {cleared.reason}",
+                        f"line names a failing half ({failing!r}){_hand_read(failing)}; "
+                        f"reason: {cleared.reason}",
                     )
                 )
                 continue

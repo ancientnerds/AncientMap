@@ -42,6 +42,7 @@ if str(PHASE3_PARENT) not in sys.path:
     sys.path.insert(0, str(PHASE3_PARENT))
 
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import review_stage as RS  # noqa: E402
 from phase3 import search_evidence as SE  # noqa: E402
 from phase3 import snapshot_plan as SP  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
@@ -640,6 +641,30 @@ def test_a_period_start_change_across_buckets_is_still_planned(
     assert plan.refused_fields(W.RULE_SAME_BUCKET) == []
 
 
+def test_a_period_start_that_stores_nothing_is_filled_not_refused_as_same_bucket(
+    tmp_path: Path,
+) -> None:
+    """An empty `period_start` has no bucket to stay inside, so filling it is never "the same bucket"
+    - and the gate must not read the stored `None` as a year (it would raise, not refuse)."""
+    plan = _plan(tmp_path, field="period_start", proposed="-1000", stored={"period_start": None})
+    assert [(row.column, row.old_value, row.new_value) for row in plan.rows] == [
+        ("period_start", None, "-1000")
+    ]
+    assert plan.refused_fields(W.RULE_SAME_BUCKET) == []
+
+
+@pytest.mark.parametrize(
+    ("field", "proposed"),
+    [("country", "United States"), ("site_type", "Settlement")],
+)
+def test_the_bucket_gate_reads_period_start_only(tmp_path: Path, field: str, proposed: str) -> None:
+    """The two other writable fields are planned past the gate: their values are not years, and
+    reading them as years would crash the plan instead of refusing one row."""
+    plan = _plan(tmp_path, field=field, proposed=proposed)
+    assert [(row.column, row.new_value) for row in plan.rows] == [(field, proposed)]
+    assert plan.refused_fields(W.RULE_SAME_BUCKET) == []
+
+
 def test_the_bucket_gate_reads_the_pipelines_own_buckets() -> None:
     """One spelling of the buckets: the writer's is the pipeline's function, not a copy of its table."""
     from pipeline.utils import text as pipeline_text
@@ -688,6 +713,41 @@ def test_a_cleared_verdict_whose_why_line_names_a_failing_half_is_held(
     (refusal,) = plan.refused_fields(W.RULE_REVIEW_CONTRADICTS)
     assert refusal.field == "country"
     assert repr(phrase) in refusal.detail and why in refusal.detail
+
+
+@pytest.mark.parametrize(
+    ("why", "hand_read"),
+    [
+        # "neither half holds": 4 of the 7 written mass-lane rows it would hold are false holds
+        ("Neither half holds - the stored Settlement is contradicted.", True),
+        # "the stored value is not contradicted": 4 of 9
+        ("The stored value is not contradicted - so Temple complex is wrong.", True),
+        # "the reason fails": 1 of 4 (Pen Dinas)
+        ("The reason fails: the source dates the fort to the Iron Age.", True),
+        # "does not show the stored value wrong": 1 of 10 (Asclepieion of Athens)
+        ("The evidence does not show the stored value wrong: it is a later date.", True),
+        # "the stored value is not shown wrong": 0 of 12 - a settled refusal
+        ("The stored value 1 is not shown wrong: period_start is a sort key.", False),
+    ],
+)
+def test_a_hold_by_a_phrase_that_misfired_on_written_rows_goes_to_the_hand_read(
+    tmp_path: Path, why: str, hand_read: bool
+) -> None:
+    """A phrase the mass lane's written rows showed misfiring does not settle a row by itself: its
+    refusal says it goes to the hand-read (HUMAN_ONLY.md B12), with the phrase's measured count."""
+    plan = W.load_plan(
+        _batch(
+            tmp_path,
+            cleared={(SITE_A, "country"): _cleared(SITE_A, "country", reason=why)},
+            answers={(SITE_A, "country"): _answer(proposed="United States")},
+        )
+    )
+    (refusal,) = plan.refused_fields(W.RULE_REVIEW_CONTRADICTS)
+    assert (W.HAND_READ_NOTE in refusal.detail) is hand_read
+    if hand_read:
+        phrase = RS.failing_half(why)
+        false, held = RS.HAND_READ_PHRASES[phrase]
+        assert f"{false} of {held}" in refusal.detail
 
 
 def test_a_cleared_verdict_whose_why_line_says_both_halves_hold_is_planned(tmp_path: Path) -> None:
