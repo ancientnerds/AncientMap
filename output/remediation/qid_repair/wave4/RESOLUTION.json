@@ -1,0 +1,378 @@
+{
+ "p31": {
+  "Q1024995": [
+   "archaeological site"
+  ],
+  "Q1046912": [
+   "tablet"
+  ],
+  "Q1058412": [
+   "archaeological site"
+  ],
+  "Q1059465": [
+   "archaeological site"
+  ],
+  "Q1156198": [
+   "cave",
+   "archaeological site",
+   "Maya site in Mexico"
+  ],
+  "Q13518345": [
+   "archaeological site"
+  ],
+  "Q1434929": [
+   "locality of Mexico"
+  ],
+  "Q2725918": [
+   "archaeological site"
+  ],
+  "Q3846612": [
+   "municipality of Mexico"
+  ],
+  "Q4384315": [
+   "archaeological site"
+  ],
+  "Q4850276": [
+   "archaeological site"
+  ],
+  "Q4936130": [
+   "archaeological site"
+  ],
+  "Q5055568": [
+   "archaeological site"
+  ],
+  "Q5788": [
+   "ancient city",
+   "city",
+   "archaeological site"
+  ],
+  "Q605455": [
+   "archaeological site"
+  ],
+  "Q804617": [
+   "archaeological site",
+   "Maya site in Mexico"
+  ],
+  "Q813784": [
+   "archaeological site"
+  ],
+  "Q8186545": [
+   "locality of Mexico"
+  ],
+  "Q928886": [
+   "archaeological site"
+  ]
+ },
+ "qid_holders": {
+  "Q1024995": [],
+  "Q1046912": [],
+  "Q1058412": [],
+  "Q1059465": [],
+  "Q1156198": [],
+  "Q13518345": [],
+  "Q1434929": [],
+  "Q2725918": [],
+  "Q3846612": [],
+  "Q4384315": [
+   {
+    "name": "Zoque Culture Archaeological Zone",
+    "site_id": "ed186ea9-9ed1-415d-828b-97d9f21401d2",
+    "source_url": "https://en.wikipedia.org/wiki/Chiapa_de_Corzo_(Mesoamerican_site)"
+   }
+  ],
+  "Q4850276": [],
+  "Q4936130": [],
+  "Q5055568": [],
+  "Q5788": [],
+  "Q605455": [],
+  "Q804617": [],
+  "Q813784": [],
+  "Q8186545": [],
+  "Q928886": []
+ },
+ "read_at": "2026-09-23T11:38:12Z",
+ "resolutions": {
+  "Acanceh": {
+   "canonical_title": "Acanceh",
+   "disambiguation": false,
+   "qid": "Q8186545",
+   "redirected": false
+  },
+  "Balamku": {
+   "canonical_title": "Balamku",
+   "disambiguation": false,
+   "qid": "Q804617",
+   "redirected": false
+  },
+  "Balankanche": {
+   "canonical_title": "Balankanche",
+   "disambiguation": false,
+   "qid": "Q1156198",
+   "redirected": false
+  },
+  "Balcón de Montezuma": {
+   "canonical_title": "Balcón de Montezuma",
+   "disambiguation": false,
+   "qid": "Q4850276",
+   "redirected": false
+  },
+  "Becan": {
+   "canonical_title": "Becan",
+   "disambiguation": false,
+   "qid": "Q813784",
+   "redirected": false
+  },
+  "Boca de Potrerillos": {
+   "canonical_title": "Boca de Potrerillos",
+   "disambiguation": false,
+   "qid": "Q4936130",
+   "redirected": false
+  },
+  "Bonampak": {
+   "canonical_title": "Bonampak",
+   "disambiguation": false,
+   "qid": "Q605455",
+   "redirected": false
+  },
+  "Cacaxtla": {
+   "canonical_title": "Cacaxtla",
+   "disambiguation": false,
+   "qid": "Q1024995",
+   "redirected": false
+  },
+  "Cascajal Block": {
+   "canonical_title": "Cascajal Block",
+   "disambiguation": false,
+   "qid": "Q1046912",
+   "redirected": false
+  },
+  "Cañada de la Virgen": {
+   "canonical_title": "Cañada de la Virgen",
+   "disambiguation": false,
+   "qid": "Q5055568",
+   "redirected": false
+  },
+  "Chacchoben": {
+   "canonical_title": "Chacchoben",
+   "disambiguation": false,
+   "qid": "Q928886",
+   "redirected": false
+  },
+  "Chacmultun": {
+   "canonical_title": "Chacmultun",
+   "disambiguation": false,
+   "qid": "Q1058412",
+   "redirected": false
+  },
+  "Chactún": {
+   "canonical_title": "Chactún",
+   "disambiguation": false,
+   "qid": "Q13518345",
+   "redirected": false
+  },
+  "Chalcatzingo": {
+   "canonical_title": "Chalcatzingo",
+   "disambiguation": false,
+   "qid": "Q1059465",
+   "redirected": false
+  },
+  "Chiapa de Corzo (Mesoamerican site)": {
+   "canonical_title": "Chiapa de Corzo (Mesoamerican site)",
+   "disambiguation": false,
+   "qid": "Q4384315",
+   "redirected": false
+  },
+  "Petra": {
+   "canonical_title": "Petra",
+   "disambiguation": false,
+   "qid": "Q5788",
+   "redirected": false
+  },
+  "Santa Cecilia Acatitlan": {
+   "canonical_title": "Santa Cecilia Acatitlan",
+   "disambiguation": false,
+   "qid": "Q2725918",
+   "redirected": false
+  },
+  "Santa María Atzompa": {
+   "canonical_title": "Santa María Atzompa",
+   "disambiguation": false,
+   "qid": "Q3846612",
+   "redirected": false
+  },
+  "Trincheras": {
+   "canonical_title": "Trincheras",
+   "disambiguation": false,
+   "qid": "Q1434929",
+   "redirected": false
+  }
+ },
+ "resolved_at": "2026-09-23T11:38:14Z",
+ "scope": "SELECT to_jsonb(t)::text FROM (SELECT id::text AS site_id, name, source_id, source_url, created_at::date::text AS created FROM unified_sites WHERE source_url ~ '[\\x00-\\x1f\\x7f]' ORDER BY id) t;",
+ "sites": [
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Bonampak",
+   "site_id": "08508ff0-053d-4b8e-b2a3-6382818c6735",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=16557\nhttps://en.wikipedia.org/wiki/Bonampak"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Cascajal Block",
+   "site_id": "08f54fa9-0ca0-490c-82af-47fdd0a40e6b",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=16211\nhttps://en.wikipedia.org/wiki/Cascajal_Block"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Balankanche Cave",
+   "site_id": "1a9242d4-250f-4ffb-8dad-dae849c10798",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=22783\nhttps://en.wikipedia.org/wiki/Balankanche"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Chiapa de Corzo",
+   "site_id": "24aa135d-4714-47f5-96c0-d58f0bc04b6f",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=26242\nhttps://en.wikipedia.org/wiki/Chiapa_de_Corzo_(Mesoamerican_site)"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Cacaxtla",
+   "site_id": "2bc26dce-7797-40a5-8a39-589e5dee1453",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=28978\nhttps://en.wikipedia.org/wiki/Cacaxtla"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Acatitlan",
+   "site_id": "3f686b4b-2d03-45c0-b7f9-6c45ab044d7b",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=16598\nhttps://en.wikipedia.org/wiki/Santa_Cecilia_Acatitlan"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Atzompa",
+   "site_id": "5699564f-61e7-481d-99dc-d23edc32207b",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=24013\nhttps://en.wikipedia.org/wiki/Santa_Mar%C3%ADa_Atzompa"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Chacchoben",
+   "site_id": "5b9393ea-f867-4553-b497-7079cebbff61",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=22796\nhttps://en.wikipedia.org/wiki/Chacchoben"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Boca de Potrerillos",
+   "site_id": "69fb9773-3709-4e8e-8682-96c75f57dfc6",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=51375\nhttps://en.wikipedia.org/wiki/Boca_de_Potrerillos"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Cantil de las animas",
+   "site_id": "885bbbdb-2583-4bc7-8be9-91b978cedcf3",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=33354\nhttps://rockartblog.blogspot.com/2013/05/cantil-de-las-animas-tepic-mexico.html"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Chactún",
+   "site_id": "8e625e19-eeb1-4813-8244-14ec448d7440",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=34244\nhttps://en.wikipedia.org/wiki/Chact%C3%BAn"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {
+    "enwiki_title": [
+     "Petra\nhttps://www.khanacademy.org/humanities/ap-art-history/west-and-central-asia-apahh/west-asia/a/petra-rock-cut-facades"
+    ]
+   },
+   "name": "Petra",
+   "site_id": "a06a95d0-35b4-44bb-a0c1-716cbf972b19",
+   "source_id": "ancient_nerds",
+   "source_url": "https://en.wikipedia.org/wiki/Petra\nhttps://www.khanacademy.org/humanities/ap-art-history/west-and-central-asia-apahh/west-asia/a/petra-rock-cut-facades"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Chacmultun",
+   "site_id": "ad605739-5499-4bbd-8a9f-448225caff56",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=16564\nhttps://en.wikipedia.org/wiki/Chacmultun"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Becan",
+   "site_id": "ad61addd-d62b-4c88-972c-18ebf465a900",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=20199\nhttps://en.wikipedia.org/wiki/Becan"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Balamkú",
+   "site_id": "b2b1beee-00c6-4dfa-a616-89f7be1b86b7",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=22752\nhttps://en.wikipedia.org/wiki/Balamku"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Chalcatzingo",
+   "site_id": "b7020e91-a80b-46cc-8624-878be1713336",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=29909\nhttps://en.wikipedia.org/wiki/Chalcatzingo"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Cañada de la Virgen",
+   "site_id": "bf81babd-58bf-4bac-b5e9-fac36c10c95c",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=51362\nhttps://en.wikipedia.org/wiki/Ca%C3%B1ada_de_la_Virgen"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Balcon de Montezuma",
+   "site_id": "c4d2251b-b64a-4615-a6f9-5a71ff6f3955",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=27653\nhttps://en.wikipedia.org/wiki/Balc%C3%B3n_de_Montezuma"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Cerro De Trincheras",
+   "site_id": "d4671d52-1421-4853-a186-6f3b4516368d",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=33431\nhttps://en.wikipedia.org/wiki/Trincheras"
+  },
+  {
+   "created": "2026-03-04",
+   "external_ids": {},
+   "name": "Acanceh",
+   "site_id": "e3a400b7-f8cd-4c4d-a2b0-b79ac18d2258",
+   "source_id": "ancient_nerds",
+   "source_url": "https://www.megalithic.co.uk/article.php?sid=22756\nhttps://en.wikipedia.org/wiki/Acanceh"
+  }
+ ]
+}

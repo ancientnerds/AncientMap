@@ -15,11 +15,14 @@ output/remediation/qid_repair/*.sql text eol=lf
 # of these exact LF bytes): a CRLF checkout must not rewrite them.
 tests/remediation/fixtures/gallery_labels_652.* text eol=lf
 output/remediation/gallery_audit/liveness-*/* text eol=lf
+# The liveness write's chunks: their APPLY.sql/ROLLBACK.sql are piped into psql.
+output/remediation/gallery_audit/liveness-*/chunk-*/* text eol=lf
 # The sealed C1 calibration: SEAL.jsonl records the sha256 of THRESHOLDS.json's LF bytes, the
 # reported JOBS.jsonl digest is over LF bytes, and ADMISSION.json is re-derived from the ledger's
 # exact bytes - a CRLF checkout must not make a byte-level check (sha256sum) disagree.
 output/remediation/gallery_audit/calibration-*/* text eol=lf
 output/remediation/qid_repair/wave2/*.sql text eol=lf
 output/remediation/qid_repair/wave3/*.sql text eol=lf
+output/remediation/qid_repair/wave4/*.sql text eol=lf
 output/remediation/bcases/coords_plan/*.sql text eol=lf
 output/remediation/bcases/coords3/*.jsonl text eol=lf
