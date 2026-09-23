@@ -25,7 +25,7 @@ from PIL import Image
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
-from gallery_audit import decide, labels, liveness, vision, worklist  # noqa: E402
+from gallery_audit import decide, labels, liveness, planned, vision, worklist  # noqa: E402
 
 from pipeline.video.shorts_select import VLM_PROMPT  # noqa: E402
 
@@ -434,6 +434,7 @@ def _row(image_id: int, site: str = SITE, tier: str = "C", **kw: Any) -> dict[st
         "_tier_reason": "",
         "_commons": f"File_{image_id}.jpg",
         "_categories": ["Category:Temple"],
+        "image_kind": None,  # `build_state` gives every row the column (NULL before G0)
     }
     row.update(kw)
     return row
@@ -581,15 +582,57 @@ def test_chunks_are_100_sites_in_export_order() -> None:
     assert [len(c) for c in got] == [100, 100, 50] and got[0][0] == sites[0]
 
 
+@pytest.fixture(scope="module")
+def snapshot_state() -> worklist.State:
+    """The snapshot plus the hero moves - about 25 s, so built once per module."""
+    return worklist.build_state(SNAPSHOT, CACHE, HERO_MOVES, T10_FINDINGS)
+
+
 @needs_state
-def test_the_current_state_reproduces_the_census_and_the_measured_tiers() -> None:
-    state = worklist.build_state(SNAPSHOT, CACHE, HERO_MOVES, T10_FINDINGS)
-    counts = worklist.tier_counts(state)
+def test_the_current_state_reproduces_the_census_and_the_measured_tiers(
+    snapshot_state: worklist.State,
+) -> None:
+    counts = worklist.tier_counts(snapshot_state)
     assert counts["promoted"] == counts["demoted"] == 2719
     assert counts["live_rows_by_tier"]["B"] == 9884 and counts["sites_serving_an_image"] == 3992
     # T10 reads "own name in the filename" from the local file name, and every demoted hero is
     # called hero.webp - so none of them can be tier D (the design's estimate said 2,146).
     assert counts["demoted_retiered"] == {"B": 383, "C": 2336}
+
+
+LIVENESS_STORE = REPO / "output" / "remediation" / "gallery_audit" / "liveness-2026-09-23"
+G0_PLAN = REPO / "output" / "remediation" / "gallery_audit" / "PLAN.jsonl"
+DEAD_ROWS = {107331, 97070, 80453, 87352, 87351, 70233}
+
+
+@needs_state
+def test_the_snapshot_state_is_refused_once_the_liveness_write_exists(
+    snapshot_state: worklist.State,
+) -> None:
+    lines = liveness.load_store(LIVENESS_STORE / "NOT_LIVE.jsonl")
+    with pytest.raises(worklist.WorklistError, match="fold the liveness write in"):
+        worklist.liveness_blocked(lines, snapshot_state.by_site)
+
+
+@needs_state
+def test_the_liveness_write_and_g0_fold_into_the_current_state() -> None:
+    state = worklist.build_state(
+        SNAPSHOT,
+        CACHE,
+        HERO_MOVES,
+        T10_FINDINGS,
+        kinds_from=[G0_PLAN],
+        applied=[LIVENESS_STORE / "PLANNED.jsonl"],
+    )
+    lines = liveness.load_store(LIVENESS_STORE / "NOT_LIVE.jsonl")
+    assert set(worklist.liveness_blocked(lines, state.by_site)) == DEAD_ROWS
+    assert all(state.row(i)["is_excluded"] and not state.row(i)["is_hero"] for i in DEAD_ROWS)
+    assert state.row(75145)["_commons"] == "Forum_Romanum_-_panoramio_(3).jpg"
+    assert sum(1 for rows in state.by_site.values() for r in rows if r["image_kind"]) == 105
+    counts = worklist.tier_counts(state)
+    # Dedan's two images were both deleted: the site serves nothing; every other count holds
+    assert counts["sites_serving_an_image"] == 3991
+    assert counts["live_rows_by_tier"] == {"A": 3857, "B": 9884, "C": 25925, "D": 9360}
 
 
 # ======================================================================= labels
@@ -807,7 +850,7 @@ def _truth(*ids: int, record: dict[str, Any] = TRUTH_BIG) -> dict[str, dict[str,
 def test_nothing_is_written_that_calibration_did_not_admit() -> None:
     rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2)]}
     gallery = {1: _v(1, kind="people"), 2: _v(2, kind="map_or_document", other_site=True)}
-    planned, _ = decide.plan_vision(rows, {}, gallery, {}, NONE, _truth(1, 2))
+    planned, _ = decide.plan_vision(rows, {}, gallery, {}, NONE, _truth(1, 2), {})
     assert planned == []
 
 
@@ -818,18 +861,18 @@ def test_kind_writes_need_admission_and_never_overwrite_a_recorded_kind() -> Non
         kind=True, strict=False, x1=False, x2=False, x3=False, thresholds_sha256="t"
     )
     planned, listed = decide.plan_vision(
-        rows, {2: "site_photo"}, gallery, {3: _v(3, vision.HERO)}, only_kind, {}
+        rows, {2: "site_photo"}, gallery, {3: _v(3, vision.HERO)}, only_kind, {}, {}
     )
     assert [(p.key, p.column, p.old, p.new, p.rule) for p in planned] == [
         (1, "image_kind", None, "artifact", "K1")
     ]
     assert "not overwritten" in listed[0]["why"]
-    planned, _ = decide.plan_vision(rows, {}, gallery, {3: _v(3, vision.HERO)}, ALL, {})
+    planned, _ = decide.plan_vision(rows, {}, gallery, {3: _v(3, vision.HERO)}, ALL, {}, {})
     assert ("image_kind", "site_photo", "K2") in {
         (p.column, p.new, p.rule) for p in planned if p.key == 3
     }
     planned, _ = decide.plan_vision(
-        rows, {}, gallery, {3: _v(3, vision.HERO, shows_archaeology=False)}, ALL, {}
+        rows, {}, gallery, {3: _v(3, vision.HERO, shows_archaeology=False)}, ALL, {}, {}
     )
     assert not [p for p in planned if p.key == 3]  # an unconfirmed site_photo stays NULL
 
@@ -847,7 +890,7 @@ def test_exclusions_spare_manual_rows_and_artifacts_and_take_the_heros_flag_with
     no_kind = decide.Admission(
         kind=False, strict=False, x1=True, x2=True, x3=True, thresholds_sha256="t"
     )
-    planned, _ = decide.plan_vision(rows, {}, gallery, {}, no_kind, {})
+    planned, _ = decide.plan_vision(rows, {}, gallery, {}, no_kind, {}, {})
     got = {(p.key, p.column, p.rule, p.role) for p in planned}
     assert got == {
         (1, "is_excluded", "X1", "exclude"),
@@ -881,7 +924,7 @@ def test_the_hero_moves_to_the_best_strict_confirmed_candidate() -> None:
         "File_5.jpg": {"status": "ok", "width": 6000, "height": 4500},
     }
     planned, _ = decide.plan_vision(
-        rows, {}, gallery, hero, decide.Admission(True, True, False, False, False, "t"), truth
+        rows, {}, gallery, hero, decide.Admission(True, True, False, False, False, "t"), truth, {}
     )
     moves = [(p.key, p.old, p.new, p.role) for p in planned if p.column == "is_hero"]
     assert moves == [(1, True, False, "hero-demote"), (3, False, True, "hero-promote")]
@@ -895,7 +938,7 @@ def test_a_failing_served_image_without_a_candidate_keeps_its_hero_and_is_listed
         1: _v(1, vision.HERO, shows_archaeology=False),
         2: _v(2, vision.HERO, shows_archaeology=False),
     }
-    planned, listed = decide.plan_vision(rows, {}, gallery, hero, ALL, _truth(1, 2))
+    planned, listed = decide.plan_vision(rows, {}, gallery, hero, ALL, _truth(1, 2), {})
     assert [p for p in planned if p.column == "is_hero"] == []
     assert any("no strict-confirmed candidate" in item["why"] for item in listed)
 
@@ -1062,7 +1105,7 @@ def test_a_planned_row_must_cite_a_ledger_verdict_about_todays_bytes(tmp_path: P
     verdict = vision.Verdict(entry.verdict_id, dict(line["verdict"]), line)
     rows = {SITE: [_row(1, tier="B")]}
     only_kind = decide.Admission(True, False, False, False, False, "t")
-    planned, _ = decide.plan_vision(rows, {}, {1: verdict}, {}, only_kind, {})
+    planned, _ = decide.plan_vision(rows, {}, {1: verdict}, {}, only_kind, {}, {})
     assert [p.rule for p in planned] == ["K1"]
     assert decide.verify_evidence(planned, [entry], images) == []
     assert "is not in the ledger" in decide.verify_evidence(planned, [], images)[0]
@@ -1073,3 +1116,202 @@ def test_a_planned_row_must_cite_a_ledger_verdict_about_todays_bytes(tmp_path: P
 def test_a_commons_title_keeps_everything_but_its_extension() -> None:
     state = _state([_row(1, _commons="A:_detail_of_the.v2_frieze.jpg")])
     assert worklist.g3_jobs(state)[0].title == "A: detail of the.v2 frieze"
+
+
+# ======================================================================= applied plans
+def _planned(key: int, column: str, old: Any, new: Any, site: str = SITE) -> planned.PlannedRow:
+    return planned.PlannedRow("wiki_images", key, site, column, old, new, "L1", "exclude", {})
+
+
+def _tier_of(tiers: dict[int, str]):
+    return lambda row, sid: (tiers[int(row["id"])], "t")
+
+
+def test_a_plan_round_trips_and_a_record_that_is_not_a_planned_row_is_refused(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "PLANNED.jsonl"
+    rows = [_planned(1, "is_excluded", False, True), _planned(1, "is_hero", True, False)]
+    planned.write_plan(path, rows)
+    assert planned.read_plan(path) == rows
+    record = {**rows[0].as_json(), "note": "hand-edited"}
+    path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+    with pytest.raises(planned.PlanError, match="not a planned row"):
+        planned.read_plan(path)
+    path.write_text("\n", encoding="utf-8")
+    with pytest.raises(planned.PlanError, match="holds no planned row"):
+        planned.read_plan(path)
+
+
+def test_a_kinds_plan_is_read_as_image_kind_rows_only(tmp_path: Path) -> None:
+    path = tmp_path / "PLAN.jsonl"
+    g0 = {
+        "table": "wiki_images",
+        "column": "image_kind",
+        "image_id": 7,
+        "site_id": SITE,
+        "old_value": None,
+        "new_value": "site_photo",
+        "test_id": "G0/vlm-kind",
+        "change_key": "g0-vlm-kind:7",
+    }
+    path.write_text(json.dumps(g0) + "\n", encoding="utf-8")
+    (row,) = planned.read_kinds_plan(path)
+    assert (row.key, row.column, row.old, row.new) == (7, "image_kind", None, "site_photo")
+    path.write_text(json.dumps({**g0, "column": "is_excluded"}) + "\n", encoding="utf-8")
+    with pytest.raises(planned.PlanError, match="not an image_kind write"):
+        planned.read_kinds_plan(path)
+    shapeless = {k: v for k, v in g0.items() if k != "old_value"}
+    path.write_text(json.dumps(shapeless) + "\n", encoding="utf-8")
+    with pytest.raises(planned.PlanError, match="not an image_kind plan record"):
+        planned.read_kinds_plan(path)
+
+
+def test_an_applied_plan_moves_the_state_and_retiers_the_rows_it_moved() -> None:
+    rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2, tier="C"), _row(3, tier="B")]}
+    plan = [
+        _planned(1, "is_excluded", False, True),
+        _planned(1, "is_hero", True, False),
+        _planned(2, "is_hero", False, True),
+        _planned(3, "original_url", rows[SITE][2]["original_url"], "https://upload.x/New.jpg"),
+        _planned(3, "image_kind", None, "artifact"),
+    ]
+    counts = worklist.fold_applied(
+        rows, [(Path("PLANNED.jsonl"), plan)], _tier_of({1: "C", 2: "C", 3: "D"})
+    )
+    assert counts == {"PLANNED.jsonl": 5}
+    got = [(r["id"], r["is_hero"], r["is_excluded"], r["_tier"]) for r in rows[SITE]]
+    assert got == [(1, False, True, "C"), (2, True, False, "A"), (3, False, False, "D")]
+    assert rows[SITE][2]["original_url"] == "https://upload.x/New.jpg"
+    assert rows[SITE][2]["image_kind"] == "artifact"
+
+
+def test_an_applied_plan_is_folded_only_onto_the_old_values_it_names() -> None:
+    def state() -> dict[str, list[dict[str, Any]]]:
+        return {SITE: [_row(1, is_hero=True, tier="A"), _row(2)]}
+
+    def fold(rows: dict[str, list[dict[str, Any]]], *plan: planned.PlannedRow) -> None:
+        worklist.fold_applied(rows, [(Path("PLANNED.jsonl"), list(plan))], _tier_of({}))
+
+    rows = state()
+    fold(rows, _planned(1, "is_excluded", False, True))
+    with pytest.raises(worklist.WorklistError, match="is True in the state, the applied plan"):
+        fold(rows, _planned(1, "is_excluded", False, True))  # the same plan folded twice
+    other = "ffffffff-0000-4000-8000-000000000000"
+    with pytest.raises(worklist.WorklistError, match="is not a row of site"):
+        fold(state(), _planned(1, "is_excluded", False, True, other))
+    with pytest.raises(worklist.WorklistError, match="is not a row of site"):
+        fold(state(), _planned(9, "is_excluded", False, True))
+    with pytest.raises(worklist.WorklistError, match="not a column a gallery plan writes"):
+        fold(state(), _planned(2, "license", "CC BY-SA 4.0", "CC0"))
+
+
+def _liveness_store() -> list[dict[str, Any]]:
+    return [
+        _live_line("Dead.jpg", liveness.DELETED_COPYVIO, [1], log={"logid": 7}),
+        _live_line(
+            "Old.jpg",
+            liveness.MOVED_WITHOUT_REDIRECT,
+            [2],
+            move_target={
+                "title": "File:New.jpg",
+                "class": liveness.LIVE,
+                "url": "https://u/New.jpg",
+            },
+        ),
+        _live_line("Redirected.jpg", liveness.MOVED_WITH_REDIRECT, [3]),
+        _live_line("Gone.jpg", liveness.MISSING_NO_LOG, [4]),
+    ]
+
+
+def test_a_state_that_has_not_folded_the_liveness_write_in_is_refused() -> None:
+    rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2), _row(3), _row(4)]}
+    with pytest.raises(worklist.WorklistError, match="fold the liveness write in"):
+        worklist.liveness_blocked(_liveness_store(), rows)
+    rows[SITE][0].update(is_excluded=True, is_hero=False)
+    assert worklist.liveness_blocked(_liveness_store(), rows) == {
+        1: liveness.DELETED_COPYVIO,
+        2: liveness.MOVED_WITHOUT_REDIRECT,  # not repointed yet
+        4: liveness.MISSING_NO_LOG,
+    }
+    rows[SITE][1]["original_url"] = "https://u/New.jpg"  # L2 applied: live again
+    assert set(worklist.liveness_blocked(_liveness_store(), rows)) == {1, 4}
+    with pytest.raises(worklist.WorklistError, match="which the state does not hold"):
+        worklist.liveness_blocked([_live_line("X.jpg", liveness.DELETED_OTHER, [99])], rows)
+
+
+def test_no_vision_rule_plans_on_a_row_whose_file_is_not_live() -> None:
+    rows = {SITE: [_row(1, tier="B"), _row(2, tier="B")]}
+    gallery = {1: _v(1, kind="people", other_site=True), 2: _v(2, kind="artifact")}
+    planned_rows, listed = decide.plan_vision(
+        rows, {}, gallery, {}, ALL, {}, {1: liveness.MISSING_NO_LOG}
+    )
+    assert {(p.key, p.column) for p in planned_rows} == {(2, "image_kind")}
+    assert any(item.get("image_id") == 1 and "missing-no-log" in item["why"] for item in listed)
+
+
+def test_h1_never_promotes_a_row_whose_file_is_not_live() -> None:
+    rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2, tier="D"), _row(3, tier="C")]}
+    gallery = {1: _v(1, kind="painting_or_artwork"), 2: _v(2), 3: _v(3)}
+    hero = {2: _v(2, vision.HERO), 3: _v(3, vision.HERO)}
+    planned_rows, _ = decide.plan_vision(
+        rows, {}, gallery, hero, ALL, _truth(1, 2, 3), {2: liveness.MISSING_NO_LOG}
+    )
+    moves = [(p.key, p.new) for p in planned_rows if p.column == "is_hero"]
+    assert moves == [(1, False), (3, True)]  # 2 outranks 3 (tier D), but its file is gone
+
+
+def test_h1_leaves_a_hero_whose_file_is_not_live_to_the_liveness_lane() -> None:
+    rows = {SITE: [_row(1, is_hero=True, tier="A"), _row(2, tier="D")]}
+    gallery = {1: _v(1, kind="painting_or_artwork"), 2: _v(2)}
+    hero = {2: _v(2, vision.HERO)}
+    planned_rows, listed = decide.plan_vision(
+        rows, {}, gallery, hero, ALL, _truth(1, 2), {1: liveness.MISSING_NO_LOG}
+    )
+    assert [p for p in planned_rows if p.column == "is_hero"] == []
+    assert any("the liveness lane owns it" in item["why"] for item in listed)
+
+
+def test_l1_never_hands_the_hero_to_another_file_that_is_not_live() -> None:
+    rows = {
+        SITE: [
+            _row(1, is_hero=True, tier="A", width=800, height=533),
+            _row(2, tier="D", width=1600, height=1200),
+            _row(3, tier="C", width=1600, height=1200),
+        ]
+    }
+    lines = [
+        _live_line("File_1.jpg", liveness.DELETED_COPYVIO, [1], log={"logid": 7}),
+        _live_line("File_2.jpg", liveness.PAGE_WITHOUT_FILE, [2]),
+    ]
+    planned_rows, _ = decide.plan_liveness(lines, rows, _truth(2, 3))
+    assert [p.key for p in planned_rows if p.role == "hero-promote"] == [3]
+
+
+def test_the_job_builder_refuses_a_state_behind_the_liveness_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = tmp_path / "store"
+    liveness.write_store(store, [_liveness_store()[0]], {"snapshot_exported_at": "x"})
+    state = _state([_row(1, is_hero=True, tier="A"), _row(2)])
+    monkeypatch.setattr(worklist, "state_from_args", lambda args: state)
+    argv = ["jobs", "--stage", "G3", "--liveness-store", str(store), "--out", str(tmp_path / "J")]
+    with pytest.raises(worklist.WorklistError, match="fold the liveness write in"):
+        worklist.main(argv)
+    state.by_site[SITE][0].update(is_excluded=True, is_hero=False)
+    assert worklist.main(argv) == 0
+    assert [j.image_id for j in vision.read_jobs(tmp_path / "J")] == [2]
+
+
+def test_decide_refuses_to_plan_vision_on_a_state_behind_the_liveness_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = tmp_path / "store"
+    liveness.write_store(store, [_liveness_store()[0]], {"snapshot_exported_at": "x"})
+    state = _state([_row(1, is_hero=True, tier="A"), _row(2)])
+    monkeypatch.setattr(worklist, "state_from_args", lambda args: state)
+    monkeypatch.setattr(decide, "load_truth", lambda path: {})
+    argv = ["vision", "--run-dir", str(tmp_path / "run"), "--admission", str(tmp_path / "A")]
+    argv += ["--liveness-store", str(store), "--chunk", "0"]
+    with pytest.raises(worklist.WorklistError, match="fold the liveness write in"):
+        decide.main(argv)

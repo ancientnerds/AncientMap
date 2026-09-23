@@ -12,8 +12,17 @@ hero flag did not move must get exactly the tier T10 recorded (`hero_repair.plan
 promoted row must have been C or D, every demoted row A. One disagreement stops the module.
 
 The current state is the snapshot plus the hero moves (`hero_repair/PLAN.jsonl`, whose old values
-are checked against the snapshot row by row). The journal holds no other `wiki_images` change
-except `image_kind` on 105 rows (design, item 5), and no tier reads `image_kind`.
+are checked against the snapshot row by row), plus every gallery plan that has reached production
+since, folded in the order it was applied and with the same old-value check: the `image_kind` plans
+of G0 and G0b (``--kinds-from``; the snapshot predates migration 0019, so every row starts NULL)
+and the plans `decide.py` writes (``--applied``) - the liveness store's PLANNED.jsonl (L1/L2), then
+each G chunk. A plan folded twice, out of order or onto another snapshot is refused, never merged:
+a state that is one write behind production plans old values production no longer holds, and the
+chunk writer would refuse every such chunk. A row whose hero flag or Commons identity an applied
+plan moved is re-tiered with T10's own function; nothing else changes a tier.
+
+After the liveness write, `jobs` refuses a state that has not folded it in (``--liveness-store``,
+`liveness_blocked`), so no call is spent on a deleted file.
 
 The stages (design S8), all in export order, chunked by 100 sites
 -----------------------------------------------------------------
@@ -29,7 +38,9 @@ A job is one question about one image (`vision.Job`); the ledger never asks a qu
 
 Usage:
     worklist.py tiers --hero-moves PLAN.jsonl [--snapshot DIR] [--cache DIR] [--t10 FINDINGS]
-    worklist.py jobs --stage G3|G2|G4 --hero-moves PLAN.jsonl --out JOBS.jsonl [--chunk N]
+                      [--kinds-from G0-PLAN.jsonl ...] [--applied PLANNED.jsonl ...]
+    worklist.py jobs --stage G3|G2|G4 --hero-moves PLAN.jsonl --liveness-store DIR
+                     --out JOBS.jsonl [--chunk N] [--kinds-from ...] [--applied ...]
     worklist.py jobs --stage G3-strict|G4-escalation --ledger VERDICTS.jsonl ...
 """
 
@@ -55,7 +66,8 @@ from census.snapshot import Snapshot  # noqa: E402
 from census.tests import t10_gallery_tiers as T10  # noqa: E402
 from hero_repair.plan import commons_file_name, load_tiers  # noqa: E402
 
-from gallery_audit import vision  # noqa: E402
+from gallery_audit import liveness, vision  # noqa: E402
+from gallery_audit.planned import PlannedRow, read_kinds_plan, read_plan  # noqa: E402
 from pipeline.video.shorts_select import image_title  # noqa: E402
 
 DEFAULT_SNAPSHOT = ROOT / "output" / "remediation" / "snapshot"
@@ -229,8 +241,127 @@ def retier(
     }
 
 
-def build_state(snapshot_dir: Path, cache_dir: Path, hero_moves: Path, t10_findings: Path) -> State:
-    """The snapshot, the hero moves and T10's index, folded into the current tiered state."""
+#: The columns a gallery plan writes (`decide.py`, G0/G0b), and so the columns an applied plan may
+#: move in the current state. Values are compared as the snapshot stores them (the two flags are
+#: real booleans on all 49,691 rows, measured 2026-09-23).
+APPLIED_COLUMNS = ("is_excluded", "is_hero", "image_kind", "commons_page_url", "original_url")
+#: The columns whose change can change a tier: tier A is the hero flag, and T10 reads the Commons
+#: file name from the two URL columns (`commons_file_name`).
+TIER_COLUMNS = ("is_hero", "commons_page_url", "original_url")
+
+
+def fold_applied(
+    rows_by_site: Mapping[str, Sequence[dict[str, Any]]],
+    plans: Sequence[tuple[Path, Sequence[PlannedRow]]],
+    tier_of: Callable[[Mapping[str, Any], str], tuple[str, str]],
+) -> dict[str, int]:
+    """Apply the plans that reached production to the current rows, in the order they were applied.
+
+    Every planned row must find its row on the site it names, holding the planned old value - the
+    check the chunk writer's transaction made in production - so a plan folded twice, out of order
+    or onto another snapshot is refused. A row whose hero flag or Commons identity moved is
+    re-tiered with T10's own function (`tier_of`). Returns the rows folded per plan.
+    """
+    rows = {
+        int(row["id"]): (sid, row) for sid, site_rows in rows_by_site.items() for row in site_rows
+    }
+    retiered: set[int] = set()
+    counts: dict[str, int] = {}
+    for path, planned in plans:
+        for change in planned:
+            if change.table != "wiki_images" or change.column not in APPLIED_COLUMNS:
+                raise WorklistError(
+                    f"{path}: {change.table}.{change.column} is not a column a gallery plan writes"
+                )
+            hit = rows.get(change.key)
+            if hit is None or hit[0] != change.site_id:
+                raise WorklistError(
+                    f"{path}: image {change.key} is not a row of site {change.site_id} in the state"
+                )
+            row = hit[1]
+            current = row.get(change.column)
+            if current != change.old:
+                raise WorklistError(
+                    f"{path}: image {change.key} {change.column} is {current!r} in the state, the "
+                    f"applied plan expected {change.old!r} - fold the plans in the order they were "
+                    "applied, each once"
+                )
+            row[change.column] = change.new
+            if change.column in TIER_COLUMNS:
+                retiered.add(change.key)
+        counts[str(path)] = len(planned)
+    for image_id in sorted(retiered):
+        sid, row = rows[image_id]
+        row["_tier"], row["_tier_reason"] = (
+            (HERO, "hero") if row.get("is_hero") else tier_of(row, sid)
+        )
+    return counts
+
+
+def liveness_row(
+    by_id: Mapping[int, Mapping[str, Any]], line: Mapping[str, Any], image_id: int
+) -> Mapping[str, Any]:
+    """The state's row for an image a liveness line names - or a refusal: a store about rows the
+    state does not hold belongs to another snapshot."""
+    row = by_id.get(int(image_id))
+    if row is None:
+        raise WorklistError(
+            f"liveness line {line['file']!r} names image {image_id}, which the state does not hold"
+        )
+    return row
+
+
+def liveness_blocked(
+    lines: Iterable[Mapping[str, Any]], rows_by_site: Mapping[str, Sequence[Mapping[str, Any]]]
+) -> dict[int, str]:
+    """The rows no vision rule may plan on (image id -> class), refusing a state that predates the
+    liveness write.
+
+    A deleted file's rows must be excluded in the state; otherwise the L1 write has not been folded
+    in (``--applied <store>/PLANNED.jsonl``) and every plan built on that state would carry old
+    values production no longer holds. Returned are the rows of every file that is not live, except
+    a file that only redirects (its page link and its offsite copy still stand) and a renamed row
+    that already points at its live target (L2 applied).
+    """
+    by_id = {int(row["id"]): row for rows in rows_by_site.values() for row in rows}
+    blocked: dict[int, str] = {}
+    for line in lines:
+        cls = line["class"]
+        if cls in (liveness.LIVE, liveness.MOVED_WITH_REDIRECT):
+            continue
+        target = line.get("move_target") or {}
+        for image_id in line["image_ids"]:
+            row = liveness_row(by_id, line, image_id)
+            if cls in (liveness.DELETED_COPYVIO, liveness.DELETED_OTHER) and not row.get(
+                "is_excluded"
+            ):
+                raise WorklistError(
+                    f"image {image_id}: Commons reports {line['file']!r} as {cls}, but the state "
+                    "still serves it - fold the liveness write in (--applied "
+                    "<store>/PLANNED.jsonl) before planning"
+                )
+            if (
+                cls == liveness.MOVED_WITHOUT_REDIRECT
+                and target.get("class") == liveness.LIVE
+                and row.get("original_url") == target.get("url")
+            ):
+                continue
+            blocked[int(image_id)] = cls
+    return blocked
+
+
+def build_state(
+    snapshot_dir: Path,
+    cache_dir: Path,
+    hero_moves: Path,
+    t10_findings: Path,
+    *,
+    kinds_from: Sequence[Path] = (),
+    applied: Sequence[Path] = (),
+) -> State:
+    """The snapshot, the hero moves, the applied gallery plans and T10's index, folded into the
+    current tiered state. `kinds_from` (G0/G0b) is folded before `applied` (decide's plans), each
+    in the order given - the order the plans reached production."""
     snap = Snapshot(snapshot_dir)
     snap.verify()
     sites = [site for site in snap.sites if site.get("source_id") == CURATED_SOURCE]
@@ -247,6 +378,13 @@ def build_state(snapshot_dir: Path, cache_dir: Path, hero_moves: Path, t10_findi
     by_site, report = retier(
         sites, rows_by_site, load_hero_moves(hero_moves), load_tiers(t10_findings), tier_of
     )
+    for rows in by_site.values():
+        for row in rows:
+            # the snapshot predates migration 0019, which added the column without a default
+            row["image_kind"] = None
+    plans = [(path, read_kinds_plan(path)) for path in kinds_from]
+    plans += [(path, read_plan(path)) for path in applied]
+    report["folded"] = fold_applied(by_site, plans, tier_of)
     for rows in by_site.values():
         for row in rows:
             name = commons_file_name(row)
@@ -378,6 +516,33 @@ def strict_jobs(
 
 
 # ------------------------------------------------------------------------------ CLI
+def add_state_flags(parser: argparse.ArgumentParser) -> None:
+    """The flags that fold applied plans into the state - one spelling for every CLI that builds it."""
+    parser.add_argument(
+        "--kinds-from",
+        action="append",
+        default=[],
+        help="a G0/G0b image_kind plan that reached production (repeat, in the order applied)",
+    )
+    parser.add_argument(
+        "--applied",
+        action="append",
+        default=[],
+        help="a decide.py plan that reached production (repeat, in the order applied)",
+    )
+
+
+def state_from_args(args: argparse.Namespace) -> State:
+    return build_state(
+        Path(args.snapshot),
+        Path(args.cache),
+        Path(args.hero_moves),
+        Path(args.t10),
+        kinds_from=[Path(p) for p in args.kinds_from],
+        applied=[Path(p) for p in args.applied],
+    )
+
+
 def _write(path: Path, jobs: Sequence[vision.Job]) -> None:
     digest = vision.write_jobs(path, jobs)
     print(f"{len(jobs)} jobs -> {path} (sha256 {digest})")
@@ -393,7 +558,13 @@ def main(argv: list[str] | None = None) -> int:
         cmd.add_argument("--t10", default=str(DEFAULT_T10))
         cmd.add_argument("--hero-moves", default=str(DEFAULT_HERO_MOVES))
         cmd.add_argument("--out", default=None)
+        add_state_flags(cmd)
         if name == "jobs":
+            cmd.add_argument(
+                "--liveness-store",
+                required=True,
+                help="the liveness store whose L1/L2 write the state must have folded in",
+            )
             cmd.add_argument(
                 "--stage", required=True, choices=(G3, G3_STRICT, G2, G4, G4_ESCALATION)
             )
@@ -405,9 +576,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--hit-sites", default=None, help="a JSON list of site ids (escalation)"
             )
     args = parser.parse_args(argv)
-    state = build_state(
-        Path(args.snapshot), Path(args.cache), Path(args.hero_moves), Path(args.t10)
-    )
+    state = state_from_args(args)
     if args.command == "tiers":
         report = tier_counts(state)
         text = json.dumps(report, indent=1, sort_keys=True)
@@ -415,6 +584,9 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.out).write_text(text + "\n", encoding="utf-8")
         print(text)
         return 0
+    liveness_blocked(
+        liveness.load_store(Path(args.liveness_store) / "NOT_LIVE.jsonl"), state.by_site
+    )
     site_ids = None if args.chunk is None else chunks(state)[args.chunk]
     if args.out is None:
         raise SystemExit("--out is required for jobs")

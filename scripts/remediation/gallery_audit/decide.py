@@ -37,7 +37,7 @@ import json
 import sys
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -59,6 +59,7 @@ from hero_repair.plan import (  # noqa: E402
 
 from gallery_audit import liveness, vision, worklist  # noqa: E402
 from gallery_audit.persist_verdicts import VOCAB  # noqa: E402
+from gallery_audit.planned import PlannedRow, write_plan  # noqa: E402
 from gallery_audit.worklist import served_row  # noqa: E402
 
 RULES: dict[str, str] = {
@@ -120,22 +121,6 @@ def load_admission(path: Path) -> Admission:
     if not all(isinstance(v, bool) for v in admitted.values()):
         raise DecideError(f"{path}: an admission that is not a boolean")
     return Admission(thresholds_sha256=str(data["thresholds_sha256"]), **admitted)
-
-
-@dataclass(frozen=True)
-class PlannedRow:
-    table: str
-    key: int
-    site_id: str
-    column: str
-    old: Any
-    new: Any
-    rule: str
-    role: str
-    evidence: dict[str, Any]
-
-    def as_json(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 def _verdict_evidence(verdict: vision.Verdict, rule: str) -> dict[str, Any]:
@@ -215,8 +200,13 @@ def plan_vision(
     hero: Mapping[int, vision.Verdict],
     admission: Admission,
     truth: Mapping[str, Mapping[str, Any]],
+    blocked: Mapping[int, str],
 ) -> tuple[list[PlannedRow], list[dict[str, Any]]]:
-    """K1, K2, X1-X3 and H1 over the current rows. Returns the planned rows and what was listed."""
+    """K1, K2, X1-X3 and H1 over the current rows. Returns the planned rows and what was listed.
+
+    `blocked` holds the rows whose Commons file is not live (`worklist.liveness_blocked`): no rule
+    here plans on them - they are listed instead - and none of them can become a hero.
+    """
     planned: list[PlannedRow] = []
     listed: list[dict[str, Any]] = []
     for site_id, rows in rows_by_site.items():
@@ -226,6 +216,14 @@ def plan_vision(
             image_id = int(row["id"])
             first = gallery.get(image_id)
             if first is None:
+                continue
+            if image_id in blocked:
+                listed.append(
+                    {
+                        "image_id": image_id,
+                        "why": f"liveness: its Commons file is {blocked[image_id]} - no vision rule plans on it",
+                    }
+                )
                 continue
             kind = first.verdict["kind"]
             current = kinds.get(image_id)
@@ -303,7 +301,9 @@ def plan_vision(
                     break
         if admission.strict:
             planned.extend(
-                _plan_hero(site_id, rows, excluded_now, hero_dropped, gallery, hero, truth, listed)
+                _plan_hero(
+                    site_id, rows, excluded_now, hero_dropped, gallery, hero, truth, blocked, listed
+                )
             )
     return planned, listed
 
@@ -373,6 +373,7 @@ def _plan_hero(
     gallery: Mapping[int, vision.Verdict],
     hero: Mapping[int, vision.Verdict],
     truth: Mapping[str, Mapping[str, Any]],
+    blocked: Mapping[int, str],
     listed: list[dict[str, Any]],
 ) -> list[PlannedRow]:
     """H1 for one site: a new hero when the served image is excluded or fails the strict pass."""
@@ -391,8 +392,24 @@ def _plan_hero(
         )
     if state != FAILS:
         return []
+    current_hero = [
+        row for row in rows if row.get("is_hero") and int(row["id"]) not in hero_dropped
+    ]
+    if any(int(row["id"]) in blocked for row in current_hero):
+        listed.append(
+            {
+                "site_id": site_id,
+                "image_id": served_id,
+                "why": "H1: the hero's Commons file is not live - the liveness lane owns it, no vision rule moves it",
+            }
+        )
+        return []
     live = [
-        row for row in rows if not row.get("is_excluded") and int(row["id"]) not in excluded_now
+        row
+        for row in rows
+        if not row.get("is_excluded")
+        and int(row["id"]) not in excluded_now
+        and int(row["id"]) not in blocked
     ]
     confirmed = [
         row
@@ -412,9 +429,6 @@ def _plan_hero(
     chosen = ranked[0]
     chosen_id = int(chosen["id"])
     out: list[PlannedRow] = []
-    current_hero = [
-        row for row in rows if row.get("is_hero") and int(row["id"]) not in hero_dropped
-    ]
     for row in current_hero:
         out.append(
             PlannedRow(
@@ -463,19 +477,26 @@ def plan_liveness(
     rows_by_site: Mapping[str, Sequence[Mapping[str, Any]]],
     truth: Mapping[str, Mapping[str, Any]],
 ) -> tuple[list[PlannedRow], list[dict[str, Any]]]:
-    """L1 and L2 over the liveness store's non-live lines."""
+    """L1 and L2 over the liveness store's non-live lines.
+
+    A hero L1 takes is replaced by the hero repair's own rule among the rows that stay live: the
+    rows of every file the store lists as not live (a redirect alone aside) are no candidate.
+    """
+    lines = list(lines)
     by_id = {int(row["id"]): row for rows in rows_by_site.values() for row in rows}
+    not_live = {
+        int(image_id)
+        for line in lines
+        if line["class"] not in (liveness.LIVE, liveness.MOVED_WITH_REDIRECT)
+        for image_id in line["image_ids"]
+    }
     planned: list[PlannedRow] = []
     listed: list[dict[str, Any]] = []
     dropped_heroes: dict[str, list[int]] = defaultdict(list)
     for line in lines:
         cls = line["class"]
         for image_id in line["image_ids"]:
-            row = by_id.get(int(image_id))
-            if row is None:
-                raise DecideError(
-                    f"liveness line {line['file']!r} names image {image_id}, which the state does not hold"
-                )
+            row = worklist.liveness_row(by_id, line, image_id)
             site_id = str(row["site_id"])
             if cls in (liveness.DELETED_COPYVIO, liveness.DELETED_OTHER):
                 if row.get("is_excluded"):
@@ -557,7 +578,7 @@ def plan_liveness(
             _replace_hero(
                 site_id,
                 rows_by_site[site_id],
-                set(ids) | {r.key for r in planned if r.column == "is_excluded"},
+                set(ids) | {r.key for r in planned if r.column == "is_excluded"} | not_live,
                 truth,
                 listed,
             )
@@ -664,18 +685,6 @@ def check_plan(
     return {"planned": len(planned), "sites_left_without_a_live_image": emptied}
 
 
-def load_kinds(paths: Iterable[Path]) -> dict[int, str]:
-    """`image_kind` values already written, from the plans that wrote them (G0, G0b)."""
-    out: dict[int, str] = {}
-    for path in paths:
-        for text in path.read_text(encoding="utf-8").splitlines():
-            record = json.loads(text)
-            if record.get("column") != "image_kind":
-                raise DecideError(f"{path}: a record that is not an image_kind write")
-            out[int(record["image_id"])] = str(record["new_value"])
-    return out
-
-
 def verify_evidence(
     planned: Sequence[PlannedRow], ledger: Sequence[vision.LedgerLine], images: vision.Images
 ) -> list[str]:
@@ -724,15 +733,6 @@ def verify_evidence(
     return problems
 
 
-def write_plan(path: Path, planned: Sequence[PlannedRow]) -> str:
-    text = "".join(
-        json.dumps(row.as_json(), ensure_ascii=False, sort_keys=True) + "\n" for row in planned
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
 def main(argv: list[str] | None = None) -> int:
     """`decide.py liveness --store DIR --hero-moves PLAN.jsonl`: the L1/L2 rows of a liveness store,
     written next to it as PLANNED.jsonl (+ LISTED.json). Offline; the chunk writer applies them."""
@@ -744,13 +744,16 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--cache", default=str(worklist.DEFAULT_CACHE))
     live.add_argument("--t10", default=str(worklist.DEFAULT_T10))
     live.add_argument("--hero-moves", default=str(worklist.DEFAULT_HERO_MOVES))
+    worklist.add_state_flags(live)
     vis = sub.add_parser("vision")
     vis.add_argument(
         "--run-dir", required=True, help="holds VERDICTS.jsonl; PLANNED.jsonl goes here"
     )
     vis.add_argument("--admission", required=True, help="the C1 ADMISSION.json")
     vis.add_argument(
-        "--kinds-from", action="append", default=[], help="plans that wrote image_kind"
+        "--liveness-store",
+        required=True,
+        help="the liveness store whose L1/L2 write the state must have folded in (--applied)",
     )
     vis.add_argument("--chunk", type=int, required=True, help="0-based chunk of 100 sites")
     for flag, default in (
@@ -760,23 +763,26 @@ def main(argv: list[str] | None = None) -> int:
         ("--hero-moves", worklist.DEFAULT_HERO_MOVES),
     ):
         vis.add_argument(flag, default=str(default))
+    worklist.add_state_flags(vis)
     args = parser.parse_args(argv)
-    state = worklist.build_state(
-        Path(args.snapshot), Path(args.cache), Path(args.hero_moves), Path(args.t10)
-    )
+    state = worklist.state_from_args(args)
     truth = load_truth(Path(args.cache) / "commons_imageinfo.json")
     if args.command == "vision":
+        blocked = worklist.liveness_blocked(
+            liveness.load_store(Path(args.liveness_store) / "NOT_LIVE.jsonl"), state.by_site
+        )
         run_dir = Path(args.run_dir)
         ledger = vision.Ledger(run_dir / "VERDICTS.jsonl").lines
         site_ids = worklist.chunks(state)[args.chunk]
         rows = {sid: state.by_site[sid] for sid in site_ids}
         planned, listed = plan_vision(
             rows,
-            load_kinds(Path(p) for p in args.kinds_from),
+            {int(row["id"]): row["image_kind"] for site in rows.values() for row in site},
             vision.verdicts_by_image(ledger, vision.GALLERY_PROMPT_ID),
             vision.verdicts_by_image(ledger, vision.HERO_PROMPT_ID),
             load_admission(Path(args.admission)),
             truth,
+            blocked,
         )
         report = check_plan(planned, rows)
         problems = verify_evidence(planned, ledger, vision.Images())

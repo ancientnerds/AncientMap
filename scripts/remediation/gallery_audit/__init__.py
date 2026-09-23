@@ -8,6 +8,8 @@ design_texts_images_2026-09-22.json, entry 7).
 ``labels``            S7: the three label sets calibration is measured against.
 ``calibrate``         S7: the sealed thresholds and the admission of each trigger.
 ``decide``            S9: the sealed rule table that turns verdicts into planned rows.
+``planned``           the planned-row record, its writer and the strict readers that fold an
+                      applied plan back into the current state.
 
 Nothing in this package writes to a database. Every production write goes through a separate,
 journalled chunk writer.
