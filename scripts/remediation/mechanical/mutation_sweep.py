@@ -44,6 +44,10 @@ SHAPE = MECHANICAL / "site_type_shape.py"
 TEXT = REPO / "pipeline/utils/text.py"
 PROD_WRITE = REPO / "scripts/remediation/prod_write.py"
 JOURNAL_CHAIN = REPO / "scripts/remediation/journal_chain.py"
+CARD_STATS = MECHANICAL / "card_stats.py"
+SCOPE = MECHANICAL / "scope.py"
+REVERSAL = MECHANICAL / "reversal.py"
+GENERATOR = REPO / "api/cardgame/generator.py"
 TESTFILE = "tests/remediation/test_mechanical.py"
 UK_TESTS = "tests/remediation/test_mechanical_uk.py"
 PERIOD_TESTS = "tests/remediation/test_mechanical_period_name.py"
@@ -51,6 +55,11 @@ SHAPE_TESTS = "tests/remediation/test_mechanical_site_type.py"
 PROD_TESTS = "tests/remediation/test_prod_write.py"
 CHAIN_TESTS = "tests/remediation/test_journal_chain.py"
 LOADER_TESTS = "tests/remediation/test_mechanical_loaders.py"
+CELL_TESTS = "tests/remediation/test_mechanical_cells.py"
+CARD_TESTS = "tests/remediation/test_mechanical_card_stats.py"
+SCOPE_TESTS = "tests/remediation/test_mechanical_scope.py"
+REVERSAL_TESTS = "tests/remediation/test_mechanical_reversal.py"
+GENERATOR_TESTS = "tests/api/test_cardgame_generator_stats.py"
 
 #: The interpreter that runs the sweep runs the tests too: a hard-coded `.venv` path does not exist in
 #: a git worktree, and a second interpreter could test different packages than the one reporting.
@@ -201,25 +210,25 @@ CASES: list[Case] = [
     guard(
         "plan-side old value",
         APPLY,
-        "        if not r.old_value:",
+        "    if not r.old_value:",
         "test_the_plan_side_mirror_refuses_a_corrupt_record",
     ),
     guard(
         "plan-side new value",
         APPLY,
-        "        if not r.new_value:",
+        "    if not r.new_value:",
         "test_the_plan_side_mirror_refuses_a_corrupt_record",
     ),
     guard(
         "plan-side is a change",
         APPLY,
-        "        if r.new_value == r.old_value:",
+        "    if r.new_value == r.old_value:",
         "test_the_plan_side_mirror_refuses_a_corrupt_record",
     ),
     guard(
         "plan-side column length",
         APPLY,
-        "        if len(r.new_value) > lane.max_chars:",
+        "    if len(r.new_value) > lane.max_chars:",
         "test_the_plan_side_mirror_refuses_a_corrupt_record",
     ),
     guard(
@@ -231,7 +240,7 @@ CASES: list[Case] = [
     guard(
         "plan-side duplicates",
         APPLY,
-        "        if r.site_id in seen:",
+        "        if cell in seen:",
         "test_the_same_site_twice_is_refused",
     ),
     Case(
@@ -299,14 +308,14 @@ CASES: list[Case] = [
     guard(
         "plan-side owned value",
         APPLY,
-        "        if lane.allowed_new_values and owned not in lane.allowed_new_values:",
+        "    if lane.allowed_new_values and owned not in lane.allowed_new_values:",
         "test_the_plan_side_mirror_refuses_a_value_the_lane_does_not_own",
     ),
     Case(
         "plan-side reversal owns its old value",
         APPLY,
-        "        owned = r.old_value if rollback else r.new_value",
-        "        owned = r.new_value",
+        "    owned = r.old_value if rollback else r.new_value",
+        "    owned = r.new_value",
         "test_a_reversal_that_undoes_a_value_the_lane_never_wrote_is_refused",
     ),
     guard(
@@ -364,8 +373,8 @@ CASES: list[Case] = [
     Case(
         "the rollback rehearsal reads each row's value",
         APPLY,
-        " WHERE u.{column} IS NOT DISTINCT FROM p.written",
-        " WHERE u.{column} IS NOT NULL",
+        '        holds = f"u.{lane.column} IS NOT DISTINCT FROM p.written"',
+        '        holds = f"u.{lane.column} IS NOT NULL"',
         "test_the_rollback_rehearsal_reads_name_the_planned_rows",
     ),
     guard(
@@ -388,7 +397,7 @@ CASES: list[Case] = [
             "test_a_lane_that_would_splice_something_unsafe_into_sql_is_refused",
         )
         for what, needle in (
-            ("an unsafe column", "        if not _IDENTIFIER.match(self.column):"),
+            ("an unsafe column", "    if not _IDENTIFIER.match(lane.column):"),
             (
                 "an unsafe temp table",
                 "        if not _IDENTIFIER.match(self.plan_table) or not "
@@ -396,14 +405,14 @@ CASES: list[Case] = [
             ),
             ("an unsafe label", "        if not _LABEL.match(self.label):"),
             ("an unsafe key prefix", "        if not _KEY_PREFIX.match(self.key_prefix):"),
-            ("a non-positive width", "        if self.max_chars <= 0:"),
+            ("a non-positive width", "    if lane.max_chars <= 0:"),
             (
                 "an incomplete journal identity",
                 "        if not self.run_stamp or not self.test_id or not self.confidence:",
             ),
             (
                 "an unwritable owned value",
-                "            if not value or len(value) > self.max_chars:",
+                "        if not value or len(value) > lane.max_chars:",
             ),
         )
     ),
@@ -1183,6 +1192,601 @@ CASES: list[Case] = [
             ),
         )
     ),
+    # ------------------------------------------ cell lanes (2026-09-23): the lane shape
+    *(
+        guard(f"cells: lane refuses {label}", LANE, needle, test, CELL_TESTS)
+        for label, needle, test in (
+            (
+                "a table not keyed by a site id",
+                "        if TARGET_KEYS.get(self.table) != self.key_column:",
+                "test_a_target_must_be_keyed_by_a_site_id",
+            ),
+            (
+                "u as anything but the site",
+                '        if not _IDENTIFIER.match(self.alias) or (self.alias == "u") != self.is_site:',
+                "test_u_is_the_site_and_only_the_site",
+            ),
+            (
+                "an unsafe cell column",
+                "        if not _IDENTIFIER.match(self.name):",
+                "test_a_column_that_would_splice_something_unsafe_is_refused",
+            ),
+            (
+                "a cast type outside the closed set",
+                "        if self.sql_type not in CELL_TYPES:",
+                "test_a_column_that_would_splice_something_unsafe_is_refused",
+            ),
+            (
+                "a non-positive cell width",
+                "        if self.max_chars is not None and self.max_chars <= 0:",
+                "test_a_column_that_would_splice_something_unsafe_is_refused",
+            ),
+            (
+                "an unwritable owned cell value",
+                "            if not value or (self.max_chars is not None and len(value) > self.max_chars):",
+                "test_a_column_that_would_splice_something_unsafe_is_refused",
+            ),
+            (
+                "a cell lane that names a column",
+                "    if lane.column or lane.max_chars or lane.allowed_new_values:",
+                "test_a_cell_lane_names_its_columns_only_in_cells",
+            ),
+            (
+                "a cell named twice",
+                "    if len(set(names)) != len(names):",
+                "test_a_cell_lane_names_its_columns_only_in_cells",
+            ),
+            (
+                "a column lane off unified_sites or reversing",
+                "    if not lane.target.is_site or lane.reverses_journal:",
+                "test_a_column_lane_writes_unified_sites_and_reverses_nothing",
+            ),
+            (
+                "a cell key without its column",
+                "        if column is None:",
+                "test_a_cell_key_names_its_column_and_a_reversal_its_suffix",
+            ),
+            (
+                "a column lane key of another column",
+                "            if column not in (None, self.column):",
+                "test_a_cell_key_names_its_column_and_a_reversal_its_suffix",
+            ),
+            (
+                "an unknown lane name",
+                "    if match is None:",
+                "test_a_card_stats_wave_resolves_and_nothing_else_does",
+            ),
+        )
+    ),
+    Case(
+        "cells: a wave label is a date",
+        LANE,
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)$")',
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(.+)$")',
+        "test_a_card_stats_wave_resolves_and_nothing_else_does",
+        CELL_TESTS,
+    ),
+    Case(
+        "scope: no longitude is inside the window",
+        LANE,
+        '    return f"({p}lon IS NOT NULL AND {date} > {cutoff})"',
+        '    return f"({date} > {cutoff})"',
+        "test_the_residual_is_the_project_s_own_rule_negated",
+        SCOPE_TESTS,
+    ),
+    # ------------------------------------------------------- cell lanes: the plan-side mirror
+    *(
+        guard(f"cells: plan-side {label}", APPLY, needle, test, CELL_TESTS)
+        for label, needle, test in (
+            (
+                "a column lane record of another column",
+                "        if r.column not in (None, lane.column):",
+                "test_a_column_lane_record_may_not_name_another_column",
+            ),
+            (
+                "an integer spelled otherwise",
+                "        if str(number) != text:",
+                "test_every_cell_is_checked_in_its_column_s_type",
+            ),
+            (
+                "NULL where the lane never leaves one",
+                "    if values[filled_side] is None:",
+                "test_a_fill_may_start_from_null_but_never_end_in_it",
+            ),
+            (
+                "NULL in a column the lane does not fill",
+                "    if values[empty_side] is None and not cell.fills_null:",
+                "test_a_column_the_lane_does_not_fill_is_never_null",
+            ),
+            (
+                "an empty new value",
+                '    if r.new_value == "":',
+                "test_every_cell_is_checked_in_its_column_s_type",
+            ),
+            (
+                "a typed no-op",
+                '    if values["old"] is not None and typed["old"] == typed["new"]:',
+                "test_every_cell_is_checked_in_its_column_s_type",
+            ),
+            (
+                "a cell wider than its column",
+                "    if cell.max_chars is not None and r.new_value is not None and len(r.new_value) > cell.max_chars:",
+                "test_every_cell_is_checked_in_its_column_s_type",
+            ),
+            (
+                "a value the cell does not own",
+                "    if cell.allowed_new_values and lane_value not in cell.allowed_new_values:",
+                "test_an_owned_column_refuses_a_value_the_lane_does_not_own",
+            ),
+            (
+                "two premises for one site",
+                "        if premises.setdefault(r.site_id, r.premise) != r.premise:",
+                "test_every_cell_of_a_site_carries_the_same_premise",
+            ),
+            (
+                "a reversal without its journal row",
+                "        if wants_journal_id and r.journal_id is None:",
+                "test_a_reversal_names_its_journal_row_and_only_a_reversal_does",
+            ),
+            (
+                "a journal row nobody checks",
+                "        if not wants_journal_id and r.journal_id is not None:",
+                "test_a_reversal_names_its_journal_row_and_only_a_reversal_does",
+            ),
+        )
+    ),
+    *(
+        Case(f"cells: plan-side {label}", APPLY, old, new, test, CELL_TESTS)
+        for label, old, new, test in (
+            (
+                "a cell of an unowned column",
+                "        lane.cell(r.column)\n    except ValueError",
+                "        pass\n    except ValueError",
+                "test_a_cell_must_name_a_column_the_lane_owns",
+            ),
+            (
+                "jsonb that does not parse",
+                "            return json.loads(text)",
+                "            return text",
+                "test_every_cell_is_checked_in_its_column_s_type",
+            ),
+            (
+                "a reversal owns the value it undoes",
+                "    lane_value = r.old_value if rollback else r.new_value",
+                "    lane_value = r.new_value",
+                "test_an_owned_column_refuses_a_value_the_lane_does_not_own",
+            ),
+            (
+                "only a reversal's write names journal rows",
+                "        wants_journal_id = lane.reverses_journal and not rollback",
+                "        wants_journal_id = lane.reverses_journal",
+                "test_a_reversal_names_its_journal_row_and_only_a_reversal_does",
+            ),
+        )
+    ),
+    # ------------------------------------------------------------- cell lanes: the statement
+    *(
+        Case(f"cells: rendered {label}", APPLY, old, new, test, CELL_TESTS)
+        for label, old, new, test in (
+            (
+                "guard 1 needs the target row",
+                'add(f"     WHERE {row} IS NULL OR u.id IS NULL OR u.source_id <> {_literal(source)};")',
+                'add(f"     WHERE u.id IS NULL OR u.source_id <> {_literal(source)};")',
+                "test_scope_guard_1_needs_the_card_stats_row_and_a_curated_site",
+            ),
+            (
+                "guard 2 refuses NULL on the filled side",
+                '        refused.append(f"{filled} IS NULL")',
+                "        pass",
+                "test_guard_2_allows_null_only_on_the_side_the_lane_fills",
+            ),
+            (
+                "guard 2 refuses an unowned column",
+                '    return "CASE p.column_name" + "".join(whens) + "\\n                ELSE true END"',
+                '    return "CASE p.column_name" + "".join(whens) + "\\n                ELSE false END"',
+                "test_every_comparison_is_made_in_the_column_s_type",
+            ),
+            (
+                "guards 3 and invariant 1 refuse an unowned column",
+                '    otherwise: str = "true",',
+                '    otherwise: str = "false",',
+                "test_every_comparison_is_made_in_the_column_s_type",
+            ),
+            (
+                "guard 4 reads the old value on a reversal",
+                '        lane_side = "p.old_value" if rollback else "p.new_value"',
+                '        lane_side = "p.new_value"',
+                "test_guard_4_covers_the_owned_columns_only",
+            ),
+            (
+                "guard 6 only on a reversal's write",
+                "    journal_guard = lane.reverses_journal and not rollback",
+                "    journal_guard = lane.reverses_journal",
+                "test_guard_6_is_rendered_for_a_reversal_s_write_only",
+            ),
+            (
+                "guard 6 refuses a later write",
+                'add(f"             WHERE {journal_cell} AND l.id > p.journal_id);")',
+                'add(f"             WHERE {journal_cell} AND l.id < p.journal_id);")',
+                "test_guard_6_is_rendered_for_a_reversal_s_write_only",
+            ),
+            (
+                "the writer names the target",
+                'f"            {_literal(target.table)}, r.column_name, {_literal(target.key_column)}, "',
+                "f\"            'unified_sites', r.column_name, 'id', \"",
+                "test_the_writer_names_the_target_and_each_cell_s_column",
+            ),
+            (
+                "invariant 2 joins each cell's column",
+                "add(f\"       AND l.column_name = {'p.column_name' if cells else _literal(column)}\")",
+                'add(f"       AND l.column_name = {_literal(column)}")',
+                "test_the_writer_names_the_target_and_each_cell_s_column",
+            ),
+            (
+                "a journal row of another column never reads as landed",
+                '            column_expr="l.column_name",\n            otherwise="false",',
+                '            column_expr="l.column_name",\n            otherwise="true",',
+                "test_the_read_backs_compare_each_cell_in_its_type",
+            ),
+            (
+                "a probe value valid in its type",
+                '    "integer": "-987654321",',
+                '    "integer": "never",',
+                "test_each_corrupted_value_is_valid_in_its_column_s_type",
+            ),
+            (
+                "the foreign-column probe names an unowned column",
+                '            corrupt(0, column="name"),',
+                "            corrupt(0),",
+                "test_the_foreign_column_probe_names_a_column_the_lane_does_not_own",
+            ),
+            (
+                "the foreign row of a cell lane reads no column",
+                '            f"SELECT u.id::text AS id, u.name{premise} "\n            "FROM unified_sites u',
+                '            f"SELECT u.id::text AS id, u.name, u.x AS value{premise} "\n            "FROM unified_sites u',
+                "test_the_probes_read_another_source_s_site_without_a_column",
+            ),
+        )
+    ),
+    *(
+        guard(f"cells: rendered {label}", APPLY, needle, test, CELL_TESTS)
+        for label, needle, test in (
+            (
+                "guard 2 refuses NULL in a column the lane does not fill",
+                "        if not cell.fills_null:",
+                "test_guard_2_allows_null_only_on_the_side_the_lane_fills",
+            ),
+            (
+                "guard 2 checks each width",
+                "        if cell.max_chars is not None:",
+                "test_every_comparison_is_made_in_the_column_s_type",
+            ),
+            (
+                "guard 4 on the owned cells",
+                "    if owned_cells:",
+                "test_guard_4_covers_the_owned_columns_only",
+            ),
+            (
+                "guard 5 once per site",
+                "        if cells:\n            # the premise is the site's",
+                "test_guard_5_reads_each_site_s_premise_once",
+            ),
+            (
+                "guard 6",
+                "    if journal_guard:\n        journal_cell",
+                "test_guard_6_is_rendered_for_a_reversal_s_write_only",
+            ),
+            (
+                "a cell lane's probes",
+                "    if lane.cells:\n        return _cell_probe_cases(",
+                "test_each_corrupted_value_is_valid_in_its_column_s_type",
+            ),
+            (
+                "the too-long probe",
+                "    if wide is not None:",
+                "test_the_probes_match_the_guards_each_lane_renders",
+            ),
+            (
+                "the guard-6 probe",
+                "    if lane.reverses_journal:\n        probes.append(",
+                "test_the_probes_match_the_guards_each_lane_renders",
+            ),
+        )
+    ),
+    Case(
+        "cells: the column lanes render as before",
+        APPLY,
+        '        add("    site_id     UUID PRIMARY KEY,")',
+        '        add("    site_id     UUID  PRIMARY KEY,")',
+        "test_every_statement_is_the_pre_generalisation_rendering",
+        TESTFILE,
+    ),
+    # ------------------------------------------------------------ cell lanes: the plan records
+    *(
+        guard(f"cells: plan record {label}", PLAN, needle, test, CELL_TESTS)
+        for label, needle, test in (
+            (
+                "names an owned column",
+                "    if lane.cells:\n        lane.cell(column)",
+                "test_a_plan_record_names_its_table_key_and_cell",
+            ),
+            (
+                "keeps the premise expression off each cell",
+                "        if not lane.cells:\n            # A cell lane's premise",
+                "test_a_plan_record_names_its_table_key_and_cell",
+            ),
+            (
+                "carries the journal row",
+                "    if lane.reverses_journal:\n        if change.journal_id is None:",
+                "test_a_reversal_record_carries_its_journal_row",
+            ),
+            (
+                "refuses a reversal without its journal row",
+                "        if change.journal_id is None:",
+                "test_a_reversal_record_carries_its_journal_row",
+            ),
+            (
+                "reverses a cell into its own column",
+                "    if lane.cells:\n        # A cell's reversal",
+                "test_the_undo_restores_null_where_the_lane_filled_it",
+            ),
+        )
+    ),
+    # ----------------------------------------------------------------- the card_stats planner
+    *(
+        guard(f"card_stats: {label}", CARD_STATS, needle, test, CARD_TESTS)
+        for label, needle, test in (
+            (
+                "the jsonb spelling is the database's",
+                '        if text is not None and cell_text("empires", json.loads(text)) != text:',
+                "test_empires_are_spelled_the_way_the_database_prints_them",
+            ),
+            (
+                "the generator's description filter",
+                '        if not row["description"]:',
+                "test_a_row_without_a_description_is_not_recomputed",
+            ),
+            (
+                "an empire production does not list",
+                "        if unranked:",
+                "test_an_empire_production_does_not_list_is_refused",
+            ),
+            (
+                "the tagger reads the repository",
+                "    if here != HISTORICAL.resolve():",
+                "test_the_tagger_must_read_the_repository_s_boundaries",
+            ),
+            (
+                "production lists every empire",
+                "    if unlisted:",
+                "test_the_tagger_must_read_the_repository_s_boundaries",
+            ),
+            (
+                "only inputs are put back",
+                "        if column not in INPUT_COLUMNS:",
+                "test_journalled_inputs_are_put_back_newest_first",
+            ),
+            (
+                "the counterfactual must reproduce the cards",
+                "    if differ:",
+                "test_a_model_that_does_not_reproduce_them_refuses_to_plan",
+            ),
+            (
+                "no row is inserted",
+                '        if not row["has_card"]:',
+                "test_a_row_without_a_card_is_reported_not_inserted",
+            ),
+            (
+                "no cell is cleared",
+                "            if new is None:",
+                "test_a_cell_the_generator_would_clear_is_reported_not_written",
+            ),
+        )
+    ),
+    *(
+        Case(f"card_stats: {label}", CARD_STATS, old, new, test, CARD_TESTS)
+        for label, old, new, test in (
+            (
+                "production's empire order",
+                '        stats["empires"] = sorted(stats["empires"], key=rank.__getitem__)',
+                "        pass",
+                "test_the_empires_take_production_s_directory_order",
+            ),
+            (
+                "mystery counts every curated row",
+                '    combos = Counter((row["site_type"], row["period_name"]) for row in sites)',
+                '    combos = Counter((row["site_type"], row["period_name"]) for row in sites if row["description"])',
+                "test_mystery_counts_every_curated_row_with_a_description_or_not",
+            ),
+            (
+                "only writes after the last card write are put back",
+                "    since = max(card_ids) if card_ids else 0",
+                "    since = 0",
+                "test_only_what_was_written_after_the_last_card_write_is_put_back",
+            ),
+            (
+                "the journal is put back newest first",
+                '    for entry in sorted(journal, key=lambda j: int(j["id"]), reverse=True):',
+                '    for entry in sorted(journal, key=lambda j: int(j["id"])):',
+                "test_journalled_inputs_are_put_back_newest_first",
+            ),
+        )
+    ),
+    *(
+        Case(f"generator: {label}", GENERATOR, old, new, test, GENERATOR_TESTS)
+        for label, old, new, test in (
+            (
+                "a missing content type is a type",
+                "        content_types.add(link.content_type)",
+                "        content_types.add(link.content_type or 'reference')",
+                "test_content_stats_counts_links_types_and_a_3d_model",
+            ),
+            (
+                "a lonely combination counts as one",
+                "    combo_count = combo_counts.get(combo_key, 1)",
+                "    combo_count = combo_counts.get(combo_key, 100)",
+                "test_a_combination_nobody_else_has_counts_as_one",
+            ),
+            (
+                "the upsert writes site_card_stats",
+                "            engagement=_get_engagement(session, site.id),",
+                "            engagement=(0, 0),",
+                "test_the_upsert_writes_exactly_what_site_card_stats_returns",
+            ),
+        )
+    ),
+    # ---------------------------------------------------------------------- the scope planner
+    *(
+        guard(f"scope: {label}", SCOPE, needle, test, SCOPE_TESTS)
+        for label, needle, test in (
+            (
+                "a duplicate needs both names within 100 m",
+                '        if float(pair["metres"]) > DUPLICATE_METRES or not all(known):',
+                "test_a_name_that_is_not_one_of_the_item_s_is_no_duplicate",
+            ),
+            (
+                "a decision names its site",
+                '            if decision.name != site["name"]:',
+                "test_a_decision_that_names_another_site_is_refused",
+            ),
+            (
+                "the quote is in the description",
+                '            if decision.quote not in (site["description"] or ""):',
+                "test_a_quote_the_description_does_not_hold_is_refused",
+            ),
+            (
+                "a museum needs a reviewed decision",
+                '            if decision is None or decision.rule != "d" or decision.status == PENDING:',
+                "test_a_museum_past_the_cutoff_needs_a_reviewed_decision",
+            ),
+            (
+                "a retired survivor keeps its duplicate",
+                "        if survivor_retired:",
+                "test_a_survivor_that_is_retired_keeps_its_duplicate",
+            ),
+            (
+                "one decision per site",
+                "        if decision.site_id in out:",
+                "test_a_site_decided_twice_is_refused",
+            ),
+            (
+                "the decision vocabulary",
+                '        if decision.status not in SCOPE_STATUSES or decision.rule not in ("a", "b", "d"):',
+                "test_a_malformed_entry_is_refused",
+            ),
+            (
+                "a decision needs its evidence",
+                "        if not decision.quote or not decision.note:",
+                "test_a_malformed_entry_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"scope: {label}", SCOPE, old, new, test, SCOPE_TESTS)
+        for label, old, new, test in (
+            (
+                "rule (a) turns retired into pending only",
+                '            elif decision.rule == "a" and decision.status == PENDING:',
+                "            elif True:",
+                "test_rule_a_can_only_turn_a_retirement_into_pending",
+            ),
+            (
+                "only a Museum row is kept by the museum rule",
+                '            and "museum" in str(site["site_type"]).casefold()',
+                "            and True",
+                "test_an_undated_museum_is_kept_by_the_museum_rule_and_nothing_else_is",
+            ),
+            (
+                "the older row survives",
+                '        str(site["created_at"]),\n',
+                "",
+                "test_the_older_row_survives_before_the_one_with_more_links",
+            ),
+            (
+                "an assessed site is left alone",
+                '    out = [d for d in out if d.site["scope_status"] is None]',
+                "    out = list(out)",
+                "test_a_site_already_assessed_is_left_alone",
+            ),
+            (
+                "a decision without a finding is refused",
+                "    for site_id in sorted(unused):",
+                "    for site_id in sorted(set()):",
+                "test_a_decision_without_a_finding_is_refused",
+            ),
+            (
+                "names fold width",
+                '    return " ".join(unicodedata.normalize("NFKC", name).casefold().split())',
+                '    return " ".join(name.casefold().split())',
+                "test_names_fold_case_width_and_spaces_but_nothing_else",
+            ),
+        )
+    ),
+    # ------------------------------------------------------------------- the reversal planner
+    *(
+        guard(f"reversal: {label}", REVERSAL, needle, test, REVERSAL_TESTS)
+        for label, needle, test in (
+            (
+                "the list is the code's",
+                "    if sorted(ids) != sorted(expected) or len(set(ids)) != len(ids):",
+                "test_the_reviewed_list_and_the_code_must_name_the_same_rows",
+            ),
+            (
+                "the journal row exists",
+                "    if entry is None:",
+                "test_each_check_refuses_with_its_reason",
+            ),
+            (
+                "a column the lane owns",
+                "    if reason.column not in lane.columns:",
+                "test_a_column_the_lane_does_not_own_is_refused",
+            ),
+            (
+                "a curated site",
+                '    if site is None or site["source_id"] != CURATED_SOURCE:',
+                "test_each_check_refuses_with_its_reason",
+            ),
+            ("an unbroken chain", "    if broken is not None:", "test_a_broken_chain_is_refused"),
+            (
+                "the last write of its cell",
+                "    if not cell.chain or cell.chain[-1].id != reason.journal_id:",
+                "test_a_row_another_write_superseded_is_not_undone",
+            ),
+            (
+                "no NULL restored",
+                "    if restored is None:",
+                "test_a_row_that_replaced_null_is_not_restored",
+            ),
+            (
+                "every quote is where it says",
+                "        if problem is not None:",
+                "test_evidence_that_is_not_where_it_says_refuses",
+            ),
+            (
+                "the gold standard judged it CORRECT",
+                '        if verdict is None or verdict["verdict"] != "CORRECT":',
+                "test_the_gold_standard_must_judge_the_restored_value_itself",
+            ),
+            (
+                "the gold standard judged the restored value",
+                '        if str(record["db_fields"].get(reason.column)) != str(restored):',
+                "test_the_gold_standard_must_judge_the_restored_value_itself",
+            ),
+            (
+                "the gold record is the site's",
+                "        if record is None or ref != reason.site_id:",
+                "test_a_gold_record_of_another_site_does_not_count",
+            ),
+        )
+    ),
+    Case(
+        "reversal: the site is read through its key",
+        REVERSAL,
+        '            f"WHERE id IN ({sql_ids(r.site_id for r in reasons)})"',
+        '            f"WHERE id::text IN ({sql_ids(r.site_id for r in reasons)})"',
+        "test_load_state_reads_the_row_the_site_and_the_chain",
+        REVERSAL_TESTS,
+    ),
     Case(
         "categorize_period: the first bucket is open below",
         TEXT,
@@ -1356,4 +1960,9 @@ def main(cases: Sequence[Case] = CASES) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # `mutation_sweep.py [label substring ...]` runs the cases whose label holds any of them,
+    # like the phase-3 sweep; no argument runs them all.
+    wanted = [c for c in CASES if not sys.argv[1:] or any(a in c.label for a in sys.argv[1:])]
+    if not wanted:
+        sys.exit(f"no case label contains any of {sys.argv[1:]}")
+    sys.exit(main(wanted))

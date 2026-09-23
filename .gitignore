@@ -307,6 +307,22 @@ output/remediation/mechanical_uk/REHEARSAL.sql
 output/remediation/mechanical_period_name/REHEARSAL.sql
 !output/remediation/mechanical_site_type/
 output/remediation/mechanical_site_type/REHEARSAL.sql
+# The cell lanes (2026-09-23): versioned the same way. A card_stats wave follows the hero repair's
+# rule instead: its production export (every curated description, ~7 MB), PLAN.jsonl (~8 MB) and
+# APPLY.sql (~5 MB) are bulk that `card_stats.py --export/--write` and `apply.py --emit` rebuild;
+# PLAN.md, SKIPPED.jsonl and the undo (ROLLBACK.sql) are versioned. A wave is re-planned from a
+# fresh export right before it is applied, so the versioned undo is the applied plan's only then.
+# The scope lane's fetched pages are bulk and regenerable (`scope.py --collect`).
+!output/remediation/mechanical_card_stats/
+output/remediation/mechanical_card_stats/*/export/
+output/remediation/mechanical_card_stats/*/PLAN.jsonl
+output/remediation/mechanical_card_stats/*/APPLY.sql
+output/remediation/mechanical_card_stats/*/REHEARSAL.sql
+!output/remediation/mechanical_scope/
+output/remediation/mechanical_scope/export/
+output/remediation/mechanical_scope/REHEARSAL.sql
+!output/remediation/mechanical_reversal_1/
+output/remediation/mechanical_reversal_1/REHEARSAL.sql
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
 # nothing and is rendered again by `qid_repair.py render`.

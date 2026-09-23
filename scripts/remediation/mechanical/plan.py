@@ -229,6 +229,10 @@ class Verdict:
     evidence: tuple[dict[str, Any], ...] = ()
     #: The live input the value was derived from, as text, for a lane with `premise_sql`.
     premise: str | None = None
+    #: The cell's column on a cell lane (`lane.cells`); None on a column lane.
+    column: str | None = None
+    #: The journal row a reversal lane undoes.
+    journal_id: int | None = None
 
 
 def load_findings(path: Path) -> list[Finding]:
@@ -1023,21 +1027,29 @@ _quoted = sql_literal
 
 
 def plan_record(change: Verdict, plan: Plan) -> dict[str, Any]:
-    """One `PLAN.jsonl` line: the row, its lane's journal identity, and its evidence."""
+    """One `PLAN.jsonl` line: the row, its lane's journal identity, and its evidence.
+
+    On a cell lane the line names the cell's column and table, and the change key names the cell;
+    on a column lane every line is exactly what it was before cell lanes existed.
+    """
     lane = plan.lane
+    column = change.column if lane.cells else lane.column
+    if lane.cells:
+        lane.cell(column)
+    target = lane.target
     record: dict[str, Any] = {
         "site_id": change.site_id,
         "site_name": change.site_name,
-        "table": "unified_sites",
-        "column": lane.column,
-        "key_column": "id",
+        "table": target.table,
+        "column": column,
+        "key_column": target.key_column,
         "old_value": change.old_value,
         "new_value": change.new_value,
         "rule": change.rule,
-        "condition": f"id = {change.site_id} AND {lane.column} IS NOT DISTINCT FROM "
+        "condition": f"{target.key_column} = {change.site_id} AND {column} IS NOT DISTINCT FROM "
         f"{_quoted(change.old_value)}",
         "reason": f"{lane.key_prefix} ({change.rule}): {change.note}",
-        "change_key": lane.change_key(change.site_id),
+        "change_key": lane.change_key(change.site_id, change.column if lane.cells else None),
         "test_id": plan.test_id,
         "run_stamp": plan.run_stamp,
         "confidence": lane.confidence,
@@ -1049,8 +1061,17 @@ def plan_record(change: Verdict, plan: Plan) -> dict[str, Any]:
     if lane.premise_sql is not None:
         if change.premise is None:
             raise PlanError(f"{change.site_id}: the {lane.name} lane needs the row's premise")
-        record["premise_sql"] = lane.premise_sql
+        if not lane.cells:
+            # A cell lane's premise expression is the lane's, named once in its PLAN.md: repeated
+            # on each of 6,000 card_stats cells it was 6 MB of the same kilobyte.
+            record["premise_sql"] = lane.premise_sql
         record["premise"] = change.premise
+    if lane.reverses_journal:
+        if change.journal_id is None:
+            raise PlanError(
+                f"{change.site_id}: the {lane.name} lane needs the journal row it undoes"
+            )
+        record["journal_id"] = change.journal_id
     return record
 
 
@@ -1075,8 +1096,8 @@ def write_skipped_jsonl(plan: Plan, path: Path) -> int:
                     {
                         "site_id": verdict.site_id,
                         "site_name": verdict.site_name,
-                        "table": "unified_sites",
-                        "column": plan.lane.column,
+                        "table": plan.lane.target.table,
+                        "column": verdict.column if plan.lane.cells else plan.lane.column,
                         "current_value": verdict.old_value,
                         "proposed_value": verdict.new_value,
                         "reason": verdict.reason,
@@ -1173,6 +1194,28 @@ def reversed_records(records: Sequence[Any], lane: Lane = T05) -> list[Any]:
     """
     from mechanical import apply as apply_mod
 
+    if lane.cells:
+        # A cell's reversal restores its old value in its own column - NULL too, where the lane
+        # filled an empty cell. The journal row it undoes is the write's own, unknown until the
+        # write has run, so the reversal names none (guard 6 checks a forward reversal only).
+        return [
+            apply_mod.ChangeRecord(
+                site_id=r.site_id,
+                site_name=r.site_name,
+                old_value=r.new_value,
+                new_value=r.old_value,
+                rule=f"rollback-{r.rule}",
+                condition=f"{lane.target.key_column} = {r.site_id} AND {r.column} IS NOT "
+                f"DISTINCT FROM {_quoted(r.new_value)}",
+                reason=f"rollback of {lane.key_prefix}: {r.column} {r.old_value!r} restored on "
+                f"{r.site_name}",
+                evidence=tuple(r.evidence),
+                phase3=r.phase3,
+                premise=r.premise,
+                column=r.column,
+            )
+            for r in reversed(list(records))
+        ]
     return [
         apply_mod.ChangeRecord(
             site_id=r.site_id,

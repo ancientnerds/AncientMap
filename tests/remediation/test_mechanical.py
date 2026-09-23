@@ -739,8 +739,8 @@ class TestReadBackStatements:
             "VERIFY_SQL": A.VERIFY_SQL,
             "PRIMITIVE_CHECK_SQL": A.PRIMITIVE_CHECK_SQL,
         }
-        for name, lane in L.LANES.items():
-            statements[f"{name}: readback"] = A.READBACKS[name]
+        for name, lane in ALL_LANES.items():
+            statements[f"{name}: readback"] = A.readback_for(lane)
             statements[f"{name}: post-commit"] = A.post_commit_reads(lane, run_stamp="x")
             statements[f"{name}: rehearsal"] = A.rehearsal_reads(lane, run_stamp="x")
             statements[f"{name}: rollback rehearsal"] = A.rollback_rehearsal_reads([record()], lane)
@@ -925,6 +925,12 @@ def shape_record(**over: Any) -> A.ChangeRecord:
     return A.ChangeRecord(**base)
 
 
+#: Every lane the tests drive: the registry, plus the card_stats wave this branch plans - the
+#: card_stats lanes are built by `lane.resolve_lane` (they import the card generator), so they
+#: are not in `L.LANES`, and a parametrisation over `L.LANES` alone would never reach them.
+CARD_STATS_WAVE = "card-stats-2026-09-23"
+ALL_LANES: dict[str, L.Lane] = {**L.LANES, CARD_STATS_WAVE: L.resolve_lane(CARD_STATS_WAVE)}
+
 #: A row of another source, as `--probe-guards` reads it from production.
 FOREIGN = {
     "id": "11111111-1111-1111-1111-111111111111",
@@ -1098,14 +1104,14 @@ class TestTheLanes:
         assert "guard4-not-owned" not in t05 and "guard5-premise" not in t05
         assert {"guard1-other-source", "guard2-no-op", "guard2-too-long"} <= t05
 
-    @pytest.mark.parametrize("name", sorted(L.LANES))
+    @pytest.mark.parametrize("name", sorted(ALL_LANES))
     def test_each_probe_names_a_refusal_exactly_one_rendered_guard_raises(
         self, name: str, tmp_path: Path
     ) -> None:
         """The text a probe waits for is a RAISE of its statement - and of no other guard, so a
         probe refused by the wrong guard cannot pass for its own. The RAISE messages are formatted
         the way plpgsql does it: `%` by `%`, the count as 1 (every probe corrupts one row)."""
-        lane = L.LANES[name]
+        lane = ALL_LANES[name]
         records, _ = lane_plan(tmp_path, lane)
         for suffix, _, mutated, says in A.probe_cases(records, lane, FOREIGN):
             sql = A.render_transaction(
@@ -1195,7 +1201,7 @@ class TestTheLanes:
         """Four statements run inside the bound (CREATE, INSERT, the DO block, COMMIT); even at
         the bound each, the server is done before `run_psql`'s client timeout."""
         client = inspect.signature(A.run_psql).parameters["timeout"].default
-        for lane in L.LANES.values():
+        for lane in ALL_LANES.values():
             if lane.statement_timeout is not None:
                 assert lane.statement_timeout.endswith("s") and lane.lock_timeout is not None
                 assert 4 * int(lane.statement_timeout[:-1]) < client
@@ -1214,12 +1220,12 @@ class TestTheLanes:
         assert f"'{L.UK_PARTS.rollback_run_stamp}'" in sql
         assert "to_regclass('pg_temp._uk_part_plan')" in sql
 
-    @pytest.mark.parametrize("name", sorted(L.LANES))
+    @pytest.mark.parametrize("name", sorted(ALL_LANES))
     def test_every_lane_has_its_own_identity(self, name: str) -> None:
         """Two lanes sharing a stamp, a key prefix, a temp table or a directory would read each
         other's rows back as their own."""
-        lane = L.LANES[name]
-        others = [other for other in L.LANES.values() if other is not lane]
+        lane = ALL_LANES[name]
+        others = [other for other in ALL_LANES.values() if other is not lane]
         for attribute in ("run_stamp", "key_prefix", "plan_table", "out_dir_name", "test_id"):
             assert getattr(lane, attribute) not in {getattr(o, attribute) for o in others}, (
                 attribute
@@ -1459,6 +1465,8 @@ def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path
     committed plan of a lane not yet applied - so every lane's own records reach the fake."""
     if lane is L.T05:
         return delivered(directory)
+    if lane.target is L.CARD_STATS:
+        return card_stats_plan(directory, lane)
     plan_path = directory / "PLAN.jsonl"
     plan_path.write_text(
         (A.lane_dir(lane) / "PLAN.jsonl").read_text(encoding="utf-8"),
@@ -1472,6 +1480,42 @@ def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path
         newline="\n",
     )
     return records, plan_path
+
+
+def card_stats_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path]:
+    """A card_stats wave's plan, fabricated: its bulk PLAN.jsonl is not versioned (the hero
+    repair's rule), so the fake reads two sites' cells of each column type - integer, text
+    with a width and owned values, jsonb - written the way the planner writes them."""
+    cells = [
+        (SITE_BOA, "mystery", "5", "6"),
+        (SITE_BOA, "category_group", "Settlements", "Monuments"),
+        (SITE_BOA, "rarity_tier", "2", "3"),
+        (SITE_GIANTS_RING, "empires", "[]", '["roman"]'),
+        (SITE_GIANTS_RING, "civilization", "Ireland", "Northern Ireland"),
+    ]
+    changes = tuple(
+        P.Verdict(
+            site_id=site,
+            site_name="a site",
+            ok=True,
+            old_value=old,
+            new_value=new,
+            rule="generator-recompute",
+            reason="",
+            note=f"{column} {old} -> {new}",
+            phase3=False,
+            finding_test_id="live:card_stats",
+            evidence=({"source": "test", "quote": "x"},),
+            premise=f"premise-of-{site[:8]}",
+            column=column,
+        )
+        for site, column, old, new in cells
+    )
+    plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-23T00:00:00+00:00", lane=lane)
+    plan_path = directory / "PLAN.jsonl"
+    P.write_plan_jsonl(plan, plan_path)
+    P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
+    return A.load_records(plan_path), plan_path
 
 
 class FakeProduction:
@@ -1518,28 +1562,57 @@ class FakeProduction:
             if isinstance(self.write, BaseException):
                 raise self.write
             return _done("", returncode=self.write)
-        if sql.startswith("WITH planned(site_id, new_value)"):
-            column = self.lane.column
-            if f"run_stamp = {stamp}" not in sql or f"u.{column} IS NOT DISTINCT FROM" not in sql:
-                raise AssertionError("a landed read-back that is not this lane's stamp and column")
-            for r in self.records:
-                if f"({P.sql_literal(r.site_id)}::uuid, {P.sql_literal(r.new_value)})" not in sql:
-                    raise AssertionError(f"the landed read-back lacks the planned row {r.site_id}")
+        if sql.startswith("WITH planned("):
+            landed_read_back_is_the_lanes(sql, self.lane, self.records)
             n = len(self.records)
             metrics = {
                 "journal rows for this run stamp": n,
                 "planned rows now holding the planned new value": n,
                 "planned rows with no journal row for this run stamp": 0,
-                f"journal rows for this run outside unified_sites.{column}": 0,
+                f"journal rows for this run outside {L.written_where(self.lane)}": 0,
                 **self.landed,
             }
             return _done("".join(f"{name}|{value}\n" for name, value in metrics.items()))
-        if sql is A.READBACKS[self.lane.name]:
+        if sql is A.readback_for(self.lane):
             self.readbacks += 1
             if self.readbacks == 2 and self.after is not None:
                 raise self.after
             return _done("")
         raise AssertionError(f"unexpected statement: {sql[:80]!r}")
+
+
+def landed_read_back_is_the_lanes(sql: str, lane: L.Lane, records: list[A.ChangeRecord]) -> None:
+    """Refuse a landed read-back that is not this lane's: its stamp, its column(s) compared in
+    their own type, and every planned row - with its column on a cell lane - by value."""
+    stamp = P.sql_literal(lane.run_stamp)
+    if f"run_stamp = {stamp}" not in sql:
+        raise AssertionError("a landed read-back that is not this lane's stamp")
+    if not lane.cells:
+        if not sql.startswith("WITH planned(site_id, new_value)"):
+            raise AssertionError("a column lane's read-back names each row's value")
+        if f"u.{lane.column} IS NOT DISTINCT FROM" not in sql:
+            raise AssertionError("a landed read-back that is not this lane's column")
+        wanted = [
+            f"({P.sql_literal(r.site_id)}::uuid, {P.sql_literal(r.new_value)})" for r in records
+        ]
+    else:
+        if not sql.startswith("WITH planned(site_id, column_name, new_value)"):
+            raise AssertionError("a cell lane's read-back names each cell's column")
+        alias = lane.target.alias
+        for cell in lane.cells:
+            compared = f"THEN {alias}.{cell.name} IS NOT DISTINCT FROM p.new_value::{cell.sql_type}"
+            if compared not in sql:
+                raise AssertionError(f"the read-back does not compare {cell.name} in its type")
+        if "ELSE false END" not in sql:
+            raise AssertionError("a cell of a column the lane does not own must not read as landed")
+        wanted = [
+            f"({P.sql_literal(r.site_id)}::uuid, {P.sql_literal(r.column)}, "
+            f"{P.sql_literal(r.new_value)})"
+            for r in records
+        ]
+    for row in wanted:
+        if row not in sql:
+            raise AssertionError(f"the landed read-back lacks the planned row {row}")
 
 
 def _done(stdout: str, returncode: int = 0) -> Any:
@@ -1586,10 +1659,10 @@ class Applied:
         )
 
 
-@pytest.fixture(params=sorted(L.LANES))
+@pytest.fixture(params=sorted(ALL_LANES))
 def applied(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     """Every lane, not T05 alone: the commit state is read under each lane's own stamp."""
-    lane = L.LANES[request.param]
+    lane = ALL_LANES[request.param]
     records, plan_path = lane_plan(tmp_path, lane)
     A.emit(records, tmp_path, lane, plan_path=plan_path)
     monkeypatch.setattr(A, "verify_interests", lambda *a, **k: "")
@@ -1683,13 +1756,13 @@ class TestTheCommitState:
             ("journal rows for this run stamp", -1),
             ("planned rows now holding the planned new value", -1),
             ("planned rows with no journal row for this run stamp", 1),
-            ("journal rows for this run outside unified_sites.{column}", 1),
+            ("journal rows for this run outside {where}", 1),
         ],
     )
     def test_a_read_back_that_disagrees_after_a_clean_commit_is_no_success(
         self, applied: Applied, capsys: pytest.CaptureFixture, metric: str, wrong: int
     ) -> None:
-        name = metric.format(column=applied.lane.column)
+        name = metric.format(where=L.written_where(applied.lane))
         value = applied.n + wrong if wrong < 0 else wrong
         applied.fake([0], 0, landed={name: value})
         assert applied.apply() == A.EXIT_COMMITTED_UNCONFIRMED
@@ -1763,20 +1836,20 @@ class TestTheLandedCheck:
         "journal rows for this run stamp",
         "planned rows now holding the planned new value",
         "planned rows with no journal row for this run stamp",
-        "journal rows for this run outside unified_sites.{column}",
+        "journal rows for this run outside {where}",
     )
 
     def answer(self, lane: L.Lane, n: int, **override: int) -> list[list[str]]:
         right = dict(zip(self.METRICS, (n, n, 0, 0), strict=True))
-        values = {name.format(column=lane.column): v for name, v in right.items()}
+        values = {name.format(where=L.written_where(lane)): v for name, v in right.items()}
         values.update(override)
         return [[name, str(value)] for name, value in values.items()]
 
-    @pytest.mark.parametrize("name", sorted(L.LANES))
+    @pytest.mark.parametrize("name", sorted(ALL_LANES))
     def test_the_read_back_is_the_lane_s_own(
         self, name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        lane = L.LANES[name]
+        lane = ALL_LANES[name]
         records, _ = lane_plan(tmp_path, lane)
         sent: list[str] = []
 
@@ -1786,17 +1859,16 @@ class TestTheLandedCheck:
 
         monkeypatch.setattr(A, "read_rows", read)
         landed = A.assert_the_write_landed(records, lane=lane)
-        assert landed[f"journal rows for this run outside unified_sites.{lane.column}"] == 0
+        assert landed[f"journal rows for this run outside {L.written_where(lane)}"] == 0
         (sql,) = sent
-        assert f"run_stamp = '{lane.run_stamp}'" in sql and f"u.{lane.column} " in sql
-        assert all(f"('{r.site_id}'::uuid, " in sql for r in records)
+        landed_read_back_is_the_lanes(sql, lane, records)
 
     @pytest.mark.parametrize(("index", "value"), [(0, 1), (1, 1), (2, 1), (3, 1), (0, 3), (1, 0)])
     def test_every_disagreement_is_refused(
         self, index: int, value: int, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         records = [record(), second()]
-        metric = self.METRICS[index].format(column="country")
+        metric = self.METRICS[index].format(where="unified_sites.country")
         monkeypatch.setattr(
             A, "read_rows", lambda sql: self.answer(L.T05, len(records), **{metric: value})
         )
@@ -1810,3 +1882,148 @@ class TestTheLandedCheck:
         monkeypatch.setattr(A, "read_rows", lambda sql: self.answer(L.T05, 2)[:3])
         with pytest.raises(P.PlanError, match="= None, expected 0"):
             A.assert_the_write_landed(records, lane=L.T05)
+
+
+# ------------------------------------------ the generalisation to cell lanes is byte-neutral
+#: sha256 of every statement the four column lanes send, rendered from their delivered plans by the
+#: code as it was BEFORE the lanes were generalised to (table, key column, value column, curated-
+#: scope predicate) on 2026-09-23 - measured at commit c186008, the branch point. T05's apply,
+#: rollback and read-back digests are the ones pinned above since 2026-09-22 (the same numbers).
+COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
+    "period-name": {
+        "apply": "fe122a2edb983d35c30c3049987f02f0e4cf0d67769cf0fe8c1f4bdb95b4e716",
+        "interests": "cb5fe87a9b1e434efa03e9b19872bdbe85cd5897617764d0cd0fb00232e1949c",
+        "landed": "ae19a74296d7ceba1debca126f9840a1007c2789eb8e1685e8e6a44697c5c175",
+        "probe:guard1-other-source": "fcc1296af5f1e067479ab8a833e7c0fae0e7bc001b41b508d8a935541875cfc7",
+        "probe:guard2-no-op": "0f27046e232845c73a157941a7e59e7a1868ea48f5df101b2d3bfd348b6be9e2",
+        "probe:guard2-too-long": "893dff7f79509550ec84605a8c6bfec62bf0ac5f2ddcf626d6696a5ecdf74a4b",
+        "probe:guard3-foreign-old-value": "e212962e2e053faa214db5c1c658000729671a442cfd3b8ecd7dd56647b8b008",
+        "probe:guard4-not-owned": "576450cc7efc119e3ec209d29c7348a4912054c320f518d87cb00024470e28e4",
+        "probe:guard5-premise": "134432bf6b4bb5632f92c553e91c8224c9e1e54cf43e20de11ecc343360cf57f",
+        "probe_foreign": "f7607f7f94abb06af84de4f2662c7dddd9521075da8ed942fa6fe4c983bb30f4",
+        "readback": "f19c8b23a424bf1a195276aacfb4cf0b911de9989417486585ba3be68bc7ac1a",
+        "rehearsal": "d5e1aa3505cb40101a299df0f3ac09bbb97dec4d14da42885d07770221f7e742",
+        "rollback": "b2642ebb9fff2081f8977987849e522ee9a072a92eb25d576a39330dff6a6066",
+        "rollback_rehearsal": "57313bcc24e085d3cc32e933e43932ec72d940783000ffae0115cbe2a5313985",
+    },
+    "site-type-shape": {
+        "apply": "d12f14e2ced6dd5700910700f0b06472ecb27f462c0ef381778b6ba1b0bd624c",
+        "interests": "904da5f4df72e6e90b384e1c6c5b2c41fc8585678233134a089f3cd8f60f95d6",
+        "landed": "cf4e4cdc273cedbe8b45cfb3445fb35fdc304f67f18ffd9aef24eed67bd50c60",
+        "probe:guard1-other-source": "193173a78caaab5fce13ec100fa0c1d305c579a9fbf06e0a96dfc11ee6d99a59",
+        "probe:guard2-no-op": "735c47353d117de3c9c04928062865c01c2a77dd9613478e8ad638ae9c51b37c",
+        "probe:guard2-too-long": "bf9963ee0a5e41942d285ce4193c92e33aed767c09e4cadb3c48f133c5543019",
+        "probe:guard3-foreign-old-value": "bbdf41a0a96e04c767892804c37e7dd63b2087d2c541b91897b01f634f87336b",
+        "probe:guard4-not-owned": "ccc7457f6b18fa8572d98021911e3dfd9dbb4b34ff74fa699f03095878005f36",
+        "probe_foreign": "acc1c85bcecf48da221a357826f1f7006196e390d18b321d45bb56e996fa699e",
+        "readback": "00cee12da82e54015b726bcf57635b68f4f58f7c88fa5ebe16f59284b5a565a0",
+        "rehearsal": "c7a22a784f81ffb992a269fb2766551addad0b401e47dadcf4fb4734bbe89c30",
+        "rollback": "b5dc82294b0d741d30ca59efdb154f2825b3ae96915248d97e469156baf313ee",
+        "rollback_rehearsal": "0fd5bca7525942286ae17b3da16941ed534ddfdf4e1e3502ef9b85ddbbe67dd8",
+    },
+    "t05": {
+        "apply": "f27845273ff0b34a458036e9ee4fcbe3e97ea4a53d08340c205ea66c3667f2ff",
+        "interests": "df54151807f6310cf8d91243be984a21d698ebdcd4bbbcb262bdce6d89315166",
+        "landed": "c2bb4bd0fff25aecdc92dcf1cc5a42f10ee2812205ba7d6dccadf5dda06b246a",
+        "probe:guard1-other-source": "9a0dac224c8afac00297e1f74435f6d1a80c6487ff2854f245bb87c9fcc04720",
+        "probe:guard2-no-op": "d36f6f9e1adff29c418cee4cd31982b2db4e95f78aac0ba8cdd2756e74211d74",
+        "probe:guard2-too-long": "8748427d57c6c4444143b016a311b5c24b89fe23347fa904d510f221699a8f56",
+        "probe:guard3-foreign-old-value": "b3100fa6640979182cb098c9108e43a9d50e8752443655bb27f09a9b781af7d7",
+        "probe_foreign": "2b3285e218aeb49b3bdcf0676cffb523c2edfa9f441237517488e06e11a02a64",
+        "readback": "a3f1d62426db68f055185bbbbffd86cb7876a25b282a77afe40347162f0f9007",
+        "rehearsal": "b901662c8a0d88118cefb3445349ec0c903409f95aa4bc90e2a97b6e0d99d0c1",
+        "rollback": "832b7b6a55558d67c4ea202ca27938698a02e73a0deae8ac552e62b915b875d1",
+        "rollback_rehearsal": "7b912c3dadfd24cc98fa3b4385c567f2f4039ec5b98741fb22eb9ec192a9ff7f",
+    },
+    "uk-parts": {
+        "apply": "a2a404b171c921ffa6f8b1ee3faf9084a579ffeb3f9f8b5f870b2b429c5ccf41",
+        "interests": "df54151807f6310cf8d91243be984a21d698ebdcd4bbbcb262bdce6d89315166",
+        "landed": "81db88dd47f58880d9ecde5889698c1afb0494ad1e82a1fdadded1540f932f77",
+        "probe:guard1-other-source": "907c7796721216efdde09504f4935530ce8ba8c6ce412639075eb455829345e6",
+        "probe:guard2-no-op": "7a88236d44697add7e7aede1c239cddee7c2eb2e91d2ca2f241e2e56eb5b20e6",
+        "probe:guard2-too-long": "88c27790be6fe91895591cca1a03c55fee4f08f044fe7e0055a4928417db3bed",
+        "probe:guard3-foreign-old-value": "2abbd07098361e9e4f00715c9cf04cd52def6e4a5dc9bf0f8cf4454570d4a181",
+        "probe:guard4-not-owned": "2563f494bae7b86af2a968815de972b9dcbe55418acef836b560f08572157c3b",
+        "probe:guard5-premise": "7ae2fd6b8ef6cab19adf4e280969e63bc0b1177128d0e2e4852f2735e179433f",
+        "probe_foreign": "9d5bf7181303fac43324a2f9396a6daaf108b5f6b191dcd32b988fe0c5fcf19c",
+        "readback": "775ea38a13ee32afad0a3bc6572f04766e50b07ed5bf7ce7e08d0d9cc7af6353",
+        "rehearsal": "5b6998bd650a0db0e8d0ce6c8ae1051bb17a782270222b6dfe426ed242829840",
+        "rollback": "f0b0e3766858ef1760f160a39bbf5ec8553774a1a5452605e524bb779270c17f",
+        "rollback_rehearsal": "01f395321eaf187732dcd6de35890c8bcffd1db6958c5edb1bd3d8ff63cbe62b",
+    },
+}
+
+
+def _column_lane_renderings(lane: L.Lane, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """Every statement a column lane sends: the write and its undo, both rehearsals, the read-back,
+    the landed check, each probe, and the two queries `--probe-guards` and `--interests` read."""
+    records = A.load_records(A.lane_dir(lane) / "PLAN.jsonl")
+    apply_sql = A.apply_statement(records, lane)
+    rollback_sql = A.rollback_statement(records, lane)
+    out = {
+        "apply": apply_sql,
+        "rollback": rollback_sql,
+        "rehearsal": A.rehearse(apply_sql, lane=lane),
+        "rollback_rehearsal": rollback_sql.partition("\nCOMMIT;\n")[0]
+        + "\nROLLBACK;\n"
+        + A.rollback_rehearsal_reads(records, lane),
+        "readback": A.READBACKS[lane.name],
+    }
+    sent: list[str] = []
+
+    def capture(sql: str, **_: Any) -> Any:
+        sent.append(sql)
+        raise P.PlanError("captured")
+
+    monkeypatch.setattr(A, "read_rows", capture)
+    with pytest.raises(P.PlanError, match="captured"):
+        A.assert_the_write_landed(records, lane=lane)
+    out["landed"] = sent[-1]
+    monkeypatch.setattr(A, "psql_json_reader", lambda: capture)
+    with pytest.raises(P.PlanError, match="captured"):
+        A.cmd_probe_guards(records, A.lane_dir(lane), lane)
+    out["probe_foreign"] = sent[-1]
+    with pytest.raises(P.PlanError, match="captured"):
+        A.verify_interests(records, lane)
+    out["interests"] = sent[-1]
+    foreign = {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "Somewhere",
+        "value": "Scotland",
+        "premise": "56.0,-3.0",
+    }
+    for suffix, _, mutated, _ in A.probe_cases(records, lane, foreign):
+        stamp = f"{lane.probe_run_stamp}-{suffix}"
+        sql = A.render_transaction(
+            mutated,
+            run_stamp=stamp,
+            site_ids={r.site_id for r in mutated},
+            validate=False,
+            lane=lane,
+        )
+        out[f"probe:{suffix}"] = A.rehearse(sql, run_stamp=stamp, lane=lane)
+    return out
+
+
+class TestTheColumnLanesAreByteNeutral:
+    """The four lanes of 2026-09-21/22 render exactly what they rendered before cell lanes existed:
+    T05's statements wrote 35 rows, the UK, period_name and site_type lanes' are rehearsed and
+    applied, and a generalisation that moved one byte of them would make every pin in their
+    evidence a claim about a statement that no longer exists."""
+
+    def test_the_pins_cover_every_column_lane(self) -> None:
+        assert sorted(COLUMN_LANE_PINS) == sorted(
+            n for n, lane in L.LANES.items() if not lane.cells
+        )
+
+    @pytest.mark.parametrize("name", sorted(COLUMN_LANE_PINS))
+    def test_every_statement_is_the_pre_generalisation_rendering(
+        self, name: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        lane = L.LANES[name]
+        if not (A.lane_dir(lane) / "PLAN.jsonl").exists():
+            pytest.skip(f"{A.lane_dir(lane)}/PLAN.jsonl is not in this checkout")
+        rendered = {
+            key: _sha(text) for key, text in _column_lane_renderings(lane, monkeypatch).items()
+        }
+        assert rendered == COLUMN_LANE_PINS[name]
