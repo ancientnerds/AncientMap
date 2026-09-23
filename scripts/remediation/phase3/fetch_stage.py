@@ -1349,7 +1349,8 @@ class WikiArticleAnswer:
 
 
 def _single_page(payload: Any, *, what: str) -> Mapping[str, Any]:
-    pages = (payload.get("query") or {}).get("pages") if isinstance(payload, Mapping) else None
+    query = payload.get("query") if isinstance(payload, Mapping) else None
+    pages = query.get("pages") if isinstance(query, Mapping) else None
     if not isinstance(pages, list) or len(pages) != 1 or not isinstance(pages[0], Mapping):
         raise EvidenceUnrenderable(
             f"{what}: the answer carries no single page: {str(payload)[:200]}"
@@ -1424,6 +1425,8 @@ def wiki_page_refusal(
     if page.get("redirect") is True:
         return f"{title!r} is a redirect, not an article"
     props = page.get("pageprops") or {}
+    if not isinstance(props, Mapping):
+        raise EvidenceUnrenderable(f"{wiki}:{title}: pageprops is {props!r}, not an object")
     if "disambiguation" in props:
         return f"{title!r} is a disambiguation page"
     if props.get("wikibase_item") != qid:

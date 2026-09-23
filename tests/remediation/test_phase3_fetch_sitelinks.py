@@ -184,3 +184,380 @@ def test_a_record_whose_findings_buy_no_article_route_refuses_its_named_articles
     record = _record(findings=[{**SP.finding_row("country", "Armenia"), "test_id": "T02"}])
     with pytest.raises(InputError, match="names articles no finding buys"):
         F.targets_for_site(record)
+
+
+def test_a_record_without_articles_buys_exactly_the_targets_it_always_bought() -> None:
+    record = _record()
+    del record[F.WIKI_SITELINKS_KEY]
+    targets = F.targets_for_site(record)
+    assert [t.feature for t in targets] == [F.FEATURE_ENWIKI, F.FEATURE_WIKIDATA_ENTITY]
+    assert all(t.sitelink is None for t in targets)
+
+
+def test_the_articles_come_after_the_english_sitelink_and_before_the_narrowed_claims() -> None:
+    record = _record(enwiki_sitelink={"qid": QID, "title": "Areni-1 cave"}, wikidata_route="narrow")
+    features = [t.feature for t in F.targets_for_site(record)]
+    assert features[:3] == [F.FEATURE_ENWIKI, F.FEATURE_ENWIKI_SITELINK, "sitelink.dewiki"]
+    assert features[3] == F.FEATURE_WIKIDATA_TRUTHY
+
+
+# ── the record's list of articles is read strictly ────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ([], "not a list of 1 to 3 articles"),
+        (
+            [dict(DE), dict(ES), {**DE, "wiki": "frwiki", "lang": "fr"}, {**DE, "wiki": "itwiki"}],
+            "not a list of 1 to 3",
+        ),
+        (dict(DE), "not a list of 1 to 3"),
+        ([{**DE, "badges": []}], "not \\{wiki, lang, title, revid\\}"),
+        ([{k: v for k, v in DE.items() if k != "revid"}], "not \\{wiki, lang, title, revid\\}"),
+        (["dewiki"], "not \\{wiki, lang, title, revid\\}"),
+        ([{**DE, "wiki": "de"}], "is not a Wikipedia site id"),
+        ([{**DE, "wiki": "enwiki", "lang": "en"}], "is English"),
+        ([{**DE, "wiki": "simplewiki", "lang": "simple"}], "is English"),
+        ([{**DE, "wiki": "cebwiki", "lang": "ceb"}], "bot-generated"),
+        ([{**DE, "wiki": "warwiki", "lang": "war"}], "bot-generated"),
+        ([{**DE, "wiki": "arzwiki", "lang": "arz"}], "bot-generated"),
+        ([{**DE, "lang": "de.example.org"}], "not a Wikipedia language subdomain"),
+        ([{**DE, "lang": "DE"}], "not a Wikipedia language subdomain"),
+        ([{**DE, "title": "  "}], "carries no title"),
+        ([{**DE, "title": None}], "carries no title"),
+        ([{**DE, "revid": 0}], "pins revision 0"),
+        ([{**DE, "revid": True}], "pins revision True"),
+        ([{**DE, "revid": "268759019"}], "pins revision '268759019'"),
+        ([dict(DE), {**DE, "title": "Areni"}], "dewiki is named twice"),
+    ],
+)
+def test_a_damaged_list_of_articles_is_refused_not_read(value: Any, message: str) -> None:
+    with pytest.raises(InputError, match=message):
+        F.targets_for_site(_record(**{F.WIKI_SITELINKS_KEY: value}))
+
+
+def test_articles_on_a_record_without_an_item_are_refused() -> None:
+    record = _record()
+    del record["wikidata_qid"]
+    with pytest.raises(InputError, match="without a wikidata_qid"):
+        F.targets_for_site(record)
+
+
+def test_the_bot_generated_and_english_wikis_are_the_named_ones() -> None:
+    assert F.BOT_GENERATED_WIKIS == {"cebwiki", "warwiki", "arzwiki"}
+    assert F.ENGLISH_WIKIS == {"enwiki", "simplewiki"}
+    assert F.MAX_WIKI_SITELINKS == 3
+
+
+# ── the addresses ─────────────────────────────────────────────────────────────────────────────
+
+
+def _query(url: str) -> dict[str, list[str]]:
+    return parse_qs(urlsplit(url).query, keep_blank_values=True)
+
+
+def test_the_article_request_asks_for_plain_text_last_and_follows_no_redirect() -> None:
+    url = F.wikipedia_article_url("de", "Areni-1")
+    assert url.startswith("https://de.wikipedia.org/w/api.php?")
+    query = _query(url)
+    assert query["action"] == ["query"] and query["formatversion"] == ["2"]
+    assert query["prop"] == ["info|revisions|pageprops|extracts"]
+    assert query["explaintext"] == ["1"] and query["rvprop"] == ["ids"]
+    assert query["ppprop"] == ["wikibase_item|disambiguation"]
+    assert query["titles"] == ["Areni-1"]
+    assert "redirects" not in query
+
+
+def test_the_pin_request_takes_one_to_fifty_titles_and_no_text() -> None:
+    url = F.wikipedia_pages_url("zh-min-nan", ["A", "B"])
+    assert url.startswith("https://zh-min-nan.wikipedia.org/w/api.php?")
+    query = _query(url)
+    assert query["titles"] == ["A|B"] and query["prop"] == ["info|revisions|pageprops"]
+    assert "redirects" not in query and "explaintext" not in query
+    F.wikipedia_pages_url("de", [f"T{n}" for n in range(50)])
+    for count in (0, 51):
+        with pytest.raises(InputError, match="1 to 50 per request"):
+            F.wikipedia_pages_url("de", [f"T{n}" for n in range(count)])
+
+
+def test_a_host_nobody_named_is_never_built() -> None:
+    for lang in ("de.example.org", "de/", "", "-de", "de-"):
+        for build in (
+            lambda: F.wikipedia_api_url(lang),
+            lambda: F.wikipedia_permalink(lang, "Areni-1", REVID),
+        ):
+            with pytest.raises(InputError, match="not a Wikipedia language subdomain"):
+                build()
+
+
+def test_the_permalink_names_one_revision_in_the_one_spelling_of_the_project() -> None:
+    assert F.wikipedia_permalink("de", "Höhle von Areni (Armenien)", 5) == (
+        "https://de.wikipedia.org/w/index.php?title=H%C3%B6hle_von_Areni_(Armenien)&oldid=5"
+    )
+    assert F.WikiSitelink("dewiki", "de", "Areni-1", REVID).permalink == (
+        f"https://de.wikipedia.org/w/index.php?title=Areni-1&oldid={REVID}"
+    )
+
+
+def test_every_sitelink_of_an_item_is_asked_with_its_url_for_the_lane() -> None:
+    lane = _query(F.wikidata_sitelinks_url(["Q1", "Q2"], all_wikis=True))
+    assert lane["props"] == ["sitelinks/urls"] and "sitefilter" not in lane
+    english = _query(F.wikidata_sitelinks_url(["Q1"]))
+    assert english["props"] == ["sitelinks"] and english["sitefilter"] == ["enwiki"]
+
+
+# ── the item's sitelinks, read ───────────────────────────────────────────────────────────────
+
+
+def _entities(**items: Any) -> bytes:
+    return json.dumps({"entities": items}).encode("utf-8")
+
+
+def _link(title: str, url: str | None = None, *badges: str) -> dict[str, Any]:
+    link: dict[str, Any] = {"title": title, "badges": list(badges)}
+    if url is not None:
+        link["url"] = url
+    return link
+
+
+def test_every_sitelink_of_every_item_is_read_with_its_url_and_badges() -> None:
+    answer = F.item_sitelinks_from_answer(
+        _entities(
+            Q1={
+                "sitelinks": {
+                    "dewiki": _link("Areni-1", "https://de.wikipedia.org/wiki/Areni-1"),
+                    "enwiki": _link("Areni-1 cave", None, "Q70893996"),
+                }
+            },
+            Q2={"sitelinks": {}},
+        )
+    )
+    assert answer["Q1"]["dewiki"] == F.Sitelink(
+        "Areni-1", (), "https://de.wikipedia.org/wiki/Areni-1"
+    )
+    assert answer["Q1"]["enwiki"].url is None
+    assert answer["Q1"]["enwiki"].redirect_badges() == ["Q70893996 sitelink to redirect"]
+    assert answer["Q2"] == {}
+    assert F.enwiki_sitelinks_from_answer(
+        _entities(Q1={"sitelinks": {"enwiki": _link("Areni-1 cave")}}, Q2={"sitelinks": {}})
+    ) == {"Q1": F.Sitelink("Areni-1 cave", ()), "Q2": None}
+
+
+def test_a_sitelink_url_that_is_not_text_is_refused() -> None:
+    for url in ("", 5, ["https://de.wikipedia.org/wiki/A"]):
+        body = _entities(Q1={"sitelinks": {"dewiki": {"title": "A", "badges": [], "url": url}}})
+        with pytest.raises(F.EvidenceUnrenderable, match="url is"):
+            F.item_sitelinks_from_answer(body)
+
+
+def test_an_item_wikidata_says_does_not_exist_is_refused() -> None:
+    with pytest.raises(F.EvidenceUnrenderable, match="does not exist"):
+        F.item_sitelinks_from_answer(_entities(Q1={"id": "Q1", "missing": ""}))
+
+
+# ── the answer, read whole or cut ─────────────────────────────────────────────────────────────
+
+
+def test_a_whole_answer_is_its_page_and_its_extract() -> None:
+    answer = F.read_wiki_article(_body(_page()), truncated=False, what="t")
+    assert answer.extract == TEXT and answer.cut is False
+    assert "extract" not in answer.page and answer.page["lastrevid"] == REVID
+
+
+def test_an_answer_that_is_not_one_page_is_refused() -> None:
+    for payload in (
+        {"query": {"pages": []}},
+        {"query": {"pages": [_page(), _page(title="B")]}},
+        {"query": "pages"},
+        {"query": {"pages": ["Areni-1"]}},
+        ["query"],
+    ):
+        with pytest.raises(F.EvidenceUnrenderable, match="no single page"):
+            F.read_wiki_article(json.dumps(payload).encode(), truncated=False, what="t")
+
+
+def _cut(body: bytes, keep: int) -> bytes:
+    return body[:keep]
+
+
+def test_a_cut_answer_is_read_as_its_whole_metadata_and_the_extract_up_to_the_cut() -> None:
+    long_text = "Höhle " * 20_000
+    body = _body(_page(extract=long_text))
+    cut = _cut(body, F.MAX_PAGE_BYTES)
+    answer = F.read_wiki_article(cut, truncated=True, what="t")
+    assert answer.cut is True and answer.page["lastrevid"] == REVID
+    assert long_text.startswith(answer.extract) and len(answer.extract) > 10_000
+
+
+def test_a_cut_that_splits_an_escape_or_a_character_drops_only_the_split_part() -> None:
+    page = _page(extract="abécd")
+    ascii_body = json.dumps({"query": {"pages": [page]}}, separators=(",", ":")).encode()
+    start = ascii_body.index(b"\\u00e9")
+    for keep in range(start + 1, start + 6):  # inside the six characters of the escape
+        assert F.read_wiki_article(ascii_body[:keep], truncated=True, what="t").extract == "ab"
+    utf8_body = _body(page)
+    at = utf8_body.index("é".encode())
+    assert F.read_wiki_article(utf8_body[: at + 1], truncated=True, what="t").extract == "ab"
+    escaped = json.dumps(
+        {"query": {"pages": [_page(extract='say "x"')]}}, separators=(",", ":")
+    ).encode()
+    quote_at = escaped.index(b'\\"x')
+    assert F.read_wiki_article(escaped[: quote_at + 1], truncated=True, what="t").extract == "say "
+
+
+def test_a_cut_that_falls_in_the_closing_brackets_keeps_the_whole_extract() -> None:
+    body = _body(_page())
+    answer = F.read_wiki_article(body[:-2], truncated=True, what="t")
+    assert answer.extract == TEXT and answer.cut is True
+
+
+def test_a_cut_answer_that_is_not_the_requested_shape_is_refused() -> None:
+    body = _body(_page())
+    cases = [
+        (body[: body.index(b'"extract"')], "cut before its extract began"),
+        (b'{"extract":"' + TEXT.encode(), "cut before its extract began"),
+        (b'{"query":{"pages":[{"title":' + b',"extract":"abc', "metadata is not JSON"),
+        (body[: body.index(b'"extract"') + 11] + b"\xff\xfe" + b"a" * 10, "not UTF-8"),
+        (body[: body.index(b'"extract"') + 11] + b"ab\\xcdefghij", "is not a JSON string"),
+    ]
+    for cut, message in cases:
+        with pytest.raises(F.EvidenceUnrenderable, match=message):
+            F.read_wiki_article(cut, truncated=True, what="t")
+
+
+# ── is it the pinned article? ─────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("changes", "reason"),
+    [
+        ({"missing": True, "revisions": None, "lastrevid": None}, "has no article 'Areni-1'"),
+        ({"title": "Areni 1"}, "the answer is for 'Areni 1', not 'Areni-1'"),
+        ({"redirect": True}, "'Areni-1' is a redirect, not an article"),
+        (
+            {"pageprops": {"wikibase_item": QID, "disambiguation": ""}},
+            "'Areni-1' is a disambiguation page",
+        ),
+        ({"pageprops": {"wikibase_item": "Q5"}}, "names the Wikidata item 'Q5', not 'Q1007510'"),
+        ({"pageprops": None}, "names the Wikidata item None"),
+        ({"lastrevid": REVID + 1}, f"at revision {REVID} \\(latest {REVID + 1}\\)"),
+        ({"revisions": [{"revid": REVID - 1}]}, f"at revision {REVID - 1} \\(latest {REVID}\\)"),
+        ({"extract": "  "}, "'Areni-1' carries no text"),
+        ({"extract": None}, "'Areni-1' carries no text"),
+    ],
+)
+def test_an_answer_that_is_not_the_pinned_article_is_refused_with_the_reason(
+    changes: dict[str, Any], reason: str
+) -> None:
+    answer = F.read_wiki_article(_body(_page(**changes)), truncated=False, what="t")
+    refused = F.wiki_article_refusal(_target(), answer)
+    assert refused is not None
+    assert __import__("re").search(reason, refused), refused
+
+
+def test_the_pinned_article_is_not_refused() -> None:
+    answer = F.read_wiki_article(_body(_page()), truncated=False, what="t")
+    assert F.wiki_article_refusal(_target(), answer) is None
+
+
+def test_a_page_the_answer_cannot_describe_is_a_contract_break() -> None:
+    target = _target()
+    for changes, message in (
+        ({"invalid": True, "invalidreason": "bad title"}, "calls 'Areni-1' invalid"),
+        ({"revisions": None}, "carries no revision"),
+        ({"revisions": []}, "carries no revision"),
+        ({"lastrevid": None}, "lastrevid None"),
+        ({"lastrevid": True}, "lastrevid True"),
+        ({"revisions": [{"revid": "1"}]}, "revision '1'"),
+        ({"pageprops": ["wikibase_item"]}, "pageprops"),
+    ):
+        answer = F.read_wiki_article(_body(_page(**changes)), truncated=False, what="t")
+        with pytest.raises(F.EvidenceUnrenderable, match=message):
+            F.wiki_article_refusal(target, answer)
+
+
+def test_only_a_sitelink_target_is_checked_and_rendered_as_an_article() -> None:
+    record = _record()
+    english = next(t for t in F.targets_for_site(record) if t.feature == F.FEATURE_ENWIKI)
+    answer = F.read_wiki_article(_body(_page()), truncated=False, what="t")
+    with pytest.raises(InputError, match="not a sitelink target"):
+        F.wiki_article_refusal(english, answer)
+    page = F.FetchedPage(status=200, final_url="u", body=b"not json at all", truncated=False)
+    assert F.answer_refusal(english, page) is None
+    refused = F.read_wiki_article(_body(_page(redirect=True)), truncated=False, what="t")
+    with pytest.raises(InputError, match="only the pinned article's own answer is rendered"):
+        F.render_wiki_article(_target(), refused)
+
+
+# ── stored as plain text, a cut one marked ────────────────────────────────────────────────────
+
+
+def test_a_cut_article_is_stored_as_far_as_it_was_read_with_the_truncation_marker(
+    tmp_path: Path,
+) -> None:
+    long_text = "Höhle " * 20_000
+    cut = _body(_page(extract=long_text))[: F.MAX_PAGE_BYTES]
+    outcome = _attempt(tmp_path, _Answers(cut, truncated=True))
+    assert outcome.stored is True and outcome.truncated is True
+    text = F.EvidenceStore(tmp_path / "evidence").path_for(SITE, "sitelink.dewiki")
+    stored = text.read_text(encoding="utf-8")
+    assert stored.endswith(F.TRUNCATION_MARKER)
+    body = stored[: -len(F.TRUNCATION_MARKER)]
+    assert body.startswith('Wikipedia (dewiki) article "Areni-1"')
+    assert long_text.startswith(body.split("\n\n", 1)[1].rstrip("\n"))
+    raw = next((tmp_path / "evidence_raw").iterdir()).read_bytes()
+    assert raw == cut
+
+
+def test_a_failed_answer_is_retried_and_never_read_as_an_article(tmp_path: Path) -> None:
+    fetcher = _Answers(b"busy", b"busy", _body(_page()), status=503)
+    outcome = _attempt(tmp_path, fetcher)
+    assert len(fetcher.asked) == F.MAX_ATTEMPTS
+    assert outcome.answer_refused is None and outcome.stored is False
+    assert [line["given_up"] for line in _lines(tmp_path)][-1] is True
+
+
+def test_the_judge_reads_a_refused_article_as_that_targets_failure(tmp_path: Path) -> None:
+    """collect_batch records the refusal in `fetch.json`; the finder's prompt then names the article
+    as failed instead of raising on a missing file (`model_stage.read_fetch_failures`)."""
+    import httpx
+
+    from phase3 import model_stage as MS
+
+    record = _record(**{F.WIKI_SITELINKS_KEY: [dict(DE), dict(ES)]})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if urlsplit(url).path == "/":
+            return httpx.Response(200, content=b"root")
+        host = urlsplit(url).netloc
+        if host == "de.wikipedia.org":
+            return httpx.Response(200, content=_body(_page()))
+        if host == "es.wikipedia.org":
+            edited = _page(title="Cueva Areni-1", lastrevid=9, revisions=[{"revid": 9}])
+            return httpx.Response(200, content=_body(edited))
+        if host == "en.wikipedia.org":
+            return httpx.Response(200, content=b"English article")
+        return httpx.Response(200, content=b'{"entities": {}}')
+
+    store = F.EvidenceStore(tmp_path / "evidence")
+    with F.HttpFetcher(transport=httpx.MockTransport(handler)) as fetcher:
+        report = F.collect_batch(
+            batch={"batch_id": "slkg-0001", "sites": [record]},
+            fetcher=fetcher,
+            store=store,
+            ledger=L.Ledger(tmp_path / "LEDGER.jsonl"),
+            stage=Stage.FINDER,
+            sleep=lambda _seconds: None,
+        )
+    (tmp_path / "fetch.json").write_text(report.to_json(), encoding="utf-8")
+    failures = MS.read_fetch_failures(tmp_path / "fetch.json")
+    assert list(failures[SITE]) == ["sitelink.eswiki"]
+    assert "answer refused" in failures[SITE]["sitelink.eswiki"]
+    excerpts = MS.evidence_excerpts(
+        site_id=SITE, site=record, store=store, hit_pages=False, failures=failures[SITE]
+    )
+    by_feature = {e.feature: e for e in excerpts}
+    assert by_feature["sitelink.dewiki"].text is not None
+    assert by_feature["sitelink.eswiki"].text is None and by_feature["sitelink.eswiki"].failure
