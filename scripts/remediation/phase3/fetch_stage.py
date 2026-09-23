@@ -131,6 +131,7 @@ import email.utils
 import json
 import os
 import re
+import sys
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -145,15 +146,19 @@ import httpx
 # The package is not installed, so the parent directory must be importable first (same shim as
 # `run.py`); `census` is the sibling package that solved HTTP fetching for this project already.
 if __package__ in (None, ""):
-    import sys
-
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# The repository root for `pipeline.utils.http`, appended as in `search_evidence`, so nothing under
+# the root can shadow a phase-3 module.
+REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.append(str(REPO))
 
 from census.fetch import USER_AGENT  # noqa: E402  - the project's one User-Agent string
 
 from phase3 import ledger as L  # noqa: E402
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
+from pipeline.utils.http import is_public_http_url  # noqa: E402  - Lyra's own SSRF check
 
 #: The binding per-page cap (decision 12; `COST.md` §7 item 1). **The sources say "60 KB" and
 #: never a byte count.** 60 x 1024 = **61,440 bytes** is my reading of "60 KB" (binary KB);
@@ -359,6 +364,19 @@ class RawGeometryRefused(ValueError):
     """A URL asks for raw geometry. Decision 12 forbids it; see `assert_named_feature`."""
 
 
+class NonPublicAddressRefused(ValueError):
+    """A URL names a host that is not a public http(s) address; see `assert_public_address`."""
+
+
+class NonPublicRedirect(httpx.RequestError):
+    """A redirect hop to a host that is not a public http(s) address, refused before it is asked.
+
+    An `httpx` error on purpose: the hop is refused inside the client, after the first request was
+    sent and answered, so `HttpFetcher.get` records it as that attempt's `TransportFailure` - the
+    request happened and keeps its ledger line - rather than as a caller's bug.
+    """
+
+
 class EvidenceConflict(RuntimeError):
     """An evidence file for this (site, feature) exists and holds *different* bytes."""
 
@@ -535,11 +553,14 @@ class HttpFetcher:
             timeout=timeout,
             follow_redirects=True,
             headers={"User-Agent": user_agent, "Accept": "*/*"},
+            event_hooks={"request": [_refuse_non_public_hop]},
         )
 
     def get(self, url: str) -> FetchedPage:
-        """GET `url`. Every URL is checked against decision 12 before a socket is opened."""
+        """GET `url`. Every URL is checked against decision 12 and for a public address before a
+        socket is opened; every redirect hop is checked for a public address before it is asked."""
         assert_named_feature(url)
+        assert_public_address(url)
         timeout = self._timeout(url)
         try:
             with self._client.stream("GET", url, timeout=timeout) as response:
@@ -765,6 +786,36 @@ def assert_named_feature(url: str) -> None:
         raise RawGeometryRefused(
             f"{url!r} asks for raw geometry ({marker!r}); decision 12 wants named features "
             "(COST.md §3: two OSM bbox dumps were 1.0 MB of 2.34 MB)"
+        )
+
+
+def assert_public_address(url: str) -> None:
+    """Refuse a URL whose host is not a public http(s) address, before a socket is opened.
+
+    The check is Lyra's own (`pipeline.utils.http.is_public_http_url`: loopback, private and
+    link-local addresses, the metadata endpoints, any scheme but http(s)). It matters for the one
+    kind of URL this module is handed from outside: a search hit's link (`phase3/hit_stage.py`) is a
+    search engine's text, and the workstation that runs the phase-3 stages carries the production
+    tunnels on localhost (psql 15432, API 18000). Every target the fetch stage builds is a fixed
+    public endpoint. `HttpFetcher` applies the same check to every redirect hop.
+    """
+    if not is_public_http_url(url):
+        raise NonPublicAddressRefused(
+            f"{url!r} is not a public http(s) address (pipeline.utils.http.is_public_http_url); "
+            "a loopback, private or link-local host is never asked"
+        )
+
+
+def _refuse_non_public_hop(request: httpx.Request) -> None:
+    """`HttpFetcher`'s request hook: `httpx` calls it before every request, each redirect hop
+    included. The first request has passed `assert_public_address` already, so what this refuses is
+    a hop - a public page redirecting into a private address."""
+    url = str(request.url)
+    if not is_public_http_url(url):
+        raise NonPublicRedirect(
+            f"redirect to {url!r} refused: not a public http(s) address "
+            "(pipeline.utils.http.is_public_http_url)",
+            request=request,
         )
 
 

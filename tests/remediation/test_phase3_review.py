@@ -277,6 +277,230 @@ def test_a_review_without_a_why_line_is_a_problem() -> None:
     assert any("no `WHY:` sentence" in p for p in answer.problems), answer.problems
 
 
+# ── a WHY line that names a failing half (2026-09-23) ────────────────────────────────────────
+
+#: Real `WHY:` lines of `REFUTED: NO` answers, each naming a failing half, and the phrase that names
+#: it. From the search pilot (`runs/search-gold`) and the mass lane's hand-held rows
+#: (`logs/_write_apply/HOLDS.jsonl`), quoted as the reviewer wrote them.
+FAILING_HALF_WHY: tuple[tuple[str, str], ...] = (
+    (  # Lake Mungo period_start, the pilot
+        "Both halves fail: the evidence actually supports a value around -500 (the store) rather "
+        "than -50000, so neither the reasoning nor the proposed value holds",
+        "both halves fail",
+    ),
+    (  # Lake Mungo site_type, the pilot
+        'Neither half holds — the reason (no source states "Geological interest") does not show '
+        "the stored value wrong",
+        "neither half holds",
+    ),
+    (  # Odeon Theatre card_description, the pilot
+        "no evidence contradicts that clause, and the stored text is not shown wrong.",
+        "the stored value is not shown wrong",
+    ),
+    (  # Cueva de los Murcielagos period_start, the pilot
+        "The stored value 1 is not shown wrong: `period_start` is a sort key",
+        "the stored value is not shown wrong",
+    ),
+    (  # Tan Hill site_type, a hold
+        'the finder\'s proposal "Natural feature" is not a site-type value and is contradicted by '
+        "the documented hill figure, so neither half is established.",
+        "neither half is established",
+    ),
+    (  # Harappa period_start, a mass-lane write
+        "The half that fails is the reason — the excavators' chronology gives the site's own "
+        "earliest occupation",
+        "the half that fails is named",
+    ),
+    (  # Jarlshof period_start, a mass-lane write
+        "The evidence does not show the stored -3000 wrong: the enwiki extract explicitly says the "
+        "oldest known remains date from the Bronze Age",
+        "does not show the stored value wrong",
+    ),
+    (  # Ollantaytambo period_start, a hold
+        "the site's own Inca founding is stated as mid/late 15th century, so nothing shows the "
+        "stored value wrong",
+        "nothing shows the stored value wrong",
+    ),
+    (  # Copan Ruins site_type, a mass-lane write
+        'P31 = Q839954 (archaeological site) is a less specific value than the stored "Temple '
+        'complex", and a broader Wikidata type does not make the finer stored type wrong.',
+        "does not make the stored value wrong",
+    ),
+    (  # Uruk period_start, a hold
+        "the enwiki extract's own founding date of c. 5000 BC supports a value earlier than -3200, "
+        "so the evidence does not establish the stored value is wrong.",
+        "does not establish that the stored value is wrong",
+    ),
+    (  # Pagans Hill Roman Temple site_type, a hold
+        'The stored "Temple complex" is not contradicted — the enwiki extract itself says the '
+        'site "formed a large pilgrimage centre"',
+        "the stored value is not contradicted",
+    ),
+    (  # Alte Burg site_type, a hold
+        'Wikidata\'s "castle in Langenenslingen" description does not contradict the stored '
+        "`Fortress/citadel`.",
+        "does not contradict the stored value",
+    ),
+    (  # Tulum period_start, a hold
+        'The evidence supports the stored value: the enwiki text says Tulum "achieved its greatest '
+        'prominence between the 13th and 15th centuries,"',
+        "the evidence supports the stored value",
+    ),
+    (  # Castell Dinas period_start, a hold
+        "The proposed -600 is contradicted by the evidence itself, which says the hillfort dates "
+        'from "600 BC to 50 AD"',
+        "the proposed value is contradicted",
+    ),
+    (  # Pen Dinas period_start, a mass-lane write
+        "The reason fails: the English Wikipedia source dates the hillfort's construction",
+        "the reason fails",
+    ),
+    (  # Amaru Marka Wasi site_type, a mass-lane write
+        "The reason does not hold — the evidence's own text describes Amaru Marka Wasi as an "
+        '"archaeological site"',
+        "the reason does not hold",
+    ),
+    (  # Roman Emperors Route site_type, a mass-lane write
+        "the proposed `Road/avenue/trackway` is not contradicted either, but the reason half fails "
+        "because enwiki/Wikidata describe it as a project/route",
+        "the reason half fails",
+    ),
+    (  # a YES answer of the mass run (batch-0007), the value half in the reviewer's own words
+        "while -4000 is not contradicted by any dating evidence for this tomb, so the second half "
+        "fails.",
+        "the value half fails",
+    ),
+    (  # a NO answer of the mass run (batch-0237)
+        'The proposal fails, not the reason: the stored "City/town/settlement" is a project bucket '
+        "for an inhabited site",
+        "the proposal fails",
+    ),
+    (  # a hand-held row of the mass lane (batch-0053, 50873aa8 period_start), `REFUTED: NO`: the
+        # half's name in quotes. Until 2026-09-23 only the value-half phrase caught it, and by its
+        # own misreading ("the proposed year 300 is contradicted neither by ...", the half that holds)
+        'The stored value 1 is the period_start year 1 (used as a sort key within the "1 - 500 AD" '
+        "bucket), and the finder supplies no evidence that the year 1 is what the project must "
+        'store; the "reason" half fails because the evidence shows an occupation beginning at 300 '
+        "AD, not a mis-stored 1, and the proposed year 300 is contradicted neither by Wikipedia nor "
+        "Wikidata's P580 +300.",
+        "the reason half fails",
+    ),
+    (  # the same quoted name for the value half, which no answer of the mass run uses yet
+        "the reason stands, but the `value` half fails because the page dates the site later",
+        "the value half fails",
+    ),
+)
+
+
+@pytest.mark.parametrize(("why", "phrase"), FAILING_HALF_WHY)
+def test_a_why_line_that_names_a_failing_half_is_recognised(why: str, phrase: str) -> None:
+    assert RS.failing_half(why) == phrase
+
+
+#: Real `WHY:` lines that say both halves hold, including the wordings closest to a failing half.
+#: A phrase that caught one of these would hold a row the reviewer cleared in so many words.
+BOTH_HALVES_HOLD_WHY: tuple[str, ...] = (
+    # Aguada Fenix, a mass-lane write
+    "The evidence supports the proposed value — the Wikipedia extract states the monumental "
+    'structure "is believed to have been built from around 1000 BC to 800 BC," so the stored -1500 '
+    "is contradicted and -1000 is not.",
+    # Celemantia, a mass-lane write
+    "so neither the reason nor the proposed `Fortress/citadel` is contradicted.",
+    # Piddington Roman Villa, a mass-lane write
+    "so neither the reason (that -3000 is unsupported) nor the proposed -3500 is contradicted; "
+    "both halves hold.",
+    # Debdieba, a mass-lane write
+    "but the proposed -3000 is contradicted by neither source and is supported by both",
+    # Dipylon, a mass-lane write
+    "however the proposed -478 is contradicted by nothing in the evidence",
+    # Maiden Castle, a mass-lane write
+    "and the proposed -600 matches that founding value, so neither the reason nor the proposal "
+    "fails.",
+    # Dos Pilas, a mass-lane write
+    "The evidence supports the stored value being wrong - both the enwiki extract (founded AD 629) "
+    "and Wikidata P571 (629 CE) date the site's founding to the 7th century",
+    # Cadbury Hill, a mass-lane write
+    "and nothing in the evidence supports the stored -3000 (3rd millennium BC), so both halves "
+    "hold: the reason stands and the proposed -1000 is not contradicted.",
+    # Ahu Tongariki period_start, the pilot
+    "The cited source explicitly says most image ahu were built circa 1000-1500 AD, so the stored "
+    "value 1 (bucket 1-500 AD) is wrong and the proposed 1000 is supported.",
+    # Aubrey Holes period_start, the pilot (refused by the bucket gate, not by a phrase)
+    "Neither half fails — the cited inventory gives the Aubrey Holes as a Neolithic pit dated "
+    "-4000 to -2351, so -4500 does fall outside that range and the proposed -4000 is not "
+    "contradicted",
+    # Asclepieion of Athens: a conditional, not a verdict on the half
+    "the second half fails only if the proposal is contradicted — it is not",
+    # Roman Bridge of Cordoba, a mass-lane write: "stored" and "not contradicted" in one sentence,
+    # about the two different values
+    "so the stored -500 is wrong and the proposed -100 is not contradicted; both halves hold.",
+    # ── "the proposed value is contradicted" in a sentence that says the value half holds
+    # (2026-09-23, the fixer's review): the mass run's own NO answers
+    # batch-0237 34f1acbd card_description: "nor its proposed value"
+    'while "oldest military fort in the Timok Valley" is simply the English equivalent of "Valea '
+    "Timacului,\" so neither the finding's reason nor its proposed value is contradicted—both "
+    "halves hold.",
+    # batch-0053 50873aa8 period_start, the value half's clause alone: "contradicted neither by"
+    "and the proposed year 300 is contradicted neither by Wikipedia nor Wikidata's P580 +300.",
+    # batch-0151 1374c196 card_description: a question the sentence answers "No" to
+    "The evidence supports the finder's reason (eight stones survive: five standing, three "
+    'recumbent), but the proposed value\'s "sandstone" is contradicted by the evidence? No — the '
+    'source says the stones are sandstone boulders of the Bagshot Beds, so "sandstone" is '
+    'actually supported; the "eight surviving boulders" and "~26 m" both stand, so the reason '
+    "holds and the proposal is not contradicted.",
+    # batch-0171 44354857 period_start, the value half's clause alone: a conditional
+    "and the proposed -430 is contradicted only if the earlier dedication is ignored",
+    # the reviewer's own synthetic check of the same wording
+    "The proposed -1000 is contradicted neither by enwiki nor by Wikidata.",
+    # the other owners a "neither ... nor <owner> proposed value" sentence can name
+    "so neither the reason nor the finding's proposed value is contradicted.",
+    "so neither the reason nor the finder's proposed value is contradicted.",
+    "so neither the reason nor finding's proposed value is contradicted.",
+    "so neither the reason nor finder’s proposed value is contradicted.",
+    # ── one sentence per exclusion that had no negative of its own (2026-09-23, the fixer's
+    # review): without it, the exclusion could be deleted with every test green
+    # `(?<!no )` on "the evidence supports the stored value" - batch-0045 69fb2e9b site_type
+    "the enwiki extract and Wikidata description call it an archaeological site, while no "
+    'evidence supports the stored "City/town/settlement"',
+    # `(?<!nothing in the )` on the same phrase - batch-0114 6b730ea0 site_type (the Cadbury Hill line
+    # above names a bare year, which the phrase never reads, so it did not protect this exclusion)
+    "the enwiki extract both class the site only as an archaeological site, and nothing in the "
+    'evidence supports the stored "City/town/settlement"; the proposed "Archaeological site" '
+    "matches the sources.",
+    # `(?<!nor )` on the same phrase
+    'neither the extract nor evidence supports the stored "Temple complex" as a type',
+    # `(?! only if)` on "the reason / first half fails" - batch-0272 6a8bc59c card_description
+    'The first half fails only if "1st-century BC" is asserted as a dating',
+    # `(?! only if)` on "the reason fails"
+    "the reason fails only if the extract is wrong, and it is not",
+    # `(?<!nor )` on "the reason fails"
+    "so neither the proposal nor the reason fails.",
+    # `(?! only if)` on "the proposal fails"
+    "the proposal fails only if the page is misread, and it is not",
+    # `(?!(?:that )?the propos)` on "does not show ... wrong"
+    "the evidence does not show the proposed -1000 wrong",
+    # `(?<!if the )` on "the proposed value is contradicted"
+    "it would fail if the proposed -700 is contradicted by a dated source, and none is given",
+    # `(?<!whether the )` on the same phrase
+    "the question is whether the proposal is contradicted, and it is not",
+    # `(?<!nor )` on the same phrase: the owner-less "nor proposed"
+    "so neither the reason nor proposed -3500 is contradicted.",
+)
+
+
+@pytest.mark.parametrize("why", BOTH_HALVES_HOLD_WHY)
+def test_a_why_line_that_says_both_halves_hold_names_no_failing_half(why: str) -> None:
+    assert RS.failing_half(why) is None
+
+
+def test_every_hand_read_phrase_is_a_failing_half_phrase() -> None:
+    """The writer looks a hold's phrase up by name: a hand-read key no phrase carries would route
+    nothing, silently. Each count is (false holds, written rows held), so false <= held."""
+    names = {name for name, _ in RS.FAILING_HALF_PHRASES}
+    assert set(RS.HAND_READ_PHRASES) <= names
+    assert all(0 < false <= held for false, held in RS.HAND_READ_PHRASES.values())
+
+
 # ── what gets reviewed at all ────────────────────────────────────────────────────────────────
 
 
