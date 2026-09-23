@@ -73,8 +73,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 _REMEDIATION = ROOT / "scripts" / "remediation"
-if str(_REMEDIATION) not in sys.path:
-    sys.path.insert(0, str(_REMEDIATION))
+for _path in (ROOT, _REMEDIATION):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 from census.fetch import Fetcher, FetchError  # noqa: E402
 from census.snapshot import Snapshot  # noqa: E402
@@ -82,8 +83,9 @@ from census.tests.t09_commons_dimensions import (  # noqa: E402
     BATCH,
     COMMONS_API,
     _commons_file_name,
-    _dereference,
 )
+
+from pipeline.utils.mediawiki import dereference  # noqa: E402
 
 log = logging.getLogger("gallery_audit.liveness")
 
@@ -315,7 +317,8 @@ def read_pages(titles: Sequence[str], answer: Answer) -> dict[str, dict[str, Any
     """Every requested title -> its store fields. A title the answer does not mention raises.
 
     Commons answers under the name it normalised (`_` -> space) and, with `redirects=1`, under the
-    redirect target; both chains are applied with T09's `_dereference`, so a moved-with-redirect
+    redirect target; both chains are applied with `pipeline.utils.mediawiki.dereference` (the
+    function T09 reads its answers with), so a moved-with-redirect
     file is recognised by its normalised title differing from the page that answered.
     """
     query = answer.body["query"]
@@ -325,8 +328,8 @@ def read_pages(titles: Sequence[str], answer: Answer) -> dict[str, dict[str, Any
 
     out: dict[str, dict[str, Any]] = {}
     for requested in titles:
-        norm = _dereference(requested, normalized)
-        title = _dereference(norm, redirects)
+        norm = dereference(requested, normalized)
+        title = dereference(norm, redirects)
         page = pages.get(title)
         if page is None:
             raise LivenessError(
