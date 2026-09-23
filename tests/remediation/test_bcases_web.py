@@ -423,6 +423,36 @@ def test_words_beside_the_coordinates_are_not_read() -> None:
         assert "stand beside the two coordinates" in _unparsed(text), text
 
 
+def test_a_sign_or_a_dash_standing_apart_is_not_read() -> None:
+    """A sign parted from its number by a space, or a dash the glyph table does not turn into a minus
+    (an en dash, a hyphen), would leave the number positive: the text is refused, not read as east
+    or north."""
+    for text in (
+        "17.5744, - 89.9958",
+        "17.5744, –89.9958",
+        "Lat 17.5744 Long + 89.9958",
+        "‐ 17.5744, 89.9958",
+        "41.5 N – 12.3 E",
+    ):
+        assert "stand beside the two coordinates" in _unparsed(text), text
+    assert W.parse_coordinates("17.5744,-89.9958") == (17.5744, -89.9958)
+
+
+def test_two_signed_numbers_are_read_latitude_first_and_a_label_saying_otherwise_is_refused() -> (
+    None
+):
+    """Signed decimals carry no axis of their own: the labels, when there are any, must name the
+    latitude first ("Longitude / Latitude -0.3579, 51.754" is a longitude first)."""
+    for text in (
+        "Longitude / Latitude -0.3579, 51.754",
+        "Long: -0.3579, Lat: 51.754",
+        "-0.3579 (lon), 51.754 (lat)",
+    ):
+        assert "names the longitude first" in _unparsed(text), text
+    assert W.parse_coordinates("Lat/Long 51.754, -0.3579") == (51.754, -0.3579)
+    assert W.parse_coordinates("51.754 (lat), -0.3579 (long)") == (51.754, -0.3579)
+
+
 def test_a_sign_and_a_letter_together_are_not_read() -> None:
     assert "both a sign and a hemisphere letter" in _unparsed("-41.5 S, 12.3 E")
 

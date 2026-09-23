@@ -36,7 +36,9 @@ ends at:
 * `unparsed` - `coord_text` does not hold exactly two coordinates this parser reads: signed decimal
   degrees (latitude first) or degrees with a hemisphere letter each (decimal, D M or D M S with the
   degree and prime signs or with spaces only, the letter before or after), with nothing else around
-  them but labels and separators (`LABEL_WORDS`, the datum "WGS 84");
+  them but labels and separators (`LABEL_WORDS`, the datum "WGS 84") - no sign or dash standing
+  apart from its number (`_SIGNS`), and for two signed numbers no axis label naming the longitude
+  first (`LAT_WORDS`, `LON_WORDS`);
 * `mismatch` - the parsed numbers are not the candidate's `lat`/`lon` within `MATCH_DEGREES` (1e-6):
   the numbers are the page's, not the agent's;
 * `identity` - no distinctive word of the stored name (`classify.tokens`, words of at least
@@ -212,6 +214,13 @@ LABEL_WORDS = frozenset(
     """lat latitude lon long lng longitude coordinates coordinate coords coord gps location position
     wgs wgs84 decimal degrees dd dms and""".split()
 )
+#: The labels that name an axis: two signed numbers are read latitude first, so the first of these
+#: in `coord_text` must be a latitude one.
+LAT_WORDS = frozenset({"lat", "latitude"})
+LON_WORDS = frozenset({"lon", "long", "lng", "longitude"})
+#: A sign or a dash left beside the two coordinates: one that stood apart from its number (a space
+#: between, or a dash `_GLYPHS` does not make a minus) - reading the number without it flips it.
+_SIGNS = re.compile(r"[+\-\u2010-\u2015\u2e3a\u2e3b\ufe58]")
 
 # One coordinate: degrees (decimal, or whole with minutes and seconds after a degree sign) with a
 # sign, or a hemisphere letter after it (`_SUFFIX`) or before it (`_PREFIX`).
@@ -382,12 +391,19 @@ def parse_coordinates(coord_text: str) -> tuple[float, float]:
             "(signed decimals, or degrees with a hemisphere letter each)",
         )
     rest = _leftover(text, chosen)
-    stray = [w for w in re.findall(r"[^\W_]+", rest) if w.casefold() not in LABEL_WORDS]
+    words = re.findall(r"[^\W_]+", rest)
+    stray = [w for w in words if w.casefold() not in LABEL_WORDS] + _SIGNS.findall(rest)
     if stray:
         raise Rejected("unparsed", f"{text!r}: {stray} stand beside the two coordinates")
     values = [_degrees(m) for m in chosen]
     letters = [_letter(m) for m in chosen]
     if letters[0] is None:
+        axes = [w.casefold() for w in words if w.casefold() in LAT_WORDS | LON_WORDS]
+        if axes and axes[0] in LON_WORDS:
+            raise Rejected(
+                "unparsed",
+                f"{text!r} names the longitude first: two signed numbers are read latitude first",
+            )
         lat, lon = values
     else:
         axis = {

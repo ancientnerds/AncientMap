@@ -7730,6 +7730,22 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_words_beside_the_coordinates_are_not_read",
     ),
     (
+        "bcases web: a sign standing apart from its number is dropped",
+        _WW,
+        "    stray = [w for w in words if w.casefold() not in LABEL_WORDS] + _SIGNS.findall(rest)\n",
+        "    stray = [w for w in words if w.casefold() not in LABEL_WORDS]  # mutant\n",
+        _WW_TEST,
+        "test_a_sign_or_a_dash_standing_apart_is_not_read",
+    ),
+    (
+        "bcases web: a label naming the longitude first is overruled",
+        _WW,
+        "        if axes and axes[0] in LON_WORDS:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_two_signed_numbers_are_read_latitude_first_and_a_label_saying_otherwise_is_refused",
+    ),
+    (
         "bcases web: a sign and a letter are read together",
         _WW,
         "    if sign and letter:\n",
