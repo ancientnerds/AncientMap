@@ -379,7 +379,7 @@ def test_the_finder_and_the_citation_check_read_the_rendering(tmp_path: Path) ->
     record = _record(wikidata_route="narrow")
     _collect(tmp_path, record, _handler)
     excerpts = MS.evidence_excerpts(
-        site_id=SITE, site=record, store=F.EvidenceStore(tmp_path / "evidence")
+        site_id=SITE, site=record, store=F.EvidenceStore(tmp_path / "evidence"), hit_pages=False
     )
     pages = DS.pages_from_excerpts(excerpts)
     assert len(pages) == 6
@@ -429,7 +429,7 @@ def test_a_truthy_line_is_cited_through_the_short_address_the_prompt_shows(tmp_p
     assert (listed["url"], listed["request_url"]) == (truthy.url, truthy.request_url)
     # the prompt shows the short address, and a P31 line cited through it passes the check
     excerpts = MS.evidence_excerpts(
-        site_id=SITE, site=record, store=F.EvidenceStore(tmp_path / "evidence")
+        site_id=SITE, site=record, store=F.EvidenceStore(tmp_path / "evidence"), hit_pages=False
     )
     shown = next(e for e in excerpts if e.feature == F.FEATURE_WIKIDATA_TRUTHY)
     assert shown.url == truthy.url

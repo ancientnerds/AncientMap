@@ -199,10 +199,19 @@ class Fetcher:
         return p
 
     def get_text(
-        self, url: str, params: dict[str, Any] | None = None, ns: str = "text"
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        ns: str = "text",
+        force: bool = False,
     ) -> dict[str, Any]:
-        """Raw body as text. Same 404-is-a-value rule as `get_json`."""
-        p = self._request("GET", url, params, ns)
+        """Raw body as text. Same 404-is-a-value rule as `get_json`.
+
+        `force` asks past the cache, as `get_json` can: an API that reports trouble as HTTP 200
+        with an error body (Wikimedia's `maxlag`) is cached like an answer, and a re-read would
+        return that error forever.
+        """
+        p = self._request("GET", url, params, ns, force)
         if p.get("error") and p["status"] != 404:
             raise FetchError(f"{p['url']}: {p['error']}")
         return p

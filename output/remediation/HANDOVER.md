@@ -149,6 +149,15 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
 - **The gap run** (802 questions over 194 sites) and the **external-id repair** (26 row changes at 19
   sites, planned and pre-flight-checked, not applied): `output/remediation/gap/GAP_PLAN.md` gives the
   exact sequence.
+- **The owner cases B1/B2** (2026-09-23): classified from data by `scripts/remediation/bcases/`
+  (`output/remediation/bcases/COUNTS.json`; HUMAN_ONLY section "B1/B2"). Planned, not applied: the
+  coordinate plan (9 sites, 27 journalled changes, `bcases/coords_plan/PLAN.md` - needs the owner's
+  go under FIELD_CONTRACT section 4.6; 8 of the first version's 17 moves rested on a rounded copy or
+  one point and are open again), the external-id repair's wave 2 (13 rows at 12 sites,
+  `qid_repair/wave2/PLAN.md`), and `bcases/DUPLICATES.jsonl` (19 losers) for the scope lane - the
+  Banias / Caesarea Philippi pair is held for the owner (`DUPLICATES_HELD.jsonl`, B10). 72 kept names
+  sit on a link that is suspect on its own (`link_suspect` in `names.jsonl`), not in wave 2. The
+  derived cache (`cache/bcases/`) is not in git: `bcases/run.py export` then `collect` rebuild it.
 - `HUMAN_ONLY.md` holds everything that needs Martin: the push (the commits of 2026-09-21/22 are pushed
   since - `origin/main` was `7fbc646` on 2026-09-22 22:39; the first version said 104 local-only
   commits), the export

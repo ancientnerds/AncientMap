@@ -19,13 +19,17 @@ import hashlib
 import re
 import time
 import urllib.parse
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 from loguru import logger
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from pipeline.commons_urls import commons_page_url_for
 from pipeline.database import WikiImage, get_session
+from pipeline.utils.mediawiki import dereference
 
 # =============================================================================
 # Configuration
@@ -43,9 +47,8 @@ WIKIDATA_ACTION_API = "https://www.wikidata.org/w/api.php"
 COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php"
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 
-# Thumbnail widths for downloads
-THUMB_WIDTH = 800  # Hero / lead image
-GALLERY_WIDTH = 1600  # All other gallery images (avoids OOM on huge panoramas)
+LOCAL_MAX_WIDTH = 1600  # widest stored file: the 1600x900 hero pages want (rule: download_image)
+FETCH_BUCKET = 1920  # the smallest Commons thumbnail bucket that is >= LOCAL_MAX_WIDTH
 MAX_RAW_BYTES = 50_000_000  # 50 MB — skip downloads larger than this
 
 # Rate limits per Wikimedia robot policy: 1s between requests, serial only
@@ -229,7 +232,7 @@ def fetch_article_images(article_title: str) -> list[dict]:
                 "display_title": title.replace("File:", "").rsplit(".", 1)[0],
                 "thumb_url": thumb_url,
                 "full_url": full_url,
-                "commons_page_url": f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title, safe='')}",
+                "commons_page_url": commons_page_url_for(title),
                 "is_lead": item.get("leadImage") is True,
             }
         )
@@ -241,14 +244,21 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
     """
     Fetch metadata for up to 50 images in one API call.
 
-    The MediaWiki imageinfo API accepts pipe-separated titles (max 50).
-    Returns {file_title: {author, author_url, license, license_url, width, height, original_url}}.
+    The MediaWiki imageinfo API accepts pipe-separated titles (max 50) and answers each under the
+    title it normalised it to (`File:A_b.jpg` -> `File:A b.jpg`, listed in `query.normalized`).
+    Returns {requested File: title: {author, author_url, license, license_url, width, height,
+    original_url}}, keyed by the title as it was asked: keyed by the answer's own title, 12 of 12
+    underscore titles of a live media-list (en.wikipedia `Stonehenge`, 2026-09-23) missed their
+    lookup, lost their width and failed to download. A Commons file redirect is answered under
+    the requested title itself (measured the same day, with and without `redirects=1`). The
+    original's URL and size are `parse_attribution`'s: the imageinfo url carries `?utm_...`
+    analytics parameters that an upload original never needs.
     """
     if not file_titles:
         return {}
 
-    normalized = [t if t.startswith("File:") else f"File:{t}" for t in file_titles]
-    titles_param = "|".join(normalized)
+    requested = [t if t.startswith("File:") else f"File:{t}" for t in file_titles]
+    titles_param = "|".join(requested)
 
     params = {
         "action": "query",
@@ -266,14 +276,18 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
             return {}
 
         data = resp.json()
-        pages = data.get("query", {}).get("pages", {})
+        query = data.get("query", {})
     except Exception as e:
         logger.debug(f"batch imageinfo error: {e}")
         return {}
 
+    pages = {page.get("title", ""): page for page in query.get("pages", {}).values()}
+    normalized = {entry["from"]: entry["to"] for entry in query.get("normalized", [])}
     results: dict[str, dict] = {}
-    for page in pages.values():
-        page_title = page.get("title", "")
+    for title in requested:
+        page = pages.get(dereference(title, normalized))
+        if page is None:
+            continue
         info = (page.get("imageinfo") or [{}])[0]
         ext = info.get("extmetadata", {})
 
@@ -293,15 +307,16 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
 
         license_name = ext.get("LicenseShortName", ext.get("License", {})).get("value", "")
         license_url = ext.get("LicenseUrl", {}).get("value", "")
+        original = parse_attribution(info)
 
-        results[page_title] = {
+        results[title] = {
             "author": author or None,
             "author_url": author_url,
             "license": license_name or None,
             "license_url": license_url or None,
-            "width": info.get("width"),
-            "height": info.get("height"),
-            "original_url": info.get("url"),
+            "width": original["width"],
+            "height": original["height"],
+            "original_url": original["original_url"],
         }
 
     return results
@@ -456,11 +471,6 @@ def parse_attribution(info: dict) -> dict:
     }
 
 
-def commons_page_url_for(file_title: str) -> str:
-    """Canonical Commons page URL for a File: title."""
-    return f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(file_title, safe='')}"
-
-
 def _parse_commons_file_page(page: dict) -> dict | None:
     """Parse a single Commons API page result into an image dict."""
     file_title = page.get("title", "")
@@ -611,14 +621,13 @@ def build_wikidata_image_entries(wikidata_images: dict[str, str]) -> list[dict]:
         encoded_name = filename.replace(" ", "_")
         md5 = hashlib.md5(encoded_name.encode()).hexdigest()
         original_url = f"https://upload.wikimedia.org/wikipedia/commons/{md5[0]}/{md5[:2]}/{urllib.parse.quote(encoded_name)}"
-        encoded_title = urllib.parse.quote(f"File:{encoded_name}", safe="")
 
         entries.append(
             {
                 "title": f"File:{filename}",
                 "display_title": filename.rsplit(".", 1)[0],
                 "original_url": original_url,
-                "commons_page_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
+                "commons_page_url": commons_page_url_for(f"File:{encoded_name}"),
                 "is_lead": False,
                 "source_type": source_type,
                 "_has_metadata": False,  # Need to fetch metadata separately
@@ -633,111 +642,185 @@ def build_wikidata_image_entries(wikidata_images: dict[str, str]) -> list[dict]:
 # =============================================================================
 
 
-def download_image(
-    original_url: str, dest_path: Path, width: int | None = None
-) -> tuple[int, int, int] | None:
-    """
-    Download a Wikimedia image, convert to WebP, and save.
+#: The thumbnail widths Wikimedia serves. Measured 2026-09-23 with the census User-Agent:
+#: `/800px-` and `/1600px-` answer HTTP 400, `/1280px-` and `/1920px-` answer 200 - any width
+#: outside this list is a 400. The old `THUMB_WIDTH = 800` / `GALLERY_WIDTH = 1600` therefore
+#: made every new download fail, and silently: the failure was logged at debug level and
+#: returned as None. A bucket wider than the original is served *upscaled* (measured: a 327x800
+#: original came back from the 1920 bucket as 1920x4697), so a bucket is only ever asked for an
+#: original wider than it.
+COMMONS_BUCKETS = (20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840)
+#: Extensions whose thumbnail keeps the original's file name (`<width>px-<name>`). Every
+#: `upload.wikimedia.org` original in the corpus is one of these (measured on the 2026-09-20
+#: snapshot: jpg, jpeg, png, gif, webp); a TIFF or a PDF names its thumbnail differently.
+THUMBNAIL_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+WEBP_QUALITY = 82
+MIN_RAW_BYTES = 1000
 
-    If width is set, fetches a thumbnail at that width.
-    If width is None, fetches the original full-resolution image.
-    dest_path must already have a .webp extension.
-    Returns (file_size_bytes, width, height) or None on failure.
+
+class DownloadError(RuntimeError):
+    """An image could not be stored. Carries the URL that was asked and the reason.
+
+    Raised instead of the old debug-log-and-return-None: a download that fails must be named
+    in the run's result, never counted as a skip.
+    """
+
+    def __init__(self, url: str, reason: str) -> None:
+        super().__init__(f"{reason}: {url}")
+        self.url = url
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class DownloadResult:
+    """What one stored file is, and how it was made."""
+
+    file_size: int
+    width: int
+    height: int
+    fetch_url: str
+    #: The Commons bucket that was fetched, or None when the original itself was.
+    fetched_bucket: int | None
+
+
+def fetch_plan(original_url: str, original_width: int) -> tuple[str, int | None]:
+    """(the URL to fetch, the bucket it names or None for the original).
+
+    The original when it is at most FETCH_BUCKET px wide - then no bucket can be both valid
+    and not an upscale - else the FETCH_BUCKET bucket. Either is then downscaled locally to
+    LOCAL_MAX_WIDTH. Only a Commons/Wikipedia upload original is accepted: a thumbnail URL
+    already names a width, and any other host has no bucket contract at all.
+    """
+    parsed = urllib.parse.urlparse(original_url)
+    if parsed.scheme != "https" or parsed.netloc != "upload.wikimedia.org":
+        raise DownloadError(original_url, "not an upload.wikimedia.org original")
+    # The URL is stored as the row's original_url: a query (imageinfo's `?utm_...`) would taint
+    # it, and urlparse keeps it out of the path the check below reads.
+    if parsed.query or parsed.fragment:
+        raise DownloadError(original_url, "an upload original carries no query or fragment")
+    match = re.fullmatch(r"/wikipedia/([\w-]+)/([0-9a-f])/([0-9a-f]{2})/([^/]+)", parsed.path)
+    if match is None:
+        raise DownloadError(original_url, "not the path of an upload original")
+    if isinstance(original_width, bool) or not isinstance(original_width, int):
+        raise DownloadError(original_url, f"the original's width is {original_width!r}")
+    if original_width <= 0:
+        raise DownloadError(original_url, f"the original's width is {original_width}")
+    if original_width <= FETCH_BUCKET:
+        return original_url, None
+    wiki, first, pair, name = match.groups()
+    if not name.lower().endswith(THUMBNAIL_EXTENSIONS):
+        raise DownloadError(original_url, "no thumbnail naming rule for this file type")
+    return (
+        f"https://upload.wikimedia.org/wikipedia/{wiki}/thumb/{first}/{pair}/{name}"
+        f"/{FETCH_BUCKET}px-{name}",
+        FETCH_BUCKET,
+    )
+
+
+def stored_size(width: int, height: int) -> tuple[int, int]:
+    """The size of the stored derivative: at most LOCAL_MAX_WIDTH wide, never wider than given."""
+    if width <= LOCAL_MAX_WIDTH:
+        return width, height
+    return LOCAL_MAX_WIDTH, max(1, round(height * LOCAL_MAX_WIDTH / width))
+
+
+def download_image(original_url: str, dest_path: Path, original_width: int) -> DownloadResult:
+    """Fetch a Wikimedia image by `fetch_plan`, downscale it, and store it as a new WebP file.
+
+    `original_width` is the Commons original's width from `imageinfo`; it decides what is
+    fetched and is the ceiling of what may arrive - a fetched image wider than the original is
+    an upscale and is refused. The file is written with O_EXCL: an existing file is never
+    replaced, so a stored image (and every row and page that points at it) cannot change
+    underneath its readers. Raises `DownloadError` for every failure and `RateLimitedError` for
+    a 429, which the caller retries.
     """
     import io
 
     from PIL import Image
 
-    if width is not None:
-        # Build thumbnail URL from original
-        # Commons URL pattern: .../commons/a/ab/File.jpg
-        # Thumb URL pattern:   .../commons/thumb/a/ab/File.jpg/800px-File.jpg
-        if "upload.wikimedia.org" in original_url and "/thumb/" not in original_url:
-            # Insert /thumb/ into the path — URLs are either /wikipedia/commons/
-            # or /wikipedia/en/ etc, so only one replacement should apply.
-            if "/wikipedia/commons/" in original_url:
-                fetch_url = original_url.replace("/commons/", "/commons/thumb/", 1)
-            else:
-                fetch_url = re.sub(
-                    r"/wikipedia/(\w+)/", r"/wikipedia/\1/thumb/", original_url, count=1
-                )
-            filename = original_url.rsplit("/", 1)[-1]
-            fetch_url = f"{fetch_url}/{width}px-{filename}"
-        elif "/thumb/" in original_url:
-            fetch_url = re.sub(r"/\d+px-", f"/{width}px-", original_url)
-        else:
-            fetch_url = original_url
-    else:
-        # Download original — strip any /thumb/ rewrite to get the real URL
-        if "/thumb/" in original_url:
-            fetch_url = thumb_to_original(original_url)
-        else:
-            fetch_url = original_url
-
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-
+    fetch_url, bucket = fetch_plan(original_url, original_width)
     try:
         resp = _download_client.get(fetch_url)
+    except httpx.HTTPError as exc:
+        raise DownloadError(fetch_url, f"no response ({type(exc).__name__}: {exc})") from exc
 
-        if resp.status_code == 429:
-            retry_after = float(resp.headers.get("retry-after", 12))
-            raise RateLimitedError(retry_after)
+    if resp.status_code == 429:
+        raise RateLimitedError(float(resp.headers.get("retry-after", 12)))
+    if resp.status_code != 200:
+        raise DownloadError(fetch_url, f"HTTP {resp.status_code}")
+    content_type = resp.headers.get("content-type", "")
+    if not content_type.startswith("image/"):
+        raise DownloadError(fetch_url, f"not an image ({content_type or 'no content-type'})")
+    raw_bytes = resp.content
+    if len(raw_bytes) < MIN_RAW_BYTES:
+        raise DownloadError(fetch_url, f"only {len(raw_bytes)} bytes")
+    if len(raw_bytes) > MAX_RAW_BYTES:
+        raise DownloadError(fetch_url, f"{len(raw_bytes) / 1_000_000:.1f} MB is over the limit")
 
-        if resp.status_code != 200:
-            logger.debug(f"Download failed {resp.status_code}: {fetch_url}")
-            return None
+    Image.MAX_IMAGE_PIXELS = 200_000_000  # 200 MP - safe limit for panoramas
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as source:
+            source.load()
+            img = source
+            if img.width > original_width:
+                raise DownloadError(
+                    fetch_url,
+                    f"arrived {img.width} px wide, wider than the {original_width} px original "
+                    "(an upscale, or the file changed since imageinfo was read)",
+                )
+            # WebP lossy has no palette mode: palette/alpha to RGBA, everything else to RGB
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGBA")
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+            target = stored_size(img.width, img.height)
+            if target != img.size:
+                img = img.resize(target, Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, "WEBP", quality=WEBP_QUALITY, method=4)
+    except DownloadError:
+        raise
+    except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise DownloadError(fetch_url, f"not a decodable image ({exc})") from exc
 
-        content_type = resp.headers.get("content-type", "")
-        if not content_type.startswith("image/"):
-            logger.debug(f"Not an image ({content_type}): {fetch_url}")
-            return None
+    data = buf.getvalue()
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with dest_path.open("xb") as fh:
+            fh.write(data)
+    except FileExistsError as exc:
+        raise DownloadError(fetch_url, f"{dest_path} exists and is never overwritten") from exc
+    return DownloadResult(
+        file_size=len(data),
+        width=target[0],
+        height=target[1],
+        fetch_url=fetch_url,
+        fetched_bucket=bucket,
+    )
 
-        raw_bytes = resp.content
-        if len(raw_bytes) < 1000:
-            logger.debug(f"Image too small ({len(raw_bytes)} bytes), skipping: {fetch_url}")
-            return None
 
-        if len(raw_bytes) > MAX_RAW_BYTES:
-            logger.debug(
-                f"Image too large ({len(raw_bytes) / 1_000_000:.1f} MB), skipping: {fetch_url}"
-            )
-            return None
+@dataclass(frozen=True)
+class FailedDownload:
+    """One image that could not be stored, named for the run's final report."""
 
-        # Convert to WebP for smaller file size and faster loading
-        try:
-            Image.MAX_IMAGE_PIXELS = 200_000_000  # 200 MP — safe limit for panoramas
-            with Image.open(io.BytesIO(raw_bytes)) as img:
-                img_width, img_height = img.size
-                # Convert RGBA/palette to RGB (WebP lossy doesn't support palette)
-                if img.mode in ("RGBA", "P"):
-                    img = img.convert("RGBA")
-                elif img.mode != "RGB":
-                    img = img.convert("RGB")
-                img.save(dest_path, "WEBP", quality=82, method=4)
-        except Exception as e:
-            logger.debug(f"WebP conversion failed, saving original: {e}")
-            dest_path.write_bytes(raw_bytes)
-            img_width, img_height = width or 0, 0
-
-        file_size = dest_path.stat().st_size
-        return file_size, img_width, img_height
-
-    except RateLimitedError:
-        raise  # let caller handle retry
-    except Exception as e:
-        logger.debug(f"Download error: {e}")
-        return None
+    title: str
+    url: str
+    reason: str
 
 
 def download_images_sequential(
-    download_tasks: list[tuple[int, dict, str, Path, int | None]],
-) -> list[tuple[int, dict, str, tuple[int, int, int] | None]]:
+    download_tasks: list[tuple[int, dict, str, Path, int]],
+) -> tuple[list[tuple[int, dict, str, DownloadResult]], list[FailedDownload]]:
     """
     Download images one at a time with delay. Retries 429s after cooldown.
     Logs every single image so you can see progress.
+
+    Returns (the stored images, the failures). A failure is a `DownloadError` or a 429 that
+    outlasted every retry round; anything else is a bug and propagates.
     """
     total = len(download_tasks)
-    results: list[tuple[int, dict, str, tuple[int, int, int] | None]] = []
+    results: list[tuple[int, dict, str, DownloadResult]] = []
+    failures: list[FailedDownload] = []
     remaining = list(download_tasks)
 
     for round_num in range(1, DOWNLOAD_RETRY_ROUNDS + 1):
@@ -747,34 +830,28 @@ def download_images_sequential(
         if round_num > 1:
             logger.info(f"  Retry round {round_num}: {len(remaining)} images...")
 
-        failed: list[tuple[int, dict, str, Path, int | None]] = []
+        failed: list[tuple[int, dict, str, Path, int]] = []
         max_retry_after = 0.0
-        ok_count = 0
 
         for task in remaining:
-            idx, img, orig_url, dest_path, width = task
+            idx, img, orig_url, dest_path, original_width = task
             title = img.get("title", "?")[:60]
+            done = len(results) + len(failures)
             try:
-                result = download_image(orig_url, dest_path, width)
-                results.append((idx, img, orig_url, result))
-                if result:
-                    ok_count += 1
-                    sz = result[0] / 1024
-                    logger.info(
-                        f"  [{ok_count + len(results) - ok_count}/{total}] OK {sz:.0f}KB  {title}"
-                    )
-                else:
-                    logger.info(f"  [{len(results)}/{total}] SKIP  {title}")
-                time.sleep(DOWNLOAD_DELAY)
+                result = download_image(orig_url, dest_path, original_width)
             except RateLimitedError as e:
                 max_retry_after = max(max_retry_after, e.retry_after)
                 failed.append(task)
-                logger.info(
-                    f"  [{len(results)}/{total}] 429 (retry-after {e.retry_after:.0f}s)  {title}"
-                )
-            except Exception as e:
-                logger.info(f"  [{len(results)}/{total}] FAIL  {title}: {e}")
-                results.append((idx, img, orig_url, None))
+                logger.info(f"  [{done}/{total}] 429 (retry-after {e.retry_after:.0f}s)  {title}")
+                continue
+            except DownloadError as e:
+                failures.append(FailedDownload(img.get("title", "?"), e.url, e.reason))
+                logger.warning(f"  [{done + 1}/{total}] FAIL  {title}: {e}")
+                time.sleep(DOWNLOAD_DELAY)
+                continue
+            results.append((idx, img, orig_url, result))
+            logger.info(f"  [{done + 1}/{total}] OK {result.file_size / 1024:.0f}KB  {title}")
+            time.sleep(DOWNLOAD_DELAY)
 
         remaining = failed
         if remaining:
@@ -785,12 +862,18 @@ def download_images_sequential(
             time.sleep(cooldown)
 
     for task in remaining:
-        logger.info(
+        logger.warning(
             f"  GAVE UP on {task[1].get('title', '?')[:60]} after {DOWNLOAD_RETRY_ROUNDS} rounds"
         )
-        results.append((task[0], task[1], task[2], None))
+        failures.append(
+            FailedDownload(
+                task[1].get("title", "?"),
+                task[2],
+                f"HTTP 429 in all {DOWNLOAD_RETRY_ROUNDS} rounds",
+            )
+        )
 
-    return results
+    return results, failures
 
 
 # =============================================================================
@@ -857,14 +940,15 @@ def site_already_downloaded(site_id: str) -> bool:
 
 def process_site(
     site: dict, dry_run: bool = False, max_per_category: int = 20, force: bool = False
-) -> int:
+) -> tuple[int, list[FailedDownload]]:
     """
     Download images for a single site from all sources:
     1. Wikipedia article images (media-list REST API)
     2. Wikidata curated images (P18, P3451, P4291, P5775)
     3. Wikimedia Commons category images (via Wikidata P373)
 
-    Returns number of images downloaded.
+    Returns (the number of images stored or already registered, every image that could not be
+    stored or registered - a failed download, a failed insert, a file on disk no row names).
     """
     site_id = site["id"]
     site_name = site["name"]
@@ -881,7 +965,7 @@ def process_site(
 
     if not article_title:
         logger.debug(f"No Wikipedia article for: {site_name}")
-        return 0
+        return 0, []
 
     # --- Source 1: Wikipedia article images ---
     all_images: list[dict] = []
@@ -932,7 +1016,7 @@ def process_site(
 
     if not deduped:
         logger.debug(f"No images for: {site_name} ({article_title})")
-        return 0
+        return 0, []
 
     # --- Pick best hero image (most panoramic) and move to front ---
     best_hero_idx = 0  # default: first image (Wikipedia lead)
@@ -970,26 +1054,27 @@ def process_site(
             f"  [DRY RUN] {site_name}: {len(deduped)} images "
             f"(wikipedia={wp_count}, wikidata={wd_count}, commons={cc_count})"
         )
-        return len(deduped)
+        return len(deduped), []
 
     # --- Prepare download list and batch-fetch metadata ---
     downloaded = 0
     img_dir = site_image_dir(site_id)
+    failures: list[FailedDownload] = []
 
-    # Load existing DB entries for this site to skip already-downloaded images
+    # The site's rows, --force or not: a file on disk counts as done only when one of them
+    # registers it; without --force a row alone marks its image as done.
     existing_urls: set[str] = set()
     existing_filenames: set[str] = set()
-    if not force:
-        with get_session() as session:
-            rows = session.execute(
-                text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),
-                {"sid": site_id},
-            ).fetchall()
-            for row in rows:
-                if row.original_url:
-                    existing_urls.add(row.original_url)
-                if row.filename:
-                    existing_filenames.add(row.filename)
+    with get_session() as session:
+        rows = session.execute(
+            text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),
+            {"sid": site_id},
+        ).fetchall()
+        for row in rows:
+            if row.original_url:
+                existing_urls.add(row.original_url)
+            if row.filename:
+                existing_filenames.add(row.filename)
 
     # Build local filenames, skip images already in DB, identify metadata needs
     needs_metadata: list[str] = []
@@ -1007,16 +1092,26 @@ def process_site(
                 local_filename += ".webp"
         img_filenames.append(local_filename)
 
-        if force:
-            already_done = False
-        else:
-            # Skip if already in DB or on disk
-            orig_url = img.get("original_url") or img.get("full_url", "")
-            already_done = (
-                local_filename in existing_filenames
-                or orig_url in existing_urls
-                or (img_dir / local_filename).exists()
+        # A file on disk is never fetched again, --force or not: download_image refuses to
+        # overwrite one. --force only stops the database rows from counting as done. A file no
+        # row of this site names - an insert that failed, a run stopped between download and
+        # insert - is named as a failure: it is never replaced, and never registered by guess
+        # (the image behind hero.webp can differ between two runs).
+        on_disk = (img_dir / local_filename).exists()
+        registered = local_filename in existing_filenames
+        if on_disk and not registered:
+            failures.append(
+                FailedDownload(
+                    file_title,
+                    str(img_dir / local_filename),
+                    "on disk without a wiki_images row of this site - never overwritten, "
+                    "never registered by guess",
+                )
             )
+            skip_flags.append(True)
+            continue
+        orig_url = img.get("original_url") or img.get("full_url", "")
+        already_done = on_disk or (not force and (registered or orig_url in existing_urls))
         skip_flags.append(already_done)
 
         if already_done:
@@ -1033,7 +1128,7 @@ def process_site(
         time.sleep(WIKIPEDIA_DELAY)
 
     # Build download tasks (skip already-downloaded)
-    download_tasks: list[tuple[int, dict, str, Path, int | None]] = []
+    download_tasks: list[tuple[int, dict, str, Path, int]] = []
     for idx, img in enumerate(deduped):
         if skip_flags[idx]:
             continue
@@ -1046,6 +1141,7 @@ def process_site(
         if img.get("_has_metadata"):
             meta = {
                 "original_url": img.get("original_url"),
+                "width": img.get("width"),
             }
         else:
             meta = batch_metadata.get(normalized_title, {})
@@ -1054,9 +1150,9 @@ def process_site(
             meta.get("original_url") or img.get("original_url") or img.get("full_url", "")
         )
 
-        is_hero = idx == 0
-        dl_width = THUMB_WIDTH if is_hero else GALLERY_WIDTH
-        download_tasks.append((idx, img, original_url, dest_path, dl_width))
+        # The original's width decides what is fetched (download_image). A title the metadata
+        # batch did not answer has none, and download_image refuses it by name.
+        download_tasks.append((idx, img, original_url, dest_path, meta.get("width")))
 
     skipped = sum(skip_flags)
     if skipped:
@@ -1065,23 +1161,19 @@ def process_site(
         )
 
     if not download_tasks:
-        return downloaded
+        return downloaded, failures
 
     # Download images sequentially (avoids Wikimedia 429s)
     logger.info(f"  Downloading {len(download_tasks)} images for {site_name}...")
-    dl_results = download_images_sequential(download_tasks)
+    dl_results, dl_failures = download_images_sequential(download_tasks)
+    failures.extend(dl_failures)
 
     # Insert results into database
     for idx, img, original_url, result in dl_results:
-        if not result:
-            continue
-
-        file_size, img_width, img_height = result
         local_filename = img_filenames[idx]
         file_title = img["title"]
         normalized_title = file_title if file_title.startswith("File:") else f"File:{file_title}"
         is_hero = idx == 0
-        dl_width = THUMB_WIDTH if is_hero else GALLERY_WIDTH
         source_type = img.get("source_type", "wikimedia")
 
         # Get metadata from batch results or inline
@@ -1097,7 +1189,7 @@ def process_site(
                     filename=local_filename,
                     original_url=original_url,
                     commons_page_url=img.get("commons_page_url"),
-                    thumb_width=dl_width,
+                    thumb_width=result.fetched_bucket,
                     author=meta.get("author") or img.get("author"),
                     author_url=meta.get("author_url") or img.get("author_url"),
                     license=meta.get("license") or img.get("license"),
@@ -1107,21 +1199,28 @@ def process_site(
                     is_lead=img.get("is_lead", False),
                     sort_order=idx,
                     source_type=source_type,
-                    file_size_bytes=file_size,
-                    width=img_width,
-                    height=img_height,
+                    file_size_bytes=result.file_size,
+                    width=result.width,
+                    height=result.height,
                 )
                 session.add(wiki_img)
                 session.commit()
-                downloaded += 1
-        except Exception as e:
-            if "uq_wiki_image_site_url" in str(e):
-                downloaded += 1
-            else:
-                logger.warning(f"DB insert error for {file_title}: {e}")
+        except SQLAlchemyError as exc:
+            # The one expected refusal: this site already has a row for this original.
+            if not (isinstance(exc, IntegrityError) and "uq_wiki_image_site_url" in str(exc)):
+                failures.append(
+                    FailedDownload(
+                        file_title,
+                        original_url,
+                        f"stored as {img_dir / local_filename}, but its wiki_images row was not "
+                        f"written ({type(exc).__name__}: {str(exc).splitlines()[0]})",
+                    )
+                )
+                continue
+        downloaded += 1
 
         # Update unified_sites.thumbnail_url to local hero image path
-        # Runs after insert (whether new or duplicate) — the file is on disk either way
+        # Runs after an insert (new or duplicate) - never for a file whose row failed
         if is_hero:
             local_path = f"/data/images/wiki/{site_id[:8]}/{local_filename}"
             with get_session() as session:
@@ -1131,7 +1230,7 @@ def process_site(
                 )
                 session.commit()
 
-    return downloaded
+    return downloaded, failures
 
 
 def run_downloader(
@@ -1141,11 +1240,14 @@ def run_downloader(
     stats_only: bool = False,
     force: bool = False,
     max_per_category: int = 20,
-) -> None:
-    """Main entry point for the wiki image downloader. Always sequential."""
+) -> list[FailedDownload]:
+    """Main entry point for the wiki image downloader. Always sequential.
+
+    Returns every image that could not be stored; `main` exits non-zero and names each one.
+    """
     if stats_only:
         print_stats()
-        return
+        return []
 
     sites = get_sites_to_process(source_filter, site_id)
     logger.info(f"Found {len(sites)} sites to process")
@@ -1169,27 +1271,26 @@ def run_downloader(
         total_skipped = 0
 
     total_downloaded = 0
-    total_errors = 0
+    all_failures: list[FailedDownload] = []
 
+    # No site-level catch: an error that is not a named image failure is a bug, and it stops the
+    # run with its traceback instead of a warning and an exit 0.
     for i, site in enumerate(to_process):
-        try:
-            name = site["name"]
-            count = process_site(
-                site, dry_run=dry_run, max_per_category=max_per_category, force=force
-            )
-            total_downloaded += count
-            if count > 0:
-                logger.info(f"  [{i + 1}/{len(to_process)}] {name}: {count} images")
-        except Exception as e:
-            logger.warning(f"  Error processing {site['name']}: {e}")
-            total_errors += 1
+        count, failures = process_site(
+            site, dry_run=dry_run, max_per_category=max_per_category, force=force
+        )
+        total_downloaded += count
+        all_failures.extend(failures)
+        if count > 0:
+            logger.info(f"  [{i + 1}/{len(to_process)}] {site['name']}: {count} images")
 
     logger.info("=" * 60)
     logger.info("Download complete:")
     logger.info(f"  Sites processed: {len(to_process)}")
     logger.info(f"  Sites skipped (already done): {total_skipped}")
     logger.info(f"  Images downloaded: {total_downloaded}")
-    logger.info(f"  Errors: {total_errors}")
+    logger.info(f"  Images that could not be stored: {len(all_failures)}")
+    return all_failures
 
 
 def print_stats() -> None:
@@ -1267,7 +1368,7 @@ def main():
     )
     args = parser.parse_args()
 
-    run_downloader(
+    failures = run_downloader(
         source_filter=args.source,
         site_id=args.site_id,
         dry_run=args.dry_run,
@@ -1275,6 +1376,10 @@ def main():
         force=args.force,
         max_per_category=args.max_per_category,
     )
+    if failures:
+        for failure in failures:
+            logger.error(f"NOT STORED  {failure.title}: {failure.reason} ({failure.url})")
+        raise SystemExit(f"{len(failures)} image(s) could not be stored - listed above")
 
 
 if __name__ == "__main__":

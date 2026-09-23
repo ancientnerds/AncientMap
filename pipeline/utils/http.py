@@ -7,6 +7,8 @@ and proper error handling.
 
 import gzip
 import hashlib
+import ipaddress
+import urllib.parse
 from pathlib import Path
 
 import httpx
@@ -25,6 +27,33 @@ DEFAULT_HEADERS = {
     "User-Agent": "AncientNerds/1.0 (Research Platform; contact@ancientnerds.com)",
     "Accept": "application/json, text/csv, application/xml, */*",
 }
+
+
+def is_public_http_url(url: str) -> bool:
+    """Block SSRF: reject internal IPs, non-HTTP schemes, metadata endpoints.
+
+    Moved here from `pipeline/lyra/handlers/content_fetch.py` (2026-09-23) unchanged, so Lyra's
+    content fetch and the remediation's search-hit pages (`scripts/remediation/phase3/fetch_stage.py`)
+    refuse the same addresses with one function. It reads the URL as written and resolves no name.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname or ""
+        if hostname in ("169.254.169.254", "metadata.google.internal"):
+            return False
+        if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+        except ValueError:
+            pass  # hostname is a domain, not an IP
+        return True
+    except Exception:
+        return False
 
 
 class HTTPError(Exception):

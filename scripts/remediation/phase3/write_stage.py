@@ -19,6 +19,9 @@ report rather than dropped:
 * the reviewer **cleared** it: `review_stage.ReviewVerdict.applies` is `asked and refuted is False and
   not problems`. A refuted, unresolved, unreviewable or problem-carrying verdict stays visible as "not
   applied, and why".
+* the reviewer's own `WHY:` line does not **name a failing half** (`review_stage.failing_half`): a
+  `REFUTED: NO` means "both halves hold", and a sentence that says a half fails contradicts it
+  (`RULE_REVIEW_CONTRADICTS`, 2026-09-23).
 * the finder's own answer (`answers/<site>%2F<field>.txt`, read with `discover_stage.parse_answer`)
   is a complete `WRONG` with a `PROPOSED:` value. The proposal is **not** in `model.json` - the
   `judgements` there are call records - so the answer text is the only place it exists, and the stored
@@ -31,7 +34,13 @@ report rather than dropped:
   carry a citation that fails this check (quotes with an ellipsis, re-typed Wikidata JSON, a URL that
   was never fetched). A row whose citation cannot be found in the evidence is refused as
   `finder-citation-not-in-evidence`; a batch whose evidence is missing *with nothing recorded about
-  it* raises, because that is a hole in the record rather than a property of one row.
+  it* raises, because that is a hole in the record rather than a property of one row. A citation of
+  a MiniMax **search hit** is checked against the page `phase3/hit_stage.py` fetched from the hit,
+  never against its snippet: a hit whose page could not be fetched or read, or whose page was cut at
+  the page cap before the quote, is refused as `RULE_HIT_UNVERIFIED`, and one the stage never tried
+  raises (2026-09-23).
+* a `period_start` change **leaves the stored value's bucket** (`categorize_period`, the card's own):
+  a move inside it is refused as `RULE_SAME_BUCKET`, because the value is a bucket sort key.
 * the field is one the run was **built to ask**. A lane that re-asks only some fields of a site (the
   gap run re-asks the 5 empty-stream and the 37 no-verdict fields of 42 sites, whose other fields the
   mass run already decided and partly wrote) names them in the record's `rerun_fields`; a field outside
@@ -160,6 +169,9 @@ from phase3.run import (
     InputError,  # noqa: E402  - one spelling per concept, not a second
 )
 
+# `pipeline` is importable once `search_evidence` has put the repository root on the path.
+from pipeline.utils.text import categorize_period  # noqa: E402  - the card's own buckets
+
 #: The only source this stage writes. The same value as `mechanical.plan.CURATED_SOURCE`; the
 #: mechanical lane is not imported here because it drags its own data readers (Natural Earth, census
 #: fetch) into every phase-3 process.
@@ -264,6 +276,26 @@ RULE_CITATION = "finder-citation-not-in-evidence"
 #: The field is not one the run was built to ask (the record's `rerun_fields`, read by
 #: `search_evidence.rerun_fields`).
 RULE_NOT_RERUN = "field-not-asked-in-this-run"
+#: A `period_start` change inside the stored value's bucket is not an error - the value is a bucket
+#: sort key (`FIELD_CLAUSE['period_start']`, the plan's false alarm 4.3.1). The bucket is
+#: `pipeline.utils.text.categorize_period`, the card's own, lower bound inclusive. Added 2026-09-23:
+#: the search pilot decided Aubrey Holes `-4500 -> -4000` wrong against a human CORRECT, and 170 of
+#: the 389 `period_start` rows the mass lane wrote are such moves (production journal, read-only).
+RULE_SAME_BUCKET = "period-start-inside-the-stored-bucket"
+#: The finder cited a MiniMax search hit whose page this batch could not verify: the page was not
+#: fetched, the fetch failed, it is not text a quote can be found in, or it was cut at the fetch
+#: stage's page cap and its read part does not carry the quote (`_hit_page_refusal`). A snippet is
+#: not a page (2026-09-23: the pilot's Las Labradas quote was a travel page's snippet about another
+#: site), so such a citation is never accepted on the snippet.
+RULE_HIT_UNVERIFIED = "search-hit-page-not-verified"
+#: The reviewer cleared the finding (`REFUTED: NO`, "both halves hold") while its own `WHY:` line
+#: names a half that fails (`review_stage.failing_half`). Added 2026-09-23 after the pilot's Lake
+#: Mungo and Odeon rows; the mass lane met the same class by hand in its 72 held rows.
+RULE_REVIEW_CONTRADICTS = "reviewer-why-names-a-failing-half"
+#: Carried by a `RULE_REVIEW_CONTRADICTS` refusal whose phrase held correctly cleared rows on the mass
+#: lane (`review_stage.HAND_READ_PHRASES`): the row is not written, and it is read by hand before it
+#: counts as refused.
+HAND_READ_NOTE = "hand-read before it counts as refused (HUMAN_ONLY.md B12)"
 
 
 class WriteRefused(ValueError):
@@ -492,6 +524,43 @@ def _shape_refusal(field_name: str, value: str) -> str | None:
     return None
 
 
+def same_bucket(old_value: str | None, new_value: str) -> str | None:
+    """The bucket two `period_start` years share (`categorize_period`), or `None` when they differ.
+
+    A field that stores nothing has no bucket to stay inside, so filling it is never "the same
+    bucket". Both values must be years: an old value that is not one is a damaged record and raises.
+    Used by the writer (`RULE_SAME_BUCKET`) and by the measurement of the rows already written
+    (`output/remediation/tools/measure_review_holds.py`), so the two cannot count differently.
+    """
+    if old_value is None:
+        return None
+    bucket = categorize_period(int(old_value))
+    return bucket if categorize_period(int(new_value)) == bucket else None
+
+
+def _same_bucket_refusal(
+    site_id: str, field_name: str, old_value: str | None, new_value: str
+) -> Refusal | None:
+    """`RULE_SAME_BUCKET` for a `period_start` move inside the stored value's bucket, else `None`.
+
+    Both values are years by now (`_shape_refusal` has read the new one, and the old one is the
+    column's own integer).
+    """
+    if field_name != "period_start":
+        return None
+    bucket = same_bucket(old_value, new_value)
+    if bucket is None:
+        return None
+    return Refusal(
+        site_id,
+        field_name,
+        RULE_SAME_BUCKET,
+        f"`{old_value}` and `{new_value}` both lie in `{bucket}` "
+        "(pipeline.utils.text.categorize_period, lower bound inclusive): a period_start change "
+        "inside the stored value's bucket is not an error - the value is a bucket sort key",
+    )
+
+
 def _evidence_for(
     *, answer: DS.DiscoverAnswer, verdict: RS.ReviewVerdict
 ) -> tuple[dict[str, Any], ...]:
@@ -565,25 +634,85 @@ def rebuilt_verdict(raw: Mapping[str, Any]) -> RS.ReviewVerdict:
     )
 
 
-def cited_pages(
+def cited_evidence(
     *,
     site_id: str,
     site: Mapping[str, Any],
     evidence: F.EvidenceStore,
     failures: Mapping[str, str] | None,
-) -> dict[str, str]:
-    """`url -> stored text` for the pages the finder's prompt carried for this site.
+) -> list[MS.EvidenceExcerpt]:
+    """The site's evidence as the stages read it: the excerpts a citation is checked against.
 
-    Built by the finder's own two functions (`model_stage.evidence_excerpts`, then
-    `discover_stage.pages_from_excerpts`) over the batch's own store and fetch report, so the page a
-    citation is checked against is byte for byte the page the finder was shown - not a re-fetch, and
-    not a second spelling of which targets a site buys. A target the fetch stage recorded as failed
-    has no text and is therefore not a page a quote can come from; a target with no file and no
-    recorded failure raises `model_stage.EvidenceUnusable`, as it does for the finder.
+    Built by the finder's own function (`model_stage.evidence_excerpts`) over the batch's own store
+    and its reports, so a fetched target a citation is checked against is byte for byte the page the
+    finder was shown - not a re-fetch, and not a second spelling of which targets a site buys. A
+    target the fetch stage recorded as failed has no text and is therefore not a page a quote can
+    come from; a target with no file and no recorded failure raises `model_stage.EvidenceUnusable`,
+    as it does for the finder. A search hit is checked against the page `phase3/hit_stage.py`
+    fetched from it (`discover_stage.pages_from_excerpts`), never against its snippet.
     """
-    return DS.pages_from_excerpts(
-        MS.evidence_excerpts(site_id=site_id, site=site, store=evidence, failures=failures)
+    return MS.evidence_excerpts(
+        site_id=site_id, site=site, store=evidence, hit_pages=True, failures=failures
     )
+
+
+def _hand_read(phrase: str) -> str:
+    """The hand-read marker for a phrase that misfired on written rows, or nothing."""
+    if phrase not in RS.HAND_READ_PHRASES:
+        return ""
+    false, held = RS.HAND_READ_PHRASES[phrase]
+    return (
+        f" - {HAND_READ_NOTE}: on the mass lane this phrase held {false} of {held} written rows "
+        "whose own sentence argued for the write"
+    )
+
+
+def _hit_page_refusal(
+    *,
+    site_id: str,
+    field_name: str,
+    answer: DS.DiscoverAnswer,
+    evidence: Sequence[MS.EvidenceExcerpt],
+) -> Refusal | None:
+    """`RULE_HIT_UNVERIFIED` when a search hit the finder cites has no page that can verify its
+    quote, else `None` (then the citation check reads the page as it reads any other).
+
+    Two ways a hit page cannot verify: it could not be fetched or read (`citable is None`), or it was
+    cut at the fetch stage's page cap and its read part does not carry the quote. The second is not
+    a fabricated citation - the rest of the page was never read - and on the first pilot it was the
+    common case: 14 of the 15 stored hit pages were cut, and all 9 citations whose readable page did
+    not carry the quote were on cut pages (2026-09-23, the fixer's review). A cited hit nobody tried
+    to verify raises in `model_stage.cited_hit_pages`.
+    """
+    pages = {
+        page.url: page
+        for page in MS.cited_hit_pages(
+            [claim.url for claim in answer.sources], evidence, where=f"{site_id}/{field_name}"
+        )
+    }
+    for claim in answer.sources:
+        page = pages.get(claim.url)
+        if page is None:
+            continue
+        if page.citable is None:
+            return Refusal(
+                site_id,
+                field_name,
+                RULE_HIT_UNVERIFIED,
+                f"the finder cites the search hit {page.url}, and its page cannot verify the quote "
+                f"({page.failure}); a snippet is not a page, so the citation is not accepted on it",
+            )
+        if page.truncated and not DS.quote_occurs(claim.quote, page.citable):
+            return Refusal(
+                site_id,
+                field_name,
+                RULE_HIT_UNVERIFIED,
+                f"the finder cites the search hit {page.url}, whose page was cut at the fetch "
+                f"stage's {F.MAX_PAGE_BYTES:,}-byte page cap (fetch_stage.MAX_PAGE_BYTES), and the "
+                f"part that was read does not carry the quote {claim.quote!r}; the rest was never "
+                "read, so the citation is neither verified nor shown to be fabricated",
+            )
+    return None
 
 
 def _row_for(
@@ -594,11 +723,11 @@ def _row_for(
     field_name: str,
     cleared: RS.ReviewVerdict,
     answers: F.EvidenceStore,
-    pages: Callable[[], Mapping[str, str]],
+    excerpts: Callable[[], Sequence[MS.EvidenceExcerpt]],
 ) -> WriteRow | Refusal:
     """The row for one cleared finding, or the refusal that stands in its place - never both.
 
-    `pages` is called only for a finding that got as far as the citation check, so a batch whose
+    `excerpts` is called only for a finding that got as far as the citation check, so a batch whose
     rows are all refused earlier never reads its evidence.
     """
     if field_name in M.REPORT_ONLY_FIELDS:
@@ -637,7 +766,13 @@ def _row_for(
             f"the finder's verdict is {answer.verdict!r} and it proposes {answer.proposed!r}, so "
             "there is no value to write",
         )
-    citation = DS.source_problems(answer, pages())
+    evidence = excerpts()
+    unverified = _hit_page_refusal(
+        site_id=site_id, field_name=field_name, answer=answer, evidence=evidence
+    )
+    if unverified is not None:
+        return unverified
+    citation = DS.source_problems(answer, DS.pages_from_excerpts(evidence))
     if citation:
         return Refusal(
             site_id,
@@ -676,6 +811,9 @@ def _row_for(
             RULE_NOT_A_CHANGE,
             f"the row already holds {old_value!r}: a write would journal a change that is not one",
         )
+    inside = _same_bucket_refusal(site_id, field_name, old_value, new_value)
+    if inside is not None:
+        return inside
 
     table = SP.FIELD_STORED_IN[field_name]
     return WriteRow(
@@ -715,7 +853,7 @@ def build_plan(
     so an empty plan cannot be mistaken for a batch where everything was already right.
 
     `evidence` and `fetch_failures` are required, not defaulted: they are what the citation check
-    reads (`cited_pages`), and a writer that could be called without them would be a writer that
+    reads (`cited_evidence`), and a writer that could be called without them would be a writer that
     could skip the check.
     """
     batch_id = str(batch.get("batch_id") or "")
@@ -759,9 +897,9 @@ def build_plan(
         except InputError as exc:
             raise InputError(f"batch {batch_id}: {exc}") from exc
         # Read once per site, and only when a finding reaches the citation check.
-        pages = functools.cache(
+        excerpts = functools.cache(
             functools.partial(
-                cited_pages,
+                cited_evidence,
                 site_id=site_id,
                 site=site,
                 evidence=evidence,
@@ -796,6 +934,19 @@ def build_plan(
                     Refusal(site_id, field_name, RULE_REVIEWER, _verdict_reason(cleared))
                 )
                 continue
+            failing = RS.failing_half(cleared.reason)
+            if failing is not None:
+                plan.refusals.append(
+                    Refusal(
+                        site_id,
+                        field_name,
+                        RULE_REVIEW_CONTRADICTS,
+                        f"the reviewer answered REFUTED: NO (both halves hold), and its own WHY "
+                        f"line names a failing half ({failing!r}){_hand_read(failing)}; "
+                        f"reason: {cleared.reason}",
+                    )
+                )
+                continue
             decided = _row_for(
                 site_id=site_id,
                 site_name=site_name,
@@ -803,7 +954,7 @@ def build_plan(
                 field_name=field_name,
                 cleared=cleared,
                 answers=answers,
-                pages=pages,
+                excerpts=excerpts,
             )
             if isinstance(decided, WriteRow):
                 plan.rows.append(decided)

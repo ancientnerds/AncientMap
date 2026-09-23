@@ -448,16 +448,6 @@ def _api_json(
     raise RuntimeError(f"{api} refused a batch: {last}")
 
 
-def _dereference(title: str, mapping: dict[str, str]) -> str:
-    """Apply the API's own `normalized`/`redirects` chains (bounded, in case of a loop)."""
-    for _ in range(4):
-        nxt = mapping.get(title)
-        if nxt is None or nxt == title:
-            break
-        title = nxt
-    return title
-
-
 def _page_records(
     ctx: Context, titles: list[str], ns: str
 ) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
@@ -514,6 +504,8 @@ def _entries_for_titles(
     A batch of 50 long non-Latin titles can exceed the request-URI limit (HTTP 414 - T09
     hit exactly that). That is the one refusal a smaller request fixes.
     """
+    from pipeline.utils.mediawiki import dereference
+
     try:
         pages, mapping = _page_records(ctx, titles, ns)
     except FetchError as exc:
@@ -528,7 +520,7 @@ def _entries_for_titles(
 
     out: dict[str, dict[str, Any]] = {}
     for title in titles:
-        page = pages.get(_dereference(title, mapping)) or pages.get(title)
+        page = pages.get(dereference(title, mapping)) or pages.get(title)
         if page is None:
             # The API may have answered under a different capitalisation of the first
             # letter; that is the same page on Commons, so it is not "unresolved".
