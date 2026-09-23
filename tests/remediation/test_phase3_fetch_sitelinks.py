@@ -233,8 +233,13 @@ def test_the_articles_come_after_the_english_sitelink_and_before_the_narrowed_cl
     ],
 )
 def test_a_damaged_list_of_articles_is_refused_not_read(value: Any, message: str) -> None:
+    """The reader refuses on its own, before any address is built from the entry (a permalink would
+    refuse a bad subdomain too, later, and hide a reader that let it through)."""
+    record = _record(**{F.WIKI_SITELINKS_KEY: value})
     with pytest.raises(InputError, match=message):
-        F.targets_for_site(_record(**{F.WIKI_SITELINKS_KEY: value}))
+        F.read_wiki_sitelinks(record, SITE)
+    with pytest.raises(InputError, match=message):
+        F.targets_for_site(record)
 
 
 def test_articles_on_a_record_without_an_item_are_refused() -> None:
