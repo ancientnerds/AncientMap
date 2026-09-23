@@ -286,3 +286,17 @@ def test_the_c1_jobs_ask_each_image_once_and_the_strict_question_of_tier_a() -> 
         (905, vision.GALLERY),
         (1, vision.HERO),
     ]
+
+
+CALIBRATION = REPO / "output" / "remediation" / "gallery_audit" / "calibration-2026-09-23"
+
+
+def test_the_versioned_c1_directory_is_sealed_with_the_pinned_thresholds() -> None:
+    thresholds, digest, sealed_at = calibrate.sealed(CALIBRATION)
+    assert digest == THRESHOLDS_SHA and thresholds == calibrate.THRESHOLDS
+    jobs = vision.read_jobs(CALIBRATION / "JOBS.jsonl")
+    assert len(jobs) == 939 and sum(job.pass_ == vision.HERO for job in jobs) == 50
+    assert {job.stage for job in jobs} == {calibrate.C1}
+    ledger = CALIBRATION / "VERDICTS.jsonl"
+    if ledger.exists():  # written by the production run, after the seal
+        assert all(str(e.line["judged_at"]) >= sealed_at for e in vision.Ledger(ledger).lines)

@@ -3,7 +3,7 @@
 Order, enforced rather than promised
 ------------------------------------
 1. ``seal``     writes ``THRESHOLDS.json`` from the constant below and appends its sha256 to
-                ``SEAL.log``. It refuses when the run directory already holds a verdict ledger:
+                ``SEAL.jsonl``. It refuses when the run directory already holds a verdict ledger:
                 a threshold written after data exists is not a threshold.
 2. ``jobs``     writes the C1 ``JOBS.jsonl`` - and refuses unless the seal is in place and the
                 file on disk still hashes to it.
@@ -106,7 +106,8 @@ THRESHOLDS: dict[str, Any] = {
     },
 }
 
-SEAL_LOG = "SEAL.log"
+#: JSON lines, and not `*.log`: the repository ignores every `*.log`, and the seal is evidence.
+SEAL_LOG = "SEAL.jsonl"
 THRESHOLDS_FILE = "THRESHOLDS.json"
 JOBS_FILE = "JOBS.jsonl"
 LEDGER_FILE = "VERDICTS.jsonl"
