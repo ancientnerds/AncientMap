@@ -49,10 +49,25 @@ Output (``output/remediation/gallery_audit/liveness-<date>/``)
 ``SUMMARY.json``    counts per class, the sha256 of both JSONL files, the snapshot it read
 ``RECHECK.json``    (``recheck``) the re-query of every logged line: its title still missing, its
                     log entry unchanged and nothing newer, its move target still live
+``chunk-NNN/``      (``chunk``) the L1/L2 rows of ``PLANNED.jsonl`` (``decide.py liveness``) as a
+                    chunk of the shared image writer (``chunk_writer.py``)
+
+The write
+---------
+``chunk`` turns ``PLANNED.jsonl`` into ``chunk_writer.Change`` records, old and new values exactly
+as planned (a boolean in its text form), each citing the store line it rests on - a planned row
+whose ``liveness_sha256`` names no line of ``NOT_LIVE.jsonl``, or a line that does not state what
+the row claims, is refused. It runs only on a store whose ``RECHECK.json`` found nothing. The one
+production read (read-only) is the live rows of every touched site: the sites the plan leaves
+without a live image are computed from it, and the chunk is emitted only when they are exactly the
+sites the operator names with ``--may-empty`` (an image lost from a page is a decision, not a side
+effect). The lane journals as ``img-liveness`` under the store's date.
 
 Usage:
     liveness.py sweep [--date YYYY-MM-DD] [--snapshot DIR] [--cache DIR] [--out DIR]
     liveness.py recheck --store DIR [--cache DIR]
+    liveness.py chunk --store DIR [--may-empty SITE_ID ...]
+    chunk_writer.py <store>/chunk-NNN --check|--rehearse|--apply|--readback|--rehearse-rollback
 """
 
 from __future__ import annotations
@@ -71,12 +86,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[3]
+_HERE = Path(__file__).resolve()
+ROOT = _HERE.parents[3]
 _REMEDIATION = ROOT / "scripts" / "remediation"
-for _path in (ROOT, _REMEDIATION):
+for _path in (ROOT, _REMEDIATION, _HERE.parent):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import chunk_writer as CW  # noqa: E402
 from census.fetch import Fetcher, FetchError  # noqa: E402
 from census.snapshot import Snapshot  # noqa: E402
 from census.tests.t09_commons_dimensions import (  # noqa: E402
@@ -85,6 +102,8 @@ from census.tests.t09_commons_dimensions import (  # noqa: E402
     _commons_file_name,
 )
 
+from gallery_audit.planned import PlanError, PlannedRow, read_plan  # noqa: E402
+from pipeline.commons_urls import commons_page_url_for  # noqa: E402
 from pipeline.utils.mediawiki import dereference  # noqa: E402
 
 log = logging.getLogger("gallery_audit.liveness")
@@ -629,6 +648,232 @@ def recheck(
     return problems
 
 
+# ------------------------------------------------------------------------------ the write
+#: The store directory `sweep` writes; its date is the write's journal stamp.
+STORE_NAME_RE = re.compile(r"liveness-(\d{4}-\d{2}-\d{2})")
+#: Where every store lives, as the journal evidence names it (repository-relative).
+STORE_HOME = "output/remediation/gallery_audit"
+#: The roles `decide.plan_liveness` plans, the rule each belongs to and the columns it writes.
+ROLE_RULE = {"exclude": "L1", "hero-drop": "L1", "hero-promote": "L1", "url": "L2"}
+ROLE_COLUMNS = {
+    "exclude": frozenset({"is_excluded"}),
+    "hero-drop": frozenset({"is_hero"}),
+    "hero-promote": frozenset({"is_hero"}),
+    "url": frozenset({"commons_page_url", "original_url"}),
+}
+#: The classes a role acts on. A hero-promote row rests on the hero repair's rule, not on a line.
+ROLE_CLASSES = {
+    "exclude": frozenset({DELETED_COPYVIO, DELETED_OTHER}),
+    "hero-drop": frozenset({DELETED_COPYVIO, DELETED_OTHER}),
+    "url": frozenset({MOVED_WITHOUT_REDIRECT}),
+}
+#: (old, new) of the boolean roles, in the text form the chunk writer compares.
+ROLE_FLIP = {
+    "exclude": ("false", "true"),
+    "hero-drop": ("true", "false"),
+    "hero-promote": ("false", "true"),
+}
+CAUSE = {
+    DELETED_COPYVIO: "Commons deleted File:{file} as a copyright violation (log {logid}, {when})",
+    DELETED_OTHER: "Commons deleted File:{file} for a stated reason other than copyright "
+    "(log {logid}, {when})",
+    MOVED_WITHOUT_REDIRECT: "Commons renamed File:{file} to {target} without a redirect "
+    "(log {logid}, {when})",
+}
+CONSEQUENCE = {
+    "exclude": "the row is excluded",
+    "hero-drop": "an excluded row cannot stay the site's hero",
+    "url": "{column} points at the live target",
+}
+
+LIVE_ROWS_SQL = """SELECT row_to_json(t) FROM (
+  SELECT w.id, w.site_id::text AS site_id, w.is_excluded FROM wiki_images w
+   WHERE w.site_id IN ({sites}) ORDER BY w.site_id, w.id
+) t;"""
+
+
+def chunk_lane(store: Path) -> CW.Lane:
+    """The journal identity of a store's write: lane `img-liveness`, stamped with the store's date."""
+    match = STORE_NAME_RE.fullmatch(store.name)
+    if match is None:
+        raise LivenessError(f"{store} is not a liveness store directory (liveness-YYYY-MM-DD)")
+    return CW.Lane(
+        "img-liveness",
+        "T09/liveness",
+        f"img-liveness-{match.group(1)}",
+        "authoritative",
+        "img liveness",
+    )
+
+
+def as_text(value: Any) -> str | None:
+    """A planned value in the text form `chunk_writer` compares (`column::text`)."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None or isinstance(value, str):
+        return value
+    raise LivenessError(f"a planned value {value!r} is neither a boolean, a text nor NULL")
+
+
+def require_recheck(store: Path, lines: Sequence[Mapping[str, Any]]) -> None:
+    """The store's `RECHECK.json` re-proved every logged line and found nothing."""
+    path = store / "RECHECK.json"
+    if not path.is_file():
+        raise LivenessError(f"{path} does not exist - run `liveness.py recheck` before the chunk")
+    report = json.loads(path.read_text(encoding="utf-8"))
+    logged = sum(1 for line in lines if line["class"] in LOGGED)
+    if report.get("problems") != [] or report.get("checked") != logged:
+        raise LivenessError(
+            f"{path} is not a clean recheck of this store: checked {report.get('checked')!r} of "
+            f"{logged} logged line(s), problems {report.get('problems')!r}"
+        )
+
+
+def _line_for(row: PlannedRow, by_sha: Mapping[str, Mapping[str, Any]]) -> Mapping[str, Any]:
+    """The store line a planned row cites, proven to state what the row claims."""
+    evidence = row.evidence
+    line = by_sha.get(str(evidence.get("liveness_sha256")))
+    if line is None:
+        raise LivenessError(
+            f"image {row.key} {row.column}: its liveness_sha256 names no line of NOT_LIVE.jsonl"
+        )
+    log = line["log"] or {}
+    claims = {
+        "class": (evidence.get("class"), line["class"]),
+        "commons_file": (evidence.get("commons_file"), line["file"]),
+        "logid": (evidence.get("logid"), log.get("logid")),
+        "rule": (evidence.get("rule"), row.rule),
+    }
+    wrong = sorted(name for name, (said, stated) in claims.items() if said != stated)
+    if wrong or row.key not in line["image_ids"]:
+        raise LivenessError(
+            f"image {row.key} {row.column}: its store line does not state what the row claims "
+            f"({', '.join(wrong) or 'the line does not reference the row'})"
+        )
+    if line["class"] not in ROLE_CLASSES[row.role]:
+        raise LivenessError(f"image {row.key}: a {line['class']} line does not allow {row.role}")
+    return line
+
+
+def _url_target(line: Mapping[str, Any], column: str) -> str:
+    """The value L2 writes: the store's live move target, spelled as the downloader stores it."""
+    target = line["move_target"] or {}
+    if target.get("class") != LIVE or not target.get("url"):
+        raise LivenessError(f"{line['file']}: the move target is not a live file")
+    if column == "original_url":
+        return str(target["url"])
+    return commons_page_url_for(str(target["title"]))
+
+
+def plan_changes(
+    planned: Sequence[PlannedRow], lines: Sequence[Mapping[str, Any]], store: Path
+) -> list[CW.Change]:
+    """PLANNED.jsonl as chunk-writer changes: values exactly as planned, reasons from the class,
+    evidence the planned pointers plus the store they point into. Refuses what it cannot prove."""
+    by_sha = {line_sha256(line): line for line in lines}
+    dropped = {row.site_id for row in planned if row.role == "hero-drop"}
+    source = f"{STORE_HOME}/{store.name}/NOT_LIVE.jsonl"
+    out: list[CW.Change] = []
+    for row in planned:
+        if ROLE_RULE.get(row.role) != row.rule or row.column not in ROLE_COLUMNS[row.role]:
+            raise LivenessError(
+                f"image {row.key}: {row.rule}/{row.role} does not write {row.column}"
+            )
+        if row.table != "wiki_images":
+            raise LivenessError(f"image {row.key}: the liveness lane writes wiki_images only")
+        old, new = as_text(row.old), as_text(row.new)
+        if row.role in ROLE_FLIP and (old, new) != ROLE_FLIP[row.role]:
+            raise LivenessError(
+                f"image {row.key}: {row.role} is {ROLE_FLIP[row.role]}, not {old!r} -> {new!r}"
+            )
+        if row.role == "hero-promote":
+            if row.site_id not in dropped or not row.evidence.get("replacement_rule"):
+                raise LivenessError(
+                    f"image {row.key}: a hero promotion without the hero L1 took on its site"
+                )
+            reason = (
+                f"L1 took the site's hero; {row.evidence['replacement_rule']} chose this row "
+                f"(tier {row.evidence.get('tier')}, Commons original "
+                f"{row.evidence.get('commons_original')})"
+            )
+            evidence = {"source": "the hero repair's rule over the rows L1 leaves live"}
+        else:
+            line = _line_for(row, by_sha)
+            if row.role == "url" and new != _url_target(line, row.column):
+                raise LivenessError(f"image {row.key} {row.column}: {new!r} is not the move target")
+            log = line["log"]
+            cause = CAUSE[line["class"]].format(
+                file=line["file"],
+                logid=log["logid"],
+                when=log["timestamp"],
+                target=(line["move_target"] or {}).get("title"),
+            )
+            reason = f"{cause}; {CONSEQUENCE[row.role].format(column=row.column)}"
+            evidence = {"source": "Commons log, read by the liveness sweep", "store": source}
+        out.append(
+            CW.Change(
+                row.table,
+                row.column,
+                str(row.key),
+                row.site_id,
+                old,
+                new,
+                row.rule,
+                reason,
+                [{**evidence, **row.evidence}],
+            )
+        )
+    return out
+
+
+def emptied_sites(changes: Sequence[CW.Change], rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The touched sites that have a live image now and none once the exclusions are applied.
+
+    `rows` are every `wiki_images` row of the touched sites as production holds them (id, site,
+    is_excluded); a NULL `is_excluded` is live, as everywhere else (`IS NOT TRUE`).
+    """
+    excluded = {int(c.row_key): c.new_value == "true" for c in changes if c.column == "is_excluded"}
+    live: dict[str, list[int]] = defaultdict(list)
+    after: dict[str, list[int]] = defaultdict(list)
+    seen: dict[int, str] = {}
+    for row in rows:
+        image_id, site_id = CW.pv._as_int(row["id"], what="wiki_images.id"), str(row["site_id"])
+        seen[image_id] = site_id
+        if row["is_excluded"] is not True:
+            live[site_id].append(image_id)
+        if not excluded.get(image_id, row["is_excluded"] is True):
+            after[site_id].append(image_id)
+    for change in changes:
+        if seen.get(int(change.row_key)) != change.site_id:
+            raise LivenessError(
+                f"image {change.row_key} is not a row of site {change.site_id} in production"
+            )
+    return sorted(site for site in live if not after[site])
+
+
+def command_chunk(args: argparse.Namespace) -> int:
+    store = Path(args.store)
+    lines = load_store(store / "NOT_LIVE.jsonl")
+    require_recheck(store, lines)
+    lane = chunk_lane(store)
+    changes = plan_changes(read_plan(store / "PLANNED.jsonl"), lines, store)
+    sites = sorted({c.site_id for c in changes})
+    rows = CW.pv.read_rows(
+        LIVE_ROWS_SQL.replace("{sites}", ", ".join(f"{CW.L(s)}::uuid" for s in sites))
+    )
+    emptied = emptied_sites(changes, rows)
+    named = sorted(set(args.may_empty))
+    if emptied != named:
+        raise LivenessError(
+            f"the plan leaves {emptied} without a live image, --may-empty names {named}: "
+            "every site that loses its last image must be named, and only those"
+        )
+    chunks = CW.chunk_changes(lane, changes, may_empty=emptied)
+    for directory in CW.emit_chunks(store, chunks):
+        print(f"{directory}: {len(changes)} row(s) over {len(sites)} site(s), may_empty {emptied}")
+    return 0
+
+
 # ------------------------------------------------------------------------------ CLI
 def _utc_now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -713,13 +958,22 @@ def main(argv: list[str] | None = None) -> int:
     rc.add_argument("--store", required=True)
     rc.add_argument("--cache", default=str(DEFAULT_CACHE))
     rc.add_argument("--interval", type=float, default=INTERVAL_S)
+    ch = sub.add_parser("chunk", help="the store's PLANNED.jsonl as a chunk of the image writer")
+    ch.add_argument("--store", required=True)
+    ch.add_argument(
+        "--may-empty",
+        action="append",
+        default=[],
+        help="a site the plan may leave without a live image (repeat; exactly those it empties)",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     # httpx logs every URL at INFO; a 50-title URL is 5 kB, 922 of them bury the progress lines.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    commands = {"sweep": command_sweep, "recheck": command_recheck, "chunk": command_chunk}
     try:
-        return command_sweep(args) if args.command == "sweep" else command_recheck(args)
-    except (LivenessError, FetchError) as exc:
+        return commands[args.command](args)
+    except (LivenessError, FetchError, PlanError, CW.pv.PersistError) as exc:
         print(f"STOPPED: {exc}", file=sys.stderr)
         return 2
 

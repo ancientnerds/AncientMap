@@ -12,7 +12,9 @@ too.
 from __future__ import annotations
 
 import json
+import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -689,3 +691,281 @@ def test_the_versioned_liveness_evidence_is_the_store_its_summary_describes() ->
     assert summary["files"] == 46_070 and summary["classes"][L.LIVE] == 46_059
     if (STORE / "COMMONS.jsonl").exists():  # the full store is local-only (gitignored)
         assert summary["commons_sha256"] == L.text_sha256(STORE / "COMMONS.jsonl")
+
+
+# ------------------------------------------------------------------------------ the write (chunk)
+#: Three sites: A keeps a live image after its deleted hero goes, B loses its only image, C's image
+#: was renamed without a redirect.
+SA = "00000000-0000-4000-8000-00000000000a"
+SB = "00000000-0000-4000-8000-00000000000b"
+SC = "00000000-0000-4000-8000-00000000000c"
+CHUNK_FILES = {
+    "Alive_one.jpg": [11, 12],
+    "Copyvio.jpg": [14],
+    "Deletion_request.jpg": [15],
+    "-_panoramio_(1931).jpg": [16],
+}
+STORE_POINTER = "output/remediation/gallery_audit/liveness-2026-09-23/NOT_LIVE.jsonl"
+
+
+def _image(image_id: int, site: str, name: str, **kw: Any) -> dict[str, Any]:
+    row = {
+        "id": image_id,
+        "site_id": site,
+        "is_excluded": False,
+        "is_hero": False,
+        "original_url": f"{UPLOAD}/a/ab/{name}",
+        "commons_page_url": f"https://commons.wikimedia.org/wiki/File%3A{name}",
+        "_tier": "C",
+    }
+    row.update(kw)
+    return row
+
+
+CHUNK_ROWS = {
+    SA: [_image(11, SA, "Alive_one.jpg"), _image(14, SA, "Copyvio.jpg", is_hero=True)],
+    SB: [_image(15, SB, "Deletion_request.jpg")],
+    SC: [_image(12, SC, "Alive_one.jpg"), _image(16, SC, "-_panoramio_%281931%29.jpg")],
+}
+
+
+def _chunk_store(tmp_path: Path, name: str = "liveness-2026-09-23") -> tuple[Path, list[Any]]:
+    """A swept store (the fake Commons), its L1/L2 plan (`decide.plan_liveness`) and a clean
+    recheck - what `chunk` reads."""
+    from gallery_audit import decide
+    from gallery_audit.planned import write_plan
+
+    lines, _, _ = _sweep(tmp_path, _commons(), CHUNK_FILES)
+    store = tmp_path / name
+    L.write_store(store, list(lines.values()), {"snapshot_exported_at": "x"})
+    planned, _ = decide.plan_liveness(list(lines.values()), CHUNK_ROWS, {})
+    write_plan(store / "PLANNED.jsonl", planned)
+    (store / "RECHECK.json").write_text(json.dumps({"checked": 3, "problems": []}), "utf-8")
+    return store, planned
+
+
+def _changes(store: Path, planned: list[Any]) -> list[Any]:
+    return L.plan_changes(planned, L.load_store(store / "NOT_LIVE.jsonl"), store)
+
+
+def test_the_chunk_carries_every_planned_row_exactly_as_planned(tmp_path: Path) -> None:
+    store, planned = _chunk_store(tmp_path)
+    changes = _changes(store, planned)
+    assert [(c.row_key, c.column, c.old_value, c.new_value, c.rule) for c in changes] == [
+        (
+            "16",
+            "commons_page_url",
+            "https://commons.wikimedia.org/wiki/File%3A-_panoramio_%281931%29.jpg",
+            "https://commons.wikimedia.org/wiki/File%3AForum%20Romanum%20-%20panoramio%20%283%29.jpg",
+            "L2",
+        ),
+        (
+            "16",
+            "original_url",
+            f"{UPLOAD}/a/ab/-_panoramio_%281931%29.jpg",
+            f"{UPLOAD}/a/ab/Forum_Romanum_-_panoramio_(3).jpg",
+            "L2",
+        ),
+        ("14", "is_excluded", "false", "true", "L1"),
+        ("14", "is_hero", "true", "false", "L1"),
+        ("15", "is_excluded", "false", "true", "L1"),
+    ]
+    by_key = {(c.row_key, c.column): c for c in changes}
+    assert by_key[("14", "is_excluded")].reason == (
+        "Commons deleted File:Copyvio.jpg as a copyright violation (log 9, 2026-09-14T08:22:32Z); "
+        "the row is excluded"
+    )
+    assert by_key[("14", "is_hero")].reason.endswith("an excluded row cannot stay the site's hero")
+    assert (
+        "for a stated reason other than copyright (log 8," in by_key[("15", "is_excluded")].reason
+    )
+    assert by_key[("16", "original_url")].reason == (
+        "Commons renamed File:-_panoramio_(1931).jpg to File:Forum Romanum - panoramio (3).jpg "
+        "without a redirect (log 7, 2026-09-16T00:59:40Z); original_url points at the live target"
+    )
+    for change, row in zip(changes, planned, strict=True):
+        (evidence,) = change.evidence
+        # every planned pointer, unchanged, plus where it points
+        assert {k: evidence[k] for k in row.evidence} == row.evidence
+        assert evidence["store"] == STORE_POINTER and evidence["source"]
+        L.CW.validate_change(change)
+
+
+def test_a_planned_row_whose_store_line_does_not_state_it_is_refused(tmp_path: Path) -> None:
+    store, planned = _chunk_store(tmp_path)
+    exclude = next(p for p in planned if p.key == 14 and p.column == "is_excluded")
+    for evidence, says in (
+        ({**exclude.evidence, "liveness_sha256": "00" * 32}, "names no line"),
+        ({**exclude.evidence, "class": L.DELETED_OTHER}, "(class)"),
+        ({**exclude.evidence, "logid": 10}, "(logid)"),
+        ({**exclude.evidence, "commons_file": "Other.jpg"}, "(commons_file)"),
+        ({**exclude.evidence, "rule": "L2"}, "(rule)"),
+    ):
+        with pytest.raises(L.LivenessError, match=re.escape(says)):
+            _changes(store, [replace(exclude, evidence=evidence)])
+    with pytest.raises(L.LivenessError, match="does not reference the row"):
+        _changes(store, [replace(exclude, key=11)])
+    moved = next(p for p in planned if p.column == "original_url")
+    as_exclusion = replace(
+        moved,
+        rule="L1",
+        role="exclude",
+        column="is_excluded",
+        old=False,
+        new=True,
+        evidence={**moved.evidence, "rule": "L1"},
+    )
+    with pytest.raises(L.LivenessError, match="does not allow exclude"):
+        _changes(store, [as_exclusion])
+
+
+def test_a_row_its_role_does_not_write_or_a_value_the_store_does_not_give_is_refused(
+    tmp_path: Path,
+) -> None:
+    store, planned = _chunk_store(tmp_path)
+    exclude = next(p for p in planned if p.key == 14 and p.column == "is_excluded")
+    with pytest.raises(L.LivenessError, match="does not write is_hero"):
+        _changes(store, [replace(exclude, column="is_hero")])
+    with pytest.raises(L.LivenessError, match="exclude is"):
+        _changes(store, [replace(exclude, old=True, new=False)])
+    with pytest.raises(L.LivenessError, match="neither a boolean"):
+        _changes(store, [replace(exclude, old=0, new=1)])
+    moved = next(p for p in planned if p.column == "original_url")
+    with pytest.raises(L.LivenessError, match="is not the move target"):
+        _changes(store, [replace(moved, new=f"{UPLOAD}/a/ab/Somewhere_else.jpg")])
+    promote = replace(
+        exclude,
+        key=11,
+        column="is_hero",
+        old=False,
+        new=True,
+        role="hero-promote",
+        evidence={"rule": "L1", "replacement_rule": "hero_repair"},
+    )
+    with pytest.raises(L.LivenessError, match="without the hero L1 took"):
+        _changes(store, [replace(promote, site_id=SB)])
+    # beside the drop on its own site it passes, and cites the hero repair's rule
+    drop = next(p for p in planned if p.column == "is_hero")
+    changes = _changes(store, [drop, promote])
+    assert changes[1].reason.startswith("L1 took the site's hero; hero_repair chose this row")
+
+
+def test_the_chunk_is_cut_only_from_a_store_whose_recheck_found_nothing(tmp_path: Path) -> None:
+    store, _ = _chunk_store(tmp_path)
+    lines = L.load_store(store / "NOT_LIVE.jsonl")
+    L.require_recheck(store, lines)
+    for report in (
+        {"checked": 3, "problems": ["Copyvio.jpg: back"]},
+        {"checked": 2, "problems": []},
+    ):
+        (store / "RECHECK.json").write_text(json.dumps(report), "utf-8")
+        with pytest.raises(L.LivenessError, match="not a clean recheck"):
+            L.require_recheck(store, lines)
+    (store / "RECHECK.json").unlink()
+    with pytest.raises(L.LivenessError, match="run `liveness.py recheck`"):
+        L.require_recheck(store, lines)
+
+
+def test_the_lane_journals_under_the_stores_date() -> None:
+    lane = L.chunk_lane(Path("x") / "liveness-2026-10-01")
+    assert (lane.name, lane.stamp, lane.test_id, lane.confidence) == (
+        "img-liveness",
+        "img-liveness-2026-10-01",
+        "T09/liveness",
+        "authoritative",
+    )
+    with pytest.raises(L.LivenessError, match="not a liveness store"):
+        L.chunk_lane(Path("attribution-2026-09-23"))
+
+
+def _production(rows_by_site: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    return [
+        {"id": r["id"], "site_id": r["site_id"], "is_excluded": r["is_excluded"]}
+        for rows in rows_by_site.values()
+        for r in rows
+    ]
+
+
+def test_the_sites_left_without_a_live_image_are_computed_from_production(tmp_path: Path) -> None:
+    store, planned = _chunk_store(tmp_path)
+    changes = _changes(store, planned)
+    assert L.emptied_sites(changes, _production(CHUNK_ROWS)) == [SB]
+    # a NULL is_excluded is live; a site that had no live image before loses nothing
+    held = [*_production(CHUNK_ROWS), {"id": 99, "site_id": SB, "is_excluded": None}]
+    assert L.emptied_sites(changes, held) == []
+    already = [r if r["id"] != 15 else {**r, "is_excluded": True} for r in _production(CHUNK_ROWS)]
+    assert L.emptied_sites(changes, already) == []
+    # a planned row production does not hold on the planned site stops the chunk
+    moved = [r if r["id"] != 14 else {**r, "site_id": SB} for r in _production(CHUNK_ROWS)]
+    with pytest.raises(L.LivenessError, match="is not a row of site"):
+        L.emptied_sites(changes, moved)
+
+
+def test_the_command_emits_only_when_the_named_sites_are_exactly_the_emptied_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    store, _ = _chunk_store(tmp_path)
+    sent: list[str] = []
+
+    def read_rows(sql: str) -> list[dict[str, Any]]:
+        sent.append(sql)
+        assert sql.startswith("SELECT row_to_json(t) FROM (\n  SELECT w.id, w.site_id::text")
+        assert set(re.findall(r"'([0-9a-f-]{36})'::uuid", sql)) == {SA, SB, SC}
+        return _production(CHUNK_ROWS)
+
+    monkeypatch.setattr(L.CW.pv, "read_rows", read_rows)
+    argv = ["chunk", "--store", str(store)]
+    # a store whose recheck found a problem is not cut into a chunk, whatever is named
+    recheck = store / "RECHECK.json"
+    clean = recheck.read_text(encoding="utf-8")
+    recheck.write_text(json.dumps({"checked": 3, "problems": ["Copyvio.jpg: back"]}), "utf-8")
+    assert L.main([*argv, "--may-empty", SB]) == 2
+    assert "not a clean recheck" in capsys.readouterr().err and not sent
+    recheck.write_text(clean, "utf-8")
+    assert L.main(argv) == 2
+    assert f"the plan leaves ['{SB}'] without a live image" in capsys.readouterr().err
+    assert L.main([*argv, "--may-empty", SB, "--may-empty", SA]) == 2
+    assert not (store / "chunk-001").exists()
+    assert L.main([*argv, "--may-empty", SB]) == 0
+    chunk = L.CW.check_delivered(store / "chunk-001")
+    assert chunk.lane == L.chunk_lane(store) and chunk.may_empty == frozenset({SB})
+    assert chunk.run_stamp == "img-liveness-2026-09-23-001" and len(chunk.changes) == 5
+    assert len(sent) == 3
+
+
+def _row_order(change: Any) -> tuple[str, str, str, int]:
+    return (change.site_id, change.table, change.column, int(change.row_key))
+
+
+def test_the_delivered_liveness_chunk_is_the_plan_of_the_store() -> None:
+    """chunk-001 is what `chunk` makes of the versioned store: the 9 planned rows, and Dedan the
+    one site it may empty (production, read 2026-09-23: its two rows are both deleted files)."""
+    from gallery_audit.planned import read_plan
+
+    chunk = L.CW.check_delivered(STORE / "chunk-001")
+    assert chunk.lane == L.chunk_lane(STORE)
+    planned = read_plan(STORE / "PLANNED.jsonl")
+    made = L.plan_changes(planned, L.load_store(STORE / "NOT_LIVE.jsonl"), STORE)
+    assert sorted(chunk.changes, key=_row_order) == sorted(made, key=_row_order)
+    assert chunk.may_empty == frozenset({"9a9a0dca-52c8-44c2-94f6-adb655db17dd"})
+    assert sorted((c.row_key, c.column, c.old_value, c.new_value) for c in chunk.changes) == [
+        ("107331", "is_excluded", "false", "true"),
+        ("70233", "is_excluded", "false", "true"),
+        (
+            "75145",
+            "commons_page_url",
+            "https://commons.wikimedia.org/wiki/File%3A-%20panoramio%20%281931%29.jpg",
+            "https://commons.wikimedia.org/wiki/File%3AForum%20Romanum%20-%20panoramio%20%283%29.jpg",
+        ),
+        (
+            "75145",
+            "original_url",
+            "https://upload.wikimedia.org/wikipedia/commons/d/db/-_panoramio_%281931%29.jpg",
+            "https://upload.wikimedia.org/wikipedia/commons/5/5f/Forum_Romanum_-_panoramio_%283%29.jpg",
+        ),
+        ("80453", "is_excluded", "false", "true"),
+        ("87351", "is_excluded", "false", "true"),
+        ("87352", "is_excluded", "false", "true"),
+        ("87352", "is_hero", "true", "false"),
+        ("97070", "is_excluded", "false", "true"),
+    ]
