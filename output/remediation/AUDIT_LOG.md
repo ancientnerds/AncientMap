@@ -5655,3 +5655,95 @@ and a full sweep would have died on its anchor assert (the gap branch ran only i
 The anchor is corrected (1/1 caught), and `test_phase3_sweep.py` now reads every entry's anchor and
 test name against the tree in the gate suite, so the next such drift is red before anyone runs a
 sweep: 176 entries, 0 stale.
+
+## 2026-09-23 - the owner cases B1/B2: decided from data, planned, not applied
+
+The owner's instruction for HUMAN_ONLY section B was "implement the recommendations" of the
+remaining-work map (`logs/remaining_map_2026-09-22.json`, block "B - owner cases"). Delivered: the
+classifier `scripts/remediation/bcases/` (collect, classify, qid_research, coord_plan, run), its
+per-site verdicts in `output/remediation/bcases/`, wave 2 of `tools/qid_repair.py` and the German
+section in HUMAN_ONLY. **Nothing was written to production.** Every production contact was a read:
+one export `SELECT` of the 5,004 curated rows, three schema/journal counts, `bcases/run.py check`
+(51 rows, 0 deviations), `qid_repair.py check --wave 2` (13 rows, 0 deviations) and
+`qid_repair.py verify` of wave 1 (26 rows, 0 deviations).
+
+### What production held when this started
+
+* Wave 1 of the external-id repair had been applied at 03:25 UTC (`2026-09-22_external-id-repair`,
+  26 journal rows). Its plan, statements and rules are unchanged; wave 1 still renders its versioned
+  `APPLY.sql`, `ROLLBACK.sql`, `PLAN.jsonl` and `PLAN.md` byte for byte, and `verify` reads 0 deviations.
+* `unified_sites.scope_status` exists (migration 0020); 0 curated rows carry a value.
+* `geom`: 5,003 of 5,004 curated rows hold exactly `ST_SetSRID(ST_MakePoint(lon, lat), 4326)`, one holds
+  NULL; `h3_index` is NULL on all of them. There is no trigger, so a coordinate write writes `geom`
+  as a third journalled change next to `lat` and `lon`.
+
+### Measured
+
+* **B1 names** (631 T01 name findings, classified against the links the census compared - the
+  snapshot's `site_external_ids` - with fresh Wikidata names of all 4,515 linked items): 508 keep
+  (354 exact name, 50 same without generic words, 67 descriptive subset, 37 transliteration), 77 wrong
+  link (21 generic concept, 43 shared parent or sibling, 8 no coordinate, 5 more than 5 km), 46 to read.
+  The remaining-work map's 508/77/46 is reproduced exactly. 18 of the 77 are wave-1 sites.
+* **Wave 2**: the other 59 researched one at a time (`bcases/qid_research.jsonl`: the exact-title
+  article, every item within 1 km by `list=geosearch`, ten `wbsearchentities` hits). 13 research
+  suggestions; 12 taken (1 rule A, 11 rule B: 13 row changes), 1 refused by hand (Ramesses III Temple:
+  name and point Karnak, description and source Medinet Habu). 47 stay as they are, each with its
+  reason - 24 have no item of their own, 11 have a candidate that cannot prove the 1 km gate, 5 are
+  right links shared with a second curated row of the same site, 3 are type records, 2 are right links
+  on a wrong point, 2 contradict themselves.
+* **Coordinates** (477 T01 findings + 11 B2 rows = 488): 17 move (51 journalled changes; 11 of them
+  among the 285 coordinate-only sites), 98 where the stored point is the English article's point,
+  210 whose item cannot speak for the point (115 container, 33 linear/areal, 30 shared, 32 other name),
+  163 open (102 one witness, 45 two witnesses that are one, 8 disagreeing, 7 none, 1 split). One move
+  (Temple of Atargatis, 459 km) lands outside its stored country, Lebanon: a country follow-up.
+* **B2** (117): 25 political (B10), 44 coastline/island/border, 4 `Northern Ireland` right, 22 Ireland
+  in Northern Ireland (all written since by the UK lane), 6 wrong country (3 written, 3 open), 3 wrong
+  coordinate, 12 need a witness, 1 not a country. Identical to the map's classification.
+* **Duplicates**: 20 DUP pairs (the plan estimated about 8; plan rule 1 - the measurement is recorded,
+  not the estimate overwritten), 20 losers in `DUPLICATES.jsonl`, 0 unresolved groups; 13 stacked
+  points carrying 36 sites. PART-OF 59, NEITHER 83, WRONG-ID 19 differ from the map's 65/93/44 because
+  wave 1 has since replaced the shared generic anchors.
+* Two full re-runs of the classifier with different hash seeds produce byte-identical files.
+
+### Traps found on the way
+
+* en.wikipedia `prop=coordinates` returns at most ten coordinates per request unless `colimit` is set:
+  131 of 614 pages came back without coordinates and with a `continue`. The fetch now asks for
+  `colimit=max` and refuses any answer that carries `continue`.
+* Wikidata answered "cirrussearch-too-busy-error" inside an HTTP 200, and `census.fetch.Fetcher` caches
+  every 2xx - the refusal would have been read back from the cache forever. `collect.api_json` asks
+  again, bounded, with the cache bypassed; any other API error raises.
+* Overpass (`overpass-api.de`) answered five queries from this workstation and then reset every
+  connection (`WinError 10054` six times, `curl` exit 35 on `/api/status`). OpenStreetMap is therefore
+  not a witness in this run; asking it from the VPS would use production for more than a read.
+* The map's K classes matched class words as substrings ("hill" in "hillfort", "city" in "ancient
+  city"). Whole-word matching with a site-word exemption gives, on the 285: container 60 (map 88),
+  linear/areal 20 (26), shared 7 (7), 1-10 km 135 (105), over 10 km 63 (59). The K classes are a report;
+  a write is decided by the witness rule and the name identity. The N7 split moves the same way
+  (27 site / 19 locality, map 22/24).
+* A first version of the plan rendered the evidence in dict order and its own `check` refused it after
+  the round trip through `PLAN.jsonl` (sorted keys). The statement now renders sorted keys; a mutation
+  case keeps it that way.
+
+### Decisions taken under "implement the recommendations"
+
+* Coordinates are written as three journalled changes (`lat`, `lon`, `geom`), not two: `geom` has no
+  trigger and the prospector's dedup measures on it.
+* Two witnesses count once when `P625` is referenced to English Wikipedia (`P143` Q328 or an import
+  URL) or when the points are the same within max(5 m, the P625 precision) - anti-pattern 9.
+* Name identity (N1/N2) gates a move: a part-of name ("Temple of Apollo, Delphi" on Delphi) would
+  otherwise move a temple to its sanctuary's centre.
+* Museum objects move to the `P189` find-spot only when stored at the holding museum.
+* Survivor rule as the task stated it (content links, sources, older `created_at`) plus the lower id
+  as a tie-break, reported as such: the 5,004 curated rows carry only three distinct `created_at`
+  values, and the tie-break decides 7 of the 20 pairs.
+* The external-id repair's wave 2 keeps rules A/B and adds the map's gate (1 km, a site kind, the
+  article's coordinates as rule A's position proof); a research lead is never taken unread.
+* `gap_plan.py` still withholds wave-1 links only; the gap lane's plan is built, so wave 2 is named for
+  its next re-plan rather than changing a plan in flight.
+
+### Mutation proof
+
+`scripts/remediation/phase3/mutation_sweep.py bcases`: **32/32 caught**, the tree byte-identical to
+the sweep's start for 5 files. The older repair and gap-plan entries, re-run after the wave-2 change:
+8/8 caught.
