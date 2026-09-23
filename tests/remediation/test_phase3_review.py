@@ -297,6 +297,12 @@ FAILING_HALF_WHY: tuple[tuple[str, str], ...] = (
         "no evidence contradicts that clause, and the stored text is not shown wrong.",
         "the stored value is not shown wrong",
     ),
+    (  # Huandacareo site_type, the re-review of 2026-09-23 (REFUTED: NO)
+        "The stored value is not wrong — the finder's reasons conflict with the evidence, which "
+        'describes Huandacareo as a site "about two kilometers from the center of the Huandacareo '
+        'town and municipality"',
+        "the stored value is not wrong",
+    ),
     (  # Cueva de los Murcielagos period_start, the pilot
         "The stored value 1 is not shown wrong: `period_start` is a sort key",
         "the stored value is not shown wrong",

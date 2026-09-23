@@ -193,6 +193,13 @@ FAILING_HALF_PHRASES: tuple[tuple[str, str], ...] = (
         r"\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not shown (?:to be )?wrong\b",
     ),
     (
+        # Added 2026-09-23 from the re-review of the 77 contradicting rows: Huandacareo's WHY opened
+        # "The stored value is not wrong" under REFUTED: NO. Over the mass run's reviewer answers it
+        # occurs 23 times under YES (consistent) and 4 under NO, each of the 4 a contradiction.
+        "the stored value is not wrong",
+        r"\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not wrong\b",
+    ),
+    (
         "does not show the stored value wrong",
         r"\b(?:does|do|did) not show (?!(?:that )?the propos)[^.;:\u2014\u2013]{0,50}?\bwrong\b",
     ),

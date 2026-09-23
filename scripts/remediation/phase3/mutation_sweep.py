@@ -3097,6 +3097,15 @@ PILOT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         R_NAMED,
     ),
     (
+        "'the stored value is not wrong' is not read as a failing half",
+        REVIEW_STAGE,
+        '        "the stored value is not wrong",\n'
+        '        r"\\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not wrong\\b",\n',
+        '        "the stored value is not wrong",\n        r"(?!x)x",  # mutant\n',
+        REVIEW_TEST,
+        R_NAMED,
+    ),
+    (
         "'the stored text is not shown wrong' is not read as a failing half",
         REVIEW_STAGE,
         '        r"\\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not shown (?:to be )?wrong\\b",\n',
