@@ -59,11 +59,11 @@ def render_hero_webp(image_bytes: bytes) -> tuple[bytes, int, int]:
     """The hero file for `image_bytes`: WebP, at most HERO_WIDTH wide, and never upscaled.
 
     Pure (bytes in, bytes and the stored size out), so the size rule is testable without a
-    database or a disk. Any mode other than RGB is converted first - WebP lossy has no palette
-    or CMYK mode, and a CMYK JPEG from Commons used to fail the whole request.
+    database or a disk. The mode handling is the endpoint's as it was: RGBA and palette images
+    lose their alpha, every other mode is left to the WebP encoder.
     """
     img = Image.open(BytesIO(image_bytes))
-    if img.mode != "RGB":
+    if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
     if img.width > HERO_WIDTH:
         ratio = HERO_WIDTH / img.width

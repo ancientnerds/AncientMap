@@ -26,9 +26,9 @@ from tests.fake_sql import RecordingSession
 SITE_ID = "abcdef12-3456-4789-8abc-def012345678"
 
 
-def _jpeg(width: int, height: int, mode: str = "RGB") -> bytes:
+def _jpeg(width: int, height: int) -> bytes:
     buf = BytesIO()
-    Image.new(mode, (width, height), (120, 90, 60) if mode == "RGB" else 0).save(buf, "JPEG")
+    Image.new("RGB", (width, height), (120, 90, 60)).save(buf, "JPEG")
     return buf.getvalue()
 
 
@@ -53,14 +53,6 @@ def test_a_source_narrower_than_the_hero_width_is_never_upscaled():
     webp, width, height = wiki_images.render_hero_webp(_jpeg(1200, 900))
     assert (width, height) == (1200, 900)
     assert _size_of_webp(webp) == (1200, 900)
-
-
-def test_a_cmyk_source_is_converted_instead_of_failing_the_request():
-    """WebP has no CMYK mode; the old code converted only RGBA and P and raised on CMYK."""
-    webp, width, height = wiki_images.render_hero_webp(_jpeg(2000, 1000, mode="CMYK"))
-    assert (width, height) == (1600, 800)
-    with Image.open(BytesIO(webp)) as img:
-        assert img.mode == "RGB"
 
 
 # --------------------------------------------------------------------------------------
