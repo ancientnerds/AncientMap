@@ -129,7 +129,8 @@ is recorded. One ledger for everything (`phase3_runner/LEDGER.jsonl`). A handoff
 round: it is answered only after its export's progress (`progress.export.json`) shows
 `"stopped": null` and `"failed": {}`, and an exported question is never replaced - if the evidence
 has to change after an export (a target the fetch recorded as failed in `fetch.json`, fetched again
-with `run.py fetch --live`), remove the handoff directory before any answer exists and export again.
+with `run.py fetch --live` once the host's `Retry-After` has passed - the pace directory does not
+remember it across runs), remove the handoff directory before any answer exists and export again.
 The pilot's import writes `logs/sitelink_gold/progress.json`, which the scorer reads for threshold 4.
 `test_sitelink_plan.py` parses these commands with the drivers' own parsers.
 

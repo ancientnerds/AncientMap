@@ -7472,3 +7472,230 @@ then `$PY scripts/remediation/opus_handoff.py validate --dir H` must exit 0 befo
 * `mass_run.package_digest` hashes `phase3/` (and `mass4` `phase4/`), not `opus_handoff.py`: an edit to
   the handoff module mid-run is not caught by the digest guard.
 * Removing the now-unraised `UnreadableStream` branches (see "Kept on purpose").
+
+
+## 2026-09-23 - the sitelink lane moves to the Opus handoff: merge, pilot addendum, runbook, the pilot's export (no model call, nothing written)
+
+Branch `wip/sitelink` (worktree `.claude/worktrees/agent-af14d4b87c0be3d40`), from `4287b5d`, after the
+owner's order of 2026-09-23 (Martin: "no DeepSeek any more - everything with Opus"). **Nothing was
+written to production, nothing was read from it, and no model was called** - no DeepSeek, Pi,
+opencode gateway or other model API, in code or in tests. Network: the pilot's fetch only (Wikipedia
+and Wikidata, the project user agent, the fetch stage's per-host pace).
+
+### The merge of integrate/wave1 (`490d114`, merge commit `66ec1da`)
+
+Three textual conflicts, both sides kept. `lanes.py`: `"sitelink": "slk"` stays in
+`PHASE3_BATCH_PREFIX`, beside integrate's `PHASE4_LANES`, `BATCH_PREFIX` and `STAMP_FAMILY` (the
+sitelink lane's family is `phase3`, its stamps `phase3:slk-%`). `test_remediation_tools.py`: the
+sitelink lane test beside the two phase-4 lane tests. `mutation_sweep.py`: `SITELINK_MUTATIONS` and
+`OPUS_HANDOFF_MUTATIONS` each defined once and registered once (25 lists, 1,886 labels, all unique).
+`AUDIT_LOG.md` and the tools README merged as an append-only union; `classify.py` without a conflict
+(integrate's web witnesses, this branch's `political_line`). The classifier outputs the item rule
+reads (`bcases/coords.jsonl`, `names.jsonl`, `b2.jsonl`, the duplicate lists) did not change on
+integrate, so the pilot plan's inputs stand.
+
+### The independent check's three findings (`recovery__check_sitelink.json`): each confirmed fixed
+
+1. **Item rule** (major): `sitelink_plan.classifier_verdicts` reads `coords.jsonl`'s
+   `container-item` and `item-is-not-the-site` and `names.jsonl`'s N7 `anchor-is-locality`, and
+   `item_for` withholds on a verdict about the item the site still carries, under the rule's name.
+   The check's seven cases (Colima, Kintradwell, Kameishi, Tiklat, Elguentra, Thasos, Ahin Posh Tape)
+   and the pilot's Hebbariyeh are tested on the classifier's tracked output.
+2. **Generated wikis** (minor): `fetch_stage.BOT_GENERATED_WIKIS` refuses `cewiki`, `lldwiki`,
+   `zh_min_nanwiki` and `cowiki` beside `cebwiki`, `warwiki`, `arzwiki`; `HOME_ONLY_WIKIS` reads
+   `svwiki` only for Swedish and Finnish sites, and `svwiki` left `FIXED_ORDER`.
+3. **Threshold 4** (minor): `SITELINK_PILOT.md` copies all four thresholds of `SEARCH_PILOT.md`
+   verbatim and states the article reading beside them; a test compares the two blocks; the scorer's
+   docstring says "their text copied verbatim".
+
+### What still named DeepSeek (commit `8e6b335`)
+
+`sitelink_plan.py`'s docstring named `opencode-go/deepseek-v4.1-flash` as the lane's finder and
+reviewer; it now names the mass run's frozen prompts answered by Opus agents through the handoff.
+`test_sitelink_plan.py`'s docstring said it reads no Pi; it now says no model. No lane code builds a
+runner: the lane's model stages are `mass_run.py` and `review_all.py`, which integrate moved to the
+handoff. The lane had no cost projection of its own - the "$0.034" and "$0.0322" in the two sitelink
+sections above were `mass_run`'s DeepSeek projection (`MEASURED_COST_PER_CALL`), which integrate
+removed; the driver now prints the model as unmetered. Those sections are history and stay as written.
+
+### The pilot's addendum (commit `28fef01`)
+
+`SITELINK_PILOT.md` gains, below the seal, "Addendum 2026-09-23: the answering model is Opus (owner
+order), written before any model call": the order, the model (`opus_handoff.OPUS_MODEL`), that no
+model call was ever made for this pilot, what did not change (the four thresholds, not loosened; the
+reading of threshold 4; the plan, its fields and articles; the human verdicts; the scorer), and how
+two sections are read now - "the model cost per call" is the number of unmetered calls, never a price,
+and "How it runs" is superseded by the runbook below (its commands predate the handoff and a live
+`mass_run.py` or `review_all.py` refuses them). No model call, verified at that commit: 0 `slkg` or
+`slk` rows in `phase3_runner/LEDGER.jsonl`, on this branch and in the main checkout; no
+`runs/sitelink-gold`; no answer, review or `model.json` in the three dry fetches, 0 `model_call` rows
+in their scratch ledgers; no handoff directory.
+
+**The sealed part is byte-identical**: the file's first 6,978 bytes hash to
+`9467e7259b3cc164b60e5cb754ade2e2ed07ae9e909e7b3e2b4eb3b3f69b3d1e`, the re-sealed sha256 recorded
+above. **The file's sha256 with the addendum: `fa4cfc46f15a49c02513ae44a72d8c5dc3285387467977440e0a062bd67777b8`.**
+`test_the_sitelink_pilot_keeps_its_sealed_text_and_names_opus_only_below_it` pins the sealed prefix
+and that the model is named only below it (red before the addendum existed).
+
+### The orchestrator's runbook (commit `4020c2f`)
+
+As committed in `output/remediation/tools/README.md` ("The sitelink lane's runbook"), which is the
+living copy; `test_the_runbook_runs_every_model_stage_as_one_handoff_round_with_the_drivers_own_flags`
+parses every driver line of it with the driver's own parser and checks the rounds (below). Every
+model stage is one handoff round: export -> the Opus agents answer -> `opus_handoff.py validate`
+exits 0 -> import. The pilot first; the lane only after `score_search_pilot.py --lane sitelink`
+exits 0 and the result is recorded. One ledger, `output/remediation/phase3_runner/LEDGER.jsonl`.
+Run directories: the pilot `output/remediation/phase3_runner/runs/sitelink-gold`, the lane
+`output/remediation/phase3_runner/runs/sitelink` (the write tools' `--lane sitelink`). Handoff
+directories: `output/remediation/handoff/sitelink-gold-finder`, `-gold-reviewer`, `sitelink-finder`,
+`sitelink-reviewer`. The export writes its own progress file (`progress.export.json`), answered only
+when it shows `"stopped": null` and `"failed": {}`; the pilot's import writes
+`logs/sitelink_gold/progress.json`, which the scorer reads for threshold 4.
+
+```bash
+cd /c/PythonProjects/AncientMap && export PYTHONIOENCODING=utf-8
+PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; T=$M/tools
+P3=scripts/remediation/phase3; OH=scripts/remediation/opus_handoff.py; L=$M/phase3_runner/LEDGER.jsonl
+
+# == the pilot: the sealed plan, batches slkg-0001 and slkg-0002, 39 finder questions
+P=$M/sitelink/pilot/PLAN.sitelink-gold.jsonl; R=$M/phase3_runner/runs/sitelink-gold
+G=$M/logs/sitelink_gold; HF=$M/handoff/sitelink-gold-finder; HR=$M/handoff/sitelink-gold-reviewer
+# 1. plan: the sealed one, never rebuilt for the pilot
+sha256sum $P    # d8a78e58f02255570bd6a7c94dd42b0a04fdbddadca440b9bc12e39dabc28b81, or it does not apply
+# 2. fetch and 3. finder export: prepare, fetch, then the judge writes its prompts to $HF (no model)
+$PY $P3/mass_run.py --live --jobs 2 --plan $P --run-dir $R --ledger $L --log-dir $G \
+    --progress $G/progress.export.json --handoff-export $HF
+# 4. Opus answers: for each line of $HF/*/MANIFEST.jsonl whose answer_path does not exist, an agent
+#    reads $HF/<prompt_path>, writes its answer text (the shape the question asks for) to a file, and
+$PY $OH answer --dir $HF --batch-id <batch_id> --stage finder --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+# 5. validate: exit 0 only when every question is answered, in shape, by Opus, for its exact prompt
+$PY $OH validate --dir $HF
+# 6. finder import: the judge on the answers - ledger line first, answers/, model.json
+$PY $P3/mass_run.py --live --jobs 2 --plan $P --run-dir $R --ledger $L --log-dir $G \
+    --handoff-import $HF
+# 7. reviewer export (it asks about the finder's answers)
+$PY $T/review_all.py --lane sitelink --run-dir $R --ledger $L --log-dir $M/logs/review_sitelink_gold \
+    --handoff-export $HR
+# 8. Opus answers, as in 4
+$PY $OH answer --dir $HR --batch-id <batch_id> --stage reviewer --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+# 9. validate
+$PY $OH validate --dir $HR
+# 10. reviewer import: each batch's review.json
+$PY $T/review_all.py --lane sitelink --run-dir $R --ledger $L --log-dir $M/logs/review_sitelink_gold \
+    --handoff-import $HR
+# 11. score: exit 0 only when all four sealed thresholds hold; it reads $R and $G/progress.json
+$PY $T/score_search_pilot.py --lane sitelink
+
+# == the lane: only after step 11 passed and its result is recorded (SITELINK_PILOT.md, AUDIT_LOG.md)
+# 12. plan, rebuilt then: the pins age, and `plan` refuses a sitelinks.json resolved under other inputs
+IN="--mass-run $M/phase3_runner/runs/mass --data $M --rows $M/logs/_write_dry/ALL_ROWS.jsonl \
+    --written-keys $M/logs/search_lane/written_keys.txt --country-census $M/logs/_country_mismatches.txt"
+$PY $T/sitelink_plan.py census --mass-run $M/phase3_runner/runs/mass
+$PY $T/sitelink_plan.py export
+$PY $T/sitelink_plan.py sitelinks $IN
+$PY $T/sitelink_plan.py plan $IN
+PL=$M/phase3_runner/PLAN.sitelink.jsonl; RL=$M/phase3_runner/runs/sitelink; GL=$M/logs/sitelink_mass
+HLF=$M/handoff/sitelink-finder; HLR=$M/handoff/sitelink-reviewer
+# 13.-16. the finder's round, as 2-6
+$PY $P3/mass_run.py --live --jobs 4 --plan $PL --run-dir $RL --ledger $L --log-dir $GL \
+    --progress $GL/progress.export.json --handoff-export $HLF
+$PY $OH answer --dir $HLF --batch-id <batch_id> --stage finder --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $HLF
+$PY $P3/mass_run.py --live --jobs 4 --plan $PL --run-dir $RL --ledger $L --log-dir $GL \
+    --handoff-import $HLF
+# 17.-20. the reviewer's round, as 7-10, on the lane's own run (runs/sitelink, logs/review_sitelink)
+$PY $T/review_all.py --lane sitelink --ledger $L --handoff-export $HLR
+$PY $OH answer --dir $HLR --batch-id <batch_id> --stage reviewer --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $HLR
+$PY $T/review_all.py --lane sitelink --ledger $L --handoff-import $HLR
+# 21. the write plan, no database: logs/_write_dry_sitelink/ALL_ROWS.jsonl
+$PY $T/write_dry_all.py --lane sitelink
+# 22. write_gate dry ("dry run, nothing is written"): read its refusals, holds and rows before 23
+$PY $T/write_gate.py --lane sitelink --step 100
+# 23. apply: production, 100-site steps, each read back; a short write or a deviation stops the wave
+$PY $T/write_gate.py --lane sitelink --apply --step 100
+# 24. the independent acceptance: RESULT: 0 deviation(s)
+$PY $T/verify_writes.py --lane sitelink
+```
+
+**Where the pilot stands:** steps 1-3 are done (below); the next step is 4. The gitignored state is
+in this worktree: `output/remediation/sitelink/pilot/` (the plan), `output/remediation/snapshot/`
+(copied from the main checkout, byte-identical; the judge reads its `site_type` list),
+`output/remediation/phase3_runner/runs/sitelink-gold/`, `output/remediation/handoff/sitelink-gold-finder/`
+and `output/remediation/logs/sitelink_gold/`. Run steps 4-11 from this worktree, or merge
+`wip/sitelink` (it carries the export's ledger rows) and copy those directories to the same relative
+paths of the checkout that runs them: the import rebuilds each prompt from the run directory's
+evidence and refuses an answer to any other prompt, so the run directory travels with its handoff
+directory.
+
+### The pilot's finder export (steps 2-3; no model call)
+
+The runbook's step 2-3 command on the sealed plan (`d8a78e58...8b81`), 21:07:59-21:11:56 UTC: both
+batches handed off after prepare, fetch and judge; `stopped` null, `failed` {}. The fetch: 182
+requests (24 host probes, 18 English articles, 49 other-language articles, 72 Wikidata claim reads,
+19 narrowed WDQS queries), 179 answered 200, one WDQS transport failure answered on its retry, and two WDQS 429s
+("asked for 120s") on the narrowed Wikidata route of Xcaret and of Aubrey Holes - Stonehenge, each
+given up and recorded as that target's failure, as the fetch stage records every such answer - so 5
+of the 39 prompts carried a failure note. Nothing had been answered (`validate`: 0 answered, 0
+orphans), so the fetch was resumed (`run.py fetch --live` per batch, 21:12:47): 2 host probes and 2
+answers, both 200, `fetch.json` without a failure. Xcaret's query was asked again 85 s after its 429,
+35 s sooner than the 120 s the server asked for: the pace directory keeps each host's last request,
+not a `Retry-After` across runs (Aubrey Holes' came after 299 s). The handoff directory was removed
+and the export run again (21:13:46; no request, every target on disk).
+
+**The export: 39 finder prompts** (`slkg-0001` 32, `slkg-0002` 7; period_start 15, description 10,
+card_description 8, site_type 5, country 1; 18 sites - the pilot's fields exactly), 5 of them other
+than the first export's (the two sites' fields), each carrying the site's pinned permalinks (`oldid=`
+in 39 of 39); 10,356 to 35,159 characters, median 15,612. **Handoff directory:
+`output/remediation/handoff/sitelink-gold-finder`** (gitignored, left in place for the orchestrator);
+`opus_handoff.py validate` on it: 39 questions, 39 missing, 0 stale, 0 malformed, 0 orphans. 49 of 49
+articles stored, 0 unaccounted for (`score_search_pilot.sitelink_unaccounted`, both batches). The
+ledger: 186 `fetch` rows, 0 `model_call` rows (commit `2718e2b`). The first export's manifest:
+`logs/sitelink_gold/first_export_manifest.jsonl`.
+
+### Tests, sweep, gates
+
+* Two new tests in `test_sitelink_plan.py` (66 there now), each red before what it guards existed:
+  the sealed prefix and the Opus addendum (`..._keeps_its_sealed_text_and_names_opus_only_below_it`),
+  and the runbook (`test_the_runbook_runs_every_model_stage_as_one_handoff_round_with_the_drivers_own_flags`:
+  every `mass_run.py`, `review_all.py`, `score_search_pilot.py` and `write_dry_all.py` line parses
+  with the driver's own parser; each of the four handoff directories is exported once, answered
+  with its stage (`finder` for the finder, `reviewer` for the reviewer), validated and imported
+  once, in that order, by one driver on the same plan, run directory, ledger and logs; the export has
+  its own progress file and the import none; the pilot's import writes the run directory and the
+  progress file the scorer reads; the lane's run directory is the write tools' `--lane sitelink`;
+  the pilot is scored after its two rounds and before the lane's first export; the writers come
+  last, dry gate before apply).
+* `mutation_sweep.SITELINK_MUTATIONS`: 9 new `"sitelink: "` cases (3 on the addendum: a sealed line
+  edited, the addendum joined onto the seal, the model name dropped; 6 on the runbook: the finder
+  imported from the reviewer's directory, a second progress file for the pilot's import, no
+  validate, a flag the driver does not know, no dry gate, the lane's run directory moved), 167 in
+  all, registered once; 1,895 labels, all unique. The sweep's own `main`, run with the main venv's
+  interpreter (`sys.executable`), over every label that names `sitelink` - the 167 `"sitelink: "`
+  cases and 9 older gap and fetch cases: **176/176 caught**, the tree byte-identical to the sweep's
+  start for the 7 files it touched (`sitelink_plan.py` 86, `fetch_stage.py` 68, `gap_plan.py` 7,
+  the tools README 6, `score_search_pilot.py` 4, `SITELINK_PILOT.md` 4, `lanes.py` 1), no `# mutant`
+  line outside the sweep files (`logs/sitelink_scratch/sweep_opus_handoff.txt`).
+* Full gate suite from the worktree (`-m "not integration and not live_llm"`, `--timeout 300`,
+  `-p no:cacheprovider`, the main venv): **5,685 passed, 107 skipped, 57 deselected, 0 failed**
+  (366 s); every skip names gitignored data a worktree does not have (the Natural Earth caches,
+  `WORKLIST.jsonl`, the bcases cache, the fonts, ...).
+* `ruff check` and `ruff format --check` clean on the touched Python files (`lanes.py`,
+  `sitelink_plan.py`, `mutation_sweep.py`, `test_sitelink_plan.py`, `test_remediation_tools.py`);
+  `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean (ruff 0.15.11).
+
+### Open
+
+* Steps 4-11 of the pilot: the answers are the orchestrator's (39 finder questions now, then the
+  reviewer's); the lane runs only after the pilot passes, on a plan rebuilt then (step 12).
+* The fetch stage does not carry a host's `Retry-After` across runs, so a resumed fetch may ask
+  sooner than a host asked (once here, 35 s early; WDQS answered).
+* `mass_run.package_digest` hashes `phase3/`, not `opus_handoff.py` (integrate's open point): an edit
+  to the handoff module during the lane's run is not caught by the digest guard.
+* From the section above: the page-level bot pages inside editor-written wikis (18 pages of the first
+  plan).
