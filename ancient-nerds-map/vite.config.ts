@@ -1,16 +1,19 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Connect, type Plugin } from 'vite'
 import { resolve, extname } from 'path'
 import { execSync } from 'child_process'
 import { createReadStream, existsSync, readFileSync, statSync } from 'fs'
+import { createGzip } from 'zlib'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 import { countryLinksHtml, pickSnapshotPath, type CountryHub } from './src/landing/hubsHtml'
+import { RUNTIME_CACHING } from './src/pwa/runtimeCaching'
 
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 const buildTime = new Date().toISOString()
 
-// Dev only: serve /data/ from repo-root public/data/ (production uses nginx alias)
+// Dev server and `vite preview`: serve /data/ from repo-root public/data/
+// (production uses the nginx alias)
 // Backend for /api and /goto in dev. Defaults to the local API container; the
 // video recorder points it at production (VITE_DEV_API_TARGET=https://ancientnerds.com)
 // so the globe has real site dots without a local database.
@@ -31,21 +34,40 @@ function servePublicData(): Plugin {
     '.svg': 'image/svg+xml',
     '.gz': 'application/gzip',
   }
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    if (!req.url) return next()
+    const clean = decodeURIComponent(req.url.split('?')[0])
+    const filePath = resolve(dataRoot, clean.startsWith('/') ? clean.slice(1) : clean)
+    if (!filePath.startsWith(dataRoot)) return next()
+    const stat = statSync(filePath, { throwIfNoEntry: false })
+    if (!stat?.isFile()) return next()
+    const contentType = mimeTypes[extname(filePath)] || 'application/octet-stream'
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    // Mirror production nginx (gzip level 6, gzip_min_length 1024, gzip_types
+    // with application/json): .json goes out compressed, .geojson (served as
+    // octet-stream there) and .webp do not — so byte counts of a local probe
+    // match what a visitor downloads.
+    if (contentType === 'application/json') {
+      res.setHeader('Vary', 'Accept-Encoding')
+      if (stat.size >= 1024 && /\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''))) {
+        res.setHeader('Content-Encoding', 'gzip')
+        createReadStream(filePath).pipe(createGzip({ level: 6 })).pipe(res)
+        return
+      }
+    }
+    createReadStream(filePath).pipe(res)
+  }
   return {
     name: 'serve-public-data',
+    // Registered directly (not as a post hook) in both servers, so it runs
+    // before preview's SPA fallback, which would answer /data/* with
+    // index.html and status 200.
     configureServer(server) {
-      server.middlewares.use('/data', (req, res, next) => {
-        if (!req.url) return next()
-        const clean = decodeURIComponent(req.url.split('?')[0])
-        const filePath = resolve(dataRoot, clean.startsWith('/') ? clean.slice(1) : clean)
-        if (!filePath.startsWith(dataRoot)) return next()
-        try {
-          if (!existsSync(filePath) || !statSync(filePath).isFile()) return next()
-        } catch { return next() }
-        res.setHeader('Content-Type', mimeTypes[extname(filePath)] || 'application/octet-stream')
-        res.setHeader('Access-Control-Allow-Origin', '*')
-        createReadStream(filePath).pipe(res)
-      })
+      server.middlewares.use('/data', handler)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use('/data', handler)
     },
   }
 }
@@ -128,10 +150,14 @@ const SW_INSTALL =
 const SW_UPDATE_ONLY =
   'if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update()}).catch(function(){})})'
 const SW_UPDATE_ONLY_PAGES = ['index.html', 'site.html', 'story.html', 'research.html', 'articles.html']
+// The globe registers the worker itself, as the last task of its background
+// queue (src/pwa/registerServiceWorker.ts): on 'load' the precache download
+// (~6.9 MB) ran in parallel with the globe's critical load.
+const SW_SELF_REGISTERING_PAGES = ['globe.html']
 
 // Post-build tuning of the HTML entries: the service-worker snippet on every
-// page, and on the landing page also CSS that does not block rendering (its
-// critical CSS is inlined in <style>).
+// page but the globe, and on the landing page also CSS that does not block
+// rendering (its critical CSS is inlined in <style>).
 function tuneLandingHtml() {
   return {
     name: 'tune-landing-html',
@@ -144,6 +170,7 @@ function tuneLandingHtml() {
         if (ctx.filename.endsWith('dashboard.html')) {
           return html.replace('<link rel="manifest" href="/manifest.webmanifest">', '')
         }
+        if (SW_SELF_REGISTERING_PAGES.some(name => ctx.filename.endsWith(name))) return html
         const children = SW_UPDATE_ONLY_PAGES.some(name => ctx.filename.endsWith(name))
           ? SW_UPDATE_ONLY
           : SW_INSTALL
@@ -292,111 +319,8 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
         // Increase file size limit for larger bundles
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6 MB
 
-        // Runtime caching strategies
-        runtimeCaching: [
-          // API sites endpoint - Network First with offline fallback
-          {
-            urlPattern: /\/api\/sites\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-sites',
-              networkTimeoutSeconds: 10,
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // API sources endpoint - Stale While Revalidate
-          {
-            urlPattern: /\/api\/sources/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'api-sources',
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // Basemap images - Cache First (manually cached by user)
-          {
-            urlPattern: /\/data\/basemaps\/.*\.(jpg|png)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'basemaps',
-              cacheableResponse: {
-                statuses: [0, 200]
-              },
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
-          },
-          // Historical empire GeoJSON - Cache First (manually cached)
-          {
-            urlPattern: /\/data\/historical\/.*\.geojson$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'historical-data',
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // Vector layer data - Stale While Revalidate
-          {
-            urlPattern: /\/data\/layers\/.*\.json$/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'vector-layers',
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // Sources metadata JSON
-          {
-            urlPattern: /\/data\/sources\.json/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'static-data',
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // External images (Wikipedia) - Network First with short timeout
-          {
-            urlPattern: /^https:\/\/upload\.wikimedia\.org\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'external-images',
-              networkTimeoutSeconds: 5,
-              cacheableResponse: {
-                statuses: [0, 200]
-              },
-              expiration: {
-                maxEntries: 1000,  // Increased from 200 for field users with many sites
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
-              }
-            }
-          },
-          // Natural Earth vector data from GitHub
-          {
-            urlPattern: /^https:\/\/raw\.githubusercontent\.com\/nvkelso\/natural-earth-vector\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'natural-earth',
-              cacheableResponse: {
-                statuses: [0, 200]
-              },
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
-          }
-        ]
+        // Runtime caching strategies (src/pwa/runtimeCaching.ts, tested there)
+        runtimeCaching: RUNTIME_CACHING,
       }
     }),
     tuneLandingHtml(),
