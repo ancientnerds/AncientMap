@@ -640,8 +640,9 @@ def web_witnesses(
 ) -> tuple[dict[str, list[C.Witness]], dict[str, list[str]]]:
     """The accepted rows as witnesses, per site and ordered by label, and the notes on those left out.
 
-    One host is one witness (`Witness.label`): pages of one host that give one point count once, and
-    pages of one host that give two points give none - which of its two is meant is not ours to pick.
+    One publisher is one witness (`Witness.label`, the host's registered domain): its pages that give
+    one point count once, and its pages that give two points give none - which of its two is meant is
+    not ours to pick.
     An accepted row whose witness is not the page it read, sits on a wiki host or carries a step that
     is not its numbers' grid was not written by `verify_candidate`, and is refused.
     """

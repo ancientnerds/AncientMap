@@ -7973,10 +7973,26 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: www.x.org and x.org are two publishers",
         _CL,
-        '    return host.rstrip(".").removeprefix("www.")\n',
+        '    return ".".join(labels[-3:] if shared else labels[-2:])\n',
         '    return host.rstrip(".")  # mutant\n',
         _WW_TEST,
         _WW_LABEL,
+    ),
+    (
+        "bcases web: two subdomains of one publisher are two witnesses",
+        _CL,
+        '    return ".".join(labels[-3:] if shared else labels[-2:])\n',
+        '    return host.rstrip(".").removeprefix("www.")  # mutant\n',
+        _WW_TEST,
+        "test_the_subdomains_of_one_publisher_are_one_witness",
+    ),
+    (
+        "bcases web: a country's shared second level is taken for the publisher",
+        _CL,
+        "    shared = len(labels) > 2 and len(labels[-1]) == 2 and labels[-2] in SHARED_SECOND_LEVEL\n",
+        "    shared = False  # mutant\n",
+        _WW_TEST,
+        "test_the_subdomains_of_one_publisher_are_one_witness",
     ),
     (
         "bcases web: two agreeing pairs on two points move the site",

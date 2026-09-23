@@ -55,10 +55,11 @@ whose names do not include the stored name (N1/N2). A museum-held object (`P189`
 when the stored point is at the holding museum.
 
 The second wave (`web_witness.py`) adds a third kind, `web`: a page outside Wikipedia and its mirrors
-whose coordinates were read from the live page. A web witness is named by its host (`Witness.label`,
-"web:whc.unesco.org"): two pages of one host count once, two of different hosts may pair under the
-same independence test, a web witness comes last in `PRIORITY`, and when two agreeing pairs name
-points further apart than the tolerance the case is read, not moved.
+whose coordinates were read from the live page. A web witness is named by its publisher, the host's
+registered domain (`Witness.label`, "web:unesco.org"): two pages of one publisher count once, two of
+different publishers may pair under the same independence test, a web witness comes last in
+`PRIORITY`, and when two agreeing pairs name points further apart than the tolerance the case is
+read, not moved.
 
 ## B2 countries (the 117 `T02` findings)
 
@@ -480,18 +481,30 @@ class Witness:
 
     @property
     def label(self) -> str:
-        """How a verdict names this witness: its kind, and for a web page its host as well - two
-        pages are two witnesses only when two hosts wrote them ("web:whc.unesco.org")."""
+        """How a verdict names this witness: its kind, and for a web page its publisher as well
+        (`web_host`) - two pages are two witnesses only when two publishers wrote them
+        ("web:unesco.org")."""
         return f"web:{web_host(self.url)}" if self.kind == "web" else self.kind
 
 
+#: Second-level labels a country's registry shares out ("co.uk", "gov.pk", "or.th"): under one of
+#: them the publisher is the label before it. A shared level missing here names a wider domain
+#: ("bel.tr") and so groups more hosts into one witness, never fewer - the safe direction.
+SHARED_SECOND_LEVEL = frozenset(
+    {"ac", "co", "com", "edu", "go", "gob", "gov", "gv", "mil", "ne", "net", "or", "org"}
+)
+
+
 def web_host(url: str) -> str:
-    """The host a web witness is named by: lower case, without a leading `www.` - `www.x.org` and
-    `x.org` are one publisher."""
+    """The publisher a web witness is named by: its host's registered domain, lower case - the last
+    two labels, or three under a country code's shared second level (`SHARED_SECOND_LEVEL`).
+    `www.x.org`, `x.org` and `whc.x.org` are one publisher, so their pages are one witness."""
     host = urlsplit(url).hostname
     if not host:
         raise ValueError(f"{url!r} names no host")
-    return host.rstrip(".").removeprefix("www.")
+    labels = host.rstrip(".").split(".")
+    shared = len(labels) > 2 and len(labels[-1]) == 2 and labels[-2] in SHARED_SECOND_LEVEL
+    return ".".join(labels[-3:] if shared else labels[-2:])
 
 
 def label_of(witness: Mapping[str, Any]) -> str:
@@ -649,7 +662,7 @@ def _m(a: Witness | tuple[float, float], b: Witness | tuple[float, float]) -> fl
 
 
 def independent(a: Witness, b: Witness) -> bool:
-    """Two witnesses count twice only if they come from two sources (two web pages of one host are
+    """Two witnesses count twice only if they come from two sources (two web pages of one publisher are
     one), neither says it copied the other, neither is the other rounded to its own grid, and they
     are not the same point."""
     if a.label == b.label:

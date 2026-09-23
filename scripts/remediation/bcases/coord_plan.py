@@ -116,9 +116,9 @@ WAVE2 = Wave(
         "A web witness is a page outside Wikipedia, Wikidata and their mirrors whose coordinates "
         "`scripts/remediation/bcases/web_witness.py` read from the live page: the quoted text occurs "
         "in the page, parses to exactly the stated numbers, and stands within 1,500 characters of a "
-        "distinctive word of the site's name. Pages of one host are one witness; two web witnesses "
-        "pair only across hosts, under the same independence rule. A move into another country than "
-        "the stored one is not in this plan (it is read first).",
+        "distinctive word of the site's name. Pages of one publisher (a registered domain) are one "
+        "witness; two web witnesses pair only across publishers, under the same independence rule. "
+        "A move into another country than the stored one is not in this plan (it is read first).",
     ),
     (PLAN_DIR,),
 )

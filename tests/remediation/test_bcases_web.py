@@ -606,6 +606,21 @@ def test_a_web_witness_is_named_by_its_host_and_one_host_is_one_witness() -> Non
     assert C.independent(_web("maya.example"), _web("heritage.example", near))
 
 
+def test_the_subdomains_of_one_publisher_are_one_witness() -> None:
+    """A witness is named by its host's registered domain: "whc.unesco.org" and "en.unesco.org" are
+    one publisher, and under a country's shared second level ("co.uk", "gov.pk") the label before
+    it is the publisher."""
+    near = (WEB_POINT[0] + 0.002, WEB_POINT[1])  # 222 m: two points
+    assert _web("whc.unesco.org").label == _web("en.unesco.org").label == "web:unesco.org"
+    assert not C.independent(_web("whc.unesco.org"), _web("en.unesco.org", near))
+    assert _web("www.megalithic.co.uk").label == "web:megalithic.co.uk"
+    assert _web("antiquities.sindhculture.gov.pk").label == "web:sindhculture.gov.pk"
+    assert _web("doam.gov.pk").label == "web:doam.gov.pk"
+    assert C.independent(_web("doam.gov.pk"), _web("antiquities.sindhculture.gov.pk", near))
+    assert _web("archaeology.sac.or.th").label == "web:sac.or.th"
+    assert _web("kids.kiddle.co").label == "web:kiddle.co"
+
+
 def test_two_witnesses_of_one_label_cannot_be_weighed_together() -> None:
     with pytest.raises(ValueError, match="share one label"):
         C.weigh(STORED, [_web("maya.example"), _web("maya.example", WD_POINT)])
