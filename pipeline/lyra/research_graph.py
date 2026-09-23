@@ -17,6 +17,8 @@ from typing import Any
 
 from sqlalchemy import text
 
+from pipeline.utils.public_sites import is_retired
+
 logger = logging.getLogger(__name__)
 
 _PUNCT_RE = re.compile(r"[^\w\s-]", re.UNICODE)
@@ -353,7 +355,7 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
     guard).
     """
     row = session.execute(
-        text("""
+        text(f"""
             SELECT n.id::text AS id, n.label, n.kind, n.site_id::text AS site_id,
                    n.question,
                    n.source_signal
@@ -398,6 +400,14 @@ def _pick_frontier(session, kinds: tuple[str, ...]) -> dict | None:
                   WHERE rr.id = n.paper_id
                     AND rr.status IN ('failed', 'cancelled')
                     AND rr.completed_at > NOW() - INTERVAL '24 hours'
+              )
+              -- Scope (E4, migration 0020): a site node whose site was retired is never
+              -- researched - a paper about it would link a page that answers 410. The
+              -- node keeps its status (a reference node was promoted to frontier by an
+              -- injector before the retirement); only the pick skips it.
+              AND NOT EXISTS (
+                  SELECT 1 FROM unified_sites us_site
+                  WHERE us_site.id = n.site_id AND {is_retired("us_site")}
               )
             ORDER BY score DESC, n.created_at ASC
             LIMIT 1

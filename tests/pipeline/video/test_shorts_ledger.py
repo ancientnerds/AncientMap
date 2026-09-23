@@ -22,11 +22,43 @@ from unittest.mock import patch
 import pytest
 
 from pipeline.video import shorts_ledger
-from tests.fake_sql import RecordingSession
+from tests.fake_sql import FakeResult, RecordingSession
 
 REPO = Path(__file__).resolve().parents[3]
 MIGRATION = REPO / "migrations" / "0021_site_shorts_ledger.sql"
 JAHANGIR = "50e5e380-1f89-4fa3-88de-e6ad35241316"
+ISHTAR = "15f3ae9f-86e9-4198-97c9-e67b42c034dc"
+RENDERED = {"status": "rendered", "status_reason": None}
+
+
+class ScopeSession(RecordingSession):
+    """RecordingSession whose scope lookup answers per site id, as the database does."""
+
+    def __init__(self, scopes: dict[str, tuple[str | None, str | None]]) -> None:
+        super().__init__({"INSERT INTO site_shorts": [object()]})
+        self.scopes = scopes
+
+    def execute(self, stmt, params=None):
+        result = super().execute(stmt, params)
+        if stmt is shorts_ledger._SCOPE_SQL:
+            scope = self.scopes.get(params["site_id"])
+            if scope is None:
+                return FakeResult([])
+            return FakeResult([SimpleNamespace(scope_status=scope[0], scope_reason=scope[1])])
+        return result
+
+
+class _ctx:
+    """get_session() stand-in yielding one fake session."""
+
+    def __init__(self, session) -> None:
+        self.session = session
+
+    def __enter__(self):
+        return self.session
+
+    def __exit__(self, *exc):
+        return False
 
 
 def _render_dir(
@@ -36,7 +68,7 @@ def _render_dir(
     site_dir = root / slug
     (site_dir / "render").mkdir(parents=True)
     site = {
-        "id": site_id or "15f3ae9f-86e9-4198-97c9-e67b42c034dc",
+        "id": site_id or ISHTAR,
         "name": slug.replace("-", " ").title(),
         "slug": slug,
         "period_name": period,
@@ -111,7 +143,7 @@ def test_the_row_hashes_the_text_and_the_file(tmp_path):
     video = site_dir / "ishtar-gate.mp4"
     when = datetime(2026, 9, 17, 22, 11, tzinfo=UTC)
     row = shorts_ledger.row_for_render(
-        site, site_dir, video, voice_id="v", pipeline_commit="abc", rendered_at=when
+        site, site_dir, video, voice_id="v", pipeline_commit="abc", rendered_at=when, **RENDERED
     )
     assert row.site_id == site["id"] and row.slug == "ishtar-gate"
     assert row.card_text_sha256 == hashlib.sha256(site["card_text"].encode()).hexdigest()
@@ -119,26 +151,44 @@ def test_the_row_hashes_the_text_and_the_file(tmp_path):
     assert (row.status, row.status_reason) == ("rendered", None)
 
 
-def test_a_site_outside_the_e3_window_enters_the_ledger_withdrawn(tmp_path):
-    """Tomb of Jahangir (1627) was rendered before the scope rule reached the batch."""
-    site_dir = _render_dir(tmp_path, "tomb-of-jahangir", period="1500+ AD", site_id=JAHANGIR)
-    site = json.loads((site_dir / "site.json").read_text(encoding="utf-8"))
-    row = shorts_ledger.row_for_render(
-        site,
-        site_dir,
-        site_dir / "tomb-of-jahangir.mp4",
-        voice_id=None,
-        pipeline_commit=None,
-        rendered_at=datetime.now(UTC),
+def test_a_retired_site_enters_the_ledger_withdrawn_with_its_scope_reason():
+    session = ScopeSession({JAHANGIR: ("retired", "dated 1627, past the E3 window")})
+    assert shorts_ledger.status_for(session, JAHANGIR) == (
+        "withdrawn",
+        "site retired (E4): dated 1627, past the E3 window",
     )
-    assert row.status == "withdrawn"
-    assert "outside the E3 window" in row.status_reason
+    session = ScopeSession({JAHANGIR: ("retired", None)})
+    assert shorts_ledger.status_for(session, JAHANGIR) == ("withdrawn", "site retired (E4)")
+
+
+@pytest.mark.parametrize("scope", [None, "in_scope", "pending"])
+def test_a_shown_site_enters_the_ledger_rendered(scope):
+    session = ScopeSession({ISHTAR: (scope, None)})
+    assert shorts_ledger.status_for(session, ISHTAR) == ("rendered", None)
+    (sql,) = session.statements()
+    assert sql == shorts_ledger._SCOPE_SQL.text
+
+
+def test_the_status_is_the_scope_decision_not_a_period_guess(tmp_path):
+    """The old rule withdrew by period_name '1500+ AD' alone: it missed '> 1500 AD' and the
+    Old World's '500 - 1000 AD', and it would withdraw an Americas site dated exactly 1500
+    (inside the window). E4 decides per site; the ledger follows scope_status."""
+    site_dir = _render_dir(tmp_path, "orongo", period="1500+ AD")
+    site = json.loads((site_dir / "site.json").read_text(encoding="utf-8"))
+    status = shorts_ledger.status_for(ScopeSession({site["id"]: (None, None)}), site["id"])
+    assert status == ("rendered", None)
+    assert not hasattr(shorts_ledger, "OUT_OF_SCOPE_PERIODS")
+
+
+def test_a_render_of_a_site_that_is_gone_raises():
+    with pytest.raises(LookupError, match="not in unified_sites"):
+        shorts_ledger.status_for(ScopeSession({}), ISHTAR)
 
 
 def test_a_naive_timestamp_and_a_missing_card_text_are_refused(tmp_path):
     site_dir = _render_dir(tmp_path, "ishtar-gate")
     site = json.loads((site_dir / "site.json").read_text(encoding="utf-8"))
-    kw = {"voice_id": None, "pipeline_commit": None}
+    kw = {"voice_id": None, "pipeline_commit": None, **RENDERED}
     with pytest.raises(ValueError):
         shorts_ledger.row_for_render(
             site, site_dir, site_dir / "ishtar-gate.mp4", rendered_at=datetime(2026, 9, 1), **kw
@@ -163,6 +213,7 @@ def test_record_inserts_once_per_file(tmp_path):
         voice_id="v",
         pipeline_commit=None,
         rendered_at=datetime.now(UTC),
+        **RENDERED,
     )
     session = RecordingSession({"INSERT INTO site_shorts": [1]})
     assert shorts_ledger.record(session, row) is True
@@ -181,30 +232,21 @@ def test_current_commit_names_a_real_commit():
 # --------------------------------------------------------------------------------------
 
 
-def test_the_render_step_writes_the_ledger_row(tmp_path, monkeypatch):
+def _render_step(tmp_path, monkeypatch, session) -> Path:
+    """Run the render step of run_short over a finished site directory."""
     from pipeline.video import __main__ as video
 
     site_dir = _render_dir(tmp_path, "ishtar-gate")
-    site = json.loads((site_dir / "site.json").read_text(encoding="utf-8"))
     monkeypatch.setattr(video, "_exported_site_dir", lambda args: site_dir)
     monkeypatch.setattr(video.shorts_export, "country_code_for", lambda c: None)
     monkeypatch.setattr(
         video.shorts_render, "render_short", lambda *a, **k: site_dir / "ishtar-gate.mp4"
     )
     monkeypatch.setattr(video.shorts_ledger, "current_commit", lambda: "c0ffee")
-    session = RecordingSession({"INSERT INTO site_shorts": [1]})
-
-    class _ctx:
-        def __enter__(self):
-            return session
-
-        def __exit__(self, *exc):
-            return False
-
-    monkeypatch.setattr(video, "get_session", lambda: _ctx())
+    monkeypatch.setattr(video, "get_session", lambda: _ctx(session))
     args = Namespace(
         steps="render",
-        site_id=site["id"],
+        site_id=ISHTAR,
         name=None,
         voice="English_expressive_narrator",
         music=None,
@@ -213,10 +255,28 @@ def test_the_render_step_writes_the_ledger_row(tmp_path, monkeypatch):
         music_start=0.0,
     )
     assert video.run_short(args) == site_dir / "ishtar-gate.mp4"
-    ((sql, params),) = session.log
-    assert "INSERT INTO site_shorts" in sql
+    return site_dir
+
+
+def test_the_render_step_writes_the_ledger_row(tmp_path, monkeypatch):
+    session = ScopeSession({ISHTAR: (None, None)})
+    _render_step(tmp_path, monkeypatch, session)
+    (scope_sql, _), (insert_sql, params) = session.log
+    assert scope_sql == shorts_ledger._SCOPE_SQL.text  # read in the insert's transaction
+    assert "INSERT INTO site_shorts" in insert_sql
     assert params["pipeline_commit"] == "c0ffee"
     assert params["voice_id"] == "English_expressive_narrator"
+    assert (params["status"], params["status_reason"]) == ("rendered", None)
+
+
+def test_a_site_retired_after_its_export_enters_the_ledger_withdrawn(tmp_path, monkeypatch):
+    """The render step works offline from a site.json exported earlier; the scope is read
+    when the row is written, so a retirement in between is not lost."""
+    session = ScopeSession({ISHTAR: ("retired", "decided out of scope")})
+    _render_step(tmp_path, monkeypatch, session)
+    _, (_, params) = session.log
+    assert params["status"] == "withdrawn"
+    assert params["status_reason"] == "site retired (E4): decided out of scope"
 
 
 def test_a_failed_ledger_write_fails_the_render_step(tmp_path, monkeypatch):
@@ -259,37 +319,53 @@ def test_the_backfill_plans_every_finished_render_and_nothing_else(tmp_path, bac
     _render_dir(tmp_path, "tomb-of-jahangir", period="1500+ AD", site_id=JAHANGIR)
     unfinished = _render_dir(tmp_path, "kerbatch")
     (unfinished / "kerbatch.mp4").unlink()  # exported, never rendered
-    rows = backfill.plan(tmp_path)
+    session = ScopeSession({ISHTAR: (None, None), JAHANGIR: (None, None)})
+    rows = backfill.plan(tmp_path, session)
     assert [(r.slug, r.status) for r in rows] == [
         ("ishtar-gate", "rendered"),
-        ("tomb-of-jahangir", "withdrawn"),
+        ("tomb-of-jahangir", "withdrawn"),  # the reviewed decision; not retired (yet)
     ]
+    assert rows[1].status_reason == backfill.WITHDRAWN_BEFORE_THE_LEDGER[JAHANGIR]
     assert all(r.voice_id == "English_expressive_narrator" for r in rows)
     assert all(r.pipeline_commit is None for r in rows)  # nobody recorded it
 
 
-def test_the_backfill_without_apply_touches_no_database(tmp_path, backfill, capsys):
+def test_the_backfill_withdraws_a_retired_site_with_its_e4_reason(tmp_path, backfill):
+    """A retirement in unified_sites is the record: it withdraws any render, the brief's
+    Jahangir decision included, with the reason E4 wrote."""
     _render_dir(tmp_path, "ishtar-gate")
-    with patch("pipeline.database.get_session", side_effect=AssertionError("no DB in a plan")):
+    _render_dir(tmp_path, "tomb-of-jahangir", period="1500+ AD", site_id=JAHANGIR)
+    session = ScopeSession({ISHTAR: ("retired", "decided out"), JAHANGIR: ("retired", "1627")})
+    rows = backfill.plan(tmp_path, session)
+    assert [(r.status, r.status_reason) for r in rows] == [
+        ("withdrawn", "site retired (E4): decided out"),
+        ("withdrawn", "site retired (E4): 1627"),
+    ]
+
+
+def test_the_backfill_plan_reads_the_scope_and_writes_nothing(tmp_path, backfill, capsys):
+    """The plan shows exactly the statuses --apply would insert, so it reads each site's
+    scope. It used to open no session at all - and print statuses guessed from the period,
+    which --apply could not have agreed with once a site is retired."""
+    _render_dir(tmp_path, "ishtar-gate")
+    session = ScopeSession({ISHTAR: (None, None)})
+    with patch("pipeline.database.get_session", return_value=_ctx(session)):
         assert backfill.main(["--root", str(tmp_path)]) == 0
+    assert session.statements() == [shorts_ledger._SCOPE_SQL.text]
     assert "plan only" in capsys.readouterr().out
 
 
 def test_the_backfill_apply_inserts_every_planned_row(tmp_path, backfill, capsys):
     _render_dir(tmp_path, "ishtar-gate")
     _render_dir(tmp_path, "tomb-of-jahangir", period="1500+ AD", site_id=JAHANGIR)
-    session = RecordingSession({"INSERT INTO site_shorts": [SimpleNamespace()]})
-
-    class _ctx:
-        def __enter__(self):
-            return session
-
-        def __exit__(self, *exc):
-            return False
-
-    with patch("pipeline.database.get_session", return_value=_ctx()):
+    session = ScopeSession({ISHTAR: (None, None), JAHANGIR: (None, None)})
+    with patch("pipeline.database.get_session", return_value=_ctx(session)):
         assert backfill.main(["--root", str(tmp_path), "--apply"]) == 0
-    assert len(session.log) == 2
+    inserts = [params for sql, params in session.log if "INSERT INTO site_shorts" in sql]
+    assert [(p["site_id"], p["status"]) for p in inserts] == [
+        (ISHTAR, "rendered"),
+        (JAHANGIR, "withdrawn"),
+    ]
     assert "inserted 2" in capsys.readouterr().out
 
 

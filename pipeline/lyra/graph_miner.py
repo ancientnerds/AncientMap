@@ -33,6 +33,7 @@ from collections.abc import Collection
 from sqlalchemy import text
 
 from pipeline.lyra.research_graph import normalize_label
+from pipeline.utils.public_sites import not_retired
 
 logger = logging.getLogger(__name__)
 
@@ -119,9 +120,12 @@ def mine_spatial_cooccurrence(session, max_km: int = 200, limit: int = 20) -> li
     period_start/period_end rows found in prod. The population here is only
     researched (explored) sites — tiny — so the doubled ST_DistanceSphere
     call (once in SELECT, once in WHERE) is irrelevant for cost.
+
+    A retired site twin (E4, migration 0020) anchors no candidate: the curator would turn
+    it into a frontier question about a site the platform no longer shows.
     """
     return session.execute(
-        text("""
+        text(f"""
             WITH researched_sites AS (
                 SELECT n_topic.id AS topic_id, n_site.label AS label,
                        s.lat, s.lon,
@@ -132,7 +136,7 @@ def mine_spatial_cooccurrence(session, max_km: int = 200, limit: int = 20) -> li
                   ON n_site.kind = 'site' AND n_site.norm_label = n_topic.norm_label
                 JOIN unified_sites s ON s.id = n_site.site_id
                 WHERE n_topic.status = 'explored' AND n_topic.kind = 'topic'
-                  AND s.period_start IS NOT NULL
+                  AND s.period_start IS NOT NULL AND {not_retired("s")}
             )
             SELECT a.label AS a_label, b.label AS b_label,
                    ROUND(ST_DistanceSphere(ST_MakePoint(a.lon, a.lat),

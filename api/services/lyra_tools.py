@@ -1190,20 +1190,25 @@ def get_site_images(
     except ValueError:
         is_uuid = False
 
+    # Both inputs resolve through unified_sites, so a retired site (E4) is "not found" as in
+    # get_site_details. A UUID is not taken as given: Qdrant keeps a retired site's point
+    # until the next nightly reindex, and a user can paste any id.
     if is_uuid:
-        site_id = site
-    else:
-        # Resolve name to UUID
         find_sql = f"""
             SELECT id::text FROM unified_sites
-            WHERE lower(name) = lower(:name) AND {not_retired()}
+            WHERE id = CAST(:site AS uuid) AND {not_retired()}
+        """
+    else:
+        find_sql = f"""
+            SELECT id::text FROM unified_sites
+            WHERE lower(name) = lower(:site) AND {not_retired()}
             LIMIT 1
         """
-        with get_session() as session:
-            row = session.execute(text(find_sql), {"name": site}).fetchone()
-            if not row:
-                return f"Site '{site}' not found."
-            site_id = row.id
+    with get_session() as session:
+        row = session.execute(text(find_sql), {"site": site}).fetchone()
+        if not row:
+            return f"Site '{site}' not found."
+        site_id = row.id
 
     sql = """
         SELECT filename, original_url, commons_page_url,

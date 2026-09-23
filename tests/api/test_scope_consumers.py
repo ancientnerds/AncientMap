@@ -152,6 +152,42 @@ def test_public_api_answers_410_for_a_retired_site(public_api):
     assert client.get(f"/sites/{SITE_ID}").status_code == 410
 
 
+def test_public_graph_drops_the_node_of_a_retired_site(public_api):
+    """GET /graph served every site node with its site_id, and the Knowledge page offers
+    "Show on globe" for each - for a retired site that opens a page answering 410."""
+    from api.routes import public_v1
+
+    client, db = public_api
+    client.app.dependency_overrides[public_v1.knowledge_rate_limit_dependency] = lambda: None
+    client.get("/graph?kinds=site")
+    hidden = (
+        "NOT EXISTS (SELECT 1 FROM unified_sites us_site "
+        "WHERE us_site.id = n.site_id AND us_site.scope_status = 'retired')"
+    )
+    count = db.statement_with("SELECT COUNT(*) FROM research_nodes n")
+    nodes = db.statement_with("FROM research_nodes n\n")
+    assert hidden in count
+    assert f"WHERE {hidden} AND n.kind = ANY(:kinds)" in nodes
+    # the country ordering hint averages shown sites only
+    assert US in nodes
+
+
+def test_the_site_image_routes_serve_no_images_of_a_retired_site():
+    """GET /api/wiki-images/{id} (the site popup's gallery) and /hero-status answered for a
+    retired site while the public API already filtered the same images."""
+    from api.routes import wiki_images
+
+    db = RecordingSession()
+    asyncio.run(wiki_images.get_wiki_images(SITE_ID, db=db))
+    asyncio.run(wiki_images.get_hero_status(db=db))
+    hidden = (
+        "NOT EXISTS (SELECT 1 FROM unified_sites us "
+        "WHERE us.id = wiki_images.site_id AND us.scope_status = 'retired')"
+    )
+    assert hidden in db.statement_with("WHERE site_id = :site_id AND (is_excluded = false")
+    assert hidden in db.statement_with("WHERE is_hero = true")
+
+
 def test_public_api_serves_no_images_of_a_retired_site(public_api):
     client, db = public_api
     client.get(f"/sites/{SITE_ID}/images")
@@ -200,10 +236,9 @@ def test_restore_brings_scope_back_only_from_a_snapshot_that_recorded_it():
     assert statements.index(scope) > statements.index(upsert)
 
 
-def test_preview_shows_an_un_retirement():
-    from api.services import snapshots
-
-    db = RecordingSession(
+def _preview_db(old_data: dict) -> RecordingSession:
+    """A one-row snapshot of a site that is retired now."""
+    return RecordingSession(
         {
             "FROM db_snapshots WHERE": [
                 SimpleNamespace(
@@ -216,9 +251,7 @@ def test_preview_shows_an_un_retirement():
                     source_id="ancient_nerds",
                 )
             ],
-            "FROM snapshot_rows WHERE": [
-                SimpleNamespace(site_id=SITE_ID, old_data={"name": "Damascus Gate"})
-            ],
+            "FROM snapshot_rows WHERE": [SimpleNamespace(site_id=SITE_ID, old_data=old_data)],
             "FROM unified_sites WHERE id::text = ANY": [
                 SimpleNamespace(
                     id=SITE_ID,
@@ -235,9 +268,86 @@ def test_preview_shows_an_un_retirement():
             ],
         }
     )
-    preview = snapshots.preview_snapshot(db, "snap")
+
+
+def test_preview_shows_an_un_retirement_the_restore_performs():
+    """A snapshot taken after 0020 recorded the site as unassessed (NULL): restoring it
+    un-retires the site, and the preview has to say so before the founder confirms."""
+    from api.services import snapshots
+
+    preview = snapshots.preview_snapshot(
+        _preview_db({"name": "Damascus Gate", "scope_status": None}), "snap"
+    )
     (site,) = preview["sites"]
+    assert site["status"] == "changed"
     assert site["fields"] == [{"field": "scope_status", "current": "retired", "restore_to": None}]
+
+
+def test_preview_of_a_snapshot_without_the_scope_key_announces_no_scope_change():
+    """A snapshot taken before 0020 has no scope key, and the restore keeps the current scope
+    for it (_RESTORE_SCOPE_SQL). The preview must not announce an un-retirement that the
+    restore never performs. The earlier version of this test pinned exactly that false
+    announcement (restore_to None for a row without the key); this one pins the opposite."""
+    from api.services import snapshots
+
+    preview = snapshots.preview_snapshot(_preview_db({"name": "Damascus Gate"}), "snap")
+    (site,) = preview["sites"]
+    assert site["status"] == "unchanged"
+    assert site["fields"] == []
+    assert preview["changed_count"] == 0
+
+
+def _history_db(*old_data: dict) -> RecordingSession:
+    """Snapshot rows of one site, newest first, and its current row (retired)."""
+    return RecordingSession(
+        {
+            "FROM snapshot_rows sr": [
+                SimpleNamespace(
+                    old_data=data,
+                    created_at=datetime(2026, 9, 10 - n),
+                    created_by="t",
+                    description=f"edit {n}",
+                    snapshot_type="edit",
+                )
+                for n, data in enumerate(old_data)
+            ],
+            "FROM unified_sites WHERE id::text = :site_id": [
+                SimpleNamespace(
+                    name="Damascus Gate",
+                    site_type=None,
+                    period_start=None,
+                    period_name=None,
+                    country=None,
+                    description=None,
+                    source_url=None,
+                    thumbnail_url=None,
+                    scope_status="retired",
+                )
+            ],
+        }
+    )
+
+
+def test_edit_history_credits_no_scope_change_to_a_snapshot_without_the_key():
+    """A journaled retirement after a pre-0020 edit is not that edit's change."""
+    from api.services import snapshots
+
+    (entry,) = snapshots.site_edit_history(_history_db({"name": "Damascus Gate"}), SITE_ID)
+    assert entry["changes"] == []
+
+
+def test_edit_history_shows_a_scope_change_both_sides_recorded():
+    from api.services import snapshots
+
+    newest, older = snapshots.site_edit_history(
+        _history_db(
+            {"name": "Damascus Gate", "scope_status": None},
+            {"name": "Damascus Gate"},  # before 0020: no key, so no scope diff to the next
+        ),
+        SITE_ID,
+    )
+    assert newest["changes"] == [{"field": "scope_status", "before": None, "after": "retired"}]
+    assert older["changes"] == []
 
 
 def test_the_file_snapshot_has_one_writer():
@@ -325,6 +435,64 @@ def test_lyra_site_details_never_resolve_a_retired_site():
     assert len(lookups) == 2
     for sql in lookups:
         assert not_retired("s") in sql
+
+
+_RESOLVE = "SELECT id::text FROM unified_sites"
+_IMAGE = SimpleNamespace(
+    filename="gate.jpg",
+    original_url="https://upload.wikimedia.org/gate.jpg",
+    commons_page_url="https://commons.wikimedia.org/wiki/File:Gate.jpg",
+    author="A. Author",
+    author_url=None,
+    license="CC BY-SA 4.0",
+    license_url=None,
+    title="Damascus Gate",
+    is_hero=True,
+    is_lead=False,
+    source_type="commons",
+    width=1600,
+    height=1200,
+    site_id=SITE_ID,
+)
+
+
+@pytest.mark.parametrize("site", [SITE_ID, "Damascus Gate"])
+def test_lyra_site_images_never_resolve_a_retired_site(site):
+    """A UUID is resolved through the scope filter like a name: Qdrant keeps a retired
+    site's point until the next reindex, so Lyra is handed exactly such UUIDs."""
+    from api.services import lyra_tools
+
+    session = RecordingSession()  # the filtered lookup finds nothing: the site is retired
+    with patch.object(lyra_tools, "get_session", return_value=_ctx(session)):
+        answer = lyra_tools.get_site_images.invoke({"site": site})
+    assert answer == f"Site '{site}' not found."
+    (lookup,) = session.statements()  # no wiki_images read at all
+    assert lookup.lstrip().startswith(_RESOLVE)
+    assert SHOWN in lookup
+
+
+def test_lyra_site_images_of_a_shown_site_by_uuid():
+    from api.services import lyra_tools
+
+    session = RecordingSession(
+        {_RESOLVE: [SimpleNamespace(id=SITE_ID)], "FROM wiki_images\n": [_IMAGE]}
+    )
+    with patch.object(lyra_tools, "get_session", return_value=_ctx(session)):
+        answer = lyra_tools.get_site_images.invoke({"site": SITE_ID})
+    assert "![Damascus Gate](https://ancientnerds.com/data/images/wiki/9c8b7a65/gate.jpg)" in answer
+    lookup, images = session.statements()
+    assert "id = CAST(:site AS uuid)" in lookup and SHOWN in lookup
+    assert "FROM wiki_images" in images
+
+
+def test_lyra_site_images_same_name_fallback_skips_retired_sites():
+    from api.services import lyra_tools
+
+    session = RecordingSession({_RESOLVE: [SimpleNamespace(id=SITE_ID)]})
+    with patch.object(lyra_tools, "get_session", return_value=_ctx(session)):
+        lyra_tools.get_site_images.invoke({"site": "Damascus Gate"})
+    fallback = session.statement_with("FROM wiki_images wi")
+    assert not_retired("us_img") in fallback
 
 
 def test_lyra_site_search_hides_retired_sites():

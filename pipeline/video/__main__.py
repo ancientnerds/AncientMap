@@ -371,16 +371,24 @@ def record_render(site: dict, site_dir: Path, video: Path, *, voice_id: str) -> 
     Part of the render step, not an afterthought: a video without its ledger row is
     exactly the untraceable short the ledger exists to prevent, so a failed write fails
     the step. voice_id is the one the description.txt names (render_short's voice_id).
+
+    The row's status is the site's scope decision now, read in the insert's transaction: the
+    render step works offline from a site.json exported earlier, and a site retired since
+    then enters the ledger withdrawn.
     """
-    row = shorts_ledger.row_for_render(
-        site,
-        site_dir,
-        video,
-        voice_id=voice_id,
-        pipeline_commit=shorts_ledger.current_commit(),
-        rendered_at=datetime.now(UTC),
-    )
+    commit = shorts_ledger.current_commit()
     with get_session() as session:
+        status, reason = shorts_ledger.status_for(session, site["id"])
+        row = shorts_ledger.row_for_render(
+            site,
+            site_dir,
+            video,
+            voice_id=voice_id,
+            pipeline_commit=commit,
+            rendered_at=datetime.now(UTC),
+            status=status,
+            status_reason=reason,
+        )
         inserted = shorts_ledger.record(session, row)
     logging.info(
         "ledger: %s %s (%s)",

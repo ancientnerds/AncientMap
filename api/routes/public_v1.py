@@ -136,6 +136,16 @@ _SHOWN = not_retired()
 _US_SHOWN = not_retired("us")
 _US_RETIRED = is_retired("us")
 
+# A knowledge-graph node the public graph shows (alias n): not the site node of a retired
+# site. The node leaves with its edges (edges need both ends selected); the Knowledge page
+# offers "Show on globe" for every node with a site_id, and that site answers 410. A
+# nested-loop anti-join on the primary key: 40-60 ms (warm) over the 17,922 nodes of
+# 2026-09-23, measured read-only with the same plan shape before the scope column existed.
+_SHOWN_GRAPH_NODE = (
+    "NOT EXISTS (SELECT 1 FROM unified_sites us_site "
+    "WHERE us_site.id = n.site_id AND " + is_retired("us_site") + ")"
+)
+
 
 def _make_rate_limit_dependency(limiter: RateLimiter, limit: int):
     """Build a FastAPI dependency that enforces `limiter`'s budget and sets
@@ -1785,7 +1795,12 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        total_nodes = db.execute(text("SELECT COUNT(*) FROM research_nodes")).scalar() or 0
+        total_nodes = (
+            db.execute(
+                text("SELECT COUNT(*) FROM research_nodes n WHERE " + _SHOWN_GRAPH_NODE)
+            ).scalar()
+            or 0
+        )
 
         kind_clause = "AND n.kind = ANY(:kinds)" if kind_list else ""
         node_rows = db.execute(
@@ -1796,6 +1811,7 @@ def create_public_api() -> FastAPI:
                        CASE WHEN n.kind = 'country' THEN (
                            SELECT AVG(us.lon) FROM unified_sites us
                            WHERE us.country = n.label AND us.source_id = 'ancient_nerds'
+                             AND {_US_SHOWN}
                        ) END AS order_hint,
                        n.site_id::text AS site_id,
                        CASE WHEN n.kind = 'paper' AND rr.is_public THEN rr.slug END AS paper_slug,
@@ -1810,7 +1826,7 @@ def create_public_api() -> FastAPI:
                     GROUP BY node_id
                 ) deg ON deg.node_id = n.id
                 LEFT JOIN research_requests rr ON rr.id = n.paper_id
-                WHERE 1=1 {kind_clause}
+                WHERE {_SHOWN_GRAPH_NODE} {kind_clause}
                 ORDER BY (n.source_signal + COALESCE(deg.cnt, 0)) DESC
                 LIMIT 15000
             """),

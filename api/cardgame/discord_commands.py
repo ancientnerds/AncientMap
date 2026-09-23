@@ -55,6 +55,24 @@ def _get_user_or_none(discord_id: str):
         return user
 
 
+def _find_card_site(session, name: str):
+    """The curated site /card shows for a name fragment, or None.
+
+    A retired site (E4, migration 0020) has no card to show: every draw skips it
+    (card_site_in_scope), and its page answers 410.
+    """
+    from pipeline.database import UnifiedSite
+    from pipeline.utils.public_sites import RETIRED
+
+    return (
+        session.query(UnifiedSite)
+        .filter(UnifiedSite.name.ilike(f"%{_escape_ilike(name)}%", escape="\\"))
+        .filter(UnifiedSite.source_id == "ancient_nerds")
+        .filter(UnifiedSite.scope_status.is_distinct_from(RETIRED))
+        .first()
+    )
+
+
 def register_commands(bot: discord.Client) -> None:
     """Register all card game slash commands on the bot's command tree."""
 
@@ -68,18 +86,10 @@ def register_commands(bot: discord.Client) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             from api.cardgame.models import CardStats
-            from pipeline.database import UnifiedSite, get_session
-            from pipeline.utils.public_sites import RETIRED
+            from pipeline.database import get_session
 
             with get_session() as session:
-                # Fuzzy search by name; a retired site (E4) has no card to show
-                site = (
-                    session.query(UnifiedSite)
-                    .filter(UnifiedSite.name.ilike(f"%{_escape_ilike(name)}%", escape="\\"))
-                    .filter(UnifiedSite.source_id == "ancient_nerds")
-                    .filter(UnifiedSite.scope_status.is_distinct_from(RETIRED))
-                    .first()
-                )
+                site = _find_card_site(session, name)
                 if not site:
                     await interaction.followup.send(
                         f"No card found matching '{name}'.", ephemeral=True

@@ -334,6 +334,63 @@ def test_shorts_batch_never_plans_a_retired_site(monkeypatch):
     assert not_retired("s") in session.statement_with("FROM unified_sites s")
 
 
+def _short_site_row(**kw) -> SimpleNamespace:
+    base = {
+        "id": "17cf019a-0000-4000-8000-000000000000",
+        "name": "Damascus Gate",
+        "country": "Syria",
+        "lat": 33.51,
+        "lon": 36.31,
+        "site_type": "Gate/archway/bridge",
+        "period_name": "1500+ AD",
+        "description": "A gate of the old city.",
+        "scope_status": None,
+        "scope_reason": None,
+        "card_description": "A gate of the old city.",
+        "rarity_tier": 4,
+        "rarity_score": 0.9,
+        "total_power": 30,
+        "antiquity": 6,
+        "fortification": 7,
+        "cultural_influence": 6,
+        "mystery": 5,
+        "legacy": 6,
+        "civilization": "Syria",
+    }
+    return SimpleNamespace(**{**base, **kw})
+
+
+def test_a_single_site_short_of_a_retired_site_is_refused():
+    """`python -m pipeline.video short --site <id>` bypasses the batch filter; the export
+    refuses the site before a single image is read, so no short of it is ever rendered."""
+    from pipeline.video import shorts_export
+
+    session = RecordingSession(
+        {"FROM unified_sites s": [_short_site_row(scope_status="retired", scope_reason="1537")]}
+    )
+    with pytest.raises(shorts_export.RetiredSite, match=r"retired \(E4\): 1537"):
+        shorts_export.export_site(session, "17cf019a-0000-4000-8000-000000000000")
+    assert not any("FROM wiki_images" in sql for sql in session.statements())
+
+
+def test_a_single_site_short_of_a_shown_site_is_exported():
+    from pipeline.video import shorts_export
+
+    session = RecordingSession({"FROM unified_sites s": [_short_site_row()]})
+    site = shorts_export.export_site(session, "17cf019a-0000-4000-8000-000000000000")
+    assert site["name"] == "Damascus Gate" and site["images"] == []
+    assert "s.scope_status" in session.statement_with("FROM unified_sites s")
+
+
+def test_a_short_by_name_never_resolves_a_retired_site():
+    from pipeline.video import shorts_export
+
+    session = RecordingSession()
+    with pytest.raises(LookupError, match="not retired"):
+        shorts_export.resolve_site_id(session, "Damascus Gate")
+    assert not_retired("s") in session.statement_with("FROM unified_sites s")
+
+
 # --------------------------------------------------------------------------------------
 # Qdrant site index (scripts/build_lyra_index.py)
 # --------------------------------------------------------------------------------------
@@ -466,9 +523,70 @@ def test_library_refs_to_retired_sites_are_dropped_from_stored_rows():
     assert "DELETE" not in sql.upper()
 
 
+def test_a_library_refresh_strips_retired_refs_after_its_upsert(monkeypatch):
+    """The strip step is part of every refresh, and it runs after the flush: the upsert
+    rewrites the parent_refs of the rows it saw, so a strip before it would be undone."""
+    from sqlalchemy import text
+
+    from pipeline import library_aggregator as la
+
+    session = RecordingSession()
+    monkeypatch.setattr(la, "get_session", lambda: _ctx(session))
+    scans: list[str] = []
+    for scan in ("_scan_news_items", "_scan_research", "_scan_sites", "_scan_articles"):
+        monkeypatch.setattr(
+            la.LibraryAggregator, scan, lambda self, s, name=scan: scans.append(name)
+        )
+
+    def flush(self, s) -> int:
+        s.execute(text("SELECT 'flush marker'"))
+        return 3
+
+    monkeypatch.setattr(la.LibraryAggregator, "_flush_to_db", flush)
+    assert la.LibraryAggregator().aggregate_all() == 3
+    assert scans == ["_scan_news_items", "_scan_research", "_scan_sites", "_scan_articles"]
+    flushed, stripped = session.statements()
+    assert flushed == "SELECT 'flush marker'"
+    assert stripped == la._STRIP_RETIRED_REFS.text
+
+
 def test_the_research_graph_never_seeds_a_retired_site():
     from pipeline.lyra.graph_injectors import inject_from_sites
 
     session = RecordingSession()
     inject_from_sites(session)
     assert not_retired("us") in session.statement_with("FROM card_stats cs")
+
+
+def test_the_full_graph_ingest_creates_no_node_for_a_retired_site():
+    """The nightly full ingest wrote every curated site as a node, retired ones included,
+    and the public graph serves each with a "Show on globe" link."""
+    from pipeline.lyra.graph_full_ingest import _GraphWriter, _ingest_sites
+
+    session = RecordingSession()
+    _ingest_sites(_GraphWriter(session))
+    sites = session.statement_with("FROM unified_sites")
+    assert "source_id = 'ancient_nerds'" in sites
+    assert SHOWN in sites
+
+
+def test_the_frontier_picker_never_picks_the_node_of_a_retired_site():
+    """An injector promoted reference site nodes to frontier before any site was retired;
+    the pick, not a demotion write, keeps Theo from spending a multi-hour run on one."""
+    from pipeline.lyra.research_graph import _pick_frontier
+
+    session = RecordingSession()
+    assert _pick_frontier(session, ("site", "topic")) is None
+    pick = " ".join(session.statement_with("FOR UPDATE OF n SKIP LOCKED").split())
+    assert (
+        "AND NOT EXISTS ( SELECT 1 FROM unified_sites us_site "
+        f"WHERE us_site.id = n.site_id AND {is_retired('us_site')} )"
+    ) in pick
+
+
+def test_the_spatial_miner_anchors_no_candidate_on_a_retired_site():
+    from pipeline.lyra.graph_miner import mine_spatial_cooccurrence
+
+    session = RecordingSession()
+    mine_spatial_cooccurrence(session)
+    assert not_retired("s") in session.statement_with("JOIN unified_sites s")

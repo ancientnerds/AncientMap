@@ -77,10 +77,11 @@ def sql_of(stmt: Any) -> str:
 
 
 class RecordingSession:
-    """Records every statement; answers from ``answers`` by fragment match, in order.
+    """Records every statement; answers from ``answers`` by fragment match.
 
-    ``answers`` maps an SQL fragment to the rows the statement containing it returns. A
-    fragment mapped to a list of lists answers successive matching statements in turn.
+    ``answers`` maps an SQL fragment to the rows every statement containing it returns - the
+    same rows each time. The first fragment (in insertion order) the statement contains
+    wins; a statement no fragment matches returns no rows.
     """
 
     def __init__(self, answers: dict[str, list[Any]] | None = None) -> None:

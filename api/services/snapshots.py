@@ -416,6 +416,22 @@ _DIFF_FIELDS = [
 ]
 
 
+def _compared_fields(*states: dict) -> list[str]:
+    """The _DIFF_FIELDS these recorded states can be compared on.
+
+    scope_status only when every state recorded it. A snapshot row taken before migration
+    0020 has no scope key: it says nothing about the scope, and the restore leaves the
+    current scope alone for it (_RESTORE_SCOPE_SQL, restore-all-uploads). Reading the
+    missing key as NULL would make the preview announce an un-retirement the restore never
+    performs, and the edit history credit a later retirement to an unrelated edit.
+    """
+    return [
+        field
+        for field in _DIFF_FIELDS
+        if field != "scope_status" or all("scope_status" in state for state in states)
+    ]
+
+
 def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
     """Return per-site diff: old_data (snapshot) vs current DB values.
 
@@ -473,7 +489,7 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
             continue
 
         changed = []
-        for field in _DIFF_FIELDS:
+        for field in _compared_fields(old):
             old_val = old.get(field)
             cur_val = getattr(cur, field, None)
             # Normalize for comparison
@@ -558,15 +574,9 @@ def site_edit_history(db: Session, site_id: str, limit: int = 20) -> list[dict]:
             after = {}
 
         changes = []
-        for field in _DIFF_FIELDS:
+        for field in _compared_fields(old, after):
             old_val = old.get(field)
-            new_val = (
-                after.get(field)
-                if isinstance(after, dict)
-                else after.get(field, None)
-                if hasattr(after, "get")
-                else None
-            )
+            new_val = after.get(field)
             old_str = str(old_val) if old_val is not None else ""
             new_str = str(new_val) if new_val is not None else ""
             if old_str != new_str:

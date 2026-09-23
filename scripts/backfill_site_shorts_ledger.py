@@ -9,13 +9,18 @@ Reads every video-assets/shorts/<slug>/ that holds a site.json and its <slug>.mp
 same code the render step now uses (pipeline/video/shorts_ledger.py): card text and site
 id from site.json, the on-screen image ids from selection.json + render/timeline.json,
 the voice from description.txt, rendered_at from the mp4's mtime. pipeline_commit stays
-NULL: nobody recorded it. A render of a site outside the E3 window (Tomb of Jahangir,
-1627, period "1500+ AD") is entered as withdrawn with its reason.
+NULL: nobody recorded it.
 
---apply writes through DATABASE_URL (the workstation reaches production through
-video-assets/prod-db.env, HUMAN_ONLY A6) in one transaction; a row whose video is already
-in the ledger is skipped (ON CONFLICT (video_sha256) DO NOTHING), so a second run is a
-no-op. Without --apply nothing touches a database.
+The status is decided as for a live render - the site's scope decision in unified_sites
+(shorts_ledger.status_for: retired -> withdrawn) - plus one reviewed per-site decision for
+a render made before the scope rule reached the batch, WITHDRAWN_BEFORE_THE_LEDGER below.
+No period heuristic: period_name is a coarse bucket that is often not the site's date (T11).
+
+Both modes read DATABASE_URL (the workstation reaches production through
+video-assets/prod-db.env, HUMAN_ONLY A6), because the plan shows exactly the statuses --apply
+would insert. The plan only SELECTs the scope of each site. --apply inserts in the same
+transaction that read the scope; a row whose video is already in the ledger is skipped
+(ON CONFLICT (video_sha256) DO NOTHING), so a second run is a no-op.
 """
 
 from __future__ import annotations
@@ -27,9 +32,23 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.video import shorts_export, shorts_ledger  # noqa: E402
+
+#: Renders made before the ledger whose site lies outside the E3 window without being
+#: retired in unified_sites yet. One reviewed decision per site, from the remediation brief
+#: (output/remediation/logs/remaining_map_2026-09-22.json, Phase 6 item 9: "Mark Tomb of
+#: Jahangir (1627) out of scope"). A retirement in unified_sites takes precedence: its
+#: reason is the E4 record.
+WITHDRAWN_BEFORE_THE_LEDGER = {
+    "50e5e380-1f89-4fa3-88de-e6ad35241316": (
+        "out of scope: Tomb of Jahangir dates to 1627, past the E3 cutoff of 500 AD outside "
+        "the Americas; rendered before the scope rule reached the batch"
+    ),
+}
 
 _VOICE = re.compile(r"Narration: AI-generated voice \(MiniMax [^,]+, ([^)]+)\)\.")
 
@@ -53,9 +72,13 @@ def rendered_dirs(root: Path) -> list[tuple[dict, Path, Path]]:
     return found
 
 
-def plan(root: Path) -> list[shorts_ledger.LedgerRow]:
+def plan(root: Path, session: Session) -> list[shorts_ledger.LedgerRow]:
+    """The ledger rows of every finished render under root; reads each site's scope."""
     rows = []
     for site, site_dir, video in rendered_dirs(root):
+        status, reason = shorts_ledger.status_for(session, site["id"])
+        if status == "rendered" and site["id"] in WITHDRAWN_BEFORE_THE_LEDGER:
+            status, reason = "withdrawn", WITHDRAWN_BEFORE_THE_LEDGER[site["id"]]
         rows.append(
             shorts_ledger.row_for_render(
                 site,
@@ -64,6 +87,8 @@ def plan(root: Path) -> list[shorts_ledger.LedgerRow]:
                 voice_id=voice_of(site_dir),
                 pipeline_commit=None,
                 rendered_at=datetime.fromtimestamp(video.stat().st_mtime, tz=UTC),
+                status=status,
+                status_reason=reason,
             )
         )
     return rows
@@ -75,7 +100,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true", help="insert the rows (default: plan)")
     args = parser.parse_args(argv)
 
-    rows = plan(args.root)
+    from pipeline.database import get_session
+
+    with get_session() as session:
+        rows = plan(args.root, session)
+        _print_plan(rows)
+        if not args.apply:
+            print("plan only; add --apply to insert")
+            return 0
+        inserted = sum(shorts_ledger.record(session, row) for row in rows)
+    print(f"inserted {inserted}, already in the ledger {len(rows) - inserted}")
+    return 0
+
+
+def _print_plan(rows: list[shorts_ledger.LedgerRow]) -> None:
     for row in rows:
         print(
             json.dumps(
@@ -93,16 +131,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     print(f"{len(rows)} render(s)")
-    if not args.apply:
-        print("plan only; add --apply to insert")
-        return 0
-
-    from pipeline.database import get_session
-
-    with get_session() as session:
-        inserted = sum(shorts_ledger.record(session, row) for row in rows)
-    print(f"inserted {inserted}, already in the ledger {len(rows) - inserted}")
-    return 0
 
 
 if __name__ == "__main__":

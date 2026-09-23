@@ -111,6 +111,41 @@ def test_the_check_is_added_not_valid_and_validated_outside_that_transaction():
     assert "convalidated" in code
 
 
+def test_the_self_test_aborts_on_each_broken_catalog_state():
+    """Each of the self-test's three checks raises, after the VALIDATE: a missing constraint,
+    an unvalidated one, and one with another vocabulary. There is no local Postgres to run
+    the DO block against (CLAUDE.md), so the branches are pinned one by one - deleting any of
+    them turns this red."""
+    sql = MIGRATION.read_text(encoding="utf-8")
+    selftest = sql[sql.index("ALTER TABLE unified_sites VALIDATE CONSTRAINT") :]
+    assert re.search(
+        r"SELECT pg_get_constraintdef\(oid\), convalidated\s+INTO v_def, v_valid\s+"
+        r"FROM pg_constraint\s+WHERE conrelid = 'unified_sites'::regclass\s+"
+        r"AND conname\s+= 'unified_sites_scope_status_vocab';",
+        selftest,
+    )
+    assert re.search(
+        r"IF v_def IS NULL THEN\s+RAISE EXCEPTION 'SELFTEST FAILED: "
+        r"unified_sites_scope_status_vocab does not exist';\s+END IF;",
+        selftest,
+    )
+    assert re.search(
+        r"IF NOT v_valid THEN\s+RAISE EXCEPTION 'SELFTEST FAILED: "
+        r"unified_sites_scope_status_vocab is not validated';\s+END IF;",
+        selftest,
+    )
+    vocabulary = re.search(
+        r"IF (v_def NOT LIKE [^;]*?) THEN\s+"
+        r"RAISE EXCEPTION 'SELFTEST FAILED: unexpected scope vocabulary: %', v_def;\s+END IF;",
+        selftest,
+        re.DOTALL,
+    )
+    assert vocabulary is not None
+    checked = set(re.findall(r"v_def NOT LIKE '%''(\w+)''%'", vocabulary.group(1)))
+    assert checked == set(SCOPE_STATUSES)
+    assert vocabulary.group(1).count(" OR ") == len(SCOPE_STATUSES) - 1
+
+
 def test_curated_page_is_the_curated_rule_plus_the_scope_filter():
     assert curated_page("u") == (
         "u.source_id = 'ancient_nerds' AND u.country IS NOT NULL AND u.country != '' "

@@ -161,6 +161,17 @@ def test_card_stats_of_a_retired_site_answer_410(monkeypatch):
     assert exc.value.status_code == 410
 
 
+def test_the_discord_card_command_never_shows_a_retired_site():
+    """/card <name> looks the site up by name; a retired site has no card to show."""
+    from api.cardgame.discord_commands import _find_card_site
+
+    session = OrmSession([[SimpleNamespace(name="Damascus Gate")]])
+    assert _find_card_site(session, "damascus").name == "Damascus Gate"
+    (sql,) = session.sql
+    assert "unified_sites.source_id = 'ancient_nerds'" in sql
+    assert "unified_sites.scope_status IS DISTINCT FROM 'retired'" in sql
+
+
 def test_the_collection_page_keeps_owned_cards_of_retired_sites():
     """Owned cards stay the player's - in the collection as in their decks and battles
     (which load straight from card_ids). Only new draws skip a retired site; hiding the

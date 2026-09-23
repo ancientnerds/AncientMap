@@ -124,6 +124,24 @@ def test_a_failing_job_records_the_error_and_frees_the_lock(monkeypatch):
     assert pg.locks == {}
 
 
+def test_a_failed_running_write_frees_the_lock_and_raises(monkeypatch):
+    """No status row, no job: the error propagates and the lock goes with it. The lock sits
+    on a dedicated connection until the process exits, so keeping it would answer every
+    later start on both instances with 409 until the next restart."""
+    pg = FakePostgres()
+    lock = bj.InstanceLock("demo", connect=pg.connect)
+
+    def database_down(*_args, **_kwargs) -> None:
+        raise ConnectionError("pipeline_heartbeats unreachable")
+
+    monkeypatch.setattr(bj, "_write_status", database_down)
+    with pytest.raises(ConnectionError):
+        bj.start_job("demo", lambda: pytest.fail("the job must not run"), lock=lock)
+    assert pg.locks == {}
+    assert not any(t.name == "job-demo" for t in threading.enumerate())
+    assert bj.InstanceLock("demo", connect=pg.connect).try_acquire()
+
+
 def test_a_second_start_is_refused_while_the_first_runs(monkeypatch):
     pg = FakePostgres()
     holder = bj.InstanceLock("demo", connect=pg.connect)
