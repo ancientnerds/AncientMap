@@ -14,7 +14,12 @@ and in this module (tests/pipeline/test_indexnow.py keeps the two in sync).
 Who calls submit():
 - the Lyra orchestrator step ``indexnow`` (submit_recent, every cycle):
   stories, papers, journals and curated sites that became public or changed
-  in the last WINDOW, built from the same rules as the sitemap parts;
+  in the last WINDOW, built from the same rules as the sitemap parts - a site
+  "changed" when its own timestamp OR its newest remediation journal write
+  falls in the window (apply_remediation_change() does not touch updated_at);
+  plus the curated sites RETIRED in the window (E4): their URL now answers 410,
+  and the protocol asks for removed URLs as well as changed ones, so Bing drops
+  them without waiting for a recrawl;
 - the paper publish/unpublish routes and the worker's auto-publish, and the
   weekly journal generator, right after their commit (one URL each);
 - scripts/indexnow_submit.py for the one-off bulk submission and by hand.
@@ -38,6 +43,7 @@ from sqlalchemy.orm import Session
 from pipeline.database import NewsArticle, NewsItem, get_session
 from pipeline.news_visibility import public_story_criteria
 from pipeline.sites_html_renderer import encode_path, site_path
+from pipeline.utils.public_sites import curated_page, is_retired, journal_join, last_change
 from pipeline.utils.slugs import BASE_URL, slugify, story_slug
 
 logger = logging.getLogger(__name__)
@@ -55,6 +61,35 @@ CHUNK = 10_000
 #: The orchestrator cycles hourly (CYCLE_INTERVAL); two hours means every
 #: change is announced once or twice, never missed between cycles.
 WINDOW = timedelta(hours=2)
+
+_CURATED = "u.source_id = 'ancient_nerds' AND u.country IS NOT NULL AND u.country != ''"
+_CURATED_SHOWN = curated_page("u")
+
+# Shown curated sites whose page changed since :since - by the sitemap's rule, journal
+# writes included (pipeline.utils.public_sites.last_change).
+_CHANGED_SITES_SQL = text(
+    "SELECT u.country, u.name, u.id FROM unified_sites u "
+    + journal_join("u")
+    + " WHERE "
+    + _CURATED_SHOWN
+    + " AND "
+    + last_change("u")
+    + " >= :since"
+)
+
+# Curated sites whose retirement was journaled since :since and that are still retired.
+# Joined on site_id_ref (a uuid, indexed): a CAST of row_pk would also be evaluated for the
+# wiki_images rows, whose row_pk is an integer, and fail. row_pk = id keeps it to writes of
+# the site row itself.
+_RETIRED_SITES_SQL = text(
+    "SELECT DISTINCT u.country, u.name, u.id FROM remediation_change_log l "
+    "JOIN unified_sites u ON u.id = l.site_id_ref AND l.row_pk = u.id::text "
+    "WHERE l.table_name = 'unified_sites' AND l.column_name = 'scope_status' "
+    "AND l.new_value = 'retired' AND l.applied_at >= :since AND "
+    + _CURATED
+    + " AND "
+    + is_retired("u")
+)
 
 
 def page_url(path: str) -> str:
@@ -127,7 +162,7 @@ def paths_for(
 def recent_public_paths(session: Session, since: datetime) -> list[str]:
     """What became public or changed since ``since``, by the sitemap's rules:
     public_story_criteria for stories, is_public + slug for papers, every
-    journal, curated sites with a country."""
+    journal, shown curated sites with a country (journaled writes included)."""
     stories = (
         session.query(NewsItem.id, NewsItem.headline)
         .filter(*public_story_criteria(), NewsItem.created_at >= since)
@@ -142,14 +177,7 @@ def recent_public_paths(session: Session, since: datetime) -> list[str]:
         {"since": since},
     ).fetchall()
     journals = session.query(NewsArticle.title).filter(NewsArticle.created_at >= since).all()
-    sites = session.execute(
-        text("""
-            SELECT country, name, id FROM unified_sites
-            WHERE source_id = 'ancient_nerds' AND country IS NOT NULL AND country != ''
-              AND COALESCE(updated_at, created_at) >= :since
-        """),
-        {"since": since},
-    ).fetchall()
+    sites = session.execute(_CHANGED_SITES_SQL, {"since": since}).fetchall()
     return paths_for(
         [(row.id, row.headline) for row in stories],
         [row.slug for row in papers],
@@ -158,12 +186,19 @@ def recent_public_paths(session: Session, since: datetime) -> list[str]:
     )
 
 
+def recent_retired_paths(session: Session, since: datetime) -> list[str]:
+    """Pages of curated sites retired since ``since`` (E4). They answer 410 now;
+    IndexNow takes removed URLs too, so the search engines drop them at once."""
+    rows = session.execute(_RETIRED_SITES_SQL, {"since": since}).fetchall()
+    return paths_for([], [], [], [(row.country, row.name, str(row.id)) for row in rows])
+
+
 def submit_recent() -> int:
     """Orchestrator step: announce everything from the last WINDOW. Returns
     the number of URLs submitted (0 when nothing changed)."""
     since = datetime.now(UTC) - WINDOW
     with get_session() as session:
-        paths = recent_public_paths(session, since)
+        paths = recent_public_paths(session, since) + recent_retired_paths(session, since)
     if not paths:
         return 0
     submit(page_url(path) for path in paths)

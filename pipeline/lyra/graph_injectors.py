@@ -25,6 +25,7 @@ import logging
 from sqlalchemy import text
 
 from pipeline.lyra.research_graph import is_junk_label, normalize_label
+from pipeline.utils.public_sites import not_retired
 
 logger = logging.getLogger(__name__)
 
@@ -125,13 +126,17 @@ def inject_from_journal(session) -> int:
 
 
 def inject_from_sites(session, limit: int = 20) -> int:
-    """Epic/Legendary map sites — strongest product tie-in for papers."""
+    """Epic/Legendary map sites — strongest product tie-in for papers.
+
+    Retired sites (E4, migration 0020) are not seeded: a paper about a site the platform
+    no longer shows would link a page that answers 410.
+    """
     rows = session.execute(
-        text("""
+        text(f"""
             SELECT us.id::text AS site_id, us.name, cs.rarity_tier
             FROM card_stats cs
             JOIN unified_sites us ON us.id = cs.site_id
-            WHERE cs.rarity_tier >= 4
+            WHERE cs.rarity_tier >= 4 AND {not_retired("us")}
             ORDER BY cs.total_power DESC
             LIMIT :limit
         """),

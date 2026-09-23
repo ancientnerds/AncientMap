@@ -22,15 +22,18 @@ import shutil
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pipeline.database import get_session
 from pipeline.lyra.minimax_shared import probe_minimax_quota
+from pipeline.utils.public_sites import not_retired
 from pipeline.utils.slugs import slugify
 from pipeline.video import (
     shorts_audit,
     shorts_export,
     shorts_images,
+    shorts_ledger,
     shorts_render,
     shorts_select,
     shorts_tts,
@@ -346,7 +349,7 @@ def run_short(args: argparse.Namespace) -> Path | None:
         selection = json.loads((site_dir / "selection.json").read_text(encoding="utf-8"))
         # Derived from the country here (not the stored field) so older exports get a flag too.
         code = shorts_export.country_code_for(site.get("country"))
-        return shorts_render.render_short(
+        video = shorts_render.render_short(
             site,
             selection["stills"],
             site_dir,
@@ -357,7 +360,42 @@ def run_short(args: argparse.Namespace) -> Path | None:
             music_start=args.music_start,
             whoosh=Path(args.whoosh) if args.whoosh else None,
         )
+        record_render(site, site_dir, video, voice_id=args.voice)
+        return video
     return None
+
+
+def record_render(site: dict, site_dir: Path, video: Path, *, voice_id: str) -> None:
+    """Write the render into the site_shorts ledger (migration 0021, plan 10.4).
+
+    Part of the render step, not an afterthought: a video without its ledger row is
+    exactly the untraceable short the ledger exists to prevent, so a failed write fails
+    the step. voice_id is the one the description.txt names (render_short's voice_id).
+
+    The row's status is the site's scope decision now, read in the insert's transaction: the
+    render step works offline from a site.json exported earlier, and a site retired since
+    then enters the ledger withdrawn.
+    """
+    commit = shorts_ledger.current_commit()
+    with get_session() as session:
+        status, reason = shorts_ledger.status_for(session, site["id"])
+        row = shorts_ledger.row_for_render(
+            site,
+            site_dir,
+            video,
+            voice_id=voice_id,
+            pipeline_commit=commit,
+            rendered_at=datetime.now(UTC),
+            status=status,
+            status_reason=reason,
+        )
+        inserted = shorts_ledger.record(session, row)
+    logging.info(
+        "ledger: %s %s (%s)",
+        "recorded" if inserted else "already had",
+        video.name,
+        row.status if not row.status_reason else f"{row.status}: {row.status_reason}",
+    )
 
 
 def quota_percentages() -> tuple[int, int]:
@@ -375,7 +413,8 @@ def quota_percentages() -> tuple[int, int]:
 
 def batch_candidates(tier_min: int, limit: int) -> list[dict]:
     """Card-bearing sites of at least `tier_min` with at least MIN_SITE_IMAGES
-    Commons images, best rarity first, that have no passing audit yet."""
+    Commons images, best rarity first, that have no passing audit yet. A retired site
+    (E4, migration 0020) is never planned: a short would advertise a page that is gone."""
     from sqlalchemy import text
 
     with get_session() as session:
@@ -385,6 +424,7 @@ def batch_candidates(tier_min: int, limit: int) -> list[dict]:
                     "SELECT s.id::text AS id, s.name FROM unified_sites s "
                     "JOIN card_stats c ON c.site_id = s.id "
                     "WHERE c.rarity_tier >= :tier AND c.card_description IS NOT NULL "
+                    "AND " + not_retired("s") + " "
                     "AND (SELECT count(*) FROM wiki_images w "
                     "     WHERE w.site_id = s.id AND NOT w.is_excluded) >= :min_images "
                     "ORDER BY c.rarity_score DESC NULLS LAST, s.name"

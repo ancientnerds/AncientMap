@@ -24,6 +24,7 @@ from datetime import timedelta
 from sqlalchemy import text
 
 from pipeline.lyra.research_graph import is_junk_label, normalize_label
+from pipeline.utils.public_sites import not_retired
 
 logger = logging.getLogger(__name__)
 
@@ -148,12 +149,18 @@ class _GraphWriter:
 
 
 def _ingest_sites(w: _GraphWriter) -> None:
-    """AN originals with period/country edges, plus radar discoveries."""
+    """AN originals with period/country edges, plus radar discoveries.
+
+    A retired site (E4, migration 0020) gets no node: the graph is public (GET
+    /api/v1/graph) and seeds Theo's frontier. A node created before the site was retired
+    stays in research_nodes (nodes are never deleted); the public graph and the frontier
+    picker skip it by its site_id.
+    """
     rows = w.session.execute(
-        text("""
+        text(f"""
             SELECT id::text AS site_id, name, country, period_start
             FROM unified_sites
-            WHERE source_id = 'ancient_nerds' AND name IS NOT NULL
+            WHERE source_id = 'ancient_nerds' AND name IS NOT NULL AND {not_retired()}
         """)
     ).fetchall()
     for r in rows:

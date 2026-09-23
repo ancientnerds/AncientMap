@@ -106,8 +106,8 @@ class TestReplaceSourceValidation:
         assert "No sites" in res.json()["detail"]
 
     def test_protected_source_rejected(self, founder_client):
-        """Protected sources (community, lyra) cannot be replaced."""
-        for source in ["community", "lyra", "ancient_nerds_community"]:
+        """Protected sources (community and every curated source) cannot be replaced."""
+        for source in ["community", "lyra", "ancient_nerds_community", "ancient_nerds"]:
             res = founder_client.post(
                 "/api/sites/replace-source",
                 json={"sites": [_make_site()], "target_source": source},

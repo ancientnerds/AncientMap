@@ -65,6 +65,8 @@ def _item(**overrides) -> SimpleNamespace:
         site_type="Burial mound",
         period_name="Bronze Age",
         period_start=-1400,
+        # E4 (migration 0020): NULL = never assessed, shown.
+        scope_status=None,
     )
     row = {
         "id": 4711,
@@ -145,6 +147,17 @@ def test_bulk_imported_site_is_not_marked_curated():
     entsteht in StoryPage nur mit site_curated (268-404s-Bug, 2026-08-09)."""
     item = _item()
     item.site.source_id = "wikidata"
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(story_page("sun-chariot-fragment-found-4711", db=_orm_db(first=item)))
+
+    assert render_mock.call_args[0][0]["site_curated"] is False
+
+
+def test_retired_site_is_not_marked_curated():
+    """A retired site's page answers 410 (E4) - the story must not link it."""
+    item = _item()
+    item.site.scope_status = "retired"
     render, shell = _patched()
     with render as render_mock, shell:
         asyncio.run(story_page("sun-chariot-fragment-found-4711", db=_orm_db(first=item)))

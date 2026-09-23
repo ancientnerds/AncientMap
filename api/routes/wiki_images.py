@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from api.cache import cache_delete_pattern
 from api.services.jwt_auth import require_founder
 from pipeline.database import DiscordUser, get_db
+from pipeline.utils.public_sites import is_retired
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,6 +22,28 @@ router = APIRouter()
 IMAGE_DIR = Path("/app/public/data/images/wiki")
 HERO_WIDTH = 800
 WEBP_QUALITY = 82
+
+#: The image's site is not retired (E4, migration 0020): a retired site shows no images,
+#: as in the public API (public_v1, /sites/{id}/images). Concatenated, never formatted in.
+_SITE_NOT_RETIRED = (
+    "NOT EXISTS (SELECT 1 FROM unified_sites us "
+    "WHERE us.id = wiki_images.site_id AND " + is_retired("us") + ")"
+)
+
+_HERO_STATUS_SQL = text(
+    "SELECT DISTINCT ON (site_id) site_id::text, original_url, commons_page_url "
+    "FROM wiki_images WHERE is_hero = true AND " + _SITE_NOT_RETIRED + " "
+    "ORDER BY site_id, created_at DESC"
+)
+
+_SITE_IMAGES_SQL = text(
+    "SELECT filename, original_url, commons_page_url, author, author_url, license, "
+    "license_url, title, is_hero, is_lead, sort_order, source_type, width, height, site_id "
+    "FROM wiki_images "
+    "WHERE site_id = :site_id AND (is_excluded = false OR is_excluded IS NULL) "
+    "AND " + _SITE_NOT_RETIRED + " "
+    "ORDER BY is_hero DESC, is_lead DESC, sort_order"
+)
 
 
 class SetHeroRequest(BaseModel):
@@ -30,15 +53,8 @@ class SetHeroRequest(BaseModel):
 
 @router.get("/hero-status")
 async def get_hero_status(db: Session = Depends(get_db)):
-    """Return hero image info for all sites that have one."""
-    result = db.execute(
-        text("""
-        SELECT DISTINCT ON (site_id) site_id::text, original_url, commons_page_url
-        FROM wiki_images
-        WHERE is_hero = true
-        ORDER BY site_id, created_at DESC
-    """)
-    )
+    """Return hero image info for all sites that have one (retired sites have none)."""
+    result = db.execute(_HERO_STATUS_SQL)
     out = {}
     for row in result:
         sid_short = row[0].replace("-", "")[:8]
@@ -261,20 +277,8 @@ async def remove_image(
 
 @router.get("/{site_id}")
 async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
-    """Get locally cached wiki images for a site."""
-    result = db.execute(
-        text("""
-        SELECT
-            filename, original_url, commons_page_url,
-            author, author_url, license, license_url,
-            title, is_hero, is_lead, sort_order,
-            source_type, width, height, site_id
-        FROM wiki_images
-        WHERE site_id = :site_id AND (is_excluded = false OR is_excluded IS NULL)
-        ORDER BY is_hero DESC, is_lead DESC, sort_order
-    """),
-        {"site_id": site_id},
-    )
+    """Get locally cached wiki images for a site (none for a retired site)."""
+    result = db.execute(_SITE_IMAGES_SQL, {"site_id": site_id})
 
     images = []
     for row in result:

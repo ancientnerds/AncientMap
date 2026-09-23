@@ -8,7 +8,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from api.cardgame.constants import LYRA_TIERS, PACK_PRICES
-from api.cardgame.models import CardCollection, CardDeck, CardPlayerStats, CardStats, LyraBattle
+from api.cardgame.models import (
+    CardCollection,
+    CardDeck,
+    CardPlayerStats,
+    CardStats,
+    LyraBattle,
+    card_site_in_scope,
+)
 from api.cardgame.synergies import describe_synergies
 from pipeline.database import CreditGrant, DiscordUser
 
@@ -29,6 +36,7 @@ def _build_lyra_deck(session: Session, tier: int) -> list[CardStats]:
         .filter(
             CardStats.rarity_tier >= cfg["min_tier"],
             CardStats.rarity_tier <= cfg["max_tier"],
+            card_site_in_scope(),
         )
         .order_by(CardStats.cultural_influence.desc(), CardStats.antiquity.desc())
         .limit(10)
@@ -41,6 +49,7 @@ def _build_lyra_deck(session: Session, tier: int) -> list[CardStats]:
             session.query(CardStats)
             .filter(
                 CardStats.rarity_tier >= cfg["min_tier"],
+                card_site_in_scope(),
             )
             .order_by(CardStats.cultural_influence.desc())
             .limit(10)

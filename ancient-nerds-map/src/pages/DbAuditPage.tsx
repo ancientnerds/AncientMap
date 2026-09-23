@@ -17,6 +17,7 @@ import SiteForm from '../components/SiteForm'
 import type { SiteFormValues } from '../components/SiteForm'
 import '../styles/db-audit.css'
 import { CACHE_BUSTER } from '../constants/buildInfo'
+import { rebuildStaticData } from '../utils/staticRebuild'
 
 interface AuditSite {
   id: string
@@ -1098,19 +1099,18 @@ export default function DbAuditPage() {
         }
       }
 
-      // Rebuild static JSON so the frontend globe picks up changes
-      setUploadProgress({ sent: total, total, phase: 'Rebuilding static data...' })
-      try {
-        const rebuildRes = await fetch(`${config.api.baseUrl}/sites/rebuild-static`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      // Rebuild the static data (file snapshot for the version history, hub list, image
+      // index) as a background job - it takes ~4 min, so the modal does not wait for it.
+      // The version list reloads when the job is done.
+      void rebuildStaticData(config.api.baseUrl, token)
+        .then((state) => {
+          refreshFileSnapshots()
+          showToast(state === 'ok' ? 'Static data rebuilt' : `Static rebuild ended: ${state}`)
         })
-        if (!rebuildRes.ok) {
-          console.error('Static rebuild failed:', await rebuildRes.text())
-        }
-      } catch (e) {
-        console.error('Static rebuild error:', e)
-      }
+        .catch((e: unknown) => {
+          console.error('Static rebuild error:', e)
+          showToast('Static rebuild failed - see the console')
+        })
 
       setShowUploadModal(false)
       setUploadParsed([])

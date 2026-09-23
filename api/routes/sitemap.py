@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from api.routes.articles_html import STORIES_PER_PAGE, public_stories_query
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.sites_html_renderer import country_path, encode_path, site_path
+from pipeline.utils.public_sites import curated_page, journal_join, last_change
 from pipeline.utils.slugs import slugify, story_slug
 
 router = APIRouter()
@@ -98,6 +99,36 @@ def _sites_lastmod(row_lastmod: datetime | None) -> datetime:
     return max(row_lastmod, _SITES_TEMPLATE_CHANGED) if row_lastmod else _SITES_TEMPLATE_CHANGED
 
 
+# The curated pages the /sites/ routes serve (pipeline.utils.public_sites.curated_page):
+# ancient_nerds, with a country, not retired (E4). A retired page answers 410.
+_CURATED_SHOWN = curated_page("u")
+
+# lastmod of a site page: its own timestamp or its newest remediation journal write,
+# whichever is later - apply_remediation_change() leaves updated_at alone, so without the
+# journal none of the 984 corrected pages (2026-09-20..22) was ever advertised as changed.
+_SITES_SQL = text(
+    "SELECT u.name, u.country, u.id, "
+    + last_change("u")
+    + " AS lastmod FROM unified_sites u "
+    + journal_join("u")
+    + " WHERE "
+    + _CURATED_SHOWN
+    + " ORDER BY u.name"
+)
+
+_LEGACY_SQL = text("SELECT u.id FROM unified_sites u WHERE " + _CURATED_SHOWN + " ORDER BY u.id")
+
+_COUNTRIES_SQL = text(
+    "SELECT u.country, MAX("
+    + last_change("u")
+    + ") AS lastmod FROM unified_sites u "
+    + journal_join("u")
+    + " WHERE "
+    + _CURATED_SHOWN
+    + " GROUP BY u.country ORDER BY u.country"
+)
+
+
 @router.api_route("/sitemap.xml", methods=["GET", "HEAD"])
 async def sitemap_index():
     """Sitemap index — robots.txt points here, the parts hang below it.
@@ -164,15 +195,7 @@ async def sitemap_sites(db: Session = Depends(get_db)):
     legacy /site.html?id={uuid} URLs live in sitemap-legacy.xml for now (see
     sitemap_legacy); this part lists canonical URLs only.
     """
-    rows = db.execute(
-        text("""
-            SELECT name, country, id, COALESCE(updated_at, created_at) AS lastmod
-            FROM unified_sites
-            WHERE source_id = 'ancient_nerds'
-              AND country IS NOT NULL AND country != ''
-            ORDER BY name
-        """)
-    ).fetchall()
+    rows = db.execute(_SITES_SQL).fetchall()
     urls = [
         _url(site_path(row.country, row.name, row.id), _sites_lastmod(row.lastmod)) for row in rows
     ]
@@ -199,15 +222,7 @@ async def sitemap_legacy(db: Session = Depends(get_db)):
     `scripts/gsc_report.py pages` shows no /site.html?id= impressions for a
     full week.
     """
-    rows = db.execute(
-        text("""
-            SELECT id
-            FROM unified_sites
-            WHERE source_id = 'ancient_nerds'
-              AND country IS NOT NULL AND country != ''
-            ORDER BY id
-        """)
-    ).fetchall()
+    rows = db.execute(_LEGACY_SQL).fetchall()
     return _xml(_urlset([_url("/site.html", None, query=f"id={row.id}") for row in rows]))
 
 
@@ -216,18 +231,10 @@ async def sitemap_countries(db: Session = Depends(get_db)):
     """The /sites/ hub + one URL per country listing (98 + 1).
 
     A country page changes when any of its sites does, so its lastmod is the
-    newest curated site edit in that country; the hub takes the global max.
+    newest curated site change (edit or journaled correction) in that country;
+    the hub takes the global max.
     """
-    rows = db.execute(
-        text("""
-            SELECT country, MAX(COALESCE(updated_at, created_at)) AS lastmod
-            FROM unified_sites
-            WHERE source_id = 'ancient_nerds'
-              AND country IS NOT NULL AND country != ''
-            GROUP BY country
-            ORDER BY country
-        """)
-    ).fetchall()
+    rows = db.execute(_COUNTRIES_SQL).fetchall()
     urls = [_url("/sites/", _sites_lastmod(_newest([row.lastmod for row in rows])))]
     urls += [_url(country_path(row.country), _sites_lastmod(row.lastmod)) for row in rows]
     return _xml(_urlset(urls))

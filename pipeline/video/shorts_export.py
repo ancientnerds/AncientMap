@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from pipeline.sites_html_renderer import site_path
+from pipeline.utils.public_sites import RETIRED, not_retired
 from pipeline.utils.slugs import slugify
 
 ASSETS_ROOT = Path(__file__).resolve().parents[2] / "video-assets" / "shorts"
@@ -180,7 +181,7 @@ RARITY_NAMES: dict[int, str] = {5: "Legendary", 4: "Epic", 3: "Rare", 2: "Uncomm
 _SITE_SQL = text(
     """
     SELECT s.id::text AS id, s.name, s.country, s.lat, s.lon, s.site_type, s.period_name,
-           s.description,
+           s.description, s.scope_status, s.scope_reason,
            c.card_description, c.rarity_tier, c.rarity_score, c.total_power,
            c.antiquity, c.fortification, c.cultural_influence, c.mystery, c.legacy,
            c.civilization
@@ -200,12 +201,14 @@ _IMAGES_SQL = text(
     """
 )
 
+# A name never resolves to a retired site (E4), as on the site pages: the lookup takes the
+# best shown card of that name.
 _LOOKUP_SQL = text(
-    """
+    f"""
     SELECT s.id::text AS id
     FROM unified_sites s
     JOIN card_stats c ON c.site_id = s.id
-    WHERE s.name = :name
+    WHERE s.name = :name AND {not_retired("s")}
     ORDER BY c.rarity_score DESC NULLS LAST
     LIMIT 1
     """
@@ -262,12 +265,21 @@ def resolve_site_id(session: Session, name: str) -> str:
     """Site id for an exact name; the highest-rarity card wins on duplicates."""
     row = session.execute(_LOOKUP_SQL, {"name": name}).first()
     if row is None:
-        raise LookupError(f"no card-bearing site named {name!r}")
+        raise LookupError(f"no card-bearing site named {name!r} that is not retired")
     return row[0]
 
 
+class RetiredSite(LookupError):
+    """The site is retired (E4, migration 0020): it gets no short."""
+
+
 def export_site(session: Session, site_id: str) -> dict:
+    """The site.json record of one site. A retired site raises RetiredSite: its page answers
+    410, and a short would advertise it (the batch never plans one; this covers --site)."""
     row = session.execute(_SITE_SQL, {"site_id": site_id}).mappings().one()
+    if row["scope_status"] == RETIRED:
+        reason = f": {row['scope_reason']}" if row["scope_reason"] else ""
+        raise RetiredSite(f"{row['name']} ({site_id}) is retired (E4){reason} - no short")
     images = session.execute(_IMAGES_SQL, {"site_id": site_id}).mappings().all()
     return assemble_site(row, list(images))
 

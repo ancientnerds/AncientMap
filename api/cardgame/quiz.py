@@ -14,7 +14,7 @@ from api.cardgame.constants import (
     QUIZ_QUESTIONS_PER_SESSION,
     QUIZ_XP_PER_CORRECT,
 )
-from api.cardgame.models import CardPlayerStats, CardStats, QuizSession
+from api.cardgame.models import CardPlayerStats, CardStats, QuizSession, card_site_in_scope
 from pipeline.database import CreditGrant, DiscordUser, UnifiedSite
 
 
@@ -36,7 +36,7 @@ def _generate_age_comparison(session: Session, rng: random.Random) -> dict | Non
     rows = (
         session.query(CardStats, UnifiedSite)
         .join(UnifiedSite, CardStats.site_id == UnifiedSite.id)
-        .filter(UnifiedSite.period_start.isnot(None))
+        .filter(UnifiedSite.period_start.isnot(None), card_site_in_scope())
         .order_by(func.random())
         .limit(2)
         .all()
@@ -62,7 +62,7 @@ def _generate_country_question(session: Session, rng: random.Random) -> dict | N
     row = (
         session.query(CardStats, UnifiedSite)
         .join(UnifiedSite, CardStats.site_id == UnifiedSite.id)
-        .filter(UnifiedSite.country.isnot(None))
+        .filter(UnifiedSite.country.isnot(None), card_site_in_scope())
         .order_by(func.random())
         .first()
     )
@@ -94,7 +94,7 @@ def _generate_country_question(session: Session, rng: random.Random) -> dict | N
 
 def _generate_category_question(session: Session, rng: random.Random) -> dict | None:
     """What type of site is X?"""
-    card = session.query(CardStats).order_by(func.random()).first()
+    card = session.query(CardStats).filter(card_site_in_scope()).order_by(func.random()).first()
     if not card or not card.site:
         return None
     site = card.site
@@ -126,7 +126,9 @@ def _generate_stat_question(session: Session, rng: random.Random) -> dict | None
     stat = rng.choice(["mystery", "antiquity", "fortification", "cultural_influence", "legacy"])
     stat_display = stat.replace("_", " ").title()
 
-    cards = session.query(CardStats).order_by(func.random()).limit(2).all()
+    cards = (
+        session.query(CardStats).filter(card_site_in_scope()).order_by(func.random()).limit(2).all()
+    )
     if len(cards) < 2:
         return None
     c1, c2 = cards
@@ -156,7 +158,7 @@ def _generate_period_question(session: Session, rng: random.Random) -> dict | No
     row = (
         session.query(CardStats, UnifiedSite)
         .join(UnifiedSite, CardStats.site_id == UnifiedSite.id)
-        .filter(UnifiedSite.period_name.isnot(None))
+        .filter(UnifiedSite.period_name.isnot(None), card_site_in_scope())
         .order_by(func.random())
         .first()
     )

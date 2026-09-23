@@ -6,6 +6,9 @@ These crawlable pages are the link path from the homepage down to each of
 the ~5,000 curated site detail pages. Only Ancient Nerds Originals are
 listed (same rule as the sitemap) — the bulk-imported 750K sites are
 searchable via the app but not part of the crawl surface.
+
+A retired site (E4, migration 0020) is not listed anywhere and its own URL
+answers 410 Gone, like a withdrawn story.
 """
 
 import logging
@@ -29,6 +32,7 @@ from pipeline.sites_html_renderer import (
     site_path,
     site_slug,
 )
+from pipeline.utils.public_sites import RETIRED, curated_page, not_retired
 from pipeline.utils.slugs import story_slug
 
 logger = logging.getLogger(__name__)
@@ -36,12 +40,30 @@ router = APIRouter()
 
 _HTML_HEADERS = {"Cache-Control": "public, max-age=3600"}
 
-_CURATED_WHERE = "source_id = 'ancient_nerds' AND country IS NOT NULL AND country != ''"
+_CURATED_WHERE = curated_page()
 
 # Plain concatenation of two module constants — the id is bound, never formatted in.
 _LEGACY_SITE_SQL = text(
     "SELECT name, country FROM unified_sites WHERE id::text = :id AND " + _CURATED_WHERE
 )
+
+_PARENT_SQL = text(
+    "SELECT id::text AS id, name FROM unified_sites WHERE id::text = :pid AND " + not_retired()
+)
+
+# Hub slugs that existed and were retired by a data correction, mapped to the hub that
+# carries their sites now. The homepage hub list baked on 2026-09-05 still links both,
+# and both answered 404 on 2026-09-22 (the country corrections moved every Georgia and
+# Easter Island site). A 301 hands their link signals to the hub that replaced them.
+# /sites/united-kingdom is deliberately NOT here: the UK lane splits those rows into
+# England / Scotland / Wales / Northern Ireland, so no single hub replaces it. Until that
+# lane has moved them it is a live hub (6 curated rows still carried 'United Kingdom' and
+# the page answered 200 on 2026-09-23); afterwards it answers 404, never a 301
+# (tests/api/test_sites_html_scope.py pins both).
+_RETIRED_HUBS = {
+    "georgia-country": "georgia",
+    "chile-easter-island": "chile",
+}
 
 
 @router.get("/sites/")
@@ -82,6 +104,8 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
     wanted = slug.lower()
     country = next((row.country for row in rows if country_slug(row.country) == wanted), None)
 
+    if not country and wanted in _RETIRED_HUBS:
+        return RedirectResponse(url=f"/sites/{_RETIRED_HUBS[wanted]}", status_code=301)
     if not country:
         return Response(
             content=render_error_html("Country"),
@@ -195,8 +219,10 @@ async def legacy_site_redirect(
         target = encode_path(site_path(row.country, row.name, id))
         return RedirectResponse(url=f"{target}{query}", status_code=301)
     exists = db.execute(
-        text("SELECT 1 FROM unified_sites WHERE id::text = :id"), {"id": id}
+        text("SELECT scope_status FROM unified_sites WHERE id::text = :id"), {"id": id}
     ).fetchone()
+    if exists and exists.scope_status == RETIRED:
+        return _site_410()
     if exists:
         return RedirectResponse(url=f"/globe.html{query}#focus={id}", status_code=301)
     return _site_404()
@@ -211,18 +237,38 @@ def _site_404() -> Response:
     )
 
 
-def _uncurated_site_exists(prefix: str, db: Session) -> str | None:
-    """Volle UUID einer NICHT kuratierten Fundstätte mit diesem 8-Hex-Präfix.
+def _site_410() -> Response:
+    """A retired site (E4): it existed and was withdrawn on purpose.
 
-    Als Bereichsabfrage auf der Primärschlüssel-Spalte statt
-    `LEFT(REPLACE(id::text, '-', ''), 8) = :prefix`: die Präfixform ist
-    genau die erste UUID-Gruppe, aber als Ausdruck über 1,7 Mio. Zeilen
-    wäre sie ein Seq-Scan bei jedem 404 — und 404s kann jeder auslösen.
+    Same answer and cache lifetime as a withdrawn story (articles_html.story_page):
+    Google drops a 410 far faster than a 404. No reason is named - scope_reason is for
+    the reviewer, not the public page.
     """
-    row = db.execute(
+    return Response(
+        content=render_error_html("Site", 410, "This site has been withdrawn."),
+        media_type="text/html",
+        status_code=410,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+def _site_by_prefix(prefix: str, db: Session):
+    """The (id, scope_status) row of a site with this 8-hex prefix, or None.
+
+    Reached when no shown curated site matches: the row is either an uncurated site
+    (lives on the globe only) or a retired one (answers 410). A retired row wins a
+    prefix shared with another row - the URL asked for a page, and the page is gone.
+
+    A range query on the primary-key column instead of
+    `LEFT(REPLACE(id::text, '-', ''), 8) = :prefix`: the prefix is exactly the first UUID
+    group, but as an expression over 1.7 million rows it would be a sequential scan on
+    every 404 - and anyone can trigger a 404.
+    """
+    return db.execute(
         text("""
-            SELECT id::text AS id FROM unified_sites
+            SELECT id::text AS id, scope_status FROM unified_sites
             WHERE id >= CAST(:lo AS uuid) AND id <= CAST(:hi AS uuid)
+            ORDER BY (scope_status IS NOT DISTINCT FROM 'retired') DESC
             LIMIT 1
         """),
         {
@@ -230,7 +276,6 @@ def _uncurated_site_exists(prefix: str, db: Session) -> str | None:
             "hi": f"{prefix}-ffff-ffff-ffff-ffffffffffff",
         },
     ).fetchone()
-    return row.id if row else None
 
 
 @router.get("/sites/{country}/{slug}")
@@ -273,9 +318,11 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
         # wikidata) und bekam bis 12.09.2026 einen 404 auf einen existierenden
         # Datensatz. Gleiche Antwort wie bei /site.html?id= — ein Ziel, das es
         # wirklich gibt.
-        uncurated = _uncurated_site_exists(prefix, db)
-        if uncurated:
-            return RedirectResponse(url=f"/globe.html#focus={uncurated}", status_code=301)
+        other = _site_by_prefix(prefix, db)
+        if other and other.scope_status == RETIRED:
+            return _site_410()
+        if other:
+            return RedirectResponse(url=f"/globe.html#focus={other.id}", status_code=301)
         return _site_404()
 
     canonical_country = country_slug(row.country)
@@ -372,10 +419,7 @@ def _related_content(row, db: Session) -> dict:
 
     parent = None
     if row.parent_site_id:
-        p = db.execute(
-            text("SELECT id::text AS id, name FROM unified_sites WHERE id::text = :pid"),
-            {"pid": row.parent_site_id},
-        ).fetchone()
+        p = db.execute(_PARENT_SQL, {"pid": row.parent_site_id}).fetchone()
         if p:
             parent = {"name": p.name, "path": site_path(row.country, p.name, p.id)}
 

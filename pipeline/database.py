@@ -491,6 +491,11 @@ class UnifiedSite(Base):
     # Audit tracking
     last_audited: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Scope (E4, migration 0020): NULL/in_scope/pending are shown, 'retired' is hidden
+    # platform-wide but kept for matching. Read through pipeline.utils.public_sites.
+    scope_status: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scope_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Relationships
     parent_site: Mapped["UnifiedSite | None"] = relationship(
         "UnifiedSite",

@@ -7,26 +7,19 @@ or uploads, enabling undo/restore operations.
 Also creates file-based snapshots for the audit page version history.
 """
 
-import json
 import logging
 import uuid
-from collections import defaultdict
-from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern
+from pipeline.static_exporter import write_file_snapshot
 
 logger = logging.getLogger(__name__)
 
 SNAPSHOTS_DIR = Path("public/data/snapshots")
-
-# Retention for file snapshots: keep the newest N, prune the rest (files +
-# manifest entries) after each new snapshot write. Without this the snapshot
-# dir and manifest grow unbounded (audit P6-16).
-_MAX_FILE_SNAPSHOTS = 50
 
 # Source IDs that hold user-curated, editable site data. A "unified" snapshot
 # covers exactly these; everything else (wikidata, osm, etc.) is reproducible
@@ -55,6 +48,8 @@ _SNAPSHOT_COLUMNS = [
     "parent_site_id",
     "created_at",
     "updated_at",
+    "scope_status",
+    "scope_reason",
 ]
 
 
@@ -127,7 +122,9 @@ def create_snapshot(
                 'raw_data', raw_data,
                 'parent_site_id', parent_site_id::text,
                 'created_at', created_at::text,
-                'updated_at', updated_at::text
+                'updated_at', updated_at::text,
+                'scope_status', scope_status,
+                'scope_reason', scope_reason
             )
             FROM unified_sites
             WHERE id::text = ANY(:ids)
@@ -362,6 +359,14 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
     )
     restored = upserted.rowcount
 
+    # The scope decision (E4, migration 0020) comes back only from a snapshot that
+    # recorded it. A snapshot taken before 0020 has no scope key and knows nothing about
+    # a later retirement - restoring NULL from it would un-retire the site without a
+    # journal row. Such a row keeps its current scope; a re-created row starts at NULL.
+    # A snapshot that did record it restores it like any other column, and the restore
+    # preview lists the change (scope_status is a _DIFF_FIELD).
+    db.execute(_RESTORE_SCOPE_SQL, {"sid": snapshot_id})
+
     deleted = 0
     if restore_sources:
         result = db.execute(
@@ -383,6 +388,20 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
     return {"restored": restored, "deleted": deleted, "undo_snapshot_id": undo_id}
 
 
+#: Restores the scope columns from the snapshot rows that recorded them (the key is
+#: present from migration 0020 on). restore-all-uploads (api/routes/sites.py) applies the
+#: same rule inside its single UPDATE, with a CASE on the key.
+_RESTORE_SCOPE_SQL = text("""
+    UPDATE unified_sites us SET
+        scope_status = sr.old_data->>'scope_status',
+        scope_reason = sr.old_data->>'scope_reason'
+    FROM snapshot_rows sr
+    WHERE sr.snapshot_id::text = :sid
+      AND us.id = sr.site_id
+      AND sr.old_data ? 'scope_status'
+""")
+
+
 _DIFF_FIELDS = [
     "name",
     "site_type",
@@ -392,7 +411,25 @@ _DIFF_FIELDS = [
     "description",
     "source_url",
     "thumbnail_url",
+    # A restore can un-retire a site; the preview has to say so.
+    "scope_status",
 ]
+
+
+def _compared_fields(*states: dict) -> list[str]:
+    """The _DIFF_FIELDS these recorded states can be compared on.
+
+    scope_status only when every state recorded it. A snapshot row taken before migration
+    0020 has no scope key: it says nothing about the scope, and the restore leaves the
+    current scope alone for it (_RESTORE_SCOPE_SQL, restore-all-uploads). Reading the
+    missing key as NULL would make the preview announce an un-retirement the restore never
+    performs, and the edit history credit a later retirement to an unrelated edit.
+    """
+    return [
+        field
+        for field in _DIFF_FIELDS
+        if field != "scope_status" or all("scope_status" in state for state in states)
+    ]
 
 
 def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
@@ -427,7 +464,7 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
     current_rows = db.execute(
         text("""
             SELECT id::text, name, site_type, period_start, period_name,
-                   country, description, source_url, thumbnail_url
+                   country, description, source_url, thumbnail_url, scope_status
             FROM unified_sites WHERE id::text = ANY(:ids)
         """),
         {"ids": site_ids},
@@ -452,7 +489,7 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
             continue
 
         changed = []
-        for field in _DIFF_FIELDS:
+        for field in _compared_fields(old):
             old_val = old.get(field)
             cur_val = getattr(cur, field, None)
             # Normalize for comparison
@@ -519,7 +556,7 @@ def site_edit_history(db: Session, site_id: str, limit: int = 20) -> list[dict]:
     current = db.execute(
         text("""
             SELECT name, site_type, period_start, period_name,
-                   country, description, source_url, thumbnail_url
+                   country, description, source_url, thumbnail_url, scope_status
             FROM unified_sites WHERE id::text = :site_id
         """),
         {"site_id": site_id},
@@ -537,15 +574,9 @@ def site_edit_history(db: Session, site_id: str, limit: int = 20) -> list[dict]:
             after = {}
 
         changes = []
-        for field in _DIFF_FIELDS:
+        for field in _compared_fields(old, after):
             old_val = old.get(field)
-            new_val = (
-                after.get(field)
-                if isinstance(after, dict)
-                else after.get(field, None)
-                if hasattr(after, "get")
-                else None
-            )
+            new_val = after.get(field)
             old_str = str(old_val) if old_val is not None else ""
             new_str = str(new_val) if new_val is not None else ""
             if old_str != new_str:
@@ -633,135 +664,9 @@ def list_snapshots(db: Session, limit: int = 20, source_id: str | None = None) -
 
 
 def export_file_snapshot(db: Session) -> str:
-    """Export current DB state as a dated snapshot file for the audit page.
+    """Write a dated snapshot file of the curated sites for the audit page.
 
-    Queries all audit-source sites, writes a JSON file to public/data/snapshots/,
-    and updates the manifest. Returns the snapshot date key.
+    One writer for public/data/snapshots/: pipeline.static_exporter.write_file_snapshot
+    (the static export writes its snapshot through the same function). Returns the key.
     """
-    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    now = datetime.now(UTC)
-    snapshot_key = now.strftime("%Y-%m-%d_%H%M%S")
-
-    result = db.execute(
-        text("""
-        SELECT
-            us.id, us.name, us.lat, us.lon, us.source_id, us.site_type,
-            us.period_start, us.period_end, us.period_name, us.country,
-            us.description, us.thumbnail_url, us.source_url, us.edited_by,
-            us.created_at,
-            hero.original_url     AS hero_url,
-            hero.commons_page_url AS hero_attribution_url,
-            COALESCE(refs.links, '[]'::jsonb) AS reference_links
-        FROM unified_sites us
-        LEFT JOIN LATERAL (
-            SELECT original_url, commons_page_url
-            FROM wiki_images
-            WHERE site_id = us.id AND is_hero = true
-            ORDER BY id LIMIT 1
-        ) hero ON TRUE
-        LEFT JOIN LATERAL (
-            SELECT jsonb_agg(
-                jsonb_build_object('url', content_url, 'title', title)
-                ORDER BY id
-            ) AS links
-            FROM site_content_links
-            WHERE site_id = us.id AND content_type = 'reference'
-              AND content_url IS NOT NULL
-        ) refs ON TRUE
-        WHERE us.source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
-        ORDER BY us.source_id, us.name
-    """)
-    )
-
-    sites = []
-    source_counts: dict[str, int] = defaultdict(int)
-
-    for row in result:
-        site: dict[str, object] = {
-            "id": str(row.id),
-            "n": row.name[:100] if row.name else "",
-            "la": round(row.lat, 5),
-            "lo": round(row.lon, 5),
-            "s": row.source_id,
-        }
-        if row.site_type:
-            site["t"] = row.site_type
-        if row.period_start is not None:
-            site["p"] = row.period_start
-        if row.period_name:
-            site["pn"] = row.period_name
-        if row.country:
-            site["c"] = row.country
-        if row.description:
-            site["d"] = row.description[:500]
-        if row.thumbnail_url:
-            site["i"] = row.thumbnail_url
-        if row.source_url:
-            site["u"] = row.source_url
-        if row.edited_by and row.edited_by != "initial":
-            site["eb"] = row.edited_by
-        if row.created_at:
-            site["ea"] = row.created_at.isoformat()
-        if row.hero_url:
-            site["hu"] = row.hero_url
-        if row.hero_attribution_url:
-            site["ha"] = row.hero_attribution_url
-        if row.reference_links:
-            site["rl"] = row.reference_links
-
-        sites.append(site)
-        source_counts[row.source_id] += 1
-
-    snapshot_data = {
-        "snapshot_date": now.isoformat(),
-        "sites": sites,
-        "count": len(sites),
-        "by_source": dict(source_counts),
-    }
-
-    snapshot_file = f"{snapshot_key}.json"
-    with open(SNAPSHOTS_DIR / snapshot_file, "w", encoding="utf-8") as f:
-        json.dump(snapshot_data, f, separators=(",", ":"))
-
-    # Update manifest
-    manifest_path = SNAPSHOTS_DIR / "manifest.json"
-    manifest: dict = {"snapshots": []}
-    if manifest_path.exists():
-        try:
-            with open(manifest_path, encoding="utf-8") as f:
-                manifest = json.load(f)
-        except (json.JSONDecodeError, ValueError):
-            pass  # Treat corrupt/empty manifest as missing
-
-    snapshots = manifest["snapshots"]
-    snapshots.append(
-        {
-            "date": snapshot_key,
-            "file": snapshot_file,
-            "sites": len(sites),
-            "by_source": dict(source_counts),
-        }
-    )
-    snapshots.sort(key=lambda s: s["date"], reverse=True)
-
-    # Retention sweep: keep the newest _MAX_FILE_SNAPSHOTS, delete older
-    # files and drop their manifest entries.
-    pruned = snapshots[_MAX_FILE_SNAPSHOTS:]
-    snapshots = snapshots[:_MAX_FILE_SNAPSHOTS]
-    for entry in pruned:
-        (SNAPSHOTS_DIR / entry["file"]).unlink(missing_ok=True)
-    manifest["snapshots"] = snapshots
-
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
-
-    if pruned:
-        logger.info(
-            "Pruned %d file snapshot(s) beyond retention of %d: %s",
-            len(pruned),
-            _MAX_FILE_SNAPSHOTS,
-            ", ".join(e["date"] for e in pruned),
-        )
-    logger.info(f"File snapshot {snapshot_key}: {len(sites)} sites")
-    return snapshot_key
+    return write_file_snapshot(db, SNAPSHOTS_DIR)

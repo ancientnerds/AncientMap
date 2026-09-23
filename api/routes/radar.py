@@ -27,6 +27,7 @@ from api.services.jwt_auth import require_founder
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.site_promotion import insert_promoted_site
 from pipeline.database import DiscordUser, get_db
+from pipeline.utils.public_sites import not_retired
 from pipeline.utils.text import categorize_period, normalize_name
 
 _radar_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="heavy_radar")
@@ -615,7 +616,10 @@ def get_radar_stats(db: Session = Depends(get_db)):
     # the queue look pointless next to it.
     sites_known = (
         db.execute(
-            text("SELECT COUNT(*) FROM unified_sites WHERE source_id = 'ancient_nerds'")
+            text(
+                "SELECT COUNT(*) FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
+                + not_retired()
+            )
         ).scalar()
         or 0
     )
