@@ -8,6 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 import { countryLinksHtml, pickSnapshotPath, type CountryHub } from './src/landing/hubsHtml'
 import { RUNTIME_CACHING } from './src/pwa/runtimeCaching'
+import { serviceWorkerSnippetFor } from './src/pwa/serviceWorkerSnippet'
 
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 const buildTime = new Date().toISOString()
@@ -132,32 +133,10 @@ function landingHubs(): Plugin {
   }
 }
 
-// Service-worker registration, written here instead of by vite-plugin-pwa
-// (`injectRegister: null`): its registerSW.js calls register() without a
-// catch, so every browser that refuses a worker — private mode, blocked
-// storage, a datacenter crawler — left an unhandled rejection that boot.ts
-// reported as a JavaScript error with triple weight on the founders
-// dashboard, for something that costs the visitor nothing (2026-09-19).
-// Inline and ~130 bytes: no request, and the work waits for 'load' anyway.
-const SW_INSTALL =
-  'if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.register("/sw.js",{scope:"/"}).catch(function(){})})'
-// The four SSR templates serve ~7,000 indexed landing pages; a visitor
-// arriving from Google only updates an already installed worker instead of
-// downloading the whole precache (over 6 MB), which a first visit has
-// no business doing on a phone (owner, 2026-09-10: "The landing page must
-// load super fast — and mobile first!"). getRegistration() needs the catch
-// for the same reason register() does.
-const SW_UPDATE_ONLY =
-  'if("serviceWorker" in navigator)addEventListener("load",function(){navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update()}).catch(function(){})})'
-const SW_UPDATE_ONLY_PAGES = ['index.html', 'site.html', 'story.html', 'research.html', 'articles.html']
-// The globe registers the worker itself, as the last task of its background
-// queue (src/pwa/registerServiceWorker.ts): on 'load' the precache download
-// (~6.9 MB) ran in parallel with the globe's critical load.
-const SW_SELF_REGISTERING_PAGES = ['globe.html']
-
-// Post-build tuning of the HTML entries: the service-worker snippet on every
-// page but the globe, and on the landing page also CSS that does not block
-// rendering (its critical CSS is inlined in <style>).
+// Post-build tuning of the HTML entries: the service-worker snippet
+// (src/pwa/serviceWorkerSnippet.ts: none on the globe and the dashboard), and
+// on the landing page also CSS that does not block rendering (its critical
+// CSS is inlined in <style>).
 function tuneLandingHtml() {
   return {
     name: 'tune-landing-html',
@@ -165,15 +144,12 @@ function tuneLandingHtml() {
     transformIndexHtml: {
       order: 'post' as const,
       handler(html: string, ctx: { filename: string }) {
-        // The dashboard lives on stats.ancientnerds.com, where /sw.js would be
-        // proxied to Umami (404) and a precache would run into the gate: no worker.
+        // The dashboard lives on stats.ancientnerds.com: no worker, no manifest.
         if (ctx.filename.endsWith('dashboard.html')) {
           return html.replace('<link rel="manifest" href="/manifest.webmanifest">', '')
         }
-        if (SW_SELF_REGISTERING_PAGES.some(name => ctx.filename.endsWith(name))) return html
-        const children = SW_UPDATE_ONLY_PAGES.some(name => ctx.filename.endsWith(name))
-          ? SW_UPDATE_ONLY
-          : SW_INSTALL
+        const children = serviceWorkerSnippetFor(ctx.filename)
+        if (children === null) return html
         const tags = [{ tag: 'script', children, injectTo: 'head' as const }]
         if (!ctx.filename.endsWith('index.html')) return { html, tags }
         // Make landing CSS non-render-blocking (critical CSS is inlined)

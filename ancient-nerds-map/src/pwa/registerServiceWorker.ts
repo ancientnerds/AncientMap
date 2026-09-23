@@ -1,6 +1,6 @@
 /**
  * Registers the service worker on globe.html. The other pages keep the inline
- * snippet that vite.config.ts writes (SW_INSTALL / SW_UPDATE_ONLY); the globe
+ * snippet that vite.config.ts writes (serviceWorkerSnippet.ts); the globe
  * does it here, as the last task of its background queue, because the
  * worker's install precaches ~6.9 MB (JS incl. the lazy Mapbox chunk, fonts)
  * and on a first visit that download competed with the globe's critical load.

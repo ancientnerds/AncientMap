@@ -2,7 +2,7 @@
  * Service-worker registration for globe.html, run late by the globe's
  * background queue instead of the inline snippet on window 'load' (whose
  * precache of ~6.9 MB competed with the globe's critical load).
- * Same semantics as the snippet (vite.config.ts SW_INSTALL): only where
+ * Same semantics as the snippet (serviceWorkerSnippet.ts SW_INSTALL): only where
  * `serviceWorker` exists, not before 'load', `/sw.js` with scope `/`. A
  * refusal rejects, so the caller (the queue) reports it; nothing is swallowed.
  * Node environment: navigator/document/window are stubbed per test (Node 20
