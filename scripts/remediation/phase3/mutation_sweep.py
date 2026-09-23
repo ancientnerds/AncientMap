@@ -2789,6 +2789,7 @@ S_UNWRITTEN_KEY = (
     "test_a_search_record_must_name_its_unwritten_proposals_a_rerun_only_record_names_none"
 )
 S_NOT_SEARCHED = "test_a_batch_whose_sites_name_no_search_fields_is_not_a_search_batch"
+S_ASKED_NOT_SEARCHED = "test_a_field_asked_again_but_not_searched_stays_out_of_every_query"
 W_ONE_PARSER = "test_the_writer_reads_the_rerun_list_with_the_discover_passs_own_parser"
 W_RERUN_ONLY = "test_a_field_the_run_was_not_built_to_ask_is_not_written_though_cleared"
 G_RECORDS = "test_the_records_carry_the_fresh_values_the_fields_to_ask_and_the_routes"
@@ -2840,6 +2841,52 @@ SPLIT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        if False:  # mutant\n",
         LANE_TEST,
         L_OLD_SEARCH_PLAN,
+    ),
+    # One case per search-plan-only key (review 2026-09-23): the test used to take its cases from
+    # `SEARCH_PLAN_KEYS` itself, so a key dropped from the tuple dropped its own case with it.
+    (
+        "a search record carrying only rerun_why reads as a rerun record",
+        SEARCH_EVIDENCE,
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)\n",
+        "SEARCH_PLAN_KEYS = (RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)  # mutant\n",
+        SEARCH_TEST,
+        S_LOST_SEARCH,
+    ),
+    (
+        "a search record carrying only rerun_unwritten reads as a rerun record",
+        SEARCH_EVIDENCE,
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)\n",
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, QUERY_VALUES_KEY)  # mutant\n",
+        SEARCH_TEST,
+        S_LOST_SEARCH,
+    ),
+    (
+        "a search record carrying only query_values reads as a rerun record",
+        SEARCH_EVIDENCE,
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY, QUERY_VALUES_KEY)\n",
+        "SEARCH_PLAN_KEYS = (RERUN_WHY_KEY, RERUN_UNWRITTEN_KEY)  # mutant\n",
+        SEARCH_TEST,
+        S_LOST_SEARCH,
+    ),
+    # A field asked again but not searched (search_fields strictly inside rerun_fields) is still
+    # judged on every search of its site, so the query rules read rerun_fields (review 2026-09-23).
+    (
+        "a field asked again but not searched keeps its name suffix",
+        SEARCH_STAGE,
+        "        name: text for name in SE.rerun_fields(site) or ()"
+        " if (text := _stored_text(site, name))\n",
+        "        name: text for name in SE.search_fields(site) or ()"
+        " if (text := _stored_text(site, name))  # mutant\n",
+        SEARCH_TEST,
+        S_ASKED_NOT_SEARCHED,
+    ),
+    (
+        "a field asked again but not searched fills its query slot",
+        SEARCH_STAGE,
+        "    rerun = set(SE.rerun_fields(site) or ())\n",
+        "    rerun = set(SE.search_fields(site) or ())  # mutant\n",
+        SEARCH_TEST,
+        S_ASKED_NOT_SEARCHED,
     ),
     (
         "a search record without its unwritten proposals reads as none",

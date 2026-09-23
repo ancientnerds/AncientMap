@@ -898,7 +898,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--stages",
         default=",".join(STAGES),
         choices=sorted(STAGE_SEQUENCES),
-        help="prepare,fetch,judge for a snapshot plan; prepare,search,judge for a search plan",
+        help=(
+            "prepare,fetch,judge for a snapshot or rerun plan; "
+            "prepare,search,judge for a search plan"
+        ),
     )
     parser.add_argument("--failures-before-stop", type=int, default=DEFAULT_FAILURES_BEFORE_STOP)
     parser.add_argument("--stage-timeout", type=float, default=DEFAULT_STAGE_TIMEOUT)

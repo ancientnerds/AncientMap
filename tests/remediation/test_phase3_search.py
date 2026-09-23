@@ -271,25 +271,41 @@ def test_a_search_subset_buys_only_its_own_searches_and_the_whole_rerun_is_asked
     assert [call.call.field for call in plan.calls] == ["period_start", "country"]
 
 
-@pytest.mark.parametrize("key", SE.SEARCH_PLAN_KEYS)
+#: The keys only the search plan writes, spelled out here rather than read from
+#: `SE.SEARCH_PLAN_KEYS`: a case taken from the tuple under test vanishes with the key it
+#: should hold.
+SEARCH_PLAN_ONLY_KEYS = ("rerun_why", "rerun_unwritten", "query_values")
+
+
+@pytest.mark.parametrize("key", SEARCH_PLAN_ONLY_KEYS)
 def test_a_search_record_without_search_fields_is_refused_not_run_without_searches(
     key: str,
 ) -> None:
     """Only the search plan writes these keys: a record that carries one without `search_fields`
     was built before the key existed (or lost it). Read as a rerun record, it would buy its calls on
     the old evidence, and a held proposal would lose its guard. Measured 2026-09-23: the search plans
-    built on 2026-09-22 carry `rerun_fields` and `rerun_why` and nothing else of this lane's."""
+    built on 2026-09-22 carry `rerun_fields` and `rerun_why` and nothing else of this lane's.
+
+    The cases are the literal key names (review 2026-09-23). Parametrized over
+    `SE.SEARCH_PLAN_KEYS` itself, a key dropped from that tuple dropped its own case too, and the
+    test stayed green while a record carrying only that key was read as a rerun record."""
     site = _site(rerun=["country"])
     del site["search_fields"]
     with pytest.raises(R.InputError, match="but no search_fields"):
         SE.search_slots(site)
-    for other in SE.SEARCH_PLAN_KEYS:
+    for other in SEARCH_PLAN_ONLY_KEYS:
         site.pop(other, None)
-    site[key] = {} if key != SE.RERUN_WHY_KEY else {"country": SPL.WHY_UNVERIFIABLE}
+    site[key] = {} if key != "rerun_why" else {"country": SPL.WHY_UNVERIFIABLE}
     with pytest.raises(R.InputError, match=rf"carries \['{key}'\] but no search_fields"):
         SE.search_fields(site)
     del site[key]
     assert SE.search_fields(site) is None  # rerun_fields alone: the gap run's shape
+
+
+def test_every_search_plan_only_key_has_its_own_case_above() -> None:
+    """A key added to `SE.SEARCH_PLAN_KEYS` is guarded only once the refusal test above has a
+    case for it."""
+    assert set(SE.SEARCH_PLAN_KEYS) == set(SEARCH_PLAN_ONLY_KEYS)
 
 
 def test_a_search_record_must_name_its_unwritten_proposals_a_rerun_only_record_names_none() -> None:
@@ -458,6 +474,27 @@ def test_a_name_ending_in_the_value_under_test_loses_it_and_one_that_carries_it_
     generic = _site(values={"site_type": "Archaeological site"}, rerun=["site_type"])
     (query,) = _queries(generic).values()
     assert SS.query_carries(generic, query) == ("site_type",)
+
+
+def test_a_field_asked_again_but_not_searched_stays_out_of_every_query() -> None:
+    """`search_fields` may be a strict subset of `rerun_fields` (the split of 2026-09-23). A field
+    asked again without a search of its own is still judged on every search of its site, so the
+    query rules read `rerun_fields`, not `search_fields`: that field's value stays out of every slot
+    and off the end of the name. `_site` writes one list under both keys, so the other query tests
+    cannot tell the two keys apart (review 2026-09-23)."""
+    stina = _site(name="Stina, Spain", rerun=["period_start", "country"])
+    stina["search_fields"] = ["period_start"]
+    assert [slot.key for slot in SE.search_slots(stina)] == ["period_start"]
+    assert SS.query_name(stina) == "Stina"
+    assert _queries(stina) == {"period_start": '"Stina" archaeological site date century BC built'}
+    assert SS.carried_by_queries(stina) == ()
+    # The slot is left out because the field is asked again, not because its value matches the one
+    # under test. With production's country different from the stored one (a record the search plan
+    # does not build: it never reruns a field production changed), a slot read from `search_fields`
+    # would pass the stored-value check and put that country into the period query.
+    moved = _site(production={"country": "Portugal"}, rerun=["period_start", "country"])
+    moved["search_fields"] = ["period_start"]
+    assert _queries(moved) == {"period_start": '"Cave 1" archaeological site date century BC built'}
 
 
 def test_a_site_without_a_name_cannot_be_searched() -> None:
