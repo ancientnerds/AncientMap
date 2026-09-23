@@ -6497,11 +6497,14 @@ code and the data give them, each re-checked here:
   **716 passed, 0 skipped** (84 s).
 * Mechanical sweep, all cases, run in this worktree after the merge, 11:03-11:59 UTC:
   **`cases: 469  fired: 469  skipped: 0  survived: 0  invalid: 0  unproven: 0  errored: 0`**,
-  exit 0 (`mechanical/evidence/21_mutation_sweep_merged.txt`); 33 of the cases are new. The
-  fixer's run of 820358c (319 of 319 fired) is kept as
+  exit 0 (`mechanical/evidence/21_mutation_sweep_merged.txt`); 33 of the cases are new. One more
+  case came after that run (`reversal: --lane names a reversal lane`); the reversal cases, run again
+  with it after the second merge: **38 of 38 fired**
+  (`mechanical/evidence/22_mutation_sweep_reversal.txt`), 470 cases in all. The fixer's run of 820358c (319 of 319 fired) is kept as
   `mechanical/evidence/20_mutation_sweep_fix.txt`.
 * Full DB-less suite (`-m "not integration and not live_llm"`, timeout 300): **4569 passed, 32
-  skipped** (gitignored data and fonts only), 57 deselected, exit 0, 297 s. `ruff check api/
+  skipped** (gitignored data and fonts only), 57 deselected, exit 0, 297 s; after the second merge
+  **4609 passed, 32 skipped**, exit 0, 306 s. `ruff check api/
   pipeline/ scripts/remediation tests/ output/remediation/tools/` clean, `ruff format --check` clean
   on every file this branch touches, lint-imports 2 kept / 0 broken, vulture exit 0.
 * gitleaks over `integrate/wave1..HEAD`: clean after the 9 premise digests of `1984834` were

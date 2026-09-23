@@ -2196,6 +2196,12 @@ CASES: list[Case] = [
                 "test_only_a_list_that_cites_the_re_review_needs_it",
             ),
             (
+                "--lane names a reversal lane",
+                '    ap.add_argument("--lane", required=True, choices=sorted(REVERSAL_LISTS))',
+                '    ap.add_argument("--lane", required=True)',
+                "test_the_lane_is_named_and_must_be_a_reversal_lane",
+            ),
+            (
                 "--write reads the re-review copy",
                 "            rereview = load_rereview(out / REREVIEW_FILE) if cites_the_rereview(reasons) else {}",
                 "            rereview = {}",
