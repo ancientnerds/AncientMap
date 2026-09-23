@@ -63,7 +63,7 @@ can still be overridden (`--run-dir`, `--out`, `--rows`, `--apply-root`, `--hold
 | `scan_rows.py`, `show_rows.py` | find and inspect rows in the plan |
 | `batch_summary.py` | per-batch counts |
 | `gap_plan.py` | builds `PLAN.gap.jsonl` for the fields the mass run never judged, from a fresh read-only production export |
-| `qid_repair.py` | renders the reviewed `site_external_ids` repair (`output/remediation/qid_repair/`) - plan, apply, rehearsal, rollback; applies nothing |
+| `qid_repair.py` | renders the reviewed `site_external_ids` repair - plan, apply, rehearsal, rollback; applies nothing. Wave 1 (`output/remediation/qid_repair/`, applied 2026-09-23) and, with `--wave 2`, the wrong links among the B1 name findings (`output/remediation/qid_repair/wave2/`, researched by `scripts/remediation/bcases/qid_research.py`, gated at 1 km) |
 
 Each needs `PYTHONIOENCODING=utf-8`. The writer's child processes get the repository root and
 `scripts/remediation` on their `PYTHONPATH` from `write_dry_all.writer_env()`, and they run under the
