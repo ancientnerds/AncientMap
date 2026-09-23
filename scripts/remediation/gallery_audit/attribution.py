@@ -16,9 +16,12 @@ Four routes, tried in this order, each on the file page as Commons serves it tod
         link, one external link, or plain text - parsed deterministically, never interpreted
 
 A route whose field is absent moves on to the next. A route whose field is present but cannot be
-read exactly (two user links, a template, a replacement character, more than 200 characters, a
-non-name such as "Own work") ends the row as UNRESOLVED with that reason: a wrong credit is worse
-than none (feedback_no_ai_slop), so nothing is guessed and every refusal is listed.
+read exactly (two user links, a template, raw wiki markup such as `[[:c:User:{{{1}}}|{{{1}}}]]`,
+a replacement character, more than 200 characters, a non-name such as "Own work", a link into a
+Wikimedia project that is not a user page) ends the row as UNRESOLVED with that reason: a wrong
+credit is worse than none (feedback_no_ai_slop), so nothing is guessed and every refusal is
+listed. For A3 the field is an own-work Credit: once the marker is there, a Credit without
+exactly one user link, or with one that cannot be read, ends the row too.
 
 Every author is `parse_attribution` of the span it came from (for A4, of the one link or text the
 wikitext names, rendered as the anchor Commons renders it), so this lane and the downloader cannot
@@ -40,12 +43,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import html
 import json
 import re
 import sys
 import time
+import urllib.parse
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -64,9 +67,10 @@ from census.fetch import Fetcher  # noqa: E402
 from census.tests.t09_commons_dimensions import (  # noqa: E402
     COMMONS_API,
     _commons_file_name,
-    _dereference,
 )
 
+from pipeline.utils.mediawiki import dereference  # noqa: E402
+from pipeline.video.shorts_ledger import sha256_text  # noqa: E402
 from pipeline.wiki_image_downloader import parse_attribution  # noqa: E402
 
 DATE = "2026-09-23"
@@ -83,6 +87,27 @@ MAX_AUTHOR = 200  # parse_attribution cuts longer values to 200 + "...": no long
 #: Values of an author field that name nobody. Compared case-folded, after the span is read.
 NOT_A_NAME = frozenset({"unknown", "anonymous", "own work", "self", "author", "see below", "n/a"})
 _ENTITY = re.compile(r"&(?:[A-Za-z][A-Za-z0-9]*|#[0-9]+|#x[0-9A-Fa-f]+);")
+#: Wikitext a rendered field should never carry. Measured 2026-09-23: two A2 `Attribution` values
+#: are the unexpanded template placeholder `[[:c:User:{{{1}}}|{{{1}}}]]` - markup, not a name.
+WIKI_MARKUP = ("[[", "]]", "{{", "}}")
+#: The Wikimedia projects' domains. A link into one of them names the author only when it is the
+#: author's own user page (or its talk page); the Main_Page, a bare site root or a policy page
+#: names the platform. Measured 2026-09-23: three A2 spans credit "Pierre-Yves Beaudouin /
+#: Wikimedia Commons" with a link to the Commons Main_Page.
+WIKIMEDIA_DOMAINS = (
+    "wikimedia.org",
+    "wikipedia.org",
+    "wikidata.org",
+    "mediawiki.org",
+    "wikisource.org",
+    "wiktionary.org",
+    "wikiquote.org",
+    "wikibooks.org",
+    "wikinews.org",
+    "wikiversity.org",
+    "wikivoyage.org",
+)
+_USER_PATH = re.compile(r"/wiki/User(?:[ _]talk)?:[^/]+(?:/.+)?")
 
 SCOPE_SQL = """SELECT row_to_json(t) FROM (
   SELECT w.id, w.site_id::text AS site_id, w.author, w.author_url, w.license,
@@ -152,12 +177,13 @@ class Refused:
     span: str
 
 
-def sha256(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def canonical_sha256(value: Any) -> str:
-    return sha256(json.dumps(value, sort_keys=True, ensure_ascii=False))
+def names_the_platform(url: str) -> bool:
+    """True for a link into a Wikimedia project that is not a user page (or its talk page)."""
+    parts = urllib.parse.urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if not any(host == domain or host.endswith(f".{domain}") for domain in WIKIMEDIA_DOMAINS):
+        return False
+    return not _USER_PATH.fullmatch(urllib.parse.unquote(parts.path))
 
 
 # ----------------------------------------------------------------------------- the routes
@@ -171,8 +197,10 @@ def _read(rule: str, field: str, span: str, markup: str) -> Found | Refused:
         return Refused(rule, "the span carries a replacement character (a broken encoding)", span)
     if len(author) > MAX_AUTHOR:
         return Refused(rule, f"longer than {MAX_AUTHOR} characters - it would be cut", span)
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in author):
-        return Refused(rule, "the author text carries a control character", span)
+    if any(CW.has_control(text) for text in (author, url or "")):
+        return Refused(rule, "the span carries a control character or a line separator", span)
+    if any(mark in text for text in (author, url or "") for mark in WIKI_MARKUP):
+        return Refused(rule, "wiki markup, not a name", span)
     if author.strip().casefold().rstrip(".") in NOT_A_NAME:
         return Refused(rule, f"{author!r} names no one", span)
     # parse_attribution strips tags but decodes no entity: `&amp;` would be stored literally, and
@@ -181,6 +209,10 @@ def _read(rule: str, field: str, span: str, markup: str) -> Found | Refused:
         return Refused(rule, "the span carries an HTML entity parse_attribution does not decode", span)
     if url is not None and not re.fullmatch(r"https?://[^\s\"'<>]+", url):
         return Refused(rule, f"the link {url!r} is not a plain web address", span)
+    if url is not None and names_the_platform(url):
+        return Refused(
+            rule, f"the link {url!r} is a Wikimedia page, not a user page - it names the platform", span
+        )
     return Found(rule, field, span, markup, author, url)
 
 
@@ -198,17 +230,23 @@ _USER_PAGE = re.compile(
 )
 
 
-def route_credit_own_work(page: Page) -> Found | None:
-    """A3: an own-work Credit with exactly one user-page link - the uploader, named by the link."""
+def route_credit_own_work(page: Page) -> Found | Refused | None:
+    """A3: an own-work Credit with exactly one user-page link - the uploader, named by the link.
+
+    The own-work marker makes the Credit this route's field. From then on the route decides the
+    row: no user link, two, or one that `_read` refuses ends it as UNRESOLVED - it never falls
+    through to the `{{Information}}` author of A4.
+    """
     credit = page.extmetadata.get("Credit") or ""
     if 'class="int-own-work"' not in credit:
         return None
     users = [m for m in _ANCHOR.finditer(credit) if _USER_PAGE.fullmatch(m.group(1))]
     if len(users) != 1:
-        return None
+        return Refused(
+            "A3", f"the own-work credit carries {len(users)} user links, not exactly one", credit
+        )
     anchor = users[0].group(0)
-    found = _read("A3", "Credit", anchor, anchor)
-    return found if isinstance(found, Found) else None
+    return _read("A3", "Credit", anchor, anchor)
 
 
 def _template_body(text: str, start: int) -> str | None:
@@ -374,10 +412,10 @@ def fetch_batch(
     normalized = {e["from"]: e["to"] for e in query.get("normalized") or []}
     redirects = {e["from"]: e["to"] for e in query.get("redirects") or []}
     retrieved_at = str(payload.get("fetched_at"))
-    digest = canonical_sha256(answer)
+    digest = pv.record_sha256(answer)
     out: dict[str, Page | str] = {}
     for name in names:
-        title = _dereference(_dereference(f"File:{name}", normalized), redirects)
+        title = dereference(dereference(f"File:{name}", normalized), redirects)
         page = pages.get(title)
         if page is None:
             out[name] = "unanswered"
@@ -453,7 +491,7 @@ def evidence_record(row: Row, page: Page, found: Found) -> dict[str, Any]:
         "rule": found.rule,
         "field": found.field,
         "span": found.span,
-        "span_sha256": sha256(found.span),
+        "span_sha256": sha256_text(found.span),
         "markup": found.html,
         "author": found.author,
         "author_url": found.author_url,
@@ -512,7 +550,7 @@ def build_plan(rows: Sequence[Row], pages: Mapping[str, Page | str]) -> Plan:
                 "url": f"https://commons.wikimedia.org/w/index.php?oldid={page.revid}",
                 "revid": page.revid,
                 "evidence_file": f"output/remediation/gallery_audit/attribution-{DATE}/EVIDENCE.jsonl",
-                "evidence_sha256": canonical_sha256(record),
+                "evidence_sha256": pv.record_sha256(record),
                 "span_sha256": record["span_sha256"],
             }
         ]
@@ -637,16 +675,20 @@ def recheck(evidence: Sequence[Mapping[str, Any]], pages: Mapping[str, Page | st
             problems.append(
                 f"{where}: parse_attribution of the stored span is not the planned author"
             )
-        if sha256(str(record["span"])) != record["span_sha256"]:
+        if sha256_text(str(record["span"])) != record["span_sha256"]:
             problems.append(f"{where}: the stored span does not hash to its span_sha256")
     return problems
 
 
-def command_recheck(out: Path = OUT) -> int:
-    path = out / "EVIDENCE.jsonl"
-    evidence = [
-        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+def load_evidence(path: Path) -> list[dict[str, Any]]:
+    """EVIDENCE.jsonl as `write_jsonl` wrote it: one record per '\\n'-terminated line."""
+    return [
+        json.loads(line) for line in pv.jsonl_lines(path.read_text(encoding="utf-8")) if line.strip()
     ]
+
+
+def command_recheck(out: Path = OUT) -> int:
+    evidence = load_evidence(out / "EVIDENCE.jsonl")
     names = [str(r["file"]).removeprefix("File:") for r in evidence]
     with Fetcher(root=CACHE, workers=1) as fetcher:
         pages = fetch_pages(names, fetcher, force=True)

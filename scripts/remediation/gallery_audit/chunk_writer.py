@@ -59,8 +59,9 @@ for _path in (ROOT / "scripts" / "remediation", _HERE.parent):
         sys.path.insert(0, str(_path))
 
 import persist_verdicts as pv  # noqa: E402
-from hero_repair.apply import one_hero_invariant_sql  # noqa: E402
+from hero_repair.apply import LABEL_RE, one_hero_invariant_sql  # noqa: E402
 from mechanical.apply import OPEN_SESSIONS_SQL, PSQL_SCRIPT_ERROR  # noqa: E402
+from mechanical.plan import UUID_RE  # noqa: E402
 from persist_verdicts import OutcomeUnknown  # noqa: E402
 from prod_write import pin_line  # noqa: E402
 
@@ -93,9 +94,7 @@ KEY_TYPES = {"wiki_images": "integer", "unified_sites": "uuid"}
 #: 0017's confidence vocabulary.
 CONFIDENCES = frozenset({"authoritative", "two_source", "weak", "unverifiable"})
 
-UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
-LABEL_RE = re.compile(r"[A-Za-z0-9 _./-]+")
 
 EXIT_OK = 0
 EXIT_REFUSED = 1
@@ -176,8 +175,21 @@ def change_key(lane: Lane, change: Change, *, rollback: bool = False) -> str:
     return f"{kind}:{change.table}.{change.column}:{change.row_key}"
 
 
+#: Characters no planned value may carry: the C0 controls, DEL, the C1 controls (U+0085 among
+#: them) and the Unicode line and paragraph separators. Together they are every character
+#: `str.splitlines()` breaks a line at, and `json.dumps(..., ensure_ascii=False)` writes U+0085,
+#: U+2028 and U+2029 raw - a value carrying one would split its own PLAN.jsonl record (measured
+#: 2026-09-23: the chunk then failed its check with a JSONDecodeError).
+LINE_BREAKERS = frozenset({"\u2028", "\u2029"})
+
+
+def has_control(value: str) -> bool:
+    """True when `value` carries a control character or a Unicode line separator."""
+    return any(ord(ch) < 32 or 127 <= ord(ch) <= 159 or ch in LINE_BREAKERS for ch in value)
+
+
 def _no_control(value: str, *, what: str) -> None:
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+    if has_control(value):
         raise ChunkError(f"{what} carries a control character: {value!r}")
 
 
@@ -326,7 +338,7 @@ def load_chunk(directory: Path) -> Chunk:
     head = json.loads(head_path.read_text(encoding="utf-8"))
     lane = Lane(head["lane"], head["test_id"], head["stamp"], head["confidence"], head["label"])
     changes = []
-    for lineno, line in enumerate(plan_path.read_text(encoding="utf-8").splitlines(), start=1):
+    for lineno, line in enumerate(pv.jsonl_lines(plan_path.read_text(encoding="utf-8")), start=1):
         if not line.strip():
             continue
         row = json.loads(line)

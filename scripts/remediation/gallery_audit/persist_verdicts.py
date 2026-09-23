@@ -71,7 +71,9 @@ if str(ROOT / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts" / "remediation"))
 
 #: The production transport, the timeout rule and the pin format live in `prod_write.py` since
-#: 2026-09-22 - moved there from this module so the mechanical lanes use the same code.
+#: 2026-09-22 - moved there from this module so the mechanical lanes use the same code. The UUID
+#: pattern is the mechanical lanes' own, imported rather than copied.
+from mechanical.plan import UUID_RE  # noqa: E402
 from prod_write import DIGEST_RE, SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 OUTPUT = ROOT / "output" / "remediation" / "gallery_audit"
@@ -257,13 +259,23 @@ def load_verdicts(base: Path = SELECTION) -> list[Verdict]:
 
 
 MAPPING_VERDICTS = frozenset({"PROVEN", "AMBIGUOUS", "UNPROVABLE"})
-_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 def record_sha256(record: Mapping[str, object]) -> str:
     """sha256 of one mapping record in canonical JSON - the pointer the journal evidence carries."""
     blob = json.dumps(record, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def jsonl_lines(text: str) -> list[str]:
+    """The lines of a JSON-lines text: split at '\\n' and nowhere else.
+
+    `str.splitlines()` also breaks at U+0085, U+2028 and U+2029, and `json.dumps(...,
+    ensure_ascii=False)` - like PostgreSQL's `row_to_json` - writes those three raw inside a
+    string, so one record would come apart into two broken ones. A file read with universal
+    newlines, and psql output read in text mode, already carry '\\n' for every CRLF.
+    """
+    return text.split("\n")
 
 
 def load_rejected_kinds(path: Path | None = None) -> tuple[list[Verdict], list[Skipped]]:
@@ -279,7 +291,7 @@ def load_rejected_kinds(path: Path | None = None) -> tuple[list[Verdict], list[S
     out: list[Verdict] = []
     skipped: list[Skipped] = []
     seen: dict[int, str] = {}
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for lineno, line in enumerate(jsonl_lines(path.read_text(encoding="utf-8")), start=1):
         if not line.strip():
             continue
         try:
@@ -312,7 +324,7 @@ def load_rejected_kinds(path: Path | None = None) -> tuple[list[Verdict], list[S
             continue
         image_id = _as_int(record.get("image_id"), what=f"{where} image_id")
         site_id = record.get("site_id")
-        if not isinstance(site_id, str) or not _UUID.fullmatch(site_id):
+        if not isinstance(site_id, str) or not UUID_RE.fullmatch(site_id):
             raise PersistError(f"{where}: site_id {site_id!r} is not a UUID")
         if image_id in seen and seen[image_id] != kind:
             raise PersistError(f"{where}: image {image_id} was already stated {seen[image_id]!r}")
@@ -472,7 +484,7 @@ def read_rows(sql: str) -> list[dict[str, object]]:
     """
     proc = run_psql(sql, rows=True)
     out: list[dict[str, object]] = []
-    for line in proc.stdout.splitlines():
+    for line in jsonl_lines(proc.stdout):
         line = line.strip()
         if not line:
             continue
@@ -662,7 +674,7 @@ def load_plan_records(path: Path) -> list[dict[str, object]]:
             "against the plan without it"
         )
     out: list[dict[str, object]] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for lineno, line in enumerate(jsonl_lines(path.read_text(encoding="utf-8")), start=1):
         if not line.strip():
             continue
         try:

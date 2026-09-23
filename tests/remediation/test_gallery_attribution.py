@@ -90,17 +90,41 @@ def test_a3_takes_the_one_user_link_of_an_own_work_credit():
     assert (found.rule, found.span, found.author) == ("A3", USER_ANCHOR, "Udimu")
 
 
+#: A well-formed {{Information}} author: a route that falls through past A3 would take it (A4).
+OTHER_AUTHOR = _info("[[User:Other|Other]]")
+
+
 @pytest.mark.parametrize(
-    "credit",
+    ("credit", "says"),
     [
-        OWN_WORK,  # the {{Own}} tag with no user link
-        f"{USER_ANCHOR} and {USER_ANCHOR.replace('Udimu', 'Other')} ({OWN_WORK})",  # two users
-        f"{USER_ANCHOR} (Own work (photo))",  # no own-work marker
+        (OWN_WORK, "carries 0 user links"),  # the {{Own}} tag with no user link
+        (f"{USER_ANCHOR} and {USER_ANCHOR.replace('Udimu', 'Other')} ({OWN_WORK})", "carries 2 user"),
     ],
 )
-def test_a_credit_without_exactly_one_user_link_and_the_marker_is_not_a3(credit):
+def test_an_own_work_credit_without_exactly_one_user_link_ends_the_row(credit, says):
+    """The marker makes the Credit A3's field: it never falls through to the wikitext author."""
+    found = A.resolve(_page({"Credit": credit}, wikitext=OTHER_AUTHOR))
+    assert isinstance(found, A.Refused), found
+    assert found.rule == "A3" and says in found.reason
+
+
+@pytest.mark.parametrize(
+    ("link_text", "says"),
+    [("Own work", "names no one"), ("Bob &amp; Co", "HTML entity")],
+)
+def test_an_own_work_user_link_that_cannot_be_read_ends_the_row(link_text, says):
+    anchor = f'<a href="//commons.wikimedia.org/wiki/User:Bob">{link_text}</a>'
+    found = A.resolve(_page({"Credit": f"{OWN_WORK} {anchor}"}, wikitext=OTHER_AUTHOR))
+    assert isinstance(found, A.Refused), found
+    assert found.rule == "A3" and says in found.reason
+
+
+def test_a_credit_without_the_own_work_marker_is_not_a3():
+    credit = f"{USER_ANCHOR} (Own work (photo))"
     found = A.resolve(_page({"Credit": credit}))
     assert isinstance(found, A.Refused) and found.rule == "-"
+    found = A.resolve(_page({"Credit": credit}, wikitext=OTHER_AUTHOR))
+    assert isinstance(found, A.Found) and (found.rule, found.author) == ("A4", "Other")
 
 
 @pytest.mark.parametrize(
@@ -139,6 +163,93 @@ def test_a4_refuses_what_it_cannot_read_exactly(author, says):
     assert found.rule == "A4" and says in found.reason
 
 
+@pytest.mark.parametrize("field", ["Artist", "Attribution"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "[[:c:User:{{{1}}}|{{{1}}}]]",  # measured: two A2 values on 2026-09-23
+        "{{Creator:Edward Rooker}}",
+        "Photo by [[User:X|X]]",
+    ],
+)
+def test_wiki_markup_in_a_rendered_field_is_not_a_name(field, value):
+    found = A.resolve(_page({field: value}))
+    assert isinstance(found, A.Refused), found
+    assert found.rule == {"Artist": "A1", "Attribution": "A2"}[field]
+    assert "wiki markup, not a name" in found.reason
+
+
+@pytest.mark.parametrize(
+    "span",
+    [
+        # measured: three A2 spans on 2026-09-23 link the platform's front page
+        'Pierre-Yves Beaudouin\xa0/\xa0<a href="//commons.wikimedia.org/wiki/Main_Page" '
+        'title="Main Page">Wikimedia Commons</a>',
+        'Jane Doe / <a class="external text" href="https://commons.wikimedia.org/">Commons</a>',
+        '<a href="https://en.wikipedia.org/wiki/Stonehenge">Jane Doe</a>',
+    ],
+)
+def test_a_link_into_wikimedia_that_is_not_a_user_page_names_the_platform(span):
+    found = A.resolve(_page({"Attribution": span}))
+    assert isinstance(found, A.Refused), found
+    assert found.rule == "A2" and "names the platform" in found.reason
+
+
+@pytest.mark.parametrize(
+    ("span", "url"),
+    [
+        (
+            '<a href="//commons.wikimedia.org/wiki/User_talk:F%C3%A6" title="User talk:F\u00e6">'
+            "F\u00e6</a>",
+            "https://commons.wikimedia.org/wiki/User_talk:F%C3%A6",
+        ),
+        (
+            '<a href="//commons.wikimedia.org/wiki/User:Chris_73">Chris 73</a> / <a class="external'
+            ' text" href="https://commons.wikimedia.org/">Wikimedia Commons</a>',
+            "https://commons.wikimedia.org/wiki/User:Chris_73",
+        ),
+        (
+            'Classical Numismatic Group, Inc. <a rel="nofollow" class="external free" '
+            'href="http://www.cngcoins.com">http://www.cngcoins.com</a>',
+            "http://www.cngcoins.com",
+        ),
+    ],
+)
+def test_a_user_page_or_the_authors_own_site_is_the_authors_link(span, url):
+    found = A.resolve(_page({"Attribution": span}))
+    assert isinstance(found, A.Found), found
+    assert found.author_url == url
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Jane\tDoe",
+        "Jane\u2028Doe",
+        "Jane\x85Doe",
+        '<a href="https://example.org/jane\x07doe">Jane Doe</a>',
+    ],
+)
+def test_a_control_character_or_line_separator_in_the_span_is_refused(value):
+    found = A.resolve(_page({"Attribution": value}))
+    assert isinstance(found, A.Refused), found
+    assert "control character or a line separator" in found.reason
+
+
+@pytest.mark.parametrize(
+    "href", ["javascript:alert(1)", "/wiki/User:Jane", "https://example.org/a b"]
+)
+def test_a_link_that_is_not_a_plain_web_address_is_refused(href):
+    found = A.resolve(_page({"Artist": f'<a href="{href}">Jane Doe</a>'}))
+    assert isinstance(found, A.Refused), found
+    assert "is not a plain web address" in found.reason
+
+
+def test_an_unclosed_information_template_gives_no_route():
+    found = A.resolve(_page(wikitext="{{Information\n|description=x\n|author=Alice Example\n"))
+    assert isinstance(found, A.Refused) and found.rule == "-"
+
+
 def test_an_empty_or_doubled_information_template_gives_no_route():
     assert isinstance(A.resolve(_page(wikitext=_info(""))), A.Refused)
     # the Dispilio page: an unclosed template swallowed a second one
@@ -171,9 +282,9 @@ def test_the_plan_writes_author_and_its_url_with_a_pointer_to_the_evidence_line(
         ("author_url", None, "https://commons.wikimedia.org/wiki/User:Udimu"),
     ]
     (record,) = plan.evidence
-    assert record["span"] == USER_ANCHOR and record["span_sha256"] == A.sha256(USER_ANCHOR)
+    assert record["span"] == USER_ANCHOR and record["span_sha256"] == A.sha256_text(USER_ANCHOR)
     pointer = plan.changes[0].evidence[0]
-    assert pointer["evidence_sha256"] == A.canonical_sha256(record)
+    assert pointer["evidence_sha256"] == A.pv.record_sha256(record)
     assert pointer["revid"] == 100 and "oldid=100" in pointer["url"]
     assert "span" not in pointer  # the journal carries pointers, not the text
 
@@ -267,6 +378,36 @@ def test_the_fetch_maps_every_name_through_normalisation_and_names_missing_files
     assert request.url.params["rvslots"] == "main" and request.url.params["maxlag"] == "5"
 
 
+def test_a_batch_answer_without_a_query_stops_the_lane(tmp_path):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"batchcomplete": True})
+
+    with Fetcher(root=tmp_path, workers=1, transport=httpx.MockTransport(handler)) as fetcher:
+        with pytest.raises(A.AttributionError, match="without 'query'"):
+            A.fetch_batch(fetcher, ["Temple.jpg"])
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        {"ns": 6, "title": "File:Temple.jpg", "imageinfo": [{"extmetadata": {}}], "revisions": []},
+        {
+            "ns": 6,
+            "title": "File:Temple.jpg",
+            "revisions": [
+                {"revid": 1, "timestamp": "2026-01-01T00:00:00Z", "slots": {"main": {"content": ""}}}
+            ],
+        },
+    ],
+)
+def test_a_page_without_one_revision_and_its_imageinfo_is_named(tmp_path, page):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"query": {"pages": [page]}})
+
+    with Fetcher(root=tmp_path, workers=1, transport=httpx.MockTransport(handler)) as fetcher:
+        assert A.fetch_batch(fetcher, ["Temple.jpg"]) == {"Temple.jpg": "no revision or no imageinfo"}
+
+
 def test_a_maxlag_refusal_is_asked_again_and_then_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(A, "PAUSE_S", 0.0)
     calls = []
@@ -298,6 +439,8 @@ def test_the_recheck_passes_on_the_same_page_and_names_every_drift():
     assert "now answers 'missing'" in A.recheck(evidence, {"Temple.jpg": "missing"})[0]
     tampered = [dict(evidence[0], author="Someone else")]
     assert "not the planned author" in A.recheck(tampered, {"Temple.jpg": page})[0]
+    rehashed = [dict(evidence[0], span_sha256="00" * 32)]
+    assert "does not hash to its span_sha256" in A.recheck(rehashed, {"Temple.jpg": page})[0]
 
 
 def test_the_evidence_file_is_one_canonical_json_line_per_resolved_row(tmp_path):
@@ -307,3 +450,13 @@ def test_the_evidence_file_is_one_canonical_json_line_per_resolved_row(tmp_path)
     lines = path.read_text(encoding="utf-8").splitlines()
     assert [json.loads(line)["image_id"] for line in lines] == [1, 2]
     assert all(line == json.dumps(json.loads(line), ensure_ascii=False, sort_keys=True) for line in lines)
+
+
+def test_the_evidence_file_is_read_back_whole_when_a_span_carries_a_line_separator(tmp_path):
+    """json.dumps writes U+2028 raw: splitlines() would cut the record in two."""
+    span = f"Jane Doe\u2028{USER_ANCHOR}"
+    record = {"image_id": 1, "file": "File:Temple.jpg", "span": span}
+    path = tmp_path / "EVIDENCE.jsonl"
+    A.write_jsonl(path, [record, dict(record, image_id=2)])
+    assert "\u2028" in path.read_text(encoding="utf-8")
+    assert A.load_evidence(path) == [record, dict(record, image_id=2)]

@@ -1214,3 +1214,36 @@ def test_plan_for_rejected_kinds_names_every_refusal_and_writes_the_rest(tmp_pat
     assert pv.verify_delivered(out / "ROLLBACK.sql", records, invert=True) == pv.plan_digest(
         records
     )
+
+
+# --------------------------------------------------------------------------------------
+# the kind test and the JSON-lines readers (review of 2026-09-23)
+# --------------------------------------------------------------------------------------
+
+
+def test_kind_test_refuses_what_is_not_a_set_of_image_kinds():
+    for kinds in ((), ("photo",), ("site_photo", "photo")):
+        with pytest.raises(pv.PersistError, match="is not a set of image kinds"):
+            pv.kind_test(kinds)
+    assert pv.kind_test(("site_photo",)) == ("= 'site_photo'", "= site_photo")
+
+
+def test_a_plan_record_with_a_line_separator_is_read_whole(tmp_path):
+    """json.dumps writes U+2028 raw; str.splitlines() would cut the record in two."""
+    record = {"image_id": 1, "reason": "one\u2028two", "new_value": "site_photo"}
+    path = tmp_path / "PLAN.jsonl"
+    path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+    assert "\u2028" in path.read_text(encoding="utf-8")
+    assert pv.load_plan_records(path) == [record]
+
+
+def test_a_production_row_with_a_line_separator_is_read_whole(monkeypatch):
+    """row_to_json, like json.dumps, leaves U+2028 unescaped in psql's output."""
+    stdout = json.dumps({"id": 1, "author": "Jane\u2028Doe"}, ensure_ascii=False) + "\n"
+
+    def fake_psql(sql, **kwargs):
+        assert sql == "SELECT 1;" and kwargs == {"rows": True}
+        return subprocess.CompletedProcess(["psql"], 0, stdout, "")
+
+    monkeypatch.setattr(pv, "run_psql", fake_psql)
+    assert pv.read_rows("SELECT 1;") == [{"id": 1, "author": "Jane\u2028Doe"}]

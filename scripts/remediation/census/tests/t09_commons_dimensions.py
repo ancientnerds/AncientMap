@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
@@ -95,12 +96,31 @@ log = logging.getLogger("census.t09")
 #: explanation stale. That day the downloader replaced both with a fetch rule over Commons' fixed
 #: thumbnail buckets (`LOCAL_MAX_WIDTH`, `fetch_plan` in `pipeline/wiki_image_downloader.py`):
 #: 800 and 1600 are not buckets and answer HTTP 400. The rows this module explains were made under
-#: these two values and no others, so they are pinned here as the history they are.
+#: these two values and no others, so they are pinned here as the history they are - and bound to
+#: it: a snapshot exported from `HISTORIC_CAPS_UNTIL` on may hold rows the new rule stored (a hero
+#: at its own width up to 1600 px, never an upscale), which a note quoting "the THUMB_WIDTH=800 px
+#: derivative" or "GALLERY_WIDTH=1600 px forced the crop up" would explain wrongly.
 HISTORIC_CAPS = {"THUMB_WIDTH": 800, "GALLERY_WIDTH": 1600}
+HISTORIC_CAPS_UNTIL = datetime.fromisoformat("2026-09-23T00:00:00+02:00")
 
 
-def _pipeline_widths() -> dict[str, int]:
-    """The caps the census's rows were downloaded under (see `HISTORIC_CAPS`)."""
+def _pipeline_widths(exported_at: str | None) -> dict[str, int]:
+    """The caps the snapshot's rows were downloaded under (`HISTORIC_CAPS`), or a refusal.
+
+    Refuses a snapshot that names no export time and one exported from the day the downloader
+    changed on: its notes would quote caps that no longer made its rows.
+    """
+    if exported_at is None:
+        raise RuntimeError(
+            "T09: the snapshot names no export time, so the 800/1600 px caps its notes quote "
+            "cannot be tied to its rows"
+        )
+    if datetime.fromisoformat(exported_at) >= HISTORIC_CAPS_UNTIL:
+        raise RuntimeError(
+            f"T09: snapshot {exported_at} was exported after the downloader stopped storing 800 px "
+            f"heroes and 1600 px crops ({HISTORIC_CAPS_UNTIL.date()}); its rows may be stored "
+            "under the new rule, which these notes do not describe - reword them first"
+        )
     return dict(HISTORIC_CAPS)
 
 
@@ -198,16 +218,6 @@ def _fetch_batch(ctx: Context, batch: list[str]) -> dict[str, Any]:
     raise RuntimeError(f"commons imageinfo refused a batch (first title {batch[0]!r}): {last}")
 
 
-def _dereference(title: str, mapping: dict[str, str]) -> str:
-    """Apply the API's own `normalized`/`redirects` chains (bounded, in case of a loop)."""
-    for _ in range(4):
-        nxt = mapping.get(title)
-        if nxt is None or nxt == title:
-            break
-        title = nxt
-    return title
-
-
 def _read_batch(batch: list[str], payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Map every title of one batch to its own status - never assume the answers align.
 
@@ -216,6 +226,8 @@ def _read_batch(batch: list[str], payload: dict[str, Any]) -> dict[str, dict[str
     record: `ok` with the original's pixel size, `missing` (the canonical source itself says
     the file does not exist), or `unresolved` (no answer - we could not find out).
     """
+    from pipeline.utils.mediawiki import dereference
+
     query = payload.get("query") or {}
     pages: dict[str, dict[str, Any]] = {p["title"]: p for p in query.get("pages") or []}
     normalized = {e["from"]: e["to"] for e in query.get("normalized") or []}
@@ -223,7 +235,7 @@ def _read_batch(batch: list[str], payload: dict[str, Any]) -> dict[str, dict[str
 
     out: dict[str, dict[str, Any]] = {}
     for name in batch:
-        title = _dereference(_dereference(f"File:{name}", normalized), redirects)
+        title = dereference(dereference(f"File:{name}", normalized), redirects)
         page = pages.get(title)
         if page is None:
             out[name] = {"status": "unresolved", "canonical": None}
@@ -811,8 +823,8 @@ def _hero_finding(
 
 
 def run(ctx: Context) -> list[Finding]:
+    caps = _pipeline_widths(ctx.snap.exported_at())
     index = _read_index(ctx)
-    caps = _pipeline_widths()
 
     findings: list[Finding] = []
     for site in ctx.sites:

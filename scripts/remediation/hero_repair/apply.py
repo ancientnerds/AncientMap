@@ -147,6 +147,11 @@ SELECT pg_get_functiondef(p.oid) LIKE '%$1::%s WHERE%' AS casts_value_to_column_
 
 
 # ------------------------------------------------------------------------------- rendering
+#: What may stand inside a single-quoted RAISE message: no quote, no percent sign, no backslash.
+#: The image lanes' chunk writer checks its lane labels against this same pattern.
+LABEL_RE = re.compile(r"[A-Za-z0-9 _./-]+")
+
+
 def one_hero_invariant_sql(
     plan_table: str = "_hero_plan", *, label: str = "hero repair", at_most: bool = False
 ) -> list[str]:
@@ -161,7 +166,7 @@ def one_hero_invariant_sql(
     """
     if not plan_table.isidentifier() or not plan_table.startswith("_"):
         raise PlanError(f"{plan_table!r} is not a temp plan table name")
-    if not re.fullmatch(r"[A-Za-z0-9 _./-]+", label):
+    if not LABEL_RE.fullmatch(label):
         raise PlanError(f"{label!r} cannot stand inside a quoted RAISE message")
     if at_most:
         heroes, rows, wrong, says = "at most one hero", "several rows", "> 1", "end with more than one hero"
