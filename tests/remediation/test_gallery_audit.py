@@ -876,7 +876,8 @@ def test_run_psql_reports_a_timeout_as_an_unknown_outcome(monkeypatch):
 
 
 def test_main_reports_an_unknown_outcome_with_its_own_exit_code(monkeypatch, capsys):
-    def boom():
+    def boom(output):
+        assert output == pv.OUTPUT  # the default source is G0's own directory
         raise pv.OutcomeUnknown("psql did not answer within 900s")
 
     monkeypatch.setattr(pv, "command_apply", boom)
@@ -973,3 +974,243 @@ def test_the_delivered_plan_carries_the_landed_run_stamp():
     """The stamp of the landed write is a fact about production; the plan records it."""
     records = pv.load_plan_records(DELIVERED / "PLAN.jsonl")
     assert pv.load_plan_stamp(records, path=DELIVERED / "PLAN.jsonl") == pv.RUN_STAMP
+
+
+# --------------------------------------------------------------------------------------
+# G0b: the kinds the pipeline stated in its rejections (--source rejected-kinds)
+# --------------------------------------------------------------------------------------
+
+G0B_SITE = "eff62515-9b70-43cc-afe6-c803dd4b5bc3"
+
+
+def _rejected_record(image_id: int, kind: str = "artifact", **over: object) -> dict:
+    record = {
+        "slug": "giza-necropolis",
+        "filename": f"Stele_{image_id}.webp",
+        "reason": f"kind={kind}",
+        "kind_stated": kind,
+        "site_id": G0B_SITE,
+        "verdict": "PROVEN",
+        "image_id": image_id,
+        "evidence": [f"images.json of the short has exactly one entry (id {image_id})"],
+    }
+    record.update(over)
+    return record
+
+
+def _rejected_file(tmp_path: Path, *records: dict) -> Path:
+    path = tmp_path / "REJECTED_KINDS.jsonl"
+    path.write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records), encoding="utf-8"
+    )
+    return path
+
+
+def _g0b_state(verdicts, *, kind=None, site=G0B_SITE, filename=None) -> dict:
+    return {
+        v.image_id: {
+            "id": v.image_id,
+            "site_id": site,
+            "source_id": "ancient_nerds",
+            "image_kind": kind,
+            "filename": filename or v.entry["filename"],
+            "is_hero": False,
+            "original_url": "https://upload.wikimedia.org/x.jpg",
+        }
+        for v in verdicts
+    }
+
+
+def test_the_versioned_mapping_yields_the_30_proven_rejections():
+    """`REJECTED_KINDS.jsonl` is tracked, so this runs everywhere: 30 PROVEN of 30, 8 sites."""
+    verdicts, refused = pv.load_rejected_kinds()
+    assert refused == []
+    assert len(verdicts) == len({v.image_id for v in verdicts}) == 30
+    assert len({v.site_id for v in verdicts}) == 8
+    counts: dict[str, int] = {}
+    for v in verdicts:
+        counts[v.kind] = counts.get(v.kind, 0) + 1
+    assert counts == {"artifact": 17, "map_or_document": 9, "painting_or_artwork": 3, "other": 1}
+    assert {v.source for v in verdicts} == {"rejected-kinds"}
+    assert all(v.verdict["reason"] == f"kind={v.kind}" for v in verdicts)
+
+
+def test_a_mapping_that_is_not_proven_is_a_named_refusal(tmp_path):
+    path = _rejected_file(
+        tmp_path,
+        _rejected_record(1),
+        _rejected_record(2, verdict="AMBIGUOUS", evidence=["only a case-insensitive match"]),
+    )
+    verdicts, refused = pv.load_rejected_kinds(path)
+    assert [v.image_id for v in verdicts] == [1]
+    assert [(s.image_id, s.reason) for s in refused] == [(2, "mapping-not-proven")]
+    assert "AMBIGUOUS: only a case-insensitive match" in refused[0].detail
+
+
+@pytest.mark.parametrize(
+    ("override", "says"),
+    [
+        ({"kind_stated": "map_or_document"}, "is not the kind the reason names"),
+        ({"kind_stated": "photo", "reason": "kind=photo"}, "is not one of"),
+        ({"site_id": "Giza"}, "is not a UUID"),
+        ({"image_id": "1"}, "expected an integer"),
+        ({"verdict": "LIKELY"}, "is none of"),
+    ],
+)
+def test_a_malformed_mapping_record_stops_the_lane(tmp_path, override, says):
+    path = _rejected_file(tmp_path, _rejected_record(1) | override)
+    with pytest.raises(pv.PersistError) as exc:
+        pv.load_rejected_kinds(path)
+    assert says in str(exc.value)
+
+
+def test_one_image_with_two_stated_kinds_stops_the_lane(tmp_path):
+    path = _rejected_file(tmp_path, _rejected_record(1), _rejected_record(1, "other"))
+    with pytest.raises(pv.PersistError, match="already stated"):
+        pv.load_rejected_kinds(path)
+
+
+def test_a_mapping_without_a_proven_record_writes_nothing(tmp_path):
+    path = _rejected_file(tmp_path, _rejected_record(1, verdict="UNPROVABLE"))
+    with pytest.raises(pv.PersistError, match="no PROVEN record"):
+        pv.load_rejected_kinds(path)
+
+
+@pytest.mark.parametrize(
+    ("state_over", "why"),
+    [
+        ({"site": "00000000-0000-4000-8000-000000000009"}, "site"),
+        ({"filename": "Renamed.webp"}, "filename"),
+    ],
+)
+def test_a_row_that_no_longer_matches_the_proof_is_refused(tmp_path, state_over, why):
+    verdicts, _ = pv.load_rejected_kinds(_rejected_file(tmp_path, _rejected_record(1)))
+    write, skipped = pv.build_plan(verdicts, _g0b_state(verdicts, **state_over))
+    assert write == []
+    assert [s.reason for s in skipped] == ["row-no-longer-matches-the-proof"]
+    assert why in skipped[0].detail
+
+
+def test_g0b_never_journals_under_the_landed_g0_stamp(tmp_path, monkeypatch):
+    """Not even after its own plan is on disk: the stamp is decided against G0's landed plan."""
+    monkeypatch.setattr(pv, "OUTPUT", tmp_path)
+    pv.emit([_verdict(1), _verdict(2)], [], {1: _state(1), 2: _state(2)})  # the landed G0 batch
+    verdicts, _ = pv.load_rejected_kinds(
+        _rejected_file(tmp_path, _rejected_record(3), _rejected_record(4, "other"))
+    )
+    state = _g0b_state(verdicts)
+    stamps = []
+    for _ in range(2):  # the second emit finds its own PLAN.jsonl already delivered
+        pv.emit(verdicts, [], state)
+        records = pv.load_plan_records(tmp_path / "rejected_kinds" / "PLAN.jsonl")
+        stamps.append(pv.load_plan_stamp(records, path=tmp_path))
+    assert stamps[0] == stamps[1] == pv.run_stamp_for(verdicts)
+    assert stamps[0].startswith(pv.BATCH_STAMP_PREFIX + "-") and stamps[0] != pv.RUN_STAMP
+
+
+def test_g0b_lives_in_its_own_directory_and_leaves_g0s_files_alone(tmp_path, monkeypatch):
+    monkeypatch.setattr(pv, "OUTPUT", tmp_path)
+    pv.emit([_verdict(1)], [], {1: _state(1)})
+    g0 = {name: (tmp_path / name).read_bytes() for name in ("APPLY.sql", "ROLLBACK.sql")}
+    verdicts, _ = pv.load_rejected_kinds(_rejected_file(tmp_path, _rejected_record(5)))
+    paths = pv.emit(verdicts, [], _g0b_state(verdicts))
+    assert Path(paths["apply"]).parent == tmp_path / "rejected_kinds"
+    assert {name: (tmp_path / name).read_bytes() for name in g0} == g0
+
+
+def test_the_g0b_statement_raises_under_its_own_scope_and_writes_its_own_kinds(tmp_path):
+    verdicts, _ = pv.load_rejected_kinds(
+        _rejected_file(tmp_path, _rejected_record(3), _rejected_record(4, "map_or_document"))
+    )
+    state = _g0b_state(verdicts)
+    stamp = pv.run_stamp_for(verdicts, output=tmp_path)
+    sql = pv.render_apply(verdicts, state, run_stamp=stamp)
+    assert "RAISE EXCEPTION 'G0b image_kind: % planned row(s) do not exist'" in sql
+    assert "'G0 image_kind" not in sql
+    assert "WHERE image_kind IN ('artifact', 'map_or_document') AND id IN" in sql
+    assert ", NULL, 'artifact', 'g0-vlm-kind:3'" in sql
+    rollback = pv.render_rollback(verdicts, state, run_stamp=stamp)
+    assert "'G0b rollback: % row(s) are still not NULL'" in rollback
+    assert "rollback of G0b: image_kind on 3 returned to NULL (was ''artifact'')" in rollback
+    literal = re.search(r"'(\[\{\"source\": \"shorts selection.*?)'::jsonb", sql).group(1)
+    evidence = json.loads(literal.replace("''", "'"))
+    assert evidence[0]["quote"] == "rejected[] entry filename='Stele_3.webp' reason='kind=artifact'"
+    assert evidence[1]["sha256"] == pv.record_sha256(_rejected_record(3))
+
+
+def test_a_batch_that_mixes_the_two_sources_is_refused(tmp_path):
+    verdicts, _ = pv.load_rejected_kinds(_rejected_file(tmp_path, _rejected_record(3)))
+    state = {**_g0b_state(verdicts), 1: _state(1)}
+    with pytest.raises(pv.PersistError, match="mixes the sources"):
+        pv.render_apply([_verdict(1), *verdicts], state)
+
+
+def test_the_g0b_verify_reads_for_its_own_kinds(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(pv, "OUTPUT", tmp_path)
+    verdicts, _ = pv.load_rejected_kinds(
+        _rejected_file(tmp_path, _rejected_record(3), _rejected_record(4, "other"))
+    )
+    pv.emit(verdicts, [], _g0b_state(verdicts))
+    label = "rows with image_kind in (artifact, other) and no journal row for this run"
+    assert label == pv.unjournalled_label(("artifact", "other"))
+    assert f"SELECT '{label}'" in pv.verify_sql("x", ("artifact", "other"))
+
+    def metrics(unjournalled: int) -> str:
+        return (
+            "journal rows for this run|2\n"
+            f"{label}|{unjournalled}\n"
+            "journal rows for this run outside wiki_images.image_kind|0\n"
+            "journal rows for this run with no evidence|0\n"
+            "rows with a kind outside the vocabulary|0\n"
+        )
+
+    monkeypatch.setattr(pv, "read_rows", lambda sql: [{"row_pks": "3,4", "disagreeing": 0}])
+    monkeypatch.setattr(pv, "run_psql", lambda sql, **kw: _psql_result(metrics(0)))
+    assert pv.command_verify(tmp_path / "rejected_kinds") == pv.EXIT_OK
+    monkeypatch.setattr(pv, "run_psql", lambda sql, **kw: _psql_result(metrics(1)))
+    assert pv.command_verify(tmp_path / "rejected_kinds") == pv.EXIT_VERIFY_FAILED
+    assert f"{label} = 1 (expected 0)" in capsys.readouterr().out
+
+
+def test_the_cli_routes_rejected_kinds_to_its_own_directory(tmp_path, monkeypatch):
+    monkeypatch.setattr(pv, "OUTPUT", tmp_path)
+    seen: list[object] = []
+    monkeypatch.setattr(pv, "command_rehearse", lambda output: seen.append(output) or 0)
+    monkeypatch.setattr(pv, "command_plan", lambda source: seen.append(source) or 0)
+    assert pv.main(["--rehearse", "--source", "rejected-kinds"]) == 0
+    assert pv.main(["--plan", "--source", "rejected-kinds"]) == 0
+    assert pv.main(["--rehearse"]) == 0
+    assert seen == [tmp_path / "rejected_kinds", "rejected-kinds", tmp_path]
+
+
+def test_plan_for_rejected_kinds_names_every_refusal_and_writes_the_rest(tmp_path, monkeypatch):
+    monkeypatch.setattr(pv, "OUTPUT", tmp_path)
+    path = _rejected_file(
+        tmp_path,
+        _rejected_record(3),
+        _rejected_record(4, "other"),
+        _rejected_record(5, verdict="AMBIGUOUS"),
+    )
+    monkeypatch.setattr(pv, "REJECTED_KINDS", path)
+    monkeypatch.setattr(
+        pv,
+        "read_state",
+        lambda ids: {
+            i: {**_g0b_state(pv.load_rejected_kinds(path)[0])[i]}
+            | ({"image_kind": "artifact"} if i == 4 else {})
+            for i in ids
+        },
+    )
+    assert pv.command_plan("rejected-kinds") == pv.EXIT_OK
+    out = tmp_path / "rejected_kinds"
+    records = pv.load_plan_records(out / "PLAN.jsonl")
+    assert [(r["image_id"], r["new_value"]) for r in records] == [(3, "artifact")]
+    skipped = [json.loads(line) for line in (out / "SKIPPED.jsonl").read_text().splitlines()]
+    assert sorted((s["image_id"], s["reason"]) for s in skipped) == [
+        (4, "different-verdict-already-recorded"),
+        (5, "mapping-not-proven"),
+    ]
+    assert pv.verify_delivered(out / "APPLY.sql", records) == pv.plan_digest(records)
+    assert pv.verify_delivered(out / "ROLLBACK.sql", records, invert=True) == pv.plan_digest(
+        records
+    )
