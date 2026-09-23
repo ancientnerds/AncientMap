@@ -14,6 +14,7 @@ import io
 import json
 import subprocess
 import sys
+import threading
 import types
 from datetime import datetime
 from pathlib import Path
@@ -267,14 +268,16 @@ def test_a_select_that_could_not_call_names_the_error_for_the_spawn_retry(
     assert MR.spawn_failure(code, out)  # mass_run's own reader finds the error
 
 
-def _selected_batch(tmp_path: Path) -> Path:
+def _selected_batch(tmp_path: Path, site_id: str = "site-1", batch: str = "p4-0001") -> Path:
     batch_dir = X.make_batch(
-        tmp_path, [X.w_site("site-1", raw_data={"description_citations": [], "k": 1})]
+        tmp_path,
+        [X.w_site(site_id, raw_data={"description_citations": [], "k": 1})],
+        batch=batch,
     )
     SEL.select_batch(
         batch_dir,
         ledger=tmp_path / "L.jsonl",
-        runner=X.ScriptedRunner({("site-1", "select"): SELECT}),
+        runner=X.ScriptedRunner({(site_id, "select"): SELECT}),
     )
     B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
     B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
@@ -408,6 +411,59 @@ def test_the_search_allowance_counts_this_runs_searches_only(tmp_path: Path) -> 
     assert runner.searches_left() == 698
 
 
+def test_parallel_routes_stages_never_share_one_search_allowance(tmp_path: Path) -> None:
+    """With `--jobs 2` two batches run at once. The allowance a routes stage is told is what is
+    left when it starts; two routes stages that started together would each be told the whole
+    remainder and could spend it twice. They take turns: the second is told what the first left."""
+    ledger = tmp_path / "L.jsonl"
+    runner = M4.Phase4StageRunner(
+        plan=tmp_path / "PLAN4.jsonl",
+        run_dir=tmp_path / "runs" / "pilot",
+        ledger=ledger,
+        log_dir=tmp_path / "logs",
+        live=True,
+        budget=MR.Budget(max_usd=15.0, max_searches=10),
+        pacing_dir=None,
+        python=Path(sys.executable),
+    )
+    first_in_routes = threading.Event()
+    second_in_routes = threading.Event()
+    told: dict[str, int] = {}
+    line = {
+        "kind": "fetch", "stage": "finder", "batch_id": "p4-0001",
+        "label": "s/minimax_search.name", "url": "https://x", "outcome": "ok",
+    }  # fmt: skip
+
+    def call(stage: str, batch_id: str) -> int:
+        log = runner.log_dir / f"{batch_id}.{stage}.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        if stage == "routes":
+            argv = runner.argv(stage, batch_id)
+            allowance = int(argv[argv.index("--max-searches") + 1])
+            told[batch_id] = allowance
+            if batch_id == "p4-0001":
+                first_in_routes.set()
+                second_in_routes.wait(timeout=1.0)  # the other batch's routes, if it can start
+            else:
+                second_in_routes.set()
+            with ledger.open("a", encoding="utf-8") as handle:
+                handle.write("".join(json.dumps(line) + "\n" for _ in range(allowance)))
+        with log.open("a", encoding="utf-8") as handle:
+            handle.write("STAGE_EXIT=0\n")
+        return 0
+
+    runner.call = call  # type: ignore[method-assign]
+    first = threading.Thread(
+        target=runner.batch, args=(MR.PlannedBatch(batch_id="p4-0001", ordinal=1, sites=1),)
+    )
+    first.start()
+    assert first_in_routes.wait(timeout=5.0)
+    runner.batch(MR.PlannedBatch(batch_id="p4-0002", ordinal=2, sites=1))
+    first.join(timeout=5.0)
+    assert told == {"p4-0001": 10, "p4-0002": 0}
+    assert MR.Spend.from_ledger(ledger).searches == 10
+
+
 def _stub_calls(runner: M4.Phase4StageRunner, outputs: dict[str, tuple[int, str]]) -> list[str]:
     """Replace the process spawn: each stage appends its scripted output to its own log."""
     called: list[str] = []
@@ -452,13 +508,13 @@ def test_a_zero_exit_line_goes_on_even_when_the_process_code_is_not_zero(tmp_pat
     assert not ok and detail.startswith("after every stage")  # nothing was really written
 
 
-def _reviewed(tmp_path: Path) -> Path:
-    batch_dir = _selected_batch(tmp_path)
+def _reviewed(tmp_path: Path, site_id: str = "site-1", batch: str = "p4-0001") -> Path:
+    batch_dir = _selected_batch(tmp_path, site_id, batch)
     answer = "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: KEEP\nCARD: KEEP"
     RV.review_batch(
         batch_dir,
         ledger=tmp_path / "L.jsonl",
-        runner=X.ScriptedRunner({("site-1", "review"): answer}),
+        runner=X.ScriptedRunner({(site_id, "review"): answer}),
         reverify=lambda site, assembly: (),
     )
     return batch_dir
@@ -579,9 +635,77 @@ def test_the_sheet_shows_every_sentence_beside_its_passage_and_never_the_reviewe
     assert "[1] Wikipedia: Stone Temple - " + X.PERMALINK in sheet
 
 
+def _ids_file(path: Path, *ids: str) -> str:
+    path.write_text("".join(f"{site_id}\n" for site_id in ids), encoding="utf-8")
+    return str(path)
+
+
 def test_the_draw_command_prints_the_sample(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     batch_dir = _reviewed(tmp_path)
-    assert AU.main(["draw", "--run-dir", str(batch_dir.parent), "--seed", "3", "--count", "5"]) == 0
+    written = _ids_file(tmp_path / "written.txt", "site-1")
+    argv = ["draw", "--run-dir", str(batch_dir.parent), "--seed", "3", "--count", "5"]
+    assert AU.main([*argv, "--written", written]) == 0
     assert capsys.readouterr().out.split() == ["site-1", "STAGE_EXIT=0"]
+
+
+def test_only_a_finished_review_counts_and_a_later_site_hold_takes_a_site_out(
+    tmp_path: Path,
+) -> None:
+    """The auditor judges reviewed text: a batch whose review never finished, and a site a later
+    stage held after it, are not in the population the samples are drawn from."""
+    run_dir = _reviewed(tmp_path, "site-1", "p4-0001").parent
+    _selected_batch(tmp_path, "site-2", "p4-0002")  # assembled, never reviewed
+    third = _reviewed(tmp_path, "site-3", "p4-0003")
+    assert M4.batch_done(run_dir, "p4-0002") == (False, "no review4.json")
+    assert set(AU.reviewed_sites(run_dir)) == {"site-1", "site-3"}
+    B.append_holds(
+        third,
+        [
+            M.Hold(
+                site_id="site-3",
+                scope=M.HoldScope.SITE,
+                reason=M.HoldReason.LANE_R_CLOSED,
+                detail="held after the review",
+            )
+        ],
+    )
+    assert set(AU.reviewed_sites(run_dir)) == {"site-1"}
+
+
+def test_a_draw_is_taken_from_the_written_sites_and_refuses_one_never_reviewed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_dir = _reviewed(tmp_path, "site-1", "p4-0001").parent
+    _reviewed(tmp_path, "site-3", "p4-0003")
+    _selected_batch(tmp_path, "site-2", "p4-0002")
+    argv = ["draw", "--run-dir", str(run_dir), "--seed", "3", "--count", "5"]
+    with pytest.raises(SystemExit):  # the written set is not optional
+        AU.main(argv)
+    capsys.readouterr()
+    assert AU.main([*argv, "--written", _ids_file(tmp_path / "w1.txt", "site-3")]) == 0
+    assert capsys.readouterr().out.split() == ["site-3", "STAGE_EXIT=0"]  # site-1: not written
+    with pytest.raises(ValueError, match="site-2"):
+        AU.main([*argv, "--written", _ids_file(tmp_path / "w2.txt", "site-1", "site-2")])
+    excluded = _ids_file(tmp_path / "ex.txt", "site-2")
+    assert AU.main([*argv, "--written", str(tmp_path / "w2.txt"), "--exclude", excluded]) == 0
+    assert capsys.readouterr().out.split() == ["site-1", "STAGE_EXIT=0"]
+
+
+def test_a_site_assembled_in_two_batches_and_an_unknown_sheet_id_are_refused(
+    tmp_path: Path,
+) -> None:
+    run_dir = _reviewed(tmp_path, "site-1", "p4-0001").parent
+    with pytest.raises(ValueError, match="not reviewed in this run"):
+        AU.main(
+            ["sheet", "--run-dir", str(run_dir), "--site-ids",
+             _ids_file(tmp_path / "ids.txt", "site-9"), "--out", str(tmp_path / "s.md")]
+        )  # fmt: skip
+    _reviewed(tmp_path / "other", "site-1", "p4-0002")
+    (run_dir / "p4-0002").mkdir()
+    for path in (tmp_path / "other" / "runs" / "pilot" / "p4-0002").iterdir():
+        if path.is_file():
+            (run_dir / "p4-0002" / path.name).write_bytes(path.read_bytes())
+    with pytest.raises(ValueError, match="site-1 is assembled in two batches"):
+        AU.reviewed_sites(run_dir)

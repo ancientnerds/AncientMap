@@ -40,7 +40,7 @@ FR = X.wiki_doc("T.fr", FR_TEXT, title="Temple de pierre", host="fr.wikipedia.or
 def _t_batch(tmp_path: Path) -> Path:
     setup = X.SiteSetup(site=X.plan_site("site-t"), lane=M.Lane.T, sources={"T.fr": (FR, FR_TEXT)})
     batch_dir = X.make_batch(tmp_path, [setup])
-    runner = X.ScriptedRunner({("site-t", "select"): "DESC: T.fr1 -t1\nDESC: T.fr2\nCARD: T.fr2"})
+    runner = X.ScriptedRunner({("site-t", "select"): "DESC: T.fr1\nDESC: T.fr2\nCARD: T.fr2"})
     assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
     return batch_dir
 
@@ -48,17 +48,30 @@ def _t_batch(tmp_path: Path) -> Path:
 # --------------------------------------------------------------------------------- lane T
 
 
-def test_the_translator_sees_the_trimmed_sentences_numbered_in_source_order(tmp_path: Path) -> None:
+def test_a_translated_sentence_offers_no_span_to_drop(tmp_path: Path) -> None:
+    """`selon les fouilles` ("according to the excavations") would be a `t` span in lane W; the
+    English protected list cannot see its hedge, so lane T offers no span and a pick naming one is
+    refused before the translator could lose it."""
+    setup = X.SiteSetup(site=X.plan_site("site-t"), lane=M.Lane.T, sources={"T.fr": (FR, FR_TEXT)})
+    batch_dir = X.make_batch(tmp_path, [setup])
+    runner = X.ScriptedRunner({("site-t", "select"): "DESC: T.fr1 -t1\nDESC: T.fr2"})
+    assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
+    (hold,) = X.holds_of(batch_dir)
+    assert hold.reason is M.HoldReason.SELECTION_REFUSED
+    assert "T.fr1 offers [], not 't1'" in hold.detail
+
+
+def test_the_translator_sees_the_whole_sentences_numbered_in_source_order(tmp_path: Path) -> None:
     batch_dir = _t_batch(tmp_path)
     answer = "T1: The stone temple was built around 2500 BC by farmers.\nT2: It was dug in 1911."
     runner = X.ScriptedRunner({("site-t", "translate"): answer})
     assert TS.translate_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
     (call,) = runner.calls
     assert (
-        "T1: Le temple de pierre fut construit vers 2500 av. J.-C. par des paysans." in call.prompt
-    )
+        "T1: Le temple de pierre fut construit vers 2500 av. J.-C. par des paysans, selon les "
+        "fouilles." in call.prompt
+    )  # the hedge reaches the translator
     assert "T2: Il fut fouillé par des archéologues en 1911 et en 1954." in call.prompt
-    assert ", selon les fouilles" not in call.prompt  # the dropped span is not translated
     assert B.read_translations(batch_dir)["site-t"] == {
         "T.fr1": "The stone temple was built around 2500 BC by farmers.",
         "T.fr2": "It was dug in 1911.",

@@ -76,6 +76,41 @@ def test_another_language_source_gets_its_own_ids() -> None:
     assert [s.sid for s in sentences] == ["T.fr1", "T.fr2"]
 
 
+@pytest.mark.parametrize(
+    ("source_id", "text"),
+    [
+        ("T.de", "Der Tempel wurde, was jedoch nicht belegt ist, von Bauern errichtet."),
+        ("T.de", "Der Tempel wurde, vermutlich, von Bauern auf dem Hügel errichtet."),
+        ("T.fr", "Le temple fut bâti par des paysans, ce qui n'est cependant pas prouvé."),
+        ("T.es", "El templo fue construido, probablemente, por campesinos del valle."),
+        ("T.it", "Il tempio fu costruito da contadini, ma questo non è dimostrato."),
+    ],
+)
+def test_a_translated_source_offers_no_span(source_id: str, text: str) -> None:
+    """The protected list is English: lane T selects whole sentences, so no foreign hedge can be
+    dropped before the translator sees it."""
+    (sentence,) = S.split_source(source_id, text)
+    assert sentence.spans == ()
+    assert S.split_source("W", text)[0].spans  # the same text in lane W would offer spans
+
+
+@pytest.mark.parametrize(
+    "heading",
+    ["Einzelnachweise", "Literatur", "Weblinks", "Références", "Notes et références",
+     "Bibliografía", "Enlaces externos", "Note", "Collegamenti esterni", "Referências",
+     "Kaynakça", "Referències"],
+)  # fmt: skip
+def test_a_translated_sources_reference_section_is_never_in_the_pool(heading: str) -> None:
+    text = (
+        "Der Tempel steht auf einem Hügel über dem Fluss.\n"
+        f"\n\n== {heading} ==\n\nDer Bericht über die Grabung erschien im Jahr 1911.\n"
+    )
+    pool = S.candidate_pool(S.split_source("T.de", text), lane=M.Lane.T, names=["X"], text=text)
+    assert [S.sentence_text(text, s) for s in pool] == [
+        "Der Tempel steht auf einem Hügel über dem Fluss."
+    ]
+
+
 # ---------------------------------------------------------------------------------- spans
 
 
@@ -100,6 +135,56 @@ def test_a_paired_comma_insertion_takes_both_commas() -> None:
 def test_a_spaced_dash_pair_is_one_insertion() -> None:
     text = "The site lies 2 km south of the village – near the old road – on farmland."
     assert _spans(text) == {"a1": " – near the old road –"}
+
+
+def _a_spans(text: str) -> set[str]:
+    return {value for key, value in _spans(text).items() if key.startswith("a")}
+
+
+def test_two_range_dashes_are_no_insertion() -> None:
+    # Agri Bavnehøj W20: dropping "– 500 BC, 100 –" read "from 1800 150 burial mounds".
+    text = "In the period from 1800 – 500 BC, 100 – 150 burial mounds were built every year."
+    assert not any(span.startswith(" –") for span in _a_spans(text))
+    assert _a_spans("The mound – fully 12 m across – stands on the ridge above the ford.") == {
+        " – fully 12 m across –"
+    }  # a number inside the insertion is no range: only a digit next to a dash is
+    assert _a_spans("The mound – 12 m across – stands on the ridge above the ford.") == set()
+
+
+def test_a_dash_pair_holding_a_semicolon_is_no_insertion() -> None:
+    # Varna Necropolis W32: "type 1 – elongated barrel-shaped; type 2 –" gave type 1 type 2's shape.
+    text = "The beads are of four kinds: type 1 – long; type 2 – faceted; type 3 – short; type 4 – round."
+    assert _a_spans(text) == set()
+
+
+def test_dashes_pair_in_order_and_an_odd_count_pairs_none() -> None:
+    text = "The corridor – lined with limestone – rises gently – lined with granite – to its end."
+    assert _a_spans(text) == {" – lined with limestone –", " – lined with granite –"}
+    route = "The fort lay on the road from Boulogne – Cologne and Xanten – Aachen – Trier."
+    assert _a_spans(route) == set()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # a serial list's last link: the text after the second comma opens with "and"/"or"
+        "The temples of Asclepius, Aphrodite, Apollo, and Artemis stood on the hill.",
+        # a short item before a short tail that carries the coordinator
+        "Finds from the ditch included pottery, coins, tools and bones from the pit.",
+        # a run of short items that ends in a list link
+        "It lies in the provinces of Nevsehir, Kayseri, Aksaray, Kirsehir, Sivas and Nigde.",
+        # an asyndetic tail (Bela Palanka W11) and a place chain
+        "The coins were minted under the rule of Constantine I, Theodosius I, Tiberius Nero.",
+        "The hill fort lies near the village of Clovelly, Devon, England.",
+    ],
+)
+def test_a_comma_pair_inside_a_list_is_no_insertion(text: str) -> None:
+    assert _a_spans(text) == set()
+
+
+def test_an_insertion_beside_a_list_is_still_offered() -> None:
+    text = "The temple, which stood on a low ridge, held statues of Ra and Isis."
+    assert _a_spans(text) == {", which stood on a low ridge,"}
 
 
 def test_a_leading_phrase_takes_its_comma_and_the_space_after_it() -> None:
@@ -155,6 +240,36 @@ def test_a_span_carrying_a_protected_token_is_never_offered(text: str, word: str
     for span_text in _spans(text).values():
         assert not S.carries_protected_token(span_text), (word, span_text)
     assert S.carries_protected_token(text), word
+
+
+@pytest.mark.parametrize(
+    ("text", "word"),
+    [
+        # The shapes the review of WB-B2 found offered in the real pools (2026-09-23): dropping one
+        # turns a hedged or negated claim into a plain assertion.
+        ("Presumably, the dead were first laid down in the open on the hill.", "Presumably"),
+        ("Apparently, the name of the village was taken from the stones.", "Apparently"),
+        ("The cave yielded, arguably, the oldest bison bones in the region.", "arguably"),
+        ("The town was, it seems, founded by settlers from the coast.", "seems"),
+        ("The mound was built, it appears, by the first farmers of the valley.", "appears"),
+        ("Supposedly, the stones were raised by giants on the hill.", "Supposedly"),
+        ("Reputedly, the hermit lived in the cave above the river.", "Reputedly"),
+        ("Evidently, the ditch was cut after the bank had been raised.", "Evidently"),
+        ("The ridge, possible remains of a Roman fort, lies above the ford.", "possible"),
+        ("The mound, probable site of a Bronze Age burial, lies on the ridge.", "probable"),
+        ("The date of the mound is unknown, since the ditch was never dated.", "unknown"),
+        ("The shrine was abandoned, as the deity venerated there cannot be named.", "cannot"),
+        ("They don't have any drilled holes, which shows the talons were worn loose.", "don't"),
+        ("They don’t have any drilled holes, which shows the talons were worn loose.", "don’t"),
+        ("The bishopric was moved, and the see wasn't restored after the war.", "wasn't"),
+    ],
+)
+def test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered(
+    text: str, word: str
+) -> None:
+    assert S.carries_protected_token(word), word
+    for span_text in _spans(text).values():
+        assert word not in span_text, (word, span_text)
 
 
 def test_every_protected_group_is_honoured() -> None:

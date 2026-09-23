@@ -11,7 +11,9 @@ under `answers/`, and an answer already on disk is read instead of bought again.
 and no second call inside the stage: an unreadable stream holds the site
 (`model-stream-unreadable`), and so does an answer the parser refuses (`selection-refused`, the
 detail naming the `SelectionProblem`) or an `ABSTAIN` (`abstained`). A rerun is a new ledgered
-call, made by deleting the answer file.
+call in a new run directory (design: STOP, fix, re-pilot "in a new run directory"). Deleting an
+answer file re-asks nothing: the hold stays in this batch directory's append-only `holds.jsonl`,
+and every stage skips a held site.
 
 `parse_selection` refuses an unknown line, an unknown sid and a span the sid does not offer itself,
 and so a pick whose spans partially overlap (the union would be no offered span, so V4 could never

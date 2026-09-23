@@ -1,15 +1,16 @@
-"""S3T: lane T's second call - the chosen, trimmed source-language sentences into English.
+"""S3T: lane T's second call - the chosen source-language sentences into English.
 
 Source: entry [6] of `output/remediation/logs/design_texts_images_2026-09-22.json`, writer "LANES
 WITH GENERATED TEXT", lane T. Work item WB-B3.
 
 The selector has already chosen sentences of the other-language article (`select_stage`, the same
-contract as lane W). This stage shows those sentences, each cut by its DESC drops with edits 1-4
-(`assemble.trim`), numbered `T1..Tk` in source order, and asks the frozen `TRANSLATE_QUESTION`. The
-answer must be exactly one line `T<i>: <English sentence>` per shown sentence, each ending in its
-own final punctuation, and nothing else; anything else holds the site as `translation-refused`. An
-unreadable stream holds it as `model-stream-unreadable`. There is no retry, and a call that could not
-be made stops the batch.
+contract as lane W). A `T.<lang>` sentence offers no span (`sentences.split_source`: the protected
+tokens are English), so every DESC pick is a whole sentence and `assemble.trim` applies only edits
+2-3 to it. This stage shows those sentences, numbered `T1..Tk` in source order, and asks the frozen
+`TRANSLATE_QUESTION`. The answer must be exactly one line `T<i>: <English sentence>` per shown
+sentence, each ending in its own final punctuation, and nothing else; anything else holds the site
+as `translation-refused`. An unreadable stream holds it as `model-stream-unreadable`. There is no
+retry, and a call that could not be made stops the batch.
 
 The published text is generated (`ai: generated`), so it gets only edit 5 (the marker), and the
 citation numbers are assigned by the assembler. Lane T builds no card.

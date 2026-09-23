@@ -11,10 +11,15 @@ samples) and renders what the auditor judges: every published sentence beside it
 `NOT_CONTAINED`). **The reviewer's verdicts are never shown**: the sheet is built from the site, its
 assembly and the pinned texts, and from nothing under `reviews/`.
 
-A draw is seeded and deterministic: the same ids, seed, count and exclusions give the same sample
-on every machine. A stratum with fewer sites than the count is taken whole.
+The population is what a finished review kept (`reviewed_sites`: a batch `mass4.batch_done` counts
+as done, minus the sites a site-scope hold keeps unwritten). A draw is taken from the sites written
+to the database, which `--written` lists (the journal's, or `verify_writes4`'s read-back): the
+mid-run and final samples are samples of written sites. A draw is seeded and deterministic: the same
+ids, seed, count and exclusions give the same sample on every machine. A stratum with fewer sites
+than the count is taken whole.
 
-    audit4.py draw  --run-dir R --seed 20260922 --count 10 [--lane W] [--exclude used.txt]
+    audit4.py draw  --run-dir R --seed 20260922 --count 10 --written written.txt [--lane W]
+                    [--exclude used.txt]
     audit4.py sheet --run-dir R --site-ids drawn.txt --out sheet.md
 """
 
@@ -33,6 +38,7 @@ from phase3.run import InputError  # noqa: E402
 
 from phase4 import assemble as A  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402
+from phase4 import mass4 as M4  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import review4 as RV  # noqa: E402
 from phase4 import run4 as R4  # noqa: E402
@@ -85,17 +91,20 @@ def audit_sheet(site: M.PlanSite, assembly: M.Assembly, *, texts: Mapping[str, s
 # ---------------------------------------------------------------------------------- the run
 
 
-def written_sites(run_dir: Path) -> dict[str, tuple[Path, M.Assembly]]:
-    """Every assembled site of the run, from each batch's `assembly.jsonl`: `id -> (batch, row)`."""
+def reviewed_sites(run_dir: Path) -> dict[str, tuple[Path, M.Assembly]]:
+    """Every site a finished review kept, `id -> (batch, row)`: the `assembly.jsonl` of each batch
+    `mass4.batch_done` counts as done (the reviewer answered over that very file), minus the sites
+    a site-scope hold keeps unwritten (a hold appended after the review counts)."""
     found: dict[str, tuple[Path, M.Assembly]] = {}
     for batch_dir in sorted(p for p in run_dir.iterdir() if p.is_dir()):
-        path = batch_dir / M.ASSEMBLY_FILE
-        if not path.exists():
+        if not M4.batch_done(run_dir, batch_dir.name)[0]:
             continue
-        for assembly in M.load_jsonl(path, M.Assembly):
+        held = B.site_held(B.read_holds(batch_dir))
+        for assembly in M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly):
             if assembly.site_id in found:
                 raise InputError(f"{assembly.site_id} is assembled in two batches")
-            found[assembly.site_id] = (batch_dir, assembly)
+            if assembly.site_id not in held:
+                found[assembly.site_id] = (batch_dir, assembly)
     return found
 
 
@@ -108,23 +117,32 @@ def _ids(path: str | None) -> set[str]:
 
 
 def cmd_draw(args: argparse.Namespace) -> int:
-    sites = written_sites(Path(args.run_dir))
+    """A sample of the sites written to the database (the mid-run 10 after every 500, the final
+    60): `--written` lists them (the journal's, or `verify_writes4`'s read-back). Every written id
+    that is not excluded must be a reviewed site of this run - a written site this run never
+    reviewed is a wrong input, not a smaller population."""
+    sites = reviewed_sites(Path(args.run_dir))
+    exclude = _ids(args.exclude)
+    written = _ids(args.written) - exclude
+    unreviewed = sorted(written - set(sites))
+    if unreviewed:
+        raise InputError(f"written but not reviewed in this run: {unreviewed}")
     ids = [
         site_id
-        for site_id, (_, assembly) in sites.items()
-        if args.lane is None or assembly.provenance.lane.value == args.lane
+        for site_id in sorted(written)
+        if args.lane is None or sites[site_id][1].provenance.lane.value == args.lane
     ]
-    for site_id in draw_sample(ids, seed=args.seed, count=args.count, exclude=_ids(args.exclude)):
+    for site_id in draw_sample(ids, seed=args.seed, count=args.count, exclude=exclude):
         print(site_id)
     return 0
 
 
 def cmd_sheet(args: argparse.Namespace) -> int:
-    sites = written_sites(Path(args.run_dir))
+    sites = reviewed_sites(Path(args.run_dir))
     wanted = sorted(_ids(args.site_ids))
     unknown = [site_id for site_id in wanted if site_id not in sites]
     if unknown:
-        raise InputError(f"not assembled in this run: {unknown}")
+        raise InputError(f"not reviewed in this run: {unknown}")
     sheets: list[str] = []
     for site_id in wanted:
         batch_dir, assembly = sites[site_id]
@@ -143,10 +161,11 @@ def cmd_sheet(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="phase4-audit", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    draw = sub.add_parser("draw", help="print a seeded sample of assembled site ids")
+    draw = sub.add_parser("draw", help="print a seeded sample of written site ids")
     draw.add_argument("--run-dir", required=True)
     draw.add_argument("--seed", type=int, required=True)
     draw.add_argument("--count", type=int, required=True)
+    draw.add_argument("--written", required=True, help="a file of the ids written to the database")
     draw.add_argument("--lane", choices=[lane.value for lane in M.ASSIGNED_LANES], default=None)
     draw.add_argument("--exclude", default=None, help="a file of ids already sampled")
     draw.set_defaults(func=cmd_draw)

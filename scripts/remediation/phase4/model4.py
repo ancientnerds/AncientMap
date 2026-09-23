@@ -299,12 +299,9 @@ MAX_CARD = 2
 # Shared word lists (data only; each consumer implements its own matcher)
 # --------------------------------------------------------------------------------------------
 
-#: V4's protected tokens (amended per judges 1 and 3), by the design's own group names. A span
-#: containing one is never offered for deletion (S2) and a drop containing one fails V4. Meaning
-#: of an entry: matched case-insensitively as whole words; a trailing `*` matches any word that
-#: starts with the rest (`suggest*`: suggests, suggested, suggestion); an entry with a space is a
-#: phrase of consecutive words; `c.` and `ca.` include their full stop.
-PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+#: V4's protected tokens as the design lists them (verification, V4, amended per judges 1 and 3),
+#: by the design's own group names, verbatim. Consumers read `PROTECTED_TOKENS`, which extends it.
+DESIGN_PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         "hedges": (
             "possibly", "probably", "perhaps", "may", "might", "could", "likely", "believed",
@@ -327,6 +324,46 @@ PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         ),
     }
 )  # fmt: skip
+
+#: The `n't` forms, in both apostrophes the extracts carry (`'` and `’`): `don't` negates like
+#: `not`, and `\bnot\b` never matches inside it (nor inside `cannot`).
+_NOT_CONTRACTIONS = tuple(
+    f"{stem}n{apostrophe}t"
+    for stem in (
+        "ca", "could", "did", "does", "do", "had", "has", "have", "is", "are", "was", "were",
+        "wo", "would", "should", "must", "need", "might", "sha", "ai",
+    )
+    for apostrophe in ("'", "’")
+)  # fmt: skip
+
+#: What the review of WB-B2 added to the design's list (WB-00 contract change, 2026-09-23). The
+#: design promises that hedges, negations and restrictions survive by construction (card_texts;
+#: pilot T3 stops the run on one lost), and its list let the real pools offer `Presumably, `,
+#: `, it seems,`, `, arguably,`, `cannot` and `don't` spans for deletion: 1,037 offered spans over
+#: the 3,681 local extracts carried a word below. Every entry uses the entry rules above, so a
+#: matcher that implements them (S2's and V4's) reads the additions without a code change.
+PROTECTED_TOKEN_ADDITIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        "hedges": (
+            "presum*", "apparent*", "arguabl*", "seem*", "appear*", "suppos*", "reputed*",
+            "purported*", "evidently", "assum*", "possible", "probable", "maybe",
+        ),
+        "negations": ("cannot", *_NOT_CONTRACTIONS),
+        "refutation": ("unknown",),
+    }
+)  # fmt: skip
+
+#: The protected tokens every consumer reads: the design's list, then the additions, per group. A
+#: span containing one is never offered for deletion (S2) and a drop containing one fails V4.
+#: Meaning of an entry: matched case-insensitively as whole words; a trailing `*` matches any word
+#: that starts with the rest (`suggest*`: suggests, suggested, suggestion); an entry with a space
+#: is a phrase of consecutive words; `c.` and `ca.` include their full stop.
+PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        group: entries + PROTECTED_TOKEN_ADDITIONS.get(group, ())
+        for group, entries in DESIGN_PROTECTED_TOKENS.items()
+    }
+)
 
 #: V6's closed pronoun list. A sentence opening with one (as its first word or words, exactly as
 #: written here, followed by a non-letter) needs its source predecessor published right before

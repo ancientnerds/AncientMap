@@ -219,6 +219,20 @@ def test_a_resumed_stage_buys_nothing_and_writes_no_second_hold(tmp_path: Path) 
     assert (ledger.read_bytes(), (batch_dir / M.HOLDS_FILE).read_bytes()) == before
 
 
+def test_deleting_the_answer_of_a_held_site_re_asks_nothing(tmp_path: Path) -> None:
+    """What the module docstring says: a rerun is a new ledgered call in a new run directory. The
+    hold stays in this batch's `holds.jsonl`, so a deleted answer file buys no second call."""
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1")])
+    ledger = tmp_path / "LEDGER.jsonl"
+    script = {("site-1", "select"): "DESC: W99\nCARD: W99"}
+    SEL.select_batch(batch_dir, ledger=ledger, runner=X.ScriptedRunner(script))
+    _answers(batch_dir).path_for("site-1", "select").unlink()
+    again = X.ScriptedRunner(script)
+    assert SEL.select_batch(batch_dir, ledger=ledger, runner=again) == 0
+    assert again.calls == [] and len(X.ledger_lines(ledger)) == 1
+    assert [hold.reason for hold in X.holds_of(batch_dir)] == [M.HoldReason.SELECTION_REFUSED]
+
+
 def test_a_prompt_that_changed_after_its_answer_is_refused(tmp_path: Path) -> None:
     batch_dir = X.make_batch(tmp_path, [X.w_site("site-1")])
     ledger = tmp_path / "LEDGER.jsonl"

@@ -75,6 +75,32 @@ EXCLUDED_SECTIONS = frozenset(
         "in popular culture", "popular culture",
     }
 )  # fmt: skip
+#: The same apparatus in the languages lane T reads (the design's unanchored other-language
+#: articles: fr, it, es, de, tr, pt, ca).
+FOREIGN_EXCLUDED_SECTIONS = frozenset(
+    {
+        # de
+        "siehe auch", "literatur", "weblinks", "einzelnachweise", "anmerkungen", "quellen",
+        "belege", "fußnoten",
+        # fr
+        "voir aussi", "notes et références", "références", "bibliographie", "liens externes",
+        "articles connexes", "dans la culture populaire",
+        # es
+        "véase también", "referencias", "notas", "bibliografía", "enlaces externos",
+        "notas y referencias", "fuentes", "en la cultura popular",
+        # it
+        "note", "bibliografia", "voci correlate", "altri progetti", "collegamenti esterni",
+        "fonti", "nella cultura di massa",
+        # pt
+        "ver também", "referências", "ligações externas", "fontes", "notas e referências",
+        "na cultura popular",
+        # tr
+        "kaynakça", "kaynaklar", "dış bağlantılar", "ayrıca bakınız", "notlar",
+        "popüler kültürde",
+        # ca
+        "vegeu també", "referències", "enllaços externs",
+    }
+)  # fmt: skip
 
 SENTENCES_PER_SECTION = 6
 MAX_POOL_SENTENCES = 120
@@ -87,6 +113,11 @@ MAX_SENTENCE_CHARS = 400
 MAX_LEADING_TOKENS = 6
 TERMINAL = ".!?"
 DASHES = "–—"  # en dash, em dash
+#: A list item and a list's tail, in whitespace tokens (`_list_links`).
+LIST_ITEM_TOKENS = 3
+LIST_TAIL_TOKENS = 6
+_COORDINATOR = re.compile(r"\b(?:and|or)\b", re.IGNORECASE)
+_OPENS_WITH_COORDINATOR = re.compile(r"(?:and|or)\b", re.IGNORECASE)
 
 
 def _protected_pattern() -> re.Pattern[str]:
@@ -120,7 +151,14 @@ def carries_protected_token(text: str) -> bool:
 
 
 def split_source(source_id: str, text: str) -> tuple[M.Sentence, ...]:
-    """Every sentence of the pinned text, numbered from 1, with its section and offered spans."""
+    """Every sentence of the pinned text, numbered from 1, with its section and offered spans.
+
+    Only an English source (`W`) offers spans. The protected tokens are English words, so a span
+    of a `T.<lang>` sentence could carry a hedge or a negation no entry names (`vermutlich`,
+    `n'est ... pas`) and be dropped before the translator ever saw it: lane T selects whole
+    sentences.
+    """
+    offers_spans = M.source_kind(source_id) is M.SourceKind.W
     sentences: list[M.Sentence] = []
     section: str | None = None
     line_start = 0
@@ -147,7 +185,7 @@ def split_source(source_id: str, text: str) -> tuple[M.Sentence, ...]:
                         section=section,
                         start=start,
                         end=end,
-                        spans=find_spans(text, start, end),
+                        spans=find_spans(text, start, end) if offers_spans else (),
                     )
                 )
         line_start += len(line) + 1
@@ -186,6 +224,46 @@ def _top_level(s: str) -> tuple[list[tuple[int, int]], list[bool]] | None:
     return groups, mask
 
 
+def _range_dash(s: str, at: int) -> bool:
+    """A dash with a digit as the nearest non-space character on either side: `1800 – 500`."""
+    before = s[:at].rstrip()
+    after = s[at + 1 :].lstrip()
+    return bool(before and before[-1].isdigit()) or bool(after and after[0].isdigit())
+
+
+def _list_links(s: str, commas: Sequence[int]) -> list[bool]:
+    """Per pair of consecutive delimiter commas: is it a link of a list rather than an insertion?
+
+    `inner` is the text between the pair's commas, `tail` the text after its second comma up to
+    the next delimiter comma or the final punctuation. A pair is a list link when `tail` opens with
+    `and`/`or` (a serial list's last link: `A, B, and C`); or when `inner` is at most 3 tokens and
+    `tail` is at most 6 tokens and carries `and`/`or` (`A, B, C and D`); or when `inner` is at most
+    3 tokens and the next pair is a list link (the run before it); or when `inner` is at most 3
+    tokens and `tail`, the sentence's last segment, is too (`Constantine I, Theodosius I, Tiberius
+    Nero`, `Clovelly, Devon, England`). Dropping a link joins two list items into a false one.
+    """
+    if len(commas) < 2:
+        return []
+    ends = [*commas[1:], len(s) - 1]
+    tails = [s[comma + 1 : end] for comma, end in zip(commas, ends, strict=True)]
+    pairs = len(commas) - 1
+    links = [False] * pairs
+    for k in reversed(range(pairs)):
+        short = len(tails[k].split()) <= LIST_ITEM_TOKENS
+        tail = tails[k + 1]
+        links[k] = (
+            _OPENS_WITH_COORDINATOR.match(tail.lstrip()) is not None
+            or (
+                short
+                and len(tail.split()) <= LIST_TAIL_TOKENS
+                and _COORDINATOR.search(tail) is not None
+            )
+            or (short and k + 1 < pairs and links[k + 1])
+            or (short and k + 1 == pairs and len(tail.split()) <= LIST_ITEM_TOKENS)
+        )
+    return links
+
+
 def _candidates(s: str) -> list[tuple[M.SpanKind, int, int]]:
     """Every span of the sentence `s` by the four rules, relative offsets, before any filter."""
     if not s or s[-1] not in TERMINAL:
@@ -205,17 +283,26 @@ def _candidates(s: str) -> list[tuple[M.SpanKind, int, int]]:
     commas = [
         i for i, ch in enumerate(s) if ch == "," and top[i] and i + 1 < len(s) and s[i + 1] == " "
     ]
-    for first, second in zip(commas, commas[1:], strict=False):
-        if s[first + 1 : second].strip():
+    links = _list_links(s, commas)
+    for (first, second), link in zip(zip(commas, commas[1:], strict=False), links, strict=True):
+        if s[first + 1 : second].strip() and not link:
             found.append((M.SpanKind.A, first, second + 1))
     dashes = [
         i
         for i, ch in enumerate(s)
         if ch in DASHES and top[i] and 0 < i < len(s) - 1 and s[i - 1] == " " and s[i + 1] == " "
     ]
-    for first, second in zip(dashes, dashes[1:], strict=False):
-        if s[first + 1 : second - 1].strip():
-            found.append((M.SpanKind.A, first - 1, second + 1))
+    # Dashes pair in order, the first with the second and the third with the fourth; an odd count
+    # leaves no reading of which two enclose an insertion.
+    if len(dashes) % 2 == 0:
+        for first, second in zip(dashes[::2], dashes[1::2], strict=True):
+            if (
+                s[first + 1 : second - 1].strip()
+                and not _range_dash(s, first)
+                and not _range_dash(s, second)
+                and not any(s[i] == ";" and top[i] for i in range(first + 1, second))
+            ):
+                found.append((M.SpanKind.A, first - 1, second + 1))
     if commas:
         lead = commas[0]
         if 1 <= len(s[:lead].split()) <= MAX_LEADING_TOKENS and s[lead + 2 :].strip():
@@ -282,7 +369,10 @@ def publishable(text: str, sentence: M.Sentence) -> bool:
 
 
 def excluded(section: str | None) -> bool:
-    return section is not None and section.casefold() in EXCLUDED_SECTIONS
+    if section is None:
+        return False
+    title = section.casefold()
+    return title in EXCLUDED_SECTIONS or title in FOREIGN_EXCLUDED_SECTIONS
 
 
 def candidate_pool(

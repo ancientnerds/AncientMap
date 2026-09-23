@@ -19,7 +19,8 @@ stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4
   (every model answer and every fetched page is reused from disk).
 * **The digest** is over `phase4/` (`package_digest(root=<phase4>)`), passed as its own root.
 * **Searches** are bounded per run: each `routes` stage is told how many of the run's
-  `--max-searches` are left, and the budget stops the run between batches.
+  `--max-searches` are left, and the budget stops the run between batches. The routes stages of
+  parallel batches take turns (`search_turn`), so no two are told the same remainder.
 
 Dry by default: without `--live` nothing is started and no ledger line is written. At the end the
 driver writes `HOLDS4.jsonl` beside the batches (`run4.aggregate_holds`).
@@ -34,6 +35,7 @@ import argparse
 import json
 import re
 import sys
+import threading
 from pathlib import Path
 
 if __package__ in (None, ""):
@@ -156,6 +158,10 @@ class Phase4StageRunner(MR.StageRunner):
         self.budget = budget
         #: The ledger as it was when this run started: the search allowance counts from here.
         self.baseline = MR.Spend.from_ledger(ledger)
+        #: Held by a routes stage from its argv to its exit, so the stages of parallel batches take
+        #: turns: each is told what the run has left once the one before it has spent, and the
+        #: allowances handed out can never add up to more than `--max-searches`.
+        self.search_turn = threading.Lock()
 
     def searches_left(self) -> int:
         if self.budget.max_searches is None:
@@ -191,7 +197,11 @@ class Phase4StageRunner(MR.StageRunner):
         for stage in self.stages4:
             log = self.log_dir / f"{planned.batch_id}.{stage}.log"
             start = log.stat().st_size if log.exists() else 0
-            code = self.call(stage, planned.batch_id)
+            if stage == "routes":
+                with self.search_turn:
+                    code = self.call(stage, planned.batch_id)
+            else:
+                code = self.call(stage, planned.batch_id)
             written = log.read_bytes()[start:].decode("utf-8", errors="replace")
             said = stage_exit(written)
             if said is None:

@@ -823,10 +823,44 @@ DESIGN_PRONOUNS = [
 ]
 
 
+#: The review of WB-B2's additions (2026-09-23), verbatim: the design's list let hedged and
+#: contracted-negation spans be offered for deletion.
+ADDED_PROTECTED = {
+    "hedges": (
+        "presum* apparent* arguabl* seem* appear* suppos* reputed* purported* evidently assum* "
+        "possible probable maybe"
+    ).split(),
+    "negations": [
+        "cannot",
+        *(
+            f"{stem}n{apostrophe}t"
+            for stem in (
+                "ca could did does do had has have is are was were wo would should must need "
+                "might sha ai"
+            ).split()
+            for apostrophe in ("'", "’")
+        ),
+    ],
+    "refutation": ["unknown"],
+}
+
+
 def test_the_protected_tokens_are_the_design_list_verbatim() -> None:
-    assert {group: list(tokens) for group, tokens in M.PROTECTED_TOKENS.items()} == (
+    assert {group: list(tokens) for group, tokens in M.DESIGN_PROTECTED_TOKENS.items()} == (
         DESIGN_PROTECTED
     )
+
+
+def test_the_protected_tokens_every_consumer_reads_are_the_design_list_then_the_additions() -> None:
+    assert {group: list(tokens) for group, tokens in M.PROTECTED_TOKEN_ADDITIONS.items()} == (
+        ADDED_PROTECTED
+    )
+    assert {group: list(tokens) for group, tokens in M.PROTECTED_TOKENS.items()} == {
+        group: [*design, *ADDED_PROTECTED.get(group, [])]
+        for group, design in DESIGN_PROTECTED.items()
+    }
+    assert "don't" in M.PROTECTED_TOKENS["negations"]
+    assert "don’t" in M.PROTECTED_TOKENS["negations"]
 
 
 def test_the_pronoun_openers_are_the_design_list_verbatim() -> None:
@@ -845,7 +879,7 @@ def test_the_word_lists_match_the_design_file() -> None:
     parsed = {
         group: [token.strip("'") for token in body.split(", ")] for group, body in groups.items()
     }
-    assert parsed == {group: list(tokens) for group, tokens in M.PROTECTED_TOKENS.items()}
+    assert parsed == {group: list(tokens) for group, tokens in M.DESIGN_PROTECTED_TOKENS.items()}
     v6 = text[text.index("V6 anaphora") : text.index("V7 subject")]
     pronouns = re.search(r"closed pronoun list \(([^)]*)\)", v6)
     assert pronouns is not None

@@ -89,6 +89,24 @@ def test_the_spoken_edit_reads_circa_and_nothing_else() -> None:
     assert A.spoken("Tools, pots etc. 5 of them.") == "Tools, pots etc. 5 of them."
 
 
+@pytest.mark.parametrize(
+    ("card", "spoken"),
+    [
+        # {{circa}} renders c. + U+2009 (thin space), the extracts' most common form
+        ("Babylon grew c.\u20091770 BC.", "Babylon grew circa 1770 BC."),
+        ("It was settled c.\u00a012,500 years ago.", "It was settled circa 12,500 years ago."),
+        ("It was built c. AD 79 on the shore.", "It was built circa AD 79 on the shore."),
+        ("It was built ca.\u2009BC 500 on the hill.", "It was built circa BC 500 on the hill."),
+        ("C. 1200 BC the city was burnt.", "Circa 1200 BC the city was burnt."),
+        # `c.` meaning century, and an initial, stay as written
+        ("It dates to the 5th c. BCE and later.", "It dates to the 5th c. BCE and later."),
+        ("It was dug by B.c. 1990 surveyors.", "It was dug by B.c. 1990 surveyors."),
+    ],
+)
+def test_the_spoken_edit_reads_every_circa_form_and_no_century(card: str, spoken: str) -> None:
+    assert A.spoken(card) == spoken
+
+
 def test_nested_ranges_collapse_to_the_outer_one_and_overlaps_raise() -> None:
     assert A.maximal([(5, 9), (0, 20), (22, 25)]) == ((0, 20), (22, 25))
     assert A.maximal([(0, 5), (5, 9)]) == ((0, 5), (5, 9))
