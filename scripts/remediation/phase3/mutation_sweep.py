@@ -7655,7 +7655,7 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: the quote need not occur in the page",
         _WW,
-        "    if needle not in hay:\n",
+        "    if not occurrences(hay, needle):\n",
         "    if False:  # mutant\n",
         _WW_TEST,
         "test_the_quote_must_occur_in_the_page",

@@ -597,13 +597,13 @@ def _prove(net: Any, name: str, candidate: Any, row: dict[str, Any]) -> dict[str
     _refuse_host(url)
     final, markup = _read_page(net, url, row)
     hay, needle = page_text(markup).casefold(), normalise(coord_text).casefold()
-    if needle not in hay:
-        raise Rejected("not-on-page", f"{coord_text!r} does not occur in the text of {final}")
     if not occurrences(hay, needle):
         raise Rejected(
             "not-on-page",
-            f"{coord_text!r} does not stand whole in the text of {final}: every occurrence is part "
-            "of a longer number or stands beside a sign or a hemisphere letter",
+            f"{coord_text!r} does not occur in the text of {final}"
+            if needle not in hay
+            else f"{coord_text!r} does not stand whole in the text of {final}: every occurrence is "
+            "part of a longer number or stands beside a sign or a hemisphere letter",
         )
     got_lat, got_lon = parse_coordinates(coord_text)
     if abs(got_lat - lat) > MATCH_DEGREES or abs(got_lon - lon) > MATCH_DEGREES:
