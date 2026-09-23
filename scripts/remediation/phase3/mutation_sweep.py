@@ -1456,8 +1456,8 @@ MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "the judge never reads the search report's failures",
         "scripts/remediation/phase3/model_stage.py",
-        "    for site_id, rows in _read_outcome_failures(path.with_name(SEARCH_REPORT_NAME)).items():\n",
-        "    for site_id, rows in {}.items():  # mutated\n",
+        "    for name in (SEARCH_REPORT_NAME, HIT_REPORT_NAME):\n",
+        "    for name in (HIT_REPORT_NAME,):  # mutated\n",
         SEARCH_TEST,
         S_TWO_FACTS,
     ),
@@ -2236,7 +2236,7 @@ GAP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "the writer no longer checks the finder's citation",
         WRITE_STAGE,
-        "    citation = DS.source_problems(answer, pages())\n",
+        "    citation = DS.source_problems(answer, DS.pages_from_excerpts(evidence))\n",
         "    citation = ()  # mutant\n",
         WRITE_TEST,
         "test_a_quote_the_cited_page_does_not_carry_is_refused_as_a_citation_failure",
@@ -3003,9 +3003,375 @@ SPLIT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         W_ONE_PARSER,
     ),
 ]
+#: The three writer fixes after the search pilot failed (2026-09-23): the period-bucket gate, the
+#: search-hit page check with its stage (`phase3/hit_stage.py`), and the reviewer contradiction hold.
+HITS_TEST = "tests/remediation/test_phase3_hits.py"
+HIT_STAGE = "scripts/remediation/phase3/hit_stage.py"
+MODEL_STAGE = "scripts/remediation/phase3/model_stage.py"
+DISCOVER_STAGE = "scripts/remediation/phase3/discover_stage.py"
+W_BUCKET_IN = "test_a_period_start_change_inside_the_stored_bucket_is_refused"
+W_BUCKET_ACROSS = "test_a_period_start_change_across_buckets_is_still_planned"
+W_BUCKET_ONE = "test_the_bucket_gate_reads_the_pipelines_own_buckets"
+W_CONTRA = "test_a_cleared_verdict_whose_why_line_names_a_failing_half_is_held"
+R_NAMED = "test_a_why_line_that_names_a_failing_half_is_recognised"
+R_BOTH_HOLD = "test_a_why_line_that_says_both_halves_hold_names_no_failing_half"
+H_FETCH = "test_the_stage_fetches_the_cited_hits_and_no_other"
+H_TARGET = "test_a_cited_fetched_target_is_not_a_hit_and_is_not_fetched_again"
+H_DISK = "test_a_page_already_on_disk_is_not_fetched_again"
+H_CAP = "test_a_cited_hit_past_the_cap_is_recorded_not_fetched"
+H_GEOM = "test_a_hit_url_asking_for_raw_geometry_is_recorded_not_fetched"
+H_FEATURE = "test_two_cited_urls_under_one_feature_are_refused"
+H_ENTITIES = "test_a_hit_page_is_read_as_its_text_with_the_entities_undone"
+H_LYRA = "test_the_page_reader_is_the_one_lyra_uses"
+H_REVIEW_HOLE = "test_the_reviewer_is_not_asked_about_a_cited_hit_nobody_tried_to_verify"
+H_REVIEW_PAGE = "test_the_reviewer_is_shown_the_page_behind_the_hit"
+H_LONG = "test_a_long_hit_page_is_cut_for_the_prompt_and_read_whole_by_the_citation_check"
+H_ROOM = "test_the_hit_pages_share_the_room_the_evidence_bound_leaves"
+H_UNVERIFIED = "test_a_hit_page_that_could_not_be_fetched_or_read_leaves_the_citation_unverified"
+H_WRITER_HOLE = "test_the_writer_raises_when_nobody_tried_to_verify_a_cited_hit"
+H_FINDER = "test_the_finders_pages_keep_the_snippet_and_leave_the_hit_page_out"
+H_LIVE = "test_verify_hits_live_writes_its_report_through_the_real_command"
+H_SCORE_WRITER = "test_the_scorer_reports_what_the_writer_would_write_beside_the_sealed_block"
+H_SCORE_SEALED = (
+    "test_the_scorer_keeps_the_sealed_citation_definition_and_the_writer_refuses_the_page"
+)
+S_SNIPPET = "test_a_quote_from_a_snippet_counts_only_once_the_fetched_page_carries_it"
+S_HIT_DONE = "test_a_search_batch_is_done_only_once_its_hit_pages_are_verified"
+S_ARGV = "test_every_search_lane_argv_is_accepted_by_the_real_cli"
+T_MEASURE = "test_the_measurement_counts_holds_false_holds_and_bucket_moves_with_the_writers_rules"
+PILOT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # (a) the period-bucket gate
+    (
+        "the writer has no period-bucket gate",
+        WRITE_STAGE,
+        "    inside = _same_bucket_refusal(site_id, field_name, old_value, new_value)\n"
+        "    if inside is not None:\n"
+        "        return inside\n",
+        "",
+        WRITE_TEST,
+        W_BUCKET_IN,
+    ),
+    (
+        "the bucket gate reads the lower bound as exclusive",
+        WRITE_STAGE,
+        "    bucket = categorize_period(int(old_value))\n"
+        "    return bucket if categorize_period(int(new_value)) == bucket else None\n",
+        "    bucket = categorize_period(int(old_value) - 1)  # mutant\n"
+        "    return bucket if categorize_period(int(new_value) - 1) == bucket else None\n",
+        WRITE_TEST,
+        W_BUCKET_ACROSS,
+    ),
+    (
+        "the bucket gate refuses a move across buckets",
+        WRITE_STAGE,
+        "    return bucket if categorize_period(int(new_value)) == bucket else None\n",
+        "    return bucket  # mutant\n",
+        WRITE_TEST,
+        W_BUCKET_ACROSS,
+    ),
+    (
+        "the writer keeps a second spelling of the buckets",
+        WRITE_STAGE,
+        "from pipeline.utils.text import categorize_period  # noqa: E402  - the card's own buckets\n",
+        "from pipeline.utils.text import categorize_period as _pipeline_buckets  # noqa: E402\n"
+        "\n\ndef categorize_period(year):  # mutant: a second spelling\n"
+        "    return _pipeline_buckets(year)\n",
+        WRITE_TEST,
+        W_BUCKET_ONE,
+    ),
+    # (c) the reviewer contradiction hold
+    (
+        "the writer ignores a WHY line that names a failing half",
+        WRITE_STAGE,
+        "            failing = RS.failing_half(cleared.reason)\n",
+        "            failing = None  # mutant\n",
+        WRITE_TEST,
+        W_CONTRA,
+    ),
+    (
+        "'Neither half holds' is not read as a failing half",
+        REVIEW_STAGE,
+        '    ("neither half holds", r"\\bneither half holds\\b"),\n',
+        "",
+        REVIEW_TEST,
+        R_NAMED,
+    ),
+    (
+        "'the stored text is not shown wrong' is not read as a failing half",
+        REVIEW_STAGE,
+        '        r"\\bstored" + _SAME_CLAUSE + r" (?:is|was|are) not shown (?:to be )?wrong\\b",\n',
+        '        r"\\bstored" + _SAME_CLAUSE + r" (?:is|was|are) never shown wrong\\b",  # mutant\n',
+        WRITE_TEST,
+        W_CONTRA,
+    ),
+    (
+        "'nor the proposed X is contradicted' holds a cleared row",
+        REVIEW_STAGE,
+        '        r"(?<!nor the )(?<!nor )(?<!if the )(?<!whether the )\\bpropos(?:ed|al)"\n',
+        '        r"\\bpropos(?:ed|al)"  # mutant\n',
+        REVIEW_TEST,
+        R_BOTH_HOLD,
+    ),
+    (
+        "a phrase runs from the stored value into the proposed value's clause",
+        REVIEW_STAGE,
+        "_SAME_CLAUSE = (\n"
+        '    r"(?: (?!(?:is|was|are|and|or|but|while|so|whereas|proposed|proposal|stored|not|'
+        'also)\\b)"\n'
+        '    r"[^\\s,;:.\\u2014\\u2013]+){0,4}"\n'
+        ")\n",
+        '_SAME_CLAUSE = r"(?: [^\\s,;:.\\u2014\\u2013]+){0,8}"  # mutant\n',
+        REVIEW_TEST,
+        R_BOTH_HOLD,
+    ),
+    (
+        "the measurement counts false holds over the held rows",
+        TOOLS + "measure_review_holds.py",
+        '    print(f"  false holds on written rows: {held_by_rule[WRITTEN]}/{len(groups[WRITTEN])}")\n',
+        '    print(f"  false holds on written rows: {held_by_rule[HELD]}/{len(groups[WRITTEN])}")\n',
+        TOOLS_TEST,
+        T_MEASURE,
+    ),
+    # (b) a search hit counts only through the page behind it
+    (
+        "a snippet answers a citation again",
+        MODEL_STAGE,
+        "        if self.kind == KIND_SEARCH_HIT:\n            return None\n",
+        "        if self.kind == KIND_SEARCH_HIT:\n            return self.text  # mutant\n",
+        SEARCH_TEST,
+        S_SNIPPET,
+    ),
+    (
+        "a hit page is cited against the part the prompt shows",
+        MODEL_STAGE,
+        "            return self.page_text\n",
+        "            return self.text  # mutant\n",
+        HITS_TEST,
+        H_LONG,
+    ),
+    (
+        "a hit page is shown whole, past its prompt bound",
+        MODEL_STAGE,
+        "        elif len(page) <= share:\n",
+        "        elif True:  # mutant\n",
+        HITS_TEST,
+        H_LONG,
+    ),
+    (
+        "the hit pages ignore the room the evidence bound leaves",
+        MODEL_STAGE,
+        "    share = max(0, min(HIT_PAGE_PROMPT_CHARS, room // readable)) if readable else 0\n",
+        "    share = HIT_PAGE_PROMPT_CHARS  # mutant\n",
+        HITS_TEST,
+        H_ROOM,
+    ),
+    (
+        "a cut hit page carries no marker",
+        MODEL_STAGE,
+        "            shown = page[: max(0, share - len(HIT_PAGE_CUT_MARKER))] + HIT_PAGE_CUT_MARKER\n",
+        "            shown = page[:share]  # mutant\n",
+        HITS_TEST,
+        H_LONG,
+    ),
+    (
+        "the evidence never carries a hit page",
+        MODEL_STAGE,
+        "    excerpts.extend(\n"
+        "        _hit_page_excerpts(site_id=site_id, store=store, recorded=recorded, "
+        "excerpts=excerpts)\n"
+        "    )\n",
+        "",
+        HITS_TEST,
+        H_REVIEW_PAGE,
+    ),
+    (
+        "a cited hit nobody tried to verify passes the writer",
+        MODEL_STAGE,
+        "        if page is None:\n            raise EvidenceUnusable(\n",
+        "        if page is None:\n            continue  # mutant\n            raise EvidenceUnusable(\n",
+        HITS_TEST,
+        H_WRITER_HOLE,
+    ),
+    (
+        "a cited hit nobody tried to verify passes the reviewer",
+        MODEL_STAGE,
+        "        if page is None:\n            raise EvidenceUnusable(\n",
+        "        if page is None:\n            continue  # mutant\n            raise EvidenceUnusable(\n",
+        HITS_TEST,
+        H_REVIEW_HOLE,
+    ),
+    (
+        "the reviewer does not ask for the cited hits' pages",
+        REVIEW_STAGE,
+        "        MS.cited_hit_pages(\n"
+        '            [claim.url for claim in answer.sources], excerpts, where=f"{site_id}/{name}"\n'
+        "        )\n",
+        "        pass  # mutant\n",
+        HITS_TEST,
+        H_REVIEW_HOLE,
+    ),
+    (
+        "the judge never reads the hit-page report",
+        MODEL_STAGE,
+        "    for name in (SEARCH_REPORT_NAME, HIT_REPORT_NAME):\n",
+        "    for name in (SEARCH_REPORT_NAME,):  # mutant\n",
+        HITS_TEST,
+        H_CAP,
+    ),
+    (
+        "a stored page that is not text is read anyway",
+        SEARCH_EVIDENCE,
+        '        markup = body.decode("utf-8")\n',
+        '        markup = body.decode("utf-8", errors="replace")  # mutant\n',
+        HITS_TEST,
+        H_UNVERIFIED,
+    ),
+    (
+        "a hit page keeps its HTML entities",
+        SEARCH_EVIDENCE,
+        "    return html.unescape(extract_text_from_html(markup))\n",
+        "    return extract_text_from_html(markup)  # mutant\n",
+        HITS_TEST,
+        H_ENTITIES,
+    ),
+    (
+        "the Lyra handler reads a page with a second spelling",
+        "pipeline/lyra/handlers/content_fetch.py",
+        "from pipeline.utils.text import extract_text_from_html\n",
+        "from pipeline.utils.text import extract_text_from_html as _shared_reader\n"
+        "\n\ndef extract_text_from_html(html: str) -> str:  # mutant: a second spelling\n"
+        "    return _shared_reader(html)\n",
+        HITS_TEST,
+        H_LYRA,
+    ),
+    (
+        "the writer accepts a hit whose page failed or is not text",
+        WRITE_STAGE,
+        "    for page in cited_hits:\n",
+        "    for page in ():  # mutant\n",
+        HITS_TEST,
+        H_UNVERIFIED,
+    ),
+    (
+        "the finder's pages include the hit page it never saw",
+        DISCOVER_STAGE,
+        "    return {e.url: e.text for e in excerpts if e.text is not None and e.kind != "
+        "MS.KIND_HIT_PAGE}\n",
+        "    return {e.url: e.text for e in excerpts if e.text is not None}  # mutant\n",
+        HITS_TEST,
+        H_FINDER,
+    ),
+    (
+        "the stage fetches a cited fetched target",
+        HIT_STAGE,
+        "            if claim.url not in hits:\n                continue\n",
+        "            if False:  # mutant\n                continue\n",
+        HITS_TEST,
+        H_TARGET,
+    ),
+    (
+        "the stage fetches a page already on disk again",
+        HIT_STAGE,
+        "        if store.exists(site_id, hit.feature):\n            outcome.existing = True\n",
+        "        if False:  # mutant\n            outcome.existing = True\n",
+        HITS_TEST,
+        H_DISK,
+    ),
+    (
+        "the stage fetches past its cap",
+        HIT_STAGE,
+        "        elif index >= MAX_HIT_PAGES_PER_SITE:\n",
+        "        elif False:  # mutant\n",
+        HITS_TEST,
+        H_CAP,
+    ),
+    (
+        "the stage sends a raw-geometry url to the fetcher",
+        HIT_STAGE,
+        "                F.assert_named_feature(hit.url)\n",
+        "                pass  # mutant\n",
+        HITS_TEST,
+        H_GEOM,
+    ),
+    (
+        "two cited urls share one stored page",
+        HIT_STAGE,
+        "        if other != url:\n",
+        "        if False:  # mutant\n",
+        HITS_TEST,
+        H_FEATURE,
+    ),
+    (
+        "the stage fetches every hit of the search, cited or not",
+        HIT_STAGE,
+        "    cited: list[CitedHit] = []\n",
+        "    for url in sorted(hits):  # mutant\n"
+        '        fields_of.setdefault(url, ["period_start"])\n'
+        "    cited: list[CitedHit] = []\n",
+        HITS_TEST,
+        H_FETCH,
+    ),
+    (
+        "the live command writes no report",
+        RUN_PY,
+        "    HS.write_report(run_dir / batch_id / MS.HIT_REPORT_NAME, report)\n",
+        "",
+        HITS_TEST,
+        H_LIVE,
+    ),
+    (
+        "the live command is not paced",
+        RUN_PY,
+        "            fetcher=F.PacedFetcher(http, F.HostPacer(Path(args.pacing_dir))),\n",
+        "            fetcher=http,  # mutant\n",
+        HITS_TEST,
+        H_LIVE,
+    ),
+    (
+        "a search batch is done before its hit pages are verified",
+        MASS_RUN,
+        "    hits = hit_state(root)\n    if hits is not None:\n        return hits\n",
+        "",
+        SEARCH_TEST,
+        S_HIT_DONE,
+    ),
+    (
+        "the search sequence ends at the judge",
+        MASS_RUN,
+        'SEARCH_STAGES = ("prepare", "search", "judge", "verify-hits")\n',
+        'SEARCH_STAGES = ("prepare", "search", "judge")  # mutant\n',
+        SEARCH_TEST,
+        S_STAGES,
+    ),
+    (
+        "the driver does not name the pace directory to verify-hits",
+        MASS_RUN,
+        '        if stage == "verify-hits" and self.pacing_dir is not None:\n',
+        "        if False:  # mutant\n",
+        SEARCH_TEST,
+        S_ARGV,
+    ),
+    (
+        "the pilot's sealed threshold 1 reads the writer's pages",
+        TOOLS + "score_search_pilot.py",
+        "            shown = DS.finder_pages(excerpts)\n",
+        "            shown = DS.pages_from_excerpts(excerpts)  # mutant\n",
+        HITS_TEST,
+        H_SCORE_SEALED,
+    ),
+    (
+        "the pilot's writer block counts no row",
+        TOOLS + "score_search_pilot.py",
+        "        for row in plan.rows:\n",
+        "        for row in ():  # mutant\n",
+        HITS_TEST,
+        H_SCORE_WRITER,
+    ),
+]
 MUTATIONS += GAP_MUTATIONS
 MUTATIONS += REVIEW_MUTATIONS
 MUTATIONS += SPLIT_MUTATIONS
+MUTATIONS += PILOT_FIX_MUTATIONS
 
 
 def digest(path: Path) -> str:

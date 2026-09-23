@@ -136,6 +136,11 @@ def _store_search(
     store.write(site_id=site_id, feature=SE.search_feature(key), body=record.to_bytes())
 
 
+def _hit_page(store: F.EvidenceStore, site_id: str, url: str, body: str) -> None:
+    """The page behind a hit, as `hit_stage` stores it: the bytes the fetch read, under its feature."""
+    store.write(site_id=site_id, feature=SE.hit_page_feature(url), body=body.encode("utf-8"))
+
+
 def _response(query: str, *items: tuple[str, str, str, str]) -> MX.SearchResponse:
     return MX.SearchResponse(
         query=query,
@@ -952,27 +957,45 @@ def test_one_url_found_by_two_searches_is_one_page_carrying_both_texts(tmp_path:
     _store_search(store, "site-1", "site_type", _hit(4, "https://e.org/a", snippet="A cave."))
     site = _site(rerun=["site_type", "country"])
     excerpts = MS.evidence_excerpts(site_id="site-1", site=site, store=store)
-    pages = DS.pages_from_excerpts(excerpts)
     merged = [e for e in excerpts if e.url == "https://e.org/a"]
     assert len(merged) == 1
     assert merged[0].feature == "minimax_search.site_type+minimax_search.country"
-    # Both quotes pass: with two excerpts under one url, the dict would keep only the second page.
+    assert "In Spain." in str(merged[0].text) and "A cave." in str(merged[0].text)
+    # One url is one page: its fetched page is one excerpt, and both quotes pass against it.
+    _hit_page(store, "site-1", "https://e.org/a", "<p>In Spain.</p><p>A cave.</p>")
+    excerpts = MS.evidence_excerpts(site_id="site-1", site=site, store=store)
+    assert [e.kind for e in excerpts if e.url == "https://e.org/a"] == [
+        MS.KIND_SEARCH_HIT,
+        MS.KIND_HIT_PAGE,
+    ]
+    pages = DS.pages_from_excerpts(excerpts)
     for quote in ("In Spain.", "A cave."):
         assert DS.claim_problems([DS.SourceClaim("https://e.org/a", quote)], pages) == ()
 
 
-def test_a_quote_from_a_snippet_passes_and_a_fabricated_one_does_not(tmp_path: Path) -> None:
+def test_a_quote_from_a_snippet_counts_only_once_the_fetched_page_carries_it(
+    tmp_path: Path,
+) -> None:
+    """A snippet is not a page (2026-09-23): the search pilot's finder quoted a snippet about another
+    site. The same honest quote fails while only the snippet carries it, passes once the page behind
+    the hit is stored and carries it, and a fabricated quote fails either way."""
     store = F.EvidenceStore(tmp_path / "evidence")
     _enwiki(store, "site-1")
     _store_search(
         store, "site-1", "period_start", _hit(1, "https://e.org/a", snippet="Built c. 3000 BC.")
     )
-    excerpts = MS.evidence_excerpts(
-        site_id="site-1", site=_site(rerun=["period_start"]), store=store
-    )
-    pages = DS.pages_from_excerpts(excerpts)
+    site = _site(rerun=["period_start"])
     honest = DS.SourceClaim("https://e.org/a", "built c. 3000 BC.")
     invented = DS.SourceClaim("https://e.org/a", "Built c. 5000 BC.")
+    snippet_only = DS.pages_from_excerpts(
+        MS.evidence_excerpts(site_id="site-1", site=site, store=store)
+    )
+    assert "https://e.org/a" not in snippet_only
+    assert DS.claim_problems([honest], snippet_only) == (
+        "cited page was not fetched by this run: https://e.org/a",
+    )
+    _hit_page(store, "site-1", "https://e.org/a", "<html><p>It was built c. 3000 BC.</p></html>")
+    pages = DS.pages_from_excerpts(MS.evidence_excerpts(site_id="site-1", site=site, store=store))
     assert DS.claim_problems([honest], pages) == ()
     assert DS.claim_problems([invented], pages) != ()
 
@@ -1101,9 +1124,12 @@ def test_the_reviewer_reads_the_same_search_pages_and_checks_a_refutation_agains
     path = answers.path_for("site-1", "country")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(answer, encoding="utf-8")
+    # The page behind the cited hit, as `verify-hits` leaves it: the reviewer is shown it too.
+    _hit_page(store, "site-1", "https://e.org/a", "<h1>Cave 1</h1><p>It is in Peru.</p>")
     plan = RS.plan_site(batch_id="srch-0001", site=site, answers=answers, store=store)
     (call,) = plan.calls
     assert call.call.field == "country" and "https://e.org/a" in call.call.prompt
+    assert f'feature="{SE.hit_page_feature("https://e.org/a")}"' in call.call.prompt
     assert DS.source_problems(DS.parse_answer(answer), DS.pages_from_excerpts(call.excerpts)) == ()
     # The fields the search plan does not rerun have no answer here, so nobody is asked about them.
     assert {v.field for v in plan.unreviewable} == set(SP.DISCOVER_FIELDS) - {"country"}
@@ -1117,6 +1143,7 @@ def _review_plan(tmp_path: Path, site: dict[str, Any], field: str, proposed: str
         _store_search(
             store, "site-1", "period_start", _hit(1, "https://e.org/a", snippet="Built in 500 BC.")
         )
+        _hit_page(store, "site-1", "https://e.org/a", "<p>Built in 500 BC.</p>")
     path = answers.path_for("site-1", field)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -1846,7 +1873,13 @@ def test_the_stage_sequence_must_fit_the_plan(tmp_path: Path) -> None:
             ["--plan", str(plan), "--run-dir", str(tmp_path / "r"), "--ledger", str(tmp_path / "L")]
         )
     assert MR.main(["--plan", str(plan), "--run-dir", str(tmp_path / "r"), "--ledger", str(tmp_path / "L"),
-                    "--stages", "prepare,search,judge"]) == 0  # fmt: skip
+                    "--stages", "prepare,search,judge,verify-hits"]) == 0  # fmt: skip
+    # The search sequence without its hit pages is no sequence (2026-09-23): the reviewer would
+    # judge a search batch on snippets alone.
+    assert MR.SEARCH_STAGES == ("prepare", "search", "judge", "verify-hits")
+    with pytest.raises(SystemExit):
+        MR.main(["--plan", str(plan), "--run-dir", str(tmp_path / "r"), "--ledger", str(tmp_path / "L"),
+                 "--stages", "prepare,search,judge"])  # fmt: skip
 
 
 def test_every_search_lane_argv_is_accepted_by_the_real_cli(tmp_path: Path) -> None:
@@ -1867,6 +1900,16 @@ def test_every_search_lane_argv_is_accepted_by_the_real_cli(tmp_path: Path) -> N
     search = parser.parse_args(runner.argv("search", "srch-0001")[2:])
     assert search.live and search.pacing_dir == str(MR.DEFAULT_PACING_DIR)
     assert search.ledger == str(tmp_path / "L.jsonl")
+    # The hit pages are fetched live, paced in the directory the driver names, with its timeout.
+    paced = MR.StageRunner(
+        plan=tmp_path / "PLAN.jsonl", run_dir=tmp_path / "runs", ledger=tmp_path / "L.jsonl",
+        log_dir=tmp_path / "logs", live=True, request_timeout=30.0, pacing_dir=tmp_path / "pace",
+        python=Path("python"), runner=Path("run.py"), stages=MR.SEARCH_STAGES,
+    )  # fmt: skip
+    hits = parser.parse_args(paced.argv("verify-hits", "srch-0001")[2:])
+    assert hits.func is R.cmd_verify_hits and hits.live
+    assert hits.pacing_dir == str(tmp_path / "pace") and hits.timeout == 30.0
+    assert hits.ledger == str(tmp_path / "L.jsonl")
     with pytest.raises(MR.PlanError):
         MR.StageRunner(
             plan=tmp_path / "P", run_dir=tmp_path, ledger=tmp_path / "L", log_dir=tmp_path,
@@ -2018,6 +2061,7 @@ def _search_json(
         (root / "fetch.json").write_text("{}", encoding="utf-8")
         model = {"totals": {"calls": 0}, "judgements": [], "failures": []}
         (root / "model.json").write_text(json.dumps(model), encoding="utf-8")
+        (root / MS.HIT_REPORT_NAME).write_text(json.dumps({"sites": []}), encoding="utf-8")
 
 
 def test_a_batch_whose_search_is_incomplete_is_never_done(tmp_path: Path) -> None:
@@ -2040,6 +2084,26 @@ def test_a_batch_whose_search_is_incomplete_is_never_done(tmp_path: Path) -> Non
         _search_json(tmp_path / "srch-0004", judged=True)
         (tmp_path / "srch-0004" / "search.json").write_text(json.dumps(payload), encoding="utf-8")
         assert MR.batch_state(tmp_path, "srch-0004")[0] == MR.BROKEN, payload
+
+
+def test_a_search_batch_is_done_only_once_its_hit_pages_are_verified(tmp_path: Path) -> None:
+    """Every other artefact says done; without `hitpages.json` the reviewer would refuse the batch,
+    so the driver sends it through `verify-hits` again (2026-09-23). A damaged report is broken."""
+    _search_json(tmp_path / "srch-0000", judged=True)
+    (tmp_path / "srch-0000" / MS.HIT_REPORT_NAME).unlink()
+    state, reason = MR.batch_state(tmp_path, "srch-0000")
+    assert state == MR.PARTIAL and "verify-hits has not run" in reason
+    for body in ("{", json.dumps({"sites": {}}), json.dumps([])):
+        (tmp_path / "srch-0000" / MS.HIT_REPORT_NAME).write_text(body, encoding="utf-8")
+        assert MR.batch_state(tmp_path, "srch-0000")[0] == MR.BROKEN, body
+    (tmp_path / "srch-0000" / MS.HIT_REPORT_NAME).write_text('{"sites": []}', encoding="utf-8")
+    assert MR.batch_state(tmp_path, "srch-0000")[0] == MR.DONE
+    # A batch that bought no search has no hits to verify and is done as it always was.
+    root = tmp_path / "batch-0001"
+    _search_json(root, judged=True)
+    (root / "search.json").unlink()
+    (root / MS.HIT_REPORT_NAME).unlink()
+    assert MR.batch_state(tmp_path, "batch-0001")[0] == MR.DONE
 
 
 @pytest.mark.parametrize("done_before", [False, True])

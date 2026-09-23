@@ -14,7 +14,6 @@ effect on what is archived, and the archive has no effect on the prompt.
 import asyncio
 import ipaddress
 import logging
-import re
 import urllib.parse
 from dataclasses import dataclass
 
@@ -33,6 +32,7 @@ from pipeline.lyra.training_corpus import (
     parse_tdmrep,
     reservation_for,
 )
+from pipeline.utils.text import extract_text_from_html
 
 logger = logging.getLogger(__name__)
 
@@ -105,14 +105,6 @@ def _is_safe_url(url: str) -> bool:
         return True
     except Exception:
         return False
-
-
-def _extract_text_from_html(html: str) -> str:
-    """Extract readable text from HTML, strip tags."""
-    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
 
 
 @dataclass
@@ -352,7 +344,7 @@ class ContentFetchHandler(BaseHandler):
                     content_type = resp.headers.get("content-type", "")
                     if "html" in content_type or not content_type:
                         html = resp.text[:MAX_HTML_CHARS]
-                        text = _extract_text_from_html(html)
+                        text = extract_text_from_html(html)
                         if text:
                             return _Page(
                                 sid=sid,

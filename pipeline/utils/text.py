@@ -237,6 +237,19 @@ def extract_period_from_text(text: str) -> int | None:
     return None
 
 
+def extract_text_from_html(html: str) -> str:
+    """Extract readable text from HTML: drop script and style blocks, strip tags, fold whitespace.
+
+    Moved here from `pipeline/lyra/handlers/content_fetch.py` (2026-09-23) unchanged, so the Lyra
+    handler and the remediation's search-hit check (`scripts/remediation/phase3/search_evidence.py`)
+    read a page with one function. Entities are left as they are, as the handler always had them.
+    """
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 # Canonical period bucket definitions: (label, lower_bound, upper_bound)
 # Mirrors frontend categorizePeriod() in src/data/sites.ts.
 PERIOD_BUCKETS: list[tuple[str, int, int]] = [

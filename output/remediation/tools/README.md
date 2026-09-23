@@ -64,6 +64,8 @@ can still be overridden (`--run-dir`, `--out`, `--rows`, `--apply-root`, `--hold
 | `batch_summary.py` | per-batch counts |
 | `gap_plan.py` | builds `PLAN.gap.jsonl` for the fields the mass run never judged, from a fresh read-only production export |
 | `qid_repair.py` | renders the reviewed `site_external_ids` repair (`output/remediation/qid_repair/`) - plan, apply, rehearsal, rollback; applies nothing |
+| `score_search_pilot.py` | scores a search pilot's run directory against the gold standard: the four thresholds sealed in `phase3_runner/SEARCH_PILOT.md`, as sealed, and beside them what the writer itself would write (`--run-dir`, `--prefix`, `--progress`, `--gold`) |
+| `measure_review_holds.py` | measures the writer's period-bucket gate and reviewer contradiction hold on the mass lane's pinned plan, its 72 hand holds and two read-only production exports (written keys, the journal's `period_start` rows); writes nothing |
 
 Each needs `PYTHONIOENCODING=utf-8`. The writer's child processes get the repository root and
 `scripts/remediation` on their `PYTHONPATH` from `write_dry_all.writer_env()`, and they run under the

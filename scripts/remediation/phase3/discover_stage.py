@@ -727,8 +727,27 @@ def quote_occurs(quote: str, page: str) -> bool:
 
 
 def pages_from_excerpts(excerpts: Iterable[MS.EvidenceExcerpt]) -> dict[str, str]:
-    """The pages behind one call's evidence: url -> the text we stored, for the pages we have."""
-    return {e.url: e.text for e in excerpts if e.text is not None}
+    """The pages a citation is checked against: url -> the text we stored, for the pages we have.
+
+    `EvidenceExcerpt.citable` decides what a url answers with: a fetched target its stored text, as
+    it always did; a search hit the whole page `phase3/hit_stage.py` fetched from it - never the
+    snippet (2026-09-23: the search pilot cited a snippet about another site, and a quote no snippet
+    carried). A hit whose page was not fetched is therefore not a page here, and a quote from it is
+    "cited page was not fetched by this run". A run without searches has no hit and no hit page, so
+    its pages are exactly what they were.
+    """
+    return {e.url: e.citable for e in excerpts if e.citable is not None}
+
+
+def finder_pages(excerpts: Iterable[MS.EvidenceExcerpt]) -> dict[str, str]:
+    """The pages the finder's prompt showed: url -> text, a hit's snippet included, no hit page.
+
+    What the search pilot's sealed threshold 1 measures ("not in the evidence the finder was
+    shown", `phase3_runner/SEARCH_PILOT.md`). The finder runs before the hit pages are fetched, so
+    they were never in its prompt; the snippets were. Not a citation check - `pages_from_excerpts`
+    is that - but the record of what the finder could have copied from.
+    """
+    return {e.url: e.text for e in excerpts if e.text is not None and e.kind != MS.KIND_HIT_PAGE}
 
 
 def claim_problems(sources: Iterable[SourceClaim], pages: Mapping[str, str]) -> tuple[str, ...]:

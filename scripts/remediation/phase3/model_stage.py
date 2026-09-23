@@ -92,7 +92,7 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -600,6 +600,29 @@ class Prompt:
         return f"<question>\n{self.system}\n</question>\n\n{self.user}\n"
 
 
+#: What an excerpt is (`EvidenceExcerpt.kind`): a target the fetch stage fetched, a MiniMax search
+#: hit's snippet (or a search slot that has none), or the page behind a hit that a finder answer
+#: cited, fetched by `phase3/hit_stage.py` after the finder.
+KIND_TARGET = "target"
+KIND_SEARCH_HIT = "search_hit"
+KIND_HIT_PAGE = "hit_page"
+
+#: How much of one fetched hit page the prompt shows, in characters: **a chosen bound**, not a
+#: measurement of what a reviewer needs. The first pilot's 13 cited pages that answered HTML read as
+#: 524 to 41,859 characters of text (median 4,084; `phase3/hit_stage.py`), 7 of them under this bound.
+#: The pages share whatever room the site's other evidence leaves under `MAX_EVIDENCE_CHARS`
+#: (`_hit_page_excerpts`), so a page is cut to that room rather than pushing the prompt past the
+#: evidence bound (less room than one cut marker per page is refused by `check_evidence_bound`). The
+#: citation check reads the whole stored page.
+HIT_PAGE_PROMPT_CHARS = 6_000
+
+#: What a hit page the prompt shows only in part carries after the part it shows.
+HIT_PAGE_CUT_MARKER = (
+    "\n[cut: the rest of this page was fetched but is not shown in this message, so it shows "
+    "nothing about the stored value either way.]"
+)
+
+
 @dataclass(frozen=True)
 class EvidenceExcerpt:
     """One evidence file as it goes into the prompt. `text is None` when it could not be read.
@@ -607,6 +630,10 @@ class EvidenceExcerpt:
     `failure` is set only when the fetch stage recorded that this target failed: it carries the
     reason the file is not there, so the prompt says which question it cannot answer instead of
     presenting an unread page as an empty one.
+
+    `kind` says what the excerpt is (`KIND_*`), because the three kinds answer a citation
+    differently (`citable`). A hit page's `text` is the part the prompt shows and `page_text` the
+    whole page as stored and read.
     """
 
     feature: str
@@ -614,6 +641,8 @@ class EvidenceExcerpt:
     path: Path
     text: str | None
     failure: str | None = None
+    kind: str = KIND_TARGET
+    page_text: str | None = None
 
     @property
     def chars(self) -> int:
@@ -622,6 +651,21 @@ class EvidenceExcerpt:
     @property
     def present(self) -> bool:
         return self.text is not None
+
+    @property
+    def citable(self) -> str | None:
+        """The text a citation of `url` is checked against, or `None` when nothing may be quoted.
+
+        A fetched target is cited against the text the prompt carried, as it always was. A search
+        hit's snippet is **not** a page: a quote it carries counts only once the page behind the
+        hit was fetched and carries it too, so a snippet answers no citation at all. A fetched hit
+        page answers with its whole stored text, of which the prompt may show only a part.
+        """
+        if self.kind == KIND_SEARCH_HIT:
+            return None
+        if self.kind == KIND_HIT_PAGE:
+            return self.page_text
+        return self.text
 
 
 @dataclass(frozen=True)
@@ -694,15 +738,18 @@ def failed_target_block(excerpts: list[EvidenceExcerpt]) -> str:
 #: The search stage's report, written beside `fetch.json` in the same batch directory and in the same
 #: `sites[].outcomes[].failure` shape (`phase3/search_stage.py`).
 SEARCH_REPORT_NAME = "search.json"
+#: The hit-page stage's report (`phase3/hit_stage.py`), in the same shape again.
+HIT_REPORT_NAME = "hitpages.json"
 
 
 def read_fetch_failures(path: Path) -> dict[str, dict[str, str]]:
-    """`site_id -> {feature: why it has no evidence}`, from the fetch report and the search report.
+    """`site_id -> {feature: why it has no evidence}`, from the fetch, search and hit-page reports.
 
-    `path` is the batch's `fetch.json`; the search stage's `search.json` in the same directory is read
-    too, because a failed search is the same fact as a failed fetch - a target that was asked and
-    bought nothing - and every caller that reads the one must see the other. The two never share a
-    feature (`minimax_search.*` is the search stage's alone), so the result is their union.
+    `path` is the batch's `fetch.json`; the search stage's `search.json` and the hit-page stage's
+    `hitpages.json` in the same directory are read too, because a failed search or a hit page that
+    could not be fetched is the same fact as a failed fetch - a target that was asked and bought
+    nothing - and every caller that reads the one must see the others. No two stages share a feature
+    (`minimax_search.*` and `hitpage.*` are the two stages' own), so the result is their union.
 
     An absent report means that stage never ran live, and it contributes nothing: no target's absence
     is explained by it, so every such target still raises at prompt time. A report that **exists** but
@@ -710,12 +757,16 @@ def read_fetch_failures(path: Path) -> dict[str, dict[str, str]]:
     not look like a clean one.
     """
     failures = _read_outcome_failures(path)
-    for site_id, rows in _read_outcome_failures(path.with_name(SEARCH_REPORT_NAME)).items():
-        mine = failures.setdefault(site_id, {})
-        clash = sorted(set(mine) & set(rows))
-        if clash:
-            raise InputError(f"{path.parent}: {site_id} has failures for {clash} in both reports")
-        mine.update(rows)
+    for name in (SEARCH_REPORT_NAME, HIT_REPORT_NAME):
+        for site_id, rows in _read_outcome_failures(path.with_name(name)).items():
+            mine = failures.setdefault(site_id, {})
+            clash = sorted(set(mine) & set(rows))
+            if clash:
+                raise InputError(
+                    f"{path.parent}: {site_id} has failures for {clash} in both reports ({name} "
+                    "and one read before it)"
+                )
+            mine.update(rows)
     return failures
 
 
@@ -756,7 +807,9 @@ def evidence_excerpts(
     failures: Mapping[str, str] | None = None,
 ) -> list[EvidenceExcerpt]:
     """The site's evidence, read once: one excerpt per target `fetch_stage` built for it, then one per
-    page the site's searches found (`_search_excerpts`; a site without `search_fields` has none).
+    page the site's searches found (`_search_excerpts`; a site without `search_fields` has none), then
+    one per search hit whose page `phase3/hit_stage.py` fetched or recorded as failed
+    (`_hit_page_excerpts`; there is none before that stage has run, which is the finder's view).
 
     Extracted from `prepare_call` for the discover pass, which builds one prompt per (site, field)
     from the same excerpts (`phase3/discover_stage.py`): the guard below is the thing that must not
@@ -798,6 +851,9 @@ def evidence_excerpts(
             taken={excerpt.url for excerpt in excerpts},
         )
     )
+    excerpts.extend(
+        _hit_page_excerpts(site_id=site_id, store=store, recorded=recorded, excerpts=excerpts)
+    )
     return excerpts
 
 
@@ -819,15 +875,17 @@ def _search_excerpts(
 
     For a site that has searches, each one is on disk, or recorded as failed by the search stage, or
     (in a preview) absent; anything else raises, the same rule as a fetched target. A stored hit
-    becomes one excerpt: the url is the hit's link, the text is `search_evidence.hit_text` (plain
-    text, so a quote copied from a snippet passes `discover_stage.quote_occurs`). Hits on our own
-    site or on a blocked host are left out (`search_evidence.excluded_because`).
+    becomes one excerpt of `KIND_SEARCH_HIT`: the url is the hit's link, the text is
+    `search_evidence.hit_text` (plain text, the snippet the finder reads). Hits on our own site or on
+    a blocked host are left out (`search_evidence.excluded_because`). A snippet is shown, never cited:
+    a quote from a hit counts only in the page behind it (`EvidenceExcerpt.citable`,
+    `_hit_page_excerpts`).
 
-    The same url found by two searches becomes **one** excerpt carrying both texts: the citation
-    check reads the pages as a dict keyed by url (`discover_stage.pages_from_excerpts`), and a second
-    excerpt under the same key would replace the first, failing an honest quote from it. For the
-    same reason a hit whose url is already a fetched target's raises instead of being merged into a
-    page of a different kind.
+    The same url found by two searches becomes **one** excerpt carrying both texts: one url is one
+    page - the hit-page stage fetches it once and stores it under one feature, and the citation
+    check reads the pages as a dict keyed by url (`discover_stage.pages_from_excerpts`), where a
+    second entry under the same key would replace the first. For the same reason a hit whose url is
+    already a fetched target's raises instead of being merged into a page of a different kind.
     """
     merged: dict[str, tuple[list[str], list[str], Path]] = {}
     unread: list[EvidenceExcerpt] = []
@@ -851,6 +909,7 @@ def _search_excerpts(
                     path=path,
                     text=None,
                     failure=failure,
+                    kind=KIND_SEARCH_HIT,
                 )
             )
             continue
@@ -870,11 +929,112 @@ def _search_excerpts(
                 texts.append(text)
     pages = [
         EvidenceExcerpt(
-            feature="+".join(features), url=url, path=path, text="\n".join(texts), failure=None
+            feature="+".join(features),
+            url=url,
+            path=path,
+            text="\n".join(texts),
+            failure=None,
+            kind=KIND_SEARCH_HIT,
         )
         for url, (features, texts, path) in merged.items()
     ]
     return pages + unread
+
+
+def _hit_page_excerpts(
+    *,
+    site_id: str,
+    store: F.EvidenceStore,
+    recorded: Mapping[str, str],
+    excerpts: Sequence[EvidenceExcerpt],
+) -> list[EvidenceExcerpt]:
+    """One excerpt per search hit whose page `phase3/hit_stage.py` stored or recorded as failed.
+
+    A hit's page is stored under `search_evidence.hit_page_feature(url)` and read as text by
+    `search_evidence.hit_page_text`. A page on disk that is not text (a PDF) becomes a failed excerpt
+    naming why, and so does a page the stage recorded as not fetched: either way the prompt says the
+    page was never read, and `citable` gives a citation of it nothing to be found in. A hit with
+    neither file nor record was not cited, or the stage has not run; nothing is added for it here,
+    and whoever needs the page - the reviewer, the writer - asks `cited_hit_pages`, which raises.
+
+    **Bounded**: the pages share the room the site's other evidence leaves under
+    `MAX_EVIDENCE_CHARS`, each at most `HIT_PAGE_PROMPT_CHARS`, and a page cut to its share carries
+    `HIT_PAGE_CUT_MARKER`. The prompt therefore stays inside the evidence bound it had, unless the
+    other evidence left less room than one marker per page - then `check_evidence_bound` refuses it,
+    as it refuses any other site over the bound. `page_text` keeps the whole page for the citation
+    check, which never reads the cut.
+    """
+    found: list[tuple[str, str, Path, str | None, str | None]] = []
+    for excerpt in excerpts:
+        if excerpt.kind != KIND_SEARCH_HIT or excerpt.text is None:
+            continue
+        feature = SE.hit_page_feature(excerpt.url)
+        path = store.path_for(site_id, feature)
+        if path.exists():
+            try:
+                found.append(
+                    (excerpt.url, feature, path, SE.hit_page_text(path.read_bytes()), None)
+                )
+            except SE.UnreadablePage as exc:
+                found.append((excerpt.url, feature, path, None, f"{excerpt.url}: {exc}"))
+        elif feature in recorded:
+            found.append((excerpt.url, feature, path, None, recorded[feature]))
+    readable = sum(1 for _, _, _, page, _ in found if page is not None)
+    room = MAX_EVIDENCE_CHARS - sum(excerpt.chars for excerpt in excerpts)
+    share = max(0, min(HIT_PAGE_PROMPT_CHARS, room // readable)) if readable else 0
+    pages: list[EvidenceExcerpt] = []
+    for url, feature, path, page, failure in found:
+        if page is None:
+            shown = None
+        elif len(page) <= share:
+            shown = page
+        else:
+            shown = page[: max(0, share - len(HIT_PAGE_CUT_MARKER))] + HIT_PAGE_CUT_MARKER
+        pages.append(
+            EvidenceExcerpt(
+                feature=feature,
+                url=url,
+                path=path,
+                text=shown,
+                failure=failure,
+                kind=KIND_HIT_PAGE,
+                page_text=page,
+            )
+        )
+    return pages
+
+
+def search_hit_urls(excerpts: Iterable[EvidenceExcerpt]) -> frozenset[str]:
+    """The urls of the search hits the evidence carries: the pages a hit-page check applies to."""
+    return frozenset(e.url for e in excerpts if e.kind == KIND_SEARCH_HIT and e.text is not None)
+
+
+def cited_hit_pages(
+    urls: Iterable[str], excerpts: Sequence[EvidenceExcerpt], *, where: str
+) -> list[EvidenceExcerpt]:
+    """The hit-page excerpt of every search hit among the cited `urls`, in citation order.
+
+    A cited url that is not a search hit is not this function's business (a fetched target is
+    checked as it always was). A cited hit with no page excerpt at all - no file, and no failure the
+    hit-page stage recorded - raises `EvidenceUnusable`: the stage that fetches cited hits has not
+    run for this batch, which is a hole in the record, not a property of one row. The reviewer and
+    the writer both ask here, so neither can act on a hit nobody tried to verify.
+    """
+    hits = search_hit_urls(excerpts)
+    pages = {e.url: e for e in excerpts if e.kind == KIND_HIT_PAGE}
+    cited: list[EvidenceExcerpt] = []
+    for url in urls:
+        if url not in hits:
+            continue
+        page = pages.get(url)
+        if page is None:
+            raise EvidenceUnusable(
+                f"{where}: the finder cites the search hit {url}, and no page was fetched for it or "
+                f"recorded as failed ({SE.hit_page_feature(url)}); run `phase3-run verify-hits` for "
+                "this batch before the reviewer or the writer reads it"
+            )
+        cited.append(page)
+    return cited
 
 
 def check_evidence_bound(site_id: str, excerpts: Iterable[EvidenceExcerpt]) -> None:

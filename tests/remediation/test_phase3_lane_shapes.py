@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -36,6 +37,7 @@ import gap_plan as G  # noqa: E402
 import lanes  # noqa: E402
 from phase3 import discover_stage as DS  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import hit_stage as HS  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
 from phase3 import mass_run as MR  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
@@ -272,6 +274,31 @@ def _search(lane: Lane, ledger: Path, searcher: _Searcher | None = None) -> _Sea
     return searcher
 
 
+def _verified(lane: Lane, ledger: Path) -> None:
+    """`run.py verify-hits` for a search lane's batch, once its finder answers are on disk: the page
+    behind the cited hit is served by a fake transport and carries the hit's snippet sentence."""
+    if lane.kind != MR.SEARCH_PLAN:
+        return
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == HIT_URL
+        return httpx.Response(200, text=f"<html><h1>Cave One</h1><p>{HIT_SNIPPET}</p></html>")
+
+    batch = json.loads((lane.batch_dir / "input.json").read_text(encoding="utf-8"))
+    with F.HttpFetcher(transport=httpx.MockTransport(serve)) as fetcher:
+        report = HS.verify_batch(
+            batch=batch,
+            fetcher=fetcher,
+            store=lane.store,
+            answers=F.EvidenceStore(lane.batch_dir / "answers"),
+            ledger=L.Ledger(ledger),
+            failures=MS.read_fetch_failures(lane.batch_dir / "fetch.json"),
+            sleep=lambda _seconds: None,
+        )
+    HS.write_report(lane.batch_dir / MS.HIT_REPORT_NAME, report)
+    assert [o.stored for o in report.outcomes] == [True]
+
+
 def _ready(shape: str, tmp_path: Path) -> Lane:
     """The lane with every piece of evidence its judge reads on disk: a search lane has searched."""
     lane = _lane(shape, tmp_path)
@@ -433,6 +460,7 @@ def test_the_reviewer_is_asked_about_a_rerun_finding(shape: str, tmp_path: Path)
     site_id, field, proposed, url, quote = lane.finding
     answers = F.EvidenceStore(lane.batch_dir / "answers")
     answers.write(site_id=site_id, feature=field, body=_answer(proposed, url, quote))
+    _verified(lane, tmp_path / "LEDGER.jsonl")
     plan = RS.plan_site(
         batch_id=lane.batch_id,
         site=lane.site(site_id),
@@ -454,6 +482,7 @@ def test_the_writer_writes_a_rerun_field_and_refuses_one_outside_rerun_fields(
     answers = F.EvidenceStore(lane.batch_dir / "answers")
     answers.write(site_id=site_id, feature=field, body=_answer(proposed, url, quote))
     answers.write(site_id=site_id, feature=lane.outside, body=_answer("Tomb", url, quote))
+    _verified(lane, tmp_path / "LEDGER.jsonl")
     review = {
         "batch_id": lane.batch_id,
         "stage": "reviewer",

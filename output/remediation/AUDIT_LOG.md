@@ -5711,3 +5711,57 @@ have been written and the Odeon card text is report-only; Aubrey Holes would hav
 row is written until (a) a deterministic period-bucket gate in the writer, (b) a search hit counts only
 when its quote occurs on the fetched page, and (c) a reviewer whose WHY line names a failing half
 while `REFUTED: NO` holds the row - and a new pilot in a new run directory passes.
+
+
+### 2026-09-23 - the three writer fixes the failed pilot asked for
+
+Branch `wip/search-fixes`. All three apply to every phase-3 write lane (mass, gap, search); the frozen
+prompts (`QUESTION_TEMPLATE`, `FIELD_CLAUSE`, `REVIEWER_QUESTION`, `PARTIAL_EVIDENCE_NOTE`) are
+byte-identical (`test_phase3_frozen.py`), and the sealed pilot thresholds are unchanged.
+
+**(a) The period-bucket gate** (`write_stage.RULE_SAME_BUCKET`, `period-start-inside-the-stored-bucket`).
+A `period_start` row whose proposed value lies in the stored value's bucket - `pipeline.utils.text.
+categorize_period`, the card's own function, lower bound inclusive - is refused. Re-measured read-only
+from the production journal (`remediation_change_log`, `run_stamp LIKE 'phase3:batch-%'`,
+`column_name = 'period_start'`): **170 of the 389 `period_start` rows the mass lane wrote are
+same-bucket moves** - the critic's 170, key for key the same rows as the pinned plan gives. They are
+not changed. 19 of the 35 held `period_start` rows are same-bucket too.
+
+**(b) A search hit counts only through its fetched page** (`phase3/hit_stage.py`, `run.py verify-hits`,
+the fourth stage of a search plan: `prepare,search,judge,verify-hits`). After the finder, the page
+behind every hit a finder answer cites is fetched (per-site cap 8, per-host pace, one ledger line per
+attempt, write-once under `hitpage.<sha1(url)[:12]>`, failures in `hitpages.json` in `fetch.json`'s
+shape). The reviewer is shown it (bounded: 6,000 characters per page within the room the evidence
+bound leaves, with a cut marker), and a citation of a hit is checked against the whole fetched page,
+never the snippet (`discover_stage.pages_from_excerpts`). A hit page that could not be fetched or is
+not text refuses the row (`RULE_HIT_UNVERIFIED`, `search-hit-page-not-verified`); a cited hit nobody
+tried to fetch raises in the reviewer and the writer. The page reader is Lyra's own, moved unchanged
+from `pipeline/lyra/handlers/content_fetch.py` to `pipeline.utils.text.extract_text_from_html`, plus
+`html.unescape`. Measured on a copy of `runs/search-gold`, the stage run live with the project
+User-Agent: 20 cited hits in 25 citations, 20 requests, 13 HTML, 2 PDFs (unreadable), 5 x 403 (four
+Cloudflare, one CloudFront); 8 of the 25 quotes occur on the fetched page. The three Wikipedia article
+pages cited as hits are cut at the 60 KB page cap with 2,400-4,100 characters of mostly navigation,
+and none of their quotes is found - a limit of the binding cap, not worked around.
+
+**(c) The reviewer contradiction hold** (`write_stage.RULE_REVIEW_CONTRADICTS`,
+`reviewer-why-names-a-failing-half`; the phrases are `review_stage.FAILING_HALF_PHRASES`, 18 of them,
+each bound to its subject). Measured with `output/remediation/tools/measure_review_holds.py` on the
+mass lane's pinned plan: **recall 51 of the 72 hand holds**; **77 of the 994 written and accepted rows
+would have been held**. Read one by one, 10 of those 77 use the phrase against their own content (a
+false hold), 5 say both, and 62 do say the stored value is not shown wrong or the proposal is
+contradicted - the class the hand-read held 72 of and missed there. They stay as they are. The bucket
+gate and the hold together catch 57 of the 72 hand holds; what neither names is the finer-type and
+the unverifiable-quote class, which stays the hand-read's.
+
+**The first pilot under the new writer.** `score_search_pilot.py` now prints the sealed block exactly as
+sealed (it reproduces `SEARCH_PILOT_RESULT_1.txt` byte for byte, threshold 1 over what the finder was
+shown: `discover_stage.finder_pages`) and, beside it, what the writer itself would write. On the
+verified copy of `runs/search-gold`: **0 rows written, 0 harmful**. Las Labradas `period_start` is not
+cleared (the reviewer's `SOURCE:` on a `NO`), Odeon and both Lake Mungo rows are held by (c), Aubrey
+Holes is refused by (b) (its hit is a PDF) and would be by (a). Two human-WRONG fields are lost too,
+and that is the rules' cost: Ahu Tongariki `period_start` by (b), its hit answered 403, and Cueva de
+los Murcielagos `period_start` by (c), its reviewer wrote "The stored value 1 is not shown wrong".
+
+**Mutation proofs.** `mutation_sweep.PILOT_FIX_MUTATIONS` (38 new) plus the two entries whose anchors
+moved, through the sweep's own `main` with the main venv: **40/40 caught**, the tree byte-identical for
+11 files. Gate: 3349 passed, 98 skipped (data a worktree does not carry), 57 deselected.

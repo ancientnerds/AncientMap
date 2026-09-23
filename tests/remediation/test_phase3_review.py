@@ -277,6 +277,157 @@ def test_a_review_without_a_why_line_is_a_problem() -> None:
     assert any("no `WHY:` sentence" in p for p in answer.problems), answer.problems
 
 
+# ── a WHY line that names a failing half (2026-09-23) ────────────────────────────────────────
+
+#: Real `WHY:` lines of `REFUTED: NO` answers, each naming a failing half, and the phrase that names
+#: it. From the search pilot (`runs/search-gold`) and the mass lane's hand-held rows
+#: (`logs/_write_apply/HOLDS.jsonl`), quoted as the reviewer wrote them.
+FAILING_HALF_WHY: tuple[tuple[str, str], ...] = (
+    (  # Lake Mungo period_start, the pilot
+        "Both halves fail: the evidence actually supports a value around -500 (the store) rather "
+        "than -50000, so neither the reasoning nor the proposed value holds",
+        "both halves fail",
+    ),
+    (  # Lake Mungo site_type, the pilot
+        'Neither half holds — the reason (no source states "Geological interest") does not show '
+        "the stored value wrong",
+        "neither half holds",
+    ),
+    (  # Odeon Theatre card_description, the pilot
+        "no evidence contradicts that clause, and the stored text is not shown wrong.",
+        "the stored value is not shown wrong",
+    ),
+    (  # Cueva de los Murcielagos period_start, the pilot
+        "The stored value 1 is not shown wrong: `period_start` is a sort key",
+        "the stored value is not shown wrong",
+    ),
+    (  # Tan Hill site_type, a hold
+        'the finder\'s proposal "Natural feature" is not a site-type value and is contradicted by '
+        "the documented hill figure, so neither half is established.",
+        "neither half is established",
+    ),
+    (  # Harappa period_start, a mass-lane write
+        "The half that fails is the reason — the excavators' chronology gives the site's own "
+        "earliest occupation",
+        "the half that fails is named",
+    ),
+    (  # Jarlshof period_start, a mass-lane write
+        "The evidence does not show the stored -3000 wrong: the enwiki extract explicitly says the "
+        "oldest known remains date from the Bronze Age",
+        "does not show the stored value wrong",
+    ),
+    (  # Ollantaytambo period_start, a hold
+        "the site's own Inca founding is stated as mid/late 15th century, so nothing shows the "
+        "stored value wrong",
+        "nothing shows the stored value wrong",
+    ),
+    (  # Copan Ruins site_type, a mass-lane write
+        'P31 = Q839954 (archaeological site) is a less specific value than the stored "Temple '
+        'complex", and a broader Wikidata type does not make the finer stored type wrong.',
+        "does not make the stored value wrong",
+    ),
+    (  # Uruk period_start, a hold
+        "the enwiki extract's own founding date of c. 5000 BC supports a value earlier than -3200, "
+        "so the evidence does not establish the stored value is wrong.",
+        "does not establish that the stored value is wrong",
+    ),
+    (  # Pagans Hill Roman Temple site_type, a hold
+        'The stored "Temple complex" is not contradicted — the enwiki extract itself says the '
+        'site "formed a large pilgrimage centre"',
+        "the stored value is not contradicted",
+    ),
+    (  # Alte Burg site_type, a hold
+        'Wikidata\'s "castle in Langenenslingen" description does not contradict the stored '
+        "`Fortress/citadel`.",
+        "does not contradict the stored value",
+    ),
+    (  # Tulum period_start, a hold
+        'The evidence supports the stored value: the enwiki text says Tulum "achieved its greatest '
+        'prominence between the 13th and 15th centuries,"',
+        "the evidence supports the stored value",
+    ),
+    (  # Castell Dinas period_start, a hold
+        "The proposed -600 is contradicted by the evidence itself, which says the hillfort dates "
+        'from "600 BC to 50 AD"',
+        "the proposed value is contradicted",
+    ),
+    (  # Pen Dinas period_start, a mass-lane write
+        "The reason fails: the English Wikipedia source dates the hillfort's construction",
+        "the reason fails",
+    ),
+    (  # Amaru Marka Wasi site_type, a mass-lane write
+        "The reason does not hold — the evidence's own text describes Amaru Marka Wasi as an "
+        '"archaeological site"',
+        "the reason does not hold",
+    ),
+    (  # Roman Emperors Route site_type, a mass-lane write
+        "the proposed `Road/avenue/trackway` is not contradicted either, but the reason half fails "
+        "because enwiki/Wikidata describe it as a project/route",
+        "the reason half fails",
+    ),
+    (  # a YES answer of the mass run (batch-0007), the value half in the reviewer's own words
+        "while -4000 is not contradicted by any dating evidence for this tomb, so the second half "
+        "fails.",
+        "the value half fails",
+    ),
+    (  # a NO answer of the mass run (batch-0237)
+        'The proposal fails, not the reason: the stored "City/town/settlement" is a project bucket '
+        "for an inhabited site",
+        "the proposal fails",
+    ),
+)
+
+
+@pytest.mark.parametrize(("why", "phrase"), FAILING_HALF_WHY)
+def test_a_why_line_that_names_a_failing_half_is_recognised(why: str, phrase: str) -> None:
+    assert RS.failing_half(why) == phrase
+
+
+#: Real `WHY:` lines that say both halves hold, including the wordings closest to a failing half.
+#: A phrase that caught one of these would hold a row the reviewer cleared in so many words.
+BOTH_HALVES_HOLD_WHY: tuple[str, ...] = (
+    # Aguada Fenix, a mass-lane write
+    "The evidence supports the proposed value — the Wikipedia extract states the monumental "
+    'structure "is believed to have been built from around 1000 BC to 800 BC," so the stored -1500 '
+    "is contradicted and -1000 is not.",
+    # Celemantia, a mass-lane write
+    "so neither the reason nor the proposed `Fortress/citadel` is contradicted.",
+    # Piddington Roman Villa, a mass-lane write
+    "so neither the reason (that -3000 is unsupported) nor the proposed -3500 is contradicted; "
+    "both halves hold.",
+    # Debdieba, a mass-lane write
+    "but the proposed -3000 is contradicted by neither source and is supported by both",
+    # Dipylon, a mass-lane write
+    "however the proposed -478 is contradicted by nothing in the evidence",
+    # Maiden Castle, a mass-lane write
+    "and the proposed -600 matches that founding value, so neither the reason nor the proposal "
+    "fails.",
+    # Dos Pilas, a mass-lane write
+    "The evidence supports the stored value being wrong - both the enwiki extract (founded AD 629) "
+    "and Wikidata P571 (629 CE) date the site's founding to the 7th century",
+    # Cadbury Hill, a mass-lane write
+    "and nothing in the evidence supports the stored -3000 (3rd millennium BC), so both halves "
+    "hold: the reason stands and the proposed -1000 is not contradicted.",
+    # Ahu Tongariki period_start, the pilot
+    "The cited source explicitly says most image ahu were built circa 1000-1500 AD, so the stored "
+    "value 1 (bucket 1-500 AD) is wrong and the proposed 1000 is supported.",
+    # Aubrey Holes period_start, the pilot (refused by the bucket gate, not by a phrase)
+    "Neither half fails — the cited inventory gives the Aubrey Holes as a Neolithic pit dated "
+    "-4000 to -2351, so -4500 does fall outside that range and the proposed -4000 is not "
+    "contradicted",
+    # Asclepieion of Athens: a conditional, not a verdict on the half
+    "the second half fails only if the proposal is contradicted — it is not",
+    # Roman Bridge of Cordoba, a mass-lane write: "stored" and "not contradicted" in one sentence,
+    # about the two different values
+    "so the stored -500 is wrong and the proposed -100 is not contradicted; both halves hold.",
+)
+
+
+@pytest.mark.parametrize("why", BOTH_HALVES_HOLD_WHY)
+def test_a_why_line_that_says_both_halves_hold_names_no_failing_half(why: str) -> None:
+    assert RS.failing_half(why) is None
+
+
 # ── what gets reviewed at all ────────────────────────────────────────────────────────────────
 
 

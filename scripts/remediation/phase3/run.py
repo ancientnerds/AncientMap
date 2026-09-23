@@ -25,13 +25,16 @@ empty one.
              - and its prompt sizes visible - before any money is spent.
 * `status` - read the run directory and the ledger and report what is actually on disk.
 
-The search lane (block A3; `phase3/search_plan.py`, `phase3/search_stage.py`) adds three commands and
-one sequence, plan-search -> prepare -> search -> judge:
+The search lane (block A3; `phase3/search_plan.py`, `phase3/search_stage.py`) adds four commands and
+one sequence, plan-search -> prepare -> search -> judge -> verify-hits (then `judge --stage reviewer`):
 
 * `plan-search`   - select the mass run's `UNVERIFIABLE` (site, field) pairs, plus the planned writes
                     that were held or stopped, into a search plan (offline).
 * `search`        - one MiniMax search per (site, search key) of one prepared search batch. **Dry
                     unless `--live`**: without it the command lists the queries and buys nothing.
+* `verify-hits`   - fetch the page behind every search hit a finder answer cites
+                    (`phase3/hit_stage.py`), which the reviewer is shown and the writer checks a
+                    citation in. **Dry unless `--live`**.
 * `search-budget` - how many rerun sites the added hits could push over the evidence bound (offline).
 
 `prepare` of a search batch also copies its source batch's evidence and `fetch.json`.
@@ -1014,6 +1017,77 @@ def cmd_search(args: argparse.Namespace) -> int:
     return SEARCH_INCOMPLETE_EXIT if report.failed else 0
 
 
+def cmd_verify_hits(args: argparse.Namespace) -> int:
+    """Fetch the page behind every search hit the batch's finder answers cite. Dry unless `--live`.
+
+    Runs after `judge --stage finder` and before `judge --stage reviewer` (`phase3/hit_stage.py`):
+    the reviewer is shown these pages, and the writer checks a hit's citation in its page, never in
+    its snippet. Without `--live` the command lists the cited hits and makes no request.
+    """
+    from phase3 import fetch_stage as F
+    from phase3 import hit_stage as HS
+    from phase3 import model_stage as MS
+
+    run_dir = Path(args.run_dir)
+    batch_id = args.batch_id
+    batch = _single_batch(run_dir / batch_id / "input.json", batch_id)
+    store = F.EvidenceStore(run_dir / batch_id / "evidence")
+    answers = F.EvidenceStore(run_dir / batch_id / "answers")
+    failures = MS.read_fetch_failures(run_dir / batch_id / "fetch.json")
+
+    if not args.live:
+        cited = [
+            hit
+            for site in batch["sites"]
+            for hit in HS.cited_hits(
+                site=site,
+                store=store,
+                answers=answers,
+                failures=failures.get(str(site.get("site_id") or "")),
+            )
+        ]
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "hits": [
+                        {
+                            "feature": hit.feature,
+                            "fields": list(hit.fields),
+                            "label": f"{hit.site_id}/{hit.feature}",
+                            "on_disk": store.exists(hit.site_id, hit.feature),
+                            "url": hit.url,
+                        }
+                        for hit in cited
+                    ],
+                    "live": False,
+                    "run_dir": str(run_dir),
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    http = F.HttpFetcher(timeout=args.timeout)
+    try:
+        report = HS.verify_batch(
+            batch=batch,
+            fetcher=F.PacedFetcher(http, F.HostPacer(Path(args.pacing_dir))),
+            store=store,
+            answers=answers,
+            ledger=L.Ledger(Path(args.ledger)),
+            failures=failures,
+        )
+    finally:
+        http.close()
+    HS.write_report(run_dir / batch_id / MS.HIT_REPORT_NAME, report)
+    payload = json.loads(report.to_json())
+    payload.update({"ledger": str(args.ledger), "live": True, "run_dir": str(run_dir)})
+    print(json.dumps(payload, indent=1, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     # Imported here, not at module level: `model_stage` imports `fetch_stage`, which imports this
     # module, so a top-level import of it would be circular.
@@ -1175,6 +1249,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="the cross-process pace directory; searches are always paced, a lone run included",
     )
     search.set_defaults(func=cmd_search)
+
+    verify = sub.add_parser(
+        "verify-hits",
+        help=(
+            "fetch the page behind every search hit a finder answer cites, before the reviewer "
+            "(dry unless --live)"
+        ),
+    )
+    verify.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
+    verify.add_argument("--batch-id", required=True)
+    verify.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+    verify.add_argument(
+        "--live",
+        action="store_true",
+        help="actually fetch the pages; without it the command lists the cited hits",
+    )
+    verify.add_argument("--timeout", type=float, default=40.0)
+    verify.add_argument(
+        "--pacing-dir",
+        default=str(DEFAULT_PACING_DIR),
+        help="the cross-process pace directory; hit pages are always paced, a lone run included",
+    )
+    verify.set_defaults(func=cmd_verify_hits)
 
     budget = sub.add_parser(
         "search-budget",
