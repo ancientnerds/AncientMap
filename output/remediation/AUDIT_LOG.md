@@ -5655,3 +5655,59 @@ and a full sweep would have died on its anchor assert (the gap branch ran only i
 The anchor is corrected (1/1 caught), and `test_phase3_sweep.py` now reads every entry's anchor and
 test name against the tree in the gate suite, so the next such drift is red before anyone runs a
 sweep: 176 entries, 0 stale.
+
+
+### 2026-09-23 - applied today, and the search pilot that failed
+
+**Applied to production, each with rehearsal, guard probes on production, journal and a rehearsed
+reversal** (evidence under each lane's `evidence/`):
+
+| lane | rows | stamp | read-back |
+|---|---|---|---|
+| site_type shape repair | 3 | `2026-09-22_mechanical-site-type-shape` | APPLY OK; 5/5 guards refused |
+| migration 0022 (key lookup) | - | deploy `c3564e3` | function body replaced; 0018 selftest 12 ok / 0 failed against it |
+| period_name derivation | 220 | `2026-09-22_mechanical-period-name` | APPLY OK; 0 of 5,004 off their bucket; 6/6 guards |
+| UK country parts (B9) | 23 | `2026-09-22_mechanical-uk-parts` | APPLY OK; NI 4 -> 26, UK 6 -> 0; 6/6 guards |
+| external-id repair | 26 at 19 sites | `2026-09-22_external-id-repair` | `verify: 26 rows, 0 deviation(s)` |
+
+The phase-3 acceptance after them: 994 journalled, 80 not written, 1,022 sites, **0 deviations**, with 5
+fields superseded by the UK lane and 3 by the site_type lane.
+
+**Why 0022 exists.** `apply_remediation_change()` located its row with `WHERE %I::text = $2`, which
+casts the key column and makes the primary-key index unusable: EXPLAIN on production, Seq Scan cost
+232,500 against an Index Scan at 8.45, twice per call. The period_name lane's 220-row rehearsal hit
+its 120 s statement timeout; after 0022 the same statement ran in 116 ms.
+
+**The gap run.** 13 batches, 194 sites, 802 questions (152 over-bound sites x 5, 5 empty streams, 37
+unreadable verdicts), built from a fresh export after the external-id repair: all 194 fit the evidence
+bound with the narrowed Wikidata claims (0 before), 802 answers, 0 failures. Its reviewer and writes
+wait for the fixes below.
+
+**The search pilot failed** (thresholds sealed beforehand in `phase3_runner/SEARCH_PILOT.md`, sha256
+`fa0287afde951b7d1e12901954ac444dd51c7e79b30c439d048dbfaf3b64d2e5`; scorer
+`output/remediation/tools/score_search_pilot.py`; result `phase3_runner/SEARCH_PILOT_RESULT_1.txt`).
+59 fields the mass finder called UNVERIFIABLE on 26 gold sites, 48 MiniMax searches, 59 finder calls:
+the search moved 20 of 59 to a decision, and three of the four thresholds failed - 1 answer cites a
+quote that is not in its evidence (Font dels Coms), 3 decided WRONG where the human says CORRECT
+(Las Labradas and Aubrey Holes period_start, Odeon card_description), agreement 14/20 = 70 %.
+Transport passed (0 unaccounted slots). Quota: about 1,900 weekly tokens per search (per-batch
+median; 19,230 as an upper bound that charges Lyra's concurrent use to the search).
+
+The thresholds stay as sealed; the definitions are not loosened after the fact. What the cases show:
+
+1. **Bucket arithmetic at the boundary.** The finder wrote "-4500 falls in `< 4500 BC`" and "500 falls
+   in `1 - 500 AD`"; by `categorize_period` (lower bound inclusive) both are in the bucket the
+   proposal is in or next to. Aubrey Holes' -4500 -> -4000 is a same-bucket change, which the gold
+   standard and the reviewer's own brief say is not an error - and the reviewer cleared it.
+2. **A snippet is not a page.** Las Labradas' "1000 B.C. - 300 A.D." came from a travel page about
+   another site (Toro Muerto); the Font dels Coms quote is not in the Zenodo snippet and its other
+   citation was never fetched.
+3. **The reviewer's flag contradicts its own WHY line.** Lake Mungo: "Neither half holds ..." with
+   `REFUTED: NO`; Odeon: "the stored text is not shown wrong" with `REFUTED: NO`. The mass lane met
+   the same class by hand (the 72 held rows).
+
+Under the writer's own rule (`applies`: asked, refuted is False, no problems) Las Labradas would not
+have been written and the Odeon card text is report-only; Aubrey Holes would have been. No search-lane
+row is written until (a) a deterministic period-bucket gate in the writer, (b) a search hit counts only
+when its quote occurs on the fetched page, and (c) a reviewer whose WHY line names a failing half
+while `REFUTED: NO` holds the row - and a new pilot in a new run directory passes.
