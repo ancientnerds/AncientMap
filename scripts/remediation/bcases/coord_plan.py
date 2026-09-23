@@ -42,6 +42,7 @@ from typing import Any
 
 from mechanical.lane import LOCK_TIMEOUT, STATEMENT_TIMEOUT, sql_literal
 from mechanical.plan import UUID_RE, psql_json_reader
+from phase3.write_stage import plan_digest  # sha256 over the rows' JSON lines, for any row type
 from prod_write import pin_line
 
 from bcases import inputs
@@ -147,10 +148,6 @@ def changes(rows: Sequence[Mapping[str, Any]]) -> list[Change]:
                 )
             )
     return out
-
-
-def plan_digest(rows: Sequence[Change]) -> str:
-    return hashlib.sha256("".join(row.to_json_line() + "\n" for row in rows).encode()).hexdigest()
 
 
 def render(rows: Sequence[Change], *, reversal: bool, rehearsal: bool = False) -> str:
@@ -320,6 +317,12 @@ def plan_markdown(rows: Sequence[Change], verdicts: Sequence[Mapping[str, Any]])
         "`move` verdicts: two independent witnesses agree within the tolerance and the stored point "
         "lies outside it. **Not applied**: FIELD_CONTRACT section 4.6 reserves coordinate changes "
         "for the owner (HUMAN_ONLY B1/B2).",
+        "",
+        "Independent means: neither says it was imported from the other, neither is the other "
+        "rounded or truncated to the grid its digits are written on (decimals, whole arcseconds or "
+        "arcminutes), and the two points lie further apart than one arcsecond, one step of either "
+        "grid and the Wikidata precision (`scripts/remediation/bcases/classify.py`, "
+        "`independent`).",
         "",
         "| site | stored | new | moved | witnesses | reason |",
         "| --- | --- | --- | --- | --- | --- |",

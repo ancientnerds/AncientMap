@@ -1,6 +1,6 @@
 # External-id repair, wave 2 (2026-09-23) - planned, not applied
 
-13 row changes at 12 sites (run stamp `2026-09-23_external-id-repair-wave2`); 47 sites unresolved and left exactly as they are. The 59 sites are the wrong links among the B1 name findings that wave 1 did not already replace (`output/remediation/bcases/names.jsonl`, classes Q1-Q4); the research record is `output/remediation/bcases/qid_research.jsonl`, the rules and the 1 km gate are in the module docstring of `output/remediation/tools/qid_repair.py`.
+13 row changes at 12 sites (run stamp `2026-09-23_external-id-repair-wave2`); 47 sites unresolved and left exactly as they are. The 59 sites are the wrong links among the B1 name findings whose name does not match, that wave 1 did not already replace (`output/remediation/bcases/names.jsonl`, classes Q1-Q4; the 72 kept names on a suspect link, `link_suspect`, are not in this wave); the research record is `output/remediation/bcases/qid_research.jsonl`, the rules and the 1 km gate are in the module docstring of `output/remediation/tools/qid_repair.py`.
 
 | site | rule | wikidata_qid | enwiki_title | gate | evidence |
 | --- | --- | --- | --- | --- | --- |

@@ -19,6 +19,12 @@
   "anchor-is-a-site": 27,
   "anchor-is-locality": 19
  },
+ "names_keep_link_suspect": {
+  "Q1": 4,
+  "Q2": 36,
+  "Q4": 35,
+  "any": 72
+ },
  "coords_k_all": {
   "K1-container-item": 114,
   "K2-linear-or-areal-item": 31,
@@ -34,15 +40,15 @@
   "K5-over-10km": 63
  },
  "coords_verdict": {
-  "move": 17,
+  "move": 9,
   "not-comparable": 210,
-  "review": 163,
+  "review": 171,
   "stored-agrees": 98
  },
  "coords_verdict_285": {
-  "move": 11,
+  "move": 5,
   "not-comparable": 99,
-  "review": 106,
+  "review": 112,
   "stored-agrees": 69
  },
  "coords_review_reason": {
@@ -50,8 +56,19 @@
   "no witness: no P625 and no English article with coordinates": 5,
   "one witness only (wikidata)": 102,
   "the two witnesses are one: P625 says it was imported from English Wikipedia": 15,
-  "the two witnesses are one: the same point (N m apart)": 30,
-  "the two witnesses disagree: N km apart (tolerance N m)": 8,
+  "the two witnesses are one: enwiki is wikidata rounded to 2 decimals": 1,
+  "the two witnesses are one: enwiki is wikidata rounded to 4 decimals": 2,
+  "the two witnesses are one: enwiki is wikidata rounded to 5 decimals": 4,
+  "the two witnesses are one: enwiki is wikidata rounded to 6 decimals": 2,
+  "the two witnesses are one: enwiki is wikidata rounded to 8 decimals": 2,
+  "the two witnesses are one: enwiki is wikidata rounded to whole arcseconds": 1,
+  "the two witnesses are one: the same point (N m apart, within N m)": 12,
+  "the two witnesses are one: wikidata is enwiki rounded to 3 decimals": 1,
+  "the two witnesses are one: wikidata is enwiki rounded to 4 decimals": 2,
+  "the two witnesses are one: wikidata is enwiki rounded to 6 decimals": 3,
+  "the two witnesses are one: wikidata is enwiki rounded to whole arcminutes": 1,
+  "the two witnesses are one: wikidata is enwiki rounded to whole arcseconds": 6,
+  "the two witnesses disagree: N km apart (tolerance N m)": 9,
   "wikidata and enwiki agree elsewhere, but enwiki puts the site at the stored point": 1
  },
  "coords_not_comparable": {
@@ -60,20 +77,20 @@
   "linear-or-areal-item": 33,
   "shared-item": 30
  },
- "moves_country_follow_up": 1,
+ "moves_country_follow_up": 0,
  "b2": {
   "a": 3,
-  "b": 6,
+  "b": 5,
   "b-ni": 22,
   "c1": 25,
-  "c2": 44,
+  "c2": 45,
   "c3": 4,
   "d": 1,
   "x": 12
  },
  "b2_state": {
-  "false": 91,
-  "true": 26
+  "open": 91,
+  "written since the census": 26
  },
  "pairs": {
   "DUP": 20,
@@ -82,8 +99,9 @@
   "WRONG-ID": 19
  },
  "duplicates": {
-  "losers": 20,
-  "unresolved_groups": 0
+  "losers": 19,
+  "unresolved_groups": 0,
+  "held_groups": 1
  },
  "stacked": {
   "groups": 13,

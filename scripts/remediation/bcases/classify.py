@@ -23,28 +23,46 @@ English title. In this order, first match wins:
 N1-N3 and N6 **keep** the stored name (no write), Q1-Q4 are a **wrong link** (an external-id repair,
 `output/remediation/tools/qid_repair.py` wave 2), N7 is the short **review** list.
 
+A matching name keeps the *name*; it does not prove the *link*. So the link is tested on its own as
+well: `link_suspect` lists the wrong-link tests Q1, Q2 and Q4 the item meets whatever the name says.
+On a kept name ("Dolmens of Sardinia" on Q101659 "dolmen", the class; "The Temple of Artemis" stored in
+Greece on the Ephesus temple, 388 km away) that is a link to research - not part of wave 2, which
+repairs only the rows whose name did not match.
+
 ## B1/B2 coordinates
 
 A coordinate is changed only when **two independent witnesses agree within the tolerance and the
 stored point lies outside it**. The witnesses are Wikidata `P625` and the English article's primary
 coordinates (OpenStreetMap was not reachable from this workstation, `collect.py`). Two witnesses are
-*not* independent when one says it was imported from the other (`P625` referenced to English
-Wikipedia) or when their points are the same point (within `COPY_M` or the item's own precision):
-Petroglyph Beach's Wikidata and Wikipedia coordinates are both downtown Juneau (plan anti-pattern 9)
-and count once. The tolerance
-is T01's: 1000 m, floored by `P625`'s own precision. Before any witness is read, an item that is not
-the site itself stops the case: an item shared with other curated sites, a settlement, administrative
-unit or natural feature that contains the site, a linear or areal feature, or an item whose names do
-not include the stored name (N1/N2). A museum-held object (`P189` find-spot plus `P195`/`P276`) is
-judged against its **find-spot** - its own `P625` is the museum - and moved only when the stored point
-is at the holding museum.
+*not* independent - they count once - when
+
+* one says it was imported from the other (`P625` referenced to English Wikipedia);
+* one is the other **rounded or truncated** to the grid its own digits are written on (`grid_of`:
+  whole arcminutes or arcseconds, or a number of decimals). Castro of Santa Trega's article gives
+  41.8927, -8.8698 - its item's 41.89275, -8.869808 cut to four decimals - and Taq Kasra's article
+  gives 33°05'37", 44°34'51", its item's 33.093722, 44.580722 rounded to whole arcseconds: one value
+  written twice, whatever wiki it was imported from (P143 French or Russian Wikipedia);
+* their points are the same point: within `SAME_POINT_M` (one arcsecond), one step of either
+  witness's grid, or the P625's declared precision. Petroglyph Beach's Wikidata and Wikipedia
+  coordinates are both downtown Juneau (plan anti-pattern 9) and count once.
+
+A `P625` is the item's truthy one: a preferred statement when there is one (`collect._truthy`). The
+tolerance is T01's: 1000 m, floored by `P625`'s own precision. Before any witness is read, an item
+that is not the site itself stops the case: an item shared with other curated sites, a settlement,
+administrative unit or natural feature that contains the site, a linear or areal feature, or an item
+whose names do not include the stored name (N1/N2). A museum-held object (`P189` find-spot plus
+`P195`/`P276`) is judged against its **find-spot** - its own `P625` is the museum - and moved only
+when the stored point is at the holding museum.
 
 ## B2 countries (the 117 `T02` findings)
 
 The remaining-work map's classification: political lines already decided (B10), coastline and border
 artefacts, the `Northern Ireland` vocabulary gap and the B9 rows, wrong countries (point and `P625`
 agree), wrong coordinates (`P625` or the site's own description names the stored country), rows that
-need a witness, and one value that is not a country.
+need a witness, and one value that is not a country. A site whose point and `P625` agree on the
+neighbouring country is transboundary, not wrong, when `P17` **or its own description** names both
+countries: the Côa Valley and Siega Verde rock art spans Portugal and Spain, and writing either one
+alone would be wrong.
 
 ## Duplicates
 
@@ -52,7 +70,9 @@ Two curated sites sharing one Wikidata item, within 2 km, **both** of whose name
 item, are one site recorded twice (DUP). One name only is a part-of or synonym pair, neither is a
 generic anchor, more than 2 km is a wrong item on one side. The survivor of a DUP group is the row with
 more content links, then more sources, then the older `created_at`, then the lower id - the last step
-only makes the rule total, it judges nothing.
+only makes the rule total, it judges nothing. A group whose rows name **different countries** is held
+back for the owner (`DUPLICATES_HELD.jsonl`): retiring one row would settle a country line, and Banias
+(Syria) / Caesarea Philippi (Israel) is the Golan line the owner decided to leave (B10).
 """
 
 from __future__ import annotations
@@ -60,9 +80,9 @@ from __future__ import annotations
 import difflib
 import itertools
 import json
+import math
 import re
 import sys
-import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -82,6 +102,7 @@ from vlm_pilot.common import write_jsonl  # noqa: E402
 
 from pipeline.utils.country_lookup import normalize_country  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
+from pipeline.utils.text import normalize_name  # noqa: E402
 
 WD = "https://www.wikidata.org/wiki/"
 WP = "https://en.wikipedia.org/wiki/"
@@ -190,8 +211,18 @@ LINEAR_OR_AREAL_WORDS = (
     "cultural landscape",
 )
 
-#: The distance a coordinate change must not be smaller than, and T01's severe edge (metres).
-COPY_M = 5.0
+#: One arcsecond of latitude in metres: two witnesses closer than this are one point, whatever their
+#: grids - the commonest grid a coordinate is written on cannot tell them apart.
+SAME_POINT_M = METRES_PER_DEGREE / 3600.0
+#: The grids a coordinate is written on, coarsest first: whole degrees, tenths, arcminutes,
+#: hundredths, thousandths, arcseconds, then decimals down to the eight the Wikipedia API prints.
+GRIDS = (1.0, 0.1, 1 / 60, 0.01, 0.001, 1 / 3600, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8)
+#: How close to a grid line a value lies on it: a thousandth of the grid's step, and never more than
+#: the last digit the Wikipedia API prints (1e-8 degrees, about a millimetre) - enough for float
+#: noise and for the API's eight-decimal print of a whole arcsecond (33.09361111 is 33°05'37"), not
+#: enough to put 0°00'01" on the whole-degree grid.
+ON_GRID = 1e-3
+ON_GRID_MAX = 1e-8
 #: Two curated sites on one item further apart than this are two places, not one (DUP rule).
 DUP_MAX_M = 2000.0
 #: A name finding whose item is further away than this is a wrong link (Q4).
@@ -201,10 +232,12 @@ TRANSLIT_RATIO = 0.8
 
 
 def fold(name: str) -> str:
-    """A comparable spelling: no accents, no case, no bracketed suffix, words single-spaced."""
-    text = unicodedata.normalize("NFKD", name)
-    text = "".join(c for c in text if not unicodedata.combining(c)).casefold()
-    text = re.sub(r"\(.*?\)", "", text)
+    """A comparable spelling: no accents, no case, no bracketed suffix, words single-spaced.
+
+    The accents and the bracketed suffix go the project's way (`normalize_name`); square brackets
+    stay, as they did when the verdicts were measured, and `casefold` adds what `lower` leaves.
+    """
+    text = normalize_name(name, remove_brackets=False).casefold()
     return " ".join(re.findall(r"[^\W_]+", text))
 
 
@@ -323,6 +356,14 @@ def classify_name(
         if claims.get("lat") is None
         else km(site["lat"], site["lon"], claims["lat"], claims["lon"])
     )
+    nocoord = claims.get("lat") is None
+    # The wrong-link tests, each a property of the link alone - the name is not asked here.
+    link = {
+        "Q1": nocoord and (en_label or "")[:1].islower(),
+        "Q2": shared.get(qid, 0) > 1,
+        "Q3": nocoord,
+        "Q4": distance is not None and distance > FAR_KM,
+    }
     cls, hit = name_identity(stored, candidates)
     ratio = None
     if cls == "none":
@@ -331,8 +372,7 @@ def classify_name(
             (difflib.SequenceMatcher(None, squash(stored), squash(n)).ratio() for n in own),
             default=0.0,
         )
-        nocoord = claims.get("lat") is None
-        if nocoord and (en_label or "")[:1].islower():
+        if link["Q1"]:
             cls = "Q1"
         elif ratio >= TRANSLIT_RATIO:
             cls = "N6"
@@ -340,14 +380,17 @@ def classify_name(
                 sorted(own),
                 key=lambda n: difflib.SequenceMatcher(None, squash(stored), squash(n)).ratio(),
             )
-        elif shared.get(qid, 0) > 1:
+        elif link["Q2"]:
             cls = "Q2"
-        elif nocoord:
+        elif link["Q3"]:
             cls = "Q3"
-        elif distance is not None and distance > FAR_KM:
+        elif link["Q4"]:
             cls = "Q4"
         else:
             cls = "N7"
+    # A kept name says nothing about the link: the tests that make a link wrong on their own (a
+    # generic concept, an item shared with other sites, one more than 5 km away) are reported.
+    suspect = [q for q in ("Q1", "Q2", "Q4") if link[q]] if NAME_GROUP[cls] == "keep" else []
     p31 = p31_labels_of(qid, t01, labels)
     evidence = [
         _evidence("snapshot:unified_sites.name", f"name = {finding['current_value']!r}"),
@@ -361,15 +404,16 @@ def classify_name(
                 f"{WD}{qid}",
             )
         )
-    if cls in ("Q1", "Q3"):
+    shown = {cls, *suspect}
+    if shown & {"Q1", "Q3"}:
         evidence.append(_evidence("wikidata:P625", f"{qid} has no P625", f"{WD}{qid}"))
-    if cls == "Q2":
+    if "Q2" in shown:
         evidence.append(
             _evidence(
                 "production:site_external_ids", f"{qid} is linked by {shared[qid]} curated sites"
             )
         )
-    if cls == "Q4":
+    if "Q4" in shown:
         evidence.append(
             _evidence(
                 "wikidata:P625", f"P625 is {distance:.2f} km from the stored point", f"{WD}{qid}"
@@ -385,6 +429,7 @@ def classify_name(
         "en_label": en_label,
         "class": cls,
         "group": NAME_GROUP[cls],
+        "link_suspect": suspect,
         "match": hit,
         "char_ratio": None if ratio is None else round(ratio, 3),
         "p625_km": None if distance is None else round(distance, 3),
@@ -418,6 +463,9 @@ class Witness:
     precision_m: float = 0.0
     #: The kind of witness this one says it was copied from ("enwiki" for a P625 imported from it).
     derived_from: str | None = None
+    #: The grid the value's digits are written on, in degrees (`grid_of`): what a copy of it may have
+    #: been rounded to. 0 when the digits lie on no grid of `GRIDS`.
+    step: float = 0.0
 
 
 def precision_m(precision: Any) -> float:
@@ -425,6 +473,66 @@ def precision_m(precision: Any) -> float:
     if isinstance(precision, int | float) and not isinstance(precision, bool):
         return float(precision) * METRES_PER_DEGREE / 2.0
     return 0.0
+
+
+def _slack(step: float) -> float:
+    """`ON_GRID` in units of `step`: how far from a grid line a value may lie and still be on it."""
+    return min(ON_GRID * step, ON_GRID_MAX) / step
+
+
+def _on_grid(value: float, step: float) -> bool:
+    units = value / step
+    return abs(units - round(units)) <= _slack(step)
+
+
+def grid_of(lat: float, lon: float) -> float:
+    """The coarsest grid (`GRIDS`) both values lie on - the digits the point is written in: 41.8927,
+    -8.8698 is four decimals; 33.09361111, 44.58083333 is whole arcseconds. 0 when on none."""
+    return next((step for step in GRIDS if _on_grid(lat, step) and _on_grid(lon, step)), 0.0)
+
+
+def grid_name(step: float) -> str:
+    """How a grid of `GRIDS` reads in a reason: "whole arcseconds", "4 decimals"."""
+    named = {1.0: "whole degrees", 1 / 60: "whole arcminutes", 1 / 3600: "whole arcseconds"}
+    if step in named:
+        return named[step]
+    decimals = round(-math.log10(step))
+    return "1 decimal" if decimals == 1 else f"{decimals} decimals"
+
+
+def _rounds_to(value: float, rounded: float, step: float) -> bool:
+    """Whether `rounded` is `value` rounded, truncated, floored or ceiled to a grid of `step`: it lies
+    on that grid, on one of the two grid lines around `value` (on `value` itself if that is one)."""
+    if not _on_grid(rounded, step):
+        return False
+    units, slack = value / step, _slack(step)
+    return math.floor(units + slack) <= round(rounded / step) <= math.ceil(units - slack)
+
+
+def rounded_copy(a: Witness, b: Witness) -> str | None:
+    """How one witness is the other cut to its own grid ("enwiki is wikidata rounded to 4 decimals"),
+    or None. Rounded, truncated or floored, in both coordinates: one value written twice. Two equal
+    points are no rounding of each other - they are one point, and `same_point_m` says so."""
+    if (a.lat, a.lon) == (b.lat, b.lon):
+        return None
+    for coarse, fine in ((a, b), (b, a)):
+        if (
+            coarse.step
+            and _rounds_to(fine.lat, coarse.lat, coarse.step)
+            and _rounds_to(fine.lon, coarse.lon, coarse.step)
+        ):
+            return f"{coarse.kind} is {fine.kind} rounded to {grid_name(coarse.step)}"
+    return None
+
+
+def same_point_m(a: Witness, b: Witness) -> float:
+    """The distance under which two witnesses are one point: one arcsecond, one step of the grid
+    either is written on, or a P625's declared precision - whichever is widest."""
+    return max(
+        SAME_POINT_M,
+        *(w.step * METRES_PER_DEGREE for w in (a, b)),
+        *(2.0 * w.precision_m for w in (a, b)),
+    )
 
 
 def _p625_from_enwiki(references: Mapping[str, Sequence[str]]) -> bool:
@@ -455,6 +563,7 @@ def witnesses(
     else:
         refs = p625.get("references") or {}
         from_en = _p625_from_enwiki(refs)
+        several = p625["statements"] > 1
         out.append(
             Witness(
                 "wikidata",
@@ -462,9 +571,15 @@ def witnesses(
                 p625["lon"],
                 f"{WD}{qid}",
                 f"P625 = {p625['lat']:.6f}, {p625['lon']:.6f} (precision {p625.get('precision')})"
-                + (" imported from English Wikipedia" if from_en else ""),
+                + (" imported from English Wikipedia" if from_en else "")
+                + (
+                    f" - the {p625['rank']}-rank one of {p625['statements']} P625 statements"
+                    if several
+                    else ""
+                ),
                 precision_m(p625.get("precision")),
                 "enwiki" if from_en else None,
+                grid_of(p625["lat"], p625["lon"]),
             )
         )
     titles = [t for t in (record.get("enwiki"), *extra_titles) if t]
@@ -481,13 +596,16 @@ def witnesses(
     elif page.get("lat") is None or (page.get("globe") or "earth") != "earth":
         notes.append(f"enwiki {page['title']!r} carries no Earth coordinates")
     else:
+        step = grid_of(page["lat"], page["lon"])
         out.append(
             Witness(
                 "enwiki",
                 page["lat"],
                 page["lon"],
                 WP + str(page["title"]).replace(" ", "_"),
-                f"enwiki {page['title']!r} coordinates = {page['lat']:.6f}, {page['lon']:.6f}",
+                f"enwiki {page['title']!r} coordinates = {page['lat']}, {page['lon']}"
+                + (f" (given to {grid_name(step)})" if step else ""),
+                step=step,
             )
         )
     return out, notes
@@ -500,10 +618,13 @@ def _m(a: Witness | tuple[float, float], b: Witness | tuple[float, float]) -> fl
 
 
 def independent(a: Witness, b: Witness) -> bool:
-    """Two witnesses count twice only if neither copied the other and they are not the same point."""
+    """Two witnesses count twice only if neither says it copied the other, neither is the other
+    rounded to its own grid, and they are not the same point."""
     if a.derived_from == b.kind or b.derived_from == a.kind:
         return False
-    return _m(a, b) > max(COPY_M, a.precision_m, b.precision_m)
+    if rounded_copy(a, b) is not None:
+        return False
+    return _m(a, b) > same_point_m(a, b)
 
 
 def tolerance_m(ws: Sequence[Witness]) -> float:
@@ -523,8 +644,14 @@ def _why_no_pair(ws: Sequence[Witness], tol: float) -> str:
     a, b = ws[0], ws[1]
     if a.derived_from == b.kind or b.derived_from == a.kind:
         return "the two witnesses are one: P625 says it was imported from English Wikipedia"
+    copy = rounded_copy(a, b)
+    if copy is not None:
+        return f"the two witnesses are one: {copy}"
     if not independent(a, b):
-        return f"the two witnesses are one: the same point ({_m(a, b):.0f} m apart)"
+        return (
+            f"the two witnesses are one: the same point ({_m(a, b):.0f} m apart, "
+            f"within {same_point_m(a, b):.0f} m)"
+        )
     return f"the two witnesses disagree: {_m(a, b) / 1000:.2f} km apart (tolerance {tol:.0f} m)"
 
 
@@ -719,6 +846,7 @@ def _witness_json(w: Witness) -> dict[str, Any]:
         "quote": w.quote,
         "precision_m": round(w.precision_m, 1),
         "derived_from": w.derived_from,
+        "grid": grid_name(w.step) if w.step else None,
     }
 
 
@@ -797,7 +925,8 @@ def country_after_move(
 
 B2_ROUTE = {
     "c1": "leave - political line decided in B10",
-    "c2": "leave - Natural Earth generalisation (coast, small island, border straddle)",
+    "c2": "leave - Natural Earth generalisation (coast, small island, border straddle) or a "
+    "transboundary site (P17 or its own description names both countries)",
     "c3": "leave - the value is right; T02's boundary file has no 'Northern Ireland' feature",
     "b-ni": "B9 decided 'Northern Ireland' - the mechanical UK lane",
     "b": "wrong country: point and P625 agree - a mechanical country-by-coordinates lane",
@@ -866,7 +995,9 @@ def classify_b2(
         if transboundary or (outside is not None and outside <= 2.0):
             cls = "c2"
         elif wd_km is not None and wd_km <= 5 and (ne_iso in p17_iso or not p17_iso):
-            cls = "b"
+            # Point and P625 agree on the neighbour - but a site whose own text names both countries
+            # spans the border (the Coa Valley and Siega Verde), and neither country alone is right.
+            cls = "c2" if desc_stored and desc_ne else "b"
         elif wd_km is not None and wd_in and CC.canonical(wd_in[0]) == CC.canonical(snap):
             cls = "a"
         elif stored_iso in p17_iso and desc_stored and not desc_ne:
@@ -979,9 +1110,11 @@ def survivor_key(site: Mapping[str, Any]) -> tuple[int, int, str, str]:
 
 def duplicate_groups(
     pairs: Sequence[Mapping[str, Any]], sites: Mapping[str, Mapping[str, Any]]
-) -> tuple[list[dict[str, Any]], list[list[str]]]:
+) -> tuple[list[dict[str, Any]], list[list[str]], list[dict[str, Any]]]:
     """DUP pairs joined into groups: one survivor each. A group in which some pair is not DUP is
-    returned apart, unresolved - transitivity does not make two places one."""
+    returned apart, unresolved - transitivity does not make two places one. A group whose rows name
+    different countries is held for the owner: retiring a row would decide which country is right,
+    and that is a country question (B10 left the Golan line as it is), not a duplicate one."""
     dup = [p for p in pairs if p["class"] == "DUP"]
     parent: dict[str, str] = {}
 
@@ -998,15 +1131,30 @@ def duplicate_groups(
     dup_set = {frozenset((p["a"], p["b"])) for p in dup}
     lines: list[dict[str, Any]] = []
     unresolved: list[list[str]] = []
+    held: list[dict[str, Any]] = []
     for members in sorted(groups.values()):
         if any(frozenset(pair) not in dup_set for pair in itertools.combinations(members, 2)):
             unresolved.append(members)
             continue
         ranked = sorted(members, key=lambda s: survivor_key(sites[s]))
         survivor = ranked[0]
+        countries = sorted({str(sites[s]["country"]) for s in members})
+        if len(countries) > 1:
+            held.append(
+                {
+                    "site_ids": members,
+                    "names": [sites[s]["name"] for s in members],
+                    "countries": countries,
+                    "survivor_by_rule": survivor,
+                    "reason": "the rows name different countries: retiring one decides the "
+                    "country - the owner's (B10), not the scope lane's",
+                    "lines": [duplicate_line(lo, survivor, sites, dup) for lo in ranked[1:]],
+                }
+            )
+            continue
         for loser in ranked[1:]:
             lines.append(duplicate_line(loser, survivor, sites, dup))
-    return lines, unresolved
+    return lines, unresolved, held
 
 
 def _decisive_step(loser: Mapping[str, Any], survivor: Mapping[str, Any]) -> str:
@@ -1131,7 +1279,7 @@ def write_all(data: Path, cache: Path, out: Path) -> dict[str, Any]:
                 str(row["country"]), row["new"]["lat"], row["new"]["lon"], atlas
             )
     pairs = classify_pairs(sites, names)
-    dup_lines, unresolved = duplicate_groups(pairs, sites)
+    dup_lines, unresolved, held = duplicate_groups(pairs, sites)
     stacks = stacked(sites)
 
     out.mkdir(parents=True, exist_ok=True)
@@ -1141,10 +1289,34 @@ def write_all(data: Path, cache: Path, out: Path) -> dict[str, Any]:
     write_jsonl(out / "dup_pairs.jsonl", pairs)
     write_jsonl(out / "stacked.jsonl", stacks)
     write_jsonl(out / "DUPLICATES.jsonl", dup_lines)
-    counts = {
+    write_jsonl(out / "DUPLICATES_HELD.jsonl", held)
+    counts = summarise(name_rows, coord_rows, b2_rows, pairs, dup_lines, unresolved, held, stacks)
+    (out / "COUNTS.json").write_text(
+        json.dumps(counts, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+    )
+    return counts
+
+
+def summarise(
+    name_rows: Sequence[Mapping[str, Any]],
+    coord_rows: Sequence[Mapping[str, Any]],
+    b2_rows: Sequence[Mapping[str, Any]],
+    pairs: Sequence[Mapping[str, Any]],
+    dup_lines: Sequence[Mapping[str, Any]],
+    unresolved: Sequence[Sequence[str]],
+    held: Sequence[Mapping[str, Any]],
+    stacks: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """`COUNTS.json`: every key a JSON key, so the counts `write_all` returns are the ones it writes."""
+    suspect = [r for r in name_rows if r["link_suspect"]]
+    return {
         "names": dict(sorted(Counter(r["class"] for r in name_rows).items())),
         "names_by_group": dict(sorted(Counter(r["group"] for r in name_rows).items())),
         "names_n7": dict(Counter(r["n7"] for r in name_rows if r["class"] == "N7")),
+        "names_keep_link_suspect": {
+            **dict(sorted(Counter(q for r in suspect for q in r["link_suspect"]).items())),
+            "any": len(suspect),
+        },
         "coords_k_all": dict(
             sorted(Counter(r["k_class"] for r in coord_rows if "k_class" in r).items())
         ),
@@ -1175,12 +1347,19 @@ def write_all(data: Path, cache: Path, out: Path) -> dict[str, Any]:
             if r["verdict"] == "move" and not r["country_after_move"]["agrees"]
         ),
         "b2": dict(sorted(Counter(r["class"] for r in b2_rows).items())),
-        "b2_state": dict(sorted(Counter(r["state"] != "open" for r in b2_rows).items())),
+        # string keys: the counts returned must be the counts written (JSON has no boolean keys)
+        "b2_state": dict(
+            sorted(
+                Counter(
+                    "open" if r["state"] == "open" else "written since the census" for r in b2_rows
+                ).items()
+            )
+        ),
         "pairs": dict(sorted(Counter(p["class"] for p in pairs).items())),
-        "duplicates": {"losers": len(dup_lines), "unresolved_groups": len(unresolved)},
+        "duplicates": {
+            "losers": len(dup_lines),
+            "unresolved_groups": len(unresolved),
+            "held_groups": len(held),
+        },
         "stacked": {"groups": len(stacks), "sites": sum(len(s["site_ids"]) for s in stacks)},
     }
-    (out / "COUNTS.json").write_text(
-        json.dumps(counts, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
-    )
-    return counts

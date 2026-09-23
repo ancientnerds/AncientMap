@@ -34,7 +34,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "output" / "remediation" / "tools"
-for path in (TOOLS, REPO / "scripts" / "remediation"):
+for path in (TOOLS, REPO / "scripts" / "remediation", REPO):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -46,6 +46,8 @@ import verify_writes as V  # noqa: E402
 import write_dry_all  # noqa: E402
 import write_gate  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
+
+from pipeline.utils.geo import haversine_distance  # noqa: E402
 
 SITE = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -1013,6 +1015,47 @@ def test_wave_two_is_every_open_wrong_link_the_research_names_and_nothing_else()
     ]
     assert refused == ["Ramesses III Temple"]
     assert all(site.evidence for site in wave2)
+
+
+def _research_distance(record: dict[str, Any], site: Any) -> float:
+    """The metres the research measured for a settled site's position proof: rule B's candidate
+    P625, rule A's candidate P625 or - where Wikidata points elsewhere - the article's coordinates."""
+    candidate = next(c for c in record["candidates"] if c["qid"] == site.new_qid)
+    if site.rule == "B" or (
+        candidate["distance_m"] is not None and candidate["distance_m"] <= 1000
+    ):
+        return float(candidate["distance_m"])
+    page = record["enwiki_page"]
+    lat, lon = record["stored_point"]
+    return haversine_distance(lat, lon, page["lat"], page["lon"]) * 1000.0
+
+
+def test_every_wave_two_gate_is_the_distance_the_research_measured() -> None:
+    """`gate_m` is typed by hand; the 1 km gate in `changes()` is only as good as that number, so it
+    is read back against the research record it was copied from (to the 0.1 m the record keeps)."""
+    research = {r["site_id"]: r for r in lanes.read_jsonl(RESEARCH)}
+    settled = [s for s in qid_repair.WAVE2_SITES if s.rule != "unresolved"]
+    assert len(settled) == 12
+    for site in settled:
+        measured = _research_distance(research[site.site_id], site)
+        assert site.gate_m == pytest.approx(measured, abs=0.05), (site.name, site.gate_m, measured)
+        assert measured <= qid_repair.GATE_M
+
+
+def test_the_delivered_wave_two_statements_are_the_rendered_ones() -> None:
+    wave = qid_repair.WAVE2
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    delivered = [
+        qid_repair.Change(**{**r, "evidence": tuple(r["evidence"])})
+        for r in lanes.read_jsonl(wave.out / "PLAN.jsonl")
+    ]
+    assert delivered == rows
+    rendered = qid_repair.statements(rows, wave)
+    for name in ("APPLY.sql", "ROLLBACK.sql"):
+        assert (wave.out / name).read_text(encoding="utf-8") == rendered[name], name
+    evidence_source = f'"source": "{wave.research}"'
+    assert evidence_source in rendered["APPLY.sql"]
+    assert f'"source": "{qid_repair.WAVE1.research}"' not in rendered["APPLY.sql"]
 
 
 def test_a_wave_two_replacement_without_its_position_proof_is_refused() -> None:

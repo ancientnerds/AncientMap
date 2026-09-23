@@ -16,7 +16,7 @@ What is fetched, and why:
 | --- | --- | --- |
 | `wd_names.json` | `wbgetentities` labels/aliases/sitelinks, every linked item | B1 names, duplicates |
 | `p31_labels.json` | `wbgetentities` English labels of every P31 class named | container / linear classes |
-| `wd_claims.json` | `wbgetentities` claims+sitelinks of the coordinate cases' items | P625 with its references, P189/P195/P276 (museum objects), the enwiki sitelink |
+| `wd_claims.json` | `wbgetentities` claims+sitelinks of the coordinate cases' items | the truthy P625 (a preferred one first) with its rank and references, P189/P195/P276 (museum objects), the enwiki sitelink |
 | `enwiki_coords.json` | en.wikipedia `prop=coordinates|pageprops` | the second coordinate witness |
 
 **OpenStreetMap is not a witness in this run.** Overpass (`overpass-api.de`, the endpoint the phase-3
@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from census.fetch import USER_AGENT, Fetcher, chunked
+from mechanical.plan import _claims  # the non-deprecated statements of one property, never copied
 
 from bcases import inputs
 
@@ -181,14 +182,17 @@ def fetch_labels(net: Fetcher, qids: Iterable[str]) -> dict[str, str | None]:
     return records
 
 
-def _statements(entity: Mapping[str, Any], prop: str) -> list[Mapping[str, Any]]:
-    """Non-deprecated statements of `prop`, in Wikidata's order."""
-    return [s for s in (entity.get("claims") or {}).get(prop, []) if s.get("rank") != "deprecated"]
+def _truthy(entity: Mapping[str, Any], prop: str) -> list[Mapping[str, Any]]:
+    """The statements Wikidata calls true: the preferred ones when any is preferred, else every
+    non-deprecated one - in Wikidata's order. Charax Spasinu's item holds three P625, the second one
+    preferred and 1.07 km from the first (2026-09-23): the first is not its point."""
+    statements = _claims(entity, prop)
+    return [s for s in statements if s.get("rank") == "preferred"] or statements
 
 
 def _item_values(entity: Mapping[str, Any], prop: str) -> list[str]:
     out: list[str] = []
-    for statement in _statements(entity, prop):
+    for statement in _claims(entity, prop):
         value = ((statement.get("mainsnak") or {}).get("datavalue") or {}).get("value")
         if isinstance(value, dict) and value.get("id"):
             out.append(str(value["id"]))
@@ -211,10 +215,11 @@ def _reference_values(statement: Mapping[str, Any]) -> dict[str, list[str]]:
 
 
 def claims_record(entity: Mapping[str, Any]) -> dict[str, Any]:
-    """The coordinate-witness view of one entity: its first non-deprecated P625 with precision, globe
-    and references, the museum properties, P31 and its English article."""
+    """The coordinate-witness view of one entity: its first truthy P625 (`_truthy`: a preferred one
+    when there is one) with precision, globe, rank and references, how many non-deprecated P625 it
+    holds, the museum properties, P31 and its English article."""
     point = None
-    coordinates = _statements(entity, P_COORD)
+    coordinates = _truthy(entity, P_COORD)
     if coordinates:
         value = ((coordinates[0].get("mainsnak") or {}).get("datavalue") or {}).get("value") or {}
         if value.get("latitude") is not None:
@@ -223,8 +228,9 @@ def claims_record(entity: Mapping[str, Any]) -> dict[str, Any]:
                 "lon": float(value["longitude"]),
                 "precision": value.get("precision"),
                 "globe": str(value.get("globe") or "").rsplit("/", 1)[-1] or None,
+                "rank": str(coordinates[0].get("rank")),
                 "references": _reference_values(coordinates[0]),
-                "statements": len(coordinates),
+                "statements": len(_claims(entity, P_COORD)),
             }
     return {
         "missing": "missing" in entity,

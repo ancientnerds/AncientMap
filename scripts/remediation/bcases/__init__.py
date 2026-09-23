@@ -12,7 +12,8 @@ This package is that implementation, and it writes nothing to production:
 * `coord_plan.py` - the coordinate write plan in the guarded shape of `qid_repair.py` (render, check,
   verify, rollback), through `apply_remediation_change()`, applied by nobody here;
 * `qid_research.py` - the candidates behind the second wave of `output/remediation/tools/qid_repair.py`
-  (the wrong Wikidata links among the B1 name findings);
+  (the wrong Wikidata links among the B1 name findings whose name does not match - a kept name on a
+  suspect link is flagged, `link_suspect`, and left for a later wave);
 * `run.py` - the command line.
 
 `output/remediation/bcases/` receives the per-class JSON lines, the duplicate list the scope lane

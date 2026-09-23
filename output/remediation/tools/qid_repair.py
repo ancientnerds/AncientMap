@@ -56,13 +56,18 @@ values are corrected, which is a separate change to a column many producers read
     ./.venv/Scripts/python.exe output/remediation/tools/qid_repair.py check    # read-only pre-flight
     ./.venv/Scripts/python.exe output/remediation/tools/qid_repair.py verify   # read-only, after apply
 
-## Wave 2 (2026-09-23): the wrong links among the B1 name findings
+## Wave 2 (2026-09-23): the wrong links among the B1 name findings whose name does not match
 
 The first wave was applied on 2026-09-23 (26 rows, run stamp `2026-09-22_external-id-repair`); its
 plan, statements and rules above are unchanged, so its `verify` still reads what was written. The
 owner-case classifier (`scripts/remediation/bcases/`) then found 77 wrong links among the 631 T01 name
-findings (a generic concept, a shared parent or sibling, an item without a coordinate, an item more
-than 5 km away); 18 of them are sites of the first wave. The other **59** were researched one at a
+findings - the rows whose stored name is none of the item's names *and* whose item is a generic
+concept, a shared parent or sibling, an item without a coordinate or one more than 5 km away (classes
+Q1-Q4); 18 of them are sites of the first wave. Wave 2 is **not** every suspect link: 72 more rows keep
+their name (it is one of the item's names) while their link meets Q1, Q2 or Q4 on its own
+(`link_suspect` in `names.jsonl` - "Dolmens of Sardinia" on the class "dolmen", "The Temple of Artemis"
+stored in Greece on the Ephesus temple). They were not researched and stay for a later wave or the
+owner (HUMAN_ONLY B1/B2). The other **59** of the 77 were researched one at a
 time (`scripts/remediation/bcases/qid_research.py`, record `output/remediation/bcases/qid_research.jsonl`):
 the English article named exactly like the site, every Wikidata item within 1 km of the stored point
 (`list=geosearch`), the first ten `wbsearchentities` hits - each with its names, classes and P625.
@@ -1342,8 +1347,9 @@ def wave2_markdown(rows: list[Change]) -> str:
         "",
         f"{len(rows)} row changes at {len(settled)} sites (run stamp `{wave.run_stamp}`); "
         f"{len(wave.sites) - len(settled)} sites unresolved and left exactly as they are. The 59 "
-        "sites are the wrong links among the B1 name findings that wave 1 did not already replace "
-        "(`output/remediation/bcases/names.jsonl`, classes Q1-Q4); the research record is "
+        "sites are the wrong links among the B1 name findings whose name does not match, that wave 1 "
+        "did not already replace (`output/remediation/bcases/names.jsonl`, classes Q1-Q4; the 72 kept "
+        "names on a suspect link, `link_suspect`, are not in this wave); the research record is "
         "`output/remediation/bcases/qid_research.jsonl`, the rules and the 1 km gate are in the "
         "module docstring of `output/remediation/tools/qid_repair.py`.",
         "",

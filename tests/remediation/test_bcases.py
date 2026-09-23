@@ -2,9 +2,11 @@
 
 Every class is pinned by a case taken from the real examples the remaining-work map names - Q309
 "history" on Clare, Suffolk; Calakmul stored 907 km off; Petroglyph Beach, whose Wikidata and Wikipedia
-points are one point; the Pergamon Altar and a museum object stored at its museum; Dooey's Cairn and
-Ballymacaldrack, one tomb recorded twice. Each guard has a test that goes red without it, and the
-mutation sweep (`scripts/remediation/phase3/mutation_sweep.py`, "bcases") removes them one by one.
+points are one point; Castro of Santa Trega and Khao Sam Kaeo, whose articles hold their items' points
+cut to four decimals; the Pergamon Altar and a museum object stored at its museum; Dooey's Cairn and
+Ballymacaldrack, one tomb recorded twice; Banias and Caesarea Philippi, one site on two sides of the
+Golan line. Each guard has a test that goes red without it, and the mutation sweep
+(`scripts/remediation/phase3/mutation_sweep.py`, "bcases") removes them one by one.
 
 Nothing here reads the network or production: the fetcher and the psql reader are fakes that refuse
 what the real ones refuse. The versioned deliverables (`output/remediation/bcases/`) are checked for
@@ -14,6 +16,7 @@ with its reason without them.
 
 from __future__ import annotations
 
+import gzip
 import json
 import re
 import sys
@@ -156,15 +159,57 @@ def test_a_shared_item_is_a_wrong_link_and_a_near_residual_is_read() -> None:
     assert (alone["class"], alone["group"], alone["n7"]) == ("N7", "review", "anchor-is-locality")
 
 
+def test_an_item_without_a_coordinate_is_a_wrong_link_not_a_residual() -> None:
+    t01 = {"Q1": {"en_label": "Iron Age", "lat": None, "lon": None}}
+    row = _name("Q1", "Dun Cuier", t01=t01, names={"Q1": {"labels": {"en": "Iron Age"}}})
+    assert (row["class"], row["group"]) == ("Q3", "wrong-link")
+    assert any("has no P625" in e["quote"] for e in row["evidence"])
+
+
+def test_a_kept_name_does_not_vouch_for_its_link() -> None:
+    """Dolmens of Sardinia on Q101659 "dolmen" (the class), The Temple of Artemis stored in Greece on
+    the Ephesus temple 388 km away, Asklepion (Kos) on an item Paphos shares: the name matches, the
+    link is still wrong - reported, not hidden behind the name."""
+    cls = _name(
+        "Q101659",
+        "Dolmens of Sardinia",
+        t01={"Q101659": {"en_label": "dolmen", "lat": None, "lon": None}},
+        names={"Q101659": {"labels": {"en": "dolmen"}, "sitelinks": {"lvwiki": "Dolmens"}}},
+    )
+    assert (cls["class"], cls["group"], cls["link_suspect"]) == ("N3", "keep", ["Q1"])
+    assert any("has no P625" in e["quote"] for e in cls["evidence"])
+    far = _name(
+        "Q43018",
+        "The Temple of Artemis",
+        t01={"Q43018": {"en_label": "Temple of Artemis", "lat": 54.5, "lon": 0.0}},
+        names={"Q43018": {"labels": {"en": "Temple of Artemis"}}},
+        shared={"Q43018": 2},
+    )
+    assert (far["class"], far["group"], far["link_suspect"]) == ("N2", "keep", ["Q2", "Q4"])
+    assert any("km from the stored point" in e["quote"] for e in far["evidence"])
+    assert any("linked by 2 curated sites" in e["quote"] for e in far["evidence"])
+    clean = _name(
+        "Q1",
+        "Hattusas",
+        t01={"Q1": {"en_label": "Hattusa", "lat": 51.0, "lon": 0.0}},
+        names={"Q1": {"labels": {"en": "Hattusa"}, "aliases": {"en": ["Hattusas"]}}},
+    )
+    assert clean["link_suspect"] == []
+
+
 # ── the coordinate witnesses ──────────────────────────────────────────────────────────────────
 
 
 def _w(kind: str, point: tuple[float, float], **kw: Any) -> C.Witness:
+    """A witness on the grid its digits are written on, as `classify.witnesses` builds it."""
+    kw.setdefault("step", C.grid_of(*point))
     return C.Witness(kind, point[0], point[1], f"https://example.org/{kind}", kind, **kw)
 
 
 def test_calakmul_moves_to_the_item_where_wikidata_and_wikipedia_agree() -> None:
+    """Wikidata's point is whole arcseconds, the article's 19.41" - no rounding of each other."""
     ws = [_w("enwiki", CALAKMUL_EN), _w("wikidata", CALAKMUL_WD, precision_m=15.5)]
+    assert ws[1].step == pytest.approx(1 / 3600) and ws[0].step == 1e-8
     verdict = C.weigh(CALAKMUL_STORED, ws)
     assert verdict["verdict"] == "move"
     assert verdict["to"].kind == "wikidata" and verdict["agreeing"] == ["wikidata", "enwiki"]
@@ -176,7 +221,85 @@ def test_petroglyph_beach_counts_once_because_both_points_are_one_point() -> Non
     assert not C.independent(*ws)
     verdict = C.weigh(WRANGELL, ws)
     assert verdict["verdict"] == "review"
-    assert verdict["reason"].startswith("the two witnesses are one: the same point")
+    assert verdict["reason"] == "the two witnesses are one: the same point (0 m apart, within 31 m)"
+
+
+# Castro of Santa Trega and Khao Sam Kaeo as Wikidata and the article held them on 2026-09-23: the
+# article's value is the item's cut to four decimals (5.6 m and 10.7 m apart).
+CASTRO_WD, CASTRO_EN = (41.89275, -8.869808), (41.8927, -8.8698)
+KHAO_WD, KHAO_EN = (10.52725, 99.18208333333334), (10.5272, 99.182)
+# Taq Kasra: the article's 33°05'37", 44°34'51" is the item's point rounded to whole arcseconds.
+TAQ_WD, TAQ_EN = (33.093722222222, 44.580722222222), (33.09361111, 44.58083333)
+
+
+def test_an_article_that_holds_the_items_point_cut_short_is_not_a_second_witness() -> None:
+    for wd, en, grid in (
+        (CASTRO_WD, CASTRO_EN, "4 decimals"),
+        (KHAO_WD, KHAO_EN, "4 decimals"),
+        (TAQ_WD, TAQ_EN, "whole arcseconds"),
+    ):
+        a, b = _w("wikidata", wd), _w("enwiki", en)
+        assert C.rounded_copy(a, b) == f"enwiki is wikidata rounded to {grid}"
+        assert not C.independent(a, b)
+        verdict = C.weigh((wd[0] + 0.05, wd[1]), [a, b])
+        assert verdict["verdict"] == "review"
+        assert (
+            verdict["reason"] == f"the two witnesses are one: enwiki is wikidata rounded to {grid}"
+        )
+
+
+def test_a_rounded_copy_further_apart_than_an_arcsecond_is_still_one_witness() -> None:
+    """Near the equator a value truncated to whole arcseconds on both axes lies up to 44 m from its
+    source - further than the one-arcsecond floor, so only the rounding rule sees the copy."""
+    whole = (1 / 3600, 10 + 1 / 3600)  # 0°00'01", 10°00'01"
+    source = (1.9 / 3600, 10 + 1.9 / 3600)  # 0.9" more on each axis
+    a, b = _w("wikidata", source), _w("enwiki", whole)
+    assert b.step == pytest.approx(1 / 3600) and a.step == 0.0
+    assert C._m(a, b) > C.same_point_m(a, b)
+    assert C.rounded_copy(a, b) == "enwiki is wikidata rounded to whole arcseconds"
+    assert not C.independent(a, b)
+    # the same distance without the rounding is two witnesses
+    moved = (whole[0] + 0.0000001, whole[1])
+    assert C.independent(a, _w("enwiki", moved, step=0.0))
+
+
+def test_one_point_within_an_arcsecond_is_one_witness() -> None:
+    """Temple of Atargatis's item and article are 8 m apart, Eridu's 27 m: one point each, although
+    neither value is the other rounded."""
+    atargatis = (_w("wikidata", (34.746854, 40.731011)), _w("enwiki", (34.746918, 40.73105)))
+    eridu = (_w("wikidata", (30.81583, 45.99583)), _w("enwiki", (30.81583333, 45.99611111)))
+    for a, b in (atargatis, eridu):
+        assert C.rounded_copy(a, b) is None
+        assert C._m(a, b) < C.SAME_POINT_M
+        assert not C.independent(a, b)
+    assert 30.8 < C.SAME_POINT_M < 31.0
+
+
+def test_a_point_given_to_three_decimals_cannot_confirm_another_within_its_step() -> None:
+    """At 60° north 86 m apart - more than an arcsecond, less than one step of 0.001° (111 m) - and no
+    rounding of each other: an article that coarse cannot tell the two points apart."""
+    a, b = _w("wikidata", (60.1232, 20.4545)), _w("enwiki", (60.123, 20.456))
+    assert b.step == 0.001 and C.rounded_copy(a, b) is None
+    assert C.SAME_POINT_M < C._m(a, b) < 0.001 * C.METRES_PER_DEGREE
+    assert not C.independent(a, b)
+
+
+def test_a_coarse_wikidata_precision_makes_two_points_one() -> None:
+    """A P625 that declares 0.01° (±556 m) cannot confirm an article 394 m away."""
+    a = _w("wikidata", (50.123456, 10.123456), precision_m=C.precision_m(0.01))
+    b = _w("enwiki", (50.127, 10.123456))
+    assert C.rounded_copy(a, b) is None and 300 < C._m(a, b) < 500
+    assert not C.independent(a, b)
+    assert C.independent(_w("wikidata", (50.123456, 10.123456)), b)
+
+
+def test_the_tolerance_widens_with_a_coarse_wikidata_precision() -> None:
+    """T01's floor: a P625 of precision 0.1° is uncertain by 5.6 km, so a stored point 2 km off it is
+    where the item says, not a defect."""
+    item = _w("wikidata", (50.123456, 10.123456), precision_m=C.precision_m(0.1))
+    assert C.tolerance_m([item]) == pytest.approx(C.precision_m(0.1))
+    verdict = C.weigh((50.141456, 10.123456), [item])
+    assert verdict["verdict"] == "stored-agrees"
 
 
 def test_a_p625_imported_from_english_wikipedia_is_not_a_second_witness() -> None:
@@ -230,6 +353,50 @@ def test_a_p625_reference_to_english_wikipedia_is_read_from_its_references() -> 
     assert record["enwiki"] == "Somewhere"
 
 
+def test_a_p625_whose_import_url_is_english_wikipedia_is_not_a_second_witness() -> None:
+    url = "https://en.wikipedia.org/w/index.php?title=Calakmul&oldid=1"
+    assert C._p625_from_enwiki({"P4656": [url]})
+    assert not C._p625_from_enwiki({"P4656": ["https://fr.wikipedia.org/w/index.php?oldid=1"]})
+    claims = {"Q1": _claims("Q1", CALAKMUL_WD, enwiki="Calakmul", references={"P4656": [url]})}
+    ws, _ = C.witnesses(
+        "Q1", claims=claims, enwiki={"Calakmul": _page("Q1", "Calakmul", CALAKMUL_EN)}
+    )
+    assert ws[0].derived_from == "enwiki" and not C.independent(*ws)
+
+
+WD_ENTITY = "http://www.wikidata.org/entity/"
+
+
+def _p625_statement(rank: str, lat: float, lon: float) -> dict[str, Any]:
+    value = {"latitude": lat, "longitude": lon, "precision": 1e-06, "globe": f"{WD_ENTITY}Q2"}
+    return {"rank": rank, "mainsnak": {"datavalue": {"value": value}}}
+
+
+def test_the_witness_is_the_preferred_p625_and_never_a_deprecated_one() -> None:
+    """Charax Spasinu's item holds three P625, the second preferred and 1.07 km from the first."""
+    charax = {
+        "claims": {
+            "P625": [
+                _p625_statement("normal", 30.894692, 47.578031),
+                _p625_statement("preferred", 30.89786289707795, 47.567476326068245),
+                _p625_statement("normal", 30.9, 47.6),
+            ]
+        }
+    }
+    point = K.claims_record(charax)["p625"]
+    assert (point["lat"], point["rank"], point["statements"]) == (30.89786289707795, "preferred", 3)
+    stale = {
+        "claims": {
+            "P625": [
+                _p625_statement("deprecated", 1.0, 1.0),
+                _p625_statement("normal", 2.0, 2.0),
+            ]
+        }
+    }
+    point = K.claims_record(stale)["p625"]
+    assert (point["lat"], point["rank"], point["statements"]) == (2.0, "normal", 1)
+
+
 # ── one coordinate case end to end ───────────────────────────────────────────────────────────
 
 
@@ -242,9 +409,11 @@ def _claims(qid: str, point: tuple[float, float] | None, **kw: Any) -> dict[str,
         else {
             "lat": point[0],
             "lon": point[1],
-            "precision": 1e-06,
-            "globe": "Q2",
-            "references": {},
+            "precision": kw.get("precision", 1e-06),
+            "globe": kw.get("globe", "Q2"),
+            "rank": "normal",
+            "references": kw.get("references", {}),
+            "statements": 1,
         },
         "p31": kw.get("p31", ["Q839954"]),
         "p189": kw.get("p189", []),
@@ -310,8 +479,77 @@ def test_an_item_that_is_not_the_site_is_never_a_witness() -> None:
     assert (other["verdict"], other["class"]) == ("not-comparable", "item-is-not-the-site")
 
 
+def test_a_road_or_a_wall_is_a_line_whose_point_is_an_arbitrary_spot() -> None:
+    site = _site("Via Egnatia", "Q1", CALAKMUL_STORED)
+    claims = {"Q1": _claims("Q1", CALAKMUL_WD, enwiki="Via Egnatia", p31=["Q2143825"])}
+    enwiki = {"Via Egnatia": _page("Q1", "Via Egnatia", CALAKMUL_EN)}
+    row = C.classify_coordinate(
+        site,
+        "Q1",
+        origin="T01/coords",
+        claims=claims,
+        labels={"Q2143825": "Roman road"},
+        names={"Q1": {"labels": {"en": "Via Egnatia"}}},
+        enwiki=enwiki,
+        shared={},
+    )
+    assert (row["verdict"], row["class"]) == ("not-comparable", "linear-or-areal-item")
+    assert "new" not in row
+
+
+def _one_witness(enwiki_page: dict[str, Any], **claims_kw: Any) -> dict[str, Any]:
+    site = _site("Calakmul", "Q1", CALAKMUL_STORED)
+    claims = {"Q1": _claims("Q1", CALAKMUL_WD, enwiki="Calakmul", **claims_kw)}
+    return _coordinate(site, claims, {"Calakmul": enwiki_page})
+
+
+def test_an_article_is_a_witness_only_for_its_own_item_on_earth() -> None:
+    """Pyramid of Neferhetepes redirects to the Pyramid of Userkaf: that article's point is another
+    item's, and a missing page or a point on another globe says nothing about this site."""
+    own = _page("Q1", "Calakmul", CALAKMUL_EN)
+    for page, note in (
+        ({**own, "wikibase_item": "Q2"}, "no English article of Q1"),
+        ({**own, "missing": True}, "no English article of Q1"),
+        ({**own, "globe": "moon"}, "carries no Earth coordinates"),
+    ):
+        row = _one_witness(page)
+        assert (row["verdict"], row["reason"]) == ("review", "one witness only (wikidata)")
+        assert any(note in n for n in row["witness_notes"]), row["witness_notes"]
+
+
+def test_the_witnesses_carry_the_grid_their_digits_are_written_on() -> None:
+    """End to end: El Kab's item holds 25°07', 32°48' - its article's 25°07'08", 32°47'52" cut to
+    whole arcminutes, 333 m away - and an article of whole arcseconds truncated from its item's point
+    lies 39 m from it near the equator. Both pairs are one witness, so neither site moves."""
+    el_kab = _site("El Kab", "Q1", (25.35, 32.8))
+    claims = {"Q1": _claims("Q1", (25.116666666667, 32.8), enwiki="El Kab")}
+    pages = {"El Kab": _page("Q1", "El Kab", (25.11888889, 32.79777778))}
+    ws, _ = C.witnesses("Q1", claims=claims, enwiki=pages)
+    assert [w.step for w in ws] == [1 / 60, 1 / 3600]
+    assert "(given to whole arcseconds)" in ws[1].quote
+    row = _coordinate(el_kab, claims, pages)
+    assert row["verdict"] == "review"
+    assert (
+        row["reason"] == "the two witnesses are one: wikidata is enwiki rounded to whole arcminutes"
+    )
+    equator = _site("Equator", "Q1", (0.3, 10.0))
+    claims = {"Q1": _claims("Q1", (1.9 / 3600, 10 + 1.9 / 3600), enwiki="Equator")}
+    pages = {"Equator": _page("Q1", "Equator", (1 / 3600, 10 + 1 / 3600))}
+    row = _coordinate(equator, claims, pages)
+    assert row["verdict"] == "review"
+    assert (
+        row["reason"] == "the two witnesses are one: enwiki is wikidata rounded to whole arcseconds"
+    )
+
+
+def test_a_p625_on_another_globe_is_no_witness() -> None:
+    row = _one_witness(_page("Q1", "Calakmul", CALAKMUL_EN), globe="Q405")
+    assert (row["verdict"], row["reason"]) == ("review", "one witness only (enwiki)")
+    assert row["witness_notes"] == ["Q1 P625 is on globe Q405"]
+
+
 MUSEUM = (48.8611, 2.3358)
-FIND = (27.63, 38.55)
+FIND = (27.629712, 38.549421)
 
 
 def _museum_case(stored: tuple[float, float]) -> dict[str, Any]:
@@ -343,6 +581,20 @@ def test_the_pergamon_altar_stays_at_pergamon() -> None:
     assert row["verdict"] == "stored-agrees"
 
 
+def test_an_object_with_two_find_spots_names_no_find_spot() -> None:
+    """Two P189 values are two places: neither is *the* find-spot, so the museum rule does not apply
+    and the item's own point is judged like any other."""
+    claims = {
+        "Q1": _claims("Q1", MUSEUM, p189=["Q2", "Q4"], p195=["Q3"]),
+        "Q2": _claims("Q2", FIND),
+        "Q3": _claims("Q3", MUSEUM),
+        "Q4": _claims("Q4", (FIND[0] + 1.0, FIND[1])),
+    }
+    assert C.museum_object("Q1", claims) is None
+    row = _coordinate(_site("Tayma Stele", "Q1", MUSEUM), claims, {})
+    assert "museum" not in row and row["rule"] == "two-independent-witnesses"
+
+
 # ── B2 on a schematic map ─────────────────────────────────────────────────────────────────────
 
 
@@ -360,7 +612,9 @@ def _b2(stored: str, point: tuple[float, float], contained: str, **kw: Any) -> d
             {"quote": f"point outside by {kw.get('km', 30.0)} km; contained in {contained}"}
         ],
     }
-    site = _site("X", kw.get("qid"), point, country=kw.get("now", stored))
+    site = _site(
+        "X", kw.get("qid"), point, country=kw.get("now", stored), description=kw.get("description")
+    )
     t01 = kw.get("t01", {})
     return C.classify_b2(finding, site, t01=t01, p17_labels=kw.get("labels", {}), atlas=_atlas())
 
@@ -384,6 +638,22 @@ def test_the_b2_classes_follow_the_owner_decisions() -> None:
         labels={"Q41": "Greece"},
     )
     assert (wrong["class"], wrong["state"]) == ("b", "open")
+
+
+def test_a_site_whose_own_text_spans_the_border_is_not_a_wrong_country() -> None:
+    """The Côa Valley and Siega Verde rock art: P17 names Portugal only and the point lies in it, but
+    the row's own description spans Portugal and Spain - writing either country alone is wrong."""
+    kw = {
+        "qid": "Q1",
+        "t01": {"Q1": {"lat": 35.11, "lon": 24.0, "country_qids": ["Q41"]}},
+        "labels": {"Q41": "Greece"},
+    }
+    spanning = "A transboundary site spanning the valley in Greece and its continuation in Italy."
+    row = _b2("Italy", (35.1, 24.0), "Greece", description=spanning, **kw)
+    assert (row["class"], row["route"]) == ("c2", C.B2_ROUTE["c2"])
+    assert (
+        _b2("Italy", (35.1, 24.0), "Greece", description="A site in Greece.", **kw)["class"] == "b"
+    )
 
 
 def test_a_move_into_another_country_is_reported_and_crimea_keeps_ukraine() -> None:
@@ -429,8 +699,8 @@ def test_dooeys_cairn_and_ballymacaldrack_are_one_tomb_and_the_richer_row_surviv
     }
     pairs = C.classify_pairs(sites, DOOEY)
     assert [p["class"] for p in pairs] == ["DUP"]
-    lines, unresolved = C.duplicate_groups(pairs, sites)
-    assert unresolved == []
+    lines, unresolved, held = C.duplicate_groups(pairs, sites)
+    assert unresolved == [] and held == []
     assert [(line["loser_id"], line["survivor_id"]) for line in lines] == [(SITE, OTHER)]
     assert set(lines[0]) == {"loser_id", "survivor_id", "evidence"}
     assert "more content links" in lines[0]["evidence"][1]["quote"]
@@ -477,8 +747,29 @@ def test_a_group_whose_members_are_not_all_duplicates_is_left_unresolved() -> No
         {"class": "DUP", "a": OTHER, "b": THIRD, "qid": "Q1242421", "distance_m": 7.0},
         {"class": "PART-OF", "a": SITE, "b": THIRD, "qid": "Q1242421", "distance_m": 14.0},
     ]
-    lines, unresolved = C.duplicate_groups(pairs, sites)
-    assert lines == [] and unresolved == [sorted([SITE, OTHER, THIRD])]
+    lines, unresolved, held = C.duplicate_groups(pairs, sites)
+    assert lines == [] and held == [] and unresolved == [sorted([SITE, OTHER, THIRD])]
+
+
+def test_one_site_recorded_on_two_sides_of_a_border_is_held_for_the_owner() -> None:
+    """Banias (Syria) and Caesarea Philippi (Israel) are one site on one item, 290 m apart - but
+    retiring either row would settle the Golan line the owner decided to leave (B10)."""
+    names = {"Q606295": {"labels": {"en": "Banias"}, "aliases": {"en": ["Caesarea Philippi"]}}}
+    sites = {
+        SITE: {**_dup_site(SITE, "Banias", 33.2487, 4, qid="Q606295"), "country": "Syria"},
+        OTHER: {
+            **_dup_site(OTHER, "Caesarea Philippi", 33.2465, 5, qid="Q606295"),
+            "country": "Israel",
+        },
+    }
+    pairs = C.classify_pairs(sites, names)
+    assert [p["class"] for p in pairs] == ["DUP"]
+    lines, unresolved, held = C.duplicate_groups(pairs, sites)
+    assert lines == [] and unresolved == []
+    assert [(h["site_ids"], h["countries"], h["survivor_by_rule"]) for h in held] == [
+        (sorted([SITE, OTHER]), ["Israel", "Syria"], OTHER)
+    ]
+    assert "B10" in held[0]["reason"] and held[0]["lines"][0]["loser_id"] == SITE
 
 
 # ── what is fetched ───────────────────────────────────────────────────────────────────────────
@@ -523,6 +814,70 @@ def test_wikipedia_coordinates_are_asked_for_every_page_and_a_partial_answer_rai
     partial = FakeNet([{"continue": {"cocontinue": "1|2"}, "query": {"pages": [page]}}])
     with pytest.raises(inputs.InputError, match="in part"):
         K.fetch_enwiki_coords(partial, ["Calakmul"])
+
+
+def test_an_answer_that_is_not_a_json_object_is_refused() -> None:
+    for body in (None, ["a list"], "text"):
+        with pytest.raises(inputs.InputError, match="no JSON object"):
+            K.api_json(FakeNet([body]), K.WIKIDATA_API, {}, ns="x", pause=0)  # type: ignore[list-item]
+
+
+def test_wikidata_must_answer_for_every_item_asked() -> None:
+    with pytest.raises(inputs.InputError, match="without an `entities` map"):
+        K.fetch_names(FakeNet([{"success": 1}]), ["Q1"])
+    with pytest.raises(inputs.InputError, match="did not answer for"):
+        K.fetch_names(FakeNet([{"entities": {"Q1": {"labels": {}}}}]), ["Q1", "Q2"])
+    got = K.fetch_names(FakeNet([{"entities": {"Q1": {}, "Q2": {"missing": ""}}}]), ["Q2", "Q1"])
+    assert (got["Q1"]["missing"], got["Q2"]["missing"]) == (False, True)
+
+
+def test_wikipedia_must_answer_for_every_title_asked() -> None:
+    with pytest.raises(inputs.InputError, match="without a `query`"):
+        K.fetch_enwiki_coords(FakeNet([{"batchcomplete": True}]), ["Calakmul"])
+    other = {"title": "Tikal", "pageprops": {"wikibase_item": "Q2"}}
+    with pytest.raises(inputs.InputError, match="did not answer for 'Calakmul'"):
+        K.fetch_enwiki_coords(FakeNet([{"query": {"pages": [other]}}]), ["Calakmul", "Tikal"])
+
+
+def test_the_research_refuses_an_answer_without_its_list() -> None:
+    with pytest.raises(inputs.InputError, match="answered without `geosearch`"):
+        R.neighbours(FakeNet([{"query": {}}]), 1.0, 2.0)
+    assert R.neighbours(FakeNet([{"query": {"geosearch": [{"title": "Q7"}]}}]), 1.0, 2.0) == ["Q7"]
+    with pytest.raises(inputs.InputError, match="answered without `search`"):
+        R.search(FakeNet([{"searchinfo": {}}]), "Dun Cuier")
+    assert R.search(FakeNet([{"search": [{"id": "Q8"}]}]), "Dun Cuier") == ["Q8"]
+
+
+def test_a_cache_file_that_is_missing_or_not_derived_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(inputs.InputError, match="is missing - `run.py collect` writes it"):
+        inputs.read_cache(tmp_path / "wd_names.json")
+    (tmp_path / "raw.json").write_text(json.dumps({"entities": {}}), encoding="utf-8")
+    with pytest.raises(inputs.InputError, match="no `records` map"):
+        inputs.read_cache(tmp_path / "raw.json")
+    inputs.write_cache(tmp_path / "ok.json", {"Q1": {"a": 1}}, {"fetched_at": "now"})
+    assert inputs.read_cache(tmp_path / "ok.json") == {"Q1": {"a": 1}}
+
+
+def test_a_census_link_held_twice_is_refused_not_overwritten(tmp_path: Path) -> None:
+    (tmp_path / "snapshot").mkdir()
+    rows = [
+        {"site_id": SITE, "kind": "wikidata_qid", "value": "Q1"},
+        {"site_id": SITE, "kind": "enwiki_title", "value": "Calakmul"},
+        {"site_id": SITE, "kind": "wikidata_qid", "value": "Q2"},
+    ]
+    with gzip.open(
+        tmp_path / "snapshot" / "site_external_ids.jsonl.gz", "wt", encoding="utf-8"
+    ) as f:
+        f.write("".join(json.dumps(r) + "\n" for r in rows))
+    with pytest.raises(inputs.InputError, match="carries two wikidata_qid rows"):
+        inputs.load_census_links(tmp_path)
+    with gzip.open(
+        tmp_path / "snapshot" / "site_external_ids.jsonl.gz", "wt", encoding="utf-8"
+    ) as f:
+        f.write("".join(json.dumps(r) + "\n" for r in rows[:2]))
+    assert inputs.load_census_links(tmp_path) == {
+        SITE: {"wikidata_qid": "Q1", "enwiki_title": "Calakmul"}
+    }
 
 
 def test_a_short_export_is_refused_not_classified(tmp_path: Path) -> None:
@@ -582,6 +937,64 @@ def test_a_move_needs_two_witnesses_a_geom_a_real_change_and_a_point_on_earth() 
         P.changes([{**_move(), "new": {"lat": 95.0, "lon": 1.0}}])
 
 
+def test_a_plan_names_each_site_once_and_by_its_uuid() -> None:
+    with pytest.raises(P.PlanError, match="is not a UUID"):
+        P.changes([_move(sid="11111111-1111-4111-8111-11111111111'; DROP TABLE x; --")])
+    with pytest.raises(P.PlanError, match="is planned twice"):
+        P.changes([_move(), _move()])
+    assert len(P.changes([_move(), _move(OTHER)])) == 6
+
+
+def test_a_statement_moves_whole_sites_only() -> None:
+    rows = P.changes([_move()])
+    with pytest.raises(P.PlanError, match="are not 3 columns per site"):
+        P.render(rows[:2], reversal=False)
+    with pytest.raises(P.PlanError, match="no rows"):
+        P.render([], reversal=False)
+
+
+def test_the_read_names_its_sites_by_uuid_only() -> None:
+    bad = P.Change(
+        site_id="1 OR 1=1",
+        name="x",
+        column="lat",
+        old_value="1",
+        new_value="2",
+        evidence=(),
+        change_key="k",
+    )
+    with pytest.raises(P.PlanError, match="is not a UUID"):
+        P.read_rows([bad], reader=lambda sql: pytest.fail(f"sent {sql}"))
+
+
+def _live(rows: list[P.Change], state: str, **override: Any) -> dict[str, dict[str, Any]]:
+    by = {r.column: r for r in rows}
+    pick = "old_value" if state == "old" else "new_value"
+    row = {
+        "site_id": SITE,
+        "lat": getattr(by["lat"], pick),
+        "lon": getattr(by["lon"], pick),
+        "geom": getattr(by["geom"], pick),
+        "geom_is_point": True,
+    }
+    return {SITE: {**row, **override}}
+
+
+def test_check_and_verify_compare_every_column_and_the_geometry() -> None:
+    rows = P.changes([_move()])
+    assert P.compare(rows, _live(rows, "old"), want="old") == []
+    assert P.compare(rows, _live(rows, "new"), want="new") == []
+    moved_by_hand = P.compare(rows, _live(rows, "old", lat="19.25"), want="old")
+    assert moved_by_hand == ["Calakmul lat: expected 19.243221692240958, found 19.25"]
+    other_geom = P.compare(rows, _live(rows, "old", geom="0101000020E61000BBBB"), want="old")
+    assert other_geom == [
+        "Calakmul geom: expected '0101000020E6100000AAAA', found '0101000020E61000BBBB'"
+    ]
+    stale = P.compare(rows, _live(rows, "new", geom_is_point=False), want="new")
+    assert stale == ["Calakmul geom: not the point lat/lon names"]
+    assert P.compare(rows, {}, want="new") == ["Calakmul: the site is not in production"] * 3
+
+
 def test_the_statement_is_guarded_and_every_change_goes_through_the_primitive() -> None:
     rows = P.changes([_move()])
     sql = P.render(rows, reversal=False)
@@ -589,17 +1002,33 @@ def test_the_statement_is_guarded_and_every_change_goes_through_the_primitive() 
     assert f"-- plan sha256 {P.plan_digest(rows)}" in sql
     assert sql.rstrip().count("COMMIT;") == 1 and "\nROLLBACK;" not in sql
     assert "SET LOCAL lock_timeout = '10s';" in sql
+    assert f"SET LOCAL statement_timeout = '{P.STATEMENT_TIMEOUT}';" in sql
     assert "     WHERE u.id IS NULL OR u.source_id <> 'ancient_nerds';" in sql
     assert (
         "HAVING array_agg(column_name ORDER BY column_name) <> ARRAY['geom', 'lat', 'lon']" in sql
     )
-    assert "u.lat IS DISTINCT FROM p.old_value::double precision" in sql
+    # guard 3: every column still holds its planned old value, compared in its own type
+    guard = sql[sql.index("-- guard 3") : sql.index("-- guard 4")]
+    for clause in (
+        "(p.column_name = 'lat' AND u.lat IS DISTINCT FROM p.old_value::double precision)",
+        "(p.column_name = 'lon' AND u.lon IS DISTINCT FROM p.old_value::double precision)",
+        "(p.column_name = 'geom' AND u.geom IS DISTINCT FROM p.old_value::geometry)",
+    ):
+        assert clause in guard, clause
     assert "g.new_value::geometry IS DISTINCT FROM" in sql
     assert "moved := moved + apply_remediation_change(" in sql
     assert "'unified_sites', r.column_name, 'id', r.site_id::text," in sql
     assert f"'{P.TEST_ID}', '{P.RUN_STAMP}', r.change_key, 'two_source'" in sql
     assert "IF moved <> expected THEN" in sql
-    assert "ST_SetSRID(ST_MakePoint(u.lon, u.lat), 4326));" in sql
+    # invariant 1: the site holds the new point, and a geom that is that point
+    invariant = sql[sql.index("-- invariant 1") : sql.index("-- invariant 2")]
+    for clause in (
+        "(p.column_name = 'lat' AND u.lat IS DISTINCT FROM p.new_value::double precision)",
+        "(p.column_name = 'lon' AND u.lon IS DISTINCT FROM p.new_value::double precision)",
+        "(p.column_name = 'geom' AND u.geom IS DISTINCT FROM\n"
+        "            ST_SetSRID(ST_MakePoint(u.lon, u.lat), 4326));",
+    ):
+        assert clause in invariant, clause
     assert "outside the plan', bad;" in sql and "no matching journal row', bad;" in sql
     for says in (
         "% row(s) are not curated sites', bad;",
@@ -761,28 +1190,120 @@ def test_rule_a_proves_the_place_by_the_article_when_wikidata_points_elsewhere()
     assert R.suggest(record)["rule"] == "unresolved"
 
 
+HARZHORN_PAGE = {
+    "title": "Battle at the Harzhorn",
+    "wikibase_item": "Q555463",
+    "redirected": False,
+    "missing": False,
+    "lat": 51.83313889,
+    "lon": 10.06683333,
+}
+
+
+def _harzhorn(**page: Any) -> dict[str, Any]:
+    return {
+        **_research(
+            {**HARZHORN_PAGE, **page}, [_candidate("Q555463", "N3", 2622.3, ["battlefield"])]
+        ),
+        "old_qid": "Q2221906",
+        "stored_point": [51.83311, 10.06685],
+    }
+
+
+def test_rule_a_needs_the_exact_title_of_an_existing_article_of_another_item() -> None:
+    """A redirect names another article (Pyramid of Neferhetepes -> Pyramid of Userkaf), a missing page
+    names nothing, and the item already linked is no replacement."""
+    assert R.suggest(_harzhorn())["rule"] == "A"
+    assert R.suggest(_harzhorn(redirected=True))["rule"] == "unresolved"
+    assert R.suggest(_harzhorn(missing=True))["rule"] == "unresolved"
+    same = {**_harzhorn(), "old_qid": "Q555463"}
+    assert R.suggest(same)["rule"] == "unresolved"
+
+
+def test_rule_b_takes_neither_the_old_item_nor_a_partial_name_nor_a_wikimedia_page() -> None:
+    page = {"title": "X", "wikibase_item": None, "redirected": False, "missing": True}
+    old = _research(page, [_candidate("Q744099", "N1", 10.0, ["hillfort"])])
+    assert R.suggest(old)["rule"] == "unresolved"
+    partial = _research(page, [_candidate("Q1", "N3", 10.0, ["cave"])])
+    assert R.suggest(partial)["rule"] == "unresolved"
+    listing = _research(page, [_candidate("Q2", "N1", 10.0, ["Wikimedia list article"])])
+    assert R.suggest(listing)["rule"] == "unresolved"
+    assert not R.is_site_kind(_candidate("Q3", "N1", 1.0, ["Wikimedia disambiguation page"]))
+    assert R.suggest(_research(page, [_candidate("Q4", "N2", 10.0, ["cave"])]))["qid"] == "Q4"
+
+
 # ── the delivered files ───────────────────────────────────────────────────────────────────────
+
+
+def test_the_counts_returned_are_the_counts_written() -> None:
+    """The re-classification compares `write_all`'s return value with `COUNTS.json`; a boolean key
+    (the first version's `b2_state`) comes back from JSON as "true" and can never compare equal."""
+    names = [{"class": "N1", "group": "keep", "link_suspect": ["Q4"]}]
+    coords = [
+        {"verdict": "move", "reason": "agree", "country_after_move": {"agrees": True}},
+        {"verdict": "review", "reason": "one witness only (wikidata)"},
+    ]
+    b2 = [
+        {"class": "c2", "state": "open"},
+        {"class": "b", "state": "written since the census: 'X' -> 'Y'"},
+    ]
+    counts = C.summarise(names, coords, b2, [], [], [], [], [])
+    assert json.loads(json.dumps(counts)) == counts
+    assert counts["b2_state"] == {"open": 1, "written since the census": 1}
+    assert counts["names_keep_link_suspect"] == {"Q4": 1, "any": 1}
 
 
 def test_the_delivered_counts_are_the_measured_ones() -> None:
     counts = json.loads((OUT / "COUNTS.json").read_text(encoding="utf-8"))
     assert counts["names_by_group"] == {"keep": 508, "review": 46, "wrong-link": 77}
+    assert counts["names_keep_link_suspect"] == {"Q1": 4, "Q2": 36, "Q4": 35, "any": 72}
     assert sum(counts["names"].values()) == 631
-    assert sum(counts["b2"].values()) == 117
-    assert counts["pairs"]["DUP"] == 20 and counts["duplicates"]["losers"] == 20
+    assert sum(counts["b2"].values()) == 117 and counts["b2"]["b"] == 5
+    # JSON-native keys: `write_all` returns exactly what it writes (the re-classification compares them)
+    assert counts["b2_state"] == {"open": 91, "written since the census": 26}
+    assert counts["pairs"]["DUP"] == 20
+    assert counts["duplicates"] == {"losers": 19, "unresolved_groups": 0, "held_groups": 1}
     assert sum(counts["coords_k_285"].values()) == 285
+    assert counts["coords_verdict"]["move"] == 9 and counts["moves_country_follow_up"] == 0
     assert counts["stacked"] == {"groups": 13, "sites": 36}
 
 
 def test_the_duplicate_file_is_what_the_scope_lane_reads() -> None:
     lines = inputs.read_jsonl(OUT / "DUPLICATES.jsonl")
-    assert len(lines) == 20
+    assert len(lines) == 19
     losers = [line["loser_id"] for line in lines]
     survivors = {line["survivor_id"] for line in lines}
     assert len(set(losers)) == len(losers) and not set(losers) & survivors
     for line in lines:
         assert set(line) == {"loser_id", "survivor_id", "evidence"}
         assert all({"source", "quote", "url"} == set(e) for e in line["evidence"])
+    held = inputs.read_jsonl(OUT / "DUPLICATES_HELD.jsonl")
+    assert [h["names"] for h in held] == [["Banias", "Caesarea Philippi"]]
+    assert not {line["loser_id"] for line in held[0]["lines"]} & set(losers)
+
+
+def test_every_planned_move_has_two_witnesses_that_are_not_one() -> None:
+    """The owner's rule, read back from the delivered verdicts: no planned move rests on a pair the
+    rules call one witness - a rounded copy, one point, or an import."""
+    moves = [v for v in inputs.read_jsonl(OUT / "coords.jsonl") if v["verdict"] == "move"]
+    assert len(moves) == 9
+    for v in moves:
+        ws = {w["kind"]: w for w in v["witnesses"]}
+        a, b = (
+            C.Witness(
+                k,
+                ws[k]["lat"],
+                ws[k]["lon"],
+                ws[k]["url"],
+                ws[k]["quote"],
+                ws[k]["precision_m"],
+                ws[k]["derived_from"],
+                C.grid_of(ws[k]["lat"], ws[k]["lon"]),
+            )
+            for k in ("wikidata", "enwiki")
+        )
+        assert C.independent(a, b), v["name"]
+        assert C.rounded_copy(a, b) is None and C._m(a, b) > C.SAME_POINT_M, v["name"]
 
 
 def test_the_delivered_coordinate_plan_is_the_verdicts_plan() -> None:
@@ -807,3 +1328,15 @@ needs_caches = pytest.mark.skipif(
 def test_a_full_reclassification_reproduces_the_delivered_verdicts(tmp_path: Path) -> None:
     counts = C.write_all(DATA, inputs.CACHE, tmp_path)
     assert counts == json.loads((OUT / "COUNTS.json").read_text(encoding="utf-8"))
+    for name in (
+        "names",
+        "coords",
+        "b2",
+        "dup_pairs",
+        "stacked",
+        "DUPLICATES",
+        "DUPLICATES_HELD",
+    ):
+        assert inputs.read_jsonl(tmp_path / f"{name}.jsonl") == inputs.read_jsonl(
+            OUT / f"{name}.jsonl"
+        ), name
