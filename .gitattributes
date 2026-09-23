@@ -29,3 +29,5 @@ output/remediation/bcases/coords_plan_wave2/*.sql text eol=lf
 output/remediation/bcases/coords3/*.jsonl text eol=lf
 output/remediation/opus_audit/*.jsonl text eol=lf
 output/remediation/opus_audit/*.md text eol=lf
+# The globe layer tiers are content-addressed (file name = sha256 of the bytes): no EOL conversion.
+public/data/layers/globe/*.json -text
