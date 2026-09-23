@@ -23,8 +23,10 @@ What is pinned here, each by a test that goes red when its guard is removed:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +34,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "output" / "remediation" / "tools"
-for path in (TOOLS, REPO / "scripts" / "remediation"):
+for path in (TOOLS, REPO / "scripts" / "remediation", REPO):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -45,6 +47,8 @@ import verify_writes as V  # noqa: E402
 import write_dry_all  # noqa: E402
 import write_gate  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
+
+from pipeline.utils.geo import haversine_distance  # noqa: E402
 
 SITE = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -988,6 +992,134 @@ def test_the_pre_flight_and_the_acceptance_compare_the_full_row() -> None:
     assert qid_repair.compare([row], {key: [row.new_value]}, want="new") == []
     assert qid_repair.compare([row], {key: [row.old_value, row.new_value]}, want="new")
     assert qid_repair.compare([row], {}, want="old")
+
+
+RESEARCH = REPO / "output" / "remediation" / "bcases" / "qid_research.jsonl"
+
+
+def test_wave_two_is_every_open_wrong_link_the_research_names_and_nothing_else() -> None:
+    research = {r["site_id"]: r["suggestion"] for r in lanes.read_jsonl(RESEARCH)}
+    wave2 = qid_repair.WAVE2_SITES
+    assert {site.site_id for site in wave2} == set(research)
+    assert not {site.site_id for site in wave2} & {site.site_id for site in qid_repair.SITES}
+    for site in wave2:
+        if site.rule != "unresolved":
+            assert (site.rule, site.new_qid) == (
+                research[site.site_id]["rule"],
+                research[site.site_id]["qid"],
+            )
+    # a research lead may be refused by hand, with its reason - never invented
+    refused = [
+        s.name
+        for s in wave2
+        if s.rule == "unresolved" and research[s.site_id]["rule"] != "unresolved"
+    ]
+    assert refused == ["Ramesses III Temple"]
+    assert all(site.evidence for site in wave2)
+
+
+def _research_distance(record: dict[str, Any], site: Any) -> float:
+    """The metres the research measured for a settled site's position proof: rule B's candidate
+    P625, rule A's candidate P625 or - where Wikidata points elsewhere - the article's coordinates."""
+    candidate = next(c for c in record["candidates"] if c["qid"] == site.new_qid)
+    if site.rule == "B" or (
+        candidate["distance_m"] is not None and candidate["distance_m"] <= 1000
+    ):
+        return float(candidate["distance_m"])
+    page = record["enwiki_page"]
+    lat, lon = record["stored_point"]
+    return haversine_distance(lat, lon, page["lat"], page["lon"]) * 1000.0
+
+
+def test_every_wave_two_gate_is_the_distance_the_research_measured() -> None:
+    """`gate_m` is typed by hand; the 1 km gate in `changes()` is only as good as that number, so it
+    is read back against the research record it was copied from (to the 0.1 m the record keeps)."""
+    research = {r["site_id"]: r for r in lanes.read_jsonl(RESEARCH)}
+    settled = [s for s in qid_repair.WAVE2_SITES if s.rule != "unresolved"]
+    assert len(settled) == 12
+    for site in settled:
+        measured = _research_distance(research[site.site_id], site)
+        assert site.gate_m == pytest.approx(measured, abs=0.05), (site.name, site.gate_m, measured)
+        assert measured <= qid_repair.GATE_M
+
+
+def test_the_delivered_wave_two_statements_are_the_rendered_ones() -> None:
+    wave = qid_repair.WAVE2
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    delivered = [
+        qid_repair.Change(**{**r, "evidence": tuple(r["evidence"])})
+        for r in lanes.read_jsonl(wave.out / "PLAN.jsonl")
+    ]
+    assert delivered == rows
+    rendered = qid_repair.statements(rows, wave)
+    for name in ("APPLY.sql", "ROLLBACK.sql"):
+        assert (wave.out / name).read_text(encoding="utf-8") == rendered[name], name
+    evidence_source = f'"source": "{wave.research}"'
+    assert evidence_source in rendered["APPLY.sql"]
+    assert f'"source": "{qid_repair.WAVE1.research}"' not in rendered["APPLY.sql"]
+
+
+def test_a_wave_two_replacement_without_its_position_proof_is_refused() -> None:
+    site = next(s for s in qid_repair.WAVE2_SITES if s.rule == "B")
+    for gate in (None, qid_repair.GATE_M + 1.0):
+        with pytest.raises(SystemExit, match="position proof"):
+            qid_repair.changes((replace(site, gate_m=gate),), gate_m=qid_repair.GATE_M)
+    assert qid_repair.changes((site,), gate_m=qid_repair.GATE_M)
+    # wave 1's rules predate the gate: its entries carry no distance and still render
+    assert qid_repair.changes() and all(s.gate_m is None for s in qid_repair.SITES)
+
+
+def test_wave_two_renders_under_its_own_stamp_and_wave_one_is_what_was_applied() -> None:
+    wave = qid_repair.WAVE2
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    sql = qid_repair.render(rows, reversal=False, wave=wave)
+    assert f"'{wave.run_stamp}'" in sql and f"'{qid_repair.RUN_STAMP}'" not in sql
+    assert f"{qid_repair.DIGEST_HEADER}{qid_repair.plan_digest(rows)}" in sql
+    undo = qid_repair.render(rows, reversal=True, wave=wave)
+    assert f"'{wave.rollback_stamp}'" in undo and f"'{wave.run_stamp}'" not in undo
+    applied = (REPO / "output" / "remediation" / "qid_repair" / "APPLY.sql").read_text(
+        encoding="utf-8"
+    )
+    assert applied == qid_repair.render(qid_repair.changes(), reversal=False)
+
+
+def test_wave_two_check_and_verify_read_their_own_rows_and_stamp(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    wave = qid_repair.WAVE2
+    rows = qid_repair.changes(wave.sites, gate_m=wave.gate_m)
+    out = ["--wave", "2", "--dir", str(tmp_path)]
+    assert qid_repair.main(["render", *out]) == 0
+
+    def database(*, state: str, journal: bool) -> None:
+        def psql(sql: str, *, host: str) -> str:
+            if "FROM remediation_change_log" in sql:
+                assert f"run_stamp = '{wave.run_stamp}'" in sql
+                keys = [row.change_key for row in rows] if journal else []
+                return "".join(json.dumps({"change_key": key}) + "\n" for key in keys)
+            asked = set(re.findall(r"'([0-9a-f-]{36})'", sql))
+            return "".join(
+                json.dumps(
+                    {
+                        "site_id": row.site_id,
+                        "kind": row.kind,
+                        "value": row.old_value if state == "old" else row.new_value,
+                    }
+                )
+                + "\n"
+                for row in rows
+                if row.site_id in asked
+            )
+
+        monkeypatch.setattr(lanes, "psql", psql)
+
+    database(state="old", journal=False)
+    assert qid_repair.main(["check", *out]) == 0
+    assert qid_repair.main(["verify", *out]) == 1
+    database(state="new", journal=True)
+    assert qid_repair.main(["verify", *out]) == 0
+    database(state="new", journal=False)
+    assert qid_repair.main(["verify", *out]) == 1
 
 
 def _repair_database(monkeypatch: Any, *, state: str, journal: bool) -> None:

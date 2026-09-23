@@ -63,7 +63,7 @@ can still be overridden (`--run-dir`, `--out`, `--rows`, `--apply-root`, `--hold
 | `scan_rows.py`, `show_rows.py` | find and inspect rows in the plan |
 | `batch_summary.py` | per-batch counts |
 | `gap_plan.py` | builds `PLAN.gap.jsonl` for the fields the mass run never judged, from a fresh read-only production export |
-| `qid_repair.py` | renders the reviewed `site_external_ids` repair (`output/remediation/qid_repair/`) - plan, apply, rehearsal, rollback; applies nothing |
+| `qid_repair.py` | renders the reviewed `site_external_ids` repair - plan, apply, rehearsal, rollback; applies nothing. Wave 1 (`output/remediation/qid_repair/`, applied 2026-09-23) and, with `--wave 2`, the wrong links among the B1 name findings whose name does not match (`output/remediation/qid_repair/wave2/`, researched by `scripts/remediation/bcases/qid_research.py`, gated at 1 km) |
 | `score_search_pilot.py` | scores a search pilot's run directory against the gold standard: the four thresholds sealed in `phase3_runner/SEARCH_PILOT.md`, as sealed, beside them what the writer itself would write, and what each of the writer's three 2026-09-23 rules refuses on its own (`--run-dir`, `--prefix`, `--progress`, `--gold`) |
 | `measure_review_holds.py` | measures the writer's period-bucket gate and reviewer contradiction hold on the mass lane's pinned plan, its 72 hand holds and two read-only production exports (written keys, the journal's `period_start` rows); writes the two lists of written rows `HUMAN_ONLY.md` B11 asks about to `logs/review_holds/` (`--out-dir`), nothing else |
 

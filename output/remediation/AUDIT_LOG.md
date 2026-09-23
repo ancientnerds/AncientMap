@@ -5860,3 +5860,200 @@ A consistency check at import time (every hand-read phrase is a failing-half phr
 test, because it made the module unimportable under the sweep's phrase deletions and the sweep then
 proves nothing (pytest exit 4). Gate: **3397 passed, 98 skipped** (data a worktree does not carry),
 **57 deselected**; `ruff check`, `ruff format --check api/ pipeline/`, `lint-imports`, `vulture` clean.
+## 2026-09-23 - the owner cases B1/B2: decided from data, planned, not applied
+
+The owner's instruction for HUMAN_ONLY section B was "implement the recommendations" of the
+remaining-work map (`logs/remaining_map_2026-09-22.json`, block "B - owner cases"). Delivered: the
+classifier `scripts/remediation/bcases/` (collect, classify, qid_research, coord_plan, run), its
+per-site verdicts in `output/remediation/bcases/`, wave 2 of `tools/qid_repair.py` and the German
+section in HUMAN_ONLY. **Nothing was written to production.** Every production contact was a read:
+one export `SELECT` of the 5,004 curated rows, three schema/journal counts, `bcases/run.py check`
+(51 rows, 0 deviations), `qid_repair.py check --wave 2` (13 rows, 0 deviations) and
+`qid_repair.py verify` of wave 1 (26 rows, 0 deviations).
+
+**Superseded in part the same day** by the review below ("the owner cases, reviewed"): the independence
+rule, the coordinate plan (17 moves became 9), the B2 class of the Côa Valley row, the duplicate list
+(20 losers became 19 plus one held pair) and the wave-2 wording. The numbers in this section are the
+first version's.
+
+### What production held when this started
+
+* Wave 1 of the external-id repair had been applied at 03:25 UTC (`2026-09-22_external-id-repair`,
+  26 journal rows). Its plan, statements and rules are unchanged; wave 1 still renders its versioned
+  `APPLY.sql`, `ROLLBACK.sql`, `PLAN.jsonl` and `PLAN.md` byte for byte, and `verify` reads 0 deviations.
+* `unified_sites.scope_status` exists (migration 0020); 0 curated rows carry a value.
+* `geom`: 5,003 of 5,004 curated rows hold exactly `ST_SetSRID(ST_MakePoint(lon, lat), 4326)`, one holds
+  NULL; `h3_index` is NULL on all of them. There is no trigger, so a coordinate write writes `geom`
+  as a third journalled change next to `lat` and `lon`.
+
+### Measured
+
+* **B1 names** (631 T01 name findings, classified against the links the census compared - the
+  snapshot's `site_external_ids` - with fresh Wikidata names of all 4,515 linked items): 508 keep
+  (354 exact name, 50 same without generic words, 67 descriptive subset, 37 transliteration), 77 wrong
+  link (21 generic concept, 43 shared parent or sibling, 8 no coordinate, 5 more than 5 km), 46 to read.
+  The remaining-work map's 508/77/46 is reproduced exactly. 18 of the 77 are wave-1 sites.
+* **Wave 2**: the other 59 researched one at a time (`bcases/qid_research.jsonl`: the exact-title
+  article, every item within 1 km by `list=geosearch`, ten `wbsearchentities` hits). 13 research
+  suggestions; 12 taken (1 rule A, 11 rule B: 13 row changes), 1 refused by hand (Ramesses III Temple:
+  name and point Karnak, description and source Medinet Habu). 47 stay as they are, each with its
+  reason - 24 have no item of their own, 11 have a candidate that cannot prove the 1 km gate, 5 are
+  right links shared with a second curated row of the same site, 3 are type records, 2 are right links
+  on a wrong point, 2 contradict themselves.
+* **Coordinates** (477 T01 findings + 11 B2 rows = 488): 17 move (51 journalled changes; 11 of them
+  among the 285 coordinate-only sites), 98 where the stored point is the English article's point,
+  210 whose item cannot speak for the point (115 container, 33 linear/areal, 30 shared, 32 other name),
+  163 open (102 one witness, 45 two witnesses that are one, 8 disagreeing, 7 none, 1 split). One move
+  (Temple of Atargatis, 459 km) lands outside its stored country, Lebanon: a country follow-up.
+* **B2** (117): 25 political (B10), 44 coastline/island/border, 4 `Northern Ireland` right, 22 Ireland
+  in Northern Ireland (all written since by the UK lane), 6 wrong country (3 written, 3 open), 3 wrong
+  coordinate, 12 need a witness, 1 not a country. Identical to the map's classification.
+* **Duplicates**: 20 DUP pairs (the plan estimated about 8; plan rule 1 - the measurement is recorded,
+  not the estimate overwritten), 20 losers in `DUPLICATES.jsonl`, 0 unresolved groups; 13 stacked
+  points carrying 36 sites. PART-OF 59, NEITHER 83, WRONG-ID 19 differ from the map's 65/93/44 because
+  wave 1 has since replaced the shared generic anchors.
+* Two full re-runs of the classifier with different hash seeds produce byte-identical files.
+
+### Traps found on the way
+
+* en.wikipedia `prop=coordinates` returns at most ten coordinates per request unless `colimit` is set:
+  131 of 614 pages came back without coordinates and with a `continue`. The fetch now asks for
+  `colimit=max` and refuses any answer that carries `continue`.
+* Wikidata answered "cirrussearch-too-busy-error" inside an HTTP 200, and `census.fetch.Fetcher` caches
+  every 2xx - the refusal would have been read back from the cache forever. `collect.api_json` asks
+  again, bounded, with the cache bypassed; any other API error raises.
+* Overpass (`overpass-api.de`) answered five queries from this workstation and then reset every
+  connection (`WinError 10054` six times, `curl` exit 35 on `/api/status`). OpenStreetMap is therefore
+  not a witness in this run; asking it from the VPS would use production for more than a read.
+* The map's K classes matched class words as substrings ("hill" in "hillfort", "city" in "ancient
+  city"). Whole-word matching with a site-word exemption gives, on the 285: container 60 (map 88),
+  linear/areal 20 (26), shared 7 (7), 1-10 km 135 (105), over 10 km 63 (59). The K classes are a report;
+  a write is decided by the witness rule and the name identity. The N7 split moves the same way
+  (27 site / 19 locality, map 22/24).
+* A first version of the plan rendered the evidence in dict order and its own `check` refused it after
+  the round trip through `PLAN.jsonl` (sorted keys). The statement now renders sorted keys; a mutation
+  case keeps it that way.
+
+### Decisions taken under "implement the recommendations"
+
+* Coordinates are written as three journalled changes (`lat`, `lon`, `geom`), not two: `geom` has no
+  trigger and the prospector's dedup measures on it.
+* Two witnesses count once when `P625` is referenced to English Wikipedia (`P143` Q328 or an import
+  URL) or when the points are the same within max(5 m, the P625 precision) - anti-pattern 9.
+* Name identity (N1/N2) gates a move: a part-of name ("Temple of Apollo, Delphi" on Delphi) would
+  otherwise move a temple to its sanctuary's centre.
+* Museum objects move to the `P189` find-spot only when stored at the holding museum.
+* Survivor rule as the task stated it (content links, sources, older `created_at`) plus the lower id
+  as a tie-break, reported as such: the 5,004 curated rows carry only three distinct `created_at`
+  values, and the tie-break decides 7 of the 20 pairs.
+* The external-id repair's wave 2 keeps rules A/B and adds the map's gate (1 km, a site kind, the
+  article's coordinates as rule A's position proof); a research lead is never taken unread.
+* `gap_plan.py` still withholds wave-1 links only; the gap lane's plan is built, so wave 2 is named for
+  its next re-plan rather than changing a plan in flight.
+
+### Mutation proof
+
+`scripts/remediation/phase3/mutation_sweep.py bcases`: **32/32 caught**, the tree byte-identical to
+the sweep's start for 5 files. The older repair and gap-plan entries, re-run after the wave-2 change:
+8/8 caught.
+
+## 2026-09-23 - the owner cases, reviewed: 12 findings, what they changed
+
+Two reviews of `wip/bcases` raised 12 findings. Each was checked against the data before anything was
+changed; nothing was written to production (every production contact below is a read).
+
+### The cache had to be rebuilt first
+
+The builder's derived cache (`cache/bcases/`, 46 MB) lived only in its worktree, and that worktree had
+been removed before the fix started - the re-classification the findings ask for had no input. It was
+rebuilt: `bcases/run.py export` (one read-only `SELECT`, 5,004 rows) and `collect` (Wikidata and
+Wikipedia with the project `USER_AGENT`, 90 s). With the **unchanged** code the rebuilt cache
+reproduces every delivered file (`names`, `coords`, `b2`, `dup_pairs`, `stacked`, `DUPLICATES`,
+`COUNTS`) exactly, so the changes below are the code's, not the day's data drifting. The rebuilt cache
+sits in the fixer's worktree (`output/remediation/cache/bcases/`, gitignored); the main checkout still
+has none, so `test_a_full_reclassification_reproduces_the_delivered_verdicts` skips there until it is
+copied or rebuilt. That test could never have passed: it compared `write_all`'s counts, whose
+`b2_state` keys were booleans, with `COUNTS.json`, where JSON had turned them into `"false"`/`"true"`.
+The keys are now `"open"` / `"written since the census"` (`classify.summarise`, with a test that
+needs no cache); the same comparison, run by hand against the main checkout's census data, passes for
+the counts and all seven files.
+
+### Findings confirmed and fixed
+
+* **Rounded copies counted as two witnesses (two findings, major).** Confirmed: Castro of Santa Trega's
+  article value is its P625 cut to four decimals (5.6 m), Khao Sam Kaeo's likewise (10.7 m), Taq
+  Kasra's article is the P625 rounded to whole arcseconds (16.1 m); the 5 m `COPY_M` called all three
+  independent and PLAN.md journalled them "(independent)". The Wikipedia witness had no precision at
+  all. Now (`classify.independent`): two witnesses are one when either says it was imported from the
+  other; when one is the other rounded, truncated, floored or ceiled to the grid its own digits are
+  written on (`grid_of`: whole degrees, tenths, arcminutes, hundredths, thousandths, arcseconds,
+  4-8 decimals; a value lies on a grid within a thousandth of a step, never more than 1e-8 degrees);
+  or when they lie within one arcsecond (30.9 m), one step of either grid, or the P625's declared
+  precision. Result: **8 of the 17 moves are open again** - El Kab (its P625 is the article's point
+  cut to whole arcminutes, 333 m), Bülövqaya (14 m), Khao Sam Kaeo, Eridu (27 m), Taq Kasra, Temple of
+  Atargatis (8 m), Sialkot Fort (P625 = the article truncated to whole arcseconds), Castro of Santa
+  Trega. **9 moves, 27 journalled changes** remain; the closest is Yenikale at 34 m (no rounding of
+  either, just over one arcsecond). The Temple of Atargatis country follow-up is gone with its move.
+  The reviewer's 35 m experiment also caught Yenikale; the principled floor (one arcsecond) does not,
+  and El Kab - 333 m apart, caught only by the rounding rule - shows why a distance alone is not the
+  rule. On the real data the rounding rule changes wording only (every rounded pair is also within the
+  distance), except El Kab; a constructed equator case (a 0.9" truncation on both axes, 39 m) is the
+  test that only the rounding rule catches.
+* **Guards without a failing test (two findings, major).** Confirmed with a harness that applied each
+  mutation and ran both test files whole: 32 of 34 guard mutations survived (97 passed, 1 skipped each
+  time; the two SQL-line mutations failed one test each). Every one now has a test that goes red
+  without it:
+  the linear/areal gate (Via Egnatia), an article of another item / a missing article / a point on
+  another globe, a P625 on another globe, a museum object with two find-spots, the tolerance floor
+  (precision 0.1 degrees; 0.01 degrees would not widen it - its half is 556 m), the P4656 import URL,
+  Q3, the UUID / planned-twice / whole-site / read-UUID checks of the plan, `compare`'s lat, old-geom
+  and geom-is-point checks, the statement's `statement_timeout`, every clause of guard 3 and of
+  invariant 1, the `entities` / answered-id / JSON / `query` / answered-title checks of the fetch, the
+  cache and census-link checks of `inputs`, rule A's redirect / missing / same-item conditions, rule
+  B's old-item / N1-N2 / Wikimedia-page conditions, and both research list checks.
+* **A matching name hid a wrong link (major).** Confirmed: 72 of the 508 kept names meet Q1 (4), Q2
+  (36) or Q4 (35). Every name record now carries `link_suspect` (the tests the link meets on its own,
+  with their evidence); `COUNTS.names_keep_link_suspect` = Q1 4, Q2 36, Q4 35, any 72. They are not in
+  wave 2 and nothing is written; the class-item links (milecastle, dolmen, nuraghe), Asklepion Kos on
+  the shared Asclepeion and The Temple of Artemis (stored in Greece, linked and described as Ephesus,
+  388 km) are named for the owner; "Themistoclean Wall" is the lower-case test's false positive.
+  HUMAN_ONLY, the qid_repair wave-2 docstring and its PLAN.md now say wave 2 is the rows whose *name*
+  did not match.
+* **Côa Valley and Siega Verde classed "wrong country" (minor).** Confirmed: its description spans
+  Portugal and Spain. In `classify_b2`, a row whose point and P625 agree on the neighbour is
+  transboundary (c2, leave) when its own description names both countries; only this row changes
+  (b 6 -> 5, c2 44 -> 45). The wider rule "any description naming both" was measured and rejected: it
+  would have made Glubochek (51 km inside Moldova, described as in Ukraine) a border straddle.
+* **Banias / Caesarea Philippi retired a Golan row (minor).** Confirmed: the only DUP pair whose rows
+  name different countries (Syria / Israel). A group whose rows name different countries is now held
+  (`DUPLICATES_HELD.jsonl`, with the lines the survivor rule would have written) instead of listed for
+  the scope lane: 19 losers, 1 held group.
+* **The first P625 instead of the preferred one (minor).** Confirmed on the rebuilt cache: Charax
+  Spasinu (Q1063054) holds a preferred P625 1.07 km from the first; Demetrias (Q1150349) likewise.
+  `collect.claims_record` now takes the truthy statements (preferred when any, else non-deprecated) and
+  records the rank and the count; the witness quote names the rank when there are several. Charax
+  Spasinu's reason changes from "the same point" to "disagree, 1.07 km"; no verdict changes. The
+  wave-2 research was re-run with the fixed record: one candidate distance moves (Milecastles'
+  Q4916035, 102.8 -> 106.6 m), no suggestion changes, and wave 2's statements are byte-identical
+  (`qid_repair.py check --wave 2`, read-only: 13 rows, 0 deviations).
+* **SQL clauses pinned only by a byte comparison, wave 2 not pinned at all (minor).** The statement
+  test now asserts the `statement_timeout` line and every clause of guard 3 and invariant 1; a new test
+  compares `qid_repair/wave2/PLAN.jsonl`, `APPLY.sql` and `ROLLBACK.sql` with the renderer and asserts
+  the evidence source is wave 2's research.
+* **`gate_m` not tied to the research (minor).** A test recomputes each of the 12 settled distances
+  from `qid_research.jsonl` (rule B: the candidate's P625; rule A: the P625, or the article's point
+  where the P625 is beyond the gate - Harzhorn) and compares to 0.05 m. All 12 match.
+* **Duplicated utilities (minor).** `coord_plan` imports `phase3.write_stage.plan_digest` (same
+  bytes, so the pin is unchanged); `collect` imports `mechanical.plan._claims`; `classify.fold` is
+  built on `pipeline.utils.text.normalize_name` (square brackets kept, as the verdicts were measured -
+  the re-classification is identical).
+
+### Measured after the fixes
+
+* Coordinates: move 9 (5 of the 285), stored-agrees 98, not-comparable 210, review 171 (one witness
+  102, two that are one 52, disagreeing 9, none 7, split 1). `bcases/run.py check`, read-only against
+  production: **27 rows, 0 deviations**.
+* Names 508 / 77 / 46 unchanged; B2 c2 45, b 5; duplicates 19 + 1 held; stacked 13 / 36.
+* Mutation proof: `mutation_sweep.py bcases` **86/86 caught** (the builder's 32, one anchor moved to
+  the new independence line, and 54 new), the tree byte-identical to the sweep's start for 7 files;
+  the repair and gap-plan entries re-run after the wave-2 wording change: 8/8.
