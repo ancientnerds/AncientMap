@@ -9,6 +9,14 @@
     $PY scripts/remediation/bcases/run.py check       # production, read-only: the old values hold
     $PY scripts/remediation/bcases/run.py verify      # production, read-only: after an apply
 
+The coordinates' second wave (`web_witness.py`), a third witness from the web:
+
+    $PY scripts/remediation/bcases/run.py web-verify  # the pages (cached): coords3/WEB_WITNESSES.jsonl
+    $PY scripts/remediation/bcases/run.py reweigh     # offline: coords3/VERDICTS.jsonl, COUNTS.json
+    $PY scripts/remediation/bcases/run.py plan --wave 2     # coords_plan_wave2/
+    $PY scripts/remediation/bcases/run.py check --wave 2    # production, read-only
+    $PY scripts/remediation/bcases/run.py verify --wave 2   # production, read-only
+
 `--data` names the directory with the census findings, the census snapshot and the T01 cache (a git
 worktree points it at the main checkout's `output/remediation`), `--cache` the derived files `collect`
 writes, `--out` the deliverables. Nothing here writes to production; the plan's statements are sent by
@@ -23,6 +31,8 @@ import logging
 import sys
 from pathlib import Path
 
+import httpx
+
 _REPO = Path(__file__).resolve().parents[3]
 for _root in (str(_REPO), str(_REPO / "scripts" / "remediation")):
     if _root not in sys.path:
@@ -36,6 +46,7 @@ from bcases import collect as K  # noqa: E402
 from bcases import coord_plan as P  # noqa: E402
 from bcases import inputs  # noqa: E402
 from bcases import qid_research as R  # noqa: E402
+from bcases import web_witness as W  # noqa: E402
 
 
 def collect(data: Path, cache: Path) -> dict[str, int]:
@@ -85,11 +96,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bcases")
     parser.add_argument(
         "command",
-        choices=("export", "collect", "classify", "research", "plan", "check", "verify"),
+        choices=(
+            "export",
+            "collect",
+            "classify",
+            "research",
+            "web-verify",
+            "reweigh",
+            "plan",
+            "check",
+            "verify",
+        ),
     )
     parser.add_argument("--data", default=str(inputs.DATA))
     parser.add_argument("--cache", default=str(inputs.CACHE))
     parser.add_argument("--out", default=str(inputs.OUT))
+    parser.add_argument(
+        "--wave", type=int, choices=sorted(P.WAVES), default=1, help="the coordinate plan's wave"
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     data, cache, out = Path(args.data), Path(args.cache), Path(args.out)
@@ -108,13 +132,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "research":
         print(json.dumps(research(cache, out)))
         return 0
+    if args.command == "web-verify":
+        with W.open_fetcher(cache / "web", httpx.HTTPTransport()) as net:
+            print(json.dumps(W.web_verify(net, out), indent=1))
+        return 0
+    if args.command == "reweigh":
+        counts = W.reweigh(cache, out, atlas=C.CC.load_countries())
+        print(json.dumps(counts, indent=1, ensure_ascii=False))
+        return 0
+    wave = P.WAVES[args.wave]
     if args.command == "plan":
-        rows = P.write_files(out)
+        rows = P.write_files(out, wave)
+        which = "" if wave.number == 1 else f", wave {wave.number}"
         print(
-            f"coordinate plan: {len(rows) // len(P.COLUMNS)} sites, {len(rows)} journalled changes"
+            f"coordinate plan{which}: {len(rows) // len(P.COLUMNS)} sites, "
+            f"{len(rows)} journalled changes"
         )
         return 0
-    return P.run_readonly(args.command, out)
+    return P.run_readonly(args.command, out, wave=wave)
 
 
 if __name__ == "__main__":
