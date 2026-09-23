@@ -148,13 +148,21 @@ def test_two_range_dashes_are_no_insertion() -> None:
     assert _a_spans("The mound – fully 12 m across – stands on the ridge above the ford.") == {
         " – fully 12 m across –"
     }  # a number inside the insertion is no range: only a digit next to a dash is
+    # a digit after the first dash, and a digit before it
     assert _a_spans("The mound – 12 m across – stands on the ridge above the ford.") == set()
+    assert _a_spans("The wall was built in 1200 – of local stone – on the ridge above.") == set()
 
 
 def test_a_dash_pair_holding_a_semicolon_is_no_insertion() -> None:
     # Varna Necropolis W32: "type 1 – elongated barrel-shaped; type 2 –" gave type 1 type 2's shape.
     text = "The beads are of four kinds: type 1 – long; type 2 – faceted; type 3 – short; type 4 – round."
     assert _a_spans(text) == set()
+    # the same shape with no digit next to a dash: only the semicolon refuses it
+    assert _a_spans("The beads are long – barrel-shaped; the pendants – round and flat.") == set()
+    # a semicolon inside a parenthesis is not at the top level
+    assert _a_spans("The corridor – lined with slabs (granite; basalt) – rises to its end.") == {
+        " – lined with slabs (granite; basalt) –"
+    }
 
 
 def test_dashes_pair_in_order_and_an_odd_count_pairs_none() -> None:
@@ -169,6 +177,7 @@ def test_dashes_pair_in_order_and_an_odd_count_pairs_none() -> None:
     [
         # a serial list's last link: the text after the second comma opens with "and"/"or"
         "The temples of Asclepius, Aphrodite, Apollo, and Artemis stood on the hill.",
+        "The temple held statues of the goddess of the harvest, the god of the sea, and the god of war.",
         # a short item before a short tail that carries the coordinator
         "Finds from the ditch included pottery, coins, tools and bones from the pit.",
         # a run of short items that ends in a list link
@@ -185,6 +194,9 @@ def test_a_comma_pair_inside_a_list_is_no_insertion(text: str) -> None:
 def test_an_insertion_beside_a_list_is_still_offered() -> None:
     text = "The temple, which stood on a low ridge, held statues of Ra and Isis."
     assert _a_spans(text) == {", which stood on a low ridge,"}
+    # a short insertion before a long tail that carries a coordinator is no list link
+    text = "The temple, now ruined, held statues of the gods of the river and of the sky."
+    assert _a_spans(text) == {", now ruined,"}
 
 
 def test_a_leading_phrase_takes_its_comma_and_the_space_after_it() -> None:

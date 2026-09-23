@@ -8480,6 +8480,213 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4B_SENT_TEST,
         "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
     ),
+    # -- C2: the `a` rule (dash pairs in order, ranges, `;`, list links)
+    (
+        "p4 sentences: a range dash encloses an insertion",
+        P4B_SENT,
+        "                and not _range_dash(s, first)\n                and not _range_dash(s, second)\n",
+        "",
+        P4B_SENT_TEST,
+        "test_two_range_dashes_are_no_insertion",
+    ),
+    (
+        "p4 sentences: a digit after a dash is no range",
+        P4B_SENT,
+        "    return bool(before and before[-1].isdigit()) or bool(after and after[0].isdigit())\n",
+        "    return bool(before and before[-1].isdigit())  # mutant\n",
+        P4B_SENT_TEST,
+        "test_two_range_dashes_are_no_insertion",
+    ),
+    (
+        "p4 sentences: a digit before a dash is no range",
+        P4B_SENT,
+        "    return bool(before and before[-1].isdigit()) or bool(after and after[0].isdigit())\n",
+        "    return bool(after and after[0].isdigit())  # mutant\n",
+        P4B_SENT_TEST,
+        "test_two_range_dashes_are_no_insertion",
+    ),
+    (
+        "p4 sentences: a dash pair may hold a semicolon",
+        P4B_SENT,
+        '                and not any(s[i] == ";" and top[i] for i in range(first + 1, second))\n',
+        "",
+        P4B_SENT_TEST,
+        "test_a_dash_pair_holding_a_semicolon_is_no_insertion",
+    ),
+    (
+        "p4 sentences: a semicolon in a parenthesis refuses its dash pair",
+        P4B_SENT,
+        's[i] == ";" and top[i] for i in',
+        's[i] == ";" for i in',
+        P4B_SENT_TEST,
+        "test_a_dash_pair_holding_a_semicolon_is_no_insertion",
+    ),
+    (
+        "p4 sentences: dashes pair with their neighbours",
+        P4B_SENT,
+        "    if len(dashes) % 2 == 0:\n"
+        "        for first, second in zip(dashes[::2], dashes[1::2], strict=True):\n",
+        "    if True:  # mutant\n        for first, second in zip(dashes, dashes[1:], strict=False):\n",
+        P4B_SENT_TEST,
+        "test_dashes_pair_in_order_and_an_odd_count_pairs_none",
+    ),
+    (
+        "p4 sentences: an odd count of dashes pairs some",
+        P4B_SENT,
+        "    if len(dashes) % 2 == 0:\n"
+        "        for first, second in zip(dashes[::2], dashes[1::2], strict=True):\n",
+        "    if True:  # mutant\n"
+        "        for first, second in zip(dashes[::2], dashes[1::2], strict=False):\n",
+        P4B_SENT_TEST,
+        "test_dashes_pair_in_order_and_an_odd_count_pairs_none",
+    ),
+    (
+        "p4 sentences: a list link is offered as an insertion",
+        P4B_SENT,
+        "        if s[first + 1 : second].strip() and not link:\n",
+        "        if s[first + 1 : second].strip():  # mutant\n",
+        P4B_SENT_TEST,
+        "test_a_comma_pair_inside_a_list_is_no_insertion",
+    ),
+    (
+        "p4 sentences: a serial list's last link is an insertion",
+        P4B_SENT,
+        "            _OPENS_WITH_COORDINATOR.match(tail.lstrip()) is not None\n",
+        "            False  # mutant\n",
+        P4B_SENT_TEST,
+        "test_a_comma_pair_inside_a_list_is_no_insertion",
+    ),
+    (
+        "p4 sentences: a short item before a coordinated tail is an insertion",
+        P4B_SENT,
+        "            or (\n"
+        "                short\n"
+        "                and len(tail.split()) <= LIST_TAIL_TOKENS\n"
+        "                and _COORDINATOR.search(tail) is not None\n"
+        "            )\n",
+        "",
+        P4B_SENT_TEST,
+        "test_a_comma_pair_inside_a_list_is_no_insertion",
+    ),
+    (
+        "p4 sentences: a coordinated tail of any length makes a list",
+        P4B_SENT,
+        "                and len(tail.split()) <= LIST_TAIL_TOKENS\n",
+        "",
+        P4B_SENT_TEST,
+        "test_an_insertion_beside_a_list_is_still_offered",
+    ),
+    (
+        "p4 sentences: the run before a list link is an insertion",
+        P4B_SENT,
+        "            or (short and k + 1 < pairs and links[k + 1])\n",
+        "",
+        P4B_SENT_TEST,
+        "test_a_comma_pair_inside_a_list_is_no_insertion",
+    ),
+    (
+        "p4 sentences: a short item before a short last segment is an insertion",
+        P4B_SENT,
+        "            or (short and k + 1 == pairs and len(tail.split()) <= LIST_ITEM_TOKENS)\n",
+        "",
+        P4B_SENT_TEST,
+        "test_a_comma_pair_inside_a_list_is_no_insertion",
+    ),
+    # -- C3: lane T selects whole sentences; foreign apparatus is excluded
+    (
+        "p4 sentences: a translated sentence offers spans",
+        P4B_SENT,
+        "    offers_spans = M.source_kind(source_id) is M.SourceKind.W\n",
+        "    offers_spans = True  # mutant\n",
+        P4B_SENT_TEST,
+        "test_a_translated_source_offers_no_span",
+    ),
+    (
+        "p4 sentences: a foreign reference section enters the pool",
+        P4B_SENT,
+        "    return title in EXCLUDED_SECTIONS or title in FOREIGN_EXCLUDED_SECTIONS\n",
+        "    return title in EXCLUDED_SECTIONS  # mutant\n",
+        P4B_SENT_TEST,
+        "test_a_translated_sources_reference_section_is_never_in_the_pool",
+    ),
+    # -- C5: parallel routes stages take turns on the search allowance
+    (
+        "p4 mass4: parallel routes stages share one allowance",
+        P4B_MASS4,
+        '            if stage == "routes":\n'
+        "                with self.search_turn:\n"
+        "                    code = self.call(stage, planned.batch_id)\n"
+        "            else:\n"
+        "                code = self.call(stage, planned.batch_id)\n",
+        "            code = self.call(stage, planned.batch_id)  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_parallel_routes_stages_never_share_one_search_allowance",
+    ),
+    (
+        "p4 mass4: routes is told the whole budget, not what is left",
+        P4B_MASS4,
+        '            argv += ["--max-searches", str(self.searches_left())]\n',
+        '            argv += ["--max-searches", str(self.budget.max_searches)]  # mutant\n',
+        P4B_RUNNER_TEST,
+        "test_parallel_routes_stages_never_share_one_search_allowance",
+    ),
+    # -- C6/R7: the audit draws written sites from finished reviews
+    (
+        "p4 audit4: an unreviewed batch is sampled",
+        P4B_AUDIT4,
+        "        if not M4.batch_done(run_dir, batch_dir.name)[0]:\n",
+        "        if not (batch_dir / M.ASSEMBLY_FILE).exists():  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_only_a_finished_review_counts_and_a_later_site_hold_takes_a_site_out",
+    ),
+    (
+        "p4 audit4: a site held after its review is sampled",
+        P4B_AUDIT4,
+        "            if assembly.site_id not in held:\n",
+        "            if True:  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_only_a_finished_review_counts_and_a_later_site_hold_takes_a_site_out",
+    ),
+    (
+        "p4 audit4: a site assembled in two batches is read once",
+        P4B_AUDIT4,
+        "            if assembly.site_id in found:\n",
+        "            if False:  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_a_site_assembled_in_two_batches_and_an_unknown_sheet_id_are_refused",
+    ),
+    (
+        "p4 audit4: a sheet for a site never reviewed is rendered",
+        P4B_AUDIT4,
+        "    if unknown:\n",
+        "    if False:  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_a_site_assembled_in_two_batches_and_an_unknown_sheet_id_are_refused",
+    ),
+    (
+        "p4 audit4: a written site never reviewed is drawn",
+        P4B_AUDIT4,
+        "    if unreviewed:\n",
+        "    if False:  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_a_draw_is_taken_from_the_written_sites_and_refuses_one_never_reviewed",
+    ),
+    (
+        "p4 audit4: the draw ignores the written set",
+        P4B_AUDIT4,
+        "        for site_id in sorted(written)\n",
+        "        for site_id in sorted(sites)  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_a_draw_is_taken_from_the_written_sites_and_refuses_one_never_reviewed",
+    ),
+    (
+        "p4 audit4: the written set is optional",
+        P4B_AUDIT4,
+        'draw.add_argument("--written", required=True,',
+        'draw.add_argument("--written", default=None,',
+        P4B_RUNNER_TEST,
+        "test_a_draw_is_taken_from_the_written_sites_and_refuses_one_never_reviewed",
+    ),
 ]
 MUTATIONS += PHASE4_SELECT_SUP_MUTATIONS
 
