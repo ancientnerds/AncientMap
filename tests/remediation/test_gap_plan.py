@@ -161,9 +161,10 @@ def test_wave_three_withholds_a_type_link_and_a_duplicate_and_keeps_a_right_link
     kept, why = G.withheld_reason(unresolved.site_id, unresolved.old_qid, shared={}, repairs=wave3)
     assert kept is None and "unresolved" in str(why) and "wave3/PLAN.md" in str(why)
     replaced = _wave3("B", "Siega Verde")
-    assert G.withheld_reason(
-        replaced.site_id, replaced.new_qid, shared={}, repairs=wave3
-    ) == (replaced.new_qid, None)
+    assert G.withheld_reason(replaced.site_id, replaced.new_qid, shared={}, repairs=wave3) == (
+        replaced.new_qid,
+        None,
+    )
 
 
 def test_a_kept_link_production_no_longer_carries_stops_the_plan() -> None:

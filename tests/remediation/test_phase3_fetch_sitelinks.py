@@ -68,7 +68,9 @@ def _page(**changes: Any) -> dict[str, Any]:
 
 def _body(page: dict[str, Any]) -> bytes:
     return json.dumps(
-        {"batchcomplete": True, "query": {"pages": [page]}}, ensure_ascii=False, separators=(",", ":")
+        {"batchcomplete": True, "query": {"pages": [page]}},
+        ensure_ascii=False,
+        separators=(",", ":"),
     ).encode("utf-8")
 
 

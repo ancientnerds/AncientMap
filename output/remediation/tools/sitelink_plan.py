@@ -19,12 +19,18 @@ scope (`writable` for the lane; `all` five fields on the gold-standard sites for
 key that is not open any more, each named with its reason in the summary:
 
 * **written** - production's journal (`remediation_change_log`, any stamp, exported read-only) holds a
-  row for the (site, column): another lane has decided it;
+  row for the (site, column): another lane has decided it. The older list of the mass lane's written
+  keys (`logs/search_lane/written_keys.txt`) is read too, as a check on the fresh export: a key it
+  names for a site of the export must have its journal row there, or the export is partial and stops
+  the build;
 * **planned by the mass lane** - the mass lane's pinned write plan (`lanes.REVIEWED_PLAN_KEYS_SHA256`)
   names the (site, column): written, held by hand (B7) or refused at the boundary (B8);
 * **decided by hand** - the country of every site the owner-case classifier sorted out of T02
-  (`bcases/b2.jsonl`, `HUMAN_ONLY.md` B2/B10), and every field of a duplicate loser or of the held
-  duplicate pair (`bcases/DUPLICATES.jsonl`, `DUPLICATES_HELD.jsonl`, B6/B10);
+  (`bcases/b2.jsonl`, `HUMAN_ONLY.md` B2), the country of the 29 geopolitical rows of the
+  2026-09-21 country census the owner left as they are (B10; `logs/_country_mismatches.txt` read with
+  the classifier's own `political_line`, six of them are not T02 findings), and every field of a
+  duplicate loser or of the held duplicate pair (`bcases/DUPLICATES.jsonl`, `DUPLICATES_HELD.jsonl`,
+  B6/B10);
 * **changed in production** - the export's value is not the value the mass finder judged.
 
 **Which item** (`item_for`): the site's `wikidata_qid` in the fresh export, withheld when the reviewed
@@ -90,10 +96,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import gap_plan as G  # noqa: E402 - the questions' shape, the export, the withheld and shared rules
 import lanes  # noqa: E402 - paths, the JSON-lines reader and the read-only psql seam
-import qid_repair  # noqa: E402 - the reviewed id repair, both waves
+import qid_repair  # noqa: E402 - the reviewed id repair, every wave
 
 sys.path.insert(0, str(lanes.REPO / "scripts" / "remediation"))
 
+from bcases import classify as BC  # noqa: E402 - the B10 political lines, never copied
 from phase3 import discover_stage as DS  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
@@ -116,6 +123,14 @@ BATCH_SIZE = 15
 WHY = "unverifiable"
 #: The mass lane's pinned write plan and its hand holds (local; `lanes.lane(MASS)`).
 ROWS = lanes.lane(lanes.MASS).rows
+#: The production journal's `phase3:batch-%` change keys, exported read-only for the search lane.
+WRITTEN_KEYS = lanes.LOGS / "search_lane" / "written_keys.txt"
+#: The 2026-09-21 country census's contradictions, `id|name|stored|found|lat|lon` (`country_census.py`).
+COUNTRY_CENSUS = lanes.LOGS / "_country_mismatches.txt"
+#: How many of those rows B10 left as they are: "Zypern 14, Krim 9, Kosovo 2, Golan 2, Palaestina 2
+#: ... 29 Zeilen ... entschieden 2026-09-21: so lassen" (`HUMAN_ONLY.md` B10). A list that reads to
+#: another number is not the list the owner decided on.
+B10_ROWS = 29
 
 #: Characters kept free for the narrowed Wikidata evidence of a site. **A chosen bound**: the gap run
 #: measured that route's rendering at a median 1,277 and a maximum 1,971 characters over its 187
@@ -353,13 +368,14 @@ class Export:
 # ------------------------------------------------------------------------------ what is still open
 @dataclass(frozen=True)
 class HandDecided:
-    """The keys decided by hand, read from the owner-case classifier's versioned output."""
+    """The keys decided by hand: the owner-case classifier's versioned output and the B10 rows."""
 
-    countries: frozenset[str]  #: sites whose country B2/B10 decided (`b2.jsonl`)
+    countries: frozenset[str]  #: sites whose country the T02 classification settled (`b2.jsonl`)
+    political: frozenset[str]  #: sites of the census's geopolitical rows B10 left as they are
     duplicates: frozenset[str]  #: duplicate losers and the held pair (B6/B10)
 
     @classmethod
-    def read(cls, bcases: pathlib.Path) -> HandDecided:
+    def read(cls, bcases: pathlib.Path, census: pathlib.Path) -> HandDecided:
         countries = {row["site_id"] for row in lanes.read_jsonl(bcases / "b2.jsonl")}
         losers = {row["loser_id"] for row in lanes.read_jsonl(bcases / "DUPLICATES.jsonl")}
         held = {
@@ -367,14 +383,57 @@ class HandDecided:
             for row in lanes.read_jsonl(bcases / "DUPLICATES_HELD.jsonl")
             for site_id in row["site_ids"]
         }
-        return cls(countries=frozenset(countries), duplicates=frozenset(losers | held))
+        return cls(
+            countries=frozenset(countries),
+            political=b10_sites(census),
+            duplicates=frozenset(losers | held),
+        )
 
 
-def mass_plan_keys(rows_path: pathlib.Path) -> set[tuple[str, str]]:
-    """`(site_id, column)` of every row the mass lane planned - the pinned plan, or the build stops."""
-    rows = lanes.read_jsonl(rows_path)
-    lanes.assert_reviewed_plan(lanes.MASS, rows, path=rows_path)
-    return {(str(row["site_id"]), str(row["column"])) for row in rows}
+def b10_sites(census: pathlib.Path) -> frozenset[str]:
+    """The sites of the country census's rows on a political line (`bcases.classify.political_line`),
+    which B10 left as they are; a list with another number of them than `B10_ROWS` stops the build."""
+    sites: list[str] = []
+    for number, line in enumerate(census.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        parts = line.split("|")
+        if len(parts) != 6:
+            raise SystemExit(f"{census}:{number}: not id|name|stored|found|lat|lon: {line!r}")
+        if BC.political_line(parts[2], parts[3]):
+            sites.append(parts[0])
+    if len(sites) != B10_ROWS or len(set(sites)) != len(sites):
+        raise SystemExit(
+            f"{census}: {len(sites)} rows on a political line ({len(set(sites))} sites); B10 decided "
+            f"on {B10_ROWS} - this is not the list the owner decided"
+        )
+    return frozenset(sites)
+
+
+@dataclass(frozen=True)
+class MassPlan:
+    """The mass lane's pinned write plan, and which of its rows the older written-keys list names."""
+
+    planned: frozenset[tuple[str, str]]  #: `(site_id, column)` of every row it planned
+    written: frozenset[tuple[str, str]]  #: those `written_keys.txt` says production wrote
+
+    @classmethod
+    def read(cls, rows_path: pathlib.Path, written_keys: pathlib.Path) -> MassPlan:
+        """The pinned plan, or the build stops; a written key the plan does not hold stops it too
+        (`search_plan.unwritten_rows` reads the same two files under the same contract)."""
+        rows = lanes.read_jsonl(rows_path)
+        lanes.assert_reviewed_plan(lanes.MASS, rows, path=rows_path)
+        by_key = {str(row["change_key"]): (str(row["site_id"]), str(row["column"])) for row in rows}
+        keys = SPL._read_lines(written_keys)
+        unknown = sorted(set(keys) - set(by_key))
+        if unknown:
+            raise SystemExit(
+                f"{written_keys}: {len(unknown)} written key(s) are not rows of the mass lane's plan, "
+                f"e.g. {unknown[:3]}"
+            )
+        return cls(
+            planned=frozenset(by_key.values()), written=frozenset(by_key[key] for key in keys)
+        )
 
 
 def judged_values(mass_run: pathlib.Path) -> dict[tuple[str, str], Any]:
@@ -396,13 +455,23 @@ def open_questions(
     judged: Mapping[tuple[str, str], Any],
     planned: Collection[tuple[str, str]],
     hand: HandDecided,
+    written_by_mass: Collection[tuple[str, str]],
 ) -> tuple[list[G.Question], list[dict[str, str]]]:
     """`(the questions still open, every other one with why)` - the rules in the module docstring,
-    first match wins: a duplicate, a journal row, a mass-lane row, a hand-decided country, a value
-    production no longer holds."""
+    first match wins: a duplicate, a journal row, a mass-lane row, a hand-decided country (T02, then
+    B10), a value production no longer holds. `written_by_mass` is `MassPlan.written`: every pair of
+    it whose site the export holds must have its journal row there, or the export is partial."""
     written: dict[tuple[str, str], str] = {}
     for row in exported.journal:
         written.setdefault((str(row["site_id"]), str(row["column_name"])), str(row["run_stamp"]))
+    missing = sorted(
+        pair for pair in written_by_mass if pair[0] in exported.sites and pair not in written
+    )
+    if missing:
+        raise SystemExit(
+            f"the export's journal lacks {len(missing)} write(s) written_keys.txt names for its own "
+            f"sites, e.g. {missing[:3]}: a partial export - export again"
+        )
     kept: list[G.Question] = []
     dropped: list[dict[str, str]] = []
     for question in questions:
@@ -421,6 +490,9 @@ def open_questions(
             why = "planned by the mass lane (written, held by hand or refused at the boundary)"
         elif question.field == "country" and question.site_id in hand.countries:
             rule, why = "hand-country", "decided by hand (bcases/b2.jsonl, HUMAN_ONLY B2/B10)"
+        elif question.field == "country" and question.site_id in hand.political:
+            rule = "political-line"
+            why = "a census row on a political line, left as it is by hand (HUMAN_ONLY B10)"
         elif now != judged[key]:
             rule, why = "changed", f"changed in production: judged {judged[key]!r}, now {now!r}"
         else:
@@ -439,7 +511,9 @@ REPAIRS: tuple[qid_repair.Site, ...] = tuple(
 )
 #: The sites whose suspect link wave 3's research read as right (`link-right`): that verdict answers
 #: the classifier's suspicion, so `names.jsonl` withholds them no longer.
-LINK_RIGHT: frozenset[str] = frozenset(site.site_id for site in REPAIRS if site.rule == "link-right")
+LINK_RIGHT: frozenset[str] = frozenset(
+    site.site_id for site in REPAIRS if site.rule == "link-right"
+)
 #: The owner-case classifier's wrong-link classes (`bcases/classify.py`).
 WRONG_LINK_CLASSES = frozenset({"Q1", "Q2", "Q3", "Q4"})
 
@@ -770,6 +844,53 @@ def resolve(
     return decided
 
 
+def site_inputs(
+    kept: Sequence[G.Question], *, exported: Export, mass: pathlib.Path
+) -> dict[str, dict[str, Any]]:
+    """`{site_id: {qid, withheld, country, room}}` for every site with an open question: what
+    `resolve` is given, and what `plan` checks `sitelinks.json` against (`stale_sites`)."""
+    qids = SP.qids_by_site(exported.external, origin="site_external_ids.jsonl")
+    shared = G.shared_counts(exported.external, repairs=REPAIRS)
+    suspect = suspect_links(lanes.REMEDIATION / "bcases")
+    sites: dict[str, dict[str, Any]] = {}
+    for question in kept:
+        if question.site_id in sites:
+            continue
+        qid, withheld = item_for(
+            question.site_id, qids.get(question.site_id), shared=shared, suspect=suspect
+        )
+        sites[question.site_id] = {
+            "qid": qid,
+            "withheld": withheld,
+            "country": exported.sites[question.site_id]["country"],
+            "room": evidence_room(question.site_id, question.source_batch, mass_run=mass),
+        }
+    return sites
+
+
+def stale_sites(
+    inputs: Mapping[str, Mapping[str, Any]], sitelinks: Mapping[str, SiteLinks]
+) -> list[str]:
+    """The sites whose recorded resolution is not the one `inputs` call for today, in id order: absent
+    from `sitelinks.json`, or resolved for another item, withholding, stored country or evidence room.
+    `sitelinks` is written by the one step that leaves the machine and read by `plan` later; a site
+    resolved under other inputs would get articles ordered or cut for another question."""
+    stale: list[str] = []
+    for site_id, row in sorted(inputs.items()):
+        links = sitelinks.get(site_id)
+        if links is None:
+            stale.append(site_id)
+            continue
+        have: tuple[Any, ...] = (links.qid, links.withheld)
+        want: tuple[Any, ...] = (row["qid"], row["withheld"])
+        if row["qid"] is not None:
+            have = (*have, links.country, links.room)
+            want = (*want, str(row["country"]), row["room"])
+        if have != want:
+            stale.append(site_id)
+    return stale
+
+
 def read_sitelinks(path: pathlib.Path) -> dict[str, SiteLinks]:
     rows = json.loads(path.read_text(encoding="utf-8"))
     return {
@@ -936,34 +1057,21 @@ def _open(args: argparse.Namespace, paths: Mapping[str, pathlib.Path]) -> tuple[
     questions = G.read_questions(paths["questions"])
     exported = Export.read(paths["export"])
     mass = pathlib.Path(args.mass_run)
+    plan = MassPlan.read(pathlib.Path(args.rows), pathlib.Path(args.written_keys))
     kept, dropped = open_questions(
         questions,
         exported=exported,
         judged=judged_values(mass),
-        planned=mass_plan_keys(pathlib.Path(args.rows)),
-        hand=HandDecided.read(lanes.REMEDIATION / "bcases"),
+        planned=plan.planned,
+        hand=HandDecided.read(lanes.REMEDIATION / "bcases", pathlib.Path(args.country_census)),
+        written_by_mass=plan.written,
     )
     return questions, exported, mass, kept, dropped
 
 
 def _sitelinks(args: argparse.Namespace, paths: Mapping[str, pathlib.Path]) -> int:
     _, exported, mass, kept, _ = _open(args, paths)
-    qids = SP.qids_by_site(exported.external, origin="site_external_ids.jsonl")
-    shared = G.shared_counts(exported.external, repairs=REPAIRS)
-    suspect = suspect_links(lanes.REMEDIATION / "bcases")
-    sites: dict[str, dict[str, Any]] = {}
-    for question in kept:
-        if question.site_id in sites:
-            continue
-        qid, withheld = item_for(
-            question.site_id, qids.get(question.site_id), shared=shared, suspect=suspect
-        )
-        sites[question.site_id] = {
-            "qid": qid,
-            "withheld": withheld,
-            "country": exported.sites[question.site_id]["country"],
-            "room": evidence_room(question.site_id, question.source_batch, mass_run=mass),
-        }
+    sites = site_inputs(kept, exported=exported, mass=mass)
     http = F.HttpFetcher(max_bytes=LOOKUP_MAX_BYTES)
     try:
         pacer = F.HostPacer(pathlib.Path(args.pacing_dir), min_interval=LOOKUP_MIN_INTERVAL_SECONDS)
@@ -981,8 +1089,14 @@ def _sitelinks(args: argparse.Namespace, paths: Mapping[str, pathlib.Path]) -> i
 
 
 def _plan(args: argparse.Namespace, paths: Mapping[str, pathlib.Path]) -> int:
-    questions, exported, _, kept, dropped = _open(args, paths)
+    questions, exported, mass, kept, dropped = _open(args, paths)
     sitelinks = read_sitelinks(paths["sitelinks"])
+    stale = stale_sites(site_inputs(kept, exported=exported, mass=mass), sitelinks)
+    if stale:
+        raise SystemExit(
+            f"{paths['sitelinks']}: {len(stale)} site(s) were resolved under other inputs than "
+            f"today's, e.g. {stale[:3]} - run `sitelinks` again"
+        )
     records, unlinked = site_records(kept, exported=exported, sitelinks=sitelinks)
     planned = batches(records, prefix=args.prefix)
     out = paths["out"]
@@ -1050,6 +1164,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mass-run", default=str(lanes.lane().run_dir))
     parser.add_argument("--data", default=str(lanes.REMEDIATION), help="run_t02/ and snapshot/")
     parser.add_argument("--rows", default=str(ROWS), help="the mass lane's pinned ALL_ROWS.jsonl")
+    parser.add_argument("--written-keys", default=str(WRITTEN_KEYS), help="the mass lane's keys")
+    parser.add_argument("--country-census", default=str(COUNTRY_CENSUS), help="the B10 rows' list")
     parser.add_argument("--gold", default=str(GOLD))
     parser.add_argument("--pacing-dir", default=str(lanes.LOGS / "pacing"))
     parser.add_argument("--prefix", default=None)
