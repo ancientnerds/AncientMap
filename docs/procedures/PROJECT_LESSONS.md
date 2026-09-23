@@ -32,8 +32,9 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   racing) runs only when its object is missing. On an up-to-date schema a boot issues no DDL at
   all; on 2026-09-23 all 108 checks answered "present" on production (read-only). Lyra is still
   ONE transaction — the checks run inside it. New boot DDL goes through `ensure()`; a bare
-  `conn.execute(text("ALTER …"))` fails `tests/pipeline/test_boot_ddl.py` (second boot must
-  be DDL-free). The `ADD CONSTRAINT` duplicate handlers now run only when two booters race, so
+  `conn.execute(text("ALTER …"))` fails `tests/pipeline/test_boot_ddl.py` (in `_run_migrations`
+  and `API_BOOT_SCHEMA` the second boot must be DDL-free; `api/main.py` may hold no DDL string
+  at all). The `ADD CONSTRAINT` duplicate handlers now run only when two booters race, so
   no ordinary boot exercises them; the same test file drives that race for every constraint of
   both paths. Moving code out of `api/main.py` and `_run_migrations` broke 22 line-number
   citations in code and docs, two of them printed in refusal texts at run time: cite code as

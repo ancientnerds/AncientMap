@@ -30,6 +30,7 @@ from pipeline.utils.boot_ddl import (
     add_constraint,
     create_index,
     ensure,
+    is_contention_error,
     set_varchar_length,
 )
 
@@ -145,22 +146,6 @@ API_BOOT_SCHEMA: tuple[BootDDL, ...] = (
 )
 
 
-def is_contention_error(exc: Exception) -> bool:
-    """True only for lock (55P03) / statement (57014) timeouts and
-    deadlocks (40P01).
-
-    Those are EXPECTED when the Lyra orchestrator migrates the same
-    tables during a simultaneous boot and may be skipped after the
-    retries below (the next boot completes them). Every other error
-    used to be swallowed as "lock contention" too, leaving silent
-    schema drift while the API started healthy (audit 2026-08-05,
-    M5) — now it aborts startup so the deploy health check fails
-    loudly.
-    """
-    pgcode = getattr(getattr(exc, "orig", None), "pgcode", None)
-    return pgcode in ("55P03", "57014", "40P01")
-
-
 def run_boot_step(
     engine: Engine, work: Callable[[Connection], object], label: str = "Migration"
 ) -> None:
@@ -184,6 +169,8 @@ def run_boot_step(
                 work(conn)
             return
         except Exception as mig_err:
+            # Anything but contention aborts startup, so the deploy's health check fails loudly
+            # instead of the API starting on a schema it does not have (audit 2026-08-05, M5).
             if not is_contention_error(mig_err):
                 logger.error(f"[STARTUP] {label} FAILED (aborting startup): {mig_err}")
                 raise

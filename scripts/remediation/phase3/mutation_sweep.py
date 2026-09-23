@@ -3025,6 +3025,14 @@ BD_API_RACE = "test_an_api_constraint_another_booter_added_first_does_not_abort_
 BD_FK_REWRITE = "test_the_fk_policy_rewrite_runs_only_while_a_cascade_fk_remains"
 BD_FK_ONE_QUERY = "test_the_fk_policy_check_and_its_rewrite_loop_are_one_query"
 W_PRODUCERS_CITED = "test_the_boot_producers_the_refusals_name_are_where_the_refusals_say"
+API_MAIN = "api/main.py"
+BD_RETRY_READS = "test_a_step_retried_after_contention_reads_the_catalog_again"
+BD_RETRY_ADDS = "test_a_step_retried_after_contention_runs_its_statement_again_while_it_is_needed"
+BD_RETRY_SKIP = "test_a_step_still_contended_after_three_attempts_is_left_to_the_next_boot"
+BD_NOT_CONTENTION = "test_an_error_that_is_not_contention_aborts_the_startup_at_once"
+BD_CONTENTION_CODES = "test_only_a_lock_timeout_a_statement_timeout_or_a_deadlock_is_contention"
+BD_ONE_CLASSIFIER = "test_both_boot_paths_classify_contention_with_the_one_shared_function"
+BD_LIFESPAN = "test_the_api_startup_runs_the_boot_schema_and_holds_no_ddl_of_its_own"
 BOOT_DDL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "boot-ddl: ensure() runs the statement without asking the catalog",
@@ -3191,6 +3199,150 @@ BOOT_DDL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         'so the write would "  # mutant\n',
         WRITE_TEST,
         W_PRODUCERS_CITED,
+    ),
+    # Second review of 2026-09-23: the retry test held whether the step retried or was skipped,
+    # nothing pinned the contention rule, three identifier guards and api/main.py's wiring.
+    # `if attempt < 3` -> `if False` (the review's mutant) does not end the loop: the step logs
+    # "skipped after 3 contention retries" after its FIRST attempt and retries at once, without a
+    # backoff. `continue` -> `return` is the mutant that really gives the step up.
+    (
+        "boot-ddl: a contended API step logs 'skipped' and retries without backoff (winner)",
+        API_BOOT_SCHEMA,
+        "            if attempt < 3:\n",
+        "            if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_READS,
+    ),
+    (
+        "boot-ddl: a contended API step logs 'skipped' and retries without backoff (alone)",
+        API_BOOT_SCHEMA,
+        "            if attempt < 3:\n",
+        "            if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_ADDS,
+    ),
+    (
+        "boot-ddl: a contended API step is given up after its first attempt (winner)",
+        API_BOOT_SCHEMA,
+        "                time.sleep(2 * attempt)\n                continue\n",
+        "                time.sleep(2 * attempt)\n                return  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_READS,
+    ),
+    (
+        "boot-ddl: a contended API step is given up after its first attempt (alone)",
+        API_BOOT_SCHEMA,
+        "                time.sleep(2 * attempt)\n                continue\n",
+        "                time.sleep(2 * attempt)\n                return  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_ADDS,
+    ),
+    (
+        "boot-ddl: an API step still contended after three attempts aborts the startup",
+        API_BOOT_SCHEMA,
+        "            logger.warning(\n"
+        '                f"[STARTUP] {label} skipped after 3 contention retries "\n',
+        "            raise  # mutant\n"
+        "            logger.warning(\n"
+        '                f"[STARTUP] {label} skipped after 3 contention retries "\n',
+        BOOT_DDL_TEST,
+        BD_RETRY_SKIP,
+    ),
+    (
+        "boot-ddl: every boot error counts as contention",
+        BOOT_DDL,
+        '    return pgcode_of(exc) in ("55P03", "57014", "40P01")\n',
+        "    return True  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NOT_CONTENTION,
+    ),
+    (
+        "boot-ddl: a deadlock no longer counts as contention",
+        BOOT_DDL,
+        '    return pgcode_of(exc) in ("55P03", "57014", "40P01")\n',
+        '    return pgcode_of(exc) in ("55P03", "57014")  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_CONTENTION_CODES,
+    ),
+    (
+        "boot-ddl: the API retries every error instead of aborting",
+        API_BOOT_SCHEMA,
+        "            if not is_contention_error(mig_err):\n",
+        "            if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NOT_CONTENTION,
+    ),
+    (
+        "boot-ddl: Lyra's main() carries its own pgcode list again",
+        LYRA_ORCHESTRATOR,
+        "            if is_contention_error(mig_err) and mig_attempt < len(MIGRATION_BACKOFF):\n",
+        '            if pgcode_of(mig_err) in ("40P01", "55P03", "57014") and mig_attempt < len('
+        "MIGRATION_BACKOFF):  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_ONE_CLASSIFIER,
+    ),
+    (
+        "boot-ddl: the API carries its own contention rule again",
+        API_BOOT_SCHEMA,
+        "logger = logging.getLogger(__name__)\n",
+        "logger = logging.getLogger(__name__)\n\n\n"
+        "def is_contention_error(exc):  # mutant\n"
+        '    return getattr(getattr(exc, "orig", None), "pgcode", None) in '
+        '("55P03", "57014", "40P01")\n',
+        BOOT_DDL_TEST,
+        BD_ONE_CLASSIFIER,
+    ),
+    (
+        "boot-ddl: set_varchar_length splices an unchecked column name",
+        BOOT_DDL,
+        '            f"ALTER COLUMN {_identifier(column)} TYPE VARCHAR({length:d})"\n',
+        '            f"ALTER COLUMN {column} TYPE VARCHAR({length:d})"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: add_constraint splices an unchecked constraint name",
+        BOOT_DDL,
+        '            f"    ALTER TABLE {_identifier(table)} ADD CONSTRAINT {_identifier(name)}'
+        ' {definition};\\n"\n',
+        '            f"    ALTER TABLE {_identifier(table)} ADD CONSTRAINT {name}'
+        ' {definition};\\n"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: relation_exists asks the catalog about an unchecked name",
+        BOOT_DDL,
+        '        conn.execute(text(_RELATION_RESOLVES), {"relation_name": _identifier(name)})'
+        ".scalar_one()\n",
+        '        conn.execute(text(_RELATION_RESOLVES), {"relation_name": name}).scalar_one()'
+        "  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: the API's startup no longer runs the boot schema",
+        API_MAIN,
+        "        run_api_boot_schema(engine)\n",
+        "        pass  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_LIFESPAN,
+    ),
+    (
+        "boot-ddl: a bare ALTER comes back into the API's startup",
+        API_MAIN,
+        "        run_api_boot_schema(engine)\n",
+        "        run_api_boot_schema(engine)\n"
+        "        run_boot_step(\n"
+        "            engine,\n"
+        "            lambda conn: conn.execute(\n"
+        '                _text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS '
+        'mutant_col INTEGER")\n'
+        "            ),\n"
+        '            label="mutant",\n'
+        "        )  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_LIFESPAN,
     ),
 ]
 MUTATIONS += GAP_MUTATIONS

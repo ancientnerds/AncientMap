@@ -20,6 +20,10 @@ it is sent. The claims:
 * a schema missing one object gets exactly the statement(s) that create it, nothing else;
 * Lyra still commits once, at the end; the API still runs each step in its own transaction
   under its lock timeout, and a retry after contention re-reads the catalog;
+* only a lock timeout, a statement timeout or a deadlock counts as contention, in one function
+  both boot paths share: an API step still contended after three attempts is left to the next
+  boot, and any other error aborts the startup at once;
+* api/main.py runs the API list and holds no DDL string of its own;
 * two booters that both read "missing" stay harmless: the loser's ADD CONSTRAINT meets the
   object the winner committed, and its handler swallows exactly the error PostgreSQL raises
   (42710 for a CHECK, 42P07 for the index behind a UNIQUE). Before 2026-09-23 the handler ran
@@ -35,11 +39,14 @@ length, a table only in the tiger schema) answer "missing".
 
 from __future__ import annotations
 
+import ast
 import copy
+import logging
 import re
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -58,10 +65,16 @@ from pipeline.utils.boot_ddl import (
     create_index,
     create_table,
     ensure,
+    is_contention_error,
+    pgcode_of,
+    relation_exists,
     set_varchar_length,
 )
 from tests.api.test_fk_policy_exemptions import SITE_OWNED_CASCADE_TABLES
 from tests.fake_sql import FakeResult, sql_of
+from tests.source_functions import names_used_by
+
+REPO = Path(__file__).resolve().parents[2]
 
 #: Tables Lyra's own migrations create; every other table the boot touches comes from the models.
 LYRA_CREATES = {
@@ -154,8 +167,9 @@ class Database:
 
     def __init__(self, catalog: Catalog) -> None:
         self.catalog = catalog
-        #: ("sql", text) for every statement, plus ("CONNECT"|"BEGIN"|"COMMIT"|"ROLLBACK"|"CLOSE",)
-        self.events: list[tuple[str, ...]] = []
+        #: ("sql", text, params) for every statement, plus ("CONNECT"|"BEGIN"|"COMMIT"|"ROLLBACK"|
+        #: "CLOSE",)
+        self.events: list[tuple[Any, ...]] = []
         #: (kind, key, sql) for every DDL statement that created or changed something.
         self.created: list[tuple[str, Any, str]] = []
         #: raised by the next DDL statement instead of running it (after calling ``on_fail``)
@@ -339,7 +353,7 @@ class Connection:
         missing = sorted(set(stmt.compile().params) - set(params))
         if missing:
             raise InvalidRequestError(f"A value is required for bind parameter {missing[0]!r}")
-        self.db.events.append(("sql", sql))
+        self.db.events.append(("sql", sql, params))
         return self.db.run(sql, params)
 
     def commit(self) -> None:
@@ -474,6 +488,59 @@ def _losing_the_race_for(up_to_date: Catalog, key: tuple[str, str]) -> Database:
 
     db.other_booter_first = the_other_booter_commits_it
     return db
+
+
+@dataclass
+class Transaction:
+    """One transaction of the API boot: what it ran, and how it ended."""
+
+    #: (the statement, whitespace-normalised; its bind parameters), in the order they ran
+    statements: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    outcome: str = ""  # "COMMIT" or "ROLLBACK"
+
+    def sql(self) -> list[str]:
+        return [sql for sql, _ in self.statements]
+
+
+def _transactions(db: Database) -> list[Transaction]:
+    """The API boot's transactions, in the order they ran."""
+    transactions: list[Transaction] = []
+    for event in db.events:
+        if event == ("BEGIN",):
+            transactions.append(Transaction())
+        elif event[0] == "sql":
+            transactions[-1].statements.append((" ".join(event[1].split()), event[2]))
+        elif event[0] in ("COMMIT", "ROLLBACK"):
+            transactions[-1].outcome = event[0]
+    return transactions
+
+
+def _attempts(db: Database, params: dict[str, str]) -> list[Transaction]:
+    """Every attempt of one API step: the transactions whose catalog check asked ``params``."""
+    return [t for t in _transactions(db) if any(p == params for _, p in t.statements)]
+
+
+#: The API step the contention tests take away, its catalog question and its statement.
+_OUTCOME_LABEL = "Migration (column research_nodes.outcome)"
+_OUTCOME = {"table_name": "research_nodes", "column_name": "outcome"}
+_ADD_OUTCOME = "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)"
+
+
+def _outcome_missing_and_contended(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> tuple[Database, list[float]]:
+    """An up-to-date API schema without research_nodes.outcome, whose next DDL statement times
+    out on its lock (55P03); and the list the retry's sleeps land in."""
+    slept: list[float] = []
+    monkeypatch.setattr(boot_schema.time, "sleep", slept.append)
+    caplog.set_level(logging.WARNING, logger=boot_schema.logger.name)
+    catalog = _boot_api(_api_bare()).catalog
+    del catalog.columns[("research_nodes", "outcome")]
+    db = Database(catalog)
+    db.fail_next_ddl = OperationalError(
+        "ALTER TABLE", {}, _PgError("55P03", "canceling statement due to lock timeout")
+    )
+    return db, slept
 
 
 # --------------------------------------------------------------------------------------------
@@ -709,8 +776,8 @@ def test_the_fk_policy_check_and_its_rewrite_loop_are_one_query():
 def test_an_api_constraint_another_booter_added_first_does_not_abort_the_boot():
     """api and api2 boot together and can both read "missing". The loser's ADD CONSTRAINT meets
     the winner's constraint and raises 42710 (CHECK) or 42P07 (the index behind a UNIQUE). Neither
-    is contention (api/boot_schema.py::is_contention_error), so a handler that misses it aborts
-    the loser's startup and fails the deploy's health check."""
+    is contention (pipeline/utils/boot_ddl.py::is_contention_error), so a handler that misses it
+    aborts the loser's startup and fails the deploy's health check."""
     first = _boot_api(_api_bare())
     constraints = _constraints_created(first)
     assert [key for key, _ in constraints] == [
@@ -733,12 +800,7 @@ def test_each_api_step_checks_and_alters_in_its_own_transaction_under_the_lock_t
 
     db = _boot_api(up_to_date)
 
-    transactions: list[list[str]] = []
-    for event in db.events:
-        if event == ("BEGIN",):
-            transactions.append([])
-        elif event[0] == "sql":
-            transactions[-1].append(" ".join(event[1].split()))
+    transactions = [t.sql() for t in _transactions(db)]
     assert len(transactions) == len(boot_schema.API_BOOT_SCHEMA)
     assert all(
         t[:2] == ["SET LOCAL lock_timeout = '5s'", "SET LOCAL statement_timeout = '30s'"]
@@ -752,29 +814,149 @@ def test_each_api_step_checks_and_alters_in_its_own_transaction_under_the_lock_t
     assert all(len(t) == 3 for t in transactions if t is not altering[0])
 
 
-def test_a_step_retried_after_contention_reads_the_catalog_again(monkeypatch):
+def test_a_step_retried_after_contention_reads_the_catalog_again(monkeypatch, caplog):
     """api and lyra can both read "missing"; the loser of the lock race retries, finds the
-    column the winner added, and runs no DDL of its own."""
-    monkeypatch.setattr(boot_schema.time, "sleep", lambda s: None)
-    up_to_date = _boot_api(_api_bare()).catalog
-    del up_to_date.columns[("research_nodes", "outcome")]
-    db = Database(up_to_date)
-    db.fail_next_ddl = OperationalError(
-        "ALTER TABLE", {}, _PgError("55P03", "canceling statement due to lock timeout")
-    )
+    column the winner added, and runs no DDL of its own.
+
+    The other booter adds the column here, so the column at the end, the single ALTER and the
+    ROLLBACK prove nothing about a retry: they hold just as well when the step is given up after
+    its first timeout. What does is the step's second transaction, the one backoff before it and
+    the absence of a "skipped" warning."""
+    db, slept = _outcome_missing_and_contended(monkeypatch, caplog)
 
     def the_other_booter_adds_it() -> None:
-        up_to_date.columns[("research_nodes", "outcome")] = "character varying(20)"
+        db.catalog.columns[("research_nodes", "outcome")] = "character varying(20)"
 
     db.on_fail = the_other_booter_adds_it
 
     run_api_boot_schema(db)
 
-    assert [" ".join(s.split()) for s in db.ddl()] == [
-        "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)"
-    ]  # the one attempt that lost the race; the retry ran none
-    assert ("ROLLBACK",) in db.events
+    attempts = _attempts(db, _OUTCOME)
+    assert [t.outcome for t in attempts] == ["ROLLBACK", "COMMIT"]
+    assert attempts[0].sql()[-1] == _ADD_OUTCOME  # the attempt that lost the lock race
+    assert "FROM pg_catalog.pg_attribute" in attempts[1].sql()[-1]  # the retry asked, and stopped
+    assert db.ddl() == [_ADD_OUTCOME]
+    assert db.created == []
+    assert slept == [2]
+    assert f"{_OUTCOME_LABEL} hit lock contention (attempt 1/3)" in caplog.text
+    assert "skipped after 3 contention retries" not in caplog.text
+
+
+def test_a_step_retried_after_contention_runs_its_statement_again_while_it_is_needed(
+    monkeypatch, caplog
+):
+    """Nobody else added the column: the retry finds it still missing and adds it itself. A boot
+    that gave the step up instead would start without the column its models read."""
+    db, slept = _outcome_missing_and_contended(monkeypatch, caplog)
+
+    run_api_boot_schema(db)
+
+    attempts = _attempts(db, _OUTCOME)
+    assert [t.outcome for t in attempts] == ["ROLLBACK", "COMMIT"]
+    assert [t.sql()[-1] for t in attempts] == [_ADD_OUTCOME, _ADD_OUTCOME]
+    assert db.ddl() == [_ADD_OUTCOME, _ADD_OUTCOME]
+    assert [(kind, key) for kind, key, _ in db.created] == [
+        ("column", ("research_nodes", "outcome"))
+    ]
     assert db.catalog.columns[("research_nodes", "outcome")] == "character varying(20)"
+    assert slept == [2]
+    assert "skipped after 3 contention retries" not in caplog.text
+
+
+def test_a_step_still_contended_after_three_attempts_is_left_to_the_next_boot(monkeypatch, caplog):
+    """Contention is expected while api and lyra both still have DDL to run. After three attempts
+    the step is skipped with a warning (the next boot completes it) and the API starts: every later
+    step still runs."""
+    db, slept = _outcome_missing_and_contended(monkeypatch, caplog)
+    timeout = db.fail_next_ddl
+
+    def the_lock_is_still_held() -> None:
+        db.fail_next_ddl = timeout
+
+    db.on_fail = the_lock_is_still_held
+
+    run_api_boot_schema(db)
+
+    attempts = _attempts(db, _OUTCOME)
+    assert [t.outcome for t in attempts] == ["ROLLBACK", "ROLLBACK", "ROLLBACK"]
+    assert slept == [2, 4]
+    assert f"{_OUTCOME_LABEL} skipped after 3 contention retries" in caplog.text
+    assert ("research_nodes", "outcome") not in db.catalog.columns
+    transactions = _transactions(db)
+    assert len(transactions) == len(boot_schema.API_BOOT_SCHEMA) + 2
+    assert transactions[-1].outcome == "COMMIT"
+    assert transactions[-1].statements[-1][0] == " ".join(FK_POLICY.satisfied_sql.split())
+
+
+@pytest.mark.parametrize("pgcode", ["42703", "42P07"])
+def test_an_error_that_is_not_contention_aborts_the_startup_at_once(monkeypatch, caplog, pgcode):
+    """Until the audit of 2026-08-05 (M5) every boot error was swallowed as "lock contention" and
+    the API started healthy on a schema it did not have. Anything else than a lock timeout, a
+    statement timeout or a deadlock raises out of the boot at its first attempt, so the deploy's
+    health check fails loudly."""
+    db, slept = _outcome_missing_and_contended(monkeypatch, caplog)
+    db.fail_next_ddl = ProgrammingError("ALTER TABLE", {}, _PgError(pgcode, "not contention"))
+
+    with pytest.raises(ProgrammingError):
+        run_api_boot_schema(db)
+
+    assert [t.outcome for t in _attempts(db, _OUTCOME)] == ["ROLLBACK"]
+    labels = [f"Migration ({step.label})" for step in boot_schema.API_BOOT_SCHEMA]
+    assert len(_transactions(db)) == labels.index(_OUTCOME_LABEL) + 1  # no later step ran
+    assert slept == []
+    assert f"[STARTUP] {_OUTCOME_LABEL} FAILED (aborting startup)" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("error", "pgcode", "contention"),
+    [
+        (OperationalError("x", {}, _PgError("55P03", "lock timeout")), "55P03", True),
+        (OperationalError("x", {}, _PgError("57014", "statement timeout")), "57014", True),
+        (OperationalError("x", {}, _PgError("40P01", "deadlock detected")), "40P01", True),
+        (ProgrammingError("x", {}, _PgError("42P07", "relation exists")), "42P07", False),
+        (ProgrammingError("x", {}, _PgError("42703", "column does not exist")), "42703", False),
+        (InvalidRequestError("no driver error behind it"), None, False),
+    ],
+)
+def test_only_a_lock_timeout_a_statement_timeout_or_a_deadlock_is_contention(
+    error, pgcode, contention
+):
+    assert pgcode_of(error) == pgcode
+    assert is_contention_error(error) is contention
+
+
+def test_both_boot_paths_classify_contention_with_the_one_shared_function():
+    """The API's run_boot_step and Lyra's main() each carried their own copy of the pgcode list.
+    pipeline/ may not import api/ (import-linter), so the one copy lives in pipeline/utils/."""
+    import pipeline.lyra.orchestrator as orch
+
+    assert boot_schema.is_contention_error is is_contention_error
+    assert orch.is_contention_error is is_contention_error
+    assert "is_contention_error" in names_used_by(REPO / "api" / "boot_schema.py", "run_boot_step")
+    assert "is_contention_error" in names_used_by(REPO / "pipeline/lyra/orchestrator.py", "main")
+
+
+#: The start of a DDL statement in a source string. A regex, not the fake's _DDL_HEAD: an f-string
+#: splits into parts, and its first part may be just ``"ALTER "``.
+_DDL_IN_SOURCE = re.compile(r"\s*(?:ALTER|CREATE|DROP|DO)\b")
+
+
+def test_the_api_startup_runs_the_boot_schema_and_holds_no_ddl_of_its_own():
+    """api/main.py::lifespan ran the API's 29 statements unconditionally until 2026-09-23. It must
+    call run_api_boot_schema - a startup without it leaves create_all's existing tables without the
+    columns the models read - and no DDL string may come back into api/main.py beside it: such a
+    statement would lock its table on every start of api and api2, and no boot here would see it."""
+    main = REPO / "api" / "main.py"
+    used = names_used_by(main, "lifespan")
+    assert {"run_api_boot_schema", "api.boot_schema.run_api_boot_schema"} <= used
+    ddl = [
+        (node.lineno, node.value)
+        for node in ast.walk(ast.parse(main.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and _DDL_IN_SOURCE.match(node.value)
+    ]
+    assert ddl == []
 
 
 # --------------------------------------------------------------------------------------------
@@ -785,16 +967,20 @@ def test_a_step_retried_after_contention_reads_the_catalog_again(monkeypatch):
 @pytest.mark.parametrize("bad", ["News_Items", "news items", "x;drop", '"quoted"', "", "1st"])
 def test_a_name_that_is_not_a_plain_lower_case_identifier_is_refused(bad):
     """PostgreSQL folds an unquoted name to lower case and the catalog queries compare against
-    the folded name: a mixed-case name would read as "missing" on every boot."""
+    the folded name: a mixed-case name would read as "missing" on every boot, and its ALTER TYPE
+    or ADD CONSTRAINT would take ACCESS EXCLUSIVE on every boot again."""
     builders = [
         lambda n: add_column(n, "c", "TEXT"),
         lambda n: add_column("t", n, "TEXT"),
         lambda n: set_varchar_length(n, "c", 10),
+        lambda n: set_varchar_length("t", n, 10),
         lambda n: create_table(n, "id INTEGER"),
         lambda n: create_index(n, "t", "(c)"),
         lambda n: create_index("i", n, "(c)"),
         lambda n: add_constraint(n, "k", "CHECK (c > 0)", duplicate=("duplicate_object",)),
+        lambda n: add_constraint("t", n, "CHECK (c > 0)", duplicate=("duplicate_object",)),
         lambda n: create_extension(n),
+        lambda n: relation_exists(Connection(Database(Catalog(tables=set()))), n),
     ]
     for build in builders:
         with pytest.raises(ValueError, match="plain lower-case SQL identifier"):

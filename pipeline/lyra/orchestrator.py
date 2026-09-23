@@ -30,6 +30,8 @@ from pipeline.utils.boot_ddl import (
     create_index,
     create_table,
     ensure,
+    is_contention_error,
+    pgcode_of,
     relation_exists,
     set_varchar_length,
 )
@@ -1958,15 +1960,15 @@ def main() -> None:
             # All migrations run in one transaction (committed at the end of
             # _run_migrations). Any failure rolls back the whole batch, so a
             # single broken statement silently strands every column added in
-            # this release. Deadlocks (40P01) and lock timeouts (55P03) are
-            # expected when api and lyra boot simultaneously and both still
-            # have DDL to run (a release that adds a column) — the batch is
-            # idempotent, so wait out the other booter and rerun it. Log
-            # everything else loudly enough that the next deploy notices.
-            pgcode = getattr(getattr(mig_err, "orig", None), "pgcode", None)
-            if pgcode in ("40P01", "55P03", "57014") and mig_attempt < len(MIGRATION_BACKOFF):
+            # this release. Contention (deadlocks, lock and statement timeouts:
+            # is_contention_error, shared with the API's boot) is expected when
+            # api and lyra boot simultaneously and both still have DDL to run
+            # (a release that adds a column) — the batch is idempotent, so wait
+            # out the other booter and rerun it. Log everything else loudly
+            # enough that the next deploy notices.
+            if is_contention_error(mig_err) and mig_attempt < len(MIGRATION_BACKOFF):
                 logger.warning(
-                    f"[STARTUP] Migration batch hit lock contention (pgcode {pgcode}, "
+                    f"[STARTUP] Migration batch hit lock contention (pgcode {pgcode_of(mig_err)}, "
                     f"attempt {mig_attempt}/{len(MIGRATION_BACKOFF)}) — retrying in {backoff}s"
                 )
                 time.sleep(backoff)

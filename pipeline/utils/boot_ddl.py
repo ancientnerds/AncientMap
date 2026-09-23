@@ -25,6 +25,10 @@ Every catalog query resolves a name the way its statement does:
   ``IF NOT EXISTS`` looks;
 * a new index in its table's schema - where ``CREATE INDEX`` creates it and where
   ``IF NOT EXISTS`` looks (any relation of that name counts, as it does for the statement).
+
+``is_contention_error`` is the one rule both boot paths retry by: the API's
+``api/boot_schema.py::run_boot_step`` and Lyra's ``pipeline/lyra/orchestrator.py::main``. It
+lives here because ``pipeline/`` may not import ``api/``.
 """
 
 from __future__ import annotations
@@ -127,6 +131,23 @@ def ensure(conn: Connection, step: BootDDL) -> bool:
     conn.execute(text(step.ddl))
     logger.info("boot DDL applied: %s", step.label)
     return True
+
+
+def pgcode_of(exc: BaseException) -> str | None:
+    """The SQLSTATE of the driver error SQLAlchemy wrapped in ``exc``; None when there is none."""
+    return getattr(getattr(exc, "orig", None), "pgcode", None)
+
+
+def is_contention_error(exc: BaseException) -> bool:
+    """True only for a lock timeout (55P03), a statement timeout (57014) or a deadlock (40P01).
+
+    Those are EXPECTED when api and lyra boot together and both still have DDL to run, so both
+    boot paths wait out the other booter and retry. Every other error is a real failure: the API
+    aborts its startup and Lyra logs its batch as rolled back. The API used to swallow every error
+    as "lock contention", leaving silent schema drift while it started healthy (audit 2026-08-05,
+    M5).
+    """
+    return pgcode_of(exc) in ("55P03", "57014", "40P01")
 
 
 def relation_exists(conn: Connection, name: str) -> bool:
