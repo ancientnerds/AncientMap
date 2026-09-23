@@ -19,8 +19,7 @@ PILOT = Path(__file__).resolve().parents[2] / "scripts" / "remediation" / "vlm_p
 if str(PILOT) not in sys.path:
     sys.path.insert(0, str(PILOT))
 
-import rejected_kinds as RK  # noqa: E402
-from common import build_tree, shard_for  # noqa: E402
+from common import build_tree, locate, shard_for  # noqa: E402
 
 SITE = "abcdef12-0000-4000-8000-000000000001"
 
@@ -34,22 +33,33 @@ def _tree(root: Path, *names: str) -> dict[str, dict[str, int]]:
 
 
 def test_an_image_is_found_by_its_exact_name_first_in_the_main_tree(tmp_path: Path) -> None:
-    tree = _tree(tmp_path / "wiki", "Temple.webp")
-    collisions = _tree(tmp_path / "collisions", "Gate.webp")
+    """`common.locate` is the one lookup `rejected_kinds` and `make_sample` both use."""
+    main_root, collision_root = tmp_path / "wiki", tmp_path / "collisions"
+    trees = (
+        (main_root, _tree(main_root, "Temple.webp", "Both.webp")),
+        (collision_root, _tree(collision_root, "Gate.webp", "Both.webp")),
+    )
     shard = shard_for(SITE)
-    assert RK.image_on_disk(tree, collisions, SITE, "Temple.webp") == (
-        RK.OFFSITE_IMAGES / shard / "Temple.webp"
-    )
-    assert RK.image_on_disk(tree, collisions, SITE, "Gate.webp") == (
-        RK.OFFSITE_CASE_COLLISIONS / shard / "Gate.webp"
-    )
-    assert RK.image_on_disk(tree, collisions, SITE, "Missing.webp") is None
+    size = len(b"RIFF\x00\x00\x00\x00WEBP")
+    assert locate(trees, SITE, "Temple.webp") == (main_root / shard / "Temple.webp", size)
+    assert locate(trees, SITE, "Gate.webp") == (collision_root / shard / "Gate.webp", size)
+    # the main tree wins when both hold the name
+    assert locate(trees, SITE, "Both.webp") == (main_root / shard / "Both.webp", size)
+    assert locate(trees, SITE, "Missing.webp") is None
 
 
 def test_a_name_that_differs_only_in_case_is_not_the_file(tmp_path: Path) -> None:
     """`Path.is_file()` says yes here on Windows; the listing says no."""
-    tree = _tree(tmp_path / "wiki", "Temple.webp")
-    assert RK.image_on_disk(tree, {}, SITE, "temple.webp") is None
+    root = tmp_path / "wiki"
+    trees = ((root, _tree(root, "Temple.webp")),)
+    assert locate(trees, SITE, "temple.webp") is None
+
+
+def test_rejected_kinds_resolves_through_the_shared_lookup() -> None:
+    import rejected_kinds as RK
+
+    assert RK.locate is locate
+    assert not hasattr(RK, "image_on_disk")  # no second implementation of the same lookup
 
 
 def test_a_missing_image_tree_stops_the_listing() -> None:

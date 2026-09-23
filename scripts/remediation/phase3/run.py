@@ -25,6 +25,17 @@ empty one.
              - and its prompt sizes visible - before any money is spent.
 * `status` - read the run directory and the ledger and report what is actually on disk.
 
+The search lane (block A3; `phase3/search_plan.py`, `phase3/search_stage.py`) adds three commands and
+one sequence, plan-search -> prepare -> search -> judge:
+
+* `plan-search`   - select the mass run's `UNVERIFIABLE` (site, field) pairs, plus the planned writes
+                    that were held or stopped, into a search plan (offline).
+* `search`        - one MiniMax search per (site, search key) of one prepared search batch. **Dry
+                    unless `--live`**: without it the command lists the queries and buys nothing.
+* `search-budget` - how many rerun sites the added hits could push over the evidence bound (offline).
+
+`prepare` of a search batch also copies its source batch's evidence and `fetch.json`.
+
 Fail-closed: a worklist record whose shape is not the one the run needs raises, rather than
 being skipped. A silently smaller plan is the failure this whole phase is paid to avoid.
 """
@@ -66,6 +77,19 @@ DEFAULT_LEDGER = REPO / "output" / "remediation" / "phase3_runner" / "LEDGER.jso
 #: (`fetch_stage.HostPacer`): two machines share no per-host state, so what this supports is "this
 #: machine does not hammer a host", not a worldwide rate limit.
 DEFAULT_PACING_DIR = REPO / "output" / "remediation" / "logs" / "pacing"
+
+#: The search lane's inputs and output. The source is the mass run, which the lane only ever reads;
+#: `ALL_ROWS.jsonl` is the write plan and `HOLDS.jsonl` the hand-read holds (both local, gitignored).
+DEFAULT_SEARCH_PLAN = REPO / "output" / "remediation" / "phase3_runner" / "PLAN.search.jsonl"
+DEFAULT_SOURCE_RUN_DIR = DEFAULT_RUN_DIR / "mass"
+DEFAULT_ALL_ROWS = REPO / "output" / "remediation" / "logs" / "_write_dry" / "ALL_ROWS.jsonl"
+DEFAULT_HOLDS = REPO / "output" / "remediation" / "logs" / "_write_apply" / "HOLDS.jsonl"
+
+#: `search`'s exit codes beyond 0. Some searches failed and are recorded (a re-run retries only
+#: them; the mass driver does not judge the batch meanwhile) - or the stage stopped: the quota gate
+#: refused, or an auth, budget, rate-cap or contract error arrived, and the whole run must stop.
+SEARCH_INCOMPLETE_EXIT = 3
+STOP_RUN_EXIT = 4
 
 
 class InputError(ValueError):
@@ -247,6 +271,7 @@ def cmd_prepare(args: argparse.Namespace) -> int:
     wanted = set(args.batch_id or [])
     written: list[str] = []
     seen: set[str] = set()
+    copies: dict[str, dict[str, int]] = {}
     for line_no, batch in enumerate(batches, start=1):
         batch_id = batch.get("batch_id")
         if not isinstance(batch_id, str) or not batch_id:
@@ -263,16 +288,18 @@ def cmd_prepare(args: argparse.Namespace) -> int:
             encoding="utf-8",
             newline="\n",
         )
+        if "source_run_dir" in batch:
+            # A search batch: its evidence is the source batch's, copied byte for byte.
+            from phase3 import search_plan as SPL
+
+            copies[batch_id] = SPL.prepare_search_batch(batch, run_dir / batch_id)
         written.append(batch_id)
     if wanted and wanted != set(written):
         raise InputError(f"asked for batches that are not in the plan: {sorted(wanted - seen)}")
-    print(
-        json.dumps(
-            {"batches": len(written), "run_dir": str(run_dir), "written": written},
-            indent=1,
-            sort_keys=True,
-        )
-    )
+    payload: dict[str, Any] = {"batches": len(written), "run_dir": str(run_dir), "written": written}
+    if copies:
+        payload["copied"] = copies
+    print(json.dumps(payload, indent=1, sort_keys=True))
     return 0
 
 
@@ -817,6 +844,176 @@ def _judge_discover(
     return 0
 
 
+def _gold_site_ids(path: Path) -> list[str]:
+    """The site ids of the gold standard's own records (`gold_standard/sites.json`), in its order."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    records = payload.get("records") if isinstance(payload, dict) else None
+    if not isinstance(records, list) or not records:
+        raise InputError(f"{path}: no `records` list of gold-standard sites")
+    ids = [str(record.get("site_id") or "") for record in records]
+    if "" in ids or len(set(ids)) != len(ids):
+        raise InputError(f"{path}: a gold record without a site_id, or one site twice")
+    return ids
+
+
+def cmd_plan_search(args: argparse.Namespace) -> int:
+    """Write the search plan: the mass run's undecided fields, plus the unwritten planned writes."""
+    from phase3 import search_plan as SPL
+    from phase3 import snapshot_plan as SP
+
+    if args.site_ids and args.gold_sites:
+        raise InputError("--site-ids and --gold-sites are two selections; give one")
+    if not args.current_values:
+        raise InputError(
+            "--current-values is required: a query reads production's values, not the snapshot's, "
+            f"and a field production changed is not rerun. Export them read-only with: "
+            f"{SPL.CURRENT_VALUES_SQL}"
+        )
+    site_ids: list[str] | None = None
+    if args.site_ids:
+        site_ids = SP.read_site_ids(Path(args.site_ids))
+    elif args.gold_sites:
+        site_ids = _gold_site_ids(Path(args.gold_sites))
+    extra = None
+    if args.scope != "text":
+        if not args.written_keys:
+            raise InputError(
+                "--written-keys is required outside the text scope: which planned writes were not "
+                "written is the production journal's answer, and a plan without it would drop the "
+                "held and stopped rows silently"
+            )
+        extra = SPL.unwritten_rows(
+            all_rows=Path(args.all_rows),
+            written_keys=Path(args.written_keys),
+            holds=Path(args.holds),
+        )
+    elif args.written_keys:
+        raise InputError("--written-keys names writable-column rows; the text scope has none")
+    plan = SPL.build_search_plan(
+        source_run_dir=Path(args.source_run_dir),
+        scope=args.scope,
+        prefix=args.prefix,
+        current=SPL.read_current_values(Path(args.current_values)),
+        site_ids=site_ids,
+        extra=extra,
+    )
+    digest = SPL.write_plan(Path(args.out), plan)
+    summary = plan.summary()
+    summary.update(
+        {
+            "out": str(args.out),
+            "scope": args.scope,
+            "sha256": digest,
+            "source_run_dir": str(args.source_run_dir),
+            # Read from the write records; how many landed in this plan is `fields_by_reason`.
+            "unwritten_rows_read": None if extra is None else len(extra),
+        }
+    )
+    print(json.dumps(summary, indent=1, sort_keys=True))
+    return 0
+
+
+def cmd_search_budget(args: argparse.Namespace) -> int:
+    """How many rerun sites the added hits could push over the evidence bound. Offline."""
+    from phase3 import search_plan as SPL
+
+    report = SPL.budget_report(
+        read_jsonl(Path(args.plan)),
+        hits_per_search=args.hits_per_search,
+        chars_per_hit=args.chars_per_hit,
+    )
+    report["plan"] = str(args.plan)
+    print(json.dumps(report, indent=1, sort_keys=True))
+    return 0
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    """One prepared search batch's searches. Nothing leaves the machine unless `--live` is passed."""
+    from phase3 import fetch_stage as F
+    from phase3 import model_stage as MS
+    from phase3 import search_evidence as SE
+    from phase3 import search_stage as SS
+
+    run_dir = Path(args.run_dir)
+    batch_id = args.batch_id
+    batch = _single_batch(run_dir / batch_id / "input.json", batch_id)
+    store = F.EvidenceStore(run_dir / batch_id / "evidence")
+
+    if not args.live:
+        slots: list[dict[str, Any]] = []
+        for site in batch["sites"]:
+            for slot in SE.search_slots(site):
+                query = SS.build_query(site, slot)
+                slots.append(
+                    {
+                        # The rerun fields whose value the name or the fixed wording still carries.
+                        "carries": list(SS.query_carries(site, query)),
+                        "fields": list(slot.fields),
+                        "feature": slot.feature,
+                        "label": f"{site['site_id']}/{slot.feature}",
+                        "query": query,
+                        "searched": store.exists(str(site["site_id"]), slot.feature),
+                    }
+                )
+        print(
+            json.dumps(
+                {
+                    "batch_id": batch_id,
+                    "live": False,
+                    "run_dir": str(run_dir),
+                    "searches_pending": sum(1 for slot in slots if not slot["searched"]),
+                    "slots": slots,
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    from pipeline.lyra import minimax_shared
+
+    try:
+        searcher = SS.MiniMaxSearcher.from_settings()
+    except InputError as exc:
+        # No key or no base url: every batch would fail the same way, so this stops the run like
+        # an auth failure does, instead of counting towards the circuit breaker batch by batch.
+        print(
+            json.dumps(
+                {"batch_id": batch_id, "error": f"search stopped: {exc}", "live": True},
+                indent=1,
+                sort_keys=True,
+            )
+        )
+        return STOP_RUN_EXIT
+    pacer = F.HostPacer(Path(args.pacing_dir), min_interval=SS.SEARCH_MIN_INTERVAL_SECONDS)
+    host = F.host_of(searcher.endpoint)
+    report_path = run_dir / batch_id / MS.SEARCH_REPORT_NAME
+    try:
+        report = SS.search_batch(
+            batch=batch,
+            searcher=searcher,
+            store=store,
+            ledger=L.Ledger(Path(args.ledger)),
+            probe=lambda: minimax_shared.probe_minimax_quota(force=True),
+            now=SS.utc_now,
+            wait=lambda: pacer.wait(host),
+            # What earlier runs of this stage measured stays in the report a resume rewrites.
+            earlier_quota=SS.read_quota(report_path),
+        )
+    finally:
+        searcher.close()
+    SS.write_report(report_path, report)
+    payload = json.loads(report.to_json())
+    payload.update({"ledger": str(args.ledger), "live": True, "run_dir": str(run_dir)})
+    if report.stopped is not None:
+        # `error` is the key the mass driver reads out of a stage's report to say why it stopped.
+        payload["error"] = f"search stopped: {report.stopped}"
+        print(json.dumps(payload, indent=1, sort_keys=True))
+        return STOP_RUN_EXIT
+    print(json.dumps(payload, indent=1, sort_keys=True))
+    return SEARCH_INCOMPLETE_EXIT if report.failed else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     # Imported here, not at module level: `model_stage` imports `fetch_stage`, which imports this
     # module, so a top-level import of it would be circular.
@@ -922,6 +1119,71 @@ def build_parser() -> argparse.ArgumentParser:
     )
     judge.add_argument("--timeout", type=float, default=MS.DEFAULT_TIMEOUT)
     judge.set_defaults(func=cmd_judge)
+
+    plan_search = sub.add_parser(
+        "plan-search",
+        help="plan the search lane: the mass run's UNVERIFIABLE fields plus unwritten rows (offline)",
+    )
+    plan_search.add_argument("--source-run-dir", default=str(DEFAULT_SOURCE_RUN_DIR))
+    plan_search.add_argument("--out", default=str(DEFAULT_SEARCH_PLAN))
+    plan_search.add_argument(
+        "--scope",
+        choices=("writable", "text", "all"),
+        default="writable",
+        help="writable: period_start, site_type, country (first); text: the report-only fields",
+    )
+    plan_search.add_argument(
+        "--prefix",
+        default="srch",
+        help="batch id prefix: srch-NNNN keeps the mass batch's number and never collides with "
+        "the phase3:batch-* journal stamps; give a pilot or a second scope its own prefix",
+    )
+    plan_search.add_argument("--all-rows", default=str(DEFAULT_ALL_ROWS))
+    plan_search.add_argument("--holds", default=str(DEFAULT_HOLDS))
+    plan_search.add_argument(
+        "--written-keys",
+        default="",
+        help="one change_key per line: the production journal's phase3:batch-% keys, exported "
+        "read-only (required for the writable and all scopes)",
+    )
+    plan_search.add_argument(
+        "--current-values",
+        default="",
+        help="production's country, site_type and period_start per site, one JSON object per "
+        "line, exported read-only (search_plan.CURRENT_VALUES_SQL); required",
+    )
+    plan_search.add_argument("--site-ids", default="", help="one site id per line; selects")
+    plan_search.add_argument(
+        "--gold-sites", default="", help="gold_standard/sites.json; selects its sites (the pilot)"
+    )
+    plan_search.set_defaults(func=cmd_plan_search)
+
+    search = sub.add_parser(
+        "search", help="MiniMax searches for one prepared search batch (dry unless --live)"
+    )
+    search.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
+    search.add_argument("--batch-id", required=True)
+    search.add_argument("--ledger", default=str(DEFAULT_LEDGER))
+    search.add_argument(
+        "--live",
+        action="store_true",
+        help="probe the quota and search; without it the command lists the queries",
+    )
+    search.add_argument(
+        "--pacing-dir",
+        default=str(DEFAULT_PACING_DIR),
+        help="the cross-process pace directory; searches are always paced, a lone run included",
+    )
+    search.set_defaults(func=cmd_search)
+
+    budget = sub.add_parser(
+        "search-budget",
+        help="how many rerun sites the added hits could push over the evidence bound (offline)",
+    )
+    budget.add_argument("--plan", default=str(DEFAULT_SEARCH_PLAN))
+    budget.add_argument("--hits-per-search", type=int, default=10)
+    budget.add_argument("--chars-per-hit", type=int, default=1000)
+    budget.set_defaults(func=cmd_search_budget)
 
     status = sub.add_parser("status", help="report what is on disk, plus the ledger (offline)")
     status.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))

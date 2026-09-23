@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,9 @@ from api.services.theo_config import (
 from pipeline.database import get_session
 from pipeline.indexnow import page_url as indexnow_url
 from pipeline.indexnow import submit as indexnow_submit
+
+# One spelling of the weekly reset, shared with the phase-3 search stage's quota gate.
+from pipeline.lyra.minimax_shared import hours_until_weekly_reset as _hours_until_weekly_reset
 
 logger = logging.getLogger(__name__)
 
@@ -985,17 +988,6 @@ def _batch_gate_open(last_start_age_s: float | None, min_interval_s: float) -> b
     """True when a batch task may start: nothing ever started, or the most
     recent start is at least min_interval_s ago."""
     return last_start_age_s is None or last_start_age_s >= min_interval_s
-
-
-def _hours_until_weekly_reset(now_utc: datetime) -> float:
-    """Hours until the next MiniMax weekly reset (Monday 00:00 UTC)."""
-    days_ahead = (7 - now_utc.weekday()) % 7
-    reset = (now_utc + timedelta(days=days_ahead)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    if reset <= now_utc:
-        reset += timedelta(days=7)
-    return (reset - now_utc).total_seconds() / 3600
 
 
 # 10-min cache for the measured batch-run duration — the poll loop calls the

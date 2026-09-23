@@ -3,6 +3,7 @@
 import ipaddress
 import logging
 import socket
+from collections.abc import Collection
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -28,6 +29,23 @@ def _load_blocked_domains() -> frozenset[str]:
 
 
 BLOCKED_DOMAINS = _load_blocked_domains()
+
+
+def listed_domain_of(host: str, domains: Collection[str] = BLOCKED_DOMAINS) -> str | None:
+    """The entry of `domains` that `host` falls under - itself or a parent domain - or None.
+
+    Matched label by label from the left (`old.reddit.com` -> `old.reddit.com`, `reddit.com`),
+    never by substring: a substring match on `x.com` would refuse `linux.com`. The last label alone
+    (a TLD) is never a candidate. One spelling of this walk for every list that needs it
+    (`theo_sources._is_blocked`, `web_research._is_blocked_correction_domain`, the phase-3 search
+    lane's evidence filter).
+    """
+    labels = host.split(".")
+    for start in range(len(labels) - 1):
+        candidate = ".".join(labels[start:])
+        if candidate in domains:
+            return candidate
+    return None
 
 
 def is_public_http_url(url: str) -> bool:

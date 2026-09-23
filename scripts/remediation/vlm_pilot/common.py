@@ -28,7 +28,7 @@ import gzip
 import json
 import os
 import sys
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -134,6 +134,22 @@ def resolve(
     if size is None:
         return None
     return filename, size
+
+
+def locate(
+    trees: Sequence[tuple[Path, Mapping[str, Mapping[str, int]]]], site_id: str, filename: str
+) -> tuple[Path, int] | None:
+    """(path, size) of a row's file in the first tree that holds its exact-case name, or None.
+
+    `trees` pairs each root with its `build_tree` listing, searched in order - the main tree first,
+    then `images-case-collisions/`. A `Path.is_file()` probe would accept a case-only mismatch on
+    this NTFS checkout; the listing does not.
+    """
+    for root, tree in trees:
+        hit = resolve(tree, site_id, filename)
+        if hit is not None:
+            return root / shard_for(site_id) / filename, hit[1]
+    return None
 
 
 def is_webp(path: Path) -> tuple[bool, str]:
