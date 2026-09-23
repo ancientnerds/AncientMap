@@ -783,14 +783,15 @@ def cmd_nogl(args: argparse.Namespace) -> int:
         if args.device == "phone":
             pass_phone_gate(page, timeout_ms, out)
         shown_at = None
-        wait_ms = max(0.0, args.wait * 1000 - page.evaluate("performance.now()"))
-        if wait_js(
-            page,
-            "(text) => !!document.body && document.body.innerText.includes(text)",
-            wait_ms,
-            arg=UNSUPPORTED_TEXT,
-            polling_ms=50,
-        ):
+        shown_js = "(text) => !!document.body && document.body.innerText.includes(text)"
+        wait_ms = args.wait * 1000 - page.evaluate("performance.now()")
+        # Playwright reads timeout=0 as "no timeout": once the page clock is past --wait
+        # (a late gate click, a slow TTFB) check once instead of waiting forever.
+        if wait_ms > 0:
+            shown = wait_js(page, shown_js, wait_ms, arg=UNSUPPORTED_TEXT, polling_ms=50)
+        else:
+            shown = bool(page.evaluate(shown_js, UNSUPPORTED_TEXT))
+        if shown:
             shown_at = page.evaluate("performance.now()")
         page.wait_for_timeout(max(0.0, args.wait * 1000 - page.evaluate("performance.now()")))
         page.screenshot(path=str(out / "nogl.png"))
