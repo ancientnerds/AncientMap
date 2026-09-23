@@ -7602,8 +7602,8 @@ QID_WAVE3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "qid wave3: the command line does not know wave 3",
         _QW3_REPAIR,
-        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE3)}\n",
-        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2)}  # mutant\n",
+        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE3, WAVE4)}\n",
+        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE4)}  # mutant\n",
         TOOLS_TEST,
         "test_wave_three_check_and_verify_read_their_own_rows_and_stamp",
     ),
@@ -7702,7 +7702,7 @@ SOURCE_URL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if CONTROL_RE.search(url):\n",
         "    if False:  # mutant\n",
         _SU_WIKI_TEST,
-        "TestWikiResolution::test_a_url_with_a_control_character_is_refused_not_turned_into_a_title",
+        "test_a_url_with_a_control_character_is_refused_not_turned_into_a_title",
     ),
     (
         "source url: a decoded title with a control character passes",
@@ -7710,7 +7710,7 @@ SOURCE_URL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if CONTROL_RE.search(title):\n",
         "    if False:  # mutant\n",
         _SU_WIKI_TEST,
-        "TestWikiResolution::test_a_percent_encoded_control_character_is_refused_after_decoding",
+        "test_a_percent_encoded_control_character_is_refused_after_decoding",
     ),
     (
         "source url: an invalid title reads as a page",
@@ -7718,7 +7718,7 @@ SOURCE_URL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '        if page is None or page.get("missing") or page.get("invalid"):\n',
         '        if page is None or page.get("missing"):  # mutant\n',
         _SU_WIKI_TEST,
-        "TestWikiResolution::test_an_invalid_title_is_no_page",
+        "test_an_invalid_title_is_no_page",
     ),
     (
         "source url: the second URL is kept",
