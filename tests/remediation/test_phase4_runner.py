@@ -1,22 +1,26 @@
 """Does the Phase-4 driver wire every stage to the contract's function, print the line the mass run
 reads, reuse Phase 3's guards, and draw audit samples nobody can steer?
 
-Work item WB-B4 (`phase4/run4.py`, `phase4/mass4.py`, `phase4/audit4.py`). The other tracks' modules
-(`sources_stage`, `route_stage`, `verify4`, `write4`, `plan4`) are stood in by recording fakes put
-into `sys.modules`, so these tests hold before and after the merge; no socket, process, model or
-database is touched (`subprocess.run` is made to raise wherever a spawn would be a bug).
+Work item WB-B4 (`phase4/run4.py`, `phase4/mass4.py`, `phase4/audit4.py`). Track A's stages are
+merged: their batch functions are replaced by stand-ins bound to the real signatures (a call the
+real function refuses raises here too), and their live fetcher is the real one. The modules not
+merged yet (`verify4`, `write4`, `plan4` for `plan`) are recording fakes put into `sys.modules`. No
+socket, process, model or database is touched (`subprocess.run` is made to raise wherever a spawn
+would be a bug).
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import inspect
 import io
 import json
 import subprocess
 import sys
 import threading
 import types
-from datetime import datetime
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -29,14 +33,17 @@ if str(PHASE_PARENT) not in sys.path:
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import mass_run as MR  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
+from phase3 import run as R3  # noqa: E402
 from phase4 import assemble as A  # noqa: E402
 from phase4 import audit4 as AU  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402
 from phase4 import mass4 as M4  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import review4 as RV  # noqa: E402
+from phase4 import route_stage as RS  # noqa: E402
 from phase4 import run4 as R4  # noqa: E402
 from phase4 import select_stage as SEL  # noqa: E402
+from phase4 import sources_stage as S1  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
 
@@ -139,78 +146,68 @@ def _prepared(tmp_path: Path) -> Path:
     return X.make_batch(tmp_path, [X.w_site("site-1")])
 
 
-def test_sources_hands_the_track_a_stage_a_paced_1_mib_fetcher(
+def _bound(real: Callable[..., Any], seen: dict[str, Any], result: Any) -> Callable[..., Any]:
+    """A stand-in for a Track-A function that refuses what the real one refuses (contract rule 4):
+    every call is bound to the real signature first, so a missing, extra or renamed keyword raises
+    here as it would there. The bound arguments are recorded."""
+    signature = inspect.signature(real)
+
+    def stand_in(*args: Any, **kwargs: Any) -> Any:
+        seen.update(signature.bind(*args, **kwargs).arguments)
+        return result
+
+    return stand_in
+
+
+def test_sources_hands_track_a_its_own_live_fetcher_and_the_phase3_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The fetcher is Track A's real `open_fetcher` (nothing about it is replaced here): the
+    host-capped, paced client the stage expects, built and closed by the driver."""
     batch_dir = _prepared(tmp_path)
-    made: list[tuple[int, _Closing]] = []
-
-    def http_fetcher(*, timeout: float, max_bytes: int) -> _Closing:
-        made.append((max_bytes, _Closing("http")))
-        return made[-1][1]
-
     seen: dict[str, Any] = {}
-
-    def sources_batch(batch_dir: Path, *, ledger: Path, fetcher: Any, now: datetime) -> int:
-        seen.update(batch_dir=batch_dir, ledger=ledger, fetcher=fetcher, now=now)
-        return 3
-
-    monkeypatch.setattr(R4, "http_fetcher", http_fetcher)
-    _fake(monkeypatch, R4.SOURCES_STAGE, sources_batch=sources_batch)
+    monkeypatch.setattr(S1, "sources_batch", _bound(S1.sources_batch, seen, 3))
     argv = ["sources", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     assert _run(capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl")])[0] == 0  # no --live
-    assert seen == {} and made == []
-    code, _, _ = _run(capsys, [*argv, "--live", "--pacing-dir", str(tmp_path / "pace")])
+    assert seen == {}
+    live = [*argv, "--live", "--pacing-dir", str(tmp_path / "pace")]
+    code, _, _ = _run(capsys, [*live, "--phase3-run", str(tmp_path / "mass")])
     assert code == 3  # the stage's own code is the exit line
-    assert seen["batch_dir"] == batch_dir and isinstance(seen["fetcher"], F.PacedFetcher)
+    assert seen["batch_dir"] == batch_dir and seen["phase3_run"] == tmp_path / "mass"
+    assert isinstance(seen["fetcher"], F.PacedFetcher)
+    assert isinstance(seen["fetcher"]._inner, S1.HostCappedFetcher)
     assert seen["now"].tzinfo is not None
-    assert [(size, fetcher.closed) for size, fetcher in made] == [(R4.WIKI_MAX_BYTES, True)]
+    _run(capsys, live)
+    assert seen["phase3_run"] == R3.DEFAULT_SOURCE_RUN_DIR  # the Phase-3 mass run
 
 
-def test_routes_gets_a_host_split_fetcher_the_searcher_and_its_search_allowance(
+def test_routes_gets_the_live_fetcher_the_search_seams_and_its_search_allowance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     batch_dir = _prepared(tmp_path)
-    made: dict[int, _Closing] = {}
     search = _Closing("search")
+    seams = (search, lambda: {"quota": "probe"}, lambda: None)
+    opened: dict[str, Any] = {}
+    signature = inspect.signature(RS.open_search)
 
-    def http_fetcher(*, timeout: float, max_bytes: int) -> _Closing:
-        made[max_bytes] = _Closing(str(max_bytes))
-        return made[max_bytes]
+    @contextlib.contextmanager
+    def open_search(*args: Any, **kwargs: Any) -> Iterator[tuple[Any, Any, Any]]:
+        opened.update(signature.bind(*args, **kwargs).arguments)
+        yield seams
+        search.close()
 
     seen: dict[str, Any] = {}
-
-    def routes_batch(batch_dir: Path, **kw: Any) -> int:
-        seen.update(kw)
-        return 0
-
-    monkeypatch.setattr(R4, "http_fetcher", http_fetcher)
-    monkeypatch.setattr(R4, "searcher", lambda: search)
-    monkeypatch.setattr(R4, "paced", lambda fetcher, pacing_dir: ("paced", fetcher, pacing_dir))
-    _fake(monkeypatch, R4.ROUTE_STAGE, routes_batch=routes_batch)
+    monkeypatch.setattr(RS, "open_search", open_search)
+    monkeypatch.setattr(RS, "routes_batch", _bound(RS.routes_batch, seen, 0))
     argv = ["routes", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--live"]
     code, report, _ = _run(capsys, [*argv, "--max-searches", "7", "--pacing-dir", str(tmp_path)])
-    assert code == 0 and seen["max_searches"] == 7 and seen["searcher"] is search
-    marker, inner, pacing_dir = seen["fetcher"]
-    assert marker == "paced" and pacing_dir == tmp_path
-    assert isinstance(inner, R4.HostCapFetcher)
-    assert inner.wiki is made[R4.WIKI_MAX_BYTES] and inner.other is made[F.MAX_PAGE_BYTES]
-    assert all(f.closed for f in made.values()) and search.closed
-
-
-def test_the_wiki_hosts_and_only_they_get_the_large_cap() -> None:
-    for url in (
-        "https://en.wikipedia.org/w/api.php?x=1",
-        "https://fr.wikipedia.org/wiki/Temple",
-        "https://www.wikidata.org/w/api.php",
-    ):
-        assert R4.is_wiki_host(url), url
-    for url in (
-        "https://example.org/wiki",
-        "https://wikipedia.org.evil.net/x",
-        "https://kiddle.co",
-    ):
-        assert not R4.is_wiki_host(url), url
+    assert code == 0 and report["max_searches"] == 7
+    assert opened == {"pacing_dir": tmp_path}
+    assert (seen["searcher"], seen["probe"], seen["wait"]) == seams
+    assert seen["max_searches"] == 7 and seen["now"].tzinfo is not None
+    assert isinstance(seen["fetcher"], F.PacedFetcher)
+    assert isinstance(seen["fetcher"]._inner, S1.HostCappedFetcher)
+    assert search.closed
 
 
 def test_verify_is_track_cs_batch_function(

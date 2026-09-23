@@ -42,7 +42,6 @@ if __package__ in (None, ""):
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
 from phase3 import run as R3  # noqa: E402
-from phase3 import search_stage as SS  # noqa: E402
 from phase3.run import InputError, read_jsonl  # noqa: E402
 
 from phase4 import assemble as A  # noqa: E402
@@ -61,9 +60,6 @@ HOLDS4_FILE = "HOLDS4.jsonl"
 STAGE_EXIT = "STAGE_EXIT="
 #: The plan's batch prefix (contracts, section 4: `assign_batches(prefix="p4")`).
 BATCH_PREFIX = "p4-"
-#: The byte cap of a Wikipedia or Wikidata answer (design S1, WB-A1): 1 MiB; every other host
-#: keeps `fetch_stage.MAX_PAGE_BYTES`.
-WIKI_MAX_BYTES = 1024 * 1024
 DEFAULT_FETCH_TIMEOUT = 40.0
 
 #: The other tracks' modules, by the contract's names (docs/procedures/PHASE4_CONTRACTS.md).
@@ -97,38 +93,8 @@ def batch_dir_of(args: argparse.Namespace) -> Path:
     return path
 
 
-def is_wiki_host(url: str) -> bool:
-    host = F.host_of(url)
-    return host.endswith(".wikipedia.org") or host in ("wikidata.org", "www.wikidata.org")
-
-
-class HostCapFetcher:
-    """The `Fetcher` seam, sending Wikipedia and Wikidata to the 1 MiB fetcher and every other
-    host to the 60 KB one (design S1: the larger cap is for the wiki hosts only)."""
-
-    def __init__(self, wiki: F.Fetcher, other: F.Fetcher) -> None:
-        self.wiki = wiki
-        self.other = other
-
-    def get(self, url: str) -> F.FetchedPage:
-        return (self.wiki if is_wiki_host(url) else self.other).get(url)
-
-
-def http_fetcher(*, timeout: float, max_bytes: int) -> F.HttpFetcher:
-    """A real fetcher. `max_bytes` is WB-A1's parameter of `HttpFetcher`."""
-    return F.HttpFetcher(timeout=timeout, max_bytes=max_bytes)  # type: ignore[call-arg]
-
-
-def paced(fetcher: F.Fetcher, pacing_dir: Path) -> F.Fetcher:
-    return F.PacedFetcher(fetcher, F.HostPacer(pacing_dir))
-
-
 def pi_runner(timeout: float) -> MS.ModelRunner:
     return MS.PiRunner(timeout=timeout)
-
-
-def searcher() -> SS.Searcher:
-    return SS.MiniMaxSearcher.from_settings()
 
 
 # -------------------------------------------------------------------------------- the commands
@@ -164,42 +130,47 @@ def cmd_prepare(args: argparse.Namespace) -> tuple[int, Report]:
 
 
 def cmd_sources(args: argparse.Namespace) -> tuple[int, Report]:
+    """S1 through Track A's own live fetcher (`sources_stage.open_fetcher`: the 1 MiB client for
+    the wiki hosts, the 60 KB one for every other, paced per host), reusing the Phase-3 mass run's
+    `wikidata_entity` files."""
     batch_dir = batch_dir_of(args)
     if not args.live:
         return 0, {"batch_id": args.batch_id, "live": False, "bought": 0}
-    fetcher = http_fetcher(timeout=args.timeout, max_bytes=WIKI_MAX_BYTES)
-    try:
-        code = track(SOURCES_STAGE).sources_batch(
+    sources = track(SOURCES_STAGE)
+    with sources.open_fetcher(pacing_dir=Path(args.pacing_dir), timeout=args.timeout) as fetcher:
+        code = sources.sources_batch(
             batch_dir,
             ledger=Path(args.ledger),
-            fetcher=paced(fetcher, Path(args.pacing_dir)),
+            fetcher=fetcher,
             now=datetime.now(UTC),
+            phase3_run=Path(args.phase3_run),
         )
-    finally:
-        fetcher.close()
     return int(code), {"batch_id": args.batch_id, "live": True}
 
 
 def cmd_routes(args: argparse.Namespace) -> tuple[int, Report]:
+    """S1b through the same live fetcher and Track A's three search seams
+    (`route_stage.open_search`: the searcher, the forced quota probe, the MiniMax host's pace)."""
     batch_dir = batch_dir_of(args)
     if not args.live:
         return 0, {"batch_id": args.batch_id, "live": False, "bought": 0}
-    wiki = http_fetcher(timeout=args.timeout, max_bytes=WIKI_MAX_BYTES)
-    other = http_fetcher(timeout=args.timeout, max_bytes=F.MAX_PAGE_BYTES)
-    search = searcher()
-    try:
-        code = track(ROUTE_STAGE).routes_batch(
+    sources = track(SOURCES_STAGE)
+    routes = track(ROUTE_STAGE)
+    pacing_dir = Path(args.pacing_dir)
+    with (
+        sources.open_fetcher(pacing_dir=pacing_dir, timeout=args.timeout) as fetcher,
+        routes.open_search(pacing_dir=pacing_dir) as (searcher, probe, wait),
+    ):
+        code = routes.routes_batch(
             batch_dir,
             ledger=Path(args.ledger),
-            fetcher=paced(HostCapFetcher(wiki, other), Path(args.pacing_dir)),
-            searcher=search,
+            fetcher=fetcher,
+            searcher=searcher,
             max_searches=args.max_searches,
             now=datetime.now(UTC),
+            probe=probe,
+            wait=wait,
         )
-    finally:
-        wiki.close()
-        other.close()
-        search.close()  # type: ignore[attr-defined]
     return int(code), {"batch_id": args.batch_id, "live": True, "max_searches": args.max_searches}
 
 
@@ -368,6 +339,12 @@ def build_parser() -> argparse.ArgumentParser:
         command = batch_command(name, func, live=True)
         command.add_argument("--pacing-dir", default=str(R3.DEFAULT_PACING_DIR))
         command.add_argument("--timeout", type=float, default=DEFAULT_FETCH_TIMEOUT)
+        if name == "sources":
+            command.add_argument(
+                "--phase3-run",
+                default=str(R3.DEFAULT_SOURCE_RUN_DIR),
+                help="the Phase-3 mass run whose wikidata_entity files S1 reuses",
+            )
         if name == "routes":
             command.add_argument("--max-searches", type=int, required=True)
     for name, func in (("select", cmd_select), ("review", cmd_review)):

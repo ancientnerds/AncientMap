@@ -5749,20 +5749,22 @@ PHASE4_SELECT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_prepare_copies_the_plan_line_write_once",
     ),
     (
-        "p4 run4: sources gets the 60 KB cap",
+        # run4's own host-cap fetcher is gone (the review's R1): the caps are Track A's
+        # `open_fetcher`, proved in PHASE4_SOURCES_MUTATIONS; what run4 owns is the wiring.
+        "p4 run4: sources is not told the Phase-3 run",
         P4B_RUN4,
-        "    fetcher = http_fetcher(timeout=args.timeout, max_bytes=WIKI_MAX_BYTES)\n",
-        "    fetcher = http_fetcher(timeout=args.timeout, max_bytes=F.MAX_PAGE_BYTES)  # mutant\n",
+        "            phase3_run=Path(args.phase3_run),\n",
+        "",
         P4B_RUNNER_TEST,
-        "test_sources_hands_the_track_a_stage_a_paced_1_mib_fetcher",
+        "test_sources_hands_track_a_its_own_live_fetcher_and_the_phase3_run",
     ),
     (
-        "p4 run4: a look-alike host gets the wiki cap",
+        "p4 run4: routes is not given the quota probe",
         P4B_RUN4,
-        'host.endswith(".wikipedia.org")',
-        '"wikipedia.org" in host',
+        "            probe=probe,\n",
+        "",
         P4B_RUNNER_TEST,
-        "test_the_wiki_hosts_and_only_they_get_the_large_cap",
+        "test_routes_gets_the_live_fetcher_the_search_seams_and_its_search_allowance",
     ),
     (
         "p4 run4: prepare overwrites an input",
@@ -8686,6 +8688,31 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         'draw.add_argument("--written", default=None,',
         P4B_RUNNER_TEST,
         "test_a_draw_is_taken_from_the_written_sites_and_refuses_one_never_reviewed",
+    ),
+    # -- R1: run4 drives Track A with Track A's signatures and Track A's live seams
+    (
+        "p4 run4: routes is not given the MiniMax pace",
+        P4B_RUN4,
+        "            wait=wait,\n",
+        "",
+        P4B_RUNNER_TEST,
+        "test_routes_gets_the_live_fetcher_the_search_seams_and_its_search_allowance",
+    ),
+    (
+        "p4 run4: routes is told the budget, not the run's allowance",
+        P4B_RUN4,
+        "            max_searches=args.max_searches,\n",
+        "            max_searches=700,  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_routes_gets_the_live_fetcher_the_search_seams_and_its_search_allowance",
+    ),
+    (
+        "p4 run4: the Phase-3 run is not the mass run",
+        P4B_RUN4,
+        "default=str(R3.DEFAULT_SOURCE_RUN_DIR),",
+        "default=str(R3.DEFAULT_RUN_DIR),",
+        P4B_RUNNER_TEST,
+        "test_sources_hands_track_a_its_own_live_fetcher_and_the_phase3_run",
     ),
 ]
 MUTATIONS += PHASE4_SELECT_SUP_MUTATIONS
