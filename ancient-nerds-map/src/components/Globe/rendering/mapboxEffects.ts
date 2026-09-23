@@ -8,9 +8,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SiteData, SOURCE_COLORS, getCategoryColor } from '../../../data/sites'
 import { FilterMode } from '../../../App'
 import { getThreeJsView, viewToMapbox, latLngToCartesian } from '../../../utils/geoMath'
-import { MapboxGlobeService, type MapboxMarkerData } from '../../../services/MapboxGlobeService'
+import type { MapboxGlobeService, MapboxMarkerData } from '../../../services/MapboxGlobeService'
+import type { MapboxLoadState } from '../../../services/mapboxLoader'
 import { EMPIRES } from '../../../config/empireData'
-import { CAMERA } from '../../../config/globeConstants'
+import { CAMERA, THREEJS_CAMERA_MAX } from '../../../config/globeConstants'
 
 // =============================================================================
 // SHARED INTERFACES
@@ -31,14 +32,6 @@ export interface SceneRefs {
 }
 
 /**
- * All refs and state setters needed by the Mapbox initialization effect.
- */
-export interface MapboxInitEffectDeps {
-  mapboxContainerRef: React.RefObject<HTMLDivElement | null>
-  mapboxServiceRef: React.MutableRefObject<MapboxGlobeService | null>
-}
-
-/**
  * All refs and state setters needed by the texture-ready effect.
  */
 export interface TextureReadyEffectDeps {
@@ -54,8 +47,9 @@ export interface TextureReadyEffectDeps {
 export interface AutoSwitchEffectDeps {
   zoom: number
   showMapbox: boolean
+  /** React state (not a ref), so reaching `ready` at the switch point re-runs the effect. */
+  mapboxState: MapboxLoadState
   setShowMapbox: (value: boolean) => void
-  mapboxServiceRef: React.MutableRefObject<MapboxGlobeService | null>
   justEnteredMapbox: React.MutableRefObject<boolean>
   contextIsOffline: boolean
   hasMapboxTilesCached: boolean
@@ -184,35 +178,6 @@ export const TRANSITION_POINT = 66
 // =============================================================================
 
 /**
- * Creates the Mapbox GL JS initialization effect body.
- * Corresponds to Globe.tsx lines ~2881-2902.
- *
- * Usage in useEffect:
- *   useEffect(() => createMapboxInitEffect(deps), [])
- *
- * @returns Cleanup function that disposes the Mapbox service.
- */
-export function createMapboxInitEffect(
-  deps: MapboxInitEffectDeps
-): (() => void) | undefined {
-  if (!deps.mapboxContainerRef.current) return
-
-  const mapboxService = new MapboxGlobeService()
-  deps.mapboxServiceRef.current = mapboxService
-
-  // Initially hidden via CSS (opacity: 0) until showMapbox triggers mapbox-primary-mode class
-  mapboxService.initialize(deps.mapboxContainerRef.current, 'dark')
-    .catch((err) => {
-      console.error('[Mapbox] Failed to initialize:', err)
-    })
-
-  return () => {
-    mapboxService.dispose()
-    deps.mapboxServiceRef.current = null
-  }
-}
-
-/**
  * Creates the texture-ready effect body.
  * Forces basemap visible when textures become ready.
  * Corresponds to Globe.tsx lines ~7055-7071.
@@ -246,12 +211,13 @@ export function createTextureReadyEffect(
  * Corresponds to Globe.tsx lines ~7078-7096.
  *
  * Usage in useEffect:
- *   useEffect(() => createAutoSwitchEffect(deps), [zoom, showMapbox, contextIsOffline, hasMapboxTilesCached])
+ *   useEffect(() => createAutoSwitchEffect(deps), [zoom, showMapbox, contextIsOffline, hasMapboxTilesCached, mapboxState])
  */
 export function createAutoSwitchEffect(
   deps: AutoSwitchEffectDeps
 ): void {
-  if (!deps.mapboxServiceRef.current?.getIsInitialized()) return
+  // `ready` is set only after MapboxGlobeService.initialize resolved.
+  if (deps.mapboxState !== 'ready') return
 
   if (deps.zoom >= TRANSITION_POINT && !deps.showMapbox) {
     // Set flag BEFORE enabling Mapbox to prevent zoom effect from running
@@ -569,7 +535,7 @@ export function createModeSwitchEffect(
 
       // Calculate camera distance from slider value (not from Mapbox zoom)
       const currentSliderZoom = deps.zoomRef.current
-      const scaledZoom = (currentSliderZoom / 66) * 80  // Match THREEJS_CAMERA_MAX
+      const scaledZoom = (currentSliderZoom / 66) * THREEJS_CAMERA_MAX
       const maxDist = CAMERA.MAX_DISTANCE  // 2.44
       const minDist = CAMERA.MIN_DISTANCE  // 1.02
       const targetDist = maxDist - (scaledZoom / 100) * (maxDist - minDist)

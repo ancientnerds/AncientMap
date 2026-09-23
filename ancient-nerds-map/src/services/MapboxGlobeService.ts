@@ -4,7 +4,7 @@
 
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { MAPBOX, rotateMapboxToken, getMapboxToken } from '../config/mapboxConstants'
+import { MAPBOX } from '../config/mapboxConstants'
 import { applyDarkTealTheme as applyTealTheme, setupDarkFog, hexToRgba } from '../utils/mapboxTheme'
 import { isDemoMode } from '../utils/demoApi'
 
@@ -120,7 +120,7 @@ export class MapboxGlobeService {
       preserveDrawingBuffer: isDemoMode(),
     })
 
-    await new Promise<void>((resolve, _reject) => {
+    await new Promise<void>((resolve, reject) => {
       this.map!.on('load', () => {
         this.setupFog()
         this.applyDarkTealTheme()
@@ -129,20 +129,13 @@ export class MapboxGlobeService {
         resolve()
       })
 
-      this.map!.on('error', (e: mapboxgl.ErrorEvent & { error?: { status?: number } }) => {
-        // Check for 401 unauthorized - token expired
-        if (e.error?.status === 401) {
-          console.warn('[MapboxGlobe] Token expired (401), rotating to next token...')
-          if (rotateMapboxToken()) {
-            // Update the token and reload style
-            mapboxgl.accessToken = getMapboxToken()
-            this.map?.setStyle(MapboxGlobeService.STYLES[this.currentStyle])
-          } else {
-            console.error('[MapboxGlobe] All tokens exhausted, cannot recover')
-          }
-        } else {
-          console.error('[MapboxGlobe] Map error:', e)
-        }
+      // Before the first 'load', an error of the style itself (style fetch
+      // failed, 401/403, offline) means the map will never load.
+      // Tile and TileJSON errors are forwarded from their source and carry
+      // `sourceId`; they are not fatal.
+      this.map!.on('error', (e: mapboxgl.ErrorEvent) => {
+        console.error('[MapboxGlobe] Map error:', e)
+        if (!this.isInitialized && !('sourceId' in e)) reject(e.error)
       })
     })
   }

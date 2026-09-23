@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { CAMERA, GLOBE, RENDER_ORDER } from '../../../config/globeConstants'
+import { CAMERA, GLOBE, MAPBOX_SWITCH_DISTANCE, RENDER_ORDER } from '../../../config/globeConstants'
 import { BRAND_ASSETS } from '../../../constants/brand'
 
 /** Options passed to initializeScene for configuring the scene. */
@@ -730,7 +730,9 @@ export function initializeScene(
   controls.dampingFactor = CAMERA.DAMPING_FACTOR
   controls.autoRotate = false // We'll handle rotation manually for frame-rate independence
   controls.enableRotate = false // Custom arcball rotation
-  controls.minDistance = CAMERA.MIN_DISTANCE
+  // Mapbox is always `idle` when the scene is created; Globe widens this
+  // with orbitMinDistance() once Mapbox is ready or has failed.
+  controls.minDistance = MAPBOX_SWITCH_DISTANCE
   controls.maxDistance = CAMERA.MAX_DISTANCE
 
   // Manual rotation state (frame-rate independent)

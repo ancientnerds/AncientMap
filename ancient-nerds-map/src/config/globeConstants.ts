@@ -2,6 +2,8 @@
 // GLOBE CONSTANTS - Central configuration for all magic numbers
 // =============================================================================
 
+import type { MapboxLoadState } from '../services/mapboxLoader'
+
 // -----------------------------------------------------------------------------
 // Camera Settings
 // -----------------------------------------------------------------------------
@@ -18,6 +20,26 @@ export const CAMERA = {
   ROTATE_SPEED: 0.5,
   ZOOM_SPEED: 1.0,
 } as const
+
+// -----------------------------------------------------------------------------
+// Three.js ↔ Mapbox switch point
+// -----------------------------------------------------------------------------
+/** At zoom state 66 (TRANSITION_POINT) the camera sits at 80 % of its distance range. */
+export const THREEJS_CAMERA_MAX = 80
+
+/** Camera distance at zoom state 66, where Mapbox takes over: 2.44 − 0.8 × 1.42 = 1.304. */
+export const MAPBOX_SWITCH_DISTANCE =
+  CAMERA.MAX_DISTANCE - (THREEJS_CAMERA_MAX / 100) * (CAMERA.MAX_DISTANCE - CAMERA.MIN_DISTANCE)
+
+/**
+ * Closest orbit distance for a Mapbox load state. Until Mapbox is ready the
+ * Three.js globe stops at the switch distance (it was never shown closer);
+ * once Mapbox is ready it takes over there, and when it failed the Three.js
+ * globe zooms on as it always did without Mapbox.
+ */
+export function orbitMinDistance(state: MapboxLoadState): number {
+  return state === 'ready' || state === 'failed' ? CAMERA.MIN_DISTANCE : MAPBOX_SWITCH_DISTANCE
+}
 
 // -----------------------------------------------------------------------------
 // Extended Camera Settings for Mapbox Satellite Mode
