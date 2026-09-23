@@ -11,3 +11,5 @@ scripts/remediation/*.sh text eol=lf
 # Statements that are piped into psql keep LF on every checkout, so a CRLF working copy cannot put a
 # carriage return into a psql meta-command such as `\set ON_ERROR_STOP on` (not measured; avoided).
 output/remediation/qid_repair/*.sql text eol=lf
+output/remediation/qid_repair/wave2/*.sql text eol=lf
+output/remediation/bcases/coords_plan/*.sql text eol=lf

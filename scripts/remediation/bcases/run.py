@@ -1,0 +1,121 @@
+"""The owner-case command line: collect, classify, research, plan - and the plan's read-only checks.
+
+    PY=./.venv/Scripts/python.exe
+    $PY scripts/remediation/bcases/run.py export      # production, read-only: the curated rows
+    $PY scripts/remediation/bcases/run.py collect     # Wikidata and Wikipedia (cached)
+    $PY scripts/remediation/bcases/run.py classify    # offline: output/remediation/bcases/*.jsonl
+    $PY scripts/remediation/bcases/run.py research    # Wikidata/Wikipedia (cached): qid_research.jsonl
+    $PY scripts/remediation/bcases/run.py plan        # offline: the coordinate plan and its SQL
+    $PY scripts/remediation/bcases/run.py check       # production, read-only: the old values hold
+    $PY scripts/remediation/bcases/run.py verify      # production, read-only: after an apply
+
+`--data` names the directory with the census findings, the census snapshot and the T01 cache (a git
+worktree points it at the main checkout's `output/remediation`), `--cache` the derived files `collect`
+writes, `--out` the deliverables. Nothing here writes to production; the plan's statements are sent by
+the orchestrator, after the owner's go.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+from pathlib import Path
+
+_REPO = Path(__file__).resolve().parents[3]
+for _root in (str(_REPO), str(_REPO / "scripts" / "remediation")):
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+from census.fetch import Fetcher  # noqa: E402
+from vlm_pilot.common import write_jsonl  # noqa: E402
+
+from bcases import classify as C  # noqa: E402
+from bcases import collect as K  # noqa: E402
+from bcases import coord_plan as P  # noqa: E402
+from bcases import inputs  # noqa: E402
+from bcases import qid_research as R  # noqa: E402
+
+
+def collect(data: Path, cache: Path) -> dict[str, int]:
+    """Fetch and cache every Wikidata/Wikipedia answer the classifier reads."""
+    sites = inputs.load_sites(cache)
+    t01 = inputs.load_findings(data, "t01")
+    t02 = inputs.load_findings(data, "t02")
+    census_claims, _labels = inputs.load_t01_claims(data)
+    with Fetcher(root=cache / "http", workers=1) as net:
+        names = K.fetch_names(net, inputs.qids_needed(sites, t01))
+        inputs.write_cache(cache / inputs.NAMES_FILE, names, K.meta(items=len(names)))
+        items = C.coordinate_items(sites, t01, t02)
+        claims = K.fetch_claims(net, items)
+        inputs.write_cache(cache / inputs.CLAIMS_FILE, claims, K.meta(items=len(claims)))
+        classes = {q for r in census_claims.values() for q in r.get("instance_qids") or ()}
+        classes |= {q for r in claims.values() for q in r["p31"]}
+        labels = K.fetch_labels(net, classes)
+        inputs.write_cache(cache / inputs.P31_FILE, labels, K.meta(items=len(labels)))
+        enwiki = K.fetch_enwiki_coords(net, C.enwiki_titles(sites, claims, items))
+        inputs.write_cache(cache / inputs.ENWIKI_FILE, enwiki, K.meta(titles=len(enwiki)))
+    return {
+        "names": len(names),
+        "claims": len(claims),
+        "labels": len(labels),
+        "enwiki": len(enwiki),
+    }
+
+
+def research(cache: Path, out: Path) -> dict[str, int]:
+    """`qid_research.jsonl`: candidates for every wrong link the first repair wave left open."""
+    sites = inputs.load_sites(cache)
+    verdicts = [
+        v
+        for v in inputs.read_jsonl(out / "names.jsonl")
+        if v["group"] == "wrong-link" and "state" not in v
+    ]
+    with Fetcher(root=cache / "http", workers=1) as net:
+        records = [R.research(net, v, sites[v["site_id"]]) for v in verdicts]
+    write_jsonl(out / "qid_research.jsonl", records)
+    return {
+        rule: sum(1 for r in records if r["suggestion"]["rule"] == rule)
+        for rule in ("A", "B", "unresolved")
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="bcases")
+    parser.add_argument(
+        "command",
+        choices=("export", "collect", "classify", "research", "plan", "check", "verify"),
+    )
+    parser.add_argument("--data", default=str(inputs.DATA))
+    parser.add_argument("--cache", default=str(inputs.CACHE))
+    parser.add_argument("--out", default=str(inputs.OUT))
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    data, cache, out = Path(args.data), Path(args.cache), Path(args.out)
+    if args.command == "export":
+        from mechanical.plan import psql_json_reader
+
+        count = K.export(cache, reader=psql_json_reader())
+        print(f"export: {count} curated rows -> {cache / inputs.EXPORT_FILE}")
+        return 0
+    if args.command == "collect":
+        print(json.dumps(collect(data, cache)))
+        return 0
+    if args.command == "classify":
+        print(json.dumps(C.write_all(data, cache, out), indent=1, ensure_ascii=False))
+        return 0
+    if args.command == "research":
+        print(json.dumps(research(cache, out)))
+        return 0
+    if args.command == "plan":
+        rows = P.write_files(out)
+        print(
+            f"coordinate plan: {len(rows) // len(P.COLUMNS)} sites, {len(rows)} journalled changes"
+        )
+        return 0
+    return P.run_readonly(args.command, out)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

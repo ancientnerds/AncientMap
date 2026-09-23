@@ -1,0 +1,92 @@
+{
+ "names": {
+  "N1": 354,
+  "N2": 50,
+  "N3": 67,
+  "N6": 37,
+  "N7": 46,
+  "Q1": 21,
+  "Q2": 43,
+  "Q3": 8,
+  "Q4": 5
+ },
+ "names_by_group": {
+  "keep": 508,
+  "review": 46,
+  "wrong-link": 77
+ },
+ "names_n7": {
+  "anchor-is-a-site": 27,
+  "anchor-is-locality": 19
+ },
+ "coords_k_all": {
+  "K1-container-item": 114,
+  "K2-linear-or-areal-item": 31,
+  "K3-shared-item": 30,
+  "K4-1-to-10km": 202,
+  "K5-over-10km": 100
+ },
+ "coords_k_285": {
+  "K1-container-item": 60,
+  "K2-linear-or-areal-item": 20,
+  "K3-shared-item": 7,
+  "K4-1-to-10km": 135,
+  "K5-over-10km": 63
+ },
+ "coords_verdict": {
+  "move": 17,
+  "not-comparable": 210,
+  "review": 163,
+  "stored-agrees": 98
+ },
+ "coords_verdict_285": {
+  "move": 11,
+  "not-comparable": 99,
+  "review": 106,
+  "stored-agrees": 69
+ },
+ "coords_review_reason": {
+  "no Wikidata item: no witness to ask": 2,
+  "no witness: no P625 and no English article with coordinates": 5,
+  "one witness only (wikidata)": 102,
+  "the two witnesses are one: P625 says it was imported from English Wikipedia": 15,
+  "the two witnesses are one: the same point (N m apart)": 30,
+  "the two witnesses disagree: N km apart (tolerance N m)": 8,
+  "wikidata and enwiki agree elsewhere, but enwiki puts the site at the stored point": 1
+ },
+ "coords_not_comparable": {
+  "container-item": 115,
+  "item-is-not-the-site": 32,
+  "linear-or-areal-item": 33,
+  "shared-item": 30
+ },
+ "moves_country_follow_up": 1,
+ "b2": {
+  "a": 3,
+  "b": 6,
+  "b-ni": 22,
+  "c1": 25,
+  "c2": 44,
+  "c3": 4,
+  "d": 1,
+  "x": 12
+ },
+ "b2_state": {
+  "false": 91,
+  "true": 26
+ },
+ "pairs": {
+  "DUP": 20,
+  "NEITHER": 83,
+  "PART-OF": 59,
+  "WRONG-ID": 19
+ },
+ "duplicates": {
+  "losers": 20,
+  "unresolved_groups": 0
+ },
+ "stacked": {
+  "groups": 13,
+  "sites": 36
+ }
+}
