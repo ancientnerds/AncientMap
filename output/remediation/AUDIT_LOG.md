@@ -6260,3 +6260,64 @@ announcing a gallery change is the cheaper error than missing a hero change.
   `wip/p4-select`. The frontend was not type-checked or tested in this worktree (it has no
   `node_modules`); `npm run type-check`, `npm run test` and the Playwright bundle swap against
   production come before that push.
+
+## 2026-09-23 - the Track D supplement, checked: write round 2, the handshake after a revert, D7
+
+An independent checker read `wip/p4-write-sup` at db6dcef and found three issues (C1 major, C2 and
+C3 minor). Each was verified here; C1 is fixed, the gate's share of C2 is fixed and its Track-C
+share is open for the orchestrator, C3 needs the orchestrator's HUMAN_ONLY edit (the gate's count
+is fixed). **Nothing was written to production, and nothing was read from it.**
+
+### C1 (major) - the documented write round 2 was a false success (fixed, 5e29f56)
+
+Reproduced with the checker's probe (`C:/tmp/p4wcheck/probe_round2.py`): round 1 `--apply`, its
+acceptance, the round's `ROLLBACK.sql` committed (what `revert4` journals), then `--apply --round 2`
+printed "open batches: 0", "done: no open batch left to write", `WRITE_EXIT=0`, 0 statements, and
+the journal held only chunk-0001 and its reversal. Cause: `render()` returned a batch that still had
+its round-1 `APPLIED.json` with its round-2 chunk, and `run_batches()` skipped it as applied.
+
+Fix: `--round N` re-opens a batch applied in round N-1 only on production's read-only word that the
+round is reverted - as many journalled writes under its stamp as it wrote, each with its own
+reversal kept. The read is `revert4`'s own post-read, now one function (`reversal_read`, parsed
+strictly by `reversal_counts`), so gate and reversal share one definition of "reverted". The round's
+`APPLIED.json` moves to `chunks/chunk-NNNN/` beside `REVERTED.json` (the proof) and chunk-000N is
+written. Refused with `WRITE_EXIT=1` instead of skipped: round 3 over round 1, round 2 for a batch
+never written, round 1 for a re-opened batch. The acceptance's rows-read rule counts every written
+round, live and reverted, under the stamps the output read - counting only the live records would
+have let an output taken between the revert and round 2 accept round 2. The same probe now sends 12
+statements in round 2 and the journal holds chunk-0002.
+
+### C2 (minor) - no way out of a pending step after a revert (gate share fixed, Track-C share open)
+
+Verified: `acceptance_problems` needs `ACCEPT_EXIT=0`, `run_batches` blocks while `STEP.json`
+exists, only `accept_step` removes it. The gate's share is fixed in the same commit:
+`--close-reverted` closes a pending step on the proof above for every batch of the step, records it
+in `CLOSED/step-NNNN.json` (never in `ACCEPTED/`), re-opens its batches and removes `STEP.json`; a
+live row refuses the whole close, and `--round` does not re-open a batch of a pending step. The
+Track-C share is open: `verify_writes4.accept4` (on `wip/p4-verify`) reads a write followed by its
+kept reversal as CHANGED LATER and two rounds of a key as WRITTEN TWICE. A round-scoped
+`--stamp-like` is no cure once a lane mixes rounds - probe `C:/tmp/p4wcheck/probe_mixed_rounds.py`
+against the checker's export of `wip/p4-verify` 6782fe3: batch 1 reverted and written as round 2,
+batch 2 live in round 1 gives `WRITTEN TWICE` and `CHANGED LATER` under `phase5:%` and `MOVED` for
+batch 2 under `phase5:%:chunk-0002`. `accept4` needs to treat a link with its own kept reversal as
+closed (PHASE4_CONTRACTS section 7, "After a revert"); the merged-branch test (write, revert,
+round 2, accept) belongs to that merge.
+
+### C3 (minor) - HUMAN_ONLY D7 does not name the sites absent from the snapshot (orchestrator)
+
+Verified: HUMAN_ONLY D7 speaks only of held texts equal to the pre-March state, while
+`legacy4.NoClaim.NOT_IN_SNAPSHOT` (e8480fd) lists sites that snapshot `d4526691` does not have in
+the same `UNCLAIMED.jsonl`, each line with its `reason`. HUMAN_ONLY is the orchestrator's file. On
+this branch the gate's report no longer sums the reasons: it prints "unclaimed by reason (HUMAN_ONLY
+D7): {...}" (35ce513).
+
+### Measured (worktree of `wip/p4-write-sup`, main venv)
+
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`): **4,373 passed, 108
+  skipped**, 57 deselected (18 more than before the check).
+* Mutation sweep, every "p4 " case: **398/398 caught**, the tree byte-identical for 23 files; 15
+  new cases (13 `write_gate4`, 2 `revert4`), and the kept-reversals case re-anchored to the shared
+  read.
+* `ruff check` (api, pipeline, scripts/remediation, tests, tools) clean, `ruff format --check`
+  clean on every touched file, `lint-imports` 2 kept, 0 broken, `vulture --min-confidence 80`
+  clean.
