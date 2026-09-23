@@ -1,0 +1,105 @@
+/**
+ * How a load of /globe.html ends when it never reaches the globe.
+ *
+ * The dashboard (pipeline/umami_db.py SQL_GLOBE, folded by
+ * stats_analysis.globe_funnel) splits the loads without globe_ready by their
+ * ending event. Umami carries no page-load id, so the fold is per session and
+ * trusts the frontend to send AT MOST ONE ending per load:
+ *
+ *   globe_gate        a phone-gate choice other than the globe
+ *   globe_unsupported the capability check failed (App)
+ *   globe_error       a start failure (App's failGlobe; not 'bg:' or 'live')
+ *   globe_abandon     the page was hidden or left before globe_ready
+ *
+ * All four go through one latch per load; globe_ready closes it too, so a
+ * load that reached the globe never sends an ending afterwards.
+ *
+ * globe_abandon rides on the tracker's own transport: Umami 3.4's
+ * `umami.track` issues fetch(…, {keepalive: true}) synchronously inside the
+ * call, which survives the unload like a beacon would. Before the tracker has
+ * loaded the event waits in analytics/index.ts's queue and is lost with the
+ * page; the dashboard reads that as "no signal".
+ *
+ * Module scope touches no browser global (SSR-safe import).
+ */
+
+import { track, type EventProps } from './index'
+
+/** The critical items of the start, in the order the abandon phase names the first one missing. */
+export const START_ITEMS = ['sites', 'scene', 'basemap', 'labels', 'coastlines', 'countryBorders'] as const
+export type StartItem = (typeof START_ITEMS)[number]
+
+/** globe_abandon's phase: the gate, or the first critical item still missing. */
+export type AbandonPhase = 'gate' | StartItem
+
+/** The phone gate's controls (globe_gate's choice). */
+export type GateChoice = 'globe' | 'stories' | 'radar' | 'journal' | 'lyra' | 'db'
+
+type GlobeEnding = 'globe_gate' | 'globe_unsupported' | 'globe_error' | 'globe_abandon'
+
+export interface GlobeEndingLatch {
+  /** Nothing has ended this load yet, and the globe is not ready. */
+  readonly open: boolean
+  /** Sends the ending if it is the first of this load; returns whether it was sent. */
+  end(name: GlobeEnding, props: EventProps): boolean
+  /** The globe is ready: this load sends no ending any more. */
+  close(): void
+}
+
+export function createGlobeEndingLatch(): GlobeEndingLatch {
+  let open = true
+  return {
+    get open() {
+      return open
+    },
+    end(name, props) {
+      if (!open) return false
+      open = false
+      track(name, props)
+      return true
+    },
+    close() {
+      open = false
+    },
+  }
+}
+
+/** A phone-gate control was used. The globe button lets the load go on; every link ends it. */
+export function reportGateChoice(choice: GateChoice, latch: GlobeEndingLatch): void {
+  if (choice === 'globe') track('globe_gate', { choice })
+  else latch.end('globe_gate', { choice })
+}
+
+/**
+ * Where the load is: 'gate' while the phone gate shows, else the first
+ * critical item not yet in. Once every item is in, the load waits only for
+ * the globe_ready check itself, and the last item names that step.
+ */
+export function loadPhase(gateShowing: boolean, done: ReadonlySet<StartItem>): AbandonPhase {
+  if (gateShowing) return 'gate'
+  return START_ITEMS.find(item => !done.has(item)) ?? START_ITEMS[START_ITEMS.length - 1]
+}
+
+/**
+ * Sends globe_abandon{ms, phase} through the latch on pagehide or when the
+ * page turns hidden. pagehide, not unload/beforeunload: it keeps the page
+ * eligible for the back/forward cache and fires on mobile. Returns the uninstall.
+ */
+export function installGlobeAbandon(opts: {
+  latch: GlobeEndingLatch
+  getPhase: () => AbandonPhase
+  now: () => number
+}): () => void {
+  const send = () => {
+    opts.latch.end('globe_abandon', { ms: Math.round(opts.now()), phase: opts.getPhase() })
+  }
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden') send()
+  }
+  window.addEventListener('pagehide', send)
+  document.addEventListener('visibilitychange', onVisibility)
+  return () => {
+    window.removeEventListener('pagehide', send)
+    document.removeEventListener('visibilitychange', onVisibility)
+  }
+}

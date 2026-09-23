@@ -66,7 +66,10 @@ import {
   type ParseLayer,
   type VectorRendererContext,
 } from './Globe/rendering/vectorRenderer'
-import { initializeScene, type SceneInitOptions } from './Globe/rendering/sceneInit'
+import { computeWarpCameraPositions, initializeScene, type SceneInitOptions, type SceneResult } from './Globe/rendering/sceneInit'
+import { useStartErrorBridge } from './GlobeErrorBoundary'
+import { GlobeStartError } from '../utils/globeStartError'
+import type { StartItem } from '../analytics/globeAbandon'
 import { runAnimationLoop, type AnimationLoopContext } from './Globe/rendering/animationLoop'
 import {
   setupEventHandlers,
@@ -117,12 +120,14 @@ interface GlobeProps {
   onEmpireClick?: (empireId: string, defaultYear?: number, yearOptions?: number[]) => void  // Opens empire popup when clicking on empire borders
   flyTo?: [number, number] | null  // [lng, lat] coordinates to fly to
   isLoading?: boolean  // Show loading state (disables clicks)
-  splashDone?: boolean  // True when splash screen has closed (triggers warp animation)
+  splashDone?: boolean  // True once the loading overlay starts to fade: the warp starts then (with this globe's layers ready)
   proximity?: ProximityState  // Proximity filter state
   onProximitySet?: (coords: [number, number]) => void  // Callback when position is set on globe
   onProximityHover?: (coords: [number, number] | null) => void  // Callback when hovering in proximity mode
   initialPosition?: [number, number] | null  // [lng, lat] initial camera position (user location)
   onLayersReady?: () => void  // Callback when essential layers (coastlines, borders) are loaded
+  onStartProgress?: (item: StartItem) => void  // A critical item of the start is in (scene, basemap, labels, coastlines, countryBorders), once each
+  onWarpComplete?: () => void  // The intro warp has ended (once per warp); the background queue starts here
   onWebglLost?: (reason: string, phase: string) => void  // WebGL context died - the globe is frozen until the page reloads
   onWebglRestored?: () => void  // Context came back and the animation loop was restarted
   // Contribute feature
@@ -172,7 +177,7 @@ interface GlobeProps {
   isOffline?: boolean  // Whether currently offline (no network)
 }
 
-export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onWebglLost, onWebglRestored, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
+export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onStartProgress, onWarpComplete, onWebglLost, onWebglRestored, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
   const refs = useGlobeRefs()
 
   // Batch destructure refs
@@ -211,6 +216,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     warpLinearProgress: warpLinearProgressRef, warpCompleteForLabels: warpCompleteForLabelsRef,
     logoAnimationStarted: logoAnimationStartedRef,
   } = refs
+
+  // Contract C0: every critical loader reports its failure here; before globe_ready it
+  // reaches GlobeErrorBoundary (App shows the error screen), afterwards it is tracked as live.
+  const reportStartError = useStartErrorBridge(() => refs.layersReadyCalled.current)
 
   // Custom Hooks
   const ui = useUIState({ initialShowCoordinates: true })
@@ -385,7 +394,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     refs,
     sceneReady,
     satelliteRequested: requestedTileLayers.satellite,
-    onStartError: (phase, err) => console.error('[globe start]', phase, err),
+    onStartError: reportStartError,
     onSatelliteFailed: () => setTileLayers(prev => ({ ...prev, satellite: false })),
   })
   // Active tile layers: the satellite counts once its texture is on the GPU
@@ -675,6 +684,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     onWebglLostRef.current?.(reason, phase)
   }, [])
 
+  // The intro's end, for the [] scene effect's loop context (same ref pattern as above)
+  const onWarpCompleteRef = useRef(onWarpComplete)
+  onWarpCompleteRef.current = onWarpComplete
+
   const handleContextRestored = useCallback(() => {
     webglLostReportedRef.current = false
     onWebglRestoredRef.current?.()
@@ -723,9 +736,16 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setSceneReady,
       onContextLost: handleContextLost,
       onContextRestored: handleContextRestored,
+      onStartError: reportStartError,
     }
 
-    const sceneResult = initializeScene(containerRef.current, sceneOptions)
+    // A throw here reaches GlobeErrorBoundary (effect errors do); the phase says which step
+    let sceneResult: SceneResult
+    try {
+      sceneResult = initializeScene(containerRef.current, sceneOptions)
+    } catch (err) {
+      throw err instanceof GlobeStartError ? err : new GlobeStartError('scene', err)
+    }
     const {
       renderer,
       scene,
@@ -770,6 +790,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       warpProgressRef, warpLinearProgressRef, warpStartTimeRef,
       warpCompleteForLabelsRef, warpInitialCameraPosRef, warpTargetCameraPosRef,
       layersReadyCalledRef, dotsAnimationCompleteRef, logoAnimationStartedRef,
+      onWarpComplete: () => onWarpCompleteRef.current?.(),
       logoSpriteRef, logoMaterialRef, basemapMeshRef, basemapBackMeshRef,
       basemapSectionMeshes, shaderMaterialsRef, selectedDotMaterialRef,
       dotSizeRef, isAutoRotatingRef, isHoveringListRef, manualRotationRef,
@@ -862,6 +883,17 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [])
 
+  // The warp target follows initialPosition (a geolocation that arrives after mount)
+  // until the first warp frame; from then on the warp owns the camera.
+  useEffect(() => {
+    const sceneData = sceneRef.current
+    if (!sceneData || warpStartTimeRef.current !== null) return
+    const { start, target } = computeWarpCameraPositions(initialPosition)
+    sceneData.camera.position.copy(start)
+    warpInitialCameraPosRef.current = start.clone()
+    warpTargetCameraPosRef.current = target
+  }, [initialPosition])
+
   // Mapbox: mapbox-gl is imported on demand (services/mapboxLoader.ts).
   // Interim trigger at mount; the background queue takes this task over (U10).
   useEffect(() => {
@@ -907,6 +939,25 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     layersLoaded,
     onLayersReady,
   })
+
+  // Start progress for App's loading watchdog and globe_abandon's phase: each item once.
+  const onStartProgressRef = useRef(onStartProgress)
+  onStartProgressRef.current = onStartProgress
+  const reportedStartItemsRef = useRef(new Set<StartItem>())
+  useEffect(() => {
+    const items: Array<[StartItem, boolean]> = [
+      ['scene', sceneReady],
+      ['basemap', texturesReady],
+      ['labels', labelsLoaded],
+      ['coastlines', layersLoaded.coastlines === true],
+      ['countryBorders', layersLoaded.countryBorders === true],
+    ]
+    for (const [item, done] of items) {
+      if (!done || reportedStartItemsRef.current.has(item)) continue
+      reportedStartItemsRef.current.add(item)
+      onStartProgressRef.current?.(item)
+    }
+  }, [sceneReady, texturesReady, labelsLoaded, layersLoaded])
   const [labelReloadTrigger, setLabelReloadTrigger] = useState(0)
   const totalLabelsCountRef = refs.totalLabelsCount
 
@@ -955,11 +1006,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       await loadGeoLabelsImpl(buildGeoLabelContext())
     }
 
-    loadLabels().catch((err) => {
-      console.error('[Loading] Labels error:', err)
+    loadLabels().catch((err: unknown) => {
       labelsLoadingRef.current = false
+      reportStartError('labels', err)
     })
-  }, [sceneReady, labelReloadTrigger, buildGeoLabelContext])
+  }, [sceneReady, labelReloadTrigger, buildGeoLabelContext, reportStartError])
 
   // Handle WebGL context restoration - reload labels when textures are lost
   useEffect(() => {
@@ -1492,10 +1543,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setLayersLoaded,
       parseLayer: runtime.parseLayer,
       signal: runtime.signal,
-      // Contract C0: interim until U9 passes reportStartError
-      onStartError: (phase, err) => console.error('[globe start]', phase, err),
+      onStartError: reportStartError,
     }
-  }, [])
+  }, [reportStartError])
 
   // Load a layer: front and back from one fetch and one parse
   const loadVectorLayer = useCallback((layerKey: VectorLayerKey) => {

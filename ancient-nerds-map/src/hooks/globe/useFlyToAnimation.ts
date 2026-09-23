@@ -23,6 +23,10 @@ export function useFlyToAnimation({
   // Rotate to coordinates when flyTo prop changes (search result) - no zoom
   useEffect(() => {
     if (!flyTo) return
+    // Before the intro starts the warp owns the camera; every start-up target
+    // (?lat&lon, focus, proximity=1) is already its target (initialPosition).
+    // Flown there first, the camera would flip ~180° at the warp's first frame.
+    if (refs.warpStartTime.current === null) return
 
     const [lng, lat] = flyTo
 
@@ -97,5 +101,5 @@ export function useFlyToAnimation({
     }
 
     refs.cameraAnimation.current = requestAnimationFrame(animateRotate)
-  }, [flyTo, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
+  }, [flyTo, refs.warpStartTime, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
 }

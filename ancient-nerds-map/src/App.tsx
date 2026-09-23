@@ -1,12 +1,29 @@
-import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import { track } from './analytics'
+import { errorProps } from './analytics/boot'
+import {
+  createGlobeEndingLatch,
+  installGlobeAbandon,
+  loadPhase,
+  reportGateChoice,
+  type GateChoice,
+  type StartItem,
+} from './analytics/globeAbandon'
 import Globe from './components/Globe'
+import GlobeErrorBoundary from './components/GlobeErrorBoundary'
+import GlobeErrorScreen from './components/GlobeErrorScreen'
+import GlobeUnsupported from './components/GlobeUnsupported'
+import PhoneGate from './components/PhoneGate'
 import FilterPanel from './components/FilterPanel'
 import { EmpirePolygonData, computeBoundingBox, isSiteInEmpirePolygons } from './utils/geometry'
 import SitePopup, { EmpirePopupData } from './components/SitePopup'
 import LazyErrorBoundary from './components/LazyErrorBoundary'
 import { EMPIRES } from './config/empireData'
 import { isPhoneOrSmallScreen } from './utils/deviceTier'
+import { checkGlobeSupport } from './utils/globeSupport'
+import { GlobeStartError, LIVE_PHASE, failurePhase } from './utils/globeStartError'
+import { lookupIpLocation } from './utils/ipLocation'
+import { START_STALL_MS, createStallWatchdog, type StallWatchdog } from './utils/loadWatchdog'
 
 // Lazy-load modals for faster initial load
 const ContributeModal = lazy(() => import('./components/ContributeModal'))
@@ -19,7 +36,7 @@ import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { config } from './config'
 import { apiDetailToSiteData } from './utils/siteApi'
-import { BRAND_NAME, BRAND_SUBTITLE, BRAND_ASSETS } from './constants/brand'
+import { BRAND_ASSETS } from './constants/brand'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { offlineFetch } from './services/OfflineFetch'
@@ -131,6 +148,23 @@ function AppContent() {
   const [initialNav] = useState(() => getInitialCoords())
   const initialCoordsHandledRef = useRef(false)
   const focusHandledRef = useRef(false)
+  // Can this browser run the globe at all? Checked once, before <Globe> mounts
+  // (a standalone ?site= page never mounts it).
+  const [globeSupport] = useState(() => standaloneSiteId ? null : checkGlobeSupport(document.createElement('canvas')))
+  // The focus site's position aims the intro; the overlay waits for its lookup.
+  const [focusLocation, setFocusLocation] = useState<[number, number] | null>(null)
+  const [focusResolved, setFocusResolved] = useState(focusSiteId === null)
+  // A start failure replaces the page with GlobeErrorScreen
+  const [globeFailure, setGlobeFailure] = useState<{ phase: string; message: string } | null>(null)
+  const globeFailureTrackedRef = useRef(false)
+  // At most one ending event per load (globe_gate, globe_unsupported, globe_error, globe_abandon)
+  const [endingLatch] = useState(createGlobeEndingLatch)
+  // Critical items of the start that are in; the watchdog and globe_abandon's phase read them
+  const startItemsRef = useRef(new Set<StartItem>())
+  const watchdogRef = useRef<StallWatchdog | null>(null)
+  const [loadStalled, setLoadStalled] = useState(false)
+  // globe_ready has fired: later failures are 'live', not start failures
+  const globeReadyRef = useRef(false)
 
   const [sites, setSites] = useState<SiteData[]>([])
   const sitesRef = useRef<SiteData[]>([])
@@ -161,8 +195,6 @@ function AppContent() {
   const [downloadedMB, setDownloadedMB] = useState<number>(0) // Total MB downloaded
   const loadingStatusTimeoutRef = useRef<number | null>(null)
   const lastStatusChangeRef = useRef<number>(Date.now())
-  const appStartTimeRef = useRef(Date.now())
-  const MIN_SPLASH_DURATION = 3000  // 3 seconds minimum splash screen
   const speedTrackingRef = useRef({
     totalBytes: 0,
     lastTotalBytes: 0,
@@ -214,7 +246,8 @@ function AppContent() {
       // PerformanceObserver not supported
     }
 
-    // Update display every 100ms with smoothing
+    // Update display every 500ms with smoothing (display only; a faster tick
+    // re-rendered App and the whole Globe ten times a second during loading)
     speedIntervalRef.current = window.setInterval(() => {
       const now = Date.now()
       const elapsed = (now - tracking.lastUpdateTime) / 1000 // seconds
@@ -253,7 +286,7 @@ function AppContent() {
       } else if (tracking.totalBytes > 0) {
         setDownloadSpeed('') // Hide when truly idle
       }
-    }, 100)
+    }, 500)
 
     return () => {
       observer.disconnect()
@@ -315,7 +348,6 @@ function AppContent() {
   const [flyToCoords, setFlyToCoords] = useState<[number, number] | null>(null)
   const [sourcesMeta, setSourcesMeta] = useState<Record<string, SourceMeta>>({})
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null) // [lng, lat] from IP geolocation
-  const [locationReady, setLocationReady] = useState(false) // True when location fetch completed (success or fail)
 
   // Proximity filter state
   const [proximityCenter, setProximityCenter] = useState<[number, number] | null>(null) // [lng, lat]
@@ -649,7 +681,33 @@ function AppContent() {
     }
   }, [])
 
-  useEffect(() => {
+  /** The globe cannot start (or broke after it had: phase 'live'): error screen, one globe_error. */
+  const failGlobe = useCallback((phase: string, err: unknown) => {
+    const message = errorProps(err instanceof Error ? err.message : err).message
+    console.error(`[globe] failed (${phase})`, err)
+    watchdogRef.current?.stop()
+    setGlobeFailure(prev => prev ?? { phase, message })
+    if (globeFailureTrackedRef.current) return
+    globeFailureTrackedRef.current = true
+    // A start failure is this load's ending; a live one follows globe_ready, which closed the latch
+    if (phase === LIVE_PHASE) track('globe_error', { phase, message })
+    else endingLatch.end('globe_error', { phase, message })
+  }, [endingLatch])
+
+  const handleGlobeError = useCallback((err: unknown) => {
+    failGlobe(failurePhase(err, globeReadyRef.current), err instanceof GlobeStartError ? err.cause : err)
+  }, [failGlobe])
+
+  /** A critical item of the start is in: the watchdog waits again. */
+  const markStartProgress = useCallback((item: StartItem) => {
+    startItemsRef.current.add(item)
+    watchdogRef.current?.progress()
+    setLoadStalled(false)
+  }, [])
+
+  // A layout effect, so the requests go out before the Globe's passive effects
+  // (scene, WebGL context, geometry) run in the same commit.
+  useLayoutEffect(() => {
     // Standalone mode: fetch only the single site, skip everything else
     if (standaloneSiteId) {
       const loadStandaloneSite = async () => {
@@ -686,96 +744,81 @@ function AppContent() {
       return
     }
 
-    // Normal mode: progressive loading
-    // Phase 1: Load default source first, then show globe with dots
+    // A browser that cannot show the globe downloads nothing and asks no third party
+    if (globeSupport && !globeSupport.ok) return
+
+    let cancelled = false
+    const lookups = new AbortController()
+
+    // IP geolocation aims the intro; it runs in parallel and the start never waits
+    // for it (utils/ipLocation.ts: a deadline per provider). A result that arrives
+    // after the warp has started is ignored by Globe. ?lat&lon always wins.
+    if (!initialNav) {
+      lookupIpLocation(lookups.signal).then(
+        location => { if (location) setUserLocation(location) },
+        (reason: unknown) => { if (!lookups.signal.aborted) throw reason }, // rejects only when aborted
+      )
+    }
+
+    // Focus mode: the warp lands on the site. The overlay waits for this lookup
+    // (focusResolved); when it fails the intro aims at the IP location, as always.
+    if (focusSiteId) {
+      fetch(`${config.api.baseUrl}/sites/${focusSiteId}`, { signal: lookups.signal })
+        .then(res => {
+          if (!res.ok) throw new Error(`/sites/${focusSiteId}: HTTP ${res.status}`)
+          return res.json()
+        })
+        .then(detail => {
+          const coords = apiDetailToSiteData(detail).coordinates
+          if (coords && !isNaN(coords[0]) && !isNaN(coords[1])) setFocusLocation(coords)
+          else console.warn(`[globe] focus site ${focusSiteId} has no position`)
+        })
+        .catch((err: unknown) => {
+          if (lookups.signal.aborted) return // unmounted
+          console.warn(`[globe] focus site ${focusSiteId}: position lookup failed`, err)
+        })
+        .finally(() => {
+          if (!lookups.signal.aborted) setFocusResolved(true)
+        })
+    }
+
+    // Normal mode: the default source first, then the globe shows its dots
     const loadData = async () => {
-      // IP geolocation - MUST complete before Globe renders
-      // Uses same logic as FilterPanel proximity (which works)
-      let detectedLocation: [number, number] | null = null
-      try {
-        const res = await fetch('https://ipwho.is/')
-        if (res.ok) {
-          const data = await res.json()
-          if (data?.success && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-            detectedLocation = [data.longitude, data.latitude]
-          }
-        }
-      } catch { /* try fallback */ }
-
-      // Fallback to geojs.io
-      if (!detectedLocation) {
-        try {
-          const res = await fetch('https://get.geojs.io/v1/ip/geo.json')
-          if (res.ok) {
-            const data = await res.json()
-            const lat = parseFloat(data?.latitude)
-            const lng = parseFloat(data?.longitude)
-            if (!isNaN(lat) && !isNaN(lng)) {
-              detectedLocation = [lng, lat]
-            }
-          }
-        } catch { /* use default */ }
-      }
-
-      // Focus mode: fetch site coordinates and use as initial position
-      // so the warp animation lands directly on the site
-      if (focusSiteId) {
-        try {
-          const res = await fetch(`${config.api.baseUrl}/sites/${focusSiteId}`)
-          if (res.ok) {
-            const detail = await res.json()
-            const site = apiDetailToSiteData(detail)
-            if (site.coordinates && !isNaN(site.coordinates[0]) && !isNaN(site.coordinates[1])) {
-              detectedLocation = site.coordinates
-            }
-          }
-        } catch { /* fall through to normal location */ }
-      }
-
-      // Set location state BEFORE anything else
-      if (detectedLocation) {
-        setUserLocation(detectedLocation)
-      }
-      setLocationReady(true)
-
-      // Fetch sites and sources in parallel with location
       updateLoadingStatus('Loading archaeological sites...')
-      setLoadingProgress(20)
-      let data: SiteData[] = []
+      setLoadingProgress(p => Math.max(p, 20))
+      let data: SiteData[]
       try {
         data = await fetchSites(globeSiteFields(focusSiteId))
-        setSites(data)
-        // A focus load (full payload) and offline mode start with their details
-        if (DataStore.detailsReady) setDetailsStatus('ready')
-
-        // Get source metadata from DataStore (already loaded in parallel with sites)
-        const sources = DataStore.getSources()
-        const sourcesMetaMap: Record<string, SourceMeta> = {}
-        for (const source of sources) {
-          sourcesMetaMap[source.id] = {
-            n: source.name,
-            c: source.color,
-            cnt: source.recordCount,
-            pri: source.isPrimary,
-            p: source.priority ?? 999,
-            on: source.enabledByDefault,
-            cat: source.category,
-          }
-        }
-        setSourcesMeta(sourcesMetaMap)
       } catch (error) {
-        console.error("Failed to fetch sites:", error)
         setDataSourceError()  // Set error state for red LED indicator
-        setSites([])
-        setIsLoading(false)
-        return
+        throw error
       }
+      if (cancelled) return
+      setSites(data)
+      // A focus load (full payload) and offline mode start with their details
+      if (DataStore.detailsReady) setDetailsStatus('ready')
+
+      // Get source metadata from DataStore (already loaded in parallel with sites)
+      const sources = DataStore.getSources()
+      const sourcesMetaMap: Record<string, SourceMeta> = {}
+      for (const source of sources) {
+        sourcesMetaMap[source.id] = {
+          n: source.name,
+          c: source.color,
+          cnt: source.recordCount,
+          pri: source.isPrimary,
+          p: source.priority ?? 999,
+          on: source.enabledByDefault,
+          cat: source.category,
+        }
+      }
+      setSourcesMeta(sourcesMetaMap)
 
       // Get all source IDs from DataStore
       const allSourceIds = DataStore.getSources().map(s => s.id)
 
       updateLoadingStatus('Preparing globe view...')
-      setLoadingProgress(50)
+      setLoadingProgress(p => Math.max(p, 50))
 
       const uniqueCategories = [...new Set(data.map(s => s.category).filter(Boolean))].sort()
       setCategories(uniqueCategories)
@@ -800,7 +843,9 @@ function AppContent() {
 
       // NOW show the globe (default source is loaded)
       setIsLoading(false)
-      setLoadingProgress(65)
+      // Monotonic: the layers may have finished first (the bar is at 100 then)
+      setLoadingProgress(p => Math.max(p, 65))
+      markStartProgress('sites')
       // Note: Additional sources are NOT loaded automatically - user must click "Load Sources" button
 
       // Interim until the background queue (U10) runs this as its `details` task
@@ -809,8 +854,15 @@ function AppContent() {
         track('globe_error', { phase: 'bg:details', message: err instanceof Error ? err.message : String(err) })
       })
     }
-    loadData()
-  }, [standaloneSiteId, openSitePopup, loadDetails])
+    // The globe cannot start without its sites: the error screen, not an empty globe
+    loadData().catch((err: unknown) => {
+      if (!cancelled) failGlobe('sites', err)
+    })
+    return () => {
+      cancelled = true
+      lookups.abort(new Error('app unmounted'))
+    }
+  }, [standaloneSiteId, openSitePopup, loadDetails, globeSupport, initialNav, focusSiteId, updateLoadingStatus, markStartProgress, failGlobe])
 
   // Load specific sources when user clicks on them or "Load All"
   const handleLoadSources = useCallback((sourceIdsToLoad: string[]) => {
@@ -1600,26 +1652,70 @@ function AppContent() {
     return () => clearInterval(interval)
   }, [isLoading, layersReady])
 
-  // Handle loading overlay fade-out transition with minimum display time
-  const loadingComplete = !isLoading && layersReady
+  // The overlay fades as soon as the sites, the critical layers and (focus mode)
+  // the focus site's position are in; the warp starts with the fade.
+  const loadingComplete = !isLoading && layersReady && focusResolved
   useEffect(() => {
-    if (loadingComplete && overlayRendered && !overlayFading) {
-      // Check if minimum display time has passed
-      const elapsed = Date.now() - appStartTimeRef.current
-      const remaining = MIN_SPLASH_DURATION - elapsed
-
-      if (remaining > 0) {
-        // Wait for remaining time before fading
-        const timer = setTimeout(() => {
-          setOverlayFading(true)
-        }, remaining)
-        return () => clearTimeout(timer)
-      } else {
-        // Minimum time already passed, fade immediately
-        setOverlayFading(true)
-      }
-    }
+    if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)
   }, [loadingComplete, overlayRendered, overlayFading])
+
+  const gateShowing = isMobile && !mobileWarningDismissed
+  const gateShowingRef = useRef(gateShowing)
+  gateShowingRef.current = gateShowing
+
+  const handleGateChoice = useCallback((choice: GateChoice) => {
+    reportGateChoice(choice, endingLatch)
+    if (choice === 'globe') setMobileWarningDismissed(true)
+  }, [endingLatch])
+
+  // globe_abandon: armed from mount (the gate phase included), until this load ends
+  useEffect(() => {
+    if (standaloneSiteId) return
+    return installGlobeAbandon({
+      latch: endingLatch,
+      getPhase: () => loadPhase(gateShowingRef.current, startItemsRef.current),
+      now: () => performance.now(),
+    })
+  }, [standaloneSiteId, endingLatch])
+
+  // globe_unsupported, once, when the unsupported screen actually shows
+  useEffect(() => {
+    if (!globeSupport || globeSupport.ok || gateShowing) return
+    endingLatch.end('globe_unsupported', { reason: globeSupport.reason, detail: globeSupport.detail })
+  }, [globeSupport, gateShowing, endingLatch])
+
+  // Loading watchdog: while the globe starts, 20 s of visible time without any
+  // critical item progressing offers a reload in the hint box. Loading goes on.
+  const startWatched = !standaloneSiteId && !gateShowing && globeSupport?.ok === true
+    && !globeFailure && !layersReady && !webglLost
+  useEffect(() => {
+    if (!startWatched) return
+    const dog = createStallWatchdog({
+      timeoutMs: START_STALL_MS,
+      onStall: () => setLoadStalled(true),
+      paused: document.visibilityState === 'hidden',
+    })
+    watchdogRef.current = dog
+    const onVisibility = () => (document.visibilityState === 'hidden' ? dog.pause() : dog.resume())
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      dog.stop()
+      watchdogRef.current = null
+      setLoadStalled(false)
+    }
+  }, [startWatched])
+
+  const handleLayersReady = useCallback(() => {
+    // Before globe_ready: from here on this load sends no ending (no abandon either)
+    globeReadyRef.current = true
+    endingLatch.close()
+    updateLoadingStatus('Map layers ready!')
+    setLoadingProgress(100)
+    setLayersReady(true)
+    track('globe_ready', { ms: Math.round(performance.now()) })
+    idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
+  }, [endingLatch, updateLoadingStatus])
 
   // Standalone mode: show only the popup in a minimal container
   if (standaloneSiteId) {
@@ -1662,58 +1758,11 @@ function AppContent() {
   }
 
   // Mobile users see desktop-only message (unless dismissed)
-  if (isMobile && !mobileWarningDismissed) {
-    return (
-      <div className="mobile-overlay">
-        <div className="mobile-overlay-content">
-          <img src={BRAND_ASSETS.logo} alt="" className="mobile-logo-icon" />
-          <div className="mobile-logo-main">{BRAND_NAME}</div>
-          <div className="mobile-logo-sub">{BRAND_SUBTITLE}</div>
-          <div className="mobile-message">
-            The 3D globe is optimized for desktop browsers.
-          </div>
-          <div className="mobile-hint">
-            Explore our mobile-friendly pages below, or continue to the globe.
-          </div>
-          <div className="mobile-actions">
-            <div className="mobile-actions-row">
-              <a className="mobile-action-btn" href="/news.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /></svg>
-                Stories
-              </a>
-              <a className="mobile-action-btn" href="/radar.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" /></svg>
-                Radar
-              </a>
-            </div>
-            <div className="mobile-actions-row">
-              <a className="mobile-action-btn" href="/articles.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
-                Journal
-              </a>
-              <a className="mobile-action-btn" href="/lyra.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-                Lyra
-              </a>
-            </div>
-            <div className="mobile-actions-row">
-              <a className="mobile-action-btn" href="/db.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 12c0 2.21 4.48 4 10 4s10-1.79 10-4" /></svg>
-                Database
-              </a>
-              <button
-                className="mobile-action-btn mobile-action-globe"
-                onClick={() => setMobileWarningDismissed(true)}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-                3D Globe
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (gateShowing) return <PhoneGate onChoice={handleGateChoice} />
+
+  // A browser that cannot run the globe, and a globe that failed: a clear screen, never a black one
+  if (globeSupport && !globeSupport.ok) return <GlobeUnsupported reason={globeSupport.reason} detail={globeSupport.detail} />
+  if (globeFailure) return <GlobeErrorScreen phase={globeFailure.phase} message={globeFailure.message} />
 
   return (
     <>
@@ -1749,6 +1798,8 @@ function AppContent() {
                 keeps its height, and the visitor gets the one action left. */}
             {webglLost ? (
               <button className="loading-retry" onClick={() => window.location.reload()}>Reload the globe</button>
+            ) : loadStalled ? (
+              <button className="loading-retry" onClick={() => window.location.reload()}>Taking unusually long — reload</button>
             ) : (
               <div className="loading-hint">For best performance, enable hardware acceleration in your browser</div>
             )}
@@ -1770,7 +1821,7 @@ function AppContent() {
           <div className="loading-cursor-spinner" />
         </div>
       )}
-      {locationReady && <Globe
+      <GlobeErrorBoundary onError={handleGlobeError}><Globe
         sites={sitesWithProximity}
         splashDone={overlayFading}
         filterMode={filterMode}
@@ -1829,14 +1880,9 @@ function AppContent() {
         }}
         onProximitySet={handleProximitySet}
         onProximityHover={handleProximityHover}
-        initialPosition={initialNav?.coords ?? userLocation}
-        onLayersReady={() => {
-          updateLoadingStatus('Map layers ready!')
-          setLoadingProgress(100)
-          setLayersReady(true)
-          track('globe_ready', { ms: Math.round(performance.now()) })
-          idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
-        }}
+        initialPosition={initialNav?.coords ?? focusLocation ?? userLocation}
+        onLayersReady={handleLayersReady}
+        onStartProgress={markStartProgress}
         onWebglLost={() => setWebglLost(true)}
         onWebglRestored={() => setWebglLost(false)}
         onContributeClick={() => setShowContributeModal(true)}
@@ -1898,7 +1944,7 @@ function AppContent() {
         isOffline={isOffline}
         onNewsFeedClick={() => setShowNewsFeed(prev => !prev)}
         isNewsFeedOpen={showNewsFeed}
-      />}
+      /></GlobeErrorBoundary>
       <FilterPanel
         categories={categoriesFromActiveSources}
         selectedCategories={selectedCategories}

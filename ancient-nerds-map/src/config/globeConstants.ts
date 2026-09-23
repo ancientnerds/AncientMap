@@ -21,6 +21,22 @@ export const CAMERA = {
   ZOOM_SPEED: 1.0,
 } as const
 
+/**
+ * WebGL context attributes of the globe's renderer. The capability check
+ * (utils/globeSupport.ts) asks for the same ones, so a browser that refuses
+ * them sees the unsupported screen instead of three's "Error creating WebGL
+ * context with your selected attributes."
+ */
+export const RENDERER_ATTRIBUTES = {
+  antialias: true,
+  powerPreference: 'high-performance',
+  stencil: true,  // Enable stencil buffer for even-odd polygon fill
+  depth: true,
+  preserveDrawingBuffer: true,  // Required for screenshot capture
+  alpha: true,  // Transparent background so Mapbox GL shows through
+  premultipliedAlpha: false,  // Required for proper alpha compositing with Mapbox behind
+} as const satisfies WebGLContextAttributes
+
 // -----------------------------------------------------------------------------
 // Three.js ↔ Mapbox switch point
 // -----------------------------------------------------------------------------
