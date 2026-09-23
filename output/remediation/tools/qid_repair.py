@@ -126,7 +126,10 @@ title, the API answered it as `invalid`, and `_parse_query` stored it (both fixe
   item that is a place (a settlement, an administrative unit or a natural feature - P31 judged by
   `bcases.qid_research.is_site_kind`, the gate of waves 2 and 3; orchestrator decision
   2026-09-23), or an item another curated site already carries is not written, for both kinds;
-  it is listed with its reason, and a shared item as a duplicate candidate.
+  it is listed with its reason, and a shared item as a duplicate candidate. A refusal the rule
+  gets wrong is overridden only by a hand-read entry (`WAVE4_HAND_READ`, like wave 2's hand
+  entries) that names that very refusal and quotes its evidence: Petra, whose item carries the
+  class "city" beside "ancient city" and "archaeological site".
 * a new `(site, kind)` row is an `INSERT` with old value `NULL` ("no row"), guarded by "no row of
   that kind exists"; its reversal deletes exactly that row, conditional on its value, and journals it.
 
@@ -2087,6 +2090,40 @@ NO_PAGE = {"canonical_title": None, "qid": None, "disambiguation": False, "redir
 
 
 @dataclass(frozen=True)
+class HandRead:
+    """A wave-4 resolution read by hand: the rule refused it, and the quoted evidence overrides
+    exactly that refusal - `overrides` is the rule's reason, verbatim. Any other refusal of the site
+    (an item another curated site carries) still stands."""
+
+    site_id: str
+    name: str
+    overrides: str
+    evidence: tuple[str, ...]
+
+
+#: The hand-read entries of wave 4 (orchestrator decision 2026-09-23), read like wave 2's hand
+#: entries: every fact quoted from what Wikidata and Wikipedia answered that day (read-only:
+#: `wbgetentities` Q5788 with its class labels, `resolve_titles(['Petra'])`).
+WAVE4_HAND_READ: tuple[HandRead, ...] = (
+    HandRead(
+        "a06a95d0-35b4-44bb-a0c1-716cbf972b19",
+        "Petra",
+        "Q5788 is a place, not the site (P31: ancient city, city, archaeological site)",
+        (
+            f"{WD}Q5788 'Petra' - 'ancient rock-cut historical city in Jordan': P31 archaeological "
+            "site (Q839954), ancient city (Q15661340) and city (Q515), all normal rank - the city "
+            "is the historical city that is the site, not a settlement that contains it",
+            f"{WD}Q5788: P1435 heritage designation World Heritage Site (Q9259), P757 World "
+            "Heritage Site ID 326 - the item of the UNESCO World Heritage Site Petra",
+            f"{WP}Petra: the stored name 'Petra' is this article's exact title (no redirect, not "
+            "a disambiguation page), and the article's item is Q5788 (Q5788's enwiki sitelink is "
+            "'Petra')",
+        ),
+    ),
+)
+
+
+@dataclass(frozen=True)
 class Left:
     """A wave-4 value the rules do not write, and why."""
 
@@ -2103,6 +2140,8 @@ class SplitPlan:
     record: Mapping[str, Any]
     #: Sites whose article's item another curated site carries: the owner's merge, not a link.
     duplicates: list[dict[str, Any]]
+    #: The hand-read entries the plan applied.
+    hand_read: tuple[HandRead, ...]
 
 
 def _utc_now() -> str:
@@ -2275,14 +2314,18 @@ def _shape_problem(site: Mapping[str, Any]) -> str | None:
     return None
 
 
-def split_plan(record: Mapping[str, Any]) -> SplitPlan:
+def split_plan(record: Mapping[str, Any], *, hand_read: tuple[HandRead, ...]) -> SplitPlan:
     """Wave 4's rows from its resolution record. Pure: the record is the only input.
 
     Per site, in name order: `source_url` keeps its first URL; the one English Wikipedia URL among
     the two becomes `enwiki_title` + `wikidata_qid` as the boot refresh would store them - a new row
     where the site has none of the kind, a correction only of a value that carries a control
-    character. Anything else is left, with its reason.
+    character. Anything else is left, with its reason - unless a hand-read entry names that very
+    refusal and quotes the evidence that overrides it.
     """
+    hands = {entry.site_id: entry for entry in hand_read}
+    if len(hands) != len(hand_read) or not all(entry.evidence for entry in hand_read):
+        raise SystemExit("a hand-read entry names its site twice or quotes no evidence")
     sites = sorted(record["sites"], key=lambda s: (str(s["name"]).casefold(), str(s["site_id"])))
     if len({s["site_id"] for s in sites}) != len(sites):
         raise SystemExit("the resolution record names a site twice")
@@ -2348,6 +2391,14 @@ def split_plan(record: Mapping[str, Any]) -> SplitPlan:
             continue
         url, res = articles[sid]
         why = _not_the_site(res, record["p31"])
+        hand = hands.pop(sid, None)
+        if hand is not None:
+            if why != hand.overrides:
+                raise SystemExit(
+                    f"{name}: the hand-read entry overrides {hand.overrides!r}, but the rule's "
+                    f"refusal is {why!r} - a hand entry names the refusal it overrides"
+                )
+            why = None
         if why is None and res["qid"] is not None:
             shared = _sharers(sid, res["qid"], by_qid, record["qid_holders"], by_id)
             if shared is not None:
@@ -2377,6 +2428,8 @@ def split_plan(record: Mapping[str, Any]) -> SplitPlan:
             if have == [new]:
                 continue
             evidence = [resolved]
+            if hand is not None:
+                evidence += [f"hand-read, overriding: {hand.overrides}", *hand.evidence]
             old: str | None = None
             if len(have) == 1 and CONTROL_RE.search(have[0]):
                 old = have[0]
@@ -2392,7 +2445,11 @@ def split_plan(record: Mapping[str, Any]) -> SplitPlan:
                     f"no other curated site carries {new} (production, {record['read_at']})"
                 )
             rows.append(_split_change(site, kind, old, new, "two_source", tuple(evidence)))
-    return SplitPlan(rows, left, record, duplicates)
+    if hands:
+        raise SystemExit(
+            f"hand-read entries for {sorted(hands)}: the wave resolves no article of those sites"
+        )
+    return SplitPlan(rows, left, record, duplicates, tuple(hand_read))
 
 
 def sql_value(value: str | None) -> str:
@@ -2721,6 +2778,17 @@ def wave4_markdown(plan: SplitPlan) -> str:
             for item in plan.left
         ),
         "",
+        "## Hand-read (a refusal of the rule overridden by quoted evidence)",
+        "",
+        "| site | the refusal it overrides | evidence |",
+        "| --- | --- | --- |",
+        *(
+            f"| {entry.name} (`{entry.site_id}`) | {entry.overrides} | "
+            + "<br>".join(entry.evidence)
+            + " |"
+            for entry in plan.hand_read
+        ),
+        "",
         "## Duplicate candidates (the owner's merge, not a link)",
         "",
         "| site | the other curated site | shared item | evidence |",
@@ -2776,7 +2844,7 @@ def wave4_markdown(plan: SplitPlan) -> str:
 def planned_rows(wave: Wave, out: pathlib.Path) -> list[Change]:
     """The rows a wave changes: waves 1-3 from their researched sites, wave 4 from its record."""
     if wave.number == SPLIT_WAVE:
-        return split_plan(load_resolution(out)).rows
+        return split_plan(load_resolution(out), hand_read=WAVE4_HAND_READ).rows
     return changes(wave.sites, gate_m=wave.gate_m)
 
 
@@ -2790,7 +2858,7 @@ MARKDOWN: dict[int, Callable[[list[Change]], str]] = {
 
 def write_files(out: pathlib.Path = OUT, wave: Wave = WAVE1) -> list[Change]:
     if wave.number == SPLIT_WAVE:
-        plan = split_plan(load_resolution(out))
+        plan = split_plan(load_resolution(out), hand_read=WAVE4_HAND_READ)
         rows, markdown = plan.rows, wave4_markdown(plan)
     else:
         rows = changes(wave.sites, gate_m=wave.gate_m)

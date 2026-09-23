@@ -1420,6 +1420,10 @@ def test_the_measurement_counts_holds_false_holds_and_bucket_moves_with_the_writ
 MEGA = "https://www.megalithic.co.uk/article.php?sid="
 WIKI = "https://en.wikipedia.org/wiki/"
 KHAN = "https://www.khanacademy.org/humanities/petra"
+KHAN_REAL = (
+    "https://www.khanacademy.org/humanities/ap-art-history/west-and-central-asia-apahh/"
+    "west-asia/a/petra-rock-cut-facades"
+)
 W4_SITES = {
     "alpha": "00000000-0000-4000-8000-0000000000a1",
     "petra": "00000000-0000-4000-8000-0000000000a2",
@@ -1523,7 +1527,7 @@ def _w4_record() -> dict:
 
 
 def _w4_plan() -> Any:
-    return qid_repair.split_plan(_w4_record())
+    return qid_repair.split_plan(_w4_record(), hand_read=())
 
 
 def test_wave_four_keeps_the_first_url_and_stores_the_article_as_the_boot_refresh_would() -> None:
@@ -1608,7 +1612,7 @@ def test_a_record_without_the_resolution_a_site_needs_is_refused() -> None:
     record = _w4_record()
     del record["resolutions"]["Alpha (site)"]
     with pytest.raises(SystemExit, match="run `resolve` again"):
-        qid_repair.split_plan(record)
+        qid_repair.split_plan(record, hand_read=())
 
 
 def test_a_control_character_is_spelled_outside_the_quotes() -> None:
@@ -1742,8 +1746,10 @@ def test_the_delivered_wave_four_files_are_the_rendered_ones(tmp_path: Path) -> 
             else ("new" if row.old_value is None else "corrected")
         )
         counts[what] = counts.get(what, 0) + 1
-    assert counts == {"source_url": 20, "new": 28}
-    plan = qid_repair.split_plan(qid_repair.load_resolution(wave.out))
+    assert counts == {"source_url": 20, "new": 29, "corrected": 1}
+    plan = qid_repair.split_plan(
+        qid_repair.load_resolution(wave.out), hand_read=qid_repair.WAVE4_HAND_READ
+    )
     left = {item.name: item.reason for item in plan.left}
     assert sorted(left) == [
         "Acanceh",
@@ -1751,14 +1757,12 @@ def test_the_delivered_wave_four_files_are_the_rendered_ones(tmp_path: Path) -> 
         "Cantil de las animas",
         "Cerro De Trincheras",
         "Chiapa de Corzo",
-        "Petra",
     ]
     assert all(item.what == "external ids" for item in plan.left)
     for name, qid in (
         ("Acanceh", "Q8186545"),
         ("Atzompa", "Q3846612"),
         ("Cerro De Trincheras", "Q1434929"),
-        ("Petra", "Q5788"),
     ):
         assert f"{qid} is a place, not the site" in left[name], name
     assert (
@@ -1831,6 +1835,7 @@ def test_resolve_reads_production_and_asks_only_for_the_article_titles() -> None
 
 
 def test_wave_four_check_and_verify_read_both_tables(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.setattr(qid_repair, "WAVE4_HAND_READ", ())
     qid_repair.write_resolution(tmp_path, _w4_record())
     out = ["--wave", "4", "--dir", str(tmp_path)]
     assert qid_repair.main(["render", *out]) == 0
@@ -1899,7 +1904,7 @@ def test_a_place_level_item_is_refused_for_both_kinds_and_the_source_url_is_stil
     record = _w4_record()
     del record["p31"]["Q20"]
     with pytest.raises(SystemExit, match="no P31 of Q20"):
-        qid_repair.split_plan(record)
+        qid_repair.split_plan(record, hand_read=())
 
 
 def test_a_shared_item_is_listed_as_a_duplicate_candidate_with_its_evidence() -> None:
@@ -1920,7 +1925,7 @@ def test_a_shared_item_is_listed_as_a_duplicate_candidate_with_its_evidence() ->
     record = _w4_record()
     record["resolutions"]["Twin one"] = _res("Twin", "Q20")
     record["resolutions"]["Twin two"] = _res("Twin", "Q20")
-    assert [d["name"] for d in qid_repair.split_plan(record).duplicates] == ["Taken"]
+    assert [d["name"] for d in qid_repair.split_plan(record, hand_read=()).duplicates] == ["Taken"]
 
 
 def test_the_class_read_refuses_a_class_it_cannot_name(monkeypatch: Any) -> None:
@@ -1949,3 +1954,70 @@ def test_the_class_read_refuses_a_class_it_cannot_name(monkeypatch: Any) -> None
     labels["Q515"] = None
     with pytest.raises(SystemExit, match="no English label for the P31 class"):
         qid_repair.item_classes(["Q1", "Q2"])
+
+
+def _petra_rows(plan: Any) -> list[tuple[str, str | None, str]]:
+    return [(r.kind, r.old_value, r.new_value) for r in plan.rows if r.name == "Petra"]
+
+
+def test_petra_is_written_by_its_hand_read_entry_and_refused_without_it() -> None:
+    """Orchestrator decision 2026-09-23: Petra is a hand-read entry, not a looser rule."""
+    record = qid_repair.load_resolution(qid_repair.WAVE4.out)
+    without = qid_repair.split_plan(record, hand_read=())
+    assert _petra_rows(without) == [
+        ("source_url", f"{WIKI}Petra\n{KHAN_REAL}", f"{WIKI}Petra"),
+    ]
+    assert {item.name: item.reason for item in without.left}["Petra"] == (
+        f"{WIKI}Petra: Q5788 is a place, not the site (P31: ancient city, city, archaeological site)"
+    )
+    plan = qid_repair.split_plan(record, hand_read=qid_repair.WAVE4_HAND_READ)
+    assert _petra_rows(plan) == [
+        ("source_url", f"{WIKI}Petra\n{KHAN_REAL}", f"{WIKI}Petra"),
+        ("enwiki_title", f"Petra\n{KHAN_REAL}", "Petra"),
+        ("wikidata_qid", None, "Q5788"),
+    ]
+    assert "Petra" not in {item.name for item in plan.left}
+    (entry,) = qid_repair.WAVE4_HAND_READ
+    qid_row = next(r for r in plan.rows if r.name == "Petra" and r.kind == "wikidata_qid")
+    assert f"hand-read, overriding: {entry.overrides}" in qid_row.evidence
+    assert set(entry.evidence) <= set(qid_row.evidence)
+    # the quoted evidence names what was read: the classes, the heritage listing, the article
+    quoted = " ".join(entry.evidence)
+    for fact in ("Q839954", "Q15661340", "Q515", "P1435", "Q9259", "P757", "326", "exact title"):
+        assert fact in quoted, fact
+    markdown = qid_repair.wave4_markdown(plan)
+    assert "## Hand-read (a refusal of the rule overridden by quoted evidence)" in markdown
+    assert f"| Petra (`{entry.site_id}`) | {entry.overrides} | " in markdown
+
+
+def _hand(key: str, overrides: str, *evidence: str) -> Any:
+    return qid_repair.HandRead(W4_SITES[key], key, overrides, evidence or ("read by hand",))
+
+
+def test_a_hand_entry_must_name_the_refusal_it_overrides() -> None:
+    record = _w4_record()
+    refusal = "Q21 is a place, not the site (P31: ancient city, city, archaeological site)"
+    plan = qid_repair.split_plan(record, hand_read=(_hand("cityish", refusal),))
+    assert [(r.kind, r.new_value) for r in plan.rows if r.name == "Cityish"] == [
+        ("source_url", f"{WIKI}Cityish"),
+        ("enwiki_title", "Cityish"),
+        ("wikidata_qid", "Q21"),
+    ]
+    for hand, says in (
+        # another reason than the rule's
+        (_hand("cityish", "Q21 is a disambiguation page"), "names the refusal it overrides"),
+        # a site the rule did not refuse
+        (_hand("alpha", "Q1 is a place, not the site (P31: x)"), "names the refusal it overrides"),
+        # a refusal that is not the rule's to override: another curated site carries the item
+        (
+            _hand("taken", f"Q4 is already carried by the curated site Holder ({HOLDER})"),
+            "names the refusal it overrides",
+        ),
+        # a site whose article the wave never resolves
+        (_hand("blog", "neither URL is an English Wikipedia article"), "resolves no article"),
+    ):
+        with pytest.raises(SystemExit, match=says):
+            qid_repair.split_plan(record, hand_read=(hand,))
+    empty = qid_repair.HandRead(W4_SITES["cityish"], "cityish", refusal, ())
+    with pytest.raises(SystemExit, match="quotes no evidence"):
+        qid_repair.split_plan(record, hand_read=(empty,))

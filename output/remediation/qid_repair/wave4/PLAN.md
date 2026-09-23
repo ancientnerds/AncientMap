@@ -1,6 +1,6 @@
 # Source-url split, wave 4 (2026-09-23) - planned, not applied
 
-48 row changes (run stamp `2026-09-23_source-url-split-wave4`): 20 `unified_sites.source_url` values keep their first URL, 28 `site_external_ids` rows are new and 0 corrected; 6 value(s) are left, each with its reason. The input is `wave4/RESOLUTION.json`: production read 2026-09-23T11:38:12Z (every `unified_sites` row whose `source_url` carries a control character: 20), English Wikipedia resolved 2026-09-23T11:38:14Z through `pipeline.lyra.prospector.wiki.resolve_titles`. The rules are in the module docstring of `output/remediation/tools/qid_repair.py`.
+50 row changes (run stamp `2026-09-23_source-url-split-wave4`): 20 `unified_sites.source_url` values keep their first URL, 29 `site_external_ids` rows are new and 1 corrected; 5 value(s) are left, each with its reason. The input is `wave4/RESOLUTION.json`: production read 2026-09-23T11:38:12Z (every `unified_sites` row whose `source_url` carries a control character: 20), English Wikipedia resolved 2026-09-23T11:38:14Z through `pipeline.lyra.prospector.wiki.resolve_titles`. The rules are in the module docstring of `output/remediation/tools/qid_repair.py`.
 
 | site | column / kind | old | new |
 | --- | --- | --- | --- |
@@ -52,6 +52,8 @@
 | Chalcatzingo (`b7020e91-a80b-46cc-8624-878be1713336`) | wikidata_qid | (no row) | `Q1059465` |
 | Chiapa de Corzo (`24aa135d-4714-47f5-96c0-d58f0bc04b6f`) | source_url | `https://www.megalithic.co.uk/article.php?sid=26242`<br>`https://en.wikipedia.org/wiki/Chiapa_de_Corzo_(Mesoamerican_site)` | `https://www.megalithic.co.uk/article.php?sid=26242` |
 | Petra (`a06a95d0-35b4-44bb-a0c1-716cbf972b19`) | source_url | `https://en.wikipedia.org/wiki/Petra`<br>`https://www.khanacademy.org/humanities/ap-art-history/west-and-central-asia-apahh/west-asia/a/petra-rock-cut-facades` | `https://en.wikipedia.org/wiki/Petra` |
+| Petra (`a06a95d0-35b4-44bb-a0c1-716cbf972b19`) | enwiki_title | `Petra`<br>`https://www.khanacademy.org/humanities/ap-art-history/west-and-central-asia-apahh/west-asia/a/petra-rock-cut-facades` | `Petra` |
+| Petra (`a06a95d0-35b4-44bb-a0c1-716cbf972b19`) | wikidata_qid | (no row) | `Q5788` |
 
 ## Left as they are, and why
 
@@ -62,7 +64,12 @@
 | Cantil de las animas (`885bbbdb-2583-4bc7-8be9-91b978cedcf3`) | external ids | neither URL is an English Wikipedia article |
 | Cerro De Trincheras (`d4671d52-1421-4853-a186-6f3b4516368d`) | external ids | https://en.wikipedia.org/wiki/Trincheras: Q1434929 is a place, not the site (P31: locality of Mexico) |
 | Chiapa de Corzo (`24aa135d-4714-47f5-96c0-d58f0bc04b6f`) | external ids | https://en.wikipedia.org/wiki/Chiapa_de_Corzo_(Mesoamerican_site): Q4384315 is already carried by the curated site Zoque Culture Archaeological Zone (ed186ea9-9ed1-415d-828b-97d9f21401d2) |
-| Petra (`a06a95d0-35b4-44bb-a0c1-716cbf972b19`) | external ids | https://en.wikipedia.org/wiki/Petra: Q5788 is a place, not the site (P31: ancient city, city, archaeological site) |
+
+## Hand-read (a refusal of the rule overridden by quoted evidence)
+
+| site | the refusal it overrides | evidence |
+| --- | --- | --- |
+| Petra (`a06a95d0-35b4-44bb-a0c1-716cbf972b19`) | Q5788 is a place, not the site (P31: ancient city, city, archaeological site) | https://www.wikidata.org/wiki/Q5788 'Petra' - 'ancient rock-cut historical city in Jordan': P31 archaeological site (Q839954), ancient city (Q15661340) and city (Q515), all normal rank - the city is the historical city that is the site, not a settlement that contains it<br>https://www.wikidata.org/wiki/Q5788: P1435 heritage designation World Heritage Site (Q9259), P757 World Heritage Site ID 326 - the item of the UNESCO World Heritage Site Petra<br>https://en.wikipedia.org/wiki/Petra: the stored name 'Petra' is this article's exact title (no redirect, not a disambiguation page), and the article's item is Q5788 (Q5788's enwiki sitelink is 'Petra') |
 
 ## Duplicate candidates (the owner's merge, not a link)
 
@@ -72,8 +79,7 @@
 
 ## Order and fixed point
 
-* After the apply the boot refresh (`refresh_site_external_ids(only_missing=True)`) reads only a site with no external-id row and an English Wikipedia `source_url`: none of these sites. The manual `--all` path reads every curated site whose `source_url` is an English Wikipedia article, and would write the ids this wave refuses for Petra - the fixed point waves 1-3 name for their own rows.
-* Petra keeps its stored enwiki_title value with a control character: the wave refuses the article's resolution, so it has no replacement to write, and a removal is a `DELETE` - the owner's call.
+* After the apply the boot refresh (`refresh_site_external_ids(only_missing=True)`) reads only a site with no external-id row and an English Wikipedia `source_url`: none of these sites. The manual `--all` path reads every curated site whose `source_url` is an English Wikipedia article, and would write the ids this wave refuses for none of them - the fixed point waves 1-3 name for their own rows.
 * `migrations/0023_source_url_no_control_chars.sql` may reach the deploy only after this wave is applied and verified: it fails while any `source_url` carries a control character, and a failing migration stops the deploy. Once it is applied, the `source_url` half of `ROLLBACK.sql` cannot run (the CHECK refuses the two-URL value).
 
 ## How to run it (the orchestrator's job, in this order)

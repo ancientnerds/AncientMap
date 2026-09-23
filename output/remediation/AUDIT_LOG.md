@@ -6331,3 +6331,42 @@ other row's `source_url` is the same article.
   class read's refusal of an unlabelled class). `mutation_sweep.py "source url: "`: **33/33 caught**.
 
 The apply commands above are unchanged; `check` now reads 48 rows.
+
+### B, revised again: Petra as a hand-read entry (orchestrator decision) - supersedes the 48-row plan
+
+The place gate stays as it is; Petra is written as a **hand-read entry**, the way wave 2's hand
+entries carry quoted evidence. `qid_repair.WAVE4_HAND_READ` holds one entry; its guard: a hand entry
+must name, verbatim, the refusal the rule made for that site, and it overrides only that one - a
+different reason, a site the rule did not refuse, a refusal that is not the place gate's (an item
+another curated site carries) or a site whose article the wave never resolves stops the plan, and so
+does an entry without evidence. PLAN.md lists the entry under "Hand-read" with the refusal it
+overrides and its evidence; each of Petra's rows carries both.
+
+Evidence, verified read-only on 2026-09-23 (`wbgetentities` Q5788 with its class labels,
+`resolve_titles(['Petra'])`, the production row): Q5788 'Petra' - 'ancient rock-cut historical city
+in Jordan', P31 archaeological site (Q839954), ancient city (Q15661340) and city (Q515), all normal
+rank; P1435 heritage designation World Heritage Site (Q9259); P757 World Heritage Site ID 326; its
+enwiki sitelink is 'Petra', and `resolve_titles` answers 'Petra' -> 'Petra', Q5788, no redirect, not a
+disambiguation page; the stored name is 'Petra' (Jordan).
+
+| what | rows |
+| --- | --- |
+| `unified_sites.source_url` -> the first URL (primitive) | 20 |
+| `site_external_ids` new rows (14 sites x 2, Petra's `wikidata_qid` Q5788) | 29 |
+| corrected (Petra `enwiki_title` `'Petra\nhttps://www.khanacademy.org/...'` -> `Petra`) | 1 |
+| **total** | **50** (digest `a5f3503d...`) |
+
+Left: Acanceh, Atzompa, Cerro De Trincheras (a place, not the site), Cantil de las animas (no
+article), Chiapa de Corzo (Q4384315 carried by Zoque Culture Archaeological Zone; duplicate
+candidate). With Petra corrected, no external-id value with a control character is left, and the
+`--all` refresh would write none of the refused ids back (both PLAN.md bullets are computed).
+
+* `qid_repair.py check --wave 4` (read-only): **`check: 50 rows, 0 deviation(s)`**.
+* Production rehearsal of `REHEARSAL.sql`: `INSERT 0 20`, `INSERT 0 30`, `DO`,
+  `NOTICE: source-url split: 50 row(s) changed and journalled`, `ROLLBACK`, journal rows for this
+  stamp 0; afterwards 0 journal rows, 20 control-character values, Petra's broken title unchanged.
+* Apply-then-undo rehearsal (one transaction, rolled back): 50 + 50 journal rows, then the pre-state
+  exactly (20 control-character values, 1 external-id row among the 20 sites, Petra's title broken).
+* Tests: 2 new (Petra written with its entry and refused without it, on the delivered record; a hand
+  entry must name the refusal it overrides - wrong reason, unrefused site, a sharer refusal, an
+  unresolved site, no evidence). `mutation_sweep.py "source url: "`: **38/38 caught**.
