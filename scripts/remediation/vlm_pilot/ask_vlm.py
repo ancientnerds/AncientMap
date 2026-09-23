@@ -64,8 +64,8 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import httpx
-
 from common import OUT_DIR, read_jsonl, write_jsonl  # noqa: E402
+
 from pipeline.video.shorts_select import (  # noqa: E402
     VLM_ATTEMPTS,
     VLM_PROMPT,

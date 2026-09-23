@@ -48,7 +48,6 @@ import argparse
 import hashlib
 import json
 import re
-import shlex
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
@@ -56,6 +55,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT / "scripts" / "remediation") not in sys.path:
+    sys.path.insert(0, str(ROOT / "scripts" / "remediation"))
+
+#: The production transport, the timeout rule and the pin format live in `prod_write.py` since
+#: 2026-09-22 - moved there from this module so the mechanical lanes use the same code.
+from prod_write import DIGEST_RE, SSH_HOST, OutcomeUnknown, send  # noqa: E402
+
 OUTPUT = ROOT / "output" / "remediation" / "gallery_audit"
 SELECTION = ROOT / "video-assets" / "shorts"
 
@@ -111,27 +117,9 @@ EXIT_INCONSISTENT = 3
 EXIT_VERIFY_FAILED = 4
 EXIT_UNKNOWN = 5
 
-#: The transport this project uses for production SQL. `-i` on `docker exec` is load-bearing:
-#: without it psql receives empty stdin and silently does nothing. No `-F`: ssh hands this
-#: command to a remote login shell, which reads a bare `|` as a pipe.
-PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1"
-PSQL_ROWS = PSQL + " -t -A"
-SSH_HOST = "ancientnerds"
-#: A hung channel must not sit for the whole psql timeout: `ConnectTimeout` bounds the connect
-#: attempt and the keepalives end a dead channel instead of waiting out `timeout=900`.
-SSH_OPTIONS = "-o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
-
 
 class PersistError(RuntimeError):
     """A condition that must stop the lane rather than be worked around."""
-
-
-class OutcomeUnknown(PersistError):
-    """The write may or may not have landed. Never retried without reading the journal first."""
-
-
-#: `-- plan sha256 <64 hex>`: the digest of the record set a delivered script was rendered from.
-DIGEST_RE = re.compile(r"^-- plan sha256 ([0-9a-f]{64})\b", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -290,24 +278,10 @@ def run_psql(
     """Send `sql` to production the way this project does it: ssh, then psql in the container.
 
     A timeout is not an error like any other: psql may be halfway through a transaction whose
-    COMMIT never reached us. It is reported as `OutcomeUnknown`, never as a plain failure, so a
-    caller cannot read it as "nothing happened" and retry blindly.
+    COMMIT never reached us. `prod_write.send` reports it as `OutcomeUnknown`, never as a plain
+    failure, so a caller cannot read it as "nothing happened" and retry blindly.
     """
-    try:
-        proc = subprocess.run(
-            shlex.split(f"ssh {SSH_OPTIONS} {host} {PSQL_ROWS if rows else PSQL}"),
-            input=sql,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise OutcomeUnknown(
-            f"psql did not answer within {timeout}s: whether the transaction committed is UNKNOWN. "
-            "Do not retry before reading the journal."
-        ) from exc
+    proc = send(sql, host=host, timeout=timeout, rows=rows)
     if check and proc.returncode != 0:
         raise PersistError(f"psql exited {proc.returncode}:\n{proc.stdout}\n{proc.stderr}".strip())
     return proc

@@ -5231,3 +5231,183 @@ moved a point in Greece to Turkey, Flevum's a point in Germany to the Netherland
 there looks exactly like a wrong country, and the boundary test is what tells them apart. Those eight are
 among the 8 `(site, field)` questions in `HUMAN_ONLY.md` for their own reasons.
 
+## 2026-09-22 - the mechanical lane's mutation proof proved 12 of its 30 cases, not 30
+
+`mechanical/APPLIED.md` section 8 reports `cases: 30  fired: 30  survived: 0` and says every guard of
+the country lane has a test that fails when the guard is removed. The table behind it
+(`mechanical/evidence/10_mutation_sweep.txt`) does not show that, for three reasons found while
+extending the lane:
+
+1. **A skipped case printed as fired.** A needle that occurs more than once was reported `SKIPPED`,
+   but `fired` was computed as `len(rows) - len(survived)` and the exit code looked at survivors only.
+   `statement must commit` (`    if not sep:`, twice in `apply.py`) was skipped in the recorded run,
+   next to `fired: 30`.
+2. **17 mutants did not compile.** The `if False:` replacement dropped the guard's indentation, so
+   17 of the 30 mutants were `IndentationError`s. pytest then failed at *collection* (exit 2), the
+   named test never ran, and any non-zero exit counted as fired. The recorded table shows exactly
+   those 17 as `fired: ` with no test name after the colon. Measured by compiling each delivered
+   mutant against the LF sources in `HEAD`: 17 do not compile, 1 needle is not unique, 12 are real.
+3. **On a CRLF checkout** (`core.autocrlf=true`, as in any fresh worktree of this repo) the three
+   two-line needles match nothing, and the run still exits 0 with `fired: 30`.
+
+The corrected sweep (`scripts/remediation/mechanical/mutation_sweep.py`) fires a case only when the
+mutant compiles, the named test passed (not skipped) on the original, and pytest reports that test
+FAILED by name on the mutant; a skipped, invalid, unproven, errored or surviving case fails the run.
+It keeps the guard's indentation, matches needles in the file's own line endings, and runs the tests
+with the interpreter that runs it. `tests/remediation/test_mechanical_sweep.py` pins each of those
+rules, and checks every real case statically in the normal test run (needle unique, mutant compiles,
+test exists). The `statement must commit` needle is unique now, and the second COMMIT guard
+(`ROLLBACK.sql has no COMMIT`), which had no test at all, has one.
+
+Result on 2026-09-22: **`cases: 31  fired: 31  skipped: 0  survived: 0`**. So the guards *were*
+covered - every one of the 17 fires once its mutant compiles - but the delivered run did not show it.
+All three runs are in `mechanical/evidence/13_mutation_sweep_audit.txt`; the published
+`10_mutation_sweep.txt` is left as it was recorded.
+
+## 2026-09-22 - `[H] SECURITY 3 / BACKEND B7` closed in the mechanical lane
+
+The mechanical `--apply` sent whatever `APPLY.sql` held, and it re-emitted the file right before
+sending it, so the statement a reviewer had read and rehearsed was not provably the one that ran.
+A psql timeout escaped as a `subprocess.TimeoutExpired` traceback, and a non-zero exit as a plain
+error - neither said whether the COMMIT had reached the database.
+
+Now (`scripts/remediation/mechanical/apply.py`, helpers in `plan.py`):
+
+* `APPLY.sql` and `ROLLBACK.sql` carry `-- plan sha256 <digest>` as their first line - the sha256 of
+  the `PLAN.jsonl` they were rendered from, taken over the text with LF endings, because this
+  repository checks committed files out with CRLF (`core.autocrlf=true`; measured on the delivered
+  T05 plan: `da4201ef..` as bytes in a worktree, `cc2e885f..` as text on both checkouts).
+* `--rehearse`, `--rehearse-rollback` and `--apply` never re-emit. Each sends the file on disk only if
+  its pin is the plan's digest *now* and its body is exactly what the plan renders; a stale plan, a
+  hand edit, a second pin or a file from another plan is refused before any psql call. `--emit`
+  refuses unless `ROLLBACK.sql` is this plan's pinned reversal.
+* `--apply` refuses a run stamp that already journals rows. After a timeout or a failed exit it reads
+  the journal for its stamp: all planned rows means **COMMITTED** (then the read-back is asserted,
+  exit 4), none means **NOT COMMITTED** (exit 3), anything else - or a journal that cannot be read -
+  is **OUTCOME UNKNOWN** (exit 5) with the exact count query to run before any retry.
+* The transport, the timeout rule and the pin format live in one place,
+  `scripts/remediation/prod_write.py`, moved there from the gallery lane (which now imports them),
+  instead of a second copy in the mechanical lane. The mechanical transport gains the gallery's ssh
+  `ConnectTimeout`/keepalive options on the way.
+
+The delivered T05 `ROLLBACK.sql` (the undo, an action not yet taken) was re-rendered with its pin
+(`plan.py --render-rollback`); its body is the current rendering, sha256 `832b7b6a..`, which differs
+from the delivered file only by that pin and the one comment the lane had already reworded. The
+delivered T05 `APPLY.sql` is kept as it ran, without a pin - which `--apply` now refuses, as it must
+for a lane that has been applied. Checked read-only against production the same day: the 35 journal
+rows of `2026-09-21_mechanical-country` are exactly the 35 `(site, old, new)` of the delivered plan,
+with their `country-canonical:` keys and `T05/country-canonical` test id
+(`mechanical/evidence/14_repin.txt`).
+
+Tests: `TestThePin`, `TestTheDeliveredT05Pin` and `TestTheCommitState` in
+`tests/remediation/test_mechanical.py` (the commit-state tests drive `cmd_apply` against a fake that
+answers only the statements the real path sends) and `tests/remediation/test_prod_write.py`. Every
+new guard has a mutation case: sweep `cases: 140  fired: 140  skipped: 0  survived: 0`.
+
+## 2026-09-22 - the phase-3 acceptance follows the journal chain
+
+`tools/verify_writes.py` compared every phase-3 journal row's `new_value` with the live value. The
+B9 lane rewrites five of those rows (`United Kingdom` -> `Northern Ireland`) and the site_type shape
+lane three more, so after those writes the documented **0 deviations** would have become **8
+`NICHT NEU`** - for writes that are journalled and correct. It now reads every planned field's whole
+journal chain, across all stamps: each link must start where the one before ended, the chain must
+end at the live value, and a planned field phase 3 did not write must start from its planned old
+value. A replaced phase-3 value is reported as *superseded by <stamp>*, never counted and never
+silently passed. NULL is kept apart from `''` with a marker, which the per-row version could not.
+
+Read-only run against production the same day, before any of the new lanes: `994 phase-3 field(s)
+journalled, 80 planned field(s) phase 3 did not write, 1022 sites read - RESULT: 0 deviation(s)`, the
+same numbers as the documented acceptance. Predicted after the UK and site_type lanes apply (from their
+plans against `ALL_ROWS.jsonl`): still 0 deviations, with 5 fields superseded by
+`2026-09-22_mechanical-uk-parts` and 3 by `2026-09-22_mechanical-site-type-shape`; the period lane
+writes `period_name`, which this acceptance does not judge. DB-less tests in
+`tests/remediation/test_verify_writes.py`; every new check has a mutation case.
+
+## 2026-09-23 - review of the mechanical lanes: ten findings, each checked, each closed
+
+A review of `wip/mech-lane` (the three new lanes, the B7 commit state and the chain-aware acceptance)
+reported sixteen findings through three lenses (correctness, rules, tests). After removing
+duplicates, ten distinct defects remain. Each was checked against the code before it was fixed,
+the first by running `judge()`; the VPS measurement in item 4 is the reviewer's. Every fix has a
+test that fails without it and a mutation case that proves it. Nothing below touched production;
+the only production access was read-only.
+
+1. **The acceptance passed a reverted phase-3 write silently.** `tools/verify_writes.py` treated
+   every stamp that starts with `phase3:batch-` as a phase-3 write. That prefix also matches the
+   writer's reversal stamp `<stamp>-rollback` (`phase3/write_stage.py:rollback_stamp`). So a write
+   followed by its reversal counted as "journalled", was not superseded and gave 0 deviations. The
+   per-row check it replaced excluded `%-rollback` and reported this case as `NICHT NEU`. Reproduced
+   with `judge()`: deviations `[]`, written 1. The judge also accepted a phase-3 row outside the plan.
+2. **The acceptance never saw a phase-3 write outside the plan.** `main()` read the journal only for
+   `row_pk IN (<planned ids>)`. The old tool read every phase-3 row and reported one outside the plan
+   as `FEHLT`. Both gaps were latent. A read-only check on production today found 994 phase-3 rows
+   in the three columns, 994 distinct fields, every one a planned `(column, pk)` of `ALL_ROWS.jsonl`,
+   and no phase-3 rollback stamp. The fixed tool reads every phase-3 row of any table, loads the
+   chain of every planned or phase-3 field, and reports four kinds of deviation: `REVERTED`,
+   `OUTSIDE PLAN`, `OUTSIDE TABLE`, and a phase-3 rollback on a field phase 3 never wrote. Rerun
+   read-only on production: `994 phase-3 field(s) journalled, 80 planned field(s) phase 3 did not
+   write, 1022 sites read - RESULT: 0 deviation(s)`, unchanged.
+3. **The acceptance copied the planners' chain rule.** Its `broken()` repeated the loop in
+   `plan.journal_break`. Both now call `scripts/remediation/journal_chain.py:first_break`. The same
+   module names the reversal suffix, and a test pins that it matches `write_stage` and every lane.
+4. **`--apply` declared NOT COMMITTED while the server could still commit.** After a client timeout
+   or ssh's 255, `settle()` read the journal once and treated 0 rows as "nothing was written". The
+   reviewer measured on the VPS that the remote psql still ran the next statement of its stdin 17 s
+   after the client ssh was killed. Its uncommitted journal rows are invisible to the count, so an
+   empty journal only settles the outcome after psql's own exit 3: ON_ERROR_STOP has then ended the
+   script and the session. Every other failure with an empty journal is now `OUTCOME UNKNOWN`
+   (exit 5). The report names `OPEN_SESSIONS_SQL` (psql sessions still in a transaction) and the
+   count query to run before any retry. A full journal is still COMMITTED, because a committed row
+   cannot vanish. The three new lanes also bound their transaction on the server:
+   `SET LOCAL lock_timeout = '10s'` and `statement_timeout = '120s'`. A lock wait now ends as
+   exit 3 and NOT COMMITTED within seconds, where it used to hang until the 900 s client timeout
+   and end as UNKNOWN. Both values were validated read-only on production (PostgreSQL 16.4:
+   `set_config` accepts them). T05's statement is unchanged byte for byte (its sha256 pin holds).
+   The committed `APPLY.sql`/`ROLLBACK.sql` of the three lanes were re-rendered from their
+   unchanged plans. Each file gains six lines, and the plan pins stay as they were: uk-parts
+   `c2b22916..`, period-name `82bc62b7..`, site-type-shape `7557dad8..`. The orchestrator's
+   rehearsal will be the first run of this text on production.
+5. **A committed write whose read-back failed was reported as REFUSED.** After psql exited 0 (the
+   COMMIT), a failing "after" read escaped as `PlanError`, printed `REFUSED` and exited 1. The
+   runbook reads that code as "nothing was sent". A timeout at that point exited 5. Both cases, and
+   a read-back that disagrees with the plan, now report `COMMITTED BUT NOT CONFIRMED` with exit 6.
+   `settle()`'s COMMITTED path does the same instead of exiting 4 or 1.
+6. **`--probe-guards` accepted any ERROR as proof.** On the new lanes guard 4 refuses a 101-character
+   value too, and the primitive refuses a foreign old value. Guard 2's and guard 3's probes would
+   therefore raise even with their own guard removed. The guards' RAISE texts are now constants
+   (`GUARD1_SAYS`..`GUARD5_SAYS`), shared by the renderer and the probes. A probe counts only when
+   psql stopped the script (exit 3) with its own guard's text, `<label>: <n> <text>`, and left no
+   journal row. A test checks that each probe's text matches exactly one RAISE of its statement.
+   Also fixed: the number of failed probes was returned as the exit code, so three failures read as
+   exit 3, "NOT COMMITTED". It is now exit 7. The output reads `refused by its own guard=True`
+   instead of `raised=True`.
+7. **The lane read-backs had no order.** `journal_readback` ended in a `UNION ALL` without
+   `ORDER BY`, and the reviewer's production run came back scrambled. They now end in `ORDER BY 1`,
+   like T05's `VERIFY_SQL`. The three texts were run read-only on production today and came back
+   sorted: uk-parts Ireland 63, Northern Ireland 4, United Kingdom 6, card_stats divergence 44;
+   period-name mismatch 220; site-type-shape residual 4, outside the list 8; every journal count 0.
+8. **The commit-state fake answered any stamp.** `FakeProduction` returned the next queued count for
+   any `run_stamp = ...`. Reading the rollback stamp in `commit_state` or in the "never apply twice"
+   check therefore stayed green. On production that mutant would report a landed write as NOT
+   COMMITTED. The fake now accepts only the lane's own stamp, and the landed read-back only with the
+   lane's stamp, column and every planned row. The commit-state tests run for all four lanes.
+9. **`assert_the_write_landed` and the four loaders had no test.** The loaders are `load_journal`,
+   `uk_parts.load_candidates`, `period_name.load_rows` and `site_type_shape.load_rows`. New tests
+   cover every read-back disagreement, the loaders against a fake reader that applies the SQL's own
+   predicates and refuses unknown ones (`tests/remediation/test_mechanical_loaders.py`), and the
+   site_type lane's two-link chain, which restores what the last write replaced.
+10. **The UK decision was tested only where the map-units cache exists.** In CI and in the main tree
+    that cache is absent, so 38 of the 44 UK tests skipped and the sweep's 27 UK cases would have
+    been UNPROVEN.
+    Part of the finding was wrong: CI installs geopandas and pyproj (`ci.yml`, since `771243b`), so
+    moving code out of the geopandas module was not needed. Every decision guard is now also decided
+    on a schematic map of lon/lat boxes (`TestClassifyUkOnASchematicMap`). Northern Ireland has a bay
+    on that map, so the 1000 m tolerance is tested inside a unit's envelope, as on a real coastline.
+    A GEOUNIT-vs-NAME test writes its own shapefile. Without the cache, 39 UK tests run where 6 did
+    before (37 real-data tests still skip, by design). The sweep's UK cases name the schematic tests.
+
+Sweep, run without the map-units cache (the main tree's condition): **`cases: 187  fired: 187
+skipped: 0  survived: 0  invalid: 0  unproven: 0  errored: 0`**, exit 0
+(`mechanical/evidence/16_mutation_sweep_review.txt`). The first run, with the cache, found one
+survivor: the schematic sea point lay outside every unit's envelope, so the 1000 m tolerance was
+never measured there. The bay fixed that.

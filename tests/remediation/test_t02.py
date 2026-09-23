@@ -152,15 +152,33 @@ class TestT02AdminCountry:
         assert 10.0 < km < 200.0, f"{km} km is not the antimeridian-corrected distance"
 
     def test_unmatched_country_is_a_review_finding_not_a_guess(self, t02):
-        """Northern Ireland is a real place and not an admin-0 feature - say so, do not force it."""
-        got = t02.run(_ctx([_site("a", "Northern Ireland", 54.6, -5.9)]))
+        """A sea is a real place and not an admin-0 feature - say so, do not force it.
+
+        Rewritten 2026-09-22: the old example, `Northern Ireland` at 54.6/-5.9, now resolves to GB
+        in the project's vocabulary (owner decision B9) and is tested below as a match. `Baltic
+        Sea` at the snapshot's own point (61.377/18.448, the row T05 names) is still unmatched;
+        the premise is asserted first, so a vocabulary that learns it fails here visibly.
+        """
+        assert t02._project_iso("Baltic Sea") is None
+        got = t02.run(_ctx([_site("a", "Baltic Sea", 61.377, 18.448)]))
         assert len(got) == 1
         finding = got[0]
         assert finding.test_id == "T02/unmatched-country"
         assert finding.proposal is M.Proposal.REVIEW
         assert finding.proposed_value is None
+        assert finding.confidence is M.Confidence.UNVERIFIABLE
+        assert not finding.applicable
         assert finding.severity is M.Severity.COSMETIC
         assert "vocabulary" in finding.note
+
+    def test_northern_ireland_resolves_to_the_united_kingdom(self, t02):
+        """Belfast's point, claimed as `Northern Ireland`: GB in the project's vocabulary, inside
+        Natural Earth's United Kingdom polygon, so no finding - the same as England/Wales/Scotland."""
+        assert t02._project_iso("Northern Ireland") == "GB"
+        assert t02.run(_ctx([_site("a", "Northern Ireland", 54.6, -5.9)])) == []
+        atlas = t02._atlas(_ctx([]))
+        claim = atlas.claim("Northern Ireland")
+        assert claim is not None and claim.matched == ("United Kingdom",)
 
     def test_contested_ground_is_not_absorbed_by_the_sovereignty_rule(self, t02):
         """Herodion lies in Natural Earth's `Palestine`, whose SOVEREIGNT is `Israel`.

@@ -192,7 +192,7 @@ def main() -> int:
         print(f"    mismatches: {index_path_bad}")
 
     # --- The hand-checked sample -------------------------------------------
-    rng = random.Random(PROOF_SEED)
+    rng = random.Random(PROOF_SEED)  # noqa: S311 - a reproducible sample draw, not cryptography
     sample = rng.sample(sorted(rows, key=lambda r: r["id"]), PROOF_SAMPLE_SIZE)
     proof: list[dict[str, object]] = []
     for row in sample:

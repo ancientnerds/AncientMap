@@ -295,6 +295,14 @@ output/remediation/phase3_runner/LEDGER.jsonl.lock
 # undo while ignoring the apply is half an audit trail. REHEARSAL.sql stays out: it rolls
 # back inside its own transaction and writes nothing.
 output/remediation/mechanical/REHEARSAL.sql
+# The later mechanical lanes (2026-09-22) are versioned the same way: the plan, the refusals, the
+# undo and, once emitted, the statement - never the rehearsal, which rolls itself back.
+!output/remediation/mechanical_uk/
+output/remediation/mechanical_uk/REHEARSAL.sql
+!output/remediation/mechanical_period_name/
+output/remediation/mechanical_period_name/REHEARSAL.sql
+!output/remediation/mechanical_site_type/
+output/remediation/mechanical_site_type/REHEARSAL.sql
 !output/remediation/phase3_pilot/
 
 # Raw third-party response bodies, fetched as evidence during the Phase-3 pilot, are NOT versioned.

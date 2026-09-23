@@ -229,11 +229,13 @@ def _parse_year(value: Any) -> int | None:
 def _bucket_of(year: int, buckets: list[tuple[str, int, int]]) -> str:
     """Bucket label for a year, by iterating the table rather than calling the helper.
 
-    `pipeline/utils/text.py::categorize_period()` falls through to `"1500+ AD"` for any
-    year below the table's floor (-999999), which mislabels the three sites at
-    -1,400,000 (Atapuerca Mountains, Archaeological Site of Atapuerca, Barranco León -
-    all three carry `period_name = '< 4500 BC'` in the snapshot). A year below the first
-    bucket belongs to the first bucket: it is the table's catch-all for the deep past.
+    `pipeline/utils/text.py::categorize_period()` fell through to `"1500+ AD"` for any
+    year below the table's floor (-999999) until 2026-09-22, which mislabelled the three
+    sites at -1,400,000 (Atapuerca Mountains, Archaeological Site of Atapuerca, Barranco
+    León - all three carry `period_name = '< 4500 BC'` in the snapshot); it now compares
+    upper bounds only, as the frontend does. This walk stays because it is parameterised by
+    the table the census reports on. A year below the first bucket belongs to the first
+    bucket: it is the table's catch-all for the deep past.
     """
     for label, lo, hi in buckets:
         if lo <= year < hi:

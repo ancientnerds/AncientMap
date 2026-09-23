@@ -255,14 +255,18 @@ PERIOD_BUCKETS: list[tuple[str, int, int]] = [
 def categorize_period(year: int | None) -> str | None:
     """Convert a year to a canonical period bucket name.
 
-    Mirrors frontend categorizePeriod() in src/data/sites.ts.
+    Mirrors frontend categorizePeriod() in src/data/sites.ts, which compares upper bounds only:
+    the first bucket is open below and the last one open above. The table's -999999/999999 are
+    range-filter bounds, not limits of the classification - testing `lo <= year` here sent every
+    year below -999999 to "1500+ AD" (the three Atapuerca-era sites at -1,400,000, whose stored
+    and displayed label is "< 4500 BC"; fixed 2026-09-22).
     """
     if year is None:
         return None
-    for label, lo, hi in PERIOD_BUCKETS:
-        if lo <= year < hi:
+    for label, _lo, hi in PERIOD_BUCKETS:
+        if year < hi:
             return label
-    return "1500+ AD"
+    return PERIOD_BUCKETS[-1][0]
 
 
 def sanitize_filename(name: str, max_length: int = 100) -> str:

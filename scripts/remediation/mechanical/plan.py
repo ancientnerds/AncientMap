@@ -18,9 +18,10 @@ and all 35 are `proposal=set`:
   below is the load-bearing one and not the flag.
 
 The other 35 T05 findings are **not** settlable by a script (spelling splits like `USA`, vocabulary
-gaps like `Northern Ireland`, a value that is not a country at all) and every one of them is refused
-here with its reason. `output/remediation/mechanical/SKIPPED.jsonl` holds them, so the report does
-not have to be believed.
+gaps like `Northern Ireland` - a gap until 2026-09-22, when both vocabularies gained it as GB - a
+value that is not a country at all) and every one of them is refused here with its reason.
+`output/remediation/mechanical/SKIPPED.jsonl` holds them, so the report does not have to be
+believed.
 
 ## The set, and the 27/35 decision
 
@@ -103,6 +104,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import logging
 import re
@@ -111,7 +113,7 @@ import unicodedata
 import urllib.parse
 import urllib.request
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timezone
 from pathlib import Path
@@ -135,7 +137,10 @@ from census.tests.t05_country_values import (  # noqa: E402
     _iso,
     _vocabulary,
 )
+from journal_chain import first_break  # noqa: E402
+from prod_write import DIGEST_RE, pin_line  # noqa: E402
 
+from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
 
 if TYPE_CHECKING:
@@ -145,21 +150,15 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mechanical.plan")
 
-#: The run stamp identifies this lane in `remediation_change_log`. It is deliberately not the
-#: hero write's `2026-09-20_remediation`: the read-back query counts journal rows by run stamp,
-#: and a shared stamp would make "0 rows unaccounted" unprovable.
-RUN_STAMP = "2026-09-21_mechanical-country"
-ROLLBACK_RUN_STAMP = f"{RUN_STAMP}-rollback"
-
-#: Journalled test id. The census emits `T05/disambiguated` and `T05/compound`; this lane's
-#: transition is a decided write, and the finding that named the row is recorded in every
-#: record's evidence under `census-finding` - one test id for the whole run is what makes the
-#: journal read-back unambiguous.
-TEST_ID = "T05/country-canonical"
-CONFIDENCE = "authoritative"
+#: T05's journal identity. The values live on the lane (`mechanical/lane.py`, which explains them);
+#: these names stay because the delivered tests, `apply.VERIFY_SQL` and every caller import them.
+RUN_STAMP = T05.run_stamp
+ROLLBACK_RUN_STAMP = T05.rollback_run_stamp
+TEST_ID = T05.test_id
+CONFIDENCE = T05.confidence
 
 CURATED_SOURCE = "ancient_nerds"
-COUNTRY_COLUMN_CHARS = 100
+COUNTRY_COLUMN_CHARS = T05.max_chars
 HINT_WORDS = frozenset({"country", "state", "nation", "republic"})
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
@@ -191,10 +190,6 @@ class Finding:
     severity: str
     note: str
     dimension: str = "classification / country"
-
-    @property
-    def change_key(self) -> str:
-        return f"country-canonical:{self.site_id}"
 
 
 @dataclass(frozen=True)
@@ -232,10 +227,8 @@ class Verdict:
     phase3: bool
     finding_test_id: str
     evidence: tuple[dict[str, Any], ...] = ()
-
-    @property
-    def change_key(self) -> str:
-        return f"country-canonical:{self.site_id}"
+    #: The live input the value was derived from, as text, for a lane with `premise_sql`.
+    premise: str | None = None
 
 
 def load_findings(path: Path) -> list[Finding]:
@@ -383,13 +376,13 @@ def names_a_country(atlas: CountryNamer, part: str) -> bool:
     return any(key == _fold(f.admin) or key in f.name_keys for f in atlas.features)
 
 
-def _legible(value: str) -> str | None:
-    """Why the string cannot be written as a country at all, or None when it is fine."""
+def _legible(value: str, max_chars: int = COUNTRY_COLUMN_CHARS) -> str | None:
+    """Why the string cannot be written into the column at all, or None when it is fine."""
     if value != value.strip():
         return "leading or trailing whitespace"
     if unicodedata.normalize("NFC", value) != value:
         return "not NFC-normalised"
-    if len(value) > COUNTRY_COLUMN_CHARS:
+    if len(value) > max_chars:
         return f"{len(value)} characters, longer than the column"
     if any(ch in value for ch in "\r\n\t"):
         return "control characters"
@@ -698,11 +691,19 @@ class Plan:
 
     changes: tuple[Verdict, ...]
     skipped: tuple[Verdict, ...]
-    run_stamp: str = RUN_STAMP
-    test_id: str = TEST_ID
     source_id: str = CURATED_SOURCE
     built_at: str = ""
     counters: Mapping[str, int] = field(default_factory=dict)
+    #: The lane the plan is written for; its run stamp and test id are the lane's, never a copy.
+    lane: Lane = T05
+
+    @property
+    def run_stamp(self) -> str:
+        return self.lane.run_stamp
+
+    @property
+    def test_id(self) -> str:
+        return self.lane.test_id
 
     @property
     def sites(self) -> tuple[str, ...]:
@@ -793,15 +794,13 @@ def load_sites(site_ids: Iterable[str], *, reader: Any, strict: bool = True) -> 
     instead of stopping the whole run.
     """
     ids = sorted({str(s) for s in site_ids})
-    for sid in ids:
-        if not UUID_RE.match(sid):
-            raise PlanError(f"{sid!r} is not a UUID - refusing to interpolate it")
+    listed = sql_ids(ids)
     if not ids:
         return {}
     sql = (
         "SELECT id, name, coalesce(country, '<NULL>'), "
         "coalesce(lat::text, ''), coalesce(lon::text, ''), source_id "
-        "FROM unified_sites WHERE id IN (" + ", ".join(f"'{sid}'::uuid" for sid in ids) + ")"
+        f"FROM unified_sites WHERE id::text IN ({listed})"
     )
     out: dict[str, Site] = {}
     for row in reader(sql):
@@ -824,18 +823,21 @@ def load_sites(site_ids: Iterable[str], *, reader: Any, strict: bool = True) -> 
 
 
 # ------------------------------------------------------------------------------- the witnesses
-def _wikidata(params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
-    url = (
-        WIKIDATA_API
-        + "?"
-        + urllib.parse.urlencode({**params, "format": "json", "formatversion": "2"})
-    )
+def get_json(endpoint: str, params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
+    """One GET with the project's `USER_AGENT`, parsed as JSON - one attempt, no mirror loop."""
+    url = endpoint + "?" + urllib.parse.urlencode(dict(params))
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except Exception as exc:  # one attempt, no mirror loop: a failure must be visible
-        raise PlanError(f"Wikidata request failed: {url}: {exc}") from exc
+        raise PlanError(f"request failed: {url}: {exc}") from exc
+
+
+def _wikidata(params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
+    return get_json(
+        WIKIDATA_API, {**params, "format": "json", "formatversion": "2"}, timeout=timeout
+    )
 
 
 def _claims(entity: Mapping[str, Any], prop: str) -> list[Any]:
@@ -939,6 +941,35 @@ def resolve_anchors(sites: Mapping[str, Site], known_qids: Mapping[str, str]) ->
     return anchors
 
 
+def fetch_entities(qids: Iterable[str], props: str, **extra: str) -> dict[str, Any]:
+    """`wbgetentities` for `qids`, 40 per request; a missing entity is an error, not a gap."""
+    wanted = sorted(set(qids))
+    entities: dict[str, Any] = {}
+    for chunk in [wanted[i : i + 40] for i in range(0, len(wanted), 40)]:
+        got = (
+            _wikidata(
+                {"action": "wbgetentities", "ids": "|".join(chunk), "props": props, **extra}
+            ).get("entities")
+            or {}
+        )
+        for qid, entity in got.items():
+            if entity.get("missing"):
+                raise PlanError(f"{qid} is missing on Wikidata")
+            entities[qid] = entity
+    return entities
+
+
+def country_codes(country_qids: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """`P297` (ISO 3166-1 alpha-2) and the English label of every country entity named."""
+    return {
+        qid: {
+            "label": ((entity.get("labels") or {}).get("en") or {}).get("value"),
+            "p297": next(iter(_claim_strings(entity, "P297")), None),
+        }
+        for qid, entity in fetch_entities(country_qids, "claims|labels", languages="en").items()
+    }
+
+
 def collect_witnesses(
     sites: Mapping[str, Site], anchors: Mapping[str, Anchor], *, fetched_at: str
 ) -> dict[str, Any]:
@@ -946,37 +977,11 @@ def collect_witnesses(
     qids = sorted({a.qid for a in anchors.values()})
     if not qids:
         raise PlanError("no Wikidata entity for any candidate - the external witness is empty")
-    site_claims: dict[str, Any] = {}
-    for chunk in [qids[i : i + 40] for i in range(0, len(qids), 40)]:
-        got = (
-            _wikidata({"action": "wbgetentities", "ids": "|".join(chunk), "props": "claims"}).get(
-                "entities"
-            )
-            or {}
-        )
-        for qid, entity in got.items():
-            if entity.get("missing"):
-                raise PlanError(f"{qid} is missing on Wikidata")
-            site_claims[qid] = _p17_claims(entity)
+    site_claims = {
+        qid: _p17_claims(entity) for qid, entity in fetch_entities(qids, "claims").items()
+    }
     countries = sorted({str(c["id"]) for claims in site_claims.values() for c in claims})
-    country_claims: dict[str, Any] = {}
-    for chunk in [countries[i : i + 40] for i in range(0, len(countries), 40)]:
-        got = (
-            _wikidata(
-                {
-                    "action": "wbgetentities",
-                    "ids": "|".join(chunk),
-                    "props": "claims|labels",
-                    "languages": "en",
-                }
-            ).get("entities")
-            or {}
-        )
-        for qid, entity in got.items():
-            country_claims[qid] = {
-                "label": ((entity.get("labels") or {}).get("en") or {}).get("value"),
-                "p297": next(iter(_claim_strings(entity, "P297")), None),
-            }
+    country_claims = country_codes(countries)
     return {
         "generated_at": fetched_at,
         "endpoint": WIKIDATA_API,
@@ -1012,42 +1017,48 @@ def load_witnesses(path: Path) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------------- the output
-def _quoted(value: str | None) -> str:
-    """A SQL literal, for the human-readable `condition` the plan records per row."""
-    return "NULL" if value is None else "'" + value.replace("'", "''") + "'"
+#: A SQL literal, for the human-readable `condition` the plan records per row - the lane's own
+#: quoting rule, not a second copy of it.
+_quoted = sql_literal
+
+
+def plan_record(change: Verdict, plan: Plan) -> dict[str, Any]:
+    """One `PLAN.jsonl` line: the row, its lane's journal identity, and its evidence."""
+    lane = plan.lane
+    record: dict[str, Any] = {
+        "site_id": change.site_id,
+        "site_name": change.site_name,
+        "table": "unified_sites",
+        "column": lane.column,
+        "key_column": "id",
+        "old_value": change.old_value,
+        "new_value": change.new_value,
+        "rule": change.rule,
+        "condition": f"id = {change.site_id} AND {lane.column} IS NOT DISTINCT FROM "
+        f"{_quoted(change.old_value)}",
+        "reason": f"{lane.key_prefix} ({change.rule}): {change.note}",
+        "change_key": lane.change_key(change.site_id),
+        "test_id": plan.test_id,
+        "run_stamp": plan.run_stamp,
+        "confidence": lane.confidence,
+        "source_id": plan.source_id,
+        "phase3": change.phase3,
+        "finding_test_id": change.finding_test_id,
+        "evidence": list(change.evidence),
+    }
+    if lane.premise_sql is not None:
+        if change.premise is None:
+            raise PlanError(f"{change.site_id}: the {lane.name} lane needs the row's premise")
+        record["premise_sql"] = lane.premise_sql
+        record["premise"] = change.premise
+    return record
 
 
 def write_plan_jsonl(plan: Plan, path: Path) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as fh:
         for change in plan.changes:
-            fh.write(
-                json.dumps(
-                    {
-                        "site_id": change.site_id,
-                        "site_name": change.site_name,
-                        "table": "unified_sites",
-                        "column": "country",
-                        "key_column": "id",
-                        "old_value": change.old_value,
-                        "new_value": change.new_value,
-                        "rule": change.rule,
-                        "condition": f"id = {change.site_id} AND country IS NOT DISTINCT FROM "
-                        f"{_quoted(change.old_value)}",
-                        "reason": f"country-canonical ({change.rule}): {change.note}",
-                        "change_key": change.change_key,
-                        "test_id": plan.test_id,
-                        "run_stamp": plan.run_stamp,
-                        "confidence": CONFIDENCE,
-                        "source_id": plan.source_id,
-                        "phase3": change.phase3,
-                        "finding_test_id": change.finding_test_id,
-                        "evidence": list(change.evidence),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+            fh.write(json.dumps(plan_record(change, plan), ensure_ascii=False) + "\n")
     return len(plan.changes)
 
 
@@ -1065,7 +1076,7 @@ def write_skipped_jsonl(plan: Plan, path: Path) -> int:
                         "site_id": verdict.site_id,
                         "site_name": verdict.site_name,
                         "table": "unified_sites",
-                        "column": "country",
+                        "column": plan.lane.column,
                         "current_value": verdict.old_value,
                         "proposed_value": verdict.new_value,
                         "reason": verdict.reason,
@@ -1150,14 +1161,15 @@ def write_plan_md(plan: Plan, path: Path, extra: Mapping[str, Any]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
-def reversed_records(records: Sequence[Any]) -> list[Any]:
+def reversed_records(records: Sequence[Any], lane: Lane = T05) -> list[Any]:
     """The reversal of a set of changes: old and new swapped, one record per row.
 
-    Takes anything carrying `site_id`, `site_name`, `old_value`, `new_value`, `rule`, `evidence`
-    and `phase3` - a `Verdict` from the plan, or an `apply.ChangeRecord` read back out of the
-    delivered `PLAN.jsonl`. Both produce the same records, which is what makes the delivered
+    Takes anything carrying `site_id`, `site_name`, `old_value`, `new_value`, `rule`, `evidence`,
+    `phase3` and `premise` - a `Verdict` from the plan, or an `apply.ChangeRecord` read back out of
+    the delivered `PLAN.jsonl`. Both produce the same records, which is what makes the delivered
     `ROLLBACK.sql` reproducible from the delivered plan (measured: byte-identical, see
-    `evidence/11_fingerprints.txt`).
+    `evidence/11_fingerprints.txt`). The premise is kept: a lane never writes the input its value
+    was derived from, so the reversal is conditioned on the same one.
     """
     from mechanical import apply as apply_mod
 
@@ -1168,17 +1180,23 @@ def reversed_records(records: Sequence[Any]) -> list[Any]:
             old_value=str(r.new_value),
             new_value=str(r.old_value),
             rule=f"rollback-{r.rule}",
-            condition=f"id = {r.site_id} AND country IS NOT DISTINCT FROM {_quoted(r.new_value)}",
-            reason=f"rollback of country-canonical: {r.old_value!r} restored on {r.site_name}",
+            condition=f"id = {r.site_id} AND {lane.column} IS NOT DISTINCT FROM "
+            f"{_quoted(r.new_value)}",
+            reason=f"rollback of {lane.key_prefix}: {r.old_value!r} restored on {r.site_name}",
             evidence=tuple(r.evidence),
             phase3=r.phase3,
+            premise=r.premise,
         )
         for r in reversed(list(records))
     ]
 
 
 def render_rollback_sql(
-    records: Sequence[Any], *, site_ids: Iterable[str], source_id: str = CURATED_SOURCE
+    records: Sequence[Any],
+    *,
+    site_ids: Iterable[str],
+    source_id: str = CURATED_SOURCE,
+    lane: Lane = T05,
 ) -> str:
     """The reversal of `records`, rendered - the one place the undo is produced.
 
@@ -1189,20 +1207,76 @@ def render_rollback_sql(
     from mechanical import apply as apply_mod
 
     return apply_mod.render_transaction(
-        reversed_records(records),
-        run_stamp=ROLLBACK_RUN_STAMP,
+        reversed_records(records, lane),
+        run_stamp=lane.rollback_run_stamp,
         site_ids=site_ids,
         source=source_id,
         rollback=True,
+        lane=lane,
     )
 
 
-def write_rollback_sql(plan: Plan, path: Path) -> int:
-    """The reversal, written **before** the apply file - both from the same generator."""
-    sql = render_rollback_sql(plan.changes, site_ids=plan.sites, source_id=plan.source_id)
+def write_rollback_sql(plan: Plan, path: Path, *, plan_path: Path) -> int:
+    """The reversal, written **before** the apply file - both from the same generator - and pinned
+    to the `PLAN.jsonl` it reverses, which must already be written."""
+    sql = render_rollback_sql(
+        plan.changes, site_ids=plan.sites, source_id=plan.source_id, lane=plan.lane
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(sql, encoding="utf-8", newline="\n")
+    path.write_text(pinned(sql, plan_sha256(plan_path)), encoding="utf-8", newline="\n")
     return len(plan.changes)
+
+
+# ------------------------------------------------------------------------------------ the pin
+def plan_sha256(path: Path) -> str:
+    """sha256 of a `PLAN.jsonl` as text with LF line endings.
+
+    Text, not bytes: the plan is committed, and `core.autocrlf=true` checks the same commit out
+    with CRLF (measured on the delivered T05 plan: raw bytes da4201ef.. in a worktree, cc2e885f..
+    in the main tree, identical as text). A digest of the bytes would refuse a correct statement on
+    one checkout and pass it on the other.
+    """
+    if not path.exists():
+        raise PlanError(f"{path} does not exist - there is no plan to pin a statement to")
+    return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+
+
+def pinned(sql: str, digest: str) -> str:
+    """`sql` with the pin as its first line: `-- plan sha256 <digest>` (a SQL comment)."""
+    return pin_line(digest) + "\n" + sql
+
+
+def verify_pinned(path: Path, *, plan_path: Path, expected: str) -> str:
+    """The statement in `path` - only if it is `expected`, pinned to the plan as it is now.
+
+    Refuses a file without a pin (not emitted from a plan, or edited), with more than one, pinned to
+    another digest (the plan changed after the emit: re-emit and re-rehearse), or whose body is not
+    what the plan renders (edited after the emit). Read in text mode, like the plan.
+    """
+    if not path.exists():
+        raise PlanError(f"{path} does not exist - emit it from the plan first")
+    text = path.read_text(encoding="utf-8")
+    declared = DIGEST_RE.findall(text)
+    if not declared:
+        raise PlanError(
+            f"{path.name} carries no '-- plan sha256' pin - it was not emitted from a plan, or it "
+            "was edited; refusing to send it to production"
+        )
+    if len(declared) > 1:
+        raise PlanError(f"{path.name} carries {len(declared)} pins - one statement, one plan")
+    digest = plan_sha256(plan_path)
+    if declared[0] != digest:
+        raise PlanError(
+            f"{path.name} was rendered from plan sha256 {declared[0]}, but {plan_path.name} now "
+            f"hashes to {digest}: the plan changed after the statement was emitted - re-emit and "
+            "re-rehearse before anything is sent"
+        )
+    if text != pinned(expected, digest):
+        raise PlanError(
+            f"{path.name} is pinned to this plan but is not the statement the plan renders - it was "
+            "edited after the emit; refusing to send it to production"
+        )
+    return text
 
 
 # ------------------------------------------------------------------------------------- CLI
@@ -1249,6 +1323,86 @@ def _psql_reader() -> Any:
     return read
 
 
+def psql_json_reader() -> Callable[[str], list[dict[str, Any]]]:
+    """Rows from production as JSON objects, one per line - a name may contain the `|` that
+    unaligned psql separates on, so the later lanes read `row_to_json` instead of splitting."""
+    from mechanical import apply as apply_mod
+
+    def read(sql: str) -> list[dict[str, Any]]:
+        proc = apply_mod.run_psql(f"SELECT row_to_json(t) FROM ({sql}) t", rows=True)
+        return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+
+    return read
+
+
+def sql_ids(ids: Iterable[str]) -> str:
+    """A SQL list of UUID literals; anything that is not a UUID is refused, never interpolated."""
+    wanted = sorted(set(ids))
+    for sid in wanted:
+        if not UUID_RE.match(sid):
+            raise PlanError(f"{sid!r} is not a UUID - refusing to interpolate it")
+    return ", ".join(sql_literal(sid) for sid in wanted)
+
+
+# ------------------------------------------------------------------------------- the journal
+@dataclass(frozen=True)
+class JournalLink:
+    """One `remediation_change_log` row for one site's field."""
+
+    id: int
+    run_stamp: str
+    test_id: str
+    old_value: str | None
+    new_value: str | None
+
+
+def load_journal(
+    reader: Callable[[str], list[dict[str, Any]]], column: str, site_ids: Iterable[str]
+) -> dict[str, tuple[JournalLink, ...]]:
+    """Every journal row for `unified_sites.<column>` of these sites, oldest first - read-only."""
+    ids = list(site_ids)
+    if not ids:
+        return {}
+    out: dict[str, list[JournalLink]] = {}
+    for r in reader(
+        "SELECT id, row_pk, run_stamp, coalesce(test_id, '') AS test_id, old_value, new_value "
+        "FROM remediation_change_log WHERE table_name = 'unified_sites' "
+        f"AND column_name = {sql_literal(column)} AND row_pk IN ({sql_ids(ids)}) ORDER BY id"
+    ):
+        out.setdefault(str(r["row_pk"]), []).append(
+            JournalLink(
+                int(r["id"]), str(r["run_stamp"]), str(r["test_id"]), r["old_value"], r["new_value"]
+            )
+        )
+    return {sid: tuple(links) for sid, links in out.items()}
+
+
+def journal_break(links: Sequence[JournalLink], live: str | None) -> tuple[str, str] | None:
+    """`(reason, note)` when a field's journal does not end at its live value, else None.
+
+    Each link must start where the one before it ended, and the last must have written the value
+    the row holds: otherwise something wrote the field around the journal, and a plan built on
+    the live value would supersede a write nobody can account for. The continuity rule is
+    `journal_chain.first_break`, the one the phase-3 acceptance judges the same chains with.
+    """
+    at = first_break([(link.old_value, link.new_value) for link in links])
+    if at is not None:
+        before, after = links[at - 1], links[at]
+        return (
+            "journal-chain-broken",
+            f"journal row {after.id} starts from {after.old_value!r}, but the row before it "
+            f"({before.id}) ended at {before.new_value!r}",
+        )
+    if links and links[-1].new_value != live:
+        last = links[-1]
+        return (
+            "journal-disagrees",
+            f"the last journal row ({last.id}, {last.run_stamp}) wrote {last.new_value!r}, the "
+            f"row holds {live!r} - something wrote it without the journal",
+        )
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Plan the mechanical country repairs")
     ap.add_argument("--findings", type=Path, default=DEFAULT_CANDIDATES)
@@ -1288,7 +1442,7 @@ def main(argv: list[str] | None = None) -> int:
         sql = render_rollback_sql(records, site_ids={r.site_id for r in records})
         target = args.out / "ROLLBACK.sql"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(sql, encoding="utf-8", newline="\n")
+        target.write_text(pinned(sql, plan_sha256(plan_file)), encoding="utf-8", newline="\n")
         log.info("wrote %s (%d row(s)) from %s", target, len(records), plan_file)
         return 0
 
@@ -1361,7 +1515,9 @@ def main(argv: list[str] | None = None) -> int:
     skipped = write_skipped_jsonl(plan, args.out / "SKIPPED.jsonl")
     write_plan_md(plan, args.out / "PLAN.md", extra)
     # ROLLBACK before APPLY, both generated - never hand-typed, and in this order on disk.
-    rollback = write_rollback_sql(plan, args.out / "ROLLBACK.sql")
+    rollback = write_rollback_sql(
+        plan, args.out / "ROLLBACK.sql", plan_path=args.out / "PLAN.jsonl"
+    )
     log.info("PLAN.jsonl %d rows; SKIPPED.jsonl %d; ROLLBACK.sql %d", rows, skipped, rollback)
     print(json.dumps(plan.counters, indent=1, sort_keys=True))
     return 0

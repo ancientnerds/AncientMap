@@ -49,11 +49,10 @@ from common import (  # noqa: E402
     OFFSITE_IMAGES,
     OUT_DIR,
     REPO_ROOT,
-    build_tree,
+    WIKI_IMAGES_SNAPSHOT,
     is_webp,
     read_jsonl_gz,
     shard_for,
-    WIKI_IMAGES_SNAPSHOT,
 )
 
 SHORTS_DIR = REPO_ROOT / "video-assets" / "shorts"
@@ -85,9 +84,6 @@ def main() -> int:
     by_site: dict[str, list[dict]] = {}
     for row in read_jsonl_gz(WIKI_IMAGES_SNAPSHOT):
         by_site.setdefault(row["site_id"], []).append(row)
-
-    tree = build_tree(OFFSITE_IMAGES)
-    collisions = build_tree(OFFSITE_CASE_COLLISIONS)
 
     records: list[dict] = []
     for entry in rejected_with_kind():
