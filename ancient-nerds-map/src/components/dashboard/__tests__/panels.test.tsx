@@ -81,6 +81,10 @@ const EMPTY = {
     gave_up: 0,
     sessions: { all: 0, reached: 0 },
     ready_ms: { min: null, median: null, max: null, samples: 0 },
+    // Explicit, not left to the cast: without these keys the empty-state test
+    // below would exercise the old-API branch instead of the empty one.
+    not_reached: { gate: 0, unsupported: 0, error: 0, abandoned: 0, no_signal: 0, unmeasured: 0 },
+    abandon_ms: { min: null, median: null, max: null, samples: 0 },
   } as GlobeData,
   clusters: { min_ids: 3, flagged: 0, clusters: [] } as ClustersData,
   content: { sites: [], stories: [], papers: [], searches: [] } as ContentData,
@@ -212,6 +216,56 @@ describe('Reading', () => {
     const html = renderToString(<Reading state={ok(older as JourneysData)} />)
     expect(html).toContain('Data unavailable.')
     expect(body(html).length).toBeGreaterThan(10)
+  })
+})
+
+describe('GlobeReach', () => {
+  const some: GlobeData = {
+    ...EMPTY.globe,
+    loads: 12,
+    reached: 5,
+    gave_up: 7,
+    sessions: { all: 9, reached: 4 },
+    ready_ms: { min: 3100, median: 4200, max: 9900, samples: 5 },
+    not_reached: { gate: 2, unsupported: 1, error: 1, abandoned: 1, no_signal: 2, unmeasured: 0 },
+    abandon_ms: { min: 6100, median: null, max: 6100, samples: 1 },
+  }
+
+  it('splits the loads that never got there under the two tiles', () => {
+    const html = renderToString(<GlobeReach state={ok(some)} />)
+    expect(html).toContain('Globe loads')
+    expect(html).toContain('<h3>')
+    for (const label of ['Stopped at the phone gate', 'Device cannot run the globe', 'Error while starting', 'Left while loading', 'No signal']) {
+      expect(html).toContain(label)
+    }
+    expect(html).not.toContain('Before these were recorded')
+    expect(html).toContain('The one load left while loading had waited 6.1 s.')
+    expect(html).not.toContain('Data unavailable.')
+  })
+
+  it('names the loads from before the endings were recorded while there are any', () => {
+    const older = { ...some, not_reached: { ...some.not_reached, no_signal: 0, unmeasured: 2 } }
+    expect(renderToString(<GlobeReach state={ok(older)} />)).toContain('Before these were recorded')
+  })
+
+  it('prints one sentence instead of an all-zero list when every load arrived', () => {
+    const all = { ...some, reached: 12, gave_up: 0, not_reached: EMPTY.globe.not_reached }
+    const html = renderToString(<GlobeReach state={ok(all)} />)
+    expect(html).toContain('Every load in this window reached the globe.')
+    expect(html).not.toContain('<h3>')
+  })
+
+  it('keeps the tiles and says the split is unavailable when the API predates it', () => {
+    // Every deploy has this window: ci.yml builds the frontend (nginx serves
+    // the new bundle at once) before it rebuilds the API.
+    const older = { ...some } as Partial<GlobeData>
+    delete older.not_reached
+    delete older.abandon_ms
+    const html = renderToString(<GlobeReach state={ok(older as GlobeData)} />)
+    expect(html).toContain('Globe loads')
+    expect(html).toContain('Reached the globe')
+    expect(html).toContain('Data unavailable.')
+    expect(html).not.toContain('<h3>')
   })
 })
 

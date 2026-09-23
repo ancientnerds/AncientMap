@@ -264,7 +264,9 @@ async def globe(
     days: int = Query(7, ge=1, le=90),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
-    """Does the globe come up, and how long does it take when it does."""
+    """Does the globe come up, how long does it take when it does, and how the
+    loads that never got there ended (`not_reached`, summing to `gave_up`, and
+    `abandon_ms`). One scan of /globe.html; see stats_analysis.globe_funnel."""
     since, until = _window(days)
     return fs.globe_funnel(fetch(SQL_GLOBE, since, until, path=GLOBE_PATH))
 

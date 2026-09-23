@@ -306,10 +306,39 @@ GLOBE_PATH = "/globe.html"
 #: places only, so a camera drag leaves the timer armed. Both live globe_idle
 #: events carry the literal ms=30000 and both belong to a visitor who was
 #: toggling a country filter at that moment. Precision 0/2.
+#:
+#: The same scan also says how the loads that never reached globe_ready
+#: ended (stats_analysis.globe_funnel folds them; one query, because the
+#: dashboard contract forbids a second /globe.html scan). The frontend sends
+#: at most one ending per load; Umami has no page-load id, so the fold is per
+#: session and capped by the unreached loads.
+#:   gate_left     - globe_gate with a choice other than the globe: the phone
+#:                   gate sent the visitor elsewhere.
+#:   gate_quit     - globe_abandon{phase:'gate'}: left while the gate showed.
+#:   unsupported   - globe_unsupported: the capability check failed.
+#:   failed        - globe_error of the start. Background failures carry
+#:                   phase 'bg:<task>' and belong to loads that reached the
+#:                   globe, so they are excluded; left(), because a LIKE
+#:                   pattern needs the percent sign the guard test forbids.
+#:   context_lost  - webgl_lost{phase:'loading'}: the start failure the globe
+#:                   reported before globe_error existed. Uncounted, it would
+#:                   land in "no signal", which reads as a crash.
+#:   abandoned     - globe_abandon in any phase after the gate.
+#:   abandon_ms    - their ms, oldest first, so the fold keeps the latest.
+#:   first_view    - the session's first page view in the window.
+#:   endings_since - the first ending event ever recorded on the path (not
+#:                   the first in the window): the moment the instrumentation
+#:                   went live. A session that started before it cannot have
+#:                   sent an ending, so its silent loads are "unmeasured", not
+#:                   "no signal". The same value on every row.
+#: choice and phase are strings (event_data.string_value); ms is a number and
+#: lives in number_value.
 SQL_GLOBE = """
 WITH ev AS (
     SELECT e.event_id, e.session_id, e.created_at, e.event_type, e.event_name,
-           (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms
+           (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms,
+           max(d.string_value) FILTER (WHERE d.data_key = 'choice') AS choice,
+           max(d.string_value) FILTER (WHERE d.data_key = 'phase')  AS phase
     FROM website_event e
     LEFT JOIN event_data d ON d.website_event_id = e.event_id
     WHERE e.website_id = :website_id AND e.url_path = :path
@@ -323,7 +352,26 @@ SELECT session_id,
            array_remove(
                array_agg(ms ORDER BY created_at) FILTER (WHERE event_name = 'globe_ready'),
                NULL),
-           ARRAY[]::float8[]) AS ready_ms
+           ARRAY[]::float8[]) AS ready_ms,
+       count(*) FILTER (WHERE event_name = 'globe_gate' AND choice <> 'globe')  AS gate_left,
+       count(*) FILTER (WHERE event_name = 'globe_abandon' AND phase = 'gate')  AS gate_quit,
+       count(*) FILTER (WHERE event_name = 'globe_unsupported')                 AS unsupported,
+       count(*) FILTER (WHERE event_name = 'globe_error'
+                          AND (phase IS NULL OR left(phase, 3) <> 'bg:'))       AS failed,
+       count(*) FILTER (WHERE event_name = 'webgl_lost' AND phase = 'loading')  AS context_lost,
+       count(*) FILTER (WHERE event_name = 'globe_abandon'
+                          AND phase IS DISTINCT FROM 'gate')                    AS abandoned,
+       coalesce(
+           array_remove(
+               array_agg(ms ORDER BY created_at) FILTER (
+                   WHERE event_name = 'globe_abandon' AND phase IS DISTINCT FROM 'gate'),
+               NULL),
+           ARRAY[]::float8[]) AS abandon_ms,
+       min(created_at) FILTER (WHERE event_type = 1) AS first_view,
+       (SELECT min(e2.created_at) FROM website_event e2
+         WHERE e2.website_id = :website_id AND e2.url_path = :path
+           AND e2.event_name IN ('globe_gate', 'globe_unsupported', 'globe_error', 'globe_abandon'))
+           AS endings_since
 FROM ev
 GROUP BY session_id
 """

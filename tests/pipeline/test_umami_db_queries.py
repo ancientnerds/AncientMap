@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -97,6 +98,56 @@ def test_problem_queries_read_the_events_the_frontend_actually_sends():
     assert "page_title" in u.SQL_LIVE
     # Devices and languages are two plain session columns, one scan.
     assert "s.device" in u.SQL_DEVICES and "s.language" in u.SQL_DEVICES
+
+
+def test_the_globe_query_reads_how_the_unreached_loads_ended():
+    """The split of the loads that never reached globe_ready rides on the one
+    /globe.html scan (the dashboard contract forbids a second one): the four
+    ending events, the two string keys they carry, the start failure the globe
+    already reports as webgl_lost, and the moment the endings began."""
+    sql = u.SQL_GLOBE
+    for name in ("'globe_gate'", "'globe_unsupported'", "'globe_error'", "'globe_abandon'"):
+        assert name in sql, name
+    assert "'choice'" in sql and "'phase'" in sql
+    # A gate choice of the globe itself is not an ending; the gate phase of an
+    # abandon is the gate bucket, not "left while loading".
+    assert "choice <> 'globe'" in sql
+    assert "phase = 'gate'" in sql and "phase IS DISTINCT FROM 'gate'" in sql
+    # Background failures belong to loads that reached the globe. left(), not
+    # LIKE: a LIKE pattern needs the percent sign the guard above forbids.
+    assert "left(phase, 3) <> 'bg:'" in sql
+    assert "'webgl_lost'" in sql and "phase = 'loading'" in sql
+    # globe_bg fires after the globe is up: nothing here may count it.
+    assert "'globe_bg'" not in sql
+    assert "AS first_view" in sql and "AS endings_since" in sql
+    # endings_since is the first ending ever recorded on the path, not the
+    # first inside the window: a window that starts after the instrumentation
+    # went live must not call its own early loads "before these were recorded".
+    sub = sql[sql.index("SELECT min(e2.created_at)") : sql.index("AS endings_since")]
+    assert ":since" not in sub and ":until" not in sub
+    assert "e2.website_id = :website_id" in sub and "e2.url_path = :path" in sub
+
+
+def test_the_ending_events_the_globe_query_reads_are_in_the_frontend_taxonomy():
+    """The event names are written twice, in two languages: SQL_GLOBE reads
+    them and src/analytics/index.ts's EventName is the only vocabulary track()
+    accepts. A rename on one side would turn a bucket into a silent zero."""
+    index_ts = (
+        Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "src" / "analytics" / "index.ts"
+    ).read_text(encoding="utf-8")
+    union = index_ts[
+        index_ts.index("export type EventName") : index_ts.index("export type EventProps")
+    ]
+    for name in (
+        "globe_gate",
+        "globe_unsupported",
+        "globe_error",
+        "globe_abandon",
+        "globe_ready",
+        "webgl_lost",
+    ):
+        assert f"| '{name}'" in union, name
+        assert f"'{name}'" in u.SQL_GLOBE, name
 
 
 def test_the_scroll_depth_funnel_needs_no_query_of_its_own():
