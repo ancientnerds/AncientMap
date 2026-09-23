@@ -18,10 +18,17 @@ export type MapboxLoadState = 'idle' | 'loading' | 'ready' | 'failed'
  * Visible time the map gets to fire 'load' once constructed. Without it a
  * style request that never answers leaves the task pending forever. mapbox-gl
  * fires 'load' from requestAnimationFrame, which does not run in a hidden
- * tab, so only visible time counts. The chunk import has no deadline: it
- * settles on its own (a failed fetch rejects).
+ * tab, so only visible time counts.
  */
 export const MAPBOX_LOAD_DEADLINE_MS = 20_000
+/**
+ * Visible time the mapbox chunk (463 kB gzip) gets to arrive. A failed fetch
+ * rejects on its own, a stalled one never does and would hold every
+ * background task queued behind this one. Longer than the map's deadline:
+ * on the local dev server the download alone took more than 20 s, and a slow
+ * connection must still get Mapbox.
+ */
+export const MAPBOX_IMPORT_DEADLINE_MS = 60_000
 const DEADLINE_TICK_MS = 250
 
 export interface MapboxLoadTaskDeps {
@@ -37,25 +44,25 @@ export interface MapboxLoadTaskDeps {
 
 /**
  * Settles with `work`, or rejects with the abort reason when the owner
- * aborts (a removed map never settles on its own), or, given a deadline,
- * rejects once that much visible time has passed.
+ * aborts (a removed map never settles on its own), or rejects with
+ * `${what} within N s of visible time` once that much visible time has passed.
  */
-function settle<T>(work: Promise<T>, signal: AbortSignal, visibleDeadlineMs: number | null): Promise<T> {
+function settle<T>(work: Promise<T>, signal: AbortSignal, visibleDeadlineMs: number, what: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let visibleMs = 0
-    const timer = visibleDeadlineMs === null ? null : setInterval(() => {
+    const timer = setInterval(() => {
       if (document.hidden) return
       visibleMs += DEADLINE_TICK_MS
       if (visibleMs < visibleDeadlineMs) return
       done()
-      reject(new Error(`Mapbox did not load within ${visibleDeadlineMs / 1000} s of visible time`))
+      reject(new Error(`${what} within ${visibleDeadlineMs / 1000} s of visible time`))
     }, DEADLINE_TICK_MS)
     const onAbort = () => {
       done()
       reject(signal.reason)
     }
     function done() {
-      if (timer !== null) clearInterval(timer)
+      clearInterval(timer)
       signal.removeEventListener('abort', onAbort)
     }
     if (signal.aborted) {
@@ -73,8 +80,8 @@ function settle<T>(work: Promise<T>, signal: AbortSignal, visibleDeadlineMs: num
 /**
  * Imports and initialises Mapbox for the globe. Sets `ready` only after
  * `initialize` resolved, so state and service agree. Every failure (chunk
- * import, missing container, constructor throw, fatal map error before
- * 'load', deadline) disposes the service, sets `failed` and is rethrown for
+ * import or its deadline, missing container, constructor throw, fatal map
+ * error before 'load', load deadline) disposes the service, sets `failed` and is rethrown for
  * the caller to report. Once cancelled it touches neither state nor refs:
  * the owner's cleanup disposes whatever sits in `serviceRef`.
  */
@@ -83,7 +90,8 @@ export async function runMapboxLoadTask(d: MapboxLoadTaskDeps): Promise<void> {
   d.setState('loading')
   let service: MapboxGlobeService | null = null
   try {
-    const { MapboxGlobeService } = await settle(import('./MapboxGlobeService'), d.signal, null)
+    const { MapboxGlobeService } = await settle(
+      import('./MapboxGlobeService'), d.signal, MAPBOX_IMPORT_DEADLINE_MS, 'The Mapbox chunk did not arrive')
     if (cancelled()) return
     const container = d.containerRef.current
     if (!container) throw new Error('Mapbox container not mounted')
@@ -92,7 +100,7 @@ export async function runMapboxLoadTask(d: MapboxLoadTaskDeps): Promise<void> {
     // A dot-size change before the service existed would be lost otherwise.
     service.setDotSize(d.dotSizeRef.current)
     const style = d.satelliteRef.current ? 'satellite' : 'dark'
-    await settle(service.initialize(container, style), d.signal, MAPBOX_LOAD_DEADLINE_MS)
+    await settle(service.initialize(container, style), d.signal, MAPBOX_LOAD_DEADLINE_MS, 'Mapbox did not load')
   } catch (err) {
     if (!cancelled()) {
       service?.dispose()

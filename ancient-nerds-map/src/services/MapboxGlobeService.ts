@@ -121,6 +121,8 @@ export class MapboxGlobeService {
     })
 
     await new Promise<void>((resolve, reject) => {
+      let styleLoaded = false
+      this.map!.once('style.load', () => { styleLoaded = true })
       this.map!.on('load', () => {
         this.setupFog()
         this.applyDarkTealTheme()
@@ -129,13 +131,16 @@ export class MapboxGlobeService {
         resolve()
       })
 
-      // Before the first 'load', an error of the style itself (style fetch
+      // Before 'style.load', an error of the style itself (style fetch
       // failed, 401/403, offline) means the map will never load.
       // Tile and TileJSON errors are forwarded from their source and carry
-      // `sourceId`; they are not fatal.
+      // `sourceId`; they are not fatal. After 'style.load' a sourceless error
+      // (sprite or iconset request failed) is not fatal either: the style
+      // still finishes and 'load' follows. Anything that hangs from there on
+      // is caught by the loader's visible-time deadline.
       this.map!.on('error', (e: mapboxgl.ErrorEvent) => {
         console.error('[MapboxGlobe] Map error:', e)
-        if (!this.isInitialized && !('sourceId' in e)) reject(e.error)
+        if (!styleLoaded && !('sourceId' in e)) reject(e.error)
       })
     })
   }

@@ -4,10 +4,14 @@
  * promise stayed pending forever, so the load state could never become
  * `failed` and the background queue behind it never ran on.
  *
- * mapbox-gl fires style-level errors from the Style itself (no `sourceId`);
- * errors of a tile or a TileJSON request are forwarded from the source with
- * `sourceId` set (Style#addSource → setEventedParent(this, {sourceId}) in
- * mapbox-gl 3.18). Only the former are fatal before 'load'.
+ * In mapbox-gl 3.18 errors of a tile or a TileJSON request are forwarded
+ * from their source with `sourceId` set (Style#addSource →
+ * setEventedParent(this, {sourceId})). The Style fires everything else itself,
+ * without `sourceId`: the style fetch (401/403, offline) before 'style.load',
+ * but also a failed sprite or iconset request after 'style.load', after which
+ * the map still fires 'load' (Style#_loadSprite: fire ErrorEvent, then
+ * imageManager.setLoaded(true)). So only a sourceless error before
+ * 'style.load' is fatal; anything later is left to the loader's deadline.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,6 +29,13 @@ const fake = vi.hoisted(() => {
     on(event: string, handler: Handler) {
       this.handlers.set(event, [...(this.handlers.get(event) ?? []), handler])
       return this
+    }
+    once(event: string, handler: Handler) {
+      const wrapped: Handler = e => {
+        this.handlers.set(event, (this.handlers.get(event) ?? []).filter(h => h !== wrapped))
+        handler(e)
+      }
+      return this.on(event, wrapped)
     }
     fire(event: string, payload?: unknown) {
       for (const h of this.handlers.get(event) ?? []) h(payload)
@@ -96,6 +107,22 @@ describe('MapboxGlobeService.initialize', () => {
 
     fake.maps[0].fire('load')
     await expect(init).resolves.toBeUndefined()
+  })
+
+  it("does not reject on a sourceless error after 'style.load' (sprite request failed)", async () => {
+    const service = new MapboxGlobeService()
+    const init = service.initialize({} as HTMLDivElement, 'dark')
+    let settled = false
+    init.then(() => { settled = true }, () => { settled = true })
+
+    fake.maps[0].fire('style.load')
+    fake.maps[0].fire('error', { type: 'error', error: new Error('sprite 503') })
+    await flush()
+    expect(settled).toBe(false)
+
+    fake.maps[0].fire('load')
+    await expect(init).resolves.toBeUndefined()
+    expect(service.getIsInitialized()).toBe(true)
   })
 
   it("keeps a later 'error' after 'load' non-fatal", async () => {
