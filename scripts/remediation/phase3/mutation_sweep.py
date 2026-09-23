@@ -16619,6 +16619,31 @@ P4_PILOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4P_PILOT_TEST,
         "test_a_design_file_that_is_not_the_pinned_one_is_refused",
     ),
+    # ── the seal: the three artefacts keep the digests AUDIT_LOG.md recorded before the export ─
+    (
+        "p4 pilot: a sealed threshold is loosened after the seal",
+        "output/remediation/phase4_runner/PILOT_THRESHOLDS.md",
+        "- T1: 0 UNSUPPORTED sentences",
+        "- T1: 1 UNSUPPORTED (mutant) sentences",
+        P4P_PILOT_TEST,
+        "test_the_sealed_artefacts_keep_the_digests_the_audit_log_recorded",
+    ),
+    (
+        "p4 pilot: a sealed pilot line is changed after the seal",
+        "output/remediation/phase4_runner/PILOT.jsonl",
+        '"name": "Las Labradas"',
+        '"name": "Las Labradas (mutant)"',
+        P4P_PILOT_TEST,
+        "test_the_sealed_artefacts_keep_the_digests_the_audit_log_recorded",
+    ),
+    (
+        "p4 pilot: the audit log loses a sealed digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`7f66f987186151108879105745f082da3b4c8623ca5bd0a201c32a95e4e063fc`",
+        "`mutant`",
+        P4P_PILOT_TEST,
+        "test_the_sealed_artefacts_keep_the_digests_the_audit_log_recorded",
+    ),
     # ── the thresholds ───────────────────────────────────────────────────────────────────────
     (
         "p4 pilot: the thresholds block keeps the blank line before ON FAILURE",

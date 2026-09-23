@@ -599,3 +599,62 @@ def test_an_anchored_id_the_gold_standard_does_not_have_is_refused(
 def test_a_routeless_id_the_plan_does_not_have_is_refused() -> None:
     with pytest.raises(R.InputError, match="does not have"):
         PL.routeless_ids([{"id": sid("0c1c1c1c")}], {})
+
+
+# ================================================================ the sealed artefacts (2026-09-24)
+
+RUNNER = REPO / "output" / "remediation" / "phase4_runner"
+AUDIT_LOG = REPO / "output" / "remediation" / "AUDIT_LOG.md"
+DESIGN = REPO / "output" / "remediation" / "logs" / "design_texts_images_2026-09-22.json"
+#: The digests AUDIT_LOG.md recorded before the first model question of the pilot was exported.
+SEALED = {
+    "PILOT.jsonl": "7f66f987186151108879105745f082da3b4c8623ca5bd0a201c32a95e4e063fc",
+    "gold_prose_errors.json": "e4e63d56cbc9cca0f9cea018967fac40e897faddb9c43ad064e6203a74ebb7df",
+    "PILOT_THRESHOLDS.md": "64ac53341068234c905cff00095a9d7244cd4703353f63bbd0997add63fe0c13",
+}
+
+
+def test_the_sealed_artefacts_keep_the_digests_the_audit_log_recorded() -> None:
+    """Design: "Their sha256 values are recorded in AUDIT_LOG.md before any model call" - and
+    nothing in them may change after the data is seen."""
+    log = AUDIT_LOG.read_text(encoding="utf-8")
+    for name, digest in SEALED.items():
+        assert PL._sha256(RUNNER / name) == digest, name
+        assert f"`{digest}`" in log, f"AUDIT_LOG.md does not record {name}'s sha256"
+
+
+def test_the_sealed_pilot_holds_every_member_the_design_names() -> None:
+    lines = R.read_jsonl(RUNNER / "PILOT.jsonl")
+    ids = [line["site_id"] for line in lines]
+    assert len(ids) == len(set(ids)) == 132
+    gold = R._gold_site_ids(GOLD_FILE)
+    assert ids[: len(gold)] == gold
+    for named in (*PL.CANARIES, *PL.B5_FIXTURES, *PL.IDENTITY_TRAPS, *PL.SPECIAL):
+        assert sum(site_id.startswith(named.prefix) for site_id in ids) == 1, named
+    strata = [stratum for line in lines for stratum in line["strata"]]
+    assert strata.count("identity-trap-q309-history") == PL.Q309_SITES
+    for stratum, count in PL.DRAWS:
+        assert strata.count(stratum) == count, stratum  # every stratum was large enough
+
+
+@pytest.mark.skipif(not GOLD_FILE.exists(), reason="the versioned gold standard is missing")
+def test_the_sealed_prose_errors_are_the_gold_standards_fifteen_and_the_ten_canaries() -> None:
+    payload = json.loads((RUNNER / "gold_prose_errors.json").read_text(encoding="utf-8"))
+    gold = json.loads(GOLD_FILE.read_text(encoding="utf-8"))
+    errors = payload["errors"]
+    assert [e["id"] for e in errors if e["kind"] == "gold"] == [
+        e["id"] for e in PL.gold_errors(gold, "gold.json")
+    ]
+    assert [e["id"] for e in errors if e["kind"] == "canary"] == [
+        f"CANARY-{n:02d}" for n in range(1, 11)
+    ]
+    assert payload["inputs"]["gold_standard"]["sha256"] == PL._sha256(GOLD_FILE)
+
+
+@pytest.mark.skipif(not DESIGN.exists(), reason="needs the gitignored design file")
+def test_the_sealed_thresholds_are_the_designs_blocks_verbatim() -> None:
+    text = (RUNNER / "PILOT_THRESHOLDS.md").read_text(encoding="utf-8")
+    entry = PL.design_entries(DESIGN)[PL.DESIGN_ENTRY]
+    thresholds, failure = PL.threshold_blocks(entry["pilot_and_thresholds"])
+    assert f"\n{thresholds}\n\n{failure}\n" in text
+    assert text == PL.thresholds_document(entry)
