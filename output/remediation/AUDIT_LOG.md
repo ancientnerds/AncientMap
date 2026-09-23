@@ -7000,3 +7000,212 @@ D7): {...}" (35ce513).
 * `ruff check` (api, pipeline, scripts/remediation, tests, tools) clean, `ruff format --check`
   clean on every touched file, `lint-imports` 2 kept, 0 broken, `vulture --min-confidence 80`
   clean.
+
+## 2026-09-23 - the Opus handoff: every model judgement answered by Opus, the DeepSeek transports removed
+
+**Owner order (Martin, 2026-09-23, binding): "no DeepSeek any more - everything with Opus".** Until
+then every model judgement of the remediation was bought from DeepSeek: the Phase-3 finder and
+reviewer - and with them the sitelink, search and gap reruns, which run the same stages - and the
+Phase-4 selector, translator, restricted-lane and reviewer calls on `opencode-go/deepseek-v4.1-flash`,
+one `pi.cmd` process per call (`phase3/model_stage.PiRunner`); the gallery vision questions on
+`deepseek-v4-flash-vision-exp` over the opencode gateway (`vlm_pilot/ask_vlm.ask_once`, called by
+`gallery_audit/vision.py`). Branch `wip/opus-handoff` (from `integrate/wave1` 8a957b4, commits
+`aa44da2` .. this one) replaces both transports with an **Opus handoff**: a stage writes its questions
+to files, the orchestrating Claude Code session's Opus agents answer them, and the stage reads the
+answers back. **Nothing was written to production, nothing was read from it, and no model API was
+called** - no DeepSeek, Pi, opencode gateway or other model, in code or in tests.
+
+### The design
+
+**One contract, `scripts/remediation/opus_handoff.py`.** `OPUS_MODEL = "anthropic/claude-opus-5-5
+(Claude Code agent)"` - one string, pinned by a test, named by every answer file, ledger line and
+disclosure. A handoff directory (one per round; it may hold several batches and stages):
+
+    <dir>/<batch_id>/MANIFEST.jsonl                 one line per exported question
+    <dir>/<batch_id>/<stage>/<label>.prompt.txt     the exact prompt, UTF-8
+    <dir>/<batch_id>/<stage>/<label>.answer.json    the answer, written by an Opus agent
+    <dir>/images/<image_id>.jpg                     vision only: the exact JPEG the question is about
+
+`<label>` is the call's label escaped as the evidence store escapes it (`quote(label, safe="")`:
+`site-1/description` -> `site-1%2Fdescription`); the stage is a path component because the Phase-3
+finder and reviewer ask about the same `<site>/<field>` label. Batch ids and stages are refused
+unless they are one plain name (no separator, no `..`; `images` is reserved). A manifest line is
+`{batch_id, stage, label, field, prompt_sha256, prompt_path, answer_path, image_path}`, paths relative
+to `<dir>` with `/`, `image_path` null except for vision; one manifest per batch, so parallel
+exports of different batches never share a file. An answer file is exactly
+
+    {"prompt_sha256": "<sha256 of the exact prompt text, UTF-8>", "text": "<the answer, verbatim>",
+     "model": "anthropic/claude-opus-5-5 (Claude Code agent)",
+     "answered_at": "<ISO 8601 with a zone>", "answered_by": "<the agent's name>"}
+
+* `export` writes the prompt (and image) write-once and then the manifest line: the same prompt again
+  is a no-op, a different prompt or image for an exported question is refused (an answer may exist).
+  No model call.
+* `answer` (`write_answer`) is the helper the agents answer through, so no agent computes a digest:
+  the question must be in the manifest, its prompt file must still hash to the manifest's digest, and
+  the answer is write-once (the identical text again is a no-op; another text is refused - delete the
+  file to answer again).
+* `read_answer` refuses (never defaults) a missing file, a file not exactly in the answer shape, an
+  empty text, a model that is not `OPUS_MODEL` and an answer to another prompt (stale digest).
+* `validate` checks every manifest line: the prompt file still the exported one, the image present,
+  the answer present, in shape, by Opus, for this prompt. It reports `missing`, `stale`, `malformed`
+  (wrong model included) and `orphans` (answer files nobody exported); exit 0 only when all are empty.
+
+**Phase 3.** `model_stage.HandoffRunner(directory=...)` implements the `ModelRunner` seam through
+`read_answer`; every refusal is a plain `ModelCallFailed`, never an `UnreadableStream`, so the batch
+stops at the question and the orchestrator answers it again, instead of a permanent named hole.
+`MODEL = OPUS_MODEL`. `Usage` gained a required `metering` field and `Usage.unmetered()` (zero tokens,
+cost 0, `metering="unmetered"`): an Opus answer on a subscription has no per-call meter, and the
+record says so rather than faking a measurement. A ledger line (`LEDGER.jsonl`) keeps its shape and
+adds `"metering": "unmetered"`; `phase3.ledger` refuses an unmetered line that carries any token or a
+cost other than 0, any other metering value, and metering on a fetch line; a line without the key
+(the Pi lines, and every fetch line) is written byte-for-byte as before; `StageTotals` counts
+`unmetered_calls`. `run.py judge` has three modes: the preview (no flag), `--handoff-export DIR` and
+`--handoff-import DIR` (mutually exclusive). **The export runs the stage's own judge function**
+(`judge_batch`, `discover_stage.judge_discover_batch`, `review_stage.judge_review_batch`) with a
+`RecordingRunner` against a scratch copy of the store it writes (`answers/` for the finder, `reviews/`
+for the reviewer) and a scratch ledger: every call it would buy is captured with its exact prompt -
+the frozen questions stay frozen - an answer already on disk is skipped exactly as the import skips
+it, and nothing the recording run writes survives (no ledger line, no answer, no `model.json`).
+`mass_run.py --live` is one half of a round: `--handoff-export DIR` runs a batch's stages up to and
+including the judge (prepare, fetch or search, judge) and counts it handed off, not done;
+`--handoff-import DIR` runs the judge and what follows it (`verify-hits` for a search plan) and then
+the artefact check as ever. A live run without either is refused. `review_all.py` takes the same pair.
+
+**Phase 4.** `run4 select` (S3 and S3R, which need no answer), `run4 translate` (S3T, a new command:
+its questions are built from the selector's answers, so it is the next round) and `run4 review` (S6)
+each take `--handoff-export DIR` or `--handoff-import DIR`. The export runs the stages themselves,
+unchanged, over a scratch copy of the batch directory (under its own run and batch names) with a
+recording runner, so holds, selections, answers and reports of the export never reach the batch.
+The import runs them through `HandoffRunner`; every call still goes through `batch4.buy` and
+`judge_site`, so write4's journal evidence (decision D5: the selector's answer by name, the
+reviewer's, each with its prompt on disk and its ledger line) holds for handoff answers - proved end
+to end through the CLI (`test_the_journal_evidence_of_a_site_answered_through_the_handoff_is_complete`).
+`mass4.py` runs one round per live run: `--stages` (a contiguous part of `prepare, sources, routes,
+select, translate, assemble, verify, review`) and at most one model stage, placed by the half
+(`check_round`: an export ends at it, an import starts at it, a round with a model stage and no
+handoff is refused). **`model4.AI_SYSTEM`**, the EU AI Act Art. 50 disclosure published with every
+Phase-4 text, is now `"Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent),
+an-sites-remediation-2026-09"`; `LEGACY_AI_SYSTEM` (the March texts) is unchanged; no Phase-4 text
+had been written, so no row carries the old disclosure. PHASE4_CONTRACTS section 6 records it as
+accepted by the orchestrator 2026-09-23 on the owner's order; rules 3 and 4 and section 5 follow.
+
+**Gallery vision.** `vision.py export --jobs J --run-dir D --handoff H` hands every job the run's
+ledger holds no ok verdict for to the handoff: the filled frozen question (`GALLERY_PROMPT` /
+`HERO_PROMPT`, unchanged; batch = the job's stage, stage `vision`, label `<image_id>/<prompt_id>`) and
+the image as `pipeline.video.shorts_select.vlm_bytes` of the offsite copy (RGB, longest side 1280,
+JPEG q85 - the bytes the pilot sent) at `images/<image_id>.jpg`. `vision.py import` refuses to start
+while any job lacks a valid answer (exit 1, nothing written), then writes one `VERDICTS.jsonl` line
+per job through the existing parsing (`extract_json`, `validate`: the in-vocabulary check, status ok
+or failed, never `other` for a non-answer); an answer given about other bytes than today's JPEG is a
+failed line. A line names `model` = `OPUS_MODEL`, carries `metering: "unmetered"`, `cost_usd` 0,
+`answered_by` and `answered_at`; `verdicts_by_image` (and `decide.py`) already refuse any other
+model, so the pilot transport's verdicts count no more. Because `calibrate.THRESHOLDS` names the
+model, its sealed digest moved (`1040cd59...` -> `e6560457...`); the tracked
+`calibration-2026-09-23/` stays untouched as the DeepSeek seal (the model is the only difference,
+tested) and admits no Opus verdict: **the Opus C1 calibration needs a directory of its own, sealed
+before its first question is exported** (commands below).
+
+### What was removed
+
+`PiRunner`, `pi_argv`, `PROGRAM`, `PI_FLAGS`, `THINKING`, `PROVIDER`, `DEFAULT_TIMEOUT`,
+`Usage.from_message_end`, `parse_stream`, `_assistant_text`, `_count` and the `subprocess`/`os`
+imports of `model_stage`; `judge --live/--timeout`; `run4.pi_runner` and `--live/--timeout` on
+`select`/`review`; the two captured Pi transcripts (`tests/remediation/fixtures/pi_probe*.json`) and
+the 11 tests that parsed them or drove a Pi process; in `mass_run` the DeepSeek cost projection
+(`MEASURED_COST_PER_CALL`) and the spawn-failure shape "a program the child started could not be
+started" (`UNSTARTABLE_PROGRAM`; the judge's Pi process was its only producer) with its 2 tests - the
+NTSTATUS shape stays; in `vision.py` the `ask_vlm` import, the gateway call, its three attempts
+(`VLM_ATTEMPTS`, `VLM_RETRY_WAIT_S`), the `run` command and the gateway ramp probe (`ramp_allows`,
+`MAX_WORKERS_UNPROVEN`, `RAMP_*`) with its test and mutation case. `vlm_pilot/` stays as pilot
+history: nothing that runs imports `ask_vlm.py` any more; the two pure helpers vision read from it
+(`EXPECTED_KINDS`, `extract_json`) moved to `vlm_pilot/common.py`, which `ask_vlm.py` now imports.
+The historical ledger lines, `PIECE3.md` and the sealed pilot documents are untouched; HANDOVER,
+SITES_DB_REMEDIATION, the search stage's docstring and the gallery DESIGN name Opus where they
+described the live route.
+
+**Kept on purpose.** `UnreadableStream` and the loops' named-hole / `MODEL_STREAM_UNREADABLE`
+branches: no runner raises it any more (every handoff refusal stops the batch), but it is the seam's
+contract for an answer that is not one and the mass run's `model.json` files carry named failures
+that `mass_run.batch_state` still reads; removing the branches is a separate change. The dollar
+ceilings (`--max-usd`, vision's `--budget-usd`) stay: Opus lines add 0, historical lines still count.
+
+### The orchestrator's commands, per stage
+
+`PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe`, run from the repository root with
+`PYTHONIOENCODING=utf-8`; `H` is a fresh handoff directory per round (for example
+`output/remediation/handoff/<lane>-<stage>-<date>`). Every round is **export -> the Opus agents answer
+-> validate -> import -> the stage's own gates**. The answering is the orchestrator's: for each line
+of every `H/*/MANIFEST.jsonl` whose `answer_path` does not exist, an agent reads `H/<prompt_path>`
+(and `H/<image_path>` for vision), writes its answer text - exactly the shape the question asks
+for, nothing else - to a file, and runs
+
+    $PY scripts/remediation/opus_handoff.py answer --dir H --batch-id <batch_id> --stage <stage> \
+        --label <label> --answered-by <agent> --text-file <answer.txt>
+
+then `$PY scripts/remediation/opus_handoff.py validate --dir H` must exit 0 before any import.
+
+* **Phase 3, one batch** (discover, rerun, search or finding-driven): `$PY scripts/remediation/phase3/
+  run.py judge --run-dir R --batch-id B --handoff-export H`; answer; validate; `... judge --run-dir R
+  --batch-id B --ledger L --handoff-import H` (writes answers, ledger lines, `model.json`); for a
+  search batch then `run.py verify-hits --live`; the reviewer the same way with `--stage reviewer`
+  (a fresh `H`); then the writer as ever (`write_stage.py`, `write_dry_all.py`, `write_gate.py`,
+  `verify_writes.py`).
+* **Phase 3, a lane's plan**: `$PY scripts/remediation/phase3/mass_run.py --live --plan P --run-dir R
+  [--stages prepare,search,judge,verify-hits] --handoff-export H`; answer; validate; the same with
+  `--handoff-import H` (the judge, then `verify-hits`; done only by the artefact check). Reviewer:
+  `$PY output/remediation/tools/review_all.py --lane <lane> --handoff-export H2`; answer; validate;
+  `... --handoff-import H2` (writes each `review.json`).
+* **Phase 4, a run** (`R` = `phase4_runner/runs/<run>`), six rounds, each followed by answering and
+  validating where it hands off:
+
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages prepare,sources,routes,select --handoff-export H/select
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages select --handoff-import H/select
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages translate --handoff-export H/translate
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages translate,assemble,verify --handoff-import H/translate
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages review --handoff-export H/review
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages review --handoff-import H/review
+
+  (`run4.py select|translate|review --run-dir R --batch-id B --handoff-export|--handoff-import DIR`
+  does one batch.) Then the stage's gates as ever: `mass4`'s done state, the independent audit,
+  `run4.py writeplan` (write4, whose D5 evidence check reads these answers), `write_gate4.py`,
+  `verify_writes4.py`.
+* **Gallery vision** - the Opus C1 calibration first, in a directory of its own (`C`, e.g.
+  `output/remediation/gallery_audit/calibration-opus-2026-09-23`):
+  `$PY scripts/remediation/gallery_audit/calibrate.py seal --run-dir C`, then `... jobs --run-dir C`;
+  `$PY scripts/remediation/gallery_audit/vision.py export --jobs C/JOBS.jsonl --run-dir C --handoff H`
+  (exit 3 names every image that cannot be found or read); answer (each agent looks at
+  `H/images/<id>.jpg` and answers with the JSON the question asks for); validate;
+  `$PY scripts/remediation/gallery_audit/vision.py import --jobs C/JOBS.jsonl --run-dir C --handoff H`;
+  then `calibrate.py evaluate --run-dir C --eye-labels ...` and `decide.py` as the design has it.
+  The G stages' JOBS files go the same way.
+
+### Measured (worktree `.claude/worktrees/opus-handoff`, main venv)
+
+* Tests: 18 new in `test_opus_handoff.py`; in the stage suites 11 Pi tests and 2 spawn-shape tests
+  and the ramp test removed and replaced by handoff tests (the Phase-3 runner and its export/import
+  round trip through the real CLI, the unmetered ledger line, mass_run's two halves, review_all's
+  argv against the real parser, run4's select and translate rounds over lanes W, T and R with the
+  batch directory byte-identical after each export, mass4's round rules, D5 end to end, vision's
+  export/import round trip with the exact JPEG); the API fixtures carry the new disclosure.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, the snapshot and
+  `WORKLIST.jsonl` copied into the worktree's ignored paths from the main checkout): **5,555
+  passed, 103 skipped, 57 deselected, 0 failed**.
+* Mutation sweep: the 62 new cases (`opus handoff: `) **62/62 caught**; every existing case whose
+  file or test this branch changed (740 cases, the 62 included) **740/740 caught** - 737 in one run,
+  and the 3 whose tests need the gitignored snapshot and worklist caught once those were copied in;
+  the tree byte-identical after each run, no `# mutant` line outside the sweep files. The AI_SYSTEM
+  case was re-anchored to the new disclosure.
+* `ruff check` and `ruff format --check` clean on all 31 touched Python files, `ruff check api/
+  pipeline/` clean, `lint-imports` 2 kept 0 broken, `vulture api/ pipeline/ .vulture_whitelist.py
+  --min-confidence 80` clean, the Lyra import check (`markdown` and `nh3` masked) passes.
+
+### Open
+
+* The Opus C1 calibration directory is not sealed here: sealing is the first act of that production
+  run and needs the gitignored state (`calibrate.py seal`, then `jobs`).
+* The answering workflow (which agents, how many questions per agent) is the orchestrator's; this
+  branch gives it the files, the helper and the validator.
+* `mass_run.package_digest` hashes `phase3/` (and `mass4` `phase4/`), not `opus_handoff.py`: an edit to
+  the handoff module mid-run is not caught by the digest guard.
+* Removing the now-unraised `UnreadableStream` branches (see "Kept on purpose").
