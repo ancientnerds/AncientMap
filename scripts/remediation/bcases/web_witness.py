@@ -31,7 +31,8 @@ ends at:
 * `not-on-page` - `coord_text` does not occur in the page's text: `extract_text_from_html` (Lyra's page
   reader) and `html.unescape`, then `normalise` on both sides - NFKC, the prime, quote, degree and
   minus glyph variants unified, zero-width characters dropped, whitespace collapsed - compared
-  without case;
+  without case; and it must stand whole there (`occurrences`): not the tail of a longer or signed
+  number, not a number the page continues with more digits or a hemisphere letter;
 * `grid-reference` - `coord_text` is a grid reference (OSGB, UTM, eastings and northings): not read;
 * `unparsed` - `coord_text` does not hold exactly two coordinates this parser reads: signed decimal
   degrees (latitude first) or degrees with a hemisphere letter each (decimal, D M or D M S with the
@@ -425,12 +426,60 @@ def distinctive_words(name: str) -> list[str]:
     return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN)
 
 
+def _standalone_hemisphere(hay: str, at: int) -> bool:
+    """Whether `hay[at]` is a hemisphere letter standing as a word of its own (`hay` is case-folded)."""
+    if not 0 <= at < len(hay) or hay[at] not in "nsew":
+        return False
+    return not (at > 0 and hay[at - 1].isalpha()) and not (
+        at + 1 < len(hay) and hay[at + 1].isalpha()
+    )
+
+
+def _whole(hay: str, start: int, end: int) -> bool:
+    """Whether the quote at `hay[start:end]` states the page's numbers whole: a number it begins with
+    has no digit, point or letter against it and no sign, dash or lone hemisphere letter against it
+    or one space before it; a number or unit it ends with has no digit, letter or decimal after it and
+    no lone hemisphere letter one degree sign or space after it. Otherwise the page's number is
+    longer, signed or lettered where the quote is not, and the quote parses to what the page does
+    not state."""
+    needle = hay[start:end]
+    if needle[0].isdigit() or needle[0] in ".+-":
+        before = hay[start - 1] if start > 0 else " "
+        if before.isalnum() or before == ".":
+            return False
+        gap = start - 1 if before == " " else start
+        if gap > 0 and (_SIGNS.fullmatch(hay[gap - 1]) or _standalone_hemisphere(hay, gap - 1)):
+            return False
+    if needle[-1].isdigit() or needle[-1] in "°'\"":
+        after = hay[end] if end < len(hay) else " "
+        if after.isalnum():
+            return False
+        if after in ".," and end + 1 < len(hay) and hay[end + 1].isdigit():
+            return False
+        at = end
+        while at < len(hay) and at < end + 2 and hay[at] in "° ":
+            at += 1
+        if _standalone_hemisphere(hay, at):
+            return False
+    return True
+
+
+def occurrences(hay: str, needle: str) -> list[int]:
+    """Where `needle` stands whole in `hay` (`_whole`): the start of each such occurrence."""
+    found, start = [], hay.find(needle)
+    while start >= 0:
+        if _whole(hay, start, start + len(needle)):
+            found.append(start)
+        start = hay.find(needle, start + 1)
+    return found
+
+
 def named_near(hay: str, needle: str, name: str) -> str | None:
     """The word of `name` (or the whole folded name) that stands within `IDENTITY_WINDOW` characters
-    of an occurrence of `needle` in `hay`, or None. Both are the case-folded normalised texts."""
+    of a whole occurrence of `needle` in `hay` (`occurrences`), or None. Both are the case-folded
+    normalised texts."""
     words, whole = distinctive_words(name), C.fold(name)
-    start = hay.find(needle)
-    while start >= 0:
+    for start in occurrences(hay, needle):
         window = hay[max(0, start - IDENTITY_WINDOW) : start + len(needle) + IDENTITY_WINDOW]
         folded = C.fold(window, keep_parentheses=True)
         present = set(folded.split())
@@ -439,7 +488,6 @@ def named_near(hay: str, needle: str, name: str) -> str | None:
                 return word
         if whole and f" {whole} " in f" {folded} ":
             return whole
-        start = hay.find(needle, start + 1)
     return None
 
 
@@ -538,6 +586,12 @@ def _prove(net: Any, name: str, candidate: Any, row: dict[str, Any]) -> dict[str
     hay, needle = page_text(markup).casefold(), normalise(coord_text).casefold()
     if needle not in hay:
         raise Rejected("not-on-page", f"{coord_text!r} does not occur in the text of {final}")
+    if not occurrences(hay, needle):
+        raise Rejected(
+            "not-on-page",
+            f"{coord_text!r} does not stand whole in the text of {final}: every occurrence is part "
+            "of a longer number or stands beside a sign or a hemisphere letter",
+        )
     got_lat, got_lon = parse_coordinates(coord_text)
     if abs(got_lat - lat) > MATCH_DEGREES or abs(got_lon - lon) > MATCH_DEGREES:
         raise Rejected(

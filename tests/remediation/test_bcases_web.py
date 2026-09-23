@@ -336,6 +336,42 @@ def test_the_quote_must_occur_in_the_page() -> None:
     assert _code(row) == "not-on-page", row["reason"]
 
 
+def test_the_quote_must_stand_whole_in_the_page() -> None:
+    """The quote is a substring of the page only where it stands whole: the page's "-17.5744" quoted
+    without its sign, its "-89.99583" quoted as "-89.9958", its "117.5744" as "17.5744", or a
+    hemisphere letter after the quote would each parse to a number the page does not state."""
+    quote, lat, lon = "17.5744, -89.9958", 17.5744, -89.9958
+    for shown in (
+        "-17.5744, -89.9958",
+        "- 17.5744, -89.9958",
+        "–17.5744, -89.9958",
+        "117.5744, -89.9958",
+        "0.17.5744, -89.9958",
+        "N17.5744, -89.9958",
+        "S 17.5744, -89.9958",
+        "17.5744, -89.99583",
+        "17.5744, -89.9958.5",
+        "17.5744, -89.9958W",
+        "17.5744, -89.9958 W",
+        "17.5744, -89.9958° W",
+    ):
+        page = _html(f"<h1>El Tintal</h1><p>GPS {shown} here</p>")
+        row, _ = _verify(Page(text=page), coord_text=quote, lat=lat, lon=lon)
+        assert _code(row) == "not-on-page" and "whole" in row["reason"], (shown, row["reason"])
+    for shown in (
+        "GPS (17.5744, -89.9958)",
+        "GPS:17.5744, -89.9958.",
+        "GPS 17.5744, -89.9958 Elevation 200 m",
+        "1. 17.5744, -89.9958",
+    ):
+        page = _html(f"<h1>El Tintal</h1><p>{shown}</p>")
+        row, _ = _verify(Page(text=page), coord_text=quote, lat=lat, lon=lon)
+        assert row["accepted"], (shown, row["reason"])
+    # a quote that ends on its hemisphere letter or begins with a label is bounded by its own words
+    row, _ = _verify(Page(text=_html(f"<h1>El Tintal</h1><p>{COORD}West</p>")))
+    assert row["accepted"], row["reason"]
+
+
 def test_the_page_and_the_quote_are_compared_across_glyph_variants() -> None:
     """The page types the coordinate with entities, a masculine ordinal and two apostrophes, split
     across tags and non-breaking spaces; the quote with the degree sign, primes and a double prime."""

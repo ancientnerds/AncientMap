@@ -7534,6 +7534,7 @@ _WW_RESEARCH = "test_the_research_file_is_refused_when_it_is_not_one_line_per_ca
 _WW_LABEL = "test_a_web_witness_is_named_by_its_host_and_one_host_is_one_witness"
 _WW_WAVE2 = "test_wave_two_renders_under_its_own_stamp_and_directory"
 _WW_WAVE1_SITE = "test_wave_two_refuses_a_site_of_wave_one"
+_WW_WHOLE = "test_the_quote_must_stand_whole_in_the_page"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -7656,6 +7657,63 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n",
         _WW_TEST,
         "test_the_quote_must_occur_in_the_page",
+    ),
+    (
+        "bcases web: a quote inside a longer or signed number stands for it",
+        _WW,
+        "        if _whole(hay, start, start + len(needle)):\n",
+        "        if True:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a digit, point or letter against the quote's start is ignored",
+        _WW,
+        '        if before.isalnum() or before == ".":\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a sign or lone hemisphere letter before the quote is ignored",
+        _WW,
+        "        if gap > 0 and (_SIGNS.fullmatch(hay[gap - 1]) or "
+        "_standalone_hemisphere(hay, gap - 1)):\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a digit or letter against the quote's end is ignored",
+        _WW,
+        "        if after.isalnum():\n            return False\n",
+        "        if False:  # mutant\n            return False\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: decimals continuing the quote's last number are ignored",
+        _WW,
+        '        if after in ".," and end + 1 < len(hay) and hay[end + 1].isdigit():\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a lone hemisphere letter after the quote is ignored",
+        _WW,
+        "        if _standalone_hemisphere(hay, at):\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a hemisphere letter inside a word counts as lone",
+        _WW,
+        "    return not (at > 0 and hay[at - 1].isalpha()) and not (\n",
+        "    return True or not (at > 0 and hay[at - 1].isalpha()) and not (  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
     ),
     (
         "bcases web: a script's text counts as page text",
