@@ -58,6 +58,11 @@ vici.org's "Location ± 5-25 m."; 0 where it states none) - the page's own uncer
 the tolerance of the comparisons the witness takes part in (`classify.weigh`) and the distance under
 which it is one point with another (`classify.same_point_m`).
 
+`web-verify --from-cache` proves every candidate again under the rules as they stand from the pages
+the previous run cached, asking nothing (`reverify`, `CacheOnly`): a page that run was refused has no
+cached copy and keeps its recorded refusal once the checks before the request still pass; a page it
+read that the cache does not hold is an error.
+
 ## `reweigh` (offline): `coords3/VERDICTS.jsonl` and `coords3/COUNTS.json`
 
 Each of the 171 cases is classified again exactly as `classify.write_all` did - the same cache, the
@@ -396,6 +401,19 @@ class PublicOnlyTransport(httpx.BaseTransport):
 
     def close(self) -> None:
         self.inner.close()
+
+
+class NotInCache(RuntimeError):
+    """A request `web-verify --from-cache` would have to send: the page is not in the cache."""
+
+
+class CacheOnly(httpx.BaseTransport):
+    """A transport that sends nothing: a `census.fetch.Fetcher` on it answers from its page cache
+    alone, and a page the cache does not hold fails as a transport failure - which `reverify` turns
+    into an error, never into a rejection."""
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        raise NotInCache(f"{request.url} is not in the page cache: --from-cache asks nothing")
 
 
 def open_fetcher(root: Path, inner: httpx.BaseTransport) -> Fetcher:
@@ -830,11 +848,60 @@ def rejection_code(row: Mapping[str, Any]) -> str:
     return str(row["reason"]).split(":", 1)[0]
 
 
-def web_verify(net: Any, out: Path) -> dict[str, Any]:
-    """`web-verify`: read `RESEARCH.jsonl`, prove every candidate, write `WEB_WITNESSES.jsonl`."""
+class _Refusal:
+    """What `reverify` answers for a page the previous run was refused (`http`): the cache holds no
+    copy of it, so the refusal the run recorded is raised again, as `census.fetch.Fetcher` raised it."""
+
+    def __init__(self, row: Mapping[str, Any]) -> None:
+        self.detail = str(row["reason"]).removeprefix("http: ")
+
+    def get_text(self, url: str, ns: str = "text") -> dict[str, Any]:
+        raise FetchError(self.detail)
+
+
+def reverify(
+    net: Any,
+    research: Sequence[Mapping[str, Any]],
+    cases: Mapping[str, str],
+    previous: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """`web-verify --from-cache`: every candidate proven again under today's rules from the pages the
+    previous run (`previous`, its `WEB_WITNESSES.jsonl`) cached - `net` is a `Fetcher` on
+    `CacheOnly`, so nothing is asked. A candidate that run was refused (`http`) is given its recorded
+    refusal again (`_Refusal`): its row is the run's once the checks before the request still pass,
+    else the check that now fails. A page the run read that the cache does not hold, or a refusal
+    that does not replay to the run's row, is an error: the file would no longer be one run's."""
+    check_verified(research, previous)
+    candidates = [(str(line["site_id"]), c) for line in research for c in line["candidates"]]
+    rows: list[dict[str, Any]] = []
+    for (sid, candidate), old in zip(candidates, previous, strict=True):
+        refused = rejection_code(old) == "http"
+        asked = _Refusal(old) if refused else net
+        row = verify_candidate(asked, site_id=sid, name=cases[sid], candidate=candidate)
+        if rejection_code(row) == "http" and row != old:
+            raise inputs.InputError(
+                f"{WEB_WITNESSES}: {sid}'s {row['url']} "
+                + (
+                    "does not replay to the row the run wrote"
+                    if refused
+                    else "was read by the run and is not in the page cache"
+                )
+                + f" ({row['reason']}): run `web-verify` with the network"
+            )
+        rows.append(row)
+    return rows
+
+
+def web_verify(net: Any, out: Path, *, from_cache: bool = False) -> dict[str, Any]:
+    """`web-verify`: read `RESEARCH.jsonl`, prove every candidate, write `WEB_WITNESSES.jsonl` -
+    with `from_cache`, again from the previous run's pages (`reverify`)."""
     cases = research_cases(out)
     research = read_research(out / COORDS3 / RESEARCH, cases)
-    rows = verify_all(net, research, cases)
+    if from_cache:
+        previous = inputs.read_jsonl(out / COORDS3 / WEB_WITNESSES)
+        rows = reverify(net, research, cases, previous)
+    else:
+        rows = verify_all(net, research, cases)
     write_jsonl(out / COORDS3 / WEB_WITNESSES, rows)
     return {
         "research_lines": len(research),

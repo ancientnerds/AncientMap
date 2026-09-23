@@ -7706,6 +7706,7 @@ _WW_TYPE = "test_a_type_word_of_the_name_does_not_identify_it"
 _WW_STATED = "test_the_precision_a_page_states_for_its_coordinates_is_read"
 _WW_OWN_TOL = "test_a_web_pages_stated_precision_is_its_own_tolerance"
 _WW_SETTLEMENT = "test_a_modern_settlement_by_country_is_a_container_where_a_web_page_takes_part"
+_WW_FROM_CACHE = "test_web_verify_from_the_cache_proves_every_candidate_again_and_asks_nothing"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -8642,6 +8643,54 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n        return False\n",
         _WW_TEST,
         _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: --from-cache asks the cache for a page the run was refused",
+        _WW,
+        "        asked = _Refusal(old) if refused else net\n",
+        "        asked = net  # mutant\n",
+        _WW_TEST,
+        _WW_FROM_CACHE,
+    ),
+    (
+        "bcases web: a page missing from the cache becomes a rejection",
+        _WW,
+        '        if rejection_code(row) == "http" and row != old:\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_web_verify_from_the_cache_refuses_a_page_it_does_not_hold",
+    ),
+    (
+        "bcases web: --from-cache copies the previous rows",
+        _WW,
+        "        rows = reverify(net, research, cases, previous)\n",
+        "        rows = [dict(r) for r in previous]  # mutant\n",
+        _WW_TEST,
+        _WW_FROM_CACHE,
+    ),
+    (
+        "bcases web: the cache-only transport sends the request",
+        _WW,
+        '        raise NotInCache(f"{request.url} is not in the page cache: --from-cache asks nothing")\n',
+        "        return httpx.Response(200)  # mutant\n",
+        _WW_TEST,
+        "test_the_cache_only_transport_sends_nothing",
+    ),
+    (
+        "bcases web: --from-cache is dropped silently outside web-verify",
+        _WW_RUN,
+        '    if args.from_cache and args.command != "web-verify":\n',
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_from_cache_belongs_to_web_verify_alone",
+    ),
+    (
+        "bcases web: web-verify --from-cache asks the network",
+        _WW_RUN,
+        "        inner = W.CacheOnly() if args.from_cache else httpx.HTTPTransport()\n",
+        "        inner = httpx.HTTPTransport()  # mutant\n",
+        _WW_TEST,
+        "test_the_command_line_verifies_from_the_cache_on_the_cache_only_transport",
     ),
     (
         "bcases web: a forged witness on an archive is weighed",

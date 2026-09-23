@@ -19,6 +19,7 @@ gitignored cache read `BCASES_CACHE` (default: the checkout's own `output/remedi
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -772,6 +773,125 @@ def test_web_verify_writes_one_row_per_candidate(tmp_path: Path) -> None:
         "reason",
         "witness",
     }
+
+
+REFUSED = "https://refusing.example/tintal"
+
+
+def _online_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, list[dict[str, Any]]]:
+    """A web-verify run on the real fetcher: one page served, one refused (403), one malformed."""
+    out = _out(tmp_path, [_candidate(), _candidate(url=REFUSED), "junk"])
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == REFUSED:
+            return httpx.Response(403)
+        return httpx.Response(200, headers={"content-type": "text/html"}, text=PAGE)
+
+    net, _ = _fetcher(tmp_path, serve, monkeypatch)
+    with net:
+        W.web_verify(net, out)
+    return out, inputs.read_jsonl(out / "coords3" / "WEB_WITNESSES.jsonl")
+
+
+def _cache_only(tmp_path: Path) -> census_fetch.Fetcher:
+    return W.open_fetcher(tmp_path / "web", W.CacheOnly())
+
+
+def test_web_verify_from_the_cache_proves_every_candidate_again_and_asks_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The rules changed after the run (the precision, the type words): `--from-cache` proves each
+    candidate again from the pages the run cached. The network is never asked; a page the run was
+    refused has no cached copy, so its row is the refusal the run recorded - once the checks before
+    the request still pass."""
+    out, first = _online_run(tmp_path, monkeypatch)
+    assert [_code(r) for r in first] == ["accepted", "http", "malformed"]
+    with _cache_only(tmp_path) as net:
+        counts = W.web_verify(net, out, from_cache=True)
+    again = inputs.read_jsonl(out / "coords3" / "WEB_WITNESSES.jsonl")
+    assert again == first
+    assert counts["outcome"] == {"accepted": 1, "http": 1, "malformed": 1}
+    # a rule that now refuses the refused page's host before the request is its row
+    moved = f"https://web.archive.org/web/2020/{REFUSED}"
+    research = [_research_line(candidates=[_candidate(), _candidate(url=moved), "junk"])]
+    _jsonl(out / "coords3" / "RESEARCH.jsonl", research)
+    _jsonl(
+        out / "coords3" / "WEB_WITNESSES.jsonl", [first[0], {**first[1], "url": moved}, first[2]]
+    )
+    with _cache_only(tmp_path) as net:
+        W.web_verify(net, out, from_cache=True)
+    rows = inputs.read_jsonl(out / "coords3" / "WEB_WITNESSES.jsonl")
+    assert [_code(r) for r in rows] == ["accepted", "copy-host", "malformed"]
+
+
+def test_web_verify_from_the_cache_refuses_a_page_it_does_not_hold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page the run read that is not in the cache would turn into an `http` rejection nobody saw:
+    an error instead. A refusal that does not replay to the row the run wrote (a 404 is answered,
+    not raised) is one too: the file would no longer be one run's."""
+    out, first = _online_run(tmp_path, monkeypatch)
+    shutil.rmtree(tmp_path / "web" / "page")
+    with (
+        _cache_only(tmp_path) as net,
+        pytest.raises(inputs.InputError, match="not in the page cache"),
+    ):
+        W.web_verify(net, out, from_cache=True)
+    out, first = _online_run(tmp_path / "again", monkeypatch)
+    _jsonl(
+        out / "coords3" / "WEB_WITNESSES.jsonl",
+        [
+            first[0],
+            {**first[1], "final_url": REFUSED, "reason": f"http: {REFUSED}: HTTP 404"},
+            first[2],
+        ],
+    )
+    with (
+        _cache_only(tmp_path / "again") as net,
+        pytest.raises(inputs.InputError, match="does not replay"),
+    ):
+        W.web_verify(net, out, from_cache=True)
+
+
+def test_the_cache_only_transport_sends_nothing() -> None:
+    with pytest.raises(W.NotInCache, match="is not in the page cache"):
+        W.CacheOnly().handle_request(httpx.Request("GET", URL))
+
+
+def test_the_command_line_verifies_from_the_cache_on_the_cache_only_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[tuple[Path, type]] = []
+    asked: list[bool] = []
+
+    def open_fetcher(root: Path, inner: httpx.BaseTransport) -> Any:
+        opened.append((root, type(inner)))
+        return contextlib.nullcontext(ScriptedNet({}))
+
+    def web_verify(net: Any, out: Path, *, from_cache: bool = False) -> dict[str, Any]:
+        asked.append(from_cache)
+        return {}
+
+    monkeypatch.setattr(W, "open_fetcher", open_fetcher)
+    monkeypatch.setattr(W, "web_verify", web_verify)
+    base = ["web-verify", "--out", str(tmp_path), "--cache", str(tmp_path / "cache")]
+    assert RUN.main([*base, "--from-cache"]) == 0
+    assert RUN.main(base) == 0
+    web = tmp_path / "cache" / "web"
+    assert opened == [(web, W.CacheOnly), (web, httpx.HTTPTransport)]
+    assert asked == [True, False]
+
+
+def test_from_cache_belongs_to_web_verify_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for command in ("classify", "reweigh", "plan"):
+        with pytest.raises(SystemExit) as stopped:
+            RUN.main([command, "--from-cache", "--out", str(tmp_path)])
+        assert stopped.value.code == 2, command
+        assert "--from-cache belongs to web-verify" in capsys.readouterr().err, command
 
 
 # ── the classifier's third kind ───────────────────────────────────────────────────────────────
