@@ -33,7 +33,11 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   all; on 2026-09-23 all 108 checks answered "present" on production (read-only). Lyra is still
   ONE transaction — the checks run inside it. New boot DDL goes through `ensure()`; a bare
   `conn.execute(text("ALTER …"))` fails `tests/pipeline/test_boot_ddl.py` (second boot must
-  be DDL-free). *(2026-09-23)*
+  be DDL-free). The `ADD CONSTRAINT` duplicate handlers now run only when two booters race, so
+  no ordinary boot exercises them; the same test file drives that race for every constraint of
+  both paths. Moving code out of `api/main.py` and `_run_migrations` broke 22 line-number
+  citations in code and docs, two of them printed in refusal texts at run time: cite code as
+  `file.py::function`. *(2026-09-23)*
 - **LLM-SDK-Versionen deckeln** (z. B. `anthropic<1.0.0`). Ungepinnte Deploys ziehen Majors
   und brechen alle MiniMax-Aufrufe. *(`reference-deployment-lessons`, 2026-08-25)*
 - **Nie `… | tail` hinter `gh run watch --exit-status` oder `ruff check`** — die Pipe

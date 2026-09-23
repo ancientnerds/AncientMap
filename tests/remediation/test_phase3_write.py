@@ -28,6 +28,7 @@ seam this module has is a fake psql, which remembers what it was sent.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
@@ -520,7 +521,7 @@ def test_the_two_report_only_reasons_stay_apart(tmp_path: Path) -> None:
         )
     )
     detail = {refusal.field: refusal.detail for refusal in plan.refused_fields(W.RULE_REPORT_ONLY)}
-    assert "api/main.py:506" in detail["card_description"]
+    assert "api/main.py::lifespan" in detail["card_description"]
     assert "Phase 5" in detail["description"]
     assert detail["description"] != detail["card_description"]
 
@@ -531,6 +532,53 @@ def test_a_site_type_the_normaliser_would_rewrite_is_refused(tmp_path: Path) -> 
     assert plan.rows == []
     refusal = plan.refused_fields(W.RULE_FIXED_POINT)[0]
     assert refusal.field == "site_type" and "normalize_site_type" in refusal.detail
+
+
+def _function(path: Path, name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    """The module-level function `name` of `path`, read from the source."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == name
+    ]
+    assert len(found) == 1, f"{path.relative_to(REPO)} has no module-level function {name}"
+    return found[0]
+
+
+def _names_used_by(path: Path, name: str) -> set[str]:
+    """What the function calls by name, and what it imports as `module.name`."""
+    used: set[str] = set()
+    for node in ast.walk(_function(path, name)):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            used.add(node.func.id)
+        elif isinstance(node, ast.ImportFrom):
+            used.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return used
+
+
+def test_the_boot_producers_the_refusals_name_are_where_the_refusals_say(tmp_path: Path) -> None:
+    """A refusal names the code that would revert the write, and that code is read here.
+
+    Both refusal texts cited line numbers until 2026-09-23 (`api/main.py:506`,
+    `pipeline/lyra/orchestrator.py:1476-1488`). The boot-DDL extraction moved both files, and the
+    refusals then pointed at unrelated code. No test noticed. They name functions now, and this test
+    checks that those functions still do what the refusal says.
+    """
+    card = W.REPORT_ONLY_REASON["card_description"]
+    assert (
+        "`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`"
+        in card
+    )
+    assert "import_card_descriptions" in _names_used_by(REPO / "api" / "main.py", "lifespan")
+    _function(REPO / "api" / "services" / "card_descriptions.py", "import_card_descriptions")
+
+    plan = _plan(tmp_path, field="site_type", proposed="settlement")
+    refusal = plan.refused_fields(W.RULE_FIXED_POINT)[0]
+    assert "`pipeline/lyra/orchestrator.py::_run_migrations`" in refusal.detail
+    assert "pipeline.normalizers.site_type.normalize_site_type" in _names_used_by(
+        REPO / "pipeline" / "lyra" / "orchestrator.py", "_run_migrations"
+    )
 
 
 def test_a_site_type_that_is_a_fixed_point_is_planned(tmp_path: Path) -> None:

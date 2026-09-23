@@ -3020,6 +3020,11 @@ BD_VARCHAR = "test_api_sets_grant_period_to_varchar_10_only_while_it_is_not"
 BD_CARD_STATS = "test_lyra_leaves_card_stats_alone_when_the_table_does_not_exist"
 BD_ONE_TX = "test_lyra_migrations_stay_one_transaction_committed_at_the_end"
 BD_API_TX = "test_each_api_step_checks_and_alters_in_its_own_transaction_under_the_lock_timeout"
+BD_LYRA_RACE = "test_a_lyra_constraint_another_booter_added_first_leaves_the_batch_intact"
+BD_API_RACE = "test_an_api_constraint_another_booter_added_first_does_not_abort_the_boot"
+BD_FK_REWRITE = "test_the_fk_policy_rewrite_runs_only_while_a_cascade_fk_remains"
+BD_FK_ONE_QUERY = "test_the_fk_policy_check_and_its_rewrite_loop_are_one_query"
+W_PRODUCERS_CITED = "test_the_boot_producers_the_refusals_name_are_where_the_refusals_say"
 BOOT_DDL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "boot-ddl: ensure() runs the statement without asking the catalog",
@@ -3100,6 +3105,92 @@ BOOT_DDL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "                conn.execute(text(\"SET LOCAL statement_timeout = '30s'\"))\n",
         BOOT_DDL_TEST,
         BD_API_TX,
+    ),
+    # Review of 2026-09-23. A duplicate handler now runs only when two booters both read
+    # "missing", so no ordinary boot exercises it any more; the FK-policy check must read the query
+    # its loop reads; and the refusal texts that cited moved lines name functions now.
+    (
+        "boot-ddl: the emitted ADD CONSTRAINT handler loses duplicate_table",
+        BOOT_DDL,
+        "            f\"EXCEPTION WHEN {' OR '.join(duplicate)} THEN NULL;\\n\"\n",
+        '            "EXCEPTION WHEN duplicate_object THEN NULL;\\n"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_RACE,
+    ),
+    (
+        "boot-ddl: a Lyra UNIQUE constraint's handler names duplicate_object",
+        LYRA_ORCHESTRATOR,
+        '                "UNIQUE (site_id, name_normalized)",\n'
+        '                duplicate=("duplicate_table",),\n',
+        '                "UNIQUE (site_id, name_normalized)",\n'
+        '                duplicate=("duplicate_object",),  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_LYRA_RACE,
+    ),
+    (
+        "boot-ddl: the API's CHECK constraint handler names duplicate_table",
+        API_BOOT_SCHEMA,
+        '        "CHECK (credits >= 0)",\n        duplicate=("duplicate_object",),\n',
+        '        "CHECK (credits >= 0)",\n        duplicate=("duplicate_table",),  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_RACE,
+    ),
+    (
+        "boot-ddl: the API's UNIQUE constraint handler loses duplicate_table",
+        API_BOOT_SCHEMA,
+        '        duplicate=("duplicate_object", "duplicate_table"),\n',
+        '        duplicate=("duplicate_object",),  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_RACE,
+    ),
+    (
+        "boot-ddl: the FK-policy check drops the exemptions its loop keeps",
+        API_BOOT_SCHEMA,
+        '    satisfied_sql="SELECT NOT EXISTS (" + _CASCADE_FKS_ONTO_SITES + ")",\n',
+        '    satisfied_sql="SELECT NOT EXISTS ("\n'
+        '    + _CASCADE_FKS_ONTO_SITES.split("AND tc.table_name NOT IN")[0]\n'
+        '    + ")",  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_QUIET,
+    ),
+    (
+        "boot-ddl: the FK-policy loop rewrites the site-owned CASCADE FKs too",
+        API_BOOT_SCHEMA,
+        '        "    FOR r IN " + _CASCADE_FKS_ONTO_SITES + "\\n"\n',
+        '        "    FOR r IN " + _CASCADE_FKS_ONTO_SITES.split("AND tc.table_name NOT IN")[0]'
+        ' + "\\n"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_FK_REWRITE,
+    ),
+    (
+        "boot-ddl: the FK-policy check exempts a table its loop rewrites",
+        API_BOOT_SCHEMA,
+        '    satisfied_sql="SELECT NOT EXISTS (" + _CASCADE_FKS_ONTO_SITES + ")",\n',
+        '    satisfied_sql="SELECT NOT EXISTS ("\n'
+        '    + _CASCADE_FKS_ONTO_SITES.replace("NOT IN (", "NOT IN (\'site_likes\', ")\n'
+        '    + ")",  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_FK_ONE_QUERY,
+    ),
+    (
+        "boot-ddl: the card_description refusal cites a line number again",
+        WRITE_STAGE,
+        '        "(`api/main.py::lifespan` -> '
+        '`api/services/card_descriptions.py::import_card_descriptions`, "\n',
+        '        "(`api/main.py:365` -> '
+        '`api/services/card_descriptions.py::import_card_descriptions`, "  # mutant\n',
+        WRITE_TEST,
+        W_PRODUCERS_CITED,
+    ),
+    (
+        "boot-ddl: the site_type refusal cites a line number again",
+        WRITE_STAGE,
+        '            "container start (`pipeline/lyra/orchestrator.py::_run_migrations`), '
+        'so the write would "\n',
+        '            "container start (`pipeline/lyra/orchestrator.py:1457-1469`), '
+        'so the write would "  # mutant\n',
+        WRITE_TEST,
+        W_PRODUCERS_CITED,
     ),
 ]
 MUTATIONS += GAP_MUTATIONS

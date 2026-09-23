@@ -60,7 +60,7 @@ What this check refuses to do:
 Provenance of the proposal guard. T04 can prove durability because
 `pipeline/lyra/orchestrator.py` rewrites `site_type` on every container boot. `country`
 has no such rewriter: the boot-time patch `pipeline/lyra/data_patches.py:46-62` (called
-from `orchestrator.py:1061-1064`) sets `country` only where it `IS NULL` and
+from `orchestrator.py::_run_migrations`) sets `country` only where it `IS NULL` and
 `source_id = 'lyra'`, so it can never revert a value this check repairs. The guard here is
 therefore the weaker but still real one: a proposed value must (a) be a key of
 `COUNTRY_CODES`, (b) resolve to an ISO-3166 alpha-2 code through `normalize_country()`,
