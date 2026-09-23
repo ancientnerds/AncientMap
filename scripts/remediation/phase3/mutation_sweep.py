@@ -9303,6 +9303,22 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_the_driver_re_queues_when_live_and_prepares_from_the_re_queue",
     ),
     (
+        "p4 mass4: a second re-queue wave rewrites the first",
+        P4B_MASS4,
+        '    B.write_text_atomic(path, before + "".join(line.to_json() + "\\n" for line in new))\n',
+        '    B.write_text_atomic(path, "".join(line.to_json() + "\\n" for line in new))  # mutant\n',
+        P4B_RUNNER_TEST,
+        "test_a_second_re_queue_wave_is_appended_after_the_first",
+    ),
+    (
+        "p4 mass4: a second re-queue wave is numbered after the plan only",
+        P4B_MASS4,
+        "    new = requeue_lines([*planned, *requeued], deferred, now=now)\n",
+        "    new = requeue_lines(planned, deferred, now=now)  # mutant\n",
+        P4B_RUNNER_TEST,
+        "test_a_second_re_queue_wave_is_appended_after_the_first",
+    ),
+    (
         "p4 mass4: a re-queued batch is prepared from the plan",
         P4B_MASS4,
         "            plan = self.run_dir / REQUEUE_FILE if batch_id in self.requeued else self.plan\n",

@@ -543,6 +543,35 @@ def test_the_driver_re_queues_when_live_and_prepares_from_the_re_queue(
     assert len(M4.read_requeue(run_dir, M4.read_plan4_lines(plan))) == 1
 
 
+def test_a_second_re_queue_wave_is_appended_after_the_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The first live drive re-queues site-1 into p4-0003 while site-2 still waits; p4-0003's run
+    holds site-1 too fresh again, so the second live drive re-queues it once more. The new batch is
+    p4-0004 - numbered after the first re-queue, not after the plan only (p4-0003 twice would give
+    run_mass two batches of one id) - and REQUEUE4 keeps p4-0003's line, whose batch directory
+    exists."""
+    plan, run_dir = _deferring_run(tmp_path, ("2020-01-01T08:00:00Z", "2999-01-01T08:00:00Z"))
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(MR, "run_mass", lambda **kw: seen.update(kw) or 0)
+    assert M4.drive(_args(tmp_path, plan, "--live")) == 0
+    assert "1 site(s) ready re-queued now, 1 waiting" in capsys.readouterr().out
+    assert [b.batch_id for b in seen["batches"]] == ["p4-0001", "p4-0002", "p4-0003"]
+    requeue = str(run_dir / M4.REQUEUE_FILE)
+    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0003", "--plan", requeue])
+    B.append_holds(run_dir / "p4-0003", [_fresh_hold("site-1", "2020-01-05T08:00:00Z")])
+    assert M4.drive(_args(tmp_path, plan, "--live")) == 0
+    lines = M4.read_requeue(run_dir, M4.read_plan4_lines(plan))
+    assert [(line.batch_id, [s.site_id for s in line.sites]) for line in lines] == [
+        ("p4-0003", ["site-1"]),
+        ("p4-0004", ["site-1"]),
+    ]
+    assert [b.batch_id for b in seen["batches"]] == ["p4-0001", "p4-0002", "p4-0003", "p4-0004"]
+    assert seen["runner"].argv("prepare", "p4-0004")[-2:] == ["--plan", requeue]
+    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0004", "--plan", requeue])
+    assert B.read_batch(run_dir / "p4-0004")[1] == [X.plan_site("site-1")]
+
+
 # ----------------------------------------------------------------------------------- mass4
 
 
