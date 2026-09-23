@@ -1,6 +1,6 @@
 # Journal reversal - plan (journal-reversal-1)
 
-Built 2026-09-23T04:15:52+00:00 by `scripts/remediation/mechanical/reversal.py`. Lane `journal-reversal-1`: run stamp `2026-09-23_mechanical-journal-reversal-1`, journal test id `P6/journal-reversal`, change keys `journal-reversal-1:<site_id>:<column>`.
+Built 2026-09-23T10:53:52+00:00 by `scripts/remediation/mechanical/reversal.py`. Lane `journal-reversal-1`: run stamp `2026-09-23_mechanical-journal-reversal-1`, journal test id `P6/journal-reversal`, change keys `journal-reversal-1:<site_id>:<column>`.
 
 **3 cell(s) will be written, 0 refused.** Each restores the value a journal row replaced, conditioned on the live value being the value that row wrote, and on that row being the last write of its cell (guard 6).
 
@@ -41,4 +41,4 @@ Site `94776f9f-ea10-4b05-87bd-fd30c2cbdf6f`, journal row 28638.
 
 ## After the apply
 
-The phase-3 acceptance reads these cells as superseded once it is told the stamp: `verify_writes.py --allow-stamp 2026-09-23_mechanical-journal-reversal-1` (with the UK lane's stamp as before). Re-plan the card_stats recompute afterwards: `civilization` and `antiquity` derive from these cells.
+The phase-3 acceptance reads these cells as superseded once it is told the stamp: `verify_writes.py --allow-stamp 2026-09-23_mechanical-journal-reversal-1`, with the stamps of the lanes applied before it. Re-plan the scope lane and the card_stats recompute afterwards: the scope premise and the cards derive from these columns.
