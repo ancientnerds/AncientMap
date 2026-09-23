@@ -6120,3 +6120,136 @@ Thasos-Artemis queries.
   3 files; the older `bcases` and repair entries re-run after the change: **92/92 caught**. The
   worktree has no `.venv` of its own, so the sweep ran through a wrapper that points its `PY` at the
   main checkout's interpreter (no junction).
+
+
+## 2026-09-23 - the sitelink lane: plan, sealed pilot, dry fetch (no model call, nothing written)
+
+**Why.** The mass run's finder answered `UNVERIFIABLE` on 7,761 fields; every one already had the
+English article (6,019 also the Wikidata entity) as evidence, so asking again on the same evidence
+buys the same answer. Of the 4,342 writable ones (`period_start` 3,028, `site_type` 887, `country`
+427), 2,709 belong to sites whose item has a non-English Wikipedia article. The lane asks them again
+with up to three of those articles. Zero MiniMax: finder and reviewer are the mass run's, the discover
+prompt stays at round 5's wording (`discover_stage.py`/`model_stage.py` untouched).
+
+**Production contacts, all reads:** two read-only exports through `lanes.psql` (the pilot's 26 sites,
+`exported_at` 2026-09-23T11:01:49Z; the lane's 3,124 sites, 11:05:17Z - both byte-identical to the
+first builds of 10:32 and 08:32), Wikidata `wbgetentities` and the Wikipedias' `query` API with the
+project User-Agent at one request per second per host, and one dry fetch of the pilot's evidence into
+its own scratch ledger. **No model call, no row in `phase3_runner/LEDGER.jsonl`, nothing written.**
+
+### The route (`fetch_stage.py`, `wiki_sitelinks` on a record)
+
+Each article is pinned to a revision when the plan is built; the target shows and is cited by its
+permalink (`wikipedia_permalink`, moved here from `phase4/sources_stage.py`, which re-exports it) and
+asks the extracts API (`wikipedia_article_url`: plain text, `formatversion=2`, the extract listed
+last, no `redirects`). An answer that is not the pinned revision of the item's own article (edited
+since, missing, normalised to another title, a redirect, a disambiguation page, another item's) is
+refused and recorded as that target's failure, never stored; one cut at the page cap is stored as far
+as it was read with `TRUNCATION_MARKER`. English (`enwiki`, `simplewiki`) and the bot-generated wikis
+(`cebwiki`, `warwiki`, `arzwiki`, each with an en.wikipedia oldid citation) are refused in the record
+itself; a sitelink badged `Q70893996`/`Q70894304` is refused by the plan, a sitelink list without
+`badges` stops it. At most three per site, in a fixed order: the stored country's own language(s)
+(`COUNTRY_WIKIS`; all 3,124 lane sites' countries are covered), then `FIXED_ORDER`, then the rest by
+site id; every sitelink not taken is recorded with its rule (`wiki_sitelinks_skipped`).
+
+### Found and fixed while finishing the interrupted builder's work
+
+1. **A request without a ledger line** (review finding, confirmed): `one_attempt` read a sitelink
+   answer before writing the attempt's line, and reading raises on an unreadable 2xx (MediaWiki sends
+   `{"error": ...}` with HTTP 200). The line now goes down first, recorded as an answered attempt
+   that was not given up, and the contract break propagates - as for a rendered feature whose answer
+   `stored_body` cannot read. Red first: the new test found no ledger file.
+2. **Articles dropped without a word:** the articles ride on the `enwiki` slot; a record none of whose
+   findings reached it would have bought none of them, and the transport count reads the same
+   targets. `targets_for_site` now refuses such a record.
+3. **Two answer shapes crashed with `AttributeError`** instead of the stage's `EvidenceUnrenderable`:
+   a `query` that is no object, and `pageprops` that is no object.
+4. **Wave 3 of the external-id repair** (applied for its two replacements) was not read, and read
+   naively it would have been wrong: `gap_plan.withheld_reason` took every kept link for "mis-resolved,
+   replaced with None", and `shared_counts` stopped counting a kept link toward a shared item - Cave 20
+   of the Pandavleni Caves would have looked like the sole carrier of the whole complex's item. The
+   item rule now names each wave-3 rule: `keep-type` withheld (the item is the monument type, its
+   articles describe the type), `duplicate-candidate` withheld (the owner's merge first), `link-right`
+   given - and that verdict answers the owner-case classifier's suspicion of the link (in this lane
+   it gives Psychro Cave its item and three articles; the Temple of Artemis-Selçuk stays withheld
+   as shared, and the other three link-right sites have no open question). A kept link production
+   no longer carries, and a repair rule the plan does not know, stop the build; the reasons name
+   each wave's `PLAN.md`.
+5. **B10 was only half excluded:** the hand-decided countries came from `bcases/b2.jsonl`, i.e. the
+   T02 findings; six of the 29 geopolitical census rows B10 left as they are are no T02 finding, and
+   three of them had an open `country` question: Kourion Ancient Amphitheatre, Nebi Samuel National
+   Park, the Sanctuary of Apollo Hylates. The plan now reads `logs/_country_mismatches.txt` with the
+   classifier's own rule (`bcases.classify.political_line`, extracted from `classify_b2` unchanged)
+   and stops on a list that does not read to 29 rows.
+6. **`logs/search_lane/written_keys.txt`**, which the assignment names, was not read (the fresh
+   journal stood in for it, untested). It is now a check on the fresh export: every key it names for a
+   site of the export must have its journal row there, or the export is partial and stops the build.
+7. **A resolution recorded under other inputs:** `plan` re-derives each site's item, withholding,
+   stored country and evidence room and refuses a `sitelinks.json` that differs. It caught the pilot's
+   own file at once: Amyntas Rock Tombs, withheld before as "shared", is now withheld as wave 3's
+   duplicate candidate - same decision, other reason; `sitelinks --pilot` was run again.
+8. `lanes.PHASE3_BATCH_PREFIX` carries `"sitelink": "slk"`, so the unmerged phase-4 writer branch,
+   which splits `BATCH_PREFIX` into that table and its own lanes, keeps the lane's stamp family.
+
+### The lane (`sitelink_plan.py`, `sitelink/lane/summary.json`; built, run only after the pilot)
+
+| step | result |
+| --- | --- |
+| census | 4,342 questions over 3,124 sites (period_start 3,028, site_type 887, country 427) |
+| not open | 34: duplicate 16 (period_start 11, site_type 5), hand-country (b2) 14, political line (B10) 3, written 1 (`2026-09-21_mechanical-country`) |
+| item | (`sitelinks`, 7.5 minutes of read-only lookups, none that stopped the build) 3,109 sites with an open question; 2,579 with a usable item; 530 withheld - no item 361, shared 73, unresolved in the repair 50, suspect link 32, duplicate candidate 11, type 3 |
+| articles | 2,040 sites given at least one (3: 1,306, 2: 299, 1: 435); 4,951 articles, dewiki 1,001, eswiki 947, frwiki 682, itwiki 350, then 97 other wikis; not taken: cap 10,341, English 2,097, bot-generated 692, room 587, redirect badge 30 |
+| plan | `PLAN.sitelink.jsonl`, 136 batches `slk-0001`..`slk-0136`, 2,040 sites, **2,399 fields** (period_start 1,970, site_type 389, country 40), sha256 `3dfd1d5e7f487ae245eae90bdc1e30be6a9f01e1cc01ba6c94483a8283ba9a12` |
+| no article | 1,909 fields: item withheld 1,303, no usable article 606 |
+
+**Country by geometry (spec item 3, report only):** of the 427 `country` fields, **412 are verified
+by the stored point** - T02 of the 2026-09-20 census found the point inside the stored country and
+neither the country nor the point has changed since; 14 are T02 findings, 1 passed T02 but changed
+since. All 40 country fields in the plan are among the 412.
+
+### The pilot (`--pilot`): sealed before any model call
+
+`phase3_runner/SITELINK_PILOT.md` (commit 2fe862b, sha256 of the committed text
+`47f9adc4bb9e9f99da08d05672059ba0fa1f2c0e5816fe9a1e8faa9d8558dac6`) fixes the four thresholds of
+`SEARCH_PILOT.md` word for word - threshold 4 counted over the lane's articles (`score_search_pilot.py
+--lane sitelink`, the search scorer generalised: its search output is unchanged) - on the plan
+`PLAN.sitelink-gold.jsonl`, sha256 `593501abbfc21ec6e3e9cc6f09dc9a968ac5f1bdc9f0b7e194165a1d7851b522`:
+19 gold-standard sites, 41 of the 59 UNVERIFIABLE fields (period_start 16, description 10,
+card_description 9, site_type 5, country 1; human verdicts CORRECT 25, WRONG 10, UNVERIFIABLE 6),
+2 batches, 52 articles. The other 18 fields: 12 at 4 sites without a usable item, 6 at 3 sites
+without a usable article. The mass driver's dry run projects 41 calls, $0.034.
+
+**Dry fetch** (`runs/sitelink-gold-dry2`, scratch ledger `logs/sitelink_scratch/LEDGER.dry2.jsonl`):
+191 requests, all answered 200; 52 of 52 articles stored, 0 cut, 0 refused; all 19 sites under the
+64,000-character bound (largest 29,925); stored/estimate at most 0.806; 0 articles unaccounted for.
+The builder's first dry fetch at 10:33 (`runs/sitelink-gold-dry`, 192 requests: one Wikidata `wbgetclaims`
+answered 429 and was asked again) had the same outcome.
+
+### Tests and proofs
+
+* `tests/remediation/test_phase3_fetch_sitelinks.py` (31 tests, 59 with parameters) and
+  `tests/remediation/test_sitelink_plan.py` (50), plus 4 in `test_gap_plan.py` and 1 in
+  `test_remediation_tools.py`; no test reads production, Pi or the network. Every fix above was red
+  before it.
+* `mutation_sweep.SITELINK_MUTATIONS`, 140 `"sitelink: "` entries, registered once. First run
+  139/140: the missed one dropped the list reader's language check, which the test only reached
+  through `targets_for_site`, whose permalink refuses a bad subdomain later; the test now asks the
+  reader first (1/1). The final run, through the sweep's own `main` with the main venv's
+  interpreter, took every entry anchored in a file this branch changed - the 140 `sitelink: `
+  entries and the 123 older ones on `fetch_stage.py`, `phase4/sources_stage.py`,
+  `bcases/classify.py`, `gap_plan.py`, `lanes.py` and `score_search_pilot.py`: **263/263
+  caught**, the tree byte-identical to the sweep's start for 7 files
+  (`logs/sitelink_scratch/sweep_final.txt`).
+* Gate suite from the worktree: 4,277 passed, 108 skipped (the snapshot and Natural Earth caches are
+  not in a worktree), 57 deselected; ruff, `ruff format --check` on the touched files, lint-imports
+  and vulture clean.
+
+### Open
+
+* The pilot's run (41 finder calls, their reviews, the score) is the orchestrator's, by
+  `SITELINK_PILOT.md`'s commands; the lane runs only after the pilot passes.
+* The lane's plan and summary are git-ignored (`output/remediation/sitelink/`,
+  `phase3_runner/PLAN.sitelink.jsonl`), like every plan; they are rebuilt by the README's commands
+  and must be, if the pilot passes later than the pins hold.
+* Merging `wip/p4-write` onto this: `lanes.py` conflicts textually; keep `"sitelink": "slk"` in
+  `PHASE3_BATCH_PREFIX`.
