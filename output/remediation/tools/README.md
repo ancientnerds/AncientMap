@@ -117,3 +117,95 @@ $PY $T/score_search_pilot.py --lane sitelink
 `plan` refuses a `sitelinks.json` resolved under other inputs than today's (another item, withholding,
 stored country or evidence room): run `sitelinks` again. The mutation proof is
 `scripts/remediation/phase3/mutation_sweep.py "sitelink: "`.
+
+## The sitelink lane's runbook (Opus handoff, 2026-09-23)
+
+Every model judgement is answered by Opus agents through the handoff (owner order 2026-09-23, no
+DeepSeek any more; `scripts/remediation/opus_handoff.py`): a driver's export writes each question's
+exact prompt, the agents answer, `validate` checks every answer, the driver's import reads them.
+Nothing else buys a model call. The pilot first; the lane only when `score_search_pilot.py --lane
+sitelink` exits 0 - all four thresholds of `phase3_runner/SITELINK_PILOT.md` hold - and that result
+is recorded. One ledger for everything (`phase3_runner/LEDGER.jsonl`). A handoff directory is one
+round: it is answered only after its export's progress (`progress.export.json`) shows
+`"stopped": null` and `"failed": {}`, and an exported question is never replaced - if the evidence
+has to change after an export (a target the fetch recorded as failed in `fetch.json`, fetched again
+with `run.py fetch --live`), remove the handoff directory before any answer exists and export again.
+The pilot's import writes `logs/sitelink_gold/progress.json`, which the scorer reads for threshold 4.
+`test_sitelink_plan.py` parses these commands with the drivers' own parsers.
+
+It runs on gitignored state: the plans (`sitelink/pilot/`, `phase3_runner/PLAN.sitelink.jsonl`),
+the census snapshot (`snapshot/`: the judge reads its `site_type` list), the run directories and the
+handoff directories.
+
+```bash
+cd /c/PythonProjects/AncientMap && export PYTHONIOENCODING=utf-8
+PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; T=$M/tools
+P3=scripts/remediation/phase3; OH=scripts/remediation/opus_handoff.py; L=$M/phase3_runner/LEDGER.jsonl
+
+# == the pilot: the sealed plan, batches slkg-0001 and slkg-0002, 39 finder questions
+P=$M/sitelink/pilot/PLAN.sitelink-gold.jsonl; R=$M/phase3_runner/runs/sitelink-gold
+G=$M/logs/sitelink_gold; HF=$M/handoff/sitelink-gold-finder; HR=$M/handoff/sitelink-gold-reviewer
+# 1. plan: the sealed one, never rebuilt for the pilot
+sha256sum $P    # d8a78e58f02255570bd6a7c94dd42b0a04fdbddadca440b9bc12e39dabc28b81, or it does not apply
+# 2. fetch and 3. finder export: prepare, fetch, then the judge writes its prompts to $HF (no model)
+$PY $P3/mass_run.py --live --jobs 2 --plan $P --run-dir $R --ledger $L --log-dir $G \
+    --progress $G/progress.export.json --handoff-export $HF
+# 4. Opus answers: for each line of $HF/*/MANIFEST.jsonl whose answer_path does not exist, an agent
+#    reads $HF/<prompt_path>, writes its answer text (the shape the question asks for) to a file, and
+$PY $OH answer --dir $HF --batch-id <batch_id> --stage finder --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+# 5. validate: exit 0 only when every question is answered, in shape, by Opus, for its exact prompt
+$PY $OH validate --dir $HF
+# 6. finder import: the judge on the answers - ledger line first, answers/, model.json
+$PY $P3/mass_run.py --live --jobs 2 --plan $P --run-dir $R --ledger $L --log-dir $G \
+    --handoff-import $HF
+# 7. reviewer export (it asks about the finder's answers)
+$PY $T/review_all.py --lane sitelink --run-dir $R --ledger $L --log-dir $M/logs/review_sitelink_gold \
+    --handoff-export $HR
+# 8. Opus answers, as in 4
+$PY $OH answer --dir $HR --batch-id <batch_id> --stage reviewer --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+# 9. validate
+$PY $OH validate --dir $HR
+# 10. reviewer import: each batch's review.json
+$PY $T/review_all.py --lane sitelink --run-dir $R --ledger $L --log-dir $M/logs/review_sitelink_gold \
+    --handoff-import $HR
+# 11. score: exit 0 only when all four sealed thresholds hold; it reads $R and $G/progress.json
+$PY $T/score_search_pilot.py --lane sitelink
+
+# == the lane: only after step 11 passed and its result is recorded (SITELINK_PILOT.md, AUDIT_LOG.md)
+# 12. plan, rebuilt then: the pins age, and `plan` refuses a sitelinks.json resolved under other inputs
+IN="--mass-run $M/phase3_runner/runs/mass --data $M --rows $M/logs/_write_dry/ALL_ROWS.jsonl \
+    --written-keys $M/logs/search_lane/written_keys.txt --country-census $M/logs/_country_mismatches.txt"
+$PY $T/sitelink_plan.py census --mass-run $M/phase3_runner/runs/mass
+$PY $T/sitelink_plan.py export
+$PY $T/sitelink_plan.py sitelinks $IN
+$PY $T/sitelink_plan.py plan $IN
+PL=$M/phase3_runner/PLAN.sitelink.jsonl; RL=$M/phase3_runner/runs/sitelink; GL=$M/logs/sitelink_mass
+HLF=$M/handoff/sitelink-finder; HLR=$M/handoff/sitelink-reviewer
+# 13.-16. the finder's round, as 2-6
+$PY $P3/mass_run.py --live --jobs 4 --plan $PL --run-dir $RL --ledger $L --log-dir $GL \
+    --progress $GL/progress.export.json --handoff-export $HLF
+$PY $OH answer --dir $HLF --batch-id <batch_id> --stage finder --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $HLF
+$PY $P3/mass_run.py --live --jobs 4 --plan $PL --run-dir $RL --ledger $L --log-dir $GL \
+    --handoff-import $HLF
+# 17.-20. the reviewer's round, as 7-10, on the lane's own run (runs/sitelink, logs/review_sitelink)
+$PY $T/review_all.py --lane sitelink --ledger $L --handoff-export $HLR
+$PY $OH answer --dir $HLR --batch-id <batch_id> --stage reviewer --label <label> \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $HLR
+$PY $T/review_all.py --lane sitelink --ledger $L --handoff-import $HLR
+# 21. the write plan, no database: logs/_write_dry_sitelink/ALL_ROWS.jsonl
+$PY $T/write_dry_all.py --lane sitelink
+# 22. write_gate dry ("dry run, nothing is written"): read its refusals, holds and rows before 23
+$PY $T/write_gate.py --lane sitelink --step 100
+# 23. apply: production, 100-site steps, each read back; a short write or a deviation stops the wave
+$PY $T/write_gate.py --lane sitelink --apply --step 100
+# 24. the independent acceptance: RESULT: 0 deviation(s)
+$PY $T/verify_writes.py --lane sitelink
+```
+
+Once the lane is written and accepted, its plan is pinned like the mass lane's
+(`lanes.REVIEWED_PLAN_KEYS_SHA256`, "A lane that has written keeps its plan" above).

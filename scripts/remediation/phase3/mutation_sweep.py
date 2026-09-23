@@ -14363,6 +14363,10 @@ _SL_GEOMETRY = "test_a_country_is_verified_by_geometry_only_on_a_t02_pass_nobody
 _SL_STALE = "test_a_resolution_made_under_other_inputs_is_named_stale"
 _SL_WAVE3 = "test_wave_three_withholds_a_type_link_and_a_duplicate_and_keeps_a_right_link"
 _SL_SEALED = "test_the_sitelink_pilot_keeps_its_sealed_text_and_names_opus_only_below_it"
+_SL_README = TOOLS + "README.md"
+_SL_RUNBOOK = (
+    "test_the_runbook_runs_every_model_stage_as_one_handoff_round_with_the_drivers_own_flags"
+)
 SITELINK_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── the fetch stage: the ledger line and the refused answer
     (
@@ -15673,6 +15677,55 @@ SITELINK_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "`anthropic/claude-opus-5-5`",
         _SLP_TEST,
         _SL_SEALED,
+    ),
+    # ── the orchestrator's runbook in the tools README: one handoff round per model stage
+    (
+        "sitelink: the runbook imports the finder from the reviewer's handoff directory",
+        _SL_README,
+        "    --handoff-import $HF\n",
+        "    --handoff-import $HR\n",
+        _SLP_TEST,
+        _SL_RUNBOOK,
+    ),
+    (
+        "sitelink: the runbook's pilot import writes a progress the scorer does not read",
+        _SL_README,
+        "--log-dir $G \\\n    --handoff-import $HF",
+        "--log-dir $G \\\n    --progress $G/progress.import.json --handoff-import $HF",
+        _SLP_TEST,
+        _SL_RUNBOOK,
+    ),
+    (
+        "sitelink: the runbook never validates the finder's answers",
+        _SL_README,
+        "$PY $OH validate --dir $HF\n",
+        "$PY $OH validate --dir $HR\n",
+        _SLP_TEST,
+        _SL_RUNBOOK,
+    ),
+    (
+        "sitelink: a runbook flag is not the driver's",
+        _SL_README,
+        "    --handoff-export $HR\n",
+        "    --handoff-exprt $HR\n",
+        _SLP_TEST,
+        _SL_RUNBOOK,
+    ),
+    (
+        "sitelink: the runbook applies without the dry gate",
+        _SL_README,
+        "$PY $T/write_gate.py --lane sitelink --step 100\n",
+        "",
+        _SLP_TEST,
+        _SL_RUNBOOK,
+    ),
+    (
+        "sitelink: the runbook runs the lane where the write tools do not look",
+        _SL_README,
+        "RL=$M/phase3_runner/runs/sitelink;",
+        "RL=$M/phase3_runner/runs/sitelink-mass;",
+        _SLP_TEST,
+        _SL_RUNBOOK,
     ),
 ]
 MUTATIONS += SITELINK_MUTATIONS

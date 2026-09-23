@@ -24,8 +24,8 @@ for path in (REPO / "output" / "remediation" / "tools", REPO / "scripts" / "reme
 
 import gap_plan as G  # noqa: E402
 import lanes  # noqa: E402
-import qid_repair  # noqa: E402
 import opus_handoff  # noqa: E402
+import qid_repair  # noqa: E402
 import sitelink_plan as SL  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import search_evidence as SE  # noqa: E402
@@ -1343,3 +1343,128 @@ def test_plan_refuses_a_resolution_recorded_under_other_inputs(
     with pytest.raises(SystemExit, match="resolved under other inputs"):
         SL.main(list(argv))  # type: ignore[call-overload]
     assert not (tmp_path / "PLAN.jsonl").exists()
+
+
+# ----------------------------------------------------------------- the runbook, through the handoff
+#: The orchestrator's runbook in the tools README: the pilot and the lane from the plan to the
+#: acceptance, every model stage one Opus handoff round (owner order 2026-09-23).
+RUNBOOK_HEADING = "## The sitelink lane's runbook"
+#: The drivers whose command lines the runbook's test parses with their own parser.
+RUNBOOK_PARSED = ("mass_run.py", "review_all.py", "score_search_pilot.py", "write_dry_all.py")
+
+
+def _runbook() -> list[list[str]]:
+    """Every `$PY` command of the README's runbook block as an argv (the script first): its shell
+    variables substituted, its continuation lines joined. Every other line is skipped."""
+    import re
+    import shlex
+
+    text = (REPO / "output" / "remediation" / "tools" / "README.md").read_text(encoding="utf-8")
+    start = text.index("```bash\n", text.index(RUNBOOK_HEADING)) + len("```bash\n")
+    block = text[start : text.index("\n```", start)].replace("\\\n", " ")
+    names: dict[str, str] = {}
+
+    def expand(value: str) -> str:
+        return re.sub(r"\$([A-Z][A-Z0-9]*)", lambda match: names[match[1]], value)
+
+    commands: list[list[str]] = []
+    for line in block.splitlines():
+        for part in line.split(" #", 1)[0].split(";"):
+            part = part.strip()
+            assignment = re.fullmatch(r'([A-Z][A-Z0-9]*)=("[^"]*"|\S+)', part)
+            if assignment:
+                names[assignment[1]] = expand(assignment[2].strip('"'))
+            elif part.startswith("$PY "):
+                commands.append(shlex.split(expand(part[len("$PY ") :])))
+    return commands
+
+
+def test_the_runbook_runs_every_model_stage_as_one_handoff_round_with_the_drivers_own_flags() -> (
+    None
+):
+    """The README's commands as written: each driver line parses with the driver's own parser; each
+    handoff directory is exported once, answered, validated and imported once, in that order, by
+    one driver on one plan, run directory, ledger and log directory; the pilot's import writes the
+    run directory and the progress file the scorer reads; the lane's writers come last."""
+    import collections
+
+    import review_all as RA
+    import score_search_pilot as SSP
+    import write_dry_all as WDA
+    from phase3 import mass_run as MR
+
+    parsers = dict(
+        zip(
+            RUNBOOK_PARSED,
+            (MR.build_parser, RA.build_parser, SSP.build_parser, WDA.build_parser),
+            strict=True,
+        )
+    )
+    steps: list[tuple[str, Any]] = []
+    for argv in _runbook():
+        script = REPO / argv[0]
+        assert script.is_file(), argv[0]
+        parser = parsers.get(script.name)
+        steps.append((script.name, parser().parse_args(argv[1:]) if parser else argv[1:]))
+
+    rounds: dict[str, dict[str, Any]] = collections.defaultdict(dict)
+    for index, (name, args) in enumerate(steps):
+        if name in ("mass_run.py", "review_all.py"):
+            directory = args.handoff_export or args.handoff_import
+            assert directory, f"{name} with no handoff half: an Opus answer is the only answer"
+            half = "export" if args.handoff_export else "import"
+            assert half not in rounds[directory], f"{directory} is {half}ed twice"
+            rounds[directory][half] = (index, name, args)
+            assert REPO / args.ledger == lanes.LEDGER
+        elif name == "opus_handoff.py":
+            flags = dict(zip(args[1::2], args[2::2], strict=True))
+            rounds[flags["--dir"]].setdefault(args[0], []).append((index, flags))
+    assert len(rounds) == 4, sorted(rounds)
+    for directory, round_ in rounds.items():
+        (out_at, driver, out), (back_at, driver_back, back) = round_["export"], round_["import"]
+        ((validated_at, _),) = round_["validate"]
+        answered = [index for index, _ in round_["answer"]]
+        assert driver == driver_back, directory
+        assert out_at < min(answered) <= max(answered) < validated_at < back_at, directory
+        stage = "finder" if driver == "mass_run.py" else "reviewer"
+        assert {flags["--stage"] for _, flags in round_["answer"]} == {stage}, directory
+        unshared = {"handoff_export", "handoff_import", "progress"}
+        assert {k: v for k, v in vars(out).items() if k not in unshared} == {
+            k: v for k, v in vars(back).items() if k not in unshared
+        }, directory
+        if driver == "mass_run.py":
+            assert out.live and out.progress is not None and back.progress is None, directory
+        else:
+            assert out.lane == "sitelink", directory
+
+    finders = {
+        REPO / args.plan: (round_, args)
+        for round_ in rounds.values()
+        for _, name, args in [round_["import"]]
+        if name == "mass_run.py"
+    }
+    (pilot_finder, pilot), lane = finders[SL.PILOT_PLAN], SSP.PILOT_LANES["sitelink"]
+    assert REPO / pilot.run_dir == lane.run
+    assert REPO / pilot.log_dir / "progress.json" == lane.progress
+    assert REPO / finders[SL.PLAN][1].run_dir == lanes.lane("sitelink").run_dir
+    reviewers = {
+        str(args.run_dir): round_
+        for round_ in rounds.values()
+        for _, name, args in [round_["import"]]
+        if name == "review_all.py"
+    }
+    assert sorted(reviewers) == ["None", pilot.run_dir]  # the pilot's run, then the lane's own
+
+    names = [name for name, _ in steps]
+    scored = names.index("score_search_pilot.py")
+    assert steps[scored][1].lane == "sitelink"
+    piloted = (pilot_finder, reviewers[pilot.run_dir])
+    assert max(round_["import"][0] for round_ in piloted) < scored
+    assert scored < min(r["export"][0] for r in rounds.values() if r not in piloted)
+    assert names[-4:] == ["write_dry_all.py", "write_gate.py", "write_gate.py", "verify_writes.py"]
+    assert steps[-4][1].lane == "sitelink"
+    assert [args for _, args in steps[-3:]] == [
+        ["--lane", "sitelink", "--step", "100"],
+        ["--lane", "sitelink", "--apply", "--step", "100"],
+        ["--lane", "sitelink"],
+    ]
