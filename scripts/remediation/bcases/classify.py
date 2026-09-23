@@ -63,7 +63,11 @@ read, not moved. With three or more witnesses "are one" is followed through chai
 two pages that are each the item's point are one with each other too, so they never pair. With two
 witnesses the chain is the pair itself, and the first wave's verdicts are unchanged. A P625 whose
 references name a web witness's publisher (`cited_publishers`: a reference URL, or GeoNames behind an
-import from the Cebuano Wikipedia) is one with that witness: it is where the value came from.
+import from the Cebuano Wikipedia) is one with that witness: it is where the value came from. A web
+page that states the precision of its own point (DARE: "precision 2000 m") carries it as its
+`precision_m`: a witness within twice of it is one point with it (`same_point_m`), and the stored
+point within it is where that page puts the site (`_reach`). It is not the case's tolerance: the
+item's witnesses and every pair are held to the first wave's tolerance still.
 
 ## B2 countries (the 117 `T02` findings)
 
@@ -476,6 +480,8 @@ class Witness:
     lon: float
     url: str
     quote: str
+    #: The value's own uncertainty in metres: half a P625's precision (`precision_m`), or the
+    #: precision a web page states for its point (`web_witness.stated_precision`). 0 when none.
     precision_m: float = 0.0
     #: The kind of witness this one says it was copied from ("enwiki" for a P625 imported from it).
     derived_from: str | None = None
@@ -733,7 +739,17 @@ def copy_groups(ws: Sequence[Witness]) -> list[int]:
 
 
 def tolerance_m(ws: Sequence[Witness]) -> float:
-    return max([TOLERANCE_M, *(w.precision_m for w in ws)])
+    """The case's tolerance: T01's 1000 m, floored by the item's P625 precision (the first wave's
+    rule). A web page's stated precision is not the case's (`_reach`): DARE's "precision 2000 m"
+    says nothing of how far the P625 may lie from the stored point."""
+    return max([TOLERANCE_M, *(w.precision_m for w in ws if w.kind != "web")])
+
+
+def _reach(tol: float, w: Witness) -> float:
+    """How far from the stored point witness `w` still puts the site there: the case's tolerance,
+    floored by the precision the witness states for its own point. A pair needs no such floor - two
+    witnesses within a page's stated precision are one point (`same_point_m`), never a pair."""
+    return max(tol, w.precision_m)
 
 
 #: Which of two agreeing witnesses the site moves to: the item's own statement first, a web page last.
@@ -805,7 +821,7 @@ def weigh(stored: tuple[float, float], ws: Sequence[Witness]) -> dict[str, Any]:
         for i, j in itertools.combinations(range(len(ordered)), 2)
         if groups[i] != groups[j] and _m(ordered[i], ordered[j]) <= tol
     ]
-    near = [w for w in ordered if _m(stored, w) <= tol]
+    near = [w for w in ordered if _m(stored, w) <= _reach(tol, w)]
     distances = {w.label: round(_m(stored, w), 1) for w in ordered}
     if len(distances) != len(ordered):
         raise ValueError(f"two witnesses share one label: {[w.label for w in ordered]}")
@@ -837,7 +853,15 @@ def weigh(stored: tuple[float, float], ws: Sequence[Witness]) -> dict[str, Any]:
             **base,
             "verdict": "stored-agrees",
             "reason": "the stored point lies within the tolerance of "
-            + ", ".join(w.label for w in near)
+            + ", ".join(
+                w.label
+                + (
+                    f" ({_reach(tol, w):.0f} m, its stated precision)"
+                    if _reach(tol, w) > tol
+                    else ""
+                )
+                for w in near
+            )
             + " - no change is planned",
         }
     if pairs:

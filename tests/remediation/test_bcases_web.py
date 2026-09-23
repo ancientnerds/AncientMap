@@ -144,6 +144,8 @@ def test_a_page_that_proves_itself_is_a_web_witness() -> None:
         "url": URL,
         "quote": COORD,
         "step": C.grid_of(LAT, LON),
+        "precision_m": 0.0,
+        "precision_text": None,
     }
     assert row["witness"]["step"] == pytest.approx(1 / 3600)
     assert (row["host"], row["final_url"], net.calls) == ("www.mayaruins.example", URL, [URL])
@@ -563,6 +565,44 @@ def test_the_numbers_are_the_pages_not_the_agents() -> None:
     assert (row["witness"]["lat"], row["witness"]["lon"]) == (LAT, LON)
 
 
+DARE_TEXT, DARE_POINT = "41.77125, 15.23548", (41.77125, 15.23548)
+DARE_ROW = (
+    "<h1>El Tintal</h1><table><tr><td>WGS 84 position</td><td>{}</td></tr>"
+    "<tr><td>precision</td><td>{}</td></tr></table>"
+)
+
+
+def test_the_precision_a_page_states_for_its_coordinates_is_read() -> None:
+    """Measured on the live run: DARE (imperium.ahlfeldt.se) prints "precision 2000 m" right after
+    its numbers, vici.org "Location ± 5-25 m.". That is the page's own uncertainty, and the witness
+    carries it (`classify.weigh` floors the tolerance of the comparisons it takes part in with it). A
+    figure elsewhere on the page is not about these numbers, and a page that states none has none."""
+    for markup, metres, stated in (
+        (DARE_ROW.format(DARE_TEXT, "2000 m"), 2000.0, "precision 2000 m"),
+        (DARE_ROW.format(DARE_TEXT, "2 km"), 2000.0, "precision 2 km"),
+        (f"<h1>El Tintal</h1><p>{DARE_TEXT} Location ± 5-25 m. Class: Villa</p>", 25.0, None),
+        (f"<h1>El Tintal</h1><p>{DARE_TEXT} ±50 m</p>", 50.0, "±50 m"),
+        (f"<h1>El Tintal</h1><p>{DARE_TEXT}</p><p>Survey precision 5 m.</p>", 0.0, None),
+        (
+            f"<h1>El Tintal</h1><p>{DARE_TEXT} precision 5 m</p><p>{DARE_TEXT}, ± 2000 m</p>",
+            2000.0,
+            "± 2000 m",
+        ),
+        (f"<h1>El Tintal</h1><p>{DARE_TEXT}</p>", 0.0, None),
+    ):
+        row = _named(NAME, markup, DARE_TEXT, *DARE_POINT)
+        assert row["accepted"], row["reason"]
+        witness = row["witness"]
+        assert witness["precision_m"] == metres, (markup, witness)
+        if stated is not None:
+            assert witness["precision_text"] == stated, (markup, witness)
+    vici = _named(NAME, f"<p>El Tintal {DARE_TEXT} Location ± 5-25 m.</p>", DARE_TEXT, *DARE_POINT)
+    assert vici["witness"]["precision_text"] == "location ± 5-25 m"
+    assert "stated precision 25 m" in vici["reason"]
+    plain = _named(NAME, f"<p>El Tintal {DARE_TEXT}</p>", DARE_TEXT, *DARE_POINT)
+    assert plain["witness"]["precision_text"] is None and "precision" not in plain["reason"]
+
+
 def test_a_malformed_candidate_is_rejected_and_nothing_is_asked() -> None:
     for broken in (
         {"lat": "17.5"},
@@ -885,6 +925,73 @@ def test_a_p625_that_cites_the_web_pages_publisher_is_one_with_it() -> None:
     assert row["verdict"] == "review" and "P625 cites geonames.org" in row["reason"]
 
 
+def _dare(point: tuple[float, float], precision: float = 2000.0) -> C.Witness:
+    return C.Witness(
+        "web",
+        *point,
+        "http://imperium.ahlfeldt.se/places/1",
+        "q",
+        precision,
+        step=C.grid_of(*point),
+    )
+
+
+def _item(point: tuple[float, float], precision: float, **kw: Any) -> C.Witness:
+    return C.Witness(
+        "wikidata", *point, "https://www.wikidata.org/wiki/Q1", "P625", C.precision_m(precision),
+        step=C.grid_of(*point), **kw,
+    )  # fmt: skip
+
+
+def test_a_web_pages_stated_precision_is_its_own_tolerance() -> None:
+    """Measured on the live run, the numbers of the delivered verdicts: DARE states "precision
+    2000 m" for Teanum Apulum's and Karnak's points. Teanum's P625 lies 985 m from DARE's point -
+    inside DARE's own uncertainty, so the two are one point, not two witnesses that agree. The stored
+    Karnak point lies 1.06 km from DARE's - inside it, so DARE cannot say the stored point is wrong,
+    and the P625 it would pair with was imported from the article. Both were planned moves."""
+    teanum_stored = (41.80020792124359, 14.916623781336527)
+    teanum = [_item((41.7637, 15.24169), 1e-05), _dare((41.77125, 15.23548))]
+    verdict = C.weigh(teanum_stored, teanum)
+    assert verdict["verdict"] == "review", verdict["reason"]
+    assert verdict["reason"] == (
+        "the two witnesses are one: the same point (985 m apart, within 4000 m)"
+    )
+    unstated = [teanum[0], _dare((41.77125, 15.23548), 0.0)]
+    assert C.weigh(teanum_stored, unstated)["verdict"] == "move"
+    karnak_stored = (25.712910635554067, 32.64862381127643)
+    karnak = [
+        _item(
+            (25.718333333333334, 32.65833333333333), 0.0002777777777777778, derived_from="enwiki"
+        ),
+        _en((25.7183, 32.6583)),
+        _dare((25.7191736, 32.6566111)),
+    ]
+    verdict = C.weigh(karnak_stored, karnak)
+    assert verdict["verdict"] == "stored-agrees", verdict["reason"]
+    assert verdict["reason"] == (
+        "the stored point lies within the tolerance of web:ahlfeldt.se (2000 m, its stated "
+        "precision) - no change is planned"
+    )
+    assert verdict["tolerance_m"] == 1000.0
+
+
+def test_a_web_pages_stated_precision_does_not_widen_the_other_witnesses() -> None:
+    """Aynuna, measured: the P625 lies 1.52 km from the stored point, DARE's point (precision
+    2000 m) 3.55 km away and 4.18 km from the P625. DARE's uncertainty is DARE's: the P625 does not
+    come to agree with the stored point through it, nor two others with each other."""
+    stored = (28.091108547210094, 35.18523477132197)
+    item = _item((28.094444444444445, 35.20027777777778), 0.0002777777777777778)
+    verdict = C.weigh(stored, [item, _dare((28.059202, 35.1853555))])
+    assert verdict["verdict"] == "review", verdict["reason"]
+    assert verdict["reason"] == "the two witnesses disagree: 4.18 km apart (tolerance 1000 m)"
+    # two witnesses 1.5 km apart do not come to agree because a third states 2 km
+    en = _en((WD_POINT[0] + 0.0135, WD_POINT[1]))  # 1.5 km north of the item's point
+    far = _dare((WD_POINT[0] - 0.1, WD_POINT[1]))  # 11 km south: one with neither
+    verdict = C.weigh(STORED, [_wd(), en, far])
+    assert verdict["verdict"] == "review", verdict["reason"]
+    assert "wikidata and enwiki disagree: 1.50 km apart (tolerance 1000 m)" in verdict["reason"]
+
+
 def test_two_agreeing_pairs_on_two_points_are_read_not_moved() -> None:
     far = (WD_POINT[0] + 0.03, WD_POINT[1])  # 3.3 km north
     ws = [_wd(), _web("maya.example"), _en(far), _web("heritage.example", (far[0] + 0.004, far[1]))]
@@ -1044,7 +1151,9 @@ def test_a_museum_object_keeps_the_first_waves_rule() -> None:
     assert row["verdict"] == "review" and "not at its holding museum" in row["reason"]
 
 
-def _accepted(url: str, point: tuple[float, float], sid: str = SITE) -> dict[str, Any]:
+def _accepted(
+    url: str, point: tuple[float, float], sid: str = SITE, stated: str | None = None
+) -> dict[str, Any]:
     return {
         "site_id": sid,
         "url": url,
@@ -1059,6 +1168,8 @@ def _accepted(url: str, point: tuple[float, float], sid: str = SITE) -> dict[str
             "url": url,
             "quote": "q",
             "step": C.grid_of(*point),
+            "precision_m": W.precision_of(stated),
+            "precision_text": stated,
         },
     }
 
@@ -1091,6 +1202,24 @@ def test_an_accepted_row_verify_candidate_did_not_write_is_refused() -> None:
     coarse = {**row, "witness": {**row["witness"], "step": 1.0}}
     with pytest.raises(inputs.InputError, match="step is not its numbers' grid"):
         W.web_witnesses([coarse])
+    dare = _accepted("http://imperium.ahlfeldt.se/places/1", WEB_POINT, stated="precision 2000 m")
+    for forged in (
+        {**dare["witness"], "precision_m": 0.0},
+        {**dare["witness"], "precision_text": None},
+        {**dare["witness"], "precision_text": "about two kilometres"},
+    ):
+        with pytest.raises(inputs.InputError, match="precision is not the one its page states"):
+            W.web_witnesses([{**dare, "witness": forged}])
+
+
+def test_a_web_witness_carries_the_precision_its_page_states() -> None:
+    dare = _accepted("http://imperium.ahlfeldt.se/places/1", WEB_POINT, stated="precision 2 km")
+    plain = _accepted("https://maya.example/a", WD_POINT)
+    web, _ = W.web_witnesses([dare, plain])
+    assert {w.label: w.precision_m for w in web[SITE]} == {
+        "web:ahlfeldt.se": 2000.0,
+        "web:maya.example": 0.0,
+    }
 
 
 def test_the_web_witnesses_must_be_the_verification_of_the_research() -> None:

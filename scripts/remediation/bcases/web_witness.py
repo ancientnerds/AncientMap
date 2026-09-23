@@ -52,7 +52,11 @@ redirect ends at:
   another site is not this site's, nor is a page about another temple.
 
 An accepted row carries the witness: kind `web`, the page's numbers (the parsed values), the URL the
-page was read at, `coord_text` as the quote and `classify.grid_of` of the numbers as its step.
+page was read at, `coord_text` as the quote, `classify.grid_of` of the numbers as its step, and the
+precision the page states for them right after them (`stated_precision`: DARE's "precision 2000 m",
+vici.org's "Location ± 5-25 m."; 0 where it states none) - the page's own uncertainty, which floors
+the tolerance of the comparisons the witness takes part in (`classify.weigh`) and the distance under
+which it is one point with another (`classify.same_point_m`).
 
 ## `reweigh` (offline): `coords3/VERDICTS.jsonl` and `coords3/COUNTS.json`
 
@@ -351,6 +355,14 @@ _GRID_FORMS = re.compile(
     r"|(?<![\d.])\d{5,}(?!\d)"
 )
 _WGS84 = re.compile(r"\bwgs\s?84\b", re.IGNORECASE)
+#: The precision a page states for its own coordinates, right after them (in the case-folded page
+#: text, a separator between): DARE's "precision 2000 m" (imperium.ahlfeldt.se), vici.org's
+#: "Location ± 5-25 m." (the range's upper end), a plain "± 50 m". Read as stated - the uncertainty
+#: itself, not a grid step to halve as a P625's precision is (`classify.precision_m`).
+_STATED_PRECISION = re.compile(
+    r"[\s,;:.]*(?P<stated>(?:precision|accuracy|location\s*±|±)\s*"
+    r"(?:\d+(?:\.\d+)?\s*-\s*)?(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>km|m))(?![^\W\d_])"
+)
 
 
 class Rejected(Exception):
@@ -575,6 +587,34 @@ def occurrences(hay: str, needle: str) -> list[int]:
     return found
 
 
+def _metres(match: re.Match[str]) -> float:
+    return float(match["value"]) * (1000.0 if match["unit"] == "km" else 1.0)
+
+
+def stated_precision(hay: str, needle: str) -> tuple[float, str | None]:
+    """The precision the page states right after a whole occurrence of `needle`
+    (`_STATED_PRECISION`), in metres, with its words - the widest where it states several - or
+    (0.0, None) where it states none. Both are the case-folded normalised texts."""
+    found = [
+        match
+        for start in occurrences(hay, needle)
+        if (match := _STATED_PRECISION.match(hay, start + len(needle))) is not None
+    ]
+    if not found:
+        return 0.0, None
+    widest = max(found, key=_metres)
+    return _metres(widest), widest["stated"]
+
+
+def precision_of(stated: str | None) -> float | None:
+    """The metres a witness's recorded `precision_text` states: 0.0 for none, None for words
+    `_STATED_PRECISION` does not read."""
+    if stated is None:
+        return 0.0
+    match = _STATED_PRECISION.fullmatch(stated)
+    return None if match is None else _metres(match)
+
+
 def named_near(hay: str, needle: str, name: str) -> str | None:
     """The word of `name` (or the whole folded name) that stands within `IDENTITY_WINDOW` characters
     of a whole occurrence of `needle` in `hay` (`occurrences`), or None. Both are the case-folded
@@ -712,7 +752,11 @@ def _prove(net: Any, name: str, candidate: Any, row: dict[str, Any]) -> dict[str
             f"no word of {name!r} {distinctive_words(name)} within {IDENTITY_WINDOW} characters "
             f"of {coord_text!r}",
         )
-    row["reason"] = f"accepted: the page reads {got_lat}, {got_lon} and names the site ({word!r})"
+    precision, stated = stated_precision(hay, needle)
+    row["reason"] = (
+        f"accepted: the page reads {got_lat}, {got_lon} and names the site ({word!r})"
+        + ("" if stated is None else f"; stated precision {precision:.0f} m ({stated!r})")
+    )
     return {
         "kind": "web",
         "lat": got_lat,
@@ -720,6 +764,8 @@ def _prove(net: Any, name: str, candidate: Any, row: dict[str, Any]) -> dict[str
         "url": final,
         "quote": coord_text,
         "step": C.grid_of(got_lat, got_lon),
+        "precision_m": precision,
+        "precision_text": stated,
     }
 
 
@@ -835,8 +881,19 @@ def web_witnesses(
             raise inputs.InputError(f"{WEB_WITNESSES}: {sid}'s witness is on {host}")
         if w["step"] != C.grid_of(w["lat"], w["lon"]):
             raise inputs.InputError(f"{WEB_WITNESSES}: {sid}'s step is not its numbers' grid")
+        if precision_of(w["precision_text"]) != w["precision_m"]:
+            raise inputs.InputError(
+                f"{WEB_WITNESSES}: {sid}'s precision is not the one its page states: "
+                f"{w['precision_m']} m for {w['precision_text']!r}"
+            )
         witness = C.Witness(
-            "web", float(w["lat"]), float(w["lon"]), str(w["url"]), str(w["quote"]), step=w["step"]
+            "web",
+            float(w["lat"]),
+            float(w["lon"]),
+            str(w["url"]),
+            str(w["quote"]),
+            float(w["precision_m"]),
+            step=w["step"],
         )
         by_label[sid][witness.label].append(witness)
     out: dict[str, list[C.Witness]] = {}

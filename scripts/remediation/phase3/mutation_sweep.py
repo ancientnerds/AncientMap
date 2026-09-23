@@ -7703,6 +7703,8 @@ _WW_CHAIN = "test_two_witnesses_that_are_each_one_with_a_third_do_not_pair"
 _WW_CITES = "test_a_p625_that_cites_the_web_pages_publisher_is_one_with_it"
 _WW_COPY = "test_a_proxy_or_an_archive_copy_is_never_a_web_witness"
 _WW_TYPE = "test_a_type_word_of_the_name_does_not_identify_it"
+_WW_STATED = "test_the_precision_a_page_states_for_its_coordinates_is_read"
+_WW_OWN_TOL = "test_a_web_pages_stated_precision_is_its_own_tolerance"
 WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: a Wikipedia or mirror page is asked for its coordinates",
@@ -8525,6 +8527,78 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         " or sorted(C.tokens(name))  # mutant\n",
         _WW_TEST,
         "test_a_name_of_type_words_only_is_matched_whole",
+    ),
+    (
+        "bcases web: the precision a page states is dropped",
+        _WW,
+        "    precision, stated = stated_precision(hay, needle)\n",
+        "    precision, stated = 0.0, None  # mutant\n",
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: a precision stated in km is read as metres",
+        _WW,
+        '    return float(match["value"]) * (1000.0 if match["unit"] == "km" else 1.0)\n',
+        '    return float(match["value"])  # mutant\n',
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: a precision anywhere after the quote is read as its own",
+        _WW,
+        "        if (match := _STATED_PRECISION.match(hay, start + len(needle))) is not None\n",
+        "        if (match := _STATED_PRECISION.search(hay, start + len(needle))) is not None  # mutant\n",
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: the first of two stated precisions is taken, not the widest",
+        _WW,
+        "    widest = max(found, key=_metres)\n",
+        "    widest = found[0]  # mutant\n",
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: a forged precision is weighed",
+        _WW,
+        '        if precision_of(w["precision_text"]) != w["precision_m"]:\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_FORGED,
+    ),
+    (
+        "bcases web: the web witness is weighed without its precision",
+        _WW,
+        '            float(w["precision_m"]),\n',
+        "            0.0,  # mutant\n",
+        _WW_TEST,
+        "test_a_web_witness_carries_the_precision_its_page_states",
+    ),
+    (
+        "bcases web: a web page's precision widens the case's tolerance",
+        _CL,
+        '    return max([TOLERANCE_M, *(w.precision_m for w in ws if w.kind != "web")])\n',
+        "    return max([TOLERANCE_M, *(w.precision_m for w in ws)])  # mutant\n",
+        _WW_TEST,
+        "test_a_web_pages_stated_precision_does_not_widen_the_other_witnesses",
+    ),
+    (
+        "bcases web: a web page's precision does not reach the stored point",
+        _CL,
+        "    return max(tol, w.precision_m)\n",
+        "    return tol  # mutant\n",
+        _WW_TEST,
+        _WW_OWN_TOL,
+    ),
+    (
+        "bcases web: the reason hides a stated precision",
+        _CL,
+        "                    if _reach(tol, w) > tol\n",
+        "                    if False  # mutant\n",
+        _WW_TEST,
+        _WW_OWN_TOL,
     ),
     (
         "bcases web: a forged witness on an archive is weighed",
