@@ -203,6 +203,20 @@ def test_a_dash_pair_inside_a_parenthesis_is_no_insertion() -> None:
     assert _offered(sentence) == [" (built – by the Romans – in stone)"]
 
 
+def test_a_range_dash_on_either_side_of_the_pair_refuses_it() -> None:
+    """Rule 6 judges both dashes: here only the second has a digit beside it."""
+    assert _offered("The wall – of local stone laid in 1200 – ran along the ridge above.") == []
+
+
+def test_an_empty_pair_and_an_empty_last_segment_are_no_spans() -> None:
+    assert _offered("The wall – – ran along the ridge above.") == []
+    assert _offered("The wall, , ran along the ridge above.") == [
+        "The wall, ",
+        ", ran along the ridge above",
+    ]
+    assert _offered("The wall was built in 1900, .") == ["The wall was built in 1900, "]
+
+
 def test_a_leading_phrase_is_at_most_six_tokens() -> None:
     seven = "In the very late summer of 1920, the site was excavated by a team."
     assert "In the very late summer of 1920, " not in _offered(seven)
@@ -233,6 +247,10 @@ VERIFIER_SPAN_TEXTS = (
     "The fort (built – by the Romans – in stone) was abandoned in the 5th century AD.",
     "In the very late summer of 1920, the site was excavated by a team.",
     "In the late summer of 1920, the site was excavated by a team.",
+    "The wall – of local stone laid in 1200 – ran along the ridge above.",
+    "The wall – – ran along the ridge above.",
+    "The wall, , ran along the ridge above.",
+    "The wall was built in 1900, .",
 )
 
 
@@ -511,6 +529,21 @@ def test_v2_a_range_that_is_not_one_whole_sentence_is_held() -> None:
     assert "V2" not in whole.reasons()
 
 
+def test_v2_the_split_counts_every_line_and_finds_a_repeated_sentence_in_order() -> None:
+    """A sentence after a heading line keeps its offsets, and the second of two equal sentences
+    in one line is found where it stands, not at the first."""
+    text = f"{S1} {S3} {S3} \n\n\n== History ==\n{S5}"  # a space ends line 1
+    case = make_case(text=text, picks=(W_PICKS[0], W_PICKS[2], Pick(S5, (), S5)))
+    second = text.index(S3, text.index(S3) + 1)
+    sentences = case.assembly.provenance.sentences
+    moved = dataclasses.replace(sentences[1], start=second, end=second + len(S3))
+    held = reprovenance(case, sentences=(sentences[0], moved, sentences[2]))
+    held.quotes[1] = S3
+    assert "V2" not in held.reasons()
+    assert (second, second + len(S3)) in V.sentence_ranges(text)
+    assert (text.index(S5), len(text)) in V.sentence_ranges(text)
+
+
 def test_v2_a_range_over_two_sentences_is_held() -> None:
     joined = f"{S2} {S3}"
     case = make_case(picks=(W_PICKS[0], Pick(joined, (), joined)))
@@ -686,6 +719,9 @@ def test_v6_the_name_match_is_bounded_by_tokens() -> None:
         ("Chichén-Itzá", "The ruins of Chichen Itza lie in Yucatan."),
     ):
         assert V.name_in(name, sentence), (name, sentence)
+    # a name the fold empties (an alias of punctuation only) names nothing
+    assert not V.name_in("", "The Tarxien temples lie in Paola.")
+    assert not V.name_in("–", "The Tarxien temples lie in Paola.")
     ur = make_case(site=plan_site(name="Ur", aliases=()), card=None, subject_gate=gate(km=None))
     assert "sentence 1 names none of ['Ur']" in ur.detail("V6")
 

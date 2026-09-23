@@ -716,6 +716,22 @@ def test_s13_the_card_is_measured_from_the_narrated_text_and_the_pin_from_the_pr
     assert held == {"card_sha256": CARD_SHA, "card_provenance_sha256": None}
 
 
+def test_s13_the_audit_measures_the_card_through_card_trace():
+    """`measure_site` needs a rendered short (ffprobe, the mp4), so its wiring is read from its
+    source: the S13 fields of the dict it returns are exactly `card_trace(site)`."""
+    import ast
+    import inspect
+    import textwrap
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(shorts_audit.measure_site)))
+    returned = [node.value for node in ast.walk(tree) if isinstance(node, ast.Return)]
+    assert len(returned) == 1 and isinstance(returned[0], ast.Dict)
+    spreads = [v for k, v in zip(returned[0].keys, returned[0].values, strict=True) if k is None]
+    assert [ast.unparse(v) for v in spreads] == ["card_trace(site)"]
+    keys = {k.value for k in returned[0].keys if isinstance(k, ast.Constant)}
+    assert not keys & {"card_sha256", "card_provenance_sha256"}
+
+
 def test_s13_the_export_carries_the_pinned_hash_into_site_json():
     row = dict(_EXPORT_ROW, card_text_sha256=CARD_SHA)
     assert assemble_site(row, [])["card_text_sha256"] == CARD_SHA

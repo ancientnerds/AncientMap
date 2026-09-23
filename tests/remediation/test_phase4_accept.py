@@ -494,6 +494,11 @@ def test_only_a_rows_own_reversal_closes_it(tmp_path: Path) -> None:
     written = written_p4(tmp_path / "twice")
     _write_round_2(written)
     assert any(d.startswith("WRITTEN TWICE") for d in _accept4(written).deviations)
+    # a journal row without a change key (the column is nullable) has no reversal of its own
+    written = written_p4(tmp_path / "keyless")
+    for row in written.production.journal:
+        row["change_key"] = None
+    assert _accept4(written).deviations == []
 
 
 def test_a_planned_row_outside_the_lanes_columns_is_a_deviation(tmp_path: Path) -> None:

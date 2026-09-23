@@ -1285,11 +1285,10 @@ def _v14(c: _Case) -> list[Problem]:
     for index, segment in enumerate(c.published or (), 1):
         if not LOCATION_VERB.search(segment.text):
             continue
+        # Every name `countries_named` finds is a NAME_TO_ISO name, so it has a code; a stored
+        # country with no code at all (`Baltic Sea`) agrees with none of them (fail-closed).
         for name in countries_named(segment.text):
-            same = (
-                _iso(name) in stored if stored else name.lower() == (c.site.country or "").lower()
-            )
-            if not same:
+            if _iso(name) not in stored:
                 problems.append(
                     f"sentence {index} places the site in {name}, the stored country is "
                     f"{c.site.country!r}"
