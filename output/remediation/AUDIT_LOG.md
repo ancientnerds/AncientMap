@@ -6512,11 +6512,12 @@ Tomb (allovergreece.com).
   second wave and the no-web-witness identity with the first.
 * `mutation_sweep.py bcases` after the last code change: **180/180 caught**, among them all
   **94/94 "bcases web:"** cases (70 from the builder, 24 added for the findings above); the tree
-  byte-identical to the sweep's start for 9 files. The standalone "bcases web" run before finding 10
+  byte-identical to the sweep's start for 9 files - and again 180/180 after the second merge of
+  `integrate/wave1` (wip/ops2). The standalone "bcases web" run before finding 10
   read 93/94. The sweep now runs from a worktree with the interpreter that runs it (`sys.executable`,
   from `integrate/wave1`), so no wrapper was needed.
-* Gates on the merged tree: full suite (`pytest -q -rs --timeout 300 -m "not integration and not
-  live_llm"`) **4,235 passed**, 110 skipped - every skip is gitignored data this worktree does not
+* Gates on the merged tree (after the second merge of `integrate/wave1`): full suite (`pytest -q -rs
+  --timeout 300 -m "not integration and not live_llm"`) **4,275 passed**, 110 skipped - every skip is gitignored data this worktree does not
   carry (Natural Earth caches, snapshots, worklists, the bcases caches; the three bcases ones pass
   with `BCASES_CACHE` at the main checkout's cache, and the full reclassification was reproduced by
   hand) - 57 deselected; `ruff check` over api, pipeline, scripts/remediation, tests and
