@@ -3634,6 +3634,96 @@ GALLERY_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         VISION_TEST,
         "test_l1_never_hands_the_hero_to_another_file_that_is_not_live",
     ),
+    (
+        "gallery: a hand-edited admission is trusted",
+        GALLERY + "calibrate.py",
+        "    if admission_text(again) != text:\n",
+        "    if False:  # mutant\n",
+        CALIBRATE_TEST,
+        "test_a_hand_edited_admission_switches_nothing_on",
+    ),
+    (
+        "gallery: decide reads an admission without re-deriving it",
+        GALLERY + "decide.py",
+        "    record, digest = calibrate.verify_admission(calibration_dir)\n",
+        '    text = (calibration_dir / "ADMISSION.json").read_text(encoding="utf-8")  # mutant\n'
+        "    record, digest = json.loads(text), hashlib.sha256(text.encode()).hexdigest()\n",
+        CALIBRATE_TEST,
+        "test_a_hand_edited_admission_switches_nothing_on",
+    ),
+    (
+        "gallery: an admission does not name its ledger",
+        GALLERY + "calibrate.py",
+        '        "ledger_sha256": _sha(ledger_path.read_text(encoding="utf-8")),\n',
+        "",
+        CALIBRATE_TEST,
+        "test_an_admission_measured_on_another_ledger_is_refused",
+    ),
+    (
+        "gallery: an admission does not name its eye labels",
+        GALLERY + "calibrate.py",
+        '        "eye_labels_sha256": eye_sha,\n',
+        "",
+        CALIBRATE_TEST,
+        "test_an_admission_measured_on_other_eye_labels_is_refused",
+    ),
+    (
+        "gallery: an admission whose T0 failed reaches decide",
+        GALLERY + "calibrate.py",
+        '    if again["metrics"]["T0"]["pass"] is not True:\n',
+        "    if False:  # mutant\n",
+        CALIBRATE_TEST,
+        "test_an_admission_whose_t0_failed_is_refused_to_decide",
+    ),
+    (
+        "gallery: a missing eye-label file reads as no eye labels",
+        GALLERY + "calibrate.py",
+        "        if not eye_path.is_file():\n"
+        "            raise CalibrationError(\n"
+        '                f"{eye_path} does not exist - name the eye labels W8 wrote, or --no-eye-labels"\n'
+        "            )\n"
+        "        eye = labels.load_eye_labels(eye_path, tiles)\n"
+        '        eye_sha = _sha(eye_path.read_text(encoding="utf-8"))\n',
+        "        if eye_path.is_file():  # mutant: the old silent fallback\n"
+        "            eye = labels.load_eye_labels(eye_path, tiles)\n"
+        '            eye_sha = _sha(eye_path.read_text(encoding="utf-8"))\n',
+        CALIBRATE_TEST,
+        "test_evaluate_names_its_eye_labels_or_says_it_has_none",
+    ),
+    (
+        "gallery: eye labels outside the repository are recorded",
+        GALLERY + "calibrate.py",
+        "        return path.resolve().relative_to(ROOT).as_posix()\n",
+        "        return path.resolve().as_posix()  # mutant\n",
+        CALIBRATE_TEST,
+        "test_evaluate_names_its_eye_labels_or_says_it_has_none",
+    ),
+    (
+        "gallery: evaluate runs without naming its eye labels",
+        GALLERY + "calibrate.py",
+        "            eye = cmd.add_mutually_exclusive_group(required=True)\n",
+        "            eye = cmd.add_mutually_exclusive_group(required=False)  # mutant\n",
+        CALIBRATE_TEST,
+        "test_evaluate_names_its_eye_labels_or_says_it_has_none",
+    ),
+    (
+        "gallery: evaluate runs without a ledger",
+        GALLERY + "calibrate.py",
+        "    if not ledger_path.is_file():\n"
+        '        raise CalibrationError(f"{ledger_path} does not exist - run the C1 vision run first")\n',
+        "",
+        CALIBRATE_TEST,
+        "test_evaluate_and_its_verification_need_their_files",
+    ),
+    (
+        "gallery: an admission is verified without its file",
+        GALLERY + "calibrate.py",
+        "    if not path.is_file():\n"
+        '        raise CalibrationError(f"{path} does not exist - run `calibrate.py evaluate` first")\n',
+        "",
+        CALIBRATE_TEST,
+        "test_evaluate_and_its_verification_need_their_files",
+    ),
 ]
 MUTATIONS += GALLERY_REVIEW_MUTATIONS
 

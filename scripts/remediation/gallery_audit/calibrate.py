@@ -11,8 +11,19 @@ Order, enforced rather than promised
    operation, about 944 calls, about $1.65 at the pilot's measured $0.00175 per call.
 4. ``evaluate`` refuses a thresholds file whose sha256 is not the sealed one, and a ledger line
    judged before the seal; then measures, and writes ``ADMISSION.json``, which `decide.py` reads.
+   The eye labels are named explicitly (``--eye-labels`` a file of this repository, or
+   ``--no-eye-labels``): a mistyped path is an error, never "no eye labels".
 
 No threshold changes after its data is seen; a trigger that fails is dropped, not re-tuned.
+
+What ties an admission to its calibration
+-----------------------------------------
+``ADMISSION.json`` is a pure function of its inputs - the sealed thresholds, the jobs, the ledger
+and the eye labels, each named with its sha256 - and carries no time of its own, so its own sha256
+names exactly what was measured. `decide.py` never trusts the file: `verify_admission` re-derives
+it from the run directory and refuses it unless the two are byte-identical and T0 passed. A
+hand-edited admission, one measured on other labels or another ledger, or one written before the
+last verdict, switches nothing on. Every vision-planned row cites the admission's sha256.
 
 The three sets (`labels.py`): (i) the 200 pilot tiles, (ii) the 652 labelled rows, (iii) the gold
 galleries - all 42 rows of Agri Bavnehoj, Langdale and Xcaret, of which 25 are named. The strict
@@ -25,7 +36,7 @@ Counts are reported with Clopper-Pearson intervals (the project's own implementa
 Usage:
     calibrate.py seal --run-dir DIR
     calibrate.py jobs --run-dir DIR --hero-moves PLAN.jsonl [--snapshot DIR] [--cache DIR] [--t10 F]
-    calibrate.py evaluate --run-dir DIR [--eye-labels LABELS.jsonl]
+    calibrate.py evaluate --run-dir DIR (--eye-labels LABELS.jsonl | --no-eye-labels)
 """
 
 from __future__ import annotations
@@ -354,10 +365,31 @@ def evaluate(
     return {"metrics": metrics, "admitted": admitted}
 
 
-def command_evaluate(run_dir: Path, eye_path: Path | None) -> dict[str, Any]:
+def _repo_path(path: Path) -> str:
+    """A path as ADMISSION.json records it: relative to the repository, so the admission can be
+    re-derived from any checkout. A file outside the repository cannot be re-read there."""
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError as exc:
+        raise CalibrationError(
+            f"{path} is not a file of this repository - the eye labels an admission rests on "
+            "must be re-readable wherever the admission is checked"
+        ) from exc
+
+
+def admission_record(run_dir: Path, eye_labels: str | None) -> dict[str, Any]:
+    """What `evaluate` measures, with the sha256 of every input it measured on.
+
+    `eye_labels` is a repository-relative path (`_repo_path`) or None for an explicit run without
+    eye labels. Nothing in the record depends on when it was made, so the same inputs give the
+    same bytes.
+    """
     thresholds, digest, sealed_at = sealed(run_dir)
+    ledger_path = run_dir / LEDGER_FILE
+    if not ledger_path.is_file():
+        raise CalibrationError(f"{ledger_path} does not exist - run the C1 vision run first")
     jobs = vision.read_jobs(run_dir / JOBS_FILE)
-    ledger = vision.Ledger(run_dir / LEDGER_FILE).lines
+    ledger = vision.Ledger(ledger_path).lines
     early = [e for e in ledger if str(e.line["judged_at"]) < sealed_at]
     if early:
         raise CalibrationError(
@@ -365,21 +397,64 @@ def command_evaluate(run_dir: Path, eye_path: Path | None) -> dict[str, Any]:
         )
     tiles = labels.pilot_tiles()
     labelled = labels.load_labelled()
-    eye = labels.load_eye_labels(eye_path, tiles) if eye_path and eye_path.is_file() else None
+    eye = None
+    eye_sha = None
+    if eye_labels is not None:
+        eye_path = ROOT / eye_labels
+        if not eye_path.is_file():
+            raise CalibrationError(
+                f"{eye_path} does not exist - name the eye labels W8 wrote, or --no-eye-labels"
+            )
+        eye = labels.load_eye_labels(eye_path, tiles)
+        eye_sha = _sha(eye_path.read_text(encoding="utf-8"))
     result = evaluate(thresholds, jobs, ledger, tiles, labelled, eye, _clopper_pearson())
-    admission = {
+    return {
         "thresholds_sha256": digest,
         "sealed_at": sealed_at,
-        "evaluated_at": _now(),
         "jobs_sha256": _sha((run_dir / JOBS_FILE).read_text(encoding="utf-8")),
+        "ledger_sha256": _sha(ledger_path.read_text(encoding="utf-8")),
         "ledger_lines": len(ledger),
-        "eye_labels": None if eye is None else str(eye_path),
+        "eye_labels": eye_labels,
+        "eye_labels_sha256": eye_sha,
         **result,
     }
-    (run_dir / ADMISSION_FILE).write_text(
-        json.dumps(admission, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
-    )
-    return admission
+
+
+def admission_text(record: Mapping[str, Any]) -> str:
+    return json.dumps(record, indent=1, sort_keys=True) + "\n"
+
+
+def command_evaluate(run_dir: Path, eye_path: Path | None) -> dict[str, Any]:
+    """Measure and write ADMISSION.json. `eye_path` None is the explicit --no-eye-labels."""
+    record = admission_record(run_dir, None if eye_path is None else _repo_path(eye_path))
+    (run_dir / ADMISSION_FILE).write_text(admission_text(record), encoding="utf-8", newline="\n")
+    return record
+
+
+def verify_admission(run_dir: Path) -> tuple[dict[str, Any], str]:
+    """ADMISSION.json as `decide.py` may trust it, and its sha256.
+
+    The file is re-derived from the run directory - the sealed thresholds, the jobs, the ledger and
+    the eye labels it names - and refused unless the re-derivation is byte-identical and T0 passed.
+    """
+    path = run_dir / ADMISSION_FILE
+    if not path.is_file():
+        raise CalibrationError(f"{path} does not exist - run `calibrate.py evaluate` first")
+    text = path.read_text(encoding="utf-8")
+    stored = json.loads(text)
+    again = admission_record(run_dir, stored.get("eye_labels"))
+    if admission_text(again) != text:
+        differing = sorted(k for k in set(stored) | set(again) if stored.get(k) != again.get(k))
+        raise CalibrationError(
+            f"{path} is not what the sealed calibration in {run_dir} measures (differs in "
+            f"{differing}) - an admission is re-derived, never trusted"
+        )
+    if again["metrics"]["T0"]["pass"] is not True:
+        raise CalibrationError(
+            f"{path}: T0 failed ({again['metrics']['T0']['without_verdict']} job(s) without a "
+            "verdict) - calibration admits nothing"
+        )
+    return again, _sha(text)
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -394,7 +469,15 @@ def main(argv: Iterable[str] | None = None) -> int:
             cmd.add_argument("--t10", default=str(worklist.DEFAULT_T10))
             cmd.add_argument("--hero-moves", default=str(worklist.DEFAULT_HERO_MOVES))
         if name == "evaluate":
-            cmd.add_argument("--eye-labels", default=str(labels.B4_LABELS))
+            eye = cmd.add_mutually_exclusive_group(required=True)
+            eye.add_argument(
+                "--eye-labels", help=f"W8's blinded tile labels (normally {labels.B4_LABELS})"
+            )
+            eye.add_argument(
+                "--no-eye-labels",
+                action="store_true",
+                help="evaluate without eye labels: T-strict is then not evaluable (K2, H1 off)",
+            )
     args = parser.parse_args(list(argv) if argv is not None else None)
     run_dir = Path(args.run_dir)
     if args.command == "seal":
@@ -414,7 +497,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             f"{len(jobs)} C1 jobs -> {run_dir / JOBS_FILE} (sha256 {vision.write_jobs(run_dir / JOBS_FILE, jobs)})"
         )
         return 0
-    admission = command_evaluate(run_dir, Path(args.eye_labels))
+    admission = command_evaluate(run_dir, None if args.no_eye_labels else Path(args.eye_labels))
     print(json.dumps({k: admission[k] for k in ("admitted", "metrics")}, indent=1, sort_keys=True))
     return 0
 

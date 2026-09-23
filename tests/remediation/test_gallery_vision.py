@@ -836,10 +836,14 @@ def _v(image_id: int, prompt: str = vision.GALLERY, **verdict: Any) -> vision.Ve
     return vision.Verdict(f"vid{image_id}{prompt[0]}", dict(line["verdict"]), line)
 
 
-ALL = decide.Admission(kind=True, strict=True, x1=True, x2=True, x3=True, thresholds_sha256="t")
-NONE = decide.Admission(
-    kind=False, strict=False, x1=False, x2=False, x3=False, thresholds_sha256="t"
-)
+def _admission(
+    kind: bool = False, strict: bool = False, x1: bool = False, x2: bool = False, x3: bool = False
+) -> decide.Admission:
+    return decide.Admission(kind, strict, x1, x2, x3, thresholds_sha256="t", admission_sha256="adm")
+
+
+ALL = _admission(kind=True, strict=True, x1=True, x2=True, x3=True)
+NONE = _admission()
 TRUTH_BIG = {"status": "ok", "width": 4000, "height": 3000}
 
 
@@ -857,9 +861,7 @@ def test_nothing_is_written_that_calibration_did_not_admit() -> None:
 def test_kind_writes_need_admission_and_never_overwrite_a_recorded_kind() -> None:
     rows = {SITE: [_row(1, tier="B"), _row(2, tier="B"), _row(3, tier="B")]}
     gallery = {1: _v(1, kind="artifact"), 2: _v(2, kind="artifact"), 3: _v(3, kind="site_photo")}
-    only_kind = decide.Admission(
-        kind=True, strict=False, x1=False, x2=False, x3=False, thresholds_sha256="t"
-    )
+    only_kind = _admission(kind=True)
     planned, listed = decide.plan_vision(
         rows, {2: "site_photo"}, gallery, {3: _v(3, vision.HERO)}, only_kind, {}, {}
     )
@@ -887,9 +889,7 @@ def test_exclusions_spare_manual_rows_and_artifacts_and_take_the_heros_flag_with
         3: _v(3, kind="artifact"),
         4: _v(4, kind="other"),
     }
-    no_kind = decide.Admission(
-        kind=False, strict=False, x1=True, x2=True, x3=True, thresholds_sha256="t"
-    )
+    no_kind = _admission(x1=True, x2=True, x3=True)
     planned, _ = decide.plan_vision(rows, {}, gallery, {}, no_kind, {}, {})
     got = {(p.key, p.column, p.rule, p.role) for p in planned}
     assert got == {
@@ -902,6 +902,7 @@ def test_exclusions_spare_manual_rows_and_artifacts_and_take_the_heros_flag_with
         evidence["verdict_id"] == "vid1g"
         and evidence["prompt_sha256"] == GALLERY_SHA
         and evidence["rules_sha256"] == RULES_SHA
+        and evidence["admission_sha256"] == "adm"  # the admission that allowed X1
     )
 
 
@@ -924,7 +925,7 @@ def test_the_hero_moves_to_the_best_strict_confirmed_candidate() -> None:
         "File_5.jpg": {"status": "ok", "width": 6000, "height": 4500},
     }
     planned, _ = decide.plan_vision(
-        rows, {}, gallery, hero, decide.Admission(True, True, False, False, False, "t"), truth, {}
+        rows, {}, gallery, hero, _admission(kind=True, strict=True), truth, {}
     )
     moves = [(p.key, p.old, p.new, p.role) for p in planned if p.column == "is_hero"]
     assert moves == [(1, True, False, "hero-demote"), (3, False, True, "hero-promote")]
@@ -1033,32 +1034,6 @@ def test_a_plan_that_breaks_the_hero_invariants_is_refused() -> None:
         decide.check_plan([kind], rows)
 
 
-def test_an_admission_file_must_name_every_trigger_with_a_boolean(tmp_path: Path) -> None:
-    path = tmp_path / "ADMISSION.json"
-    path.write_text(
-        json.dumps(
-            {
-                "thresholds_sha256": "t",
-                "admitted": {"kind": True, "strict": False, "x1": True, "x2": False},
-            }
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(decide.DecideError, match="kind/strict/x1/x2/x3"):
-        decide.load_admission(path)
-    path.write_text(
-        json.dumps(
-            {
-                "thresholds_sha256": "t",
-                "admitted": dict.fromkeys(("kind", "strict", "x1", "x2", "x3"), "yes"),
-            }
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(decide.DecideError, match="not a boolean"):
-        decide.load_admission(path)
-
-
 def test_the_served_image_state_names_every_case() -> None:
     gallery = {1: _v(1), 2: _v(2, other_site=True), 3: _v(3), 4: _v(4)}
     hero = {3: _v(3, vision.HERO), 4: _v(4, vision.HERO, shows_archaeology=False)}
@@ -1104,7 +1079,7 @@ def test_a_planned_row_must_cite_a_ledger_verdict_about_todays_bytes(tmp_path: P
     entry = vision.LedgerLine(vision.verdict_id(text), line)
     verdict = vision.Verdict(entry.verdict_id, dict(line["verdict"]), line)
     rows = {SITE: [_row(1, tier="B")]}
-    only_kind = decide.Admission(True, False, False, False, False, "t")
+    only_kind = _admission(kind=True)
     planned, _ = decide.plan_vision(rows, {}, {1: verdict}, {}, only_kind, {}, {})
     assert [p.rule for p in planned] == ["K1"]
     assert decide.verify_evidence(planned, [entry], images) == []
@@ -1311,7 +1286,7 @@ def test_decide_refuses_to_plan_vision_on_a_state_behind_the_liveness_write(
     state = _state([_row(1, is_hero=True, tier="A"), _row(2)])
     monkeypatch.setattr(worklist, "state_from_args", lambda args: state)
     monkeypatch.setattr(decide, "load_truth", lambda path: {})
-    argv = ["vision", "--run-dir", str(tmp_path / "run"), "--admission", str(tmp_path / "A")]
+    argv = ["vision", "--run-dir", str(tmp_path / "run"), "--calibration", str(tmp_path / "C1")]
     argv += ["--liveness-store", str(store), "--chunk", "0"]
     with pytest.raises(worklist.WorklistError, match="fold the liveness write in"):
         decide.main(argv)

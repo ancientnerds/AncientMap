@@ -3,8 +3,10 @@
 The model never writes a value. A planned row is produced only by one of the rules below, and it
 carries pointers, never prose: the ledger line it rests on (`verdict_id`, the sha256 of that line)
 or the liveness line (`liveness_sha256`), the model, the prompt's sha256, the image's sha256 and
-the rule id. The table's own sha256 is pinned in `tests/remediation/test_gallery_vision.py`; a rule
-is changed by changing the pin, in review, never quietly.
+the rule id - and a vision rule's row the sha256 of the C1 admission that allowed it, which is
+re-derived from the sealed calibration before any plan is made (`load_admission`). The table's own
+sha256 is pinned in `tests/remediation/test_gallery_vision.py`; a rule is changed by changing the
+pin, in review, never quietly.
 
 What each rule may do, and when it is silent
 --------------------------------------------
@@ -57,7 +59,7 @@ from hero_repair.plan import (  # noqa: E402
     rank_key,
 )
 
-from gallery_audit import liveness, vision, worklist  # noqa: E402
+from gallery_audit import calibrate, liveness, vision, worklist  # noqa: E402
 from gallery_audit.persist_verdicts import VOCAB  # noqa: E402
 from gallery_audit.planned import PlannedRow, write_plan  # noqa: E402
 from gallery_audit.worklist import served_row  # noqa: E402
@@ -108,25 +110,36 @@ class Admission:
     x2: bool
     x3: bool
     thresholds_sha256: str
+    #: The sha256 of the ADMISSION.json these flags come from; every vision-planned row cites it.
+    admission_sha256: str
 
     def admits(self, rule: str) -> bool:
         return {"X1": self.x1, "X2": self.x2, "X3": self.x3}[rule]
 
 
-def load_admission(path: Path) -> Admission:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    admitted = data.get("admitted")
-    if not isinstance(admitted, dict) or set(admitted) != {"kind", "strict", "x1", "x2", "x3"}:
-        raise DecideError(f"{path}: no admission block with kind/strict/x1/x2/x3")
-    if not all(isinstance(v, bool) for v in admitted.values()):
-        raise DecideError(f"{path}: an admission that is not a boolean")
-    return Admission(thresholds_sha256=str(data["thresholds_sha256"]), **admitted)
+def load_admission(calibration_dir: Path) -> Admission:
+    """The admission of a C1 run directory, re-derived from its sealed inputs before it is used
+    (`calibrate.verify_admission`): a hand-written or stale ADMISSION.json switches nothing on.
+    The flags are the re-derivation's own, so they are `evaluate`'s five booleans by construction.
+    """
+    record, digest = calibrate.verify_admission(calibration_dir)
+    admitted = record["admitted"]
+    return Admission(
+        kind=admitted["kind"],
+        strict=admitted["strict"],
+        x1=admitted["x1"],
+        x2=admitted["x2"],
+        x3=admitted["x3"],
+        thresholds_sha256=record["thresholds_sha256"],
+        admission_sha256=digest,
+    )
 
 
-def _verdict_evidence(verdict: vision.Verdict, rule: str) -> dict[str, Any]:
+def _verdict_evidence(verdict: vision.Verdict, rule: str, admission: Admission) -> dict[str, Any]:
     return {
         "rule": rule,
         "rules_sha256": rules_sha256(),
+        "admission_sha256": admission.admission_sha256,
         "verdict_id": verdict.verdict_id,
         "model": verdict.line["model"],
         "prompt_id": verdict.line["prompt_id"],
@@ -250,7 +263,9 @@ def plan_vision(
                             new_kind,
                             rule,
                             "kind",
-                            _verdict_evidence(first if rule == "K1" else hero[image_id], rule),
+                            _verdict_evidence(
+                                first if rule == "K1" else hero[image_id], rule, admission
+                            ),
                         )
                     )
                 elif current != new_kind:
@@ -279,7 +294,7 @@ def plan_vision(
                             True,
                             rule_id,
                             "exclude",
-                            _verdict_evidence(first, rule_id),
+                            _verdict_evidence(first, rule_id, admission),
                         )
                     )
                     excluded_now.add(image_id)
@@ -294,7 +309,7 @@ def plan_vision(
                                 False,
                                 rule_id,
                                 "hero-drop",
-                                _verdict_evidence(first, rule_id),
+                                _verdict_evidence(first, rule_id, admission),
                             )
                         )
                         hero_dropped.add(image_id)
@@ -302,7 +317,16 @@ def plan_vision(
         if admission.strict:
             planned.extend(
                 _plan_hero(
-                    site_id, rows, excluded_now, hero_dropped, gallery, hero, truth, blocked, listed
+                    site_id,
+                    rows,
+                    excluded_now,
+                    hero_dropped,
+                    gallery,
+                    hero,
+                    truth,
+                    blocked,
+                    admission,
+                    listed,
                 )
             )
     return planned, listed
@@ -374,6 +398,7 @@ def _plan_hero(
     hero: Mapping[int, vision.Verdict],
     truth: Mapping[str, Mapping[str, Any]],
     blocked: Mapping[int, str],
+    admission: Admission,
     listed: list[dict[str, Any]],
 ) -> list[PlannedRow]:
     """H1 for one site: a new hero when the served image is excluded or fails the strict pass."""
@@ -440,7 +465,7 @@ def _plan_hero(
                 False,
                 "H1",
                 "hero-demote",
-                _verdict_evidence(hero[chosen_id], "H1"),
+                _verdict_evidence(hero[chosen_id], "H1", admission),
             )
         )
     out.append(
@@ -453,7 +478,7 @@ def _plan_hero(
             True,
             "H1",
             "hero-promote",
-            _verdict_evidence(hero[chosen_id], "H1"),
+            _verdict_evidence(hero[chosen_id], "H1", admission),
         )
     )
     return out
@@ -749,7 +774,11 @@ def main(argv: list[str] | None = None) -> int:
     vis.add_argument(
         "--run-dir", required=True, help="holds VERDICTS.jsonl; PLANNED.jsonl goes here"
     )
-    vis.add_argument("--admission", required=True, help="the C1 ADMISSION.json")
+    vis.add_argument(
+        "--calibration",
+        required=True,
+        help="the C1 run directory; its ADMISSION.json is re-derived before it is used",
+    )
     vis.add_argument(
         "--liveness-store",
         required=True,
@@ -780,7 +809,7 @@ def main(argv: list[str] | None = None) -> int:
             {int(row["id"]): row["image_kind"] for site in rows.values() for row in site},
             vision.verdicts_by_image(ledger, vision.GALLERY_PROMPT_ID),
             vision.verdicts_by_image(ledger, vision.HERO_PROMPT_ID),
-            load_admission(Path(args.admission)),
+            load_admission(Path(args.calibration)),
             truth,
             blocked,
         )

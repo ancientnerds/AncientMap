@@ -17,7 +17,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
-from gallery_audit import calibrate, labels, vision, worklist  # noqa: E402
+from gallery_audit import calibrate, decide, labels, vision, worklist  # noqa: E402
 
 THRESHOLDS_SHA = "1040cd59353181c6928640b3ef51148454cdcbf13b2b31179ca57f3f8b55c99b"
 SITE = "0a1b2c3d-4e5f-6789-abcd-ef0123456789"
@@ -250,6 +250,156 @@ def test_a_verdict_judged_before_the_seal_is_refused(tmp_path: Path) -> None:
     )
     with pytest.raises(calibrate.CalibrationError, match="judged before the seal"):
         calibrate.command_evaluate(tmp_path, None)
+
+
+def _c1_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, drop: int | None = None
+) -> tuple[Path, Path]:
+    """A sealed C1 run directory over small label sets, with its ledger and W8-style eye labels.
+
+    The repository root is `tmp_path` (the eye labels must be a repository file), the thresholds
+    are the real sealed ones. `drop` leaves one gallery verdict out of the ledger (T0 fails).
+    """
+    monkeypatch.setattr(calibrate, "ROOT", tmp_path)
+    tiles = [
+        labels.PilotTile(1, SITE, "A", "site_photo"),
+        labels.PilotTile(2, SITE, "B", "artifact"),
+    ]
+    labelled = [
+        labels.LabelledRow(SITE, 11, frozenset({labels.FOREIGN})),
+        labels.LabelledRow(SITE, 12, frozenset()),
+    ]
+    monkeypatch.setattr(labels, "pilot_tiles", lambda: tiles)
+    monkeypatch.setattr(labels, "load_labelled", lambda: labelled)
+    run = tmp_path / "calibration"
+    calibrate.seal(run, now=lambda: "2026-09-23T10:00:00Z")
+    definitions = calibrate.THRESHOLDS["definitions"]
+    ids = [1, 2, 11, 12, *definitions["gold_foreign"], *definitions["gold_correct"]]
+    vision.write_jobs(run / "JOBS.jsonl", [_job(i) for i in ids] + [_job(1, vision.HERO)])
+    lines = [_line(i).line for i in ids if i != drop] + [_line(1, vision.HERO).line]
+    (run / "VERDICTS.jsonl").write_text(
+        "".join(vision.line_text(line) + "\n" for line in lines), encoding="utf-8", newline="\n"
+    )
+    eye = tmp_path / "LABELS.jsonl"
+    eye.write_text(
+        json.dumps(
+            {
+                "image_id": 1,
+                "human_kind": "site_photo",
+                "shows_archaeology": True,
+                "other_site": None,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return run, eye
+
+
+def test_a_genuine_admission_is_re_derived_and_decide_cites_its_sha256(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, eye = _c1_dir(tmp_path, monkeypatch)
+    written = calibrate.command_evaluate(run, eye)
+    assert written["eye_labels"] == "LABELS.jsonl" and len(written["eye_labels_sha256"]) == 64
+    assert (
+        written["ledger_sha256"]
+        == hashlib.sha256((run / "VERDICTS.jsonl").read_bytes()).hexdigest()
+    )
+    text = (run / "ADMISSION.json").read_text(encoding="utf-8")
+    record, digest = calibrate.verify_admission(run)
+    assert record == written and digest == hashlib.sha256(text.encode("utf-8")).hexdigest()
+    admission = decide.load_admission(run)
+    assert admission.admission_sha256 == digest
+    assert {k: getattr(admission, k) for k in written["admitted"]} == written["admitted"]
+    calibrate.command_evaluate(run, eye)  # the same inputs give the same bytes
+    assert (run / "ADMISSION.json").read_text(encoding="utf-8") == text
+
+
+def test_a_hand_edited_admission_switches_nothing_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, eye = _c1_dir(tmp_path, monkeypatch)
+    written = calibrate.command_evaluate(run, eye)
+    path = run / "ADMISSION.json"
+    for forged in (
+        {**written, "admitted": dict.fromkeys(written["admitted"], True)},
+        {**written, "thresholds_sha256": "0" * 64},
+    ):
+        path.write_text(calibrate.admission_text(forged), encoding="utf-8", newline="\n")
+        with pytest.raises(calibrate.CalibrationError, match="is not what the sealed calibration"):
+            calibrate.verify_admission(run)
+        with pytest.raises(calibrate.CalibrationError, match="is not what the sealed calibration"):
+            decide.load_admission(run)
+
+
+def test_an_admission_measured_on_another_ledger_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, eye = _c1_dir(tmp_path, monkeypatch)
+    calibrate.command_evaluate(run, eye)
+    ledger = run / "VERDICTS.jsonl"
+    # the same verdicts, another cost: no metric moves, only the ledger's bytes do
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace('"cost_usd": 0.001', '"cost_usd": 0.002', 1),
+        encoding="utf-8",
+        newline="\n",
+    )
+    with pytest.raises(calibrate.CalibrationError, match=r"differs in \['ledger_sha256'\]"):
+        calibrate.verify_admission(run)
+
+
+def test_an_admission_measured_on_other_eye_labels_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, eye = _c1_dir(tmp_path, monkeypatch)
+    calibrate.command_evaluate(run, eye)
+    # other_site is no input of any metric: only the labels' bytes move
+    eye.write_text(
+        eye.read_text(encoding="utf-8").replace('"other_site": null', '"other_site": true'),
+        encoding="utf-8",
+    )
+    with pytest.raises(calibrate.CalibrationError, match=r"differs in \['eye_labels_sha256'\]"):
+        calibrate.verify_admission(run)
+
+
+def test_an_admission_whose_t0_failed_is_refused_to_decide(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, eye = _c1_dir(tmp_path, monkeypatch, drop=12)
+    written = calibrate.command_evaluate(run, eye)
+    assert written["metrics"]["T0"]["pass"] is False
+    with pytest.raises(calibrate.CalibrationError, match="T0 failed"):
+        calibrate.verify_admission(run)
+
+
+def test_evaluate_names_its_eye_labels_or_says_it_has_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, _ = _c1_dir(tmp_path, monkeypatch)
+    with pytest.raises(calibrate.CalibrationError, match="does not exist - name the eye labels"):
+        calibrate.command_evaluate(run, tmp_path / "LABELS-typo.jsonl")
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.jsonl"
+    outside.write_text("", encoding="utf-8")
+    with pytest.raises(calibrate.CalibrationError, match="not a file of this repository"):
+        calibrate.command_evaluate(run, outside)
+    with pytest.raises(SystemExit):
+        calibrate.main(["evaluate", "--run-dir", str(run)])
+    assert calibrate.main(["evaluate", "--run-dir", str(run), "--no-eye-labels"]) == 0
+    record, _ = calibrate.verify_admission(run)
+    assert record["eye_labels"] is None and record["eye_labels_sha256"] is None
+    assert record["metrics"]["T-strict"]["evaluable"] is False
+
+
+def test_evaluate_and_its_verification_need_their_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, eye = _c1_dir(tmp_path, monkeypatch)
+    with pytest.raises(calibrate.CalibrationError, match="run `calibrate.py evaluate` first"):
+        calibrate.verify_admission(run)
+    (run / "VERDICTS.jsonl").unlink()
+    with pytest.raises(calibrate.CalibrationError, match="run the C1 vision run first"):
+        calibrate.command_evaluate(run, eye)
 
 
 def test_the_c1_jobs_ask_each_image_once_and_the_strict_question_of_tier_a() -> None:
