@@ -8,7 +8,7 @@
 import type * as THREE from 'three'
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { SiteData } from '../../data/sites'
-import type { VectorLayerKey } from '../../config/vectorLayers'
+import type { GlobeLayerKey, GlobeLayerTierState, VectorLayerKey } from '../../config/vectorLayers'
 import type { GlobeLabelMesh } from '../../utils/LabelRenderer'
 import type { FadeManager } from '../../utils/FadeManager'
 import type { MapboxGlobeService } from '../../services/MapboxGlobeService'
@@ -147,8 +147,12 @@ export interface GlobeRefs {
   // ========== Vector Layer Refs ==========
   frontLineLayers: React.MutableRefObject<Record<VectorLayerKey, THREE.Line[]>>
   backLineLayers: React.MutableRefObject<Record<VectorLayerKey, THREE.Line[]>>
-  backLayersLoaded: React.MutableRefObject<Record<string, boolean>>
-  loading: React.MutableRefObject<Record<string, boolean>>
+  /** Newest load id per layer (vectorRenderer.loadVectorLayer): a newer load supersedes an older one */
+  layerLoadIds: React.MutableRefObject<Record<string, number>>
+  /** Coastline/border tier on the globe and the highest one requested (start < detail < hires) */
+  globeLayerTiers: React.MutableRefObject<Record<GlobeLayerKey, GlobeLayerTierState>>
+  /** Layers whose load failed: the load effect does not start them again while they stay on */
+  failedLayers: React.MutableRefObject<Partial<Record<VectorLayerKey, boolean>>>
 
   // ========== Paleoshoreline Refs ==========
   paleoshorelineLines: React.MutableRefObject<THREE.Line[]>
@@ -322,7 +326,6 @@ export interface GlobeRefs {
 
   // ========== Previous State Tracking Refs ==========
   prevDetailLevel: React.MutableRefObject<DetailLevel | null>
-  prevBackDetailLevel: React.MutableRefObject<DetailLevel | null>
   prevSeaLevel: React.MutableRefObject<number>
   prevReplaceCoastlines: React.MutableRefObject<boolean>
   prevPaleoshorelineVisible: React.MutableRefObject<boolean>
@@ -332,9 +335,6 @@ export interface GlobeRefs {
     grayBasemap: THREE.Texture | null
     satellite: THREE.Texture | null
   }>
-
-  // ========== Preloading Refs ==========
-  vectorPreloaded: React.MutableRefObject<boolean>
 
   // ========== Additional Callback Refs ==========
   onEmpireYearsChange: React.MutableRefObject<((years: Record<string, number>) => void) | undefined>

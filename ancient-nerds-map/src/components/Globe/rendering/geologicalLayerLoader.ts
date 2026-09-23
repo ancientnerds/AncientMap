@@ -13,6 +13,7 @@ import { offlineFetch } from '../../../services/OfflineFetch'
 import { createFrontLineMaterial as createFrontMaterial } from '../../../shaders/globe'
 import type { FadeManager } from '../../../utils/FadeManager'
 import { GEOLOGICAL_LAYER_CONFIG, getGeologicalLayerUrl, type GeologicalLayerKey } from '../../../config/geologicalLayers'
+import { latLngTo3DArray } from './segmentBuilder'
 
 // ============================================================================
 // Types
@@ -35,16 +36,6 @@ export interface GeologicalLayerContext {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function latLngTo3DArray(lat: number, lng: number, r: number): [number, number, number] {
-  const phi = (90 - lat) * Math.PI / 180
-  const theta = (lng + 180) * Math.PI / 180
-  return [
-    -r * Math.sin(phi) * Math.cos(theta),
-    r * Math.cos(phi),
-    r * Math.sin(phi) * Math.sin(theta),
-  ]
-}
 
 /** Size of cross marker for point features, in degrees */
 const CROSS_SIZE = 0.05

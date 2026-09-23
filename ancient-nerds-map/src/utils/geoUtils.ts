@@ -85,29 +85,6 @@ export function hexToRgb(hex: string): [number, number, number] {
 }
 
 /**
- * Check if a line segment is an artificial Antarctic boundary
- * (straight lines at 0°, ±90°, ±180° longitude dividing ice sheet sectors)
- */
-export function isArtificialAntarcticBoundary(coord1: number[], coord2: number[]): boolean {
-  const [lon1, lat1] = coord1
-  const [lon2, lat2] = coord2
-  // Only check Antarctica (lat < -60)
-  if (lat1 > -60 && lat2 > -60) return false
-  // Check if segment is at a round longitude (tolerance 0.5°)
-  for (const roundLon of [0, 90, -90, 180, -180]) {
-    if (Math.abs(lon1 - roundLon) < 0.5 && Math.abs(lon2 - roundLon) < 0.5) {
-      // Check if it's a significant vertical segment (spans > 2° latitude)
-      if (Math.abs(lat1 - lat2) > 2) return true
-    }
-  }
-  // Also check horizontal lines at -90° latitude (South Pole connections)
-  if (Math.abs(lat1 - (-90)) < 0.5 && Math.abs(lat2 - (-90)) < 0.5) {
-    if (Math.abs(lon1 - lon2) > 10) return true
-  }
-  return false
-}
-
-/**
  * Format year as BCE/CE string
  */
 export function formatYear(year: number): string {

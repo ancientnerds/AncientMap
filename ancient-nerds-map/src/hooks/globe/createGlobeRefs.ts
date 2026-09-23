@@ -10,7 +10,7 @@ import { useRef } from 'react'
 import * as THREE from 'three'
 import type { GlobeRefs, SceneObjectRefs, GlobeLabel, MeasurementLabelData, MeasurementLineData, MeasurementMarkerData } from './types'
 import type { SiteData } from '../../data/sites'
-import type { VectorLayerKey } from '../../config/vectorLayers'
+import type { GlobeLayerKey, GlobeLayerTierState, VectorLayerKey } from '../../config/vectorLayers'
 import type { GlobeLabelMesh } from '../../utils/LabelRenderer'
 import { FadeManager } from '../../utils/FadeManager'
 import type { MapboxGlobeService } from '../../services/MapboxGlobeService'
@@ -97,8 +97,12 @@ export function useGlobeRefs(): GlobeRefs {
     coralReefs: [],
     plateBoundaries: []
   })
-  const backLayersLoaded = useRef<Record<string, boolean>>({})
-  const loading = useRef<Record<string, boolean>>({})
+  const layerLoadIds = useRef<Record<string, number>>({})
+  const globeLayerTiers = useRef<Record<GlobeLayerKey, GlobeLayerTierState>>({
+    coastlines: { committed: null, requested: null },
+    countryBorders: { committed: null, requested: null },
+  })
+  const failedLayers = useRef<Partial<Record<VectorLayerKey, boolean>>>({})
 
   // ========== Paleoshoreline Refs ==========
   const paleoshorelineLines = useRef<THREE.Line[]>([])
@@ -280,7 +284,6 @@ export function useGlobeRefs(): GlobeRefs {
 
   // ========== Previous State Tracking Refs ==========
   const prevDetailLevel = useRef<DetailLevel | null>(null)
-  const prevBackDetailLevel = useRef<DetailLevel | null>(null)
   const prevSeaLevel = useRef<number>(-120)
   const prevReplaceCoastlines = useRef<boolean>(false)
   const prevPaleoshorelineVisible = useRef<boolean>(false)
@@ -293,9 +296,6 @@ export function useGlobeRefs(): GlobeRefs {
     grayBasemap: null,
     satellite: null
   })
-
-  // ========== Preloading Refs ==========
-  const vectorPreloaded = useRef<boolean>(false)
 
   // ========== Additional Callback Refs ==========
   const onEmpireYearsChange = useRef<((years: Record<string, number>) => void) | undefined>(undefined)
@@ -354,8 +354,9 @@ export function useGlobeRefs(): GlobeRefs {
     // Vector Layer Refs
     frontLineLayers,
     backLineLayers,
-    backLayersLoaded,
-    loading,
+    layerLoadIds,
+    globeLayerTiers,
+    failedLayers,
 
     // Paleoshoreline Refs
     paleoshorelineLines,
@@ -529,16 +530,12 @@ export function useGlobeRefs(): GlobeRefs {
 
     // Previous State Tracking Refs
     prevDetailLevel,
-    prevBackDetailLevel,
     prevSeaLevel,
     prevReplaceCoastlines,
     prevPaleoshorelineVisible,
 
     // Texture Cache Refs
     textureCache,
-
-    // Preloading Refs
-    vectorPreloaded,
 
     // Additional Callback Refs
     onEmpireYearsChange,

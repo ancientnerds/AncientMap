@@ -2,12 +2,13 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SiteData, getDataSource } from '../data/sites'
 import { FilterMode } from '../App'
-import { offlineFetch, OfflineFetch } from '../services/OfflineFetch'
+import { offlineFetch } from '../services/OfflineFetch'
 import { useOffline } from '../contexts/OfflineContext'
 import { track } from '../analytics'
 import { EMPIRES } from '../config/empireData'
 import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
+import { CAMERA } from '../config/globeConstants'
 import { fadeLabelIn, fadeLabelOut } from '../utils/LabelRenderer'
 import { createProximityCircle, createCenterMarker, disposeGroup, disposeSprite } from '../utils/proximityHelpers'
 import { CoordinateDisplay, ScaleBar, ContributePickerHint, HardwareWarning, TooltipOverlay, MapboxOfflineWarning } from './Globe/overlays'
@@ -57,8 +58,12 @@ import {
   type GeoLabelContext,
 } from './Globe/rendering/geoLabelSystem'
 import {
-  loadFrontLayer as loadFrontLayerImpl,
-  loadBackLayer as loadBackLayerImpl,
+  createLayerParser,
+  ensureHiresCoastline,
+  loadVectorLayer as loadVectorLayerImpl,
+  pickLayersToLoad,
+  type HiresCoastlineGate,
+  type ParseLayer,
   type VectorRendererContext,
 } from './Globe/rendering/vectorRenderer'
 import { initializeScene, type SceneInitOptions } from './Globe/rendering/sceneInit'
@@ -459,7 +464,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const {
     stars: starsRef, isManualZoom, isWheelZoom, wheelCursorLatLng, justEnteredMapbox,
     mapboxBaseZoom: mapboxBaseZoomRef, isAutoRotating: isAutoRotatingRef, manualRotation: manualRotationRef,
-    loading: loadingRef, shaderMaterials: shaderMaterialsRef, ledDotMaterial: ledDotMaterialRef,
+    shaderMaterials: shaderMaterialsRef, ledDotMaterial: ledDotMaterialRef,
     layersReadyCalled: layersReadyCalledRef, cameraAnimation: cameraAnimationRef, animationId: animationIdRef,
     zoom: zoomRef, highlightGlows: highlightGlowsRef, listHighlightedSites: listHighlightedSitesRef,
     listHighlightedPositions: listHighlightedPositionsRef, proximityRaycaster: proximityRaycasterRef,
@@ -487,7 +492,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     basemapMesh: basemapMeshRef, basemapSectionMeshes, basemapBackMesh: basemapBackMeshRef,
     proximityCircle: proximityCircleRef, proximityCenter: proximityCenterRef, proximityPreview: proximityPreviewRef,
     proximityPreviewCenter: proximityPreviewCenterRef, proximityCircleCenterPos: proximityCircleCenterPosRef,
-    backLayersLoaded: backLayersLoadedRef,
+    layerLoadIds: layerLoadIdsRef, globeLayerTiers: globeLayerTiersRef, failedLayers: failedLayersRef,
   } = refs
 
   // Sync refs with current values
@@ -1380,85 +1385,78 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     )
   }, [])
 
-  // Build context for vector renderer functions
-  const buildVectorRendererContext = useCallback((): VectorRendererContext => ({
-    sceneRef,
-    loadingRef,
-    shaderMaterialsRef,
-    frontLineLayersRef,
-    backLineLayersRef,
-    backLayersLoadedRef,
-    fadeManagerRef,
-    detailLevelRef,
-    layerLabelsRef,
-    allLabelMeshesRef,
-    updateGeoLabelsRef,
-    vectorLayers,
-    tileLayers,
-    setIsLoadingLayers,
-    setLayersLoaded,
-    latLngTo3DRef,
-  }), [vectorLayers, tileLayers, latLngTo3DRef])
+  // Vector layers: one layer worker per Globe parses every layer file off the main thread. The
+  // lifetime signal cancels the loads still in flight when the Globe unmounts (StrictMode's
+  // simulated unmount included), so they are dropped instead of reported.
+  const layerRuntimeRef = useRef<{ parseLayer: ParseLayer; signal: AbortSignal } | null>(null)
+  useEffect(() => {
+    const lifetime = new AbortController()
+    const parser = createLayerParser()
+    layerRuntimeRef.current = { parseLayer: parser.parse, signal: lifetime.signal }
+    return () => {
+      lifetime.abort()
+      parser.dispose()
+      layerRuntimeRef.current = null
+    }
+  }, [])
 
-  // Load FRONT layer (always high detail, visible on front of globe)
-  const loadFrontLayer = useCallback(async (layerKey: VectorLayerKey) => {
-    return loadFrontLayerImpl(layerKey, buildVectorRendererContext())
-  }, [vectorLayers, latLngTo3DRef, tileLayers.satellite])
+  // Build context for vector renderer functions. Refs only, so a context built before an await
+  // (or by a background task) never works on a stale visibility or satellite snapshot.
+  const buildVectorRendererContext = useCallback((): VectorRendererContext => {
+    const runtime = layerRuntimeRef.current
+    if (!runtime) throw new Error('Vector layers: the layer worker is not running')
+    return {
+      sceneRef,
+      shaderMaterialsRef,
+      frontLineLayersRef,
+      backLineLayersRef,
+      fadeManagerRef,
+      detailLevelRef,
+      layerLabelsRef,
+      allLabelMeshesRef,
+      updateGeoLabelsRef,
+      vectorLayersRef,
+      satelliteModeRef: refs.satelliteMode,
+      layerLoadIdsRef,
+      globeLayerTiersRef,
+      failedLayersRef,
+      setIsLoadingLayers,
+      setLayersLoaded,
+      parseLayer: runtime.parseLayer,
+      signal: runtime.signal,
+      // Contract C0: interim until U9 passes reportStartError
+      onStartError: (phase, err) => console.error('[globe start]', phase, err),
+    }
+  }, [])
+
+  // Load a layer: front and back from one fetch and one parse
+  const loadVectorLayer = useCallback((layerKey: VectorLayerKey) => {
+    return loadVectorLayerImpl(layerKey, buildVectorRendererContext())
+  }, [buildVectorRendererContext])
 
   // Reload rivers/lakes when detail level changes (track previous to avoid initial load)
   const prevDetailLevelRef = refs.prevDetailLevel
   useEffect(() => {
     if (!sceneRef.current) return
 
-    // Skip initial mount - the visibility effect handles first load
+    // Skip initial mount - the load effect handles first load
     if (prevDetailLevelRef.current === null) {
       prevDetailLevelRef.current = detailLevel
       return
     }
 
     // Only reload if detail level actually changed
-    if (prevDetailLevelRef.current !== detailLevel) {
-      prevDetailLevelRef.current = detailLevel
+    const prevDetail = prevDetailLevelRef.current
+    if (prevDetail === detailLevel) return
+    prevDetailLevelRef.current = detailLevel
 
-      // Reload LOD-enabled layers that are currently visible
-      if (vectorLayers.rivers) {
-        loadFrontLayer('rivers')
-      }
-      if (vectorLayers.lakes) {
-        loadFrontLayer('lakes')
-      }
-    }
-  }, [detailLevel, loadFrontLayer, vectorLayers.rivers, vectorLayers.lakes])
-
-  // Load BACK layer (same LOD as front, visible on back of globe)
-  const loadBackLayer = useCallback(async (layerKey: VectorLayerKey, forceReload = false) => {
-    return loadBackLayerImpl(layerKey, buildVectorRendererContext(), forceReload)
-  }, [vectorLayers, latLngTo3DRef, tileLayers.satellite])
-
-  // Reload BACK layers when detail level changes (mirrors front layer LOD effect)
-  const prevBackDetailLevelRef = refs.prevBackDetailLevel
-  useEffect(() => {
-    if (!sceneRef.current) return
-
-    // Skip initial mount
-    if (prevBackDetailLevelRef.current === null) {
-      prevBackDetailLevelRef.current = detailLevel
-      return
-    }
-
-    // Only reload if detail level actually changed
-    if (prevBackDetailLevelRef.current !== detailLevel) {
-      prevBackDetailLevelRef.current = detailLevel
-
-      // Reload LOD-enabled back layers that are currently loaded
-      if (backLayersLoadedRef.current['rivers'] && vectorLayers.rivers) {
-        loadBackLayer('rivers', true) // forceReload = true
-      }
-      if (backLayersLoadedRef.current['lakes'] && vectorLayers.lakes) {
-        loadBackLayer('lakes', true)
+    // Reload LOD-enabled layers that are currently visible, unless both levels use one file
+    for (const layerKey of ['rivers', 'lakes'] as const) {
+      if (vectorLayers[layerKey] && getLayerUrl(layerKey, prevDetail) !== getLayerUrl(layerKey, detailLevel)) {
+        loadVectorLayer(layerKey)
       }
     }
-  }, [detailLevel, loadBackLayer, vectorLayers.rivers, vectorLayers.lakes])
+  }, [detailLevel, loadVectorLayer, vectorLayers.rivers, vectorLayers.lakes])
 
   // Load paleoshoreline contour for current sea level (delegated to extracted module)
   const loadPaleoshoreline = useCallback(async (level: number) => {
@@ -1835,7 +1833,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         material.uniforms.uCameraPos.value.copy(sceneRef.current.camera.position)
       }
 
-      // Build merged geometry (same pattern as loadFrontLayer in vectorRenderer.ts)
+      // Build merged geometry (same pattern as loadVectorLayer in vectorRenderer.ts)
       const allPositions: number[] = []
       for (const feature of features) {
         const geometryType = feature.geometry.type
@@ -2163,25 +2161,42 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [geologicalLayers, currentTimeStep, buildGeologicalCtx])
 
-  // Load layers when visibility changes (always high detail)
+  // Load layers when they are switched on
   // NOTE: This runs in parallel with texture and label loading
   useEffect(() => {
-    Object.keys(vectorLayers).forEach(key => {
-      const layerKey = key as VectorLayerKey
-      const isEnabled = vectorLayers[layerKey]
-      const isLoaded = layersLoaded[layerKey]
-      const isLoading = isLoadingLayers[layerKey]
+    const failed = failedLayersRef.current
+    for (const layerKey of Object.keys(vectorLayers) as VectorLayerKey[]) {
+      // A failed layer is not loaded again while it stays on (no retry loop); switching it
+      // off and on again is a new attempt
+      if (!vectorLayers[layerKey]) delete failed[layerKey]
+    }
+    for (const layerKey of pickLayersToLoad(vectorLayers, layersLoaded, isLoadingLayers, failed)) {
+      loadVectorLayer(layerKey)
+    }
+  }, [vectorLayers, layersLoaded, isLoadingLayers, loadVectorLayer])
 
-      if (isEnabled && !isLoaded && !isLoading) {
-        // Load back layer (low detail for performance) if not already loaded
-        if (!backLayersLoadedRef.current[layerKey]) {
-          loadBackLayer(layerKey)
-        }
-        // Load front layer (high detail)
-        loadFrontLayer(layerKey)
-      }
-    })
-  }, [vectorLayers, layersLoaded, isLoadingLayers, loadFrontLayer, loadBackLayer])
+  // Hi-res coastline where the Three.js globe is the only view closer than the Mapbox switch
+  // (Mapbox failed). The controls fire 'change' on every camera move: wheel, drag and slider.
+  useEffect(() => {
+    const controls = sceneRef.current?.controls
+    if (!controls) return
+    // INTEGRATION (U5): U5 owns the Mapbox load state and MAPBOX_SWITCH_DISTANCE; the merge
+    // points these two fields at mapboxStateRef.current and the constant.
+    const gate: HiresCoastlineGate = {
+      getMapboxState: () => 'idle',
+      switchDistance: CAMERA.MAX_DISTANCE - 0.8 * (CAMERA.MAX_DISTANCE - CAMERA.MIN_DISTANCE),
+    }
+    const onChange = () => {
+      ensureHiresCoastline(buildVectorRendererContext(), gate)?.catch((err: unknown) => {
+        // Unmounted while it loaded: cancelled, not failed
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        console.error('[Vector layers] hi-res coastline failed:', err)
+        track('globe_error', { phase: 'bg:hires', message: err instanceof Error ? err.message : String(err) })
+      })
+    }
+    controls.addEventListener('change', onChange)
+    return () => controls.removeEventListener('change', onChange)
+  }, [buildVectorRendererContext])
 
   // Handle layer visibility changes with fade animation (unified)
   useEffect(() => {
@@ -2384,32 +2399,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   // Cleanup FadeManager on unmount
   useEffect(() => {
     return () => fadeManagerRef.current.dispose()
-  }, [])
-
-  // Background preload vector layers (rivers, lakes) for instant toggle
-  const vectorPreloadedRef = refs.vectorPreloaded
-
-  useEffect(() => {
-    // Skip preloading in offline mode - we only use cached data
-    if (vectorPreloadedRef.current || !sceneRef.current || OfflineFetch.isOffline) return
-    vectorPreloadedRef.current = true
-
-    const preloadVectorLayers = async () => {
-      // Preload vector layers (rivers, lakes) - coastlines and borders load by default
-      const vectorLayersToPreload: VectorLayerKey[] = ['rivers', 'lakes']
-      for (const layerKey of vectorLayersToPreload) {
-        try {
-          const url = getLayerUrl(layerKey, 'high')
-          await offlineFetch(url).then(r => r.json())
-        } catch (e) {
-          // Silently ignore preload failures
-        }
-      }
-    }
-
-    // Start preloading after a short delay to not compete with initial render
-    const timeoutId = setTimeout(preloadVectorLayers, 2000)
-    return () => clearTimeout(timeoutId)
   }, [])
 
   return (
