@@ -8101,10 +8101,18 @@ WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases web: the command line plans wave 1 for --wave 2",
         _WW_RUN,
-        "    wave = P.WAVES[args.wave]\n",
+        "    wave = P.WAVES[1 if args.wave is None else args.wave]\n",
         "    wave = P.WAVE1  # mutant\n",
         _WW_TEST,
         "test_the_command_line_plans_the_second_wave",
+    ),
+    (
+        "bcases web: --wave is dropped silently outside the plan commands",
+        _WW_RUN,
+        '    if args.wave is not None and args.command not in ("plan", "check", "verify"):\n',
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_the_wave_belongs_to_the_plan_commands_alone",
     ),
 ]
 MUTATIONS += WEB_WITNESS_MUTATIONS

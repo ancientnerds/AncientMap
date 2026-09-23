@@ -121,7 +121,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache", default=str(inputs.CACHE))
     parser.add_argument("--out", default=str(inputs.OUT))
     parser.add_argument(
-        "--wave", type=int, choices=sorted(P.WAVES), default=1, help="the coordinate plan's wave"
+        "--wave",
+        type=int,
+        choices=sorted(P.WAVES),
+        help="plan, check, verify: the coordinate plan's wave (default 1)",
     )
     parser.add_argument(
         "--suspects",
@@ -131,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.suspects and args.command != "research":
         parser.error("--suspects belongs to the research command")
+    if args.wave is not None and args.command not in ("plan", "check", "verify"):
+        parser.error("--wave belongs to plan, check and verify")
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     data, cache, out = Path(args.data), Path(args.cache), Path(args.out)
     if args.command == "export":
@@ -156,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         counts = W.reweigh(cache, out, atlas=C.CC.load_countries())
         print(json.dumps(counts, indent=1, ensure_ascii=False))
         return 0
-    wave = P.WAVES[args.wave]
+    wave = P.WAVES[1 if args.wave is None else args.wave]
     if args.command == "plan":
         rows = P.write_files(out, wave)
         which = "" if wave.number == 1 else f", wave {wave.number}"

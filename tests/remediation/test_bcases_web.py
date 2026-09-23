@@ -1020,6 +1020,17 @@ def test_the_command_line_plans_the_second_wave(tmp_path: Path) -> None:
     assert (out / "coords_plan_wave2" / "APPLY.sql").exists()
 
 
+def test_the_wave_belongs_to_the_plan_commands_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--wave` given to a command that has no wave is an error, not an option silently dropped."""
+    for command in ("classify", "research", "web-verify", "reweigh"):
+        with pytest.raises(SystemExit) as stopped:
+            RUN.main([command, "--wave", "2", "--out", str(tmp_path)])
+        assert stopped.value.code == 2, command
+        assert "--wave belongs to plan, check and verify" in capsys.readouterr().err, command
+
+
 def test_wave_one_still_renders_what_is_committed(tmp_path: Path) -> None:
     """Wave 1 is applied: its plan, statements and PLAN.md render as committed, byte for byte (the
     working copy's line endings aside - PLAN.md and PLAN.jsonl are not pinned to LF)."""
