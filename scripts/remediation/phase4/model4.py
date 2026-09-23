@@ -178,6 +178,9 @@ class Route(StrEnum):
     MINIMAX = "minimax"  #: a search hit (phase3.search_stage.MiniMaxSearcher)
     PHASE3_EVIDENCE = "phase3-evidence"  #: a Phase-3 wikidata_entity file, reused
     WIKIDATA_NARROW = "wikidata-narrow"  #: refetched through the narrow Wikidata route
+    #: refetched through the Phase-3 entity request at the 1 MiB wiki cap (WB-A2, 2026-09-23: the
+    #: narrow route carries no P279 and no P625 precision, which the subject gate reads)
+    WIKIDATA_ENTITY = "wikidata-entity"
 
 
 class SubjectVerdict(StrEnum):
