@@ -5,6 +5,7 @@
     $PY scripts/remediation/bcases/run.py collect     # Wikidata and Wikipedia (cached)
     $PY scripts/remediation/bcases/run.py classify    # offline: output/remediation/bcases/*.jsonl
     $PY scripts/remediation/bcases/run.py research    # Wikidata/Wikipedia (cached): qid_research.jsonl
+    $PY scripts/remediation/bcases/run.py research --suspects   # wave 3: qid_research_suspects.jsonl
     $PY scripts/remediation/bcases/run.py plan        # offline: the coordinate plan and its SQL
     $PY scripts/remediation/bcases/run.py check       # production, read-only: the old values hold
     $PY scripts/remediation/bcases/run.py verify      # production, read-only: after an apply
@@ -75,17 +76,25 @@ def collect(data: Path, cache: Path) -> dict[str, int]:
     }
 
 
-def research(cache: Path, out: Path) -> dict[str, int]:
-    """`qid_research.jsonl`: candidates for every wrong link the first repair wave left open."""
+#: Where each research selection is written.
+RESEARCH_FILE = "qid_research.jsonl"
+SUSPECTS_FILE = "qid_research_suspects.jsonl"
+
+
+def research(cache: Path, out: Path, *, suspects: bool = False) -> dict[str, int]:
+    """`qid_research.jsonl`: candidates for every wrong link the first repair wave left open.
+
+    With `suspects` (wave 3), `qid_research_suspects.jsonl`: the same research, under the same rules,
+    for every kept name whose link is a generic concept or a shared item (`R.suspect_links`).
+    """
     sites = inputs.load_sites(cache)
-    verdicts = [
-        v
-        for v in inputs.read_jsonl(out / "names.jsonl")
-        if v["group"] == "wrong-link" and "state" not in v
-    ]
+    verdicts = inputs.read_jsonl(out / "names.jsonl")
     with Fetcher(root=cache / "http", workers=1) as net:
-        records = [R.research(net, v, sites[v["site_id"]]) for v in verdicts]
-    write_jsonl(out / "qid_research.jsonl", records)
+        if suspects:
+            records = [R.research_suspect(net, v, sites) for v in R.suspect_links(verdicts)]
+        else:
+            records = [R.research(net, v, sites[v["site_id"]]) for v in R.wrong_links(verdicts)]
+    write_jsonl(out / (SUSPECTS_FILE if suspects else RESEARCH_FILE), records)
     return {
         rule: sum(1 for r in records if r["suggestion"]["rule"] == rule)
         for rule in ("A", "B", "unresolved")
@@ -114,7 +123,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--wave", type=int, choices=sorted(P.WAVES), default=1, help="the coordinate plan's wave"
     )
+    parser.add_argument(
+        "--suspects",
+        action="store_true",
+        help="research: the kept names on a suspect link (wave 3), not the wrong links (wave 2)",
+    )
     args = parser.parse_args(argv)
+    if args.suspects and args.command != "research":
+        parser.error("--suspects belongs to the research command")
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     data, cache, out = Path(args.data), Path(args.cache), Path(args.out)
     if args.command == "export":
@@ -130,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(C.write_all(data, cache, out), indent=1, ensure_ascii=False))
         return 0
     if args.command == "research":
-        print(json.dumps(research(cache, out)))
+        print(json.dumps(research(cache, out, suspects=args.suspects)))
         return 0
     if args.command == "web-verify":
         with W.open_fetcher(cache / "web", httpx.HTTPTransport()) as net:

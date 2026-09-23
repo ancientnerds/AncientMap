@@ -6057,3 +6057,66 @@ the counts and all seven files.
 * Mutation proof: `mutation_sweep.py bcases` **86/86 caught** (the builder's 32, one anchor moved to
   the new independence line, and 54 new), the tree byte-identical to the sweep's start for 7 files;
   the repair and gap-plan entries re-run after the wave-2 wording change: 8/8.
+
+## 2026-09-23 - external-id repair, wave 3: the kept names on a suspect link (planned, not applied)
+
+Waves 1 (26 rows) and 2 (13 rows at 12 sites, stamp `2026-09-23_external-id-repair-wave2`) are
+applied. Wave 3 took the 39 B1 name findings whose name matched (`group` keep) while their link met
+Q1 (generic concept) or Q2 (item shared with other curated rows) on its own - `link_suspect` in
+`bcases/names.jsonl`: Q2 33, Q1 3, Q1+Q2 1, Q2+Q4 2. The 33 with Q4 alone (item only far away) are a
+coordinate question first and stay out. **Nothing was written to production.** Production contacts,
+all reads: one `site_external_ids` read of who links each of the 33 linked items today (after wave 2)
+and the 3 candidate items (Q22681531, Q2717874 and Q22987223 are linked by no row), and
+`qid_repair.py check --wave 3`.
+
+### Research
+
+`bcases/run.py research --suspects` (new flag; same `qid_research.research` and `suggest`, rule for
+rule, same 1 km gate) wrote `bcases/qid_research_suspects.jsonl`: per site the exact-title article,
+every item within 1 km (`list=geosearch`), ten `wbsearchentities` hits, plus `link_suspect`,
+`shared_with` (the export's other curated rows on the same item, with distances), country and
+description. Suggestions: rule A 0, rule B 4, unresolved 35. Every record was read by hand; two ad-hoc
+`wbsearchentities` lookups (cached, project user agent) were added as evidence: "milefortlet" and four
+Thasos-Artemis queries.
+
+### Outcomes (`qid_repair.py --wave 3`, `output/remediation/qid_repair/wave3/`)
+
+| outcome | sites | what it means |
+| --- | --- | --- |
+| replace | 2 | rule B under the gate: Ancient Theatre of Megalopolis `Q823721` (the modern town) -> `Q22681531` (the theatre, 31 m); Siega Verde `Q552106` (the Côa Valley, Portugal, 53.5 km) -> `Q2717874` (Siega Verde, 16 m). Titles unchanged (no own English article; `Siega_Verde` redirects to the joint Côa article). 2 row changes |
+| keep-type | 3 | Dolmens of Sardinia, Nuraghes of Sardinia, Milefortlet - Hadrians Wall: the record is the type. Wikidata has no milefortlet class - its milefortlets are instances of Q1568283 and `Milefortlet` redirects to `Milecastle` - so the task's "different type" does not hold |
+| duplicate-candidate | 23 | the link is right and another curated row is the same site: 12 pairs already in `DUPLICATES.jsonl`, Caesarea Philippi is the held Golan pair, the rest (Twin Gates/Porta Gemina, Birdoswald, Biniai Nou, Killarumiyoq, Obelisk of Ark, Madain Saleh/Hegra, Enkomi/Engomi, Amyntas) are named in the plan |
+| link-right | 5 | Themistoclean Wall (Q1 misread a specific wall without P625), Psychro Cave and Locmariaquer Megaliths (their other row's link was replaced by wave 2 - production holds each item on one row now), Pandavleni Caves (the other row is one of its caves), The Temple of Artemis-Selçuk (the other row is the Thasos record) |
+| unresolved | 6 | The Temple of Artemis, Asklepion Kos, Asklepieion - Pathos, Caunos Tombs of The Kings, Bosnian Pyramid of the Sun, Bosnian Pyramid of Love |
+
+* **Two rule-B leads refused by hand:** Madain Saleh's Q12239409 is the Hejaz railway station named
+  after the site; Caesarea Philippi's Q2484244 would split the held Banias/Caesarea Philippi pair by
+  link and settle what the owner holds by country (B10).
+* **The Temple of Artemis (a939e800):** point and country are Limenas on Thasos (40.7802, 24.7156),
+  description and link are the Ephesus temple (Q43018, 388 km), which the Selçuk row carries too. No
+  Thasos Artemis item passes rule B: none of the 15 items within 1 km names Artemis, and
+  `wbsearchentities` finds nothing for "Artemision Thasos", "Sanctuary of Artemis Thasos", "Temple of
+  Artemis Thasos" or "Artemision (Thasos)". Unresolved: Ephesus makes it a duplicate of e60fc487,
+  Thasos leaves it with no item to link - the owner's decision.
+* **The two Asklepieia** stay on the class Q731841 although each has an obvious item (Q2655433 at Kos,
+  258 m; Q82073722 at Paphos, 20 m): the names match only descriptively ("Asklepion (Kos)", N3) or not
+  at all ("Pathos" for Paphos), and wave 2 refused the same kind of spelling lead (Sun Temple of
+  Niuserre). They are the strongest leads for the owner.
+* **Enkomi / Engomi:** both rows describe the one Bronze Age city and link the village item Q1343280.
+  The site's own item Q22987223 holds two normal-rank P625 1.9 km apart; the one the research reads is
+  2.07 km from "Enkomi" (beyond the gate) and 93 m from "Engomi Ancient City Ruins", for which
+  Wikidata's geosearch (indexing the other point) returned no candidate at all.
+
+### Check, render, proofs
+
+* `qid_repair.py check --wave 3`, read-only against production: **2 rows, 0 deviations**.
+* Waves 1 and 2 render byte for byte what is committed (`PLAN.jsonl`, `PLAN.md`, `APPLY.sql`,
+  `ROLLBACK.sql`; a new test compares all four, CRLF of this checkout normalised).
+* Tests: 6 new in `test_bcases.py` (selection, sharers, the suspect record with a scripted fetcher,
+  the `--suspects` file and flag, the delivered research re-judged by `suggest`), 9 new in
+  `test_remediation_tools.py` (wave-3 sites vs research, gates vs research, delivered files, the plan's
+  outcome table, kept rules carry no value, the gate, the stamp, check/verify).
+* `mutation_sweep.py "qid wave3"`: **22/22 caught**, the tree byte-identical to the sweep's start for
+  3 files; the older `bcases` and repair entries re-run after the change: **92/92 caught**. The
+  worktree has no `.venv` of its own, so the sweep ran through a wrapper that points its `PY` at the
+  main checkout's interpreter (no junction).

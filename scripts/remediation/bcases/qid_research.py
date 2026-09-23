@@ -20,6 +20,14 @@ not already replace. For each site, one at a time, read-only and cached:
 
 The suggestion is a lead, not a decision: every wave-2 entry in `qid_repair.py` is read and written by
 hand, with the evidence quoted from `qid_research.jsonl`.
+
+**Wave 3** (`run.py research --suspects`, record `qid_research_suspects.jsonl`) asks the same questions
+under the same rules for the kept names whose link is suspect on its own (`suspect_links`): the stored
+name is one of the item's names, but the item is a generic concept (Q1) or other curated rows link it
+too (Q2). A kept name on an item only far away (Q4 alone) is a coordinate question first and is not in
+this wave. Each wave-3 record adds the tests the link met (`link_suspect`) and the curated rows of the
+export that link the same item (`shared_with`) - the facts that tell a wrong link from a type record
+or a second row of the same site.
 """
 
 from __future__ import annotations
@@ -36,6 +44,44 @@ from bcases import inputs
 #: The radius of the neighbourhood search, and the gate a replacement must pass (metres).
 RADIUS_M = 1000
 SEARCH_LIMIT = 10
+#: Wave 3: the link tests (`classify.classify_name`'s `link_suspect`) that make a kept name's link a
+#: research case - a generic concept, an item other curated rows share.
+SUSPECT_TESTS = frozenset({"Q1", "Q2"})
+
+
+def wrong_links(verdicts: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Wave 2's selection: the wrong links the first repair wave left open (no `state`)."""
+    return [v for v in verdicts if v["group"] == "wrong-link" and "state" not in v]
+
+
+def suspect_links(verdicts: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Wave 3's selection: a kept name on a link that is a generic concept or a shared item."""
+    return [
+        v
+        for v in verdicts
+        if v["group"] == "keep" and SUSPECT_TESTS & set(v["link_suspect"]) and "state" not in v
+    ]
+
+
+def sharers(sites: Mapping[str, Mapping[str, Any]], site_id: str, qid: str) -> list[dict[str, Any]]:
+    """The other curated rows of the export that link `qid`, with their distance from `site_id`."""
+    me = sites[site_id]
+    if me.get("qid") != qid:
+        raise inputs.InputError(f"{site_id} links {me.get('qid')!r} in the export, not {qid}")
+    return [
+        {
+            "site_id": sid,
+            "name": other["name"],
+            "country": other["country"],
+            "distance_m": round(
+                C.km(float(me["lat"]), float(me["lon"]), float(other["lat"]), float(other["lon"]))
+                * 1000.0,
+                1,
+            ),
+        }
+        for sid, other in sorted(sites.items())
+        if sid != site_id and other.get("qid") == qid
+    ]
 
 
 def enwiki_page(net: Fetcher, title: str) -> dict[str, Any]:
@@ -142,6 +188,22 @@ def research(net: Fetcher, verdict: Mapping[str, Any], site: Mapping[str, Any]) 
     }
     record["suggestion"] = suggest(record)
     return record
+
+
+def research_suspect(
+    net: Fetcher,
+    verdict: Mapping[str, Any],
+    sites: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """`research` for a kept name on a suspect link (wave 3), with what the suspicion rests on."""
+    site = sites[verdict["site_id"]]
+    return {
+        **research(net, verdict, site),
+        "link_suspect": list(verdict["link_suspect"]),
+        "shared_with": sharers(sites, str(verdict["site_id"]), str(verdict["qid"])),
+        "country": site["country"],
+        "description": site["description"],
+    }
 
 
 def is_site_kind(candidate: Mapping[str, Any]) -> bool:

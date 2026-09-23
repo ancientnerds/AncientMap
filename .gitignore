@@ -313,6 +313,7 @@ output/remediation/mechanical_site_type/REHEARSAL.sql
 !output/remediation/qid_repair/
 output/remediation/qid_repair/REHEARSAL.sql
 output/remediation/qid_repair/wave2/REHEARSAL.sql
+output/remediation/qid_repair/wave3/REHEARSAL.sql
 # The owner cases of HUMAN_ONLY section B (2026-09-23): the per-site verdicts with their evidence, the
 # duplicate list the scope lane reads, the research behind the external-id repair's second wave and the
 # coordinate plan. Rendered from Wikidata and Wikipedia answers of one day, so not regenerable byte for

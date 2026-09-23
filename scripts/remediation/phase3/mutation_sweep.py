@@ -25,7 +25,10 @@ from collections.abc import Mapping
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-PY = REPO / ".venv" / "Scripts" / "python.exe"
+#: The interpreter that runs the sweep runs the tests too (as in `mechanical/mutation_sweep.py`): a
+#: hard-coded `.venv` path does not exist in a git worktree, and no junction to the main venv may be
+#: made there (PROJECT_LESSONS, 2026-09-23).
+PY = Path(sys.executable)
 BACKUP = REPO / "output" / "remediation" / "logs" / "phase3_mutations" / "backup"
 TEST = "tests/remediation/test_phase3_discover.py"
 FETCH_TEST = "tests/remediation/test_phase3_fetch.py"
@@ -7322,6 +7325,198 @@ PHASE4_SOURCES_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += PHASE4_SOURCES_MUTATIONS
+#: The external-id repair's third wave (2026-09-23): the research selection of the kept names on a
+#: generic or shared link (`run.py research --suspects`), the facts it adds, and wave 3's own plan,
+#: stamp, gate and decision record - while waves 1 and 2 still render what was applied. Labels start
+#: with "qid wave3: " so `mutation_sweep.py "qid wave3"` runs them alone.
+_QW3_RUN = BCASES + "run.py"
+_QW3_REPAIR = TOOLS + "qid_repair.py"
+_QW3_SELECT = "test_wave_three_takes_the_kept_names_on_a_generic_or_shared_link_only"
+_QW3_SHARERS = "test_the_rows_sharing_an_item_are_the_other_rows_and_a_stale_link_is_refused"
+_QW3_FLAG = "test_the_suspects_flag_reaches_the_research_and_belongs_to_it_alone"
+_QW3_OWN_FILE = "test_research_suspects_writes_its_own_record_and_leaves_wave_twos_alone"
+_QW3_SITES = "test_wave_three_is_every_suspect_the_research_names_and_nothing_else"
+_QW3_DELIVERED = "test_the_delivered_wave_three_files_are_the_rendered_ones"
+_QW3_KEPT = "test_a_kept_wave_three_site_carries_no_value_and_an_unknown_rule_is_refused"
+QID_WAVE3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "qid wave3: a link that is only far away is selected",
+        _QR,
+        'if v["group"] == "keep" and SUSPECT_TESTS & set(v["link_suspect"]) and',
+        'if v["group"] == "keep" and set(v["link_suspect"]) and',
+        BCASES_TEST,
+        _QW3_SELECT,
+    ),
+    (
+        "qid wave3: a row that is not a kept name is selected",
+        _QR,
+        'if v["group"] == "keep" and SUSPECT_TESTS & set(v["link_suspect"]) and',
+        'if SUSPECT_TESTS & set(v["link_suspect"]) and',
+        BCASES_TEST,
+        _QW3_SELECT,
+    ),
+    (
+        "qid wave3: a record changed since the census is selected",
+        _QR,
+        'SUSPECT_TESTS & set(v["link_suspect"]) and "state" not in v\n',
+        'SUSPECT_TESTS & set(v["link_suspect"])  # mutant\n',
+        BCASES_TEST,
+        _QW3_SELECT,
+    ),
+    (
+        "qid wave3: a row shares its item with itself",
+        _QR,
+        '        if sid != site_id and other.get("qid") == qid\n',
+        '        if other.get("qid") == qid  # mutant\n',
+        BCASES_TEST,
+        _QW3_SHARERS,
+    ),
+    (
+        "qid wave3: the sharers of a stale link are read",
+        _QR,
+        '    if me.get("qid") != qid:\n',
+        "    if False:  # mutant\n",
+        BCASES_TEST,
+        _QW3_SHARERS,
+    ),
+    (
+        "qid wave3: the suspect record drops the rows that share its item",
+        _QR,
+        '        "shared_with": sharers(sites, str(verdict["site_id"]), str(verdict["qid"])),\n',
+        '        "shared_with": [],  # mutant\n',
+        BCASES_TEST,
+        "test_a_suspect_record_carries_its_tests_the_rows_sharing_its_item_and_the_rules",
+    ),
+    (
+        "qid wave3: the suspect research overwrites wave 2's record",
+        _QW3_RUN,
+        "    write_jsonl(out / (SUSPECTS_FILE if suspects else RESEARCH_FILE), records)\n",
+        "    write_jsonl(out / RESEARCH_FILE, records)  # mutant\n",
+        BCASES_TEST,
+        _QW3_OWN_FILE,
+    ),
+    (
+        "qid wave3: the suspect research researches the wrong links",
+        _QW3_RUN,
+        "for v in R.suspect_links(verdicts)]",
+        "for v in R.wrong_links(verdicts)]",
+        BCASES_TEST,
+        _QW3_OWN_FILE,
+    ),
+    (
+        "qid wave3: --suspects never reaches the research",
+        _QW3_RUN,
+        "research(cache, out, suspects=args.suspects)",
+        "research(cache, out)",
+        BCASES_TEST,
+        _QW3_FLAG,
+    ),
+    (
+        "qid wave3: --suspects is taken by another command",
+        _QW3_RUN,
+        '    if args.suspects and args.command != "research":\n',
+        "    if False:  # mutant\n",
+        BCASES_TEST,
+        _QW3_FLAG,
+    ),
+    (
+        "qid wave3: a kept outcome is read as a rule that changes a row",
+        _QW3_REPAIR,
+        "        if site.rule in UNCHANGED:\n",
+        '        if site.rule == "unresolved":  # mutant\n',
+        TOOLS_TEST,
+        _QW3_KEPT,
+    ),
+    (
+        "qid wave3: a kept wave-3 site carries a new value",
+        _QW3_REPAIR,
+        "            if site.new_qid is not None or site.new_title is not None:\n",
+        "            if False:  # mutant\n",
+        TOOLS_TEST,
+        _QW3_KEPT,
+    ),
+    (
+        "qid wave3: the command line does not know wave 3",
+        _QW3_REPAIR,
+        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2, WAVE3)}\n",
+        "WAVES = {wave.number: wave for wave in (WAVE1, WAVE2)}  # mutant\n",
+        TOOLS_TEST,
+        "test_wave_three_check_and_verify_read_their_own_rows_and_stamp",
+    ),
+    (
+        "qid wave3: wave 3 journals under wave 2's stamp",
+        _QW3_REPAIR,
+        '    "2026-09-23_external-id-repair-wave3",\n',
+        '    "2026-09-23_external-id-repair-wave2",  # mutant\n',
+        TOOLS_TEST,
+        "test_wave_three_renders_under_its_own_stamp",
+    ),
+    (
+        "qid wave3: wave 3 renders into wave 2's directory",
+        _QW3_REPAIR,
+        '    OUT / "wave3",\n',
+        '    OUT / "wave2",  # mutant\n',
+        TOOLS_TEST,
+        _QW3_DELIVERED,
+    ),
+    (
+        "qid wave3: the wave-3 journal cites wave 2's research",
+        _QW3_REPAIR,
+        '    "qid-repair research 2026-09-23 (wave 3)",\n',
+        '    "qid-repair research 2026-09-23 (wave 2)",  # mutant\n',
+        TOOLS_TEST,
+        _QW3_DELIVERED,
+    ),
+    (
+        "qid wave3: a wave-3 replacement needs no position proof",
+        _QW3_REPAIR,
+        '    "qid-repair research 2026-09-23 (wave 3)",\n    GATE_M,\n',
+        '    "qid-repair research 2026-09-23 (wave 3)",\n    None,  # mutant\n',
+        TOOLS_TEST,
+        "test_a_wave_three_replacement_without_its_position_proof_is_refused",
+    ),
+    (
+        "qid wave3: a wave-3 gate is typed wrong",
+        _QW3_REPAIR,
+        "        31.1,\n",
+        "        3.1,  # mutant\n",
+        TOOLS_TEST,
+        "test_every_wave_three_gate_is_the_distance_the_research_measured",
+    ),
+    (
+        "qid wave3: wave 3's decision record is wave 2's",
+        _QW3_REPAIR,
+        "    3: wave3_markdown,\n",
+        "    3: wave2_markdown,  # mutant\n",
+        TOOLS_TEST,
+        "test_the_wave_three_plan_names_every_site_once_under_its_outcome",
+    ),
+    (
+        "qid wave3: wave 2's decision record is wave 3's",
+        _QW3_REPAIR,
+        "    2: wave2_markdown,\n",
+        "    2: wave3_markdown,  # mutant\n",
+        TOOLS_TEST,
+        "test_waves_one_and_two_still_render_byte_for_byte_what_is_committed",
+    ),
+    (
+        "qid wave3: the plan counts no unresolved site",
+        _QW3_REPAIR,
+        'OUTCOMES = ("replace", *UNCHANGED)\n',
+        'OUTCOMES = ("replace", *UNCHANGED[:-1])  # mutant\n',
+        TOOLS_TEST,
+        _QW3_SITES,
+    ),
+    (
+        "qid wave3: a replacement is counted under its rule letter",
+        _QW3_REPAIR,
+        '    return "replace" if site.rule in ("A", "B") else site.rule\n',
+        "    return site.rule  # mutant\n",
+        TOOLS_TEST,
+        _QW3_SITES,
+    ),
+]
+MUTATIONS += QID_WAVE3_MUTATIONS
 #: The owner-case coordinates' second wave (2026-09-23): a third witness from the web, proven from the
 #: live page (`bcases/web_witness.py`), weighed under the unchanged rule (`classify.weigh`) and planned
 #: under its own stamp (`coord_plan.WAVE2`). Each case breaks one guard and names the test that must go
