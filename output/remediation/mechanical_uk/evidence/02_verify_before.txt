@@ -1,0 +1,22 @@
+[32m2026-09-23 03:43:44[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+                              metric                              | value 
+------------------------------------------------------------------+-------
+ card_stats rows whose civilization differs from the site country | 44
+ curated sites                                                    | 5004
+ journal rows for the rollback stamp                              | 0
+ journal rows for this run on non-curated rows                    | 0
+ journal rows for this run outside unified_sites.country          | 0
+ journal rows for this run stamp                                  | 0
+ journal rows for this run with a site_id_ref of another site     | 0
+ journal rows for this run with old value 'Ireland'               | 0
+ journal rows for this run with old value 'United Kingdom'        | 0
+ journal rows for this test id                                    | 0
+ phase-3 country rows superseded by this run                      | 0
+ rows country = 'England'                                         | 1052
+ rows country = 'Ireland'                                         | 63
+ rows country = 'Northern Ireland'                                | 4
+ rows country = 'Scotland'                                        | 83
+ rows country = 'United Kingdom'                                  | 6
+ rows country = 'Wales'                                           | 118
+
+
