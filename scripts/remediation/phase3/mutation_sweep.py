@@ -6495,6 +6495,15 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4_WRITE_TEST,
         "test_each_lane_needs_its_own_calls_and_the_reviewers_by_name",
     ),
+    # -- the command the gate prints for the acceptance is one verify_writes4 runs
+    (
+        "p4 write_gate4: the printed acceptance command lacks the run directory",
+        P4_GATE,
+        '        f"--run {run_dir} (0 deviations), then --accept <its output>."\n',
+        '        "(0 deviations), then --accept <its output>."  # mutant\n',
+        P4_WRITE_TEST,
+        "test_the_gate_prints_the_acceptance_command_it_will_accept",
+    ),
 ]
 MUTATIONS += GAP_MUTATIONS
 MUTATIONS += REVIEW_MUTATIONS

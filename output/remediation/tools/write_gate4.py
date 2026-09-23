@@ -362,6 +362,7 @@ def run_batches(
     host: str,
     apply_root: pathlib.Path,
     lane: str,
+    run_dir: pathlib.Path,
 ) -> int:
     """Rehearse every open batch, or write open batches while the next one still fits into `step`
     sites. 0 = done (or the step is complete), 1 = stopped; a stop leaves `STOPPED.json` and
@@ -425,7 +426,7 @@ def run_batches(
     print(
         f"STEP COMPLETE: {written_sites} site(s) written in {len(written)} batch(es). Accept it "
         f"before the next step: {VERIFY_TOOL} --lane {lane} --plan {apply_root / LANE_PLAN_FILE} "
-        "(0 deviations), then --accept <its output>."
+        f"--run {run_dir} (0 deviations), then --accept <its output>."
         if written
         else "done: no open batch left to write"
     )
@@ -519,6 +520,7 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         host=args.host,
         apply_root=apply_root,
         lane=lane.name,
+        run_dir=run_dir,
     )
 
 

@@ -1182,6 +1182,22 @@ def test_the_gate_writes_one_step_and_stops_for_the_acceptance(
     assert (tmp_path / "apply" / "p4-0003" / "APPLIED.json").exists()
 
 
+def test_the_gate_prints_the_acceptance_command_it_will_accept(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """The step ends with the command to run: `verify_writes4.py` re-runs V1-V15 for lanes p4 and
+    p5 and refuses to start without `--run` (wip/p4-verify, `accept_lane`), so the printed command
+    names the lane, the lane plan and the run directory - copied as printed, it runs."""
+    ledger = _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db("00000001-0000-4000-8000-000000000001")
+    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "1"), runner=db) == 0
+    out = capsys.readouterr().out
+    plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    run = tmp_path / "runs" / "pilot"
+    assert f"{G.VERIFY_TOOL} --lane p4 --plan {plan} --run {run} (0 deviations)" in out
+
+
 def test_a_step_without_its_acceptance_blocks_the_next_step(tmp_path, monkeypatch, capsys) -> None:
     """The owner's "after every hundred, a check, and only then continue" is a precondition: a
     driver that calls the gate in a loop writes one step and no more."""

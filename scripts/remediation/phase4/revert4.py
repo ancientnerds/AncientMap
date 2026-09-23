@@ -12,13 +12,24 @@ It is the design's answer to a red CI in the P5 sitting ("run revert4.py over th
 git revert the JSON commit") and to a systematic cause found by the mass-run audits.
 
 What it refuses, before anything runs: a pattern outside the three phase-4/5 families (`phase4:`,
-`phase4l:`, `phase5:` - never phase 3, never the mechanical lanes), a pattern naming reversals, and,
-inside the transaction, a set with no row, a row outside the three written columns or outside the
-curated sites, and a row that was already reverted (its key plus `-rollback` is in the journal).
+`phase4l:`, `phase5:` - never phase 3, never the mechanical lanes) and a pattern naming reversals;
+inside the transaction, a pattern that matches no write, a pattern whose every matched write is
+reverted already, and a row outside the three written columns or outside the curated sites.
 After the loop it asserts that every reverted field holds the old value of its oldest reverted link
 and that each reversal is journalled with the values swapped. Reversals are journalled under the
 write's stamp and key plus `-rollback` (`journal_chain.ROLLBACK_SUFFIX`), so every acceptance
 already reads them as reversals.
+
+**A write that already has its own reversal is skipped, not refused** (review of 2026-09-23). A
+change key names a transition, not a write: a batch written again after a revert (write round 2)
+journals the same keys as round 1 under its own stamp, so a pattern such as `phase5:%` then matches
+both rounds. Refusing the whole pattern - the first version did, on the key alone - left the live
+round revertable only by its exact stamp, and the red-CI answer of the P5 sitting would have failed
+the second time it was needed. Reverting the reverted round again is no option either: it needs the
+field to hold its written value, which round 2 may have put back, and it would undo round 2's write
+under round 1's stamp. So the set is fixed first, inside the transaction, as the matched writes
+without their own reversal (the key **and** the stamp plus `-rollback`), and every guard, the loop
+and both invariants run over exactly that set.
 
     python scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'             # render
     python scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%' --rehearse  # BEGIN..ROLLBACK
