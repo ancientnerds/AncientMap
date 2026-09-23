@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { secs, timesLine, visitorsLine } from '../GlobeReach'
+import { abandonLine, endingItems, secs, timesLine, visitorsLine } from '../GlobeReach'
 import type { GlobeData } from '../types'
 
 /** The live seven-day window on 2026-09-19, straight out of SQL_GLOBE:
@@ -11,6 +11,8 @@ const live: GlobeData = {
   gave_up: 26,
   sessions: { all: 22, reached: 8 },
   ready_ms: { min: 9450, median: 19917, max: 80383, samples: 10 },
+  not_reached: { gate: 9, unsupported: 2, error: 3, abandoned: 7, no_signal: 5, unmeasured: 0 },
+  abandon_ms: { min: 3100, median: 9800, max: 44000, samples: 7 },
 }
 
 describe('GlobeReach secs', () => {
@@ -74,6 +76,60 @@ describe('GlobeReach visitorsLine', () => {
   it('says nobody opened it rather than dividing by nothing', () => {
     expect(visitorsLine({ ...live, sessions: { all: 0, reached: 0 } })).toBe(
       'Nobody opened the globe in this window.'
+    )
+  })
+})
+
+describe('GlobeReach endingItems', () => {
+  it('lists the ways a load ends in the order a load meets them', () => {
+    const items = endingItems(live)
+    expect(items.map(i => i.label)).toEqual([
+      'Stopped at the phone gate',
+      'Device cannot run the globe',
+      'Error while starting',
+      'Left while loading',
+      'No signal',
+    ])
+    expect(items.map(i => i.value)).toEqual([9, 2, 3, 7, 5])
+    // Rows that happen to be zero stay: the order is the reading, not the rank.
+    const quiet = endingItems({ ...live, not_reached: { ...live.not_reached, unsupported: 0 } })
+    expect(quiet.map(i => i.key)).toEqual(['gate', 'unsupported', 'error', 'abandoned', 'no_signal'])
+  })
+
+  it('names the loads from before the endings were recorded only while there are any', () => {
+    const older = endingItems({ ...live, not_reached: { ...live.not_reached, unmeasured: 4 } })
+    expect(older[older.length - 1]).toMatchObject({ key: 'unmeasured', label: 'Before these were recorded', value: 4 })
+    expect(endingItems(live).some(i => i.key === 'unmeasured')).toBe(false)
+  })
+
+  it('hints the middle wait on the abandon row only when there is a middle', () => {
+    const hints = endingItems(live).map(i => i.hint)
+    expect(hints).toEqual([undefined, undefined, undefined, 'median 9.8 s', undefined])
+    const thin = endingItems({ ...live, abandon_ms: { min: 3100, median: null, max: 44000, samples: 4 } })
+    expect(thin.every(i => i.hint === undefined)).toBe(true)
+  })
+})
+
+describe('GlobeReach abandonLine', () => {
+  it('says nothing without a measured abandon', () => {
+    expect(abandonLine({ ...live, abandon_ms: { min: null, median: null, max: null, samples: 0 } })).toBe('')
+  })
+
+  it('does not build a spread out of one measurement', () => {
+    const one = { ...live, abandon_ms: { min: 4200, median: null, max: 4200, samples: 1 } }
+    expect(abandonLine(one)).toBe('The one load left while loading had waited 4.2 s.')
+  })
+
+  it('names only the shortest and the longest below the median floor, and never prints null', () => {
+    const thin = { ...live, abandon_ms: { min: 3100, median: null, max: 44000, samples: 4 } }
+    const line = abandonLine(thin)
+    expect(line).toBe('The 4 loads left while loading had waited 3.1 s at the shortest, 44.0 s at the longest.')
+    expect(line).not.toContain('null')
+  })
+
+  it('names the middle once there is one', () => {
+    expect(abandonLine(live)).toBe(
+      'The 7 loads left while loading had waited 3.1 s at the shortest, 9.8 s in the middle, 44.0 s at the longest.'
     )
   })
 })

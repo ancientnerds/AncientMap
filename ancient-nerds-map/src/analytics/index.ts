@@ -33,6 +33,11 @@ export type EventName =
   | 'globe_idle' // globe ready, no site/search/filter within 30 s — ms
   | 'webgl_lost' // globe's WebGL context died — reason, phase
   | 'globe_focus' // #focus= deep link resolved — site
+  | 'globe_gate' // phone gate button — choice: globe | stories | radar | journal | lyra | db
+  | 'globe_unsupported' // capability check failed, unsupported screen shown — reason: no_webgl2 | max_texture_size, detail
+  | 'globe_error' // globe failed to start — phase, message; background failures carry phase 'bg:<task>'
+  | 'globe_abandon' // page hidden/left before globe_ready — ms, phase: gate | sites | scene | basemap | labels | coastlines | countryBorders
+  | 'globe_bg' // background task finished after the intro — task (BgTaskName), ms
   | 'vital' // Core Web Vital sample — name, value, rating, page
   | 'js_error' // uncaught error / rejection — message, source, page
   | 'scroll_depth' // 25/50/75/100 % of a content page — depth, page
