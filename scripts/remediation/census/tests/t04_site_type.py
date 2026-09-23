@@ -7,7 +7,7 @@ Two questions, both answerable from the snapshot alone:
    `suspect_modern` flag?
 2. Would the value survive the producer that rewrites it on every restart?
 
-Point 2 is not theoretical. `pipeline/lyra/orchestrator.py:1476-1488` runs on EVERY
+Point 2 is not theoretical. `pipeline/lyra/orchestrator.py::_run_migrations` runs on EVERY
 orchestrator boot and executes, globally:
 
     UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw

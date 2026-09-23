@@ -1,0 +1,72 @@
+{
+ "cases": 171,
+ "research_lines": 171,
+ "research_none_reason": 63,
+ "candidates": 141,
+ "candidate_outcome": {
+  "accepted": 42,
+  "grid-reference": 2,
+  "http": 59,
+  "identity": 9,
+  "mismatch": 2,
+  "not-html": 4,
+  "not-on-page": 10,
+  "unparsed": 13
+ },
+ "cases_by_web_witnesses": {
+  "0": 135,
+  "1": 31,
+  "2": 5
+ },
+ "verdict": {
+  "move": 4,
+  "not-comparable": 1,
+  "review": 157,
+  "stored-agrees": 9
+ },
+ "reason": {
+  "move": {
+   "wikidata and web agree within N m (independent), the stored point is N km away": 4
+  },
+  "not-comparable": {
+   "the item is a settlement, administrative unit or natural feature that contains the site": 1
+  },
+  "review": {
+   "no Wikidata item: no witness to ask": 2,
+   "no two of the 3 witnesses are independent and agree: wikidata and enwiki are one: P625 says it was imported from English Wikipedia; wikidata and web are one: both are one with enwiki; enwiki and web are one: the same point (N m apart, within N m)": 1,
+   "no two of the 3 witnesses are independent and agree: wikidata and enwiki are one: P625 says it was imported from English Wikipedia; wikidata and web are one: the same point (N m apart, within N m); enwiki and web are one: the same point (N m apart, within N m)": 1,
+   "no two of the 3 witnesses are independent and agree: wikidata and enwiki are one: enwiki is wikidata rounded to 5 decimals; wikidata and web are one: the same point (N m apart, within N m); enwiki and web are one: the same point (N m apart, within N m)": 1,
+   "no two of the 3 witnesses are independent and agree: wikidata and enwiki are one: the same point (N m apart, within N m); wikidata and web are one: wikidata is web rounded to 1 decimal; enwiki and web are one: enwiki is web rounded to 1 decimal": 1,
+   "no two of the 3 witnesses are independent and agree: wikidata and enwiki are one: wikidata is enwiki rounded to 4 decimals; wikidata and web are one: wikidata is web rounded to 4 decimals; enwiki and web are one: the same point (N m apart, within N m)": 1,
+   "no two of the 3 witnesses are independent and agree: wikidata and enwiki are one: wikidata is enwiki rounded to whole arcminutes; wikidata and web are one: wikidata is web rounded to whole arcminutes; enwiki and web are one: both are one with wikidata": 1,
+   "no two of the 3 witnesses are independent and agree: wikidata and enwiki disagree: N km apart (tolerance N m); wikidata and web are one: wikidata is web rounded to 4 decimals; enwiki and web disagree: N km apart (tolerance N m)": 1,
+   "no two of the 4 witnesses are independent and agree: wikidata and enwiki are one: both are one with web and web; wikidata and web are one: the same point (N m apart, within N m); wikidata and web are one: both are one with enwiki and web; enwiki and web are one: the same point (N m apart, within N m); enwiki and web are one: both are one with wikidata and web; web and web are one: the same point (N m apart, within N m)": 1,
+   "no witness: no P625 and no English article with coordinates": 4,
+   "one witness only (web)": 1,
+   "one witness only (wikidata)": 80,
+   "the two witnesses are one: P625 cites geonames.org, the web page's publisher": 1,
+   "the two witnesses are one: P625 cites phrc.it, the web page's publisher": 1,
+   "the two witnesses are one: P625 says it was imported from English Wikipedia": 11,
+   "the two witnesses are one: enwiki is wikidata rounded to 2 decimals": 1,
+   "the two witnesses are one: enwiki is wikidata rounded to 4 decimals": 2,
+   "the two witnesses are one: enwiki is wikidata rounded to 5 decimals": 3,
+   "the two witnesses are one: enwiki is wikidata rounded to 6 decimals": 2,
+   "the two witnesses are one: enwiki is wikidata rounded to 8 decimals": 2,
+   "the two witnesses are one: enwiki is wikidata rounded to whole arcseconds": 1,
+   "the two witnesses are one: the same point (N m apart, within N m)": 15,
+   "the two witnesses are one: wikidata is enwiki rounded to 3 decimals": 1,
+   "the two witnesses are one: wikidata is enwiki rounded to 6 decimals": 2,
+   "the two witnesses are one: wikidata is enwiki rounded to whole arcseconds": 6,
+   "the two witnesses are one: wikidata is web rounded to whole arcseconds": 1,
+   "the two witnesses disagree: N km apart (tolerance N m)": 10,
+   "wikidata and enwiki agree elsewhere, but enwiki puts the site at the stored point": 1,
+   "wikidata and web agree elsewhere, but web puts the site at the stored point": 1,
+   "wikidata and web agree within N m (independent), the stored point is N km away; but the new point lies in [...], not in the stored country 'Germany' - a country question first": 1
+  },
+  "stored-agrees": {
+   "the stored point lies within the tolerance of web (N m, its stated precision) - no change is planned": 3,
+   "the stored point lies within the tolerance of web - no change is planned": 6
+  }
+ },
+ "moves_held_for_country": 1
+}
