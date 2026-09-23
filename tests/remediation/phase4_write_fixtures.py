@@ -177,15 +177,20 @@ def source_doc(site_verdict: M.SubjectVerdict = M.SubjectVerdict.OWN) -> M.Sourc
     )
 
 
+#: A lane-W site's two calls: the ledger stage and the call's feature (`model4`'s names, which
+#: Track B's stages store their answers, prompts and ledger labels under).
+CALLS = (("selector", M.SELECT_FEATURE), ("reviewer", M.REVIEW_FEATURE))
+
+
 def ledger_rows(*site_ids: str, batch: str = BATCH) -> list[dict[str, Any]]:
     rows = []
     for site_id in site_ids:
-        for stage in ("selector", "reviewer"):
+        for stage, feature in CALLS:
             rows.append(
                 {
                     "kind": "model_call",
                     "batch_id": batch,
-                    "label": f"{site_id}/{stage}",
+                    "label": f"{site_id}/{feature}",
                     "stage": stage,
                 }
             )
@@ -243,14 +248,14 @@ def write_batch(
             site_id=site.site_id, feature=M.source_feature("W", "txt"), body=TEXT.encode("utf-8")
         )
         # One call per stage: its answer (`answers/` or `reviews/`), its prompt (`prompts/`, the
-        # same feature) and its ledger line (`ledger_rows`: `<site>/selector`, `<site>/reviewer`).
+        # same feature) and its ledger line (`ledger_rows`: `<site>/select`, `<site>/review`).
         for folder in folders:
             files = {
-                "answers": {"selector": "DESC: W1\n"},
-                "reviews": {"reviewer": "R1: KEEP\nR2: KEEP\nCARD: KEEP\n"},
+                "answers": {M.SELECT_FEATURE: "DESC: W1\n"},
+                "reviews": {M.REVIEW_FEATURE: "R1: KEEP\nR2: KEEP\nCARD: KEEP\n"},
                 "prompts": {
-                    "selector": "the selector prompt\n",
-                    "reviewer": "the reviewer prompt\n",
+                    M.SELECT_FEATURE: "the selector prompt\n",
+                    M.REVIEW_FEATURE: "the reviewer prompt\n",
                 },
             }[folder]
             for feature, body in files.items():

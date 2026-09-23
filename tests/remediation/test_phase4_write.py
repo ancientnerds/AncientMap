@@ -213,20 +213,71 @@ def test_every_answer_needs_the_prompt_it_answered(tmp_path: Path) -> None:
     disk is incomplete evidence, although `prompts/` holds the selector's."""
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
     F = FX.F
-    F.EvidenceStore(batch.root / "prompts").path_for(FX.SITE_A, "reviewer").unlink()
+    F.EvidenceStore(batch.root / "prompts").path_for(FX.SITE_A, M.REVIEW_FEATURE).unlink()
     plan = _p4(batch)
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_EVIDENCE
-    assert "reviews/reviewer has no prompt" in plan.refusals[0].detail
+    assert "reviews/review has no prompt" in plan.refusals[0].detail
 
 
 def test_every_answer_needs_its_ledger_line_and_every_call_its_answer(tmp_path: Path) -> None:
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
     selector_only = [row for row in FX.ledger_rows(FX.SITE_A) if row["stage"] == "selector"]
     plan = _p4(batch, ledger=selector_only)
-    assert not plan.rows and "reviews/reviewer has no ledger line" in plan.refusals[0].detail
+    assert not plan.rows and "reviews/review has no ledger line" in plan.refusals[0].detail
     extra = [*FX.ledger_rows(FX.SITE_A), {**selector_only[0], "label": f"{FX.SITE_A}/translate"}]
     plan = _p4(batch, ledger=extra)
     assert not plan.rows and "translate has no answer on disk" in plan.refusals[0].detail
+
+
+def test_a_site_without_the_selectors_answer_is_refused(tmp_path: Path) -> None:
+    """The design's p_evidence names the selector's answer (its sha256). A lane-W site whose every
+    call is complete - answer, prompt and ledger line - but none of which is the selector's (a
+    translation stands where the selection should be) is not written (decision D5)."""
+    batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
+    for folder in ("answers", "prompts"):
+        store = FX.F.EvidenceStore(batch.root / folder)
+        store.path_for(FX.SITE_A, M.SELECT_FEATURE).unlink()
+        store.write(site_id=FX.SITE_A, feature=M.TRANSLATE_FEATURE, body=b"T1: A sentence.\n")
+    ledger = [
+        {**row, "label": row["label"].replace(f"/{M.SELECT_FEATURE}", f"/{M.TRANSLATE_FEATURE}")}
+        for row in FX.ledger_rows(FX.SITE_A)
+    ]
+    plan = _p4(batch, ledger=ledger)
+    assert not plan.rows and plan.refusals[0].rule == W4.RULE_EVIDENCE
+    assert plan.refusals[0].detail == "no answers/select: this lane's site needs that call"
+
+
+def _calls(*features: str) -> tuple[list[W4.ModelFile], list[str]]:
+    """Complete calls: each with its answer (the reviewer's under reviews/), its prompt and its
+    ledger label - so only a rule about which calls there are can object."""
+    files: list[W4.ModelFile] = []
+    for feature in features:
+        folder = "reviews" if feature == M.REVIEW_FEATURE else "answers"
+        files.append(W4.ModelFile(folder=folder, feature=feature, sha256="a" * 64))
+        files.append(W4.ModelFile(folder="prompts", feature=feature, sha256="b" * 64))
+    return files, [f"{FX.SITE_A}/{feature}" for feature in features]
+
+
+@pytest.mark.parametrize(
+    ("lane", "answers"),
+    [
+        (M.Lane.W, ["select"]),
+        (M.Lane.S, ["select"]),
+        (M.Lane.T, ["select", "translate"]),
+        (M.Lane.R, ["restricted"]),
+    ],
+)
+def test_each_lane_needs_its_own_calls_and_the_reviewers_by_name(lane, answers) -> None:
+    """W, S and T select (T translates the selection too), R restates without a selector; every
+    lane is reviewed. The names are the design's, not model4's, so a renamed constant goes red."""
+    assert list(M.LANE_ANSWERS[lane]) == answers and M.REVIEW_FEATURE == "review"
+    assert W4.evidence_problems(*_calls(*answers, "review"), lane=lane) == []
+    for missing in [*answers, "review"]:
+        kept = [feature for feature in [*answers, "review"] if feature != missing]
+        folder = "reviews" if missing == "review" else "answers"
+        assert W4.evidence_problems(*_calls(*kept), lane=lane) == [
+            f"no {folder}/{missing}: this lane's site needs that call"
+        ], missing
 
 
 def test_the_journal_carries_every_published_sentences_quote(tmp_path: Path) -> None:
@@ -249,7 +300,7 @@ def test_the_journal_carries_every_published_sentences_quote(tmp_path: Path) -> 
     assert evidence["sources"][0]["revid"] == FX.REVID
     assert {f["folder"] for f in evidence["model_files"]} == set(W4.MODEL_FOLDERS)
     assert evidence["reviewer_lines"] == ["R1: KEEP", "R2: KEEP", "CARD: KEEP"]
-    assert evidence["ledger_labels"] == [f"{FX.SITE_A}/selector", f"{FX.SITE_A}/reviewer"]
+    assert evidence["ledger_labels"] == [f"{FX.SITE_A}/select", f"{FX.SITE_A}/review"]
 
 
 def test_a_quote_never_reaches_public_raw_data(tmp_path: Path) -> None:
@@ -489,10 +540,10 @@ def test_model_files_are_only_the_sites_own(tmp_path: Path) -> None:
     )
     files = W4.model_files(batch_dir, FX.SITE_A)
     assert [(entry.folder, entry.feature) for entry in files] == [
-        ("answers", "selector"),
-        ("reviews", "reviewer"),
-        ("prompts", "reviewer"),
-        ("prompts", "selector"),
+        ("answers", "select"),
+        ("reviews", "review"),
+        ("prompts", "review"),
+        ("prompts", "select"),
     ]
 
 

@@ -6429,6 +6429,47 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "tests/remediation/test_phase4_plan.py",
         "test_the_read_tells_a_site_absent_from_the_snapshot_from_a_null_text_in_it",
     ),
+    # -- decision D5 (R5): a written site's calls are required by name, the selector's first
+    (
+        "p4 write4: a site without its lane's calls by name is written",
+        P4_WRITE,
+        "        if (folder, feature) not in present\n",
+        "        if False  # mutant\n",
+        P4_WRITE_TEST,
+        "test_a_site_without_the_selectors_answer_is_refused",
+    ),
+    (
+        "p4 write4: a site without the reviewer's answer by name is written",
+        P4_WRITE,
+        '    needed.append(("reviews", M.REVIEW_FEATURE))\n',
+        "",
+        P4_WRITE_TEST,
+        "test_each_lane_needs_its_own_calls_and_the_reviewers_by_name",
+    ),
+    (
+        "p4 write4: the calls a site needs are not its own lane's",
+        P4_WRITE,
+        "    missing = evidence_problems(files, labels, lane=lane)\n",
+        "    missing = evidence_problems(files, labels, lane=M.Lane.R)  # mutant\n",
+        P4_WRITE_TEST,
+        "test_a_site_without_the_selectors_answer_is_refused",
+    ),
+    (
+        "p4 model: lane T is written without its translation call",
+        P4_MODEL,
+        "        Lane.T: (SELECT_FEATURE, TRANSLATE_FEATURE),\n",
+        "        Lane.T: (SELECT_FEATURE,),  # mutant\n",
+        P4_WRITE_TEST,
+        "test_each_lane_needs_its_own_calls_and_the_reviewers_by_name",
+    ),
+    (
+        "p4 model: lane R is asked for a selector it never calls",
+        P4_MODEL,
+        "        Lane.R: (RESTRICTED_FEATURE,),\n",
+        "        Lane.R: (SELECT_FEATURE,),  # mutant\n",
+        P4_WRITE_TEST,
+        "test_each_lane_needs_its_own_calls_and_the_reviewers_by_name",
+    ),
 ]
 MUTATIONS += GAP_MUTATIONS
 MUTATIONS += REVIEW_MUTATIONS

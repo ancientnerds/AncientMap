@@ -350,6 +350,25 @@ LANES_FILE = "lanes.jsonl"  #: LaneAssignment, one per site of the batch (A3 -> 
 ASSEMBLY_FILE = "assembly.jsonl"  #: Assembly after review (B3 -> C, D)
 HOLDS_FILE = "holds.jsonl"  #: Hold, every stage's (all -> D)
 
+#: The feature of each model call: its answer file (`answers/`, the reviewer's under `reviews/`),
+#: its prompt (`prompts/`, stored before the call) and its ledger label (`<site_id>/<feature>`).
+#: Track B's stages store them under these names; the writer requires a written site's calls by
+#: name in its journal evidence (design p_evidence "selector-answer sha256"; accepted by the
+#: orchestrator 2026-09-23, decision D5).
+SELECT_FEATURE = "select"  #: S3, the selector (lanes W, S and T)
+TRANSLATE_FEATURE = "translate"  #: S3T, lane T's second call
+RESTRICTED_FEATURE = "restricted"  #: S3R, lane R's one call (no selector: nothing is selected)
+REVIEW_FEATURE = "review"  #: S6, the drop-only reviewer of every assembled site
+#: The answers a written site of each publishing lane has under `answers/`: its text's calls.
+LANE_ANSWERS: Mapping[Lane, tuple[str, ...]] = MappingProxyType(
+    {
+        Lane.W: (SELECT_FEATURE,),
+        Lane.S: (SELECT_FEATURE,),
+        Lane.T: (SELECT_FEATURE, TRANSLATE_FEATURE),
+        Lane.R: (RESTRICTED_FEATURE,),
+    }
+)
+
 
 # --------------------------------------------------------------------------------------------
 # Form checks

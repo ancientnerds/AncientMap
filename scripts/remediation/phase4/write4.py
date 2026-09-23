@@ -27,8 +27,9 @@ P4 writes a site when all of the design's conditions hold: it carries an assembl
 site-scope hold of any stage (a card-scope hold writes the description with `card: null`), its lane
 is one whose pilot passed (`open_lanes`), a lane-T or lane-R site is on the independent audit's
 cleared list, `verify` (verify4.verify_site, V1-V15, run here on exactly the text, raw_data and
-quotes this row will write) returns no hold, and its journal evidence is complete (the selector's
-answer, the reviewer's answer and each call's prompt on disk, and the calls in the ledger).
+quotes this row will write) returns no hold, and its journal evidence is complete (its lane's calls
+by name - the selector's answer for W, S and T - the reviewer's answer and each call's prompt on
+disk, and the calls in the ledger).
 L writes the held sites whose text the March chain changed (`legacy4`); P5 writes the card of a site
 whose P4 provenance is live in production and clears the old card of a held-card site whose card
 carries a Phase-3 reviewer-cleared defect (one of the 709), with that finding as the evidence.
@@ -286,18 +287,28 @@ def ledger_labels(
     )
 
 
-def evidence_problems(files: Sequence[ModelFile], labels: Sequence[str]) -> list[str]:
+def evidence_problems(
+    files: Sequence[ModelFile], labels: Sequence[str], *, lane: M.Lane
+) -> list[str]:
     """What the journal evidence of a written site lacks, call by call.
 
-    A site is written only if a model stage answered (`answers/`) and the reviewer answered
-    (`reviews/`), and every call is complete: each answer has the prompt it answered (`prompts/`,
-    the same feature - `judge_site` keys the answer, the prompt store and the ledger label by the
-    call's `answer_key`), each answer has its ledger line (`<site_id>/<feature>` in this batch), and
-    each ledger call of the site has its answer on disk. No feature name is assumed: the stages'
-    own names are what the files and the ledger carry.
+    A site is written only if the calls its lane makes answered, **by name** (`model4.LANE_ANSWERS`
+    under `answers/`: the selector's for lanes W, S and T - the design's p_evidence names the
+    "selector-answer sha256" - T's translation beside it, and lane R's one restricted call), and the
+    reviewer answered (`model4.REVIEW_FEATURE` under `reviews/`). Every call is complete: each
+    answer has the prompt it answered (`prompts/`, the same feature - `judge_site` keys the answer,
+    the prompt store and the ledger label by the call's `answer_key`), each answer has its ledger
+    line (`<site_id>/<feature>` in this batch), and each ledger call of the site has its answer on
+    disk.
     """
-    folders = {entry.folder for entry in files}
-    problems = [f"no {folder}/ file" for folder in MODEL_FOLDERS if folder not in folders]
+    present = {(entry.folder, entry.feature) for entry in files}
+    needed = [("answers", feature) for feature in M.LANE_ANSWERS[lane]]
+    needed.append(("reviews", M.REVIEW_FEATURE))
+    problems = [
+        f"no {folder}/{feature}: this lane's site needs that call"
+        for folder, feature in needed
+        if (folder, feature) not in present
+    ]
     if not labels:
         problems.append("no model call in the ledger for this batch")
     prompted = {entry.feature for entry in files if entry.folder == "prompts"}
@@ -750,7 +761,7 @@ def _p4_site(
 
     files = model_files(batch.root, site_id)
     labels = ledger_labels(ledger, batch_id=batch.batch_id, site_id=site_id)
-    missing = evidence_problems(files, labels)
+    missing = evidence_problems(files, labels, lane=lane)
     if missing:
         return W.Refusal(site_id, "description", RULE_EVIDENCE, "; ".join(missing))
     if assembly.description == site.description:
