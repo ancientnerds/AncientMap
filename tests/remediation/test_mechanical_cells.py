@@ -401,6 +401,33 @@ class TestTheReversalOfACellPlan:
         with pytest.raises(ValueError, match="is not a column this lane writes"):
             P.plan_record(replace(verdict, column="name"), P.Plan((verdict,), (), lane=CARD))
 
+    def test_a_column_lane_record_still_names_its_premise_expression(self) -> None:
+        """The delivered UK and period_name plans carry `premise_sql` on every line; dropping it
+        for the cell lanes must not drop it there (their PLAN.jsonl would no longer re-plan to the
+        same bytes)."""
+        verdict = P.Verdict(
+            site_id=SITE_A,
+            site_name="Boa Island",
+            ok=True,
+            old_value="Ireland",
+            new_value="Northern Ireland",
+            rule="geo-unit",
+            reason="",
+            note="n",
+            phase3=False,
+            finding_test_id="live",
+            evidence=({"source": "t", "quote": "x"},),
+            premise="54.5,-7.8",
+        )
+        record = P.plan_record(verdict, P.Plan((verdict,), (), lane=L.UK_PARTS))
+        assert record["premise_sql"] == L.UK_PARTS.premise_sql
+        assert (record["table"], record["key_column"], record["column"]) == (
+            "unified_sites",
+            "id",
+            "country",
+        )
+        assert record["change_key"] == f"country-uk-part:{SITE_A}"
+
     def test_a_reversal_record_carries_its_journal_row(self) -> None:
         verdict = P.Verdict(
             site_id=SITE_B,

@@ -301,6 +301,33 @@ class TestTheCells:
         assert result.tier_moves == {} or all(isinstance(k, tuple) for k in result.tier_moves)
 
 
+class TestAWaveThatIsDone:
+    def test_a_recomputed_database_plans_no_cell_and_leaves_no_statement(
+        self, tmp_path: Path
+    ) -> None:
+        """The read-back of an applied wave: re-planned, it must find nothing to write - and a
+        statement of an earlier plan must not be left behind to look like this plan's."""
+        result = C.build_card_stats_plan(export(with_stored([row()])), LANE, built_at="t")
+        assert not result.plan.changes and result.counters["cells"] == 0
+        for stale in ("APPLY.sql", "ROLLBACK.sql"):
+            (tmp_path / stale).write_text("-- an earlier plan's\n", encoding="utf-8")
+        P.write_plan_jsonl(result.plan, tmp_path / "PLAN.jsonl")
+        assert C.write_statements_or_none(result.plan, tmp_path) is False
+        assert not (tmp_path / "APPLY.sql").exists() and not (tmp_path / "ROLLBACK.sql").exists()
+
+    def test_a_plan_with_cells_gets_its_undo(self, tmp_path: Path) -> None:
+        now = [{**with_stored([row(country="Malta")])[0], "country": "Gozo"}]
+        journal = (jrow(1, SITE_A, "country", "Malta", "Gozo"),)
+        result = C.build_card_stats_plan(export(now, journal), LANE, built_at="t")
+        P.write_plan_jsonl(result.plan, tmp_path / "PLAN.jsonl")
+        assert C.write_statements_or_none(result.plan, tmp_path) is True
+        P.verify_pinned(
+            tmp_path / "ROLLBACK.sql",
+            plan_path=tmp_path / "PLAN.jsonl",
+            expected=A.rollback_statement(A.load_records(tmp_path / "PLAN.jsonl"), LANE),
+        )
+
+
 @needs_export
 def test_the_production_export_is_reproduced_cell_for_cell() -> None:
     """The counterfactual on the real export: with every journalled input put back, the generator's

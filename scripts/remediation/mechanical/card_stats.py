@@ -854,6 +854,25 @@ def write_plan_md(result: CardStatsPlan, export: Export, path: Path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
+def write_statements_or_none(plan: Plan, out: Path) -> bool:
+    """The undo of a plan with cells - or, for a plan with none, no statement at all.
+
+    A wave re-planned after its apply must plan 0 cells: that is the read-back that the recompute
+    is complete. An empty plan has no transaction to render (`render_transaction` refuses one),
+    and a statement left in the directory from an earlier plan is not this plan's: it is removed,
+    so `apply.py` finds nothing to send instead of a stale file its pin would refuse anyway.
+    """
+    if plan.changes:
+        write_rollback_sql(plan, out / "ROLLBACK.sql", plan_path=out / "PLAN.jsonl")
+        return True
+    for stale in ("APPLY.sql", "ROLLBACK.sql"):
+        if (out / stale).exists():
+            (out / stale).unlink()
+            log.info("removed %s: it belonged to an earlier plan of this wave", out / stale)
+    log.info("0 cells: the stored card_stats are what the generator computes")
+    return False
+
+
 # ------------------------------------------------------------------------------------- CLI
 def lane_directory(lane: Lane) -> Path:
     return REPO / "output" / "remediation" / lane.out_dir_name
@@ -894,7 +913,7 @@ def main(argv: list[str] | None = None) -> int:
             write_plan_jsonl(result.plan, out / "PLAN.jsonl")
             write_skipped_jsonl(result.plan, out / "SKIPPED.jsonl")
             write_plan_md(result, export, out / "PLAN.md")
-            write_rollback_sql(result.plan, out / "ROLLBACK.sql", plan_path=out / "PLAN.jsonl")
+            write_statements_or_none(result.plan, out)
             print(json.dumps(dict(result.counters), indent=1, sort_keys=True))
             print(
                 "rarity_tier moves:",

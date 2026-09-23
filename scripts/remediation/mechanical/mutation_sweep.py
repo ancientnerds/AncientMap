@@ -1511,9 +1511,9 @@ CASES: list[Case] = [
                 "test_a_plan_record_names_its_table_key_and_cell",
             ),
             (
-                "keeps the premise expression off each cell",
+                "keeps the premise expression on a column lane's lines",
                 "        if not lane.cells:\n            # A cell lane's premise",
-                "test_a_plan_record_names_its_table_key_and_cell",
+                "test_a_column_lane_record_still_names_its_premise_expression",
             ),
             (
                 "carries the journal row",
@@ -1531,6 +1531,14 @@ CASES: list[Case] = [
                 "test_the_undo_restores_null_where_the_lane_filled_it",
             ),
         )
+    ),
+    Case(
+        "cells: plan record keeps the premise expression off each cell",
+        PLAN,
+        "        if not lane.cells:\n            # A cell lane's premise",
+        "        if True:\n            # A cell lane's premise",
+        "test_a_plan_record_names_its_table_key_and_cell",
+        CELL_TESTS,
     ),
     # ----------------------------------------------------------------- the card_stats planner
     *(
@@ -1575,6 +1583,11 @@ CASES: list[Case] = [
                 "no row is inserted",
                 '        if not row["has_card"]:',
                 "test_a_row_without_a_card_is_reported_not_inserted",
+            ),
+            (
+                "an empty plan leaves no statement, a full one its undo",
+                "    if plan.changes:\n        write_rollback_sql(",
+                "test_a_plan_with_cells_gets_its_undo",
             ),
             (
                 "no cell is cleared",
