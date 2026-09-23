@@ -1,18 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """The boot-time FK policy must exempt every site-owned CASCADE table.
 
-api/main.py rewrites every FK onto unified_sites to ON DELETE SET NULL and
-drops NOT NULL on the column. A site-owned table whose site_id is part of
-its PRIMARY KEY cannot have NOT NULL dropped — on 2026-09-15 the deploy of
-site_external_ids (migration 0015) crash-looped the API on
-`column "site_id" is in a primary key` until the table was added to the
-exemption list. Any future site-owned table must be listed here AND there.
+The API boot (api/boot_schema.py, run from api/main.py) rewrites every FK onto
+unified_sites to ON DELETE SET NULL and drops NOT NULL on the column. A
+site-owned table whose site_id is part of its PRIMARY KEY cannot have NOT NULL
+dropped — on 2026-09-15 the deploy of site_external_ids (migration 0015)
+crash-looped the API on `column "site_id" is in a primary key` until the table
+was added to the exemption list. Any future site-owned table must be listed
+here AND there.
 """
 
 import inspect
 import re
 
-from api import main
+from api import boot_schema
 from pipeline import database
 
 SITE_OWNED_CASCADE_TABLES = {
@@ -25,7 +26,7 @@ SITE_OWNED_CASCADE_TABLES = {
 
 
 def _exemption_tuple() -> set[str]:
-    src = inspect.getsource(main)
+    src = inspect.getsource(boot_schema)
     block = src[src.index("FK policy (2026-08-17)") :]
     m = re.search(r"NOT IN \(([^)]*)\)", block)
     assert m, "FK policy exemption tuple not found"

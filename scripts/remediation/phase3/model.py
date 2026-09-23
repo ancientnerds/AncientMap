@@ -16,12 +16,12 @@ Two rules are enforced here because they decide whether a proposal is a correcti
 
 1. **Text fields are report-only in Phase 3** (brief decision 5), and the two reasons differ.
    `card_description` is re-derived on every API boot from the JSON file
-   (`api/main.py:506` -> `api/services/card_descriptions.py:35-48`, upserting into
-   `card_stats`), so a DB-only `set` is reverted. `unified_sites.description` has **no** boot
-   overwriter; it is report-only because text regeneration belongs to Phase 5, not to a SQL
-   update. Both are refused here, so the refusal cannot depend on which brief a stage read.
+   (`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`,
+   upserting into `card_stats`), so a DB-only `set` is reverted. `unified_sites.description`
+   has **no** boot overwriter; it is report-only because text regeneration belongs to Phase 5,
+   not to a SQL update. Both are refused here, so the refusal cannot depend on which brief a stage read.
 2. **A `site_type` write must be a fixed point of its own boot producer**
-   (`pipeline/lyra/orchestrator.py:1476-1488`): a value that `normalize_site_type()` would
+   (`pipeline/lyra/orchestrator.py::_run_migrations`): a value that `normalize_site_type()` would
    rewrite is not a correction but a temporary edit. The check imports the producer itself,
    so there is no second spelling of the normalisation.
 
@@ -90,7 +90,7 @@ def site_type_fixed_point(value: str) -> bool:
     """Would `value` survive the boot normalizer?
 
     Uses the boot producer itself (`pipeline.normalizers.site_type.normalize_site_type`,
-    called from `pipeline/lyra/orchestrator.py:1476-1488` on every start).
+    called from `pipeline/lyra/orchestrator.py::_run_migrations` on every start).
     """
     from pipeline.normalizers.site_type import normalize_site_type
 

@@ -1754,7 +1754,7 @@ def _report_inputs(
     restart = (
         "`unified_sites.country` has no boot-time producer for a curated row: the only writer that "
         "runs at startup is `pipeline/lyra/data_patches.py::fix_countries()`, scoped "
-        "`source_id = 'lyra' AND country IS NULL` (orchestrator.py:1062), and "
+        "`source_id = 'lyra' AND country IS NULL` (run from `orchestrator.py::_run_migrations`), and "
         "`scripts/audit_enrich.py:560-576` fills `country` only `WHERE country IS NULL`. A written "
         "value therefore survives a restart. `card_stats.civilization` is a copy of `country` "
         "(`api/cardgame/stats.py:184`, upserted by `api/cardgame/generator.py::_upsert_stats`) and is "

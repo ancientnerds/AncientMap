@@ -20,7 +20,7 @@ from collections.abc import Iterable, Iterator
 from typing import Any
 
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.exc import ArgumentError
+from sqlalchemy.exc import ArgumentError, MultipleResultsFound, NoResultFound
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.base import Executable
 from sqlalchemy.sql.elements import TextClause
@@ -60,6 +60,16 @@ class FakeResult:
         if len(self._rows) != 1:
             raise AssertionError(f"one() on {len(self._rows)} rows")
         return self._rows[0]
+
+    def scalar_one(self) -> Any:
+        # The real one raises unless there is exactly one row; a data statement answered with
+        # no rows must not read as a falsy scalar.
+        if not self._rows:
+            raise NoResultFound("scalar_one() on 0 rows")
+        if len(self._rows) > 1:
+            raise MultipleResultsFound(f"scalar_one() on {len(self._rows)} rows")
+        row = self._rows[0]
+        return row[0] if isinstance(row, tuple) else row
 
     def __iter__(self) -> Iterator[Any]:
         return iter(self._rows)
