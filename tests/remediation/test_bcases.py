@@ -20,6 +20,7 @@ import gzip
 import json
 import re
 import sys
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -1230,6 +1231,186 @@ def test_rule_b_takes_neither_the_old_item_nor_a_partial_name_nor_a_wikimedia_pa
     assert R.suggest(listing)["rule"] == "unresolved"
     assert not R.is_site_kind(_candidate("Q3", "N1", 1.0, ["Wikimedia disambiguation page"]))
     assert R.suggest(_research(page, [_candidate("Q4", "N2", 10.0, ["cave"])]))["qid"] == "Q4"
+
+
+# ── the research behind the third wave: kept names on a suspect link ─────────────────────────
+
+
+def _verdict(site_id: str, group: str, suspect: list[str], **extra: Any) -> dict[str, Any]:
+    return {
+        "site_id": site_id,
+        "group": group,
+        "link_suspect": suspect,
+        "class": "N1",
+        "qid": "Q1",
+        "en_label": "Tarxien Temples",
+        **extra,
+    }
+
+
+def test_wave_three_takes_the_kept_names_on_a_generic_or_shared_link_only() -> None:
+    """Q1 or Q2 on a kept name is wave 3; far only (Q4) is a coordinate question, a wrong link was
+    wave 2's, a changed record says so in `state`, and a review row is read, not researched."""
+    verdicts = [
+        _verdict("a", "keep", ["Q2"]),
+        _verdict("b", "keep", ["Q1"]),
+        _verdict("c", "keep", ["Q2", "Q4"]),
+        _verdict("d", "keep", ["Q4"]),
+        _verdict("e", "keep", []),
+        _verdict("f", "keep", ["Q2"], state="link changed since the census: Q1 -> Q2"),
+        _verdict("g", "review", ["Q2"]),
+        _verdict("h", "wrong-link", []),
+        _verdict("i", "wrong-link", [], state="link changed since the census: Q1 -> Q2"),
+    ]
+    assert [v["site_id"] for v in R.suspect_links(verdicts)] == ["a", "b", "c"]
+    assert [v["site_id"] for v in R.wrong_links(verdicts)] == ["h"]
+
+
+def _maltese(site_id: str, name: str, qid: str, point: tuple[float, float]) -> dict[str, Any]:
+    about = f"{name}, a Neolithic temple complex."
+    return _site(name, qid, point, id=site_id, country="Malta", description=about)
+
+
+TARXIEN = {
+    SITE: _maltese(SITE, "Templos de Tarxien", "Q1", (35.86935, 14.51242)),
+    OTHER: _maltese(OTHER, "Tarxien Temples", "Q1", (35.86969, 14.51243)),
+    THIRD: _maltese(THIRD, "Hal Saflieni", "Q2", (35.86925, 14.50694)),
+}
+
+
+def test_the_rows_sharing_an_item_are_the_other_rows_and_a_stale_link_is_refused() -> None:
+    shared = R.sharers(TARXIEN, SITE, "Q1")
+    assert [(s["site_id"], s["name"]) for s in shared] == [(OTHER, "Tarxien Temples")]
+    assert shared[0]["distance_m"] == pytest.approx(37.8, abs=0.1)
+    assert R.sharers(TARXIEN, THIRD, "Q2") == []
+    # the verdict's item must be the export's: a link repaired since is not researched as if not
+    with pytest.raises(inputs.InputError, match="links 'Q1' in the export, not Q9"):
+        R.sharers(TARXIEN, SITE, "Q9")
+
+
+def _page_missing(title: str) -> dict[str, Any]:
+    return {"query": {"pages": [{"title": title, "missing": True}]}}
+
+
+def _entity(label: str, lat: float, lon: float, p31: str) -> dict[str, Any]:
+    return {
+        "labels": {"en": {"language": "en", "value": label}},
+        "claims": {
+            "P625": [
+                {
+                    "rank": "normal",
+                    "mainsnak": {
+                        "datavalue": {
+                            "value": {
+                                "latitude": lat,
+                                "longitude": lon,
+                                "precision": 0.0001,
+                                "globe": "http://www.wikidata.org/entity/Q2",
+                            }
+                        }
+                    },
+                }
+            ],
+            "P31": [{"rank": "normal", "mainsnak": {"datavalue": {"value": {"id": p31}}}}],
+        },
+    }
+
+
+def test_a_suspect_record_carries_its_tests_the_rows_sharing_its_item_and_the_rules() -> None:
+    """The same research and the same rules as wave 2, and the facts the suspicion rests on."""
+    net = FakeNet(
+        [
+            _page_missing("Templos de Tarxien"),
+            {"query": {"geosearch": [{"title": "Q1"}, {"title": "Q5"}]}},
+            {"search": [{"id": "Q1"}]},
+            {
+                "entities": {
+                    "Q1": _entity("Tarxien Temples", 35.8697, 14.5124, "Q839954"),
+                    "Q5": _entity("Templos de Tarxien", 35.8694, 14.5125, "Q839954"),
+                }
+            },
+            {"entities": {"Q839954": {"labels": {"en": {"value": "archaeological site"}}}}},
+        ]
+    )
+    verdict = _verdict(SITE, "keep", ["Q2"], name="Templos de Tarxien")
+    record = R.research_suspect(net, verdict, TARXIEN)
+    assert record["link_suspect"] == ["Q2"]
+    assert [s["site_id"] for s in record["shared_with"]] == [OTHER]
+    assert (record["country"], record["description"]) == ("Malta", TARXIEN[SITE]["description"])
+    assert record["suggestion"] == {"rule": "B", "qid": "Q5", "title": None}
+    assert record["suggestion"] == R.suggest(record)
+
+
+def _research_tree(tmp_path: Path) -> tuple[Path, Path]:
+    cache, out = tmp_path / "cache", tmp_path / "out"
+    inputs.write_cache(cache / inputs.EXPORT_FILE, TARXIEN, {"exported_at": "test"})
+    out.mkdir()
+    verdicts = [
+        _verdict(SITE, "keep", ["Q2"]),
+        _verdict(THIRD, "wrong-link", [], qid="Q2", en_label="Hal Saflieni"),
+    ]
+    (out / "names.jsonl").write_text(
+        "".join(json.dumps(v) + "\n" for v in verdicts), encoding="utf-8"
+    )
+    return cache, out
+
+
+def test_research_suspects_writes_its_own_record_and_leaves_wave_twos_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bcases import run as RUN
+
+    cache, out = _research_tree(tmp_path)
+    net = FakeNet(
+        [_page_missing("Templos de Tarxien"), {"query": {"geosearch": []}}, {"search": []}]
+    )
+
+    class Scripted:
+        def __init__(self, *, root: Path, workers: int) -> None:
+            assert root == cache / "http" and workers == 1
+
+        def __enter__(self) -> FakeNet:
+            return net
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    monkeypatch.setattr(RUN, "Fetcher", Scripted)
+    assert RUN.research(cache, out, suspects=True) == {"A": 0, "B": 0, "unresolved": 1}
+    assert not (out / RUN.RESEARCH_FILE).exists()
+    [record] = inputs.read_jsonl(out / RUN.SUSPECTS_FILE)
+    assert record["site_id"] == SITE and record["shared_with"][0]["site_id"] == OTHER
+    assert not net.answers
+
+
+def test_the_suspects_flag_reaches_the_research_and_belongs_to_it_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bcases import run as RUN
+
+    asked: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        RUN, "research", lambda cache, out, **kw: asked.append(kw) or {"A": 0, "B": 0}
+    )
+    where = ["--cache", str(tmp_path), "--out", str(tmp_path)]
+    assert RUN.main(["research", "--suspects", *where]) == 0
+    assert RUN.main(["research", *where]) == 0
+    assert asked == [{"suspects": True}, {"suspects": False}]
+    with pytest.raises(SystemExit) as refused:
+        RUN.main(["plan", "--suspects", *where])
+    assert refused.value.code == 2
+
+
+def test_the_delivered_suspect_research_is_wave_threes_selection_under_the_same_rules() -> None:
+    verdicts = inputs.read_jsonl(OUT / "names.jsonl")
+    records = inputs.read_jsonl(OUT / "qid_research_suspects.jsonl")
+    assert [r["site_id"] for r in records] == [v["site_id"] for v in R.suspect_links(verdicts)]
+    assert not {r["site_id"] for r in records} & {v["site_id"] for v in R.wrong_links(verdicts)}
+    tests = Counter("+".join(r["link_suspect"]) for r in records)
+    assert tests == {"Q2": 33, "Q1": 3, "Q1+Q2": 1, "Q2+Q4": 2}
+    for record in records:
+        assert record["suggestion"] == R.suggest(record), record["name"]
+    assert Counter(r["suggestion"]["rule"] for r in records) == {"B": 4, "unresolved": 35}
 
 
 # ── the delivered files ───────────────────────────────────────────────────────────────────────
