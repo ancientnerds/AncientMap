@@ -1,0 +1,322 @@
+# Globe load: visible first — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Use superpowers:test-driven-development for every code step.
+
+**Goal:** `/globe.html` shows the globe in a few seconds on every device that can run it, with a clear screen on every device that cannot, and loads everything the first frame does not show in the background after the intro — without any visible change to the first frame.
+
+**Architecture:** The critical path shrinks to what the first frame shows at the size it shows it (slim site payload, start-tier basemap decoded off the main thread, start-tier coastlines/borders parsed in a worker, no Mapbox). A sequential background queue that starts after the warp intro brings the rest (site details, Mapbox, detail tiers, satellite, sharper basemap, service worker). Every start failure surfaces on an explicit screen and in analytics; the dashboard splits the loads that never reached the globe.
+
+**Tech Stack:** React 18 + three r182 + Vite 5 + vite-plugin-pwa (workbox) + mapbox-gl 3.18 on the frontend; FastAPI + Redis on the backend; Umami for analytics; vitest 4 (node env by default, jsdom opt-in per file) and pytest; Python Playwright for probes.
+
+**Spec:** `docs/superpowers/specs/2026-09-23-globe-load-design.md` (approved). Where this plan and the spec differ, this plan wins; the corrections are listed in §0.2.
+
+**Integration briefs (read the one for your unit before you start; they carry file:line detail this plan does not repeat):**
+`C:/Users/marti/AppData/Local/Temp/globe-load-briefs/{vector,textures,sites,startup,mapbox,reliability,dashboard,infra}.md`
+
+---
+
+## 0. Ground rules for every unit
+
+### 0.1 Working environment
+- Integration worktree: `C:/PythonProjects/AncientMap-globeload`, branch `globe-load`. Unit worktrees are created by the orchestrator from `globe-load` (paths given in your task prompt). Work **only** in your worktree. Never read, write or run anything in `C:/PythonProjects/AncientMap` (a DB-audit session owns it) — except the read-only LFS object store the build script reads through the production URL instead.
+- Python: `C:/PythonProjects/AncientMap-globeload/.venv/Scripts/python.exe` (Python 3.13, has requirements + pytest + ruff + vulture + import-linter + mypy + playwright + shapely). Run it with your worktree as cwd; check once that `python -c "import api,pipeline;print(api.__file__)"` prints your worktree.
+- Frontend: `cd <worktree>/ancient-nerds-map`. If `node_modules` is missing, run `npm ci --no-audit --no-fund` once.
+- CI runs Node 20; locally Node 22. Run vitest under Node 20 before you finish: `npx --offline -y -p node@20 -- node node_modules/vitest/vitest.mjs run <files>`. Node 20 has no global `navigator`: stub it with `vi.stubGlobal('navigator', …)` in node-env tests that touch it.
+- Frontend tests default to the **node** environment. Opt into jsdom per file with a `/** @vitest-environment jsdom */` docblock. There is no @testing-library: render with `createRoot` + `act` and `globalThis.IS_REACT_ACT_ENVIRONMENT = true` (pattern: `src/components/LyraChatModal.test.tsx`).
+- Backend tests: `-m "not integration and not live_llm"` always.
+- Commit on your branch with a clear message ending in `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`. Never push. Never touch `main`. Never `git stash`, `reset --hard`, or `commit --amend` on shared branches.
+
+### 0.2 Corrections to the spec (binding)
+1. The Mapbox switch is at camera distance **1.304** (`MAPBOX_SWITCH_DISTANCE = 2.44 − 0.8 × 1.42`), where the loop's telephoto FOV is ≈13.2° and the globe shows ≈0.21 km per device px. The coastline **detail** tier therefore needs ≈0.001° tolerance; the **start** tier (0.02°) is correct.
+2. The basemap start tier is computed from the canvas, not from "desktop vs touch": required texture width ≈ `3.78 × innerHeight × min(devicePixelRatio, 2)`; the start tier is the smallest tier at least that wide, never above the device's maximum tier. The upgrade to the maximum tier runs whenever max > start (also on tablets).
+3. `mapbox-gl` reaches the globe entry through two chains: `mapboxEffects.ts → MapboxGlobeService` **and** `App → SitePopup → MapSection → EmpireMinimap`. Both are cut.
+4. The service worker precaches 6.9 MB right at `load` on `globe.html`. On `globe.html` registration moves into the background queue (last task).
+5. `CACHE_BUSTER` changes on every deploy, so new layer files carry a **content hash in the file name** (manifest imported by the bundle); basemaps stay unversioned (content-stable). No `?_v=` on either.
+6. No start failure reaches a React error boundary today. Every async start path is wired explicitly (state bridge → throw in render, or App's `failGlobe`).
+7. Umami events carry no page-load id: the dashboard split is a per-session fold capped by unreached loads; the frontend sends **at most one ending event per load** (a latch).
+8. The rivers/lakes "preload" warmed 12 MB of 10 m files that are only used at zoom ≥ 50. The background task now preloads the level a toggle at the current zoom actually needs (normally `ne_110m`, 38 kB each) into a parsed cache; the 10 m files load on LOD change as today.
+9. On touch devices (max tier ≤ `med`) the satellite texture is **not** preloaded; it loads on the first toggle with the pending indicator. Desktops preload it at the start tier.
+10. The warp starts when the overlay starts fading (`splashDone && layersReadyCalled`), so sites, layers and focus position are all in place before the intro, whatever finishes first.
+
+### 0.3 Rules that bind every line of code
+- CLAUDE.md: no fallback code, no `catch {}` that returns empty data, no silent retries. Feature detection (e.g. `requestIdleCallback` missing on Safari) is not a fallback. A timeout on a third-party call is not a fallback.
+- Nothing visible changes in the first frame (A5). No new colours, sizes, fonts or layouts; new screens reuse the phone gate's classes; new UI states reuse existing indicators (`loading-indicator`, `.loading-retry`, results header text).
+- SSR safety: modules imported by `DataStore`, `SitePopup` or `SitePage` must not touch `window`/`document`/`navigator`/`requestIdleCallback` at module scope (guard: `src/seo/__tests__/render.test.tsx`).
+- StrictMode (dev) double-mounts: every effect that starts async work returns a cleanup that aborts it; once-only events use ref guards.
+- `noUnusedLocals`/`noUnusedParameters` are on; knip fails on unreachable new files.
+- `pipeline/` modules imported by Lyra must import with `markdown`/`nh3` blocked:
+  `python -c "import sys; sys.modules['markdown']=None; sys.modules['nh3']=None; import pipeline.lyra.orchestrator, pipeline.lyra.analytics_alerts, pipeline.stats_analysis, pipeline.umami_db"`.
+
+### 0.4 Cross-unit contracts (do not deviate; other units code against these)
+
+**C0 — start-error callback.** Every critical loader takes `onStartError: (phase: string, err: unknown) => void` (vector renderer context, texture hook options, label context, `SceneInitOptions`). In wave 2 Globe passes an interim `(phase, err) => console.error('[globe start]', phase, err)`; U9 replaces it with `reportStartError`, which feeds the error boundary. Loaders call it once per failure and never retry.
+
+**C1 — globe layer manifest** `ancient-nerds-map/src/data/globeLayers.generated.json` (written by `scripts/build_globe_layers.py`, never by hand):
+```json
+{
+  "coastlines":     { "start": "/data/layers/globe/coast_start.<hash8>.json",   "detail": "/data/layers/globe/coast_detail.<hash8>.json" },
+  "countryBorders": { "start": "/data/layers/globe/borders_start.<hash8>.json", "detail": "/data/layers/globe/borders_detail.<hash8>.json" }
+}
+```
+Each file is a GeoJSON `FeatureCollection` whose features are `MultiLineString`s, compact (`separators=(',',':')`), no trailing newline. `<hash8>` = first 8 hex chars of the sha256 of the file bytes.
+
+**C2 — sites API** `GET /api/sites/all?...&fields=globe|all` (default `all` = today's payload byte-for-byte). `globe` keeps only `id,n,la,lo,s,t,p,pn,c` (keys absent in a site stay absent).
+
+**C3 — analytics events** (added to `EventName` in `src/analytics/index.ts`):
+
+| event | props | sent by |
+|---|---|---|
+| `globe_gate` | `{choice: 'globe'\|'stories'\|'radar'\|'journal'\|'lyra'\|'db'}` | phone-gate buttons |
+| `globe_unsupported` | `{reason: 'no_webgl2'\|'max_texture_size', detail?: string}` | capability check, when the screen shows |
+| `globe_error` | `{phase: string, message: string}` | start failures; background failures use `phase: 'bg:<task>'` |
+| `globe_abandon` | `{ms: number, phase: 'gate'\|'sites'\|'scene'\|'basemap'\|'labels'\|'coastlines'\|'countryBorders'}` | `pagehide` / `visibilitychange→hidden` before `globe_ready` |
+| `globe_bg` | `{task: BgTaskName, ms: number}` | each finished background task |
+
+`BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'`. At most **one ending** (`globe_gate` with choice ≠ globe, `globe_unsupported`, a start `globe_error`, `globe_abandon`) per load.
+
+**C4 — Mapbox load state** `src/services/mapboxLoader.ts`: `export type MapboxLoadState = 'idle' | 'loading' | 'ready' | 'failed'` and `runMapboxLoadTask(deps)` (shape in Task U5.4).
+
+**C5 — constants** in `src/config/globeConstants.ts`: `THREEJS_CAMERA_MAX = 80`, `MAPBOX_SWITCH_DISTANCE` (derived, ≈1.304), `RENDERER_ATTRIBUTES` (the object literal from `sceneInit.ts:95-103`, used by the renderer and the capability probe).
+
+**C6 — background queue** `src/services/globeBackgroundQueue.ts`:
+```ts
+export type BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'
+export interface BgTask { name: BgTaskName; run: (signal: AbortSignal) => Promise<void> }
+export interface GlobeBackgroundQueue {
+  add(task: BgTask): void        // appends; order of add() = run order
+  promote(name: BgTaskName): void // moves a pending task to the front
+  start(): void                  // idempotent
+  dispose(): void                // aborts the running task, drops the rest
+}
+export function createGlobeBackgroundQueue(deps: {
+  scheduleIdle: (cb: () => void) => () => void   // returns cancel
+  isHidden: () => boolean
+  onVisibilityChange: (cb: () => void) => () => void
+  now: () => number
+  onTaskDone: (name: BgTaskName, ms: number) => void
+  onTaskFailed: (name: BgTaskName, err: unknown) => void
+}): GlobeBackgroundQueue
+```
+
+**C7 — device tiers** `src/utils/deviceTier.ts`: keep `BasemapTier`, `getBasemapTier(maxTextureSize)` (= the maximum tier, unchanged semantics), add `TIER_WIDTH = {low: 4096, med: 8192, high: 16383}`, `MIN_BASEMAP_TEXTURE_SIZE = 4096`, `requiredBasemapWidth(cssHeight: number, dpr: number): number`, `getStartTier(maxTextureSize: number, viewport: {cssHeight: number; dpr: number}): BasemapTier`, `tierRank(t): 0|1|2`. `?basemap=` pins both start and maximum tier.
+
+**C8 — basemap service** `src/services/basemapUpgrade.ts`: `decodeBasemap(url, signal): Promise<ImageBitmap>`, `uploadWhole(renderer, bitmap): THREE.Texture`, `uploadInStrips(renderer, bitmap, opts): Promise<THREE.Texture>`, `stripPlan(width, height, rows)`, `swapUniform(materials, uniform, texture)`; a small per-kind state holder `BasemapState` (current tier, texture, in-flight abort).
+
+---
+
+## 1. Waves
+
+| wave | units (parallel within a wave) | base |
+|---|---|---|
+| 1 | U1 layer data · U2 sites API · U3 measurement · U4 PWA/infra · U11 probe harness | `globe-load` |
+| 2 | U5 Mapbox lazy · U6 vector layers · U7 basemap textures · U8 sites frontend | `globe-load` after wave-1 merge |
+| 3 | U9 startup + reliability + events (then) U10 background queue + wiring | `globe-load`, sequential, in the integration worktree |
+| 4 | verification (probes, visuals, gates), audit convergence, fixes | integration worktree |
+
+---
+
+## U1 — Globe layer data (Python build script + generated files)
+
+**Files:** Create `scripts/build_globe_layers.py`, `tests/scripts/test_build_globe_layers.py`, `public/data/layers/globe/*.json` (generated), `ancient-nerds-map/src/data/globeLayers.generated.json` (generated). Modify `.gitattributes` (one line).
+
+**Inputs:** coast `https://ancientnerds.com/data/layers/coast_hires.geojson` (25,035,507 B; the worktree copy is an LFS pointer — do not `git lfs pull`); borders `https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_0_boundary_lines_land.geojson` (pinned tag). The script takes `--coast PATH_OR_URL` and `--borders PATH_OR_URL` (defaults = those URLs), downloads into a temp dir, never at runtime.
+
+- [ ] **U1.1 Failing tests** (`tests/scripts/test_build_globe_layers.py`, load the script by file path like `tests/scripts/test_funnel_report.py:16-23`):
+```python
+def test_simplify_drops_artificial_antarctic_segments_before_simplifying(mod):
+    # vertical segment at a round longitude below -60 spanning > 2 degrees, like isArtificialAntarcticBoundary
+    lines = [[[180.0, -70.0], [180.0, -80.0]], [[10.0, 50.0], [10.5, 50.2], [11.0, 50.0]]]
+    out = mod.clean_and_simplify(lines, tolerance=0.0, decimals=3)
+    assert [[180.0, -70.0], [180.0, -80.0]] not in out
+
+def test_rounding_and_min_two_points(mod):
+    out = mod.clean_and_simplify([[[1.23456, 2.34567], [1.23457, 2.34568]]], tolerance=0.01, decimals=3)
+    assert all(len(line) >= 2 for line in out)
+    assert all(p == [round(p[0], 3), round(p[1], 3)] for line in out for p in line)
+
+def test_feature_collection_is_compact_multilinestring(mod):
+    raw = mod.to_feature_collection_bytes([[[0.0, 0.0], [1.0, 1.0]]])
+    assert raw.startswith(b'{"type":"FeatureCollection"') and not raw.endswith(b"\n")
+    fc = json.loads(raw)
+    assert {f["geometry"]["type"] for f in fc["features"]} == {"MultiLineString"}
+
+def test_hashed_name_is_content_addressed(mod):
+    assert mod.hashed_name("coast_start", b"abc") == "coast_start.ba7816bf.json"
+
+def test_committed_manifest_points_at_committed_files_within_budget():
+    root = Path(__file__).resolve().parents[2]
+    manifest = json.loads((root / "ancient-nerds-map/src/data/globeLayers.generated.json").read_text())
+    budgets_gz = {"coastlines": {"start": 700_000, "detail": 3_500_000}, "countryBorders": {"start": 200_000, "detail": 450_000}}
+    for layer, tiers in manifest.items():
+        for tier, url in tiers.items():
+            path = root / "public" / url.lstrip("/")
+            data = path.read_bytes()
+            assert hashlib.sha256(data).hexdigest()[:8] in path.name
+            assert len(gzip.compress(data, 6)) <= budgets_gz[layer][tier]
+            fc = json.loads(data)
+            assert fc["type"] == "FeatureCollection" and fc["features"]
+```
+- [ ] **U1.2 Run** `…/.venv/Scripts/python.exe -m pytest tests/scripts/test_build_globe_layers.py -q -m "not integration and not live_llm"` → FAIL (module missing).
+- [ ] **U1.3 Implement** `scripts/build_globe_layers.py`:
+  - `flatten_lines(fc) -> list[list[list[float]]]` (LineString, MultiLineString, Polygon rings, MultiPolygon rings — same walker as `vectorRenderer.ts`).
+  - `is_artificial_antarctic(a, b)` — port `ancient-nerds-map/src/utils/geoUtils.ts:91-110` exactly; `clean_and_simplify(lines, tolerance, decimals)` splits each line at artificial segments (drop them), simplifies each piece with shapely `LineString.simplify(tolerance, preserve_topology=False)` (closed rings: keep closed), rounds to `decimals`, drops consecutive duplicate points and pieces with < 2 points.
+  - Tiers: `coast_start` tol 0.02 dec 3; `coast_detail` tol 0.001 dec 4; `borders_start` tol 0.02 dec 3; `borders_detail` tol 0 (no simplification) dec 4. Put these four in one `TIERS` table with a comment stating the pixel reasoning (start view d=2.44 FOV 60 ≈ 4.9 km/device px → 0.5 px ≈ 0.022°; switch view d=1.304 FOV 13.2 ≈ 0.21 km/device px → 0.5 px ≈ 0.001°).
+  - `to_feature_collection_bytes(lines)` → one feature per ≤ 5,000 lines, `MultiLineString`, `json.dumps(..., separators=(",", ":"))`, no newline.
+  - `hashed_name(stem, data)`; `write_outputs(out_dir, manifest_path)` removes stale `*.json` in `public/data/layers/globe/`, writes the four files, writes the manifest (sorted keys, 2-space indent, trailing newline — it is source, not data), prints point counts and gzip-6 sizes.
+  - `main(argv)` with argparse; `if __name__ == "__main__": raise SystemExit(main(sys.argv[1:]))`.
+- [ ] **U1.4 Run the build** from the worktree root: `…/python.exe scripts/build_globe_layers.py`. Record the printed sizes in the commit message. Verify idempotency: run twice, `git status` shows no change after the second run.
+- [ ] **U1.5 `.gitattributes`:** add `public/data/layers/globe/*.json -text` (byte-exact on every checkout; never `.json.gz`).
+- [ ] **U1.6 Tests pass**; `ruff check scripts/build_globe_layers.py tests/scripts/test_build_globe_layers.py` and `ruff format --check` on both.
+- [ ] **U1.7 Commit** "Build the globe's coastline and border tiers offline".
+
+## U2 — Sites API: `fields=globe` and a pre-compressed shared cache
+
+**Files:** Modify `api/cache.py`, `api/routes/sites.py` (`get_all_sites`, docstring), `tests/api/test_sites_scope.py`. Create `tests/api/test_sites_all_fields.py`. Brief: `sites.md` §1.
+
+- [ ] **U2.1 Failing tests** (`tests/api/test_sites_all_fields.py`), app built like `tests/api/test_landing_html.py:182-205` (FastAPI + `GZipMiddleware(minimum_size=500)` + `include_router(sites.router, prefix="/api/sites")`, `dependency_overrides[get_db]` → `tests/fake_sql.py::RecordingSession` with a `"FROM unified_sites us"` row set and `"FROM site_content_links"`, `api.routes.snapshots.get_active_pins` patched to `{}`, a dict-backed fake for the new bytes cache):
+  1. `fields=globe` returns only `id,n,la,lo,s,t,p,pn,c` per site and the same `count`/`dataSource`;
+  2. default and `fields=all` return exactly today's dict (build the expected dict with the current code path before refactoring and assert equality);
+  3. `Accept-Encoding: gzip` → exactly one `content-encoding: gzip`, `vary` contains `Accept-Encoding`, `response.json()` works (httpx decodes once); no `Accept-Encoding` → identity body is valid JSON;
+  4. second request: `RecordingSession` records no statements, gzip not recomputed (spy on `gzip.compress`);
+  5. one request fills **both** cache keys (`…:f=all` and `…:f=globe`) from one DB read;
+  6. `cache_delete_pattern("sites:*")` and `("sites:all:*")` remove both keys (fake cache supports fnmatch);
+  7. pinned snapshot sites without `t/p/pn/c` project without KeyError;
+  8. `fields=bogus` → 422.
+- [ ] **U2.2 Run** → FAIL.
+- [ ] **U2.3 `api/cache.py`:** a second, bytes-capable Redis client (`redis.from_url(REDIS_URL)` without `decode_responses`, same cooldown/`mark_redis_lost` handling) and `cache_get_bytes(key) -> bytes | None`, `cache_set_bytes(key, value: bytes, ttl: int) -> None`. When Redis is unavailable they use the existing `_memory_cache` exactly like `cache_get`/`cache_set` do today (that is today's behaviour, not a new fallback). Type-annotated for mypy.
+- [ ] **U2.4 `api/routes/sites.py`:** split `get_all_sites` into a pure `_build_sites_payload(db, source, site_type, period_max, skip, limit) -> dict` (today's body up to the dict, no caching) and the route. Route signature adds `fields: Annotated[Literal["all", "globe"], Query()] = "all"`. Cache key `…:pin={pin_fp}:f={fields}`. On miss: build the payload once, derive both variants (`_GLOBE_KEYS = ("id","n","la","lo","s","t","p","pn","c")`, projection `{k: s[k] for k in _GLOBE_KEYS if k in s}`), serialise each with `json.dumps(obj, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()`, `gzip.compress(body, compresslevel=6, mtime=0)`, store both with `cache_set_bytes(…, ttl=1800)`. Response: gzip body with `Content-Encoding: gzip` + `Vary: Accept-Encoding` when the request accepts gzip, else `gzip.decompress` with `Vary`. `media_type="application/json"`. Rate limiter unchanged. Update the docstring (it says "minimal data", which is wrong).
+- [ ] **U2.5 Update `tests/api/test_sites_scope.py`:** its `_all()` helper calls `_build_sites_payload` (the pure function) so the three existing assertions keep their dict shape; keep every assertion.
+- [ ] **U2.6 Run** the two files, then the gate subset `tests/api -q -m "not integration and not live_llm"`; `ruff check api/`, `ruff format --check api/`, `mypy api/ --no-error-summary` (report only new errors), `lint-imports`, `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80`.
+- [ ] **U2.7 Commit** "Serve the globe's site fields pre-compressed from a shared cache".
+
+## U3 — Measurement: events, SQL, fold, panel
+
+**Files:** Modify `ancient-nerds-map/src/analytics/index.ts` (EventName only), `pipeline/umami_db.py` (`SQL_GLOBE` + its comment), `pipeline/stats_analysis.py` (`globe_funnel`, new `GLOBE_ENDINGS`, `_spread`), `api/routes/founders_stats.py` (docstring only), `ancient-nerds-map/src/components/dashboard/types.ts`, `GlobeReach.tsx`, `scripts/dashboard_screenshots.py` (fixtures). Tests: `tests/pipeline/test_umami_db_queries.py`, `tests/pipeline/test_stats_analysis.py`, `tests/api/test_founders_stats_routes.py`, `src/components/dashboard/__tests__/globeReach.test.ts`, `panels.test.tsx`. Brief: `dashboard.md` (use its §3 SQL and code verbatim unless a test proves it wrong).
+
+- [ ] **U3.1** Extend `EventName` with `'globe_gate' | 'globe_unsupported' | 'globe_error' | 'globe_abandon' | 'globe_bg'`, each with a one-line comment naming its props (C3). No senders in this unit.
+- [ ] **U3.2 Failing Python tests** as listed in `dashboard.md` §4: string guards for the new literals (`'globe_gate'`, `'globe_unsupported'`, `'globe_error'`, `'globe_abandon'`, `'choice'`, `'phase'`, the `bg:` exclusion via `left(phase, 3)`, no `'globe_bg'`); `_globe_row` helper gains the new columns with defaults; new fold tests: split sums to `gave_up`; precedence gate → unsupported → error → abandoned with cap; `gate_quit` is gate; `context_lost` is error; `[-0:]` trap; abandon median floor; `ready_ms` unchanged; **unmeasured**: sessions whose `first_view` is earlier than `endings_since` (the first new-style ending event in the window) count their unreached loads as `unmeasured`, not `no_signal`.
+- [ ] **U3.3 SQL** (`umami_db.py`): the `dashboard.md` §3.1 query plus two columns: `min(created_at) FILTER (WHERE event_type = 1) AS first_view` per session, and a scalar sub-select in the SELECT list `(SELECT min(e2.created_at) FROM website_event e2 WHERE e2.website_id = :website_id AND e2.url_path = :path AND e2.event_name IN ('globe_gate','globe_unsupported','globe_error','globe_abandon')) AS endings_since`. Respect the guards: no `'%`, `%s`, `{`, no verb substrings in aliases.
+- [ ] **U3.4 Fold** (`stats_analysis.py`): `GLOBE_ENDINGS`, `_spread`, the capped split, `no_signal`, `unmeasured` (sessions with `first_view < endings_since` or `endings_since is None`), `abandon_ms`. Return adds `not_reached: {gate, unsupported, error, abandoned, no_signal, unmeasured}` and `abandon_ms`. Strict `r["…"]` indexing. Docstring states the invariant `sum(not_reached.values()) == gave_up`.
+- [ ] **U3.5 Validate the SQL read-only on production** (literals substituted for `:website_id`, `:path`, `:since`, `:until`; database `umami`, user `ancient_map`): `ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d umami" < file.sql`. One SELECT, nothing else. Paste the row count into the commit message.
+- [ ] **U3.6 Frontend failing tests** then implementation: `GlobeEndings` type (6 keys), `GlobeData.not_reached`/`abandon_ms`; `endingItems(g)` (fixed order and labels: 'Stopped at the phone gate', 'Device cannot run the globe', 'Error while starting', 'Left while loading', 'No signal', 'Before these were recorded'; the abandoned row's hint `median X s` only with a median; the `unmeasured` row only when > 0); an abandon sentence helper sharing code with `timesLine` without changing any existing `timesLine` string; old-API response → `Data unavailable.` under intact tiles (`Reading.tsx:33-43` pattern); existing strings in `globeReach.test.ts` unchanged; `panels.test.tsx` `EMPTY.globe` gets the new keys explicitly plus an old-API test.
+- [ ] **U3.7 `scripts/dashboard_screenshots.py`:** add the new keys to `FIXTURES["globe"]` and `EMPTY_FIXTURES["globe"]`.
+- [ ] **U3.8 Run** the four Python test files, the Lyra import check (§0.3), ruff/format/lint-imports/vulture, and `npx vitest run src/components/dashboard src/analytics` under Node 20, `npx tsc --noEmit`.
+- [ ] **U3.9 Commit** "Split the globe loads that never arrive by how they ended".
+
+## U4 — PWA and build infrastructure
+
+**Files:** Create `ancient-nerds-map/src/pwa/runtimeCaching.ts`, `src/pwa/__tests__/runtimeCaching.test.ts`, `src/pwa/registerServiceWorker.ts` (+ test). Modify `ancient-nerds-map/vite.config.ts`, `ancient-nerds-map/globe.html`. Brief: `infra.md` §1, §7.
+
+- [ ] **U4.1 Failing tests** for `runtimeCaching.ts` (pure data: an exported `RUNTIME_CACHING` array whose `urlPattern`s are RegExps):
+  - `/data/basemaps/gray_dark_med.webp` matches the basemap rule (CacheFirst, `basemaps`, `maxEntries` 10), also with a query string;
+  - `/data/layers/globe/coast_start.1a2b3c4d.json` matches the globe-layer rule (CacheFirst, cacheName `vector-layers`, `maxEntries` 16) **before** the generic `/data/layers/…json` rule (find the index of the first matching rule, like workbox does: first match wins);
+  - `/api/sites/all?limit=100000&source=ancient_nerds&fields=globe&_v=abc` matches `api-sites` NetworkFirst with `networkTimeoutSeconds: 10` and an `expiration` (`maxEntries: 8`);
+  - every other existing rule keeps its pattern, handler and cacheName (copy the table from `infra.md` §1.1 into the test);
+  - every `$`-anchored pattern also matches `?x=1` or has no `$`.
+- [ ] **U4.2 Move** the `runtimeCaching` array out of `vite.config.ts` into `src/pwa/runtimeCaching.ts` (precedent: `src/landing/hubsHtml.ts` is imported only by `vite.config.ts` and its test). Apply the rule changes from U4.1. Keep `directoryIndex: null`, `navigateFallback: null`, `injectRegister: null`, and the three strings `tests/pipeline/test_analytics_tag.py` pins.
+- [ ] **U4.3 Deferred registration on `globe.html`:** `tuneLandingHtml` does not inject `SW_INSTALL` into `globe.html` any more. `src/pwa/registerServiceWorker.ts` exports `registerServiceWorker(): Promise<void>` with the exact semantics of the inline `SW_INSTALL` snippet (register `/sw.js`, scope `/`; a failure is reported, never thrown uncaught) and is SSR-safe (no module-scope browser access). Unit test with a stubbed `navigator.serviceWorker`. The background queue (U10) calls it as task `sw`.
+- [ ] **U4.4 `servePublicData` also in preview** (`configurePreviewServer`, same handler, registered directly), with gzip level 6 for `application/json` bodies ≥ 1024 bytes when the request accepts gzip (mirrors nginx) and `Vary: Accept-Encoding`. `.geojson`/`.webp` stay uncompressed (as production).
+- [ ] **U4.5 `globe.html`:** remove the dead `<link rel="preload" href="/data/basemaps/gray_dark_low.png" as="image">`. Add `<link rel="preload" as="font" type="font/woff2" crossorigin>` for the two label fonts that load late today (`/fonts/inter-300-latin.woff2`, `/fonts/inter-300-latin-ext.woff2`) — only if `src/components/Globe/rendering/geoLabelSystem.ts` draws labels with Inter 300 (verify in code; if not, skip this sub-step and say why in the commit).
+- [ ] **U4.6 Verify:** `npx vitest run src/pwa` (Node 20), `npx tsc --noEmit`, `npm run build` then `grep -c "sw.js" dist/globe.html` (expect 0 registration snippets; other pages keep theirs: check `dist/index.html`), `npx vite preview --port 4175 --strictPort --host 127.0.0.1` + `curl -sI -H 'Accept-Encoding: gzip' http://127.0.0.1:4175/data/labels.json` shows `Content-Encoding: gzip`; stop preview (`taskkill /F /T /PID`).
+- [ ] **U4.7 Commit** "Cache the globe's assets by what they are and register the worker late".
+
+## U11 — Probe harness (Python Playwright)
+
+**Files:** Create `scripts/globe_probe/probe.py`, `scripts/globe_probe/README.md`. Output to `output/globe_probe/<run-id>/` (gitignored). Brief: `infra.md` §7.
+
+- [ ] **U11.1 Implement** `probe.py` with subcommands, all writing JSON + screenshots into the run dir:
+  - `load --target prod|local --device desktop|phone [--cpu 4] [--net fast4g|none] [--gpu]` — tracker stubbed (`window.umami = {track}` via init script; `**/pulse.js` and `**/api/pulse` aborted), service workers blocked, CDP `Network.*` bytes until `globe_ready` (`encodedDataLength`; for route-fulfilled local files add the gzip-6 size of the body for `.json`, raw size otherwise), `globe_ready.ms`, long tasks (`PerformanceObserver` longtask, buffered), the moment the warp ends (`?demo=1` → `window.__DEMO.isReady()`), long tasks in the 30 s after that, all `track()` events, console errors. Phone: 412×915 DPR 2.625 touch UA, clicks `.mobile-action-globe`.
+  - `nogl --target …` — init script makes `HTMLCanvasElement.prototype.getContext` return null for `webgl2`; screenshot after 3 s; reports whether the unsupported screen is present.
+  - `shot --target … --pose lng,lat,distance [--dpr 1|2] [--after-bg]` — `?demo=1`, waits for `__DEMO.isReady()` (and with `--after-bg` for the `globe_bg` event of task `layers` and `basemap`), `__DEMO.setAutoRotate(false)`, `__DEMO.setCameraPose(...)`, waits 1.5 s, screenshots the canvas.
+  - `diff A.png B.png` — Pillow per-pixel mean absolute difference and the share of pixels differing by > 24/255; writes a diff image.
+  - `--target local`: serves the local build under the production origin: `context.route("https://ancientnerds.com/**")` fulfils files that exist in `ancient-nerds-map/dist/` (html, `/assets/**`, `/sw.js`, fonts) and in the worktree's `public/data/layers/globe/`, and lets everything else (API, other `/data/`) go to production. Until U2 is deployed, a `/api/sites/all?…fields=globe` request is answered by fetching the production full payload and projecting it to the globe keys in the handler (clearly logged as simulated).
+  - Mapbox: `--block-mapbox` aborts `api.mapbox.com`/`events.mapbox.com` (default on for `load`, off for `shot`), because each init is a billed map load.
+- [ ] **U11.2 Baseline against production now** (before any deploy): `load --target prod --device desktop --gpu`, `load --target prod --device phone --cpu 4 --gpu`, `nogl --target prod`, `shot --target prod --pose 10,51,2.44 --dpr 1` and `--dpr 2`, `shot --target prod --pose 10,51,1.31 --dpr 2` (closest Three.js view; Mapbox blocked so the Three.js view stays). Commit the README with the baseline numbers (not the images).
+- [ ] **U11.3 Commit** "Add the globe load probe and record the baseline".
+
+## U5 — Mapbox off the critical path
+
+**Files:** Modify `src/services/MapboxGlobeService.ts`, `src/config/mapboxConstants.ts`, `src/config/globeConstants.ts`, `src/components/Globe/rendering/mapboxEffects.ts`, `animationLoop.ts`, `eventHandlers.ts`, `src/hooks/globe/useMapboxSync.ts`, `useGlobeZoom.ts`, `src/components/SitePopup/sections/MapSection.tsx`, `src/utils/demoApi.ts`, `src/components/Globe.tsx` (init effect, auto-switch deps, clamp effect only), `sceneInit.ts` (only `controls.minDistance`). Create `src/services/mapboxLoader.ts`, tests. Brief: `mapbox.md`.
+
+- [ ] **U5.1 Failing tests:** `createAutoSwitchEffect` (loading + 66 → no switch; ready + 66 → `justEnteredMapbox` + `setShowMapbox(true)`; ready + 65 + showMapbox → off; offline warning); `MAPBOX_SWITCH_DISTANCE ≈ 1.304` and the loop formula gives zoom 66 there, 65 at 1.3127; `orbitMinDistance(state)` → 1.304 for idle/loading, 1.02 for ready/failed; loader with `vi.mock('../MapboxGlobeService')` (order loading→ready; reject → dispose + ref null + failed + rethrow; cancel after import → no state, no ref); `MapboxGlobeService.initialize` with `vi.mock('mapbox-gl')` (load resolves; error without `sourceId` before load rejects; tile error with `sourceId` does not); wheel at the clamp leaves the camera unchanged; `enterMapbox` in demoApi resolves when the service appears after the call; **static import graph guard**: walking value imports from `src/main.tsx` never reaches `mapbox-gl` (regex walker over `import … from`/`export … from`, skipping `import type` and `{ type X }`, resolving `.ts/.tsx/index`).
+- [ ] **U5.2 Constants (C5):** `THREEJS_CAMERA_MAX` moves to `globeConstants.ts` (import it in `useGlobeZoom.ts`, `animationLoop.ts`, `eventHandlers.ts`, `mapboxEffects.ts`, `useMapboxSync.ts` instead of the literal 80); `MAPBOX_SWITCH_DISTANCE`; `orbitMinDistance(state)`.
+- [ ] **U5.3 Cut both static chains:** `mapboxEffects.ts:11` → `import type`; remove `createMapboxInitEffect`/`MapboxInitEffectDeps`; `animationLoop.ts:8`, `eventHandlers.ts:4` → `import type`; `MapSection.tsx`: `const EmpireMinimap = lazy(() => import('../../EmpireMinimap'))` inside `<Suspense fallback={<div className="empire-minimap-container" />}>`.
+- [ ] **U5.4 `mapboxLoader.ts`:** `MapboxLoadState` and `runMapboxLoadTask({ containerRef, serviceRef, satelliteRef /* refs.satelliteMode */, dotSizeRef, setState, isCancelled, signal })` exactly as `mapbox.md` §5.2, plus a **visible-time** deadline of 20 s (count only while `!document.hidden`) that rejects with `Error('Mapbox did not load within 20 s of visible time')`.
+- [ ] **U5.5 `MapboxGlobeService.initialize` settles:** reject on an `'error'` before the first `'load'` when the event has no `sourceId`; delete the dead `rotateMapboxToken` branch and export (`mapboxConstants.ts:22-29`).
+- [ ] **U5.6 State and clamp:** `useMapboxSync` holds `mapboxState` state + `mapboxStateRef`; `sceneInit.ts:733` sets `controls.minDistance = MAPBOX_SWITCH_DISTANCE`; Globe effect sets `controls.minDistance = orbitMinDistance(mapboxState)`; wheel handler and double-click use `controls.minDistance` with the epsilon early return; auto-switch deps gain `mapboxState` and its body checks `mapboxState === 'ready'`.
+- [ ] **U5.7 Interim trigger:** until U10 wires the queue, Globe starts `runMapboxLoadTask` from a mount effect (cleanup cancels and disposes). U10 moves it into the queue.
+- [ ] **U5.8 demoApi:** `enterMapbox` reads `refs.mapboxServiceRef.current` inside its poll.
+- [ ] **U5.9 Verify:** vitest (Node 20) for the new tests + `src/seo` (SSR renders still green), `npx tsc --noEmit`, `npx knip --no-progress --include files,dependencies,devDependencies`, `npm run build` and check `dist/globe.html` has no modulepreload of the mapbox chunk (`grep -o 'modulepreload[^>]*' dist/globe.html`), and that `dist/site.html` no longer preloads it either.
+- [ ] **U5.10 Commit** "Load Mapbox only when the globe asks for it".
+
+## U6 — Vector layers: tiers, one parse in a worker, in-place upgrade
+
+**Files:** Modify `src/config/vectorLayers.ts`, `src/components/Globe/rendering/vectorRenderer.ts`, `src/components/Globe.tsx` (layer sections only), `src/hooks/globe/types.ts`, `createGlobeRefs.ts`, `src/services/VectorLayerCache.ts`. Create `src/components/Globe/rendering/layerWorker.ts`, `src/components/Globe/rendering/segmentBuilder.ts`, tests. Delete dead `src/hooks/globe/useVectorLayers.ts` (+ its re-export). Brief: `vector.md` (§11 is the design; follow it).
+
+- [ ] **U6.1 Failing tests:** `getLayerUrl` / `getGlobeLayerUrl(key, tier)` returns the manifest URLs (import `src/data/globeLayers.generated.json`), no `raw.githubusercontent.com` anywhere in `src/config` or `src/services`, `coast_hires` only for tier `hires`; `getLayerFiles(key)` equals what the loader fetches and what `VectorLayerCache` downloads; `buildSegmentPositions(features, radii)` equals the legacy `latLngTo3DRef` formula for LineString/MultiLineString/Polygon/MultiPolygon, drops the artificial Antarctic segment, returns one `Float32Array` per radius; loader: `!response.ok` throws with the URL; one fetch per layer creates front (1.002, renderOrder 10) and back (1.001, renderOrder −10) lines and sets `layersLoaded` only after both exist; `swapGeometry`/`upgradeLayerTier` keeps the Line object and material, never calls `fadeTo`, never changes `uOpacity`/`visible`/`isLoadingLayers`/`layersLoaded`, disposes the old geometry once, never downgrades (start < detail < hires), discards a stale load id; a failed critical layer is reported once through `ctx.onStartError(phase, err)` and the load effect never retries it.
+- [ ] **U6.2 `segmentBuilder.ts`** (pure, shared by worker and tests): the feature walker + Antarctic filter + two-pass `Float32Array` fill (count, then fill), exact `latLngTo3D` formula; plus the rivers/lakes label candidates (move the pure part of `vectorRenderer.ts:190-272` here so the worker returns `{name, lat, lng, …}` and the main thread never parses the file).
+- [ ] **U6.3 `layerWorker.ts`:** module worker (`new Worker(new URL('./layerWorker.ts', import.meta.url), { type: 'module' })`). Message in: `{id, buffer: ArrayBuffer, radii, withLabels}` (the main thread fetches with `offlineFetch` and transfers the bytes). Message out: `{id, positions: Float32Array[], labels?}` transferred, or `{id, error}`. One worker per Globe, created lazily, terminated on unmount. If knip flags the worker file, add it to `knip.json` `entry`.
+- [ ] **U6.4 One loader:** `loadVectorLayer(layerKey, ctx)` replaces `loadFrontLayer`/`loadBackLayer` (front + back from one parse, same synchronous commit, today's fades for the first appearance, labels for rivers/lakes), with a per-layer load id instead of the dropping `loadingRef` guard, reading `vectorLayersRef`/`satelliteModeRef` at finish time (not the stale snapshot). The two LOD effects merge into one that calls the same loader. No `requestAnimationFrame` chunking (the worker did the work; the main thread only creates geometries).
+- [ ] **U6.5 Tiers:** coastlines and borders load their `start` file on mount. Export `upgradeGlobeLayers(ctx, signal)` (both layers to `detail`, used by queue task `layers` in U10) and `ensureHiresCoastline(ctx)` (tier `hires` = `/data/layers/coast_hires.geojson`, only when `mapboxStateRef.current === 'failed'` and `camera.position.length() < MAPBOX_SWITCH_DISTANCE`; wire that check into the existing controls-change handler path, once).
+- [ ] **U6.6 Rivers/lakes preload:** delete the `Globe.tsx` preload effect (and the silent catch) and the `vectorPreloaded` ref. Export `preloadRiversLakes(ctx, signal)` that loads the file the current detail level needs for each of rivers and lakes into a module-level parsed cache keyed by URL, which `loadVectorLayer` consults first (U10 queues it as `rivers_lakes`).
+- [ ] **U6.7 Offline:** `VectorLayerCache` downloads exactly `getLayerFiles(key)` for coastlines and borders (so offline mode finds the same URLs), and fix the existing rivers/lakes mismatch the same way (local `ne_*` files the globe actually fetches); estimated sizes updated.
+- [ ] **U6.8 Verify:** vitest (Node 20) new tests, `tsc --noEmit`, knip, `npm run build`; `npm run dev` with `VITE_DEV_API_TARGET=https://ancientnerds.com`, open `/globe.html` in Playwright, confirm coastlines/borders render and the network shows exactly one request per layer file.
+- [ ] **U6.9 Commit** "Load coastlines and borders in tiers, parsed once in a worker".
+
+## U7 — Basemap textures: start tier, off-thread decode, strip upgrade
+
+**Files:** Modify `src/utils/deviceTier.ts`, `src/hooks/globe/useTextureLoading.ts`, `src/hooks/globe/useSatelliteMode.ts`, `src/components/Globe.tsx` (satellite requested/active split, props to `MapLayersPanel`), `src/components/Globe/panels/MapLayersPanel.tsx`, `createGlobeRefs.ts`, `types.ts`, `src/services/BasemapCache.ts` (offline item list). Create `src/services/basemapUpgrade.ts`, tests. Brief: `textures.md` (§3 is the verified call sequence — use it).
+
+- [ ] **U7.1 Failing tests:** `deviceTier` matrix (override pins both tiers; GPU size; touch; deviceMemory; `requiredBasemapWidth(1080,1)=4082.4`; `getStartTier` never above max; 4096 GPU → low); `stripPlan(16383, 8192, 256)`; `uploadInStrips` allocation assertions, per-copy `generateMipmaps` false except the final call, same src Texture never given to `initTexture`, `Box2`/`Vector2` values, `(…, 0, 0)` levels, one copy per `nextFrame`, `bitmap.close()` after the last copy, abort mid-way disposes dst + closes bitmap and leaves uniforms untouched; `swapUniform` assigns all materials before disposing the old texture; tier monotonicity; `decodeBasemap` rejects on `!res.ok` with URL and status and calls `createImageBitmap(blob, {imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none'})`; `MapLayersPanel` shows the existing `loading-indicator` next to Satellite while `satellitePending`.
+- [ ] **U7.2 `deviceTier.ts`** per C7. Reuse one small-screen/phone definition (the phone gate's `innerWidth < 768 || innerHeight < 500` rule lives in App today — export a single helper and use it in both places; keep the gate's behaviour identical).
+- [ ] **U7.3 `basemapUpgrade.ts`** per C8 and `textures.md` §3 (Option A orientation, allocation from `bitmap.width/height`, never 16384 for the 16383 files, `generateMipmaps` true at allocation then false during strips then true for the final one-row copy, swap before dispose, one `gl.getError()` check after allocation and after mips that fails the task explicitly on `OUT_OF_MEMORY`). Plain `fetch` for basemaps (today's `<img>` semantics; the SW `.webp` rule caches them).
+- [ ] **U7.4 `useTextureLoading.ts`:** only the start-tier gray on `sceneReady`: `decodeBasemap` → `uploadWhole` (`renderer.initTexture` before assigning, so the first render does not upload) → assign `uGrayBasemap` on main + sections + back → `setTexturesReady(true)`. Abort in cleanup; failure → `onStartError('basemap', err)` (a new option of the hook). Delete the satellite load, the 100 ms poll, the "count failure as loaded" branch, the dead `uTexelSize` write and the dead refs (`highResGrayLoaded`, `highResSatelliteLoaded`, `basemapTexture`, `currentBasemap`, `landMaskMesh`, unused `createTextureReadyEffect`). Keep `backgroundLoadingComplete` meaning "start tier on the GPU" (rotation gate and OptionsPanel keep today's timing).
+- [ ] **U7.5 Background entry points** (queued in U10): `loadSatellite(ctx, tier, signal)` (strip path whenever the tier is ≥ med), `upgradeGray(ctx, signal)` (to max tier when max > start). Context restore: keep the start-tier bitmaps open; on `webglcontextrestored` point the uniforms back at the start-tier textures, dispose strip-built textures, re-request the upgrades.
+- [ ] **U7.6 Satellite requested vs active:** `tileLayers.satellite` = requested; `satelliteActive = requested && satelliteReady`; use `satelliteActive` at every read site listed in `textures.md` §1.7 (not the dead `mapboxSync.satelliteModeRef`); `satellitePending` prop into `MapLayersPanel`; toggling on while not ready calls `requestSatellite()` (exported hook callback that U10 maps to `queue.promote('satellite')`, or loads directly on touch devices where it is not queued); a failure ends pending and reports `globe_error{phase:'bg:satellite'}`. `useSatelliteMode` no longer depends on `cache.satellite` for basemap visibility.
+- [ ] **U7.7 `BasemapCache` offline item:** download the satellite at the device's maximum tier and the gray at the maximum tier (so offline mode has what the loader will request).
+- [ ] **U7.8 Verify:** vitest (Node 20), `tsc --noEmit`, knip, build; dev server + Playwright: the basemap renders, orientation correct (north up at the default pose), satellite toggle shows the indicator and then the satellite; one screenshot compared with the U11 baseline at the start pose (`probe.py diff`) — report the numbers.
+- [ ] **U7.9 Commit** "Decode the basemap off the main thread and upgrade it in strips".
+
+## U8 — Sites on the frontend: globe fields first, details after
+
+**Files:** Modify `src/data/DataStore.ts`, `src/data/sites.ts`, `src/hooks/useSiteSearch.ts`, `src/App.tsx` (loadData fetch call + search branch + merge callback only), `src/components/FilterPanel.tsx` (results header only), `src/utils/demoApi.ts` (openSitePopup fallback path). Tests. Brief: `sites.md` §2-§5.
+
+- [ ] **U8.1 Failing tests:** `DataStoreClass.initialize('globe')` requests `…&fields=globe`, `initialize()` defaults to `'all'` (SearchPage unchanged); `loadSiteDetails()` is memoised, fetches the full payload once, `Object.assign`s only detail fields onto known ids (never `la/lo/n/t/p/pn/c`, never adds ids), resolves `detailsReady`; offline init and `'all'` init report details ready immediately; `mergeSiteDetails(prev, byId)` pure: unchanged elements identical (`toBe`), changed ones new objects keeping the same `coordinates` reference, no ids added; `useSiteSearch` with `detailsReady:false` and a query → `searchResults = []`, `isSearching = true`, no `search`/`search_empty` analytics while pending (jsdom + fake timers + `vi.mock('../analytics')`). Stub `navigator` and `OfflineStorage.isOfflineEnabled` (Node 20).
+- [ ] **U8.2 Implement** DataStore `initialize(fields: 'globe' | 'all' = 'all')` + id index + `loadSiteDetails()` + `detailsReady` (one mapping helper shared with `_parseSitesData`, no duplicate mapping; also dedupe `fetchSites`/`getCurrentSites` mapping into one `toSiteData`).
+- [ ] **U8.3 App:** normal mode calls `fetchSites('globe')`; exports a `loadDetails()` step (queued as `details` in U10; until then App calls it right after sites load) that merges with `setSites(prev => mergeSiteDetails(prev, byId))` + `setDetailsReady(true)`; the filter effect's search branch keeps the previous `filteredSites` while `!detailsReady` (deps include `detailsReady`); pass `isSearching` to FilterPanel.
+- [ ] **U8.4 FilterPanel:** while searching, the results header shows `Searching...` (the same text SearchPage shows) instead of "No sites found"; no new styles.
+- [ ] **U8.5 Popup fallback paths** (`App.tsx:548-566`, `demoApi.openSitePopup`) await `DataStore.detailsReady` before opening from bulk data. Do not add any wait inside `SitePopup`.
+- [ ] **U8.6 Verify:** vitest (Node 20) incl. `src/seo`, `tsc --noEmit`, knip; dev server against production (production ignores `fields`, still works): search for a description-only term right after load shows `Searching...` then results.
+- [ ] **U8.7 Commit** "Start the globe with the site fields it draws and fetch the rest after".
+
+## U9 — Startup sequencing, reliability, and the load events
+
+**Files:** Modify `src/App.tsx`, `src/components/Globe.tsx`, `src/components/Globe/rendering/sceneInit.ts`, `animationLoop.ts`, `src/hooks/globe/useFlyToAnimation.ts`, `src/components/FilterPanel.tsx` (geo helper use), `src/components/Globe/rendering/geoLabelSystem.ts` (`res.ok`), `src/config/globeConstants.ts` (`RENDERER_ATTRIBUTES`). Create `src/utils/ipLocation.ts`, `src/utils/globeSupport.ts`, `src/utils/loadWatchdog.ts`, `src/analytics/globeAbandon.ts`, `src/components/GlobeUnsupported.tsx`, `src/components/GlobeErrorScreen.tsx`, `src/components/GlobeErrorBoundary.tsx`, `src/components/globeFallbackLinks.tsx` (shared gate/screen links + icons), tests. Briefs: `startup.md`, `reliability.md`.
+
+- [ ] **U9.1 Failing tests:** `computeWarpCameraPositions` (default 10/51; |start|=|target|=2.44; start = (−x,y,−z); equals the legacy inline formula; fresh vectors); animation loop: no warp before `splashDone && layersReadyCalled`, target refs replaced before the first warp frame are honoured, `onWarpComplete` exactly once after the warp (jsdom, driven rAF, real three objects, full `AnimationLoopContext` stub); `lookupIpLocation` (2000 ms deadline per provider via fake timers + abort-aware fetch mock, second provider only after the first fails, null on double failure, failures logged); fly-to guard (pre-warp flyTo does nothing); `checkGlobeSupport` with a fake canvas (no webgl2 → `no_webgl2`; `MAX_TEXTURE_SIZE` 2048 → `max_texture_size`; ok releases the context with `WEBGL_lose_context`); `createStallWatchdog` (fires after 20 s without progress, reset by progress, paused while hidden, stopped); `installGlobeAbandon` (sends `globe_abandon{ms, phase}` once on pagehide or hidden while armed; not after disarm; cleanup removes listeners); `GlobeErrorBoundary` catches a render throw and an effect throw and calls `onError`, and the async bridge (`setStartError` → throw in render) reaches it; gate buttons send `globe_gate` with the right choice and keep the gate DOM byte-identical (render the gate before/after and compare `innerHTML`); one ending per load (latch) across gate → abandon.
+- [ ] **U9.2 Startup:** `computeWarpCameraPositions` exported from `sceneInit.ts` and used there; Globe effect after the scene effect re-targets the warp while `warpStartTimeRef.current === null`; warp trigger `splashDone && layersReadyCalled` (update the stale comments at `Globe.tsx:115` and `animationLoop.ts:260-263`); `onWarpComplete` in `AnimationLoopContext`, called once in the one-shot block, bridged through a ref like `onWebglLostRef`, exposed as a Globe prop; `useFlyToAnimation` returns early while `refs.warpStartTime.current === null`.
+- [ ] **U9.3 App:** remove `locationReady` and the mount gate; start geolocation (`lookupIpLocation`, shared with FilterPanel — remove the duplicate there) and the focus fetch in parallel with the sites load, all with abort cleanup; `initialPosition = initialNav?.coords ?? focusLocation ?? userLocation`; `loadingComplete = !isLoading && layersReady && focusResolved`; delete `MIN_SPLASH_DURATION` and `appStartTimeRef`; monotonic progress (`Math.max`); `onLayersReady` via `useCallback`; the download-speed interval at 500 ms instead of 100 ms (display only).
+- [ ] **U9.4 Capability check + screens:** `RENDERER_ATTRIBUTES` in `globeConstants.ts` used by `sceneInit` and `checkGlobeSupport`; lazy `useState` check in `AppContent` (skip in standalone mode); the `loadData` effect does nothing when unsupported; early returns **after** the phone gate: unsupported → `<GlobeUnsupported>`, failure → `<GlobeErrorScreen>` (phase, message, "Reload the globe" button, links). Both reuse the gate's classes and the shared `globeFallbackLinks` (the gate uses the same module; its DOM stays identical). Text (English, like the rest of the UI): unsupported — heading "Your browser can't show the 3D globe", body naming the missing capability ("WebGL 2 is not available" / "Your graphics card supports textures up to N px; the globe needs 4096"), hint "Turning on hardware acceleration in your browser settings often fixes this.", then the links; error — "The 3D globe could not start" + "Something went wrong while loading (<phase>): <message>" + reload button + links.
+- [ ] **U9.5 Error bridge:** `GlobeErrorBoundary` around `<Globe>`; Globe holds `startError` state and throws it in render; `reportStartError(phase, err)` passed as `onStartError` (C0) into `SceneInitOptions`, the texture hook, the label context and the vector renderer context (replacing the interim callback from wave 2); `renderer.debug.onShaderError` logs the info logs itself and reports `'shader'` (must not throw); sites failure → `failGlobe('sites')` instead of an empty globe; `loadData().catch(e => failGlobe('sites', e))`; labels `res.ok` + report `'labels'`. `failGlobe` tracks `globe_error` once (message through `errorProps`), disarms abandon, stops the watchdog. Keep the `webgl_lost` ternary at `Globe.tsx:625` byte-identical (a Python test pins it).
+- [ ] **U9.6 Watchdog:** progress items from Globe via an `onStartProgress(item)` prop (sceneReady, texturesReady, labelsLoaded, coastlines, countryBorders) plus App's sites; 20 s without progress (visible time) → the hint box shows the existing `.loading-retry` button with the label "Taking unusually long — reload" in place of the hint (same box, no layout change); loading continues; cleared on the next progress.
+- [ ] **U9.7 Events:** `globe_gate` on the six gate controls; `globe_unsupported{reason, detail}` once when the unsupported screen actually shows; `installGlobeAbandon` armed from mount (phase `'gate'` while the gate shows, then the first missing critical item), disarmed synchronously in `onLayersReady` **before** `track('globe_ready')`, in `failGlobe`, when unsupported shows, and on a non-globe gate choice; a single "ending sent" latch shared by all four ending senders.
+- [ ] **U9.8 Verify:** vitest (Node 20) all new tests + `src/seo` + `src/analytics`, `tsc --noEmit`, knip; `probe.py nogl --target local` (after `npm run build`) shows the unsupported screen; `probe.py load --target local --device desktop --gpu` reaches `globe_ready`; the phone gate screenshot equals the baseline (`probe.py diff`).
+- [ ] **U9.9 Commit** "Start the globe without waiting and name every way it can fail".
+
+## U10 — Background queue and wiring
+
+**Files:** Create `src/services/globeBackgroundQueue.ts` + tests. Modify `src/components/Globe.tsx`, `src/App.tsx` (queue ownership and the details/SW tasks), `src/utils/demoApi.ts` (`isReady` also waits for the Mapbox task to settle only in `enterMapbox`, not in `isReady`). Brief: `startup.md` §2(5).
+
+- [ ] **U10.1 Failing tests** (node env, injected scheduler): runs tasks in `add` order one at a time; waits for `scheduleIdle` between tasks; pauses while hidden and resumes on visible; a failing task calls `onTaskFailed` and the next task still runs; `promote` moves a pending task to the front (no effect on the running one); `start` is idempotent; `dispose` aborts the running task's signal and runs nothing more; `onTaskDone` gets the measured ms.
+- [ ] **U10.2 Implement** C6. `scheduleIdle` = `requestIdleCallback(cb, {timeout: 2000})` where the browser has it, else `setTimeout(cb, 50)` (Safari has no `requestIdleCallback`; feature detection, not a fallback).
+- [ ] **U10.3 Wire** in Globe (owner; created per mount, disposed on unmount, started from `onWarpComplete`). App passes its own tasks through a new Globe prop `appBackgroundTasks: { details: BgTask['run']; sw: BgTask['run'] }` (held in a ref). Tasks in order `details` (App), `layers` (`upgradeGlobeLayers`), `mapbox` (`runMapboxLoadTask`, replacing U5's interim mount trigger), `satellite` (only when not touch; start tier), `basemap` (`upgradeGray`, only when max > start), `rivers_lakes` (`preloadRiversLakes`), `sw` (`registerServiceWorker`, only on `globe.html`). `onTaskDone` → `track('globe_bg', {task, ms})`; `onTaskFailed` → `console.error` with the task name + `track('globe_error', {phase: 'bg:' + name, message})`. Satellite requested before its task ran → `promote('satellite')`; on touch devices the toggle loads it directly (U7).
+- [ ] **U10.4 Remove interim triggers** from U5 (mount-time Mapbox), U8 (details right after sites).
+- [ ] **U10.5 Verify:** vitest (Node 20), `tsc --noEmit`, knip, build; `probe.py load --target local --device desktop --gpu` shows the `globe_bg` events in order after the warp and no long task > 200 ms in the 30 s after the warp.
+- [ ] **U10.6 Commit** "Load what the first frame does not show after the intro, one task at a time".
+
+## Wave 4 — Verification, audit, fixes
+
+- [ ] **V1 Gates** (all, exactly as CI): see `infra.md` §6. Node 20 for vitest/knip/tsc/build/size-limit/build:ssr; `.venv` for pytest (full gate subset with the CI env vars), ruff, ruff format, lint-imports, vulture, `generate_shared_data.py --verify`, mypy `api/`; semgrep; gitleaks; Lyra import check. Add a globe entry budget to `.size-limit.json` (`dist/assets/main-*.js`, measured + 10 %, brotli).
+- [ ] **V2 Probes against the local build:** A1 (bytes before `globe_ready`, desktop + phone; with the simulated `fields=globe`), A2, A3 (indicative; final on production), A4, A5 (start pose DPR 1 and 2 vs baseline), A6 (closest pose after background vs baseline), WebKit check of `createImageBitmap` orientation on a 2D canvas and `typeof requestIdleCallback` (install `playwright install webkit` into the worktree venv if needed).
+- [ ] **V3 Audit convergence:** `docs/procedures/CODE_AUDIT.md` procedure scoped to this branch's diff, multi-lens review with adversarial verification, fix loop until two consecutive rounds find nothing new.
+- [ ] **V4 Deploy** (only with every gate green and the VPS showing no exec'd jobs in api/lyra): push `globe-load` to `main`, watch CI without pipes, check `commit` at `http://localhost:8000/` on the VPS, run the probes against production (A1–A6 final), check the new events arrive in Umami.
