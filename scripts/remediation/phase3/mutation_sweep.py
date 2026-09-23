@@ -16257,6 +16257,364 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += OPUS_HANDOFF_MUTATIONS
 
 
+# ── the Phase-4 pilot of 2026-09-24: searches off, the pilot's own batches, the draw ──────────────
+#: The pilot runs with no MiniMax search (owner order 2026-09-23, "everything with Opus"): a zero
+#: allowance builds no client and refuses every seam; `mass4 --searches-off` tells every routes
+#: stage 0 and carries no ceiling; `plan4 build --pilot` puts the pilot into its own batches; and
+#: `pilot4.py` draws the pilot set and writes the documents sealed with it.
+P4P_ROUTES = "scripts/remediation/phase4/route_stage.py"
+P4P_RUN4 = "scripts/remediation/phase4/run4.py"
+P4P_MASS4 = "scripts/remediation/phase4/mass4.py"
+P4P_PLAN4 = "scripts/remediation/phase4/plan4.py"
+P4P_PILOT4 = "scripts/remediation/phase4/pilot4.py"
+P4P_ROUTES_TEST = "tests/remediation/test_phase4_routes.py"
+P4P_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4P_PLAN_TEST = "tests/remediation/test_phase4_plan.py"
+P4P_PILOT_TEST = "tests/remediation/test_phase4_pilot.py"
+
+P4_PILOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── searches off ─────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: the searcher of a run without searches answers",
+        P4P_ROUTES,
+        '        raise SearchesOff(f"a run that may send no search was asked {query!r}")\n',
+        "        return None  # mutant\n",
+        P4P_ROUTES_TEST,
+        "test_the_searcher_of_a_run_without_searches_refuses_every_search",
+    ),
+    (
+        "p4 pilot: a run without searches probes the MiniMax quota",
+        P4P_ROUTES,
+        '        raise SearchesOff("a run that may send no search was asked to probe the MiniMax '
+        'quota")\n',
+        "        return {}  # mutant\n",
+        P4P_ROUTES_TEST,
+        "test_a_run_without_searches_refuses_to_probe_the_minimax_quota",
+    ),
+    (
+        "p4 pilot: a run without searches paces the MiniMax host",
+        P4P_ROUTES,
+        '        raise SearchesOff("a run that may send no search was asked to pace the MiniMax '
+        'host")\n',
+        "        return None  # mutant\n",
+        P4P_ROUTES_TEST,
+        "test_a_run_without_searches_refuses_to_pace_the_minimax_host",
+    ),
+    (
+        "p4 pilot: the search report of a run without searches names MiniMax",
+        P4P_ROUTES,
+        "    endpoint = SEARCHES_OFF_ENDPOINT\n",
+        '    endpoint = "https://api.minimax.io/v1/coding_plan/search"  # mutant\n',
+        P4P_ROUTES_TEST,
+        "test_a_run_that_may_send_no_search_holds_its_routed_sites_and_names_no_endpoint",
+    ),
+    (
+        "p4 pilot: a zero allowance opens the MiniMax client",
+        P4P_RUN4,
+        "        routes.no_search() if args.max_searches == 0 else routes.open_search(pacing_dir="
+        "pacing_dir)\n",
+        "        routes.open_search(pacing_dir=pacing_dir)  # mutant\n",
+        P4P_RUNNER_TEST,
+        "test_routes_with_a_zero_search_allowance_builds_no_minimax_client",
+    ),
+    (
+        "p4 pilot: searches off still hands out the allowance",
+        P4P_MASS4,
+        "        if self.searches_off:\n            return 0\n",
+        "        if False:  # mutant\n            return 0\n",
+        P4P_RUNNER_TEST,
+        "test_a_run_with_searches_off_tells_every_routes_stage_zero",
+    ),
+    (
+        "p4 pilot: searches off keeps a search ceiling",
+        P4P_MASS4,
+        "        max_searches=None if args.searches_off else args.max_searches,\n",
+        "        max_searches=args.max_searches,  # mutant\n",
+        P4P_RUNNER_TEST,
+        "test_a_run_with_searches_off_is_not_stopped_by_the_search_ceiling",
+    ),
+    (
+        "p4 pilot: searches off and an allowance may be asked together",
+        P4P_MASS4,
+        "    searches = parser.add_mutually_exclusive_group()\n",
+        "    searches = parser  # mutant\n",
+        P4P_RUNNER_TEST,
+        "test_searches_off_and_a_search_allowance_are_never_asked_together",
+    ),
+    # ── the pilot's own batches ──────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: the pilot shares its last batch with the rest",
+        P4P_PLAN4,
+        "    R.write_batches(path, [*head, *tail])\n",
+        "    R.write_batches(path, R.assign_batches(records, BATCH_SIZE, prefix=BATCH_PREFIX))"
+        "  # mutant\n",
+        P4P_PLAN_TEST,
+        "test_the_pilots_sites_fill_their_own_batches_and_the_rest_continue_the_numbering",
+    ),
+    (
+        "p4 pilot: a pilot longer than the plan is written",
+        P4P_PLAN4,
+        "    if not 0 <= pilot <= len(sites):\n",
+        "    if False:  # mutant\n",
+        P4P_PLAN_TEST,
+        "test_the_pilot_is_a_leading_part_of_the_plan",
+    ),
+    (
+        "p4 pilot: build takes the gold standard although --pilot names the pilot",
+        P4P_PLAN4,
+        "    pilot = pilot_site_ids(Path(args.pilot)) if args.pilot else R._gold_site_ids(Path("
+        "args.gold))\n",
+        "    pilot = R._gold_site_ids(Path(args.gold))  # mutant\n",
+        P4P_PLAN_TEST,
+        "test_build_takes_the_pilot_from_pilot_jsonl_in_its_order",
+    ),
+    (
+        "p4 pilot: a pilot line without a site id is skipped",
+        P4P_PLAN4,
+        "        if not isinstance(site_id, str) or not site_id:\n"
+        '            raise R.InputError(f"{path}:{number}: a pilot line without a site id: '
+        '{line!r}")\n',
+        "        if not isinstance(site_id, str) or not site_id:\n            continue  # mutant\n",
+        P4P_PLAN_TEST,
+        "test_a_pilot_line_without_a_site_id_stops_the_plan",
+    ),
+    (
+        "p4 pilot: the pilot may come from the gold standard and PILOT.jsonl at once",
+        P4P_PLAN4,
+        "    pilot = build.add_mutually_exclusive_group()\n",
+        "    pilot = build  # mutant\n",
+        P4P_PLAN_TEST,
+        "test_the_pilot_comes_from_the_gold_standard_or_from_pilot_jsonl_never_both",
+    ),
+    # ── the fixed members ────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: a prefix that names two sites resolves to the first",
+        P4P_PILOT4,
+        "    if len(found) != 1:\n"
+        '        raise R.InputError(f"{named.prefix} ({named.name}) names {len(found)} curated '
+        'sites")\n',
+        "    if not found:  # mutant\n"
+        '        raise R.InputError(f"{named.prefix} ({named.name}) names {len(found)} curated '
+        'sites")\n',
+        P4P_PILOT_TEST,
+        "test_a_prefix_that_names_no_site_or_two_is_refused",
+    ),
+    (
+        "p4 pilot: a named site of another name is taken",
+        P4P_PILOT4,
+        "    if named.name is not None and not _names_the_site((site.name, *site.aliases), "
+        "named.name):\n",
+        "    if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_named_site_must_carry_the_designs_name",
+    ),
+    (
+        "p4 pilot: the design's name is matched inside a word",
+        P4P_PILOT4,
+        '    wanted = f" {SG.fold(name)} "\n',
+        "    wanted = SG.fold(name)  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_named_site_must_carry_the_designs_name",
+    ),
+    (
+        "p4 pilot: any count of Q309 sites is taken",
+        P4P_PILOT4,
+        "    if len(ids) != Q309_SITES:\n",
+        "    if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_any_other_count_of_q309_sites_than_the_designs_seven_is_refused",
+    ),
+    (
+        "p4 pilot: a site the export still stores on 'History' is no Q309 trap",
+        P4P_PILOT4,
+        "        if site.wikidata_qid == HISTORY_QID or site.enwiki_title == HISTORY_TITLE\n",
+        "        if site.wikidata_qid == HISTORY_QID  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_the_q309_traps_are_the_repairs_old_links_and_what_the_export_still_shows",
+    ),
+    # ── the draws ────────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: a draw takes a site placed before it",
+        P4P_PILOT4,
+        "        drawn = AU.draw_sample(pools[stratum], seed=seed, count=count, exclude=before)\n",
+        "        drawn = AU.draw_sample(pools[stratum], seed=seed, count=count, exclude=set())"
+        "  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_draw_never_takes_a_site_placed_before_it",
+    ),
+    (
+        "p4 pilot: the draw is not the one its seed gives",
+        P4P_PILOT4,
+        "        drawn = AU.draw_sample(pools[stratum], seed=seed, count=count, exclude=before)\n",
+        "        drawn = AU.draw_sample(pools[stratum], seed=seed + 1, count=count, exclude=before)"
+        "  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_the_lane_draws_take_the_census_lanes_and_are_seeded",
+    ),
+    (
+        "p4 pilot: an English article makes a T candidate",
+        P4P_PILOT4,
+        '    return any(title is not None and title[0] != "en" for title in titles)\n',
+        "    return any(title is not None for title in titles)  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_t_candidate_waits_on_its_search_and_names_an_other_language_article",
+    ),
+    (
+        "p4 pilot: a site not waiting on its search is a T or R candidate",
+        P4P_PILOT4,
+        "    return census.lane is M.Lane.ZERO and M.HoldReason.SEARCH_STOPPED.value in "
+        "census.holds\n",
+        "    return census.lane is M.Lane.ZERO  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_an_r_candidate_waits_on_its_search_with_only_non_wiki_web_pages",
+    ),
+    (
+        "p4 pilot: a wiki host makes an R candidate",
+        P4P_PILOT4,
+        "    return bool(hosts) and not any(LIC.is_wiki_host(host) for host in hosts)\n",
+        "    return bool(hosts)  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_an_r_candidate_waits_on_its_search_with_only_non_wiki_web_pages",
+    ),
+    (
+        "p4 pilot: an extract of exactly 40,000 characters is long",
+        P4P_PILOT4,
+        "        DRAW_LONG: lambda site, facts: (facts.extract_chars or 0) > EXTRACT_OVER,\n",
+        "        DRAW_LONG: lambda site, facts: (facts.extract_chars or 0) >= EXTRACT_OVER,"
+        "  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_the_long_draw_takes_lane_sources_over_40000_characters",
+    ),
+    (
+        "p4 pilot: a routeless site the plan gives a URL is taken",
+        P4P_PILOT4,
+        '            or _HTTP_ANYWHERE.search(site.source_url or "")\n',
+        "            or False  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_routeless_site_the_plan_gives_a_route_is_refused",
+    ),
+    (
+        "p4 pilot: a routeless id the plan does not have is skipped",
+        P4P_PILOT4,
+        "        if site is None:\n            raise R.InputError(\n",
+        "        if site is None:\n            continue  # mutant\n            raise R.InputError(\n",
+        P4P_PILOT_TEST,
+        "test_a_routeless_id_the_plan_does_not_have_is_refused",
+    ),
+    # ── the census ───────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: a census batch that never finished S1b is read",
+        P4P_PILOT4,
+        "        if not (batch_dir / RS.ROUTES_REPORT).exists():\n",
+        "        if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_census_batch_without_its_routes_report_is_refused",
+    ),
+    (
+        "p4 pilot: a census run of another plan is read",
+        P4P_PILOT4,
+        "        if tuple(batch_sites) != line.sites:\n",
+        "        if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_census_run_of_another_plan_is_refused",
+    ),
+    (
+        "p4 pilot: a card hold counts as a site hold in the census",
+        P4P_PILOT4,
+        "            if hold.scope is M.HoldScope.SITE:\n",
+        "            if True:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_the_census_is_each_sites_lane_site_holds_and_lane_source_length",
+    ),
+    # ── the prose errors ─────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: a gold anchor that is not in its text is kept",
+        P4P_PILOT4,
+        "                if anchor not in text:\n",
+        "                if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_an_anchor_that_is_not_in_the_gold_text_is_refused",
+    ),
+    (
+        "p4 pilot: a gold prose error without anchors is skipped",
+        P4P_PILOT4,
+        '            if error["id"] not in GOLD_ANCHORS:\n'
+        "                raise R.InputError(f\"{error['id']}: a prose error with no anchors in "
+        'GOLD_ANCHORS")\n',
+        '            if error["id"] not in GOLD_ANCHORS:\n                continue  # mutant\n',
+        P4P_PILOT_TEST,
+        "test_a_gold_prose_error_without_anchors_is_refused",
+    ),
+    (
+        "p4 pilot: an anchored id the gold standard lacks is kept",
+        P4P_PILOT4,
+        "    if listed != set(GOLD_ANCHORS) or len(entries) != GOLD_PROSE_ERRORS:\n",
+        "    if len(entries) != GOLD_PROSE_ERRORS:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_an_anchored_id_the_gold_standard_does_not_have_is_refused",
+    ),
+    (
+        "p4 pilot: the canary defects need not be the design's ten",
+        P4P_PILOT4,
+        "    if [canary.prefix for canary in CANARY_DEFECTS] != [named.prefix for named in "
+        "CANARIES]:\n",
+        "    if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_the_canary_defects_are_the_designs_ten_canaries_in_its_order",
+    ),
+    (
+        "p4 pilot: a canary row of another site is taken",
+        P4P_PILOT4,
+        '        if not _names_the_site((row["name"], *row["names"]), str(named.name)):\n',
+        "        if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_canary_row_of_another_site_is_refused",
+    ),
+    (
+        "p4 pilot: a canary claim that is not verbatim in its source is kept",
+        P4P_PILOT4,
+        "            if _collapsed(text) not in _collapsed(sources[source]):\n",
+        "            if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_canary_claim_that_is_not_verbatim_in_its_source_is_refused",
+    ),
+    (
+        "p4 pilot: a canary anchor the export does not carry is kept",
+        P4P_PILOT4,
+        '            if anchor not in (row[ROW_FIELD[field]] or ""):\n',
+        "            if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_canary_anchor_the_export_does_not_carry_is_refused",
+    ),
+    (
+        "p4 pilot: a design file that is not the pinned one is read",
+        P4P_PILOT4,
+        "    if _sha256(path) != DESIGN_SHA256:\n",
+        "    if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_a_design_file_that_is_not_the_pinned_one_is_refused",
+    ),
+    # ── the thresholds ───────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: the thresholds block keeps the blank line before ON FAILURE",
+        P4P_PILOT4,
+        '    return text[start:failure].rstrip("\\n"), text[failure:end]\n',
+        "    return text[start:failure], text[failure:end]  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_the_threshold_blocks_are_cut_exactly_at_the_designs_headings",
+    ),
+    (
+        "p4 pilot: the thresholds document loses the owner's note",
+        P4P_PILOT4,
+        '        f"{THRESHOLDS_NOTE}"\n',
+        '        ""  # mutant\n',
+        P4P_PILOT_TEST,
+        "test_the_thresholds_document_carries_both_blocks_verbatim_and_the_note",
+    ),
+]
+MUTATIONS += P4_PILOT_MUTATIONS
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

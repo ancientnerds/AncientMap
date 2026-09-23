@@ -375,8 +375,8 @@ def test_the_plan_is_batches_of_15_named_p4_and_byte_identical_across_runs(tmp_p
     sites = build([row(n) for n in range(1, 32)])
     first, second = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
 
-    P.write_plan(first, sites)
-    P.write_plan(second, sites)
+    P.write_plan(first, sites, pilot=0)
+    P.write_plan(second, sites, pilot=0)
 
     assert first.read_bytes() == second.read_bytes()
     batches = R.read_jsonl(first)
@@ -384,6 +384,35 @@ def test_the_plan_is_batches_of_15_named_p4_and_byte_identical_across_runs(tmp_p
     assert [len(b["sites"]) for b in batches] == [15, 15, 1]
     back = [M.PlanSite.from_dict(s) for b in batches for s in b["sites"]]
     assert back == sites
+
+
+def test_the_pilots_sites_fill_their_own_batches_and_the_rest_continue_the_numbering(
+    tmp_path: Path,
+) -> None:
+    """The pilot runs its own batches (design pilot_and_thresholds; the mass run takes the plan's
+    later batches in the same run directory): a batch that held pilot sites and other sites would
+    put the others into the pilot's model calls and its audit. So the pilot's last batch may be
+    short, and the rest start a new batch."""
+    sites = build([row(n) for n in range(1, 33)], gold=[uuid(n) for n in range(1, 18)])
+    path = tmp_path / "PLAN4.jsonl"
+
+    P.write_plan(path, sites, pilot=17)
+
+    batches = R.read_jsonl(path)
+    assert [(b["batch_id"], b["ordinal"]) for b in batches] == [
+        ("p4-0001", 1), ("p4-0002", 2), ("p4-0003", 3)
+    ]  # fmt: skip
+    assert [len(b["sites"]) for b in batches] == [15, 2, 15]
+    pilot = [s["site_id"] for b in batches[:2] for s in b["sites"]]
+    assert pilot == [uuid(n) for n in range(1, 18)]
+    assert [M.PlanSite.from_dict(s) for b in batches for s in b["sites"]] == sites
+
+
+def test_the_pilot_is_a_leading_part_of_the_plan(tmp_path: Path) -> None:
+    sites = build([row(n) for n in range(1, 4)])
+    with pytest.raises(R.InputError, match="pilot"):
+        P.write_plan(tmp_path / "PLAN4.jsonl", sites, pilot=4)
+    assert not (tmp_path / "PLAN4.jsonl").exists()
 
 
 def test_the_cleared_defects_are_the_report_only_rows_of_the_write_dry_run() -> None:
@@ -498,10 +527,68 @@ def test_build_writes_the_plan_and_prints_its_exit_line(
 
     out = capsys.readouterr().out
     assert code == 0 and out.rstrip().endswith("STAGE_EXIT=0")
-    (batch,) = R.read_jsonl(tmp_path / "PLAN4.jsonl")
-    assert [s["site_id"] for s in batch["sites"]] == [uuid(1), uuid(2)]
+    # The gold site is the pilot: it fills its own batch, and the rest starts the next one.
+    pilot, rest = R.read_jsonl(tmp_path / "PLAN4.jsonl")
+    assert [s["site_id"] for s in pilot["sites"]] == [uuid(1)]
+    assert [s["site_id"] for s in rest["sites"]] == [uuid(2)]
     summary = json.loads(out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
     assert summary["invalid_titles"] == [uuid(2)]
+    assert (summary["pilot_sites"], summary["pilot_batches"]) == (1, 1)
+
+
+def _build_inputs(tmp_path: Path, rows: list[dict[str, Any]]) -> list[str]:
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (tmp_path / "names.json").write_text("{}")
+    (tmp_path / "refused.jsonl").write_text(
+        json.dumps({"site_id": uuid(2), "field": "description", "rule": "report-only-field"}) + "\n"
+    )
+    (tmp_path / "t03.jsonl").write_text(
+        json.dumps({"site_id": uuid(1), "field": "description", "severity": "severe"}) + "\n"
+    )
+    return [
+        "build",
+        f"--rows={tmp_path / 'rows.jsonl'}",
+        f"--names={tmp_path / 'names.json'}",
+        f"--refused={tmp_path / 'refused.jsonl'}",
+        f"--t03={tmp_path / 't03.jsonl'}",
+        f"--out={tmp_path / 'PLAN4.jsonl'}",
+    ]
+
+
+def test_build_takes_the_pilot_from_pilot_jsonl_in_its_order(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The design's pilot is about 120 sites (PILOT.jsonl, `phase4/pilot4.py`), not only the 36
+    gold sites: `--pilot` names it, and its sites lead the plan in PILOT.jsonl's order."""
+    argv = _build_inputs(tmp_path, [row(n) for n in range(1, 5)])
+    pilot = tmp_path / "PILOT.jsonl"
+    lines = [{"site_id": uuid(4), "strata": ["gold"]}, {"site_id": uuid(3), "strata": ["draw-W"]}]
+    pilot.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+
+    assert P.main([*argv, f"--pilot={pilot}"]) == 0
+
+    out = capsys.readouterr().out
+    first, second = R.read_jsonl(tmp_path / "PLAN4.jsonl")
+    assert [s["site_id"] for s in first["sites"]] == [uuid(4), uuid(3)]
+    assert [s["site_id"] for s in second["sites"]] == [uuid(2), uuid(1)]  # cleared, then T03
+    summary = json.loads(out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
+    assert (summary["pilot_sites"], summary["pilot_batches"]) == (2, 1)
+
+
+def test_a_pilot_line_without_a_site_id_stops_the_plan(tmp_path: Path) -> None:
+    argv = _build_inputs(tmp_path, [row(1), row(2)])
+    pilot = tmp_path / "PILOT.jsonl"
+    pilot.write_text(json.dumps({"strata": ["gold"]}) + "\n", encoding="utf-8")
+    with pytest.raises(R.InputError, match="site id"):
+        P.main([*argv, f"--pilot={pilot}"])
+
+
+def test_the_pilot_comes_from_the_gold_standard_or_from_pilot_jsonl_never_both(
+    tmp_path: Path,
+) -> None:
+    argv = _build_inputs(tmp_path, [row(1)])
+    with pytest.raises(SystemExit):
+        P.main([*argv, f"--gold={tmp_path / 'gold.json'}", f"--pilot={tmp_path / 'PILOT.jsonl'}"])
 
 
 def test_a_stored_title_with_a_control_character_is_listed_for_the_repair() -> None:

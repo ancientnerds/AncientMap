@@ -224,16 +224,24 @@ def cmd_sources(args: argparse.Namespace) -> tuple[int, Report]:
 
 def cmd_routes(args: argparse.Namespace) -> tuple[int, Report]:
     """S1b through the same live fetcher and Track A's three search seams
-    (`route_stage.open_search`: the searcher, the forced quota probe, the MiniMax host's pace)."""
+    (`route_stage.open_search`: the searcher, the forced quota probe, the MiniMax host's pace).
+
+    A run told `--max-searches 0` may send no search, so it opens no MiniMax client at all: it is
+    handed `route_stage.no_search`, whose seams refuse (owner order 2026-09-23, "everything with
+    Opus": the Phase-4 pilot sends no search, and its sites that need one are held
+    `search-stopped`)."""
     batch_dir = batch_dir_of(args)
     if not args.live:
         return 0, {"batch_id": args.batch_id, "live": False, "bought": 0}
     sources = track(SOURCES_STAGE)
     routes = track(ROUTE_STAGE)
     pacing_dir = Path(args.pacing_dir)
+    seams = (
+        routes.no_search() if args.max_searches == 0 else routes.open_search(pacing_dir=pacing_dir)
+    )
     with (
         sources.open_fetcher(pacing_dir=pacing_dir, timeout=args.timeout) as fetcher,
-        routes.open_search(pacing_dir=pacing_dir) as (searcher, probe, wait),
+        seams as (searcher, probe, wait),
     ):
         code = routes.routes_batch(
             batch_dir,

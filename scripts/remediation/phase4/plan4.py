@@ -16,9 +16,11 @@ rebuilt from it offline, byte for byte:
             (`wbgetentities props=labels|aliases`, through the 1 MiB wiki client, ledgered).
 * `build` - offline: `build_plan` over the rows, the reviewer-cleared defects
             (`logs/_write_dry/ALL_REFUSED.jsonl`, rule `report-only-field`), the T03 findings
-            (`run_t03/findings.jsonl`) and the pilot's site ids (`gold_standard/sites.json`), then
-            `write_plan`: `PLAN4.jsonl`, batches of 15 named `p4-NNNN`. Its summary lists the
-            stored titles MediaWiki refuses (`invalid_titles`) for the data repair.
+            (`run_t03/findings.jsonl`) and the pilot's site ids - the design's pilot set
+            (`--pilot PILOT.jsonl`, drawn by `phase4/pilot4.py`), or the 36 gold-standard sites
+            (`--gold`, the default) - then `write_plan`: `PLAN4.jsonl`, batches of 15 named
+            `p4-NNNN`. Its summary lists the stored titles MediaWiki refuses (`invalid_titles`)
+            for the data repair.
 
 Derived here, from data and not from the B block's temp files (`SiteFlag`):
 
@@ -36,7 +38,9 @@ Derived here, from data and not from the B block's temp files (`SiteFlag`):
   about the description's text.
 
 Order: the pilot's sites (in the order given), then the cleared-defect sites, then T03, then the
-rest, each group in `site_id` order.
+rest, each group in `site_id` order. **The pilot fills its own batches** (the last may be short) and
+the rest starts a new one: the pilot runs its batches alone, and a batch shared with other sites
+would put them into the pilot's model calls and its audit.
 """
 
 from __future__ import annotations
@@ -77,6 +81,8 @@ DEFAULT_EVIDENCE = RUNNER / "plan_evidence"
 DEFAULT_REFUSED = REPO / "output" / "remediation" / "logs" / "_write_dry" / "ALL_REFUSED.jsonl"
 DEFAULT_T03 = REPO / "output" / "remediation" / "run_t03" / "findings.jsonl"
 DEFAULT_GOLD = REPO / "output" / "remediation" / "gold_standard" / "sites.json"
+#: The design's pilot set, written by `phase4/pilot4.py` (one JSON object per site, in order).
+DEFAULT_PILOT = RUNNER / "PILOT.jsonl"
 
 #: The pre-March snapshot lane L compares against (plan section 15.3; `db_snapshots`, 5,005 rows).
 SNAPSHOT_ID = "d4526691-28eb-4623-b9eb-daeabafb167e"
@@ -343,10 +349,37 @@ def _site(
     )
 
 
-def write_plan(path: Path, sites: Sequence[M.PlanSite]) -> None:
-    """`PLAN4.jsonl`: one `phase3.run.Batch` per line, 15 sites each, ids `p4-NNNN`, in order."""
+def write_plan(path: Path, sites: Sequence[M.PlanSite], *, pilot: int) -> None:
+    """`PLAN4.jsonl`: one `phase3.run.Batch` per line, 15 sites each, ids `p4-NNNN`, in order.
+
+    The first `pilot` sites are the pilot's and fill their own batches, the last of them possibly
+    short; the rest continue the numbering in a new batch (module docstring).
+    """
+    if not 0 <= pilot <= len(sites):
+        raise R.InputError(f"a pilot of {pilot} sites is no leading part of {len(sites)} sites")
     records = [site.to_dict() for site in sites]
-    R.write_batches(path, R.assign_batches(records, BATCH_SIZE, prefix=BATCH_PREFIX))
+    head = R.assign_batches(records[:pilot], BATCH_SIZE, prefix=BATCH_PREFIX)
+    tail = [
+        R.Batch(
+            batch_id=f"{BATCH_PREFIX}-{batch.ordinal + len(head):04d}",
+            ordinal=batch.ordinal + len(head),
+            sites=batch.sites,
+        )
+        for batch in R.assign_batches(records[pilot:], BATCH_SIZE, prefix=BATCH_PREFIX)
+    ]
+    R.write_batches(path, [*head, *tail])
+
+
+def pilot_site_ids(path: Path) -> list[str]:
+    """The pilot's site ids in its order: one JSON object per line of `PILOT.jsonl`, each with a
+    `site_id` (`phase4/pilot4.py` writes it). A line without one is refused, never skipped."""
+    ids: list[str] = []
+    for number, line in enumerate(R.read_jsonl(path), start=1):
+        site_id = line.get("site_id")
+        if not isinstance(site_id, str) or not site_id:
+            raise R.InputError(f"{path}:{number}: a pilot line without a site id: {line!r}")
+        ids.append(site_id)
+    return ids
 
 
 # ----------------------------------------------------------------------------- the item names
@@ -467,20 +500,25 @@ def cmd_names(args: argparse.Namespace, *, fetcher: F.Fetcher | None = None) -> 
 def cmd_build(args: argparse.Namespace) -> int:
     rows = R.read_jsonl(Path(args.rows))
     names = json.loads(Path(args.names).read_text(encoding="utf-8"))
+    pilot = pilot_site_ids(Path(args.pilot)) if args.pilot else R._gold_site_ids(Path(args.gold))
     sites = build_plan(
         rows,
         cleared=cleared_defects(R.read_jsonl(Path(args.refused))),
         t03=t03_findings(R.read_jsonl(Path(args.t03))),
-        gold=R._gold_site_ids(Path(args.gold)),
+        gold=pilot,
         item_names=names,
     )
     out = Path(args.out)
-    write_plan(out, sites)
+    write_plan(out, sites, pilot=len(pilot))
     flags = collections.Counter(flag.value for site in sites for flag in site.flags)
+    pilot_batches = -(-len(pilot) // BATCH_SIZE)
     summary = {
-        "batches": -(-len(sites) // BATCH_SIZE),
+        "batches": pilot_batches + -(-(len(sites) - len(pilot)) // BATCH_SIZE),
         "flags": dict(sorted(flags.items())),
         "out": str(out),
+        "pilot": str(args.pilot or args.gold),
+        "pilot_batches": pilot_batches,
+        "pilot_sites": len(pilot),
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "invalid_titles": invalid_titles(rows),
         "sites": len(sites),
@@ -508,7 +546,9 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--names", default=str(DEFAULT_NAMES))
     build.add_argument("--refused", default=str(DEFAULT_REFUSED))
     build.add_argument("--t03", default=str(DEFAULT_T03))
-    build.add_argument("--gold", default=str(DEFAULT_GOLD))
+    pilot = build.add_mutually_exclusive_group()
+    pilot.add_argument("--gold", default=str(DEFAULT_GOLD), help="the pilot: the gold standard")
+    pilot.add_argument("--pilot", default=None, help="the pilot: PILOT.jsonl (phase4/pilot4.py)")
     build.add_argument("--out", default=str(DEFAULT_PLAN))
     build.set_defaults(handler=cmd_build)
     return parser

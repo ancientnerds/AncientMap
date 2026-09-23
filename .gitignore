@@ -292,6 +292,19 @@ output/remediation/phase3_runner/runs/
 # The append lock is machine state, not data: `Ledger.append` holds it only while it writes a line,
 # and the operating system frees it when a writer dies. It must never be versioned or deleted.
 output/remediation/phase3_runner/LEDGER.jsonl.lock
+# The Phase-4 runner (2026-09-24), versioned by the same rule: the pilot's sealed artefacts
+# (PILOT.jsonl, gold_prose_errors.json, PILOT_THRESHOLDS.md), the small reads they were drawn from
+# (S0_ROUTELESS.json, S0_ITEM_NAMES.json) and the ledgers are the record. The production export
+# (S0_ROWS.jsonl: every curated description and raw_data, ~20 MB) and the plans built from it are
+# bulk that `plan4.py read`/`build` rebuild from a fresh read; their sha256 are in AUDIT_LOG.md. The
+# runs hold Wikipedia text and the repository is public (design, source_store: RETENTION), so they
+# stay on the workstation with the names lookup's evidence.
+!output/remediation/phase4_runner/
+output/remediation/phase4_runner/S0_ROWS.jsonl
+output/remediation/phase4_runner/PLAN*.jsonl
+output/remediation/phase4_runner/runs/
+output/remediation/phase4_runner/plan_evidence/
+output/remediation/phase4_runner/LEDGER*.jsonl.lock
 !output/remediation/mechanical/
 # APPLY.sql and PLAN.jsonl are pinned rather than ignored: the deploy lens established that
 # the generator cannot reproduce them, and APPLY.sql is the exact statement set that wrote

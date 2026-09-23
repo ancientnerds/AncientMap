@@ -1292,3 +1292,55 @@ def test_a_stopped_walk_asks_nothing_for_the_sites_after_it(tmp_path: Path) -> N
     assert run_routes(tmp_path, batch_dir, web, Searcher(), probe=refused) == R.STOP_RUN_EXIT
 
     assert web.asked(RS.geosearch_url(later.lat, later.lon)) == []
+
+
+# ================================================================== searches off (2026-09-24)
+
+
+def test_a_run_that_may_send_no_search_holds_its_routed_sites_and_names_no_endpoint(
+    tmp_path: Path,
+) -> None:
+    """Owner order 2026-09-23 ("everything with Opus"): the Phase-4 pilot sends no MiniMax search.
+    `no_search` builds no client; with a zero allowance the stage never reaches it, so a site whose
+    free routes found nothing waits on the search - held `search-stopped` - and the batch
+    completes. The search report names the switched-off endpoint, not MiniMax's."""
+    web = Web()
+    batch_dir = through_s1(tmp_path, [unanchored()], web)
+    empty_geosearch(web)
+
+    with RS.no_search() as (searcher, probe, wait):
+        code = RS.routes_batch(
+            batch_dir,
+            ledger=tmp_path / "LEDGER.jsonl",
+            fetcher=web.fetcher(),
+            searcher=searcher,
+            max_searches=0,
+            now=NOW,
+            probe=probe,
+            wait=wait,
+            sleep=lambda _: None,
+        )
+
+    assert code == 0
+    (only,) = holds_of(batch_dir)
+    assert only.reason is M.HoldReason.SEARCH_STOPPED and "0 queries" in only.detail
+    report = json.loads((batch_dir / SEARCH_REPORT_NAME).read_text(encoding="utf-8"))
+    assert report["endpoint"] == RS.SEARCHES_OFF_ENDPOINT
+    assert report["quota"] == []  # nothing was probed
+    routes = json.loads((batch_dir / RS.ROUTES_REPORT).read_text(encoding="utf-8"))
+    assert (routes["queries"], routes["search_requests"]) == (0, 0)
+
+
+def test_the_searcher_of_a_run_without_searches_refuses_every_search() -> None:
+    with RS.no_search() as (searcher, _, _), pytest.raises(RS.SearchesOff):
+        searcher.search('"Tarxien Temples" Temple Malta')
+
+
+def test_a_run_without_searches_refuses_to_probe_the_minimax_quota() -> None:
+    with RS.no_search() as (_, probe, _), pytest.raises(RS.SearchesOff):
+        probe()
+
+
+def test_a_run_without_searches_refuses_to_pace_the_minimax_host() -> None:
+    with RS.no_search() as (_, _, wait), pytest.raises(RS.SearchesOff):
+        wait()

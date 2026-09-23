@@ -255,6 +255,29 @@ def test_routes_gets_the_live_fetcher_the_search_seams_and_its_search_allowance(
     assert search.closed
 
 
+def test_routes_with_a_zero_search_allowance_builds_no_minimax_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Owner order 2026-09-23 ("everything with Opus"): a routes stage that may send no search
+    never opens the MiniMax client (it would read the key and could probe the quota); it is handed
+    Track A's `no_search` seams, which refuse all three."""
+
+    def open_search(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("a routes stage with a zero allowance opened the MiniMax client")
+
+    batch_dir = _prepared(tmp_path)
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(RS, "open_search", open_search)
+    monkeypatch.setattr(RS, "routes_batch", _bound(RS.routes_batch, seen, 0))
+    argv = ["routes", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--live"]
+    code, report, _ = _run(capsys, [*argv, "--max-searches", "0", "--pacing-dir", str(tmp_path)])
+
+    assert code == 0 and report["max_searches"] == 0
+    assert isinstance(seen["searcher"], RS.NoSearcher) and seen["max_searches"] == 0
+    with pytest.raises(RS.SearchesOff):
+        seen["probe"]()
+
+
 def test_verify_is_track_cs_batch_function(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1063,6 +1086,45 @@ def test_the_live_run_is_mass_runs_loop_with_phase4s_digest_and_budget(
     assert isinstance(seen["runner"], M4.Phase4StageRunner)
     assert seen["stop_of"]() is None
     assert (tmp_path / "runs" / "pilot" / R4.HOLDS4_FILE).exists()
+
+
+def test_a_run_with_searches_off_tells_every_routes_stage_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner order 2026-09-23: the pilot's routes round sends no search. Every routes stage is told
+    an allowance of 0 (so it builds no MiniMax client and holds what needs a search
+    `search-stopped`), whatever the default `--max-searches` would have handed out."""
+    plan = _plan(tmp_path, [X.plan_site("site-1")])
+    (tmp_path / "runs" / "pilot").mkdir(parents=True)
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(MR, "run_mass", lambda **kw: seen.update(kw) or 0)
+
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND, "--searches-off")) == 0
+
+    assert seen["runner"].argv("routes", "p4-0001")[-2:] == ["--max-searches", "0"]
+
+
+def test_a_run_with_searches_off_is_not_stopped_by_the_search_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A search ceiling of 0 is reached before the first batch (`Budget.stop_reason`: 0 >= 0), so
+    a run that sends no search carries no search ceiling at all; the allowance of 0 is what keeps
+    it from searching."""
+    plan = _plan(tmp_path, [X.plan_site("site-1")])
+    (tmp_path / "runs" / "pilot").mkdir(parents=True)
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(MR, "run_mass", lambda **kw: seen.update(kw) or 0)
+
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND, "--searches-off")) == 0
+
+    assert seen["budget"].max_searches is None
+    assert seen["budget"].stop_reason(MR.Spend.from_ledger(tmp_path / "L.jsonl")) is None
+
+
+def test_searches_off_and_a_search_allowance_are_never_asked_together(tmp_path: Path) -> None:
+    plan = _plan(tmp_path, [X.plan_site("site-1")])
+    with pytest.raises(SystemExit):
+        _args(tmp_path, plan, "--searches-off", "--max-searches", "5")
 
 
 def test_a_dry_run_starts_nothing_and_writes_no_ledger_line(
