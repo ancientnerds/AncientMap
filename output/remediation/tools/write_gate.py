@@ -56,19 +56,17 @@ import pathlib
 import subprocess
 import sys
 
-# A console that cannot encode a site name must not be able to kill a production write: this tool
-# prints its refusals and its holds *before* it writes the first row, so one encoding error aborts the
-# whole wave. Measured 2026-09-22: a cp1252 console died on U+0259 with nothing written.
-for _stream in (sys.stdout, sys.stderr):
-    _reconfigure = getattr(_stream, "reconfigure", None)
-    if _reconfigure is not None:
-        _reconfigure(encoding="utf-8", errors="replace")
-
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import country_census as C  # noqa: E402 - the one alias map and point-in-polygon test
 import lanes  # noqa: E402 - the lane's paths, the JSON-lines reader and the database seam
 import write_dry_all  # noqa: E402 - the writer's child environment, one spelling
+
+# A console that cannot encode a site name must not be able to kill a production write: this tool
+# prints its refusals and its holds *before* it writes the first row, so one encoding error aborts the
+# whole wave. Measured 2026-09-22: a cp1252 console died on U+0259 with nothing written. Nothing above
+# prints; the streams are UTF-8 before the first line this tool writes.
+lanes.W.utf8_streams()
 
 #: The marker of a batch whose writer calls all wrote exactly what they were handed.
 APPLIED_FILE = "APPLIED.json"

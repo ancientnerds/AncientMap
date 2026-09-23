@@ -128,6 +128,20 @@ def test_a_p5_row_that_starts_from_another_card_than_s0_read_is_refused(tmp_path
         C.planned_cards(plan4, _p5_root(tmp_path, [stale]))
 
 
+def test_a_p5_row_for_a_site_outside_the_plan_is_refused(tmp_path: Path) -> None:
+    plan4 = _plan4(tmp_path, [FX.plan_site(FX.SITE_A, card="kept")])
+    foreign = _card_row(FX.plan_site(FX.SITE_B, card="old card"), "new card")
+    with pytest.raises(C.CardFileRefused, match="is not a site of the plan"):
+        C.planned_cards(plan4, _p5_root(tmp_path, [foreign]))
+
+
+def test_a_file_whose_card_is_not_a_string_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "card_descriptions.json"
+    path.write_text(json.dumps({"descriptions": {A: "a", B: None}}), encoding="utf-8")
+    with pytest.raises(C.CardFileRefused, match=f"the card of {B} is not a string"):
+        C.read_cards(path)
+
+
 def test_regenerate_is_identical_only_when_production_holds_the_prerender(tmp_path: Path) -> None:
     path = _file(tmp_path, {A: "a", B: "b"}, crlf=True)
     identical, _ = C.regenerate(path, run=_production({A: "a", B: "b", C_: None}))

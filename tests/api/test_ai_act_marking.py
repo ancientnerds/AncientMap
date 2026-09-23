@@ -159,6 +159,32 @@ def test_no_provenance_no_disclosure():
     assert DP.provenance_of(None) is None
 
 
+@pytest.mark.parametrize("malformed", ['{"lane": "L", "ai": "generated"}', ["x"], 1])
+def test_a_provenance_that_is_not_an_object_is_refused_not_ignored(malformed):
+    """A present but malformed provenance (a double-encoded JSON string, a list) fails loudly on
+    every reader, as `description_disclosure` does for an unknown mark - never a silent 'nothing to
+    disclose' on one path and an exception on the other."""
+    with pytest.raises(ValueError, match="is not a JSON object"):
+        DP.provenance_of({DP.PROVENANCE_KEY: malformed})
+
+
+def test_an_unknown_ai_mark_is_refused():
+    provenance = {**_provenance("W"), "ai": "handwritten"}
+    with pytest.raises(ValueError, match="not one of"):
+        DP.description_disclosure(provenance, DESCRIPTION)
+
+
+def test_an_attribution_that_names_no_single_cited_source_is_refused():
+    provenance = copy.deepcopy(_provenance("W"))
+    provenance["attribution"]["url"] = "https://en.wikipedia.org/w/index.php?oldid=1"
+    with pytest.raises(ValueError, match="names no single cited source"):
+        DP.description_disclosure(provenance, DESCRIPTION)
+    twice = copy.deepcopy(_provenance("W"))
+    twice["sources"] = twice["sources"] * 2
+    with pytest.raises(ValueError, match="names no single cited source"):
+        DP.description_disclosure(twice, DESCRIPTION)
+
+
 def test_a_description_edited_after_its_provenance_discloses_nothing():
     """The provenance hashes one text; an admin edit or a stale export is another text."""
     assert DP.description_disclosure(_provenance("W"), DESCRIPTION + " Edited.") is None

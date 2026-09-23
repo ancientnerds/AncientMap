@@ -81,12 +81,42 @@ def curated_page(alias: str = "") -> str:
     )
 
 
-#: LEFT JOIN target: the newest journal write per site. Joined as ``jlast``; the
-#: grouped subquery reads the whole journal once (6,572 rows on 2026-09-22) instead of
-#: one lookup per site.
+#: The ``unified_sites`` columns the site's public page renders (the SSR detail query of
+#: api/routes/sites_html.py): a journalled write of one of them changes the page. The
+#: Phase-4/5 design (entry [6], production_write, COLUMNS) names description, raw_data,
+#: name, country, site_type and period_start; period_name, period_end, lat, lon,
+#: source_url and parent_site_id are rendered on the same page, and later lanes journal
+#: some of them (period_name: 220 rows, lat/lon: 9, read 2026-09-23). Not counted: a
+#: ``card_stats`` write - the card never appears on the page, and the ~4,300 P5 card
+#: writes would otherwise move the lastmod and the hourly IndexNow announcement of pages
+#: whose content did not change - and any column the page does not show (``geom``, which
+#: the coordinate lane writes beside lat/lon).
+PAGE_COLUMNS = (
+    "description",
+    "raw_data",
+    "name",
+    "country",
+    "site_type",
+    "period_start",
+    "period_end",
+    "period_name",
+    "lat",
+    "lon",
+    "source_url",
+    "parent_site_id",
+)
+
+_PAGE_COLUMN_LIST = ", ".join("'" + column + "'" for column in PAGE_COLUMNS)
+
+#: LEFT JOIN target: the newest journal write per site that changed its page. Joined as
+#: ``jlast``; the grouped subquery reads the journal once (6,572 rows on 2026-09-22)
+#: instead of one lookup per site.
 JOURNAL_LAST_WRITE = (
     "(SELECT site_id_ref, MAX(applied_at AT TIME ZONE 'UTC') AS applied_at "
-    "FROM remediation_change_log WHERE site_id_ref IS NOT NULL GROUP BY site_id_ref)"
+    "FROM remediation_change_log WHERE site_id_ref IS NOT NULL "
+    "AND table_name = 'unified_sites' "
+    f"AND column_name IN ({_PAGE_COLUMN_LIST}) "
+    "GROUP BY site_id_ref)"
 )
 
 

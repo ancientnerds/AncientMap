@@ -37,8 +37,10 @@ Every run prints its own `WRITE_EXIT=` line; that line is what is read.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
+import re
 import sys
 import uuid
 from collections.abc import Mapping, Sequence
@@ -56,6 +58,20 @@ from phase4 import write4 as W4  # noqa: E402
 
 APPLIED_FILE = "APPLIED.json"
 STOPPED_FILE = "STOPPED.json"
+#: The written step that awaits its acceptance, in the apply root: its batches, stamps and counts.
+STEP_FILE = "STEP.json"
+#: One record per accepted step (`step-NNNN.json`), with the acceptance output it was accepted on.
+ACCEPTED_DIR = "ACCEPTED"
+#: Every rendered write batch's plan rows, in batch order: the `--plan` the acceptance reads.
+LANE_PLAN_FILE = "LANE_PLAN.jsonl"
+#: The acceptance CLI (Track C, WB-C3) and the lines of its output `--accept` reads.
+VERIFY_TOOL = "output/remediation/tools/verify_writes4.py"
+ACCEPT_OK = "ACCEPT_EXIT=0"
+ACCEPT_CLEAN = "RESULT: 0 deviation(s)"
+_ACCEPT_LANE = re.compile(
+    r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows \d+ \| "
+    r"lane journal rows (?P<journal>\d+) \|"
+)
 #: The Phase-3 refusal rule under which the reviewer-cleared text defects were set aside.
 PHASE3_REPORT_ONLY = "report-only-field"
 
@@ -207,6 +223,135 @@ def _mark(out: pathlib.Path, name: str, payload: Mapping[str, Any]) -> None:
     )
 
 
+# ------------------------------------------------------------------------------ the acceptance
+def pending_step(apply_root: pathlib.Path) -> dict[str, Any] | None:
+    """The written step that awaits its acceptance, or `None` when every written step is accepted."""
+    path = apply_root / STEP_FILE
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_lane_plan(apply_root: pathlib.Path) -> pathlib.Path:
+    """Every rendered write batch's `PLAN.jsonl`, in batch order, as one file: the plan the
+    acceptance compares the lane's whole journal against (a journal row outside it is a deviation,
+    a planned row not written yet is a later step)."""
+    lines: list[str] = []
+    for plan in sorted(apply_root.glob(f"*/{W4.PLAN_FILE}")):
+        lines.extend(line for line in plan.read_text(encoding="utf-8").splitlines() if line)
+    path = apply_root / LANE_PLAN_FILE
+    path.write_text("".join(line + "\n" for line in lines), encoding="utf-8", newline="\n")
+    return path
+
+
+def _record_step(apply_root: pathlib.Path, *, lane: str, written: Sequence[Planned]) -> None:
+    """`STEP.json` for the batches this invocation wrote - rewritten after every batch, so a run that
+    stops half-way still leaves the batches it did write awaiting their acceptance."""
+    chunks = [item.chunk for item in written if item.chunk is not None]
+    _mark(
+        apply_root,
+        STEP_FILE,
+        {
+            "lane": lane,
+            "batches": [chunk.batch_id for chunk in chunks],
+            "stamps": [chunk.stamp for chunk in chunks],
+            "sites": sum(len(chunk.site_ids) for chunk in chunks),
+            "rows": sum(len(chunk.rows) for chunk in chunks),
+        },
+    )
+    write_lane_plan(apply_root)
+
+
+def rows_written(apply_root: pathlib.Path) -> int:
+    """The rows every applied batch of this apply root wrote, by its own `APPLIED.json`."""
+    return sum(
+        int(json.loads(path.read_text(encoding="utf-8"))["rows_written"])
+        for path in apply_root.glob(f"*/{APPLIED_FILE}")
+    )
+
+
+def _accepted(apply_root: pathlib.Path) -> list[dict[str, Any]]:
+    return [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((apply_root / ACCEPTED_DIR).glob("step-*.json"))
+    ]
+
+
+def like_matches(pattern: str, stamp: str) -> bool:
+    """SQL `LIKE` (`%` any run, `_` one character, everything else literal) over one stamp."""
+    regex = "".join(
+        ".*" if char == "%" else "." if char == "_" else re.escape(char) for char in pattern
+    )
+    return re.fullmatch(regex, stamp, flags=re.DOTALL) is not None
+
+
+def acceptance_problems(
+    text: str, *, step: Mapping[str, Any], written_rows: int, used: set[str]
+) -> list[str]:
+    """Why `text` (the output of one `verify_writes4.py` run) does not accept `step`; empty = it
+    does. It must end in `ACCEPT_EXIT=0` with 0 deviations, be the step's own lane, match every stamp
+    the step wrote, have read at least every row written so far (so it was run after this step, not
+    before it), and not be an output an earlier step was accepted on."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    problems: list[str] = []
+    if not lines or lines[-1] != ACCEPT_OK:
+        problems.append(f"the output does not end in {ACCEPT_OK}")
+    if ACCEPT_CLEAN not in lines:
+        problems.append(f"the output does not say {ACCEPT_CLEAN!r}")
+    heads = [found for line in lines if (found := _ACCEPT_LANE.match(line))]
+    if len(heads) != 1:
+        problems.append(f"the output has {len(heads)} lane line(s), not one")
+        return problems
+    head = heads[0]
+    if head["lane"] != step["lane"]:
+        problems.append(f"the output accepts lane {head['lane']}, the step is lane {step['lane']}")
+    missed = [stamp for stamp in step["stamps"] if not like_matches(head["stamps"], stamp)]
+    if missed:
+        problems.append(f"the stamps {head['stamps']} do not cover {missed[:5]}")
+    if int(head["journal"]) < written_rows:
+        problems.append(
+            f"the output read {head['journal']} lane journal row(s), {written_rows} are written: "
+            "it was run before this step"
+        )
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() in used:
+        problems.append("an earlier step was accepted on this very output")
+    return problems
+
+
+def accept_step(apply_root: pathlib.Path, output: pathlib.Path) -> int:
+    """`--accept`: record the acceptance of the pending step, or refuse and say why. 0 = accepted."""
+    step = pending_step(apply_root)
+    if step is None:
+        raise SystemExit(f"{apply_root}: no written step awaits its acceptance")
+    text = output.read_text(encoding="utf-8")
+    accepted = _accepted(apply_root)
+    problems = acceptance_problems(
+        text,
+        step=step,
+        written_rows=rows_written(apply_root),
+        used={record["output_sha256"] for record in accepted},
+    )
+    if problems:
+        for problem in problems:
+            print(f"NOT ACCEPTED: {problem}")
+        return 1
+    number = len(accepted) + 1
+    (apply_root / ACCEPTED_DIR).mkdir(exist_ok=True)
+    _mark(
+        apply_root / ACCEPTED_DIR,
+        f"step-{number:04d}.json",
+        {
+            **step,
+            "output": str(output),
+            "output_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "output_lines": text.splitlines(),
+        },
+    )
+    (apply_root / STEP_FILE).unlink()
+    print(f"ACCEPTED step {number}: {step['sites']} site(s) in {len(step['batches'])} batch(es)")
+    return 0
+
+
 # ------------------------------------------------------------------------------------ running
 def run_batches(
     planned: Sequence[Planned],
@@ -215,9 +360,17 @@ def run_batches(
     step: int,
     runner: W.SqlRunner | None,
     host: str,
+    apply_root: pathlib.Path,
+    lane: str,
 ) -> int:
-    """Rehearse every open batch, or write open batches until `step` sites are written. 0 = done
-    (or the step is complete), 1 = stopped; a stop leaves `STOPPED.json` and writes nothing more."""
+    """Rehearse every open batch, or write open batches while the next one still fits into `step`
+    sites. 0 = done (or the step is complete), 1 = stopped; a stop leaves `STOPPED.json` and
+    writes nothing more.
+
+    A write needs every earlier step accepted: while `STEP.json` names a written step without its
+    acceptance (`--accept`), `--apply` writes nothing. Every batch written here is recorded in a
+    fresh `STEP.json` before the next one starts.
+    """
     stopped = [item.out.name for item in planned if item.stopped]
     if stopped:
         print(
@@ -225,10 +378,25 @@ def run_batches(
             f"applied: {stopped[:5]}. Read their STOPPED.json and run verify_writes4.py first."
         )
         return 1
+    if not rehearse:
+        waiting = pending_step(apply_root)
+        if waiting is not None:
+            print(
+                f"STOP: the step of {waiting['sites']} site(s) written before ({waiting['batches']}) "
+                f"has no acceptance. Run {VERIFY_TOOL} on it and hand its output to --accept first."
+            )
+            return 1
+    written: list[Planned] = []
     written_sites = 0
     for item in planned:
         if item.chunk is None or item.applied:
             continue
+        sites = len(item.chunk.site_ids)
+        if not rehearse and written_sites + sites > step:
+            if not written:
+                print(f"STOP at {item.out.name}: {sites} sites in one batch; the step is {step}")
+                return 1
+            break
         try:
             outcome = W4.apply_chunk(
                 item.chunk, out=item.out, rehearse=rehearse, runner=runner, host=host
@@ -248,14 +416,19 @@ def run_batches(
         if rehearse:
             continue
         _mark(item.out, APPLIED_FILE, report)
-        written_sites += len(item.chunk.site_ids)
-        if written_sites >= step:
-            print(
-                f"STEP COMPLETE: {written_sites} site(s) written. Run the acceptance now "
-                "(verify_writes4.py, 0 deviations) before the next step."
-            )
-            return 0
-    print("every open batch rehearsed" if rehearse else f"done: {written_sites} site(s) written")
+        written.append(item)
+        written_sites += sites
+        _record_step(apply_root, lane=lane, written=written)
+    if rehearse:
+        print("every open batch rehearsed")
+        return 0
+    print(
+        f"STEP COMPLETE: {written_sites} site(s) written in {len(written)} batch(es). Accept it "
+        f"before the next step: {VERIFY_TOOL} --lane {lane} --plan {apply_root / LANE_PLAN_FILE} "
+        "(0 deviations), then --accept <its output>."
+        if written
+        else "done: no open batch left to write"
+    )
     return 0
 
 
@@ -277,6 +450,9 @@ def build_parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--rehearse", action="store_true")
     mode.add_argument("--apply", action="store_true")
+    mode.add_argument(
+        "--accept", default=None, help="record the pending step's acceptance: verify_writes4 output"
+    )
     return parser
 
 
@@ -288,6 +464,8 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     apply_root = pathlib.Path(args.apply_root) if args.apply_root else lane.apply_root
     if args.step < 1:
         raise SystemExit("--step: at least one site per step")
+    if args.accept:
+        return accept_step(apply_root, pathlib.Path(args.accept))
     batches = [W4.load_batch(path) for path in batch_dirs(run_dir, args.batch)]
     site_ids = [site.site_id for batch in batches for site in batch.sites]
     print(f"group {group.value} | run {run_dir} | apply root {apply_root} | {len(batches)} batches")
@@ -334,7 +512,13 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     if not (args.rehearse or args.apply):
         return 0
     return run_batches(
-        planned, rehearse=args.rehearse, step=args.step, runner=runner, host=args.host
+        planned,
+        rehearse=args.rehearse,
+        step=args.step,
+        runner=runner,
+        host=args.host,
+        apply_root=apply_root,
+        lane=lane.name,
     )
 
 

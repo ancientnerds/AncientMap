@@ -51,13 +51,24 @@ def _sha256(text: str) -> str:
 
 
 def provenance_of(raw_data: Any) -> dict[str, Any] | None:
-    """The provenance object of a ``raw_data`` value (a dict, a JSON string or ``None``)."""
+    """The provenance object of a ``raw_data`` value (a dict, a JSON string or ``None``).
+
+    ``None`` only when there is no provenance: no ``raw_data`` object, or no key. A key that is
+    present and is not an object (a double-encoded JSON string, a list) raises ``ValueError``: a
+    malformed provenance fails on every reader alike, as an unknown ``ai`` mark does in
+    ``description_disclosure``, instead of reading as "nothing to disclose" here only.
+    """
     if isinstance(raw_data, str):
         raw_data = json.loads(raw_data)
-    if not isinstance(raw_data, Mapping):
+    if not isinstance(raw_data, Mapping) or PROVENANCE_KEY not in raw_data:
         return None
-    provenance = raw_data.get(PROVENANCE_KEY)
-    return provenance if isinstance(provenance, dict) else None
+    provenance = raw_data[PROVENANCE_KEY]
+    if not isinstance(provenance, dict):
+        raise ValueError(
+            f"{PROVENANCE_KEY} is not a JSON object but {type(provenance).__name__}: "
+            f"{str(provenance)[:80]!r}"
+        )
+    return provenance
 
 
 def description_disclosure(

@@ -13,7 +13,7 @@ import dataclasses
 import json
 import re
 import sys
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -240,13 +240,21 @@ def write_batch(
         store.write(
             site_id=site.site_id, feature=M.source_feature("W", "txt"), body=TEXT.encode("utf-8")
         )
+        # One call per stage: its answer (`answers/` or `reviews/`), its prompt (`prompts/`, the
+        # same feature) and its ledger line (`ledger_rows`: `<site>/selector`, `<site>/reviewer`).
         for folder in folders:
-            answer = "R1: KEEP\nR2: KEEP\nCARD: KEEP\n" if folder == "reviews" else "DESC: W1\n"
-            F.EvidenceStore(batch_dir / folder).write(
-                site_id=site.site_id,
-                feature="reviewer" if folder == "reviews" else "selector",
-                body=answer.encode("utf-8"),
-            )
+            files = {
+                "answers": {"selector": "DESC: W1\n"},
+                "reviews": {"reviewer": "R1: KEEP\nR2: KEEP\nCARD: KEEP\n"},
+                "prompts": {
+                    "selector": "the selector prompt\n",
+                    "reviewer": "the reviewer prompt\n",
+                },
+            }[folder]
+            for feature, body in files.items():
+                F.EvidenceStore(batch_dir / folder).write(
+                    site_id=site.site_id, feature=feature, body=body.encode("utf-8")
+                )
     return batch_dir
 
 
@@ -317,10 +325,20 @@ class FakeDb:
     longer holds its old value, a no-op, and a statement it does not know. A refused statement
     changes nothing, like a transaction psql aborted."""
 
-    def __init__(self, sites: Mapping[str, Site]) -> None:
+    def __init__(self, sites: Mapping[str, Site], *, journal_order: str = "oldest-first") -> None:
         self.sites = {site_id: copy.deepcopy(site) for site_id, site in sites.items()}
         self.journal: list[dict[str, Any]] = []
         self.sent: list[str] = []
+        #: The order the journal read returns its rows in. The real statement orders by the JSON
+        #: text, which says nothing about write rounds, so a reader must not depend on the order.
+        if journal_order not in ("oldest-first", "newest-first"):
+            raise ValueError(journal_order)
+        self.journal_order = journal_order
+        #: Sabotage, for the checks around a chunk: a writer that moves a row right after a commit
+        #: (`after_commit`), and a statement ending in ROLLBACK whose journal rows survive while its
+        #: values are rolled back (`leak_rolled_back_journal`) - what those checks must catch.
+        self.after_commit: Callable[[FakeDb], None] | None = None
+        self.leak_rolled_back_journal = False
 
     # -- helpers
     def value(self, site_id: str, column: str) -> Any:
@@ -373,11 +391,19 @@ class FakeDb:
             stamp = _literal(re.search(r"WHERE run_stamp = ('(?:[^']|'')*')", sql)[1])
             return f"{sum(1 for entry in self.journal if entry['run_stamp'] == stamp)}\n"
         if sql.startswith("-- the journal rows of this chunk's changes"):
-            keys = {_literal(k) for k in re.findall(r"'(?:[^']|'')*'", sql.split("IN (", 1)[1])}
-            return "".join(
-                json.dumps({k: entry[k] for k in entry if k != "id"}) + "\n"
+            listed = sql.split("IN (", 1)[1].split(")", 1)[0]
+            keys = {_literal(k) for k in re.findall(r"'(?:[^']|'')*'", listed)}
+            stamp = re.search(r"l\.run_stamp = ('(?:[^']|'')*')", sql)
+            entries = [
+                entry
                 for entry in self.journal
                 if entry["change_key"] in keys
+                and (stamp is None or entry["run_stamp"] == _literal(stamp[1]))
+            ]
+            if self.journal_order == "newest-first":
+                entries.reverse()
+            return "".join(
+                json.dumps({k: entry[k] for k in entry if k != "id"}) + "\n" for entry in entries
             )
         if "INSERT INTO _phase4_plan" in sql:
             return self._transaction(sql)
@@ -425,6 +451,7 @@ class FakeDb:
                         "old_value": row["old"],
                         "new_value": row["new"],
                         "test_id": row["test_id"],
+                        "site_id_ref": row["site"],
                     }
                 )
             if len(rows) != expected:
@@ -437,7 +464,11 @@ class FakeDb:
             self.sites, self.journal = saved
             raise
         if not commit:
-            self.sites, self.journal = saved
+            self.sites = saved[0]
+            if not self.leak_rolled_back_journal:
+                self.journal = saved[1]
+        elif self.after_commit is not None:
+            self.after_commit(self)
         return "NOTICE\n"
 
     def _guards(self, sql: str, rows: list[dict[str, Any]]) -> None:

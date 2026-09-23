@@ -287,12 +287,29 @@ def ledger_labels(
 
 
 def evidence_problems(files: Sequence[ModelFile], labels: Sequence[str]) -> list[str]:
-    """What the journal evidence of a written site lacks: a site is written only if the reviewer
-    answered, and the evidence names the selector's answer, every prompt and the ledger lines."""
+    """What the journal evidence of a written site lacks, call by call.
+
+    A site is written only if a model stage answered (`answers/`) and the reviewer answered
+    (`reviews/`), and every call is complete: each answer has the prompt it answered (`prompts/`,
+    the same feature - `judge_site` keys the answer, the prompt store and the ledger label by the
+    call's `answer_key`), each answer has its ledger line (`<site_id>/<feature>` in this batch), and
+    each ledger call of the site has its answer on disk. No feature name is assumed: the stages'
+    own names are what the files and the ledger carry.
+    """
     folders = {entry.folder for entry in files}
     problems = [f"no {folder}/ file" for folder in MODEL_FOLDERS if folder not in folders]
     if not labels:
         problems.append("no model call in the ledger for this batch")
+    prompted = {entry.feature for entry in files if entry.folder == "prompts"}
+    answered = {entry.feature: entry.folder for entry in files if entry.folder != "prompts"}
+    called = {label.split("/", 1)[1] for label in labels}
+    for feature, folder in sorted(answered.items()):
+        if feature not in prompted:
+            problems.append(f"{folder}/{feature} has no prompt in prompts/")
+        if labels and feature not in called:
+            problems.append(f"{folder}/{feature} has no ledger line")
+    for feature in sorted(called - set(answered)):
+        problems.append(f"the ledger call {feature} has no answer on disk")
     return problems
 
 
@@ -1367,6 +1384,7 @@ def render_rollback(chunk: Chunk4) -> str:
     add("       ;")
     out.extend(_raise_if(f"{label}: % row(s) are not back at the old value"))
     add("")
+    add("    -- the reversal is journalled row for row, under the rollback stamp")
     add("    SELECT count(*) INTO bad")
     add(f"      FROM {PLAN_TABLE} p LEFT JOIN remediation_change_log l")
     add(
@@ -1439,12 +1457,9 @@ def read_plan(out: Path, *, group: Group) -> list[Row4]:
 def exit_line(tag: str, run: Callable[[], int]) -> int:
     """Run one tool body and print its own `<TAG>_EXIT=` line - the line that is read, never a
     wrapper's status (design, DRIVER). The streams are UTF-8 first: a console that cannot encode a
-    site name once killed a write wave before its first row. A refusal is printed, not swallowed:
-    the code is the refusal's."""
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            reconfigure(encoding="utf-8", errors="replace")
+    site name once killed a write wave before its first row (`write_stage.utf8_streams`). A
+    refusal is printed, not swallowed: the code is the refusal's."""
+    W.utf8_streams()
     try:
         code = run()
     except SystemExit as exc:
@@ -1517,25 +1532,6 @@ def invariant_problems(stored: Mapping[str, Any], rows: Sequence[Row4]) -> list[
     return problems
 
 
-@dataclass(frozen=True)
-class ReadBack4:
-    checked: int
-    held: int
-    journal_rows: int
-    mismatches: tuple[str, ...]
-
-    @property
-    def ok(self) -> bool:
-        return not self.mismatches and self.checked > 0 and self.checked == self.held
-
-    def describe(self) -> str:
-        head = (
-            f"{self.held}/{self.checked} row(s) hold the planned value, "
-            f"{self.journal_rows} journal row(s) for the run stamp"
-        )
-        return head if self.ok else head + ": " + "; ".join(self.mismatches)
-
-
 def _stored(chunk: Chunk4, runner: W.SqlRunner | None, host: str) -> dict[str, dict[str, Any]]:
     text = W._exec(runner, stored_values_sql(chunk.site_ids), host=host)
     return {str(entry["id"]): entry for entry in W._json_rows(text)}
@@ -1578,10 +1574,11 @@ def read_back(
     expect_new: bool,
     runner: W.SqlRunner | None = None,
     host: str = W.SSH_HOST,
-) -> ReadBack4:
-    """Every row compared with its planned value, the journal row for row, the stamp's count, and
-    (after a write) the two sha256 invariants. `expect_new=False` is the rehearsal's check: every
-    row still old and the stamp without a single journal row."""
+) -> W.ReadBack:
+    """Every row compared with its planned value, the journal row for row (this chunk's stamp
+    only: a later write round journals the same change keys), the stamp's count, and (after a
+    write) the two sha256 invariants. `expect_new=False` is the rehearsal's check: every row still
+    old and the stamp without a single journal row."""
     stored = _stored(chunk, runner, host)
     mismatches: list[str] = []
     held = 0
@@ -1596,35 +1593,17 @@ def read_back(
     if not expect_new:
         if total:
             mismatches.append(f"the rehearsal left {total} journal row(s) for {chunk.stamp}")
-        return ReadBack4(
+        return W.ReadBack(
             checked=len(chunk.rows), held=held, journal_rows=total, mismatches=tuple(mismatches)
         )
-    journal = {
-        str(entry["change_key"]): entry
-        for entry in W._json_rows(
-            W._exec(
-                runner,
-                W.journal_rows_sql(change_keys=[row.change_key for row in chunk.rows]),
-                host=host,
-            )
+    mismatches.extend(
+        W.journal_mismatches(
+            chunk.rows,  # type: ignore[arg-type]  # duck-typed: the WriteRow fields it reads
+            run_stamp=chunk.stamp,
+            run_sql_runner=runner,
+            host=host,
         )
-    }
-    for row in chunk.rows:
-        entry = journal.get(row.change_key)
-        if entry is None:
-            mismatches.append(f"{row.site_id}/{row.column}: no journal row for {row.change_key}")
-            continue
-        for name, wanted in (
-            ("row_pk", row.pk),
-            ("table_name", row.table),
-            ("column_name", row.column),
-            ("old_value", row.old_value),
-            ("new_value", row.new_value),
-            ("test_id", row.test_id),
-            ("run_stamp", chunk.stamp),
-        ):
-            if entry.get(name) != wanted:
-                mismatches.append(f"{row.site_id}/{row.column}: the journal's {name} differs")
+    )
     if total != len(chunk.rows):
         mismatches.append(
             f"run stamp {chunk.stamp} has {total} journal row(s), the plan {len(chunk.rows)}"
@@ -1635,7 +1614,7 @@ def read_back(
     for site_id, rows in by_site.items():
         if site_id in stored:
             mismatches.extend(invariant_problems(stored[site_id], rows))
-    return ReadBack4(
+    return W.ReadBack(
         checked=len(chunk.rows), held=held, journal_rows=total, mismatches=tuple(mismatches)
     )
 
@@ -1646,8 +1625,8 @@ class ChunkOutcome4:
     rehearsed: bool
     written: int
     blocked: tuple[str, ...] = ()
-    read_back: ReadBack4 | None = None
-    inverse: ReadBack4 | None = None
+    read_back: W.ReadBack | None = None
+    inverse: W.ReadBack | None = None
     rollback_rows: int | None = None
 
     @property
