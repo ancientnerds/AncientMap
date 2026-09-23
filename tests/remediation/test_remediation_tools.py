@@ -75,6 +75,17 @@ def test_the_gap_lane_shares_no_path_and_no_stamp_with_the_mass_lane() -> None:
         assert getattr(gap, attribute) != getattr(mass, attribute), attribute
 
 
+def test_the_sitelink_lane_is_a_phase_three_lane_with_its_own_paths_and_stamp() -> None:
+    """`slk-NNNN` batches write `phase3:slk-...` stamps; its pilot's `slkg` is no lane and never
+    writes (`sitelink_plan.py`)."""
+    mass, sitelink = lanes.lane("mass"), lanes.lane("sitelink")
+    assert lanes.PHASE3_BATCH_PREFIX["sitelink"] == "slk"
+    assert sitelink.run_dir.name == "sitelink" and sitelink.stamp_like == "phase3:slk-%"
+    for attribute in ("run_dir", "dry_root", "apply_root", "review_logs", "stamp_like"):
+        assert getattr(sitelink, attribute) != getattr(mass, attribute), attribute
+    assert "slkg" not in lanes.BATCH_PREFIX.values()
+
+
 def test_an_unknown_lane_is_refused_rather_than_given_a_guessed_prefix() -> None:
     with pytest.raises(SystemExit, match="unknown lane"):
         lanes.lane("gapp")

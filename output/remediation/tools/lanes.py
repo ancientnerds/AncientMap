@@ -59,13 +59,16 @@ MASS = "mass"
 #: `redecide` are the lanes the 2026-09-22 remaining-work map names (`srch-NNNN`, `rdc-NNNN`);
 #: `sitelink` re-asks the mass run's UNVERIFIABLE fields with the item's other-language articles
 #: (`sitelink_plan.py`, `slk-NNNN`; its pilot's batches are `slkg-NNNN` and never write).
-BATCH_PREFIX: dict[str, str] = {
+PHASE3_BATCH_PREFIX: dict[str, str] = {
     MASS: "batch",
     "gap": "gap",
     "search1": "srch",
     "redecide": "rdc",
     "sitelink": "slk",
 }
+#: Every lane's batch-id prefix. Today the phase-3 lanes'; the phase-4/5 lanes join them here, each
+#: named by its own prefix (`wip/p4-write`), so a phase-3 lane is added to `PHASE3_BATCH_PREFIX`.
+BATCH_PREFIX: dict[str, str] = dict(PHASE3_BATCH_PREFIX)
 
 
 @dataclass(frozen=True)
