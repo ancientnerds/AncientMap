@@ -54,6 +54,12 @@ whose names do not include the stored name (N1/N2). A museum-held object (`P189`
 `P195`/`P276`) is judged against its **find-spot** - its own `P625` is the museum - and moved only
 when the stored point is at the holding museum.
 
+The second wave (`web_witness.py`) adds a third kind, `web`: a page outside Wikipedia and its mirrors
+whose coordinates were read from the live page. A web witness is named by its host (`Witness.label`,
+"web:whc.unesco.org"): two pages of one host count once, two of different hosts may pair under the
+same independence test, a web witness comes last in `PRIORITY`, and when two agreeing pairs name
+points further apart than the tolerance the case is read, not moved.
+
 ## B2 countries (the 117 `T02` findings)
 
 The remaining-work map's classification: political lines already decided (B10), coastline and border
@@ -88,6 +94,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from census.tests.t01_wikidata_claims import METRES_PER_DEGREE, SEVERE_M, TOLERANCE_M
 
@@ -231,13 +238,17 @@ FAR_KM = 5.0
 TRANSLIT_RATIO = 0.8
 
 
-def fold(name: str) -> str:
+def fold(name: str, *, keep_parentheses: bool = False) -> str:
     """A comparable spelling: no accents, no case, no bracketed suffix, words single-spaced.
 
     The accents and the bracketed suffix go the project's way (`normalize_name`); square brackets
     stay, as they did when the verdicts were measured, and `casefold` adds what `lower` leaves.
+    `keep_parentheses` folds a running text rather than a name: a page's "(El Tintal)" is words to
+    find, not a suffix to drop (`web_witness`'s identity check).
     """
-    text = normalize_name(name, remove_brackets=False).casefold()
+    text = normalize_name(
+        name, remove_parentheses=not keep_parentheses, remove_brackets=False
+    ).casefold()
     return " ".join(re.findall(r"[^\W_]+", text))
 
 
@@ -455,7 +466,7 @@ def classify_name(
 class Witness:
     """One independent statement of where an item is."""
 
-    kind: str  #: "wikidata" or "enwiki"
+    kind: str  #: "wikidata", "enwiki" or "web" (a page read by `web_witness.py`)
     lat: float
     lon: float
     url: str
@@ -466,6 +477,26 @@ class Witness:
     #: The grid the value's digits are written on, in degrees (`grid_of`): what a copy of it may have
     #: been rounded to. 0 when the digits lie on no grid of `GRIDS`.
     step: float = 0.0
+
+    @property
+    def label(self) -> str:
+        """How a verdict names this witness: its kind, and for a web page its host as well - two
+        pages are two witnesses only when two hosts wrote them ("web:whc.unesco.org")."""
+        return f"web:{web_host(self.url)}" if self.kind == "web" else self.kind
+
+
+def web_host(url: str) -> str:
+    """The host a web witness is named by: lower case, without a leading `www.` - `www.x.org` and
+    `x.org` are one publisher."""
+    host = urlsplit(url).hostname
+    if not host:
+        raise ValueError(f"{url!r} names no host")
+    return host.rstrip(".").removeprefix("www.")
+
+
+def label_of(witness: Mapping[str, Any]) -> str:
+    """`Witness.label` of a witness as `_witness_json` wrote it."""
+    return str(witness["label"]) if witness["kind"] == "web" else str(witness["kind"])
 
 
 def precision_m(precision: Any) -> float:
@@ -618,8 +649,11 @@ def _m(a: Witness | tuple[float, float], b: Witness | tuple[float, float]) -> fl
 
 
 def independent(a: Witness, b: Witness) -> bool:
-    """Two witnesses count twice only if neither says it copied the other, neither is the other
-    rounded to its own grid, and they are not the same point."""
+    """Two witnesses count twice only if they come from two sources (two web pages of one host are
+    one), neither says it copied the other, neither is the other rounded to its own grid, and they
+    are not the same point."""
+    if a.label == b.label:
+        return False
     if a.derived_from == b.kind or b.derived_from == a.kind:
         return False
     if rounded_copy(a, b) is not None:
@@ -631,28 +665,39 @@ def tolerance_m(ws: Sequence[Witness]) -> float:
     return max([TOLERANCE_M, *(w.precision_m for w in ws)])
 
 
-#: Which of two agreeing witnesses the site moves to: the item's own statement first.
-PRIORITY = {"wikidata": 0, "enwiki": 1}
+#: Which of two agreeing witnesses the site moves to: the item's own statement first, a web page last.
+PRIORITY = {"wikidata": 0, "enwiki": 1, "web": 2}
+
+
+def _pair_state(a: Witness, b: Witness, tol: float) -> str:
+    """Why two witnesses are no agreeing pair: "are one: <how>" or "disagree: <how far>"."""
+    if a.label == b.label:
+        return f"are one: both are {a.label}"
+    if a.derived_from == b.kind or b.derived_from == a.kind:
+        return "are one: P625 says it was imported from English Wikipedia"
+    copy = rounded_copy(a, b)
+    if copy is not None:
+        return f"are one: {copy}"
+    if not independent(a, b):
+        return (
+            f"are one: the same point ({_m(a, b):.0f} m apart, within {same_point_m(a, b):.0f} m)"
+        )
+    return f"disagree: {_m(a, b) / 1000:.2f} km apart (tolerance {tol:.0f} m)"
 
 
 def _why_no_pair(ws: Sequence[Witness], tol: float) -> str:
-    """Why no two independent witnesses agree - in the words the owner's list quotes."""
+    """Why no two independent witnesses agree - in the words the owner's list quotes. With more
+    than two witnesses (a web page joined the item's two) every pair is named."""
     if not ws:
         return "no witness: no P625 and no English article with coordinates"
     if len(ws) == 1:
-        return f"one witness only ({ws[0].kind})"
-    a, b = ws[0], ws[1]
-    if a.derived_from == b.kind or b.derived_from == a.kind:
-        return "the two witnesses are one: P625 says it was imported from English Wikipedia"
-    copy = rounded_copy(a, b)
-    if copy is not None:
-        return f"the two witnesses are one: {copy}"
-    if not independent(a, b):
-        return (
-            f"the two witnesses are one: the same point ({_m(a, b):.0f} m apart, "
-            f"within {same_point_m(a, b):.0f} m)"
-        )
-    return f"the two witnesses disagree: {_m(a, b) / 1000:.2f} km apart (tolerance {tol:.0f} m)"
+        return f"one witness only ({ws[0].label})"
+    if len(ws) == 2:
+        return f"the two witnesses {_pair_state(ws[0], ws[1], tol)}"
+    return f"no two of the {len(ws)} witnesses are independent and agree: " + "; ".join(
+        f"{a.label} and {b.label} {_pair_state(a, b, tol)}"
+        for a, b in itertools.combinations(ws, 2)
+    )
 
 
 def weigh(stored: tuple[float, float], ws: Sequence[Witness]) -> dict[str, Any]:
@@ -660,7 +705,9 @@ def weigh(stored: tuple[float, float], ws: Sequence[Witness]) -> dict[str, Any]:
 
     `stored-agrees` says only that a witness puts the site where it is stored - the curated point may
     well have been taken from that witness, so it is a reason not to move it, not a proof that it is
-    right.
+    right. With three or more witnesses, one that stands alone does not stop a move two others agree
+    on (the third witness decides between two that disagree), but two agreeing pairs whose points lie
+    further apart than the tolerance do: which of them is the site is a question to read.
     """
     tol = tolerance_m(ws)
     ordered = sorted(ws, key=lambda w: PRIORITY[w.kind])
@@ -670,17 +717,30 @@ def weigh(stored: tuple[float, float], ws: Sequence[Witness]) -> dict[str, Any]:
         if independent(a, b) and _m(a, b) <= tol
     ]
     near = [w for w in ordered if _m(stored, w) <= tol]
-    distances = {w.kind: round(_m(stored, w), 1) for w in ordered}
+    distances = {w.label: round(_m(stored, w), 1) for w in ordered}
+    if len(distances) != len(ordered):
+        raise ValueError(f"two witnesses share one label: {[w.label for w in ordered]}")
     base = {"tolerance_m": round(tol, 1), "stored_to_witness_m": distances}
     if pairs and not near:
         a, b = pairs[0]
+        clash = [
+            f"{c.label} and {d.label}" for c, d in pairs[1:] if _m(a, c) > tol or _m(a, d) > tol
+        ]
+        if clash:
+            return {
+                **base,
+                "verdict": "review",
+                "reason": f"{a.label} and {b.label} agree, but so do "
+                + ", ".join(clash)
+                + " on a point further than the tolerance from theirs",
+            }
         return {
             **base,
             "verdict": "move",
             "to": a,
-            "agreeing": [a.kind, b.kind],
+            "agreeing": [a.label, b.label],
             "agreement_m": round(_m(a, b), 1),
-            "reason": f"{a.kind} and {b.kind} agree within {_m(a, b):.0f} m (independent), "
+            "reason": f"{a.label} and {b.label} agree within {_m(a, b):.0f} m (independent), "
             f"the stored point is {_m(stored, a) / 1000:.2f} km away",
         }
     if near and (not pairs or all(w in near for w in pairs[0])):
@@ -688,15 +748,15 @@ def weigh(stored: tuple[float, float], ws: Sequence[Witness]) -> dict[str, Any]:
             **base,
             "verdict": "stored-agrees",
             "reason": "the stored point lies within the tolerance of "
-            + ", ".join(w.kind for w in near)
+            + ", ".join(w.label for w in near)
             + " - no change is planned",
         }
     if pairs:
         return {
             **base,
             "verdict": "review",
-            "reason": f"{pairs[0][0].kind} and {pairs[0][1].kind} agree elsewhere, but "
-            + ", ".join(w.kind for w in near)
+            "reason": f"{pairs[0][0].label} and {pairs[0][1].label} agree elsewhere, but "
+            + ", ".join(w.label for w in near)
             + " puts the site at the stored point",
         }
     return {**base, "verdict": "review", "reason": _why_no_pair(ordered, tol)}
@@ -779,8 +839,14 @@ def classify_coordinate(
     names: Mapping[str, Any],
     enwiki: Mapping[str, Any],
     shared: Mapping[str, int],
+    web: Sequence[Witness] = (),
 ) -> dict[str, Any]:
-    """One coordinate case: `move` (planned), `stored-agrees`, `not-comparable` or `review`."""
+    """One coordinate case: `move` (planned), `stored-agrees`, `not-comparable` or `review`.
+
+    `web` are the site's web witnesses (`web_witness.py`, the second wave): weighed with the item's
+    own under the same rule. A museum object's web witnesses join its find-spot's, and it still moves
+    only when stored at its museum; a site without an item has its web witnesses alone.
+    """
     stored = (float(site["lat"]), float(site["lon"]))
     record: dict[str, Any] = {
         "site_id": site["id"],
@@ -794,13 +860,22 @@ def classify_coordinate(
         "geom_text": site["geom_text"],
     }
     if qid is None:
-        return {**record, "verdict": "review", "reason": "no Wikidata item: no witness to ask"}
+        if not web:
+            return {**record, "verdict": "review", "reason": "no Wikidata item: no witness to ask"}
+        record.update(
+            witnesses=[_witness_json(w) for w in web],
+            witness_notes=["no Wikidata item: the web witnesses alone"],
+        )
+        verdict = weigh(stored, web)
+        verdict["rule"] = "two-independent-witnesses"
+        return _finish(record, verdict)
     museum = museum_object(qid, claims)
     extra: Sequence[str] = (str(site["enwiki"]),) if site.get("enwiki") else ()
     if museum is not None:
         found_at, holders = museum
         at = [h for h in holders if _at_holder(stored, (claims.get(h) or {}).get("p625"))]
         ws, notes = witnesses(found_at, claims=claims, enwiki=enwiki)
+        ws = [*ws, *web]
         verdict = weigh(stored, ws)
         record.update(
             museum={"find_spot": found_at, "holders": holders, "stored_at_holder": at},
@@ -821,6 +896,7 @@ def classify_coordinate(
     if gate is not None:
         return {**record, "verdict": "not-comparable", "class": gate, "reason": _GATE_REASON[gate]}
     ws, notes = witnesses(qid, claims=claims, enwiki=enwiki, extra_titles=extra)
+    ws = [*ws, *web]
     record.update(witnesses=[_witness_json(w) for w in ws], witness_notes=notes)
     verdict = weigh(stored, ws)
     verdict["rule"] = "two-independent-witnesses"
@@ -838,7 +914,8 @@ _GATE_REASON = {
 
 
 def _witness_json(w: Witness) -> dict[str, Any]:
-    return {
+    """A witness as a verdict records it; a web witness carries its label (`label_of`) as well."""
+    out = {
         "kind": w.kind,
         "lat": w.lat,
         "lon": w.lon,
@@ -848,6 +925,9 @@ def _witness_json(w: Witness) -> dict[str, Any]:
         "derived_from": w.derived_from,
         "grid": grid_name(w.step) if w.step else None,
     }
+    if w.kind == "web":
+        out["label"] = w.label
+    return out
 
 
 def _at_holder(stored: tuple[float, float], p625: Mapping[str, Any] | None) -> bool:
@@ -862,7 +942,7 @@ def _finish(record: dict[str, Any], verdict: dict[str, Any]) -> dict[str, Any]:
     """The record with its verdict; only a `move` names the point it moves to."""
     to = verdict.pop("to", None)
     if verdict["verdict"] == "move":
-        verdict["new"] = {"lat": to.lat, "lon": to.lon, "from": to.kind, "url": to.url}
+        verdict["new"] = {"lat": to.lat, "lon": to.lon, "from": to.label, "url": to.url}
         verdict["moved_km"] = round(_m(tuple(record["stored"]), to) / 1000.0, 3)
     return {**record, **verdict}
 
