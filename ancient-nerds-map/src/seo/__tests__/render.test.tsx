@@ -235,10 +235,55 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
     expect(html).not.toContain('Loading site details')
   })
 
-  it('kuratierte Site-Records tragen KEINEN Art.-50-Hinweis (menschlich kuratiert)', () => {
-    // Aus tests/pipeline/test_ai_act_notices.py übernommen (Task 16): Art. 50
-    // gilt für KI-generierten Text, nicht für kuratierte Site-Datensätze.
-    expect(html).not.toContain('data-ai-generated')
+  describe('the description disclosure follows its provenance, in both directions', () => {
+    // The premise of the test this replaces ("curated site records carry NO Art. 50 notice,
+    // they are human-curated", from tests/pipeline/test_ai_act_notices.py) ended with the
+    // 2026-09 remediation: an AI system now selects (lanes W, S) or writes (lanes T, R and the
+    // legacy lane L) the descriptions, and raw_data._description_provenance records which.
+    // So the rule is stricter, and pinned both ways: the AiFootnote appears if and only if
+    // ai === 'generated'; the attribution line if and only if the lane is W, S or T (the
+    // server sends an attribution exactly for those, api/services/description_provenance.py);
+    // and a description without provenance for its text carries no notice at all.
+    const permalink = 'https://en.wikipedia.org/w/index.php?title=G%C3%B6bekli_Tepe&oldid=1234567'
+    const attribution = (changes: string) => ({
+      title: 'Göbekli Tepe',
+      url: permalink,
+      licence: 'CC BY-SA 4.0',
+      licenceUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      changes,
+      revisionDate: '2026-09-01',
+    })
+    const cases = [
+      { lane: 'none', ai: null, attribution: null, footnote: false, line: false },
+      { lane: 'W', ai: 'selected', attribution: attribution('sentences selected and shortened'), footnote: false, line: true },
+      { lane: 'S', ai: 'selected', attribution: attribution('sentences selected and shortened'), footnote: false, line: true },
+      { lane: 'T', ai: 'generated', attribution: attribution('translated'), footnote: true, line: true },
+      { lane: 'R', ai: 'generated', attribution: null, footnote: true, line: false },
+      { lane: 'L', ai: 'generated', attribution: null, footnote: true, line: false },
+    ] as const
+
+    for (const c of cases) {
+      it(`lane ${c.lane}: footnote ${c.footnote ? 'yes' : 'no'}, attribution line ${c.line ? 'yes' : 'no'}`, () => {
+        const page = renderRoute({
+          ...FIXTURES.site,
+          description_ai: c.ai,
+          description_attribution: c.attribution,
+        })
+        expect(page.includes('data-ai-generated="true"')).toBe(c.footnote)
+        expect(page.includes('data-description-attribution="true"')).toBe(c.line)
+        if (c.attribution) {
+          expect(page).toContain(`href="${permalink.replace(/&/g, '&amp;')}"`)
+          expect(page).toContain("Text: Wikipedia – &#x27;Göbekli Tepe&#x27; (revision of 2026-09-01),")
+          expect(page).toContain('href="https://creativecommons.org/licenses/by-sa/4.0/"')
+          expect(page).toContain(`· ${c.attribution.changes} by an AI system · source →`)
+        }
+      })
+    }
+
+    it('the fixture without provenance is the page it always was', () => {
+      expect(html).not.toContain('data-ai-generated')
+      expect(html).not.toContain('data-description-attribution')
+    })
   })
 
   it('Fußnotenmarker werden im Crawler-Body zu Quellen-Links aufgelöst', () => {

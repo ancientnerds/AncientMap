@@ -5,7 +5,7 @@ These models use developer-friendly field names (not compact internal names)
 and include OpenAPI examples for auto-generated documentation.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -85,6 +85,34 @@ class SiteDetailResponse(SiteResult):
     description: str | None = Field(None, description="Site description")
     thumbnail_url: str | None = Field(None, description="Thumbnail image URL")
     period_end: int | None = Field(None, description="Estimated end date (negative = BC)")
+    ai_generated: bool = Field(
+        False,
+        description=(
+            "Machine-readable AI marking (Art. 50(2) EU AI Act): true when an AI system wrote "
+            "the words of the description (description_ai = 'generated'). False for a "
+            "description whose sentences are verbatim source text an AI system only selected "
+            "and shortened, and for one without recorded provenance."
+        ),
+    )
+    description_ai: Literal["selected", "generated"] | None = Field(
+        None,
+        description=(
+            "How an AI system took part in the description: 'selected' - verbatim sentences of "
+            "the cited Wikipedia revision, chosen and shortened by an AI system; 'generated' - "
+            "written by an AI system (translated, restated or legacy text). Null when the "
+            "description carries no recorded provenance."
+        ),
+    )
+    description_ai_system: str | None = Field(
+        None, description="Identifier of the AI system that selected or generated the description"
+    )
+    description_license: str | None = Field(
+        None,
+        description=(
+            "Licence of the published description text (CC BY-SA 4.0 for text adapted from "
+            "Wikipedia); null where no licence is recorded"
+        ),
+    )
 
 
 # =============================================================================

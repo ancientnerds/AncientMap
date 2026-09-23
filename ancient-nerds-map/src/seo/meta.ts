@@ -275,6 +275,23 @@ export function siteMeta(route: SiteRoute): PageMeta {
     )
   }
   if (ogImage) place.push(`"image": "${ogImage}"`)
+  // The description as a CreativeWork about the place (Place itself has no licence or
+  // source properties): isBasedOn and license for text adapted from a Wikipedia revision
+  // (CC BY-SA 4.0 section 3(a)); the IPTC type for text an AI system wrote, as on the
+  // story, research and journal pages. Nothing without provenance for this text.
+  if (route.description_ai) {
+    const work = ['"@type": "CreativeWork"']
+    if (route.description_attribution) {
+      work.push(`"isBasedOn": ${jsonStr(route.description_attribution.url)}`)
+      work.push(`"license": ${jsonStr(route.description_attribution.licenceUrl)}`)
+    }
+    if (route.description_ai === 'generated') {
+      work.push(
+        '"digitalSourceType": "https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"',
+      )
+    }
+    place.push(`"subjectOf": {${work.join(', ')}}`)
+  }
 
   // Nur das Place-Objekt, wie bei allen anderen acht Seitentypen auch.
   // Das BreadcrumbList kommt aus <Breadcrumbs> (components/layout), das

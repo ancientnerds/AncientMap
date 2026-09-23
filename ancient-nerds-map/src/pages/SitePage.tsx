@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState, lazy, Suspense, Fragment } from 'react'
 import CitationText from '../components/CitationText'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
+import DescriptionDisclosure from '../components/DescriptionDisclosure'
 import PageHeader from '../components/layout/PageHeader'
 import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import SitePopup from '../components/SitePopup/SitePopup'
@@ -113,6 +114,14 @@ function SiteRecord({ site }: { site: SiteRoute }) {
             <CitationText text={p} citations={site.description_citations} />
           </p>
         ))}
+        {/* The same disclosure the popup shows (EU AI Act Art. 50, CC BY-SA 4.0):
+            crawlers and no-JS readers see the page's text with its attribution. */}
+        {paragraphs.length > 0 && (
+          <DescriptionDisclosure
+            ai={site.description_ai}
+            attribution={site.description_attribution}
+          />
+        )}
       </div>
       <table className="site-record-facts">
         <tbody>
@@ -270,6 +279,8 @@ export default function SitePage() {
             bestWikiUrl: site.best_wiki_url ?? undefined,
             sourceLanguage: site.source_language ?? undefined,
             descriptionCitations: site.description_citations ?? undefined,
+            descriptionAi: site.description_ai ?? undefined,
+            descriptionAttribution: site.description_attribution,
           })
         : null,
     [site],

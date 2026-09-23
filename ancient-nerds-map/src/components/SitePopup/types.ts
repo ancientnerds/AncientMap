@@ -1,6 +1,6 @@
 import type { GalleryImage } from '../ImageGallery'
 import type { SiteData } from '../../data/sites'
-import type { DescriptionCitation } from '../../types/anRoute'
+import type { DescriptionAi, DescriptionAttribution, DescriptionCitation } from '../../types/anRoute'
 import type { SeshatPolityData } from '../../types/seshat'
 
 // Artifact type (placeholder - API disabled)
@@ -205,6 +205,9 @@ export interface DescriptionSectionProps {
   sourceLanguage?: string
   referenceLinks?: ReferenceLink[]
   descriptionCitations?: DescriptionCitation[]
+  /** The disclosure of exactly this description, or undefined (descriptionDisclosure.ts). */
+  descriptionAi?: DescriptionAi
+  descriptionAttribution?: DescriptionAttribution | null
 }
 
 export interface MapSectionProps {

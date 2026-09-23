@@ -3968,11 +3968,84 @@ PHASE4_WRITE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_written_sites_counts_only_full_provenance",
     ),
 ]
+P4_API_PROVENANCE = "api/services/description_provenance.py"
+P4_API_TEST = "tests/api/test_ai_act_marking.py"
+P4_SSR_TEST = "tests/api/test_sites_html_ssr.py"
+P4_SITEMAP_TEST = "tests/api/test_sitemap_lastmod.py"
+#: Track D (WB-D4): the disclosure the API, the SSR payload and the public API derive from
+#: provenance, the removed boot seed and the journal-aware sitemap lastmod.
+PHASE4_API_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "p4 api: a description edited after its provenance is still disclosed",
+        P4_API_PROVENANCE,
+        '    if provenance["desc_sha256"] != _sha256(description):\n',
+        "    if False:  # mutant\n",
+        P4_API_TEST,
+        "test_a_description_edited_after_its_provenance_discloses_nothing",
+    ),
+    (
+        "p4 api: lane R names its restricted page",
+        P4_API_PROVENANCE,
+        'ATTRIBUTION_LANES = frozenset({"W", "S", "T"})\n',
+        'ATTRIBUTION_LANES = frozenset({"W", "S", "T", "R"})  # mutant\n',
+        P4_API_TEST,
+        "test_restated_text_is_generated_and_names_no_restricted_page",
+    ),
+    (
+        "p4 api: a card other than the hashed one is marked",
+        P4_API_PROVENANCE,
+        '    if recorded is None or recorded["text_sha256"] != _sha256(card):\n',
+        "    if recorded is None:  # mutant\n",
+        P4_API_TEST,
+        "test_a_card_is_marked_only_while_it_is_the_card_the_provenance_hashes",
+    ),
+    (
+        "p4 api: /api/sites/{id} does not surface the disclosure",
+        "api/routes/sites.py",
+        '            resp["descriptionAi"] = disclosure["ai"]\n',
+        "            pass  # mutant\n",
+        P4_API_TEST,
+        "test_the_site_api_surfaces_description_ai_and_attribution",
+    ),
+    (
+        "p4 api: the public API never marks generated text",
+        "api/routes/public_v1.py",
+        '            ai_generated=disclosure is not None and disclosure["ai"] == "generated",\n',
+        "            ai_generated=False,  # mutant\n",
+        P4_API_TEST,
+        "test_the_public_api_marks_the_description_by_its_provenance",
+    ),
+    (
+        "p4 api: the SSR payload carries no disclosure",
+        "api/routes/sites_html.py",
+        '            "description_ai": None if disclosure is None else disclosure["ai"],\n',
+        '            "description_ai": None,  # mutant\n',
+        P4_SSR_TEST,
+        "test_site_detail_hands_the_disclosure_of_the_description_it_serves",
+    ),
+    (
+        "p4 api: the boot citation seed is back",
+        "api/main.py",
+        "        # The 10-site description_citations seed that stood here (a boot writer the plan's\n",
+        "        _seed = \"'{description_citations}'\"  # mutant\n",
+        P4_API_TEST,
+        "test_the_api_boot_writes_no_description_citations",
+    ),
+    (
+        "p4 api: the sitemap forgets the journal",
+        "api/routes/sitemap.py",
+        '    + journal_join("u")\n',
+        '    + ""  # mutant\n',
+        P4_SITEMAP_TEST,
+        "test_the_page_lastmod_is_the_later_of_the_row_and_its_newest_journal_write",
+    ),
+]
 MUTATIONS += GAP_MUTATIONS
 MUTATIONS += REVIEW_MUTATIONS
 MUTATIONS += SPLIT_MUTATIONS
 MUTATIONS += PHASE4_MODEL_MUTATIONS
 MUTATIONS += PHASE4_WRITE_MUTATIONS
+MUTATIONS += PHASE4_API_MUTATIONS
 
 
 def digest(path: Path) -> str:

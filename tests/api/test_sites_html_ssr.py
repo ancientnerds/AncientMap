@@ -163,6 +163,7 @@ def _borremose_row() -> SimpleNamespace:
         description_citations=[
             {"n": 1, "url": "https://example.org/ref", "title": "Ref", "domain": "example.org"}
         ],
+        description_provenance=None,
         best_wiki_url="https://da.wikipedia.org/wiki/Borremose",
         source_language="da",
     )
@@ -228,6 +229,8 @@ def test_site_detail_hands_the_full_raw_payload():
     assert route["best_wiki_url"] == "https://da.wikipedia.org/wiki/Borremose"
     assert route["source_language"] == "da"
     assert route["description_citations"][0]["url"] == "https://example.org/ref"
+    # No provenance, no disclosure: nothing is claimed for a text without one.
+    assert route["description_ai"] is None and route["description_attribution"] is None
     # _related_content: fertige Pfade, Attribution vollständig.
     assert route["alt_names"] == ["Borremose fortress"]
     assert route["image"] == {
@@ -251,6 +254,50 @@ def test_site_detail_hands_the_full_raw_payload():
     assert route["siblings"] == [
         {"name": "Lindholm Høje", "path": "/sites/denmark/lindholm-høje-99887766"}
     ]
+
+
+def test_site_detail_hands_the_disclosure_of_the_description_it_serves():
+    """Phase 4 (design entry [6], licensing_and_ai_act): the page carries the AI mark and the
+    CC BY-SA attribution derived by the same function /api/sites/{id} uses - and it selects the
+    provenance in the same statement as the description it describes."""
+    import hashlib
+
+    row = _borremose_row()
+    permalink = "https://en.wikipedia.org/w/index.php?title=Borremose&oldid=42"
+    row.description_provenance = {
+        "lane": "W",
+        "ai": "selected",
+        "ai_system": "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)",
+        "licence": "CC BY-SA 4.0",
+        "attribution": {
+            "title": "Borremose",
+            "url": permalink,
+            "licence_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "changes": "sentences selected and shortened",
+        },
+        "sources": [{"url": permalink, "rev_timestamp": "2026-09-01T10:00:00Z"}],
+        "desc_sha256": hashlib.sha256(row.description.encode("utf-8")).hexdigest(),
+    }
+    news_chain = MagicMock()
+    news_chain.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+    db = FakeDb([row], [], [], [], [])
+    render, shell = _patched()
+    with (
+        render as render_mock,
+        shell,
+        patch("api.routes.sites_html.public_stories_query", return_value=news_chain),
+    ):
+        asyncio.run(site_detail("denmark", "borremose-5281654c", db=db))
+    route = render_mock.call_args[0][0]
+    assert route["description_ai"] == "selected"
+    assert route["description_attribution"] == {
+        "title": "Borremose",
+        "url": permalink,
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "changes": "sentences selected and shortened",
+        "revisionDate": "2026-09-01",
+    }
 
 
 def test_site_detail_301s_a_stale_slug_to_the_canonical_url():
