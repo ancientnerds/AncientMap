@@ -7,6 +7,8 @@ Covers the four properties the design's trust argument rests on:
   4. a string the model did not copy from the text cannot become a fact.
 """
 
+import pytest
+
 from pipeline.lyra.prospector import corpus
 from pipeline.lyra.prospector.mentions import GroundingStats, ground_mentions
 from pipeline.lyra.prospector.wiki import _parse_query, enwiki_title_from_url
@@ -72,6 +74,44 @@ class TestWikiResolution:
         )
         assert enwiki_title_from_url("https://de.wikipedia.org/wiki/Foo") is None
         assert enwiki_title_from_url(None) is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # the shape of the 20 curated source_url values of 2026-03-04: two URLs, one newline
+        "https://en.wikipedia.org/wiki/Petra\nhttps://www.khanacademy.org/humanities/petra",
+        "https://www.megalithic.co.uk/article.php?sid=22756\nhttps://en.wikipedia.org/wiki/Acanceh",
+        "https://en.wikipedia.org/wiki/Petra\r",
+        "https://en.wikipedia.org/wiki/Pe\ttra",
+        "https://en.wikipedia.org/wiki/Petra\x7f",
+    ],
+)
+def test_a_url_with_a_control_character_is_refused_not_turned_into_a_title(url):
+    with pytest.raises(ValueError, match="control character"):
+        enwiki_title_from_url(url)
+
+
+def test_a_percent_encoded_control_character_is_refused_after_decoding():
+    with pytest.raises(ValueError, match="decodes to a title with a control character"):
+        enwiki_title_from_url("https://en.wikipedia.org/wiki/Petra%0Ahttps://example.org")
+
+
+def test_an_invalid_title_is_no_page():
+    """The live answer of 2026-09-23 for Petra's two-URL "title": `invalid`, no `missing`."""
+    title = "Petra\nhttps://www.khanacademy.org/humanities/petra"
+    query = {
+        "pages": [
+            {
+                "title": title,
+                "invalidreason": 'The requested page title contains invalid characters: "\n".',
+                "invalid": True,
+            }
+        ]
+    }
+    r = _parse_query([title], query)[title]
+    assert not r.exists
+    assert (r.canonical_title, r.qid) == (None, None)
 
 
 PAPER = (

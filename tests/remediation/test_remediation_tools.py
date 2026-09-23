@@ -48,6 +48,7 @@ import write_dry_all  # noqa: E402
 import write_gate  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
 
+from pipeline.lyra.prospector.wiki import TitleResolution  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
 
 SITE = "11111111-1111-4111-8111-111111111111"
@@ -1423,3 +1424,611 @@ def test_the_measurement_counts_holds_false_holds_and_bucket_moves_with_the_writ
     monkeypatch.setitem(lanes.REVIEWED_PLAN_KEYS_SHA256, lanes.MASS, "0" * 64)
     with pytest.raises(SystemExit, match="not the plan the production rows"):
         measure_review_holds.main(argv)
+
+
+# ── wave 4: the curated source_url values that hold two URLs ─────────────────────────────────
+
+MEGA = "https://www.megalithic.co.uk/article.php?sid="
+WIKI = "https://en.wikipedia.org/wiki/"
+KHAN = "https://www.khanacademy.org/humanities/petra"
+KHAN_REAL = (
+    "https://www.khanacademy.org/humanities/ap-art-history/west-and-central-asia-apahh/"
+    "west-asia/a/petra-rock-cut-facades"
+)
+W4_SITES = {
+    "alpha": "00000000-0000-4000-8000-0000000000a1",
+    "petra": "00000000-0000-4000-8000-0000000000a2",
+    "blog": "00000000-0000-4000-8000-0000000000a3",
+    "taken": "00000000-0000-4000-8000-0000000000a4",
+    "nopage": "00000000-0000-4000-8000-0000000000a5",
+    "disamb": "00000000-0000-4000-8000-0000000000a6",
+    "twin1": "00000000-0000-4000-8000-0000000000a7",
+    "twin2": "00000000-0000-4000-8000-0000000000a8",
+    "import": "00000000-0000-4000-8000-0000000000a9",
+    "three": "00000000-0000-4000-8000-0000000000aa",
+    "clean": "00000000-0000-4000-8000-0000000000ab",
+    "town": "00000000-0000-4000-8000-0000000000ac",
+    "cityish": "00000000-0000-4000-8000-0000000000ad",
+}
+HOLDER = "00000000-0000-4000-8000-0000000000ff"
+
+
+def _w4_site(key: str, name: str, url: str, source: str = "ancient_nerds", **ids: list[str]):
+    return {
+        "site_id": W4_SITES[key],
+        "name": name,
+        "source_id": source,
+        "source_url": url,
+        "created": "2026-03-04",
+        "external_ids": dict(ids),
+    }
+
+
+def _res(title: str | None, qid: str | None, *, disambiguation: bool = False) -> dict:
+    return {
+        "canonical_title": title,
+        "qid": qid,
+        "disambiguation": disambiguation,
+        "redirected": False,
+    }
+
+
+def _w4_record() -> dict:
+    """Every shape the wave meets: the 19 Mesoamerican one (Alpha), Petra, a blog second URL, an
+    item another curated site carries, no page, a disambiguation page, two sites on one item, a
+    row that is not curated, three URLs, a clean title already stored, an article about the
+    municipality (Town), and one whose item carries the real Petra's P31 set (Cityish, with a
+    broken stored title)."""
+    return {
+        "read_at": "2026-09-23T10:00:00Z",
+        "resolved_at": "2026-09-23T10:00:05Z",
+        "scope": qid_repair.SCOPE_SQL,
+        "sites": [
+            _w4_site("alpha", "Alpha", f"{MEGA}1\n{WIKI}Alpha_(site)"),
+            _w4_site("petra", "Petra", f"{WIKI}Petra\n{KHAN}", enwiki_title=[f"Petra\n{KHAN}"]),
+            _w4_site("blog", "Blogged", f"{MEGA}3\nhttps://rockart.blogspot.com/x.html"),
+            _w4_site("taken", "Taken", f"{MEGA}4\n{WIKI}Taken"),
+            _w4_site("nopage", "Nopage", f"{MEGA}5\n{WIKI}Nopage"),
+            _w4_site("disamb", "Disamb", f"{MEGA}6\n{WIKI}Disamb"),
+            _w4_site("twin1", "Twin one", f"{MEGA}7\n{WIKI}Twin_one"),
+            _w4_site("twin2", "Twin two", f"{MEGA}8\n{WIKI}Twin_two"),
+            _w4_site("import", "Imported", f"{MEGA}9\n{WIKI}Imported", source="megalithic"),
+            _w4_site("three", "Three", f"{MEGA}10\n{WIKI}Three\n{MEGA}11"),
+            _w4_site("clean", "Clean", f"{MEGA}12\n{WIKI}Clean", enwiki_title=["Clean site"]),
+            _w4_site("town", "Town site", f"{MEGA}13\n{WIKI}Town"),
+            _w4_site(
+                "cityish", "Cityish", f"{WIKI}Cityish\n{KHAN}", enwiki_title=[f"Cityish\n{KHAN}"]
+            ),
+        ],
+        "resolutions": {
+            "Alpha (site)": _res("Alpha", "Q1"),
+            "Petra": _res("Petra", "Q5788"),
+            "Taken": _res("Taken", "Q4"),
+            "Nopage": _res(None, None),
+            "Disamb": _res("Disamb", "Q6", disambiguation=True),
+            "Twin one": _res("Twin", "Q7"),
+            "Twin two": _res("Twin", "Q7"),
+            "Imported": _res("Imported", "Q9"),
+            "Clean": _res("Clean", "Q12"),
+            "Town": _res("Town", "Q20"),
+            "Cityish": _res("Cityish", "Q21"),
+        },
+        "qid_holders": {
+            "Q1": [],
+            "Q4": [{"site_id": HOLDER, "name": "Holder", "source_url": f"{WIKI}Taken"}],
+            "Q5788": [],
+            "Q7": [],
+            "Q9": [],
+            "Q12": [],
+            "Q20": [],
+            "Q21": [],
+        },
+        "p31": {
+            "Q1": ["archaeological site", "Maya site in Mexico"],
+            "Q4": ["archaeological site"],
+            "Q5788": ["ancient city", "archaeological site"],
+            "Q6": ["Wikimedia disambiguation page"],
+            "Q7": ["archaeological site"],
+            "Q9": ["archaeological site"],
+            "Q12": ["archaeological site"],
+            "Q20": ["municipality of Mexico"],
+            "Q21": ["ancient city", "city", "archaeological site"],
+        },
+    }
+
+
+def _w4_plan() -> Any:
+    return qid_repair.split_plan(_w4_record(), hand_read=())
+
+
+def test_wave_four_keeps_the_first_url_and_stores_the_article_as_the_boot_refresh_would() -> None:
+    rows = _w4_plan().rows
+    alpha = [(r.table, r.kind, r.old_value, r.new_value) for r in rows if r.name == "Alpha"]
+    assert alpha == [
+        ("unified_sites", "source_url", f"{MEGA}1\n{WIKI}Alpha_(site)", f"{MEGA}1"),
+        ("site_external_ids", "enwiki_title", None, "Alpha"),
+        ("site_external_ids", "wikidata_qid", None, "Q1"),
+    ]
+    by_kind = {r.kind: r for r in rows if r.name == "Alpha"}
+    assert (by_kind["source_url"].test_id, by_kind["source_url"].confidence) == (
+        "EXT/source_url",
+        "authoritative",
+    )
+    assert by_kind["source_url"].row_pk == W4_SITES["alpha"]
+    assert by_kind["source_url"].column == "source_url"
+    assert by_kind["wikidata_qid"].row_pk == f"{W4_SITES['alpha']}/wikidata_qid"
+    assert by_kind["wikidata_qid"].column == "value"
+    assert {r.confidence for r in rows if r.table == "site_external_ids"} == {"two_source"}
+    assert "no other curated site carries Q1" in by_kind["wikidata_qid"].evidence[-1]
+
+
+def test_petras_broken_title_is_corrected_and_its_item_added() -> None:
+    petra = [
+        (r.table, r.kind, r.old_value, r.new_value) for r in _w4_plan().rows if r.name == "Petra"
+    ]
+    assert petra == [
+        ("unified_sites", "source_url", f"{WIKI}Petra\n{KHAN}", f"{WIKI}Petra"),
+        ("site_external_ids", "enwiki_title", f"Petra\n{KHAN}", "Petra"),
+        ("site_external_ids", "wikidata_qid", None, "Q5788"),
+    ]
+
+
+def test_what_the_rules_do_not_write_is_left_with_its_reason() -> None:
+    plan = _w4_plan()
+    left = {(item.name, item.what): item.reason for item in plan.left}
+    assert left == {
+        ("Blogged", "external ids"): "neither URL is an English Wikipedia article",
+        ("Taken", "external ids"): (
+            f"{WIKI}Taken: Q4 is already carried by the curated site Holder ({HOLDER})"
+        ),
+        ("Nopage", "external ids"): f"{WIKI}Nopage: no English Wikipedia page by that title",
+        ("Disamb", "external ids"): f"{WIKI}Disamb: 'Disamb' is a disambiguation page",
+        ("Twin one", "external ids"): (
+            f"{WIKI}Twin_one: Q7 is the item of Twin two ({W4_SITES['twin2']}) too"
+        ),
+        ("Twin two", "external ids"): (
+            f"{WIKI}Twin_two: Q7 is the item of Twin one ({W4_SITES['twin1']}) too"
+        ),
+        ("Imported", "source_url"): "a megalithic row, not curated",
+        ("Three", "source_url"): "not two URLs joined by one newline",
+        ("Clean", "enwiki_title"): "the site already carries ['Clean site']",
+        ("Town site", "external ids"): (
+            f"{WIKI}Town: Q20 is a place, not the site (P31: municipality of Mexico)"
+        ),
+        ("Cityish", "external ids"): (
+            f"{WIKI}Cityish: Q21 is a place, not the site (P31: ancient city, city, archaeological site)"
+        ),
+    }
+    # a left site's source_url is still split where it is curated and two URLs; nothing else moves
+    written = {(r.name, r.kind) for r in plan.rows}
+    assert {name for name, kind in written if kind == "source_url"} == {
+        "Alpha",
+        "Petra",
+        "Blogged",
+        "Taken",
+        "Nopage",
+        "Disamb",
+        "Twin one",
+        "Twin two",
+        "Clean",
+        "Town site",
+        "Cityish",
+    }
+    assert ("Clean", "wikidata_qid") in written and ("Clean", "enwiki_title") not in written
+    for name in ("Taken", "Nopage", "Disamb", "Twin one", "Twin two", "Blogged", "Town site"):
+        assert not {kind for n, kind in written if n == name} - {"source_url"}, name
+
+
+def test_a_record_without_the_resolution_a_site_needs_is_refused() -> None:
+    record = _w4_record()
+    del record["resolutions"]["Alpha (site)"]
+    with pytest.raises(SystemExit, match="run `resolve` again"):
+        qid_repair.split_plan(record, hand_read=())
+
+
+def test_a_control_character_is_spelled_outside_the_quotes() -> None:
+    assert qid_repair.sql_value("a\nb'c") == "('a' || chr(10) || 'b''c')"
+    assert qid_repair.sql_value("\ta") == "(chr(9) || 'a')"
+    for plain in ("Petra", "O'Brien", None):
+        assert qid_repair.sql_value(plain) == lanes.sql_text(plain)
+
+
+def _w4_rows() -> list[Any]:
+    return _w4_plan().rows
+
+
+def test_wave_four_writes_source_url_through_the_primitive_and_new_rows_only_where_none_is() -> (
+    None
+):
+    sql = qid_repair.render_split(_w4_rows(), reversal=False)
+    # the source_url rows: the journal primitive, under the wave's stamp
+    assert "moved := moved + apply_remediation_change(" in sql
+    assert (
+        "            'unified_sites', 'source_url', 'id', r.site_id::text, r.old_value, r.new_value,\n"
+        "            r.test_id, '2026-09-23_source-url-split-wave4', r.change_key, r.confidence, "
+        "r.evidence, r.site_id);"
+    ) in sql
+    # a two-URL value never stands raw in the file
+    assert f"'{MEGA}1' || chr(10) || '{WIKI}Alpha_(site)'" in sql
+    assert f"{MEGA}1\n" not in sql
+    # guard 2: the source_url still holds the old value
+    assert "     WHERE u.source_url IS DISTINCT FROM p.old_value;" in sql
+    assert "source_url value(s) no longer hold the planned old value', bad;" in sql
+    # guard 3: a row with an old value is the one row of its kind and holds it
+    assert "     WHERE p.old_value IS NOT NULL\n" in sql
+    assert "external-id row(s) no longer hold the planned old value', bad;" in sql
+    # guard 4: a row planned as new is new
+    assert (
+        "     WHERE p.old_value IS NULL\n"
+        "       AND EXISTS (SELECT 1 FROM site_external_ids e WHERE e.site_id = p.site_id "
+        "AND e.kind = p.kind);"
+    ) in sql
+    assert "already hold a row of a kind planned as new', bad;" in sql
+    # guard 5: no other curated site carries a planned item
+    assert (
+        "      JOIN site_external_ids e ON e.kind = p.kind AND e.value = p.new_value "
+        "AND e.site_id <> p.site_id"
+    ) in sql
+    assert (
+        "      JOIN unified_sites u ON u.id = e.site_id AND u.source_id = 'ancient_nerds'\n"
+        "     WHERE p.kind = 'wikidata_qid';"
+    ) in sql
+    assert "planned item(s) are carried by another curated site', bad;" in sql
+    # the writes: an insert where the old value is NULL, else a conditional update - no DELETE
+    assert "        IF r.old_value IS NULL THEN\n            INSERT INTO site_external_ids" in sql
+    assert "WHERE site_id = r.site_id AND kind = r.kind AND value = r.old_value;" in sql
+    assert "DELETE" not in sql
+    assert "IF n <> 1 THEN" in sql and "IF moved <> expected THEN" in sql
+    # invariants: new values held, the one row of its kind, the journal both ways
+    assert "source_url value(s) do not hold the new value', bad;" in sql
+    assert "external-id row(s) do not hold the new value', bad;" in sql
+    assert "row(s) have no matching journal row', bad;" in sql
+    assert "journalled % row(s) outside the plan'" in sql
+    assert sql.rstrip().endswith(
+        "FROM remediation_change_log WHERE run_stamp = '2026-09-23_source-url-split-wave4';"
+    )
+    assert "\nCOMMIT;\n" in sql and "\nROLLBACK;\n" not in sql
+    rehearsal = qid_repair.render_split(_w4_rows(), reversal=False, rehearsal=True)
+    assert "\nROLLBACK;\n" in rehearsal and "\nCOMMIT;\n" not in rehearsal
+
+
+def test_the_reversal_deletes_exactly_the_inserted_rows_and_puts_every_old_value_back() -> None:
+    rows = _w4_rows()
+    undo = qid_repair.render_split(rows, reversal=True)
+    assert (
+        "        ELSIF r.new_value IS NULL THEN\n"
+        "            DELETE FROM site_external_ids\n"
+        "             WHERE site_id = r.site_id AND kind = r.kind AND value = r.old_value;"
+    ) in undo
+    assert "'2026-09-23_source-url-split-wave4-rollback'" in undo
+    assert "'2026-09-23_source-url-split-wave4'" not in undo
+    new_qid = next(r for r in rows if r.name == "Alpha" and r.kind == "wikidata_qid")
+    assert (
+        f"'{new_qid.site_id}'::uuid, 'wikidata_qid', 'Q1', NULL, '{new_qid.change_key}-rollback'"
+    ) in undo
+    title = next(r for r in rows if r.name == "Petra" and r.kind == "enwiki_title")
+    assert f"'Petra', ('Petra' || chr(10) || '{KHAN}'), '{title.change_key}-rollback'" in undo
+    url = next(r for r in rows if r.name == "Alpha" and r.kind == "source_url")
+    assert f"'{MEGA}1', ('{MEGA}1' || chr(10) || '{WIKI}Alpha_(site)')" in undo
+    assert url.change_key + "-rollback" in undo
+    assert "migration 0023 is applied, its CHECK refuses the two-URL source_url" in undo
+
+
+def test_a_statement_is_refused_for_a_new_value_with_a_control_character() -> None:
+    row = replace(_w4_rows()[0], new_value="a\nb")
+    with pytest.raises(SystemExit, match="control character"):
+        qid_repair.render_split([row], reversal=False)
+
+
+def test_the_plan_line_of_waves_one_to_three_carries_no_table_key() -> None:
+    row = qid_repair.changes()[0]
+    assert "table" not in json.loads(row.to_json_line())
+    url = next(r for r in _w4_rows() if r.table == "unified_sites")
+    assert json.loads(url.to_json_line())["table"] == "unified_sites"
+    # the key of an external-id row is the one waves 1-3 computed
+    assert qid_repair.change_key(
+        row.site_id, row.kind, row.old_value, row.new_value, row.test_id
+    ) == (row.change_key)
+
+
+def test_waves_one_to_three_still_render_byte_for_byte_beside_wave_four(tmp_path: Path) -> None:
+    for wave in (qid_repair.WAVE1, qid_repair.WAVE2, qid_repair.WAVE3):
+        out = tmp_path / str(wave.number)
+        qid_repair.write_files(out, wave)
+        for name in ("PLAN.jsonl", "PLAN.md", "APPLY.sql", "ROLLBACK.sql"):
+            assert (out / name).read_bytes() == _as_committed(wave.out / name), (wave.number, name)
+
+
+def test_the_delivered_wave_four_files_are_the_rendered_ones(tmp_path: Path) -> None:
+    wave = qid_repair.WAVE4
+    assert (wave.run_stamp, wave.out) == (
+        "2026-09-23_source-url-split-wave4",
+        REPO / "output" / "remediation" / "qid_repair" / "wave4",
+    )
+    (tmp_path / qid_repair.RESOLUTION).write_bytes(_as_committed(wave.out / qid_repair.RESOLUTION))
+    rows = qid_repair.write_files(tmp_path, wave)
+    for name in ("PLAN.jsonl", "PLAN.md", "APPLY.sql", "ROLLBACK.sql"):
+        assert (tmp_path / name).read_bytes() == _as_committed(wave.out / name), name
+    counts = {}
+    for row in rows:
+        what = (
+            "source_url"
+            if row.table == "unified_sites"
+            else ("new" if row.old_value is None else "corrected")
+        )
+        counts[what] = counts.get(what, 0) + 1
+    assert counts == {"source_url": 20, "new": 29, "corrected": 1}
+    plan = qid_repair.split_plan(
+        qid_repair.load_resolution(wave.out), hand_read=qid_repair.WAVE4_HAND_READ
+    )
+    left = {item.name: item.reason for item in plan.left}
+    assert sorted(left) == [
+        "Acanceh",
+        "Atzompa",
+        "Cantil de las animas",
+        "Cerro De Trincheras",
+        "Chiapa de Corzo",
+    ]
+    assert all(item.what == "external ids" for item in plan.left)
+    for name, qid in (
+        ("Acanceh", "Q8186545"),
+        ("Atzompa", "Q3846612"),
+        ("Cerro De Trincheras", "Q1434929"),
+    ):
+        assert f"{qid} is a place, not the site" in left[name], name
+    assert (
+        "Q4384315 is already carried by the curated site Zoque Culture" in left["Chiapa de Corzo"]
+    )
+    assert [(d["name"], d["qid"], d["others"][0]["site_id"]) for d in plan.duplicates] == [
+        ("Chiapa de Corzo", "Q4384315", "ed186ea9-9ed1-415d-828b-97d9f21401d2")
+    ]
+
+
+def test_resolve_reads_production_and_asks_only_for_the_article_titles() -> None:
+    sent: list[str] = []
+    asked: list[list[str]] = []
+
+    def run(sql: str) -> str:
+        sent.append(sql)
+        if sql == qid_repair.SCOPE_SQL:
+            rows = [
+                {k: v for k, v in s.items() if k != "external_ids"}
+                for s in _w4_record()["sites"][:3]
+            ]
+            return "".join(json.dumps(r) + "\n" for r in rows)
+        if "FROM site_external_ids WHERE site_id::text IN" in sql:
+            return (
+                json.dumps(
+                    {
+                        "site_id": W4_SITES["petra"],
+                        "kind": "enwiki_title",
+                        "value": f"Petra\n{KHAN}",
+                    }
+                )
+                + "\n"
+            )
+        assert "e.kind = 'wikidata_qid' AND u.source_id = 'ancient_nerds'" in sql
+        assert set(re.findall(r"'(Q\d+)'", sql)) == {"Q1", "Q5788"}
+        assert sql.startswith(
+            "SELECT to_jsonb(t)::text FROM (SELECT e.value AS qid, e.site_id::text AS site_id, "
+            "u.name, u.source_url "
+        )
+        holder = {"qid": "Q1", "site_id": HOLDER, "name": "Holder", "source_url": f"{WIKI}A"}
+        return json.dumps(holder) + "\n"
+
+    def resolve(titles: list[str]) -> dict:
+        asked.append(titles)
+        return {
+            t: TitleResolution(t, t.removesuffix(" (site)"), q, None, None, False, False)
+            for t, q in (("Alpha (site)", "Q1"), ("Petra", "Q5788"))
+        }
+
+    classed: list[list[str]] = []
+
+    def classes(qids: list[str]) -> dict[str, list[str]]:
+        classed.append(qids)
+        return {"Q1": ["archaeological site"], "Q5788": ["ancient city", "city"]}
+
+    record = qid_repair.resolve_split(run, resolve=resolve, classes=classes, now=lambda: "T")
+    assert asked == [["Alpha (site)", "Petra"]]
+    assert classed == [["Q1", "Q5788"]]
+    assert record["p31"] == {"Q1": ["archaeological site"], "Q5788": ["ancient city", "city"]}
+    assert r"source_url ~ '[\x00-\x1f\x7f]'" in sent[0]
+    assert record["sites"][1]["external_ids"] == {"enwiki_title": [f"Petra\n{KHAN}"]}
+    assert record["sites"][0]["external_ids"] == {}
+    assert record["qid_holders"] == {
+        "Q1": [{"site_id": HOLDER, "name": "Holder", "source_url": f"{WIKI}A"}],
+        "Q5788": [],
+    }
+    assert record["resolutions"]["Petra"] == _res("Petra", "Q5788")
+    with pytest.raises(SystemExit, match="only wave 4 is resolved"):
+        qid_repair.main(["resolve", "--wave", "3"])
+
+
+def test_wave_four_check_and_verify_read_both_tables(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.setattr(qid_repair, "WAVE4_HAND_READ", ())
+    qid_repair.write_resolution(tmp_path, _w4_record())
+    out = ["--wave", "4", "--dir", str(tmp_path)]
+    assert qid_repair.main(["render", *out]) == 0
+    rows = _w4_rows()
+
+    def database(*, state: str, journal: bool) -> None:
+        def psql(sql: str, *, host: str) -> str:
+            if "FROM remediation_change_log" in sql:
+                assert "run_stamp = '2026-09-23_source-url-split-wave4'" in sql
+                keys = [row.change_key for row in rows] if journal else []
+                return "".join(json.dumps({"change_key": key}) + "\n" for key in keys)
+            asked = set(re.findall(r"'([0-9a-f-]{36})'", sql))
+            lines = []
+            for row in rows:
+                value = row.old_value if state == "old" else row.new_value
+                if row.site_id not in asked or value is None:
+                    continue
+                if row.table == "unified_sites" and "FROM unified_sites WHERE id IN" in sql:
+                    assert f"'{row.site_id}'::uuid" in sql
+                    lines.append({"site_id": row.site_id, "value": value})
+                if row.table == "site_external_ids" and "FROM site_external_ids" in sql:
+                    lines.append({"site_id": row.site_id, "kind": row.kind, "value": value})
+            return "".join(json.dumps(line) + "\n" for line in lines)
+
+        monkeypatch.setattr(lanes, "psql", psql)
+
+    database(state="old", journal=False)
+    assert qid_repair.main(["check", *out]) == 0
+    assert qid_repair.main(["verify", *out]) == 1
+    database(state="new", journal=True)
+    assert qid_repair.main(["verify", *out]) == 0
+    assert qid_repair.main(["check", *out]) == 1
+
+
+def test_a_new_row_is_compared_as_no_row() -> None:
+    row = next(r for r in _w4_rows() if r.old_value is None)
+    key = (row.site_id, row.kind)
+    assert qid_repair.compare([row], {}, want="old") == []
+    assert qid_repair.compare([row], {key: [row.new_value]}, want="old")
+    assert qid_repair.compare([row], {key: [row.new_value]}, want="new") == []
+
+
+def test_a_place_level_item_is_refused_for_both_kinds_and_the_source_url_is_still_split() -> None:
+    """Orchestrator decision 2026-09-23: no link to a town or municipality (the defect waves 1-3
+    repaired). The gate is waves 2-3's own, `bcases.qid_research.is_site_kind`, not a copy."""
+    rows = _w4_rows()
+    for name, first in (("Town site", f"{MEGA}13"), ("Cityish", f"{WIKI}Cityish")):
+        mine = [(r.kind, r.new_value) for r in rows if r.name == name]
+        assert mine == [("source_url", first)], name
+    # the real Petra's P31 set carries plain "city" beside "ancient city": the gate refuses it,
+    # so a broken stored title stays and PLAN.md says so
+    plan = _w4_plan()
+    markdown = qid_repair.wave4_markdown(plan)
+    assert (
+        "* Cityish keeps its stored enwiki_title value with a control character: the wave refuses "
+        "the article's resolution"
+    ) in markdown
+    assert (
+        "The manual `--all` path reads every curated site whose `source_url` is an English "
+        "Wikipedia article, and would write the ids this wave refuses for Cityish"
+    ) in markdown
+    from bcases import qid_research
+
+    assert qid_repair.is_site_kind is qid_research.is_site_kind  # imported, not copied
+    # a record without the item's classes cannot be judged
+    record = _w4_record()
+    del record["p31"]["Q20"]
+    with pytest.raises(SystemExit, match="no P31 of Q20"):
+        qid_repair.split_plan(record, hand_read=())
+
+
+def test_a_shared_item_is_listed_as_a_duplicate_candidate_with_its_evidence() -> None:
+    plan = _w4_plan()
+    assert [(d["name"], d["qid"], [o["name"] for o in d["others"]]) for d in plan.duplicates] == [
+        ("Taken", "Q4", ["Holder"]),
+        ("Twin one", "Q7", ["Twin two"]),
+        ("Twin two", "Q7", ["Twin one"]),
+    ]
+    markdown = qid_repair.wave4_markdown(plan)
+    assert "## Duplicate candidates (the owner's merge, not a link)" in markdown
+    assert (
+        f"| Taken (`{W4_SITES['taken']}`) | Holder (`{HOLDER}`) | `Q4` | this site's article "
+        f"{WIKI}Taken resolves to `Q4`, the item the other row carries; the other row's "
+        f"source_url is `{WIKI}Taken` - the same article |"
+    ) in markdown
+    # a place-level item two sites share is no duplicate: both link a town, not each other
+    record = _w4_record()
+    record["resolutions"]["Twin one"] = _res("Twin", "Q20")
+    record["resolutions"]["Twin two"] = _res("Twin", "Q20")
+    assert [d["name"] for d in qid_repair.split_plan(record, hand_read=()).duplicates] == ["Taken"]
+
+
+def test_the_class_read_refuses_a_class_it_cannot_name(monkeypatch: Any) -> None:
+    class Net:
+        def __init__(self, **_: Any) -> None:
+            pass
+
+        def __enter__(self) -> Net:
+            return self
+
+        def __exit__(self, *_: Any) -> None:
+            return None
+
+    monkeypatch.setattr(qid_repair, "Fetcher", Net)
+    monkeypatch.setattr(
+        qid_repair.bcases_collect,
+        "fetch_claims",
+        lambda net, qids: {"Q1": {"p31": ["Q839954", "Q3024240"]}, "Q2": {"p31": ["Q515"]}},
+    )
+    labels = {"Q839954": "archaeological site", "Q3024240": "historical country", "Q515": "city"}
+    monkeypatch.setattr(qid_repair.bcases_collect, "fetch_labels", lambda net, qids: dict(labels))
+    assert qid_repair.item_classes(["Q1", "Q2"]) == {
+        "Q1": ["archaeological site", "historical country"],
+        "Q2": ["city"],
+    }
+    labels["Q515"] = None
+    with pytest.raises(SystemExit, match="no English label for the P31 class"):
+        qid_repair.item_classes(["Q1", "Q2"])
+
+
+def _petra_rows(plan: Any) -> list[tuple[str, str | None, str]]:
+    return [(r.kind, r.old_value, r.new_value) for r in plan.rows if r.name == "Petra"]
+
+
+def test_petra_is_written_by_its_hand_read_entry_and_refused_without_it() -> None:
+    """Orchestrator decision 2026-09-23: Petra is a hand-read entry, not a looser rule."""
+    record = qid_repair.load_resolution(qid_repair.WAVE4.out)
+    without = qid_repair.split_plan(record, hand_read=())
+    assert _petra_rows(without) == [
+        ("source_url", f"{WIKI}Petra\n{KHAN_REAL}", f"{WIKI}Petra"),
+    ]
+    assert {item.name: item.reason for item in without.left}["Petra"] == (
+        f"{WIKI}Petra: Q5788 is a place, not the site (P31: ancient city, city, archaeological site)"
+    )
+    plan = qid_repair.split_plan(record, hand_read=qid_repair.WAVE4_HAND_READ)
+    assert _petra_rows(plan) == [
+        ("source_url", f"{WIKI}Petra\n{KHAN_REAL}", f"{WIKI}Petra"),
+        ("enwiki_title", f"Petra\n{KHAN_REAL}", "Petra"),
+        ("wikidata_qid", None, "Q5788"),
+    ]
+    assert "Petra" not in {item.name for item in plan.left}
+    (entry,) = qid_repair.WAVE4_HAND_READ
+    qid_row = next(r for r in plan.rows if r.name == "Petra" and r.kind == "wikidata_qid")
+    assert f"hand-read, overriding: {entry.overrides}" in qid_row.evidence
+    assert set(entry.evidence) <= set(qid_row.evidence)
+    # the quoted evidence names what was read: the classes, the heritage listing, the article
+    quoted = " ".join(entry.evidence)
+    for fact in ("Q839954", "Q15661340", "Q515", "P1435", "Q9259", "P757", "326", "exact title"):
+        assert fact in quoted, fact
+    markdown = qid_repair.wave4_markdown(plan)
+    assert "## Hand-read (a refusal of the rule overridden by quoted evidence)" in markdown
+    assert f"| Petra (`{entry.site_id}`) | {entry.overrides} | " in markdown
+
+
+def _hand(key: str, overrides: str, *evidence: str) -> Any:
+    return qid_repair.HandRead(W4_SITES[key], key, overrides, evidence or ("read by hand",))
+
+
+def test_a_hand_entry_must_name_the_refusal_it_overrides() -> None:
+    record = _w4_record()
+    refusal = "Q21 is a place, not the site (P31: ancient city, city, archaeological site)"
+    plan = qid_repair.split_plan(record, hand_read=(_hand("cityish", refusal),))
+    assert [(r.kind, r.new_value) for r in plan.rows if r.name == "Cityish"] == [
+        ("source_url", f"{WIKI}Cityish"),
+        ("enwiki_title", "Cityish"),
+        ("wikidata_qid", "Q21"),
+    ]
+    for hand, says in (
+        # another reason than the rule's
+        (_hand("cityish", "Q21 is a disambiguation page"), "names the refusal it overrides"),
+        # a site the rule did not refuse
+        (_hand("alpha", "Q1 is a place, not the site (P31: x)"), "names the refusal it overrides"),
+        # a refusal that is not the rule's to override: another curated site carries the item
+        (
+            _hand("taken", f"Q4 is already carried by the curated site Holder ({HOLDER})"),
+            "names the refusal it overrides",
+        ),
+        # a site whose article the wave never resolves
+        (_hand("blog", "neither URL is an English Wikipedia article"), "resolves no article"),
+    ):
+        with pytest.raises(SystemExit, match=says):
+            qid_repair.split_plan(record, hand_read=(hand,))
+    empty = qid_repair.HandRead(W4_SITES["cityish"], "cityish", refusal, ())
+    with pytest.raises(SystemExit, match="quotes no evidence"):
+        qid_repair.split_plan(record, hand_read=(empty,))
