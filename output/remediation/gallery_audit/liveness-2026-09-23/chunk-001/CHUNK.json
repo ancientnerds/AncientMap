@@ -1,0 +1,15 @@
+{
+ "chunk": 1,
+ "confidence": "authoritative",
+ "label": "img liveness",
+ "lane": "img-liveness",
+ "may_empty": [
+  "9a9a0dca-52c8-44c2-94f6-adb655db17dd"
+ ],
+ "rollback_stamp": "img-liveness-2026-09-23-001-rollback",
+ "rows": 9,
+ "run_stamp": "img-liveness-2026-09-23-001",
+ "sites": 6,
+ "stamp": "img-liveness-2026-09-23",
+ "test_id": "T09/liveness"
+}

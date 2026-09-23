@@ -6134,6 +6134,170 @@ GALLERY_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += GALLERY_REVIEW_MUTATIONS
+
+#: The liveness lane's write (2026-09-23): `liveness.py chunk` turns PLANNED.jsonl into a chunk of
+#: the shared image writer. Labels start with "liveness chunk: " so the list runs on its own.
+_LC_TEST_PLAN = "test_the_chunk_carries_every_planned_row_exactly_as_planned"
+_LC_TEST_LINE = "test_a_planned_row_whose_store_line_does_not_state_it_is_refused"
+_LC_TEST_ROLE = "test_a_row_its_role_does_not_write_or_a_value_the_store_does_not_give_is_refused"
+_LC_TEST_RECHECK = "test_the_chunk_is_cut_only_from_a_store_whose_recheck_found_nothing"
+_LC_TEST_EMPTIED = "test_the_sites_left_without_a_live_image_are_computed_from_production"
+_LC_TEST_COMMAND = "test_the_command_emits_only_when_the_named_sites_are_exactly_the_emptied_ones"
+LIVENESS_CHUNK_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "liveness chunk: a boolean is written in Python's spelling",
+        GALLERY + "liveness.py",
+        '        return "true" if value else "false"\n',
+        "        return str(value)  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_PLAN,
+    ),
+    (
+        "liveness chunk: the evidence drops the planned pointers",
+        GALLERY + "liveness.py",
+        "                [{**evidence, **row.evidence}],\n",
+        "                [evidence],  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_PLAN,
+    ),
+    (
+        "liveness chunk: a row citing no store line passes",
+        GALLERY + "liveness.py",
+        "    if line is None:\n",
+        "    if False:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_LINE,
+    ),
+    (
+        "liveness chunk: a line stating another class, file, log or rule passes",
+        GALLERY + "liveness.py",
+        "    wrong = sorted(name for name, (said, stated) in claims.items() if said != stated)\n",
+        "    wrong: list[str] = []  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_LINE,
+    ),
+    (
+        "liveness chunk: a line that does not reference the row passes",
+        GALLERY + "liveness.py",
+        '    if wrong or row.key not in line["image_ids"]:\n',
+        "    if wrong:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_LINE,
+    ),
+    (
+        "liveness chunk: a role acts on a class it does not own",
+        GALLERY + "liveness.py",
+        '    if line["class"] not in ROLE_CLASSES[row.role]:\n',
+        "    if False:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_LINE,
+    ),
+    (
+        "liveness chunk: a role writes a column it does not own",
+        GALLERY + "liveness.py",
+        "        if ROLE_RULE.get(row.role) != row.rule or row.column not in ROLE_COLUMNS[row.role]:\n",
+        "        if ROLE_RULE.get(row.role) != row.rule:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_ROLE,
+    ),
+    (
+        "liveness chunk: an exclusion may flip the other way",
+        GALLERY + "liveness.py",
+        "        if row.role in ROLE_FLIP and (old, new) != ROLE_FLIP[row.role]:\n",
+        "        if False:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_ROLE,
+    ),
+    (
+        "liveness chunk: L2 writes a URL that is not the move target",
+        GALLERY + "liveness.py",
+        '            if row.role == "url" and new != _url_target(line, row.column):\n',
+        "            if False:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_ROLE,
+    ),
+    (
+        "liveness chunk: a hero promotion needs no hero drop",
+        GALLERY + "liveness.py",
+        '            if row.site_id not in dropped or not row.evidence.get("replacement_rule"):\n',
+        '            if not row.evidence.get("replacement_rule"):  # mutant\n',
+        LIVENESS_TEST,
+        _LC_TEST_ROLE,
+    ),
+    (
+        "liveness chunk: a recheck that found problems passes",
+        GALLERY + "liveness.py",
+        '    if report.get("problems") != [] or report.get("checked") != logged:\n',
+        '    if report.get("checked") != logged:  # mutant\n',
+        LIVENESS_TEST,
+        _LC_TEST_RECHECK,
+    ),
+    (
+        "liveness chunk: a recheck of fewer lines passes",
+        GALLERY + "liveness.py",
+        '    if report.get("problems") != [] or report.get("checked") != logged:\n',
+        '    if report.get("problems") != []:  # mutant\n',
+        LIVENESS_TEST,
+        _LC_TEST_RECHECK,
+    ),
+    (
+        "liveness chunk: the command cuts a chunk without the recheck",
+        GALLERY + "liveness.py",
+        "    require_recheck(store, lines)\n",
+        "    # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_COMMAND,
+    ),
+    (
+        "liveness chunk: the journal stamp ignores the store's date",
+        GALLERY + "liveness.py",
+        '        f"img-liveness-{match.group(1)}",\n',
+        '        "img-liveness-2026-09-23",  # mutant\n',
+        LIVENESS_TEST,
+        "test_the_lane_journals_under_the_stores_date",
+    ),
+    (
+        "liveness chunk: an emptied site need not be named",
+        GALLERY + "liveness.py",
+        "    if emptied != named:\n",
+        "    if False:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_COMMAND,
+    ),
+    (
+        "liveness chunk: a named site the plan does not empty passes",
+        GALLERY + "liveness.py",
+        "    if emptied != named:\n",
+        "    if not set(emptied) <= set(named):  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_COMMAND,
+    ),
+    (
+        "liveness chunk: an already excluded row counts as live",
+        GALLERY + "liveness.py",
+        '        if row["is_excluded"] is not True:\n',
+        "        if True:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_EMPTIED,
+    ),
+    (
+        "liveness chunk: a NULL is_excluded reads as excluded",
+        GALLERY + "liveness.py",
+        '        if not excluded.get(image_id, row["is_excluded"] is True):\n',
+        '        if not excluded.get(image_id, row["is_excluded"] is not False):  # mutant\n',
+        LIVENESS_TEST,
+        _LC_TEST_EMPTIED,
+    ),
+    (
+        "liveness chunk: a planned row on another site passes the production read",
+        GALLERY + "liveness.py",
+        "        if seen.get(int(change.row_key)) != change.site_id:\n",
+        "        if False:  # mutant\n",
+        LIVENESS_TEST,
+        _LC_TEST_EMPTIED,
+    ),
+]
+MUTATIONS += LIVENESS_CHUNK_MUTATIONS
 MUTATIONS += BCASES_MUTATIONS
 MUTATIONS += BCASES_REVIEW_MUTATIONS
 MUTATIONS += PHASE4_MODEL_MUTATIONS
