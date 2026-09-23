@@ -102,108 +102,15 @@ async def lifespan(app: FastAPI):
         from pipeline.database import Base, engine
 
         Base.metadata.create_all(bind=engine)
-        # Add columns that models define but create_all won't add to existing tables.
-        # Note: unified_sites ALTERs live in pipeline/lyra/orchestrator.py migrations
-        # to avoid lock contention when both containers start simultaneously.
-        from sqlalchemy import text as _text
+        import json as _json
 
-        _api_migrations = [
-            """DO $$ BEGIN
-                ALTER TABLE discord_users ADD CONSTRAINT credits_non_negative CHECK (credits >= 0);
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$""",
-            "ALTER TABLE expedition_progress ADD COLUMN IF NOT EXISTS last_stage_played_at TIMESTAMP",
-            "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS feature_flags JSONB DEFAULT '{}'",
-            "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS daily_streak INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS last_daily TIMESTAMP",
-            # Ensure unified_sites columns exist (normally added by orchestrator, but API needs them for /sites/all)
-            "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial'",
-            "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
-            "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP",
-            # Ensure card_stats enrichment columns exist (model defines them but create_all won't add to existing table).
-            # Keep this block in CardStats declaration order — a missing entry here
-            # breaks every query that loads the entity, not just the new column.
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS wikidata_qid VARCHAR(20)",
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS confidence_score FLOAT",
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS source_language VARCHAR(10)",
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS heritage_designation TEXT",
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS inception_year INTEGER",
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS best_wiki_url VARCHAR(500)",
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS commons_image VARCHAR(500)",
-            # Ensure db_snapshots has source_id column (added after initial table creation)
-            "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
-            # Widen grant_period from varchar(7) to varchar(10) — "one_time" sentinel is 8 chars
-            "ALTER TABLE credit_grants ALTER COLUMN grant_period TYPE VARCHAR(10)",
-            # Ensure site_content_links unique constraint exists (needed for ON CONFLICT upsert).
-            # duplicate_table: ADD CONSTRAINT UNIQUE raises 42P07 for the backing
-            # index when the constraint already exists, not duplicate_object
-            """DO $$ BEGIN
-                ALTER TABLE site_content_links
-                    ADD CONSTRAINT uq_content_link
-                    UNIQUE (site_id, content_source, content_id);
-            EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
-            END $$""",
-            # Ensure token_usage_logs has web_search_requests column
-            "ALTER TABLE token_usage_logs ADD COLUMN IF NOT EXISTS web_search_requests INTEGER NOT NULL DEFAULT 0",
-            # (Orphan-citation strip moved to migrations/0011 — it scanned
-            # 750K rows on every boot and was silently skipped on timeout.)
-            # Theo research: approval tracking, debug log, LLM call count
-            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS approved_by VARCHAR(100)",
-            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
-            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS debug_log JSONB",
-            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS llm_calls INTEGER DEFAULT 0",
-            # Theo batch pacing: batch flag + actual run-start timestamp (created_at
-            # is queue-insert time, useless for start-to-start pacing)
-            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS is_batch BOOLEAN NOT NULL DEFAULT FALSE",
-            "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS started_at TIMESTAMP",
-            # Thinking layer: curator-facing question + outcome on research_nodes (2026-08-04)
-            "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS question TEXT",
-            "ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text ON knowledge_claims (norm_text)",
-            # FK policy (2026-08-17): every FK onto unified_sites is SET NULL
-            # except the site-owned tables (unified_site_names,
-            # site_content_links, wiki_images, site_external_ids) and
-            # card_stats (regenerated derived data). The models said SET NULL
-            # for years; existing DBs kept CASCADE because create_all never
-            # alters constraints — the duplicate-merge audit would have
-            # cascaded into user data.
-            # A site-owned table whose site_id sits in its PRIMARY KEY cannot
-            # have NOT NULL dropped: site_external_ids crash-looped the API on
-            # deploy (2026-09-15) until it was listed here. Every new
-            # site-owned CASCADE table goes into this tuple AND into
-            # tests/api/test_fk_policy_exemptions.py.
-            """DO $$ DECLARE r RECORD; BEGIN
-                FOR r IN
-                    SELECT tc.table_name, tc.constraint_name, ccu.column_name
-                    FROM information_schema.table_constraints tc
-                    JOIN information_schema.referential_constraints rc
-                        ON rc.constraint_name = tc.constraint_name
-                    JOIN information_schema.key_column_usage ccu
-                        ON ccu.constraint_name = tc.constraint_name
-                    WHERE tc.constraint_type = 'FOREIGN KEY'
-                      AND rc.unique_constraint_name IN (
-                          SELECT constraint_name FROM information_schema.table_constraints
-                          WHERE table_name = 'unified_sites' AND constraint_type = 'PRIMARY KEY')
-                      AND rc.delete_rule = 'CASCADE'
-                      AND tc.table_name NOT IN (
-                          'unified_site_names', 'site_content_links', 'wiki_images', 'card_stats',
-                          'site_external_ids')
-                LOOP
-                    EXECUTE format('ALTER TABLE %I ALTER COLUMN %I DROP NOT NULL',
-                                   r.table_name, r.column_name);
-                    EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', r.table_name, r.constraint_name);
-                    EXECUTE format(
-                        'ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (%I) '
-                        'REFERENCES unified_sites(id) ON DELETE SET NULL',
-                        r.table_name, r.constraint_name, r.column_name);
-                END LOOP;
-            END $$""",
-        ]
+        from sqlalchemy import text as _text
+        from sqlalchemy.engine import Connection
+
+        from api.boot_schema import run_api_boot_schema, run_boot_step
 
         # Populate description_citations for 10 enriched sites (one-time prod data fix).
         # Uses parameterized queries to avoid SQLAlchemy parsing JSON colons as bind params.
-        import json as _json
-
         _citation_seed = {
             "f6b8fa8a-775c-4ee3-babd-1723dc03ba86": [
                 {
@@ -411,68 +318,22 @@ async def lifespan(app: FastAPI):
               AND NOT jsonb_exists(COALESCE(raw_data, cast('{}' as jsonb)), 'description_citations')
         """)
 
-        def _is_contention_error(exc: Exception) -> bool:
-            """True only for lock (55P03) / statement (57014) timeouts and
-            deadlocks (40P01).
-
-            Those are EXPECTED when the Lyra orchestrator migrates the same
-            tables during a simultaneous boot and may be skipped after the
-            retries below (the next boot completes them). Every other error
-            used to be swallowed as "lock contention" too, leaving silent
-            schema drift while the API started healthy (audit 2026-08-05,
-            M5) — now it aborts startup so the deploy health check fails
-            loudly.
-            """
-            pgcode = getattr(getattr(exc, "orig", None), "pgcode", None)
-            return pgcode in ("55P03", "57014", "40P01")
-
-        def _exec_boot_statement(sql, params=None, label: str = "Migration") -> None:
-            """One statement in its own transaction, retried on contention.
-
-            api and lyra boot together on deploys that rebuild both, and both
-            migrate unified_sites — a deadlock (40P01) kills whichever boot
-            PostgreSQL picks as victim. Every statement here is idempotent,
-            so wait out the other booter and retry before giving up.
-            """
-            import time as _time
-
-            for _attempt in (1, 2, 3):
-                try:
-                    with engine.begin() as conn:
-                        # LOCAL: scoped to this transaction. Plain SET stuck
-                        # to the pooled session, so every later request on
-                        # that connection inherited the 5 s lock limit
-                        # (seen as 500s during the 2026-09-17 Lyra crash loop).
-                        conn.execute(_text("SET LOCAL lock_timeout = '5s'"))
-                        conn.execute(_text("SET LOCAL statement_timeout = '30s'"))
-                        conn.execute(sql, params)
-                    return
-                except Exception as _mig_err:
-                    if not _is_contention_error(_mig_err):
-                        logger.error(f"[STARTUP] {label} FAILED (aborting startup): {_mig_err}")
-                        raise
-                    if _attempt < 3:
-                        logger.warning(
-                            f"[STARTUP] {label} hit lock contention "
-                            f"(attempt {_attempt}/3) — retrying in {2 * _attempt}s"
-                        )
-                        _time.sleep(2 * _attempt)
-                        continue
-                    logger.warning(
-                        f"[STARTUP] {label} skipped after 3 contention retries "
-                        f"(next boot completes it): {_mig_err}"
-                    )
-
-        # Run DDL migrations first (fast), then data fixes.
-        # Use lock_timeout=5s so ALTER TABLE fails fast on lock contention
+        # Run DDL migrations first (fast), then data fixes. The DDL adds what models
+        # define but create_all won't add to existing tables; each step asks the
+        # catalog first and takes its table lock only when its object is missing
+        # (api/boot_schema.py). Each step runs in its own transaction with
+        # lock_timeout=5s, so one that does need a lock fails fast on contention
         # (e.g. Lyra orchestrator holding locks on unified_sites) instead of
         # blocking for minutes and racing the health check.
-        for _sql in _api_migrations:
-            _exec_boot_statement(_text(_sql))
+        run_api_boot_schema(engine)
         for _sid, _dc in _citation_seed.items():
-            _exec_boot_statement(
-                _cite_sql, {"id": _sid, "dc": _json.dumps(_dc)}, label="Citation seed"
-            )
+            _cite_params = {"id": _sid, "dc": _json.dumps(_dc)}
+
+            # A def, not a lambda: mypy cannot type a lambda's bound default (CI mypy api/).
+            def _seed_citation(conn: Connection, params: dict[str, str] = _cite_params) -> None:
+                conn.execute(_cite_sql, params)
+
+            run_boot_step(engine, _seed_citation, label="Citation seed")
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
         )

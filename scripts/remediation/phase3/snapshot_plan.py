@@ -18,8 +18,9 @@ Where each value comes from - read, not assumed:
 * `wikidata_qid` - **`site_external_ids`** (`kind='wikidata_qid'`, 4,618 of its 9,237 rows), which
   is what routes this pass to a Wikidata item. **Measured on the snapshot (2026-09-21):
   `card_stats.wikidata_qid` is NULL in all 5,004 rows**, and nothing in this repository ever
-  writes that column - `api/main.py:126` creates it with `ADD COLUMN IF NOT EXISTS` and the only
-  writer of a Q-id is `pipeline/lyra/prospector/external_ids.py:55`, into `site_external_ids`.
+  writes that column - `api/boot_schema.py::API_BOOT_SCHEMA` creates it with
+  `ADD COLUMN IF NOT EXISTS` and the only writer of a Q-id is
+  `pipeline/lyra/prospector/external_ids.py:55`, into `site_external_ids`.
   `recon/reusable-tooling.md:292` names the same 4,618 QIDs in the same file as this project's
   input of record, and `mechanical/PLAN.md:30` counts the same rows as its anchor
   (`site_external_ids:wikidata_qid`). Reading the column the brief's §3 sentence names would route

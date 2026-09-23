@@ -3872,7 +3872,8 @@ BCASES_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases: a village speaks for the site's point",
         BCASES + "classify.py",
-        '    if any(map(is_container_class, p31)):\n        return "container-item", p31\n',
+        "    if any(is_container_class(label, strict=strict) for label in p31):\n"
+        '        return "container-item", p31\n',
         '    if False:  # mutant\n        return "container-item", p31\n',
         BCASES_TEST,
         "test_an_item_that_is_not_the_site_is_never_a_witness",
@@ -3904,8 +3905,8 @@ BCASES_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases: an ancient city is a container",
         BCASES + "classify.py",
-        "    return _has_word(label, CONTAINER_WORDS) and not _has_word(label, SITE_WORDS)\n",
-        "    return _has_word(label, CONTAINER_WORDS)  # mutant\n",
+        "    if _has_word(label, SITE_WORDS):\n        return False\n",
+        "    if False:  # mutant\n        return False\n",
         BCASES_TEST,
         "test_a_modern_place_contains_a_site_and_an_ancient_one_is_the_site",
     ),
@@ -4279,7 +4280,7 @@ BCASES_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "bcases: a coarse P625 does not widen the tolerance",
         _CL,
-        "    return max([TOLERANCE_M, *(w.precision_m for w in ws)])\n",
+        '    return max([TOLERANCE_M, *(w.precision_m for w in ws if w.kind != "web")])\n',
         "    return TOLERANCE_M  # mutant\n",
         BCASES_TEST,
         "test_the_tolerance_widens_with_a_coarse_wikidata_precision",
@@ -9354,6 +9355,1363 @@ QID_WAVE3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += QID_WAVE3_MUTATIONS
+#: The owner-case coordinates' second wave (2026-09-23): a third witness from the web, proven from the
+#: live page (`bcases/web_witness.py`), weighed under the unchanged rule (`classify.weigh`) and planned
+#: under its own stamp (`coord_plan.WAVE2`). Each case breaks one guard and names the test that must go
+#: red. Every label starts with "bcases web: ", so `mutation_sweep.py "bcases web"` runs the set alone.
+_WW = BCASES + "web_witness.py"
+_WW_RUN = BCASES + "run.py"
+_WW_TEST = "tests/remediation/test_bcases_web.py"
+_WW_HOST = "test_a_wiki_host_or_mirror_is_never_a_web_witness"
+_WW_NAMED = "test_the_named_mirrors_are_in_the_list_and_matched_by_domain_only"
+_WW_NUMBERS = "test_the_numbers_are_the_pages_not_the_agents"
+_WW_FAR = "test_a_list_pages_coordinate_far_from_the_name_is_not_the_sites"
+_WW_WORDS = "test_generic_and_short_words_of_the_name_do_not_identify_it"
+_WW_FORGED = "test_an_accepted_row_verify_candidate_did_not_write_is_refused"
+_WW_RESEARCH = "test_the_research_file_is_refused_when_it_is_not_one_line_per_case"
+_WW_LABEL = "test_a_web_witness_is_named_by_its_host_and_one_host_is_one_witness"
+_WW_WAVE2 = "test_wave_two_renders_under_its_own_stamp_and_directory"
+_WW_WAVE1_SITE = "test_wave_two_refuses_a_site_of_wave_one"
+_WW_WHOLE = "test_the_quote_must_stand_whole_in_the_page"
+_WW_CHAIN = "test_two_witnesses_that_are_each_one_with_a_third_do_not_pair"
+_WW_CITES = "test_a_p625_that_cites_the_web_pages_publisher_is_one_with_it"
+_WW_COPY = "test_a_proxy_or_an_archive_copy_is_never_a_web_witness"
+_WW_TYPE = "test_a_type_word_of_the_name_does_not_identify_it"
+_WW_STATED = "test_the_precision_a_page_states_for_its_coordinates_is_read"
+_WW_OWN_TOL = "test_a_web_pages_stated_precision_is_its_own_tolerance"
+_WW_SETTLEMENT = "test_a_modern_settlement_by_country_is_a_container_where_a_web_page_takes_part"
+_WW_FROM_CACHE = "test_web_verify_from_the_cache_proves_every_candidate_again_and_asks_nothing"
+WEB_WITNESS_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "bcases web: a Wikipedia or mirror page is asked for its coordinates",
+        _WW,
+        '    if wiki is not None:\n        raise Rejected(\n            "wiki-host", f"{how}{host} is',
+        '    if False:  # mutant\n        raise Rejected(\n            "wiki-host", f"{how}{host} is',
+        _WW_TEST,
+        _WW_HOST,
+    ),
+    (
+        "bcases web: a redirect into Wikipedia is read as the page",
+        _WW,
+        "    if final != url:\n        _refuse_host(final, asked=url)\n",
+        "    if False:  # mutant\n        _refuse_host(final, asked=url)\n",
+        _WW_TEST,
+        "test_a_redirect_into_wikipedia_is_rejected",
+    ),
+    (
+        "bcases web: a redirect is checked against the wiki list only",
+        _WW,
+        "    if final != url:\n        _refuse_host(final, asked=url)\n",
+        '    if final != url and listed_domain_of(_host(final) or "", WIKI_HOSTS):  # mutant\n'
+        "        _refuse_host(final, asked=url)\n",
+        _WW_TEST,
+        "test_a_redirect_to_our_own_site_a_blocked_host_or_a_private_address_is_refused",
+    ),
+    (
+        "bcases web: a named mirror drops off the list",
+        _WW,
+        '        "wikiwand.com",\n',
+        "",
+        _WW_TEST,
+        _WW_NAMED,
+    ),
+    (
+        "bcases web: the wiki list is matched by substring",
+        _WW,
+        "    wiki = listed_domain_of(host, WIKI_HOSTS)\n    if wiki is not None:\n",
+        "    wiki = next((d for d in WIKI_HOSTS if d in host), None)  # mutant\n"
+        "    if wiki is not None:\n",
+        _WW_TEST,
+        _WW_NAMED,
+    ),
+    (
+        "bcases web: our own site or a blocked host is a witness",
+        _WW,
+        "    if refused is not None:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_our_own_site_and_a_blocked_host_are_refused",
+    ),
+    (
+        "bcases web: a private address is asked",
+        _WW,
+        '    if not is_public_http_url(url):\n        raise Rejected("not-public"',
+        '    if False:  # mutant\n        raise Rejected("not-public"',
+        _WW_TEST,
+        "test_a_private_address_is_never_asked",
+    ),
+    (
+        "bcases web: a redirect hop into a private address is followed",
+        _WW,
+        "        if not is_public_http_url(url):\n            raise NonPublicAddress",
+        "        if False:  # mutant\n            raise NonPublicAddress",
+        _WW_TEST,
+        "test_a_redirect_hop_into_a_private_address_is_refused_inside_the_transport",
+    ),
+    (
+        "bcases web: a refusing host is asked four times",
+        _WW,
+        "MAX_ATTEMPTS = 1\n",
+        "MAX_ATTEMPTS = 4  # mutant\n",
+        _WW_TEST,
+        "test_the_real_fetcher_asks_a_refusing_host_once_and_caches_a_page",
+    ),
+    (
+        "bcases web: a refused page is read as an empty page",
+        _WW,
+        '    except FetchError as exc:\n        raise Rejected("http", str(exc)) from None\n',
+        '    except FetchError:  # mutant\n        return url, ""\n',
+        _WW_TEST,
+        "test_an_http_refusal_is_a_rejection_with_its_status_and_one_request",
+    ),
+    (
+        "bcases web: a 404 page is read",
+        _WW,
+        '    if payload["error"]:\n',
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_missing_page_is_a_rejection",
+    ),
+    (
+        "bcases web: a PDF is read as a page",
+        _WW,
+        "    if media not in HTML_TYPES:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_pdf_or_another_document_is_not_read",
+    ),
+    (
+        "bcases web: a challenge page is read as a page",
+        _WW,
+        '    if wall is not None:\n        raise Rejected("bot-wall"',
+        '    if False:  # mutant\n        raise Rejected("bot-wall"',
+        _WW_TEST,
+        "test_a_challenge_page_served_with_200_is_a_bot_wall",
+    ),
+    (
+        "bcases web: the Cloudflare challenge title is not recognised",
+        _WW,
+        '    ("<title>just a moment...</title>", "a Cloudflare challenge page"),\n',
+        "",
+        _WW_TEST,
+        "test_a_challenge_page_served_with_200_is_a_bot_wall",
+    ),
+    (
+        "bcases web: the quote need not occur in the page",
+        _WW,
+        "    if not occurrences(hay, needle):\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_the_quote_must_occur_in_the_page",
+    ),
+    (
+        "bcases web: a quote inside a longer or signed number stands for it",
+        _WW,
+        "        if _whole(hay, start, start + len(needle)):\n",
+        "        if True:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a digit, point or letter against the quote's start is ignored",
+        _WW,
+        '        if before.isalnum() or before == "." or _SIGNS.fullmatch(before):\n',
+        "        if _SIGNS.fullmatch(before):  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a sign against the quote's first number is ignored",
+        _WW,
+        '        if before.isalnum() or before == "." or _SIGNS.fullmatch(before):\n',
+        '        if before.isalnum() or before == ".":  # mutant\n',
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a sign or lone hemisphere letter a space before a signed quote is ignored",
+        _WW,
+        '            signed\n            and before == " "\n',
+        '            False  # mutant\n            and before == " "\n',
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a lettered quote takes a sign from the page around it",
+        _WW,
+        "    signed = _LONE_HEMISPHERE.search(needle) is None\n",
+        "    signed = True  # mutant\n",
+        _WW_TEST,
+        "test_a_dash_before_a_lettered_quote_is_a_separator_not_its_sign",
+    ),
+    (
+        "bcases web: a digit or letter against the quote's end is ignored",
+        _WW,
+        "        if after.isalnum():\n            return False\n",
+        "        if False:  # mutant\n            return False\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: decimals continuing the quote's last number are ignored",
+        _WW,
+        '        if after in ".," and end + 1 < len(hay) and hay[end + 1].isdigit():\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a lone hemisphere letter after the quote is ignored",
+        _WW,
+        "        if signed and _standalone_hemisphere(hay, at):\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a hemisphere letter inside a word counts as lone",
+        _WW,
+        "    return not (at > 0 and hay[at - 1].isalpha()) and not (\n",
+        "    return True or not (at > 0 and hay[at - 1].isalpha()) and not (  # mutant\n",
+        _WW_TEST,
+        _WW_WHOLE,
+    ),
+    (
+        "bcases web: a script's text counts as page text",
+        _WW,
+        "    return normalise(html.unescape(extract_text_from_html(markup)))\n",
+        "    return normalise(html.unescape(markup))  # mutant\n",
+        _WW_TEST,
+        "test_a_coordinate_inside_a_script_is_not_page_text",
+    ),
+    (
+        "bcases web: the page's entities are compared undecoded",
+        _WW,
+        "    return normalise(html.unescape(extract_text_from_html(markup)))\n",
+        "    return normalise(extract_text_from_html(markup))  # mutant\n",
+        _WW_TEST,
+        "test_the_page_and_the_quote_are_compared_across_glyph_variants",
+    ),
+    (
+        "bcases web: the glyphs are unified only after NFKC broke them",
+        _WW,
+        '    unified = unicodedata.normalize("NFKC", text.translate(_GLYPHS)).translate(_GLYPHS)\n',
+        '    unified = unicodedata.normalize("NFKC", text).translate(_GLYPHS)  # mutant\n',
+        _WW_TEST,
+        "test_the_glyphs_are_unified_before_nfkc_would_break_them",
+    ),
+    (
+        "bcases web: whitespace runs are compared as they stand",
+        _WW,
+        '    return " ".join(unified.replace("\'\'", \'"\').split())\n',
+        "    return unified.replace(\"''\", '\"')  # mutant\n",
+        _WW_TEST,
+        "test_whitespace_runs_are_one_space",
+    ),
+    (
+        "bcases web: a grid reference is parsed as degrees",
+        _WW,
+        "    if grid is not None:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_grid_reference_is_not_read",
+    ),
+    (
+        "bcases web: a D M S value without its letter is read",
+        _WW,
+        "    if minutes is not None and letter is None:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_dms_value_needs_its_hemisphere_letter",
+    ),
+    (
+        "bcases web: a whole number is read as a coordinate",
+        _WW,
+        '    if letter is None and "." not in deg and groups.get("dg") is None:\n',
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_whole_number_is_not_a_coordinate",
+    ),
+    (
+        "bcases web: three values are read as two",
+        _WW,
+        "        if len(found) == 2 and not any(_letter(m) for m in found):\n",
+        "        if found and not any(_letter(m) for m in found):  # mutant\n",
+        _WW_TEST,
+        "test_two_values_in_one_form_and_no_more",
+    ),
+    (
+        "bcases web: a word beside the numbers is read as a label",
+        _WW,
+        "    if stray:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_words_beside_the_coordinates_are_not_read",
+    ),
+    (
+        "bcases web: a sign standing apart from its number is dropped",
+        _WW,
+        "    stray = [w for w in words if w.casefold() not in LABEL_WORDS] + _SIGNS.findall(rest)\n",
+        "    stray = [w for w in words if w.casefold() not in LABEL_WORDS]  # mutant\n",
+        _WW_TEST,
+        "test_a_sign_or_a_dash_standing_apart_is_not_read",
+    ),
+    (
+        "bcases web: a label naming the longitude first is overruled",
+        _WW,
+        "        if axes and axes[0] in LON_WORDS:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_two_signed_numbers_are_read_latitude_first_and_a_label_saying_otherwise_is_refused",
+    ),
+    (
+        "bcases web: a sign and a letter are read together",
+        _WW,
+        "    if sign and letter:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_sign_and_a_letter_together_are_not_read",
+    ),
+    (
+        "bcases web: one axis named twice is read",
+        _WW,
+        "        if len(axis) != 2:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_one_axis_named_twice_is_not_read",
+    ),
+    (
+        "bcases web: a point off the Earth is read",
+        _WW,
+        '    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):\n        raise Rejected("unparsed"',
+        '    if False:  # mutant\n        raise Rejected("unparsed"',
+        _WW_TEST,
+        "test_a_point_off_the_earth_is_not_read",
+    ),
+    (
+        "bcases web: sixty minutes are read",
+        _WW,
+        "            if float(part) >= 60.0:\n",
+        "            if False:  # mutant\n",
+        _WW_TEST,
+        "test_minutes_and_seconds_stay_below_sixty",
+    ),
+    (
+        "bcases web: the agent's numbers stand for the page's",
+        _WW,
+        "    if abs(got_lat - lat) > MATCH_DEGREES or abs(got_lon - lon) > MATCH_DEGREES:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        _WW_NUMBERS,
+    ),
+    (
+        "bcases web: the numbers match to a thousandth of a degree",
+        _WW,
+        "MATCH_DEGREES = 1e-6\n",
+        "MATCH_DEGREES = 1e-3  # mutant\n",
+        _WW_TEST,
+        _WW_NUMBERS,
+    ),
+    (
+        "bcases web: the witness carries the agent's numbers",
+        _WW,
+        '        "lat": got_lat,\n',
+        '        "lat": lat,  # mutant\n',
+        _WW_TEST,
+        _WW_NUMBERS,
+    ),
+    (
+        "bcases web: a page need not name the site",
+        _WW,
+        "    if word is None:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        _WW_FAR,
+    ),
+    (
+        "bcases web: the name may stand anywhere on the page",
+        _WW,
+        "IDENTITY_WINDOW = 1500\n",
+        "IDENTITY_WINDOW = 15000  # mutant\n",
+        _WW_TEST,
+        _WW_FAR,
+    ),
+    (
+        "bcases web: a short word of the name identifies it",
+        _WW,
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.tokens(name) if t not in TYPE_WORDS)  # mutant\n",
+        _WW_TEST,
+        _WW_WORDS,
+    ),
+    (
+        "bcases web: a generic word of the name identifies it",
+        _WW,
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.fold(name).split() if len(t) >= MIN_TOKEN"
+        " and t not in TYPE_WORDS)  # mutant\n",
+        _WW_TEST,
+        _WW_WORDS,
+    ),
+    (
+        "bcases web: the whole name matches inside a word",
+        _WW,
+        '        if whole and f" {whole} " in f" {folded} ":\n',
+        "        if whole and whole in folded:  # mutant\n",
+        _WW_TEST,
+        "test_a_name_without_a_distinctive_word_is_matched_whole",
+    ),
+    (
+        "bcases web: a name in parentheses on the page is dropped",
+        _WW,
+        "        folded = C.fold(window, keep_parentheses=True)\n",
+        "        folded = C.fold(window)  # mutant\n",
+        _WW_TEST,
+        "test_a_name_in_parentheses_on_the_page_identifies_the_site",
+    ),
+    (
+        "bcases web: a candidate's numbers are not checked",
+        _WW,
+        "        if (\n            isinstance(value, bool)\n            or not isinstance(value, int | float)\n"
+        "            or not math.isfinite(value)\n        ):\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_malformed_candidate_is_rejected_and_nothing_is_asked",
+    ),
+    (
+        "bcases web: a research line for a foreign site is read",
+        _WW,
+        "        if sid not in known:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_RESEARCH,
+    ),
+    (
+        "bcases web: a site researched twice is read twice",
+        _WW,
+        "        if sid in seen:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_RESEARCH,
+    ),
+    (
+        "bcases web: stale web witnesses are weighed",
+        _WW,
+        "    if asked != answered:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_the_web_witnesses_must_be_the_verification_of_the_research",
+    ),
+    (
+        "bcases web: a forged witness on a wiki host is weighed",
+        _WW,
+        "        if listed_domain_of(host, WIKI_HOSTS | COPY_HOSTS) is not None:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_FORGED,
+    ),
+    (
+        "bcases web: a witness whose step is not its grid is weighed",
+        _WW,
+        '        if w["step"] != C.grid_of(w["lat"], w["lon"]):\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_FORGED,
+    ),
+    (
+        "bcases web: a witness that is not the page read is weighed",
+        _WW,
+        '        if w["kind"] != "web" or w["url"] != row["final_url"] or host is None:\n',
+        "        if host is None:  # mutant\n",
+        _WW_TEST,
+        _WW_FORGED,
+    ),
+    (
+        "bcases web: a host with two points gives a witness",
+        _WW,
+        "            if len(points) == 1:\n",
+        "            if True:  # mutant\n",
+        _WW_TEST,
+        "test_one_host_is_one_witness_and_a_host_with_two_points_gives_none",
+    ),
+    (
+        "bcases web: a first-wave site is weighed again",
+        _WW,
+        "        if sid in wave1:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_first_wave_site_is_never_reweighed",
+    ),
+    (
+        "bcases web: a case that was not open is weighed",
+        _WW,
+        '        if old["verdict"] != "review":\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_only_a_review_case_is_reweighed",
+    ),
+    (
+        "bcases web: a cache that does not reproduce the first wave is used",
+        _WW,
+        "        if json.loads(json.dumps(again)) != first:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_reweigh_refuses_a_cache_that_does_not_reproduce_the_first_wave",
+    ),
+    (
+        "bcases web: a move into another country is planned",
+        _WW,
+        '            if not country["agrees"]:\n',
+        "            if False:  # mutant\n",
+        _WW_TEST,
+        "test_a_move_into_another_country_is_held_for_review",
+    ),
+    (
+        "bcases web: a research input of other sites is weighed",
+        _WW,
+        '    if {str(r["site_id"]) for r in delivered} != set(cases):\n',
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_reweigh_refuses_a_research_input_that_is_not_the_review_cases",
+    ),
+    (
+        "bcases web: two pages of one host are two witnesses",
+        _CL,
+        "    if a.label == b.label:\n        return False\n",
+        "    if False:  # mutant\n        return False\n",
+        _WW_TEST,
+        _WW_LABEL,
+    ),
+    (
+        "bcases web: a web page outranks the item",
+        _CL,
+        'PRIORITY = {"wikidata": 0, "enwiki": 1, "web": 2}\n',
+        'PRIORITY = {"wikidata": 1, "enwiki": 2, "web": 0}  # mutant\n',
+        _WW_TEST,
+        "test_a_web_page_that_confirms_the_item_moves_the_site_to_the_items_point",
+    ),
+    (
+        "bcases web: a web page outranks the article",
+        _CL,
+        'PRIORITY = {"wikidata": 0, "enwiki": 1, "web": 2}\n',
+        'PRIORITY = {"wikidata": 0, "enwiki": 2, "web": 1}  # mutant\n',
+        _WW_TEST,
+        "test_the_article_outranks_a_web_page",
+    ),
+    (
+        "bcases web: every web page is one witness named web",
+        _CL,
+        '        return f"web:{web_host(self.url)}" if self.kind == "web" else self.kind\n',
+        "        return self.kind  # mutant\n",
+        _WW_TEST,
+        _WW_LABEL,
+    ),
+    (
+        "bcases web: www.x.org and x.org are two publishers",
+        _CL,
+        '    return ".".join(labels[-3:] if shared else labels[-2:])\n',
+        '    return host.rstrip(".")  # mutant\n',
+        _WW_TEST,
+        _WW_LABEL,
+    ),
+    (
+        "bcases web: two subdomains of one publisher are two witnesses",
+        _CL,
+        '    return ".".join(labels[-3:] if shared else labels[-2:])\n',
+        '    return host.rstrip(".").removeprefix("www.")  # mutant\n',
+        _WW_TEST,
+        "test_the_subdomains_of_one_publisher_are_one_witness",
+    ),
+    (
+        "bcases web: a country's shared second level is taken for the publisher",
+        _CL,
+        "    shared = len(labels) > 2 and len(labels[-1]) == 2 and labels[-2] in SHARED_SECOND_LEVEL\n",
+        "    shared = False  # mutant\n",
+        _WW_TEST,
+        "test_the_subdomains_of_one_publisher_are_one_witness",
+    ),
+    (
+        "bcases web: the counted reason swallows the bracket after a publisher",
+        _WW,
+        '    reason = re.sub(r"web:[^\\s,;)]+", "web", reason)\n',
+        '    reason = re.sub(r"web:[^\\s,;]+", "web", reason)  # mutant\n',
+        _WW_TEST,
+        "test_the_counted_reason_drops_the_publisher_and_the_numbers_only",
+    ),
+    (
+        "bcases web: a P625 citing the web page's publisher pairs with it",
+        _CL,
+        "    if _cites(a, b) or _cites(b, a):\n        return False\n",
+        "    if False:  # mutant\n        return False\n",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: the Cebuano Wikipedia is not read as GeoNames",
+        _CL,
+        '    ("P143", "Q837615"): "geonames.org",\n',
+        "",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: a reference URL names no publisher",
+        _CL,
+        '    out |= {web_host(url) for url in references.get("P854") or () if urlsplit(url).hostname}\n',
+        "    pass  # mutant\n",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: the item's witness forgets what its P625 cites",
+        _CL,
+        "                cites=cited_publishers(refs),\n",
+        "",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: the reason calls a cited source a disagreement",
+        _CL,
+        "    if cited:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        _WW_CITES,
+    ),
+    (
+        "bcases web: the two ends of a chain of copies pair",
+        _CL,
+        "        if groups[i] != groups[j] and _m(ordered[i], ordered[j]) <= tol\n",
+        "        if independent(ordered[i], ordered[j]) and _m(ordered[i], ordered[j]) <= tol  # mutant\n",
+        _WW_TEST,
+        _WW_CHAIN,
+    ),
+    (
+        "bcases web: the copy groups do not join two witnesses that are one",
+        _CL,
+        "        if not independent(ws[i], ws[j]):\n            low, high",
+        "        if False:  # mutant\n            low, high",
+        _WW_TEST,
+        _WW_CHAIN,
+    ),
+    (
+        "bcases web: the reason calls a chain of copies a disagreement",
+        _CL,
+        "    if via:\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        _WW_CHAIN,
+    ),
+    (
+        "bcases web: two agreeing pairs on two points move the site",
+        _CL,
+        "        if clash:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_two_agreeing_pairs_on_two_points_are_read_not_moved",
+    ),
+    (
+        "bcases web: two witnesses of one label overwrite each other",
+        _CL,
+        "    if len(distances) != len(ordered):\n",
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_two_witnesses_of_one_label_cannot_be_weighed_together",
+    ),
+    (
+        "bcases web: a site without an item ignores its web witnesses",
+        _CL,
+        "        if not web:\n",
+        "        if True:  # mutant\n",
+        _WW_TEST,
+        "test_two_web_pages_of_two_hosts_pair_for_a_site_without_an_item",
+    ),
+    (
+        "bcases web: a museum object's web witnesses are dropped",
+        _CL,
+        "        ws = [*ws, *web]\n        verdict = weigh(stored, ws)\n",
+        "        ws = list(ws)  # mutant\n        verdict = weigh(stored, ws)\n",
+        _WW_TEST,
+        "test_a_museum_object_keeps_the_first_waves_rule",
+    ),
+    (
+        "bcases web: the item's web witnesses are dropped",
+        _CL,
+        "    ws = [*ws, *web]\n    record.update(witnesses=",
+        "    ws = list(ws)  # mutant\n    record.update(witnesses=",
+        _WW_TEST,
+        "test_reweigh_moves_a_case_a_web_page_confirms",
+    ),
+    (
+        "bcases web: a web witness's label is not recorded",
+        _CL,
+        '    if w.kind == "web":\n        out["label"] = w.label\n',
+        '    if False:  # mutant\n        out["label"] = w.label\n',
+        _WW_TEST,
+        "test_two_web_pages_of_two_hosts_pair_for_a_site_without_an_item",
+    ),
+    (
+        "bcases web: the reason names only the first two of three witnesses",
+        _CL,
+        "    if len(ws) == 2:\n",
+        "    if len(ws) >= 2:  # mutant\n",
+        _WW_TEST,
+        "test_the_reason_names_every_pair_when_three_witnesses_do_not_agree",
+    ),
+    (
+        "bcases web: wave 2 journals under wave 1's stamp",
+        _CP,
+        "    stamp = wave.rollback_stamp if reversal else wave.run_stamp\n",
+        "    stamp = ROLLBACK_STAMP if reversal else RUN_STAMP  # mutant\n",
+        _WW_TEST,
+        _WW_WAVE2,
+    ),
+    (
+        "bcases web: wave 2's verify reads wave 1's journal",
+        _CP,
+        "            + sql_literal(wave.run_stamp)\n",
+        "            + sql_literal(RUN_STAMP)  # mutant\n",
+        _WW_TEST,
+        "test_wave_two_check_and_verify_read_their_own_rows_and_stamp",
+    ),
+    (
+        "bcases web: wave 2 plans a site of wave 1",
+        _CP,
+        "        if again:\n",
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_WAVE1_SITE,
+    ),
+    (
+        "bcases web: wave 2 does not know wave 1's plan",
+        _CP,
+        "    (PLAN_DIR,),\n)",
+        "    (),  # mutant\n)",
+        _WW_TEST,
+        _WW_WAVE1_SITE,
+    ),
+    (
+        "bcases web: wave 2 renders into wave 1's directory",
+        _CP,
+        '    "coords_plan_wave2",\n',
+        "    PLAN_DIR,  # mutant\n",
+        _WW_TEST,
+        _WW_WAVE2,
+    ),
+    (
+        "bcases web: the web page a move rests on drops out of its evidence",
+        _CP,
+        '        if label_of(w) in row["agreeing"]\n    ]',
+        '        if w["kind"] in row["agreeing"]  # mutant\n    ]',
+        _WW_TEST,
+        _WW_WAVE2,
+    ),
+    (
+        "bcases web: a wave without a move renders an empty statement",
+        _CP,
+        '    if not rows:\n        raise PlanError(f"{wave.verdicts} holds no move',
+        '    if False:  # mutant\n        raise PlanError(f"{wave.verdicts} holds no move',
+        _WW_TEST,
+        "test_a_wave_without_a_move_has_nothing_to_plan",
+    ),
+    (
+        "bcases web: wave 1's plan reads another source",
+        _CP,
+        '    "the classifier\'s `move` verdicts",\n',
+        '    "the classifier\'s verdicts",  # mutant\n',
+        _WW_TEST,
+        "test_wave_one_still_renders_what_is_committed",
+    ),
+    (
+        "bcases web: the command line plans wave 1 for --wave 2",
+        _WW_RUN,
+        "    wave = P.WAVES[1 if args.wave is None else args.wave]\n",
+        "    wave = P.WAVE1  # mutant\n",
+        _WW_TEST,
+        "test_the_command_line_plans_the_second_wave",
+    ),
+    (
+        "bcases web: --wave is dropped silently outside the plan commands",
+        _WW_RUN,
+        '    if args.wave is not None and args.command not in ("plan", "check", "verify"):\n',
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_the_wave_belongs_to_the_plan_commands_alone",
+    ),
+    (
+        "bcases web: a Wikipedia copy on a wiki farm is a witness",
+        _WW,
+        '        "fandom.com",\n',
+        "",
+        _WW_TEST,
+        _WW_HOST,
+    ),
+    (
+        "bcases web: a proxy or an archive copy is a witness",
+        _WW,
+        "    if copy is not None:\n        raise Rejected(\n",
+        "    if False:  # mutant\n        raise Rejected(\n",
+        _WW_TEST,
+        _WW_COPY,
+    ),
+    (
+        "bcases web: Google Translate's proxy drops off the copy list",
+        _WW,
+        '        "translate.goog",\n',
+        "",
+        _WW_TEST,
+        _WW_COPY,
+    ),
+    (
+        "bcases web: the copy list is matched by substring",
+        _WW,
+        "    copy = listed_domain_of(host, COPY_HOSTS)\n",
+        "    copy = next((d for d in COPY_HOSTS if d in host), None)  # mutant\n",
+        _WW_TEST,
+        _WW_COPY,
+    ),
+    (
+        "bcases web: a type word of the name identifies it",
+        _WW,
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN)  # mutant\n",
+        _WW_TEST,
+        _WW_TYPE,
+    ),
+    (
+        "bcases web: 'great' is read as a name of its own",
+        _WW,
+        "        great little small large",
+        "        little small large",
+        _WW_TEST,
+        _WW_TYPE,
+    ),
+    (
+        "bcases web: 'temple' is read as a name of its own",
+        _WW,
+        " sanctuary settlement settlements shelter shrine spring springs square stadium statue\n"
+        "        stele stone stones street stupa tomb tombs tower towers temple temples",
+        " sanctuary settlement settlements shelter shrine spring springs square stadium statue\n"
+        "        stele stone stones street stupa tomb tombs tower towers temples",
+        _WW_TEST,
+        _WW_TYPE,
+    ),
+    (
+        "bcases web: a name of type words only matches on one of them",
+        _WW,
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)\n",
+        "    return sorted(t for t in C.tokens(name) if len(t) >= MIN_TOKEN and t not in TYPE_WORDS)"
+        " or sorted(C.tokens(name))  # mutant\n",
+        _WW_TEST,
+        "test_a_name_of_type_words_only_is_matched_whole",
+    ),
+    (
+        "bcases web: the precision a page states is dropped",
+        _WW,
+        "    precision, stated = stated_precision(hay, needle)\n",
+        "    precision, stated = 0.0, None  # mutant\n",
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: a precision stated in km is read as metres",
+        _WW,
+        '    return float(match["value"]) * (1000.0 if match["unit"] == "km" else 1.0)\n',
+        '    return float(match["value"])  # mutant\n',
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: a precision anywhere after the quote is read as its own",
+        _WW,
+        "        if (match := _STATED_PRECISION.match(hay, start + len(needle))) is not None\n",
+        "        if (match := _STATED_PRECISION.search(hay, start + len(needle))) is not None  # mutant\n",
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: the first of two stated precisions is taken, not the widest",
+        _WW,
+        "    widest = max(found, key=_metres)\n",
+        "    widest = found[0]  # mutant\n",
+        _WW_TEST,
+        _WW_STATED,
+    ),
+    (
+        "bcases web: a forged precision is weighed",
+        _WW,
+        '        if precision_of(w["precision_text"]) != w["precision_m"]:\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        _WW_FORGED,
+    ),
+    (
+        "bcases web: the web witness is weighed without its precision",
+        _WW,
+        '            float(w["precision_m"]),\n',
+        "            0.0,  # mutant\n",
+        _WW_TEST,
+        "test_a_web_witness_carries_the_precision_its_page_states",
+    ),
+    (
+        "bcases web: a web page's precision widens the case's tolerance",
+        _CL,
+        '    return max([TOLERANCE_M, *(w.precision_m for w in ws if w.kind != "web")])\n',
+        "    return max([TOLERANCE_M, *(w.precision_m for w in ws)])  # mutant\n",
+        _WW_TEST,
+        "test_a_web_pages_stated_precision_does_not_widen_the_other_witnesses",
+    ),
+    (
+        "bcases web: a web page's precision does not reach the stored point",
+        _CL,
+        "    return max(tol, w.precision_m)\n",
+        "    return tol  # mutant\n",
+        _WW_TEST,
+        _WW_OWN_TOL,
+    ),
+    (
+        "bcases web: the reason hides a stated precision",
+        _CL,
+        "                    if _reach(tol, w) > tol\n",
+        "                    if False  # mutant\n",
+        _WW_TEST,
+        _WW_OWN_TOL,
+    ),
+    (
+        "bcases web: a modern settlement by country is no container where a web page takes part",
+        _CL,
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=bool(web)\n",
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=False"
+        "  # mutant\n",
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: the strict gate reaches the first wave's verdicts",
+        _CL,
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=bool(web)\n",
+        "        qid, site, claims=claims, labels=labels, names=names, shared=shared, strict=True"
+        "  # mutant\n",
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: the strict gate forgets the settlements by country",
+        _CL,
+        "        strict and SETTLEMENT_IN_COUNTRY.search(label) is not None\n",
+        "        False  # mutant\n",
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: a settlement in a lower-case place is a country's",
+        _CL,
+        'SETTLEMENT_IN_COUNTRY = re.compile(r"(?<![\\w-])settlement(?: formation)? in [A-Z]")\n',
+        'SETTLEMENT_IN_COUNTRY = re.compile(r"(?<![\\w-])settlement(?: formation)? in \\w")  # mutant\n',
+        _WW_TEST,
+        _WW_SETTLEMENT,
+    ),
+    (
+        "bcases web: --from-cache asks the cache for a page the run was refused",
+        _WW,
+        "        asked = _Refusal(old) if refused else net\n",
+        "        asked = net  # mutant\n",
+        _WW_TEST,
+        _WW_FROM_CACHE,
+    ),
+    (
+        "bcases web: a page missing from the cache becomes a rejection",
+        _WW,
+        '        if rejection_code(row) == "http" and row != old:\n',
+        "        if False:  # mutant\n",
+        _WW_TEST,
+        "test_web_verify_from_the_cache_refuses_a_page_it_does_not_hold",
+    ),
+    (
+        "bcases web: --from-cache copies the previous rows",
+        _WW,
+        "        rows = reverify(net, research, cases, previous)\n",
+        "        rows = [dict(r) for r in previous]  # mutant\n",
+        _WW_TEST,
+        _WW_FROM_CACHE,
+    ),
+    (
+        "bcases web: the cache-only transport sends the request",
+        _WW,
+        '        raise NotInCache(f"{request.url} is not in the page cache: --from-cache asks nothing")\n',
+        "        return httpx.Response(200)  # mutant\n",
+        _WW_TEST,
+        "test_the_cache_only_transport_sends_nothing",
+    ),
+    (
+        "bcases web: --from-cache is dropped silently outside web-verify",
+        _WW_RUN,
+        '    if args.from_cache and args.command != "web-verify":\n',
+        "    if False:  # mutant\n",
+        _WW_TEST,
+        "test_from_cache_belongs_to_web_verify_alone",
+    ),
+    (
+        "bcases web: web-verify --from-cache asks the network",
+        _WW_RUN,
+        "        inner = W.CacheOnly() if args.from_cache else httpx.HTTPTransport()\n",
+        "        inner = httpx.HTTPTransport()  # mutant\n",
+        _WW_TEST,
+        "test_the_command_line_verifies_from_the_cache_on_the_cache_only_transport",
+    ),
+    (
+        "bcases web: a forged witness on an archive is weighed",
+        _WW,
+        "        if listed_domain_of(host, WIKI_HOSTS | COPY_HOSTS) is not None:\n",
+        "        if listed_domain_of(host, WIKI_HOSTS) is not None:  # mutant\n",
+        _WW_TEST,
+        _WW_FORGED,
+    ),
+]
+MUTATIONS += WEB_WITNESS_MUTATIONS
+
+# ── boot DDL asks the catalog first (ops, 2026-09-23) ───────────────────────────────────────────
+# Lyra's boot and the API's startup took an ACCESS EXCLUSIVE / SHARE lock per schema statement on
+# every start, even with nothing to add; the deploy's library refresh deadlocked on news_items
+# twice. Every guard of the fix, broken one at a time.
+BOOT_DDL_TEST = "tests/pipeline/test_boot_ddl.py"
+BOOT_DDL = "pipeline/utils/boot_ddl.py"
+API_BOOT_SCHEMA = "api/boot_schema.py"
+LYRA_ORCHESTRATOR = "pipeline/lyra/orchestrator.py"
+BD_LYRA_QUIET = "test_lyra_boot_on_an_up_to_date_schema_issues_no_ddl"
+BD_API_QUIET = "test_api_boot_on_an_up_to_date_schema_issues_no_ddl"
+BD_NAMES = "test_a_name_that_is_not_a_plain_lower_case_identifier_is_refused"
+BD_HANDLER = "test_a_constraint_handler_swallows_only_a_duplicate"
+BD_VARCHAR = "test_api_sets_grant_period_to_varchar_10_only_while_it_is_not"
+BD_CARD_STATS = "test_lyra_leaves_card_stats_alone_when_the_table_does_not_exist"
+BD_ONE_TX = "test_lyra_migrations_stay_one_transaction_committed_at_the_end"
+BD_API_TX = "test_each_api_step_checks_and_alters_in_its_own_transaction_under_the_lock_timeout"
+BD_LYRA_RACE = "test_a_lyra_constraint_another_booter_added_first_leaves_the_batch_intact"
+BD_API_RACE = "test_an_api_constraint_another_booter_added_first_does_not_abort_the_boot"
+BD_FK_REWRITE = "test_the_fk_policy_rewrite_runs_only_while_a_cascade_fk_remains"
+BD_FK_ONE_QUERY = "test_the_fk_policy_check_and_its_rewrite_loop_are_one_query"
+W_PRODUCERS_CITED = "test_the_boot_producers_the_refusals_name_are_where_the_refusals_say"
+API_MAIN = "api/main.py"
+BD_RETRY_READS = "test_a_step_retried_after_contention_reads_the_catalog_again"
+BD_RETRY_ADDS = "test_a_step_retried_after_contention_runs_its_statement_again_while_it_is_needed"
+BD_RETRY_SKIP = "test_a_step_still_contended_after_three_attempts_is_left_to_the_next_boot"
+BD_NOT_CONTENTION = "test_an_error_that_is_not_contention_aborts_the_startup_at_once"
+BD_CONTENTION_CODES = "test_only_a_lock_timeout_a_statement_timeout_or_a_deadlock_is_contention"
+BD_ONE_CLASSIFIER = "test_both_boot_paths_classify_contention_with_the_one_shared_function"
+BD_LIFESPAN = "test_the_api_startup_runs_the_boot_schema_and_holds_no_ddl_of_its_own"
+BOOT_DDL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "boot-ddl: ensure() runs the statement without asking the catalog",
+        BOOT_DDL,
+        "    if conn.execute(text(step.satisfied_sql), dict(step.params)).scalar_one():\n"
+        "        return False\n",
+        "    conn.execute(text(step.satisfied_sql), dict(step.params)).scalar_one()  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_LYRA_QUIET,
+    ),
+    (
+        "boot-ddl: a mixed-case or non-identifier name is accepted",
+        BOOT_DDL,
+        "    if not _IDENTIFIER.fullmatch(name):\n",
+        "    if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: an ADD CONSTRAINT handler may swallow any condition",
+        BOOT_DDL,
+        "    if not duplicate or unknown:\n",
+        "    if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_HANDLER,
+    ),
+    (
+        "boot-ddl: the varchar check compares a spelling format_type() never returns",
+        BOOT_DDL,
+        '            "column_type": f"character varying({length:d})",\n',
+        '            "column_type": f"varchar({length:d})",  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_VARCHAR,
+    ),
+    (
+        "boot-ddl: one Lyra column back to a bare ALTER TABLE",
+        LYRA_ORCHESTRATOR,
+        '        ensure(conn, add_column("news_items", "significance", "INTEGER"))\n',
+        '        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS significance'
+        ' INTEGER"))  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_LYRA_QUIET,
+    ),
+    (
+        "boot-ddl: Lyra alters card_stats without checking the table exists",
+        LYRA_ORCHESTRATOR,
+        '        if relation_exists(conn, "card_stats"):\n',
+        "        if True:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_CARD_STATS,
+    ),
+    (
+        "boot-ddl: Lyra commits inside the migration batch",
+        LYRA_ORCHESTRATOR,
+        '        ensure(conn, add_column("news_items", "speculative_tag", "VARCHAR(50)"))\n',
+        '        ensure(conn, add_column("news_items", "speculative_tag", "VARCHAR(50)"))\n'
+        "        conn.commit()  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_ONE_TX,
+    ),
+    (
+        "boot-ddl: the API runs its steps without asking the catalog",
+        API_BOOT_SCHEMA,
+        '        run_boot_step(engine, partial(ensure, step=step), label=f"Migration ({step.label})")\n',
+        "        run_boot_step(engine, lambda conn, s=step: conn.execute(text(s.ddl)),"
+        ' label=f"Migration ({step.label})")  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_QUIET,
+    ),
+    (
+        "boot-ddl: an API step reads the catalog before its lock timeout is set",
+        API_BOOT_SCHEMA,
+        "                conn.execute(text(\"SET LOCAL lock_timeout = '5s'\"))\n"
+        "                conn.execute(text(\"SET LOCAL statement_timeout = '30s'\"))\n"
+        "                work(conn)\n",
+        "                work(conn)  # mutant\n"
+        "                conn.execute(text(\"SET LOCAL lock_timeout = '5s'\"))\n"
+        "                conn.execute(text(\"SET LOCAL statement_timeout = '30s'\"))\n",
+        BOOT_DDL_TEST,
+        BD_API_TX,
+    ),
+    # Review of 2026-09-23. A duplicate handler now runs only when two booters both read
+    # "missing", so no ordinary boot exercises it any more; the FK-policy check must read the query
+    # its loop reads; and the refusal texts that cited moved lines name functions now.
+    (
+        "boot-ddl: the emitted ADD CONSTRAINT handler loses duplicate_table",
+        BOOT_DDL,
+        "            f\"EXCEPTION WHEN {' OR '.join(duplicate)} THEN NULL;\\n\"\n",
+        '            "EXCEPTION WHEN duplicate_object THEN NULL;\\n"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_RACE,
+    ),
+    (
+        "boot-ddl: a Lyra UNIQUE constraint's handler names duplicate_object",
+        LYRA_ORCHESTRATOR,
+        '                "UNIQUE (site_id, name_normalized)",\n'
+        '                duplicate=("duplicate_table",),\n',
+        '                "UNIQUE (site_id, name_normalized)",\n'
+        '                duplicate=("duplicate_object",),  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_LYRA_RACE,
+    ),
+    (
+        "boot-ddl: the API's CHECK constraint handler names duplicate_table",
+        API_BOOT_SCHEMA,
+        '        "CHECK (credits >= 0)",\n        duplicate=("duplicate_object",),\n',
+        '        "CHECK (credits >= 0)",\n        duplicate=("duplicate_table",),  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_RACE,
+    ),
+    (
+        "boot-ddl: the API's UNIQUE constraint handler loses duplicate_table",
+        API_BOOT_SCHEMA,
+        '        duplicate=("duplicate_object", "duplicate_table"),\n',
+        '        duplicate=("duplicate_object",),  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_RACE,
+    ),
+    (
+        "boot-ddl: the FK-policy check drops the exemptions its loop keeps",
+        API_BOOT_SCHEMA,
+        '    satisfied_sql="SELECT NOT EXISTS (" + _CASCADE_FKS_ONTO_SITES + ")",\n',
+        '    satisfied_sql="SELECT NOT EXISTS ("\n'
+        '    + _CASCADE_FKS_ONTO_SITES.split("AND tc.table_name NOT IN")[0]\n'
+        '    + ")",  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_API_QUIET,
+    ),
+    (
+        "boot-ddl: the FK-policy loop rewrites the site-owned CASCADE FKs too",
+        API_BOOT_SCHEMA,
+        '        "    FOR r IN " + _CASCADE_FKS_ONTO_SITES + "\\n"\n',
+        '        "    FOR r IN " + _CASCADE_FKS_ONTO_SITES.split("AND tc.table_name NOT IN")[0]'
+        ' + "\\n"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_FK_REWRITE,
+    ),
+    (
+        "boot-ddl: the FK-policy check exempts a table its loop rewrites",
+        API_BOOT_SCHEMA,
+        '    satisfied_sql="SELECT NOT EXISTS (" + _CASCADE_FKS_ONTO_SITES + ")",\n',
+        '    satisfied_sql="SELECT NOT EXISTS ("\n'
+        '    + _CASCADE_FKS_ONTO_SITES.replace("NOT IN (", "NOT IN (\'site_likes\', ")\n'
+        '    + ")",  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_FK_ONE_QUERY,
+    ),
+    (
+        "boot-ddl: the card_description refusal cites a line number again",
+        WRITE_STAGE,
+        '        "(`api/main.py::lifespan` -> '
+        '`api/services/card_descriptions.py::import_card_descriptions`, "\n',
+        '        "(`api/main.py:365` -> '
+        '`api/services/card_descriptions.py::import_card_descriptions`, "  # mutant\n',
+        WRITE_TEST,
+        W_PRODUCERS_CITED,
+    ),
+    (
+        "boot-ddl: the site_type refusal cites a line number again",
+        WRITE_STAGE,
+        '            "container start (`pipeline/lyra/orchestrator.py::_run_migrations`), '
+        'so the write would "\n',
+        '            "container start (`pipeline/lyra/orchestrator.py:1457-1469`), '
+        'so the write would "  # mutant\n',
+        WRITE_TEST,
+        W_PRODUCERS_CITED,
+    ),
+    # Second review of 2026-09-23: the retry test held whether the step retried or was skipped,
+    # nothing pinned the contention rule, three identifier guards and api/main.py's wiring.
+    # `if attempt < 3` -> `if False` (the review's mutant) does not end the loop: the step logs
+    # "skipped after 3 contention retries" after its FIRST attempt and retries at once, without a
+    # backoff. `continue` -> `return` is the mutant that really gives the step up.
+    (
+        "boot-ddl: a contended API step logs 'skipped' and retries without backoff (winner)",
+        API_BOOT_SCHEMA,
+        "            if attempt < 3:\n",
+        "            if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_READS,
+    ),
+    (
+        "boot-ddl: a contended API step logs 'skipped' and retries without backoff (alone)",
+        API_BOOT_SCHEMA,
+        "            if attempt < 3:\n",
+        "            if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_ADDS,
+    ),
+    (
+        "boot-ddl: a contended API step is given up after its first attempt (winner)",
+        API_BOOT_SCHEMA,
+        "                time.sleep(2 * attempt)\n                continue\n",
+        "                time.sleep(2 * attempt)\n                return  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_READS,
+    ),
+    (
+        "boot-ddl: a contended API step is given up after its first attempt (alone)",
+        API_BOOT_SCHEMA,
+        "                time.sleep(2 * attempt)\n                continue\n",
+        "                time.sleep(2 * attempt)\n                return  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_RETRY_ADDS,
+    ),
+    (
+        "boot-ddl: an API step still contended after three attempts aborts the startup",
+        API_BOOT_SCHEMA,
+        "            logger.warning(\n"
+        '                f"[STARTUP] {label} skipped after 3 contention retries "\n',
+        "            raise  # mutant\n"
+        "            logger.warning(\n"
+        '                f"[STARTUP] {label} skipped after 3 contention retries "\n',
+        BOOT_DDL_TEST,
+        BD_RETRY_SKIP,
+    ),
+    (
+        "boot-ddl: every boot error counts as contention",
+        BOOT_DDL,
+        '    return pgcode_of(exc) in ("55P03", "57014", "40P01")\n',
+        "    return True  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NOT_CONTENTION,
+    ),
+    (
+        "boot-ddl: a deadlock no longer counts as contention",
+        BOOT_DDL,
+        '    return pgcode_of(exc) in ("55P03", "57014", "40P01")\n',
+        '    return pgcode_of(exc) in ("55P03", "57014")  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_CONTENTION_CODES,
+    ),
+    (
+        "boot-ddl: the API retries every error instead of aborting",
+        API_BOOT_SCHEMA,
+        "            if not is_contention_error(mig_err):\n",
+        "            if False:  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NOT_CONTENTION,
+    ),
+    (
+        "boot-ddl: Lyra's main() carries its own pgcode list again",
+        LYRA_ORCHESTRATOR,
+        "            if is_contention_error(mig_err) and mig_attempt < len(MIGRATION_BACKOFF):\n",
+        '            if pgcode_of(mig_err) in ("40P01", "55P03", "57014") and mig_attempt < len('
+        "MIGRATION_BACKOFF):  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_ONE_CLASSIFIER,
+    ),
+    (
+        "boot-ddl: the API carries its own contention rule again",
+        API_BOOT_SCHEMA,
+        "logger = logging.getLogger(__name__)\n",
+        "logger = logging.getLogger(__name__)\n\n\n"
+        "def is_contention_error(exc):  # mutant\n"
+        '    return getattr(getattr(exc, "orig", None), "pgcode", None) in '
+        '("55P03", "57014", "40P01")\n',
+        BOOT_DDL_TEST,
+        BD_ONE_CLASSIFIER,
+    ),
+    (
+        "boot-ddl: set_varchar_length splices an unchecked column name",
+        BOOT_DDL,
+        '            f"ALTER COLUMN {_identifier(column)} TYPE VARCHAR({length:d})"\n',
+        '            f"ALTER COLUMN {column} TYPE VARCHAR({length:d})"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: add_constraint splices an unchecked constraint name",
+        BOOT_DDL,
+        '            f"    ALTER TABLE {_identifier(table)} ADD CONSTRAINT {_identifier(name)}'
+        ' {definition};\\n"\n',
+        '            f"    ALTER TABLE {_identifier(table)} ADD CONSTRAINT {name}'
+        ' {definition};\\n"  # mutant\n',
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: relation_exists asks the catalog about an unchecked name",
+        BOOT_DDL,
+        '        conn.execute(text(_RELATION_RESOLVES), {"relation_name": _identifier(name)})'
+        ".scalar_one()\n",
+        '        conn.execute(text(_RELATION_RESOLVES), {"relation_name": name}).scalar_one()'
+        "  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_NAMES,
+    ),
+    (
+        "boot-ddl: the API's startup no longer runs the boot schema",
+        API_MAIN,
+        "        run_api_boot_schema(engine)\n",
+        "        pass  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_LIFESPAN,
+    ),
+    (
+        "boot-ddl: a bare ALTER comes back into the API's startup",
+        API_MAIN,
+        "        run_api_boot_schema(engine)\n",
+        "        run_api_boot_schema(engine)\n"
+        "        run_boot_step(\n"
+        "            engine,\n"
+        "            lambda conn: conn.execute(\n"
+        '                _text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS '
+        'mutant_col INTEGER")\n'
+        "            ),\n"
+        '            label="mutant",\n'
+        "        )  # mutant\n",
+        BOOT_DDL_TEST,
+        BD_LIFESPAN,
+    ),
+]
+MUTATIONS += BOOT_DDL_MUTATIONS
 
 #: The supplemental fix of Track B (wip/p4-select-sup, 2026-09-23): the guards the reviews of WB-B2
 #: to WB-B4 asked for (wf_57d89c7d-7ac__review_p4-select_correctness/_rules) and the orchestrator's

@@ -9,6 +9,8 @@ and bulk-upserts into card_stats.
 
 import sys
 from collections import Counter
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from sqlalchemy import func, text
 
@@ -40,9 +42,13 @@ def _count_combos(session) -> dict[tuple[str | None, str | None], int]:
     return {(r.site_type, r.period_name): r.cnt for r in rows}
 
 
-def _get_content_stats(session, site_id) -> tuple[int, int, bool]:
-    """Return (content_link_count, distinct_content_types, has_3d_model)."""
-    links = session.query(SiteContentLink).filter(SiteContentLink.site_id == site_id).all()
+def content_stats(links: Sequence[Any]) -> tuple[int, int, bool]:
+    """(content_link_count, distinct_content_types, has_3d_model) of one site's content links.
+
+    Pure: `links` is anything carrying `content_type` and `content_source`. The generator feeds it
+    ORM rows; the remediation's card_stats planner (scripts/remediation/mechanical/card_stats.py)
+    feeds it rows read from a production export, so both compute the same numbers by construction.
+    """
     content_types = set()
     has_3d = False
     for link in links:
@@ -50,6 +56,12 @@ def _get_content_stats(session, site_id) -> tuple[int, int, bool]:
         if link.content_type == "model" or link.content_source == "sketchfab":
             has_3d = True
     return len(links), len(content_types), has_3d
+
+
+def _get_content_stats(session, site_id) -> tuple[int, int, bool]:
+    """Return (content_link_count, distinct_content_types, has_3d_model)."""
+    links = session.query(SiteContentLink).filter(SiteContentLink.site_id == site_id).all()
+    return content_stats(links)
 
 
 def _get_wiki_image_count(session, site_id) -> int:
@@ -116,6 +128,56 @@ def _run_enrichment_migrations(session) -> None:
     print("[CARDGAME] Enrichment columns ensured on card_stats", flush=True)
 
 
+def site_card_stats(
+    site: Any,
+    *,
+    combo_counts: Mapping[tuple[str | None, str | None], int],
+    content: tuple[int, int, bool],
+    wiki_image_count: int,
+    engagement: tuple[int, int],
+) -> dict:
+    """Every card_stats column this generator owns, for one site - the upsert's values.
+
+    Pure apart from the empire tagger's boundary files: `site` is anything carrying the
+    UnifiedSite fields read below, and the counts are what `_get_content_stats`,
+    `_get_wiki_image_count` and `_get_engagement` return. `_upsert_stats` calls it with ORM rows;
+    the remediation's card_stats planner calls it with a production export, so the recompute it
+    plans is this function's output and not a second copy of the rules.
+    """
+    content_link_count, content_type_count, has_3d = content
+    like_count, bookmark_count = engagement
+    combo_key = (site.site_type, site.period_name)
+    combo_count = combo_counts.get(combo_key, 1)
+
+    stats = compute_all_stats(
+        period_start=site.period_start,
+        period_end=site.period_end,
+        site_type=site.site_type,
+        has_description=bool(site.description),
+        has_thumbnail=bool(site.thumbnail_url),
+        content_link_count=content_link_count,
+        wiki_image_count=wiki_image_count,
+        has_source_url=bool(site.source_url),
+        combo_count=combo_count,
+        is_unesco=_is_unesco(site),
+        like_count=like_count,
+        bookmark_count=bookmark_count,
+        content_type_count=content_type_count,
+        has_3d_model=has_3d,
+        country=site.country,
+    )
+
+    # Tag with empires
+    empires = tag_site(
+        lat=site.lat,
+        lon=site.lon,
+        period_start=site.period_start,
+    )
+    stats["empires"] = empires
+    stats["empire_count"] = len(empires)
+    return stats
+
+
 def _upsert_stats(session, sites, combo_counts, progress: bool) -> tuple[int, int, Counter]:
     """Compute and upsert card_stats for `sites`. Returns (created, updated, tiers)."""
     tier_counter: Counter = Counter()
@@ -125,38 +187,13 @@ def _upsert_stats(session, sites, combo_counts, progress: bool) -> tuple[int, in
 
     for i, site in enumerate(sites):
         # Gather data for stat computation
-        content_link_count, content_type_count, has_3d = _get_content_stats(session, site.id)
-        wiki_image_count = _get_wiki_image_count(session, site.id)
-        like_count, bookmark_count = _get_engagement(session, site.id)
-        combo_key = (site.site_type, site.period_name)
-        combo_count = combo_counts.get(combo_key, 1)
-
-        stats = compute_all_stats(
-            period_start=site.period_start,
-            period_end=site.period_end,
-            site_type=site.site_type,
-            has_description=bool(site.description),
-            has_thumbnail=bool(site.thumbnail_url),
-            content_link_count=content_link_count,
-            wiki_image_count=wiki_image_count,
-            has_source_url=bool(site.source_url),
-            combo_count=combo_count,
-            is_unesco=_is_unesco(site),
-            like_count=like_count,
-            bookmark_count=bookmark_count,
-            content_type_count=content_type_count,
-            has_3d_model=has_3d,
-            country=site.country,
+        stats = site_card_stats(
+            site,
+            combo_counts=combo_counts,
+            content=_get_content_stats(session, site.id),
+            wiki_image_count=_get_wiki_image_count(session, site.id),
+            engagement=_get_engagement(session, site.id),
         )
-
-        # Tag with empires
-        empires = tag_site(
-            lat=site.lat,
-            lon=site.lon,
-            period_start=site.period_start,
-        )
-        stats["empires"] = empires
-        stats["empire_count"] = len(empires)
 
         # Upsert
         existing = session.get(CardStats, site.id)

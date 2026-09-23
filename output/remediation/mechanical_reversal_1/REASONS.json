@@ -1,0 +1,40 @@
+{
+  "_about": "The first journal-reversal list (2026-09-23), read by scripts/remediation/mechanical/reversal.py. Each entry names one remediation_change_log row the lane undoes (new value = the row's old value, conditioned on the live value = the row's new value) and the evidence it rests on. A quote from `description` must appear verbatim in the site's live description; `enwiki:<title>` and `wikidata:<qid>` quotes in the page `--collect` fetched; `gold_standard:<site_id>` quotes in that record of output/remediation/gold_standard/sites.json. The list must equal lane.REVERSAL_1_JOURNAL_IDS.",
+  "reversals": [
+    {
+      "journal_id": 28384,
+      "site_id": "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6",
+      "name": "Ahin Posh Tape",
+      "column": "country",
+      "reason": "phase 3 wrote country Pakistan from Wikidata Q4695118, an item whose statements describe a village in Pakistan while its sitelinks are the Afghan stupa's articles; the site's own description and its English Wikipedia article place the stupa near Jalalabad, Afghanistan",
+      "quotes": [
+        {"source": "description", "text": "A Kushan-era Buddhist stupa and monastery near Jalalabad, Afghanistan"},
+        {"source": "enwiki:Ahin Posh", "text": "is an ancient Buddhist stupa and monastery complex in the vicinity of Jalalabad, Afghanistan"},
+        {"source": "wikidata:Q4695118", "text": "human settlement in Pakistan"}
+      ],
+      "residual": "The stored point (33.668, 70.955) is the Pakistani village's, about 80 km from the article's coordinates (34.412, 70.452): after the reversal the country contradicts the point, which T02 will flag again. Coordinates are never written automatically (FIELD_CONTRACT section 4.6); the remaining map records this as a named residual."
+    },
+    {
+      "journal_id": 28018,
+      "site_id": "60722e7e-587a-46fb-b09c-e6e82f1b74f7",
+      "name": "Stanydale Temple",
+      "column": "period_start",
+      "reason": "phase 3 replaced period_start -3000, which the gold standard judged CORRECT as a bucket-correct sort key (plan 4.3 item 1), with -2500 in the same bucket; under the project's rule only a value from another bucket is an error, so the write was not a correction",
+      "quotes": [
+        {"source": "gold_standard:60722e7e-587a-46fb-b09c-e6e82f1b74f7", "text": "-3000 is the floor of the bucket 3000 - 1500 BC, which contains -2500. Bucket correct (plan 4.3.1)."}
+      ],
+      "residual": "The gold standard's own note gives the settlement's dating as 2500-2000 BC: -2500 was the more precise year. The reversal restores the bucket floor the gold standard judged; the remaining map puts the 170 same-bucket writes to the owner as 'precision upgrade or roll back'."
+    },
+    {
+      "journal_id": 28638,
+      "site_id": "94776f9f-ea10-4b05-87bd-fd30c2cbdf6f",
+      "name": "Agri Bavnehøj",
+      "column": "period_start",
+      "reason": "phase 3 replaced period_start -3000, which the gold standard judged CORRECT as a bucket-correct sort key (plan 4.3 item 1), with -1800 in the same bucket; under the project's rule only a value from another bucket is an error, so the write was not a correction",
+      "quotes": [
+        {"source": "gold_standard:94776f9f-ea10-4b05-87bd-fd30c2cbdf6f", "text": "-3000 is the floor of the bucket 3000 - 1500 BC, which contains the true start (-1800). Per plan 4.3.1 the round value is not an error as long as the bucket is right - it is."}
+      ],
+      "residual": "The gold standard's own note and the site's description date the mound to c. 1800-1000 BC: -1800 was the more precise year. The reversal restores the bucket floor the gold standard judged."
+    }
+  ]
+}

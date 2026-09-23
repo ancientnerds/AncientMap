@@ -23,6 +23,18 @@ from sqlalchemy import text
 
 from pipeline.lyra.config import LyraSettings
 from pipeline.lyra.site_key import site_key_sql
+from pipeline.utils.boot_ddl import (
+    add_column,
+    add_constraint,
+    create_extension,
+    create_index,
+    create_table,
+    ensure,
+    is_contention_error,
+    pgcode_of,
+    relation_exists,
+    set_varchar_length,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -486,34 +498,31 @@ def run_pipeline(
 
 
 def _run_migrations(engine) -> None:
-    """Run all database migrations (schema + data) for the Lyra pipeline."""
+    """Run all database migrations (schema + data) for the Lyra pipeline.
+
+    Everything runs in ONE transaction, committed at the very end: one failing statement
+    rolls the whole batch back (main() retries it on lock contention).
+
+    Every schema statement goes through ``ensure()`` (pipeline/utils/boot_ddl.py): a
+    pg_catalog query decides, and the statement runs only when its object is missing.
+    ``ADD COLUMN IF NOT EXISTS`` and ``CREATE INDEX IF NOT EXISTS`` take their table lock
+    BEFORE they look for the object, and this transaction holds every lock it takes until
+    the commit - so until 2026-09-23 each boot ACCESS-EXCLUSIVE-locked news_items and a
+    dozen other tables for the whole batch, and the deploy's library refresh deadlocked on
+    news_items twice (2026-09-22/23). On an up-to-date schema a boot now issues no DDL at
+    all (tests/pipeline/test_boot_ddl.py). A new schema statement goes through ensure() too.
+    """
     with engine.connect() as conn:
         # Prevent ALTER TABLE from blocking reads on busy tables.
         # If a lock can't be acquired in 5s, the statement fails fast
         # instead of queuing and blocking all API SELECTs.
         conn.execute(text("SET lock_timeout = '5s'"))
-        conn.execute(
-            text(
-                "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
-            )
-        )
-        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS significance INTEGER"))
-        conn.execute(
-            text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS news_category VARCHAR(50)")
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_news_items_significance ON news_items (significance)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_news_items_news_category ON news_items (news_category)"
-            )
-        )
-        conn.execute(
-            text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS speculative_tag VARCHAR(50)")
-        )
+        ensure(conn, add_column("news_items", "site_match_tried", "BOOLEAN DEFAULT FALSE"))
+        ensure(conn, add_column("news_items", "significance", "INTEGER"))
+        ensure(conn, add_column("news_items", "news_category", "VARCHAR(50)"))
+        ensure(conn, create_index("idx_news_items_significance", "news_items", "(significance)"))
+        ensure(conn, create_index("idx_news_items_news_category", "news_items", "(news_category)"))
+        ensure(conn, add_column("news_items", "speculative_tag", "VARCHAR(50)"))
         # One-time backfill: re-rescore videos with untagged speculative items
         # so the updated prompt assigns speculative_tag subcategories.
         # Naturally idempotent — no-op once all speculative items have tags.
@@ -537,145 +546,116 @@ def _run_migrations(engine) -> None:
         """)
         )
         # Create unified_site_names table if it doesn't exist (for alt-name matching)
-        conn.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS unified_site_names (
+        ensure(
+            conn,
+            create_table(
+                "unified_site_names",
+                """
                 id SERIAL PRIMARY KEY,
                 site_id UUID NOT NULL REFERENCES unified_sites(id) ON DELETE CASCADE,
                 name VARCHAR(500) NOT NULL,
                 name_normalized VARCHAR(500) NOT NULL,
                 language_code VARCHAR(10),
                 name_type VARCHAR(50)
-            )
-        """)
+                """,
+            ),
         )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_usn_name_normalized ON unified_site_names (name_normalized)"
-            )
+        ensure(
+            conn,
+            create_index("idx_usn_name_normalized", "unified_site_names", "(name_normalized)"),
         )
-        conn.execute(
-            text("CREATE INDEX IF NOT EXISTS idx_usn_site ON unified_site_names (site_id)")
-        )
-        conn.execute(
-            text("""
-            DO $$ BEGIN
-                ALTER TABLE unified_site_names
-                    ADD CONSTRAINT uq_usn UNIQUE (site_id, name_normalized);
-            EXCEPTION WHEN duplicate_table THEN NULL;
-            END $$
-        """)
+        ensure(conn, create_index("idx_usn_site", "unified_site_names", "(site_id)"))
+        ensure(
+            conn,
+            add_constraint(
+                "unified_site_names",
+                "uq_usn",
+                "UNIQUE (site_id, name_normalized)",
+                duplicate=("duplicate_table",),
+            ),
         )
         # Enable pg_trgm for fuzzy matching (used by discoveries API)
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        ensure(conn, create_extension("pg_trgm"))
         # unaccent is used by the name-normalization migration further down;
         # relying on init_extensions.sql alone breaks on DBs initialized
         # before it existed (audit 2026-08-05).
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent"))
-        conn.execute(
-            text("""
-            CREATE INDEX IF NOT EXISTS idx_usn_name_trgm
-            ON unified_site_names USING gin (name_normalized gin_trgm_ops)
-        """)
+        ensure(conn, create_extension("unaccent"))
+        ensure(
+            conn,
+            create_index(
+                "idx_usn_name_trgm",
+                "unified_site_names",
+                "USING gin (name_normalized gin_trgm_ops)",
+            ),
         )
         # Pipeline heartbeat table (for LIVE status on frontend)
-        conn.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS pipeline_heartbeats (
+        ensure(
+            conn,
+            create_table(
+                "pipeline_heartbeats",
+                """
                 pipeline_name VARCHAR(50) PRIMARY KEY,
                 last_heartbeat TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                 status VARCHAR(20) NOT NULL DEFAULT 'ok',
                 last_error TEXT
-            )
-        """)
+                """,
+            ),
         )
 
         # Journal active flag + quality report (for regeneration workflow)
-        conn.execute(
-            text("ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true")
-        )
-        conn.execute(
-            text("ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS quality_report JSONB")
-        )
+        ensure(conn, add_column("news_articles", "active", "BOOLEAN DEFAULT true"))
+        ensure(conn, add_column("news_articles", "quality_report", "JSONB"))
 
         # Lyra auto-discovery migrations: new columns on user_contributions
-        conn.execute(
-            text(
-                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_status VARCHAR(20) DEFAULT 'pending'"
-            )
+        ensure(
+            conn,
+            add_column("user_contributions", "enrichment_status", "VARCHAR(20) DEFAULT 'pending'"),
         )
-        conn.execute(
-            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikidata_id VARCHAR(20)")
+        ensure(conn, add_column("user_contributions", "wikidata_id", "VARCHAR(20)"))
+        ensure(conn, add_column("user_contributions", "wikipedia_url", "TEXT"))
+        ensure(conn, add_column("user_contributions", "thumbnail_url", "TEXT"))
+        ensure(conn, add_column("user_contributions", "period_start", "INTEGER"))
+        ensure(conn, add_column("user_contributions", "period_end", "INTEGER"))
+        ensure(conn, add_column("user_contributions", "period_name", "VARCHAR(100)"))
+        ensure(conn, add_column("user_contributions", "score", "INTEGER NOT NULL DEFAULT 0"))
+        ensure(conn, add_column("user_contributions", "last_facts_hash", "VARCHAR(64)"))
+        ensure(conn, add_column("user_contributions", "enrichment_data", "JSONB"))
+        ensure(
+            conn,
+            add_column(
+                "user_contributions",
+                "promoted_site_id",
+                "UUID REFERENCES unified_sites(id) ON DELETE SET NULL",
+            ),
         )
-        conn.execute(
-            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikipedia_url TEXT")
-        )
-        conn.execute(
-            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS thumbnail_url TEXT")
-        )
-        conn.execute(
-            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_start INTEGER")
-        )
-        conn.execute(
-            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_end INTEGER")
-        )
-        conn.execute(
-            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_name VARCHAR(100)")
-        )
-        conn.execute(
-            text(
-                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0"
-            )
-        )
-        conn.execute(
-            text(
-                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS last_facts_hash VARCHAR(64)"
-            )
-        )
-        conn.execute(
-            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_data JSONB")
-        )
-        conn.execute(
-            text(
-                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS promoted_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
-            )
-        )
-        conn.execute(
-            text(
-                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS corrected_name VARCHAR(500)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_contributions_enrichment ON user_contributions (source, enrichment_status)"
-            )
+        ensure(conn, add_column("user_contributions", "corrected_name", "VARCHAR(500)"))
+        ensure(
+            conn,
+            create_index(
+                "idx_contributions_enrichment", "user_contributions", "(source, enrichment_status)"
+            ),
         )
 
         # New columns on news_videos
-        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS description TEXT"))
-        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS tags JSONB"))
-        conn.execute(
-            text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS last_attempted_at TIMESTAMP")
-        )
+        ensure(conn, add_column("news_videos", "description", "TEXT"))
+        ensure(conn, add_column("news_videos", "tags", "JSONB"))
+        ensure(conn, add_column("news_videos", "last_attempted_at", "TIMESTAMP"))
 
         # Functional index for site_identifier queries on news_items
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"
-            )
+        ensure(
+            conn,
+            create_index(
+                "idx_news_items_site_name_lower", "news_items", "(lower(site_name_extracted))"
+            ),
         )
 
         # Lyra RAG enrichment columns on news_items
-        conn.execute(
-            text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS transcript_segment TEXT")
-        )
-        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS entities JSONB"))
-        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS tags JSONB"))
+        ensure(conn, add_column("news_items", "transcript_segment", "TEXT"))
+        ensure(conn, add_column("news_items", "entities", "JSONB"))
+        ensure(conn, add_column("news_items", "tags", "JSONB"))
 
         # Add updated_at column to unified_sites for edit tracking
-        conn.execute(
-            text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP")
-        )
+        ensure(conn, add_column("unified_sites", "updated_at", "TIMESTAMP"))
 
         # Rename sources for branding
         conn.execute(
@@ -1386,9 +1366,11 @@ def _run_migrations(engine) -> None:
         )
 
         # Wiki images table for self-hosted Wikipedia/Commons images
-        conn.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS wiki_images (
+        ensure(
+            conn,
+            create_table(
+                "wiki_images",
+                """
                 id SERIAL PRIMARY KEY,
                 site_id UUID NOT NULL REFERENCES unified_sites(id) ON DELETE CASCADE,
                 filename VARCHAR(500) NOT NULL,
@@ -1408,32 +1390,32 @@ def _run_migrations(engine) -> None:
                 width INTEGER,
                 height INTEGER,
                 created_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
+                """,
+            ),
         )
-        conn.execute(
-            text("CREATE INDEX IF NOT EXISTS idx_wiki_images_site ON wiki_images (site_id)")
-        )
-        conn.execute(
-            text("""
-            DO $$ BEGIN
-                ALTER TABLE wiki_images
-                    ADD CONSTRAINT uq_wiki_image_site_url UNIQUE (site_id, original_url);
-            EXCEPTION WHEN duplicate_table THEN NULL;
-            END $$
-        """)
+        ensure(conn, create_index("idx_wiki_images_site", "wiki_images", "(site_id)"))
+        ensure(
+            conn,
+            add_constraint(
+                "wiki_images",
+                "uq_wiki_image_site_url",
+                "UNIQUE (site_id, original_url)",
+                duplicate=("duplicate_table",),
+            ),
         )
 
         # Source version pins table (per-source snapshot pinning for public globe)
-        conn.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS source_version_pins (
+        ensure(
+            conn,
+            create_table(
+                "source_version_pins",
+                """
                 source_id VARCHAR(50) PRIMARY KEY,
                 snapshot_date VARCHAR(30),
                 pinned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 pinned_by VARCHAR(50) NOT NULL
-            )
-        """)
+                """,
+            ),
         )
 
         # Fix wikipedia_url / wikidata_id swap: rows where wikipedia_url
@@ -1456,22 +1438,23 @@ def _run_migrations(engine) -> None:
         # _fix_youtube_published_dates.
 
         # Missing columns on unified_sites that models define but were never migrated
-        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
-        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS period_end INTEGER"))
+        ensure(conn, add_column("unified_sites", "raw_data", "JSONB"))
+        ensure(conn, add_column("unified_sites", "period_end", "INTEGER"))
 
         # Site hierarchy: parent_site_id for "part of" relationships
         # (e.g. Great Sphinx → Giza Necropolis)
-        conn.execute(
-            text(
-                "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS parent_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
-            )
+        ensure(
+            conn,
+            add_column(
+                "unified_sites",
+                "parent_site_id",
+                "UUID REFERENCES unified_sites(id) ON DELETE SET NULL",
+            ),
         )
 
         # Edit tracking: who last edited the row
-        conn.execute(
-            text(
-                "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial'"
-            )
+        ensure(
+            conn, add_column("unified_sites", "edited_by", "VARCHAR(20) NOT NULL DEFAULT 'initial'")
         )
 
         # Normalize ALL site_type values through the canonical normalizer.
@@ -1503,7 +1486,7 @@ def _run_migrations(engine) -> None:
                 )
 
         # Pipeline efficiency: per-item verification tracking
-        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP"))
+        ensure(conn, add_column("news_items", "verified_at", "TIMESTAMP"))
         # Backfill: mark items in already-verified videos so they don't re-run
         conn.execute(
             text("""
@@ -1515,44 +1498,31 @@ def _run_migrations(engine) -> None:
         )
 
         # Pipeline efficiency: cap screenshot retry attempts across cycles
-        conn.execute(
-            text(
-                "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS screenshot_attempts INTEGER DEFAULT 0"
-            )
-        )
+        ensure(conn, add_column("news_items", "screenshot_attempts", "INTEGER DEFAULT 0"))
 
         # Storyboard-based screenshot extraction: cache YouTube sprite metadata
         # per video so we only call yt-dlp once, then download tiny sprites instead
         # of full video clips.
-        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS storyboard_meta JSONB"))
+        ensure(conn, add_column("news_videos", "storyboard_meta", "JSONB"))
 
         # is_unlimited flag: decoupled from credits balance
-        conn.execute(
-            text(
-                "ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS is_unlimited BOOLEAN DEFAULT FALSE"
-            )
-        )
+        ensure(conn, add_column("discord_users", "is_unlimited", "BOOLEAN DEFAULT FALSE"))
         # Migrate legacy credits=-1 to the new flag
         conn.execute(
             text("UPDATE discord_users SET is_unlimited = TRUE, credits = 0 WHERE credits = -1")
         )
 
         # Role-based credit system: monthly grants with accumulation
-        conn.execute(
-            text("ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS grant_anchor_date TIMESTAMP")
-        )
-        conn.execute(
-            text("ALTER TABLE credit_grants ADD COLUMN IF NOT EXISTS grant_period VARCHAR(7)")
-        )
-        conn.execute(
-            text("""
-            DO $$ BEGIN
-                ALTER TABLE credit_grants
-                    ADD CONSTRAINT uq_credit_grants_user_reason_period
-                    UNIQUE (user_id, reason, grant_period);
-            EXCEPTION WHEN duplicate_table THEN NULL;
-            END $$
-        """)
+        ensure(conn, add_column("discord_users", "grant_anchor_date", "TIMESTAMP"))
+        ensure(conn, add_column("credit_grants", "grant_period", "VARCHAR(7)"))
+        ensure(
+            conn,
+            add_constraint(
+                "credit_grants",
+                "uq_credit_grants_user_reason_period",
+                "UNIQUE (user_id, reason, grant_period)",
+                duplicate=("duplicate_table",),
+            ),
         )
 
         # The UNIQUE(user_id, reason, grant_period) constraint does NOT prevent
@@ -1573,12 +1543,14 @@ def _run_migrations(engine) -> None:
         """)
         )
 
-        conn.execute(
-            text("""
-            CREATE UNIQUE INDEX IF NOT EXISTS uq_credit_grants_one_time
-            ON credit_grants (user_id, reason)
-            WHERE grant_period IS NULL
-        """)
+        ensure(
+            conn,
+            create_index(
+                "uq_credit_grants_one_time",
+                "credit_grants",
+                "(user_id, reason) WHERE grant_period IS NULL",
+                unique=True,
+            ),
         )
 
         # Migrate one-time grants from NULL to "one_time" sentinel so the
@@ -1611,38 +1583,19 @@ def _run_migrations(engine) -> None:
         # Guarded (audit 2026-08-05): card_stats is created by the API
         # container's models, never by this orchestrator's create_all_tables()
         # — on a fresh DB an unguarded ALTER would roll back the ENTIRE
-        # migration batch. The ALTER TYPE is conditioned on the current length
-        # so it stops taking an ACCESS EXCLUSIVE lock on every startup.
-        conn.execute(
-            text("""
-                DO $$
-                BEGIN
-                    IF to_regclass('card_stats') IS NOT NULL THEN
-                        ALTER TABLE card_stats
-                            ADD COLUMN IF NOT EXISTS card_description VARCHAR(150);
-                        IF (SELECT character_maximum_length
-                            FROM information_schema.columns
-                            WHERE table_name = 'card_stats'
-                              AND column_name = 'card_description') IS DISTINCT FROM 200 THEN
-                            ALTER TABLE card_stats
-                                ALTER COLUMN card_description TYPE VARCHAR(200);
-                        END IF;
-                        ALTER TABLE card_stats
-                            ADD COLUMN IF NOT EXISTS last_enriched TIMESTAMP;
-                    END IF;
-                END $$;
-            """)
-        )
+        # migration batch. The ALTER TYPE runs only while the column is not
+        # already VARCHAR(200), so it takes no ACCESS EXCLUSIVE lock on a
+        # normal startup.
+        if relation_exists(conn, "card_stats"):
+            ensure(conn, add_column("card_stats", "card_description", "VARCHAR(150)"))
+            ensure(conn, set_varchar_length("card_stats", "card_description", 200))
+            ensure(conn, add_column("card_stats", "last_enriched", "TIMESTAMP"))
 
         # Audit tracking column
-        conn.execute(
-            text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP")
-        )
+        ensure(conn, add_column("unified_sites", "last_audited", "TIMESTAMP"))
 
         # Snapshot source tracking: which database a snapshot belongs to
-        conn.execute(
-            text("ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)")
-        )
+        ensure(conn, add_column("db_snapshots", "source_id", "VARCHAR(50)"))
 
         # --- Data migrations (idempotent) ---
 
@@ -1789,55 +1742,36 @@ def _run_migrations(engine) -> None:
         conn.execute(text("DELETE FROM news_articles WHERE id = 7"))
 
         # Add step_data column to heartbeats for per-step timing persistence
-        conn.execute(
-            text("ALTER TABLE pipeline_heartbeats ADD COLUMN IF NOT EXISTS step_data JSONB")
-        )
+        ensure(conn, add_column("pipeline_heartbeats", "step_data", "JSONB"))
 
         # Credit reservation model: reserve credits atomically on submit, deduct on completion
-        conn.execute(
-            text(
-                "ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS reserved_credits INTEGER DEFAULT 0"
-            )
-        )
+        ensure(conn, add_column("discord_users", "reserved_credits", "INTEGER DEFAULT 0"))
 
         # Theo specialist options: force_include / force_exclude
-        conn.execute(
-            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS specialist_options JSONB")
-        )
+        ensure(conn, add_column("research_requests", "specialist_options", "JSONB"))
 
         # Theo public research library
-        conn.execute(
-            text(
-                "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE"
-            )
-        )
-        conn.execute(
-            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS published_at TIMESTAMP")
-        )
-        conn.execute(
-            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS published_by VARCHAR(100)")
-        )
-        conn.execute(
-            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS slug VARCHAR(300)")
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_research_requests_public ON research_requests (is_public, published_at)"
-            )
+        ensure(conn, add_column("research_requests", "is_public", "BOOLEAN DEFAULT FALSE"))
+        ensure(conn, add_column("research_requests", "published_at", "TIMESTAMP"))
+        ensure(conn, add_column("research_requests", "published_by", "VARCHAR(100)"))
+        ensure(conn, add_column("research_requests", "slug", "VARCHAR(300)"))
+        ensure(
+            conn,
+            create_index(
+                "idx_research_requests_public", "research_requests", "(is_public, published_at)"
+            ),
         )
 
         # Theo debug log + LLM call tracking
-        conn.execute(text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS debug_log JSONB"))
-        conn.execute(
-            text(
-                "ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS llm_calls INTEGER DEFAULT 0"
-            )
-        )
+        ensure(conn, add_column("research_requests", "debug_log", "JSONB"))
+        ensure(conn, add_column("research_requests", "llm_calls", "INTEGER DEFAULT 0"))
 
         # Library sources table (2026-04-15)
-        conn.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS library_sources (
+        ensure(
+            conn,
+            create_table(
+                "library_sources",
+                """
                 id VARCHAR(12) PRIMARY KEY,
                 url TEXT NOT NULL UNIQUE,
                 title VARCHAR(500) NOT NULL,
@@ -1851,29 +1785,33 @@ def _run_migrations(engine) -> None:
                 citation_count INTEGER DEFAULT 1,
                 parent_refs JSONB,
                 created_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
+                """,
+            ),
         )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_library_sources_citation_count ON library_sources (citation_count DESC)"
-            )
+        ensure(
+            conn,
+            create_index(
+                "idx_library_sources_citation_count", "library_sources", "(citation_count DESC)"
+            ),
         )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_library_sources_period_tags ON library_sources USING gin (period_tags)"
-            )
+        ensure(
+            conn,
+            create_index(
+                "idx_library_sources_period_tags", "library_sources", "USING gin (period_tags)"
+            ),
         )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_library_sources_source_types ON library_sources USING gin (source_types)"
-            )
+        ensure(
+            conn,
+            create_index(
+                "idx_library_sources_source_types", "library_sources", "USING gin (source_types)"
+            ),
         )
 
         # TTS audio queue: tts_requests table
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS tts_requests ("
+        ensure(
+            conn,
+            create_table(
+                "tts_requests",
                 "  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
                 "  paper_id UUID NOT NULL,"
                 "  user_id VARCHAR(255) NOT NULL,"
@@ -1881,31 +1819,28 @@ def _run_migrations(engine) -> None:
                 "  status VARCHAR(20) NOT NULL DEFAULT 'pending',"
                 "  audio_url TEXT,"
                 "  chars_generated INTEGER,"
-                "  error_message TEXT"
-                ")"
-            )
+                "  error_message TEXT",
+            ),
         )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_tts_requests_status_requested ON tts_requests (status, requested_at)"
-            )
+        ensure(
+            conn,
+            create_index(
+                "idx_tts_requests_status_requested", "tts_requests", "(status, requested_at)"
+            ),
         )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_tts_requests_paper_user ON tts_requests (paper_id, user_id)"
-            )
+        ensure(
+            conn,
+            create_index("idx_tts_requests_paper_user", "tts_requests", "(paper_id, user_id)"),
         )
 
         # Thinking layer: curator-facing question + outcome on research_nodes (2026-08-04)
-        conn.execute(text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS question TEXT"))
-        conn.execute(
-            text("ALTER TABLE research_nodes ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)")
-        )
-        conn.execute(
-            text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_claim_norm_text "
-                "ON knowledge_claims (norm_text)"
-            )
+        ensure(conn, add_column("research_nodes", "question", "TEXT"))
+        ensure(conn, add_column("research_nodes", "outcome", "VARCHAR(20)"))
+        ensure(
+            conn,
+            create_index(
+                "uq_knowledge_claim_norm_text", "knowledge_claims", "(norm_text)", unique=True
+            ),
         )
 
         conn.commit()
@@ -2025,15 +1960,15 @@ def main() -> None:
             # All migrations run in one transaction (committed at the end of
             # _run_migrations). Any failure rolls back the whole batch, so a
             # single broken statement silently strands every column added in
-            # this release. Deadlocks (40P01) and lock timeouts (55P03) are
-            # expected when api and lyra boot simultaneously and both migrate
-            # unified_sites — the batch is idempotent, so wait out the other
-            # booter and rerun it. Log everything else loudly enough that the
-            # next deploy notices.
-            pgcode = getattr(getattr(mig_err, "orig", None), "pgcode", None)
-            if pgcode in ("40P01", "55P03", "57014") and mig_attempt < len(MIGRATION_BACKOFF):
+            # this release. Contention (deadlocks, lock and statement timeouts:
+            # is_contention_error, shared with the API's boot) is expected when
+            # api and lyra boot simultaneously and both still have DDL to run
+            # (a release that adds a column) — the batch is idempotent, so wait
+            # out the other booter and rerun it. Log everything else loudly
+            # enough that the next deploy notices.
+            if is_contention_error(mig_err) and mig_attempt < len(MIGRATION_BACKOFF):
                 logger.warning(
-                    f"[STARTUP] Migration batch hit lock contention (pgcode {pgcode}, "
+                    f"[STARTUP] Migration batch hit lock contention (pgcode {pgcode_of(mig_err)}, "
                     f"attempt {mig_attempt}/{len(MIGRATION_BACKOFF)}) — retrying in {backoff}s"
                 )
                 time.sleep(backoff)

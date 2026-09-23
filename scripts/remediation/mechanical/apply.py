@@ -62,7 +62,17 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 
 from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
-from mechanical.lane import LANE_READBACKS, LANES, T05, Lane  # noqa: E402
+from mechanical.lane import (  # noqa: E402
+    LANE_READBACKS,
+    LANES,
+    T05,
+    Column,
+    Lane,
+    outside,
+    resolve_lane,
+    typed_case,
+    written_where,
+)
 from mechanical.lane import sql_literal as _literal  # noqa: E402
 from mechanical.plan import (  # noqa: E402
     CURATED_SOURCE,
@@ -106,6 +116,7 @@ GUARD2_SAYS = "planned row(s) are not writable changes"
 GUARD3_SAYS = "planned row(s) no longer hold the planned old value"
 GUARD4_SAYS = "planned row(s) {what} a value this lane does not own"
 GUARD5_SAYS = "planned row(s) no longer hold the premise the plan derived its value from"
+GUARD6_SAYS = "planned row(s) do not undo the last journal row of their cell"
 
 
 def lane_dir(lane: Lane) -> Path:
@@ -130,12 +141,17 @@ def rollback_change_key(site_id: str, lane: Lane = T05) -> str:
 # --------------------------------------------------------------------------------- the records
 @dataclass(frozen=True)
 class ChangeRecord:
-    """One row to write, exactly as `PLAN.jsonl` holds it."""
+    """One row to write, exactly as `PLAN.jsonl` holds it.
+
+    On a cell lane the record names its `column`, and `old_value` is `None` where the lane fills an
+    empty cell (`new_value` is `None` only in the reversal of such a fill). `journal_id` is the
+    journal row a reversal lane undoes.
+    """
 
     site_id: str
     site_name: str
-    old_value: str
-    new_value: str
+    old_value: str | None
+    new_value: str | None
     rule: str
     condition: str
     reason: str
@@ -143,6 +159,13 @@ class ChangeRecord:
     phase3: bool = False
     #: The live input the value was derived from, as the database prints it (`Lane.premise_sql`).
     premise: str | None = None
+    column: str | None = None
+    journal_id: int | None = None
+
+
+def _text(value: Any) -> str | None:
+    """A plan value as text; JSON null stays None (never the string 'None')."""
+    return None if value is None else str(value)
 
 
 def load_records(path: Path) -> list[ChangeRecord]:
@@ -156,23 +179,126 @@ def load_records(path: Path) -> list[ChangeRecord]:
                 continue
             payload = json.loads(line)
             premise = payload.get("premise")
+            journal_id = payload.get("journal_id")
             records.append(
                 ChangeRecord(
                     site_id=str(payload["site_id"]),
                     site_name=str(payload["site_name"]),
-                    old_value=str(payload["old_value"]),
-                    new_value=str(payload["new_value"]),
+                    old_value=_text(payload["old_value"]),
+                    new_value=_text(payload["new_value"]),
                     rule=str(payload["rule"]),
                     condition=str(payload["condition"]),
                     reason=str(payload["reason"]),
                     evidence=tuple(payload.get("evidence") or ()),
                     phase3=bool(payload.get("phase3")),
                     premise=None if premise is None else str(premise),
+                    column=_text(payload.get("column")),
+                    journal_id=None if journal_id is None else int(journal_id),
                 )
             )
     if not records:
         raise PlanError(f"{path} holds no records")
     return records
+
+
+def _cell_key(r: ChangeRecord, lane: Lane) -> str:
+    """What must be unique in a plan: the site on a column lane, the (site, column) on a cell lane.
+
+    A column lane's record may name its column (the planners write it into every line) but never
+    another one; a cell lane's record must name a column the lane owns.
+    """
+    if not lane.cells:
+        if r.column not in (None, lane.column):
+            raise PlanError(
+                f"{r.site_id}: the {lane.name} lane writes {lane.column}, not {r.column}"
+            )
+        return r.site_id
+    try:
+        lane.cell(r.column)
+    except ValueError as exc:
+        raise PlanError(f"{r.site_id}: {exc}") from exc
+    return f"{r.site_id}/{r.column}"
+
+
+def _validate_column(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
+    """One record of a column lane: a real change of one non-empty value, owned and in width."""
+    if not r.old_value:
+        raise PlanError(f"{r.site_id}: no old value - a conditional write needs one")
+    if not r.new_value:
+        raise PlanError(f"{r.site_id}: no new value - this lane never clears the column")
+    if r.new_value == r.old_value:
+        raise PlanError(f"{r.site_id}: old and new are both {r.old_value!r} - not a change")
+    if len(r.new_value) > lane.max_chars:
+        raise PlanError(
+            f"{r.site_id}: the new value is {len(r.new_value)} characters, "
+            f"the column holds {lane.max_chars}"
+        )
+    owned = r.old_value if rollback else r.new_value
+    if lane.allowed_new_values and owned not in lane.allowed_new_values:
+        raise PlanError(
+            f"{r.site_id}: {owned!r} is not a value the {lane.name} lane owns "
+            f"({', '.join(lane.allowed_new_values)})"
+        )
+
+
+def typed_value(cell: Column, text: str) -> Any:
+    """A cell's planned text read in the column's type - what the database compares.
+
+    Refuses text the column's cast would not take, and an integer the database would print
+    differently (`'05'`, `' 5'`): the journal records the text, so it must be the stored value's own
+    spelling.
+    """
+    if cell.sql_type == "integer":
+        try:
+            number = int(text)
+        except ValueError as exc:
+            raise PlanError(f"{cell.name}: {text!r} is not an integer") from exc
+        if str(number) != text:
+            raise PlanError(f"{cell.name}: {text!r} is not how the database prints {number}")
+        return number
+    if cell.sql_type == "jsonb":
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise PlanError(f"{cell.name}: {text!r} is not JSON") from exc
+    return text
+
+
+def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
+    """One record of a cell lane, in its column's type.
+
+    NULL is allowed on one side only, and only for a column the lane fills: the old value of a
+    write, the new value of its reversal. Everything else is a column lane's rule, per column.
+    """
+    cell = lane.cell(r.column)
+    empty_side, filled_side = ("new", "old") if rollback else ("old", "new")
+    values = {"old": r.old_value, "new": r.new_value}
+    if values[filled_side] is None:
+        raise PlanError(
+            f"{r.site_id}/{cell.name}: no {filled_side} value - this lane never "
+            + ("undoes a NULL" if rollback else "clears a column")
+        )
+    if values[empty_side] is None and not cell.fills_null:
+        raise PlanError(
+            f"{r.site_id}/{cell.name}: no {empty_side} value, and {cell.name} is not a column "
+            "this lane fills"
+        )
+    if r.new_value == "":
+        raise PlanError(f"{r.site_id}/{cell.name}: an empty new value is not a value")
+    typed = {side: None if v is None else typed_value(cell, v) for side, v in values.items()}
+    if values["old"] is not None and typed["old"] == typed["new"]:
+        raise PlanError(f"{r.site_id}/{cell.name}: old and new are both {r.old_value!r}")
+    if cell.max_chars is not None and r.new_value is not None and len(r.new_value) > cell.max_chars:
+        raise PlanError(
+            f"{r.site_id}/{cell.name}: the new value is {len(r.new_value)} characters, the column "
+            f"holds {cell.max_chars}"
+        )
+    lane_value = r.old_value if rollback else r.new_value
+    if cell.allowed_new_values and lane_value not in cell.allowed_new_values:
+        raise PlanError(
+            f"{r.site_id}: {lane_value!r} is not a value the {lane.name} lane owns in "
+            f"{cell.name} ({', '.join(cell.allowed_new_values)})"
+        )
 
 
 def validate_records(
@@ -194,28 +320,31 @@ def validate_records(
     if source != CURATED_SOURCE:
         raise PlanError(f"this lane writes {CURATED_SOURCE!r} only, not {source!r}")
     seen: set[str] = set()
+    premises: dict[str, str | None] = {}
     for r in records:
         if not UUID_RE.match(r.site_id):
             raise PlanError(f"{r.site_id!r} is not a UUID")
-        if r.site_id in seen:
-            raise PlanError(f"{r.site_id} appears twice - the plan is not a set of rows")
-        seen.add(r.site_id)
-        if not r.old_value:
-            raise PlanError(f"{r.site_id}: no old value - a conditional write needs one")
-        if not r.new_value:
-            raise PlanError(f"{r.site_id}: no new value - this lane never clears the column")
-        if r.new_value == r.old_value:
-            raise PlanError(f"{r.site_id}: old and new are both {r.old_value!r} - not a change")
-        if len(r.new_value) > lane.max_chars:
+        cell = _cell_key(r, lane)
+        if cell in seen:
+            raise PlanError(f"{cell} appears twice - the plan is not a set of rows")
+        seen.add(cell)
+        if lane.cells:
+            _validate_cell(r, lane, rollback=rollback)
+        else:
+            _validate_column(r, lane, rollback=rollback)
+        if premises.setdefault(r.site_id, r.premise) != r.premise:
             raise PlanError(
-                f"{r.site_id}: the new value is {len(r.new_value)} characters, "
-                f"the column holds {lane.max_chars}"
+                f"{r.site_id}: two premises for one site - every cell of a site is derived from "
+                "the same input"
             )
-        owned = r.old_value if rollback else r.new_value
-        if lane.allowed_new_values and owned not in lane.allowed_new_values:
+        wants_journal_id = lane.reverses_journal and not rollback
+        if wants_journal_id and r.journal_id is None:
             raise PlanError(
-                f"{r.site_id}: {owned!r} is not a value the {lane.name} lane owns "
-                f"({', '.join(lane.allowed_new_values)})"
+                f"{r.site_id}: the {lane.name} lane reverses journal rows, and the record names none"
+            )
+        if not wants_journal_id and r.journal_id is not None:
+            raise PlanError(
+                f"{r.site_id}: a journal id this statement does not check is a false assurance"
             )
         if lane.premise_sql is not None and r.premise is None:
             raise PlanError(
@@ -232,6 +361,61 @@ def validate_records(
 
 
 # ---------------------------------------------------------------------------------- rendering
+def _target_join(lane: Lane, plan: str = "p") -> str:
+    """The join from a plan row to the row it writes (`u` on unified_sites, `t` elsewhere)."""
+    target = lane.target
+    return (
+        f"JOIN {target.table} {target.alias} ON {target.alias}.{target.key_column} = {plan}.site_id"
+    )
+
+
+def cell_case(
+    lane: Lane,
+    value: str,
+    *,
+    alias: str | None = None,
+    compare: str = "IS DISTINCT FROM",
+    column_expr: str = "p.column_name",
+    otherwise: str = "true",
+) -> str:
+    """`lane.typed_case` over a cell lane's own cells, on the row it writes (`t`, or `u` on
+    `unified_sites`) unless `alias` names another."""
+    return typed_case(
+        lane.cells,
+        value,
+        alias=lane.target.alias if alias is None else alias,
+        compare=compare,
+        column_expr=column_expr,
+        otherwise=otherwise,
+    )
+
+
+def _differs(lane: Lane, value: str) -> str:
+    """The row does not hold `value`: the column lane's text comparison, a cell lane's CASE."""
+    if not lane.cells:
+        return f"u.{lane.column} IS DISTINCT FROM {value}"
+    return cell_case(lane, value)
+
+
+def _writable_case(lane: Lane, *, rollback: bool) -> str:
+    """Guard 2 of a cell lane: the cell is not a change, not writable in its column, or NULL on a
+    side its column never is NULL (the old value of a write, the new value of its reversal, and
+    only for a column the lane fills). A column the lane does not own falls to `ELSE true`."""
+    whens = []
+    for cell in lane.cells:
+        refused = [f"{cell.cast('p.new_value')} IS NOT DISTINCT FROM {cell.cast('p.old_value')}"]
+        empty, filled = (
+            ("p.new_value", "p.old_value") if rollback else ("p.old_value", "p.new_value")
+        )
+        refused.append(f"{filled} IS NULL")
+        if not cell.fills_null:
+            refused.append(f"{empty} IS NULL")
+        if cell.max_chars is not None:
+            refused.append(f"length(p.new_value) > {cell.max_chars}")
+        whens.append(f"\n                WHEN {_literal(cell.name)} THEN " + " OR ".join(refused))
+    return "CASE p.column_name" + "".join(whens) + "\n                ELSE true END"
+
+
 def render_transaction(
     records: Sequence[ChangeRecord],
     *,
@@ -266,6 +450,9 @@ def render_transaction(
     key_of = lane.rollback_change_key if rollback else lane.change_key
     table, column, label = lane.plan_table, lane.column, lane.label
     premise = lane.premise_sql is not None
+    cells = bool(lane.cells)
+    journal_guard = lane.reverses_journal and not rollback
+    target = lane.target
     sites = sorted({str(s) for s in site_ids})
     out: list[str] = []
     add = out.append
@@ -295,24 +482,55 @@ def render_transaction(
             add(f"SET LOCAL statement_timeout = {_literal(lane.statement_timeout)};")
         add("")
     add(f"CREATE TEMP TABLE {table} (")
-    add("    site_id     UUID PRIMARY KEY,")
-    add("    old_value   TEXT NOT NULL,")
-    add("    new_value   TEXT NOT NULL,")
+    if cells:
+        # A cell lane's plan is a set of (site, column) cells; NULL is refused by guard 2 wherever
+        # the column's rule refuses it, so that a probe can prove the refusal.
+        add("    site_id     UUID NOT NULL,")
+        add("    column_name TEXT NOT NULL,")
+        add("    old_value   TEXT,")
+        add("    new_value   TEXT,")
+    else:
+        add("    site_id     UUID PRIMARY KEY,")
+        add("    old_value   TEXT NOT NULL,")
+        add("    new_value   TEXT NOT NULL,")
     add("    change_key  TEXT NOT NULL,")
     add("    reason      TEXT NOT NULL,")
     if premise:
         add("    premise     TEXT NOT NULL,")
-    add("    evidence    JSONB NOT NULL")
+    if journal_guard:
+        add("    journal_id  BIGINT NOT NULL,")
+    if cells:
+        add("    evidence    JSONB NOT NULL,")
+        add("    PRIMARY KEY (site_id, column_name)")
+    else:
+        add("    evidence    JSONB NOT NULL")
     add(") ON COMMIT DROP;")
     add("")
     premise_column = " premise," if premise else ""
-    add(
-        f"INSERT INTO {table} (site_id, old_value, new_value, change_key, reason,{premise_column} "
-        "evidence) VALUES"
-    )
+    if cells:
+        journal_column = " journal_id," if journal_guard else ""
+        add(
+            f"INSERT INTO {table} (site_id, column_name, old_value, new_value, change_key, reason,"
+            f"{premise_column}{journal_column} evidence) VALUES"
+        )
+    else:
+        add(
+            f"INSERT INTO {table} (site_id, old_value, new_value, change_key, reason,{premise_column} "
+            "evidence) VALUES"
+        )
     rows = []
-    for r in sorted(records, key=lambda r: r.site_id):
+    for r in sorted(records, key=lambda r: (r.site_id, r.column or "")):
         premise_value = f"{_literal(r.premise)}, " if premise else ""
+        if cells:
+            journal_value = f"{r.journal_id}, " if journal_guard else ""
+            rows.append(
+                "    ("
+                f"{_literal(r.site_id)}::uuid, {_literal(r.column)}, {_literal(r.old_value)}, "
+                f"{_literal(r.new_value)}, {_literal(key_of(r.site_id, r.column))}, "
+                f"{_literal(r.reason)}, {premise_value}{journal_value}"
+                f"{_literal(json.dumps(list(r.evidence), ensure_ascii=False))}::jsonb)"
+            )
+            continue
         rows.append(
             "    ("
             f"{_literal(r.site_id)}::uuid, {_literal(r.old_value)}, {_literal(r.new_value)}, "
@@ -334,10 +552,21 @@ def render_transaction(
     add("    -- unreachable is apply_remediation_change, which raises unless exactly one row")
     add("    -- matched; this guard is what reports a loop that changed fewer rows than the plan.")
     add("")
-    add("    -- scope guard 1: every planned row is a curated site that still exists")
-    add("    SELECT count(*) INTO bad")
-    add(f"      FROM {table} p LEFT JOIN unified_sites u ON u.id = p.site_id")
-    add(f"     WHERE u.id IS NULL OR u.source_id <> {_literal(source)};")
+    if target.is_site:
+        add("    -- scope guard 1: every planned row is a curated site that still exists")
+        add("    SELECT count(*) INTO bad")
+        add(f"      FROM {table} p LEFT JOIN unified_sites u ON u.id = p.site_id")
+        add(f"     WHERE u.id IS NULL OR u.source_id <> {_literal(source)};")
+    else:
+        row = f"{target.alias}.{target.key_column}"
+        add(
+            f"    -- scope guard 1: every planned row is a {target.table} row of a curated site that "
+            "still exists"
+        )
+        add("    SELECT count(*) INTO bad")
+        add(f"      FROM {table} p LEFT JOIN {target.table} {target.alias} ON {row} = p.site_id")
+        add("      LEFT JOIN unified_sites u ON u.id = p.site_id")
+        add(f"     WHERE {row} IS NULL OR u.id IS NULL OR u.source_id <> {_literal(source)};")
     add("    IF bad > 0 THEN")
     add("        -- the source name is a RAISE argument, never part of the quoted message: a name")
     add("        -- spliced into the message text only parses while the name happens to contain no")
@@ -348,22 +577,53 @@ def render_transaction(
     add(f"        RAISE EXCEPTION '{label}: % {GUARD1_SAYS}', bad, {_literal(source)};")
     add("    END IF;")
     add("")
-    add("    -- scope guard 2: the plan is a set of real changes, each one writable in the column")
-    add(f"    SELECT count(*) INTO bad FROM {table} p")
-    add("     WHERE p.old_value IS NULL OR p.new_value = '' OR p.new_value = p.old_value")
-    add(f"        OR length(p.new_value) > {lane.max_chars};")
+    if cells:
+        add(
+            "    -- scope guard 2: the plan is a set of real changes, each one writable in its column"
+        )
+        add("    -- (compared in the column's own type; CASE, because only CASE fixes the order in")
+        add("    -- which the casts are evaluated)")
+        add(f"    SELECT count(*) INTO bad FROM {table} p")
+        add(f"     WHERE p.new_value = '' OR {_writable_case(lane, rollback=rollback)};")
+    else:
+        add(
+            "    -- scope guard 2: the plan is a set of real changes, each one writable in the column"
+        )
+        add(f"    SELECT count(*) INTO bad FROM {table} p")
+        add("     WHERE p.old_value IS NULL OR p.new_value = '' OR p.new_value = p.old_value")
+        add(f"        OR length(p.new_value) > {lane.max_chars};")
     add("    IF bad > 0 THEN")
     add(f"        RAISE EXCEPTION '{label}: % {GUARD2_SAYS}', bad;")
     add("    END IF;")
     add("")
     add("    -- scope guard 3: every planned row still holds the old value the plan names")
     add("    SELECT count(*) INTO bad")
-    add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
-    add(f"     WHERE u.{column} IS DISTINCT FROM p.old_value;")
+    add(f"      FROM {table} p {_target_join(lane)}")
+    add(f"     WHERE {_differs(lane, 'p.old_value')};")
     add("    IF bad > 0 THEN")
     add(f"        RAISE EXCEPTION '{label}: % {GUARD3_SAYS}', bad;")
     add("    END IF;")
     add("")
+    owned_cells = [cell for cell in lane.cells if cell.allowed_new_values]
+    if owned_cells:
+        lane_side = "p.old_value" if rollback else "p.new_value"
+        what = "undo" if rollback else "write"
+        add(
+            f"    -- scope guard 4: every planned row {what}s a value this lane owns "
+            f"({'old' if rollback else 'new'} value)"
+        )
+        whens = "".join(
+            f"\n                WHEN {_literal(cell.name)} THEN {lane_side} NOT IN ("
+            + ", ".join(_literal(v) for v in cell.allowed_new_values)
+            + ")"
+            for cell in owned_cells
+        )
+        add(f"    SELECT count(*) INTO bad FROM {table} p")
+        add(f"     WHERE CASE p.column_name{whens}\n                ELSE false END;")
+        add("    IF bad > 0 THEN")
+        add(f"        RAISE EXCEPTION '{label}: % {GUARD4_SAYS.format(what=what)}', bad;")
+        add("    END IF;")
+        add("")
     if lane.allowed_new_values:
         owned = "p.old_value" if rollback else "p.new_value"
         what = "undo" if rollback else "write"
@@ -386,17 +646,54 @@ def render_transaction(
             "    -- scope guard 5: every planned row still holds the input its value was derived from"
         )
         add("    SELECT count(*) INTO bad")
-        add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
+        if cells:
+            # the premise is the site's, so it is read once per site and not once per cell
+            add(
+                f"      FROM (SELECT DISTINCT site_id, premise FROM {table}) p "
+                "JOIN unified_sites u ON u.id = p.site_id"
+            )
+        else:
+            add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
         add(f"     WHERE ({lane.premise_sql}) IS DISTINCT FROM p.premise;")
         add("    IF bad > 0 THEN")
         add(f"        RAISE EXCEPTION '{label}: % {GUARD5_SAYS}', bad;")
         add("    END IF;")
         add("")
+    if journal_guard:
+        journal_cell = (
+            f"l.table_name = {_literal(target.table)} AND l.column_name = p.column_name\n"
+            "               AND l.row_pk = p.site_id::text"
+        )
+        add(
+            "    -- scope guard 6: every planned row is the exact inverse of the last journal row of"
+        )
+        add("    -- its cell - it restores what that row replaced, from the value that row wrote")
+        add(f"    SELECT count(*) INTO bad FROM {table} p")
+        add("     WHERE NOT EXISTS (")
+        add("            SELECT 1 FROM remediation_change_log l")
+        add(f"             WHERE l.id = p.journal_id AND {journal_cell}")
+        add("               AND l.new_value IS NOT DISTINCT FROM p.old_value")
+        add("               AND l.old_value IS NOT DISTINCT FROM p.new_value)")
+        add("        OR EXISTS (")
+        add("            SELECT 1 FROM remediation_change_log l")
+        add(f"             WHERE {journal_cell} AND l.id > p.journal_id);")
+        add("    IF bad > 0 THEN")
+        add(f"        RAISE EXCEPTION '{label}: % {GUARD6_SAYS}', bad;")
+        add("    END IF;")
+        add("")
     add("    -- the only writer: the conditional UPDATE and its journal row commit together, and")
     add("    -- the function raises unless exactly one row matched")
-    add(f"    FOR r IN SELECT * FROM {table} ORDER BY site_id LOOP")
-    add("        moved := moved + apply_remediation_change(")
-    add(f"            'unified_sites', {_literal(column)}, 'id', r.site_id::text,")
+    if cells:
+        add(f"    FOR r IN SELECT * FROM {table} ORDER BY site_id, column_name LOOP")
+        add("        moved := moved + apply_remediation_change(")
+        add(
+            f"            {_literal(target.table)}, r.column_name, {_literal(target.key_column)}, "
+            "r.site_id::text,"
+        )
+    else:
+        add(f"    FOR r IN SELECT * FROM {table} ORDER BY site_id LOOP")
+        add("        moved := moved + apply_remediation_change(")
+        add(f"            'unified_sites', {_literal(column)}, 'id', r.site_id::text,")
     add("            r.old_value, r.new_value,")
     add(
         f"            {_literal(lane.test_id)}, {_literal(run_stamp)}, r.change_key, "
@@ -410,8 +707,8 @@ def render_transaction(
     add("")
     add("    -- invariant 1: every planned row now holds the new value")
     add("    SELECT count(*) INTO bad")
-    add(f"      FROM {table} p JOIN unified_sites u ON u.id = p.site_id")
-    add(f"     WHERE u.{column} IS DISTINCT FROM p.new_value;")
+    add(f"      FROM {table} p {_target_join(lane)}")
+    add(f"     WHERE {_differs(lane, 'p.new_value')};")
     add("    IF bad > 0 THEN")
     add(f"        RAISE EXCEPTION '{label}: % planned row(s) do not hold the new value', bad;")
     add("    END IF;")
@@ -419,8 +716,8 @@ def render_transaction(
     add("    -- invariant 2: the journal and the data agree, row for row, in both directions")
     add("    SELECT count(*) INTO bad")
     add(f"      FROM {table} p LEFT JOIN remediation_change_log l")
-    add("        ON l.row_pk = p.site_id::text AND l.table_name = 'unified_sites'")
-    add(f"       AND l.column_name = {_literal(column)}")
+    add(f"        ON l.row_pk = p.site_id::text AND l.table_name = {_literal(target.table)}")
+    add(f"       AND l.column_name = {'p.column_name' if cells else _literal(column)}")
     add(f"       AND l.run_stamp = {_literal(run_stamp)}")
     add("     WHERE l.id IS NULL")
     add("        OR l.new_value IS DISTINCT FROM p.new_value")
@@ -431,15 +728,21 @@ def render_transaction(
     add("")
     add("    SELECT count(*) INTO bad FROM remediation_change_log l")
     add("     WHERE l.run_stamp = " + _literal(run_stamp))
-    add(f"       AND (l.table_name <> 'unified_sites' OR l.column_name <> {_literal(column)});")
+    add(f"       AND {outside(lane, 'l.')};")
     add("    IF bad > 0 THEN")
     add(
         f"        RAISE EXCEPTION '{label}: this run stamp journalled % row(s) outside "
-        f"unified_sites.{column}', bad;"
+        f"{written_where(lane)}', bad;"
     )
     add("    END IF;")
     add("")
-    add(f"    RAISE NOTICE '{label}: % row(s) changed and journalled over % curated site(s)',")
+    if cells:
+        add(
+            f"    RAISE NOTICE '{label}: % of % planned cell(s) changed and journalled over "
+            f"{len(sites)} curated site(s)',"
+        )
+    else:
+        add(f"    RAISE NOTICE '{label}: % row(s) changed and journalled over % curated site(s)',")
     add("        moved, expected;")
     add("END $$;")
     add("")
@@ -459,10 +762,10 @@ SELECT 'journal rows for this test id', count(*)::text
 UNION ALL
 SELECT 'planned rows now holding the new value', count(*)::text
   FROM remediation_change_log l
- WHERE l.run_stamp = {run_stamp} AND l.table_name = 'unified_sites'
-   AND l.column_name = {column_literal}
-   AND EXISTS (SELECT 1 FROM unified_sites u
-                WHERE u.id::text = l.row_pk AND u.{column} = l.new_value)
+ WHERE l.run_stamp = {run_stamp} AND l.table_name = {table_literal}
+   AND l.column_name {column_test}
+   AND EXISTS (SELECT 1 FROM {table} {alias}
+                WHERE {alias}.{key}::text = l.row_pk AND {holds})
 UNION ALL
 SELECT {residual_metric}, count(*)::text
   FROM unified_sites
@@ -474,13 +777,30 @@ SELECT 'curated sites', count(*)::text
 
 
 def post_commit_reads(lane: Lane, *, run_stamp: str, source: str = CURATED_SOURCE) -> str:
-    """`POST_COMMIT_READS` for one lane: its journal identity, its column, its residual."""
+    """`POST_COMMIT_READS` for one lane: its journal identity, its column(s), its residual."""
+    target = lane.target
+    if lane.cells:
+        column_test = "IN (" + ", ".join(_literal(c) for c in lane.columns) + ")"
+        holds = cell_case(
+            lane,
+            "l.new_value",
+            compare="IS NOT DISTINCT FROM",
+            column_expr="l.column_name",
+            otherwise="false",
+        )
+    else:
+        column_test = f"= {_literal(lane.column)}"
+        holds = f"u.{lane.column} = l.new_value"
     return POST_COMMIT_READS.format(
         run_stamp=_literal(run_stamp),
         test_id=_literal(lane.test_id),
         source=_literal(source),
-        column=lane.column,
-        column_literal=_literal(lane.column),
+        table=target.table,
+        table_literal=_literal(target.table),
+        alias=target.alias,
+        key=target.key_column,
+        column_test=column_test,
+        holds=holds,
         residual_metric=_literal(lane.post_commit_residual.metric),
         residual_predicate=lane.post_commit_residual.predicate,
     )
@@ -492,25 +812,38 @@ def post_commit_reads(lane: Lane, *, run_stamp: str, source: str = CURATED_SOURC
 #: to `country = 'Georgia'` = 30, because `VERIFY_SQL` was not an f-string and every placeholder was
 #: read as its literal self - and `--apply` printed that without asserting anything about it.
 POST_WRITE_ASSERT_SQL = """\
-WITH planned(site_id, new_value) AS (VALUES {values})
+WITH planned({planned}) AS (VALUES {values})
 SELECT 'journal rows for this run stamp' AS metric, count(*)::text AS value
   FROM remediation_change_log WHERE run_stamp = {run_stamp}
 UNION ALL
 SELECT 'planned rows now holding the planned new value', count(*)::text
-  FROM planned p JOIN unified_sites u ON u.id = p.site_id
- WHERE u.{column} IS NOT DISTINCT FROM p.new_value
+  FROM planned p {target_join}
+ WHERE {holds}
 UNION ALL
 SELECT 'planned rows with no journal row for this run stamp', count(*)::text
   FROM planned p LEFT JOIN remediation_change_log l
-    ON l.row_pk = p.site_id::text AND l.table_name = 'unified_sites'
-   AND l.column_name = {column_literal} AND l.run_stamp = {run_stamp}
+    ON l.row_pk = p.site_id::text AND l.table_name = {table_literal}
+   AND l.column_name = {journal_column} AND l.run_stamp = {run_stamp}
  WHERE l.id IS NULL
 UNION ALL
-SELECT 'journal rows for this run outside unified_sites.{column}', count(*)::text
+SELECT 'journal rows for this run outside {where}', count(*)::text
   FROM remediation_change_log
  WHERE run_stamp = {run_stamp}
-   AND (table_name <> 'unified_sites' OR column_name <> {column_literal});
+   AND {outside};
 """
+
+
+def _planned_values(records: Sequence[ChangeRecord], lane: Lane, value: str) -> tuple[str, str]:
+    """`(columns, VALUES rows)` naming each planned row - and on a cell lane its column - with
+    `value` (`new_value`): what a read-back compares the database against, row for row."""
+    if not lane.cells:
+        rows = ", ".join(f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records)
+        return f"site_id, {value}", rows
+    rows = ", ".join(
+        f"({_literal(r.site_id)}::uuid, {_literal(r.column)}, {_literal(r.new_value)})"
+        for r in records
+    )
+    return f"site_id, column_name, {value}", rows
 
 
 def assert_the_write_landed(
@@ -526,13 +859,24 @@ def assert_the_write_landed(
     if not records:
         raise PlanError("refusing to check the read-back of an empty plan")
     stamp = lane.run_stamp if run_stamp is None else run_stamp
-    values = ", ".join(f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records)
+    planned, values = _planned_values(records, lane, "new_value")
+    if lane.cells:
+        holds = cell_case(lane, "p.new_value", compare="IS NOT DISTINCT FROM", otherwise="false")
+        journal_column = "p.column_name"
+    else:
+        holds = f"u.{lane.column} IS NOT DISTINCT FROM p.new_value"
+        journal_column = _literal(lane.column)
     rows = read_rows(
         POST_WRITE_ASSERT_SQL.format(
+            planned=planned,
             values=values,
             run_stamp=_literal(stamp),
-            column=lane.column,
-            column_literal=_literal(lane.column),
+            target_join=_target_join(lane),
+            holds=holds,
+            table_literal=_literal(lane.target.table),
+            journal_column=journal_column,
+            where=written_where(lane),
+            outside=outside(lane),
         )
     )
     got = {name.strip(): int(value) for name, value in rows}
@@ -554,9 +898,9 @@ def assert_the_write_landed(
             "every planned row is journalled",
         ),
         (
-            f"journal rows for this run outside unified_sites.{lane.column}",
+            f"journal rows for this run outside {written_where(lane)}",
             0,
-            f"this run stamp journals unified_sites.{lane.column} only",
+            f"this run stamp journals {written_where(lane)} only",
         ),
     )
     for name, want, why in checks:
@@ -662,13 +1006,13 @@ READBACKS: dict[str, str] = {T05.name: VERIFY_SQL, **LANE_READBACKS}
 
 ROLLBACK_REHEARSAL_READS = """\
 -- after ROLLBACK of the reversal: the reversal must leave nothing behind either
-WITH planned(site_id, written) AS (VALUES {values})
+WITH planned({planned}) AS (VALUES {values})
 SELECT 'journal rows for the rollback stamp' AS metric, count(*)::text AS value
   FROM remediation_change_log WHERE run_stamp = {rollback_stamp}
 UNION ALL
 SELECT 'planned rows still holding the written value', count(*)::text
-  FROM planned p JOIN unified_sites u ON u.id = p.site_id
- WHERE u.{column} IS NOT DISTINCT FROM p.written
+  FROM planned p {target_join}
+ WHERE {holds}
 UNION ALL
 SELECT 'curated sites', count(*)::text
   FROM unified_sites WHERE source_id = {source}
@@ -680,12 +1024,18 @@ SELECT 'temp table {plan_table} left behind',
 
 def rollback_rehearsal_reads(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
     """The reads after a rehearsed reversal, per planned row and the value *that* row was given."""
-    values = ", ".join(f"({_literal(r.site_id)}::uuid, {_literal(r.new_value)})" for r in records)
+    planned, values = _planned_values(records, lane, "written")
+    if lane.cells:
+        holds = cell_case(lane, "p.written", compare="IS NOT DISTINCT FROM", otherwise="false")
+    else:
+        holds = f"u.{lane.column} IS NOT DISTINCT FROM p.written"
     return ROLLBACK_REHEARSAL_READS.format(
+        planned=planned,
         values=values,
         rollback_stamp=_literal(lane.rollback_run_stamp),
         source=_literal(CURATED_SOURCE),
-        column=lane.column,
+        target_join=_target_join(lane),
+        holds=holds,
         plan_table=lane.plan_table,
     )
 
@@ -867,8 +1217,41 @@ def _value_rows(lane: Lane) -> list[tuple[str, str, int]]:
     ]
 
 
+def _cell_value_rows(lane: Lane, columns: Iterable[str]) -> list[dict[str, Any]]:
+    """(column, value, rows) over the curated rows of a cell lane's target, read as JSON - a
+    stored text may contain the `|` unaligned psql separates on."""
+    target = lane.target
+    site = (
+        ""
+        if target.is_site
+        else f" JOIN unified_sites u ON u.id = {target.alias}.{target.key_column}"
+    )
+    selects = [
+        f"SELECT {_literal(lane.cell(column).name)} AS column_name, "
+        f"coalesce({target.alias}.{lane.cell(column).name}::text, '<NULL>') AS value, "
+        f"count(*) AS n FROM {target.table} {target.alias}{site} "
+        f"WHERE u.source_id = 'ancient_nerds' GROUP BY 2"
+        for column in sorted(set(columns))
+    ]
+    return psql_json_reader()(" UNION ALL ".join(selects) + " ORDER BY 1, 2")
+
+
 def verify_interests(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
     """The value table (and hub slug) for the values this plan touches - measured, not asserted."""
+    if lane.cells:
+        wanted_cells = {
+            (r.column, "<NULL>" if v is None else v)
+            for r in records
+            for v in (r.old_value, r.new_value)
+        }
+        rows = [
+            row
+            for row in _cell_value_rows(lane, {str(r.column) for r in records})
+            if (row["column_name"], row["value"]) in wanted_cells
+        ]
+        lines = ["column          rows  value"]
+        lines += [f"{row['column_name']:<15} {int(row['n']):>4}  {row['value']}" for row in rows]
+        return "\n".join(lines)
     wanted = {r.old_value for r in records} | {r.new_value for r in records}
     rows = [row for row in _value_rows(lane) if row[0] in wanted]
     width = max((len(c) for c, _, _ in rows), default=1)
@@ -984,7 +1367,7 @@ def cmd_apply(
             f"run stamp {lane.run_stamp!r} already journals {already} row(s): this write has "
             "landed, or something else wrote under its stamp - run --verify; never apply twice"
         )
-    readback = READBACKS[lane.name]
+    readback = readback_for(lane)
     print("=== before ===")
     print(run_psql(readback).stdout)
     print(verify_interests(records, lane))
@@ -1044,6 +1427,8 @@ def probe_cases(
     `premise`), read from production by the caller. Pure, so a test can check that every guard the
     lane renders has its probe.
     """
+    if lane.cells:
+        return _cell_probe_cases(records, lane, foreign)
     first = records[0]
     probes: list[tuple[str, str, list[ChangeRecord], str]] = []
 
@@ -1127,6 +1512,130 @@ def probe_cases(
     return probes
 
 
+#: A value of each cell type that no row holds and every cast accepts: a probe's corrupted value
+#: must reach its own guard, not stop at an `invalid input syntax for type integer` first.
+NEVER_STORED = {
+    "integer": "-987654321",
+    "jsonb": '["probe: a value never stored"]',
+    "text": "A value that was never there",
+    "character varying": "A value that was never there",
+}
+NOT_OWNED = {
+    "integer": "987654321",
+    "jsonb": '["probe: a value this lane does not own"]',
+    "text": "A value this lane does not own",
+    "character varying": "A value this lane does not own",
+}
+
+
+def _cell_probe_cases(
+    records: Sequence[ChangeRecord], lane: Lane, foreign: Mapping[str, Any]
+) -> list[tuple[str, str, list[ChangeRecord], str]]:
+    """`probe_cases` for a cell lane: each corrupted value is valid in its column's type, so the
+    probe reaches the guard it is meant for; guard 2 also refuses a column the lane does not own,
+    and a reversal lane's guard 6 a cell that names another journal row or restores a value other
+    than the one its journal row replaced."""
+    first = records[0]
+    first_cell = lane.cell(first.column)
+
+    def corrupt(index: int, **change: Any) -> list[ChangeRecord]:
+        mutated = list(records)
+        mutated[index] = replace(records[index], **change)
+        return mutated
+
+    probes: list[tuple[str, str, list[ChangeRecord], str]] = [
+        (
+            "guard3-foreign-old-value",
+            "guard 3 - a planned old value the row does not hold",
+            corrupt(0, old_value=NEVER_STORED[first_cell.sql_type]),
+            refusal(GUARD3_SAYS),
+        ),
+        (
+            "guard2-no-op",
+            "guard 2 - a planned cell that is not a change",
+            corrupt(0, new_value=first.old_value),
+            refusal(GUARD2_SAYS),
+        ),
+        (
+            "guard2-foreign-column",
+            "guard 2 - a cell in a column the lane does not own",
+            corrupt(0, column="name"),
+            refusal(GUARD2_SAYS),
+        ),
+    ]
+    wide = next(
+        (i for i, r in enumerate(records) if lane.cell(r.column).max_chars is not None), None
+    )
+    if wide is not None:
+        width = lane.cell(records[wide].column).max_chars or 0
+        probes.append(
+            (
+                "guard2-too-long",
+                "guard 2 - a value longer than its column",
+                corrupt(wide, new_value="X" * (width + 1)),
+                refusal(GUARD2_SAYS),
+            )
+        )
+    probes.append(
+        (
+            "guard1-other-source",
+            f"guard 1 - a {lane.target.table} row outside source_id = 'ancient_nerds'",
+            [
+                replace(
+                    first,
+                    site_id=str(foreign["id"]),
+                    site_name=str(foreign["name"]),
+                    condition=f"id = {foreign['id']}",
+                    reason="probe: a row of another source, which must be refused",
+                    evidence=({"source": "probe", "quote": "corrupted copy"},),
+                    premise=None if lane.premise_sql is None else str(foreign["premise"]),
+                ),
+                *records[1:],
+            ],
+            refusal(GUARD1_SAYS),
+        )
+    )
+    owned = next((i for i, r in enumerate(records) if lane.cell(r.column).allowed_new_values), None)
+    if owned is not None:
+        probes.append(
+            (
+                "guard4-not-owned",
+                "guard 4 - a planned value the lane does not own",
+                corrupt(owned, new_value=NOT_OWNED[lane.cell(records[owned].column).sql_type]),
+                refusal(GUARD4_SAYS.format(what="write")),
+            )
+        )
+    if lane.premise_sql is not None:
+        probes.append(
+            (
+                "guard5-premise",
+                "guard 5 - a site whose premise has changed since the plan",
+                corrupt(0, premise="a premise the row never had"),
+                refusal(GUARD5_SAYS),
+            )
+        )
+    if lane.reverses_journal:
+        probes.append(
+            (
+                "guard6-journal-row",
+                "guard 6 - a cell that names a journal row it does not undo",
+                corrupt(0, journal_id=0),
+                refusal(GUARD6_SAYS),
+            )
+        )
+        # the row it names is its own, so only guard 6's inverse clause can refuse it: journal
+        # id 0 above is refused by the lookup alone and never reaches that clause
+        probes.append(
+            (
+                "guard6-not-the-inverse",
+                "guard 6 - a cell that names its journal row but restores another value",
+                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),
+                refusal(GUARD6_SAYS),
+            )
+        )
+    return probes
+
+
 def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
     """Corrupt one copy per guard and show, on production, that *that* guard refuses.
 
@@ -1138,11 +1647,19 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
     """
     # Read as JSON: a name may contain the `|` unaligned psql separates fields on.
     premise = f", {lane.premise_sql} AS premise" if lane.premise_sql is not None else ""
-    foreign = psql_json_reader()(
-        f"SELECT u.id::text AS id, u.name, u.{lane.column}::text AS value{premise} "
-        f"FROM unified_sites u WHERE u.source_id <> 'ancient_nerds' "
-        f"AND u.{lane.column} IS NOT NULL AND u.{lane.column} <> '' LIMIT 1"
-    )
+    if lane.cells:
+        # the probe keeps the first cell's values and swaps in another source's site: guard 1
+        # refuses it for its source (and, off unified_sites, for having no row there at all)
+        foreign = psql_json_reader()(
+            f"SELECT u.id::text AS id, u.name{premise} "
+            "FROM unified_sites u WHERE u.source_id <> 'ancient_nerds' LIMIT 1"
+        )
+    else:
+        foreign = psql_json_reader()(
+            f"SELECT u.id::text AS id, u.name, u.{lane.column}::text AS value{premise} "
+            f"FROM unified_sites u WHERE u.source_id <> 'ancient_nerds' "
+            f"AND u.{lane.column} IS NOT NULL AND u.{lane.column} <> '' LIMIT 1"
+        )
     if not foreign:
         raise PlanError("no non-curated row to probe the source guard with")
 
@@ -1178,12 +1695,33 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
     return failures
 
 
+def readback_for(lane: Lane) -> str:
+    """The lane's read-only verification: `READBACKS`, or a card_stats wave's own."""
+    if lane.name in READBACKS:
+        return READBACKS[lane.name]
+    from mechanical.card_stats import card_stats_readback
+
+    return card_stats_readback(lane)
+
+
+def _lane_argument(name: str) -> str:
+    """`--lane`: a registered lane or a card_stats wave (`card-stats-2026-09-24`); anything else
+    is argparse's "invalid choice", as it was when the names were a fixed `choices` list."""
+    try:
+        resolve_lane(name)
+    except KeyError as exc:
+        raise argparse.ArgumentTypeError(
+            f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, card-stats-<wave>)"
+        ) from exc
+    return name
+
+
 # ------------------------------------------------------------------------------------ CLI
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Apply one mechanical lane's plan")
     ap.add_argument(
         "--lane",
-        choices=sorted(LANES),
+        type=_lane_argument,
         default=T05.name,
         help="the lane (column, journal identity, owned values); default t05",
     )
@@ -1220,7 +1758,7 @@ def main(argv: list[str] | None = None) -> int:
         help="report which body of apply_remediation_change is deployed",
     )
     args = ap.parse_args(argv)
-    lane = LANES[args.lane]
+    lane = resolve_lane(args.lane)
     out = args.out if args.out is not None else lane_dir(lane)
     plan = args.plan if args.plan is not None else out / "PLAN.jsonl"
 
@@ -1242,7 +1780,7 @@ def run(args: argparse.Namespace, *, lane: Lane, out: Path, plan: Path, usage: A
         print(run_psql(PRIMITIVE_CHECK_SQL).stdout)
         return EXIT_OK
     if args.verify:
-        print(run_psql(READBACKS[lane.name]).stdout)
+        print(run_psql(readback_for(lane)).stdout)
         return EXIT_OK
 
     records = load_records(plan)

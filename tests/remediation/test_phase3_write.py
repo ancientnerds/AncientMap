@@ -36,6 +36,8 @@ from typing import Any
 
 import pytest
 
+from tests.source_functions import function_def, names_used_by
+
 REPO = Path(__file__).resolve().parents[2]
 PHASE3_PARENT = REPO / "scripts" / "remediation"
 if str(PHASE3_PARENT) not in sys.path:
@@ -524,7 +526,7 @@ def test_the_two_report_only_reasons_stay_apart(tmp_path: Path) -> None:
         )
     )
     detail = {refusal.field: refusal.detail for refusal in plan.refused_fields(W.RULE_REPORT_ONLY)}
-    assert "api/main.py:506" in detail["card_description"]
+    assert "api/main.py::lifespan" in detail["card_description"]
     assert "Phase 5" in detail["description"]
     assert detail["description"] != detail["card_description"]
 
@@ -535,6 +537,30 @@ def test_a_site_type_the_normaliser_would_rewrite_is_refused(tmp_path: Path) -> 
     assert plan.rows == []
     refusal = plan.refused_fields(W.RULE_FIXED_POINT)[0]
     assert refusal.field == "site_type" and "normalize_site_type" in refusal.detail
+
+
+def test_the_boot_producers_the_refusals_name_are_where_the_refusals_say(tmp_path: Path) -> None:
+    """A refusal names the code that would revert the write, and that code is read here.
+
+    Both refusal texts cited line numbers until 2026-09-23 (`api/main.py:506`,
+    `pipeline/lyra/orchestrator.py:1476-1488`). The boot-DDL extraction moved both files, and the
+    refusals then pointed at unrelated code. No test noticed. They name functions now, and this test
+    checks that those functions still do what the refusal says.
+    """
+    card = W.REPORT_ONLY_REASON["card_description"]
+    assert (
+        "`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`"
+        in card
+    )
+    assert "import_card_descriptions" in names_used_by(REPO / "api" / "main.py", "lifespan")
+    function_def(REPO / "api" / "services" / "card_descriptions.py", "import_card_descriptions")
+
+    plan = _plan(tmp_path, field="site_type", proposed="settlement")
+    refusal = plan.refused_fields(W.RULE_FIXED_POINT)[0]
+    assert "`pipeline/lyra/orchestrator.py::_run_migrations`" in refusal.detail
+    assert "pipeline.normalizers.site_type.normalize_site_type" in names_used_by(
+        REPO / "pipeline" / "lyra" / "orchestrator.py", "_run_migrations"
+    )
 
 
 def test_a_site_type_that_is_a_fixed_point_is_planned(tmp_path: Path) -> None:

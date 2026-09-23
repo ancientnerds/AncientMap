@@ -60,8 +60,8 @@ no opt-out flag. Only the `WHERE ... IS DISTINCT FROM` guard limits how many row
 
 ### 2.1 `unified_sites.site_type` — normalizer-run
 
-`pipeline/lyra/orchestrator.py:1476-1488`, inside `_run_migrations()` (called from `main()` at
-`:1990`, so once per orchestrator start):
+`pipeline/lyra/orchestrator.py`, inside `_run_migrations()` (called from `main()`, so once per
+orchestrator start):
 
 ```python
 _raw_types = conn.execute(
@@ -85,12 +85,12 @@ anything it cannot place.
 Measured 2026-09-20: all 97 canonical types are fixed points, and the only non-canonical value
 present in production is `suspect_modern` (1 site), which the check deliberately skips.
 
-`user_contributions.site_type` is normalized the same way (`:1490-1502`) — irrelevant to this
+`user_contributions.site_type` is normalized the same way (the next loop) — irrelevant to this
 remediation but part of the same rule.
 
 ### 2.2 `unified_sites.name_normalized` — and the trap in its own WHERE clause
 
-`pipeline/lyra/orchestrator.py:1694-1702`:
+`pipeline/lyra/orchestrator.py`, inside `_run_migrations()`:
 
 ```sql
 UPDATE unified_sites
@@ -114,17 +114,19 @@ clean it up for me" is false.
 **Rule: write `left(lower(unaccent(name)), 500)` — the derivation the code intends — not merely some
 fixed point.** That satisfies both the intent and the guard.
 
-`unified_site_names.name_normalized` (`:1687-1692`) is re-normalised **in place** (from itself, not
-from `name`), so its fixed point is the same condition, `value = left(lower(unaccent(value)), 500)`.
-The same block (`:1679-1685`) deletes duplicate `unified_site_names` rows keeping the lowest id, so
-inserting a duplicate name here is undone on the next start.
+`unified_site_names.name_normalized` is re-normalised **in place** by the UPDATE that runs just
+before the `unified_sites` one (from itself, not from `name`), so its fixed point is the same
+condition, `value = left(lower(unaccent(value)), 500)`. The DELETE just before that removes
+duplicate `unified_site_names` rows keeping the lowest id, so inserting a duplicate name here is
+undone on the next start.
 
 ### 2.3 `card_stats.card_description` — the JSON file wins on every API boot
 
-`api/main.py:493-552`, an unconditional startup import:
+`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`, an
+unconditional startup import:
 
 - Source: `public/data/card_descriptions.json` (git-LFS tracked), key `descriptions`.
-- Upsert at `api/main.py:527-531`:
+- Upsert `_UPSERT_SQL` in `api/services/card_descriptions.py`:
 
 ```sql
 INSERT INTO card_stats (site_id, card_description, ...)
@@ -133,7 +135,7 @@ ON CONFLICT (site_id) DO UPDATE SET card_description = :desc
 WHERE card_stats.card_description IS DISTINCT FROM :desc
 ```
 
-- Truncated to 200 characters at `api/main.py:533`.
+- Truncated to 200 characters (`CARD_DESCRIPTION_MAX_LENGTH`, same file).
 
 The `IS DISTINCT FROM` guard only prevents rewriting an identical value. It does **not** protect a
 differing one — the JSON value overwrites the database value on every API start.
@@ -178,7 +180,8 @@ found by the OVERWRITER lane after this section was first written, and the secti
 
 The two files have the same shape, so the bootstrap is a copy. Verified contents of the deployed
 file: exactly one top-level key `descriptions`, **4,996 entries**, UUID site_ids as keys, and a
-**maximum value length of 200** - matching `varchar(200)` and the truncation at `api/main.py:533`.
+**maximum value length of 200** - matching `varchar(200)` and the truncation in
+`api/services/card_descriptions.py` (`CARD_DESCRIPTION_MAX_LENGTH`).
 
 ```bash
 cp public/data/card_descriptions.json output/card_descriptions.json   # then edit output/ and run:

@@ -57,12 +57,12 @@ report rather than dropped:
 
 | column | producer | rule | verdict |
 | --- | --- | --- | --- |
-| `unified_sites.site_type` | `pipeline/lyra/orchestrator.py:1476-1488`, every start | `normalize_site_type(value) == value` | re-checked per row, by the producer's own function |
+| `unified_sites.site_type` | `pipeline/lyra/orchestrator.py::_run_migrations` (its `normalize_site_type` pass), every start | `normalize_site_type(value) == value` | re-checked per row, by the producer's own function |
 | `unified_sites.country` | `pipeline/lyra/data_patches.py:48-61` (`fix_countries`) | that UPDATE is guarded `source_id = 'lyra' AND country IS NULL` | **writable**: no `ancient_nerds` row is re-derived |
 | `unified_sites.period_start` | `pipeline/lyra/data_patches.py:64-78` (`backfill_periods`) | guarded `source_id = 'lyra' AND period_start IS NULL` | **writable**, same reason |
 | `unified_sites.description` | none | text regeneration is Phase 5 | **report-only**, refused |
-| `card_stats.card_description` | `api/main.py:506` -> `api/services/card_descriptions.py:35-48`, every API boot | an upsert from `public/data/card_descriptions.json` | **report-only**, refused |
-| `unified_sites.name_normalized` | `pipeline/lyra/orchestrator.py:1694-1702` | `left(lower(unaccent(value)), 500)`, which no offline check can evaluate | **cannot be reached here**: `snapshot_plan.FIELD_STORED_IN` has no table for the column, so the plan refuses it as `no-table-mapping`. If that mapping ever grows the column, this table has to grow with it - a branch keyed on `unaccent` would be code no test could reach |
+| `card_stats.card_description` | `api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`, every API boot | an upsert from `public/data/card_descriptions.json` | **report-only**, refused |
+| `unified_sites.name_normalized` | `pipeline/lyra/orchestrator.py::_run_migrations` (its `name_normalized` UPDATE) | `left(lower(unaccent(value)), 500)`, which no offline check can evaluate | **cannot be reached here**: `snapshot_plan.FIELD_STORED_IN` has no table for the column, so the plan refuses it as `no-table-mapping`. If that mapping ever grows the column, this table has to grow with it - a branch keyed on `unaccent` would be code no test could reach |
 
 The `site_type` check calls `model.site_type_fixed_point`, i.e. the boot producer's own function, so
 there is no second spelling of the normalisation; a value the normaliser would rewrite is refused with
@@ -246,8 +246,8 @@ REPORT_ONLY_REASON: dict[str, str] = {
     ),
     "card_description": (
         "report-only in Phase 3: `card_stats.card_description` is re-derived on every API boot "
-        "(`api/main.py:506` -> `api/services/card_descriptions.py:35-48`, an upsert into "
-        "`card_stats`), so a database-only write is reverted at the next start"
+        "(`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`, "
+        "an upsert into `card_stats`), so a database-only write is reverted at the next start"
     ),
 }
 
@@ -480,17 +480,18 @@ def _fixed_point_refusal(field_name: str, value: str) -> tuple[str, str] | None:
     """(rule, reason) for a value a producer would rewrite, or `None` when it survives every one.
 
     The producer is named in the reason because "refused" alone is not actionable: a refused
-    `site_type` needs the normaliser's name and the line it runs from. Only the columns the plan can
-    actually reach arrive here (`snapshot_plan.FIELD_STORED_IN` minus the report-only fields), and of
-    those only `site_type` has a producer that rewrites the value.
+    `site_type` needs the normaliser's name and the function it runs from (a function, not a line:
+    lines move). Only the columns the plan can actually reach arrive here
+    (`snapshot_plan.FIELD_STORED_IN` minus the report-only fields), and of those only `site_type`
+    has a producer that rewrites the value.
     """
     if field_name == "site_type" and not M.site_type_fixed_point(value):
         return (
             RULE_FIXED_POINT,
             f"`{value}` is not a site_type fixed point: "
             "pipeline.normalizers.site_type.normalize_site_type would rewrite it on the next "
-            "container start (pipeline/lyra/orchestrator.py:1476-1488), so the write would be a "
-            "temporary edit rather than a correction",
+            "container start (`pipeline/lyra/orchestrator.py::_run_migrations`), so the write would "
+            "be a temporary edit rather than a correction",
         )
     return None
 
