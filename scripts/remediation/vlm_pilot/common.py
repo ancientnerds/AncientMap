@@ -27,6 +27,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import re
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
@@ -55,6 +56,39 @@ SNAPSHOT_DIR = REPO_ROOT / "output" / "remediation" / "snapshot"
 WIKI_IMAGES_SNAPSHOT = SNAPSHOT_DIR / "wiki_images.jsonl.gz"
 UNIFIED_SITES_SNAPSHOT = SNAPSHOT_DIR / "unified_sites.jsonl.gz"
 CARD_STATS_SNAPSHOT = SNAPSHOT_DIR / "card_stats.jsonl.gz"
+
+#: The six image kinds the pipeline's question prints (`shorts_select.VLM_PROMPT`), in its order.
+#: Moved here from `ask_vlm.py` (2026-09-23) together with `extract_json`: the gallery audit's
+#: vision stage reads both, and the pilot's transport, which that module still holds as history, is
+#: not imported by anything that runs any more.
+EXPECTED_KINDS = (
+    "site_photo",
+    "artifact",
+    "map_or_document",
+    "painting_or_artwork",
+    "people",
+    "other",
+)
+
+
+def extract_json(text: str) -> dict[str, Any] | None:
+    """Outermost `{...}` of the response, or None. Mirrors `parse_fenced_json(extract_object=True)`."""
+    cleaned = (text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        cleaned = cleaned.rsplit("```", 1)[0].strip()
+    try:
+        parsed = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        match = re.search(r"\{[\s\S]*\}", cleaned)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+        except (json.JSONDecodeError, ValueError):
+            return None
+    return parsed if isinstance(parsed, dict) else None
+
 
 #: T10's per-row tier verdicts, one finding per `wiki_images` row.
 T10_FINDINGS = REPO_ROOT / "output" / "remediation" / "run_t10" / "findings.jsonl"

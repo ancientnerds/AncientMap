@@ -43,6 +43,16 @@ Crash safety: `Ledger.append` opens the file in append mode, writes exactly one 
 `\n`, flushes and `os.fsync`s before returning, so a crash loses at most the call in flight and
 never leaves a half line behind (a half line would make every later `summarise()` a guess).
 
+The Opus handoff (owner order 2026-09-23) added `metering`. From then on a model call's answer is
+written by an Opus agent of the orchestrating Claude Code session and read back from the handoff
+directory (`scripts/remediation/opus_handoff.py`); a subscription has no per-call meter, so there is
+no token count and no dollar figure to record. Such a line says so - `metering: "unmetered"` - and
+carries zero tokens and a cost of 0, which this module then refuses to be anything else: an
+unmetered line with a number on it would be an invented measurement. The zeros sum like any other
+line, so a total over unmetered calls is 0 dollars **because nothing was metered**, and
+`StageTotals.unmetered_calls` counts them so the report says which. A line without the key is the
+provider-reported shape every line had before (the Pi transport's), and it is written unchanged.
+
 Concurrency, added 2026-09-21 after the second mass run died on its own bookkeeping: append mode is
 **not** enough when several processes write one ledger. `_O_APPEND` is emulated as
 seek-to-end-then-write, so two writers that seek in the same instant get the same offset and the
@@ -98,6 +108,10 @@ class FetchOutcome(StrEnum):
     HOST_UNREACHABLE = "host_unreachable"
 
 
+#: `Entry.metering` of a model call no meter read: the answer came through the Opus handoff.
+UNMETERED = "unmetered"
+
+
 class LedgerError(ValueError):
     """A ledger line that is not a measurement this module can total."""
 
@@ -137,6 +151,11 @@ class Entry:
     attempt: int | None = None
     error: str | None = None
     given_up: bool | None = None
+    #: model-call shape, since the Opus handoff: `UNMETERED` when no meter read this call (zero
+    #: tokens and a cost of 0 then say "not measured", never "measured as nothing"); `None` when the
+    #: numbers are the provider's own report. Written only when set, so a line without it keeps the
+    #: exact shape every line had before.
+    metering: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kind", _coerce(LedgerKind, self.kind, "kind"))
@@ -177,6 +196,8 @@ class Entry:
                     raise LedgerError(f"{self.label}: a model call cannot carry {name}")
             if self.outcome is not None:
                 raise LedgerError(f"{self.label}: a model call cannot carry outcome")
+            if self.metering is not None:
+                self._check_unmetered()
         else:
             if not self.url:
                 raise LedgerError(f"{self.label}: a fetch needs the url it fetched")
@@ -184,6 +205,27 @@ class Entry:
             for name in ("model", "input_tokens", "output_tokens", "cost_usd"):
                 if getattr(self, name) is not None:
                     raise LedgerError(f"{self.label}: a fetch cannot carry {name}")
+            if self.metering is not None:
+                raise LedgerError(f"{self.label}: a fetch cannot carry metering")
+
+    def _check_unmetered(self) -> None:
+        """An unmetered call carries zeros and nothing else: any number on it would be invented."""
+        if self.metering != UNMETERED:
+            raise LedgerError(
+                f"{self.label}: metering={self.metering!r} is not {UNMETERED!r}, the one "
+                "metering a line can declare"
+            )
+        counts = (
+            self.input_tokens,
+            self.output_tokens,
+            self.cache_read_tokens or 0,
+            self.cache_write_tokens or 0,
+        )
+        if any(counts) or self.cost_usd != 0:
+            raise LedgerError(
+                f"{self.label}: an unmetered call carries tokens {counts} and cost "
+                f"{self.cost_usd!r}; with no meter there is no number to record, so both are 0"
+            )
 
     def _check_fetch_attempt(self) -> None:
         """The fetch line's shape: an observed outcome, and a status exactly when one arrived."""
@@ -262,6 +304,8 @@ class Entry:
 
     def to_json(self) -> str:
         payload = asdict(self)
+        if self.metering is None:
+            del payload["metering"]
         payload["kind"] = self.kind.value
         payload["stage"] = self.stage.value
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -359,6 +403,7 @@ def _with_time(entry: Entry, at: str) -> Entry:
         attempt=entry.attempt,
         error=entry.error,
         given_up=entry.given_up,
+        metering=entry.metering,
     )
 
 
@@ -384,6 +429,9 @@ class StageTotals:
     #: twice appears twice, and `fetch_failures` answers exactly what the pilot's count asked: how
     #: much of this batch's traffic bought nothing.
     fetch_failures: int = 0
+    #: Model calls no meter read (`metering: "unmetered"`, the Opus handoff): their zeros are in the
+    #: sums above, and this says how many of `model_calls` those zeros stand for.
+    unmetered_calls: int = 0
     first_at: str | None = None
     last_at: str | None = None
 
@@ -447,7 +495,7 @@ def summarise(path: Path) -> LedgerSummary:
 
 
 def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
-    calls = fetches = failures = 0
+    calls = fetches = failures = unmetered = 0
     tokens = {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -468,6 +516,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
             cost_usd += entry.cost_usd
             fetch_bytes += entry.fetch_bytes
             failures += entry.fetch_failures
+            unmetered += entry.unmetered_calls
             times.extend(t for t in (entry.first_at, entry.last_at) if t)
             continue
         if entry["kind"] == LedgerKind.MODEL_CALL.value:
@@ -475,6 +524,8 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
             for name in tokens:
                 tokens[name] += int(entry.get(name) or 0)
             cost_usd += float(entry.get("cost_usd") or 0.0)
+            if entry.get("metering") == UNMETERED:
+                unmetered += 1
         else:
             fetches += 1
             fetch_bytes += int(entry.get("bytes") or 0)
@@ -491,6 +542,7 @@ def _totals(stage: str, entries: Iterable[Any]) -> StageTotals:
         fetches=fetches,
         fetch_bytes=fetch_bytes,
         fetch_failures=failures,
+        unmetered_calls=unmetered,
         cost_usd=cost_usd,
         first_at=times[0] if times else None,
         last_at=times[-1] if times else None,

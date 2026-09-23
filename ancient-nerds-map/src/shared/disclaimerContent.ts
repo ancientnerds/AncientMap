@@ -90,7 +90,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
       <div class="license-group">
         <h4>Wikipedia &amp; Wikimedia</h4>
         <ul>
-          <li><strong>CC BY-SA 3.0:</strong> <a href="https://en.wikipedia.org/" target="_blank" rel="noopener noreferrer">Wikipedia</a> (empire descriptions via REST API)</li>
+          <li><strong>CC BY-SA 4.0 / 3.0:</strong> <a href="https://en.wikipedia.org/" target="_blank" rel="noopener noreferrer">Wikipedia</a> (site descriptions, each linked to its exact source revision; empire descriptions via REST API)</li>
           <li><strong>Various licenses:</strong> <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a> (empire &amp; site images &mdash; individual licenses displayed in lightbox)</li>
         </ul>
       </div>
@@ -225,7 +225,8 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <h4>Platform License</h4>
     <ul>
       <li>The Ancient Nerds Research Platform source code is provided under <strong>AGPL-3.0</strong>.</li>
-      <li>Original content and documentation are provided under <strong>CC BY-NC-SA 4.0</strong>.</li>
+      <li>Original content (stories, weekly journals) and documentation are provided under <strong>CC BY-NC-SA 4.0</strong>.</li>
+      <li>Site descriptions that carry a source line reproduce, shorten or translate text from the linked source revision (Wikipedia: <strong>CC BY-SA 4.0</strong>); the line states how an AI system was involved.</li>
       <li>See <a href="https://github.com/AncientNerds/AncientMap" target="_blank" rel="noopener noreferrer">GitHub</a> for full license details.</li>
     </ul>
   </div>

@@ -254,8 +254,12 @@ def _year(token: str) -> int:
     return year
 
 
-def _mentions(text: str) -> list[_Mention]:
-    """Every dated claim in `text`, longest match winning where patterns overlap."""
+def mentions(text: str) -> list[_Mention]:
+    """Every dated claim in `text`, longest match winning where patterns overlap.
+
+    Public since 2026-09-23: the Phase-4 verifier (`phase4/verify4.py`, V11) reads the years of a
+    generated sentence with this parser instead of a second one.
+    """
     found: list[tuple[int, int, _Mention]] = []
 
     def add(
@@ -400,9 +404,12 @@ def _ordinal_years(ordinal: str, unit: str, era: str | None) -> tuple[int, int]:
     return width * (n - 1), width * n - 1
 
 
-def _claims(text: str) -> list[_Mention]:
-    """Dated claims that a bucket comparison may use: era-marked and not modern."""
-    return [m for m in _mentions(text) if m.marked and not m.modern]
+def claims(text: str) -> list[_Mention]:
+    """Dated claims that a bucket comparison may use: era-marked and not modern.
+
+    Public since 2026-09-23, like `mentions`, for the Phase-4 verifier.
+    """
+    return [m for m in mentions(text) if m.marked and not m.modern]
 
 
 def _bounds(label: str, buckets: list[tuple[str, int, int]]) -> tuple[int, int]:
@@ -474,14 +481,14 @@ def run(ctx: Context) -> list[Finding]:
         verdicts: dict[str, list[_Mention]] = {}
         all_claims: dict[str, list[_Mention]] = {}
         for field in TEXT_FIELDS:
-            claims = _claims(texts[field])
-            all_claims[field] = claims
-            if not claims:
+            field_claims = claims(texts[field])
+            all_claims[field] = field_claims
+            if not field_claims:
                 continue
-            outside = [c for c in claims if not _touches(c, window)]
+            outside = [c for c in field_claims if not _touches(c, window)]
             if not outside:
                 continue
-            if len(outside) < len(claims) and not any(c.primary for c in outside):
+            if len(outside) < len(field_claims) and not any(c.primary for c in outside):
                 # The text tells a longer story and its own dating agrees with the
                 # site's bucket: an isolated later claim is a later phase, not a
                 # contradiction (§4.3 pattern 1).

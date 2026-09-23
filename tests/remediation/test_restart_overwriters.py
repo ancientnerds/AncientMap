@@ -8,7 +8,7 @@ remediation is about to write:
   `card_stats.card_description` from `public/data/card_descriptions.json`. It
   overwrites on purpose - the file is that column's authoritative copy and the
   import is the only path from a committed file to an existing row
-  (`docs/procedures/CARD_DESCRIPTIONS.md:95`) - so the tests here pin two things
+  (`docs/procedures/CARD_DESCRIPTIONS.md`, "How a card reaches production") - so the tests here pin two things
   at once: the overwrite survives (a fill-only variant would be a regression),
   and it can no longer be silent.
 * `pipeline/lyra/orchestrator.py::_run_migrations` reconciles
@@ -58,6 +58,12 @@ class _Result:
     def fetchone(self) -> Any:
         return self._rows[0] if self._rows else None
 
+    def scalar_one(self) -> Any:
+        # The real one raises unless there is exactly one row.
+        if len(self._rows) != 1:
+            raise AssertionError(f"scalar_one() on {len(self._rows)} rows")
+        return self._rows[0][0]
+
 
 class _Conn:
     """Records every statement; answers from `rows_for` by fragment match."""
@@ -98,11 +104,14 @@ class _Conn:
 
 
 class _Engine:
-    def __init__(self, log: list[tuple[str, dict[str, Any]]]) -> None:
+    def __init__(
+        self, log: list[tuple[str, dict[str, Any]]], rows_for: dict[str, list[Any]] | None = None
+    ) -> None:
         self.log = log
+        self.rows_for = rows_for
 
     def connect(self) -> _Conn:
-        return _Conn(self.log)
+        return _Conn(self.log, self.rows_for)
 
 
 def _upserts(log: list[tuple[str, dict[str, Any]]]) -> list[dict[str, Any]]:
@@ -238,7 +247,10 @@ def _run_migrations_log() -> list[tuple[str, dict[str, Any]]]:
     import pipeline.lyra.orchestrator as orch
 
     log: list[tuple[str, dict[str, Any]]] = []
-    orch._run_migrations(_Engine(log))
+    # The boot asks pg_catalog before each schema statement (pipeline/utils/boot_ddl.py);
+    # answer "present" to all of them, as production's up-to-date schema does.
+    up_to_date = {"FROM pg_catalog.": [(True,)], "to_regclass(:relation_name)": [(True,)]}
+    orch._run_migrations(_Engine(log, up_to_date))
     return log
 
 
@@ -309,7 +321,9 @@ def _restore_log(monkeypatch) -> list[tuple[str, dict[str, Any]]]:
     db = _Conn(
         log,
         {
-            "FROM db_snapshots": [SimpleNamespace(source_id="ancient_nerds", snapshot_type="upload")],
+            "FROM db_snapshots": [
+                SimpleNamespace(source_id="ancient_nerds", snapshot_type="upload")
+            ],
             "FROM snapshot_rows WHERE snapshot_id": [SimpleNamespace(site_id=AN)],
         },
     )
@@ -350,5 +364,7 @@ def test_restore_reverts_every_column_the_insert_branch_writes(monkeypatch):
     update_columns = upsert.split("ON CONFLICT (id) DO UPDATE SET")[1]
 
     for column in ("name_normalized", "description", "raw_data", "period_end", "site_type"):
-        assert f"old_data->>'{column}'" in insert_columns or f"old_data->'{column}'" in insert_columns
+        assert (
+            f"old_data->>'{column}'" in insert_columns or f"old_data->'{column}'" in insert_columns
+        )
         assert f"{column} = EXCLUDED.{column}" in update_columns

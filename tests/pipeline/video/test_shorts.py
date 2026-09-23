@@ -1,12 +1,22 @@
 """Pure-function tests for the site-shorts pipeline (no network, no ffmpeg, no VLM)."""
 
+import hashlib
 from pathlib import Path
 
 import pytest
+from PIL import ImageFont
 
+from pipeline.video import shorts_audit
 from pipeline.video.__main__ import music_start_default, sfx
 from pipeline.video.media import ff_path
-from pipeline.video.shorts_audit import evaluate, longest_frozen_run, passed
+from pipeline.video.shorts_audit import (
+    card_sha256,
+    card_trace,
+    evaluate,
+    longest_frozen_run,
+    passed,
+    widest_word_px,
+)
 from pipeline.video.shorts_brand import FONT_HEADING, FONT_SOURCES, FONTS, missing_glyphs
 from pipeline.video.shorts_captions import Word, align_words, display_text, spoken_at, srt_text
 from pipeline.video.shorts_export import (
@@ -483,6 +493,7 @@ class TestExportShape:
             "mystery": 4,
             "legacy": 5,
             "civilization": "Inca",
+            "card_text_sha256": None,
         }
         imgs = [
             {
@@ -525,6 +536,35 @@ def test_local_image_name_is_filesystem_safe_and_keeps_original_extension():
     )
 
 
+#: A card and the hash its `_description_provenance` pins (S13), computed here with hashlib
+#: rather than with the module's own helper, so a wrong helper cannot move the expectation.
+CARD = "Machu Picchu is a 15th-century Inca citadel at 2,430 metres."
+CARD_SHA = hashlib.sha256(CARD.encode("utf-8")).hexdigest()
+
+#: One `_SITE_SQL` row, as the export reads it; a card without card provenance.
+_EXPORT_ROW = {
+    "id": "12345678-aaaa-bbbb-cccc-1234567890ab",
+    "name": "X",
+    "country": "Peru",
+    "lat": 0.0,
+    "lon": 0.0,
+    "site_type": "Tomb",
+    "period_name": None,
+    "description": "",
+    "card_description": "c",
+    "rarity_tier": 3,
+    "rarity_score": 1,
+    "total_power": 1,
+    "antiquity": 0,
+    "fortification": 0,
+    "cultural_influence": 0,
+    "mystery": 0,
+    "legacy": 0,
+    "civilization": None,
+    "card_text_sha256": None,
+}
+
+
 def _measurements(**over):
     m = {
         "width": 1080,
@@ -559,6 +599,8 @@ def _measurements(**over):
         "card_words": 27,
         "caption_words": 27,
         "captions_end": 15.1,
+        "card_sha256": CARD_SHA,
+        "card_provenance_sha256": CARD_SHA,
     }
     m.update(over)
     return m
@@ -633,6 +675,111 @@ class TestAudit:
         assert not passed(evaluate(_measurements(loop_seam=5.0)))
 
 
+# S13: the narrated card is the card its `_description_provenance` pins (Phase 5).
+
+
+def test_s13_the_card_hash_is_the_provenance_form():
+    assert card_sha256(CARD) == CARD_SHA
+    assert card_sha256("Ávila") == hashlib.sha256("Ávila".encode()).hexdigest()
+
+
+def test_s13_a_card_its_provenance_pins_passes():
+    checks = {c.name: c.ok for c in evaluate(_measurements())}
+    assert checks["card_traced"] is True
+
+
+def test_s13_a_card_that_is_not_the_pinned_one_fails():
+    other = card_sha256(CARD + " ")  # one byte off: the file was edited after the write
+    checks = evaluate(_measurements(card_sha256=other))
+    assert not passed(checks)
+    assert {c.name for c in checks if not c.ok} == {"card_traced"}
+
+
+def test_s13_a_card_without_card_provenance_is_not_shorts_eligible():
+    """A held card, or one written before Phase 5, carries no pinned hash."""
+    checks = evaluate(_measurements(card_provenance_sha256=None))
+    failed = [c for c in checks if not c.ok]
+    assert [c.name for c in failed] == ["card_traced"]
+    assert "carries no card" in failed[0].value
+
+
+def test_s13_the_card_is_measured_from_the_narrated_text_and_the_pin_from_the_provenance():
+    """The two S13 inputs `measure_site` reads out of site.json: the hash of the card the short
+    narrates, and the hash its provenance pins. Taking either from the other side would make S13
+    pass every card that has any pin."""
+    pinned = card_sha256(CARD + " ")  # the card was edited after the write
+    trace = card_trace({"card_text": CARD, "card_text_sha256": pinned})
+    assert trace == {"card_sha256": CARD_SHA, "card_provenance_sha256": pinned}
+    checks = evaluate(_measurements(**trace))
+    assert {c.name for c in checks if not c.ok} == {"card_traced"}
+    held = card_trace({"card_text": CARD, "card_text_sha256": None})
+    assert held == {"card_sha256": CARD_SHA, "card_provenance_sha256": None}
+
+
+def test_s13_the_audit_measures_the_card_through_card_trace():
+    """`measure_site` needs a rendered short (ffprobe, the mp4), so its wiring is read from its
+    source: the S13 fields of the dict it returns are exactly `card_trace(site)`."""
+    import ast
+    import inspect
+    import textwrap
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(shorts_audit.measure_site)))
+    returned = [node.value for node in ast.walk(tree) if isinstance(node, ast.Return)]
+    assert len(returned) == 1 and isinstance(returned[0], ast.Dict)
+    spreads = [v for k, v in zip(returned[0].keys, returned[0].values, strict=True) if k is None]
+    assert [ast.unparse(v) for v in spreads] == ["card_trace(site)"]
+    keys = {k.value for k in returned[0].keys if isinstance(k, ast.Constant)}
+    assert not keys & {"card_sha256", "card_provenance_sha256"}
+
+
+def test_s13_the_export_carries_the_pinned_hash_into_site_json():
+    row = dict(_EXPORT_ROW, card_text_sha256=CARD_SHA)
+    assert assemble_site(row, [])["card_text_sha256"] == CARD_SHA
+    assert assemble_site(dict(_EXPORT_ROW), [])["card_text_sha256"] is None
+
+
+def test_s13_the_export_reads_the_hash_from_the_card_provenance():
+    from pipeline.video.shorts_export import _SITE_SQL
+
+    sql = " ".join(str(_SITE_SQL).split())
+    assert (
+        "s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256' "
+        "AS card_text_sha256" in sql
+    )
+
+
+#: A real FreeType face (Pillow's own) at the caption size, for the width tests.
+CAPTION_FACE = ImageFont.load_default(size=shorts_audit.CAPTION_SIZE)
+
+
+# S3 and the Phase-4 card check (V10) measure a caption word with one function.
+
+
+def test_the_widest_word_is_measured_as_shown_with_its_outline():
+    word, px = widest_word_px(["An", "Intihuatana,", "stone"], CAPTION_FACE)
+    assert word == "Intihuatana"  # the trailing comma is not drawn
+    expected = int(CAPTION_FACE.getlength("Intihuatana")) + 2 * shorts_audit.CAPTION_BORDER
+    assert px == expected
+
+
+def test_a_punctuation_only_token_has_no_width():
+    assert widest_word_px(["-", "—"], CAPTION_FACE) == ("", 0)
+
+
+def test_the_caption_audit_measures_through_the_public_helper(monkeypatch):
+    seen = []
+
+    def spy(words, font):
+        seen.append((list(words), font))
+        return "x", 7
+
+    monkeypatch.setattr(shorts_audit, "widest_word_px", spy)
+    monkeypatch.setattr(shorts_audit, "caption_font", lambda path: CAPTION_FACE)
+    got = shorts_audit._widest_caption([{"text": "Inca"}, {"text": "citadel."}], Path("f"))
+    assert got == ("x", 7)
+    assert seen == [(["Inca", "citadel."], CAPTION_FACE)]
+
+
 class TestSpokenName:
     def test_site_and_country(self):
         assert spoken_name("Machu Picchu", "Peru") == "Machu Picchu, Peru."
@@ -657,27 +804,7 @@ class TestFlagAndMusic:
         assert country_code_for(None) is None
 
     def test_site_json_carries_the_country_code(self):
-        row = {
-            "id": "12345678-aaaa-bbbb-cccc-1234567890ab",
-            "name": "X",
-            "country": "Peru",
-            "lat": 0.0,
-            "lon": 0.0,
-            "site_type": "Tomb",
-            "period_name": None,
-            "description": "",
-            "card_description": "c",
-            "rarity_tier": 3,
-            "rarity_score": 1,
-            "total_power": 1,
-            "antiquity": 0,
-            "fortification": 0,
-            "cultural_influence": 0,
-            "mystery": 0,
-            "legacy": 0,
-            "civilization": None,
-        }
-        assert assemble_site(row, [])["country_code"] == "PE"
+        assert assemble_site(dict(_EXPORT_ROW), [])["country_code"] == "PE"
 
     def test_mix_graph_with_music_loops_fades_and_stays_silent_at_the_loop_point(self):
         g = mix_graph(16.7, 19.5, music=True)

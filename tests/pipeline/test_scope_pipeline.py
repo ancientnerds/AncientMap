@@ -356,6 +356,7 @@ def _short_site_row(**kw) -> SimpleNamespace:
         "mystery": 5,
         "legacy": 6,
         "civilization": "Syria",
+        "card_text_sha256": None,  # no card provenance yet: the audit's S13 fails it
     }
     return SimpleNamespace(**{**base, **kw})
 

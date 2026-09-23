@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import SiteMetadata from '../../SiteMetadata'
+import DescriptionDisclosure from '../../DescriptionDisclosure'
 import CitationText, { hasCitationMarkers } from '../../CitationText'
 import { hasDisplayableRawData } from '../../../config/sourceFields'
 import { isWikipediaUrl } from '../../../services/imageService'
@@ -24,14 +25,18 @@ export function DescriptionSection({
   sourceLanguage,
   referenceLinks,
   descriptionCitations,
+  descriptionAi,
+  descriptionAttribution,
 }: DescriptionSectionProps) {
   const [showCitations, setShowCitations] = useState(false)
   const [showMoreInfo, setShowMoreInfo] = useState(false)
 
   const hasMoreInfo = !rawDataLoading && hasDisplayableRawData(sourceId, rawData)
 
-  // Extract domain for source attribution (e.g. "de.wikipedia.org")
-  const wikiSourceDomain = bestWikiUrl && sourceLanguage && sourceLanguage !== 'en'
+  // Extract domain for source attribution (e.g. "de.wikipedia.org"). A description with
+  // its own attribution names its source itself: the older enrichment link would then
+  // name a page the text no longer comes from.
+  const wikiSourceDomain = !descriptionAttribution && bestWikiUrl && sourceLanguage && sourceLanguage !== 'en'
     ? (() => { try { return new URL(bestWikiUrl).hostname } catch { return null } })()
     : null
 
@@ -86,6 +91,11 @@ export function DescriptionSection({
       ) : (
         <>
           {descriptionContent}
+
+          {/* EU AI Act Art. 50 and CC BY-SA 4.0: graded by the text's provenance */}
+          {description && (
+            <DescriptionDisclosure ai={descriptionAi} attribution={descriptionAttribution} />
+          )}
 
           {/* Source attribution for non-English wiki sources */}
           {wikiSourceDomain && bestWikiUrl && (

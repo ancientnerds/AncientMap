@@ -1,5 +1,12 @@
 # Gallery-audit stage — design (plan §6.5 / Phase 2 items 2–5)
 
+> **Transport superseded, 2026-09-23.** Owner order: "no DeepSeek any more - everything with Opus".
+> The vision questions are no longer sent to `deepseek-v4-flash-vision-exp` over the opencode
+> gateway: they are answered by Opus agents of the orchestrating session through the handoff
+> directory (`scripts/remediation/opus_handoff.py`; `gallery_audit/vision.py export|import`). The
+> image bytes and the frozen questions are unchanged. The sections below are the design as it was
+> made; read "the transport" there as history (AUDIT_LOG, "the Opus handoff").
+
 Status: **design, read-only recon**. No database write, no source edit, no commit.
 Author: scout lane, 2026-09-21. Snapshot basis: `output/remediation/snapshot`
 (exported 2026-09-20T20:20:01+02:00), T10 run `output/remediation/run_t10`.

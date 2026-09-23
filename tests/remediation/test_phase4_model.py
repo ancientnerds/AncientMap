@@ -77,7 +77,10 @@ def _provenance_dict() -> dict[str, Any]:
         "run": "pilot-20260922",
         "lane": "W",
         "ai": "selected",
-        "ai_system": "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)",
+        "ai_system": (
+            "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+            "an-sites-remediation-2026-09"
+        ),
         "licence": "CC BY-SA 4.0",
         "attribution": {
             "title": "Tarxien Temples",
@@ -178,6 +181,7 @@ def _plan_site_dict() -> dict[str, Any]:
         "source_url": "https://en.wikipedia.org/wiki/Tarxien_Temples",
         "wikidata_qid": "Q1195938",
         "enwiki_title": "Tarxien Temples",
+        "in_snapshot": True,
         "snapshot_description": None,
         "flags": ["cleared-card-defect", "shared-title"],
     }
@@ -434,7 +438,12 @@ def test_the_change_note_follows_the_lane() -> None:
 
 
 def test_the_disclosed_ai_system_is_the_model_that_is_called() -> None:
-    assert M.AI_SYSTEM == f"{MS.MODEL} via Pi (an-sites-remediation-2026-09)"
+    """EU AI Act Art. 50: the disclosure names Claude Opus (Anthropic), the model every call's ledger
+    line names (owner order 2026-09-23); the March texts keep their own disclosure."""
+    assert M.AI_SYSTEM == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
+    assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
+    assert "deepseek" not in M.AI_SYSTEM.lower() and " via Pi " not in M.AI_SYSTEM
+    assert M.LEGACY_AI_SYSTEM == "2026-03 enrichment chain (LLM; model per site not recorded)"
     data = _provenance_dict()
     data["ai_system"] = "some other model"
     _refused(M.Provenance.from_dict, data, "provenance.ai_system")
@@ -754,6 +763,19 @@ def test_a_plan_site_digest_is_the_sha256_of_its_text() -> None:
     _refused(M.PlanSite.from_dict, data, "raw_data and raw_data_sha256 disagree on null")
 
 
+def test_a_plan_site_says_whether_the_snapshot_has_it() -> None:
+    """`in_snapshot` is a boolean, and a site the snapshot does not have carries no snapshot text
+    (accepted by the orchestrator 2026-09-23, decision D4)."""
+    _refused(M.PlanSite.from_dict, {**_plan_site_dict(), "in_snapshot": 1}, "not a boolean")
+    _refused(
+        M.PlanSite.from_dict,
+        {**_plan_site_dict(), "in_snapshot": False, "snapshot_description": "old"},
+        "a snapshot description for a site not in the snapshot",
+    )
+    absent = M.PlanSite.from_dict({**_plan_site_dict(), "in_snapshot": False})
+    assert M.PlanSite.from_json(absent.to_json()) == absent
+
+
 def test_a_plan_site_accepts_the_oldest_period_in_production() -> None:
     # Measured 2026-09-23 (read-only): min(period_start) over the curated rows is -1,400,000.
     data = {**_plan_site_dict(), "period_start": -1_400_000}
@@ -823,14 +845,73 @@ DESIGN_PRONOUNS = [
 ]
 
 
+#: The review of WB-B2's additions (2026-09-23), verbatim: the design's list let hedged and
+#: contracted-negation spans be offered for deletion.
+ADDED_PROTECTED = {
+    "hedges": (
+        "presum* apparent* arguabl* seem* appear* suppos* reputed* purported* evidently assum* "
+        "possible probable maybe"
+    ).split(),
+    "negations": ["cannot", "*n't", "*n’t"],
+    "refutation": ["unknown"],
+}
+
+
 def test_the_protected_tokens_are_the_design_list_verbatim() -> None:
-    assert {group: list(tokens) for group, tokens in M.PROTECTED_TOKENS.items()} == (
+    assert {group: list(tokens) for group, tokens in M.DESIGN_PROTECTED_TOKENS.items()} == (
         DESIGN_PROTECTED
     )
 
 
+def test_the_protected_tokens_every_consumer_reads_are_the_design_list_then_the_additions() -> None:
+    assert {group: list(tokens) for group, tokens in M.PROTECTED_TOKEN_ADDITIONS.items()} == (
+        ADDED_PROTECTED
+    )
+    assert {group: list(tokens) for group, tokens in M.PROTECTED_TOKENS.items()} == {
+        group: [*design, *ADDED_PROTECTED.get(group, [])]
+        for group, design in DESIGN_PROTECTED.items()
+    }
+
+
 def test_the_pronoun_openers_are_the_design_list_verbatim() -> None:
     assert list(M.PRONOUN_OPENERS) == DESIGN_PRONOUNS
+
+
+@pytest.mark.parametrize(
+    ("text", "circa"),
+    [
+        ("built c. 2500 BC", "c. "),
+        ("built ca.300 AD", "ca."),
+        # {{circa}} renders `c.` and a thin space (U+2009); an NBSP is whitespace too
+        ("grew c.\u20091770 BC", "c.\u2009"),
+        ("settled c.\u00a012,500 years ago", "c.\u00a0"),
+        # era-first dates
+        ("built c. AD 79 on the shore", "c. "),
+        ("built ca. BC 500 on the hill", "ca. "),
+        ("built c. BCE 500 on the hill", "c. "),
+        # a capital C, at the start of a sentence
+        ("C. 1200 BC the city was burnt", "C. "),
+        ("Ca. 1200 BC the city was burnt", "Ca. "),
+    ],
+)
+def test_the_circa_pattern_reads_every_circa_form(text: str, circa: str) -> None:
+    (match,) = M.CIRCA_PATTERN.finditer(text)
+    assert match.group() == circa
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "It dates to the 5th c. BCE and later.",  # c. is a century: no number follows
+        "It dates to the 5th c. and the 4th c.",
+        "It was dug by B.c. 1990 surveyors.",  # an initial after a full stop
+        "Tools from Africa. 1990 was the year.",  # the end of a word, not an abbreviation
+        "Tools, pots etc. 5 of them.",
+        "It was built c. ad 79.",  # an era word is upper case
+    ],
+)
+def test_the_circa_pattern_reads_no_century_and_no_word_end(text: str) -> None:
+    assert M.CIRCA_PATTERN.search(text) is None
 
 
 def test_the_word_lists_match_the_design_file() -> None:
@@ -845,7 +926,7 @@ def test_the_word_lists_match_the_design_file() -> None:
     parsed = {
         group: [token.strip("'") for token in body.split(", ")] for group, body in groups.items()
     }
-    assert parsed == {group: list(tokens) for group, tokens in M.PROTECTED_TOKENS.items()}
+    assert parsed == {group: list(tokens) for group, tokens in M.DESIGN_PROTECTED_TOKENS.items()}
     v6 = text[text.index("V6 anaphora") : text.index("V7 subject")]
     pronouns = re.search(r"closed pronoun list \(([^)]*)\)", v6)
     assert pronouns is not None

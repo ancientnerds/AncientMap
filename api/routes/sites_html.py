@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
 from api.seo_shell import ssr_shell_response
+from api.services.description_provenance import description_disclosure
 from pipeline.article_html_renderer import render_error_html
 from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
@@ -302,6 +303,7 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
                    period_start, period_end, description, lat, lon, source_url,
                    parent_site_id::text AS parent_site_id,
                    raw_data -> 'description_citations' AS description_citations,
+                   raw_data -> '_description_provenance' AS description_provenance,
                    cs.best_wiki_url, cs.source_language
             FROM unified_sites
             LEFT JOIN card_stats cs ON cs.site_id = unified_sites.id
@@ -335,6 +337,9 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
     # related content with ready-built paths. Since react-ssr Task 11 this
     # payload is everything SitePage needs: head (siteMeta), crawler body
     # (SiteRecord) and the interactive SitePopup all render without a fetch.
+    # The disclosure (AI mark and CC BY-SA attribution) is derived by the one
+    # function /api/sites/{id} uses, and only for the text the provenance hashes.
+    disclosure = description_disclosure(row.description_provenance, row.description)
     return ssr_shell_response(
         "site.html",
         {
@@ -353,6 +358,8 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
             "best_wiki_url": row.best_wiki_url,
             "source_language": row.source_language,
             "description_citations": row.description_citations,
+            "description_ai": None if disclosure is None else disclosure["ai"],
+            "description_attribution": None if disclosure is None else disclosure["attribution"],
             **_related_content(row, db),
         },
         _HTML_HEADERS,

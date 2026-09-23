@@ -61,6 +61,7 @@ from api.schemas.public_v1 import (
     StatsResponse,
     StatusResponse,
 )
+from api.services.description_provenance import description_disclosure
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import get_db
@@ -580,7 +581,8 @@ def create_public_api() -> FastAPI:
         query = text("""
             SELECT id::text, name, lat, lon, source_id, site_type,
                    period_start, period_end, period_name, country,
-                   description, source_url, thumbnail_url, scope_status
+                   description, source_url, thumbnail_url, scope_status,
+                   raw_data -> '_description_provenance' AS description_provenance
             FROM unified_sites
             WHERE id::text = :site_id
             LIMIT 1
@@ -592,6 +594,9 @@ def create_public_api() -> FastAPI:
             # Withdrawn on purpose (E4) - same answer as /api/sites/{id}.
             raise HTTPException(status_code=410, detail="This site has been withdrawn.")
 
+        # The disclosure of the description (Art. 50 EU AI Act, CC BY-SA 4.0): the one
+        # derivation /api/sites/{id} and the SSR page use, for the text the provenance hashes.
+        disclosure = description_disclosure(row.description_provenance, row.description)
         response = SiteDetailResponse(
             id=row.id,
             name=row.name,
@@ -606,6 +611,10 @@ def create_public_api() -> FastAPI:
             description=row.description,
             source_url=row.source_url,
             thumbnail_url=row.thumbnail_url,
+            ai_generated=disclosure is not None and disclosure["ai"] == "generated",
+            description_ai=None if disclosure is None else disclosure["ai"],
+            description_ai_system=None if disclosure is None else disclosure["aiSystem"],
+            description_license=None if disclosure is None else disclosure["licence"],
         )
         cache_set(cache_key, response.model_dump(), ttl=600)
         return response

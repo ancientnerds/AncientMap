@@ -81,12 +81,79 @@ def curated_page(alias: str = "") -> str:
     )
 
 
-#: LEFT JOIN target: the newest journal write per site. Joined as ``jlast``; the
-#: grouped subquery reads the whole journal once (6,572 rows on 2026-09-22) instead of
-#: one lookup per site.
+#: The columns the site's public page reads, per table: a journalled write of one of them
+#: changes the page (the SSR detail route api/routes/sites_html.py, rendered by
+#: src/pages/SitePage.tsx; tests/api/test_sitemap_lastmod.py derives the same lists from
+#: the route's own queries).
+#:
+#: - ``unified_sites``: the Phase-4/5 design (entry [6], production_write, COLUMNS) names
+#:   description, raw_data, name, country, site_type and period_start; period_name,
+#:   period_end, lat, lon, source_url and parent_site_id are rendered on the same page,
+#:   and later lanes journal some of them (period_name: 220 rows, lat/lon: 9, read
+#:   2026-09-23).
+#: - ``card_stats``: only the page's Wikipedia link and its language. The card itself
+#:   never appears on the page, and the ~4,300 P5 card writes would otherwise move the
+#:   lastmod and the hourly IndexNow announcement of pages whose content did not change.
+#: - ``wiki_images`` (orchestrator decision D6, 2026-09-23): the page shows one image - the
+#:   hero, else the lead, else the first by sort order, never an excluded one - so a write
+#:   of a column that chooses it (a hero change) or of one it renders of it (file, author,
+#:   licence, Commons link, size) changes the page. The image lanes journal is_hero,
+#:   is_excluded, filename, author, commons_page_url, width and height
+#:   (gallery_audit/chunk_writer.WRITABLE). A rendered column counts for every image of
+#:   the site, not only the one shown - the journal does not say which image the page
+#:   showed at the time, and announcing a page whose gallery changed behind its hero is
+#:   the cheaper error than missing a hero change.
+#:
+#: Not counted: any column the page does not show (``geom``, which the coordinate lane
+#: writes beside lat/lon; ``thumbnail_url``, the country hub's fallback for a site with
+#: no downloaded hero; the image lanes' image_kind, author_url, original_url and
+#: file_size_bytes; the card game's stats).
+PAGE_COLUMNS: dict[str, tuple[str, ...]] = {
+    "unified_sites": (
+        "description",
+        "raw_data",
+        "name",
+        "country",
+        "site_type",
+        "period_start",
+        "period_end",
+        "period_name",
+        "lat",
+        "lon",
+        "source_url",
+        "parent_site_id",
+    ),
+    "card_stats": ("best_wiki_url", "source_language"),
+    "wiki_images": (
+        "is_hero",
+        "is_excluded",
+        "is_lead",
+        "sort_order",
+        "filename",
+        "author",
+        "license",
+        "commons_page_url",
+        "width",
+        "height",
+    ),
+}
+
+
+def _page_write(table: str, columns: tuple[str, ...]) -> str:
+    listed = ", ".join("'" + column + "'" for column in columns)
+    return f"(table_name = '{table}' AND column_name IN ({listed}))"
+
+
+_PAGE_WRITE = " OR ".join(_page_write(table, columns) for table, columns in PAGE_COLUMNS.items())
+
+#: LEFT JOIN target: the newest journal write per site that changed its page. Joined as
+#: ``jlast``; the grouped subquery reads the journal once (6,572 rows on 2026-09-22)
+#: instead of one lookup per site.
 JOURNAL_LAST_WRITE = (
     "(SELECT site_id_ref, MAX(applied_at AT TIME ZONE 'UTC') AS applied_at "
-    "FROM remediation_change_log WHERE site_id_ref IS NOT NULL GROUP BY site_id_ref)"
+    "FROM remediation_change_log WHERE site_id_ref IS NOT NULL "
+    f"AND ({_PAGE_WRITE}) "
+    "GROUP BY site_id_ref)"
 )
 
 

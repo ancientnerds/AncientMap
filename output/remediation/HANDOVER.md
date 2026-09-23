@@ -43,7 +43,9 @@ The 7,761 unverifiable fields are a **search** problem, not a model problem: the
 no search route. (`pipeline/lyra/minimax_shared.minimax_search` exists and serves Lyra, the tweet
 verifier and Theo, but it turns every failure into an empty list; the first version of this file said
 no search route existed anywhere.) Decision (2026-09-22): MiniMax supplies search, the reasoning stays
-on `opencode-go/deepseek-v4.1-flash`.
+on `opencode-go/deepseek-v4.1-flash` - **superseded 2026-09-23 by the owner's order "no DeepSeek any
+more - everything with Opus"**: every model judgement is answered by Opus agents of the orchestrating
+session through the handoff (`scripts/remediation/opus_handoff.py`; AUDIT_LOG, "the Opus handoff").
 
 The 760 never-asked fields, the 5 empty streams and the 37 answers without a verdict are the **gap
 run**: 802 questions over 194 sites, planned in `PLAN.gap.jsonl` from a fresh production export
@@ -128,7 +130,8 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
 3. The 4 rows refused as "not writable in the columns' shape" are not written.
 4. The 29 geopolitical census rows are left as they are.
 5. Deploy only after all 5,004 are through - **that condition is now met**.
-6. The search route (A3) is **MiniMax** - search service only, reasoning stays on deepseek.
+6. The search route (A3) is **MiniMax** - search service only; the reasoning is **Opus** through the
+   handoff since the owner order of 2026-09-23 (it was deepseek until then).
 7. B7/B8/B9/B10 are decided (2026-09-21); see `HUMAN_ONLY.md`.
 8. Never push to `main` from an agent session: a push is a live deploy, and `.githooks/pre-push`
    aborts anyway when the working tree differs from the pushed commit.
@@ -182,6 +185,15 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
 - **The journal table is project-wide.** `remediation_change_log` carries rows from other phases
   (`is_hero` 5,438, `image_kind` 105, `mechanical-country` 35); this action's rows are stamped
   `phase3:batch-…`. Never present the table's total as this action's count.
+- **A card_stats wave's `ROLLBACK.sql` expires.** It carries the write's premise guard (guard 5),
+  which hashes every curated `(site_type, period_name)` pair and each planned site's inputs
+  (fields, content links, images, likes, bookmarks). The undo refuses as soon as any curated
+  `site_type` or `period_name` is written anywhere, or any input of a planned site moves - in
+  practice at the next field-write wave. From then on the wave is not undone from its file: the
+  next card_stats wave recomputes the cards from the inputs as they are, or a reversal is planned
+  from the journal as a new decision (no lane does that for card_stats today). Each wave's
+  `BASIS.json` must be committed with the plan that is applied: the next wave's proof reads it
+  (`scripts/remediation/mechanical/card_stats.py`, "The basis a wave's proof stands on").
 - **Never point the integration tests at production.** They INSERT test rows into `unified_sites`.
 - **Never weaken a check to make it green**, and never edit a test to match prose - if a test really
   encodes a superseded defect, rewrite it strictly stronger and say why.

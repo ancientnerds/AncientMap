@@ -60,8 +60,8 @@ no opt-out flag. Only the `WHERE ... IS DISTINCT FROM` guard limits how many row
 
 ### 2.1 `unified_sites.site_type` — normalizer-run
 
-`pipeline/lyra/orchestrator.py:1476-1488`, inside `_run_migrations()` (called from `main()` at
-`:1990`, so once per orchestrator start):
+`pipeline/lyra/orchestrator.py`, inside `_run_migrations()` (called from `main()`, so once per
+orchestrator start):
 
 ```python
 _raw_types = conn.execute(
@@ -85,12 +85,12 @@ anything it cannot place.
 Measured 2026-09-20: all 97 canonical types are fixed points, and the only non-canonical value
 present in production is `suspect_modern` (1 site), which the check deliberately skips.
 
-`user_contributions.site_type` is normalized the same way (`:1490-1502`) — irrelevant to this
+`user_contributions.site_type` is normalized the same way (the next loop) — irrelevant to this
 remediation but part of the same rule.
 
 ### 2.2 `unified_sites.name_normalized` — and the trap in its own WHERE clause
 
-`pipeline/lyra/orchestrator.py:1694-1702`:
+`pipeline/lyra/orchestrator.py`, inside `_run_migrations()`:
 
 ```sql
 UPDATE unified_sites
@@ -114,17 +114,21 @@ clean it up for me" is false.
 **Rule: write `left(lower(unaccent(name)), 500)` — the derivation the code intends — not merely some
 fixed point.** That satisfies both the intent and the guard.
 
-`unified_site_names.name_normalized` (`:1687-1692`) is re-normalised **in place** (from itself, not
-from `name`), so its fixed point is the same condition, `value = left(lower(unaccent(value)), 500)`.
-The same block (`:1679-1685`) deletes duplicate `unified_site_names` rows keeping the lowest id, so
-inserting a duplicate name here is undone on the next start.
+`unified_site_names.name_normalized` is re-normalised **in place** by the UPDATE that runs just
+before the `unified_sites` one (from itself, not from `name`), so its fixed point is the same
+condition, `value = left(lower(unaccent(value)), 500)`. The DELETE just before that removes
+duplicate `unified_site_names` rows keeping the lowest id, so inserting a duplicate name here is
+undone on the next start.
 
 ### 2.3 `card_stats.card_description` — the JSON file wins on every API boot
 
-`api/main.py:493-552`, an unconditional startup import:
+`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`, an
+unconditional startup import:
 
-- Source: `public/data/card_descriptions.json` (git-LFS tracked), key `descriptions`.
-- Upsert at `api/main.py:527-531`:
+- Source: `public/data/card_descriptions.json`, key `descriptions`. A normal git blob, **not
+  LFS** (`.gitattributes` puts `public/data/sites/*`, `*.geojson` and `*.json.gz` into LFS,
+  not this file; `git check-attr filter` answers `unspecified`, verified 2026-09-23).
+- Upsert `_UPSERT_SQL` in `api/services/card_descriptions.py`:
 
 ```sql
 INSERT INTO card_stats (site_id, card_description, ...)
@@ -133,16 +137,36 @@ ON CONFLICT (site_id) DO UPDATE SET card_description = :desc
 WHERE card_stats.card_description IS DISTINCT FROM :desc
 ```
 
-- Truncated to 200 characters at `api/main.py:533`.
+- Truncated to 200 characters (`CARD_DESCRIPTION_MAX_LENGTH`, same file).
 
 The `IS DISTINCT FROM` guard only prevents rewriting an identical value. It does **not** protect a
 differing one — the JSON value overwrites the database value on every API start.
 
 **Rule: never treat `card_stats.card_description` as the source of truth, and never fix a card text
 in the database alone. Any Phase 5 correction must be applied to `public/data/card_descriptions.json`
-*and* the database, or it is reverted at the next API restart.** The descriptions are generated and
-exported by the pipeline; the correct order is: fix the text, regenerate/export the JSON, then let
-the startup import carry it into the database.
+*and* the database, or it is reverted at the next API restart.**
+
+**The P5 order (2026-09 remediation, design entry [6], production_write step 3): the database
+first, journalled; then the file, byte for byte; then the push - in one sitting.**
+
+1. `scripts/remediation/phase4/card_json.py --prerender` renders the file the P5 plan leaves
+   behind, from the plan alone, and it is committed locally (not pushed);
+2. `output/remediation/tools/write_gate4.py --group P5 --apply --step 100` writes the cards through
+   `apply_remediation_change` (journal row, conditional old value, read-back, inverse proof), one
+   step per invocation; `verify_writes4.py` accepts each step, and its output handed to
+   `write_gate4.py --accept` is what unlocks the next `--apply` (the gate refuses to write while
+   the last step has no recorded acceptance - `docs/procedures/PHASE4_CONTRACTS.md` section 7);
+3. `card_json.py --regenerate` renders the file again from a read-only production SELECT and
+   passes only when it is byte for byte the pre-render;
+4. Push #2 (owner), then 0 `[STARTUP] Card description overwritten` lines on both API containers
+   and `card_json.py --check` (`ACCEPT_EXIT=0`).
+
+**Pushing the file before the database write is forbidden**: the boot import would write the cards
+without a journal, and the journalled write would then refuse every row with matched_0. A red CI
+inside the sitting is answered by `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'`
+plus a `git revert` of the JSON commit (rehearsed first; `revert4` skips a write that already has
+its own reversal, so the same pattern reverts only the live round of a batch written again). The
+full sitting is in `docs/procedures/CARD_DESCRIPTIONS.md` ("How a card reaches production").
 
 For contrast, `api/routes/sites.py:1743-1751` deliberately does **not** overwrite — it uses
 `card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description)`. Two write
@@ -168,6 +192,10 @@ generation -> output/card_descriptions.json          <- gitignored, DOES NOT EXI
 `scripts/merge_rewrites.py:2` ("Merge rewrite outputs into card_descriptions.json, then
 re-validate") is the other half of the same workflow.
 
+**Neither is a remediation path** (2026-09-23): the P5 sitting above writes the rows through the
+journal and renders the file with `card_json.py`; `import_card_descriptions.py` UPDATEs
+`card_stats` without a journal row, and both carry a docstring saying so.
+
 #### Step 1 does not exist by default - bootstrap it before Phase 5
 
 Measured 2026-09-20: **`output/card_descriptions.json` is absent**; only the deployed
@@ -178,7 +206,8 @@ found by the OVERWRITER lane after this section was first written, and the secti
 
 The two files have the same shape, so the bootstrap is a copy. Verified contents of the deployed
 file: exactly one top-level key `descriptions`, **4,996 entries**, UUID site_ids as keys, and a
-**maximum value length of 200** - matching `varchar(200)` and the truncation at `api/main.py:533`.
+**maximum value length of 200** - matching `varchar(200)` and the truncation in
+`api/services/card_descriptions.py` (`CARD_DESCRIPTION_MAX_LENGTH`).
 
 ```bash
 cp public/data/card_descriptions.json output/card_descriptions.json   # then edit output/ and run:
@@ -211,8 +240,14 @@ Four defects of one kind - a command that reports success without having succeed
 3. **Validation errors are printed and then ignored.** The apply loop's only condition is
    `sid in descs and len(new_desc) <= 200` (`:78`); it never consults the `errors` list. A rewrite
    rejected as `BAD ENDING` is applied anyway. Only the >200 case is filtered, and only by accident.
-4. **Even the do-nothing run overwrites** the git-LFS-tracked, deploy-relevant
+4. **Even the do-nothing run overwrites** the deploy-relevant
    `public/data/card_descriptions.json`.
+
+**Status: fixed - `merge_rewrites.py` fails closed** (its docstring, "WHY THIS SCRIPT IS WRITTEN
+THIS WAY"; `tests/remediation/test_merge_rewrites_fails_closed.py`): all ten batches present, every
+rewrite valid, at least one applied, the count unchanged and the re-validation not worse - or it
+exits non-zero and writes nothing to `public/data/`. The table above is the defect as measured
+before the fix.
 
 **Consequence for the bootstrap above:** copying the public file back makes
 `import_card_descriptions.py` usable, and it also makes `merge_rewrites.py` runnable - which is what
@@ -281,8 +316,9 @@ read through this contract before it becomes a write:
 1. **`site_type` proposals** must be fixed points of `normalize_site_type()`. Anything else is a
    revert-on-restart edit — emit `REVIEW` instead. (Enforced in `t04_site_type.py`.)
 2. **`name_normalized` proposals** must equal `left(lower(unaccent(name)), 500)`.
-3. **`card_description` proposals** are not database fixes; they are JSON-file fixes that the DB
-   import then carries. A Phase-5 plan that only writes SQL is wrong.
+3. **`card_description` proposals** are never a database-only fix. Phase 5 writes the rows through
+   the journal *and* renders the file from the same plan, in the order of section 2.3 - a plan that
+   only writes SQL is reverted at the next boot, a file pushed first writes without a journal.
 4. **Value proposals must fit the column**, checked before the proposal is made, not at write time.
 5. **`country` and `site_type` are `varchar(100)`** — a compound value like `"Chile, Easter Island"`
    fits, but the replacement must also fit.

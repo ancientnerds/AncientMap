@@ -11,6 +11,15 @@ directory, and `write_gate.py` would have skipped every one of its batches whose
 | --- | --- | --- | --- | --- | --- |
 | `mass` (default) | `runs/mass` | `logs/_write_dry` | `logs/_write_apply` | `logs/review` | `phase3:batch-%` |
 | `<name>` | `runs/<name>` | `logs/_write_dry_<name>` | `logs/_write_apply_<name>` | `logs/review_<name>` | `phase3:<prefix>-%` |
+| `p4`, `p4l`, `p5` | `phase4_runner/runs` (the run is chosen with `--run`) | `logs/_write_dry_<lane>` | `logs/_write_apply_<lane>` | - | `phase4:p4-%`, `phase4l:p4l-%`, `phase5:p5-%` |
+
+The three phase-4/5 lanes (2026-09-23, WB-D1) are the writer's row groups - the descriptions (P4), the
+legacy disclosure (L) and the cards (P5) of `scripts/remediation/phase4/write4.py` - and they are
+registered here **from the writer's own table** (`write4.GROUP_PREFIX` is the lane name and the batch-id
+prefix, `write4.GROUP_FAMILY` the journal family), so a lane and the stamps its writer renders cannot
+disagree. Their family is not `phase3`: the design names three journal families
+(`phase4:p4-NNNN:chunk-NNNN`, `phase4l:p4l-NNNN:...`, `phase5:p5-NNNN:...`), which is why a lane now
+carries its `family` beside its prefix.
 
 The default lane is exactly the paths the tools had before, so an invocation without `--lane` does
 what it always did. The journal stamp of a lane is the writer's own (`write_stage.Chunk.stamp`,
@@ -43,10 +52,14 @@ for _root in (REPO, REPO / "scripts" / "remediation"):
         sys.path.insert(0, str(_root))
 
 from phase3 import write_stage as W  # noqa: E402 - the one psql seam, parser and quoting
+from phase4 import write4 as W4  # noqa: E402 - the phase-4/5 row groups: lane names and families
 
 REMEDIATION = REPO / "output" / "remediation"
 LOGS = REMEDIATION / "logs"
 RUNS = REMEDIATION / "phase3_runner" / "runs"
+#: Where the phase-4 runs live (design, pipeline: `phase4_runner/runs/<run>/`) and their ledger.
+PHASE4_RUNS = REMEDIATION / "phase4_runner" / "runs"
+PHASE4_LEDGER = REMEDIATION / "phase4_runner" / "LEDGER.jsonl"
 LEDGER = REMEDIATION / "phase3_runner" / "LEDGER.jsonl"
 WRITER = REPO / "scripts" / "remediation" / "phase3" / "write_stage.py"
 RUNNER = REPO / "scripts" / "remediation" / "phase3" / "run.py"
@@ -66,9 +79,14 @@ PHASE3_BATCH_PREFIX: dict[str, str] = {
     "redecide": "rdc",
     "sitelink": "slk",
 }
-#: Every lane's batch-id prefix. Today the phase-3 lanes'; the phase-4/5 lanes join them here, each
-#: named by its own prefix (`wip/p4-write`), so a phase-3 lane is added to `PHASE3_BATCH_PREFIX`.
-BATCH_PREFIX: dict[str, str] = dict(PHASE3_BATCH_PREFIX)
+#: The phase-4/5 lanes, one per row group of the writer: the lane is named by its batch-id prefix.
+PHASE4_LANES: dict[str, W4.Group] = {W4.GROUP_PREFIX[group]: group for group in W4.Group}
+BATCH_PREFIX: dict[str, str] = {**PHASE3_BATCH_PREFIX, **{name: name for name in PHASE4_LANES}}
+#: The journal family of each lane: the first part of every run stamp it writes.
+STAMP_FAMILY: dict[str, str] = {
+    **dict.fromkeys(PHASE3_BATCH_PREFIX, "phase3"),
+    **{name: W4.GROUP_FAMILY[group] for name, group in PHASE4_LANES.items()},
+}
 
 
 @dataclass(frozen=True)
@@ -81,6 +99,7 @@ class Lane:
     apply_root: pathlib.Path
     review_logs: pathlib.Path
     stamp_like: str
+    family: str  #: the journal family: `phase3`, `phase4`, `phase4l` or `phase5`
 
     @property
     def rows(self) -> pathlib.Path:
@@ -103,13 +122,15 @@ def lane(name: str = MASS) -> Lane:
             "batch-id prefix in lanes.BATCH_PREFIX, because that prefix is its journal stamp"
         )
     suffix = "" if name == MASS else f"_{name}"
+    family = STAMP_FAMILY[name]
     return Lane(
         name=name,
-        run_dir=RUNS / name,
+        run_dir=PHASE4_RUNS if name in PHASE4_LANES else RUNS / name,
         dry_root=LOGS / f"_write_dry{suffix}",
         apply_root=LOGS / f"_write_apply{suffix}",
         review_logs=LOGS / f"review{suffix}",
-        stamp_like=f"phase3:{BATCH_PREFIX[name]}-%",
+        stamp_like=f"{family}:{BATCH_PREFIX[name]}-%",
+        family=family,
     )
 
 

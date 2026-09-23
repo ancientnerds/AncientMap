@@ -4,6 +4,22 @@
 The "one button" entry point for auditing and enriching the Ancient Nerds database.
 Currently scoped to ancient_nerds source only (lyra/community to be added later).
 
+NOT A REMEDIATION PATH (2026-09-23, Phases 4 and 5 of the sites remediation, design entry [6] of
+output/remediation/logs/design_texts_images_2026-09-22.json, section pipeline). The 2026-09
+remediation never uses this orchestrator's Wave-4 chain, for three measured reasons:
+
+  * sync_from_production (:196; its batch UPDATE at :275-314) UPDATEs every synced row of
+    unified_sites, conditional on nothing and journalled nowhere;
+  * merge_verification (:2667; the UPDATEs at :2762-2817) is a plain UPDATE of unified_sites and
+    card_stats with no old-value condition and no journal row;
+  * the web-links merge derives content_id from Python's salted hash() (:1862), so the same URL gets
+    another id in every process.
+
+Every remediation write goes through apply_remediation_change() (migrations 0017/0018/0022) with a
+conditional old value, a journal row and a rollback: scripts/remediation/phase4/write4.py and
+output/remediation/tools/write_gate4.py. Wave 3 ("card descriptions") is retired as well: cards are
+extractive now, docs/procedures/CARD_DESCRIPTIONS.md.
+
 Flow:
   sync    → Fetch latest site data from API (GeoJSON) into local DB
   Waves 0-3 → Audit & enrich locally

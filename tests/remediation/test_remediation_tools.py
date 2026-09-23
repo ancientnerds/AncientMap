@@ -87,6 +87,33 @@ def test_the_sitelink_lane_is_a_phase_three_lane_with_its_own_paths_and_stamp() 
     assert "slkg" not in lanes.BATCH_PREFIX.values()
 
 
+def test_the_phase4_lanes_carry_the_three_journal_families_the_design_names() -> None:
+    """WB-D1: production_write names the stamps `phase4:p4-NNNN:chunk-NNNN`,
+    `phase4l:p4l-NNNN:chunk-NNNN` and `phase5:p5-NNNN:chunk-NNNN`, and their rollback files live in
+    `logs/_write_apply_p4|_p4l|_p5/`. The literals are the design's, not the module's."""
+    base = REPO / "output" / "remediation"
+    for name, family in (("p4", "phase4"), ("p4l", "phase4l"), ("p5", "phase5")):
+        paths = lanes.lane(name)
+        assert paths.family == family
+        assert paths.stamp_like == f"{family}:{name}-%"
+        assert paths.apply_root == base / "logs" / f"_write_apply_{name}"
+        assert paths.run_dir == base / "phase4_runner" / "runs"
+    assert lanes.lane().family == "phase3" and lanes.lane("gap").family == "phase3"
+
+
+def test_the_phase4_lanes_are_the_writers_row_groups_not_a_second_table() -> None:
+    """The lane name, its batch-id prefix and its family come from `write4`'s own table, so the
+    stamps the writer renders and the stamps the acceptance reads cannot disagree."""
+    from phase4 import write4 as W4
+
+    for group in W4.Group:
+        name = W4.GROUP_PREFIX[group]
+        assert lanes.BATCH_PREFIX[name] == name
+        assert lanes.STAMP_FAMILY[name] == W4.GROUP_FAMILY[group]
+        chunk = W4.Chunk4(group=group, batch_id=f"{name}-0007", write_round=1, rows=())
+        assert chunk.stamp.startswith(lanes.lane(name).stamp_like.rstrip("%"))
+
+
 def test_an_unknown_lane_is_refused_rather_than_given_a_guessed_prefix() -> None:
     with pytest.raises(SystemExit, match="unknown lane"):
         lanes.lane("gapp")
@@ -168,6 +195,7 @@ def _lane(tmp_path: Path, name: str = "gap") -> lanes.Lane:
         apply_root=tmp_path / f"_write_apply_{name}",
         review_logs=tmp_path / f"review_{name}",
         stamp_like=f"phase3:{name}-%",
+        family="phase3",
     )
 
 
@@ -494,6 +522,27 @@ def test_the_reviewer_ceiling_counts_this_pass_and_really_stops_the_queue() -> N
     # and the other 7 are never started.
     assert len(started) == 3
     assert not_reached == todo[3:]
+
+
+def test_a_reviewer_pass_is_one_half_of_an_opus_handoff_round(tmp_path: Path) -> None:
+    """The reviewer has no transport of its own: a pass exports its questions or imports answers,
+    and the argv it sends is one the real `run.py judge` takes (owner order 2026-09-23)."""
+    from phase3 import run as R
+
+    parser = review_all.build_parser()
+    with pytest.raises(SystemExit, match="only through the Opus handoff"):
+        review_all.handoff_flag(parser.parse_args([]))
+    for mode in ("export", "import"):
+        args = parser.parse_args([f"--handoff-{mode}", str(tmp_path / "handoff")])
+        argv = review_all.judge_argv(
+            "gap-0001",
+            run_dir=tmp_path,
+            ledger=tmp_path / "L",
+            handoff=review_all.handoff_flag(args),
+        )
+        parsed = R.build_parser().parse_args(argv[2:])
+        assert parsed.stage == "reviewer"
+        assert getattr(parsed, f"handoff_{mode}") == str(tmp_path / "handoff")
 
 
 # ── the dry planner ──────────────────────────────────────────────────────────────────────────────

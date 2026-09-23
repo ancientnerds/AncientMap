@@ -6,6 +6,12 @@ Reads:  output/card_descriptions.json (original)
 Writes: output/card_descriptions.json (candidate)
 Copies: public/data/card_descriptions.json - ONLY on a complete, valid, non-regressing run
 
+NOT A REMEDIATION PATH (2026-09-23): it fails closed now (below), but it still writes
+output/card_descriptions.json and copies it over public/data/card_descriptions.json (PUBLIC, :69)
+without a journal row, and the file is what every API boot upserts into card_stats. The 2026-09
+remediation's cards are extractive and journalled: scripts/remediation/phase4/write4.py (group P5)
+and scripts/remediation/phase4/card_json.py, docs/procedures/CARD_DESCRIPTIONS.md.
+
 WHY THIS SCRIPT IS WRITTEN THIS WAY (it used to be a script that could not fail)
 The previous version reported success in situations where it had done nothing or done harm. Measured,
 same fixture, all ten batch files missing:

@@ -45,6 +45,10 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
   return (
     <div
       className={`site-card${compact ? ' site-card--compact' : ''}`}
+      // Machine-readable only (design: no visual change on cards); the visible notice is
+      // on the site's page, which the card opens.
+      data-description-ai={site.descriptionAi}
+      data-card-ai={site.cardAi}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}

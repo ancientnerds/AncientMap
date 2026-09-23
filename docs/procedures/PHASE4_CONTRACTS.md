@@ -21,8 +21,9 @@ tests `tests/remediation/test_phase4_model.py`. The tracks start from branch `wi
    `if __package__ in (None, ""): sys.path.insert(0, str(Path(__file__).resolve().parent.parent))`.
    `import phase4` appends the repository root to `sys.path`, so `pipeline.*` resolves from any
    working directory (tested in a subprocess with `-I`).
-3. **Seams are imported, never re-implemented** (design, pipeline): `model_stage.PiRunner`,
-   `ModelRunner`, `judge_site`, `ModelCall`, `Prompt`; `fetch_stage.HttpFetcher`, `PacedFetcher`,
+3. **Seams are imported, never re-implemented** (design, pipeline): `model_stage.HandoffRunner`
+   (the Opus handoff, which replaced `PiRunner` on 2026-09-23 - section 6), `RecordingRunner`,
+   `export_calls`, `ModelRunner`, `judge_site`, `ModelCall`, `Prompt`; `fetch_stage.HttpFetcher`, `PacedFetcher`,
    `HostPacer`, `probe_host`, `one_attempt`, `EvidenceStore`, `TRUNCATION_MARKER`;
    `search_stage.MiniMaxSearcher`, `Searcher`, `quota_stop_reason`, `search_slot`;
    `run.assign_batches`, `write_batches`, `read_jsonl`, `Batch`; `write_stage.run_sql`,
@@ -32,8 +33,9 @@ tests `tests/remediation/test_phase4_model.py`. The tracks start from branch `wi
    `pipeline.lyra.training_corpus.parse_robots`, `parse_tdmrep`, `reservation_for`,
    `html_reserves_tdm`; `pipeline.lyra.blocked_domains.BLOCKED_DOMAINS`. Never the
    `audit_enrich.py` Wave-4 chain.
-4. **No live calls in tests.** No Pi, MiniMax, Anthropic, socket or production access in any test:
-   a scripted `ModelRunner`, a scripted fetcher, a recording `SqlRunner`. Fakes refuse what the
+4. **No live calls in tests.** No model call, MiniMax, Anthropic, socket or production access in any
+   test: a scripted `ModelRunner` or answers the test writes into a handoff directory, a scripted
+   fetcher, a recording `SqlRunner`. Fakes refuse what the
    real object refuses. A test that needs gitignored data skips with its reason.
 5. **Every guard has a test that goes red without it and a mutation case** in
    `scripts/remediation/phase3/mutation_sweep.py` (phase-4 code and the tools), labelled
@@ -56,7 +58,7 @@ vocabularies; source ids (`W`, `D`, `T.<lang>`, `R<k>`), sentence ids (`W12`, `T
 their sentence; references (every sentence's `src` is a listed source, every listed source is
 cited, source ids unique, card items name existing sentences in ascending order, 1-2 of them); the
 fixed pairings lane -> `ai` and lane -> `attribution.changes`; the constants `AI_SYSTEM` (built
-from `model_stage.MODEL`), `LEGACY_AI_SYSTEM`, `LEGACY_BASIS`, version 1, the published licence
+from `model_stage.MODEL`, which is `opus_handoff.OPUS_MODEL` - section 6), `LEGACY_AI_SYSTEM`, `LEGACY_BASIS`, version 1, the published licence
 CC BY-SA 4.0 and its URL; `attribution.url` is one of the cited sources' URLs; Wikidata (`D`) is
 never cited; sentences of one source keep source order without overlap; `PlanSite` digests of
 `description` and `card` are their sha256; the selector refusals listed in section 5.
@@ -89,9 +91,17 @@ the world (a text, a marker, a hash), not a shape `model4` would refuse first.
   `encode(sha256(convert_to(x, 'UTF8')), 'hex')`.
 - **Parity.** `sentences.py` (B2) and `verify4.py` (C2) each implement the span finder and the
   edit list from the design text; neither reads the other's (C2 never opens `assemble.py`, an AST
-  test proves `verify4` does not import it). Before the pilot the orchestrator runs both finders
-  over the same pools: any difference is a contract bug, fixed in the design reading, not by
-  making one import the other.
+  test proves `verify4` does not import it). Both implement the rules of section 7 (decision D3,
+  2026-09-23), and a parity test runs both finders over the same fixture texts
+  (`tests/remediation/p4_span_cases.py`, `SPAN_CASES`: one case per rule and per refusal, with the
+  exact spans) and asserts identical span sets. Before the pilot the orchestrator also runs both
+  finders over the same pools: any difference is a contract bug, fixed in the design reading, not
+  by making one import the other. What both import is data, never a matcher of the other's:
+  `model4.PROTECTED_TOKENS` and `model4.CIRCA_PATTERN`. Measured on wip/p4-verify-sup
+  (2026-09-23, section 7 with the shared-comma refusal), read-only over the 3,661 local enwiki
+  extracts: 170,528 sentences (81,979 of them in a lane-W pool, 144,272 spans offered by S2),
+  **0** sentences on which the two finders differ, and every S2 sentence range is one sentence
+  of verify4's own split (V2).
 
 ## 4. Records and run directory
 
@@ -159,10 +169,12 @@ Provides:
   host did not answer (then nothing is final and a re-run retries).
 - **A `revision-too-fresh` hold is final for its batch directory** (S1 and S1b): the answer is
   stored write-once and the report is the completion mark, so a re-run judges the same answer. The
-  design's "defers the site to a later batch" is the driver's (Track B, `mass4`): after the run it
-  re-queues the sites held `revision-too-fresh` into a new batch directory once 48 h have passed
-  since their `retrieved_at`. The Track-A review measured on 2026-09-23: 102 of 4,502 articles
-  were younger than 48 h, about 2 % of the sites at any moment.
+  design's "defers the site to a later batch" is the driver's (Track B, `mass4`): it re-queues the
+  sites held `revision-too-fresh` into a new batch directory once 48 h have passed since their
+  `retrieved_at` (built 2026-09-23; section 7, "The re-queue"). `sources_stage.fresh_until(detail)`
+  reads that time back out of the hold (`article_problem` writes the answer's `curtimestamp`). The
+  Track-A review measured on 2026-09-23: 102 of 4,502 articles were younger than 48 h, about 2 % of
+  the sites at any moment.
 - `route_stage.routes_batch(batch_dir, *, ledger, fetcher, searcher, max_searches: int, now:
   datetime, probe, wait, sleep=time.sleep) -> int`: writes `src.T.*`, `src.R*` (and `src.W`, `src.D`
   for the sites S1b anchors), then `lanes.jsonl` (one `LaneAssignment` per site, lane 0 included),
@@ -205,12 +217,13 @@ Owns `pipeline/lyra/text_sentences.py` and `tests/pipeline/test_text_sentences.p
 `test_phase4_select.py`, `test_phase4_assemble.py`, `test_phase4_review.py`,
 `test_phase4_lanes.py`, `test_phase4_runner.py`.
 
-Provides:
+Provides (section 7 records the signatures Track B had to change and its span reading):
 
 - `text_sentences.split_sentences` (unchanged signature) protecting `c.`, `ca.`, `r.`, `fl.`, `b.`,
   `d.` before a digit; its 10 importers' tests run unchanged.
 - `sentences.split_source(source_id: str, text: str) -> tuple[M.Sentence, ...]` (every sentence of
-  the pinned text, spans offered, none containing a `M.PROTECTED_TOKENS` entry) and
+  the pinned text, spans offered by the rules of section 7 - on `W` sentences only - none
+  containing a `M.PROTECTED_TOKENS` entry) and
   `sentences.candidate_pool(sentences: Sequence[M.Sentence], *, lane: M.Lane, names:
   Sequence[str]) -> tuple[M.Sentence, ...]` (lead plus 6 per section, at most 120 sentences or
   24,000 characters; lane S keeps name-bearing sentences only).
@@ -227,8 +240,10 @@ Provides:
   under `reviews/` never bought twice; re-assembles and re-verifies through
   `verify4.verify_site`); `translate_stage.translate_batch(...)` and
   `restricted_stage.restricted_batch(...)` in the same shape.
-- `run4`: subcommands `plan|sources|routes|select|assemble|verify|review|writeplan`, each printing
-  `STAGE_EXIT=`; `mass4`: the loop, `--max-usd 15`, `--max-searches 700`,
+- `run4`: subcommands `plan|sources|routes|select|translate|assemble|verify|review|writeplan`,
+  each printing `STAGE_EXIT=`; `select` (S3, S3R), `translate` (S3T) and `review` (S6) each take
+  `--handoff-export DIR` or `--handoff-import DIR` (section 6); `mass4`: the loop, one handoff
+  round per live run (`--stages`, `check_round`), `--max-usd 15`, `--max-searches 700`,
   `package_digest(root=<phase4>)`; `audit4.draw_sample(site_ids: Sequence[str], *, seed: int,
   count: int, exclude: set[str]) -> list[str]` and `audit4.audit_sheet(...) -> str`.
 
@@ -254,6 +269,30 @@ Provides:
 - `verify_writes4`: the acceptance CLI (`ACCEPT_EXIT=`), reusing `verify_writes`' journal-chain
   reader and re-running `verify4.verify_site` on production read-back with the journal quotes.
 
+How verify4 reads what the design leaves open (the p4-verify reviews, closed on
+wip/p4-verify-sup, 2026-09-23):
+
+- **V2**: a published `W`/`T.<lang>` range `[start, end)` is exactly one sentence of the pinned
+  text's split (section 3: each non-heading line through `text_sentences.split_sentences`, each
+  stripped piece found again in its line). A range that starts after `According to X, ` is held,
+  although no drop names it. Lane R quotes are located by code and not checked this way.
+- **V6/V7 names**: `name_in` folds with `subject_gate.fold` (Phase 4's one name fold) and wants
+  the name's tokens as a run of whole tokens, each pair at `fuzz.ratio >= 90` (`Ur` is not in
+  `during`). V7's lane-S heading counts only with a stored name or alias **inside** the heading,
+  the direction S2's pool reads; the heading inside the name (a sibling `Nether Largie South
+  Cairn`, a generic `Pyramid`) does not.
+- **V8**: a citation's `domain` is its URL's host without a leading `www.` - the production form
+  (`api/main.py`'s seeded citations) and what S4's `assemble.domain_of` writes.
+- **V10**: lanes T and R build no card; any card there is held (card scope).
+- **V14**: a stored country that is no single `NAME_TO_ISO` name is read part by part
+  (`Chile, Easter Island` -> CL); one with no code at all agrees with no named country.
+- **The acceptance** re-verifies a `p4` site with the run's card only where production's
+  `provenance.card` pins one (a card-held site is written with `card: null`). A lane row whose
+  field chain holds a row under its change key **and** its run stamp, each plus `-rollback`
+  (revert4 `_reversed`), is reverted: not "changed later", not a second write of its row; a
+  planned row whose lane rows are all reverted is judged like one not yet written. So write,
+  revert and write round 2 is accepted on the round-2 rows.
+
 ### Track D - write and ship (WB-D1 ... WB-D5)
 
 Owns `scripts/remediation/phase3/write_stage.py` and `output/remediation/tools/lanes.py` (timed edit
@@ -273,10 +312,11 @@ Provides:
   whose `sentences[i].quote` C3 reads); `write4.plan_writes(...)` and `write4.render_apply(...)`
   (row groups P4, L, P5, guards 1-5, ROLLBACK.sql, pinned digests); `revert4.render_revert(
   stamp_like: str) -> str`; `write_gate4` (dry run by default, `--rehearse`, `--apply --step
-  100`, `WRITE_EXIT=`).
+  100`, `--accept <verify_writes4 output>`, `WRITE_EXIT=`).
 - `legacy4.legacy_provenance(site: M.PlanSite) -> M.LegacyProvenance | None` (`None` when the
-  held text equals snapshot d4526691: no claim, listed for HUMAN_ONLY); `card_json` with
-  `--check`, `--prerender`, `--regenerate`.
+  held text equals snapshot d4526691 or the snapshot does not have the site at all: no claim,
+  listed for HUMAN_ONLY under its `NoClaim` reason); `card_json` with `--check`, `--prerender`,
+  `--regenerate`.
 
 ## 6. What WB-00 decided where the design leaves room
 
@@ -289,3 +329,396 @@ Provides:
 - `HoldReason` spells every hold the design names; `SelectionProblem` spells the parser's refusals
   plus `no-desc`, `no-card`, `abstain-with-other-lines` and `abstain-without-reason`, which the
   design implies (1-8 DESC, 1-2 CARD, ABSTAIN excludes all other lines and carries a reason).
+
+`model4.py` changes made on a track branch, **accepted by the orchestrator 2026-09-23** (decision
+D1; rule 1 of section 1 otherwise holds):
+
+- **The protected tokens** (wip/p4-select-sup, the review of WB-B2). `DESIGN_PROTECTED_TOKENS` is
+  the design's V4 list verbatim (the old `PROTECTED_TOKENS`, renamed; the design-file test reads
+  it). `PROTECTED_TOKEN_ADDITIONS` adds, per group: hedges `presum*`, `apparent*`, `arguabl*`,
+  `seem*`, `appear*`, `suppos*`, `reputed*`, `purported*`, `evidently`, `assum*`, `possible`,
+  `probable`, `maybe`; negations `cannot`, `*n't`, `*n’t` (every contracted negation, in both
+  apostrophes); refutation `unknown`. `PROTECTED_TOKENS` is the design list then the additions,
+  per group: what S2 and V4 read. A new entry rule: a **leading** `*` matches any word that ends
+  with the rest (`*n't`: don't, can't, oughtn't). Why: the design promises hedges and negations
+  survive by construction (card_texts; pilot T3 stops the run on one lost), and with the design
+  list alone 990 offered spans of the 3,681 local enwiki pools carried one of these words
+  (`Presumably, `, `, arguably,`, `, it seems,`, `don't`, `cannot`); with the additions 0.
+- **`CIRCA_PATTERN`** (wip/p4-select-sup, decision D2): the one definition of the card's spoken
+  edit; `assemble.spoken` (S4) and V10 import it, and no other phase-4 module compiles a circa
+  pattern of its own (the splitter's abbreviation rule in `text_sentences` is not the edit).
+  Section 7 states it.
+- `Route.WIKIDATA_ENTITY` (Track A, recorded in section 5).
+- **The AI-system disclosure names Claude Opus (Anthropic)** (wip/opus-handoff, **accepted by the
+  orchestrator 2026-09-23 on the owner's order** "no DeepSeek any more - everything with Opus").
+  `AI_SYSTEM` is `f"Claude Opus (Anthropic): {MODEL}, an-sites-remediation-2026-09"` with
+  `model_stage.MODEL = opus_handoff.OPUS_MODEL` (`anthropic/claude-opus-5-5 (Claude Code
+  agent)`), so the disclosure published with every Phase-4 text (EU AI Act Art. 50) still names
+  the model every ledger line of its calls names. `LEGACY_AI_SYSTEM` (the March texts) is
+  unchanged. No Phase-4 text had been written when it changed, so no row carries the old one.
+  With it the transport changed: every Phase-4 call - selector, translator, restricted lane,
+  reviewer - is answered by an Opus agent of the orchestrating session through the handoff
+  directory (`scripts/remediation/opus_handoff.py`). `run4 select|translate|review
+  --handoff-export DIR` runs the stage itself over a scratch copy of the batch directory with a
+  recording runner and hands its exact prompts to DIR; after the answers are validated
+  (`opus_handoff.py validate`), `--handoff-import DIR` runs the stage on them through
+  `model_stage.HandoffRunner`, which refuses a missing answer, an answer to another prompt or by
+  another model, and an empty one - a stop, never a hold. `translate` became its own command,
+  because S3T's questions are built from the selector's answers; S3 and S3R are one round.
+  Every call still goes through `batch4.buy` and `judge_site`, so the journal evidence write4
+  requires (decision D5: the selector's answer by name, the reviewer's, each with its prompt and
+  its ledger line) holds for these answers unchanged; a ledger line says `metering: unmetered`
+  and carries zero tokens and a cost of 0.
+
+## 7. What Track B built against these contracts (WB-B1 ... WB-B4)
+
+Recorded so Tracks C and D, and the parity check before the pilot, read the same thing. Where it
+changes a signature of section 5, the change is the smallest one the code needed.
+
+### Spans: the rules both finders implement (decision D3, 2026-09-23)
+
+S2's finder (`sentences.find_spans`) and V4's own candidate-span finder in `verify4` implement
+exactly these rules, each in its own code; `tests/remediation/p4_span_cases.py` (`SPAN_CASES`) is
+the fixture both are tested against, one case per rule and per refusal with its exact spans. `s`
+is the sentence text (`text[start:end]`), offsets are relative to it until the last step, and
+"whitespace tokens" are `s.split()`. Python's Unicode `str` semantics apply (`\w`, `\b`, `\s`,
+`str.isdigit`, `str.split`).
+
+1. **Which sentences offer spans.** Only a sentence of an English source (`W`). A `T.<lang>`
+   sentence offers none: the protected tokens are English words, so a span of it could carry a
+   hedge or negation no entry names (`vermutlich`, `n'est ... pas`) and be dropped before the
+   translator saw it; lane T selects whole sentences. Of a `W` sentence, only one whose last
+   character is `.`, `!` or `?`, and whose parentheses balance: scanning left to right, depth
+   rises at `(` and falls at `)`, never goes below 0 (a `)` before its `(` offers nothing) and
+   ends at 0.
+2. **Top level** is depth 0; the parentheses themselves and everything inside a group are not top
+   level. A **top-level group** is a `(` at depth 0 through its matching `)`.
+3. **A delimiter comma** is a top-level `,` whose next character is a space (U+0020), so the
+   comma of `4,500` delimits nothing. **A spaced dash** is a top-level en dash (U+2013) or em dash
+   (U+2014) at index `i` with `0 < i < len(s) - 1`, a space at `i - 1` and a space at `i + 1`; an
+   unspaced dash (`temple—the`) is none.
+4. **`p`** for every top-level group `[low, high)`: `[low - 1, high)` when `s[low - 1]` is a space;
+   else, when `low == 0` and a space follows the group, `[0, high + 1)`; else `[low, high)`.
+5. **`a`, comma pairs.** With the delimiter commas `c_1 < ... < c_n`, pair `k` (`1 <= k < n`) is
+   `(c_k, c_{k+1})`; its *inner* is `s[c_k + 1 : c_{k+1}]`, and its *tail* is
+   `s[c_{k+1} + 1 : c_{k+2}]`, for the last pair `s[c_n + 1 : len(s) - 1]` (up to, not including,
+   the final punctuation). The pairs are judged from the last to the first. A pair is **a list
+   link** when
+   - (i) its tail, left-stripped, opens with `and` or `or` as a whole word (case-insensitive,
+     `(?:and|or)\b` at the start); or
+   - (ii) its inner is at most 3 tokens, its tail at most 6 tokens, and the tail carries `and` or
+     `or` as a whole word (`\b(?:and|or)\b`, case-insensitive); or
+   - (iii) its inner is at most 3 tokens and the next pair (`k + 1`) is a list link; or
+   - (iv) its inner is at most 3 tokens, it is the last pair, and its tail is at most 3 tokens; or
+   - (v) its inner, left-stripped, opens with `and` or `or` as a whole word (`(?:and|or)\b` at
+     the start, case-insensitive): a conjunct, not an insertion.
+   A pair whose stripped inner is not empty and that is no list link is an **insertion pair**. An
+   insertion pair offers `[c_k, c_{k+1} + 1)` (`", built by Khufu,"`) **unless the pair before it
+   (`k - 1`) or the pair after it (`k + 1`) is an insertion pair too**: two insertion pairs that
+   share a comma leave no reading of which two commas enclose the insertion, so **neither** is
+   offered (decision of the orchestrator, 2026-09-23). Agri Bavnehøj W11: "The old Danish word,
+   bavn, in Bavnehøj, means ..." offered `, bavn,` and `, in Bavnehøj,`, and dropping the second
+   read "The old Danish word, bavn means ..."; Babylon W1 offered `, within modern-day Hillah,`
+   beside `, Iraq,`. The judgement is made here, on rule 5 alone, before rule 9's filter: a
+   neighbour refused for a protected token (`, probably bavn,`) still refuses its partner. A
+   neighbour that is a list link is no insertion pair and refuses nothing (`The finds, which were
+   made in 1900, included pottery, coins, and tools.` offers `, which were made in 1900,`).
+   Dropping a list link would join two list items into a false one
+   (Bela Palanka W11: "Constantine I Tiberius Claudius Nero"); dropping a conjunct hangs what
+   follows it on the item before it (Sparta W58: "inscriptions, sculptures founded by Stamatakis
+   in 1872" from ", and other objects collected in the local museum,"). The heuristic also
+   refuses some genuine insertions; that stays so (decision D7: safety over coverage; the pilot's
+   T8 measures coverage). Rule (v) alone took 2,413 of the 25,408 `a` spans of the 3,661 local
+   enwiki pools (2026-09-23). The shared-comma refusal took a further 12,750 of the 22,881 comma
+   `a` spans of those pools (55.7 %; 10,131 remain), measured on wip/p4-select-sup 2026-09-23;
+   the 114 dash `a` spans and every `p`, `l` and `t` span are unchanged.
+6. **`a`, dash pairs.** With the spaced dashes `d_1 < ... < d_m`: none when `m` is odd; otherwise
+   the pairs are `(d_1, d_2), (d_3, d_4), ...` in order (never `(d_2, d_3)`). A pair `(d, e)`
+   offers `[d - 1, e + 1)` (`" – near the old road –"`) when `s[d + 1 : e - 1]` stripped is not
+   empty, **neither dash is a range dash** - the nearest character before it or after it that is
+   not whitespace is a digit (`str.isdigit`; whitespace is `str.isspace`, as `str.rstrip()` and
+   `str.lstrip()` strip it: U+0020, but also an NBSP or a thin space, so `1200` NBSP ` – ` is a
+   range dash too) (`1800 – 500`) - and **no top-level `;` lies between them** (Varna W32:
+   `type 1 – long; type 2 –`). A `;` inside a parenthesis between them does not refuse the pair.
+7. **`l`**: with a first delimiter comma `c_1`, `[0, c_1 + 2)` when `s[:c_1]` is 1-6 tokens,
+   `s[c_1 + 2:]` stripped is not empty (`"In 1900, "`; edit 4 restores the capital), and `c_1`
+   separates no list items or conjuncts: **pair 1 is no list link** (rule 5, any of (i)-(v)) and
+   **`s[c_1 + 1:]`, left-stripped, does not open with `and` or `or`** (`(?:and|or)\b`,
+   case-insensitive; this matters when `c_1` is the only delimiter comma). Before such a comma
+   stands a list's head and its first item, and dropping it makes the rest the subject (Babylon
+   W204: "Sasanian, and Arabic periods excavated in Babylon demonstrate ..." from "Coins from the
+   Parthian, "; Sparta W105: "Strategy, and bronze armour ..."). Decided under D7 (safety over
+   coverage) on the independent check of wip/p4-select-sup, 2026-09-23: over the 3,661 local
+   enwiki pools it took 1,951 of the 15,261 offered `l` spans (1,746 by the list link, 205 by the
+   opening coordinator), some of them genuine leading phrases before a coordinated clause (Babylon
+   W161: "Under Nabopolassar, Babylon escaped Assyrian rule, and ..."). **The orchestrator
+   confirmed this refusal on 2026-09-23**; it stands as written here.
+8. **`t`**: with a last delimiter comma `c_n`, `[c_n, len(s) - 1)` when
+   `s[c_n + 1 : len(s) - 1]` stripped is not empty (`", whose tomb lies nearby"`).
+9. **Protected tokens.** A candidate whose range text contains an entry of
+   `model4.PROTECTED_TOKENS` (every group) is never offered. An entry matches case-insensitively:
+   `word*` as `\bword\w*`; `*end` as `\b\w*end\b`; an entry ending in `.` (`c.`, `ca.`) as `\bc\.`
+   with no boundary after the stop; any other entry as its words joined by `\s+`, between `\b`
+   and `\b`.
+10. **Ids.** The candidates are collected in the order `p`, `a` (commas), `a` (dashes), `l`, `t`;
+    a range already taken is not offered again under a second kind. The kept ranges are sorted
+    by `(start, end)` and numbered per kind from 1 (`p1`, `a1`, `a2`, `l1`, `t1`); the offsets are
+    then made absolute (`+ start`).
+
+The pair is the insertion's delimiter: `A, X, B` becomes `A B`, never `A, B` (a departure from a
+literal "exactly one adjacent delimiter", which would leave `Khufu, built it` after an appositive).
+Kinds may overlap (an `a` and the `t` after it share a comma): `select_stage.parse_selection`
+refuses a pick whose chosen spans overlap without one holding the other (`span-not-offered`: no
+offered span is their union), for a CARD pick together with its DESC pick's spans. A nested span is
+dropped with its outer one, and `drop` lists maximal ranges only; ranges that merely touch stay two
+ranges.
+
+### The edit list and the spoken edit
+
+Edits 2-4 apply to the whole trimmed slice (collapse runs of spaces, `' ,'` -> `','`, uppercase the
+first character when the first drop starts at the sentence start); edit 5 is `' [n]'` before the
+last character. A lane-T sentence is shown to the translator whole, with edits 2-3
+(`translate_stage.shown_sentences`); its published text is the translation with edit 5.
+
+**The card's spoken edit is `model4.CIRCA_PATTERN`** (decision D2, the one definition; S4 and V10
+import it):
+
+    (?<![\w.])(?P<c>[Cc])a?\.\s*(?=\d|(?:AD|BC|BCE|CE)\s*\d)
+
+that is, `c.` or `ca.` (either with a capital `C`) not right after a word character or a full stop
+(`B.c.`, `Africa.` are no circa), followed by any whitespace or none (`{{circa}}` renders `c.` and
+a thin space, U+2009; an NBSP is whitespace too; `ca.300`), in front of a digit or of an era-first
+date (`c. AD 79`, `ca. BC 500`; the era word in upper case). A `c.` no number follows is no circa
+(`5th c. BCE`, where c. is a century). **Every match is replaced by `circa `, or `Circa ` when group
+`c` is a capital `C`** (the letter, the optional `a`, the stop and the whitespace after it go).
+Card items are joined with one space.
+
+### The pool
+
+The pool offers only complete sentences (`is_complete_sentence`) of 25-400 characters that end in
+`.`, `!` or `?`, outside the sections `see also, references, notes, footnotes, citations, sources,
+bibliography, further reading, external links, gallery, literature, works cited, notes and
+references, references and notes, explanatory notes, in popular culture, popular culture` and the
+same apparatus in the languages lane T reads (`sentences.FOREIGN_EXCLUDED_SECTIONS`: de, fr, es,
+it, pt, tr, ca, e.g. `einzelnachweise`, `références`, `referencias`, `note`, `kaynakça`)
+(case-insensitive, a subsection by its own title). Lane S filters by name before the
+6-per-section count. Names match as whole words after Phase 4's one name fold,
+`subject_gate.fold` (accents stripped, lower case, every non-alphanumeric character a space), the
+fold the subject gate accepted the article by: `Chichén-Itzá` is found in `Chichen Itza`, `St.
+Kilda` in `St Kilda`.
+
+### Signatures changed from section 5
+
+- `sentences.candidate_pool(sentences, *, lane, names, text)`: lane S cannot find a name without
+  the pinned text.
+- `assemble.assemble(..., run, translations=None)`: lane T passes `sid -> English sentence`.
+  Lane R is `assemble.build_restated(site, restatements, sources, *, run)`; `build_picks` builds
+  from DESC and 0-2 CARD picks (0 after a review drop). `assemble.quotes_of(assembly, texts)` is
+  the `quotes` argument of `verify4.verify_site` in a batch.
+- `review4.review_batch(batch_dir, *, ledger, runner, reverify)`: `reverify(site, assembly) ->
+  tuple[Hold, ...]` is the seam; `run4` builds it from `verify4.verify_site` with the raw metas, the
+  pinned texts, `quotes_of` and `write4.new_raw_data(site.raw_data, assembly)`, so Track B never
+  imports Track C or D at module level.
+- `run4` adds `prepare` (the plan line to `input.json`, write-once, after `run4.plan_line_sites`
+  read every site of it: a line without a non-empty `sites` list is refused before anything is
+  written) and `holds` (`HOLDS4.jsonl`); `select` runs S3, S3T and S3R in that order. `plan` and
+  `writeplan` forward their arguments to `plan4.main(argv: list[str]) -> int` and
+  `write4.main(argv: list[str]) -> int`, which Tracks A and D provide (each prints its own
+  report). `sources` and `routes` run inside Track A's `sources_stage.open_fetcher` (the one live
+  fetcher: 1 MiB for the wiki hosts, 60 KB for every other, paced per host) and pass Track A's
+  keywords: `sources_batch(..., phase3_run=--phase3-run)` (default the Phase-3 mass run,
+  `phase3.run.DEFAULT_SOURCE_RUN_DIR`), and `routes_batch(..., max_searches=<the run's remaining
+  allowance>, probe=, wait=)` from `route_stage.open_search`.
+- `batch4.read_batch` is Track A's `sources_stage.read_batch` (on `phase3.run._single_batch`), the
+  one reader of `input.json`; `batch4.sha256_file` is `phase3.run._sha256`, and prompt and answer
+  digests are `model4.text_sha256`.
+- `audit4 draw` takes `--written` (the ids written to the database: the journal's, or
+  `verify_writes4`'s read-back) and draws only from them; every written id must be a site a
+  finished review kept (`audit4.reviewed_sites`: batches `mass4.batch_done` counts as done, minus
+  site-held sites, a hold appended after the review included).
+- A batch function's non-zero return stops the whole run (`mass4` reads `STAGE_EXIT=`); a stage
+  that prints no exit line fails its batch and counts for the circuit breaker. The routes stages of
+  parallel batches take turns (`Phase4StageRunner.search_turn`), so the allowances handed out never
+  add up to more than `--max-searches`.
+
+### The re-queue (design S1: "A revision younger than 48 h defers the site to a later batch")
+
+A site's **latest batch** is the last line of `PLAN4.jsonl`, then of the run directory's
+`REQUEUE4.jsonl`, that lists it. When its latest batch holds it `revision-too-fresh` at site
+scope, `mass4` re-queues it once `sources_stage.fresh_until(hold.detail)` has passed (48 h after
+the answer's `curtimestamp`, which S1's and S1b's detail both name): each live invocation appends
+the ready sites to `REQUEUE4.jsonl` in new batches - PLAN4's line shape, 15 sites each
+(`plan4.BATCH_SIZE`), ids `p4-NNNN` numbered after the last ordinal of the plan and of every earlier
+re-queue - and runs them after the plan's batches; `run4 prepare --plan <run>/REQUEUE4.jsonl`
+copies such a line into a new batch directory. A dry run writes nothing and says how many sites are
+ready and how many wait (and until when). `mass4.read_requeue` refuses a line that is not the new
+batch of its ordinal, carries a site the plan does not, or carries a site twice. A re-queued site
+lives in two batch directories: **its latest batch is its state** - `run4.aggregate_holds` keeps
+only the holds of each site's latest batch, so the hold it left behind no longer keeps it
+unwritten. A reader of the per-batch `holds.jsonl` files (Track D's writer, verify_writes4) must
+apply the same rule, or read `HOLDS4.jsonl`.
+
+### Track B's files in a batch directory
+
+`pools.jsonl`, `selection.jsonl` (`Selection`), `translations.jsonl`, `restatements.jsonl`, and
+`prompts/`, `answers/`, `reviews/` (write-once, `EvidenceStore`); each LLM stage writes its file
+even when empty, and an absent one means the stage never ran. Reports: `select.json`,
+`translate.json`, `restricted.json` (per site: `label`, `prompt_sha256`, `answer_sha256`,
+`cost_usd`, `outcome`) and `review4.json` (per site: the reviewer's `lines`, `kept`, `card`, and at
+the top `assembly_sha256`). `assembly.jsonl` is written by `assemble` and rewritten by `review`
+with exactly the sites that passed; it counts as reviewed only when `review4.json` has
+`error: null` and its `assembly_sha256` is the file's (the design's "the reviewer answered").
+
+### Holds Track B writes, and one open vocabulary request
+
+- `no-source` also for a lane-W/S/T site whose pool is empty (lane S with no name-bearing
+  sentence), before any call.
+- `card-too-short-after-review` (card scope) also when the reviewer drops the card or writes no
+  CARD line.
+- **Open, for WB-00:** lanes T and R build no card (their text is not the source's, so no offered
+  span applies) and write no hold for it, because no `HoldReason` fits. `Assembly.card is None` is
+  the signal meanwhile; a card-scope reason such as `card-not-extractive` would let the writer
+  treat a T/R site's cleared-defect card like any held card (P5/card-clear). verify4's V10 holds
+  any card an assembly of lane T or R does carry (card scope, 2026-09-23), so an assembler bug
+  cannot publish French or restricted wording as a card.
+- **`PlanSite.in_snapshot` - accepted by the orchestrator 2026-09-23 (decision D4, Track D
+  supplement).** A boolean: snapshot d4526691 has a row for the site (`plan4.PLAN_SQL` asks with
+  `EXISTS` on `snapshot_rows`). `snapshot_description` is `null` both for a site the snapshot does
+  not have and for one it holds without a description; only the second can carry the design's
+  basis "description differs from pre-March snapshot d4526691", so lane L (`legacy4`) makes no
+  claim for a site absent from the snapshot and lists it under the closed `NoClaim` reason
+  `not-in-snapshot` (8 curated sites were created after 2026-03-04, 7 of them on 2026-04-24).
+  `model4` refuses a snapshot text for a site not in the snapshot. Every producer and fixture of
+  `PlanSite` carries the key; Track B's `tests/remediation/p4_fixtures.py` and Track C's
+  `tests/remediation/phase4_cases.py` need the one line on their merge.
+- **The model-call features - accepted by the orchestrator 2026-09-23 (decision D5, Track D
+  supplement).** `SELECT_FEATURE` (`select`), `TRANSLATE_FEATURE` (`translate`),
+  `RESTRICTED_FEATURE` (`restricted`), `REVIEW_FEATURE` (`review`) and `LANE_ANSWERS`: the calls a
+  written site of each lane answered under `answers/` (W and S: select; T: select and translate;
+  R: restricted - lane R selects nothing). A call's feature names its answer file, its prompt file
+  and its ledger label (`<site_id>/<feature>`). These are the names Track B's `batch4` stores
+  under (`SELECT_FIELD` ... `REVIEW_FIELD` on `wip/p4-select`); on that merge `batch4` takes them
+  from `model4`, so there is one spelling.
+
+## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
+
+Track D (WB-D1 ... WB-D5, branch `wip/p4-write`) built against sections 1-6 unchanged; its
+supplement (`wip/p4-write-sup`, the fixes of the two reviews of 2026-09-23) added the two `model4`
+fields section 6 lists. What the design left open, and how the writer settled it:
+
+- **Write batches.** A write batch is the rows one row group takes from one plan batch: plan batch
+  `p4-0007` gives the write batches `p4-0007` (P4), `p4l-0007` (L) and `p5-0007` (P5), each written
+  as **one chunk** (at most 100 sites - the step - and at most 200/100/100 rows), stamped
+  `<family>:<batch>:chunk-NNNN`. The chunk number is the write round: 1, or 2 and up for a batch
+  written again after a revert (a reverted round's stamps stay in the journal; `write_gate4.py
+  --round N`, see "After a revert" below). The step of 100
+  sites is `write_gate4.py --apply --step 100`: one step per invocation, and a batch is written
+  only while it still fits into the step (with 15-site batches a step writes 90 sites; a batch
+  larger than the step is refused).
+- **The acceptance between steps is a handshake, not a promise** (supplement). After every
+  written batch the gate records `STEP.json` in the apply root (the step's batches, stamps, sites
+  and rows) and `LANE_PLAN.jsonl` (every rendered batch's plan rows: the `--plan` the acceptance
+  reads). While `STEP.json` exists, `--apply` writes nothing and says why. The step is accepted by
+  running `verify_writes4.py --lane <lane> --plan <apply root>/LANE_PLAN.jsonl --run <run dir>`
+  (the command the gate prints; lanes p4 and p5 re-run V1-V15 and need `--run`), saving its
+  output, and handing it to `write_gate4.py --group <G> --run <run> --accept <file>`. `--accept`
+  records `ACCEPTED/step-NNNN.json` (the step, the output and its sha256) and removes `STEP.json`
+  only when the output ends in `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has exactly one lane
+  line for the step's lane whose stamp pattern covers every stamp the step wrote, read at least as
+  many lane journal rows as the apply root has written under that pattern - every round, the
+  reverted ones too (so it ran after this step, not before) - and is not the output an earlier
+  step was accepted on. The lane line is parsed in the print
+  format of `verify_writes4.py` (Track C, `wip/p4-verify`); a change of that line must change
+  `write_gate4._ACCEPT_LANE` with it.
+- **Write rounds, and what the reversal skips** (supplement). A change key names a transition, not
+  a write: round 2 of a batch journals the same keys as round 1 under its own stamp. Every journal
+  read is therefore scoped to the stamp as well - the read-back (`write_stage.journal_rows_sql(
+  change_keys, run_stamp)`, shared through `journal_mismatches`) and `revert4`'s "reverted
+  already" (the key **and** the stamp plus `-rollback`). `revert4` **skips** a matched write that
+  already has its own reversal instead of refusing the pattern, and raises only when the pattern
+  matches no write or every matched write is reverted already. Why: after one revert and one
+  re-write, `--stamp-like 'phase5:%'` matches both rounds. Refusing would leave the live round
+  revertable only by its exact stamp, so the red-CI answer of the P5 sitting would fail exactly
+  the second time it is needed; reverting the reverted round again would need its field to hold
+  its written value - which round 2 may have put back - and would undo round 2's write under round
+  1's stamp. The set is fixed inside the transaction before anything moves (`ids := ARRAY(...)`);
+  every guard, the loop and both invariants run over exactly that set. This PL/pgSQL has run only
+  as pinned text and through SQLite evaluations of its set and post-read: rehearse it on
+  production (`revert4.py --rehearse`) before relying on it.
+- **After a revert: what the operator does** (supplement, checker review of 2026-09-23). `revert4`
+  changes production only; the gate's `APPLIED.json` files are local records and learn of a revert
+  only through the steps below. The gate's proof that a round is reverted is `revert4`'s own read
+  (`revert4.reversal_read`, `write_gate4.prove_reverted`, read-only): the journal holds exactly as
+  many writes under the round's stamp as its `APPLIED.json` says it wrote, and each has its own
+  reversal kept (key and stamp plus `-rollback`).
+  1. If the reverted step had no acceptance yet (`STEP.json` pending - the P5 red-CI case, or any
+     revert of a step whose acceptance was red): `write_gate4.py --group <G> --run <run>
+     --close-reverted`. On the proof for every batch of the step it records the step in
+     `CLOSED/step-NNNN.json` with the proofs (never in `ACCEPTED/`: it was taken back, not
+     accepted), moves each batch's `APPLIED.json` to `chunks/chunk-NNNN/` beside a `REVERTED.json`
+     (the proof) and removes `STEP.json`. A row still live refuses the whole close. Until the step
+     is accepted or closed, its batches are frozen: `--round` does not re-open them.
+  2. `write_gate4.py --group <G> --run <run> --apply --round 2 --step 100` (the same `--round` for
+     every step of the second sitting). A batch applied in round 1 is re-opened on the proof (its
+     round-1 record kept as in 1), and chunk-0002 is rendered and written. A round the batch cannot
+     take is refused with `WRITE_EXIT=1`, never skipped: `--round 3` over a round-1 batch, `--round
+     2` for a batch never written (name the reverted batches with `--batch`, or write the others
+     as round 1), `--round 1` for a re-opened batch. A batch already applied in the named round is
+     done. Without `--round`, a reverted batch still reads as applied ("no open batch"): only
+     `--round` asks production.
+  3. The acceptance of every step after it: `--accept` counts every written round - live and
+     reverted, from the records kept in 1 and 2 - under the stamps the output read, so an output
+     taken between a revert and round 2 does not accept round 2.
+
+  **Open for the `wip/p4-verify` merge (orchestrator decision).** Track C's `verify_writes4.
+  accept4` reports a lane write followed by its own kept reversal as `CHANGED LATER`, and round 1
+  plus round 2 of a key as `WRITTEN TWICE`; so after any revert in a lane no acceptance of that
+  lane reaches `ACCEPT_EXIT=0` and `--apply` stays blocked (fail-closed). A round-scoped
+  `--stamp-like` does not cure it once a lane mixes rounds: with batch 1 reverted and written as
+  round 2 and batch 2 live in round 1, `phase5:%` gives `WRITTEN TWICE` and `CHANGED LATER` for
+  batch 1 and `phase5:%:chunk-0002` gives `MOVED` for batch 2 (checker probes of 2026-09-23 against
+  `wip/p4-verify` 6782fe3). What the gate needs from `accept4`: a lane link that has its own kept
+  reversal is closed - no `CHANGED LATER` for it, not counted in `WRITTEN TWICE`, and a planned row
+  whose only lane links are closed is judged like a row not written yet - plus a merged-branch test
+  (write, revert, `--close-reverted` or accept, `--round 2`, accept). The printed acceptance
+  command stays the lane's own pattern; the rows-read rule above is already scoped to it.
+- **The statements' guards are pinned byte for byte** (supplement). The fake psql of the tests
+  cannot evaluate PL/pgSQL, so every guard's predicate and RAISE in `render_apply`,
+  `render_rollback` and `render_revert` is pinned in `tests/remediation/phase4_write_pins.py`;
+  33 mutation cases each break one predicate or RAISE and go red on those pins.
+- **The site page's lastmod** (WB-D4, supplement; decision D6). `pipeline/utils/public_sites.
+  PAGE_COLUMNS` - read by the sitemap and IndexNow - counts a journalled write of a column the
+  SSR page reads: 12 `unified_sites` columns (the design's six plus period_end, period_name, lat,
+  lon, source_url, parent_site_id), `card_stats.best_wiki_url` and `source_language`, and the
+  `wiki_images` columns that choose the page's one image or that it renders of it (a hero change
+  advances the page). The P5 card writes do not. A test derives the lists from the route's SQL.
+- **The group table lives in the writer** (`write4.GROUP_FAMILY`, `GROUP_PREFIX`), and
+  `output/remediation/tools/lanes.py` registers the lanes `p4`, `p4l`, `p5` from it (their
+  `family` and `stamp_like`; `run_dir` is `phase4_runner/runs`, the run is chosen with `--run`).
+- **The verifier runs inside the plan.** `write4.plan_p4` calls `verify4.verify_site` itself, on the
+  exact `new_raw_data`, texts, metas and quotes the rows write (with `card: null` where the card is
+  held), so no row is planned from a verification of other bytes. `write_gate4` imports
+  `phase4.verify4` when it plans P4.
+- **Entry points.** `write4.plan_writes(batch, *, group, **inputs)` dispatches to `plan_p4(batch,
+  *, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, written)` and `plan_cards(batch,
+  *, written, card_findings)`; `write4.load_batch(batch_dir)` reads the section-4 files strictly (a
+  site with neither an assembly nor a site hold is a hole and raises); `write4.render_apply(chunk,
+  *, rehearse=False)`, `render_rollback(chunk)`, `apply_chunk(chunk, *, out, rehearse, runner,
+  host)`; `write4.journal_evidence(assembly, *, texts, subject_gate, lane_detail, files, reviews,
+  labels)`; `write4.exit_line(tag, run)` prints every Track-D tool's `*_EXIT=` line.
+- **Lane gates are inputs, not guesses.** Which lanes passed their pilot (`--open-lanes`) and which
+  lane-T/R sites the independent audit cleared (`--audited`, one site id per line) are handed to
+  the plan; a site outside them is refused and counted, never written.
+
+**Needed from Track B (a contract addition, section 4): the prompts on disk.** The journal evidence
+of a written site records the sha256 of every file the model stages left for it - the answers
+(`answers/`), the reviewer's answers (`reviews/`) and **the exact prompt of every call
+(`prompts/`)** - plus its ledger labels (`<site_id>/<answer_key>`). `judge_site` stores answers but
+not prompts, so every model stage (select, review, translate, restricted) must also store the prompt
+it sends, write-once, through an `EvidenceStore` rooted at `<batch>/prompts/` under the same feature
+as its answer. `write4` requires a written site's calls **by name** (section 6, decision D5): the
+selector's answer for lanes W, S and T (the design's "selector-answer sha256"), T's translation
+beside it, lane R's restricted call, and the reviewer's answer for every lane; every answer needs
+its prompt of the same feature and its ledger line, and every ledger call of the site its answer.
+A site that lacks one is refused (`journal-evidence-incomplete`), so without this addition no P4
+row is planned.

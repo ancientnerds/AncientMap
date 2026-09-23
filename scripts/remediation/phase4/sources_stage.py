@@ -498,6 +498,20 @@ def article_problem(article: Article) -> tuple[M.HoldReason, str] | None:
     return None
 
 
+#: The answer's clock in a `revision-too-fresh` detail (`article_problem`: "... h old at <ts>; ").
+_FRESH_AT = re.compile(r" h old at (?P<at>\S+); ")
+
+
+def fresh_until(detail: str) -> datetime:
+    """When a site held `revision-too-fresh` may be asked again: 48 h after the answer that held
+    it, whose `curtimestamp` the hold's detail names. S1's holds and S1b's (which open with the
+    same `article_problem` text) alike; `mass4` re-queues the site into a later batch then."""
+    match = _FRESH_AT.search(detail)
+    if match is None:
+        raise R.InputError(f"a revision-too-fresh detail names no answer time: {detail[:160]!r}")
+    return _utc(match["at"], "curtimestamp") + FRESH
+
+
 def parse_entity(body: bytes, qid: str) -> Mapping[str, Any] | None:
     """The entity `qid` of a wbgetentities answer, or `None` when the answer is not usable."""
     try:

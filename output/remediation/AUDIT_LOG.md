@@ -6633,3 +6633,842 @@ candidate). With Petra corrected, no external-id value with a control character 
 * Tests: 2 new (Petra written with its entry and refused without it, on the delivered record; a hand
   entry must name the refusal it overrides - wrong reason, unrefused site, a sharer refusal, an
   unresolved site, no evidence). `mutation_sweep.py "source url: "`: **38/38 caught**.
+
+## 2026-09-23 - the cell lanes and journal-reversal-2: planned, not applied
+
+Branch `wip/mech2` (merged with `integrate/wave1` at `b6de246`, and with its tip `9046ef9` after
+this section was written). Four lanes of the mechanical write path
+(`scripts/remediation/mechanical/`) are planned and committed; **none of them has written anything**
+(read-only at 11:11 UTC: 0 journal rows for any of their stamps, 0 `card_stats` journal rows, 0
+curated rows with a `scope_status`). Production was only read (`SELECT`s, `BEGIN READ ONLY`): the
+reversal plans, their read-backs, the owned-card count and a re-read of the duplicate list. The
+apply order at the end of this section is the orchestrator's.
+
+### What each lane does
+
+* **`card-stats-<wave>`** (`card_stats.py`): recomputes the twelve `card_stats` columns of every
+  curated card whose inputs moved, with the generator's own code (`api/cardgame/generator.py`
+  `site_card_stats`/`content_stats`, extracted behaviour-neutrally and imported, never copied). It
+  plans only after a counterfactual proves the model: the journalled inputs put back must reproduce
+  every stored cell. Each wave is a lane of its own (stamp `<wave>_mechanical-card-stats`), carries
+  a premise per site (its inputs plus one digest of all curated `(site_type, period_name)` pairs)
+  and commits a `BASIS.json` the next wave's proof reads. Its `ROLLBACK.sql` expires at the next
+  write to any curated `site_type` or `period_name` (HANDOVER, "A card_stats wave's ROLLBACK.sql
+  expires").
+* **`scope-e4`** (`scope.py`): fills `scope_status` and `scope_reason` (E3/E4: out of the window,
+  undated, duplicate, museum) in one transaction, every decision conditioned on the date, point,
+  type, name and description it rests on (guard 5). It now also retires the owner-case duplicate
+  list `output/remediation/bcases/DUPLICATES.jsonl` (below).
+* **`journal-reversal-1`** and **`journal-reversal-2`** (`reversal.py --lane <name>`): each restores
+  the value a named list of journal rows replaced, conditioned on the live value being the value the
+  row wrote and on that row being the last write of its cell (guard 6). Every row needs a reason and
+  quotes that are checked where they say they are.
+
+### journal-reversal-2: the 45 rows the re-review reverses
+
+`output/remediation/phase3_runner/REREVIEW_1.md` fixed the rule before the call: each of the 77
+written rows whose reviewer answered `REFUTED: NO` while its own WHY named a failing half
+(`HUMAN_ONLY.md` B11) got one new reviewer call and was kept only on a clean clearance; a hand read
+then moved 8 rows from keep to reverse. Its result, `logs/review_holds/REREVIEW_1_FINAL.jsonl`
+(gitignored in the main checkout; sha256 `adc678ce...79063eb`), is copied unchanged into
+`output/remediation/mechanical_reversal_2/`: **45 reverse** (30 `site_type`, 15 `period_start`),
+**32 keep**. The 32 stay written.
+
+* **The period label.** 8 of the 15 `period_start` writes had moved a site into another bucket,
+  and the period-name lane (2026-09-22) had then relabelled it (journal rows 30335-30536).
+  Restoring the start alone would leave 8 sites whose label contradicts their date. The list
+  therefore also restores those 8 labels, and `reversal.py` checks the list as a whole
+  (`keep_the_period_label`): a restored label must be the bucket of the start the list leaves, and
+  a start must not leave behind a label that was its bucket - a refused start takes its label with
+  it and back. **53 cells over 45 sites.**
+* **Evidence.** Each of the 45 quotes the re-review's hand-read WHY and the reviewer's new WHY
+  (`rereview:<change_key>`; the lane accepts it only when that row decided `reverse` for exactly
+  the write the journal row made - same key, site, column, old and new value). Each label quotes the
+  period-name lane's own journal evidence ("... the write that left the label behind").
+* **The Trundle** is among the 45 (`period_start` -500 -> -1000, and its label back to
+  '1500 - 500 BC'). Its residual keeps the hand read's note: both values miss the Neolithic
+  causewayed enclosure (c. 3500 BC), the field stays open. Every reversed field is open again, not
+  corrected (REREVIEW_1.md).
+* **Planned from production** (`reversal.py --lane journal-reversal-2 --write`, read-only, 10:53
+  UTC): 53 of 53 planned, 0 refused - every journal row is the last write of its cell, every live
+  value is the value its row wrote, every restored `site_type` is canonical. Read-back before the
+  apply (read-only, about 11:00 UTC): `curated sites still holding a value this reversal list
+  undoes` 45, `curated rows whose period_name is not the bucket of period_start` 11 (none of them
+  among the 45; the list leaves the count as it is).
+
+### scope-e4 reads the owner-case duplicate list
+
+`DUPLICATES.jsonl` (19 losers, each with its survivor and evidence, "for the scope lane") was not
+read by the lane: its own 100 m rule found 3 of them. It is now: each listed loser is retired
+with `duplicate_of:<survivor>` after its claim is re-read in the export - both rows curated (else
+the plan is refused), both still carrying the one item the line names, still within the list's 2 km
+(`bcases.classify.DUP_MAX_M`, imported). A pair the lane finds itself and the list names too is one
+retirement with both evidences (the 3: Tarxien Temples, Bishop's Basilica of Philippopolis, Dooey's
+Cairn); a loser the two name with different survivors is refused. No duplicate touches a site of
+`DUPLICATES_HELD.jsonl` (Banias / Caesarea Philippi, B10), whoever found it.
+
+Re-planned offline from the same export as before (07:41:01 UTC): **115 sites, 230 cells: 79
+retired (55 rule a, 2 rule b, 19 duplicates, 3 museums), 19 pending, 17 in_scope, 0 refused**
+(before: 99 sites, 198 cells, 63 retired). All 19 listed pairs held in that export and still hold
+in production (read-only re-read, 11:00 UTC: same item on both rows, within 2 km, both curated and
+unassessed). The plan is stale on arrival and is re-planned in the apply order below: Yenikale's
+point moved at 07:45 UTC (guard 5 would refuse the whole transaction), and the reversals change
+`period_start`/`site_type` of sites the scope premise holds.
+
+### card-stats-2026-09-23, as committed
+
+Planned from the 03:59:54 UTC export: 6,104 cells over 1,566 of 5,004 cards; the counterfactual put
+back 1,275 journalled inputs and reproduced all 60,048 stored cells; `BASIS.json` horizon
+`journal_max_id` 30815. Stale by design: 35 journalled input rows at 25 curated sites since
+(the inventory's read, 09:21 UTC), and both reversals and the scope lane write before it. **Owned cards**
+(read-only, about 11:00 UTC, `card_collections` on the planned sites): **12 rows of 4 users on 11
+sites** change stats; **3 rows of 2 users on 3 sites** change rarity (the 502 sites whose
+`rarity_tier` moves). The re-plan will move these numbers.
+
+### Corrections to the builder's report (review findings R0-5, R1-5)
+
+The operator list in the builder's report of `1ad071a` is not versioned; these are the facts as the
+code and the data give them, each re-checked here:
+
+* **Step 3d names the wrong metrics.** The card_stats read-back prints `curated rows whose
+  card_stats civilization differs from the site country` (`card_stats.py:207`; 62 today, read as
+  journal-reversal-1's equivalent count, one card per site) and `card_stats rows whose total_power
+  is not the sum of the five stats`
+  (`card_stats.py:268`). `card_stats rows whose civilization differs from the site country` is
+  journal-reversal-1's read-back, not the card_stats wave's.
+* `DECISIONS.json` holds **41** decisions, not 42: a/pending 8, b/pending 11, b/retired 2,
+  d/in_scope 17, d/retired 3.
+* The builder re-pointed **11** existing sweep needles, not 12 (sweep `c186008` vs `1ad071a`: 167 ->
+  267 cases, 11 changed, 0 removed, 100 added).
+* **Owned cards**: 12 rows / 4 users / 11 sites change stats, 3 of them (2 users, 3 sites) in rarity
+  - not "3 card_collections rows (2 users, 3 sites)".
+* `card_stats.py --wave` is checked against `CARD_STATS_LANE` (`card_stats_lane` raises for a label
+  `apply.py --lane card-stats-<label>` could not resolve; `main` exits 2,
+  `test_a_wave_label_nothing_could_apply_is_refused`), and the `apply.py` docstring example is
+  `card-stats-2026-09-24` (`apply.py:1708`), not the unresolvable `card-stats-w2`.
+* The scope counts of the builder report (196 cells, 62 retired) are outdated twice over: the
+  fixer's re-plan made them 198/63 (+Prambanan Temple), the duplicate list makes them 230/79.
+* The reversal read-back counted sites under the name "curated cells ...": it is now `curated sites
+  still holding a value this reversal list undoes` (45 for the 53 cells of reversal-2).
+
+### Tests, sweep, gates
+
+* Red first: 18 of the new scope tests fail on the previous `scope.py`, 46 of the new and adapted
+  reversal tests on the previous `reversal.py`, the residual-name test on the previous `lane.py`.
+* Mechanical tests (`tests/remediation/test_mechanical*.py`,
+  `tests/api/test_cardgame_generator_stats.py`, with the map-units cache copied into the worktree):
+  **716 passed, 0 skipped** (84 s).
+* Mechanical sweep, all cases, run in this worktree after the merge, 11:03-11:59 UTC:
+  **`cases: 469  fired: 469  skipped: 0  survived: 0  invalid: 0  unproven: 0  errored: 0`**,
+  exit 0 (`mechanical/evidence/21_mutation_sweep_merged.txt`); 33 of the cases are new. One more
+  case came after that run (`reversal: --lane names a reversal lane`); the reversal cases, run again
+  with it after the second merge: **38 of 38 fired**
+  (`mechanical/evidence/22_mutation_sweep_reversal.txt`), 470 cases in all. The fixer's run of 820358c (319 of 319 fired) is kept as
+  `mechanical/evidence/20_mutation_sweep_fix.txt`.
+* Full DB-less suite (`-m "not integration and not live_llm"`, timeout 300): **4569 passed, 32
+  skipped** (gitignored data and fonts only), 57 deselected, exit 0, 297 s; after the second merge
+  **4609 passed, 32 skipped**, exit 0, 306 s. `ruff check api/
+  pipeline/ scripts/remediation tests/ output/remediation/tools/` clean, `ruff format --check` clean
+  on every file this branch touches, lint-imports 2 kept / 0 broken, vulture exit 0.
+* gitleaks over `integrate/wave1..HEAD`: clean after the 9 premise digests of `1984834` were
+  triaged in `.gitleaksignore` (md5 premises after a site name containing "api"/"key"; a re-plan
+  of a card_stats wave writes new ones - scan its commit).
+
+### The apply order (the orchestrator runs it; nothing here was applied)
+
+Owner gates first (`HUMAN_ONLY.md`): **"Was nur du entscheiden kannst" item 4** under B1/B2
+(Ahin Posh Tape: the reversal and its point) before step 1; **B11** (keep or reverse the written
+rows the new rules would not write: REREVIEW_1 decided 45 reverse / 32 keep - confirm the owner's
+go covers applying it) before step 2; **item 2 / B6**, the per-site go for the 19 duplicate
+retirements (`mechanical_scope/REVIEW.md`, rule c), before step 3. Each step: rehearse, probe,
+apply, read back. Commands from the repo root with `PYTHONIOENCODING=utf-8`;
+`A=scripts/remediation/mechanical/apply.py`.
+
+0. `./.venv/Scripts/python.exe $A --check-primitive` -> the 0022 body.
+1. **journal-reversal-1** (3 cells on 3 sites).
+   `./.venv/Scripts/python.exe scripts/remediation/mechanical/reversal.py --lane journal-reversal-1 --collect --write`
+   -> `PLAN.jsonl` unchanged (re-rendered byte for byte at 10:53 UTC); if it changed, `$A --lane
+   journal-reversal-1 --emit` and read the diff. Then `$A --lane journal-reversal-1` with
+   `--verify` (before: `curated sites still holding a value this reversal list undoes` 3) and
+   `--interests`; `--rehearse` (NOTICE `journal reversal: 3 of 3 planned cell(s) changed and
+   journalled over 3 curated site(s)`); `--probe-guards` -> exit 0, 7 probes each refused by its
+   own guard: guard3-foreign-old-value, guard2-no-op, guard2-foreign-column, guard2-too-long,
+   guard1-other-source, guard6-journal-row, guard6-not-the-inverse; `--rehearse-rollback`;
+   `--apply` -> APPLY OK, 3 journal rows; `--verify` -> the residual 0.
+2. **journal-reversal-2** (53 cells on 45 sites), the same sequence with `--lane
+   journal-reversal-2` (`reversal.py --lane journal-reversal-2 --collect --write`, NOTICE `53 of 53
+   planned cell(s) ... over 45 curated site(s)`, the same 7 probes). After: `curated sites still
+   holding a value this reversal list undoes` 0, `curated rows whose period_name is not the bucket
+   of period_start` unchanged (11 on 2026-09-23), 53 journal rows. Then the acceptance:
+   `./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py --allow-stamp
+   2026-09-22_mechanical-uk-parts --allow-stamp 2026-09-23_mechanical-journal-reversal-1
+   --allow-stamp 2026-09-23_mechanical-journal-reversal-2` -> 0 deviations (48 more rows
+   superseded: 3 + 45; the 8 label rows are the period-name lane's, not phase 3's). In the
+   period-name lane's own read-back, `journal rows for this run whose value is not the row's
+   bucket` rises by 8: its 8 labels are undone together with the starts they came from - by
+   design.
+3. **scope-e4**, re-planned: `./.venv/Scripts/python.exe scripts/remediation/mechanical/scope.py
+   --export --collect`, then `scope.py --write` (T11 needs geopandas and Natural Earth in
+   `output/remediation/cache/naturalearth/`; every DECISIONS quote and every DUPLICATES line is
+   re-checked; expect about 115 sites / 230 cells, Yenikale re-read), `$A --lane scope-e4 --emit`,
+   commit the lane directory. Then `--verify` / `--interests` / `--rehearse` (NOTICE `E4 scope
+   decision: <n> of <n> planned cell(s) ...`) / `--probe-guards` (6: guard3-foreign-old-value,
+   guard2-no-op, guard2-foreign-column, guard1-other-source, guard4-not-owned, guard5-premise) /
+   `--rehearse-rollback` / `--apply`. After: `curated rows with scope_status retired` = the plan's
+   retired count (79 at the 07:41 export), `curated rows retired as a duplicate` 19, and 0 for
+   `curated rows outside the E3 window with no scope decision`, `curated rows without a date and
+   no scope decision`, `curated rows with a scope_status but no scope_reason` and `retired
+   duplicates whose survivor is retired or not curated`. `/api/sites/all` serves from a 30-minute
+   Redis cache.
+4. **card-stats-2026-09-23, last**, re-planned: `./.venv/Scripts/python.exe
+   scripts/remediation/mechanical/card_stats.py --wave 2026-09-23 --export`, then `--write`
+   (refuses unless the counterfactual reproduces every stored cell), `$A --lane
+   card-stats-2026-09-23 --emit`; commit `PLAN.md`, `SKIPPED.jsonl`, `ROLLBACK.sql` and
+   `BASIS.json` (the next wave's proof reads it) and run gitleaks over that commit. Then `--verify`
+   / `--interests` / `--rehearse` (about 6,100 `apply_remediation_change` calls in one DO block
+   under `statement_timeout` 120 s - watch the time; a timeout is psql exit 3, NOT COMMITTED) /
+   `--probe-guards` (7: guard3-foreign-old-value, guard2-no-op, guard2-foreign-column,
+   guard2-too-long, guard1-other-source, guard4-not-owned, guard5-premise) / `--rehearse-rollback` /
+   `--apply`. **Straight after the apply** `--verify`: `curated rows whose card_stats civilization
+   differs from the site country` 0 (62 before), `card_stats rows whose total_power is not the sum
+   of the five stats` 0, `journal rows for this run whose row is not a card_stats row` 0, plus the
+   tier counts. Completion: `card_stats.py --wave 2026-09-23b --export --write` must print
+   `"cells": 0` and write no statement (a read-back, not a wave: do not apply or commit it).
+## 2026-09-23 - owner-case coordinates, wave 2: a third witness from the web (planned, not applied)
+
+Wave 1 (`2026-09-23_owner-case-coordinates`, 9 sites, 27 journal rows) is applied. It left 171 of its
+cases `review` (`bcases/coords.jsonl`): one witness only, two witnesses that are one (a copy, a rounded
+copy, one point), two that disagree, none. This lane looks for a third statement of where each site
+is, outside Wikipedia and Wikidata, and weighs it under wave 1's rule. **Nothing was written to
+production.** Production contacts, all reads: `bcases/run.py check --wave 2` and one journal count
+per coordinate stamp.
+
+The builder of this lane (workflow `wf_bb241314-8a0`) died with its work uncommitted; the salvaged
+state was committed as it stood, merged with `integrate/wave1`, and its review phase - which never
+ran - was done here, with every finding fixed test-first (below).
+
+### The lane (`scripts/remediation/bcases/web_witness.py`, `run.py web-verify|reweigh|plan|check --wave 2`)
+
+* **Research** (agents, untrusted): `coords3/RESEARCH.jsonl`, one line per case, candidates with a
+  URL, the two numbers and the page's own words (`coord_text`). 171 lines, 108 with candidates,
+  141 candidates, 63 with a `none_reason`.
+* **web-verify** (network) proves each candidate from the live page or rejects it with the first check
+  that fails: not a Wikipedia/Wikidata host or mirror (`WIKI_HOSTS`), not our own site or a blocked
+  host, a public address (every redirect hop too, inside the transport; the host checks run again on
+  the URL a redirect ends at), one request through `census.fetch.Fetcher` with the project user agent
+  (an HTTP error or a transport failure is a rejection with its status, never asked another way), an
+  HTML page and no challenge page, `coord_text` standing whole in the page text (Lyra's reader,
+  entities undone, NFKC and glyph variants unified), parsed to exactly the candidate's numbers
+  (1e-6 degrees; decimal, D M, D M S; grid references refused), and a distinctive word of the stored
+  name within 1,500 characters. Output: `coords3/WEB_WITNESSES.jsonl`, one row per candidate.
+* **reweigh** (offline) classifies each case again with the same cache - first without web witnesses,
+  which must reproduce `coords.jsonl` row for row, then with its accepted ones - under wave 1's rule:
+  two independent witnesses agree within the tolerance and the stored point lies outside it. A web
+  witness is named by its publisher (the registered domain) and comes last in priority. A move into
+  another country is held as `review`; a wave-1 site is refused. Output: `coords3/VERDICTS.jsonl`,
+  `coords3/COUNTS.json`.
+* **plan --wave 2 / check --wave 2**: wave 1's renderer, parameterised (`coord_plan.Wave`): stamp
+  `2026-09-23_owner-case-coordinates-wave2`, directory `bcases/coords_plan_wave2/`, confidence
+  `two_source`, three journalled changes per site (`geom`, `lat`, `lon`), conditional on the old value,
+  a stamp-scoped journal guard, `ROLLBACK.sql` under its own stamp. Wave 1's `APPLY.sql`,
+  `ROLLBACK.sql`, `PLAN.jsonl` and `PLAN.md` still render byte for byte (a test compares all four).
+
+### Review findings, each fixed with a test that goes red without it and a mutation case
+
+1. A redirect was checked against the wiki list only: a page redirecting to our own site or to a
+   blocked host passed. The final URL now goes through every host check.
+2. `--wave` was accepted and silently ignored by every command but plan/check/verify; it is now a
+   parser error there.
+3. A web witness was named by its host minus `www.`, so two subdomains of one publisher
+   (`whc.unesco.org`, `en.unesco.org`) were two independent witnesses. It is now the registered domain
+   (three labels under a country's shared second level such as `co.uk`, `gov.pk`); an unknown shared
+   level groups more hosts, never fewer.
+4. A sign parted from its number by a space, or an en dash the glyph table does not make a minus, was
+   dropped: the number read positive. Such a text is now unparsed.
+5. Two signed decimals were read latitude first whatever the labels said ("Longitude / Latitude
+   -0.358, 51.754"). A signed quote whose first axis label is a longitude one is now unparsed.
+6. The quote was matched as a plain substring, so a quote cut from a longer or signed number matched
+   ("17.5744" inside "-17.5744", "-89.9958" inside "-89.99583"): a sign error in the stored point could
+   so be confirmed. A quote now counts only where it stands whole; for a quote without hemisphere
+   letters also no sign, dash or lone hemisphere letter one space away. (A first version refused a
+   dash before a lettered quote - measured on cestenfrance.fr, "Franche-Comte – 47°14'02.9"N" - and
+   was narrowed to signed quotes.)
+7. Independence was tested pair by pair: two pages that are each the item's point (within an
+   arcsecond, or roundings of it) but 40 m apart moved the site on one statement counted three times.
+   `copy_groups` now follows "are one" through chains; with two witnesses a group is the pair itself.
+8. Measured on the live run: Pusilha's P625 was imported from the Cebuano Wikipedia, whose geographic
+   articles were generated from GeoNames, and its web witness was geonames.org - a planned 5.2 km move
+   on one source. Mersinaki's P625 cites phrc.it by URL, its web witness is phrc.it. A P625 whose
+   references name the page's publisher (`cited_publishers`: P854 URLs; P143 Q837615 and P248 Q830106
+   for GeoNames) is now one with that page.
+9. `COUNTS.json` counted "one witness only (web:geonames.org)" as "one witness only (web" - the reason
+   class now keeps the bracket.
+10. The sweep itself found one: after finding 6, "the quote occurs in the page" was subsumed by "the
+    quote stands whole in the page", so its mutation case survived (93/94). The two are one check now,
+    with the same two messages.
+
+Findings 7 and 8 change `classify.py`; the field they add is not part of a verdict's record, and a full
+reclassification over the main checkout's cache still reproduces `COUNTS.json` and all seven delivered
+files of the first wave.
+
+### The run (2026-09-23)
+
+web-verify, 141 candidates, each page asked once (cache: the main checkout's gitignored
+`output/remediation/cache/bcases/web/`, 82 pages):
+
+| outcome | candidates | what |
+| --- | --- | --- |
+| accepted | 45 | 23 publishers: geonames.org 8, ahlfeldt.se (DARE) 7, topostext.org 5, vici.org 5, paganplaces.com 2, 18 others 1 each |
+| http | 59 | megalithic.co.uk 47 read timeouts (30 s), whc.unesco.org 10 HTTP 403, patrimoniocultural.gov.pt 1 HTTP 403, culture.tw 1 TLS certificate failure |
+| unparsed | 13 | labels this parser does not read (`geo:` 3, Lonxitude 2, Latitud/Longitud 2, Chinese hemisphere words), a longitude-first quote twice, a decimal comma, degrees written with `d` or without a degree sign |
+| not-on-page | 10 | the quoted text is not in the page's text - numbers in a map link, a script or a JavaScript-drawn page (OpenStreetMap 4, wikimapia, alaska.org, heritagemalta, sindhculture, mersin.bel.tr, isprambiente) |
+| identity | 6 | no distinctive word of the name within 1,500 characters |
+| not-html | 4 | Pleiades answered JSON and Turtle, two PDFs |
+| grid-reference | 2 | "Easting ... Northing" and a decimal comma read as a projected value |
+| mismatch | 2 | datahub.drago.pe prints longitude first; the agent's latitude-first numbers did not match |
+
+megalithic.co.uk (47 candidates, the largest source) and whc.unesco.org (10) were not readable from this
+workstation with the project user agent; their candidates were never checked, not rejected on content.
+
+reweigh, 171 cases: **7 move, 8 stored-agrees, 156 review** (35 cases have one web witness, 5 two,
+131 none). One move is held for its country (Flevum: Wikidata and vici.org agree in the Netherlands,
+225 km from the stored point in Germany). `plan --wave 2`: 7 sites, 21 journalled changes.
+`check --wave 2` against production: **21 rows, 0 deviations**; the journal holds 27 rows of wave 1's
+stamp and none of wave 2's.
+
+| site | moved | Wikidata P625 | web witness (quote) | pair |
+| --- | --- | --- | --- | --- |
+| Teanum Apulum | 27.26 km | Q3017180 41.763700, 15.241690 | imperium.ahlfeldt.se/places/23226 "41.77125, 15.23548" | 985 m |
+| Aziz Dheri | 15.81 km | Q88078046 34.245464, 72.393405 | doam.gov.pk/public/sites/2330 "Latitude: 34.241666667 Longitude: 72.402333333" | 923 m |
+| Kephala, Kea | 4.15 km | Q1739125 37.680899, 24.328623 | topostext.org/place/377243XKef "Latitude: 37.681700 Longitude: 24.328600" | 89 m |
+| Jordbro Grave Field | 3.92 km | Q10540828 59.131944, 18.122694 | guidebook-sweden.com "59°7′53.7″N 18°7′29.0″E" | 122 m |
+| Dalj | 2.69 km | Q912341 45.484361, 18.987394 | geonames.org/3202215 "45.48438, 18.98610" | 101 m |
+| Great Dolmen of Dwasieden | 1.39 km | Q575698 54.502100, 13.609100 | paganplaces.com "54.5020817, 13.6069502" | 139 m |
+| Karnak Temple Complex | 1.14 km | Q522862 25.718333, 32.658333 (imported from enwiki) | imperium.ahlfeldt.se/places/21108 "25.7191736, 32.6566111" | 196 m |
+
+Every move goes to the Wikidata point (first in priority). Stored-agrees (no change): Tenam Puente,
+Baking Pot and Argishtikhinili (geonames.org), Colybrassus (nomisma.org), Tower of Elahbel (vici.org),
+Talgua Caves (showcaves.com), Menir da Cabeça do Rochedo (prehistoricportugal.com, 3 m) and Lycaean
+Tomb (allovergreece.com).
+
+### For the reader of the plan
+
+* Dalj's record describes the village (its item is "settlement in Croatia"); the move puts it at the
+  village's Wikidata and GeoNames point.
+* Teanum Apulum's pair agrees within 985 m of a 1,000 m tolerance.
+* Two accepted witnesses matched their name on a type word only (Lycaean Tomb: "tomb", page "Lykian
+  Grave | Kastelorizo"; Menir da Cabeça do Rochedo: "menir", the full name in the page title). Both
+  pages were read by hand: they are the site's own pages. Both are stored-agrees, no move.
+* Three pairs rest on a P625 "stated in" an item this workstation could not identify offline:
+  Xultun and Cusichaca River (P248 Q1194038, web witness geonames.org) and Mankby (P248 Q31017965,
+  web witness kyppi.fi). None of them is a move; if Q1194038 is a source GeoNames copies, or Q31017965
+  the register kyppi.fi publishes, `REFERENCE_PUBLISHERS` should name them before a later run.
+* Stored points far from every witness while the witnesses are one source stay `review`: Trajan's
+  Forum 374 km, Petroglyph Beach 236 km from Wikidata/enwiki (1.7 km from its web witness), Hadrian's
+  Gate 42 km, Cusichaca River 35 km, El Kab 26 km. These are wrong points the rule cannot move.
+
+### Tests and proofs
+
+* `tests/remediation/test_bcases_web.py`: 74 tests, no network (a scripted fetcher that refuses what
+  the real one refuses, the real fetcher on a mock transport, a fake psql reader); with
+  `BCASES_CACHE` at the main checkout's cache all 74 pass, including the reproduction of the delivered
+  second wave and the no-web-witness identity with the first.
+* `mutation_sweep.py bcases` after the last code change: **180/180 caught**, among them all
+  **94/94 "bcases web:"** cases (70 from the builder, 24 added for the findings above); the tree
+  byte-identical to the sweep's start for 9 files - and again 180/180 after the second merge of
+  `integrate/wave1` (wip/ops2). The standalone "bcases web" run before finding 10
+  read 93/94. The sweep now runs from a worktree with the interpreter that runs it (`sys.executable`,
+  from `integrate/wave1`), so no wrapper was needed.
+* Gates on the merged tree (after the second merge of `integrate/wave1`): full suite (`pytest -q -rs
+  --timeout 300 -m "not integration and not live_llm"`) **4,275 passed**, 110 skipped - every skip is gitignored data this worktree does not
+  carry (Natural Earth caches, snapshots, worklists, the bcases caches; the three bcases ones pass
+  with `BCASES_CACHE` at the main checkout's cache, and the full reclassification was reproduced by
+  hand) - 57 deselected; `ruff check` over api, pipeline, scripts/remediation, tests and
+  output/remediation/tools clean; `ruff format --check` on the six touched Python files clean;
+  `lint-imports` 2 kept, 0 broken; `vulture` clean.
+
+## 2026-09-23 - Track C's "every guard is proven" was not true; the p4-verify findings closed, with the real counts
+
+Commit `6782fe3` on wip/p4-verify is titled "Prove every Track C guard with a mutation case (100/100
+caught)" and says its sweep "breaks each guard of verify4 ... of verify_writes4 ... and of the
+shorts S13 card trace". The 100/100 was real for its 100 cases; the claim that they were every
+guard was not:
+
+* **Rules review** (wf_57d89c7d-7ac, read-only): 46 guard conditions that no case named, removed one
+  at a time, left the Phase-4 suite green in 42 cases; 34 of them were reachable gaps (V1's pin
+  checks, V8's citation checks, V12's citation equality, V13's card presence, S13's inputs, the
+  one-sided and bracketed dash, each V5 artefact, curly-quote balance, the strong-own conditions,
+  lane T's trimmed quote, the batch's lane sources, the acceptance's planned-outside-lane check).
+  The inventory re-checked 17 of them in memory: all green without the guard.
+* **Correctness review**: four majors and three minors the 100 cases did not touch - V7 matched a
+  lane-S heading in both directions (C1), nothing checked that a range is one whole sentence (C2),
+  V10 rebuilt T/R cards from French or restricted text (C3), the acceptance failed every card-held
+  site (C4), one trailing space passed (C5), `name_in` matched inside words (C6), V14 held the
+  eight `Chile, Easter Island` sites (C7).
+
+### What wip/p4-verify-sup changed (commits `21822ea` .. `be79b23`)
+
+* The interrupted fixer's verify4 finder (section 7 before the evening's decision) was committed as
+  found (`21822ea`), then finished: the shared-comma refusal (two insertion pairs that share a
+  comma offer neither), and D2 - V10's spoken edit is `model4.CIRCA_PATTERN`, no circa pattern of
+  verify4's own (`c. AD 79` now reads as S4 reads it).
+* C1-C7 as the reviews proposed; see PHASE4_CONTRACTS.md section 5, Track C, for each reading.
+* Found on the way: V8 compared a citation's domain with the URL's full netloc, while S4
+  (`assemble.domain_of`) and production (`api/main.py`'s seeded citations) write the host without
+  `www.`; every lane-R citation on a `www.` host would have been held. V8 now reads the production
+  form, and the lane-R fixture follows it.
+* V14's string-equality fallback was dead code (every name `countries_named` finds has a code) and
+  is gone; a stored country with no code agrees with no named country, as before.
+* The acceptance: C4, and the follow-up wip/p4-write-sup left for this merge - a lane row with its
+  own kept reversal (its change key **and** its run stamp, each plus `-rollback`, revert4's
+  `_reversed`) is reverted, not "changed later" and not a second write; a row whose lane rows are
+  all reverted is judged like one not yet written. Both journal reads now carry `change_key`.
+* R3: S13's two inputs come from `shorts_audit.card_trace`; `measure_site`'s use of it is pinned by
+  an AST test, because `measure_site` itself needs a rendered short (ffprobe).
+
+### The counts, measured on wip/p4-verify-sup at `be79b23`
+
+* **Tests.** `test_phase4_verify.py`: 112 test functions (76 at `6782fe3`), 242 collected, 241
+  passed, 1 skipped (the brand fonts, gitignored). `test_phase4_accept.py`: 34 (29). The S13 tests
+  in `tests/pipeline/video/test_shorts.py`: 8 (6). Every fix was red first: 25 failures in the two
+  Phase-4 files plus the shorts module's `card_trace` import error, before any code change.
+  The tests of guards that already existed (R1, R2, R4, R5) were green before; their sweep
+  cases are what shows each of them red without its guard.
+* **Sweep.** `PHASE4_VERIFY_MUTATIONS` (100) plus the new `PHASE4_VERIFY_SUP_MUTATIONS` (105, each
+  list registered once): **205 of 205 caught**, the four mutated files byte-identical afterwards,
+  `git status` clean, no `# mutant` line outside the sweep files. By family: 165 `p4 verify4:`, 32
+  `p4 verify_writes4:`, 7 `p4 shorts_audit:`, 1 `p4 shorts_export:`. Eight older cases were
+  re-anchored where the new code replaced their lines. The first run of the new list read
+  **204/205**: "a row without a change key has a reversal" survived, because the keyless test had
+  no row under the reversal stamp and `any()` never reached the null key; the test now also holds
+  a keyless write followed by its keyless reversal open (SQL `NULL || '-rollback'` equals nothing),
+  and the case is caught.
+* **D3 parity.** The parity test runs `sentences.split_source` and verify4's finder over the 50
+  `SPAN_CASES` and 17 texts of the verifier's own: identical ranges. Read-only over the 3,661 local
+  enwiki extracts (`phase3_runner/runs/mass`): 170,528 sentences, 81,979 of them in a lane-W pool,
+  144,272 spans offered by S2 - **0** sentences on which the two finders differ, and every S2
+  sentence range is one sentence of verify4's split, so V2's whole-sentence check holds no S2 pick.
+* **Gates** on the merged tree (integrate/wave1 `234e198` and wip/p4-select-sup `c5c4335` merged
+  in): `pytest -q -rs --timeout 300 -m "not integration and not live_llm"` **5,306 passed**, 116
+  skipped (gitignored data, caches and the brand fonts), 57 deselected; `ruff check` over api,
+  pipeline, scripts/remediation, tests and output/remediation/tools clean; `ruff format --check`
+  on the eight touched Python files clean; `lint-imports` 2 kept, 0 broken; `vulture` clean.
+
+### What 205/205 still does not prove
+
+The sweep proves that each listed case is caught; it cannot prove that the list is complete. Left
+without a case, on purpose: the `l` rule's "text after the comma" check (unreachable once the
+sentence must end in `.`, `!` or `?`), the split's `if piece:` and heading-line skip (equivalent:
+an empty range or a heading range is never a published sentence's), the lane read's key map
+(equivalent: the chain read records every lane row's key as well), and `change_key` in
+`JOURNAL_COLUMNS` (removing it raises `KeyError`; it never passes). The pre-pilot end-to-end run of write4, write_gate4 `--round 2`, revert4 and the
+acceptance together needs wip/p4-write-sup on the same tree; it is not on this branch.
+## 2026-09-23 - the Phase-4/5 writer (Track D), reviewed: 13 findings, what the supplement changed
+
+Branch `wip/p4-write-sup`, on `wip/p4-write` (708cf0b, WB-D1 ... WB-D5), with `integrate/wave1`
+(f32c95d) merged in. Two reviews of Track D - correctness (5 findings, C1-C5) and rules/teeth (8,
+R1-R8) - were each checked against the code and closed. A first fixer answered 11 of them and died
+before committing; its tree was committed as found (676e1f9), then merged with `integrate/wave1`
+(one conflict, the tools README table, both sides kept) and finished under the orchestrator's
+decisions D4-D6. **Nothing was written to production, and this supplement read nothing from it**;
+the production figures below are the reviewers' read-only measurements.
+
+### Correctness
+
+* **C1 (major) - `revert4` could not undo a second write round.** Confirmed: a change key names a
+  transition, not a write, so round 2 of a batch journals the same keys as round 1, and the
+  "reverted already" guard matched on the key alone - after one revert, `--stamp-like 'phase5:%'`
+  (the red-CI answer of the P5 sitting) was refused for good. Now "reverted already" is the key
+  **and** the stamp plus `-rollback` (`revert4._reversed`), and `revert4` **skips** a matched write
+  that already has its own reversal instead of refusing the pattern; it raises only when the
+  pattern matches nothing or only reverted writes. Why skip rather than refuse: refusing left the
+  live round revertable only by its exact stamp, and reverting the reverted round again would need
+  its field to hold its written value - which round 2 may have put back - and would undo round 2's
+  write under round 1's stamp. The set is fixed inside the transaction before anything moves, and
+  every guard, the loop and both invariants run over exactly that set. Test:
+  `test_revert4_reverts_the_live_round_and_refuses_the_reverted_one` (the rendered set query and the
+  post-read evaluated in SQLite). **The new PL/pgSQL has never run on PostgreSQL**: rehearse it
+  (`revert4.py --rehearse`) before relying on it.
+* **C2 (major) - the gate never required the acceptance between steps.** Confirmed by the reviewer's
+  probe (two `--apply --step 100` calls wrote 120 sites with no check between). Now a handshake:
+  every written batch is recorded in `STEP.json`; while it exists `--apply` writes nothing; `--accept
+  <file>` records `ACCEPTED/step-NNNN.json` only for a `verify_writes4.py` output that ends in
+  `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has one lane line of the step's lane whose stamps
+  cover the step's, read at least the rows written so far, and accepted no earlier step. Tests:
+  `test_a_step_without_its_acceptance_blocks_the_next_step` (nothing is sent, not even a preflight),
+  `test_an_acceptance_that_does_not_accept_this_step_is_refused` (6 cases),
+  `test_one_acceptance_output_never_accepts_two_steps`. The lane line is parsed in the print format
+  of `verify_writes4.py` on `wip/p4-verify`; a change there must change `write_gate4._ACCEPT_LANE`.
+  Found while documenting it: the command the gate printed for the acceptance lacked `--run`, which
+  `verify_writes4.py` requires for lanes p4 and p5 - it now names the run directory
+  (`test_the_gate_prints_the_acceptance_command_it_will_accept`, red first).
+* **C3 (minor) - a step of 100 wrote up to 114 sites.** Now a batch is written only while it still
+  fits: 8 batches of 15 sites give exactly 90 journalled sites
+  (`test_a_step_of_100_sites_never_writes_more_than_100`); a batch larger than the step is refused.
+* **C4 (minor) - every journalled column moved the sitemap lastmod.** The ~4,300 P5 card writes would
+  have re-announced (sitemap and the hourly IndexNow cycle) pages whose content does not change.
+  `public_sites.PAGE_COLUMNS` now lists the columns the SSR page reads, per table - see D6 below.
+* **C5 (minor) - lane L claimed the March chain for sites the snapshot does not have** (decision
+  D4). `snapshot_description` is NULL both for a site d4526691 lacks and for one it holds without a
+  text, so a held site created after 2026-03-04 (8 curated sites, 7 of them on 2026-04-24, by the
+  reviewer's read) would have been marked "generated by the 2026-03 enrichment chain" with a basis
+  that has nothing to compare against. `PlanSite` gains `in_snapshot` (model4 change accepted by the
+  orchestrator; `plan4` reads it with `EXISTS` on `snapshot_rows`), and `legacy4` makes no claim
+  for an absent site and lists it under the closed reason `NoClaim.NOT_IN_SNAPSHOT`
+  (`not-in-snapshot`, in UNCLAIMED.jsonl for HUMAN_ONLY). Red first: the two legacy tests planned
+  the claim before the fix.
+
+### Rules and teeth
+
+* **R1 (major) - the SQL guards had no teeth.** The fake psql applies its own Python checks when a
+  comment marker is present, so a predicate or RAISE could be deleted with the suite green. Every
+  predicate and RAISE of `render_apply`, `render_rollback` and `render_revert` is now pinned byte for
+  byte (`tests/remediation/phase4_write_pins.py`), and 33 mutation cases each break one of them.
+* **R2 (major) - round 2's read-back read either round's journal row.** `write_stage.journal_rows_sql`
+  now takes the run stamp and filters on it; the per-row comparison is one helper,
+  `write_stage.journal_mismatches`, used by Phase 3's and Phase 4's read-back. Test:
+  `test_a_batch_written_again_after_a_revert_reads_back_its_own_round`, for either journal order.
+* **R3 (major) - the checks around a chunk were untested.** The fake psql got sabotage hooks (a
+  write moved after commit; a rolled-back statement whose journal rows survive); 9 tests make the
+  read-back, the rehearsal trace, the inverse proof, a surviving reversal, a journal row with other
+  values, a stamp's extra row, a non-curated site and a missing `card_stats` row each stop the run.
+* **R4 (major) - most plan-side guards were untested.** One red test per guard: `validate_rows` (8
+  tampered fields, 4 raw_data cases, the 200-character card), `Chunk4`, `load_batch` (a site twice, 6
+  files naming a site wrongly), `model_files`, the open-lane and step checks, the audited list, the
+  card-clear evidence (`phase3_card_findings`), `card_json` and the API disclosure.
+* **R5 (minor) - the journal evidence was weaker than documented** (decision D5). Every call had to
+  be complete, but none was required by name: a site whose only answer was a translation was
+  planned. `model4` now names the calls (`SELECT_FEATURE` ... `REVIEW_FEATURE`, `LANE_ANSWERS` - the
+  names Track B's `batch4` stores under) and `write4.evidence_problems` requires the lane's calls by
+  name - the selector's for W, S and T (the design's "selector-answer sha256"), T's translation
+  beside it, lane R's restricted call - and the reviewer's for every lane. The test fixtures now use
+  Track B's names (`select`, `review`) instead of invented ones. Red first:
+  `test_a_site_without_the_selectors_answer_is_refused` planned the site before the fix.
+* **R6 (minor) - duplicated utilities.** `ReadBack4` is gone (`write_stage.ReadBack`), the journal
+  loop is `journal_mismatches`, the UTF-8 stream setup is `write_stage.utf8_streams()` for
+  `write_gate.py` and `write4.exit_line`.
+* **R7 (minor) - the empty-list half of the card-clear evidence guard** is tested (`{}` and
+  `{site: []}`), and its mutation case now keeps `None` handling intact.
+* **R8 (minor) - `provenance_of` silently read a malformed provenance as none.** It now raises when
+  `_description_provenance` is present but not an object, as the public route already did; no
+  production row carries the key today.
+
+### The site page's lastmod (decision D6)
+
+The first fix of C4 counted only `unified_sites` rows, so an image lane's hero change - journalled
+with the site in `site_id_ref` - no longer moved the date although the page shows that image.
+`PAGE_COLUMNS` is now per table and equal to what the detail route reads: 12 `unified_sites` columns
+(the design's six plus period_end, period_name, lat, lon, source_url and parent_site_id, which the
+page renders and later lanes journal), `card_stats.best_wiki_url` and `source_language` (the page's
+Wikipedia link), and the `wiki_images` columns that pick the page's one image (is_hero, is_excluded,
+is_lead, sort_order) or that it renders of it (filename, author, license, commons_page_url, width,
+height). Not counted: the card, the card game's stats, `geom`, `thumbnail_url`, and the image
+columns the page never shows. `test_the_page_columns_are_exactly_the_ones_the_ssr_route_reads`
+derives the three lists from the route's own SQL. A rendered image column counts for every image of
+the site, not only the shown one - the journal does not say which image was shown at the time, and
+announcing a gallery change is the cheaper error than missing a hero change.
+
+### Measured (the worktree of `wip/p4-write-sup`, main venv)
+
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`): **4,355 passed, 108
+  skipped**, 57 deselected; every skip names gitignored data (Natural Earth, the snapshot, the
+  worklist, the design file) or the pre-existing `_write_article_body` refactor. Merged tree before
+  the supplement's own fixes: 4,342 passed.
+* Mutation sweep, every "p4 " case (`mutation_sweep.py "p4 "`): **383/383 caught**, the tree
+  byte-identical to the sweep's start for 23 files. Of them 111 are the supplement's
+  (`PHASE4_WRITE_SUP_MUTATIONS`: the first fixer's 96, and 15 for D4, D5, D6 and the printed
+  command), 54 Track D's first cases, 8 the API's. The fixer's two lastmod cases were re-anchored
+  to the per-table filter, and Track D's legacy case moved with the legacy guard.
+* `ruff check` (api, pipeline, scripts/remediation, tests, tools) clean; `ruff format --check`
+  clean on every file the supplement touched and on api/ and pipeline/; `lint-imports` 2 kept, 0
+  broken; `vulture --min-confidence 80` clean; the Lyra import check (no markdown, no nh3) passes.
+
+### Not proven here, and what the merge must carry
+
+* `revert4`'s PL/pgSQL and the write statements have run only as pinned text and through the fake;
+  the first production contact is a `--rehearse`.
+* `write_gate4 --accept` parses `verify_writes4.py`'s lane line, which lives on `wip/p4-verify`;
+  `write_gate4` imports `phase4.verify4` (Track C) for P4. Neither is on this branch.
+* On the merge with `wip/p4-select`: `batch4.SELECT_FIELD` ... `REVIEW_FIELD` take their values from
+  `model4` (one spelling), and Track B's `tests/remediation/p4_fixtures.py` gains `in_snapshot`; on the
+  merge with `wip/p4-verify`, `tests/remediation/phase4_cases.py` gains it too.
+* No migration: `_description_provenance` is a key inside `raw_data`, the journal is 0017/0018/0022
+  (applied), and `in_snapshot` is a field of the local plan file.
+* Push #1 (HUMAN_ONLY D1) from this branch: the disclosure API (`api/services/description_provenance.py`,
+  `api/routes/sites.py`, `sites_html.py`, `public_v1.py`, `api/schemas/public_v1.py`), the seed removal
+  (`api/main.py`), the page lastmod (`pipeline/utils/public_sites.py`, read by the sitemap and by
+  Lyra's IndexNow), and the frontend line, AI footnote and licence lines (`ancient-nerds-map/src/...`
+  and `terms.html`). The sentence splitter (`pipeline/lyra/text_sentences.py`) is Track B's, on
+  `wip/p4-select`. The frontend was not type-checked or tested in this worktree (it has no
+  `node_modules`); `npm run type-check`, `npm run test` and the Playwright bundle swap against
+  production come before that push.
+
+## 2026-09-23 - the Track D supplement, checked: write round 2, the handshake after a revert, D7
+
+An independent checker read `wip/p4-write-sup` at db6dcef and found three issues (C1 major, C2 and
+C3 minor). Each was verified here; C1 is fixed, the gate's share of C2 is fixed and its Track-C
+share is open for the orchestrator, C3 needs the orchestrator's HUMAN_ONLY edit (the gate's count
+is fixed). **Nothing was written to production, and nothing was read from it.**
+
+### C1 (major) - the documented write round 2 was a false success (fixed, 5e29f56)
+
+Reproduced with the checker's probe (`C:/tmp/p4wcheck/probe_round2.py`): round 1 `--apply`, its
+acceptance, the round's `ROLLBACK.sql` committed (what `revert4` journals), then `--apply --round 2`
+printed "open batches: 0", "done: no open batch left to write", `WRITE_EXIT=0`, 0 statements, and
+the journal held only chunk-0001 and its reversal. Cause: `render()` returned a batch that still had
+its round-1 `APPLIED.json` with its round-2 chunk, and `run_batches()` skipped it as applied.
+
+Fix: `--round N` re-opens a batch applied in round N-1 only on production's read-only word that the
+round is reverted - as many journalled writes under its stamp as it wrote, each with its own
+reversal kept. The read is `revert4`'s own post-read, now one function (`reversal_read`, parsed
+strictly by `reversal_counts`), so gate and reversal share one definition of "reverted". The round's
+`APPLIED.json` moves to `chunks/chunk-NNNN/` beside `REVERTED.json` (the proof) and chunk-000N is
+written. Refused with `WRITE_EXIT=1` instead of skipped: round 3 over round 1, round 2 for a batch
+never written, round 1 for a re-opened batch. The acceptance's rows-read rule counts every written
+round, live and reverted, under the stamps the output read - counting only the live records would
+have let an output taken between the revert and round 2 accept round 2. The same probe now sends 12
+statements in round 2 and the journal holds chunk-0002.
+
+### C2 (minor) - no way out of a pending step after a revert (gate share fixed, Track-C share open)
+
+Verified: `acceptance_problems` needs `ACCEPT_EXIT=0`, `run_batches` blocks while `STEP.json`
+exists, only `accept_step` removes it. The gate's share is fixed in the same commit:
+`--close-reverted` closes a pending step on the proof above for every batch of the step, records it
+in `CLOSED/step-NNNN.json` (never in `ACCEPTED/`), re-opens its batches and removes `STEP.json`; a
+live row refuses the whole close, and `--round` does not re-open a batch of a pending step. The
+Track-C share is open: `verify_writes4.accept4` (on `wip/p4-verify`) reads a write followed by its
+kept reversal as CHANGED LATER and two rounds of a key as WRITTEN TWICE. A round-scoped
+`--stamp-like` is no cure once a lane mixes rounds - probe `C:/tmp/p4wcheck/probe_mixed_rounds.py`
+against the checker's export of `wip/p4-verify` 6782fe3: batch 1 reverted and written as round 2,
+batch 2 live in round 1 gives `WRITTEN TWICE` and `CHANGED LATER` under `phase5:%` and `MOVED` for
+batch 2 under `phase5:%:chunk-0002`. `accept4` needs to treat a link with its own kept reversal as
+closed (PHASE4_CONTRACTS section 7, "After a revert"); the merged-branch test (write, revert,
+round 2, accept) belongs to that merge.
+
+### C3 (minor) - HUMAN_ONLY D7 does not name the sites absent from the snapshot (orchestrator)
+
+Verified: HUMAN_ONLY D7 speaks only of held texts equal to the pre-March state, while
+`legacy4.NoClaim.NOT_IN_SNAPSHOT` (e8480fd) lists sites that snapshot `d4526691` does not have in
+the same `UNCLAIMED.jsonl`, each line with its `reason`. HUMAN_ONLY is the orchestrator's file. On
+this branch the gate's report no longer sums the reasons: it prints "unclaimed by reason (HUMAN_ONLY
+D7): {...}" (35ce513).
+
+### Measured (worktree of `wip/p4-write-sup`, main venv)
+
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`): **4,373 passed, 108
+  skipped**, 57 deselected (18 more than before the check).
+* Mutation sweep, every "p4 " case: **398/398 caught**, the tree byte-identical for 23 files; 15
+  new cases (13 `write_gate4`, 2 `revert4`), and the kept-reversals case re-anchored to the shared
+  read.
+* `ruff check` (api, pipeline, scripts/remediation, tests, tools) clean, `ruff format --check`
+  clean on every touched file, `lint-imports` 2 kept, 0 broken, `vulture --min-confidence 80`
+  clean.
+
+## 2026-09-23 - the Opus handoff: every model judgement answered by Opus, the DeepSeek transports removed
+
+**Owner order (Martin, 2026-09-23, binding): "no DeepSeek any more - everything with Opus".** Until
+then every model judgement of the remediation was bought from DeepSeek: the Phase-3 finder and
+reviewer - and with them the sitelink, search and gap reruns, which run the same stages - and the
+Phase-4 selector, translator, restricted-lane and reviewer calls on `opencode-go/deepseek-v4.1-flash`,
+one `pi.cmd` process per call (`phase3/model_stage.PiRunner`); the gallery vision questions on
+`deepseek-v4-flash-vision-exp` over the opencode gateway (`vlm_pilot/ask_vlm.ask_once`, called by
+`gallery_audit/vision.py`). Branch `wip/opus-handoff` (from `integrate/wave1` 8a957b4, commits
+`aa44da2` .. this one) replaces both transports with an **Opus handoff**: a stage writes its questions
+to files, the orchestrating Claude Code session's Opus agents answer them, and the stage reads the
+answers back. **Nothing was written to production, nothing was read from it, and no model API was
+called** - no DeepSeek, Pi, opencode gateway or other model, in code or in tests.
+
+### The design
+
+**One contract, `scripts/remediation/opus_handoff.py`.** `OPUS_MODEL = "anthropic/claude-opus-5-5
+(Claude Code agent)"` - one string, pinned by a test, named by every answer file, ledger line and
+disclosure. A handoff directory (one per round; it may hold several batches and stages):
+
+    <dir>/<batch_id>/MANIFEST.jsonl                 one line per exported question
+    <dir>/<batch_id>/<stage>/<label>.prompt.txt     the exact prompt, UTF-8
+    <dir>/<batch_id>/<stage>/<label>.answer.json    the answer, written by an Opus agent
+    <dir>/images/<image_id>.jpg                     vision only: the exact JPEG the question is about
+
+`<label>` is the call's label escaped as the evidence store escapes it (`quote(label, safe="")`:
+`site-1/description` -> `site-1%2Fdescription`); the stage is a path component because the Phase-3
+finder and reviewer ask about the same `<site>/<field>` label. Batch ids and stages are refused
+unless they are one plain name (no separator, no `..`; `images` is reserved). A manifest line is
+`{batch_id, stage, label, field, prompt_sha256, prompt_path, answer_path, image_path}`, paths relative
+to `<dir>` with `/`, `image_path` null except for vision; one manifest per batch, so parallel
+exports of different batches never share a file. An answer file is exactly
+
+    {"prompt_sha256": "<sha256 of the exact prompt text, UTF-8>", "text": "<the answer, verbatim>",
+     "model": "anthropic/claude-opus-5-5 (Claude Code agent)",
+     "answered_at": "<ISO 8601 with a zone>", "answered_by": "<the agent's name>"}
+
+* `export` writes the prompt (and image) write-once and then the manifest line: the same prompt again
+  is a no-op, a different prompt or image for an exported question is refused (an answer may exist).
+  No model call.
+* `answer` (`write_answer`) is the helper the agents answer through, so no agent computes a digest:
+  the question must be in the manifest, its prompt file must still hash to the manifest's digest, and
+  the answer is write-once (the identical text again is a no-op; another text is refused - delete the
+  file to answer again).
+* `read_answer` refuses (never defaults) a missing file, a file not exactly in the answer shape, an
+  empty text, a model that is not `OPUS_MODEL` and an answer to another prompt (stale digest).
+* `validate` checks every manifest line: the prompt file still the exported one, the image present,
+  the answer present, in shape, by Opus, for this prompt. It reports `missing`, `stale`, `malformed`
+  (wrong model included) and `orphans` (answer files nobody exported); exit 0 only when all are empty.
+
+**Phase 3.** `model_stage.HandoffRunner(directory=...)` implements the `ModelRunner` seam through
+`read_answer`; every refusal is a plain `ModelCallFailed`, never an `UnreadableStream`, so the batch
+stops at the question and the orchestrator answers it again, instead of a permanent named hole.
+`MODEL = OPUS_MODEL`. `Usage` gained a required `metering` field and `Usage.unmetered()` (zero tokens,
+cost 0, `metering="unmetered"`): an Opus answer on a subscription has no per-call meter, and the
+record says so rather than faking a measurement. A ledger line (`LEDGER.jsonl`) keeps its shape and
+adds `"metering": "unmetered"`; `phase3.ledger` refuses an unmetered line that carries any token or a
+cost other than 0, any other metering value, and metering on a fetch line; a line without the key
+(the Pi lines, and every fetch line) is written byte-for-byte as before; `StageTotals` counts
+`unmetered_calls`. `run.py judge` has three modes: the preview (no flag), `--handoff-export DIR` and
+`--handoff-import DIR` (mutually exclusive). **The export runs the stage's own judge function**
+(`judge_batch`, `discover_stage.judge_discover_batch`, `review_stage.judge_review_batch`) with a
+`RecordingRunner` against a scratch copy of the store it writes (`answers/` for the finder, `reviews/`
+for the reviewer) and a scratch ledger: every call it would buy is captured with its exact prompt -
+the frozen questions stay frozen - an answer already on disk is skipped exactly as the import skips
+it, and nothing the recording run writes survives (no ledger line, no answer, no `model.json`).
+`mass_run.py --live` is one half of a round: `--handoff-export DIR` runs a batch's stages up to and
+including the judge (prepare, fetch or search, judge) and counts it handed off, not done;
+`--handoff-import DIR` runs the judge and what follows it (`verify-hits` for a search plan) and then
+the artefact check as ever. A live run without either is refused. `review_all.py` takes the same pair.
+
+**Phase 4.** `run4 select` (S3 and S3R, which need no answer), `run4 translate` (S3T, a new command:
+its questions are built from the selector's answers, so it is the next round) and `run4 review` (S6)
+each take `--handoff-export DIR` or `--handoff-import DIR`. The export runs the stages themselves,
+unchanged, over a scratch copy of the batch directory (under its own run and batch names) with a
+recording runner, so holds, selections, answers and reports of the export never reach the batch.
+The import runs them through `HandoffRunner`; every call still goes through `batch4.buy` and
+`judge_site`, so write4's journal evidence (decision D5: the selector's answer by name, the
+reviewer's, each with its prompt on disk and its ledger line) holds for handoff answers - proved end
+to end through the CLI (`test_the_journal_evidence_of_a_site_answered_through_the_handoff_is_complete`).
+`mass4.py` runs one round per live run: `--stages` (a contiguous part of `prepare, sources, routes,
+select, translate, assemble, verify, review`) and at most one model stage, placed by the half
+(`check_round`: an export ends at it, an import starts at it, a round with a model stage and no
+handoff is refused). **`model4.AI_SYSTEM`**, the EU AI Act Art. 50 disclosure published with every
+Phase-4 text, is now `"Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent),
+an-sites-remediation-2026-09"`; `LEGACY_AI_SYSTEM` (the March texts) is unchanged; no Phase-4 text
+had been written, so no row carries the old disclosure. PHASE4_CONTRACTS section 6 records it as
+accepted by the orchestrator 2026-09-23 on the owner's order; rules 3 and 4 and section 5 follow.
+
+**Gallery vision.** `vision.py export --jobs J --run-dir D --handoff H` hands every job the run's
+ledger holds no ok verdict for to the handoff: the filled frozen question (`GALLERY_PROMPT` /
+`HERO_PROMPT`, unchanged; batch = the job's stage, stage `vision`, label `<image_id>/<prompt_id>`) and
+the image as `pipeline.video.shorts_select.vlm_bytes` of the offsite copy (RGB, longest side 1280,
+JPEG q85 - the bytes the pilot sent) at `images/<image_id>.jpg`. `vision.py import` refuses to start
+while any job lacks a valid answer (exit 1, nothing written), then writes one `VERDICTS.jsonl` line
+per job through the existing parsing (`extract_json`, `validate`: the in-vocabulary check, status ok
+or failed, never `other` for a non-answer); an answer given about other bytes than today's JPEG is a
+failed line. A line names `model` = `OPUS_MODEL`, carries `metering: "unmetered"`, `cost_usd` 0,
+`answered_by` and `answered_at`; `verdicts_by_image` (and `decide.py`) already refuse any other
+model, so the pilot transport's verdicts count no more. Because `calibrate.THRESHOLDS` names the
+model, its sealed digest moved (`1040cd59...` -> `e6560457...`); the tracked
+`calibration-2026-09-23/` stays untouched as the DeepSeek seal (the model is the only difference,
+tested) and admits no Opus verdict: **the Opus C1 calibration needs a directory of its own, sealed
+before its first question is exported** (commands below).
+
+### What was removed
+
+`PiRunner`, `pi_argv`, `PROGRAM`, `PI_FLAGS`, `THINKING`, `PROVIDER`, `DEFAULT_TIMEOUT`,
+`Usage.from_message_end`, `parse_stream`, `_assistant_text`, `_count` and the `subprocess`/`os`
+imports of `model_stage`; `judge --live/--timeout`; `run4.pi_runner` and `--live/--timeout` on
+`select`/`review`; the two captured Pi transcripts (`tests/remediation/fixtures/pi_probe*.json`) and
+the 11 tests that parsed them or drove a Pi process; in `mass_run` the DeepSeek cost projection
+(`MEASURED_COST_PER_CALL`) and the spawn-failure shape "a program the child started could not be
+started" (`UNSTARTABLE_PROGRAM`; the judge's Pi process was its only producer) with its 2 tests - the
+NTSTATUS shape stays; in `vision.py` the `ask_vlm` import, the gateway call, its three attempts
+(`VLM_ATTEMPTS`, `VLM_RETRY_WAIT_S`), the `run` command and the gateway ramp probe (`ramp_allows`,
+`MAX_WORKERS_UNPROVEN`, `RAMP_*`) with its test and mutation case. `vlm_pilot/` stays as pilot
+history: nothing that runs imports `ask_vlm.py` any more; the two pure helpers vision read from it
+(`EXPECTED_KINDS`, `extract_json`) moved to `vlm_pilot/common.py`, which `ask_vlm.py` now imports.
+The historical ledger lines, `PIECE3.md` and the sealed pilot documents are untouched; HANDOVER,
+SITES_DB_REMEDIATION, the search stage's docstring and the gallery DESIGN name Opus where they
+described the live route.
+
+**Kept on purpose.** `UnreadableStream` and the loops' named-hole / `MODEL_STREAM_UNREADABLE`
+branches: no runner raises it any more (every handoff refusal stops the batch), but it is the seam's
+contract for an answer that is not one and the mass run's `model.json` files carry named failures
+that `mass_run.batch_state` still reads; removing the branches is a separate change. The dollar
+ceilings (`--max-usd`, vision's `--budget-usd`) stay: Opus lines add 0, historical lines still count.
+
+### The orchestrator's commands, per stage
+
+`PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe`, run from the repository root with
+`PYTHONIOENCODING=utf-8`; `H` is a fresh handoff directory per round (for example
+`output/remediation/handoff/<lane>-<stage>-<date>`). Every round is **export -> the Opus agents answer
+-> validate -> import -> the stage's own gates**. The answering is the orchestrator's: for each line
+of every `H/*/MANIFEST.jsonl` whose `answer_path` does not exist, an agent reads `H/<prompt_path>`
+(and `H/<image_path>` for vision), writes its answer text - exactly the shape the question asks
+for, nothing else - to a file, and runs
+
+    $PY scripts/remediation/opus_handoff.py answer --dir H --batch-id <batch_id> --stage <stage> \
+        --label <label> --answered-by <agent> --text-file <answer.txt>
+
+then `$PY scripts/remediation/opus_handoff.py validate --dir H` must exit 0 before any import.
+
+* **Phase 3, one batch** (discover, rerun, search or finding-driven): `$PY scripts/remediation/phase3/
+  run.py judge --run-dir R --batch-id B --handoff-export H`; answer; validate; `... judge --run-dir R
+  --batch-id B --ledger L --handoff-import H` (writes answers, ledger lines, `model.json`); for a
+  search batch then `run.py verify-hits --live`; the reviewer the same way with `--stage reviewer`
+  (a fresh `H`); then the writer as ever (`write_stage.py`, `write_dry_all.py`, `write_gate.py`,
+  `verify_writes.py`).
+* **Phase 3, a lane's plan**: `$PY scripts/remediation/phase3/mass_run.py --live --plan P --run-dir R
+  [--stages prepare,search,judge,verify-hits] --handoff-export H`; answer; validate; the same with
+  `--handoff-import H` (the judge, then `verify-hits`; done only by the artefact check). Reviewer:
+  `$PY output/remediation/tools/review_all.py --lane <lane> --handoff-export H2`; answer; validate;
+  `... --handoff-import H2` (writes each `review.json`).
+* **Phase 4, a run** (`R` = `phase4_runner/runs/<run>`), six rounds, each followed by answering and
+  validating where it hands off:
+
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages prepare,sources,routes,select --handoff-export H/select
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages select --handoff-import H/select
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages translate --handoff-export H/translate
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages translate,assemble,verify --handoff-import H/translate
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages review --handoff-export H/review
+      $PY scripts/remediation/phase4/mass4.py --run-dir R --live --stages review --handoff-import H/review
+
+  (`run4.py select|translate|review --run-dir R --batch-id B --handoff-export|--handoff-import DIR`
+  does one batch.) Then the stage's gates as ever: `mass4`'s done state, the independent audit,
+  `run4.py writeplan` (write4, whose D5 evidence check reads these answers), `write_gate4.py`,
+  `verify_writes4.py`.
+* **Gallery vision** - the Opus C1 calibration first, in a directory of its own (`C`, e.g.
+  `output/remediation/gallery_audit/calibration-opus-2026-09-23`):
+  `$PY scripts/remediation/gallery_audit/calibrate.py seal --run-dir C`, then `... jobs --run-dir C`;
+  `$PY scripts/remediation/gallery_audit/vision.py export --jobs C/JOBS.jsonl --run-dir C --handoff H`
+  (exit 3 names every image that cannot be found or read); answer (each agent looks at
+  `H/images/<id>.jpg` and answers with the JSON the question asks for); validate;
+  `$PY scripts/remediation/gallery_audit/vision.py import --jobs C/JOBS.jsonl --run-dir C --handoff H`;
+  then `calibrate.py evaluate --run-dir C --eye-labels ...` and `decide.py` as the design has it.
+  The G stages' JOBS files go the same way.
+
+### Measured (worktree `.claude/worktrees/opus-handoff`, main venv)
+
+* Tests: 18 new in `test_opus_handoff.py`; in the stage suites 11 Pi tests and 2 spawn-shape tests
+  and the ramp test removed and replaced by handoff tests (the Phase-3 runner and its export/import
+  round trip through the real CLI, the unmetered ledger line, mass_run's two halves, review_all's
+  argv against the real parser, run4's select and translate rounds over lanes W, T and R with the
+  batch directory byte-identical after each export, mass4's round rules, D5 end to end, vision's
+  export/import round trip with the exact JPEG); the API fixtures carry the new disclosure.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, the snapshot and
+  `WORKLIST.jsonl` copied into the worktree's ignored paths from the main checkout): **5,555
+  passed, 103 skipped, 57 deselected, 0 failed**.
+* Mutation sweep: the 62 new cases (`opus handoff: `) **62/62 caught**; every existing case whose
+  file or test this branch changed (740 cases, the 62 included) **740/740 caught** - 737 in one run,
+  and the 3 whose tests need the gitignored snapshot and worklist caught once those were copied in;
+  the tree byte-identical after each run, no `# mutant` line outside the sweep files. The AI_SYSTEM
+  case was re-anchored to the new disclosure.
+* `ruff check` and `ruff format --check` clean on all 31 touched Python files, `ruff check api/
+  pipeline/` clean, `lint-imports` 2 kept 0 broken, `vulture api/ pipeline/ .vulture_whitelist.py
+  --min-confidence 80` clean, the Lyra import check (`markdown` and `nh3` masked) passes.
+
+### Open
+
+* The Opus C1 calibration directory is not sealed here: sealing is the first act of that production
+  run and needs the gitignored state (`calibrate.py seal`, then `jobs`).
+* The answering workflow (which agents, how many questions per agent) is the orchestrator's; this
+  branch gives it the files, the helper and the validator.
+* `mass_run.package_digest` hashes `phase3/` (and `mass4` `phase4/`), not `opus_handoff.py`: an edit to
+  the handoff module mid-run is not caught by the digest guard.
+* Removing the now-unraised `UnreadableStream` branches (see "Kept on purpose").
