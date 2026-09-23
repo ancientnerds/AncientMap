@@ -1,55 +1,40 @@
-"""Stage "model" of the Phase-3 runner: one non-interactive Pi process per judgement.
+"""Stage "model" of the Phase-3 runner: one judgement per call, answered through the Opus handoff.
 
-The transport is decided and measured, not chosen here. A Pi process in `--mode json` is the
-model driver, invoked from an argv list:
+**The transport is the Opus handoff (owner order, 2026-09-23: "no DeepSeek any more - everything
+with Opus").** Every call is answered by an Opus agent of the orchestrating Claude Code session
+(`OPUS_MODEL`), which this code cannot call: a stage is therefore run twice with the answering in
+between (`scripts/remediation/opus_handoff.py` holds the directory's contract).
 
-    pi -p --mode json -ne -nt -nc --no-session --model opencode-go/deepseek-v4.1-flash
-       --thinking off < prompt
+* **export** - the stage runs with a `RecordingRunner`, against scratch copies of what it writes, so
+  every call it would buy is captured with the exact prompt the stage builds (the frozen questions
+  stay frozen, and no second spelling of a stage's site filter or prompt builder exists anywhere);
+  `export_calls` writes them to the handoff directory. No ledger line, no answer, no report.
+* **import** - the same stage runs with a `HandoffRunner`, which reads each call's answer file and
+  refuses (`ModelCallFailed`, so the batch stops rather than recording a hole) a missing file, an
+  answer to another prompt, an answer by another model and an empty text. Every other rule below is
+  unchanged: the ledger line goes down first, the answer is stored write-once, a stored answer is
+  never asked again.
 
-* `-p`          one non-interactive run, no TUI.
-* prompt on **stdin**, never in argv. Measured 2026-09-21: a real prompt (one site record plus its
-                evidence, ~24,000 characters) passed as the last argv element made `pi.cmd` fail
-                with `Die Befehlszeile ist zu lang.` - `pi.cmd` is a batch file, so Windows runs
-                it through `cmd.exe`, whose command line stops near 8,191 characters. The same
-                shape of prompt on stdin answered normally: 445 input tokens, $0.00006735, and a
-                one-word answer. Stdin has no such bound, and a prompt that is never an argv
-                element never needs quoting either.
-* `--mode json` one JSON object per line on stdout; the settled usage of the assistant message
-                arrives in the `message_end` event at `message.usage`.
-* `-nt`         **no tools.** The runner fetches the evidence (`phase3/fetch_stage.py`) and the
-                model only judges it, so the model can neither fetch a page nor edit a record.
-* `-nc`         do not load `CLAUDE.md`/`AGENTS.md`. That removes a measured ~31,500-token fixed
-                overhead per lifecycle (the figure the project's working rules state).
-* `-ne`         do not load extensions. Measured, not estimated: two live calls with an identical
-                prompt on 2026-09-21 by the supervisor --
-
-                    extensions loaded: 14,013 ms wall, input 2,271 tokens, cost $0.00034125
-                    with `-ne`       :  2,698 ms wall, input   437 tokens, cost $0.00006615
-
-                i.e. extensions inject ~1,830 tokens into *every* call, and cost 5.2x the money
-                and 5x the wall time. Nothing in this design needs an extension: the model judges
-                text the runner already fetched. Dropping `-ne` to "simplify" re-buys all of it.
-* `--thinking off` the reasoning budget adds tokens to a judgement this narrow and prices it.
+Until 2026-09-23 the transport was one non-interactive Pi process per call on
+`opencode-go/deepseek-v4.1-flash` (`output/remediation/phase3_runner/PIECE3.md` records its argv,
+its measurements and why each flag was there). It is removed, not kept beside the handoff: there is
+no second transport and no fallback model.
 
 Three things this module refuses to do, because each of them is an invisible cost or an invented
 number:
 
-1. **It never computes a cost.** The provider reports `cost.total` per call and that reported
-   number is what `phase3.ledger` stores (`cost_usd`). Piece 1 recorded tokens only, on the
-   ground that a price table is an assumption; the provider's own figure is a measurement, so it
-   is recorded and no price is ever applied to a token count here.
-2. **It never writes an unmeasured call.** A non-zero exit, a timeout, a stream that does not
-   parse, a missing `message_end` usage block or an empty assistant text all raise. Usage is
-   never defaulted to zero and an empty answer is never returned as a result. A call that fails
-   *after* the provider billed it is therefore not in the ledger - the ledger refuses a line it
-   cannot total - which is stated here rather than papered over.
-3. **It never retries.** A retry doubles the charge invisibly. Nothing in this module calls the
-   runner twice for one `ModelCall`; a re-run of the stage is a second `judge` invocation, and it
-   writes its own ledger lines.
+1. **It never invents a measurement.** An Opus answer has no per-call meter (a subscription), so its
+   `Usage` says so - `metering="unmetered"`, zero tokens, cost 0 - and so does its ledger line
+   (`phase3.ledger.UNMETERED`); the ledger refuses an unmetered line that carries a number. No
+   price is ever applied to a token count.
+2. **It never writes an unanswered call.** A missing, stale, foreign-model or empty answer raises;
+   an empty answer is never returned as a result.
+3. **It never retries.** Nothing in this module calls the runner twice for one `ModelCall`; a re-run
+   of the stage is a second `judge` invocation, and it writes its own ledger lines.
 
-`--dry-run` (the default of `phase3 run judge`) renders the exact argv and the exact prompt text
-through `pi_argv` / `Prompt.render` without starting a process, so a batch is readable - and its
-prompt sizes are visible - before any money is spent.
+`--dry-run` (the default of `phase3 run judge`) renders the exact prompt text through
+`Prompt.render` without exporting anything, so a batch is readable - and its prompt sizes are
+visible - before a question is handed off.
 
 Piece 4 added the two halves of "partial evidence" whose absence the first live batch exposed. The
 batch died because one Overpass request timed out and no evidence file was written for it, and
@@ -89,8 +74,6 @@ stored verbatim as bytes, one file per `(site, stage)`) - with the one exception
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -103,6 +86,8 @@ from typing import Any, Protocol, runtime_checkable
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import opus_handoff as OH  # noqa: E402  - the handoff directory every model answer comes through
+
 from phase3 import fetch_stage as F  # noqa: E402  - the evidence this stage reads
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model as M  # noqa: E402  - the census vocabulary a verdict is spelled in
@@ -110,28 +95,8 @@ from phase3 import search_evidence as SE  # noqa: E402  - the search lane's stor
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
 
-#: Provider and model as the probe transcripts record them (`provider: opencode-go`,
-#: `model: deepseek-v4.1-flash`) and as the brief names the id. Given, not chosen.
-PROVIDER = "opencode-go"
-MODEL = "opencode-go/deepseek-v4.1-flash"
-THINKING = "off"
-
-#: The launcher and the flags, in the order the transport was measured with. See the module
-#: docstring for what each flag buys; `-ne`'s numbers are measured, not estimated.
-PI_FLAGS = ("-p", "--mode", "json", "-ne", "-nt", "-nc", "--no-session")
-
-#: The launcher, resolved per platform. The brief names `pi`; on Windows the installed `pi` is a
-#: POSIX sh script (`.../pi-node/current/pi`) and `subprocess` without a shell cannot execute it --
-#: measured 2026-09-21: `subprocess.run(["pi", "--version"])` -> `FileNotFoundError [WinError 2]`,
-#: `subprocess.run(["pi.cmd", "--version"])` -> rc 0, `0.86.1`. The `.cmd` shim execs the same
-#: `dist/bundle/cli.js` with the same arguments, so only the launcher differs - and the argv stays
-#: a list either way.
-PROGRAM = "pi.cmd" if os.name == "nt" else "pi"
-
-#: How long one call may take before its process is killed. A chosen bound, **not** a measurement:
-#: the two probe calls took 2,698 ms and 14,013 ms wall, a judgement over a fetched page is
-#: longer, and the brief names no number. A call that exceeds it raises; the batch stops.
-DEFAULT_TIMEOUT = 180.0
+#: The model every call's ledger line names: the Opus agents of the orchestrating session.
+MODEL = OH.OPUS_MODEL
 
 #: How much evidence text may be inlined into one prompt, in characters. **An interpretation, not a
 #: source's figure** - but one bounded by a measurement now instead of by arithmetic on a phrase.
@@ -267,25 +232,25 @@ ABSENT_TARGET_MARKER = "[absent:"
 
 
 class ModelCallFailed(RuntimeError):
-    """The call produced no usable, measured answer. Raised, never turned into an empty result."""
+    """The call produced no usable answer. Raised, never turned into an empty result."""
 
 
 class UnreadableStream(ModelCallFailed):
-    """Bytes came back, and no single settled measured answer could be read out of them.
+    """An answer arrived for one call and holds no usable answer: a named hole, not a batch stop.
 
-    The subclass exists so the two facts a `ModelCallFailed` carries are told apart. A *transport*
-    failure - a timeout, a non-zero exit, a process that could not be started - is a fact about the
-    run of the process and stops the batch. An *unreadable stream* is a fact about one call's bytes:
-    the provider answered (and may have billed), but the stream carries no text, or no usage block,
-    or more than one settled assistant usage, so there is nothing to write and nothing to measure.
+    The subclass exists so the two facts a `ModelCallFailed` carries are told apart. A failure of the
+    *transport* stops the batch; an unreadable answer is a fact about one call, which the judge
+    loops record as a named failure (`FailedCall`; Phase 4 holds the site) before carrying on.
 
-    Measured 2026-09-21, the mass run over 5,004 sites: 8 calls threw from exactly two sites of this
-    class - the empty assistant text (`_assistant_text`) and the stream with more than one settled
-    assistant usage (`parse_stream`) - four batches each, and each throw took the whole batch, its
-    already-answered calls included, down with it (`output/remediation/logs/mass/batch-0143.judge.log`).
-    The judge loops record one of these per call as a named failure and carry on; the transport
-    class still propagates. Nothing is retried and no zero-usage ledger line is written: module
-    refusal 2 ("It never writes an unmeasured call") is unchanged.
+    Measured 2026-09-21, the mass run over 5,004 sites: 8 calls of the Pi transport came back as a
+    stream with no text or with two settled usages, and each took its whole batch down with it
+    (`output/remediation/logs/mass/batch-0143.judge.log`) until the loops learned this class.
+
+    **No runner raises it since the Opus handoff (2026-09-23).** `HandoffRunner` raises the plain
+    class for every refusal, because a missing or wrong answer file is the orchestrator's to answer
+    again, and a named hole or an append-only hold would make it permanent. The class and the loops'
+    handling stay: they are the seam's contract for an answer that is not one, and the named
+    failures the mass run recorded in its `model.json` files are still read (`is_named_failure`).
     """
 
 
@@ -316,94 +281,39 @@ class EvidenceOverBound(EvidenceUnusable):
         self.bound = bound
 
 
-def pi_argv(
-    *,
-    program: str = PROGRAM,
-    model: str = MODEL,
-    thinking: str = THINKING,
-) -> list[str]:
-    """The exact argv, as a **list**. The prompt is deliberately **not** in it.
-
-    `subprocess` gets this list and no shell, so a shell metacharacter in a prompt (a site name
-    with `$(`, `&`, `|` or a quote) is data, not syntax. There is no quoting to get wrong because
-    nothing quotes - and because the prompt travels on stdin, it is not limited by the operating
-    system's command-line length either (see the module docstring for the measurement).
-    """
-    return [program, *PI_FLAGS, "--model", model, "--thinking", thinking]
-
-
 @dataclass(frozen=True)
 class Usage:
-    """The settled numbers of one call, exactly as the provider reported them."""
+    """What one answer cost, and whether anything measured it."""
 
     input_tokens: int
     output_tokens: int
     cache_read_tokens: int
     cache_write_tokens: int
     total_tokens: int
-    #: The provider's own `cost.total`, in USD. The unit is checked, not assumed: the captured
-    #: 0.000342 for 2,276 input tokens matches deepseek-v4.1-flash's $0.15/M input
-    #: (0.15 x 2276 / 1e6 = 0.000341). No price is ever applied to a count in this module.
     cost_usd: float
+    #: `phase3.ledger.UNMETERED` when no meter read the answer (the Opus handoff: a subscription
+    #: with no per-call count) - the zeros above then say "not measured", and the ledger line says
+    #: so too; `None` when the numbers are a provider's own report. Required, so no runner can
+    #: leave the question open.
+    metering: str | None
 
     @classmethod
-    def from_message_end(cls, usage: Mapping[str, Any], *, source: str) -> Usage:
-        """Read `message.usage` of the assistant `message_end`. Every key is required."""
-        counts = {
-            "input_tokens": _count(usage, "input", source),
-            "output_tokens": _count(usage, "output", source),
-            "cache_read_tokens": _count(usage, "cacheRead", source),
-            "cache_write_tokens": _count(usage, "cacheWrite", source),
-            "total_tokens": _count(usage, "totalTokens", source),
-        }
-        cost = usage.get("cost")
-        if not isinstance(cost, dict) or "total" not in cost:
-            raise UnreadableStream(
-                f"{source}: usage carries no `cost.total` - the provider's own cost is the only "
-                "dollar figure this runner records, and it is never computed from a price table"
-            )
-        reported = cost["total"]
-        if not isinstance(reported, (int, float)) or isinstance(reported, bool):
-            raise UnreadableStream(f"{source}: cost.total={reported!r} is not a number")
-        if reported != reported or reported in (float("inf"), float("-inf")) or reported < 0:
-            raise UnreadableStream(f"{source}: cost.total={reported!r} is not a cost")
-        return cls(cost_usd=float(reported), **counts)
-
-
-def _count(usage: Mapping[str, Any], key: str, source: str) -> int:
-    value = usage.get(key)
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise UnreadableStream(
-            f"{source}: usage.{key}={value!r} is not a token count - token counts are recorded "
-            "per call and never estimated, so a call without them is not written"
+    def unmetered(cls) -> Usage:
+        """The usage of an answer no meter read: zeros that are declared, not measured."""
+        return cls(
+            input_tokens=0,
+            output_tokens=0,
+            cache_read_tokens=0,
+            cache_write_tokens=0,
+            total_tokens=0,
+            cost_usd=0.0,
+            metering=L.UNMETERED,
         )
-    return value
-
-
-def _assistant_text(message: Mapping[str, Any], *, source: str) -> str:
-    """`message.content[].text`, joined. An answer of nothing is not an answer."""
-    content = message.get("content")
-    if not isinstance(content, list):
-        raise UnreadableStream(
-            f"{source}: assistant message carries content={content!r}, not a list"
-        )
-    text = "".join(
-        part["text"]
-        for part in content
-        if isinstance(part, dict)
-        and part.get("type") == "text"
-        and isinstance(part.get("text"), str)
-    ).strip()
-    if not text:
-        raise UnreadableStream(
-            f"{source}: the assistant message carries no text - an empty answer is not a result"
-        )
-    return text
 
 
 @dataclass(frozen=True)
 class ModelAnswer:
-    """One settled answer: the text, and the provider's measured usage of it."""
+    """One answer: the text, and its usage - a provider's report, or declared unmetered."""
 
     text: str
     usage: Usage
@@ -411,58 +321,6 @@ class ModelAnswer:
     @property
     def cost_usd(self) -> float:
         return self.usage.cost_usd
-
-
-def parse_stream(lines: Iterable[str], *, source: str) -> ModelAnswer:
-    """Parse a `--mode json` event stream into the one settled answer in it.
-
-    The settled usage and the text both come from the `message_end` event of the assistant
-    message - the event whose `usage` is final. `message_update` events carry partial text and are
-    not read: a partial answer is not a result, and a usage that is not settled is not a
-    measurement. Any line that is not a JSON object raises (a capture that merged a second stream
-    into this one is a shape this parser refuses, not one it guesses about).
-
-    Every refusal here is an `UnreadableStream`: the bytes are in hand and hold no single settled
-    measured answer, which is a fact about this one call rather than about the batch.
-    """
-    settled: list[ModelAnswer] = []
-    for lineno, raw in enumerate(lines, start=1):
-        text = raw.strip()
-        if not text:
-            raise UnreadableStream(f"{source}:{lineno}: empty line in the event stream")
-        try:
-            event = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise UnreadableStream(f"{source}:{lineno}: not JSON ({exc}): {text[:120]!r}") from exc
-        if not isinstance(event, dict):
-            raise UnreadableStream(
-                f"{source}:{lineno}: event is {type(event).__name__}, not an object"
-            )
-        if event.get("type") != "message_end":
-            continue
-        message = event.get("message")
-        if not isinstance(message, dict) or message.get("role") != "assistant":
-            continue
-        where = f"{source}:{lineno} assistant message_end"
-        usage = message.get("usage")
-        if not isinstance(usage, dict):
-            raise UnreadableStream(
-                f"{where}: no usage block - the call cannot be written as if it were measured"
-            )
-        settled.append(
-            ModelAnswer(
-                text=_assistant_text(message, source=where),
-                usage=Usage.from_message_end(usage, source=where),
-            )
-        )
-    if not settled:
-        raise UnreadableStream(f"{source}: no assistant message_end event - nothing was measured")
-    if len(settled) > 1:
-        raise UnreadableStream(
-            f"{source}: {len(settled)} settled assistant usages in one stream; this runner will "
-            "not guess which call was billed"
-        )
-    return settled[0]
 
 
 @dataclass(frozen=True)
@@ -507,78 +365,75 @@ class ModelCall:
 
 @runtime_checkable
 class ModelRunner(Protocol):
-    """The seam. The real driver is `PiRunner`; tests pass a scripted one and never spend money."""
+    """The seam. The real driver is `HandoffRunner`; export records through `RecordingRunner`."""
 
     def run(self, call: ModelCall) -> ModelAnswer:
         """Answer `call`, or raise `ModelCallFailed`."""
         ...
 
 
-class PiRunner:
-    """The real driver: one Pi process per call, argv list, no shell, no retry."""
+class HandoffRunner:
+    """The driver: each call's answer is read from the Opus handoff directory, never bought here.
 
-    def __init__(
-        self,
-        *,
-        program: str = PROGRAM,
-        timeout: float = DEFAULT_TIMEOUT,
-        model: str = MODEL,
-        thinking: str = THINKING,
-        cwd: Path | None = None,
-    ) -> None:
-        if timeout <= 0:
-            raise InputError(f"timeout must be > 0 seconds, got {timeout}")
-        self.program = program
-        self.timeout = timeout
-        self.model = model
-        self.thinking = thinking
-        self.cwd = cwd
+    Every refusal of `opus_handoff.read_answer` - no answer file, an answer to another prompt, an
+    answer by another model, an empty or malformed answer - is a plain `ModelCallFailed`, never an
+    `UnreadableStream`: the orchestrator can answer the question again, so the batch stops at it
+    instead of recording a permanent hole (Phase 3) or an append-only hold (Phase 4).
+    """
 
-    def argv(self) -> list[str]:
-        """The exact argv this runner would hand to `subprocess`. The prompt is on stdin."""
-        return pi_argv(program=self.program, model=self.model, thinking=self.thinking)
+    def __init__(self, *, directory: Path) -> None:
+        self.directory = directory
 
     def run(self, call: ModelCall) -> ModelAnswer:
-        """Run one Pi process and return its settled answer.
+        try:
+            answer = OH.read_answer(
+                self.directory,
+                batch_id=call.batch_id,
+                stage=call.stage.value,
+                label=call.label,
+                prompt=call.prompt,
+            )
+        except OH.HandoffError as exc:
+            raise ModelCallFailed(f"{call.label}: {exc}") from exc
+        return ModelAnswer(text=answer.text, usage=Usage.unmetered())
 
-        `subprocess.run(..., timeout=)` kills the child and re-raises, so a hung process cannot
-        hold the batch; the kill is turned into `ModelCallFailed` here.
-        """
-        argv = self.argv()
-        try:
-            proc = subprocess.run(  # noqa: S603 - argv list, shell=False, no string ever built
-                argv,
-                # The prompt goes on **stdin**, UTF-8 encoded, so it is never an argv element:
-                # Windows caps a `cmd.exe` command line near 8,191 characters and a prompt
-                # carrying evidence is far longer (the module docstring records the measurement).
-                # Encoded explicitly so the child reads the same bytes on every platform.
-                input=call.prompt.encode("utf-8"),
-                capture_output=True,
-                timeout=self.timeout,
-                shell=False,
-                check=False,
-                cwd=self.cwd,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ModelCallFailed(
-                f"{call.label}: {argv[0]} did not answer within {self.timeout}s; the process was "
-                "killed and the batch stops here (no retry: a retry doubles the charge invisibly)"
-            ) from exc
-        except OSError as exc:
-            raise ModelCallFailed(f"{call.label}: {argv[0]!r} could not be started: {exc}") from exc
-        if proc.returncode != 0:
-            # stderr is decoded leniently *for this message only*; no result is read from it.
-            tail = proc.stderr.decode("utf-8", errors="replace")[-800:]
-            raise ModelCallFailed(
-                f"{call.label}: {argv[0]} exited {proc.returncode}; stderr tail: {tail!r}"
-            )
-        try:
-            stdout = proc.stdout.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise UnreadableStream(
-                f"{call.label}: stdout is not UTF-8 ({exc}); the event stream is unreadable"
-            ) from exc
-        return parse_stream(stdout.splitlines(), source=f"{call.label} stdout")
+
+#: What `RecordingRunner` answers every call with. It is no stage's answer shape, so each stage's
+#: parser refuses it and the stage goes on to its next call - in the scratch copy an export runs in.
+NOT_AN_ANSWER = "(recorded for the Opus handoff export; not an answer)"
+
+
+class RecordingRunner:
+    """Export's runner: records every call the stage asks, and answers none of them.
+
+    An export runs the stage's own function with this runner against scratch copies of everything
+    the stage writes, so the calls captured are exactly the calls the import will make - the same
+    site filter, the same prompt builder, the same skip of an answer already on disk - and nothing
+    the stage writes survives the export.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[ModelCall] = []
+
+    def run(self, call: ModelCall) -> ModelAnswer:
+        self.calls.append(call)
+        return ModelAnswer(text=NOT_AN_ANSWER, usage=Usage.unmetered())
+
+
+def export_calls(calls: Iterable[ModelCall], *, directory: Path) -> dict[str, int]:
+    """Write each recorded call to the handoff directory. `exported` new, `already` there before."""
+    counts = {"exported": 0, "already": 0}
+    for call in calls:
+        new = OH.export(
+            directory,
+            batch_id=call.batch_id,
+            stage=call.stage.value,
+            label=call.label,
+            field=call.field,
+            prompt=call.prompt,
+        )
+        counts["exported" if new else "already"] += 1
+    return counts
 
 
 @dataclass(frozen=True)
@@ -594,9 +449,8 @@ class Prompt:
         return len(self.system) + len(self.user)
 
     def render(self) -> str:
-        """The exact text that is the last argv element. Both blocks travel in it: the transport
-        is one prompt argument per process (`pi ... <prompt>`), so the question is a labelled
-        block rather than a system message."""
+        """The exact text of the call. Both blocks travel in it - one prompt per question, as the
+        handoff exports it - so the question is a labelled block rather than a system message."""
         return f"<question>\n{self.system}\n</question>\n\n{self.user}\n"
 
 
@@ -1188,15 +1042,7 @@ def judge_site(
         stored_path = answers.path_for(call.site_id, call.answer_key)
         return JudgedCall(
             answer=ModelAnswer(
-                text=stored_path.read_text(encoding="utf-8"),
-                usage=Usage(
-                    input_tokens=0,
-                    output_tokens=0,
-                    cache_read_tokens=0,
-                    cache_write_tokens=0,
-                    total_tokens=0,
-                    cost_usd=0.0,
-                ),
+                text=stored_path.read_text(encoding="utf-8"), usage=Usage.unmetered()
             ),
             wrote=False,
         )
@@ -1213,6 +1059,7 @@ def judge_site(
             cache_read_tokens=answer.usage.cache_read_tokens,
             cache_write_tokens=answer.usage.cache_write_tokens,
             cost_usd=answer.usage.cost_usd,
+            metering=answer.usage.metering,
         )
     )
     # The fetch stage's store, reused deliberately: one file per (site, feature) there, one file
@@ -1318,7 +1165,7 @@ class FailedCall:
 
     It is not a ledger line either. The provider may have billed a stream that came back unreadable,
     but no usage was measured, so a line could only carry invented zeros - which is what
-    `phase3.ledger` refuses (module refusal 2, "It never writes an unmeasured call"). A retry has the
+    `phase3.ledger` refuses (module refusal 2, "It never writes an unanswered call"). A retry has the
     same objection from the other side (refusal 3: a retry doubles the charge invisibly). So the hole
     is written down instead, in the artefact that has a word for it.
     """
@@ -1400,7 +1247,7 @@ class BatchModelReport:
 
     @property
     def cost_usd(self) -> float:
-        """The sum of the provider's own per-call figures. Not a price applied to a count."""
+        """The sum of the per-call figures (0 for an unmetered call). Never a price on a count."""
         return sum(j.cost_usd for j in self.judgements)
 
     def to_json(self) -> str:
@@ -1450,11 +1297,10 @@ def judge_batch(
     untouched by it: before 2026-09-21 one such call threw out of this loop and took every answer
     already written down with it (`output/remediation/logs/mass/batch-0143.judge.log`).
 
-    Nothing else is caught: a call that could not be *made* - a timeout, a non-zero exit, a process
-    that would not start, all plain `ModelCallFailed` - propagates, so a batch that could not be
-    measured is reported as failed rather than as a smaller batch (`phase3.model.StageResult` has the
-    same rule). A re-run re-answers every site and writes a second line per call: the second charge
-    is then visible in the ledger instead of hidden behind an invisible retry.
+    Nothing else is caught: a call that could not be *answered* - no answer file in the handoff, an
+    answer to another prompt or by another model, all plain `ModelCallFailed` - propagates, so the
+    batch is reported as failed rather than as a smaller batch (`phase3.model.StageResult` has the
+    same rule). The answers already stored stay, and a re-run asks only what is still missing.
     """
     batch_id = str(batch.get("batch_id") or "")
     if not batch_id:

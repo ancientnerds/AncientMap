@@ -43,7 +43,9 @@ The 7,761 unverifiable fields are a **search** problem, not a model problem: the
 no search route. (`pipeline/lyra/minimax_shared.minimax_search` exists and serves Lyra, the tweet
 verifier and Theo, but it turns every failure into an empty list; the first version of this file said
 no search route existed anywhere.) Decision (2026-09-22): MiniMax supplies search, the reasoning stays
-on `opencode-go/deepseek-v4.1-flash`.
+on `opencode-go/deepseek-v4.1-flash` - **superseded 2026-09-23 by the owner's order "no DeepSeek any
+more - everything with Opus"**: every model judgement is answered by Opus agents of the orchestrating
+session through the handoff (`scripts/remediation/opus_handoff.py`; AUDIT_LOG, "the Opus handoff").
 
 The 760 never-asked fields, the 5 empty streams and the 37 answers without a verdict are the **gap
 run**: 802 questions over 194 sites, planned in `PLAN.gap.jsonl` from a fresh production export
@@ -128,7 +130,8 @@ before every batch, which is why nothing under `phase3/` may be edited while it 
 3. The 4 rows refused as "not writable in the columns' shape" are not written.
 4. The 29 geopolitical census rows are left as they are.
 5. Deploy only after all 5,004 are through - **that condition is now met**.
-6. The search route (A3) is **MiniMax** - search service only, reasoning stays on deepseek.
+6. The search route (A3) is **MiniMax** - search service only; the reasoning is **Opus** through the
+   handoff since the owner order of 2026-09-23 (it was deepseek until then).
 7. B7/B8/B9/B10 are decided (2026-09-21); see `HUMAN_ONLY.md`.
 8. Never push to `main` from an agent session: a push is a live deploy, and `.githooks/pre-push`
    aborts anyway when the working tree differs from the pushed commit.

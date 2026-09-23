@@ -1,32 +1,23 @@
-"""Does the Phase-3 model stage read the settled usage, record the provider's own cost and refuse
-every answer it could not measure?
+"""Does the Phase-3 model stage answer every call through the Opus handoff, record each answer
+honestly as unmetered, and refuse every answer that is not the answer to exactly its question?
 
-Piece 3 has no database and no network, and it is the first piece that can spend money, so the
-interesting mistakes are again not exceptions but a *silently wrong* number: a usage taken from a
-partial `message_update`, an empty answer returned as a result, a cost recomputed from a price
-table, a second ledger line that hides a charge, an argv that a shell would re-parse, or a
-`--dry-run` that quietly starts a process. Each guard below has a test that fails when the guard
-is removed; the mutation evidence is in `output/remediation/phase3_runner/PIECE3.md`.
+Owner order 2026-09-23: every judgement is answered by an Opus agent of the orchestrating session,
+through files (`scripts/remediation/opus_handoff.py`). The interesting mistakes are again not
+exceptions but a *silently wrong* record: an answer to another prompt read as this one's, a missing
+answer turned into a named hole instead of a stop, a zero cost that claims a measurement, an export
+that writes a ledger line or an answer, or a dry run that quietly exports. Each guard below has a
+test that fails when the guard is removed, and a mutation case in
+`scripts/remediation/phase3/mutation_sweep.py`.
 
-Two captured transcripts are the fixtures, copied verbatim out of the gitignored
-`output/remediation/logs/` so this suite does not depend on a scratch path:
-
-* `fixtures/pi_probe_no_extensions.json` - the trace of **the argv this module builds**, `-ne`
-  included (`input=437`, `cost.total=6.615e-05`). Every line is a JSON event.
-* `fixtures/pi_probe2.json` - the earlier probe, taken **with extensions loaded** and with the
-  two streams merged: its last line is the OSC 777 notifier of `~/.pi/agent/extensions/
-  10-benachrichtigung.ts` followed by the `agent_settled` event. That is what dropping `-ne`
-  buys, and the file is used here as the real, uncut input that must make the parser raise.
-
-Nothing in this suite runs `pi`, opens a socket or touches the database.
+Until 2026-09-23 the transport was a Pi process on `opencode-go/deepseek-v4.1-flash`; its tests and
+the two captured Pi transcripts they read went with it (`output/remediation/phase3_runner/PIECE3.md`
+keeps the measurements). Nothing in this suite calls a model, opens a socket or touches the database.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -38,35 +29,17 @@ PHASE3_PARENT = REPO / "scripts" / "remediation"
 if str(PHASE3_PARENT) not in sys.path:
     sys.path.insert(0, str(PHASE3_PARENT))
 
+import opus_handoff as OH  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
 from phase3 import model as M  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
 from phase3 import run as R  # noqa: E402
 
-FIXTURES = Path(__file__).resolve().parent / "fixtures"
-NO_EXTENSIONS = FIXTURES / "pi_probe_no_extensions.json"
-MERGED_CAPTURE = FIXTURES / "pi_probe2.json"
-
-#: The prompt of both probes, read out of the capture itself (not re-typed from the brief).
-PROMPT = "Reply with exactly the word OK and nothing else."
-
-#: The settled usage of `pi_probe_no_extensions.json`, verbatim.
-REPORTED_INPUT = 437
-REPORTED_OUTPUT = 1
-REPORTED_TOTAL = 438
-REPORTED_COST = 6.615e-05
-
-NOTIFIER_PREFIX = "\x1b]777;"
-
-
-def _lines(path: Path) -> list[str]:
-    return path.read_text(encoding="utf-8").splitlines()
-
 
 def _answer() -> MS.ModelAnswer:
-    """The fixture's settled answer, parsed - the numbers every scripted call replays."""
-    return MS.parse_stream(_lines(NO_EXTENSIONS), source=str(NO_EXTENSIONS))
+    """The answer every scripted call replays: what the handoff returns, unmetered."""
+    return MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered())
 
 
 def _call(site_id: str = "site-1", stage: M.Stage = M.Stage.FINDER) -> MS.ModelCall:
@@ -118,234 +91,136 @@ class ScriptedRunner:
         return self.answer
 
 
-def _assert_no_process(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fail the test if anything starts a Pi process. Used by every dry-run path."""
+def _assert_nothing_handed_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if anything exports a question or reads an answer. Used by the dry run."""
 
     def refuse(*args: Any, **kwargs: Any) -> None:
-        raise AssertionError(f"a dry run must not start a process: {args!r} {kwargs!r}")
+        raise AssertionError(f"a dry run must not touch the handoff: {args!r} {kwargs!r}")
 
-    monkeypatch.setattr(MS.subprocess, "run", refuse)
-
-
-# ── the settled usage and the provider's own cost ────────────────────────────────────────────
+    monkeypatch.setattr(OH, "export", refuse)
+    monkeypatch.setattr(OH, "read_answer", refuse)
 
 
-def test_usage_and_the_providers_cost_come_from_the_assistant_message_end() -> None:
-    answer = _answer()
-
-    assert answer.text == "OK"
-    assert answer.usage.input_tokens == REPORTED_INPUT
-    assert answer.usage.output_tokens == REPORTED_OUTPUT
-    assert answer.usage.cache_read_tokens == 0
-    assert answer.usage.cache_write_tokens == 0
-    assert answer.usage.total_tokens == REPORTED_TOTAL
-    assert answer.usage.cost_usd == REPORTED_COST
-    # The provider's figure is recorded, not recomputed: a price table applied to the same input
-    # count (0.15 USD/M, the model's own input price) would give 6.555e-05, not 6.615e-05.
-    assert answer.usage.cost_usd != REPORTED_INPUT * 0.15e-6
-
-
-def test_usage_is_read_from_message_end_and_not_from_a_partial_update() -> None:
-    lines = _lines(NO_EXTENSIONS)
-    # A partial event carrying a usage of its own must not be read as the settled one.
-    partial = json.dumps(
-        {
-            "type": "message_update",
-            "message": {
-                "role": "assistant",
-                "content": [{"type": "text", "text": "O"}],
-                "usage": {
-                    "input": 999999,
-                    "output": 999999,
-                    "cacheRead": 999999,
-                    "cacheWrite": 999999,
-                    "totalTokens": 3999996,
-                    "cost": {"total": 99.0},
-                },
-            },
-        }
-    )
-    stream = lines[:3] + [partial] + lines[3:]
-
-    answer = MS.parse_stream(stream, source="spliced fixture")
-
-    assert answer.usage.input_tokens == REPORTED_INPUT
-    assert answer.usage.cost_usd == REPORTED_COST
-
-
-def test_a_missing_usage_block_raises() -> None:
-    lines = []
-    for line in _lines(NO_EXTENSIONS):
-        event = json.loads(line)
-        if event["type"] == "message_end" and event["message"].get("role") == "assistant":
-            del event["message"]["usage"]
-        lines.append(json.dumps(event, ensure_ascii=False))
-
-    with pytest.raises(MS.ModelCallFailed, match="no usage block"):
-        MS.parse_stream(lines, source="usage-less fixture")
-
-
-def test_an_unparsable_line_raises_on_the_real_merged_capture() -> None:
-    raw = _lines(MERGED_CAPTURE)
-
-    # The capture is a real one, taken with extensions loaded and the streams merged: that line is
-    # exactly what `-ne` removes (measured: the `-ne` capture has no such line).
-    assert any(line.startswith(NOTIFIER_PREFIX) for line in raw)
-
-    with pytest.raises(MS.ModelCallFailed, match="not JSON"):
-        MS.parse_stream(raw, source=str(MERGED_CAPTURE))
-
-
-def test_empty_assistant_text_raises() -> None:
-    stream = [
-        json.dumps(
-            {
-                "type": "message_end",
-                "message": {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": "   "}],
-                    "usage": {
-                        "input": 10,
-                        "output": 0,
-                        "cacheRead": 0,
-                        "cacheWrite": 0,
-                        "totalTokens": 10,
-                        "cost": {"total": 1e-05},
-                    },
-                },
-            }
+def _handoff_answers(directory: Path, text: str = "OK") -> int:
+    """Answer every exported question of `directory` as an Opus agent would: through the helper."""
+    lines = OH.manifest(directory)
+    for line in lines:
+        OH.write_answer(
+            directory,
+            batch_id=line["batch_id"],
+            stage=line["stage"],
+            label=line["label"],
+            text=text,
+            answered_by="test-agent",
+            now=lambda: "2026-09-23T12:00:00+00:00",
         )
-    ]
-
-    with pytest.raises(MS.ModelCallFailed, match="no text"):
-        MS.parse_stream(stream, source="empty-answer stream")
+    return len(lines)
 
 
-def test_a_stream_without_a_settled_assistant_message_raises() -> None:
-    stream = [
-        json.dumps({"type": "session", "version": 3}),
-        json.dumps({"type": "agent_start"}),
-        json.dumps({"type": "message_end", "message": {"role": "system", "content": ""}}),
-    ]
-
-    with pytest.raises(MS.ModelCallFailed, match="nothing was measured"):
-        MS.parse_stream(stream, source="headless stream")
+# ── the handoff runner: the answer to exactly this prompt, by Opus, or a stop ─────────────────
 
 
-# ── the process: argv, exit code, timeout ────────────────────────────────────────────────────
-
-
-def test_the_argv_is_a_list_with_the_measured_flags_and_the_exact_model_id() -> None:
-    argv = MS.pi_argv()
-
-    assert isinstance(argv, list)
-    assert all(isinstance(part, str) for part in argv)
-    for flag in ("-p", "-ne", "-nt", "-nc", "--no-session"):
-        assert flag in argv, flag
-    assert argv[argv.index("--mode") + 1] == "json"
-    assert argv[argv.index("--model") + 1] == "opencode-go/deepseek-v4.1-flash"
-    assert argv[argv.index("--thinking") + 1] == "off"
-    # Nothing was string-formatted into a command line: no flag element carries a space.
-    assert [part for part in argv if " " in part] == []
-
-
-def test_the_prompt_never_becomes_an_argv_element_and_arrives_on_stdin(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The defect that stopped the first live batch, pinned.
-
-    Measured 2026-09-21: a real prompt (one site record plus its evidence) reached ~24,000
-    characters. Passed as the last argv element it made `pi.cmd` exit 1 with `Die Befehlszeile ist
-    zu lang.` - `pi.cmd` is a batch file, so Windows runs it through `cmd.exe`, whose command line
-    stops near 8,191 characters. The prompt must travel on stdin, UTF-8 encoded, and the argv must
-    stay far below that ceiling. This test fails if the prompt is put back into the argv list.
-    """
-    prompt = 'site "Ötzi" $(rm -rf /) && echo | done ' + "evidence " * 4_000
-    assert len(prompt) > 20_000, "this test only means something with a prompt of the real size"
-    seen: dict[str, Any] = {}
-
-    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        seen["argv"] = argv
-        seen.update(kwargs)
-        return subprocess.CompletedProcess(argv, 0, NO_EXTENSIONS.read_bytes(), b"")
-
-    monkeypatch.setattr(MS.subprocess, "run", fake_run)
-
+def test_the_runner_reads_the_opus_answer_to_exactly_this_prompt(tmp_path: Path) -> None:
     call = MS.ModelCall(
-        stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt=prompt
+        stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Ötzi? " * 10
     )
-    answer = MS.PiRunner(timeout=5.0).run(call)
+    assert MS.export_calls([call], directory=tmp_path) == {"exported": 1, "already": 0}
+    assert MS.export_calls([call], directory=tmp_path) == {"exported": 0, "already": 1}
+    _handoff_answers(tmp_path, text="VERDICT: CORRECT")
 
-    assert answer.usage.cost_usd == REPORTED_COST
-    argv = seen["argv"]
-    # 1. The prompt is not there, whole or in pieces.
-    assert prompt not in argv
-    assert [part for part in argv if "evidence" in part] == []
-    # 2. The whole argv fits a Windows command line with room to spare.
-    assert sum(len(part) for part in argv) < 200, sum(len(part) for part in argv)
-    # 3. The child receives the prompt's exact bytes, and the non-ASCII site name survives.
-    assert seen["input"] == prompt.encode("utf-8")
-    assert "Ötzi" in seen["input"].decode("utf-8")
+    answer = MS.HandoffRunner(directory=tmp_path).run(call)
+
+    assert answer.text == "VERDICT: CORRECT"
+    assert answer.usage == MS.Usage.unmetered()
+    assert MS.MODEL == OH.OPUS_MODEL
 
 
-def test_the_runner_passes_the_argv_list_without_a_shell(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: dict[str, Any] = {}
+def test_every_handoff_refusal_stops_the_batch_and_is_never_a_named_hole(tmp_path: Path) -> None:
+    """A missing or stale answer is the orchestrator's to answer again, never a permanent hole.
 
-    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        seen["argv"] = argv
-        seen.update(kwargs)
-        return subprocess.CompletedProcess(argv, 0, NO_EXTENSIONS.read_bytes(), b"")
+    `UnreadableStream` would make the judge loop record a named failure and carry on (Phase 4 would
+    append a hold); a plain `ModelCallFailed` stops the batch, so the question is asked again.
+    """
+    call = MS.ModelCall(stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Q")
+    runner = MS.HandoffRunner(directory=tmp_path)
+    MS.export_calls([call], directory=tmp_path)
 
-    monkeypatch.setattr(MS.subprocess, "run", fake_run)
+    with pytest.raises(MS.ModelCallFailed, match="no answer at") as missing:
+        runner.run(call)
+    assert not isinstance(missing.value, MS.UnreadableStream)
 
-    answer = MS.PiRunner(timeout=5.0).run(_call())
+    _handoff_answers(tmp_path)
+    changed = MS.ModelCall(
+        stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Q, asked today"
+    )
+    with pytest.raises(MS.ModelCallFailed, match="stale") as stale:
+        runner.run(changed)
+    assert not isinstance(stale.value, MS.UnreadableStream)
 
-    assert answer.usage.cost_usd == REPORTED_COST
-    assert isinstance(seen["argv"], list)
-    assert seen["shell"] is False
-    # The prompt is not in the argv; it goes to the child on stdin, UTF-8 encoded.
-    assert seen["input"] == b"a prompt"
-    assert "a prompt" not in seen["argv"]
 
-
-def test_a_non_zero_exit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        MS.subprocess,
-        "run",
-        lambda argv, **kwargs: subprocess.CompletedProcess(argv, 1, b"", b"panicked"),
+def test_an_unmetered_answer_carries_zeros_and_says_so() -> None:
+    usage = MS.Usage.unmetered()
+    assert usage.metering == L.UNMETERED == "unmetered"
+    assert (usage.input_tokens, usage.output_tokens, usage.total_tokens, usage.cost_usd) == (
+        0,
+        0,
+        0,
+        0.0,
     )
 
-    with pytest.raises(MS.ModelCallFailed, match="exited 1"):
-        MS.PiRunner(timeout=5.0).run(_call())
+
+def test_an_unmetered_ledger_line_refuses_every_number_and_every_other_metering() -> None:
+    """With no meter there is no number: an unmetered line that carries one invented it."""
+
+    def line(**overrides: Any) -> L.Entry:
+        fields: dict[str, Any] = {
+            "kind": L.LedgerKind.MODEL_CALL,
+            "stage": M.Stage.FINDER,
+            "batch_id": "batch-0001",
+            "label": "site-1/finder",
+            "model": OH.OPUS_MODEL,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0.0,
+            "metering": L.UNMETERED,
+        }
+        fields.update(overrides)
+        return L.Entry(**fields)
+
+    assert json.loads(line().to_json())["metering"] == "unmetered"
+    for overrides in ({"input_tokens": 437}, {"cache_read_tokens": 3}, {"cost_usd": 6.6e-05}):
+        with pytest.raises(L.LedgerError, match="unmetered call carries"):
+            line(**overrides)
+    with pytest.raises(L.LedgerError, match="unmetered call carries"):
+        line(cost_usd=None)  # "not recorded" is not the declared 0 either
+    with pytest.raises(L.LedgerError, match="is not 'unmetered'"):
+        line(metering="subscription")
+    # A provider-reported line keeps the exact shape every line had before: no key at all.
+    assert "metering" not in json.loads(line(metering=None, input_tokens=5).to_json())
 
 
-def test_a_hung_process_is_killed_and_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    marker = tmp_path / "survived.txt"
-    code = f"import time,pathlib;time.sleep(6);pathlib.Path({marker.as_posix()!r}).write_text('x')"
-    # A real child process: the flags are replaced by `-c <code>` so that sys.executable can be the
-    # "pi" for this one call. Everything else - subprocess, timeout, kill - is the real path.
-    monkeypatch.setattr(MS, "PI_FLAGS", ("-c", code))
-    runner = MS.PiRunner(program=sys.executable, timeout=1.0)
-
-    started = time.monotonic()
-    with pytest.raises(MS.ModelCallFailed, match="did not answer within"):
-        runner.run(_call())
-    elapsed = time.monotonic() - started
-
-    assert elapsed < 4.0, f"the timeout did not fire: {elapsed:.1f}s"
-    time.sleep(2.5)  # the child would still be inside its sleep if it had survived
-    assert not marker.exists(), "the timed-out process was not killed"
+def test_a_fetch_line_cannot_carry_metering() -> None:
+    with pytest.raises(L.LedgerError, match="a fetch cannot carry metering"):
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=M.Stage.FINDER,
+            batch_id="batch-0001",
+            label="site-1/enwiki",
+            url="https://en.wikipedia.org/wiki/X",
+            http_status=200,
+            bytes=10,
+            outcome=L.FetchOutcome.OK,
+            attempt=1,
+            given_up=False,
+            metering=L.UNMETERED,
+        )
 
 
-# ── the ledger: one measured line per call, with the reported cost ───────────────────────────
+# ── the ledger: one line per call, naming Opus and saying it was not metered ─────────────────
 
 
-def test_exactly_one_ledger_line_per_call_records_tokens_and_the_reported_cost(
-    tmp_path: Path,
-) -> None:
-    ledger = L.Ledger(tmp_path / "LEDGER.jsonl", clock=lambda: "2026-09-21T06:00:00+00:00")
+def test_exactly_one_ledger_line_per_call_names_opus_and_is_unmetered(tmp_path: Path) -> None:
+    ledger = L.Ledger(tmp_path / "LEDGER.jsonl", clock=lambda: "2026-09-23T06:00:00+00:00")
     runner = ScriptedRunner()
     answers = F.EvidenceStore(tmp_path / "answers")
 
@@ -365,22 +240,19 @@ def test_exactly_one_ledger_line_per_call_records_tokens_and_the_reported_cost(
     assert {row["kind"] for row in rows} == {"model_call"}
     assert {row["stage"] for row in rows} == {"finder"}
     assert [row["label"] for row in rows] == ["site-1/finder", "site-2/finder"]
-    assert {row["model"] for row in rows} == {"opencode-go/deepseek-v4.1-flash"}
+    assert {row["model"] for row in rows} == {"anthropic/claude-opus-5-5 (Claude Code agent)"}
     for row in rows:
-        assert row["input_tokens"] == REPORTED_INPUT
-        assert row["output_tokens"] == REPORTED_OUTPUT
-        assert row["cache_read_tokens"] == 0
-        assert row["cache_write_tokens"] == 0
-        # The provider's own figure, verbatim. Nothing here is a price applied to a token count.
-        assert row["cost_usd"] == REPORTED_COST
+        # Declared, not measured: the line says so, and every number on it is the declared zero.
+        assert row["metering"] == "unmetered"
+        assert (row["input_tokens"], row["output_tokens"], row["cost_usd"]) == (0, 0, 0.0)
     assert report.calls == 2
-    assert report.input_tokens == 2 * REPORTED_INPUT
-    assert report.cost_usd == 2 * REPORTED_COST
+    assert report.cost_usd == 0.0
     assert answers.path_for("site-1", "finder").read_text(encoding="utf-8") == "OK"
 
     summary = L.summarise(tmp_path / "LEDGER.jsonl")
     assert summary.by_stage["finder"].model_calls == 2
-    assert summary.by_stage["finder"].cost_usd == 2 * REPORTED_COST
+    assert summary.by_stage["finder"].unmetered_calls == 2
+    assert summary.total.unmetered_calls == 2
 
 
 def test_a_question_whose_answer_is_already_on_disk_is_not_asked_again(tmp_path: Path) -> None:
@@ -443,12 +315,12 @@ def test_a_fetch_line_cannot_carry_a_model_cost() -> None:
 def test_a_run_stops_at_the_first_call_it_could_not_measure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A **transport** failure ends the batch; only an unreadable stream is a named hole.
+    """A call that could not be answered ends the batch; only an unreadable answer is a named hole.
 
-    The seam is the exception class. `ModelCallFailed` says the call could not be *made* - a
-    timeout, a non-zero exit, a process that would not start - and nothing after it may be trusted,
-    so it propagates. `UnreadableStream` says these bytes hold no answer: the batch records the hole
-    and buys the next call (the two tests below).
+    The seam is the exception class. `ModelCallFailed` says the call could not be *answered* - the
+    handoff holds no answer for it, or one to another prompt - and nothing after it may be trusted,
+    so it propagates. `UnreadableStream` says the answer that arrived holds none: the batch records
+    the hole and buys the next call (the two tests below).
     """
 
     class FailingRunner:
@@ -456,11 +328,9 @@ def test_a_run_stops_at_the_first_call_it_could_not_measure(
             self.kwargs = kwargs
 
         def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
-            raise MS.ModelCallFailed(f"{call.label}: pi exited 1; stderr tail: 'boom'")
+            raise MS.ModelCallFailed(f"{call.label}: no answer at <handoff> - export it first")
 
-    monkeypatch.setattr(MS, "PiRunner", FailingRunner)
-
-    with pytest.raises(MS.ModelCallFailed, match="exited 1"):
+    with pytest.raises(MS.ModelCallFailed, match="no answer at"):
         MS.judge_batch(
             batch=_batch(1),
             runner=FailingRunner(),
@@ -478,10 +348,10 @@ def test_a_run_stops_at_the_first_call_it_could_not_measure(
 class HoleRunner:
     """A scripted runner whose one named site answers with an unreadable stream.
 
-    It raises exactly what `PiRunner` raises once `parse_stream` has refused the bytes, so the loop
-    under test cannot tell the scripted hole from the measured one. That loop is the whole point of
-    the class: measured 2026-09-21, 4 of the mass run's 334 batches died on such a call and lost
-    every answer they had already written (`output/remediation/logs/mass/batch-0143.judge.log`).
+    No runner raises `UnreadableStream` since the Opus handoff (the handoff stops the batch
+    instead), but the loops keep their contract for an answer that is not one: measured 2026-09-21,
+    4 of the mass run's 334 batches died on such a call of the Pi transport and lost every answer
+    they had already written (`output/remediation/logs/mass/batch-0143.judge.log`).
     """
 
     def __init__(self, hole: str = "site-2", **kwargs: Any) -> None:
@@ -521,7 +391,6 @@ def test_an_unreadable_stream_is_a_named_failure_and_the_batch_carries_on(tmp_pa
     assert [call.site_id for call in runner.calls] == ["site-1", "site-2", "site-3"]
     assert [j.site_id for j in report.judgements] == ["site-1", "site-3"]
     assert report.calls == 3  # a failed call was a call
-    assert report.cost_usd == 2 * REPORTED_COST  # ... and not an invented zero
     assert len(report.failures) == 1
     hole = report.failures[0]
     assert (hole.site_id, hole.field) == ("site-2", None)
@@ -566,7 +435,7 @@ def test_judge_live_records_an_unreadable_stream_as_a_hole_and_exits_zero(
     hit the answers it had already written. Neither happens now - the batch finishes, `model.json`
     carries the hole, and the exit code says the batch is done.
     """
-    monkeypatch.setattr(MS, "PiRunner", HoleRunner)
+    monkeypatch.setattr(MS, "HandoffRunner", HoleRunner)
     run_dir = _prepared_run_dir(tmp_path, count=2)
     # The store the CLI builds sits next to input.json: <run_dir>/<batch_id>/evidence.
     _evidence_store(run_dir / "batch-0001", 2)
@@ -581,7 +450,8 @@ def test_judge_live_records_an_unreadable_stream_as_a_hole_and_exits_zero(
             "batch-0001",
             "--ledger",
             str(ledger),
-            "--live",
+            "--handoff-import",
+            str(tmp_path / "handoff"),
         ]
     )
 
@@ -985,10 +855,10 @@ def _prepared_run_dir(tmp_path: Path, count: int = 1) -> Path:
     return run_dir
 
 
-def test_judge_without_live_renders_the_argv_and_the_prompt_and_starts_nothing(
+def test_judge_without_a_handoff_renders_the_prompt_and_hands_off_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _assert_no_process(monkeypatch)
+    _assert_nothing_handed_off(monkeypatch)
     run_dir = _prepared_run_dir(tmp_path)
     ledger = tmp_path / "LEDGER.jsonl"
 
@@ -1008,23 +878,92 @@ def test_judge_without_live_renders_the_argv_and_the_prompt_and_starts_nothing(
     assert rc == 0
     assert payload["live"] is False
     assert payload["calls"] == 1
-    assert payload["model"] == "opencode-go/deepseek-v4.1-flash"
+    assert payload["model"] == "anthropic/claude-opus-5-5 (Claude Code agent)"
     site = payload["sites"][0]
-    # The preview shows the argv the runner would use, and the prompt **separately**: the prompt is
-    # never an argv element (it travels on stdin - the module docstring records the measurement).
-    assert site["prompt"] not in site["argv"]
-    assert site["argv"][1:] == list(MS.PI_FLAGS) + [
-        "--model",
-        "opencode-go/deepseek-v4.1-flash",
-        "--thinking",
-        "off",
-    ]
+    assert "argv" not in site  # there is no process to show any more
     assert site["prompt_chars"] == len(site["prompt"])
     assert MS.FINDER_QUESTION in site["prompt"]
     # The preview shows the missing evidence instead of hiding it, and nothing was written.
     assert site["evidence"][0]["present"] is False
     assert not ledger.exists()
     assert not (run_dir / "batch-0001" / "answers").exists()
+
+
+def _judge_argv(run_dir: Path, ledger: Path, *extra: str) -> list[str]:
+    return [
+        "judge",
+        "--run-dir",
+        str(run_dir),
+        "--batch-id",
+        "batch-0001",
+        "--ledger",
+        str(ledger),
+        *extra,
+    ]
+
+
+def test_an_export_hands_off_exactly_the_calls_the_import_asks_and_writes_nothing_else(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Export, answer, import through the real CLI: every call answered, nothing written early.
+
+    The export runs the judge itself with a recording runner, so the questions handed off are the
+    import's by construction; the import then finds an answer for every call it makes. The export
+    writes no ledger line, no answer and no `model.json`: those are the import's, from the answers.
+    """
+    run_dir = _prepared_run_dir(tmp_path, count=2)
+    _evidence_store(run_dir / "batch-0001", 2)
+    ledger = tmp_path / "LEDGER.jsonl"
+    handoff = tmp_path / "handoff"
+
+    assert R.main(_judge_argv(run_dir, ledger, "--handoff-export", str(handoff))) == 0
+    exported = json.loads(capsys.readouterr().out)
+    assert exported["labels"] == ["site-1/finder", "site-2/finder"]
+    assert exported["exported"] == 2 and "error" not in exported
+    assert not ledger.exists()
+    assert not (run_dir / "batch-0001" / "answers").exists()
+    assert not (run_dir / "batch-0001" / "model.json").exists()
+    assert [line["prompt_sha256"] for line in OH.manifest(handoff)] == [
+        OH.prompt_sha256(item.call.prompt)
+        for item in MS.prepare_batch(
+            batch=_batch(2),
+            store=F.EvidenceStore(run_dir / "batch-0001" / "evidence"),
+            stage=M.Stage.FINDER,
+        )
+    ]
+    assert R.main(_judge_argv(run_dir, ledger, "--handoff-import", str(handoff))) == 2
+    assert "no answer at" in json.loads(capsys.readouterr().out)["error"]
+
+    assert _handoff_answers(handoff, text="VERDICT: CORRECT") == 2
+    assert OH.validate(handoff).ok
+    assert R.main(_judge_argv(run_dir, ledger, "--handoff-import", str(handoff))) == 0
+    imported = json.loads(capsys.readouterr().out)
+    assert imported["totals"]["calls"] == 2
+    rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+    assert [(row["label"], row["metering"]) for row in rows] == [
+        ("site-1/finder", "unmetered"),
+        ("site-2/finder", "unmetered"),
+    ]
+    # A second export after the import has nothing left to ask: the answers are on disk.
+    assert R.main(_judge_argv(run_dir, ledger, "--handoff-export", str(handoff))) == 0
+    assert json.loads(capsys.readouterr().out)["calls"] == 0
+
+
+def test_export_and_import_are_one_or_the_other(tmp_path: Path) -> None:
+    run_dir = _prepared_run_dir(tmp_path)
+    with pytest.raises(SystemExit):
+        R.main(
+            _judge_argv(
+                run_dir,
+                tmp_path / "LEDGER.jsonl",
+                "--handoff-export",
+                str(tmp_path / "a"),
+                "--handoff-import",
+                str(tmp_path / "b"),
+            )
+        )
+    with pytest.raises(SystemExit):
+        R.main(_judge_argv(run_dir, tmp_path / "LEDGER.jsonl", "--live"))
 
 
 def test_judge_live_records_unverifiable_findings_for_a_site_with_no_evidence(
@@ -1041,7 +980,7 @@ def test_judge_live_records_unverifiable_findings_for_a_site_with_no_evidence(
             started.append(call.site_id)
             return _answer()
 
-    monkeypatch.setattr(MS, "PiRunner", CountingRunner)
+    monkeypatch.setattr(MS, "HandoffRunner", CountingRunner)
     run_dir = _prepared_run_dir(tmp_path)
     batch_dir = run_dir / "batch-0001"
     (batch_dir / "fetch.json").write_text(
@@ -1075,7 +1014,8 @@ def test_judge_live_records_unverifiable_findings_for_a_site_with_no_evidence(
             "batch-0001",
             "--ledger",
             str(ledger),
-            "--live",
+            "--handoff-import",
+            str(tmp_path / "handoff"),
         ]
     )
 
@@ -1100,9 +1040,9 @@ def test_judge_live_reports_a_call_it_could_not_measure_with_exit_2(
             self.kwargs = kwargs
 
         def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
-            raise MS.ModelCallFailed(f"{call.label}: pi exited 1; stderr tail: 'boom'")
+            raise MS.ModelCallFailed(f"{call.label}: no answer at <handoff> - export it first")
 
-    monkeypatch.setattr(MS, "PiRunner", FailingRunner)
+    monkeypatch.setattr(MS, "HandoffRunner", FailingRunner)
     run_dir = _prepared_run_dir(tmp_path)
     # The store the CLI builds sits next to input.json: <run_dir>/<batch_id>/evidence.
     _evidence_store(run_dir / "batch-0001", 1)
@@ -1117,13 +1057,14 @@ def test_judge_live_reports_a_call_it_could_not_measure_with_exit_2(
             "batch-0001",
             "--ledger",
             str(ledger),
-            "--live",
+            "--handoff-import",
+            str(tmp_path / "handoff"),
         ]
     )
 
     payload = json.loads(capsys.readouterr().out)
     assert rc == 2
     assert payload["live"] is True
-    assert "pi exited 1" in payload["error"]
+    assert "no answer at" in payload["error"]
     assert not ledger.exists()
     assert not (run_dir / "batch-0001" / "model.json").exists()

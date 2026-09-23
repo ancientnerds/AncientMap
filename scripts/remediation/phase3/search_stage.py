@@ -3,8 +3,10 @@
 Block A3 of `output/remediation/logs/remaining_map_2026-09-22.json`: 7,761 of the mass run's 24,255
 finder answers are `UNVERIFIABLE`, and 61 % of them sit at sites whose Wikipedia lookup by name came
 back missing - the evidence ran out, not the model. Decision 6 of `HANDOVER.md` settles the route:
-**MiniMax supplies search only; the reasoning stays on opencode-go/deepseek-v4.1-flash.** This module
-is that search and nothing else. It does not judge, and it writes no database.
+**MiniMax supplies search only; the reasoning is not MiniMax's** - since the owner order of
+2026-09-23 it is Opus, answered through the handoff (`scripts/remediation/opus_handoff.py`), where it
+was `opencode-go/deepseek-v4.1-flash` before. This module is that search and nothing else. It does
+not judge, and it writes no database.
 
 What one batch does, in order (`search_batch`):
 
@@ -722,7 +724,8 @@ def search_batch(
     ]
     if pending:
         # The gate guards MiniMax requests. A resumed batch whose searches are all on disk makes
-        # none, so it is neither probed nor stopped - its judge runs on the Pi route, not on MiniMax.
+        # none, so it is neither probed nor stopped - its judge is answered through the Opus
+        # handoff, not by MiniMax.
         reading = probe()
         report.quota_before = quota_reading(reading)
         report.stopped = quota_stop_reason(reading, now_utc=now())

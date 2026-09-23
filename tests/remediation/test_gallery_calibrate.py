@@ -19,7 +19,11 @@ sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 from gallery_audit import calibrate, decide, labels, vision, worklist  # noqa: E402
 
-THRESHOLDS_SHA = "1040cd59353181c6928640b3ef51148454cdcbf13b2b31179ca57f3f8b55c99b"
+#: Today's sealed thresholds. They name the model the verdicts must be by (`vision.MODEL`), so the
+#: owner order of 2026-09-23 (Opus instead of DeepSeek) moved this pin from the one below.
+THRESHOLDS_SHA = "e65604571e5b6717a4c13982039fa94c3d5646101f36b6d53eecde3cdddc61a2"
+#: The thresholds `calibration-2026-09-23/` was sealed with, naming the pilot's DeepSeek transport.
+DEEPSEEK_THRESHOLDS_SHA = "1040cd59353181c6928640b3ef51148454cdcbf13b2b31179ca57f3f8b55c99b"
 SITE = "0a1b2c3d-4e5f-6789-abcd-ef0123456789"
 
 
@@ -527,13 +531,24 @@ def test_the_c1_jobs_ask_each_image_once_and_the_strict_question_of_tier_a() -> 
 CALIBRATION = REPO / "output" / "remediation" / "gallery_audit" / "calibration-2026-09-23"
 
 
-def test_the_versioned_c1_directory_is_sealed_with_the_pinned_thresholds() -> None:
+def test_the_versioned_c1_directory_is_the_deepseek_seal_and_admits_no_opus_verdict() -> None:
+    """History, untouched: the C1 directory was sealed for the pilot's DeepSeek transport.
+
+    The owner order of 2026-09-23 changed nothing in the thresholds but the model they name, and
+    `vision.verdicts_by_image` refuses a verdict by any other model than today's - so the DeepSeek
+    ledger written into that directory can admit no trigger, and an Opus calibration is sealed in a
+    directory of its own (`calibrate.py seal`, then `jobs`) before its first question is handed off.
+    """
     thresholds, digest, sealed_at = calibrate.sealed(CALIBRATION)
-    assert digest == THRESHOLDS_SHA and thresholds == calibrate.THRESHOLDS
+    assert digest == DEEPSEEK_THRESHOLDS_SHA != THRESHOLDS_SHA
+    assert thresholds["definitions"]["model"] == "deepseek-v4-flash-vision-exp"
+    today = json.loads(json.dumps(calibrate.THRESHOLDS))
+    today["definitions"]["model"] = thresholds["definitions"]["model"]
+    assert thresholds == today  # the model is the only difference
     # the bytes on disk, not only the text: `.gitattributes` pins calibration-*/* to LF, so a
     # sha256sum of the checkout agrees with the seal and with the reported jobs digest
     assert hashlib.sha256((CALIBRATION / "THRESHOLDS.json").read_bytes()).hexdigest() == (
-        THRESHOLDS_SHA
+        DEEPSEEK_THRESHOLDS_SHA
     )
     assert hashlib.sha256((CALIBRATION / "JOBS.jsonl").read_bytes()).hexdigest() == (
         "f0c4ccd6833f2de456e2d1ca110d2520ae6772cd9c3ebd4ec789a032de70e5c9"
@@ -542,5 +557,9 @@ def test_the_versioned_c1_directory_is_sealed_with_the_pinned_thresholds() -> No
     assert len(jobs) == 939 and sum(job.pass_ == vision.HERO for job in jobs) == 50
     assert {job.stage for job in jobs} == {calibrate.C1}
     ledger = CALIBRATION / "VERDICTS.jsonl"
-    if ledger.exists():  # written by the production run, after the seal
-        assert all(str(e.line["judged_at"]) >= sealed_at for e in vision.Ledger(ledger).lines)
+    if ledger.exists():  # the pilot transport's run, after the seal: no verdict of it counts today
+        lines = vision.Ledger(ledger).lines
+        assert all(str(e.line["judged_at"]) >= sealed_at for e in lines)
+        if any(e.ok for e in lines):
+            with pytest.raises(vision.VisionError, match="answered by"):
+                vision.verdicts_by_image(lines, vision.GALLERY_PROMPT_ID)

@@ -196,21 +196,15 @@ def make_batch(
     return batch_dir
 
 
-USAGE = MS.Usage(
-    input_tokens=2500,
-    output_tokens=150,
-    cache_read_tokens=0,
-    cache_write_tokens=0,
-    total_tokens=2650,
-    cost_usd=0.000465,
-)
+#: What the Opus handoff declares for every answer: no meter, zeros that say so.
+USAGE = MS.Usage.unmetered()
 
 
 class ScriptedRunner:
     """The `ModelRunner` seam, answering from a script keyed by `(site_id, field)`.
 
-    Like `PiRunner` it takes a `ModelCall` and nothing else, and it raises what the real runner
-    raises: a scripted `UnreadableStream` or `ModelCallFailed` is raised instead of answered. A call
+    Like `HandoffRunner` it takes a `ModelCall` and nothing else, and it raises what a runner may
+    raise: a scripted `UnreadableStream` or `ModelCallFailed` is raised instead of answered. A call
     that is not in the script is a test error, not an empty answer.
     """
 

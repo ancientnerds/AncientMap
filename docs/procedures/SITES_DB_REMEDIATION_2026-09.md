@@ -502,7 +502,7 @@ A new column is approved (E4). Proposal: `unified_sites.scope_status`
 | Wave-4 chain | `scripts/audit_enrich.py:1608-2810` | 6 phases, **demonstrably executed once in March 2026** (2,217 sites received citations between 03-06 and 03-14). **Not used by Phases 4/5** (2026-09-23): `sync_from_production` UPDATEs every row, `merge_verification` is an unconditional, unjournalled UPDATE, and `content_id` comes from a salted `hash()` - see the script's docstring and 12, Phase 4 |
 | Transport path to production | `audit_enrich.py:1528-1540` → `api/routes/sites.py:1560-1561, 1756-1836` | `description_citations` and `reference_links` **do** reach production |
 | Batch fan-out | `scripts/prepare_verify_batches.py`, `verify_agent.py`, `merge_rewrites.py` | ready-made scaffold - **retired for card texts** (2026-09-23): cards are extractive, `docs/procedures/CARD_DESCRIPTIONS.md` |
-| Phase-3 runner seams | `scripts/remediation/phase3/` (`model_stage.PiRunner`, `judge_site`, `fetch_stage.EvidenceStore`, `write_stage.run_sql`/`change_key`, `mass_run`) | what Phases 4/5 import instead of the Wave-4 chain; `scripts/remediation/phase4/` builds on them (`docs/procedures/PHASE4_CONTRACTS.md`) |
+| Phase-3 runner seams | `scripts/remediation/phase3/` (`model_stage.HandoffRunner` - the Opus handoff since 2026-09-23, `judge_site`, `fetch_stage.EvidenceStore`, `write_stage.run_sql`/`change_key`, `mass_run`) | what Phases 4/5 import instead of the Wave-4 chain; `scripts/remediation/phase4/` builds on them (`docs/procedures/PHASE4_CONTRACTS.md`) |
 | **Prospector `dedup.py`** | `pipeline/…/prospector/` | LLM-free four-rung ladder (hard identifier → exact name key → trigram/Levenshtein/PostGIS → gates for country/distance/rare token). Already adjudicated **5,260 candidates and written 26,515 verbatim evidence rows** in production |
 | Prospector `resolve.py` | same | exactly the rejection filters needed here: no P625 coordinate, P625 precision ≥ 0.1°, P31 region denylist, off-Earth, and `passes_date_cutoff()` carrying the project scope |
 | Theo citation integrity gate | `pipeline/lyra/theo_citations.py` (1,953 lines), `hallucination_gate.py`, `citation_verifier.py` | **deterministic, no LLM**, 206 green tests in 0.39 s, live in production. Built for markdown papers, so **not directly** applicable to sites — but its components are: `strip_orphan_citation_markers`, `normalize_grouped_markers`, `_collect_non_numeric_markers`, `detect_placeholder_markers`, `score_tier_by_domain` |
@@ -761,8 +761,10 @@ used: its sync UPDATEs every row, its merge is an unconditional, unjournalled UP
 content ids come from a salted `hash()` (9.1, and the docstring of `scripts/audit_enrich.py`).
 
 **Extractive-first.** A description is assembled by code, byte for byte, from sentences of a pinned
-Wikipedia revision (the oldid permalink plus the sha256 of the exact text). The model (one Pi call per
-site through `phase3/model_stage.PiRunner`) returns only sentence and span ids; code applies the closed
+Wikipedia revision (the oldid permalink plus the sha256 of the exact text). The model (one call per
+site, answered by Opus through the handoff since the owner order of 2026-09-23 -
+`phase3/model_stage.HandoffRunner`, `scripts/remediation/opus_handoff.py`) returns only sentence and
+span ids; code applies the closed
 edit list (drop an offered span with one delimiter, collapse spaces, repair `' ,'`, restore a capital,
 insert `' [n]'`); citation numbers are assigned by code. An independent verifier that never imports
 the assembler re-derives every byte (V1-V15), a drop-only reviewer in a separate context checks every

@@ -12,7 +12,8 @@ is never shown to the selector, so it cannot anchor on unsourced text; the site 
 the Phase-3-verified fields.
 
 A prompt travels as `model_stage.Prompt(stage, system=<question>, user=<block>)`, rendered by
-`Prompt.render()` onto Pi's stdin; this module builds the two strings and nothing else.
+`Prompt.render()` into the Opus handoff's prompt file; this module builds the two strings and nothing
+else.
 """
 
 from __future__ import annotations

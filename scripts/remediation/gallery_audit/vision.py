@@ -1,4 +1,4 @@
-"""S6 - the vision stage: two frozen questions, one transport, an append-only verdict ledger.
+"""S6 - the vision stage: two frozen questions, the Opus handoff, an append-only verdict ledger.
 
 The model classifies; it never writes a value. `decide.py` maps a verdict to a database value by a
 sealed rule table, and every planned row cites the verdict it rests on by `verdict_id` - the
@@ -20,29 +20,42 @@ the first pass called ``site_photo``. The pilot measured ``site_photo`` as over-
 hero tier (74 % claimed, about 40 % accepted: empty fields, hillsides, a coastline, one engraving),
 so an unconfirmed ``site_photo`` is never written as clean.
 
-Transport - the pilot's, imported unchanged
--------------------------------------------
-`scripts/remediation/vlm_pilot/ask_vlm.py`: ``ask_once`` (one POST to the opencode gateway),
-``extract_json``, ``usage_cost``, ``load_api_key``, ``GATEWAY_URL``, ``MODEL``
-(``deepseek-v4-flash-vision-exp``), ``MAX_TOKENS``. The image bytes are
-`pipeline.video.shorts_select.vlm_bytes` (RGB, longest side 1280, JPEG q85 - the bytes the pilot
-sent), read from the offsite copy through `vlm_pilot/common.py`'s exact-case lookup, main tree
-first, then the case-collision tree. Retry policy: ``VLM_ATTEMPTS`` (3) with ``VLM_RETRY_WAIT_S``
-(8 s) between attempts. There is no second transport and no fallback model.
+Transport - the Opus handoff (owner order 2026-09-23)
+-----------------------------------------------------
+"No DeepSeek any more - everything with Opus": every question is answered by an Opus agent of the
+orchestrating Claude Code session (`opus_handoff.OPUS_MODEL`) through the handoff directory
+(`scripts/remediation/opus_handoff.py`), never by a model API called from here. Until 2026-09-23
+the pilot's opencode gateway (`deepseek-v4-flash-vision-exp`, `vlm_pilot/ask_vlm.py`) answered; it is
+not imported any more, and `vlm_pilot/` stays as the pilot's history.
+
+* ``export`` hands every job the ledger holds no ok verdict for to the handoff: the filled frozen
+  question (batch = the job's stage, stage ``vision``, label ``<image_id>/<prompt_id>``) and the image
+  as the exact bytes the pilot sent - `pipeline.video.shorts_select.vlm_bytes` (RGB, longest side
+  1280, JPEG q85) of the offsite copy, read through `vlm_pilot/common.py`'s exact-case lookup, main
+  tree first, then the case-collision tree - to ``images/<image_id>.jpg``.
+* the orchestrator's Opus agents answer each question with the JSON the question asks for, and
+  ``opus_handoff.py validate`` checks every answer before anything is imported.
+* ``import`` refuses to start while any job lacks a valid answer, then writes one ledger line per
+  job from its answer through the same parsing as ever (`extract_json`, `validate`: the
+  in-vocabulary check, status ``ok`` or ``failed``). A line names ``model`` = `MODEL`, says
+  ``metering: unmetered`` and carries ``cost_usd`` 0: an Opus answer has no per-call meter. There is
+  one answer per question and no retry: a question answered badly is answered again by the
+  orchestrator, never re-asked here.
 
 Stops, never skips
 ------------------
-* An image whose file cannot be found, or a job with no parseable in-vocabulary verdict after 3
-  attempts, is written to the ledger as ``status: failed`` and **stops the run with exit 3**. It is
-  never written as ``other`` or ``unknown``: an empty answer that reads as a verdict is the silent
-  failure this lane exists to rule out.
+* An image whose file cannot be found or read, an answer given about other bytes than today's JPEG
+  of the image, or an answer with no parseable in-vocabulary verdict is written to the ledger as
+  ``status: failed`` and **stops the run with exit 3**. It is never written as ``other`` or
+  ``unknown``: an empty answer that reads as a verdict is the silent failure this lane exists to rule
+  out.
 * The spend is summed from the ledger (every line carries its cost, failed lines included); once
-  it reaches the budget no further call starts and the run exits 4.
-* More than ``MAX_WORKERS_UNPROVEN`` workers only when the ledger's first ``RAMP_CALLS`` lines show
-  0 failures and a p90 latency under ``RAMP_P90_MS``.
+  it reaches the budget no further line is written and the run exits 4. The Opus lines add 0; the
+  lines of the pilot's transport, where a ledger carries them, still count.
 
 Usage:
-    vision.py run --jobs JOBS.jsonl --run-dir DIR [--budget-usd 75] [--workers 4] [--dry-run]
+    vision.py export --jobs JOBS.jsonl --run-dir DIR --handoff HANDOFF [--dry-run]
+    vision.py import --jobs JOBS.jsonl --run-dir DIR --handoff HANDOFF [--budget-usd 75]
 """
 
 from __future__ import annotations
@@ -50,12 +63,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import re
 import sys
 import threading
-import time
-import uuid
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass, field
@@ -64,24 +74,23 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-_PILOT = ROOT / "scripts" / "remediation" / "vlm_pilot"
-for _entry in (ROOT, _PILOT):
+_REMEDIATION = ROOT / "scripts" / "remediation"
+_PILOT = _REMEDIATION / "vlm_pilot"
+for _entry in (ROOT, _REMEDIATION, _PILOT):
     if str(_entry) not in sys.path:
         sys.path.insert(0, str(_entry))
 
-import ask_vlm  # noqa: E402  (the pilot's transport, imported - not copied)
-import common as pilot  # noqa: E402  (the pilot's offsite paths and exact-case lookup)
-import httpx  # noqa: E402
+import common as pilot  # noqa: E402  (the pilot's offsite lookup, kinds and answer reader)
+import opus_handoff as OH  # noqa: E402  (the handoff directory every answer comes through)
+from phase3.ledger import UNMETERED  # noqa: E402  (the one spelling of "no meter read it")
 
-from pipeline.video.shorts_select import (  # noqa: E402
-    VLM_ATTEMPTS,
-    VLM_RETRY_WAIT_S,
-    vlm_bytes,
-)
+from pipeline.video.shorts_select import vlm_bytes  # noqa: E402
 
-#: The model and gateway are the pilot's; the ledger records them per line.
-MODEL = ask_vlm.MODEL
-KINDS: tuple[str, ...] = ask_vlm.EXPECTED_KINDS
+#: The model every answer is by, and every ledger line names (`verdicts_by_image` refuses another).
+MODEL = OH.OPUS_MODEL
+KINDS: tuple[str, ...] = pilot.EXPECTED_KINDS
+#: The stage every vision question is handed off under: a path component of the handoff directory.
+HANDOFF_STAGE = "vision"
 
 GALLERY = "gallery"
 HERO = "hero"
@@ -125,9 +134,6 @@ def prompt_sha256(text: str) -> str:
 
 #: A budget stop is read from the ledger (design: $52 expected, $65 upper bound, stop at $75).
 DEFAULT_BUDGET_USD = 75.0
-MAX_WORKERS_UNPROVEN = 4
-RAMP_CALLS = 500
-RAMP_P90_MS = 40_000
 
 EXIT_OK = 0
 EXIT_INPUT = 1
@@ -243,6 +249,11 @@ def categories_text(categories: Sequence[str] | None) -> str:
     return "; ".join(f'"{n}"' for n in names) if names else CATEGORIES_NONE
 
 
+def job_label(job: Job) -> str:
+    """A question's label in the handoff: the image and the frozen question's id."""
+    return f"{job.image_id}/{PROMPTS[job.pass_][0]}"
+
+
 def prompt_for(job: Job) -> str:
     """The frozen question of the job's pass, filled from the job. Nothing else goes in."""
     _, template = PROMPTS[job.pass_]
@@ -307,18 +318,12 @@ def validate(
     return {k: parsed[k] for k in ("shows_archaeology", "structure", "generic_landscape")}, None
 
 
-Transport = Callable[[Any, str, str, bytes], dict[str, Any]]
-
-
 @dataclass
 class Judge:
-    """Everything one judgement needs besides the job."""
+    """Everything one judgement needs besides the job: the images and the Opus answers."""
 
-    transport: Transport
-    client: Any
-    session: str
+    handoff: Path
     images: Images
-    sleep: Callable[[float], None] = time.sleep
     now: Callable[[], str] = field(default=lambda: datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
     def __call__(self, job: Job) -> dict[str, Any]:
@@ -331,6 +336,7 @@ class Judge:
             "tier": job.tier,
             "pass": job.pass_,
             "model": MODEL,
+            "metering": UNMETERED,
             "prompt_id": prompt_id,
             "prompt_sha256": prompt_sha256(template),
             "prompt": prompt,
@@ -349,15 +355,10 @@ class Judge:
             "verdict": None,
             "parsed": None,
             "raw_response": None,
-            "finish_reason": None,
-            "http_status": None,
             "error": None,
-            "attempts": 0,
-            "attempts_detail": [],
-            "usage_totals": {},
+            "answered_by": None,
+            "answered_at": None,
             "cost_usd": 0.0,
-            "latency_ms": None,
-            "session_id": self.session,
             "judged_at": self.now(),
         }
         try:
@@ -373,57 +374,32 @@ class Judge:
             line["error"] = f"image: {path} cannot be read as an image: {exc}"
             return line
         line["jpeg_sha256"] = hashlib.sha256(jpeg).hexdigest()
-
-        costs: list[dict[str, Any]] = []
-        for attempt in range(1, VLM_ATTEMPTS + 1):
-            line["attempts"] = attempt
-            try:
-                call = self.transport(self.client, self.session, prompt, jpeg)
-            except (httpx.HTTPError, ValueError) as exc:  # a transport failure is data
-                line["attempts_detail"].append(
-                    {"attempt": attempt, "transport_error": f"{type(exc).__name__}: {exc}"[:400]}
-                )
-                line["error"] = f"transport: {type(exc).__name__}: {exc}"[:400]
-                if attempt < VLM_ATTEMPTS:
-                    self.sleep(VLM_RETRY_WAIT_S)
-                continue
-            usage = call.get("usage") or {}
-            if usage:
-                costs.append(ask_vlm.usage_cost(usage))
-            line["attempts_detail"].append(
-                {
-                    "attempt": attempt,
-                    "http_status": call["http_status"],
-                    "latency_ms": call["latency_ms"],
-                    "finish_reason": call["finish_reason"],
-                    "usage": usage,
-                }
+        shown = self.handoff / OH.image_relpath(str(job.image_id))
+        if not shown.is_file() or shown.read_bytes() != jpeg:
+            line["error"] = (
+                f"image: the answer was given about {shown}, which is not today's JPEG of "
+                f"{line['image_file']} - export the job again"
             )
-            line.update(
-                http_status=call["http_status"],
-                latency_ms=call["latency_ms"],
-                raw_response=call["raw_response"],
-                finish_reason=call["finish_reason"],
-            )
-            if call["http_status"] != 200:
-                line["error"] = (
-                    f"http {call['http_status']}: {str(call.get('body_text') or '')[:200]}"
-                )
-            else:
-                parsed = ask_vlm.extract_json(call["raw_response"])
-                verdict, problem = validate(job.pass_, parsed)
-                line["parsed"] = parsed
-                if verdict is not None:
-                    line.update(status="ok", verdict=verdict, error=None)
-                    break
-                line["error"] = problem
-            if attempt < VLM_ATTEMPTS:
-                self.sleep(VLM_RETRY_WAIT_S)
-        line["cost_usd"] = round(sum(c["cost_usd"] for c in costs), 8)
-        line["usage_totals"] = {
-            key: sum(c[key] for c in costs)
-            for key in ("prompt_tokens", "completion_tokens", "cached_tokens", "reasoning_tokens")
-        }
+            return line
+        answer = OH.read_answer(
+            self.handoff,
+            batch_id=job.stage,
+            stage=HANDOFF_STAGE,
+            label=job_label(job),
+            prompt=prompt,
+        )
+        parsed = pilot.extract_json(answer.text)
+        verdict, problem = validate(job.pass_, parsed)
+        line.update(
+            raw_response=answer.text,
+            answered_by=answer.answered_by,
+            answered_at=answer.answered_at,
+            parsed=parsed,
+        )
+        if verdict is None:
+            line["error"] = problem
+            return line
+        line.update(status="ok", verdict=verdict)
         return line
 
 
@@ -507,7 +483,8 @@ def verdicts_by_image(lines: Iterable[LedgerLine], prompt_id: str) -> dict[int, 
     """image id -> the one verdict the ledger holds for the question `prompt_id`.
 
     A verdict counts only if it was asked with today's frozen prompt of that id and answered by
-    the pilot's model (design: verification 3). Two ok verdicts for one question mean the ledger
+    `MODEL` (design: verification 3; since 2026-09-23 the Opus model, so a verdict of the pilot's
+    transport counts no more). Two ok verdicts for one question mean the ledger
     was written by two runs that did not see each other, and the reader refuses to pick one.
     """
     template = dict(PROMPTS.values())[prompt_id]
@@ -529,21 +506,6 @@ def verdicts_by_image(lines: Iterable[LedgerLine], prompt_id: str) -> dict[int, 
             raise VisionError(f"image {image_id}: two ok verdicts for {prompt_id}")
         out[image_id] = Verdict(entry.verdict_id, dict(line["verdict"]), line)
     return out
-
-
-def ramp_allows(lines: Sequence[LedgerLine], workers: int) -> tuple[bool, str]:
-    """May the run use `workers` workers? Above MAX_WORKERS_UNPROVEN only after the ramp probe."""
-    if workers <= MAX_WORKERS_UNPROVEN:
-        return True, f"{workers} workers need no ramp proof"
-    first = lines[:RAMP_CALLS]
-    if len(first) < RAMP_CALLS:
-        return False, f"the ramp probe needs {RAMP_CALLS} ledger lines, the ledger has {len(first)}"
-    failed = sum(1 for e in first if not e.ok)
-    latencies = sorted(int(e.line["latency_ms"] or 0) for e in first)
-    p90 = latencies[math.ceil(0.9 * len(latencies)) - 1]
-    if failed or p90 >= RAMP_P90_MS:
-        return False, f"ramp probe: {failed} failures, p90 {p90} ms (needs 0 and < {RAMP_P90_MS})"
-    return True, f"ramp probe passed: 0 failures, p90 {p90} ms over {RAMP_CALLS} calls"
 
 
 # ------------------------------------------------------------------------------ running
@@ -573,9 +535,9 @@ def run_jobs(
 ) -> RunResult:
     """Judge every job the ledger does not already hold a verdict for.
 
-    At most `workers` calls are in flight. No new call starts once a judgement failed (the run then
-    exits 3) or once the ledger's spend reached `budget_usd` (exit 4); calls already in flight are
-    finished and written, so no paid answer is lost.
+    At most `workers` judgements are in flight. No new one starts once a judgement failed (the run
+    then exits 3) or once the ledger's spend reached `budget_usd` (exit 4); those already in flight
+    are finished and written, so no answer is lost.
     """
     result = RunResult()
     done = ledger.done()
@@ -624,54 +586,105 @@ def run_jobs(
     return result
 
 
+def export_jobs(
+    jobs: Sequence[Job], ledger: Ledger, images: Images, handoff: Path, *, dry_run: bool
+) -> tuple[dict[str, int], list[str]]:
+    """Hand every job the ledger holds no ok verdict for to the Opus handoff: its filled frozen
+    question and the exact JPEG the question is about. `dry_run` resolves every image and writes
+    nothing. Returns the counts and every image that could not be found or read."""
+    done = ledger.done()
+    counts = {"exported": 0, "already": 0, "done": 0}
+    missing: list[str] = []
+    for job in jobs:
+        if job.key() in done:
+            counts["done"] += 1
+            continue
+        prompt = prompt_for(job)
+        try:
+            path = images.path_for(job.site_id, job.filename)
+        except VisionError as exc:
+            missing.append(str(exc))
+            continue
+        if dry_run:
+            continue
+        try:
+            jpeg = vlm_bytes(path)
+        except OSError as exc:  # an image that cannot be decoded cannot be handed off
+            missing.append(f"{path} cannot be read as an image: {exc}")
+            continue
+        new = OH.export(
+            handoff,
+            batch_id=job.stage,
+            stage=HANDOFF_STAGE,
+            label=job_label(job),
+            field=job.pass_,
+            prompt=prompt,
+            image_name=str(job.image_id),
+            image=jpeg,
+        )
+        counts["exported" if new else "already"] += 1
+    return counts, missing
+
+
+def unanswered(jobs: Sequence[Job], ledger: Ledger, handoff: Path) -> list[str]:
+    """Every job without a valid Opus answer to its exact question: the import starts only at none."""
+    done = ledger.done()
+    problems: list[str] = []
+    for job in jobs:
+        if job.key() in done:
+            continue
+        try:
+            OH.read_answer(
+                handoff,
+                batch_id=job.stage,
+                stage=HANDOFF_STAGE,
+                label=job_label(job),
+                prompt=prompt_for(job),
+            )
+        except OH.HandoffError as exc:
+            problems.append(str(exc))
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    run = sub.add_parser("run", help="judge the jobs of a JOBS.jsonl into a run's VERDICTS.jsonl")
-    run.add_argument("--jobs", required=True)
-    run.add_argument("--run-dir", required=True)
-    run.add_argument("--budget-usd", type=float, default=DEFAULT_BUDGET_USD)
-    run.add_argument("--workers", type=int, default=MAX_WORKERS_UNPROVEN)
-    run.add_argument(
-        "--dry-run", action="store_true", help="resolve every image and prompt, call nothing"
+    export = sub.add_parser("export", help="hand the jobs' questions and images to the handoff")
+    answers = sub.add_parser("import", help="write the Opus answers into the run's VERDICTS.jsonl")
+    for command in (export, answers):
+        command.add_argument("--jobs", required=True)
+        command.add_argument("--run-dir", required=True)
+        command.add_argument("--handoff", required=True, help="the Opus handoff directory")
+    export.add_argument(
+        "--dry-run", action="store_true", help="resolve every image and prompt, write nothing"
     )
+    answers.add_argument("--budget-usd", type=float, default=DEFAULT_BUDGET_USD)
     args = parser.parse_args(argv)
 
     jobs = read_jobs(Path(args.jobs))
     ledger = Ledger(Path(args.run_dir) / "VERDICTS.jsonl")
-    allowed, why = ramp_allows(ledger.lines, args.workers)
-    print(why)
-    if not allowed:
-        return EXIT_INPUT
+    handoff = Path(args.handoff)
     images = Images()
-    if args.dry_run:
-        missing = []
-        for job in jobs:
-            try:
-                images.path_for(job.site_id, job.filename)
-            except VisionError as exc:
-                missing.append(str(exc))
-            prompt_for(job)
-        todo = [job for job in jobs if job.key() not in ledger.done()]
+    if args.command == "export":
+        counts, missing = export_jobs(jobs, ledger, images, handoff, dry_run=args.dry_run)
         print(
-            f"dry run: {len(jobs)} jobs, {len(todo)} not yet in the ledger, {len(missing)} image(s) "
-            f"not found, ledger spend ${ledger.spent_usd:.4f} of ${args.budget_usd:.2f}"
+            f"{'dry run' if args.dry_run else 'export'}: {len(jobs)} jobs, {counts['done']} already "
+            f"in the ledger, {counts['exported']} handed off, {counts['already']} handed off "
+            f"before, {len(missing)} image(s) not found or unreadable -> {handoff}"
         )
         for problem in missing[:20]:
             print(f"  {problem}")
         return EXIT_NO_VERDICT if missing else EXIT_OK
 
-    key = ask_vlm.load_api_key(ask_vlm.AUTH_FILE)
-    session = str(uuid.uuid4())
-    print(
-        f"model={MODEL} url={ask_vlm.GATEWAY_URL} jobs={len(jobs)} workers={args.workers} session={session}"
-    )
-    with httpx.Client(
-        timeout=180.0,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-    ) as client:
-        judge = Judge(transport=ask_vlm.ask_once, client=client, session=session, images=images)
-        result = run_jobs(jobs, ledger, judge, workers=args.workers, budget_usd=args.budget_usd)
+    problems = unanswered(jobs, ledger, handoff)
+    if problems:
+        print(f"{len(problems)} job(s) have no valid Opus answer in {handoff}; nothing was written")
+        for problem in problems[:20]:
+            print(f"  {problem}")
+        return EXIT_INPUT
+    print(f"model={MODEL} handoff={handoff} jobs={len(jobs)}")
+    judge = Judge(handoff=handoff, images=images)
+    result = run_jobs(jobs, ledger, judge, workers=1, budget_usd=args.budget_usd)
     print(
         f"judged {result.judged}, already in the ledger {result.skipped_done}, "
         f"ledger spend ${ledger.spent_usd:.4f}"

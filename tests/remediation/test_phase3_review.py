@@ -47,7 +47,6 @@ from phase3 import model_stage as MS  # noqa: E402
 from phase3 import review_stage as RS  # noqa: E402
 from phase3 import snapshot_plan as SP  # noqa: E402
 
-NO_EXTENSIONS = Path(__file__).resolve().parent / "fixtures" / "pi_probe_no_extensions.json"
 PAGE_TEXT = "Cave text xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 #: A URL key for the parse-only tests, which bring their own `pages` mapping. The batch-level tests
 #: must not use it: they derive the URL the run really fetched (`_page_url`), because a citation
@@ -59,9 +58,8 @@ CITED_URL = "https://en.wikipedia.org/w/api.php?action=query&titles=Cave%201&for
 
 
 def _usage() -> Any:
-    """The captured settled usage, so every scripted call carries real numbers."""
-    lines = NO_EXTENSIONS.read_text(encoding="utf-8").splitlines()
-    return MS.parse_stream(lines, source=str(NO_EXTENSIONS)).usage
+    """The usage every scripted call carries: what the Opus handoff declares, unmetered."""
+    return MS.Usage.unmetered()
 
 
 def _site(site_id: str = "site-1", *, name: str = "Cave 1") -> dict[str, Any]:

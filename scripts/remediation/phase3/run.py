@@ -19,10 +19,14 @@ empty one.
 * `fetch`   - collect the evidence a batch's findings buy (`phase3/fetch_stage.py`). **Offline
              unless `--live` is given**: without it the command only lists the targets and the
              URLs, so what a batch would cost is reviewable before it costs a request.
-* `judge`   - run one stage over one prepared batch (`phase3/model_stage.py`). **Dry run unless
-             `--live` is given**: without it the command renders the exact argv and the exact
-             prompt text of every call in the batch and starts no process, so a batch is readable
-             - and its prompt sizes visible - before any money is spent.
+* `judge`   - run one stage over one prepared batch (`phase3/model_stage.py`), answered through
+             the Opus handoff (owner order 2026-09-23). **Dry run unless a handoff is named**:
+             without one the command renders the exact prompt text of every call and exports
+             nothing. `--handoff-export DIR` writes every call the stage would make - its exact
+             prompt - to DIR (`scripts/remediation/opus_handoff.py`) and writes nothing else;
+             once Opus agents have answered and `opus_handoff.py validate` is clean,
+             `--handoff-import DIR` runs the stage on those answers (ledger line, stored answer,
+             report).
 * `status` - read the run directory and the ledger and report what is actually on disk.
 
 The search lane (block A3; `phase3/search_plan.py`, `phase3/search_stage.py`) adds four commands and
@@ -48,7 +52,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
+import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -456,8 +463,54 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export(
+    args: argparse.Namespace,
+    *,
+    batch_id: str,
+    run_dir: Path,
+    written: str,
+    judge: Callable[[Any, Any, L.Ledger], object],
+    extra: dict[str, Any] | None = None,
+) -> int:
+    """`judge --handoff-export`: the stage's own judge function, run with a recording runner.
+
+    `written` is the store the judge writes its answers into (`answers` for the finder, `reviews`
+    for the reviewer). It is copied into a scratch directory first, so an answer already on disk is
+    skipped exactly as the import will skip it, and nothing the recording run writes survives it -
+    no ledger line, no answer, no report. The recorded calls, with their exact prompts, go to the
+    handoff directory: no second spelling of the stage's site filter or prompt builder exists.
+    """
+    from phase3 import fetch_stage as F
+    from phase3 import model_stage as MS
+
+    recorder = MS.RecordingRunner()
+    base = {"batch_id": batch_id, "handoff_export": str(args.handoff_export), "stage": args.stage}
+    base.update(extra or {})
+    with tempfile.TemporaryDirectory() as scratch:
+        source = run_dir / batch_id / written
+        copy = Path(scratch) / written
+        if source.is_dir():
+            shutil.copytree(source, copy)
+        try:
+            judge(recorder, F.EvidenceStore(copy), L.Ledger(Path(scratch) / "LEDGER.jsonl"))
+        except MS.ModelCallFailed as exc:
+            # The same stop the import makes: evidence missing with nothing recorded about it.
+            print(json.dumps({**base, "error": str(exc)}, indent=1, sort_keys=True))
+            return 2
+    counts = MS.export_calls(recorder.calls, directory=Path(args.handoff_export))
+    payload = {
+        **base,
+        **counts,
+        "calls": len(recorder.calls),
+        "labels": [call.label for call in recorder.calls],
+        "model": MS.MODEL,
+    }
+    print(json.dumps(payload, indent=1, sort_keys=True))
+    return 0
+
+
 def cmd_judge(args: argparse.Namespace) -> int:
-    """Run one stage over one prepared batch. No model call unless `--live` is passed."""
+    """Run one stage over one prepared batch: a preview, an export, or an import of Opus answers."""
     # Imported here because `model_stage` imports `fetch_stage`, which imports this module.
     from phase3 import fetch_stage as F
     from phase3 import model_stage as MS
@@ -482,7 +535,23 @@ def cmd_judge(args: argparse.Namespace) -> int:
             f"know (known: {DISCOVER_PASS!r}; a batch without `pass` is the finding-driven plan)"
         )
 
-    if not args.live:
+    if args.handoff_export:
+        return _export(
+            args,
+            batch_id=batch_id,
+            run_dir=run_dir,
+            written="answers",
+            judge=lambda runner, scratch, ledger: MS.judge_batch(
+                batch=batch,
+                runner=runner,
+                store=store,
+                answers=scratch,
+                ledger=ledger,
+                stage=stage,
+                failures=failures,
+            ),
+        )
+    if not args.handoff_import:
         prepared = MS.prepare_batch(
             batch=batch, store=store, stage=stage, allow_absent=True, failures=failures
         )
@@ -493,11 +562,9 @@ def cmd_judge(args: argparse.Namespace) -> int:
                     "calls": len(prepared),
                     "live": False,
                     "model": MS.MODEL,
-                    "program": MS.PROGRAM,
                     "run_dir": str(run_dir),
                     "sites": [
                         {
-                            "argv": MS.pi_argv(),
                             "evidence": [
                                 {
                                     "chars": e.chars,
@@ -524,7 +591,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
         )
         return 0
 
-    runner = MS.PiRunner(timeout=args.timeout)
+    runner = MS.HandoffRunner(directory=Path(args.handoff_import))
     answers = F.EvidenceStore(run_dir / batch_id / "answers")
     try:
         report = MS.judge_batch(
@@ -537,7 +604,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
             failures=failures,
         )
     except MS.ModelCallFailed as exc:
-        # Fail-closed and loud: the batch stops at the call that could not be measured. Answers
+        # Fail-closed and loud: the batch stops at the call that could not be answered. Answers
         # already stored stay, and the ledger already carries the calls that did happen.
         print(
             json.dumps(
@@ -609,7 +676,24 @@ def _judge_discover_reviewer(
     answers = F.EvidenceStore(run_dir / batch_id / "answers")
     reviews = F.EvidenceStore(run_dir / batch_id / "reviews")
 
-    if not args.live:
+    if args.handoff_export:
+        return _export(
+            args,
+            batch_id=batch_id,
+            run_dir=run_dir,
+            written="reviews",
+            judge=lambda runner, scratch, ledger: RS.judge_review_batch(
+                batch=batch,
+                runner=runner,
+                store=store,
+                answers=answers,
+                reviews=scratch,
+                ledger=ledger,
+                failures=failures,
+            ),
+            extra={"pass": DISCOVER_PASS},
+        )
+    if not args.handoff_import:
         plan = RS.plan_batch(batch=batch, answers=answers, store=store, failures=failures)
         print(
             json.dumps(
@@ -620,11 +704,9 @@ def _judge_discover_reviewer(
                     "live": False,
                     "model": MS.MODEL,
                     "pass": DISCOVER_PASS,
-                    "program": MS.PROGRAM,
                     "run_dir": str(run_dir),
                     "sites": [
                         {
-                            "argv": MS.pi_argv(),
                             "evidence": [
                                 {
                                     "chars": e.chars,
@@ -653,7 +735,7 @@ def _judge_discover_reviewer(
         )
         return 0
 
-    runner = MS.PiRunner(timeout=args.timeout)
+    runner = MS.HandoffRunner(directory=Path(args.handoff_import))
     try:
         report = RS.judge_review_batch(
             batch=batch,
@@ -665,7 +747,7 @@ def _judge_discover_reviewer(
             failures=failures,
         )
     except MS.ModelCallFailed as exc:
-        # Same rule as the finder's path: the batch stops at the call that could not be measured,
+        # Same rule as the finder's path: the batch stops at the call that could not be answered,
         # and says so in the JSON a caller reads instead of writing a report that pretends to be
         # complete.
         print(
@@ -753,7 +835,24 @@ def _judge_discover(
     # without them. Read once per invocation, not per call.
     vocabulary = SP.site_type_vocabulary()
 
-    if not args.live:
+    if args.handoff_export:
+        return _export(
+            args,
+            batch_id=batch_id,
+            run_dir=run_dir,
+            written="answers",
+            judge=lambda runner, scratch, ledger: DS.judge_discover_batch(
+                batch=batch,
+                runner=runner,
+                store=store,
+                answers=scratch,
+                ledger=ledger,
+                vocabulary=vocabulary,
+                failures=failures,
+            ),
+            extra={"pass": DISCOVER_PASS},
+        )
+    if not args.handoff_import:
         plan = DS.plan_batch(
             batch=batch, store=store, vocabulary=vocabulary, allow_absent=True, failures=failures
         )
@@ -766,11 +865,9 @@ def _judge_discover(
                     "live": False,
                     "model": MS.MODEL,
                     "pass": DISCOVER_PASS,
-                    "program": MS.PROGRAM,
                     "run_dir": str(run_dir),
                     "sites": [
                         {
-                            "argv": MS.pi_argv(),
                             "evidence": [
                                 {
                                     "chars": e.chars,
@@ -799,7 +896,7 @@ def _judge_discover(
         )
         return 0
 
-    runner = MS.PiRunner(timeout=args.timeout)
+    runner = MS.HandoffRunner(directory=Path(args.handoff_import))
     answers = F.EvidenceStore(run_dir / batch_id / "answers")
     try:
         report = DS.judge_discover_batch(
@@ -813,7 +910,7 @@ def _judge_discover(
         )
     except MS.ModelCallFailed as exc:
         # Same rule as the finding-driven path: the batch stops at the call that could not be
-        # measured. What the over-bound rule already decided is in the report's `skipped`, and a
+        # answered. What the over-bound rule already decided is in the report's `skipped`, and a
         # batch that stops there never writes one - the ledger carries the calls that did happen.
         print(
             json.dumps(
@@ -1089,10 +1186,6 @@ def cmd_verify_hits(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    # Imported here, not at module level: `model_stage` imports `fetch_stage`, which imports this
-    # module, so a top-level import of it would be circular.
-    from phase3 import model_stage as MS
-
     parser = argparse.ArgumentParser(
         prog="phase3-run",
         description="Phase-3 runner: plan, prepare and report a two-stage audit run",
@@ -1168,9 +1261,12 @@ def build_parser() -> argparse.ArgumentParser:
         "judge",
         help="run one stage over one prepared batch (dry run unless --live)",
         description=(
-            "Without --live this renders the exact argv and prompt of every call in the batch and "
-            "starts nothing. Run it with PYTHONIOENCODING=utf-8: the prompts carry site names, "
-            "notes and page text, and the Windows console code page raises on non-ASCII."
+            "Every call is answered by an Opus agent through the handoff directory "
+            "(scripts/remediation/opus_handoff.py): --handoff-export DIR writes the exact prompts, "
+            "--handoff-import DIR reads the validated answers. Without either it renders the exact "
+            "prompt of every call and exports nothing. Run it with PYTHONIOENCODING=utf-8: the "
+            "prompts carry site names, notes and page text, and the Windows console code page "
+            "raises on non-ASCII."
         ),
     )
     judge.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
@@ -1186,12 +1282,19 @@ def build_parser() -> argparse.ArgumentParser:
             "--stage reviewer)"
         ),
     )
-    judge.add_argument(
-        "--live",
-        action="store_true",
-        help="actually run one Pi process per site; without it nothing is executed",
+    handoff = judge.add_mutually_exclusive_group()
+    handoff.add_argument(
+        "--handoff-export",
+        metavar="DIR",
+        default=None,
+        help="write every call the stage would make, its exact prompt, to this handoff directory",
     )
-    judge.add_argument("--timeout", type=float, default=MS.DEFAULT_TIMEOUT)
+    handoff.add_argument(
+        "--handoff-import",
+        metavar="DIR",
+        default=None,
+        help="run the stage on the Opus answers in this handoff directory (validate it first)",
+    )
     judge.set_defaults(func=cmd_judge)
 
     plan_search = sub.add_parser(

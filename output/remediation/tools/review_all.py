@@ -25,7 +25,16 @@ and after a STOP only the ones already running finish; the ones never started ar
 Which run it reviews is the lane's (`lanes.py`): the default is the mass run and `logs/review/`, as
 it always was; `--lane gap` reviews `runs/gap` into `logs/review_gap/`.
 
-    ./.venv/Scripts/python.exe output/remediation/tools/review_all.py --lane gap
+**The reviewer answers through the Opus handoff** (owner order 2026-09-23, `opus_handoff.py`), so a
+pass is one half of a round: `--handoff-export DIR` hands every open batch's reviewer questions to
+DIR, and - once Opus agents answered and `opus_handoff.py validate --dir DIR` is clean -
+`--handoff-import DIR` runs the reviewer on those answers and writes each batch's `review.json`.
+Opus answers are unmetered, so the dollar ceiling reads a ledger whose reviewer lines add 0.
+
+    ./.venv/Scripts/python.exe output/remediation/tools/review_all.py --lane gap \
+        --handoff-export output/remediation/handoff/gap-reviewer
+    ./.venv/Scripts/python.exe output/remediation/tools/review_all.py --lane gap \
+        --handoff-import output/remediation/handoff/gap-reviewer
 """
 
 from __future__ import annotations
@@ -81,28 +90,38 @@ def reviewer_spend(ledger: pathlib.Path) -> tuple[float, int]:
     return cost, unreadable
 
 
+def judge_argv(
+    batch: str, *, run_dir: pathlib.Path, ledger: pathlib.Path, handoff: list[str]
+) -> list[str]:
+    """`run.py judge --stage reviewer` for one batch, told which half of the handoff round it is."""
+    return [
+        sys.executable,
+        str(lanes.RUNNER),
+        "judge",
+        "--run-dir",
+        str(run_dir),
+        "--batch-id",
+        batch,
+        "--ledger",
+        str(ledger),
+        "--stage",
+        "reviewer",
+        *handoff,
+    ]
+
+
 def run_one(
-    batch: str, *, run_dir: pathlib.Path, ledger: pathlib.Path, log_dir: pathlib.Path
+    batch: str,
+    *,
+    run_dir: pathlib.Path,
+    ledger: pathlib.Path,
+    log_dir: pathlib.Path,
+    handoff: list[str],
 ) -> tuple[str, int]:
     out = log_dir / f"{batch}.json"
     log = log_dir / f"{batch}.log"
     proc = subprocess.run(
-        [
-            sys.executable,
-            str(lanes.RUNNER),
-            "judge",
-            "--run-dir",
-            str(run_dir),
-            "--batch-id",
-            batch,
-            "--ledger",
-            str(ledger),
-            "--stage",
-            "reviewer",
-            "--live",
-            "--timeout",
-            "240",
-        ],
+        judge_argv(batch, run_dir=run_dir, ledger=ledger, handoff=handoff),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -189,11 +208,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ledger", default=str(lanes.LEDGER))
     parser.add_argument("--cap-usd", type=float, default=CAP_USD)
     parser.add_argument("--workers", type=int, default=WORKERS)
+    half = parser.add_mutually_exclusive_group()
+    half.add_argument("--handoff-export", metavar="DIR", default=None)
+    half.add_argument("--handoff-import", metavar="DIR", default=None)
     return parser
+
+
+def handoff_flag(args: argparse.Namespace) -> list[str]:
+    """The judge's handoff half. Neither is refused: the reviewer has no other way to answer."""
+    if args.handoff_export:
+        return ["--handoff-export", args.handoff_export]
+    if args.handoff_import:
+        return ["--handoff-import", args.handoff_import]
+    raise SystemExit(
+        "the reviewer answers only through the Opus handoff: give --handoff-export DIR, and after "
+        "the answers are validated, --handoff-import DIR"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    handoff = handoff_flag(args)
     paths = lanes.lane(args.lane)
     run_dir = pathlib.Path(args.run_dir) if args.run_dir else paths.run_dir
     log_dir = pathlib.Path(args.log_dir) if args.log_dir else paths.review_logs
@@ -205,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     def one(batch: str) -> tuple[str, int]:
-        return run_one(batch, run_dir=run_dir, ledger=ledger, log_dir=log_dir)
+        return run_one(batch, run_dir=run_dir, ledger=ledger, log_dir=log_dir, handoff=handoff)
 
     failed, not_reached = review_batches(
         todo,
@@ -219,7 +254,8 @@ def main(argv: list[str] | None = None) -> int:
         f"done | failed: {failed} | never started: {len(not_reached)} "
         f"| without review.json: {len(remaining)}"
     )
-    return 1 if failed or remaining else 0
+    # An export leaves every batch without its review.json: that is the export, not a failure.
+    return 1 if failed or (args.handoff_import and remaining) else 0
 
 
 if __name__ == "__main__":
