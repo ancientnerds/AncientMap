@@ -58,7 +58,11 @@ SITE_ID = "4a5a324f-0000-4000-8000-000000000001"
 DESCRIPTION = "The Tarxien Temples are an archaeological complex in Tarxien, Malta [1]."
 CARD = "The Tarxien Temples are an archaeological complex in Malta's south."
 PERMALINK = "https://en.wikipedia.org/w/index.php?title=Tarxien_Temples&oldid=1234567"
-AI_SYSTEM = "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)"
+#: The disclosure Phase 4 writes (`phase4/model4.AI_SYSTEM`, owner order 2026-09-23).
+AI_SYSTEM = (
+    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+    "an-sites-remediation-2026-09"
+)
 LICENCE_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
 CHANGES = {"W": "sentences selected and shortened", "S": "sentences selected and shortened"}
 CHANGES.update({"T": "translated", "R": "facts restated"})

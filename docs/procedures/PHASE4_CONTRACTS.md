@@ -21,8 +21,9 @@ tests `tests/remediation/test_phase4_model.py`. The tracks start from branch `wi
    `if __package__ in (None, ""): sys.path.insert(0, str(Path(__file__).resolve().parent.parent))`.
    `import phase4` appends the repository root to `sys.path`, so `pipeline.*` resolves from any
    working directory (tested in a subprocess with `-I`).
-3. **Seams are imported, never re-implemented** (design, pipeline): `model_stage.PiRunner`,
-   `ModelRunner`, `judge_site`, `ModelCall`, `Prompt`; `fetch_stage.HttpFetcher`, `PacedFetcher`,
+3. **Seams are imported, never re-implemented** (design, pipeline): `model_stage.HandoffRunner`
+   (the Opus handoff, which replaced `PiRunner` on 2026-09-23 - section 6), `RecordingRunner`,
+   `export_calls`, `ModelRunner`, `judge_site`, `ModelCall`, `Prompt`; `fetch_stage.HttpFetcher`, `PacedFetcher`,
    `HostPacer`, `probe_host`, `one_attempt`, `EvidenceStore`, `TRUNCATION_MARKER`;
    `search_stage.MiniMaxSearcher`, `Searcher`, `quota_stop_reason`, `search_slot`;
    `run.assign_batches`, `write_batches`, `read_jsonl`, `Batch`; `write_stage.run_sql`,
@@ -32,8 +33,9 @@ tests `tests/remediation/test_phase4_model.py`. The tracks start from branch `wi
    `pipeline.lyra.training_corpus.parse_robots`, `parse_tdmrep`, `reservation_for`,
    `html_reserves_tdm`; `pipeline.lyra.blocked_domains.BLOCKED_DOMAINS`. Never the
    `audit_enrich.py` Wave-4 chain.
-4. **No live calls in tests.** No Pi, MiniMax, Anthropic, socket or production access in any test:
-   a scripted `ModelRunner`, a scripted fetcher, a recording `SqlRunner`. Fakes refuse what the
+4. **No live calls in tests.** No model call, MiniMax, Anthropic, socket or production access in any
+   test: a scripted `ModelRunner` or answers the test writes into a handoff directory, a scripted
+   fetcher, a recording `SqlRunner`. Fakes refuse what the
    real object refuses. A test that needs gitignored data skips with its reason.
 5. **Every guard has a test that goes red without it and a mutation case** in
    `scripts/remediation/phase3/mutation_sweep.py` (phase-4 code and the tools), labelled
@@ -56,7 +58,7 @@ vocabularies; source ids (`W`, `D`, `T.<lang>`, `R<k>`), sentence ids (`W12`, `T
 their sentence; references (every sentence's `src` is a listed source, every listed source is
 cited, source ids unique, card items name existing sentences in ascending order, 1-2 of them); the
 fixed pairings lane -> `ai` and lane -> `attribution.changes`; the constants `AI_SYSTEM` (built
-from `model_stage.MODEL`), `LEGACY_AI_SYSTEM`, `LEGACY_BASIS`, version 1, the published licence
+from `model_stage.MODEL`, which is `opus_handoff.OPUS_MODEL` - section 6), `LEGACY_AI_SYSTEM`, `LEGACY_BASIS`, version 1, the published licence
 CC BY-SA 4.0 and its URL; `attribution.url` is one of the cited sources' URLs; Wikidata (`D`) is
 never cited; sentences of one source keep source order without overlap; `PlanSite` digests of
 `description` and `card` are their sha256; the selector refusals listed in section 5.
@@ -238,8 +240,10 @@ Provides (section 7 records the signatures Track B had to change and its span re
   under `reviews/` never bought twice; re-assembles and re-verifies through
   `verify4.verify_site`); `translate_stage.translate_batch(...)` and
   `restricted_stage.restricted_batch(...)` in the same shape.
-- `run4`: subcommands `plan|sources|routes|select|assemble|verify|review|writeplan`, each printing
-  `STAGE_EXIT=`; `mass4`: the loop, `--max-usd 15`, `--max-searches 700`,
+- `run4`: subcommands `plan|sources|routes|select|translate|assemble|verify|review|writeplan`,
+  each printing `STAGE_EXIT=`; `select` (S3, S3R), `translate` (S3T) and `review` (S6) each take
+  `--handoff-export DIR` or `--handoff-import DIR` (section 6); `mass4`: the loop, one handoff
+  round per live run (`--stages`, `check_round`), `--max-usd 15`, `--max-searches 700`,
   `package_digest(root=<phase4>)`; `audit4.draw_sample(site_ids: Sequence[str], *, seed: int,
   count: int, exclude: set[str]) -> list[str]` and `audit4.audit_sheet(...) -> str`.
 
@@ -345,6 +349,26 @@ D1; rule 1 of section 1 otherwise holds):
   pattern of its own (the splitter's abbreviation rule in `text_sentences` is not the edit).
   Section 7 states it.
 - `Route.WIKIDATA_ENTITY` (Track A, recorded in section 5).
+- **The AI-system disclosure names Claude Opus (Anthropic)** (wip/opus-handoff, **accepted by the
+  orchestrator 2026-09-23 on the owner's order** "no DeepSeek any more - everything with Opus").
+  `AI_SYSTEM` is `f"Claude Opus (Anthropic): {MODEL}, an-sites-remediation-2026-09"` with
+  `model_stage.MODEL = opus_handoff.OPUS_MODEL` (`anthropic/claude-opus-5-5 (Claude Code
+  agent)`), so the disclosure published with every Phase-4 text (EU AI Act Art. 50) still names
+  the model every ledger line of its calls names. `LEGACY_AI_SYSTEM` (the March texts) is
+  unchanged. No Phase-4 text had been written when it changed, so no row carries the old one.
+  With it the transport changed: every Phase-4 call - selector, translator, restricted lane,
+  reviewer - is answered by an Opus agent of the orchestrating session through the handoff
+  directory (`scripts/remediation/opus_handoff.py`). `run4 select|translate|review
+  --handoff-export DIR` runs the stage itself over a scratch copy of the batch directory with a
+  recording runner and hands its exact prompts to DIR; after the answers are validated
+  (`opus_handoff.py validate`), `--handoff-import DIR` runs the stage on them through
+  `model_stage.HandoffRunner`, which refuses a missing answer, an answer to another prompt or by
+  another model, and an empty one - a stop, never a hold. `translate` became its own command,
+  because S3T's questions are built from the selector's answers; S3 and S3R are one round.
+  Every call still goes through `batch4.buy` and `judge_site`, so the journal evidence write4
+  requires (decision D5: the selector's answer by name, the reviewer's, each with its prompt and
+  its ledger line) holds for these answers unchanged; a ledger line says `metering: unmetered`
+  and carries zero tokens and a cost of 0.
 
 ## 7. What Track B built against these contracts (WB-B1 ... WB-B4)
 

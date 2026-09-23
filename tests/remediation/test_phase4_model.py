@@ -77,7 +77,10 @@ def _provenance_dict() -> dict[str, Any]:
         "run": "pilot-20260922",
         "lane": "W",
         "ai": "selected",
-        "ai_system": "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)",
+        "ai_system": (
+            "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+            "an-sites-remediation-2026-09"
+        ),
         "licence": "CC BY-SA 4.0",
         "attribution": {
             "title": "Tarxien Temples",
@@ -435,7 +438,12 @@ def test_the_change_note_follows_the_lane() -> None:
 
 
 def test_the_disclosed_ai_system_is_the_model_that_is_called() -> None:
-    assert M.AI_SYSTEM == f"{MS.MODEL} via Pi (an-sites-remediation-2026-09)"
+    """EU AI Act Art. 50: the disclosure names Claude Opus (Anthropic), the model every call's ledger
+    line names (owner order 2026-09-23); the March texts keep their own disclosure."""
+    assert M.AI_SYSTEM == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
+    assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
+    assert "deepseek" not in M.AI_SYSTEM.lower() and " via Pi " not in M.AI_SYSTEM
+    assert M.LEGACY_AI_SYSTEM == "2026-03 enrichment chain (LLM; model per site not recorded)"
     data = _provenance_dict()
     data["ai_system"] = "some other model"
     _refused(M.Provenance.from_dict, data, "provenance.ai_system")

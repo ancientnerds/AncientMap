@@ -4671,8 +4671,8 @@ PHASE4_MODEL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 model: the disclosure names a model that is not called",
         P4_MODEL,
-        'AI_SYSTEM = f"{MODEL} via Pi (an-sites-remediation-2026-09)"\n',
-        'AI_SYSTEM = "deepseek via Pi (an-sites-remediation-2026-09)"  # mutant\n',
+        'AI_SYSTEM = f"Claude Opus (Anthropic): {MODEL}, an-sites-remediation-2026-09"\n',
+        'AI_SYSTEM = "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)"  # mutant\n',
         P4_MODEL_TEST,
         "test_the_disclosed_ai_system_is_the_model_that_is_called",
     ),

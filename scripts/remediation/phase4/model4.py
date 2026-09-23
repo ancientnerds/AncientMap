@@ -120,8 +120,11 @@ class Licence(StrEnum):
 PUBLISHED_LICENCE = Licence.CC_BY_SA_4
 PUBLISHED_LICENCE_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
 
-#: `_description_provenance.ai_system` for lanes W/S/T/R (production_write).
-AI_SYSTEM = f"{MODEL} via Pi (an-sites-remediation-2026-09)"
+#: `_description_provenance.ai_system` for lanes W/S/T/R (production_write): the AI-system disclosure
+#: published with every Phase-4 text (EU AI Act Art. 50). Since the owner order of 2026-09-23 ("no
+#: DeepSeek any more - everything with Opus") every call is answered by Claude Opus (Anthropic)
+#: through the Opus handoff, and the disclosure names it, built from the model the ledger records.
+AI_SYSTEM = f"Claude Opus (Anthropic): {MODEL}, an-sites-remediation-2026-09"
 #: Lane L's `ai_system` and `basis`, verbatim from production_write.
 LEGACY_AI_SYSTEM = "2026-03 enrichment chain (LLM; model per site not recorded)"
 LEGACY_BASIS = "description differs from pre-March snapshot d4526691 (plan section 15.3)"

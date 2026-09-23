@@ -8,8 +8,9 @@ What is reused from `phase3/mass_run.py`, by import and never copied: the loop w
 its circuit breaker and its progress file (`run_mass`, `Budget`, `Spend`, `Progress`), and the
 stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4's own:
 
-* **The stages** are `run4.py`'s `prepare, sources, routes, select, assemble, verify, review`, one
-  process each, and what is read is the process's own `STAGE_EXIT=` line, never its exit status. A
+* **The stages** are `run4.py`'s `prepare, sources, routes, select, translate, assemble, verify,
+  review`, one process each, and what is read is the process's own `STAGE_EXIT=` line, never its
+  exit status. A
   stage that printed no line died before it finished: the batch failed (the circuit breaker counts
   it). A stage that printed a non-zero line could not complete its batch, which by the contracts'
   rule stops the whole run (`stop_reason`).
@@ -31,11 +32,25 @@ stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4
   ready yet is re-queued by a later invocation. Its latest batch is then the one that counts
   (`run4.aggregate_holds` drops the holds of the batches it left).
 
-Dry by default: without `--live` nothing is started, no ledger line and no re-queue is written. At
-the end the driver writes `HOLDS4.jsonl` beside the batches (`run4.aggregate_holds`).
+**A live run is one round of the Opus handoff** (owner order 2026-09-23, `opus_handoff.py`): the
+model stages `select` (S3, S3R), `translate` (S3T) and `review` (S6) are answered by Opus agents of
+the orchestrating session between two runs of this driver. `--stages` names the stages of the round,
+a contiguous part of `STAGES4`, and holds at most one model stage (`check_round`): with
+`--handoff-export DIR` the round ends at that stage, whose questions go to DIR; with
+`--handoff-import DIR` - after the answers were validated - it starts there. A round without a model
+stage takes no handoff. A batch is done (`batch_done`) only after the round that imports the review;
+every other round succeeds when each of its stages printed `STAGE_EXIT=0`.
 
-    ./.venv/Scripts/python.exe scripts/remediation/phase4/mass4.py \\
-        --run-dir output/remediation/phase4_runner/runs/pilot --live --jobs 4
+Dry by default: without `--live` nothing is started, no ledger line and no re-queue is written. At
+the end the driver writes `HOLDS4.jsonl` beside the batches (`run4.aggregate_holds`). One run's
+rounds, each followed by the answering and `opus_handoff.py validate` where it hands off:
+
+    mass4.py --run-dir R --live --stages prepare,sources,routes,select --handoff-export H/select
+    mass4.py --run-dir R --live --stages select --handoff-import H/select
+    mass4.py --run-dir R --live --stages translate --handoff-export H/translate
+    mass4.py --run-dir R --live --stages translate,assemble,verify --handoff-import H/translate
+    mass4.py --run-dir R --live --stages review --handoff-export H/review
+    mass4.py --run-dir R --live --stages review --handoff-import H/review
 """
 
 from __future__ import annotations
@@ -67,9 +82,20 @@ PHASE4_DIR = Path(__file__).resolve().parent
 RUN4 = PHASE4_DIR / "run4.py"
 REPO = PHASE4_DIR.parents[2]
 DEFAULT_LOG_DIR = REPO / "output" / "remediation" / "logs" / "phase4_mass"
-STAGES4 = ("prepare", "sources", "routes", "select", "assemble", "verify", "review")
+STAGES4 = (
+    "prepare",
+    "sources",
+    "routes",
+    "select",
+    "translate",
+    "assemble",
+    "verify",
+    "review",
+)
 #: The stages that buy something and therefore take `--live`.
-LIVE_STAGES = frozenset({"sources", "routes", "select", "review"})
+LIVE_STAGES = frozenset({"sources", "routes"})
+#: The stages whose calls are answered through the Opus handoff: one half of a round each.
+MODEL_STAGES = frozenset({"select", "translate", "review"})
 #: The stages that open sockets, and so share the machine's per-host pace.
 PACED_STAGES = frozenset({"sources", "routes"})
 DEFAULT_MAX_USD = 15.0
@@ -245,6 +271,49 @@ def batch_done(run_dir: Path, batch_id: str) -> tuple[bool, str]:
     return True, f"{len(written)} assembled, {len(held - written)} held"
 
 
+def read_stages(text: str) -> tuple[str, ...]:
+    """`--stages`: a contiguous part of `STAGES4`, in its order."""
+    names = tuple(name.strip() for name in text.split(",") if name.strip())
+    unknown = sorted(set(names) - set(STAGES4))
+    if unknown or not names:
+        raise MR.PlanError(
+            f"--stages {text!r}: {unknown or 'no stage'} is not a stage of {STAGES4}"
+        )
+    first = STAGES4.index(names[0])
+    if STAGES4[first : first + len(names)] != names:
+        raise MR.PlanError(f"--stages {text!r} is not a contiguous part of {','.join(STAGES4)}")
+    return names
+
+
+def check_round(stages: Sequence[str], handoff: MR.Handoff | None) -> None:
+    """A live run is one handoff round: at most one model stage, and the half decides its place.
+
+    Without a handoff the round holds no model stage - a model stage has no other way to answer. An
+    export ends at its model stage, because what follows needs the answers; an import starts at it,
+    because what came before ran with the export and is on disk.
+    """
+    models = [stage for stage in stages if stage in MODEL_STAGES]
+    if handoff is None:
+        if models:
+            raise MR.PlanError(
+                f"{models[0]} answers only through the Opus handoff: give --handoff-export DIR or "
+                "--handoff-import DIR, or run a round without a model stage"
+            )
+        return
+    if len(models) != 1:
+        raise MR.PlanError(
+            f"a handoff round holds exactly one model stage, and {','.join(stages)} holds "
+            f"{len(models)}"
+        )
+    at = list(stages).index(models[0])
+    if handoff.mode == MR.EXPORT and at != len(stages) - 1:
+        raise MR.PlanError(f"an export ends at {models[0]}: what follows it needs the answers")
+    if handoff.mode == MR.IMPORT and at != 0:
+        raise MR.PlanError(
+            f"an import starts at {models[0]}: what comes before ran with the export"
+        )
+
+
 class Phase4StageRunner(MR.StageRunner):
     """`mass_run.StageRunner` with Phase 4's stages: its `call` (log file, stage timeout, bounded
     spawn retry) is used as it is; the argv, the exit line and the done state are Phase 4's."""
@@ -262,6 +331,8 @@ class Phase4StageRunner(MR.StageRunner):
         pacing_dir: Path | None = MR.DEFAULT_PACING_DIR,
         python: Path | None = None,
         requeued: Collection[str] = (),
+        stages4: tuple[str, ...] = STAGES4,
+        handoff: MR.Handoff | None = None,
     ) -> None:
         # `StageRunner` checks its stage names against Phase 3's sequences; its default passes, and
         # the stages this runner walks are `stages4`.
@@ -275,8 +346,9 @@ class Phase4StageRunner(MR.StageRunner):
             pacing_dir=pacing_dir,
             python=python,
             runner=RUN4,
+            handoff=handoff,
         )
-        self.stages4 = STAGES4
+        self.stages4 = stages4
         self.budget = budget
         #: The batches `prepare` copies from the run's `REQUEUE4.jsonl` instead of the plan.
         self.requeued = frozenset(requeued)
@@ -307,6 +379,9 @@ class Phase4StageRunner(MR.StageRunner):
             plan = self.run_dir / REQUEUE_FILE if batch_id in self.requeued else self.plan
             return [*argv, "--plan", str(plan)]
         argv += ["--ledger", str(self.ledger)]
+        if stage in MODEL_STAGES:
+            # A model stage buys nothing itself: it is one half of a handoff round (`opus_handoff`).
+            return argv if self.handoff is None else [*argv, *self.handoff.flag]
         if self.live and stage in LIVE_STAGES:
             argv.append("--live")
         if stage in PACED_STAGES and self.pacing_dir is not None:
@@ -338,6 +413,10 @@ class Phase4StageRunner(MR.StageRunner):
                     f"({R4.STAGE_EXIT}{said}): {why}"
                 )
                 return False, f"{stage} {R4.STAGE_EXIT}{said}"
+        if "review" not in self.stages4 or (
+            self.handoff is not None and self.handoff.mode == MR.EXPORT
+        ):
+            return True, f"{','.join(self.stages4)}: every stage printed {R4.STAGE_EXIT}0"
         done, why = batch_done(self.run_dir, planned.batch_id)
         return done, why if done else f"after every stage: {why}"
 
@@ -351,6 +430,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--progress", default=None, help="default: <log-dir>/progress.json")
     parser.add_argument("--jobs", type=int, default=MR.DEFAULT_JOBS)
     parser.add_argument("--live", action="store_true", help="actually run the stages")
+    parser.add_argument(
+        "--stages",
+        default=",".join(STAGES4),
+        help="the round: a contiguous part of the stages, with at most one model stage",
+    )
+    half = parser.add_mutually_exclusive_group()
+    half.add_argument("--handoff-export", metavar="DIR", default=None)
+    half.add_argument("--handoff-import", metavar="DIR", default=None)
     parser.add_argument("--max-usd", type=float, default=DEFAULT_MAX_USD)
     parser.add_argument("--max-searches", type=int, default=DEFAULT_MAX_SEARCHES)
     parser.add_argument("--failures-before-stop", type=int, default=MR.DEFAULT_FAILURES_BEFORE_STOP)
@@ -371,6 +458,14 @@ def main(argv: list[str] | None = None) -> int:
 def drive(args: argparse.Namespace) -> int:
     plan, run_dir, ledger = Path(args.plan), Path(args.run_dir), Path(args.ledger)
     log_dir = Path(args.log_dir)
+    stages = read_stages(args.stages)
+    handoff = None
+    if args.handoff_export:
+        handoff = MR.Handoff(MR.EXPORT, Path(args.handoff_export))
+    elif args.handoff_import:
+        handoff = MR.Handoff(MR.IMPORT, Path(args.handoff_import))
+    if args.live:
+        check_round(stages, handoff)
     planned = read_plan4_lines(plan)
     requeued = read_requeue(run_dir, planned)
     deferred = deferred_sites(run_dir, [*planned, *requeued])
@@ -397,7 +492,12 @@ def drive(args: argparse.Namespace) -> int:
     print(f"plan          {plan}")
     print(f"run dir       {run_dir}")
     print(f"ledger        {ledger}")
-    print(f"stages        {','.join(STAGES4)}")
+    print(f"stages        {','.join(stages)}")
+    print(
+        f"handoff       {handoff.mode} {handoff.directory}"
+        if handoff is not None
+        else "handoff       none"
+    )
     print(f"batches       {len(batches)} ({sum(b.sites for b in batches)} sites)")
     print(
         f"re-queue      {len(requeued)} batch(es) in {REQUEUE_FILE}; "
@@ -431,6 +531,8 @@ def drive(args: argparse.Namespace) -> int:
         budget=budget,
         stage_timeout=args.stage_timeout,
         requeued=[line.batch_id for line in requeued],
+        stages4=stages,
+        handoff=handoff,
     )
     code = MR.run_mass(
         batches=batches,

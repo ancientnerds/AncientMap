@@ -31,6 +31,7 @@ PHASE_PARENT = Path(__file__).resolve().parents[2] / "scripts" / "remediation"
 if str(PHASE_PARENT) not in sys.path:
     sys.path.insert(0, str(PHASE_PARENT))
 
+import opus_handoff as OH  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import mass_run as MR  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
@@ -45,6 +46,7 @@ from phase4 import route_stage as RS  # noqa: E402
 from phase4 import run4 as R4  # noqa: E402
 from phase4 import select_stage as SEL  # noqa: E402
 from phase4 import sources_stage as S1  # noqa: E402
+from phase4 import write4 as W4  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
 
@@ -276,36 +278,125 @@ def test_plan_and_writeplan_forward_their_arguments(
     assert got == {"plan": ["--out", "x.jsonl"], "write": ["--run-dir", "r"]}
 
 
-def test_select_runs_the_three_model_stages_and_a_dry_run_buys_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    batch_dir = _prepared(tmp_path)
-    ledger = tmp_path / "L.jsonl"
-    argv = ["select", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
-    code, report, _ = _run(capsys, [*argv, "--ledger", str(ledger)])
-    assert code == 0 and report["live"] is False and report["sites"][0]["prompt_chars"] > 0
-    assert not ledger.exists()
-    runner = X.ScriptedRunner({("site-1", "select"): SELECT})
-    monkeypatch.setattr(R4, "pi_runner", lambda timeout: runner)
-    code, report, _ = _run(capsys, [*argv, "--ledger", str(ledger), "--live"])
-    assert code == 0 and report["stages"] == ["select", "translate", "restricted"]
-    for name in (B.SELECTIONS_FILE, B.TRANSLATIONS_FILE, B.RESTATEMENTS_FILE):
-        assert (batch_dir / name).exists(), name
-    assert len(X.ledger_lines(ledger)) == 1
+FR_TEXT = (
+    "Le temple de pierre fut construit vers 2500 av. J.-C. par des paysans, selon les fouilles. "
+    "Il fut fouillé par des archéologues en 1911 et en 1954.\n"
+)
+PAGE = (
+    "The mound was raised in the Bronze Age by local farmers. It is surrounded by a ditch "
+    "that is now filled in."
+)
+PAGE_URL = "https://www.example.org/mound"
+ANSWERS = {
+    ("site-1", "finder", "select"): SELECT,
+    ("site-t", "finder", "select"): "DESC: T.fr2\nDESC: T.fr1\nCARD: T.fr2",
+    ("site-r", "finder", "restricted"): (
+        "S1: Farmers built the mound in the Bronze Age.\n"
+        f'Q1: {PAGE_URL} - "The mound was raised in the Bronze Age by local farmers."\n'
+        "S2: A ditch surrounds it.\n"
+        f'Q2: {PAGE_URL} - "It is surrounded by a ditch"\n'
+    ),
+    ("site-t", "finder", "translate"): (
+        "T1: The stone temple was built around 2500 BC by farmers.\n"
+        "T2: It was excavated in 1911 and in 1954.\n"
+    ),
+}
 
 
-def test_a_select_that_could_not_call_names_the_error_for_the_spawn_retry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    batch_dir = _prepared(tmp_path)
-    failed = MS.ModelCallFailed("site-1/select: 'pi.cmd' could not be started: [WinError 2]")
-    monkeypatch.setattr(
-        R4, "pi_runner", lambda timeout: X.ScriptedRunner({("site-1", "select"): failed})
+def _three_lanes(tmp_path: Path) -> Path:
+    """A batch of lane W, lane T and lane R: S3, S3R and S3T all have a question to ask."""
+    fr = X.wiki_doc("T.fr", FR_TEXT, title="Temple de pierre", host="fr.wikipedia.org")
+    return X.make_batch(
+        tmp_path,
+        [
+            X.w_site("site-1"),
+            X.SiteSetup(site=X.plan_site("site-t"), lane=M.Lane.T, sources={"T.fr": (fr, FR_TEXT)}),
+            X.SiteSetup(
+                site=X.plan_site("site-r"),
+                lane=M.Lane.R,
+                sources={"R1": (X.page_doc("R1", PAGE, url=PAGE_URL, title="The Mound"), PAGE)},
+            ),
+        ],
     )
-    argv = ["select", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--live"]
-    code, report, out = _run(capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl")])
-    assert code == 2 and report["stage"] == "select"
-    assert MR.spawn_failure(code, out)  # mass_run's own reader finds the error
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def _answer_all(handoff: Path, answers: dict[tuple[str, str, str], str] = ANSWERS) -> int:
+    """Answer every exported question as an Opus agent would: through the handoff's helper."""
+    lines = OH.manifest(handoff)
+    for line in lines:
+        site_id, field = line["label"].split("/")
+        OH.write_answer(
+            handoff,
+            batch_id=line["batch_id"],
+            stage=line["stage"],
+            label=line["label"],
+            text=answers[(site_id, line["stage"], field)],
+            answered_by="test-agent",
+            now=lambda: "2026-09-23T12:00:00+00:00",
+        )
+    return len(lines)
+
+
+def test_select_and_translate_are_two_handoff_rounds_and_only_the_import_writes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S3 and S3R are one round, S3T - built from the selector's answers - the next.
+
+    The export runs the stages over a scratch copy: the batch directory and the ledger are exactly
+    what they were, and the questions handed off are the import's (each answer names its prompt's
+    digest, and the import refuses any other).
+    """
+    batch_dir = _three_lanes(tmp_path)
+    ledger = tmp_path / "L.jsonl"
+    handoff = tmp_path / "handoff"
+    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--ledger", str(ledger)]
+    before = _tree(batch_dir)
+
+    code, report, _ = _run(capsys, ["select", *argv])
+    assert code == 0 and report["live"] is False  # no handoff named: a preview
+    code, report, _ = _run(capsys, ["select", *argv, "--handoff-export", str(handoff)])
+    assert code == 0 and report["stages"] == ["select", "restricted"]
+    assert sorted(report["labels"]) == ["site-1/select", "site-r/restricted", "site-t/select"]
+    assert _tree(batch_dir) == before and not ledger.exists()
+
+    code, report, _ = _run(capsys, ["select", *argv, "--handoff-import", str(handoff)])
+    assert code == 2 and "no answer at" in report["error"]  # validated first, or it stops
+    assert _answer_all(handoff) == 3 and OH.validate(handoff).ok
+    code, report, _ = _run(capsys, ["select", *argv, "--handoff-import", str(handoff)])
+    assert code == 0 and report["stages"] == ["select", "restricted"]
+    assert set(B.read_selections(batch_dir)) == {"site-1", "site-t"}
+    assert set(B.read_restatements(batch_dir)) == {"site-r"}
+    lines = X.ledger_lines(ledger)
+    assert {(line["label"], line["model"], line["metering"]) for line in lines} == {
+        (label, OH.OPUS_MODEL, "unmetered")
+        for label in ("site-1/select", "site-t/select", "site-r/restricted")
+    }
+
+    second = tmp_path / "handoff-translate"
+    code, report, _ = _run(capsys, ["translate", *argv, "--handoff-export", str(second)])
+    assert code == 0 and report["labels"] == ["site-t/translate"]
+    assert _answer_all(second) == 1
+    code, report, _ = _run(capsys, ["translate", *argv, "--handoff-import", str(second)])
+    assert code == 0 and B.read_translations(batch_dir)["site-t"]
+    assert len(X.ledger_lines(ledger)) == 4
+
+
+def test_a_select_import_without_its_answers_stops_and_names_the_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing answer is the orchestrator's to give: the stage stops, nothing is held for it."""
+    batch_dir = _prepared(tmp_path)
+    argv = ["select", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
+    empty = str(tmp_path / "handoff")
+    code, report, _ = _run(
+        capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl"), "--handoff-import", empty]
+    )
+    assert code == 2 and report["stage"] == "select" and "no answer at" in report["error"]
+    assert X.holds_of(batch_dir) == []
 
 
 def _selected_batch(tmp_path: Path, site_id: str = "site-1", batch: str = "p4-0001") -> Path:
@@ -342,10 +433,13 @@ def test_review_re_verifies_through_verify_site_with_the_contracts_arguments(
     _fake(monkeypatch, R4.WRITE4, new_raw_data=new_raw_data)
     answer = "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: KEEP\nCARD: KEEP"
     monkeypatch.setattr(
-        R4, "pi_runner", lambda timeout: X.ScriptedRunner({("site-1", "review"): answer})
+        MS, "HandoffRunner", lambda directory: X.ScriptedRunner({("site-1", "review"): answer})
     )
-    argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--live"]
-    code, _, _ = _run(capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl")])
+    argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
+    code, _, _ = _run(
+        capsys,
+        [*argv, "--ledger", str(tmp_path / "L.jsonl"), "--handoff-import", str(tmp_path / "h")],
+    )
     assert code == 0
     (call,) = seen
     assert set(call) == {"site", "assembly", "metas", "texts", "quotes", "new_raw_data"}
@@ -361,14 +455,13 @@ def test_a_review_that_could_not_call_names_the_error_for_the_spawn_retry(
     batch_dir = _selected_batch(tmp_path)
     _fake(monkeypatch, R4.VERIFY4, verify_site=lambda site, assembly, **kw: ())
     _fake(monkeypatch, R4.WRITE4, new_raw_data=lambda old, assembly: {})
-    failed = MS.ModelCallFailed("site-1/review: 'pi.cmd' could not be started: [WinError 2]")
-    monkeypatch.setattr(
-        R4, "pi_runner", lambda timeout: X.ScriptedRunner({("site-1", "review"): failed})
+    argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
+    empty = str(tmp_path / "handoff")  # nothing was answered: the import cannot call
+    code, report, _ = _run(
+        capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl"), "--handoff-import", empty]
     )
-    argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--live"]
-    code, report, out = _run(capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl")])
-    assert code != 0 and report["error"] == str(failed)
-    assert MR.spawn_failure(code, out)  # mass_run's own reader finds the error
+    stage = json.loads((batch_dir / B.REVIEW_REPORT).read_text(encoding="utf-8"))
+    assert code != 0 and "no answer at" in report["error"] and report["error"] == stage["error"]
 
 
 def test_holds4_is_every_batch_hold_once(
@@ -534,12 +627,12 @@ def test_the_driver_re_queues_when_live_and_prepares_from_the_re_queue(
     assert M4.drive(_args(tmp_path, plan)) == 0  # dry: nothing is written
     assert not (run_dir / M4.REQUEUE_FILE).exists()
     assert "2 site(s) ready (written by a live run)" in capsys.readouterr().out
-    assert M4.drive(_args(tmp_path, plan, "--live")) == 0
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND)) == 0
     assert [b.batch_id for b in seen["batches"]] == ["p4-0001", "p4-0002", "p4-0003"]
     runner = seen["runner"]
     assert runner.argv("prepare", "p4-0003")[-2:] == ["--plan", str(run_dir / M4.REQUEUE_FILE)]
     assert runner.argv("prepare", "p4-0001")[-2:] == ["--plan", str(plan)]
-    assert M4.drive(_args(tmp_path, plan, "--live")) == 0  # nothing new: written once
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND)) == 0  # nothing new: written once
     assert len(M4.read_requeue(run_dir, M4.read_plan4_lines(plan))) == 1
 
 
@@ -554,13 +647,13 @@ def test_a_second_re_queue_wave_is_appended_after_the_first(
     plan, run_dir = _deferring_run(tmp_path, ("2020-01-01T08:00:00Z", "2999-01-01T08:00:00Z"))
     seen: dict[str, Any] = {}
     monkeypatch.setattr(MR, "run_mass", lambda **kw: seen.update(kw) or 0)
-    assert M4.drive(_args(tmp_path, plan, "--live")) == 0
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND)) == 0
     assert "1 site(s) ready re-queued now, 1 waiting" in capsys.readouterr().out
     assert [b.batch_id for b in seen["batches"]] == ["p4-0001", "p4-0002", "p4-0003"]
     requeue = str(run_dir / M4.REQUEUE_FILE)
     R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0003", "--plan", requeue])
     B.append_holds(run_dir / "p4-0003", [_fresh_hold("site-1", "2020-01-05T08:00:00Z")])
-    assert M4.drive(_args(tmp_path, plan, "--live")) == 0
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND)) == 0
     lines = M4.read_requeue(run_dir, M4.read_plan4_lines(plan))
     assert [(line.batch_id, [s.site_id for s in line.sites]) for line in lines] == [
         ("p4-0003", ["site-1"]),
@@ -662,7 +755,12 @@ def test_run4_runs_as_a_script_from_any_directory(tmp_path: Path) -> None:
 
 
 def _runner(
-    tmp_path: Path, *, live: bool = True, ledger: Path | None = None
+    tmp_path: Path,
+    *,
+    live: bool = True,
+    ledger: Path | None = None,
+    stages4: tuple[str, ...] = M4.STAGES4,
+    handoff: MR.Handoff | None = None,
 ) -> M4.Phase4StageRunner:
     return M4.Phase4StageRunner(
         plan=tmp_path / "PLAN4.jsonl",
@@ -673,6 +771,8 @@ def _runner(
         budget=MR.Budget(max_usd=15.0, max_searches=700),
         pacing_dir=tmp_path / "pace",
         python=Path(sys.executable),
+        stages4=stages4,
+        handoff=handoff,
     )
 
 
@@ -688,6 +788,13 @@ def test_every_stage_argv_is_accepted_by_the_real_run4_parser(tmp_path: Path) ->
         assert ("--pacing-dir" in argv) == (stage in M4.PACED_STAGES)
     assert runner.argv("routes", "p4-0001")[-2:] == ["--max-searches", "700"]
     assert "--live" not in _runner(tmp_path, live=False).argv("select", "p4-0001")
+    # A model stage is told its half of the handoff round, and the real parser takes it.
+    for mode in (MR.EXPORT, MR.IMPORT):
+        half = _runner(tmp_path, handoff=MR.Handoff(mode, tmp_path / "handoff"))
+        for stage in sorted(M4.MODEL_STAGES):
+            args = parser.parse_args(half.argv(stage, "p4-0001")[2:])
+            assert getattr(args, f"handoff_{mode}") == str(tmp_path / "handoff")
+        assert "--handoff-export" not in half.argv("routes", "p4-0001")
 
 
 def test_the_search_allowance_counts_this_runs_searches_only(tmp_path: Path) -> None:
@@ -839,6 +946,89 @@ def test_a_done_batch_starts_no_stage(tmp_path: Path) -> None:
     assert ok and detail.startswith("already done") and called == []
 
 
+#: A live round without a model stage: it takes no handoff (`mass4.check_round`).
+LIVE_ROUND = ("--live", "--stages", "prepare,sources,routes")
+
+
+def test_a_live_round_holds_one_model_stage_placed_by_its_half(tmp_path: Path) -> None:
+    """Each model stage is one half of a handoff round; what follows an export needs the answers,
+    and what precedes an import ran with the export."""
+    assert M4.read_stages("select") == ("select",)
+    with pytest.raises(MR.PlanError, match="not a contiguous part"):
+        M4.read_stages("prepare,select")
+    with pytest.raises(MR.PlanError, match="is not a stage"):
+        M4.read_stages("prepare,judge")
+    export = MR.Handoff(MR.EXPORT, tmp_path)
+    importing = MR.Handoff(MR.IMPORT, tmp_path)
+    M4.check_round(("prepare", "sources", "routes"), None)
+    M4.check_round(("prepare", "sources", "routes", "select"), export)
+    M4.check_round(("translate", "assemble", "verify"), importing)
+    with pytest.raises(MR.PlanError, match="only through the Opus handoff"):
+        M4.check_round(("routes", "select"), None)
+    with pytest.raises(MR.PlanError, match="exactly one model stage"):
+        M4.check_round(("select", "translate"), export)
+    with pytest.raises(MR.PlanError, match="an export ends at translate"):
+        M4.check_round(("translate", "assemble"), export)
+    with pytest.raises(MR.PlanError, match="an import starts at review"):
+        M4.check_round(("verify", "review"), importing)
+    plan = _plan(tmp_path, [X.plan_site("site-1")])
+    with pytest.raises(MR.PlanError, match="only through the Opus handoff"):
+        M4.drive(_args(tmp_path, plan, "--live"))  # the whole sequence holds three model stages
+
+
+def test_an_export_round_succeeds_without_a_done_batch_and_the_review_import_checks_done(
+    tmp_path: Path,
+) -> None:
+    exporting = _runner(
+        tmp_path, stages4=("assemble", "verify", "review"), handoff=MR.Handoff(MR.EXPORT, tmp_path)
+    )
+    called = _stub_calls(exporting, {})
+    ok, detail = exporting.batch(MR.PlannedBatch(batch_id="p4-0001", ordinal=1, sites=1))
+    assert ok and called == ["assemble", "verify", "review"] and "STAGE_EXIT=0" in detail
+    importing = _runner(tmp_path, stages4=("review",), handoff=MR.Handoff(MR.IMPORT, tmp_path))
+    _stub_calls(importing, {})
+    ok, detail = importing.batch(MR.PlannedBatch(batch_id="p4-0001", ordinal=1, sites=1))
+    assert not ok and detail.startswith("after every stage")  # nothing was really reviewed
+
+
+def test_the_journal_evidence_of_a_site_answered_through_the_handoff_is_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Decision D5 holds for Opus answers: the selector's answer by name, the reviewer's, each with
+    the prompt it answered and its ledger line (`write4.evidence_problems`)."""
+    batch_dir = _prepared(tmp_path)
+    ledger = tmp_path / "L.jsonl"
+    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--ledger", str(ledger)]
+    select = tmp_path / "handoff-select"
+    _run(capsys, ["select", *argv, "--handoff-export", str(select)])
+    _answer_all(select)
+    assert _run(capsys, ["select", *argv, "--handoff-import", str(select)])[0] == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir) == 0
+    rows = X.ledger_lines(ledger)
+    files = W4.model_files(batch_dir, "site-1")
+    labels = W4.ledger_labels(rows, batch_id="p4-0001", site_id="site-1")
+    assert W4.evidence_problems(files, labels, lane=M.Lane.W) == [
+        "no reviews/review: this lane's site needs that call"
+    ]
+
+    _fake(monkeypatch, R4.VERIFY4, verify_site=lambda site, assembly, **kw: ())
+    _fake(monkeypatch, R4.WRITE4, new_raw_data=lambda old, assembly: {})
+    review = tmp_path / "handoff-review"
+    _run(capsys, ["review", *argv, "--handoff-export", str(review)])
+    _answer_all(
+        review,
+        {("site-1", "reviewer", "review"): "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: KEEP\nCARD: KEEP"},
+    )
+    assert _run(capsys, ["review", *argv, "--handoff-import", str(review)])[0] == 0
+    rows = X.ledger_lines(ledger)
+    files = W4.model_files(batch_dir, "site-1")
+    labels = W4.ledger_labels(rows, batch_id="p4-0001", site_id="site-1")
+    assert W4.evidence_problems(files, labels, lane=M.Lane.W) == []
+    assert {(row["model"], row["metering"]) for row in rows} == {(OH.OPUS_MODEL, "unmetered")}
+
+
 def _args(tmp_path: Path, plan: Path, *extra: str) -> argparse.Namespace:
     return M4.build_parser().parse_args(
         ["--plan", str(plan), "--run-dir", str(tmp_path / "runs" / "pilot"),
@@ -858,7 +1048,7 @@ def test_the_live_run_is_mass_runs_loop_with_phase4s_digest_and_budget(
         return 0
 
     monkeypatch.setattr(MR, "run_mass", run_mass)
-    assert M4.drive(_args(tmp_path, plan, "--live")) == 0
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND)) == 0
     assert seen["plan_digest"] == MR.package_digest(root=M4.PHASE4_DIR)
     assert seen["plan_digest"] != MR.package_digest()
     assert seen["digest_of"]() == seen["plan_digest"]
