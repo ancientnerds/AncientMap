@@ -10,8 +10,8 @@
  * - The satellite shows only once its texture is on the GPU (satelliteReady);
  *   while it is switched on, its maximum tier follows, and switching it off
  *   aborts that upload.
- * - A WebGL context restore brings the start tier back and asks again for
- *   what had been loaded on top of it.
+ * - A WebGL context loss falls back to the start tier (its bitmap stays
+ *   open); the restore asks again for what had been loaded on top of it.
  * - Low FPS warning delay.
  */
 
@@ -25,7 +25,8 @@ import {
   loadSatellite as loadSatelliteTier,
   loadStartGray,
   nextAnimationFrame,
-  restoreAfterContextLoss,
+  releaseOnContextLost,
+  reloadAfterContextRestored,
   upgradeGray as upgradeGrayTier,
   type BasemapContext,
 } from '../../services/basemapUpgrade'
@@ -64,7 +65,7 @@ interface UseTextureLoadingReturn {
   loadSatellite: (signal: AbortSignal) => Promise<void>
   /** Queue task 'basemap': the gray at the maximum tier. Rejects on failure. */
   upgradeGray: (signal: AbortSignal) => Promise<void>
-  /** Satellite toggle while not ready and not queued: load it now and report a failure itself. */
+  /** The satellite is requested but not ready: load it now (joins a running load) and report a failure itself. */
   requestSatellite: () => void
 }
 
@@ -164,17 +165,21 @@ export function useTextureLoading({
       },
     )
 
-    // three re-creates its GL state on restore (its own listener runs first);
-    // the textures that cannot come back from their image are replaced here.
+    // Textures that cannot come back from their image leave the materials on
+    // the loss: the first render after the restore may run in a listener before
+    // ours (sceneInit restarts the loop). The restore only asks for them again.
     const canvas = renderer.domElement
+    const onLost = () => releaseOnContextLost(ctx)
     const onRestored = () => {
-      const redo = restoreAfterContextLoss(ctx)
+      const redo = reloadAfterContextRestored(ctx)
       if (redo.grayUpgrade) runOwn('basemap', signal => upgradeGrayTier(ctx, signal))
       if (redo.satellite) runOwn('satellite', loadSatellite)
     }
+    canvas.addEventListener('webglcontextlost', onLost)
     canvas.addEventListener('webglcontextrestored', onRestored)
 
     return () => {
+      canvas.removeEventListener('webglcontextlost', onLost)
       canvas.removeEventListener('webglcontextrestored', onRestored)
       start.abort(new Error('basemap: globe unmounted'))
       own.abort(new Error('basemap: globe unmounted'))

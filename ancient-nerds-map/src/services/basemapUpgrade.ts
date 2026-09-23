@@ -36,7 +36,7 @@
  *   as they are.
  * - Synchronous GL queries wait for the GPU process: a `getError` right after
  *   the 16k allocation measured 458-499 ms. The one out-of-memory check runs a
- *   frame after the mip copy.
+ *   frame after the mip copy. `isContextLost` reads a flag, it is no query.
  *
  * Plain `fetch`, not offlineFetch: today's <img> loads never failed in app
  * offline mode, and the service worker's basemap rule (src/pwa/runtimeCaching)
@@ -86,12 +86,22 @@ function configureBasemapTexture(texture: THREE.Texture): void {
 
 /**
  * three's texStorage2D only logs; a GPU that cannot hold the texture leaves a
- * silent GL error. One synchronous check per upload turns it into a failure
- * (the flag stays set until read, so a later check still sees it).
+ * silent GL error. One check per upload turns it into a failure (flags stay
+ * set until read, so a later check still sees it). WebGL may hold several
+ * flags and getError returns them in no fixed order, so all are drained: only
+ * the first call waits for the GPU process. Flags cannot be attributed to a
+ * call, so anything but OUT_OF_MEMORY is logged with its code rather than
+ * failing a load it may not belong to; CONTEXT_LOST_WEBGL belongs to the
+ * context-loss path (releaseOnContextLost / reloadAfterContextRestored).
  */
 function assertNoOutOfMemory(renderer: Uploader, what: string): void {
   const gl = renderer.getContext()
-  if (gl.getError() === gl.OUT_OF_MEMORY) throw new Error(`${what}: GPU out of memory`)
+  const flags: number[] = []
+  for (let e = gl.getError(); e !== gl.NO_ERROR; e = gl.getError()) {
+    if (e !== gl.CONTEXT_LOST_WEBGL) flags.push(e)
+  }
+  if (flags.includes(gl.OUT_OF_MEMORY)) throw new Error(`${what}: GPU out of memory`)
+  if (flags.length > 0) console.error(`[basemap] ${what}: GL error flags`, flags.map(f => `0x${f.toString(16)}`).join(', '))
 }
 
 /** Uploads a bitmap in one go (texStorage2D + texSubImage2D + mips) now, not inside the next render. */
@@ -100,7 +110,12 @@ export function uploadWhole(renderer: Uploader, bitmap: ImageBitmap): THREE.Text
   configureBasemapTexture(texture)
   texture.needsUpdate = true
   renderer.initTexture(texture)
-  assertNoOutOfMemory(renderer, `basemap upload ${bitmap.width}x${bitmap.height}`)
+  try {
+    assertNoOutOfMemory(renderer, `basemap upload ${bitmap.width}x${bitmap.height}`)
+  } catch (err) {
+    texture.dispose() // the storage is allocated already
+    throw err
+  }
   return texture
 }
 
@@ -297,7 +312,9 @@ async function loadTier(ctx: BasemapContext, kind: BasemapKind, tier: BasemapTie
     }
   }
   const state = ctx[kind]
-  if (!state.accepts(tier)) {
+  // Uploaded into a lost context: the storage is gone, and releaseOnContextLost
+  // has run or is about to. The restore asks for `wanted` again.
+  if (!state.accepts(tier) || ctx.renderer.getContext().isContextLost()) {
     texture.dispose()
     return
   }
@@ -310,7 +327,9 @@ async function loadTier(ctx: BasemapContext, kind: BasemapKind, tier: BasemapTie
 /**
  * The critical-path gray: the start tier, uploaded whole before the first
  * render needs it, assigned only once it is on the GPU. Its bitmap stays open
- * so a context restore can bring it back without a network round trip.
+ * so a context restore can bring it back without a network round trip (also
+ * when it lands in a lost context: three uploads it at the first render after
+ * the restore).
  */
 export async function loadStartGray(ctx: BasemapContext, signal: AbortSignal): Promise<void> {
   const bitmap = await decodeBasemap(getBasemapAssets(ctx.tiers.start).gray, signal)
@@ -321,10 +340,14 @@ export async function loadStartGray(ctx: BasemapContext, signal: AbortSignal): P
     bitmap.close()
     throw err
   }
+  ctx.gray.keeper = texture
+  if (!ctx.gray.accepts(ctx.tiers.start)) {
+    texture.dispose() // a higher tier landed first; three re-uploads the keeper from its bitmap if a restore needs it
+    return
+  }
   swapUniform(ctx.materials, 'uGrayBasemap', texture)
   ctx.gray.tier = ctx.tiers.start
   ctx.gray.texture = texture
-  ctx.gray.keeper = texture
 }
 
 /** Background: the gray at the maximum tier (a no-op when the start tier is the maximum). */
@@ -339,29 +362,39 @@ export function loadSatellite(ctx: BasemapContext, tier: BasemapTier, signal: Ab
 }
 
 /**
- * After `webglcontextrestored` three re-uploads every texture from its
- * `image`: the kept start gray comes back from its open bitmap, strip-built
- * textures would come back empty (black) and closed bitmaps not at all. So the
- * gray returns to the start tier, the satellite is dropped, running loads are
- * aborted, and the caller re-requests what this returns.
+ * `webglcontextlost`. After the restore three re-uploads every texture from
+ * its `image` at the next render: the kept start gray comes back from its open
+ * bitmap, a strip-built texture would be reallocated empty (black, up to
+ * 683 MiB at 16k) and a closed bitmap fails with INVALID_VALUE. The first
+ * render after a restore can come from a listener that runs before ours
+ * (sceneInit restarts the loop synchronously), so everything is put right
+ * here, while the context is lost: pure JS, no GL call. Running loads are
+ * aborted and handed over; the gray falls back to the keeper, the satellite
+ * is dropped.
  */
-export function restoreAfterContextLoss(ctx: BasemapContext): { grayUpgrade: boolean; satellite: boolean } {
-  const reason = new Error('basemap: WebGL context restored')
+export function releaseOnContextLost(ctx: BasemapContext): void {
+  const reason = new Error('basemap: WebGL context lost')
   ctx.gray.abortAll(reason)
   ctx.satellite.abortAll(reason)
-
   const keeper = ctx.gray.keeper
-  if (keeper) {
-    ctx.renderer.initTexture(keeper) // re-upload from the open bitmap before any material samples it
-    swapUniform(ctx.materials, 'uGrayBasemap', keeper)
-    ctx.gray.tier = ctx.tiers.start
-    ctx.gray.texture = keeper
-  }
-  if (ctx.satellite.texture) swapUniform(ctx.materials, 'uSatellite', null)
+  swapUniform(ctx.materials, 'uGrayBasemap', keeper)
+  ctx.gray.tier = keeper ? ctx.tiers.start : null
+  ctx.gray.texture = keeper
+  swapUniform(ctx.materials, 'uSatellite', null)
   ctx.satellite.tier = null
   ctx.satellite.texture = null
   ctx.onSatelliteReady(false)
+}
 
+/**
+ * `webglcontextrestored`: aborts what was started while the context was lost
+ * (its uploads went nowhere; loadTier does not commit them) and names what the
+ * caller must request again.
+ */
+export function reloadAfterContextRestored(ctx: BasemapContext): { grayUpgrade: boolean; satellite: boolean } {
+  const reason = new Error('basemap: WebGL context restored')
+  ctx.gray.abortAll(reason)
+  ctx.satellite.abortAll(reason)
   const grayWanted = ctx.gray.wanted
   return {
     grayUpgrade: grayWanted !== null && tierRank(grayWanted) > tierRank(ctx.tiers.start),

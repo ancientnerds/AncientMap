@@ -44,12 +44,13 @@ function material(): THREE.ShaderMaterial {
 function makeRefs(maxTextureSize = 16384) {
   const mesh = () => new THREE.Mesh(new THREE.BufferGeometry(), material())
   const canvas = document.createElement('canvas')
+  const lost = { value: false }
   const renderer = {
     capabilities: { maxTextureSize },
     domElement: canvas,
     initTexture: vi.fn(),
     copyTextureToTexture: vi.fn(),
-    getContext: () => ({ getError: () => 0, OUT_OF_MEMORY: 0x0505 }),
+    getContext: () => ({ getError: () => 0, NO_ERROR: 0, OUT_OF_MEMORY: 0x0505, CONTEXT_LOST_WEBGL: 0x9242, isContextLost: () => lost.value }),
     render: vi.fn(),
   }
   const basemapMesh = mesh()
@@ -63,7 +64,10 @@ function makeRefs(maxTextureSize = 16384) {
   } as unknown as GlobeRefs
   const materials = () => [refs.basemapMesh.current!, ...refs.basemapSectionMeshes.current, refs.basemapBackMesh.current!]
     .map(m => m.material as THREE.ShaderMaterial)
-  return { refs, renderer, canvas, materials }
+  /** What the browser does: the context is gone at once, the events follow as tasks. */
+  const loseContext = () => { lost.value = true; canvas.dispatchEvent(new Event('webglcontextlost')) }
+  const restoreContext = () => { lost.value = false; canvas.dispatchEvent(new Event('webglcontextrestored')) }
+  return { refs, renderer, canvas, materials, loseContext, restoreContext }
 }
 
 interface Props {
@@ -294,8 +298,8 @@ describe('useTextureLoading', () => {
     expect(bitmaps.get(GRAY_LOW)!.close).toHaveBeenCalledTimes(1)
   })
 
-  it('hands a satellite load cut short by a context restore over to the restore, without a failure', async () => {
-    const { refs, canvas } = makeRefs()
+  it('hands a satellite load cut short by a context loss over to the restore, without a failure', async () => {
+    const { refs, loseContext, restoreContext } = makeRefs()
     const p = props(refs)
     await render(p)
     await settle()
@@ -304,7 +308,8 @@ describe('useTextureLoading', () => {
     await act(async () => { latest.requestSatellite() })
     await render({ ...p, satelliteRequested: true })
     await settle()
-    await act(async () => { canvas.dispatchEvent(new Event('webglcontextrestored')) })
+    await act(async () => { loseContext() })
+    await act(async () => { restoreContext() })
     holds.delete(SAT_LOW)
     release()
     await settle()
@@ -314,7 +319,7 @@ describe('useTextureLoading', () => {
   })
 
   it('brings the start tier back after a context restore and asks for the upgrades again', async () => {
-    const { refs, canvas, materials } = makeRefs()
+    const { refs, materials, loseContext, restoreContext } = makeRefs()
     await render(props(refs))
     await settle()
     const start = materials()[0].uniforms.uGrayBasemap.value
@@ -326,10 +331,11 @@ describe('useTextureLoading', () => {
     let releaseSat!: () => void
     holds.set(GRAY_HIGH, new Promise<void>(r => { releaseGray = r }))
     holds.set(SAT_LOW, new Promise<void>(r => { releaseSat = r }))
-    await act(async () => { canvas.dispatchEvent(new Event('webglcontextrestored')) })
+    await act(async () => { loseContext() })
     expect(materials()[0].uniforms.uGrayBasemap.value).toBe(start)
     expect(materials()[0].uniforms.uSatellite.value).toBe(null)
     expect(latest.satelliteReady).toBe(false)
+    await act(async () => { restoreContext() })
     releaseGray()
     releaseSat()
     await settle()
@@ -337,6 +343,43 @@ describe('useTextureLoading', () => {
     expect(fetched.filter(u => u === SAT_LOW)).toHaveLength(2)
     expect(latest.satelliteReady).toBe(true)
     expect((materials()[0].uniforms.uGrayBasemap.value.image as { width: number }).width).toBe(16383)
+    expect(trackBackgroundFailure).not.toHaveBeenCalled()
+  })
+
+  it('never lets the first render after a restore sample a texture that cannot come back', async () => {
+    const { refs, canvas, materials, loseContext, restoreContext } = makeRefs()
+    // sceneInit's listener sits on the canvas before the hook's and renders synchronously
+    const seen: Array<{ gray: unknown; sat: unknown }> = []
+    canvas.addEventListener('webglcontextrestored', () => {
+      seen.push({ gray: materials()[0].uniforms.uGrayBasemap.value, sat: materials()[0].uniforms.uSatellite.value })
+    })
+    await render(props(refs))
+    await settle()
+    const start = materials()[0].uniforms.uGrayBasemap.value
+    await act(async () => { await latest.upgradeGray(new AbortController().signal) })
+    await act(async () => { await latest.loadSatellite(new AbortController().signal) })
+    await act(async () => { loseContext() })
+    await act(async () => { restoreContext() })
+    expect(seen).toEqual([{ gray: start, sat: null }])
+    await settle()
+  })
+
+  it('does not commit a satellite that finished uploading while the context was lost; the restore loads it again', async () => {
+    const { refs, materials, loseContext, restoreContext } = makeRefs()
+    const p = props(refs)
+    await render(p)
+    await settle()
+    await act(async () => { loseContext() })
+    await act(async () => { latest.requestSatellite() })
+    await render({ ...p, satelliteRequested: true })
+    await settle()
+    expect(materials()[0].uniforms.uSatellite.value).toBe(null)
+    expect(latest.satelliteReady).toBe(false)
+    await act(async () => { restoreContext() })
+    await settle()
+    expect(latest.satelliteReady).toBe(true)
+    expect(materials()[0].uniforms.uSatellite.value).toBeInstanceOf(THREE.Texture)
+    expect(p.onSatelliteFailed).not.toHaveBeenCalled()
     expect(trackBackgroundFailure).not.toHaveBeenCalled()
   })
 })

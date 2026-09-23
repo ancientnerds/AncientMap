@@ -14,7 +14,8 @@ import {
   loadSatellite,
   loadStartGray,
   nextAnimationFrame,
-  restoreAfterContextLoss,
+  releaseOnContextLost,
+  reloadAfterContextRestored,
   STRIP_ROWS,
   stripPlan,
   swapUniform,
@@ -26,6 +27,9 @@ import {
 } from '../basemapUpgrade'
 
 const OOM = 0x0505
+const INVALID_VALUE = 0x0501
+const INVALID_OPERATION = 0x0502
+const CONTEXT_LOST_WEBGL = 0x9242
 
 interface FakeBitmap { width: number; height: number; close: ReturnType<typeof vi.fn> }
 
@@ -44,12 +48,13 @@ interface CopyCall {
   dstVersion: number
 }
 
-function fakeRenderer(opts: { errorAfter?: (n: number) => number } = {}) {
+/** `errors`: the pending GL error flags, drained by getError; `lost`: what isContextLost answers. */
+function fakeRenderer(opts: { errors?: number[]; lost?: { value: boolean } } = {}) {
   const log: string[] = []
   const copies: CopyCall[] = []
   const initSnapshots: Array<Record<string, unknown>> = []
   const initialised: THREE.Texture[] = []
-  let errorCalls = 0
+  const errors = [...(opts.errors ?? [])]
   const renderer = {
     initTexture: vi.fn((t: THREE.Texture) => {
       log.push('init')
@@ -82,12 +87,14 @@ function fakeRenderer(opts: { errorAfter?: (n: number) => number } = {}) {
       })
     }),
     getContext: vi.fn(() => ({
+      NO_ERROR: 0,
       OUT_OF_MEMORY: OOM,
+      CONTEXT_LOST_WEBGL,
       getError: () => {
-        errorCalls += 1
         log.push('getError')
-        return opts.errorAfter ? opts.errorAfter(errorCalls) : 0
+        return errors.shift() ?? 0
       },
+      isContextLost: () => opts.lost?.value ?? false,
     })),
   }
   return { renderer: renderer as unknown as Uploader & typeof renderer, log, copies, initSnapshots, initialised }
@@ -178,8 +185,38 @@ describe('uploadWhole', () => {
   })
 
   it('fails explicitly when the GPU runs out of memory', () => {
-    const { renderer } = fakeRenderer({ errorAfter: () => OOM })
+    const { renderer } = fakeRenderer({ errors: [OOM] })
     expect(() => uploadWhole(renderer, fakeBitmap() as unknown as ImageBitmap)).toThrow(/out of memory/)
+  })
+
+  it('frees the allocated texture when the GPU runs out of memory', () => {
+    const { renderer, initialised } = fakeRenderer({ errors: [OOM] })
+    const disposeSpy = vi.spyOn(THREE.Texture.prototype, 'dispose')
+    expect(() => uploadWhole(renderer, fakeBitmap() as unknown as ImageBitmap)).toThrow(/out of memory/)
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(disposeSpy.mock.contexts[0]).toBe(initialised[0])
+  })
+
+  it('drains every pending GL error flag: out-of-memory behind another flag still fails', () => {
+    const { renderer, log } = fakeRenderer({ errors: [INVALID_OPERATION, OOM] })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(() => uploadWhole(renderer, fakeBitmap() as unknown as ImageBitmap)).toThrow(/out of memory/)
+    expect(log.filter(e => e === 'getError')).toHaveLength(3)
+  })
+
+  it('logs other GL error flags with their code instead of clearing them silently', () => {
+    const { renderer } = fakeRenderer({ errors: [INVALID_VALUE, INVALID_OPERATION] })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    uploadWhole(renderer, fakeBitmap(4096, 2048) as unknown as ImageBitmap)
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    expect(String(consoleError.mock.calls[0].join(' '))).toMatch(/4096x2048.*0x501.*0x502/)
+  })
+
+  it('leaves a lost context to the context-loss path (no failure, no log)', () => {
+    const { renderer } = fakeRenderer({ errors: [CONTEXT_LOST_WEBGL] })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(() => uploadWhole(renderer, fakeBitmap() as unknown as ImageBitmap)).not.toThrow()
+    expect(consoleError).not.toHaveBeenCalled()
   })
 })
 
@@ -271,7 +308,7 @@ describe('uploadInStrips', () => {
   })
 
   it('fails the upload on GL out-of-memory: destination disposed, bitmap closed, nothing returned', async () => {
-    const r = fakeRenderer({ errorAfter: () => OOM })
+    const r = fakeRenderer({ errors: [OOM] })
     const bitmap = fakeBitmap(100, 600)
     const disposeSpy = vi.spyOn(THREE.Texture.prototype, 'dispose')
     await expect(uploadInStrips(r.renderer, bitmap as unknown as ImageBitmap, { rows: 256, nextFrame: frames(r.log), signal: new AbortController().signal }))
@@ -382,8 +419,8 @@ const SIZES: Record<string, [number, number]> = {
   '/data/basemaps/satellite_high.webp': [16383, 8192],
 }
 
-function makeCtx(tiers: BasemapContext['tiers'] = { start: 'med', max: 'high' }) {
-  const r = fakeRenderer()
+function makeCtx(tiers: BasemapContext['tiers'] = { start: 'med', max: 'high' }, lost = { value: false }) {
+  const r = fakeRenderer({ lost })
   const materials = Array.from({ length: 6 }, () => new THREE.ShaderMaterial({
     uniforms: { uGrayBasemap: { value: null }, uSatellite: { value: null } },
   }))
@@ -423,6 +460,28 @@ describe('loadStartGray', () => {
     expect(ctx.gray.keeper).toBe(tex)
     expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).not.toHaveBeenCalled()
     expect(log).not.toContain('copy')
+  })
+
+  it('never replaces a higher gray that landed first, but keeps its bitmap for a context restore', async () => {
+    const dec = stubDecoding(SIZES)
+    const release = dec.hold('/data/basemaps/gray_dark_med.webp')
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    const starting = loadStartGray(ctx, new AbortController().signal)
+    await upgradeGray(ctx, new AbortController().signal)
+    const high = ctx.gray.texture!
+    const disposeSpy = vi.spyOn(THREE.Texture.prototype, 'dispose')
+    release()
+    await starting
+    expect(ctx.gray.tier).toBe('high')
+    expect(ctx.gray.texture).toBe(high)
+    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === high)).toBe(true)
+    const keeper = ctx.gray.keeper!
+    expect(keeper).not.toBe(high)
+    expect(keeper.image).toBe(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp'))
+    // its GPU copy is freed at once; the open bitmap brings it back after a restore
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(disposeSpy.mock.contexts[0]).toBe(keeper)
+    expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).not.toHaveBeenCalled()
   })
 })
 
@@ -509,6 +568,21 @@ describe('loadSatellite', () => {
     expect(dec.fetched.filter(u => u.includes('satellite_med'))).toHaveLength(1)
   })
 
+  it('does not commit a texture uploaded into a lost context (the restore asks for it again)', async () => {
+    stubDecoding(SIZES)
+    const lost = { value: false }
+    const { ctx, onSatelliteReady } = makeCtx({ start: 'med', max: 'high' }, lost)
+    lost.value = true // lost before the webglcontextlost event reached any listener
+    const disposeSpy = vi.spyOn(THREE.Texture.prototype, 'dispose')
+    await expect(loadSatellite(ctx, 'med', new AbortController().signal)).resolves.toBeUndefined()
+    expect(ctx.satellite.texture).toBe(null)
+    expect(ctx.satellite.tier).toBe(null)
+    expect(uniformOf(ctx, 'uSatellite').every(v => v === null)).toBe(true)
+    expect(onSatelliteReady).not.toHaveBeenCalled()
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(ctx.satellite.wanted).toBe('med')
+  })
+
   it('aborting one tier leaves the uniforms and the held texture alone', async () => {
     stubDecoding(SIZES)
     const { ctx } = makeCtx({ start: 'med', max: 'high' })
@@ -550,10 +624,10 @@ describe('disposeBasemaps', () => {
   })
 })
 
-describe('restoreAfterContextLoss', () => {
-  it('points the gray back at the kept start texture, drops strip-built textures, and names the upgrades to redo', async () => {
+describe('releaseOnContextLost', () => {
+  it('points the gray back at the kept start texture and drops strip-built textures, without any GL call', async () => {
     stubDecoding(SIZES)
-    const { ctx, initialised } = makeCtx({ start: 'med', max: 'high' })
+    const { ctx, log } = makeCtx({ start: 'med', max: 'high' })
     await loadStartGray(ctx, new AbortController().signal)
     const start = ctx.gray.keeper!
     await upgradeGray(ctx, new AbortController().signal)
@@ -562,37 +636,80 @@ describe('restoreAfterContextLoss', () => {
     const sat = ctx.satellite.texture!
     const disposeHigh = vi.spyOn(high, 'dispose')
     const disposeSat = vi.spyOn(sat, 'dispose')
-    const before = initialised.length
+    const before = log.length
 
-    const redo = restoreAfterContextLoss(ctx)
+    releaseOnContextLost(ctx)
 
-    expect(redo).toEqual({ grayUpgrade: true, satellite: true })
-    expect(initialised.slice(before)).toEqual([start])
+    // the renderer is not touched: the context is gone, and three re-uploads the keeper at its first render
+    expect(log.slice(before)).toEqual([])
     expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === start)).toBe(true)
     expect(uniformOf(ctx, 'uSatellite').every(v => v === null)).toBe(true)
     expect(disposeHigh).toHaveBeenCalledTimes(1)
     expect(disposeSat).toHaveBeenCalledTimes(1)
     expect(ctx.gray.tier).toBe('med')
+    expect(ctx.gray.texture).toBe(start)
     expect(ctx.satellite.tier).toBe(null)
+    expect(ctx.satellite.texture).toBe(null)
     expect(ctx.onSatelliteReady).toHaveBeenLastCalledWith(false)
+  })
+
+  it('clears the gray when no start texture is kept', async () => {
+    stubDecoding(SIZES)
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    await upgradeGray(ctx, new AbortController().signal)
+    releaseOnContextLost(ctx)
+    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === null)).toBe(true)
+    expect(ctx.gray.tier).toBe(null)
+    expect(ctx.gray.texture).toBe(null)
+  })
+
+  it('aborts running uploads and hands them over (no failure)', async () => {
+    const dec = stubDecoding(SIZES)
+    const release = dec.hold('/data/basemaps/satellite_med.webp')
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    await loadStartGray(ctx, new AbortController().signal)
+    const running = loadSatellite(ctx, 'med', new AbortController().signal)
+    releaseOnContextLost(ctx)
+    release()
+    await expect(running).resolves.toBeUndefined()
+    expect(ctx.satellite.texture).toBe(null)
+    expect(uniformOf(ctx, 'uSatellite').every(v => v === null)).toBe(true)
+    expect(dec.bitmaps.get('/data/basemaps/satellite_med.webp')!.close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('reloadAfterContextRestored', () => {
+  it('names the upgrades to redo', async () => {
+    stubDecoding(SIZES)
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    await loadStartGray(ctx, new AbortController().signal)
+    await upgradeGray(ctx, new AbortController().signal)
+    await loadSatellite(ctx, 'med', new AbortController().signal)
+    releaseOnContextLost(ctx)
+    expect(reloadAfterContextRestored(ctx)).toEqual({ grayUpgrade: true, satellite: true })
   })
 
   it('asks for nothing that was never asked for', async () => {
     stubDecoding(SIZES)
     const { ctx } = makeCtx({ start: 'med', max: 'high' })
     await loadStartGray(ctx, new AbortController().signal)
-    expect(restoreAfterContextLoss(ctx)).toEqual({ grayUpgrade: false, satellite: false })
+    releaseOnContextLost(ctx)
+    expect(reloadAfterContextRestored(ctx)).toEqual({ grayUpgrade: false, satellite: false })
   })
 
-  it('aborts uploads that were running when the context came back and hands them over (no failure)', async () => {
+  it('aborts loads started while the context was lost (their uploads went nowhere) and hands them over', async () => {
     const dec = stubDecoding(SIZES)
     const release = dec.hold('/data/basemaps/satellite_med.webp')
-    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    const lost = { value: false }
+    const { ctx } = makeCtx({ start: 'med', max: 'high' }, lost)
     await loadStartGray(ctx, new AbortController().signal)
-    const running = loadSatellite(ctx, 'med', new AbortController().signal)
-    const redo = restoreAfterContextLoss(ctx)
+    lost.value = true
+    releaseOnContextLost(ctx)
+    const duringLoss = loadSatellite(ctx, 'med', new AbortController().signal)
+    lost.value = false
+    const redo = reloadAfterContextRestored(ctx)
     release()
-    await expect(running).resolves.toBeUndefined()
+    await expect(duringLoss).resolves.toBeUndefined()
     expect(redo.satellite).toBe(true)
     expect(ctx.satellite.texture).toBe(null)
     expect(dec.bitmaps.get('/data/basemaps/satellite_med.webp')!.close).toHaveBeenCalledTimes(1)

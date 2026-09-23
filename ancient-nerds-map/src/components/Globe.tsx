@@ -391,6 +391,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     [requestedTileLayers, satelliteActive],
   )
   const satellitePending = requestedTileLayers.satellite && !satelliteReady
+  // A requested satellite that is not on the GPU loads now, whoever asked for it
+  // (the panel toggle, demoApi.setSatellite); a running load of it is joined.
+  useEffect(() => {
+    if (satellitePending && basemapPlan) requestSatellite()
+  }, [satellitePending, basemapPlan, requestSatellite])
 
   // Interim until the background queue (U10) owns these tasks: once the intro
   // starts, the satellite preload (desktops) and the gray upgrade run in queue order.
@@ -2564,13 +2569,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onToggleMinimize={() => setMapLayersMinimized(prev => !prev)}
         tileLayers={requestedTileLayers}
         satellitePending={satellitePending}
-        onTileLayerToggle={(layer) => {
-          if (layer === 'satellite' && !requestedTileLayers.satellite && !satelliteReady) requestSatellite()
-          setTileLayers(prev => ({
-            satellite: layer === 'satellite' ? !prev.satellite : false,
-            streets: layer === 'streets' ? !prev.streets : false
-          }))
-        }}
+        onTileLayerToggle={(layer) => setTileLayers(prev => ({
+          satellite: layer === 'satellite' ? !prev.satellite : false,
+          streets: layer === 'streets' ? !prev.streets : false
+        }))}
         vectorLayers={vectorLayers}
         onVectorLayerToggle={(key) => setVectorLayers(prev => ({ ...prev, [key]: !prev[key] }))}
         isLoadingLayers={isLoadingLayers}
