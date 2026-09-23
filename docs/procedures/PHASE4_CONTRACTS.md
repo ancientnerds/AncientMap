@@ -356,12 +356,17 @@ is the sentence text (`text[start:end]`), offsets are relative to it until the l
    - (ii) its inner is at most 3 tokens, its tail at most 6 tokens, and the tail carries `and` or
      `or` as a whole word (`\b(?:and|or)\b`, case-insensitive); or
    - (iii) its inner is at most 3 tokens and the next pair (`k + 1`) is a list link; or
-   - (iv) its inner is at most 3 tokens, it is the last pair, and its tail is at most 3 tokens.
+   - (iv) its inner is at most 3 tokens, it is the last pair, and its tail is at most 3 tokens; or
+   - (v) its inner, left-stripped, opens with `and` or `or` as a whole word (`(?:and|or)\b` at
+     the start, case-insensitive): a conjunct, not an insertion.
    A pair whose stripped inner is not empty and that is no list link offers `[c_k, c_{k+1} + 1)`
    (`", built by Khufu,"`). Dropping a list link would join two list items into a false one
-   (Bela Palanka W11: "Constantine I Tiberius Claudius Nero"). The heuristic also refuses some
-   genuine insertions; that stays so (decision D7: safety over coverage; the pilot's T8 measures
-   coverage).
+   (Bela Palanka W11: "Constantine I Tiberius Claudius Nero"); dropping a conjunct hangs what
+   follows it on the item before it (Sparta W58: "inscriptions, sculptures founded by Stamatakis
+   in 1872" from ", and other objects collected in the local museum,"). The heuristic also
+   refuses some genuine insertions; that stays so (decision D7: safety over coverage; the pilot's
+   T8 measures coverage). Rule (v) alone took 2,413 of the 25,408 `a` spans of the 3,661 local
+   enwiki pools (2026-09-23).
 6. **`a`, dash pairs.** With the spaced dashes `d_1 < ... < d_m`: none when `m` is odd; otherwise
    the pairs are `(d_1, d_2), (d_3, d_4), ...` in order (never `(d_2, d_3)`). A pair `(d, e)`
    offers `[d - 1, e + 1)` (`" – near the old road –"`) when `s[d + 1 : e - 1]` stripped is not

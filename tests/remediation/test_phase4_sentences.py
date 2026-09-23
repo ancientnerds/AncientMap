@@ -197,6 +197,11 @@ def test_dashes_pair_in_order_and_an_odd_count_pairs_none() -> None:
         # an asyndetic tail (Bela Palanka W11) and a place chain
         "The coins were minted under the rule of Constantine I, Theodosius I, Tiberius Nero.",
         "The hill fort lies near the village of Clovelly, Devon, England.",
+        # a conjunct: the pair's own text opens with "and"/"or" (Sparta W58: dropping ", and other
+        # objects collected in the local museum," gave "sculptures founded by Stamatakis")
+        "The finds consisted of inscriptions, sculptures, and other objects kept in the local "
+        "museum, founded in 1872.",
+        "Visitors reach the site by boat, or by the coastal road, which was built in 1950.",
     ],
 )
 def test_a_comma_pair_inside_a_list_is_no_insertion(text: str) -> None:

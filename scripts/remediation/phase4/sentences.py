@@ -28,11 +28,11 @@ marker in front of; a `T.<lang>` sentence offers none (the protected tokens are 
   the start of the sentence the space after it instead (`"(...) "`); with no space on either side,
   the parenthesis alone.
 * `a` - a paired insertion: from a delimiter comma through the next delimiter comma, `", built by
-  Khufu,"`, unless the pair is a link of a list (`_list_links`); or from the space before a spaced
-  dash (` - ` as en or em dash) through the next one, the dashes paired in order (first with second,
-  third with fourth, none on an odd count), never a pair with a range dash (a digit beside it) or
-  a top-level `;` between them. The pair is the insertion's delimiter, so both marks go: `A, X, B`
-  becomes `A B`, never the broken `A, B` that removing one comma would leave.
+  Khufu,"`, unless the pair is a link of a list or a conjunct (`_list_links`); or from the space
+  before a spaced dash (` - ` as en or em dash) through the next one, the dashes paired in order
+  (first with second, third with fourth, none on an odd count), never a pair with a range dash (a
+  digit beside it) or a top-level `;` between them. The pair is the insertion's delimiter, so both
+  marks go: `A, X, B` becomes `A B`, never the broken `A, B` that removing one comma would leave.
 * `l` - a leading phrase of at most 6 tokens before the first delimiter comma, with that comma and
   the space after it: `"In 1900, "`. Edit 4 restores the capital of what follows.
 * `t` - the last comma segment: from the last delimiter comma up to, not including, the final
@@ -250,7 +250,9 @@ def _list_links(s: str, commas: Sequence[int]) -> list[bool]:
     `tail` is at most 6 tokens and carries `and`/`or` (`A, B, C and D`); or when `inner` is at most
     3 tokens and the next pair is a list link (the run before it); or when `inner` is at most 3
     tokens and `tail`, the sentence's last segment, is too (`Constantine I, Theodosius I, Tiberius
-    Nero`, `Clovelly, Devon, England`). Dropping a link joins two list items into a false one.
+    Nero`, `Clovelly, Devon, England`); or when `inner` opens with `and`/`or` (a conjunct: `A, B,
+    and C, D`). Dropping a link joins two list items into a false one; dropping a conjunct hangs
+    what follows it on the item before it (Sparta W58: `sculptures founded by Stamatakis`).
     """
     if len(commas) < 2:
         return []
@@ -263,6 +265,7 @@ def _list_links(s: str, commas: Sequence[int]) -> list[bool]:
         tail = tails[k + 1]
         links[k] = (
             _OPENS_WITH_COORDINATOR.match(tail.lstrip()) is not None
+            or _OPENS_WITH_COORDINATOR.match(tails[k].lstrip()) is not None
             or (
                 short
                 and len(tail.split()) <= LIST_TAIL_TOKENS

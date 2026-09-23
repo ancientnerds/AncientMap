@@ -85,6 +85,13 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
         {"t1": ", Tiberius Nero"},
     ),
     ("W", "The hill fort lies near the village of Clovelly, Devon, England.", {"t1": ", England"}),
+    # a conjunct: the pair's inner opens with "and"/"or" (rule 5 (v); Sparta W58)
+    (
+        "W",
+        "The remaining finds of the site were inscriptions, sculptures, and other objects kept in "
+        "the museum, founded in 1872.",
+        {"t1": ", founded in 1872"},
+    ),
     (
         "W",
         "The temple, now ruined, held statues of the gods of the river and of the sky.",

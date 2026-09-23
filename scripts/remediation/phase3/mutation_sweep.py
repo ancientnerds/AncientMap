@@ -8758,6 +8758,14 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4B_SENT_TEST,
         "test_a_comma_pair_inside_a_list_is_no_insertion",
     ),
+    (
+        "p4 sentences: a conjunct pair is an insertion",
+        P4B_SENT,
+        "            or _OPENS_WITH_COORDINATOR.match(tails[k].lstrip()) is not None\n",
+        "",
+        P4B_SENT_TEST,
+        "test_a_comma_pair_inside_a_list_is_no_insertion",
+    ),
     # -- C3: lane T selects whole sentences; foreign apparatus is excluded
     (
         "p4 sentences: a translated sentence offers spans",
