@@ -17,18 +17,44 @@ type RuntimeCaching = NonNullable<NonNullable<Partial<VitePWAOptions>['workbox']
 
 const ONE_YEAR = 60 * 60 * 24 * 365
 
+/**
+ * The three caches of /api/sites/ answers. workbox-expiration bounds each
+ * cacheName as one LRU over every URL it wrote, so the kinds are split: the
+ * many small per-site and search answers, or a user's opt-in sources, would
+ * otherwise evict the globe's own payload, the one entry NetworkFirst's
+ * timeout and offline fallback exist for. An admin save clears all three
+ * (useAdminMode).
+ */
+export const API_SITES_CACHE_NAMES = ['api-sites-globe', 'api-sites-sources', 'api-sites'] as const
+
+const API_SITES_NETWORK_FIRST = {
+  networkTimeoutSeconds: 10,
+  cacheableResponse: { statuses: [0, 200] },
+}
+
 export const RUNTIME_CACHING: RuntimeCaching = [
-  // API sites endpoint - Network First with offline fallback. The globe asks
-  // with a per-deploy `_v`, so every deploy adds entries: bounded here.
+  // The globe's payloads: DataStore always loads source=ancient_nerds, with a
+  // per-deploy `_v` (the globe keys and the full payload), and the offline
+  // download asks for it without `_v`. Six = these three for the current and
+  // the previous build. `(?![^&])`: the value ends at `&` or the end.
+  {
+    urlPattern: /\/api\/sites\/all\?(?:[^#]*&)?source=ancient_nerds(?![^&])/,
+    handler: 'NetworkFirst',
+    options: { cacheName: 'api-sites-globe', ...API_SITES_NETWORK_FIRST, expiration: { maxEntries: 6 } },
+  },
+  // Opt-in sources (SourceLoader, per-deploy `_v`; DownloadManager): room for
+  // every source of the filter panel in one build.
+  {
+    urlPattern: /\/api\/sites\/all\?/,
+    handler: 'NetworkFirst',
+    options: { cacheName: 'api-sites-sources', ...API_SITES_NETWORK_FIRST, expiration: { maxEntries: 32 } },
+  },
+  // Everything else under /api/sites/: one small entry per opened site, its
+  // alternates, and per distinct search query.
   {
     urlPattern: /\/api\/sites\//,
     handler: 'NetworkFirst',
-    options: {
-      cacheName: 'api-sites',
-      networkTimeoutSeconds: 10,
-      cacheableResponse: { statuses: [0, 200] },
-      expiration: { maxEntries: 8 },
-    },
+    options: { cacheName: 'api-sites', ...API_SITES_NETWORK_FIRST, expiration: { maxEntries: 200 } },
   },
   // API sources endpoint - Stale While Revalidate
   {

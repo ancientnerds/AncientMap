@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { RUNTIME_CACHING } from '../runtimeCaching'
+import { API_SITES_CACHE_NAMES, RUNTIME_CACHING } from '../runtimeCaching'
 
 const ORIGIN = 'https://ancientnerds.com'
 
@@ -76,14 +76,76 @@ describe('RUNTIME_CACHING', () => {
     expect(ruleFor('/data/layers/other.json')).toBe(RUNTIME_CACHING.indexOf(generic))
   })
 
-  it('keeps api/sites NetworkFirst with a 10 s timeout and bounds its storage', () => {
-    const rule = ruleNamed('api-sites', 'NetworkFirst')
-    expect(ruleFor('/api/sites/all?limit=100000&source=ancient_nerds&fields=globe&_v=abc')).toBe(
-      RUNTIME_CACHING.indexOf(rule)
-    )
-    expect(rule.options?.networkTimeoutSeconds).toBe(10)
-    expect(rule.options?.cacheableResponse).toEqual({ statuses: [0, 200] })
-    expect(rule.options?.expiration).toEqual({ maxEntries: 8 })
+  // The globe's own payloads (DataStore, source=ancient_nerds), the opt-in
+  // sources (SourceLoader, DownloadManager) and the small per-site/search
+  // answers each get their own cache, so no kind can evict another's entries.
+  const GLOBE_PAYLOADS = [
+    '/api/sites/all?limit=100000&source=ancient_nerds&fields=globe&_v=abc',
+    '/api/sites/all?limit=100000&source=ancient_nerds&_v=abc',
+    '/api/sites/all?limit=100000&source=ancient_nerds&fields=all&_v=abc',
+    '/api/sites/all?source=ancient_nerds&limit=100000',
+  ]
+  const SOURCE_PAYLOADS = [
+    '/api/sites/all?source=pleiades&limit=100000&_v=abc',
+    '/api/sites/all?source=ancient_nerds_extra&limit=100000&_v=abc',
+    '/api/sites/all?source=historic_england&limit=100000',
+  ]
+  const SMALL_SITE_ANSWERS = [
+    '/api/sites/123',
+    '/api/sites/123/alternates',
+    '/api/sites/search?q=giza&limit=20',
+    '/api/sites/search?q=ancient_nerds&source=ancient_nerds',
+  ]
+
+  it.each([
+    ['api-sites-globe', GLOBE_PAYLOADS, { maxEntries: 6 }],
+    ['api-sites-sources', SOURCE_PAYLOADS, { maxEntries: 32 }],
+    ['api-sites', SMALL_SITE_ANSWERS, { maxEntries: 200 }],
+  ] as const)('routes to %s NetworkFirst with a 10 s timeout and a bound', (cacheName, urls, expiration) => {
+    const rule = ruleNamed(cacheName, 'NetworkFirst')
+    for (const url of urls) expect(ruleFor(url), url).toBe(RUNTIME_CACHING.indexOf(rule))
+    expect(rule.options).toEqual({
+      cacheName,
+      networkTimeoutSeconds: 10,
+      cacheableResponse: { statuses: [0, 200] },
+      expiration,
+    })
+  })
+
+  it('lists every api/sites cache in API_SITES_CACHE_NAMES (admin save clears them all)', () => {
+    const fromTable = RUNTIME_CACHING.map(r => r.options?.cacheName).filter(n => n?.startsWith('api-sites'))
+    expect([...API_SITES_CACHE_NAMES].sort()).toEqual([...fromTable].sort())
+  })
+
+  // workbox-expiration keeps, per cacheName, the newest `maxEntries` URLs it
+  // wrote (CacheTimestampsModel.expireEntries); NetworkFirst writes on every
+  // successful fetch. Replays a heavy session plus the next deploy's visit.
+  it('keeps the globe payload of the current build through a heavy session', () => {
+    const written = new Map<string, string[]>()
+    const write = (url: string) => {
+      const rule = RUNTIME_CACHING[ruleFor(url)]
+      const cacheName = rule.options!.cacheName!
+      const max = rule.options!.expiration!.maxEntries!
+      const urls = (written.get(cacheName) ?? []).filter(u => u !== url)
+      urls.push(url)
+      written.set(cacheName, urls.slice(-max))
+    }
+    const visit = (v: string) => {
+      write(`/api/sites/all?limit=100000&source=ancient_nerds&fields=globe&_v=${v}`)
+      write(`/api/sites/all?limit=100000&source=ancient_nerds&fields=all&_v=${v}`)
+      for (let i = 0; i < 40; i++) {
+        write(`/api/sites/${i}`)
+        write(`/api/sites/${i}/alternates`)
+        write(`/api/sites/search?q=query${i}`)
+      }
+      for (let i = 0; i < 20; i++) write(`/api/sites/all?source=src${i}&limit=100000&_v=${v}`)
+    }
+    visit('build1')
+    visit('build2')
+    const kept = [...written.values()].flat()
+    expect(kept).toContain('/api/sites/all?limit=100000&source=ancient_nerds&fields=globe&_v=build2')
+    expect(kept).toContain('/api/sites/all?limit=100000&source=ancient_nerds&fields=all&_v=build2')
+    expect(kept).toContain('/api/sites/all?limit=100000&source=ancient_nerds&fields=globe&_v=build1')
   })
 
   // The table of infra.md §1.1 (the rules as they were before this change).
@@ -91,7 +153,7 @@ describe('RUNTIME_CACHING', () => {
   // (historical, generic layers) keep what they matched and now also match
   // the same URL with a query string.
   const EXISTING: Array<{ source: string | null; handler: string; cacheName: string; urls: string[] }> = [
-    { source: '\\/api\\/sites\\/', handler: 'NetworkFirst', cacheName: 'api-sites', urls: ['/api/sites/all?limit=1'] },
+    { source: '\\/api\\/sites\\/', handler: 'NetworkFirst', cacheName: 'api-sites', urls: ['/api/sites/123'] },
     { source: '\\/api\\/sources', handler: 'StaleWhileRevalidate', cacheName: 'api-sources', urls: ['/api/sources/?_v=dev'] },
     {
       source: null,
@@ -148,8 +210,10 @@ describe('RUNTIME_CACHING', () => {
     }
   })
 
-  it('has exactly the nine rules (seven kept, basemaps fixed, globe layers new)', () => {
+  it('has exactly the eleven rules (seven kept, basemaps fixed, globe layers and two sites payload caches new)', () => {
     expect(RUNTIME_CACHING.map(r => `${r.options?.cacheName}:${r.handler}`)).toEqual([
+      'api-sites-globe:NetworkFirst',
+      'api-sites-sources:NetworkFirst',
       'api-sites:NetworkFirst',
       'api-sources:StaleWhileRevalidate',
       'basemaps:CacheFirst',

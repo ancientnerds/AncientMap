@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { SiteData } from '../../../data/sites'
 import { config } from '../../../config'
+import { API_SITES_CACHE_NAMES } from '../../../pwa/runtimeCaching'
 
 interface UseAdminModeOptions {
   site: SiteData
@@ -63,12 +64,14 @@ export function useAdminMode({
         body: JSON.stringify(editedSite)
       })
       if (response.ok) {
-        // Clear Service Worker cache for sites API to ensure fresh data on refresh
+        // Clear the Service Worker caches of the sites API to ensure fresh data on refresh
         if ('caches' in window) {
           try {
-            const cache = await caches.open('api-sites')
-            const keys = await cache.keys()
-            await Promise.all(keys.map(key => cache.delete(key)))
+            for (const cacheName of API_SITES_CACHE_NAMES) {
+              const cache = await caches.open(cacheName)
+              const keys = await cache.keys()
+              await Promise.all(keys.map(key => cache.delete(key)))
+            }
           } catch (e) {
             console.warn('[Admin] Could not clear SW cache:', e)
           }
