@@ -28,6 +28,13 @@ Files, in `output/remediation/bcases/coords_plan/`:
 
 Every statement carries `-- plan sha256 <digest>` (`prod_write.pin_line`) and `check`/`verify` refuse a
 file on disk that is not, byte for byte, what the plan renders.
+
+**Two waves, one renderer** (`Wave`). Wave 1 (`2026-09-23_owner-case-coordinates`, applied) is the
+classifier's `move` verdicts (`coords.jsonl`) in `coords_plan/`; its files still render byte for byte.
+Wave 2 (`2026-09-23_owner-case-coordinates-wave2`, `--wave 2`) is the `move` verdicts of
+`coords3/VERDICTS.jsonl` - the first wave's review cases weighed again with the web witnesses
+`web_witness.py` proved from the live page - in `coords_plan_wave2/`, under its own stamp, so its
+journal guard and its `verify` see its own rows only. A site of wave 1's plan is refused in wave 2.
 """
 
 from __future__ import annotations
@@ -46,6 +53,7 @@ from phase3.write_stage import plan_digest  # sha256 over the rows' JSON lines, 
 from prod_write import pin_line
 
 from bcases import inputs
+from bcases.classify import label_of
 
 RUN_STAMP = "2026-09-23_owner-case-coordinates"
 ROLLBACK_STAMP = RUN_STAMP + "-rollback"
@@ -59,6 +67,62 @@ PLAN_DIR = "coords_plan"
 
 class PlanError(RuntimeError):
     """The plan or a statement on disk is not what the classifier's verdicts render."""
+
+
+@dataclass(frozen=True)
+class Wave:
+    """One coordinate plan: its verdicts, its journal stamp, where it renders, how PLAN.md reads."""
+
+    number: int
+    run_stamp: str
+    #: The verdict file under `--out` whose `move` rows this wave plans.
+    verdicts: str
+    plan_dir: str
+    title: str
+    #: What the moves were rendered from, as PLAN.md's first paragraph says it.
+    source: str
+    #: Paragraphs PLAN.md adds after the independence rule.
+    notes: tuple[str, ...] = ()
+    #: The plan directories of earlier waves: a site planned there is never planned here.
+    earlier: tuple[str, ...] = ()
+
+    @property
+    def rollback_stamp(self) -> str:
+        return self.run_stamp + "-rollback"
+
+    @property
+    def flag(self) -> str:
+        """The `run.py` option that selects this wave ("" for wave 1, the default)."""
+        return "" if self.number == 1 else f" --wave {self.number}"
+
+
+WAVE1 = Wave(
+    1,
+    RUN_STAMP,
+    "coords.jsonl",
+    PLAN_DIR,
+    "# Owner-case coordinates - planned, not applied",
+    "the classifier's `move` verdicts",
+)
+WAVE2 = Wave(
+    2,
+    "2026-09-23_owner-case-coordinates-wave2",
+    "coords3/VERDICTS.jsonl",
+    "coords_plan_wave2",
+    "# Owner-case coordinates, wave 2 (a third witness from the web) - planned, not applied",
+    "the `move` verdicts of `coords3/VERDICTS.jsonl` (`web_witness.py reweigh`: the first wave's "
+    "review cases weighed again with the web witnesses proven from the live page)",
+    (
+        "A web witness is a page outside Wikipedia, Wikidata and their mirrors whose coordinates "
+        "`scripts/remediation/bcases/web_witness.py` read from the live page: the quoted text occurs "
+        "in the page, parses to exactly the stated numbers, and stands within 1,500 characters of a "
+        "distinctive word of the site's name. Pages of one host are one witness; two web witnesses "
+        "pair only across hosts, under the same independence rule. A move into another country than "
+        "the stored one is not in this plan (it is read first).",
+    ),
+    (PLAN_DIR,),
+)
+WAVES = {wave.number: wave for wave in (WAVE1, WAVE2)}
 
 
 @dataclass(frozen=True)
@@ -96,9 +160,9 @@ def ewkt(lat: float, lon: float) -> str:
 
 def _evidence(row: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
     entries = [
-        {"source": f"witness:{w['kind']}", "quote": w["quote"], "url": w["url"]}
+        {"source": f"witness:{label_of(w)}", "quote": w["quote"], "url": w["url"]}
         for w in row["witnesses"]
-        if w["kind"] in row["agreeing"]
+        if label_of(w) in row["agreeing"]
     ]
     entries.append(
         {
@@ -150,13 +214,15 @@ def changes(rows: Sequence[Mapping[str, Any]]) -> list[Change]:
     return out
 
 
-def render(rows: Sequence[Change], *, reversal: bool, rehearsal: bool = False) -> str:
+def render(
+    rows: Sequence[Change], *, reversal: bool, rehearsal: bool = False, wave: Wave = WAVE1
+) -> str:
     """One transaction over every row, or nothing: guards, the writes, invariants, COMMIT/ROLLBACK."""
     if not rows:
         raise PlanError("refusing to render a statement with no rows")
     if len(rows) % len(COLUMNS):
         raise PlanError(f"{len(rows)} rows are not {len(COLUMNS)} columns per site")
-    stamp = ROLLBACK_STAMP if reversal else RUN_STAMP
+    stamp = wave.rollback_stamp if reversal else wave.run_stamp
     what = "reversal" if reversal else "move"
     values = []
     for row in rows:
@@ -286,17 +352,17 @@ def render(rows: Sequence[Change], *, reversal: bool, rehearsal: bool = False) -
     return "\n".join(lines)
 
 
-def statements(rows: Sequence[Change]) -> dict[str, str]:
+def statements(rows: Sequence[Change], wave: Wave = WAVE1) -> dict[str, str]:
     return {
-        "APPLY.sql": render(rows, reversal=False),
-        "REHEARSAL.sql": render(rows, reversal=False, rehearsal=True),
-        "ROLLBACK.sql": render(rows, reversal=True),
+        "APPLY.sql": render(rows, reversal=False, wave=wave),
+        "REHEARSAL.sql": render(rows, reversal=False, rehearsal=True, wave=wave),
+        "ROLLBACK.sql": render(rows, reversal=True, wave=wave),
     }
 
 
-def assert_rendered(directory: Path, rows: Sequence[Change]) -> None:
+def assert_rendered(directory: Path, rows: Sequence[Change], wave: Wave = WAVE1) -> None:
     """Refuse a statement on disk that is not, byte for byte, the one `render` makes from the plan."""
-    for name, sql in statements(rows).items():
+    for name, sql in statements(rows, wave).items():
         path = directory / name
         if not path.exists():
             raise PlanError(f"{path} does not exist; run `plan` first")
@@ -307,14 +373,17 @@ def assert_rendered(directory: Path, rows: Sequence[Change]) -> None:
             )
 
 
-def plan_markdown(rows: Sequence[Change], verdicts: Sequence[Mapping[str, Any]]) -> str:
+def plan_markdown(
+    rows: Sequence[Change], verdicts: Sequence[Mapping[str, Any]], wave: Wave = WAVE1
+) -> str:
     moves = sorted((v for v in verdicts if v["verdict"] == "move"), key=lambda v: -v["moved_km"])
+    directory = f"output/remediation/bcases/{wave.plan_dir}"
     lines = [
-        "# Owner-case coordinates - planned, not applied",
+        wave.title,
         "",
         f"{len(moves)} curated sites, {len(rows)} journalled changes (geom, lat, lon each), run stamp "
-        f"`{RUN_STAMP}`. Rendered by `scripts/remediation/bcases/coord_plan.py` from the classifier's "
-        "`move` verdicts: two independent witnesses agree within the tolerance and the stored point "
+        f"`{wave.run_stamp}`. Rendered by `scripts/remediation/bcases/coord_plan.py` from "
+        f"{wave.source}: two independent witnesses agree within the tolerance and the stored point "
         "lies outside it. **Not applied**: FIELD_CONTRACT section 4.6 reserves coordinate changes "
         "for the owner (HUMAN_ONLY B1/B2).",
         "",
@@ -324,55 +393,73 @@ def plan_markdown(rows: Sequence[Change], verdicts: Sequence[Mapping[str, Any]])
         "grid and the Wikidata precision (`scripts/remediation/bcases/classify.py`, "
         "`independent`).",
         "",
+    ]
+    for note in wave.notes:
+        lines += [note, ""]
+    lines += [
         "| site | stored | new | moved | witnesses | reason |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
     for v in moves:
         witnesses = "<br>".join(
-            f"[{w['kind']}]({w['url']}) {w['quote']}"
+            f"[{label_of(w)}]({w['url']}) {w['quote']}"
             for w in v["witnesses"]
-            if w["kind"] in v["agreeing"]
+            if label_of(w) in v["agreeing"]
         )
         lines.append(
             f"| {v['name']} (`{v['site_id']}`) | {v['stored'][0]:.5f}, {v['stored'][1]:.5f} | "
             f"{v['new']['lat']:.5f}, {v['new']['lon']:.5f} | {v['moved_km']:.2f} km | {witnesses} | "
             f"{v['reason']} |"
         )
+    run = "$PY scripts/remediation/bcases/run.py"
     lines += [
         "",
         "## How to run it (the orchestrator's job, in this order, after the owner's go)",
         "",
         "```bash",
         "PY=./.venv/Scripts/python.exe",
-        "$PY scripts/remediation/bcases/run.py plan     # REHEARSAL.sql is not versioned",
-        "$PY scripts/remediation/bcases/run.py check    # read-only: every old value still holds",
+        f"{run} plan{wave.flag}     # REHEARSAL.sql is not versioned",
+        f"{run} check{wave.flag}    # read-only: every old value still holds",
         'ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map '
-        '-v ON_ERROR_STOP=1" < output/remediation/bcases/coords_plan/REHEARSAL.sql',
+        f'-v ON_ERROR_STOP=1" < {directory}/REHEARSAL.sql',
         'ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map '
-        '-v ON_ERROR_STOP=1" < output/remediation/bcases/coords_plan/APPLY.sql',
-        "$PY scripts/remediation/bcases/run.py verify   # read-only: new values and the journal",
+        f'-v ON_ERROR_STOP=1" < {directory}/APPLY.sql',
+        f"{run} verify{wave.flag}   # read-only: new values and the journal",
         "```",
         "",
     ]
     return "\n".join(lines)
 
 
-def load_verdicts(out: Path) -> list[dict[str, Any]]:
-    return inputs.read_jsonl(out / "coords.jsonl")
+def load_verdicts(out: Path, wave: Wave = WAVE1) -> list[dict[str, Any]]:
+    return inputs.read_jsonl(out / wave.verdicts)
 
 
-def write_files(out: Path) -> list[Change]:
-    verdicts = load_verdicts(out)
-    rows = changes(verdicts)
-    directory = out / PLAN_DIR
+def wave_changes(out: Path, wave: Wave = WAVE1) -> list[Change]:
+    """The wave's changes from its verdicts; a site an earlier wave planned is refused."""
+    rows = changes(load_verdicts(out, wave))
+    for earlier in wave.earlier:
+        planned = {str(r["site_id"]) for r in inputs.read_jsonl(out / earlier / "PLAN.jsonl")}
+        again = sorted({row.name for row in rows if row.site_id in planned})
+        if again:
+            raise PlanError(f"wave {wave.number} plans sites {earlier}/ already planned: {again}")
+    return rows
+
+
+def write_files(out: Path, wave: Wave = WAVE1) -> list[Change]:
+    verdicts = load_verdicts(out, wave)
+    rows = wave_changes(out, wave)
+    if not rows:
+        raise PlanError(f"{wave.verdicts} holds no move: wave {wave.number} has nothing to plan")
+    directory = out / wave.plan_dir
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "PLAN.jsonl").write_text(
         "".join(row.to_json_line() + "\n" for row in rows), encoding="utf-8", newline="\n"
     )
-    for name, sql in statements(rows).items():
+    for name, sql in statements(rows, wave).items():
         (directory / name).write_text(sql, encoding="utf-8", newline="\n")
     (directory / "PLAN.md").write_text(
-        plan_markdown(rows, verdicts), encoding="utf-8", newline="\n"
+        plan_markdown(rows, verdicts, wave), encoding="utf-8", newline="\n"
     )
     return rows
 
@@ -424,6 +511,7 @@ def run_readonly(
     out: Path,
     *,
     reader: Callable[[str], list[dict[str, Any]]] | None = None,
+    wave: Wave = WAVE1,
 ) -> int:
     """`check` (the old values hold) or `verify` (the new values and the journal), read-only.
 
@@ -431,14 +519,14 @@ def run_readonly(
     """
     if command not in ("check", "verify"):
         raise PlanError(f"unknown command {command!r}")
-    directory = out / PLAN_DIR
+    directory = out / wave.plan_dir
     rows = [
         Change(**{**r, "evidence": tuple(r["evidence"])})
         for r in inputs.read_jsonl(directory / "PLAN.jsonl")
     ]
-    if rows != changes(load_verdicts(out)):
+    if rows != wave_changes(out, wave):
         raise PlanError("PLAN.jsonl is not the plan the verdicts render; run `plan` again")
-    assert_rendered(directory, rows)
+    assert_rendered(directory, rows, wave)
     read = reader if reader is not None else psql_json_reader()
     problems = compare(
         rows, read_rows(rows, reader=read), want="old" if command == "check" else "new"
@@ -446,11 +534,13 @@ def run_readonly(
     if command == "verify" and not problems:
         journal = read(
             "SELECT change_key FROM remediation_change_log WHERE run_stamp = "
-            + sql_literal(RUN_STAMP)
+            + sql_literal(wave.run_stamp)
         )
         keys = {str(r["change_key"]) for r in journal}
         if keys != {row.change_key for row in rows}:
-            problems.append(f"journal holds {len(keys)} rows for {RUN_STAMP}, the plan {len(rows)}")
+            problems.append(
+                f"journal holds {len(keys)} rows for {wave.run_stamp}, the plan {len(rows)}"
+            )
     for problem in problems:
         print(f"  DEVIATION {problem}")
     print(f"{command}: {len(rows)} rows, {len(problems)} deviation(s)")

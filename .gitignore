@@ -320,6 +320,7 @@ output/remediation/qid_repair/wave2/REHEARSAL.sql
 # (`cache/bcases/`) stay out; the rehearsal keeps nothing.
 !output/remediation/bcases/
 output/remediation/bcases/coords_plan/REHEARSAL.sql
+output/remediation/bcases/coords_plan_wave2/REHEARSAL.sql
 # The gap run's decision record is versioned; its production export is bulk and regenerable
 # (`gap_plan.py export`), and PLAN.gap.jsonl is covered by the phase3_runner PLAN*.jsonl rule.
 !output/remediation/gap/
