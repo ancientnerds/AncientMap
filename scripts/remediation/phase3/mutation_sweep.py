@@ -25,7 +25,10 @@ from collections.abc import Mapping
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-PY = REPO / ".venv" / "Scripts" / "python.exe"
+#: The interpreter that runs the sweep runs the tests too (as in `mechanical/mutation_sweep.py`): a
+#: hard-coded `.venv` path does not exist in a git worktree, and no junction to the main venv may be
+#: made there (PROJECT_LESSONS, 2026-09-23).
+PY = Path(sys.executable)
 BACKUP = REPO / "output" / "remediation" / "logs" / "phase3_mutations" / "backup"
 TEST = "tests/remediation/test_phase3_discover.py"
 FETCH_TEST = "tests/remediation/test_phase3_fetch.py"
