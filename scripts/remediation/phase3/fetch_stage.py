@@ -491,26 +491,27 @@ class Fetcher(Protocol):
         ...
 
 
-def _read_capped(chunks: Iterable[bytes]) -> tuple[bytes, bool]:
-    """Read at most `MAX_PAGE_BYTES`, **stopping the stream** at the cap.
+def _read_capped(chunks: Iterable[bytes], max_bytes: int = MAX_PAGE_BYTES) -> tuple[bytes, bool]:
+    """Read at most `max_bytes` (`MAX_PAGE_BYTES` unless a caller says otherwise), **stopping the
+    stream** at the cap.
 
     Truncation is a stop, not a slice: the body is never buffered in full and then cut. The
     pilot's two dumps (598 KB, 400 KB) are exactly the pages that must not be pulled over the
     wire to be thrown away, and a test that counts the bytes the transport actually yielded
     fails if this ever becomes read-then-slice.
 
-    A page whose body is exactly `MAX_PAGE_BYTES` is reported `truncated=True`: telling an
+    A page whose body is exactly `max_bytes` is reported `truncated=True`: telling an
     exactly-capped page from a cut one requires reading past the cap, which is the thing the
     cap forbids.
     """
     body = bytearray()
     for chunk in chunks:
-        room = MAX_PAGE_BYTES - len(body)
+        room = max_bytes - len(body)
         if len(chunk) > room:
             body.extend(chunk[:room])
             return bytes(body), True
         body.extend(chunk)
-        if len(body) == MAX_PAGE_BYTES:
+        if len(body) == max_bytes:
             return bytes(body), True
     return bytes(body), False
 
@@ -520,6 +521,14 @@ class HttpFetcher:
 
     `transport` is the injectable seam (`census/fetch.py` takes an `httpx.BaseTransport` the
     same way): tests pass `httpx.MockTransport` or a counting stream and never open a socket.
+
+    `max_bytes` is the page cap this client stops every stream at. The default is
+    `MAX_PAGE_BYTES`, so every Phase-3 caller reads exactly what it read before (2026-09-23, WB-A1
+    of the Phase-4 design). Phase 4 builds a second client with 1 MiB for `*.wikipedia.org` and
+    `wikidata.org` only: at 60 KB, 18 of the mass run's 5,004 enwiki answers and 115 of its 4,618
+    `wikidata_entity` answers stopped at exactly 61,440 bytes, JSON nobody can parse (measured
+    2026-09-23; five of the cut entities re-measured at 64-146 KB). Which host gets which client
+    is Phase 4's decision (`phase4/sources_stage.py`), not this class's.
     """
 
     def __init__(
@@ -528,7 +537,11 @@ class HttpFetcher:
         timeout: float = 40.0,
         user_agent: str = USER_AGENT,
         clock: Callable[[], float] = time.time,
+        max_bytes: int = MAX_PAGE_BYTES,
     ) -> None:
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+            raise ValueError(f"max_bytes={max_bytes!r} is not a positive byte count")
+        self._max_bytes = max_bytes
         self._clock = clock
         self._client = httpx.Client(
             transport=transport,
@@ -543,7 +556,7 @@ class HttpFetcher:
         timeout = self._timeout(url)
         try:
             with self._client.stream("GET", url, timeout=timeout) as response:
-                body, truncated = _read_capped(response.iter_bytes())
+                body, truncated = _read_capped(response.iter_bytes(), self._max_bytes)
                 return FetchedPage(
                     status=response.status_code,
                     final_url=str(response.url),
@@ -1913,6 +1926,51 @@ def one_attempt(
     raise AssertionError("unreachable: the loop returns on its last attempt")  # pragma: no cover
 
 
+def record_not_attempted(
+    *, target: Target, probe: HostProbe, ledger: L.Ledger, batch_id: str, stage: Stage
+) -> TargetOutcome:
+    """Record a target whose host did not answer the run's probe, and make no request for it.
+
+    One line, and no request to this target's URL: nothing was asked, so there is no attempt to
+    number (`attempt=0`) and the reason is the probe's own. Extracted from `collect_batch` on
+    2026-09-23 so Phase 4's stages record such a target with this one spelling of the line.
+    """
+    ledger.append(
+        L.Entry(
+            kind=L.LedgerKind.FETCH,
+            stage=stage,
+            batch_id=batch_id,
+            label=target.label,
+            url=target.request_url,
+            http_status=None,
+            bytes=0,
+            outcome=L.FetchOutcome.HOST_UNREACHABLE,
+            attempt=0,
+            error=probe.reason,
+            given_up=False,
+        )
+    )
+    return TargetOutcome(
+        feature=target.feature,
+        url=target.request_url,
+        bought_by=target.reason,
+        not_attempted=probe.reason,
+    )
+
+
+def tally(result: SiteEvidence, target: Target, outcome: TargetOutcome) -> None:
+    """Add one attempted target's outcome to its site's counts (extracted from `collect_batch`)."""
+    result.outcomes.append(outcome)
+    if outcome.stored:
+        result.fetched += 1
+        result.bytes += outcome.final.bytes
+        result.truncated += int(outcome.truncated)
+    for attempt in outcome.attempts:
+        if not attempt.ok and attempt.http_status is not None:
+            # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
+            result.non_2xx.append((target.request_url, attempt.http_status))
+
+
 def _complete_utf8(body: bytes) -> bytes:
     """`body` without the incomplete UTF-8 sequence a cut can leave at its very end.
 
@@ -2036,29 +2094,9 @@ def collect_batch(
                 )
                 probes[host] = probe
             if not probe.reachable:
-                # One line, and no request to this target's URL: nothing was asked, so there is no
-                # attempt to number (`attempt=0`) and the reason is the probe's own.
-                ledger.append(
-                    L.Entry(
-                        kind=L.LedgerKind.FETCH,
-                        stage=stage,
-                        batch_id=batch_id,
-                        label=target.label,
-                        url=target.request_url,
-                        http_status=None,
-                        bytes=0,
-                        outcome=L.FetchOutcome.HOST_UNREACHABLE,
-                        attempt=0,
-                        error=probe.reason,
-                        given_up=False,
-                    )
-                )
                 result.outcomes.append(
-                    TargetOutcome(
-                        feature=target.feature,
-                        url=target.request_url,
-                        bought_by=target.reason,
-                        not_attempted=probe.reason,
+                    record_not_attempted(
+                        target=target, probe=probe, ledger=ledger, batch_id=batch_id, stage=stage
                     )
                 )
                 continue
@@ -2071,15 +2109,7 @@ def collect_batch(
                 stage=stage,
                 sleep=sleep,
             )
-            result.outcomes.append(outcome)
-            if outcome.stored:
-                result.fetched += 1
-                result.bytes += outcome.final.bytes
-                result.truncated += int(outcome.truncated)
-            for attempt in outcome.attempts:
-                if not attempt.ok and attempt.http_status is not None:
-                    # Data, not an exception: the pilot recorded 403/404/504/429 and continued.
-                    result.non_2xx.append((target.request_url, attempt.http_status))
+            tally(result, target, outcome)
     report.probes = list(probes.values())
     return report
 
