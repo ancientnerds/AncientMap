@@ -140,6 +140,8 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
   const { scene } = ctx.sceneRef.current
 
   const res = await offlineFetch('/data/labels.json')
+  // Part of the start: an error answer fails it (Globe reports phase 'labels')
+  if (!res.ok) throw new Error(`/data/labels.json: HTTP ${res.status}`)
   const data: { labels: GeoLabel[] } = await res.json()
   if (!ctx.sceneRef.current) return
 
