@@ -538,7 +538,8 @@ describe('disposeBasemaps', () => {
     disposeBasemaps(ctx)
     release()
 
-    await expect(upgrading).rejects.toThrow(/unmounted/)
+    // cut short by the unmount: handed over, not a failure of the caller's task
+    await expect(upgrading).resolves.toBeUndefined()
     expect(disposeGray).toHaveBeenCalled()
     expect(disposeSat).toHaveBeenCalled()
     expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).toHaveBeenCalledTimes(1)
@@ -583,7 +584,7 @@ describe('restoreAfterContextLoss', () => {
     expect(restoreAfterContextLoss(ctx)).toEqual({ grayUpgrade: false, satellite: false })
   })
 
-  it('aborts uploads that were running when the context came back', async () => {
+  it('aborts uploads that were running when the context came back and hands them over (no failure)', async () => {
     const dec = stubDecoding(SIZES)
     const release = dec.hold('/data/basemaps/satellite_med.webp')
     const { ctx } = makeCtx({ start: 'med', max: 'high' })
@@ -591,7 +592,7 @@ describe('restoreAfterContextLoss', () => {
     const running = loadSatellite(ctx, 'med', new AbortController().signal)
     const redo = restoreAfterContextLoss(ctx)
     release()
-    await expect(running).rejects.toThrow(/context restored/)
+    await expect(running).resolves.toBeUndefined()
     expect(redo.satellite).toBe(true)
     expect(ctx.satellite.texture).toBe(null)
     expect(dec.bitmaps.get('/data/basemaps/satellite_med.webp')!.close).toHaveBeenCalledTimes(1)

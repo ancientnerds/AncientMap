@@ -294,6 +294,25 @@ describe('useTextureLoading', () => {
     expect(bitmaps.get(GRAY_LOW)!.close).toHaveBeenCalledTimes(1)
   })
 
+  it('hands a satellite load cut short by a context restore over to the restore, without a failure', async () => {
+    const { refs, canvas } = makeRefs()
+    const p = props(refs)
+    await render(p)
+    await settle()
+    let release!: () => void
+    holds.set(SAT_LOW, new Promise<void>(r => { release = r }))
+    await act(async () => { latest.requestSatellite() })
+    await render({ ...p, satelliteRequested: true })
+    await settle()
+    await act(async () => { canvas.dispatchEvent(new Event('webglcontextrestored')) })
+    holds.delete(SAT_LOW)
+    release()
+    await settle()
+    expect(p.onSatelliteFailed).not.toHaveBeenCalled()
+    expect(trackBackgroundFailure).not.toHaveBeenCalled()
+    expect(latest.satelliteReady).toBe(true)
+  })
+
   it('brings the start tier back after a context restore and asks for the upgrades again', async () => {
     const { refs, canvas, materials } = makeRefs()
     await render(props(refs))
