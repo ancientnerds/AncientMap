@@ -201,7 +201,7 @@ describe('loadVectorLayer', () => {
     expect(ctx.shaderMaterialsRef.current).toEqual([front.material, back.material])
     expect(loaded.coastlines).toBe(true)
     expect(bothExistedWhenLoaded).toBe(true)
-    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'start', inFlight: {}, failed: {}, deferred: false })
+    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'start', inFlight: {}, failed: {}, deferred: {} })
   })
 
   it('fades a visible layer in from zero, front and back, as today', async () => {
@@ -430,7 +430,7 @@ describe('upgradeLayerTier', () => {
     expect(fade).not.toHaveBeenCalled()
     expect(ctx.setIsLoadingLayers).not.toHaveBeenCalled()
     expect(ctx.setLayersLoaded).not.toHaveBeenCalled()
-    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'detail', inFlight: {}, failed: {}, deferred: false })
+    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'detail', inFlight: {}, failed: {}, deferred: {} })
   })
 
   it('never downgrades: a detail tier that arrives after hires is discarded', async () => {
@@ -659,6 +659,33 @@ describe('ensureHiresCoastline', () => {
     await expect(ensureHiresCoastline(gate, () => ctx)).rejects.toThrow(/HTTP 404/)
     expect(ensureHiresCoastline(gate, () => ctx)).toBeNull()
     expect(fetched.filter(u => u === COAST_HIRES)).toHaveLength(1)
+  })
+
+  it('offline, leaves a hi-res coastline no cache holds for later: not barred, not reported, loaded once offline mode is off', async () => {
+    const { ctx, camera } = makeCtx()
+    await startTier('coastlines', ctx)
+    routes.set(COAST_HIRES, { features: lines(3) })
+    // An offline start: the Mapbox style fetch failed, and a sources-only download holds no coast_hires
+    vi.stubGlobal('caches', { open: async () => ({ match: async () => undefined }) })
+    const gate = gateFor(camera, { state: 'failed' })
+    camera.position.set(0, 0, 1.2)
+    OfflineFetch.setOfflineMode(true)
+    try {
+      // Not now is not failed: no rejection, so Globe sends no globe_error{bg:hires}
+      await expect(ensureHiresCoastline(gate, () => ctx)).resolves.toBeUndefined()
+      expect(ctx.globeLayerTiersRef.current.coastlines.failed).toEqual({})
+      expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('start')
+      // Camera changes while offline mode is on do not ask the cache again and again
+      expect(ensureHiresCoastline(gate, () => ctx)).toBeNull()
+    } finally {
+      OfflineFetch.setOfflineMode(false)
+    }
+    expect(fetched.filter(u => u === COAST_HIRES)).toHaveLength(0)
+    // The next close-zoom camera change after offline mode is off loads it
+    await ensureHiresCoastline(gate, () => ctx)
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('hires')
+    expect(fetched.filter(u => u === COAST_HIRES)).toHaveLength(1)
+    expect(ensureHiresCoastline(gate, () => ctx)).toBeNull()
   })
 })
 

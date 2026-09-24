@@ -24,7 +24,7 @@ import {
 } from '../../../config/vectorLayers'
 import type { DetailLevel } from '../../../config/globeConstants'
 import { LABEL_BASE_SCALE } from '../../../config/globeConstants'
-import { OfflineFetch, offlineFetch } from '../../../services/OfflineFetch'
+import { OfflineFetch, OfflineNotCachedError, offlineFetch } from '../../../services/OfflineFetch'
 import { createFrontLineMaterial as createFrontMaterial, createBackLineMaterial as createBackMaterial } from '../../../shaders/globe'
 import { createLabelTexture, createGlobeTangentLabel, type GlobeLabelMesh } from '../../../utils/LabelRenderer'
 import type { FadeManager } from '../../../utils/FadeManager'
@@ -450,6 +450,8 @@ export async function loadVectorLayer(layerKey: VectorLayerKey, ctx: VectorRende
  * joins that load; a tier that failed is never fetched again and rejects with its error. Each
  * tier stands alone: a hi-res load on its way or failed does not stand in for the detail tier.
  * Rejects with an AbortError when `signal` or the Globe aborts; that tier may be asked for again.
+ * Rejects with an OfflineNotCachedError when app offline mode is on and no cache holds the file:
+ * not now, not failed - the tier is marked deferred and may be asked for again.
  */
 export async function upgradeLayerTier(
   layerKey: GlobeLayerKey,
@@ -480,12 +482,14 @@ async function loadTier(layerKey: GlobeLayerKey, tier: UpgradeTier, ctx: VectorR
     parsed = await fetchAndParse(getGlobeLayerUrl(layerKey, tier), layerKey, ctx, linked.signal)
     throwIfAborted(linked.signal)
   } catch (err) {
-    // Cancelled is not failed: only a failure bars the tier
-    if (!linked.signal.aborted) state.failed[tier] = err
+    // Cancelled is not failed, nor is offline without a cached file: only a failure bars the tier
+    if (err instanceof OfflineNotCachedError) state.deferred[tier] = true
+    else if (!linked.signal.aborted) state.failed[tier] = err
     throw err
   } finally {
     linked.release()
   }
+  delete state.deferred[tier]
   // A higher tier landed while this one was on its way
   if (tierRank(state.committed) >= tierRank(tier)) return
   const [frontRadius, backRadius] = layerRadii(layerKey)
@@ -494,11 +498,18 @@ async function loadTier(layerKey: GlobeLayerKey, tier: UpgradeTier, ctx: VectorR
   state.committed = tier
 }
 
+/** The tier load, resolving without the tier when app offline mode deferred it (not failed). */
+function unlessDeferred(load: Promise<void>): Promise<void> {
+  return load.catch((err: unknown) => {
+    if (!(err instanceof OfflineNotCachedError)) throw err
+  })
+}
+
 /**
  * Background task `layers`: coastlines and borders to their detail tier. In app offline mode a
- * detail file no cache holds is not fetched (offlineFetch would refuse it without asking the
- * network, and the refusal would bar the tier for the session): the layer is marked deferred,
- * like preloadRiversLakes skips such files, and resumeDeferredGlobeLayers loads it later.
+ * detail file no cache holds is left for later (upgradeLayerTier marks it deferred, as
+ * preloadRiversLakes skips such files): not a task failure, and resumeDeferredGlobeLayers
+ * loads it once offline mode is off.
  */
 export async function upgradeGlobeLayers(
   ctx: VectorRendererContext,
@@ -506,9 +517,7 @@ export async function upgradeGlobeLayers(
   keys: readonly GlobeLayerKey[] = GLOBE_LAYER_KEYS,
 ): Promise<void> {
   for (const key of keys) {
-    const state = ctx.globeLayerTiersRef.current[key]
-    state.deferred = OfflineFetch.isOffline && !(await OfflineFetch.isCached(getGlobeLayerUrl(key, 'detail')))
-    if (!state.deferred) await upgradeLayerTier(key, 'detail', ctx, signal)
+    await unlessDeferred(upgradeLayerTier(key, 'detail', ctx, signal))
   }
 }
 
@@ -518,7 +527,7 @@ export async function upgradeGlobeLayers(
  */
 export function resumeDeferredGlobeLayers(ctx: VectorRendererContext): Promise<void> | null {
   if (OfflineFetch.isOffline) return null
-  const keys = GLOBE_LAYER_KEYS.filter(key => ctx.globeLayerTiersRef.current[key].deferred)
+  const keys = GLOBE_LAYER_KEYS.filter(key => ctx.globeLayerTiersRef.current[key].deferred.detail)
   if (keys.length === 0) return null
   return upgradeGlobeLayers(ctx, ctx.signal, keys)
 }
@@ -526,14 +535,18 @@ export function resumeDeferredGlobeLayers(ctx: VectorRendererContext): Promise<v
 /**
  * The hi-res coastline (today's coast_hires) where the Three.js globe is the only view closer
  * than the Mapbox switch: Mapbox failed. Called on every camera change, so the gate is checked
- * before the context is built; returns the load when it starts one, null otherwise.
+ * before the context is built; returns the load when it starts one, null otherwise. An offline
+ * start fails Mapbox too: a coast_hires no cache holds is deferred (the load resolves without
+ * it, no failure), not asked for again while offline mode is on, and loaded by the first
+ * close-zoom camera change after offline mode is off.
  */
 export function ensureHiresCoastline(gate: HiresCoastlineGate, buildContext: () => VectorRendererContext): Promise<void> | null {
   if (gate.getMapboxState() !== 'failed' || gate.getCameraDistance() >= gate.switchDistance) return null
   const ctx = buildContext()
   const tiers = ctx.globeLayerTiersRef.current.coastlines
   if (tiers.committed === null || tiers.committed === 'hires' || tiers.inFlight.hires || 'hires' in tiers.failed) return null
-  return upgradeLayerTier('coastlines', 'hires', ctx, ctx.signal)
+  if (tiers.deferred.hires && OfflineFetch.isOffline) return null
+  return unlessDeferred(upgradeLayerTier('coastlines', 'hires', ctx, ctx.signal))
 }
 
 /**

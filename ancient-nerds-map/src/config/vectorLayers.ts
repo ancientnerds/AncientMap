@@ -101,18 +101,19 @@ export interface GlobeLayerTierState {
   /** Upgrades that failed, with their error: never fetched again. */
   failed: Partial<Record<UpgradeTier, unknown>>
   /**
-   * The `layers` task left the detail tier for later: app offline mode was on and no cache
-   * held the file (not failed - resumeDeferredGlobeLayers loads it once offline mode is off).
+   * Upgrades left for later: app offline mode was on and no cache held the file. Not failed:
+   * resumeDeferredGlobeLayers loads a deferred detail tier once offline mode is off, the next
+   * close-zoom camera change a deferred hi-res coastline.
    */
-  deferred: boolean
+  deferred: Partial<Record<UpgradeTier, true>>
 }
 export const GLOBE_LAYER_KEYS: readonly GlobeLayerKey[] = ['coastlines', 'countryBorders']
 
 /** Nothing on the globe, nothing asked for. */
 export function createGlobeLayerTiers(): Record<GlobeLayerKey, GlobeLayerTierState> {
   return {
-    coastlines: { committed: null, inFlight: {}, failed: {}, deferred: false },
-    countryBorders: { committed: null, inFlight: {}, failed: {}, deferred: false },
+    coastlines: { committed: null, inFlight: {}, failed: {}, deferred: {} },
+    countryBorders: { committed: null, inFlight: {}, failed: {}, deferred: {} },
   }
 }
 
