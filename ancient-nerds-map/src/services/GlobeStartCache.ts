@@ -26,20 +26,25 @@ const START_LAYER_BYTES: Record<(typeof GLOBE_LAYER_KEYS)[number], number> = {
   countryBorders: 399_406,
 }
 
+/** The coastline and border start tiers, the one list both exports below read. */
+function startLayerFiles(): StartFile[] {
+  return GLOBE_LAYER_KEYS.map(key => ({ url: getGlobeLayerUrl(key, 'start'), size: START_LAYER_BYTES[key], cache: VECTOR_LAYER_CACHE }))
+}
+
 /**
  * The coastline and border start tiers. They are in getLayerFiles too (the
  * 'complete' check of a layer download), but these files own them: a layer
  * download neither fetches nor clears them (VectorLayerCache).
  */
 export function globeStartLayerUrls(): string[] {
-  return GLOBE_LAYER_KEYS.map(key => getGlobeLayerUrl(key, 'start'))
+  return startLayerFiles().map(file => file.url)
 }
 
 export function globeStartFiles(): StartFile[] {
   return [
     { ...LABELS_FILE, cache: BASEMAP_CACHE },
     ...grayBasemapFiles().map(file => ({ ...file, cache: BASEMAP_CACHE })),
-    ...GLOBE_LAYER_KEYS.map(key => ({ url: getGlobeLayerUrl(key, 'start'), size: START_LAYER_BYTES[key], cache: VECTOR_LAYER_CACHE })),
+    ...startLayerFiles(),
   ]
 }
 

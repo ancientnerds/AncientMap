@@ -15,7 +15,7 @@ vi.mock('../OfflineStorage', () => ({
   },
 }))
 
-import { getLayerFiles, LAYER_CONFIG, type VectorLayerKey } from '../../config/vectorLayers'
+import { getGlobeLayerUrl, getLayerFiles, LAYER_CONFIG, type VectorLayerKey } from '../../config/vectorLayers'
 import { globeStartLayerUrls } from '../GlobeStartCache'
 import { OfflineStorage } from '../OfflineStorage'
 import { VectorLayerCache } from '../VectorLayerCache'
@@ -23,14 +23,21 @@ import { VectorLayerCache } from '../VectorLayerCache'
 const KEYS = Object.keys(LAYER_CONFIG) as VectorLayerKey[]
 
 /**
- * The files a layer download fetches: getLayerFiles without the coastline and border
- * start tiers, which belong to the globe's start files (GlobeStartCache). Every
- * download stores those first, so a layer download fetching them again fetched,
- * stored and counted them twice.
+ * The coastline and border start tiers belong to the globe's start files
+ * (GlobeStartCache), which every download stores first: a layer download that
+ * fetched them again fetched, stored and counted them twice.
  */
-function ownFiles(key: VectorLayerKey): string[] {
-  const start = new Set(globeStartLayerUrls())
-  return getLayerFiles(key).filter(url => !start.has(url))
+const COAST_START = getGlobeLayerUrl('coastlines', 'start')
+const BORDERS_START = getGlobeLayerUrl('countryBorders', 'start')
+const START_TIER = /\/(coast|borders)_start\.[0-9a-f]+\.json$/
+
+/** getLayerFiles(key) without its start tier, named here, not taken from the code under test. */
+function expectedDownload(key: VectorLayerKey): string[] {
+  const files = getLayerFiles(key)
+  const start = key === 'coastlines' ? COAST_START : key === 'countryBorders' ? BORDERS_START : null
+  if (start === null) return files
+  expect(files).toContain(start)
+  return files.filter(url => url !== start)
 }
 
 let stored: Map<string, Response>
@@ -74,27 +81,30 @@ describe('VectorLayerCache', () => {
     for (const key of KEYS) {
       const info = VectorLayerCache.getLayerInfo(key)
       expect(info, key).toBeDefined()
-      expect(info!.fileCount).toBe(ownFiles(key).length)
+      expect(info!.fileCount).toBe(expectedDownload(key).length)
     }
   })
 
   it('leaves the coastline and border start tiers to the start files', () => {
-    expect(globeStartLayerUrls()).toHaveLength(2)
-    for (const url of globeStartLayerUrls()) expect(getLayerFiles('coastlines').concat(getLayerFiles('countryBorders'))).toContain(url)
-    expect(ownFiles('coastlines')).toHaveLength(getLayerFiles('coastlines').length - 1)
-    expect(ownFiles('countryBorders')).toHaveLength(getLayerFiles('countryBorders').length - 1)
+    expect(COAST_START).toMatch(START_TIER)
+    expect(BORDERS_START).toMatch(START_TIER)
+    expect(globeStartLayerUrls()).toEqual([COAST_START, BORDERS_START])
+    expect(VectorLayerCache.getLayerInfo('coastlines')!.fileCount).toBe(getLayerFiles('coastlines').length - 1)
+    expect(VectorLayerCache.getLayerInfo('countryBorders')!.fileCount).toBe(getLayerFiles('countryBorders').length - 1)
   })
 
   it.each(KEYS)('downloads and stores exactly getLayerFiles(%s) without the start files', async key => {
     await VectorLayerCache.downloadLayer(key)
-    expect(fetched).toEqual(ownFiles(key))
-    expect([...stored.keys()]).toEqual(ownFiles(key))
+    expect(fetched.filter(url => START_TIER.test(url))).toEqual([])
+    expect(fetched).toEqual(expectedDownload(key))
+    expect([...stored.keys()]).toEqual(expectedDownload(key))
     expect(OfflineStorage.addDownloadedLayer).toHaveBeenCalledWith(key)
   })
 
   it('clears the layer download, never a start file the offline start needs', async () => {
     await VectorLayerCache.clearLayer('coastlines')
-    expect(deleted).toEqual(ownFiles('coastlines'))
+    expect(deleted).not.toContain(COAST_START)
+    expect(deleted).toEqual(expectedDownload('coastlines'))
   })
 
   it('counts a layer as downloaded only when every file of getLayerFiles is in the cache', async () => {
