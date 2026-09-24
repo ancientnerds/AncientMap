@@ -419,8 +419,11 @@ def test_reference_sections_are_never_in_the_pool() -> None:
 
 def test_only_publishable_sentences_are_offered() -> None:
     long_one = "The temple " + "was very large and " * 30 + "old."
-    text = f"Short one. The temple stands on the ridge above the sea. {long_one} and a fragment."
+    # the fragment on its own line: after "old." on the same line the splitter would keep it inside
+    # the long sentence, whose "old. and" the garble rule (pilot 2, T5) refuses before its length
+    text = f"Short one. The temple stands on the ridge above the sea. {long_one}\nand a fragment.\n"
     sentences = S.split_source("W", text)
+    assert long_one in [S.sentence_text(text, s) for s in sentences] and not S.garbled(long_one)
     pool = S.candidate_pool(sentences, lane=M.Lane.W, names=["X"], text=text)
     assert [S.sentence_text(text, s) for s in pool] == [
         "The temple stands on the ridge above the sea."
