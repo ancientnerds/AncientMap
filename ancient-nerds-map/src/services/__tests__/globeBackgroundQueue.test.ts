@@ -12,10 +12,10 @@ import {
   BG_TASK_DEADLINE_MS,
   browserQueueScheduling,
   createGlobeBackgroundQueue,
-  globeBackgroundTasks,
   type BgTask,
   type BgTaskName,
 } from '../globeBackgroundQueue'
+import { MAPBOX_IMPORT_DEADLINE_MS, MAPBOX_LOAD_DEADLINE_MS } from '../mapboxLoader'
 
 const flush = async () => {
   for (let i = 0; i < 5; i++) await Promise.resolve()
@@ -412,6 +412,11 @@ describe('the per-task deadline', () => {
     expect(BG_TASK_DEADLINE_MS).toBe(90_000)
   })
 
+  it('leaves Mapbox its own, shorter deadlines: the task always ends through them (state failed, not stuck loading)', () => {
+    // runMapboxLoadTask sets 'failed' only for its own failures; a queue abort is a cancellation to it
+    expect(MAPBOX_IMPORT_DEADLINE_MS + MAPBOX_LOAD_DEADLINE_MS).toBeLessThan(BG_TASK_DEADLINE_MS)
+  })
+
   it('aborts a task that does not finish in time, reports it and moves on', async () => {
     const h = harness()
     const a = deferred('details')
@@ -546,30 +551,6 @@ describe('the per-task deadline', () => {
     expect(h.visibility.size).toBe(0)
     await h.advance(200_000)
     expect(h.failed).toEqual([])
-  })
-})
-
-describe('globeBackgroundTasks', () => {
-  const run = (label: string) => Object.assign(async () => {}, { label })
-  const base = {
-    details: run('details'),
-    layers: run('layers'),
-    mapbox: run('mapbox'),
-    satellite: run('satellite'),
-    basemap: run('basemap'),
-    riversLakes: run('rivers_lakes'),
-    sw: run('sw'),
-  }
-
-  it('orders the tasks: details, layers, mapbox, satellite, basemap, rivers_lakes, sw', () => {
-    const tasks = globeBackgroundTasks(base)
-    expect(tasks.map(t => t.name)).toEqual(['details', 'layers', 'mapbox', 'satellite', 'basemap', 'rivers_lakes', 'sw'])
-    expect(tasks.map(t => (t.run as unknown as { label: string }).label)).toEqual(tasks.map(t => t.name))
-  })
-
-  it('leaves out what this device or build does not do in the background', () => {
-    const tasks = globeBackgroundTasks({ ...base, satellite: null, basemap: null, sw: null })
-    expect(tasks.map(t => t.name)).toEqual(['details', 'layers', 'mapbox', 'rivers_lakes'])
   })
 })
 

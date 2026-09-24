@@ -4,16 +4,10 @@ import { SiteData, getDataSource } from '../data/sites'
 import { FilterMode } from '../App'
 import { offlineFetch } from '../services/OfflineFetch'
 import { runMapboxLoadTask } from '../services/mapboxLoader'
-import {
-  browserQueueScheduling,
-  createGlobeBackgroundQueue,
-  globeBackgroundTasks,
-  type BgTask,
-  type GlobeBackgroundQueue,
-} from '../services/globeBackgroundQueue'
+import { browserQueueScheduling } from '../services/globeBackgroundQueue'
+import { useGlobeBackgroundQueue, type GlobeBackgroundRuns } from '../hooks/globe/useGlobeBackgroundQueue'
 import { useOffline } from '../contexts/OfflineContext'
 import { track } from '../analytics'
-import { trackBackgroundDone, trackBackgroundFailure } from '../analytics/globeBackground'
 import { EMPIRES } from '../config/empireData'
 import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
@@ -115,10 +109,7 @@ interface ProximityState {
 }
 
 /** App's tasks in the globe's background queue; `sw` is null where no worker is registered (dev). */
-export interface AppBackgroundTasks {
-  details: BgTask['run']
-  sw: BgTask['run'] | null
-}
+export type AppBackgroundTasks = Pick<GlobeBackgroundRuns, 'details' | 'sw'>
 
 interface GlobeProps {
   sites: (SiteData & { isInsideProximity?: boolean })[]
@@ -236,12 +227,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   // Contract C0: every critical loader reports its failure here; before globe_ready it
   // reaches GlobeErrorBoundary (App shows the error screen), afterwards it is tracked as live.
   const reportStartError = useStartErrorBridge(() => refs.layersReadyCalled.current)
-
-  // The background queue (services/globeBackgroundQueue.ts): one per mount, its tasks
-  // added once the basemap plan is known, started when the intro warp ends.
-  const backgroundRef = useRef<{ queue: GlobeBackgroundQueue; tasksAdded: boolean } | null>(null)
-  const appBackgroundTasksRef = useRef(appBackgroundTasks)
-  appBackgroundTasksRef.current = appBackgroundTasks
 
   // Custom Hooks
   const ui = useUIState({ initialShowCoordinates: true })
@@ -426,16 +411,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     () => ({ ...requestedTileLayers, satellite: satelliteActive }),
     [requestedTileLayers, satelliteActive],
   )
+  // A requested satellite that is not on the GPU yet: useGlobeBackgroundQueue (below)
+  // moves its task to the front or loads it directly.
   const satellitePending = requestedTileLayers.satellite && !satelliteReady
-  // A requested satellite that is not on the GPU loads now, whoever asked for it
-  // (the panel toggle, demoApi.setSatellite). Where the background queue preloads
-  // it (desktops), its task moves to the front or is already running; elsewhere
-  // (touch devices, or its task is over) it loads directly, joining a running load.
-  useEffect(() => {
-    if (!satellitePending || !basemapPlan) return
-    if (backgroundRef.current?.queue.promote('satellite')) return
-    requestSatellite()
-  }, [satellitePending, basemapPlan, requestSatellite])
 
   // Satellite mode: toggle between gray basemap and satellite imagery
   useSatelliteMode({ refs, satellite: tileLayers.satellite, vectorLayers, showMapbox, mapboxServiceRef })
@@ -598,7 +576,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       exitMapboxMode,
       mapboxServiceRef,
       mapboxStateRef,
-      requestMapbox: () => { backgroundRef.current?.queue.promote('mapbox') },
+      requestMapbox: () => { background.promote('mapbox') },
     })
   }, [])
 
@@ -799,7 +777,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       layersReadyCalledRef, dotsAnimationCompleteRef, logoAnimationStartedRef,
       // Runs inside the frame that ends the warp: start() only books an idle callback
       onWarpComplete: () => {
-        backgroundRef.current?.queue.start()
+        background.start()
         onWarpCompleteRef.current?.()
       },
       logoSpriteRef, logoMaterialRef, basemapMeshRef, basemapBackMeshRef,
@@ -905,24 +883,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     warpTargetCameraPosRef.current = target
   }, [initialPosition])
 
-  // The background queue of this mount. A finished task sends globe_bg, a failed one
-  // globe_error{phase:'bg:<task>'}; unmounting aborts the running task (not a failure)
-  // and drops the rest. Mapbox is created by its task (mapbox-gl is imported on
-  // demand, services/mapboxLoader.ts) and goes with the globe.
-  useEffect(() => {
-    const queue = createGlobeBackgroundQueue({
-      ...browserQueueScheduling(),
-      onTaskDone: trackBackgroundDone,
-      onTaskFailed: trackBackgroundFailure,
-    })
-    backgroundRef.current = { queue, tasksAdded: false }
-    return () => {
-      backgroundRef.current = null
-      queue.dispose()
-      mapboxServiceRef.current?.dispose()
-      mapboxServiceRef.current = null
-    }
-  }, [])
 
   // No orbit closer than the Mapbox switch distance until Mapbox is ready
   // (or has failed): the Three.js globe was never shown closer than that.
@@ -1555,16 +1515,13 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     return loadVectorLayerImpl(layerKey, buildVectorRendererContext())
   }, [buildVectorRendererContext])
 
-  // The background tasks, once per queue. The basemap plan (which basemap work this
-  // device does in the background) exists before the start-tier gray is on the GPU,
-  // so always before the warp that starts the queue. Every task builds its context
-  // when it runs, from refs.
-  useEffect(() => {
-    const background = backgroundRef.current
-    if (!background || background.tasksAdded || !basemapPlan) return
-    background.tasksAdded = true
-    const tasks = globeBackgroundTasks({
-      details: signal => appBackgroundTasksRef.current.details(signal),
+  // The background queue of this mount (hooks/globe/useGlobeBackgroundQueue.ts): the
+  // tasks this device needs, started from the loop's onWarpComplete, disposed on
+  // unmount. Every task builds its context when it runs, from refs.
+  const background = useGlobeBackgroundQueue({
+    plan: basemapPlan,
+    runs: {
+      details: appBackgroundTasks.details,
       layers: signal => upgradeGlobeLayers(buildVectorRendererContext(), signal),
       mapbox: signal => runMapboxLoadTask({
         containerRef: mapboxContainerRef,
@@ -1575,13 +1532,26 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         isCancelled: () => signal.aborted,
         signal,
       }),
-      satellite: basemapPlan.preloadSatellite ? loadSatellite : null,
-      basemap: basemapPlan.upgradeGray ? upgradeGray : null,
+      satellite: loadSatellite,
+      basemap: upgradeGray,
       riversLakes: signal => preloadRiversLakes(buildVectorRendererContext(), signal),
-      sw: appBackgroundTasksRef.current.sw,
-    })
-    for (const task of tasks) background.queue.add(task)
-  }, [basemapPlan, buildVectorRendererContext, loadSatellite, upgradeGray])
+      sw: appBackgroundTasks.sw,
+    },
+    satellitePending,
+    requestSatellite,
+    scheduling: browserQueueScheduling,
+  })
+
+  // Mapbox is created by its background task (mapbox-gl is imported on demand,
+  // services/mapboxLoader.ts) and goes with the globe. Declared after the queue
+  // (useGlobeBackgroundQueue), so its unmount cleanup runs after the queue has
+  // aborted a Mapbox load still on its way.
+  useEffect(() => {
+    return () => {
+      mapboxServiceRef.current?.dispose()
+      mapboxServiceRef.current = null
+    }
+  }, [])
 
   // Reload rivers/lakes when detail level changes (track previous to avoid initial load)
   const prevDetailLevelRef = refs.prevDetailLevel

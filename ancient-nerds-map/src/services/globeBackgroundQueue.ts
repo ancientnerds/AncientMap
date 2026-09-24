@@ -231,35 +231,3 @@ export function browserQueueScheduling(): Pick<GlobeBackgroundQueueDeps, 'schedu
     },
   }
 }
-
-/** The globe's background work; null where this device or build does not do it in the background. */
-export interface GlobeBackgroundRuns {
-  /** App: the site fields the globe payload leaves out (search and popups wait for them). */
-  details: BgTask['run']
-  /** Coastlines and borders to their detail tier. */
-  layers: BgTask['run']
-  /** mapbox-gl import and map init. */
-  mapbox: BgTask['run']
-  /** The satellite at the start tier (desktops whose maximum tier is high; touch devices load it on the first toggle). */
-  satellite: BgTask['run'] | null
-  /** The gray basemap at the maximum tier (when it is above the start tier). */
-  basemap: BgTask['run'] | null
-  /** The rivers and lakes files a toggle at the current zoom would load. */
-  riversLakes: BgTask['run']
-  /** App: the service worker (production builds only). */
-  sw: BgTask['run'] | null
-}
-
-/** The tasks in their run order: what search and popups wait for first, the service worker last. */
-export function globeBackgroundTasks(runs: GlobeBackgroundRuns): BgTask[] {
-  const order: Array<[BgTaskName, BgTask['run'] | null]> = [
-    ['details', runs.details],
-    ['layers', runs.layers],
-    ['mapbox', runs.mapbox],
-    ['satellite', runs.satellite],
-    ['basemap', runs.basemap],
-    ['rivers_lakes', runs.riversLakes],
-    ['sw', runs.sw],
-  ]
-  return order.flatMap(([name, run]) => (run ? [{ name, run }] : []))
-}

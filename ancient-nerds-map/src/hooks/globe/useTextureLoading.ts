@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { GlobeRefs } from './types'
-import { getBasemapTier, getStartTier, tierRank } from '../../utils/deviceTier'
+import { getBasemapTier, getStartTier, tierRank, type BasemapTier } from '../../utils/deviceTier'
 import {
   BasemapState,
   disposeBasemaps,
@@ -49,6 +49,11 @@ export interface BasemapPlan {
   preloadSatellite: boolean
   /** Queue task 'basemap': the maximum tier is above the start tier. */
   upgradeGray: boolean
+}
+
+/** What a device with these tiers loads in the background. */
+export function basemapPlanFor(tiers: { start: BasemapTier; max: BasemapTier }): BasemapPlan {
+  return { preloadSatellite: tiers.max === 'high', upgradeGray: tierRank(tiers.max) > tierRank(tiers.start) }
 }
 
 interface UseTextureLoadingReturn {
@@ -155,7 +160,7 @@ export function useTextureLoading({
     ctxRef.current = ctx
     const own = new AbortController()
     ownLoadsRef.current = own
-    setBasemapPlan({ preloadSatellite: tiers.max === 'high', upgradeGray: tierRank(tiers.max) > tierRank(tiers.start) })
+    setBasemapPlan(basemapPlanFor(tiers))
 
     const start = new AbortController()
     loadStartGray(ctx, start.signal).then(
