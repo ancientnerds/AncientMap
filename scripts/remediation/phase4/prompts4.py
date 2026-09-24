@@ -6,6 +6,16 @@ WITH GENERATED TEXT" (the translation and restatement rules) and verification "I
 REVIEW" (the reviewer's question and answer lines). The texts are frozen: a byte-hash test
 (`tests/remediation/test_phase4_select.py`) pins every one of them, the way Phase 3 pins its own.
 
+**Pilot 1's additions (2026-09-24).** Pilot 1 failed T2, T5 and T8
+(`output/remediation/phase4_runner/PILOT_RESULT_1.md`), so the selector question carries four
+rules after the design's five - (6) V9's 200-1100 characters, which it was never told; (7) V6's
+first sentence names the site, by a stored name or an `also_named` name of the site element (the
+title and the item's English label V6 accepts for a strong 'own' verdict); (8) never a sentence
+about the modern village, town or municipality, even when it names the site, and ABSTAIN when only
+such a sentence names it (T2, Orolik); (9) no definite reference whose antecedent is not picked
+(T5) - and the reviewer question the matching two DROP criteria. The answer lines and the parsers
+are unchanged. `docs/procedures/PHASE4_CONTRACTS.md` section 7 records the decision.
+
 Every question ends with the project's LLM01 guard line (`GUARD_LINE`), and every third-party text
 in a prompt sits inside a `<source>` element, which is what that line names. The stored description
 is never shown to the selector, so it cannot anchor on unsourced text; the site element carries only
@@ -46,6 +56,16 @@ SELECTOR_QUESTION = (
     "country, has no parentheses, does not open with a pronoun, and states something concrete; "
     "prefer one that carries a date;\n"
     "(5) if no listed sentence is about this site, answer ABSTAIN.\n"
+    "(6) the description is your DESC sentences after their removals, joined by spaces: it must "
+    "be 200-1100 characters long in total;\n"
+    "(7) your first DESC sentence must name the site: its name, an alias or an also_named name of "
+    "the site element;\n"
+    "(8) never pick a sentence about the modern village, town or municipality (its "
+    "administration, its population, its modern founding), even when it names the site; if the "
+    "only sentence that names the site is such a sentence, answer ABSTAIN with that reason;\n"
+    "(9) every picked sentence must be understandable from your picked sentences alone: never "
+    'pick a sentence with a definite reference ("the valley", "the mountain", "other ...", '
+    '"it") whose antecedent is not among your picks.\n'
     "\n"
     "Answer with these lines and nothing else. A sentence id is followed by the ids of the spans "
     "you remove from it, each written as a space, a hyphen and the span id:\n"
@@ -92,6 +112,11 @@ REVIEWER_QUESTION = (
     "sentence ask: is it about this site, is it fully supported by its passage, does it keep the "
     "same hedging and restrictions, and did the removals change what it says? Ask the same of the "
     "card, against the description.\n"
+    "DROP a sentence about the modern village, town or municipality (its administration, its "
+    "population, its modern founding) rather than the site, even when it names the site.\n"
+    'DROP a sentence with a definite reference ("the valley", "the mountain", "other ...", "it") '
+    "whose antecedent is in no published sentence before it: the source sentences before it are "
+    "not published.\n"
     "\n"
     "Answer with one line per sentence and nothing else:\n"
     "R<i>: KEEP\n"
@@ -124,11 +149,15 @@ def _period(site: M.PlanSite) -> str:
     return f"{site.period_start} to {site.period_end}"
 
 
-def site_element(site: M.PlanSite) -> str:
-    """The Phase-3-verified fields of the site. The stored description is deliberately absent."""
+def site_element(site: M.PlanSite, *, also_named: Sequence[str] | None = None) -> str:
+    """The Phase-3-verified fields of the site. The stored description is deliberately absent.
+
+    `also_named` is shown to the selector only (rule 7): the names V6 accepts in the first
+    sentence beside the stored name and aliases (`select_stage.also_named`)."""
+    also = "" if also_named is None else f'also_named="{attr("; ".join(also_named))}" '
     return (
         f'<site id="{attr(site.site_id)}" name="{attr(site.name)}" '
-        f'aliases="{attr("; ".join(site.aliases))}" country="{attr(site.country or "")}" '
+        f'aliases="{attr("; ".join(site.aliases))}" {also}country="{attr(site.country or "")}" '
         f'site_type="{attr(site.site_type or "")}" period="{attr(_period(site))}" '
         f'lat="{site.lat}" lon="{site.lon}"/>'
     )
@@ -142,10 +171,17 @@ def _source_open(source_id: str, meta: M.SourceDoc) -> str:
 
 
 def selector_block(
-    site: M.PlanSite, source_id: str, meta: M.SourceDoc, pool: Sequence[M.Sentence], text: str
+    site: M.PlanSite,
+    source_id: str,
+    meta: M.SourceDoc,
+    pool: Sequence[M.Sentence],
+    text: str,
+    *,
+    also_named: Sequence[str],
 ) -> str:
-    """The selector's user block: the site, then one entry per candidate with its spans."""
-    rows = [site_element(site), _source_open(source_id, meta)]
+    """The selector's user block: the site (with the names rule 7 lets the first sentence use),
+    then one entry per candidate with its spans."""
+    rows = [site_element(site, also_named=also_named), _source_open(source_id, meta)]
     for sentence in pool:
         section = sentence.section if sentence.section is not None else "lead"
         rows.append(f"{sentence.sid} [{section}] {S.sentence_text(text, sentence)}")

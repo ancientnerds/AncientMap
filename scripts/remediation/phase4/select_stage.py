@@ -24,9 +24,11 @@ non-zero and names the error in `select.json`.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,7 @@ from phase4 import batch4 as B  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import prompts4 as P  # noqa: E402
 from phase4 import sentences as S  # noqa: E402
+from phase4 import subject_gate as SG  # noqa: E402
 
 #: The lanes whose text is selected from a Wikipedia source (T selects in its own language).
 SELECTING_LANES = frozenset({M.Lane.W, M.Lane.S, M.Lane.T})
@@ -139,14 +142,107 @@ def site_pool(
     return source_id, meta, text, pool
 
 
+# ------------------------------------------------------------ the names V6 accepts (S3's reading)
+
+#: `src.D` as S1 stored it: the raw meta object and the raw answer's bytes, `None` for an absent part.
+Witness = tuple[Mapping[str, Any] | None, bytes | None]
+
+
+def site_witness(batch_dir: Path, site_id: str) -> Witness:
+    """The site's Wikidata item as S1 pinned it (`src.D.meta`, `src.D`), each part `None` when S1
+    stored none (a QID-less site, or an item S1 could not pin)."""
+    store = B.evidence_store(batch_dir)
+    meta_path = store.path_for(site_id, M.source_feature("D", "meta"))
+    raw_path = store.path_for(site_id, M.source_feature("D", "raw"))
+    meta = B.read_meta(batch_dir, site_id, "D") if meta_path.exists() else None
+    return meta, raw_path.read_bytes() if raw_path.exists() else None
+
+
+def _strong_own(gate: M.SubjectGate | None) -> bool:
+    """The design's strong 'own' verdict (V6): QID + coordinates + not a place-level item."""
+    return (
+        gate is not None
+        and gate.verdict is M.SubjectVerdict.OWN
+        and gate.qid_match
+        and gate.km is not None
+        and not gate.place_item
+    )
+
+
+def _witness_label(site: M.PlanSite, witness: Witness) -> str | None:
+    """The English label of the stored QID's item, when `src.D` is that item as S1 pinned it: the
+    meta is D's, the stored answer hashes to its `sha256_raw`, and the answer carries the QID."""
+    meta, raw = witness
+    if site.wikidata_qid is None or meta is None or raw is None or meta.get("id") != "D":
+        return None
+    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():
+        return None
+    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)
+    if not isinstance(entity, Mapping):
+        return None
+    value = ((entity.get("labels") or {}).get("en") or {}).get("value")
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def v6_names(site: M.PlanSite, meta: M.SourceDoc, witness: Witness) -> tuple[str, ...]:
+    """The names V6 accepts in the first published sentence of a text from this source: the stored
+    name and the `unified_site_names` aliases, and - only for a strong 'own' verdict of the source,
+    where the subject gate already tied the article and the item to the site - the article's pinned
+    title and the English label of the site's pinned Wikidata item.
+
+    S3's own reading of V6's rule (PHASE4_CONTRACTS.md section 7, 2026-09-24): `verify4` has its
+    own, and a parity test holds the two together; neither imports the other's."""
+    names = [site.name, *site.aliases]
+    if _strong_own(meta.subject_gate):
+        if meta.title is not None and meta.title.strip():
+            names.append(meta.title)
+        label = _witness_label(site, witness)
+        if label is not None:
+            names.append(label)
+    return tuple(names)
+
+
+def also_named(site: M.PlanSite, names: Sequence[str]) -> tuple[str, ...]:
+    """The names beyond the stored name and aliases, each once: what the selector's site element
+    adds as `also_named` (compared by Phase 4's one name fold, `subject_gate.fold`)."""
+    seen = {SG.fold(name) for name in (site.name, *site.aliases)}
+    extra: list[str] = []
+    for name in names:
+        folded = SG.fold(name)
+        if folded and folded not in seen:
+            seen.add(folded)
+            extra.append(name)
+    return tuple(extra)
+
+
 def selector_prompt(
-    site: M.PlanSite, source_id: str, meta: M.SourceDoc, pool: Sequence[M.Sentence], text: str
+    site: M.PlanSite,
+    source_id: str,
+    meta: M.SourceDoc,
+    pool: Sequence[M.Sentence],
+    text: str,
+    *,
+    also: Sequence[str],
 ) -> MS.Prompt:
     return MS.Prompt(
         stage=Stage.FINDER,
         system=P.SELECTOR_QUESTION,
-        user=P.selector_block(site, source_id, meta, pool, text),
+        user=P.selector_block(site, source_id, meta, pool, text, also_named=also),
     )
+
+
+def site_selector_prompt(
+    batch_dir: Path,
+    site: M.PlanSite,
+    source_id: str,
+    meta: M.SourceDoc,
+    pool: Sequence[M.Sentence],
+    text: str,
+) -> MS.Prompt:
+    """The selector's prompt for one site of this batch: its pool, and beside the stored names the
+    ones V6 accepts from the batch's pinned evidence (`v6_names`, shown as `also_named`)."""
+    names = v6_names(site, meta, site_witness(batch_dir, site.site_id))
+    return selector_prompt(site, source_id, meta, pool, text, also=also_named(site, names))
 
 
 def _hold(site_id: str, reason: M.HoldReason, detail: str) -> M.Hold:
@@ -197,7 +293,7 @@ def select_batch(batch_dir: Path, *, ledger: Path, runner: MS.ModelRunner) -> in
                 site_id=site.site_id,
                 field=B.SELECT_FIELD,
                 stage=Stage.FINDER,
-                prompt=selector_prompt(site, source_id, meta, pool, text),
+                prompt=site_selector_prompt(batch_dir, site, source_id, meta, pool, text),
                 runner=runner,
                 ledger=book,
                 answers=answers,

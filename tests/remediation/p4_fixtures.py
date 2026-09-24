@@ -196,6 +196,57 @@ def make_batch(
     return batch_dir
 
 
+#: A strong 'own' verdict (V6): the QIDs match, the article lies near the point, no place item.
+STRONG_OWN = M.SubjectGate(
+    qid_match=True,
+    shared=False,
+    concept=False,
+    place_item=False,
+    km=0.3,
+    name_score=95.0,
+    verdict=M.SubjectVerdict.OWN,
+)
+
+
+def witness_answer(qid: str = "Q1", label: str | None = "Stone Temple") -> bytes:
+    """A `wbgetentities` answer for one item, as S1 pins it as `src.D` (English labels only)."""
+    labels = {} if label is None else {"en": {"language": "en", "value": label}}
+    entity = {"type": "item", "id": qid, "labels": labels, "claims": {}}
+    return json.dumps({"entities": {qid: entity}}, ensure_ascii=False).encode("utf-8")
+
+
+def pin_witness(
+    batch_dir: Path, site_id: str, raw: bytes, *, sha256_raw: str | None = None, **over: object
+) -> None:
+    """Store `raw` as the site's `src.D` with its meta, pinned by `sha256_raw` (default: its own);
+    `over` replaces fields of the stored meta (a meta filed under another id, say)."""
+    import hashlib
+
+    meta = M.SourceDoc(
+        id="D",
+        url="https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q1&format=json",
+        permalink=None,
+        title=None,
+        pageid=None,
+        revid=None,
+        lastrevid=None,
+        rev_timestamp=None,
+        retrieved_at="2026-09-21T20:17:23+00:00",
+        sha256_raw=sha256_raw or hashlib.sha256(raw).hexdigest(),
+        sha256_text=None,
+        licence=M.Licence.CC0,
+        route=M.Route.PHASE3_EVIDENCE,
+        subject_gate=None,
+        tdm=None,
+        final_url=None,
+        truncated=None,
+    )
+    store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    store.write(site_id=site_id, feature=M.source_feature("D", "raw"), body=raw)
+    body = json.dumps({**meta.to_dict(), **over}, ensure_ascii=False).encode("utf-8")
+    store.write(site_id=site_id, feature=M.source_feature("D", "meta"), body=body)
+
+
 #: What the Opus handoff declares for every answer: no meter, zeros that say so.
 USAGE = MS.Usage.unmetered()
 

@@ -677,6 +677,18 @@ def source_files(
     return metas, texts
 
 
+def witness_files(
+    store: F.EvidenceStore, site_id: str
+) -> tuple[dict[str, Any] | None, bytes | None]:
+    """The site's Wikidata item as S1 pinned it: the raw `src.D.meta` object and the `src.D` answer's
+    bytes, each `None` when S1 stored none. The verifier's `witness` (V6 accepts the item's English
+    label for a strong 'own' verdict and checks the pin itself)."""
+    meta_path = store.path_for(site_id, M.source_feature("D", "meta"))
+    raw_path = store.path_for(site_id, M.source_feature("D", "raw"))
+    meta = M.parse_json(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else None
+    return meta, raw_path.read_bytes() if raw_path.exists() else None
+
+
 def _hold_detail(holds: Iterable[M.Hold]) -> str:
     return "; ".join(f"{hold.reason.value} ({hold.scope.value}): {hold.detail}" for hold in holds)
 
@@ -755,7 +767,15 @@ def _p4_site(
     metas, texts = source_files(batch.evidence, site_id, source_ids)
     quotes = [texts[s.src][s.start : s.end] for s in assembly.provenance.sentences]
     raw = new_raw_data(site.raw_data, assembly)
-    found = verify(site, assembly, metas=metas, texts=texts, quotes=quotes, new_raw_data=raw)
+    found = verify(
+        site,
+        assembly,
+        metas=metas,
+        texts=texts,
+        quotes=quotes,
+        new_raw_data=raw,
+        witness=witness_files(batch.evidence, site_id),
+    )
     if found:
         return W.Refusal(site_id, "description", RULE_VERIFY, _hold_detail(found))
 

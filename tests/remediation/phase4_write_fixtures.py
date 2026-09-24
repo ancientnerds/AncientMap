@@ -284,6 +284,7 @@ class Verify:
         texts: Mapping[str, str],
         quotes: Sequence[str],
         new_raw_data: Mapping[str, Any],
+        witness: tuple[Any, bytes | None],
     ) -> tuple[M.Hold, ...]:
         self.calls.append(
             {
@@ -293,6 +294,7 @@ class Verify:
                 "texts": texts,
                 "quotes": list(quotes),
                 "new_raw_data": new_raw_data,
+                "witness": witness,
             }
         )
         return tuple(self.holds.get(site.site_id, ()))

@@ -465,7 +465,13 @@ def reverify(
             if text is not None:
                 texts[ref.id] = text
         for hold in V4.verify_site(
-            entry.site, assembly, metas=metas, texts=texts, quotes=quotes, new_raw_data=raw
+            entry.site,
+            assembly,
+            metas=metas,
+            texts=texts,
+            quotes=quotes,
+            new_raw_data=raw,
+            witness=V4.read_witness(store, site_id),
         ):
             deviations.append(
                 f"REVERIFY {site_id} {hold.reason.value} ({hold.scope.value}): {hold.detail}"

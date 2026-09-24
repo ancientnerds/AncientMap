@@ -165,6 +165,38 @@ def wiki_meta(source_id: str, text: str, *, lang: str, title: str, revid: int, *
     return {**doc.to_dict(), **over}
 
 
+def witness_answer(qid: str = "Q1353330", label: str | None = "Tarxien Temples") -> bytes:
+    """A `wbgetentities` answer for one item, in the shape S1 pins as `src.D` (English only)."""
+    labels = {} if label is None else {"en": {"language": "en", "value": label}}
+    entity = {"type": "item", "id": qid, "labels": labels, "claims": {}}
+    return json.dumps({"entities": {qid: entity}}, ensure_ascii=False).encode("utf-8")
+
+
+def witness(raw: bytes | None = None, **over: Any) -> V.Witness:
+    """The site's `src.D`: its raw meta object (pinned by `sha256_raw`) and the answer's bytes."""
+    raw = witness_answer() if raw is None else raw
+    meta = M.SourceDoc(
+        id="D",
+        url="https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q1353330&format=json",
+        permalink=None,
+        title=None,
+        pageid=None,
+        revid=None,
+        lastrevid=None,
+        rev_timestamp=None,
+        retrieved_at="2026-09-21T20:17:23+00:00",
+        sha256_raw=hashlib.sha256(raw).hexdigest(),
+        sha256_text=None,
+        licence=M.Licence.CC0,
+        route=M.Route.PHASE3_EVIDENCE,
+        subject_gate=None,
+        tdm=None,
+        final_url=None,
+        truncated=None,
+    )
+    return V.Witness(meta={**meta.to_dict(), **over}, raw=raw)
+
+
 def plan_site(**over: Any) -> M.PlanSite:
     values: dict[str, Any] = {
         "site_id": SITE_ID,
@@ -203,6 +235,8 @@ class Case:
     texts: dict[str, str]
     quotes: list[str]
     new_raw_data: dict[str, Any] = field(default_factory=dict)
+    #: the site's `src.D` as S1 pinned it; none by default (V6 then reads no item label)
+    witness: tuple[Any, bytes | None] = (None, None)
 
     def run(self) -> tuple[M.Hold, ...]:
         return V.verify_site(
@@ -212,6 +246,7 @@ class Case:
             texts=self.texts,
             quotes=self.quotes,
             new_raw_data=self.new_raw_data,
+            witness=self.witness,
         )
 
     def reasons(self) -> set[str]:
@@ -432,6 +467,23 @@ def make_generated_case(lane: str) -> Case:
     )
 
 
+def retitle(case: Case, title: str) -> Case:
+    """The lane-W case with its article pinned under another title: the meta, the attribution and
+    the citation name it (V1 and V8 hold them together); the text and its permalink stay."""
+    provenance = case.assembly.provenance
+    attribution = dataclasses.replace(provenance.attribution, title=title)
+    citations = tuple(
+        dataclasses.replace(citation, title=f"Wikipedia: {title}")
+        for citation in case.assembly.citations
+    )
+    moved = case.replace(
+        provenance=dataclasses.replace(provenance, attribution=attribution), citations=citations
+    )
+    return dataclasses.replace(
+        moved, metas={**moved.metas, "W": {**moved.metas["W"], "title": title}}
+    )
+
+
 def reprovenance(case: Case, **over: Any) -> Case:
     """The case with provenance fields replaced (desc_sha256 kept honest)."""
     provenance = dataclasses.replace(case.assembly.provenance, **over)
@@ -521,7 +573,8 @@ def write_batch(
 ) -> Path:
     """One batch directory `p4-0001` under `parent` as S0-S4 leave it: the plan's two sites
     (the case's and one held in lane 0), their lanes (the case's with `sources`), the case's
-    assembly and every pinned source of the case in the evidence store."""
+    assembly and every pinned source of the case in the evidence store (its `src.D` too, when
+    the case carries one)."""
     batch_dir = parent / "p4-0001"
     batch_dir.mkdir(parents=True)
     held = plan_site(site_id=HELD_SITE, name="Bulls of Guisando")
@@ -534,6 +587,14 @@ def write_batch(
     (batch_dir / M.LANES_FILE).write_text(M.dump_jsonl(lanes), encoding="utf-8")
     (batch_dir / M.ASSEMBLY_FILE).write_text(M.dump_jsonl([case.assembly]), encoding="utf-8")
     store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    d_meta, d_raw = case.witness
+    if d_meta is not None and d_raw is not None:
+        store.write(
+            site_id=SITE_ID,
+            feature=M.source_feature("D", "meta"),
+            body=json.dumps(d_meta, ensure_ascii=False).encode("utf-8"),
+        )
+        store.write(site_id=SITE_ID, feature=M.source_feature("D", "raw"), body=d_raw)
     for source_id, meta in case.metas.items():
         store.write(
             site_id=SITE_ID,

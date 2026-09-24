@@ -5,8 +5,10 @@ prefixes and names, the seeded draws per stratum (lanes W and S from the census;
 candidates the routes stage held for a search that is switched off; B3 from the routeless read;
 extracts over 40,000 characters), the census read from a run directory, the forbidden anchors of
 `gold_prose_errors.json` and the verbatim threshold blocks. No socket, database or model is touched:
-the production read goes through a recording runner. The mutation cases are `P4_PILOT_MUTATIONS`
-in `scripts/remediation/phase3/mutation_sweep.py` (label `p4 pilot: `).
+the production read goes through a recording runner. Pilot 2 (seed 20260924): pilot 1's fixed members
+kept, its draws excluded, its sealed thresholds unchanged. The mutation cases are
+`P4_PILOT_MUTATIONS` and `P4_PILOT2_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py`
+(label `p4 pilot: `).
 """
 
 from __future__ import annotations
@@ -242,6 +244,70 @@ def test_a_draw_never_takes_a_site_placed_before_it() -> None:
     assert summary["draws"][PL.DRAW_W]["eligible"] == 25
 
 
+# ================================================================ pilot 2: a fresh draw (2026-09-24)
+
+
+def fixed_lines(lines: list[dict[str, Any]]) -> list[tuple[str, list[str]]]:
+    return [
+        (line["site_id"], line["strata"])
+        for line in lines
+        if not set(line["strata"]) & {stratum for stratum, _ in PL.DRAWS}
+    ]
+
+
+def test_pilot_2_keeps_pilot_1s_fixed_members_and_draws_anew_without_its_draws() -> None:
+    """The design's failure rule: "re-pilot on a fresh draw of the same strata". The fixed members
+    are exactly pilot 1's; every stratum is drawn with pilot 2's seed, pilot 1's draws excluded."""
+    sites = named_sites()
+    census = census_of(
+        sites, {**lane_sites("0b0b0b0b", 80, M.Lane.W), **lane_sites("0c0c0c0c", 12, M.Lane.S)}
+    )
+    first, _ = build(sites, census)
+    second, summary = PL.build_pilot(
+        sites, census, gold=[], q309=Q309, routeless=set(), seed=PL.SEED_PILOT2, earlier=first
+    )
+
+    assert PL.SEED_PILOT2 == 20260924
+    assert (
+        fixed_lines(second) == fixed_lines(first)
+        and second[: summary["fixed"]] == first[: summary["fixed"]]
+    )
+    w1, w2 = drawn(first, PL.DRAW_W), drawn(second, PL.DRAW_W)
+    eligible = sorted({sid("0b0b0b0b", n) for n in range(1, 81)} - set(w1))
+    assert w2 == sorted(random.Random(PL.SEED_PILOT2).sample(eligible, 30))  # noqa: S311
+    assert summary["draws"][PL.DRAW_W] == {
+        "asked": 30,
+        "population": 80,
+        "eligible": 50,
+        "taken": 30,
+    }
+    # a stratum pilot 1 nearly used up is taken whole: 12 lane-S sites, 8 drawn before
+    assert drawn(second, PL.DRAW_S) == sorted(
+        {sid("0c0c0c0c", n) for n in range(1, 13)} - set(drawn(first, PL.DRAW_S))
+    )
+    assert summary["earlier_draws_excluded"] == 38
+
+
+def test_pilot_2_refuses_fixed_members_that_are_not_pilot_1s() -> None:
+    sites = named_sites()
+    census = census_of(sites, lane_sites("0b0b0b0b", 40, M.Lane.W))
+    first, _ = build(sites, census)
+    for earlier in (first[1:], [first[1], first[0], *first[2:]]):
+        with pytest.raises(R.InputError, match="not the earlier pilot's"):
+            PL.build_pilot(
+                sites, census, gold=[], q309=Q309, routeless=set(), seed=1, earlier=earlier
+            )
+
+
+def test_an_earlier_line_that_is_neither_fixed_nor_one_draw_is_refused() -> None:
+    mixed = {"site_id": sid("0b0b0b0b"), "strata": ["gold-standard", PL.DRAW_W]}
+    with pytest.raises(R.InputError, match="neither fixed nor one draw"):
+        PL.earlier_pilot([mixed])
+    two = {"site_id": sid("0b0b0b0b"), "strata": [PL.DRAW_W, PL.DRAW_S]}
+    with pytest.raises(R.InputError, match="neither fixed nor one draw"):
+        PL.earlier_pilot([two])
+
+
 def _held(site_id: str, source_url: str | None, holds: tuple[str, ...] = STOPPED) -> tuple:
     plan_site = site(site_id, "Held site", enwiki_title=None, source_url=source_url)
     return plan_site, facts(M.Lane.ZERO, holds)
@@ -438,6 +504,17 @@ def test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line(
     lines = R.read_jsonl(tmp_path / "a.jsonl")
     assert lines[0]["site_id"] == sid("0b0b0b0b", 1) and lines[0]["strata"] == ["gold-standard"]
     assert drawn(lines, PL.DRAW_W) == [sid("0b0b0b0b", 2), sid("0b0b0b0b", 3)]
+
+    # pilot 2: `--after` keeps the fixed lines, excludes the draws, and names its input's digest
+    second = tmp_path / "second.jsonl"
+    after = [f"--after={tmp_path / 'a.jsonl'}", f"--seed={PL.SEED_PILOT2}", f"--out={second}"]
+    assert PL.main([*argv, *after]) == 0
+    printed = capsys.readouterr().out
+    summary = json.loads(printed[: printed.rindex("STAGE_EXIT=")])
+    assert summary["earlier_draws_excluded"] == 2
+    assert summary["inputs"]["after"] == PL._sha256(tmp_path / "a.jsonl")
+    lines2 = R.read_jsonl(second)
+    assert fixed_lines(lines2) == fixed_lines(lines) and drawn(lines2, PL.DRAW_W) == []
 
 
 # =========================================================================== the prose errors
@@ -658,3 +735,46 @@ def test_the_sealed_thresholds_are_the_designs_blocks_verbatim() -> None:
     thresholds, failure = PL.threshold_blocks(entry["pilot_and_thresholds"])
     assert f"\n{thresholds}\n\n{failure}\n" in text
     assert text == PL.thresholds_document(entry)
+
+
+# ========================================================= pilot 2's seal (2026-09-24, seed 20260924)
+
+#: The audit log's section that sealed pilot 2 before its first model question was exported.
+PILOT2_SECTION = "## 2026-09-24 - Phase-4 pilot 2, sealed before its first model question"
+#: Pilot 2's new draw, and the two documents it keeps from pilot 1, byte for byte.
+SEALED_PILOT2 = {
+    "PILOT2.jsonl": "9caaaa0312369155bb489a0c96ba6fb1b5e57ec988e787a0206c10503cc9f81c",
+    "PILOT_THRESHOLDS.md": SEALED["PILOT_THRESHOLDS.md"],
+    "gold_prose_errors.json": SEALED["gold_prose_errors.json"],
+}
+
+
+def _section(log: str, heading: str) -> str:
+    start = log.index(heading)
+    end = log.find("\n## ", start + len(heading))
+    return log[start:] if end == -1 else log[start:end]
+
+
+def test_pilot_2_is_sealed_with_pilot_1s_thresholds_byte_for_byte() -> None:
+    """The thresholds are "never loosened after the data is seen": pilot 2 runs under the document
+    sealed before pilot 1's first question, byte for byte, and the audit log's pilot-2 section
+    records PILOT2.jsonl's digest beside the two unchanged ones before its first export."""
+    section = _section(AUDIT_LOG.read_text(encoding="utf-8"), PILOT2_SECTION)
+    for name, digest in SEALED_PILOT2.items():
+        assert PL._sha256(RUNNER / name) == digest, name
+        assert f"`{digest}`" in section, f"the pilot-2 section does not record {name}'s sha256"
+
+
+def test_the_sealed_pilot_2_keeps_pilot_1s_fixed_members_and_none_of_its_draws() -> None:
+    first = R.read_jsonl(RUNNER / "PILOT.jsonl")
+    second = R.read_jsonl(RUNNER / "PILOT2.jsonl")
+    fixed, drawn_first = PL.earlier_pilot(first)
+    fixed_second, drawn_second = PL.earlier_pilot(second)
+    assert fixed_second == fixed and len(fixed) == 70
+    assert second[:70] == first[:70]  # the same census: the fixed lines are pilot 1's, whole
+    assert not drawn_first & drawn_second and len(drawn_second) == 62
+    ids = [line["site_id"] for line in second]
+    assert len(ids) == len(set(ids)) == 132
+    strata = [stratum for line in second for stratum in line["strata"]]
+    for stratum, count in PL.DRAWS:
+        assert strata.count(stratum) == count, stratum

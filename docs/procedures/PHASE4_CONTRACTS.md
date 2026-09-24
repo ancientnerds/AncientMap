@@ -265,9 +265,11 @@ Provides:
   `sha256(card) == provenance.card.text_sha256`. Callers updated in place, no copies.
 - `verify4.verify_site(site: M.PlanSite, assembly: M.Assembly, *, metas: Mapping[str,
   Mapping[str, Any]], texts: Mapping[str, str], quotes: Sequence[str], new_raw_data:
-  Mapping[str, Any]) -> tuple[M.Hold, ...]`: empty means V1-V15 pass; every hold carries its rule
-  id (`M.HoldReason.V1` ... `V15`). `metas` are the raw `src.<id>.meta` objects, `quotes` the
-  quote per published sentence (the store slice in a batch, the journal's at acceptance).
+  Mapping[str, Any], witness: tuple[Any, bytes | None]) -> tuple[M.Hold, ...]`: empty means
+  V1-V15 pass; every hold carries its rule id (`M.HoldReason.V1` ... `V15`). `metas` are the raw
+  `src.<id>.meta` objects, `quotes` the quote per published sentence (the store slice in a batch,
+  the journal's at acceptance), `witness` the site's `src.D` (raw meta, raw answer bytes, each
+  `None` when S1 pinned none; added 2026-09-24, section 7 "Pilot 1's fixes").
   `verify4.verify_batch(batch_dir) -> int`. Never imports `assemble.py`; one mutation case per rule.
 - `verify_writes4`: the acceptance CLI (`ACCEPT_EXIT=`), reusing `verify_writes`' journal-chain
   reader and re-running `verify4.verify_site` on production read-back with the journal quotes.
@@ -604,6 +606,69 @@ with exactly the sites that passed; it counts as reviewed only when `review4.jso
   under (`SELECT_FIELD` ... `REVIEW_FIELD` on `wip/p4-select`); on that merge `batch4` takes them
   from `model4`, so there is one spelling.
 
+### Pilot 1's fixes (2026-09-24): the two questions and V6's names
+
+Pilot 1 (`output/remediation/phase4_runner/PILOT_RESULT_1.md`, run `pilot-2026-09-24`) failed T2
+(Orolik: the selector picked the lead sentence about the modern village, its municipality and
+county, and the reviewer kept it), T5 (4 of 319 sentences with a dangling definite reference:
+Condorcaga "the mountain", Kit Hill "Other notable artifacts", Peppercombe Castle "the valley",
+Ocriticum "the via glareata") and T8 (52 of 77 lane-W sites write-eligible; V6 held 15, V9 8).
+Under the thresholds' failure rule the causes were fixed before pilot 2; no threshold changed.
+
+**The selector question** (`prompts4.SELECTOR_QUESTION`, sha256 `8969add9...baad046`, was
+`a9dad5c0...439498e28`) keeps the design's rules (1)-(5) verbatim and adds, before the answer lines:
+
+    (6) the description is your DESC sentences after their removals, joined by spaces: it must be 200-1100 characters long in total;
+    (7) your first DESC sentence must name the site: its name, an alias or an also_named name of the site element;
+    (8) never pick a sentence about the modern village, town or municipality (its administration, its population, its modern founding), even when it names the site; if the only sentence that names the site is such a sentence, answer ABSTAIN with that reason;
+    (9) every picked sentence must be understandable from your picked sentences alone: never pick a sentence with a definite reference ("the valley", "the mountain", "other ...", "it") whose antecedent is not among your picks.
+
+(6) is V9's bound, which the selector was never told (8 lane-W V9 holds). (7) is V6's first-sentence
+rule, which (8)'s ABSTAIN presupposes. **The reviewer question** (`REVIEWER_QUESTION`, sha256
+`529c9678...461d0cb3`, was `8d2362a9...2c4399`) adds after "Ask the same of the card, against the
+description.":
+
+    DROP a sentence about the modern village, town or municipality (its administration, its population, its modern founding) rather than the site, even when it names the site.
+    DROP a sentence with a definite reference ("the valley", "the mountain", "other ...", "it") whose antecedent is in no published sentence before it: the source sentences before it are not published.
+
+The answer lines (`DESC:`/`CARD:`/`ABSTAIN:`, `R<i>: KEEP|DROP <why>`, `CARD: KEEP|DROP <why>`) and
+both parsers are unchanged; the byte pins in `test_phase4_select.py` were re-pinned with the reason.
+
+**V6's names** (design: "The article title and Wikidata labels count only for a strong 'own'
+verdict (QID + coordinates + not place-level)"). Sentence 1 must name the site by the stored name or
+a `unified_site_names` alias; for a strong 'own' verdict of sentence 1's source (verdict `own`,
+`qid_match`, a known `km`, no `place_item`) also by the pinned article's title and by the **English
+label of the site's pinned Wikidata item** (`src.D`). The title already counted; the label is new:
+until now `verify_site` never saw the item and read "Wikidata labels" as the title alone. The label
+counts only as S1 pinned it: the meta is `src.D`'s, the stored answer hashes to its `sha256_raw`,
+and the answer carries the stored QID. Fold and token rules are unchanged (`name_in`). **This is
+not a loosening of identity:** a strong 'own' verdict means the subject gate already verified
+article <-> site (the page's item is the stored QID, the article lies within `max(5 km, P625
+precision)`, the item is no concept and no place-level item), so the title and the label are
+names of the verified site; a place-level item (a town's article, 'Clare', 'Enns (town)') still
+adds no name - that is the T2 trap. Re-measured on a scratch copy of pilot 1's run (its stored
+selections re-assembled and re-verified, 2026-09-24): the V6 name holds fall from 14 to 9 - 'Beacon
+Hill, Burghclere, Hampshire' (label 'Beacon Hill'), 'Justinianopolis (Epirus)', 'Altar Stone -
+Stonehenge', 'Pant-y-Saer Burial Chamber' and 'Windmill Hill, Avebury' pass; the 4 place-level
+items (City of Enns, Argos, Clare, Ai-Khanoum) and the 5 sites whose first pick carries none of
+the names (Odeon, Čertova pec, Partiscum, Temple of Dakka, Orbe-Boscéaz) stay held - rule (7)
+now asks the selector for that first name.
+
+- `verify_site(..., witness)` (section 5): `verify4.read_witness(store, site_id)` reads it in S5
+  (`verify_batch`), the review's S5 (`run4.reverify_for`) and the acceptance (`verify_writes4`);
+  `write4.witness_files` in the P4 plan. `verify4.v6_names` and `verify4.witness_label` are public;
+  a failed V6 names every name it tried and, for a strong 'own' verdict, why the witness added none.
+- **The same rule on S3's side, in its own code** (the D3 idea): `select_stage.v6_names` reads the
+  source's `SubjectGate` record and `src.D` through `batch4`, and the selector's site element shows
+  the names beyond the stored ones as `also_named` (`select_stage.also_named`, by Phase 4's one name
+  fold) - rule (7)'s names. `run4 select`'s preview measures that exact prompt
+  (`select_stage.site_selector_prompt`). Neither module imports the other; the parity test
+  `test_s3_and_v6_accept_the_same_names` runs both over the same store (strong, no distance, QID
+  mismatch, place item, shared, no witness, another item, unpinned, no English label, a meta filed
+  under another id) and asserts the same names. The lane-S pool filter (`candidate_pool`'s `names`)
+  stays the stored names only: it mirrors V7, not V6, and lane S's verdict is `shared`, never a
+  strong 'own'.
+
 ## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
 
 Track D (WB-D1 ... WB-D5, branch `wip/p4-write`) built against sections 1-6 unchanged; its
@@ -747,3 +812,8 @@ section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question")
   (`gold_prose_errors.json`) and `thresholds` (`PILOT_THRESHOLDS.md`, verbatim from the design).
 - `phase3.fetch_stage.HostPacer.wait` waits for a lock its holder is deleting (Windows answers the
   re-create with access denied while the file is "delete pending") instead of dying of it.
+- **Pilot 2** (2026-09-24, after pilot 1 failed T2, T5 and T8): `pilot4 build --after PILOT.jsonl
+  --seed 20260924` - pilot 1's fixed members, refused unless site for site and in order, and a fresh
+  draw of every seeded stratum excluding pilot 1's 62 draws (`PILOT2.jsonl`); `PILOT_THRESHOLDS.md`
+  and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is `PLAN4.pilot2.jsonl` and
+  its run `runs/pilot2-2026-09-24`. The fixes it runs with are section 7, "Pilot 1's fixes".

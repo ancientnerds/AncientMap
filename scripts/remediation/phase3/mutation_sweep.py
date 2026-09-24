@@ -5141,8 +5141,9 @@ PHASE4_WRITE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write4: the verifier is shown other raw_data than the row writes",
         P4_WRITE,
-        "quotes=quotes, new_raw_data=raw)",
-        "quotes=quotes, new_raw_data=dict(site.raw_data or {}))  # mutant",
+        "        new_raw_data=raw,\n        witness=witness_files(batch.evidence, site_id),\n",
+        "        new_raw_data=dict(site.raw_data or {}),  # mutant\n"
+        "        witness=witness_files(batch.evidence, site_id),\n",
         P4_WRITE_TEST,
         "test_the_verifier_is_shown_exactly_the_bytes_the_rows_write",
     ),
@@ -7309,8 +7310,10 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: the store's slices replace the journal quotes",
         P4_ACCEPT,
-        "            entry.site, assembly, metas=metas, texts=texts, quotes=quotes, new_raw_data=raw\n",
-        "            entry.site, assembly, metas=metas, texts=texts, new_raw_data=raw,  # mutant\n            quotes=[texts[s.src][s.start : s.end] for s in provenance.sentences],\n",
+        "            quotes=quotes,\n            new_raw_data=raw,\n"
+        "            witness=V4.read_witness(store, site_id),\n",
+        "            quotes=[texts[s.src][s.start : s.end] for s in provenance.sentences],  # mutant\n"
+        "            new_raw_data=raw,\n            witness=V4.read_witness(store, site_id),\n",
         P4_ACCEPT_TEST,
         "test_the_journal_quotes_are_the_ones_verified",
     ),
@@ -16663,6 +16666,316 @@ P4_PILOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += P4_PILOT_MUTATIONS
+
+
+# ── pilot 1's root causes fixed (2026-09-24), and pilot 2's draw ─────────────────────────────────
+#: Pilot 1 failed T2 (a sentence about the modern village), T5 (dangling definite references) and
+#: T8 (V9 bounds the selector was never told; V6 accepting no name the gate had tied to the site):
+#: `output/remediation/phase4_runner/PILOT_RESULT_1.md`. The selector and reviewer questions carry
+#: the rules, V6 accepts the pinned title and the pinned item's English label for a strong 'own'
+#: verdict - in verify4 and, in its own code, on S3's side, which shows them to the selector.
+P4P2_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4P2_SELECT = "scripts/remediation/phase4/select_stage.py"
+P4P2_SELECT_TEST = "tests/remediation/test_phase4_select.py"
+P4P2_RUN4 = "scripts/remediation/phase4/run4.py"
+P4P2_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4P2_VERIFY = "scripts/remediation/phase4/verify4.py"
+P4P2_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
+P4P2_WRITE = "scripts/remediation/phase4/write4.py"
+P4P2_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4P2_ACCEPT = "output/remediation/tools/verify_writes4.py"
+P4P2_ACCEPT_TEST = "tests/remediation/test_phase4_accept.py"
+
+P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── the two questions ────────────────────────────────────────────────────────────────────
+    (
+        "p4 prompts: the selector is not told the 200-1100 characters",
+        P4P2_PROMPTS,
+        '    "(6) the description is your DESC sentences after their removals, joined by spaces: '
+        'it must "\n    "be 200-1100 characters long in total;\\n"\n',
+        "    # mutant: rule (6) gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the selector's first sentence need not name the site",
+        P4P2_PROMPTS,
+        '    "(7) your first DESC sentence must name the site: its name, an alias or an also_named '
+        'name of "\n    "the site element;\\n"\n',
+        "    # mutant: rule (7) gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the selector may pick the modern village's sentence",
+        P4P2_PROMPTS,
+        '    "(8) never pick a sentence about the modern village, town or municipality (its "\n'
+        '    "administration, its population, its modern founding), even when it names the site; '
+        'if the "\n    "only sentence that names the site is such a sentence, answer ABSTAIN with '
+        'that reason;\\n"\n',
+        "    # mutant: rule (8) gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the selector may pick a dangling definite reference",
+        P4P2_PROMPTS,
+        '    "(9) every picked sentence must be understandable from your picked sentences alone: '
+        'never "\n',
+        '    "(9) every picked sentence should read well: never "  # mutant\n',
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the reviewer keeps the modern village's sentence",
+        P4P2_PROMPTS,
+        '    "DROP a sentence about the modern village, town or municipality (its administration, '
+        'its "\n    "population, its modern founding) rather than the site, even when it names the '
+        'site.\\n"\n',
+        "    # mutant: the modern-place DROP gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_reviewer_question_drops_modern_place_and_dangling_sentences",
+    ),
+    (
+        "p4 prompts: the reviewer keeps a dangling definite reference",
+        P4P2_PROMPTS,
+        '    \'DROP a sentence with a definite reference ("the valley", "the mountain", '
+        '"other ...", "it") \'\n',
+        "    'DROP a sentence with a reference '  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_the_reviewer_question_drops_modern_place_and_dangling_sentences",
+    ),
+    (
+        "p4 prompts: the selector's site element hides also_named",
+        P4P2_PROMPTS,
+        '    also = "" if also_named is None else f\'also_named="{attr("; ".join(also_named))}" \'\n',
+        '    also = ""  # mutant\n',
+        P4P2_SELECT_TEST,
+        "test_the_selector_is_shown_the_names_v6_accepts_for_a_strong_own_verdict",
+    ),
+    # ── the names V6 accepts, S3's reading ─────────────────────────────────────────────────────
+    (
+        "p4 select: the pinned item's label is not a name",
+        P4P2_SELECT,
+        "        if label is not None:\n            names.append(label)\n",
+        "        if False:  # mutant\n            names.append(label)\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_is_shown_the_names_v6_accepts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 select: any verdict counts the title and the label",
+        P4P2_SELECT,
+        "    if _strong_own(meta.subject_gate):\n",
+        "    if True:  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_only_a_strong_own_verdict_counts_the_title_and_the_label",
+    ),
+    (
+        "p4 select: a place-level item is a strong own",
+        P4P2_SELECT,
+        "        and not gate.place_item\n",
+        "        and True  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_only_a_strong_own_verdict_counts_the_title_and_the_label",
+    ),
+    (
+        "p4 select: a witness that is not the pinned answer counts",
+        P4P2_SELECT,
+        '    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():\n        return None\n',
+        "    if False:  # mutant\n        return None\n",
+        P4P2_SELECT_TEST,
+        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
+    ),
+    (
+        "p4 select: another item's label counts",
+        P4P2_SELECT,
+        '    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)\n',
+        '    entity = next(iter(json.loads(raw.decode("utf-8"))["entities"].values()))  # mutant\n',
+        P4P2_SELECT_TEST,
+        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
+    ),
+    (
+        "p4 select: also_named repeats a stored name",
+        P4P2_SELECT,
+        "    seen = {SG.fold(name) for name in (site.name, *site.aliases)}\n",
+        "    seen: set[str] = set()  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_also_named_lists_only_what_the_stored_names_do_not_already_say",
+    ),
+    (
+        "p4 select: the stage asks without the names V6 accepts",
+        P4P2_SELECT,
+        "                prompt=site_selector_prompt(batch_dir, site, source_id, meta, pool, text),\n",
+        "                prompt=selector_prompt(site, source_id, meta, pool, text, also=()),  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_is_shown_the_names_v6_accepts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 run4: the select preview measures another prompt than the stage asks",
+        P4P2_RUN4,
+        "        prompt = SEL.site_selector_prompt(batch_dir, site, source_id, meta, pool, text)"
+        ".render()\n",
+        "        prompt = SEL.selector_prompt(site, source_id, meta, pool, text, also=()).render()"
+        "  # mutant\n",
+        P4P2_RUNNER_TEST,
+        "test_the_select_preview_and_export_show_the_names_v6_accepts",
+    ),
+    # ── the names V6 accepts, verify4's reading, and every caller that hands it the witness ──
+    (
+        "p4 verify4: the pinned item's label is not a name",
+        P4P2_VERIFY,
+        "        if label is not None:\n            names.append(label)\n",
+        "        if False:  # mutant\n            names.append(label)\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_the_pinned_items_english_label_counts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: the label counts for any verdict",
+        P4P2_VERIFY,
+        "    if _strong_own(gate if isinstance(gate, Mapping) else None):\n",
+        "    if True:  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_the_label_counts_only_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: a witness that is not the pinned answer counts",
+        P4P2_VERIFY,
+        '    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():\n',
+        "    if False:  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
+    ),
+    (
+        "p4 verify4: another item's label counts",
+        P4P2_VERIFY,
+        '    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)\n',
+        '    entity = next(iter(json.loads(raw.decode("utf-8"))["entities"].values()))  # mutant\n',
+        P4P2_VERIFY_TEST,
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
+    ),
+    (
+        "p4 verify4: a witness meta filed under another id counts",
+        P4P2_VERIFY,
+        '    if not isinstance(meta, Mapping) or meta.get("id") != M.SourceKind.D.value:\n',
+        "    if not isinstance(meta, Mapping):  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
+    ),
+    (
+        "p4 verify4: the V6 hold hides why the witness adds no name",
+        P4P2_VERIFY,
+        '            problem += f" (the Wikidata witness adds no name: {why})"\n',
+        "            pass  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_the_pinned_items_english_label_counts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: the batch verifies without the store's witness",
+        P4P2_VERIFY,
+        "                witness=read_witness(store, site.site_id),\n",
+        "                witness=Witness(meta=None, raw=None),  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_reads_the_witness_the_store_pins",
+    ),
+    (
+        "p4 verify4: read_witness reads no answer",
+        P4P2_VERIFY,
+        "    return Witness(meta=meta, raw=raw_path.read_bytes() if raw_path.exists() else None)\n",
+        "    return Witness(meta=meta, raw=None)  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_reads_the_witness_the_store_pins",
+    ),
+    (
+        "p4 select: S3 reads no label where V6 does (the names parity)",
+        P4P2_SELECT,
+        "        label = _witness_label(site, witness)\n",
+        "        label = None  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_names",
+    ),
+    (
+        "p4 run4: the review's S5 reads no witness",
+        P4P2_RUN4,
+        "                witness=verify4.read_witness(store, site.site_id),\n",
+        "                witness=(None, None),  # mutant\n",
+        P4P2_RUNNER_TEST,
+        "test_review_re_verifies_through_verify_site_with_the_contracts_arguments",
+    ),
+    (
+        "p4 write4: the plan verifies without the site's witness",
+        P4P2_WRITE,
+        "        witness=witness_files(batch.evidence, site_id),\n",
+        "        witness=(None, None),  # mutant\n",
+        P4P2_WRITE_TEST,
+        "test_the_verifier_is_shown_the_sites_pinned_wikidata_item",
+    ),
+    (
+        "p4 write4: witness_files reads no answer",
+        P4P2_WRITE,
+        "    return meta, raw_path.read_bytes() if raw_path.exists() else None\n",
+        "    return meta, None  # mutant\n",
+        P4P2_WRITE_TEST,
+        "test_the_verifier_is_shown_the_sites_pinned_wikidata_item",
+    ),
+    (
+        "p4 verify_writes4: the read-back is verified without the run's witness",
+        P4P2_ACCEPT,
+        "            witness=V4.read_witness(store, site_id),\n",
+        "            witness=(None, None),  # mutant\n",
+        P4P2_ACCEPT_TEST,
+        "test_the_read_back_is_verified_with_the_sites_pinned_wikidata_item",
+    ),
+    # ── pilot 2: a fresh draw of the same strata, pilot 1's fixed members kept ───────────────
+    (
+        "p4 pilot: pilot 2 draws pilot 1's drawn sites again",
+        P4P_PILOT4,
+        "        before = set(strata) | earlier_drawn\n",
+        "        before = set(strata)  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_pilot_2_keeps_pilot_1s_fixed_members_and_draws_anew_without_its_draws",
+    ),
+    (
+        "p4 pilot: pilot 2 takes fixed members other than pilot 1's",
+        P4P_PILOT4,
+        "    if earlier and list(strata.items()) != earlier_fixed:\n",
+        "    if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_pilot_2_refuses_fixed_members_that_are_not_pilot_1s",
+    ),
+    (
+        "p4 pilot: an earlier line mixing a draw and a fixed stratum reads as drawn",
+        P4P_PILOT4,
+        "        elif strata == seeded and len(seeded) == 1:\n",
+        "        elif seeded:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_an_earlier_line_that_is_neither_fixed_nor_one_draw_is_refused",
+    ),
+    (
+        "p4 pilot: build ignores the earlier pilot it is told",
+        P4P_PILOT4,
+        "    earlier = R.read_jsonl(Path(args.after)) if args.after else []\n",
+        "    earlier = []  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
+    ),
+    (
+        "p4 pilot: the audit log loses pilot 2's sealed digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`9caaaa0312369155bb489a0c96ba6fb1b5e57ec988e787a0206c10503cc9f81c`",
+        "`mutant`",
+        P4P_PILOT_TEST,
+        "test_pilot_2_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+    (
+        "p4 pilot: pilot 2's thresholds are loosened after pilot 1's data",
+        "output/remediation/phase4_runner/PILOT_THRESHOLDS.md",
+        "- T8: at least 80% of the pilot's lane-W sites are write-eligible (coverage).\n",
+        "- T8: at least 60% of the pilot's lane-W sites are write-eligible (coverage). (mutant)\n",
+        P4P_PILOT_TEST,
+        "test_pilot_2_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+]
+MUTATIONS += P4_PILOT2_MUTATIONS
 
 
 def digest(path: Path) -> str:
