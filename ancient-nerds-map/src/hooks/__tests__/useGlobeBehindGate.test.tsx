@@ -39,6 +39,8 @@ interface Controls {
   setGate: (on: boolean) => void
   setSitesIn: () => void
   setLayersIn: () => void
+  /** The Globe's WebGL context died (App's onWebglLost). */
+  loseContext: () => void
   markItem: (item: StartItem) => void
   phase: () => AbandonPhase
 }
@@ -49,6 +51,7 @@ function Harness({ controls }: { controls: Controls }) {
   const [layersReady, setLayersReady] = React.useState(false)
   const [overlayFading, setOverlayFading] = React.useState(false)
   const [overlayRendered, setOverlayRendered] = React.useState(true)
+  const [webglLost, setWebglLost] = React.useState(false)
   const [latch] = React.useState(createGlobeEndingLatch)
   const readyRef = React.useRef(false)
   const startItemsRef = React.useRef(new Set<StartItem>())
@@ -57,18 +60,20 @@ function Harness({ controls }: { controls: Controls }) {
   controls.phase = () => loadPhase(gateShowing, startItemsRef.current)
   controls.setSitesIn = () => setIsLoading(false)
   controls.setLayersIn = () => setLayersReady(true)
+  controls.loseContext = () => setWebglLost(true)
 
   const loadingComplete = !gateShowing && !isLoading && layersReady
   React.useEffect(() => {
     if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)
   }, [loadingComplete, overlayRendered, overlayFading])
-  useGlobeReady(loadingComplete, latch, readyRef, () => {})
+  useGlobeReady(loadingComplete && !webglLost, latch, readyRef, () => {})
   useGlobeBehindGate(gateShowing, overlayFading, {
     resetLayers: () => {
       setLayersReady(false)
       dropGlobeStartItems(startItemsRef.current)
     },
     removeOverlay: () => setOverlayRendered(false),
+    dropLostContext: () => setWebglLost(false),
   })
 
   if (gateShowing) return <div id="gate" />
@@ -81,6 +86,7 @@ function Harness({ controls }: { controls: Controls }) {
           onTransitionEnd={() => overlayFading && setOverlayRendered(false)}
         />
       )}
+      {webglLost && <div id="webgl-lost" />}
       <div id="globe" />
     </>
   )
@@ -99,6 +105,7 @@ beforeEach(() => {
     setGate: () => {},
     setSitesIn: () => {},
     setLayersIn: () => {},
+    loseContext: () => {},
     markItem: () => {},
     phase: () => 'gate',
   }
@@ -138,6 +145,30 @@ describe('useGlobeBehindGate', () => {
     expect(overlay()).toBeNull()
     expect(container.querySelector('#globe')).not.toBeNull()
     expect(readyEvents()).toHaveLength(1)
+  })
+
+  // The gate unmounts the Globe whose context died; the fresh Globe has a context
+  // of its own and never reports a restore, so the loss goes with the old one.
+  it('a context lost during the load does not outlive the Globe the gate unmounts', () => {
+    act(() => controls.setSitesIn())
+    act(() => controls.loseContext()) // Safari drops the context under memory pressure, never restores it
+    act(() => controls.setLayersIn())
+    expect(readyEvents()).toHaveLength(0)
+    act(() => controls.setGate(true)) // rotated to portrait
+    act(() => controls.setGate(false)) // 'globe': a fresh Globe with a fresh context
+    expect(container.querySelector('#webgl-lost')).toBeNull()
+    act(() => controls.setLayersIn())
+    expect(readyEvents()).toHaveLength(1)
+  })
+
+  it('a context lost after the load goes with the Globe the gate unmounts too', () => {
+    act(() => controls.setLayersIn())
+    act(() => controls.setSitesIn())
+    expect(readyEvents()).toHaveLength(1)
+    act(() => controls.loseContext())
+    act(() => controls.setGate(true))
+    act(() => controls.setGate(false))
+    expect(container.querySelector('#webgl-lost')).toBeNull()
   })
 
   it("a gate before completion: globe_abandon's phase follows the fresh Globe, not the unmounted one", () => {

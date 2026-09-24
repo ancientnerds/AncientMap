@@ -1679,6 +1679,7 @@ function AppContent() {
       dropGlobeStartItems(startItemsRef.current)
     },
     removeOverlay: () => setOverlayRendered(false),
+    dropLostContext: () => setWebglLost(false),
   })
 
   // globe_ready when the visitor sees the globe: the overlay fades on loadingComplete,
