@@ -2658,6 +2658,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         vectorLayers={vectorLayers}
         onVectorLayerToggle={(key) => setVectorLayers(prev => ({ ...prev, [key]: !prev[key] }))}
         isLoadingLayers={isLoadingLayers}
+        layersLoaded={layersLoaded}
         geoLabelsVisible={geoLabelsVisible}
         onGeoLabelsToggle={labels.toggleGeoLabels}
         labelTypesExpanded={labelTypesExpanded}

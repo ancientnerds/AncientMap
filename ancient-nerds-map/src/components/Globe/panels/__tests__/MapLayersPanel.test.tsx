@@ -37,6 +37,7 @@ async function renderPanel(satellite: boolean, satellitePending: boolean, onTile
         vectorLayers={{ coastlines: true, countryBorders: true, rivers: false, lakes: false, coralReefs: false, glaciers: false, plateBoundaries: false }}
         onVectorLayerToggle={() => {}}
         isLoadingLayers={{}}
+        layersLoaded={{ coastlines: true, countryBorders: true }}
         geoLabelsVisible={false}
         onGeoLabelsToggle={() => {}}
         labelTypesExpanded={false}
@@ -62,6 +63,64 @@ afterEach(async () => {
   await act(async () => { root?.unmount() })
   root = null
   container?.remove()
+})
+
+describe('MapLayersPanel vector rows offline', () => {
+  async function renderOffline(onVectorLayerToggle = vi.fn()) {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root!.render(
+        <MapLayersPanel
+          minimized={false}
+          onToggleMinimize={() => {}}
+          tileLayers={{ satellite: false, streets: false }}
+          satellitePending={false}
+          onTileLayerToggle={() => {}}
+          // Coastlines switched off by the visitor; rivers never loaded
+          vectorLayers={{ coastlines: false, countryBorders: true, rivers: false, lakes: false, coralReefs: false, glaciers: false, plateBoundaries: false }}
+          onVectorLayerToggle={onVectorLayerToggle}
+          isLoadingLayers={{}}
+          layersLoaded={{ coastlines: true, countryBorders: true }}
+          geoLabelsVisible={false}
+          onGeoLabelsToggle={() => {}}
+          labelTypesExpanded={false}
+          onLabelTypesExpandToggle={() => {}}
+          labelTypesVisible={{}}
+          onLabelTypeToggle={() => {}}
+          showMapbox={false}
+          isOffline={true}
+          // A sources-only download: no layer download is complete
+          cachedLayerIds={new Set()}
+        />,
+      )
+    })
+  }
+
+  function vectorRow(label: string): HTMLLabelElement {
+    const row = [...container.querySelectorAll('label.layer-toggle')]
+      .find(el => el.querySelector('.layer-label')?.textContent === label)
+    if (!row) throw new Error(`no ${label} row`)
+    return row as HTMLLabelElement
+  }
+
+  it('lets a layer that is loaded be switched back on: the toggle fetches nothing', async () => {
+    const toggle = vi.fn()
+    await renderOffline(toggle)
+    const row = vectorRow('Coastlines')
+    expect(row.querySelector('input')!.disabled).toBe(false)
+    expect(row.className).not.toContain('offline-unavailable')
+    await act(async () => { row.querySelector('input')!.click() })
+    expect(toggle).toHaveBeenCalledWith('coastlines')
+  })
+
+  it('still blocks a layer that would have to be fetched', async () => {
+    await renderOffline()
+    const row = vectorRow('Rivers')
+    expect(row.querySelector('input')!.disabled).toBe(true)
+    expect(row.title).toContain('Not available offline')
+  })
 })
 
 describe('MapLayersPanel satellite row', () => {

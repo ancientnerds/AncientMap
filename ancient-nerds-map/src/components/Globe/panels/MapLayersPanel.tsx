@@ -24,6 +24,8 @@ interface MapLayersPanelProps {
   vectorLayers: VectorLayerVisibility
   onVectorLayerToggle: (layer: VectorLayerKey) => void
   isLoadingLayers: Record<string, boolean>
+  /** Layers in the scene: switching one on only shows it again, nothing is fetched. */
+  layersLoaded: Record<string, boolean>
 
   // Labels
   geoLabelsVisible: boolean
@@ -51,6 +53,7 @@ export function MapLayersPanel({
   vectorLayers,
   onVectorLayerToggle,
   isLoadingLayers,
+  layersLoaded,
   geoLabelsVisible,
   onGeoLabelsToggle,
   labelTypesExpanded,
@@ -178,8 +181,10 @@ export function MapLayersPanel({
             {/* Vector Layers */}
             <div className={`subsection-label ${showMapbox ? 'mapbox-unavailable' : ''}`}>Vector Layers</div>
             {(Object.keys(LAYER_CONFIG) as VectorLayerKey[]).map(key => {
-              // Check if layer is unavailable offline (only matters when trying to enable)
-              const isLayerOfflineUnavailable = isOffline && !cachedLayerIds.has(key)
+              // Unavailable offline: enabling it would need a fetch no cache answers. A loaded
+              // layer (the coastline/border start tiers every offline start has) only turns
+              // visible again, so it never is.
+              const isLayerOfflineUnavailable = isOffline && !cachedLayerIds.has(key) && !layersLoaded[key]
               const isCurrentlyEnabled = vectorLayers[key]
               // Only disable if trying to ENABLE when unavailable - always allow disabling
               // Also disable in Mapbox mode
