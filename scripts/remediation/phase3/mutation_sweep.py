@@ -17221,24 +17221,25 @@ OPUS_AUDIT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus audit: a wrong-both keeps the written value",
         OA_DECIDE,
-        '    route_decision = KEEP if basis[-1]["verdict"] == KEEP else REVERT\n',
-        '    route_decision = REVERT if basis[-1]["verdict"] == REVERT else KEEP  # mutant\n',
+        '        route_decision = KEEP if basis[-1]["verdict"] == KEEP else REVERT\n',
+        '        route_decision = REVERT if basis[-1]["verdict"] == REVERT else KEEP  # mutant\n',
         OA_DECIDE_TEST,
         "test_a_pass_2_keep_goes_to_the_third_judge_who_decides",
     ),
     (
         "opus audit: an uncounted verdict decides",
         OA_DECIDE,
-        "    decision = REJUDGE if failed else route_decision\n",
-        "    decision = route_decision  # mutant\n",
+        "    decision = REJUDGE if rejudge else PENDING if pending else route_decision\n",
+        "    decision = PENDING if pending else route_decision  # mutant\n",
         OA_DECIDE_TEST,
         "test_a_deciding_verdict_that_fails_its_quote_check_sends_the_row_back",
     ),
     (
         "opus audit: only the last verdict's quote check counts",
         OA_DECIDE,
-        '    failed = [b["pass"] for b in basis if not b["counted"]]\n',
-        '    failed = [b["pass"] for b in basis[-1:] if not b["counted"]]  # mutant\n',
+        "    uncounted = [p for p in stages if p not in given or not checks[p][key].counted]\n",
+        "    uncounted = [p for p in stages[-1:] if p not in given or not checks[p][key].counted]"
+        "  # mutant\n",
         OA_DECIDE_TEST,
         "test_a_deciding_verdict_that_fails_its_quote_check_sends_the_row_back",
     ),
@@ -17302,8 +17303,8 @@ OPUS_AUDIT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus audit: an undecidable third judge is accepted",
         OA_DECIDE,
-        '            if stage == "tie" and v["verdict"] not in TIE_NAMES:\n',
-        "            if False:  # mutant\n",
+        '    if stage == "tie" and v["verdict"] not in TIE_NAMES:\n',
+        "    if False:  # mutant\n",
         OA_DECIDE_TEST,
         "test_a_third_judge_that_is_undecidable_is_refused",
     ),
@@ -17366,6 +17367,275 @@ OPUS_AUDIT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += OPUS_AUDIT_MUTATIONS
+
+
+# ── the Opus re-verification, round 2 (2026-09-24): overlay, rule 4 fired, pending ───────────────
+#: Round 2 laid over round 1 (`decide.read_round_2`, `overlay`, `rule_4`, `trace`), the route once
+#: rule 4 fires, the `pending` decision and its two lists (SECOND_JUDGE.json, TIE_ROUND2.json), and
+#: the fetch of the URLs round 2 cites (`run.cited_urls`). A block of its own, after the round-1
+#: block, so a merge with other branches' additions stays mechanical. The sweep over these alone:
+#: `mutation_sweep.py "opus round 2:"`.
+OA_RUN = "scripts/remediation/opus_audit/run.py"
+OPUS_ROUND2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── the route once rule 4 fires ──────────────────────────────────────────────────────────
+    (
+        "opus round 2: a pass-1 keep stands after rule 4 fired",
+        OA_DECIDE,
+        "        if not second_judgement:\n",
+        "        if True:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_once_rule_4_fires_a_pass_1_keep_waits_for_its_second_judgement",
+    ),
+    (
+        "opus round 2: rule 4 counts as fired by default",
+        OA_DECIDE,
+        "    second_judgement: bool = False,\n",
+        "    second_judgement: bool = True,  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_before_rule_4_fires_a_pass_1_keep_stands_beside_a_second_verdict",
+    ),
+    (
+        "opus round 2: two keeps still call the third judge",
+        OA_DECIDE,
+        '        if key not in verdicts["p2"] or verdicts["p2"][key]["verdict"] == KEEP:\n',
+        '        if key not in verdicts["p2"]:  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_once_rule_4_fires_a_second_keep_keeps_the_row",
+    ),
+    (
+        "opus round 2: a split keep decides without the third judge",
+        OA_DECIDE,
+        '        return ("p1", "p2", "tie")\n',
+        '        return ("p1", "p2")  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_once_rule_4_fires_a_second_judge_who_does_not_keep_calls_the_third",
+    ),
+    # ── rejudge and pending ──────────────────────────────────────────────────────────────────
+    (
+        "opus round 2: a keep's failed second judgement is a rejudge",
+        OA_DECIDE,
+        '    rejudge = [p for p in uncounted if p == "p1" or (p == "p2" and not pass_1_keep)]\n',
+        '    rejudge = [p for p in uncounted if p in ("p1", "p2")]  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_a_second_judgement_that_failed_its_quote_check_leaves_the_keep_waiting",
+    ),
+    (
+        "opus round 2: a row waits on every later verdict too",
+        OA_DECIDE,
+        "    pending = [] if rejudge else uncounted[:1]\n",
+        "    pending = [] if rejudge else uncounted  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_second_judgement_that_failed_its_quote_check_leaves_the_keep_waiting",
+    ),
+    (
+        "opus round 2: a row waits although its pass 1 failed",
+        OA_DECIDE,
+        "    pending = [] if rejudge else uncounted[:1]\n",
+        "    pending = uncounted[:1]  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_failed_pass_1_is_judged_again_before_anything_waits_on_it",
+    ),
+    (
+        "opus round 2: an incomplete route states a decision",
+        OA_DECIDE,
+        "    if len(given) == len(stages):\n",
+        "    if given:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_once_rule_4_fires_a_pass_1_keep_waits_for_its_second_judgement",
+    ),
+    (
+        "opus round 2: a pending row is decided (and reverted)",
+        OA_DECIDE,
+        "    decision = REJUDGE if rejudge else PENDING if pending else route_decision\n",
+        "    decision = REJUDGE if rejudge else route_decision  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_third_judge_that_failed_its_quote_check_leaves_the_row_waiting_on_a_tie",
+    ),
+    # ── rule 4 on the sample judged again ────────────────────────────────────────────────────
+    (
+        "opus round 2: rule 4 fires on 3 of the 60",
+        OA_DECIDE,
+        "    fired = len(not_keep) > SAMPLE_THRESHOLD\n",
+        "    fired = len(not_keep) >= SAMPLE_THRESHOLD  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_rule_4_fires_when_more_than_3_of_the_60_are_not_keep",
+    ),
+    (
+        "opus round 2: rule 4's threshold moves",
+        OA_DECIDE,
+        "SAMPLE_THRESHOLD = 3\n",
+        "SAMPLE_THRESHOLD = 4  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_rule_4_fires_when_more_than_3_of_the_60_are_not_keep",
+    ),
+    (
+        "opus round 2: a failed sample verdict counts for rule 4",
+        OA_DECIDE,
+        "    counted = sorted(k for k in sample if sample_checks[k].counted)\n",
+        "    counted = sorted(sample)  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_sample_verdict_that_failed_its_quote_check_is_not_counted_for_rule_4",
+    ),
+    (
+        "opus round 2: rule 4 is decided while failed verdicts could tip it",
+        OA_DECIDE,
+        "    if not fired and len(not_keep) + len(not_counted) > SAMPLE_THRESHOLD:\n",
+        "    if False:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_rule_4_is_not_decided_while_a_failed_sample_verdict_could_tip_it",
+    ),
+    # ── the overlay ──────────────────────────────────────────────────────────────────────────
+    (
+        "opus round 2: the round-2 verdicts are not quote-checked",
+        OA_DECIDE,
+        "    round2_checks = _check_all(round2, by_key, library)\n",
+        '    round2_checks = {s: {k: Q.VerdictCheck(True, (), "") for k in g} for s, g in '
+        "round2.items()}  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_the_run_applies_round_2_and_writes_every_output_the_same_twice",
+    ),
+    (
+        "opus round 2: a counted round-1 verdict is judged again",
+        OA_DECIDE,
+        "            if raw_checks[stage][key].counted:\n",
+        "            if False:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_round_2_verdict_over_a_counted_round_1_verdict_is_refused",
+    ),
+    (
+        "opus round 2: a failed round-2 verdict replaces round 1's",
+        OA_DECIDE,
+        "            if not new.counted:\n",
+        "            if False:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_round_2_verdict_that_fails_its_quote_check_replaces_nothing",
+    ),
+    (
+        "opus round 2: a failed sample verdict is a second judgement",
+        OA_DECIDE,
+        "        if not new.counted:\n"
+        '            aside.setdefault(key, []).append(_aside(f"{ROUND_2} sample", v, new, NOT_COUNTED))\n',
+        "        if False:  # mutant\n"
+        '            aside.setdefault(key, []).append(_aside(f"{ROUND_2} sample", v, new, NOT_COUNTED))\n',
+        OA_DECIDE_TEST,
+        "test_a_counted_sample_verdict_is_its_keep_rows_second_judgement",
+    ),
+    (
+        "opus round 2: a counted sample verdict is not the keep's p2",
+        OA_DECIDE,
+        '        verdicts["p2"][key], checks["p2"][key] = v, new\n',
+        "        pass  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_counted_sample_verdict_is_its_keep_rows_second_judgement",
+    ),
+    (
+        "opus round 2: a round-1 tie survives a changed pair",
+        OA_DECIDE,
+        '        if verdicts["p1"][key] == raw["p1"][key] and verdicts["p2"][key] == raw["p2"][key]:\n',
+        "        if True:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_round_1_tie_stands_only_while_the_pair_it_was_shown_is_unchanged",
+    ),
+    (
+        "opus round 2: a tie's pair is judged by its p2 alone",
+        OA_DECIDE,
+        '        if verdicts["p1"][key] == raw["p1"][key] and verdicts["p2"][key] == raw["p2"][key]:\n',
+        '        if verdicts["p2"][key] == raw["p2"][key]:  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_a_counted_round_1_tie_goes_stale_when_a_new_pass_1_changes_its_pair",
+    ),
+    (
+        "opus round 2: a tie's pair is judged by its p1 alone",
+        OA_DECIDE,
+        '        if verdicts["p1"][key] == raw["p1"][key] and verdicts["p2"][key] == raw["p2"][key]:\n',
+        '        if verdicts["p1"][key] == raw["p1"][key]:  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_a_round_1_tie_stands_only_while_the_pair_it_was_shown_is_unchanged",
+    ),
+    (
+        "opus round 2: the trace names round 1 for every verdict",
+        OA_DECIDE,
+        '            "basis": [{**b, "from": ov.origin[b["pass"]][d["change_key"]]} for b in d["basis"]],\n',
+        '            "basis": [{**b, "from": RAW} for b in d["basis"]],  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_the_trace_names_where_each_verdict_came_from_and_what_was_set_aside",
+    ),
+    (
+        "opus round 2: the run ignores rule 4",
+        OA_DECIDE,
+        '    decisions = trace(decide(rows, ov.verdicts, ov.checks, second_judgement=rule4["fired"]), ov)\n',
+        "    decisions = trace(decide(rows, ov.verdicts, ov.checks), ov)  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_the_run_applies_round_2_and_writes_every_output_the_same_twice",
+    ),
+    # ── the round-2 file ─────────────────────────────────────────────────────────────────────
+    (
+        "opus round 2: a sample other than the stated one is read",
+        OA_DECIDE,
+        '    if set(got["sample"]) != set(sample_keys):\n',
+        "    if False:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_the_round_2_file_must_judge_exactly_the_stated_sample",
+    ),
+    (
+        "opus round 2: a verdict with nothing to replace is read",
+        OA_DECIDE,
+        "        if orphans:\n",
+        "        if False:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_round_2_verdict_for_a_pass_round_1_never_gave_is_refused",
+    ),
+    (
+        "opus round 2: a round-2 verdict's shape is not checked",
+        OA_DECIDE,
+        "            _verdict_shape(section, key, v)\n",
+        "            pass  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_a_round_2_verdict_is_held_to_the_shape_of_round_1",
+    ),
+    (
+        "opus round 2: a keep sample that is not the draw is read",
+        OA_DECIDE,
+        "    if stated != keep_sample(raw):\n",
+        "    if False:  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_the_run_refuses_a_keep_sample_that_is_not_the_draw_from_these_verdicts",
+    ),
+    # ── the two lists and the fetch ──────────────────────────────────────────────────────────
+    (
+        "opus round 2: SECOND_JUDGE lists the rows waiting on a tie",
+        OA_DECIDE,
+        '    keys = sorted(d["change_key"] for d in decisions if d["pending"] == ["p2"])\n',
+        '    keys = sorted(d["change_key"] for d in decisions if d["decision"] == PENDING)  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_second_judge_lists_every_pass_1_keep_without_a_counted_second_judgement",
+    ),
+    (
+        "opus round 2: TIE_ROUND2 lists the rows waiting on a p2",
+        OA_DECIDE,
+        '    keys = sorted(d["change_key"] for d in decisions if d["pending"] == ["tie"])\n',
+        '    keys = sorted(d["change_key"] for d in decisions if d["decision"] == PENDING)  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_tie_round_2_embeds_both_judgements_of_every_split_pair_without_a_counted_tie",
+    ),
+    (
+        "opus round 2: TIE_ROUND2's judge_1 is the p2",
+        OA_DECIDE,
+        '                "judge_1": _judgement(verdicts["p1"][key]),\n',
+        '                "judge_1": _judgement(verdicts["p2"][key]),  # mutant\n',
+        OA_DECIDE_TEST,
+        "test_tie_round_2_embeds_both_judgements_of_every_split_pair_without_a_counted_tie",
+    ),
+    (
+        "opus round 2: the fetch skips the URLs round 2 cites",
+        OA_RUN,
+        "            for verdicts in rounds\n",
+        "            for verdicts in rounds[:1]  # mutant\n",
+        OA_DECIDE_TEST,
+        "test_the_fetch_collects_the_urls_only_round_2_cites",
+    ),
+]
+MUTATIONS += OPUS_ROUND2_MUTATIONS
 
 
 def digest(path: Path) -> str:
