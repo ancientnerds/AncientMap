@@ -1,9 +1,10 @@
 /**
  * @vitest-environment jsdom
  *
- * The full-screen notices of /globe.html. The phone gate must stay exactly as
- * it was (spec §3: text and layout unchanged) while its controls now report
- * globe_gate; the unsupported and error screens reuse its layout and links.
+ * The full-screen notices of /globe.html. The phone gate keeps its text and
+ * layout (spec §3) and lists the pages that work on a phone - Sites, Research
+ * and Search joined on 2026-09-24 (owner request); its controls report
+ * globe_gate, and the unsupported and error screens reuse its layout and links.
  * The probe (scripts/globe_probe/probe.py) finds the unsupported screen by the
  * text "show the 3D globe".
  */
@@ -23,57 +24,23 @@ import PhoneGate from '../PhoneGate'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-/** The gate as App.tsx rendered it before globe-load (commit 7df5e24), verbatim. */
-function LegacyGate({ onGlobe }: { onGlobe: () => void }) {
-  return (
-      <div className="mobile-overlay">
-        <div className="mobile-overlay-content">
-          <img src={BRAND_ASSETS.logo} alt="" className="mobile-logo-icon" />
-          <div className="mobile-logo-main">{BRAND_NAME}</div>
-          <div className="mobile-logo-sub">{BRAND_SUBTITLE}</div>
-          <div className="mobile-message">
-            The 3D globe is optimized for desktop browsers.
-          </div>
-          <div className="mobile-hint">
-            Explore our mobile-friendly pages below, or continue to the globe.
-          </div>
-          <div className="mobile-actions">
-            <div className="mobile-actions-row">
-              <a className="mobile-action-btn" href="/news.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /></svg>
-                Stories
-              </a>
-              <a className="mobile-action-btn" href="/radar.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" /></svg>
-                Radar
-              </a>
-            </div>
-            <div className="mobile-actions-row">
-              <a className="mobile-action-btn" href="/articles.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
-                Journal
-              </a>
-              <a className="mobile-action-btn" href="/lyra.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-                Lyra
-              </a>
-            </div>
-            <div className="mobile-actions-row">
-              <a className="mobile-action-btn" href="/db.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 12c0 2.21 4.48 4 10 4s10-1.79 10-4" /></svg>
-                Database
-              </a>
-              <button
-                className="mobile-action-btn mobile-action-globe"
-                onClick={onGlobe}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-                3D Globe
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+/** The pages that work without the globe, in the order every notice lists them. */
+const PAGES = [
+  ['Stories', '/news.html', 'stories'],
+  ['Sites', '/sites/', 'sites'],
+  ['Research', '/research/', 'research'],
+  ['Search', '/search.html', 'search'],
+  ['Radar', '/radar.html', 'radar'],
+  ['Journal', '/articles.html', 'journal'],
+  ['Lyra', '/lyra.html', 'lyra'],
+  ['Database', '/db.html', 'db'],
+] as const
+const HREFS = PAGES.map(([, href]) => href)
+
+/** The label of every control, row by row. */
+function rows(container: HTMLElement): string[][] {
+  return [...container.querySelectorAll('.mobile-actions-row')].map(row =>
+    [...row.children].map(c => c.textContent ?? ''),
   )
 }
 
@@ -103,25 +70,31 @@ afterEach(async () => {
 })
 
 describe('PhoneGate', () => {
-  it('renders exactly the DOM of the gate it replaced', async () => {
-    const before = await mount(<LegacyGate onGlobe={() => {}} />)
-    const after = await mount(<PhoneGate onChoice={() => {}} />)
-    expect(after.innerHTML).toBe(before.innerHTML)
-    expect(after.innerHTML.length).toBeGreaterThan(1000)
+  it('keeps the gate text and lists the pages two per row, the globe button last', async () => {
+    const container = await mount(<PhoneGate onChoice={() => {}} />)
+    const text = container.textContent ?? ''
+    expect(container.querySelector('.mobile-logo-main')!.textContent).toBe(BRAND_NAME)
+    expect(container.querySelector('.mobile-logo-sub')!.textContent).toBe(BRAND_SUBTITLE)
+    expect(container.querySelector<HTMLImageElement>('.mobile-logo-icon')!.getAttribute('src')).toBe(BRAND_ASSETS.logo)
+    expect(text).toContain('The 3D globe is optimized for desktop browsers.')
+    expect(text).toContain('Explore our mobile-friendly pages below, or continue to the globe.')
+    expect(rows(container)).toEqual([
+      ['Stories', 'Sites'], ['Research', 'Search'], ['Radar', 'Journal'], ['Lyra', 'Database'], ['3D Globe'],
+    ])
+    expect([...container.querySelectorAll('a')].map(a => a.getAttribute('href'))).toEqual(HREFS)
   })
 
-  it('each of the six controls reports its choice as globe_gate', async () => {
+  it('each of the nine controls reports its choice as globe_gate', async () => {
     const latches: GateChoice[] = []
     const container = await mount(
       <PhoneGate onChoice={choice => { latches.push(choice); reportGateChoice(choice, createGlobeEndingLatch()) }} />,
     )
     const controls = [...container.querySelectorAll<HTMLElement>('.mobile-action-btn')]
-    expect(controls.map(c => c.textContent)).toEqual(['Stories', 'Radar', 'Journal', 'Lyra', 'Database', '3D Globe'])
+    expect(controls.map(c => c.textContent)).toEqual([...PAGES.map(([label]) => label), '3D Globe'])
     for (const control of controls) control.click()
-    expect(latches).toEqual(['stories', 'radar', 'journal', 'lyra', 'db', 'globe'])
-    expect(vi.mocked(track).mock.calls).toEqual(
-      ['stories', 'radar', 'journal', 'lyra', 'db', 'globe'].map(choice => ['globe_gate', { choice }]),
-    )
+    const choices = [...PAGES.map(([, , choice]) => choice), 'globe']
+    expect(latches).toEqual(choices)
+    expect(vi.mocked(track).mock.calls).toEqual(choices.map(choice => ['globe_gate', { choice }]))
   })
 
   it('one ending per load: a gate link, then the page leaving, sends only the link', async () => {
@@ -157,7 +130,8 @@ describe('GlobeUnsupported', () => {
     expect(text).toContain('WebGL 2 is not available.')
     expect(text).toContain('Turning on hardware acceleration in your browser settings often fixes this.')
     const links = [...container.querySelectorAll('a')].map(a => a.getAttribute('href'))
-    expect(links).toEqual(['/news.html', '/radar.html', '/articles.html', '/lyra.html', '/db.html'])
+    expect(links).toEqual(HREFS)
+    expect(rows(container)).toEqual([['Stories', 'Sites'], ['Research', 'Search'], ['Radar', 'Journal'], ['Lyra', 'Database']])
     expect(container.querySelector('.mobile-overlay')).not.toBeNull()
   })
 
@@ -176,7 +150,8 @@ describe('GlobeErrorScreen', () => {
     expect(text).toContain('The 3D globe could not start')
     expect(text).toContain('Something went wrong while loading (labels): /data/labels.json: HTTP 404')
     const links = [...container.querySelectorAll('a')].map(a => a.getAttribute('href'))
-    expect(links).toEqual(['/news.html', '/radar.html', '/articles.html', '/lyra.html', '/db.html'])
+    expect(links).toEqual(HREFS)
+    expect(rows(container).at(-1)).toEqual(['Reload the globe'])
     const button = container.querySelector<HTMLButtonElement>('button')!
     expect(button.textContent).toBe('Reload the globe')
     button.click()

@@ -223,7 +223,7 @@ The queue is unit-tested for order, idle gating, pause/resume and failure isolat
 
 New events (extend `EventName` first):
 
-- `globe_gate` `{choice: globe|stories|radar|journal|lyra|db}` — the phone gate's buttons.
+- `globe_gate` `{choice: globe|stories|sites|research|search|radar|journal|lyra|db}` — the phone gate's buttons (sites, research, search since 2026-09-24).
 - `globe_unsupported` `{reason}` — the capability check failed.
 - `globe_error` `{phase, message}` — the error boundary or a failed critical load.
 - `globe_abandon` `{ms, phase}` — `pagehide`/`visibilitychange→hidden` before `globe_ready`, sent

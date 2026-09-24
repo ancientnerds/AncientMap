@@ -27,6 +27,7 @@
  */
 
 import { track, type EventProps } from './index'
+import type { FallbackPage } from '../components/globeFallbackLinks'
 
 /** The critical items of the start, in the order the abandon phase names the first one missing. */
 export const START_ITEMS = ['sites', 'scene', 'basemap', 'labels', 'coastlines', 'countryBorders'] as const
@@ -36,7 +37,7 @@ export type StartItem = (typeof START_ITEMS)[number]
 export type AbandonPhase = 'gate' | StartItem
 
 /** The phone gate's controls (globe_gate's choice). */
-export type GateChoice = 'globe' | 'stories' | 'radar' | 'journal' | 'lyra' | 'db'
+export type GateChoice = 'globe' | FallbackPage
 
 type GlobeEnding = 'globe_gate' | 'globe_unsupported' | 'globe_error' | 'globe_abandon' | 'webgl_lost'
 

@@ -66,7 +66,7 @@ Each file is a GeoJSON `FeatureCollection` whose features are `MultiLineString`s
 
 | event | props | sent by |
 |---|---|---|
-| `globe_gate` | `{choice: 'globe'\|'stories'\|'radar'\|'journal'\|'lyra'\|'db'}` | phone-gate buttons |
+| `globe_gate` | `{choice: 'globe'\|'stories'\|'sites'\|'research'\|'search'\|'radar'\|'journal'\|'lyra'\|'db'}` | phone-gate buttons (sites, research, search since 2026-09-24) |
 | `globe_unsupported` | `{reason: 'no_webgl2'\|'max_texture_size', detail?: string}` | capability check, when the screen shows |
 | `globe_error` | `{phase: string, message: string, ending?: 'no'}` | start failures (phase = the step); background failures use `phase: 'bg:<task>'`, failures after `globe_ready` use `phase: 'live'` (a Globe remounted after the phone gate keeps its step in the message: `'basemap: HTTP 502'`); `ending: 'no'` marks a start failure whose load had already ended (see below) |
 | `globe_abandon` | `{ms: number, phase: 'gate'\|'sites'\|'scene'\|'basemap'\|'labels'\|'coastlines'\|'countryBorders'}` | `pagehide` / `visibilitychange→hidden` before `globe_ready` |
