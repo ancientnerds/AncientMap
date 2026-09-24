@@ -8034,3 +8034,102 @@ this section). The draw's inputs: `PILOT.jsonl` (sealed in pilot 1's section, `7
 `gold_standard/sites.json` `18653fc12607bc7b25c160ab022d114b86500c5dd15641979dc4cfdb72d2b756`,
 `qid_repair/PLAN.jsonl` `9d57b4315bea6fe6c7cfc1d94cae8776b442bce1443159eef2328579f9a6ce4f`. Without
 `--after`, the same build rewrites pilot 1's `PILOT.jsonl` byte-identically (checked before this draw).
+
+## 2026-09-24 - Phase-4 pilot 2's non-model stages and its select export (no model called, nothing written)
+
+After the seal above (commit `ee89b8e`, 03:51:16 +02:00; the first question was exported at 03:52:26),
+`plan4.py build --pilot PILOT2.jsonl --out PLAN4.pilot2.jsonl` wrote pilot 2's plan from the same
+export as the census and pilot 1 (`S0_ROWS.jsonl` `2c99f96f...72a8`; sha256
+`400e28a0d7bc5a4432ec8e659fb1fbafcc66abe95b57e54eb948c4067c8f1bd9`, gitignored): **pilot 2 is its first
+9 batches, `p4-0001` .. `p4-0009`** (8 x 15 + 12, in PILOT2.jsonl's order), 334 batches in all, the
+same flags as pilot 1's plan. Pilot 1's `PLAN4.jsonl` and run directory are untouched.
+
+    mass4.py --plan PLAN4.pilot2.jsonl --run-dir runs/pilot2-2026-09-24 --log-dir logs/p4_pilot2 \
+        --only p4-0001,..,p4-0009 --live --stages prepare,sources,routes,select --searches-off \
+        --handoff-export output/remediation/handoff/p4-pilot2-select --jobs 3
+
+2026-09-24 01:52-01:53 UTC, `STAGE_EXIT=0`, every batch "done" for its round. 226 fetch lines in
+`LEDGER.jsonl` (en.wikipedia.org 159, www.wikidata.org 51, other Wikipedias 16), all 200, none given
+up; 0 searches; 0 model calls (no `model_call` line). Every lane equals the census's.
+
+| stage | result |
+|---|---|
+| S0 plan | 132 sites in 9 batches |
+| S1 sources | pinned 96, scope-pending 3, no-title 20, rejected 13 |
+| S1b routes | **lane W 78, S 18, 0 36**; 0 searches |
+| S3 select, export | **87 questions** (lane W 78, lane S 9); prompts 2,400-30,722 characters, median 5,455; 19 carry a non-empty `also_named` (the pinned title or item label V6 accepts, e.g. Beacon Hill, Justinianopolis, Galava for Ambleside Roman Fort) |
+| S3R restricted | no lane-R site: nothing asked |
+
+Every exported prompt carries the selector question `8969add9...` (rules (6)-(9)). The 96 selecting
+sites (lane W or S, not held) minus 87 questions are 9 lane-S sites whose article offers no sentence
+that names them (`sentences.candidate_pool`, lane S); the import holds them `no-source` with no call
+bought: Soyuqbulaq (Agstafa), Mitla Entrance to Tomb 1, Coria (Corbridge), Dilmun Burial Mounds - Aali
+(draw-S); Templos de Tarxien (identity trap); Hebbariyeh Roman Temple, Priene Ruins, Amyntas Rock
+Tombs (gold); Temple of Nefertari - Abu Simbel (long extract).
+
+**The 36 holds** (`HOLDS4.jsonl`): `scope-pending` 3 - Midford Castle, Ksar el Barka, Museo Campano
+(the gold members pilot 1 held the same way); `search-stopped` 33 - the gold sites Font dels Coms and
+Temple of Dedun, the canaries El Tintal and Ahin Posh Tape, the Q309 traps Tlalpan, Estipeon and
+Crantit Chambered Cairn, the 3 'Theatre' and 4 'Mortuary temple' traps (all fixed members, held as in
+pilot 1), and the 19 new T, R and B3 candidates (6 T: Tomba dei Giganti di Laccaneddu, Tongobriga,
+Kusilluchayoc, Santa Cristina, Museo de Sitio Wari, Yunus Sütunu; 8 R: Acropolis of Alatri, Lycaean
+Tomb, Tubuco, Castro de Sabroso, Itá Letra Petroglyphs, Paracas History Museum, Temple of Apollo,
+Al-Ukhdud; 5 B3: Ruínas Romanas da Bobadela, Selva di Malano, Chichén Viejo, Beşkardeşler Kaya
+Mezarları, the hut circle south-east of Bod Silin). By stratum: gold 26 W / 5 S / 5 held (28
+exported); canaries 8 W exported / 2 held; named traps 7 exported; Q309 4 exported / 3 held; the new
+draws W 30 and S 4 of 8 exported; long extracts 4 of 5 exported.
+
+**Handoff directory** `output/remediation/handoff/p4-pilot2-select` (gitignored, 900 KB, stage
+`finder`, labels `<site_id>/select`). `opus_handoff.py validate`: 87 questions, 87 missing, 0
+answered, 0 stale, 0 malformed, 0 orphans (exit 1 until they are answered). The run directory
+`runs/pilot2-2026-09-24` (7.6 MB, gitignored) travels with it.
+
+**T7 for pilot 2** is what it was for pilot 1 (the same fixed members): the canaries El Tintal and
+Ahin Posh Tape and the gold errors FC-2 (Font dels Coms) and TD-1 (Temple of Dedun) sit on sites held
+`search-stopped`, AM-1 (Amyntas Rock Tombs) on a lane-S site the import holds `no-source` -
+closed-list reasons; the other 20 are asked.
+
+### The orchestrator's next commands (from this worktree, main venv)
+
+```bash
+cd /c/PythonProjects/AncientMap/.claude/worktrees/p4-pilot && export PYTHONIOENCODING=utf-8
+PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+P4=scripts/remediation/phase4; OH=scripts/remediation/opus_handoff.py; H=$M/handoff/p4-pilot2
+RUN=$R4/runs/pilot2-2026-09-24; ONLY=p4-0001,p4-0002,p4-0003,p4-0004,p4-0005,p4-0006,p4-0007,p4-0008,p4-0009
+ROUND="--plan $R4/PLAN4.pilot2.jsonl --run-dir $RUN --log-dir $M/logs/p4_pilot2 --only $ONLY --searches-off --live"
+# 1. answer the 87 selector questions: for each line of $H-select/*/MANIFEST.jsonl, an Opus agent reads
+#    $H-select/<prompt_path>, follows the question's rules (1)-(9), writes only DESC:/CARD: lines (or
+#    ABSTAIN:) to a file, and runs
+$PY $OH answer --dir $H-select --batch-id <batch_id> --stage finder --label <site_id>/select \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-select                                   # exit 0: 87 answered
+$PY $P4/mass4.py $ROUND --stages select --handoff-import $H-select  # S3 (+S3R: nothing to ask)
+# 2. the translate round: lane T is empty, so the export writes no question and no directory -
+#    skip `validate` when every batch reports 0 calls; the import still runs assemble and verify
+$PY $P4/mass4.py $ROUND --stages translate --handoff-export $H-translate
+$PY $P4/mass4.py $ROUND --stages translate,assemble,verify --handoff-import $H-translate
+# 3. the review round (stage `reviewer`, labels <site_id>/review)
+$PY $P4/mass4.py $ROUND --stages review --handoff-export $H-review
+$PY $OH answer --dir $H-review --batch-id <batch_id> --stage reviewer --label <site_id>/review \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-review
+$PY $P4/mass4.py $ROUND --stages review --handoff-import $H-review  # the batches are then done
+$PY $P4/run4.py holds --run-dir $RUN                               # HOLDS4.jsonl
+# 4. the Claude Code audit of every sentence and card of pilot 2 (design S6b; T1-T7, T5 "broken"
+#    included), against the pinned passages and gold_prose_errors.json - never the reviewer's verdicts
+$PY -c "import sys; sys.path.insert(0, 'scripts/remediation'); from pathlib import Path; \
+from phase4 import audit4; print('\n'.join(sorted(audit4.reviewed_sites(Path('$RUN')))))" > $M/logs/p4_pilot2/reviewed.txt
+$PY $P4/audit4.py sheet --run-dir $RUN --site-ids $M/logs/p4_pilot2/reviewed.txt --out $M/logs/p4_pilot2/AUDIT_SHEETS.md
+# 5. score T1-T13 against PILOT_THRESHOLDS.md (unchanged since pilot 1); only passing lanes open
+# 6. P4 and P5 rehearsed against production (APPLY ending in ROLLBACK; nothing is written)
+$PY $M/tools/write_gate4.py --group P4 --run pilot2-2026-09-24 --open-lanes W,S            # dry: plan + render
+$PY $M/tools/write_gate4.py --group P4 --run pilot2-2026-09-24 --open-lanes W,S --rehearse
+$PY $M/tools/write_gate4.py --group P5 --run pilot2-2026-09-24 --rehearse
+```
+
+**Open before any write of a pilot-2 site:** pilot 2 reuses the batch ids `p4-0001` .. `p4-0009` in
+its own run directory, and `write4.ledger_labels` reads a site's calls from `LEDGER.jsonl` by batch id
+and site id, not by run. The 70 fixed members sit in the same batch ids in both pilots, so their
+journal evidence would list pilot 1's select and review labels beside pilot 2's (the evidence check
+itself passes: it compares sets). Nothing is written before a pilot passes; scope the ledger read to
+the run (or give pilot 2's model rounds their own `--ledger`) before step 6's committed write.
