@@ -32,7 +32,7 @@ difference amplified 4x) and `diff.json`.
   production Umami. Every `track()` call ends up in `report.json` → `events`, with its
   `performance.now()` time.
 - **Service workers are blocked.** Every run is a first visit. The worker's precache
-  (6.9 MB) is not part of any number. Playwright routing also turns off Chromium's HTTP cache.
+  (~8.8 MB with the start tiers) is not part of any number. Playwright routing also turns off Chromium's HTTP cache.
 - **Mapbox.** `--block-mapbox` aborts `api.mapbox.com` and `events.mapbox.com`, because every
   Mapbox init is a billed map load. It is on by default for `load` and `nogl` and off for
   `shot`. Pass `--block-mapbox` to a `shot` at a pose close to the switch distance (1.304),
