@@ -6,10 +6,15 @@
  * These are the "why did they leave" proxies the interaction events cannot
  * give: a slow LCP or an exception on the page is measurable, a change of
  * mind is not.
+ *
+ * One thing here is not a signal: boot is the module every entry runs before
+ * React mounts, so it also keeps page translation from blanking the page
+ * (utils/translatedDom.ts) - the cause of every removeChild js_error so far.
  */
 
 import { onCLS, onINP, onLCP, onTTFB, type Metric } from 'web-vitals'
 
+import { tolerateDetachedNodes } from '../utils/translatedDom'
 import { MAX_VALUE_CHARS, pageType, track } from './index'
 
 const SCROLL_STEPS = [25, 50, 75, 100] as const
@@ -130,6 +135,7 @@ export function bootAnalytics(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   if (window.__anAnalyticsBooted) return
   window.__anAnalyticsBooted = true
+  tolerateDetachedNodes(Node.prototype)
   const page = pageType(location.pathname)
   onLCP(reportVital)
   onCLS(reportVital)
