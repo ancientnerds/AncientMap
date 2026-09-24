@@ -1,0 +1,31 @@
+{
+ "about": "Rows whose route holds a verdict that failed the quote check (RULES.md: it does not count; the row is judged again), by the pass whose verdict failed. Re-run p1 first: a new p1 'keep' ends the route there. A p2 verdict never sees p1, so a counted p2 stays valid when p1 is re-run. A tie saw both reasonings, so a row that reaches the tie again after a new p1 or p2 verdict needs a new tie too.",
+ "p1": [
+  "phase3:53aa972359f4eb9f48b8fc14ff450c2f27f7f5b662d41cedc451969cab424098",
+  "phase3:926f268e74dc41826cc4a2fe4a96bde0ee62f71ac446074646fd6b58e93dcd1b",
+  "phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208",
+  "phase3:969f0d81afaf27c6f68a954777c9a15ff21a746024a53bcc1cdf7635be0939a6",
+  "phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756",
+  "phase3:f4b53d07266bbac31c9108e5d62cb1f725f17f4fd9d0d9771bf3bd1e93c74ac0",
+  "phase3:f96d5a702a347897a8492efb2e89c9525bd8e7519cccf9ee705b6acc9b8cab82"
+ ],
+ "p2": [
+  "phase3:0542944ad9281b8560a944bda9b861ab5d1e81a8b8591b5b8a80ead9d2660c68",
+  "phase3:29f48c3fc32861550077620c84986c8cc02d6489df213694313fb91ec76161d3",
+  "phase3:82d1c776c75f02cd28e3c6b93615939dceeedf7900851653a8f380d08fcb945e",
+  "phase3:8b3fb47d8cbbfc11b1b33dcb596bed0f2bf557a8515df553e04149a539bc7131",
+  "phase3:926f268e74dc41826cc4a2fe4a96bde0ee62f71ac446074646fd6b58e93dcd1b",
+  "phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208",
+  "phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756",
+  "phase3:ea2a6f8479a6b21537cce5c969ec476fbeaa8903a7aded3ff93be14d097bcbc6",
+  "phase3:f4b53d07266bbac31c9108e5d62cb1f725f17f4fd9d0d9771bf3bd1e93c74ac0",
+  "phase3:f96d5a702a347897a8492efb2e89c9525bd8e7519cccf9ee705b6acc9b8cab82",
+  "phase3:faff3a9fa29162f6e82563969fdb04fa78789530a1675b76ca1a24ace0649858"
+ ],
+ "tie": [
+  "phase3:29f48c3fc32861550077620c84986c8cc02d6489df213694313fb91ec76161d3",
+  "phase3:47731ff7e088555f65fe1c3ab0992a6957bd1f8ddbb710e9b02b9b3cf4f79372",
+  "phase3:8b3fb47d8cbbfc11b1b33dcb596bed0f2bf557a8515df553e04149a539bc7131",
+  "phase3:8f6a33d17e7d651f7bf455f977a64050c17d12daa927c0e34bc243b984abeffb"
+ ]
+}

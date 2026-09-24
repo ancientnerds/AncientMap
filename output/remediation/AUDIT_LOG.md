@@ -8227,3 +8227,188 @@ supersedes the partial, which stays as committed and is not read by anything her
 The draw was checked independently of the module (the same call over the raw file gives the same 60
 keys). `write_keep_sample` never writes a second, different sample over it. Nobody has judged the
 sample yet; the orchestrator runs the Opus judges on it.
+
+### The quote check (`quotes.py`, run 2026-09-24)
+
+RULES.md: "A verdict whose quotes cannot be found verbatim (whitespace-normalised) in the cited
+evidence file or fetched page does not count; the row is judged again." What the check normalises,
+applied to the quote and the text alike, and nothing else: **Unicode NFC, then every maximal run of
+characters for which Python's `str.isspace()` is true becomes one U+0020 space, then both ends are
+stripped.** Case, punctuation, quotation marks, dashes, ellipses, ligatures and citation markers are
+compared as they are. A verdict counts only when it has at least one quote and every quote is found.
+
+Where a quote may be found:
+
+* **an evidence file** - only one of the row's own `evidence_files` (RULES.md: "an evidence file path
+  from the row"): the file as UTF-8 text, and, for the JSON API answers the finder was shown, each
+  string it holds, decoded - to the cut of a file the fetch stage truncated at its byte cap (the
+  largest evidence files end inside their last string);
+* **a URL** - fetched once (`run.py fetch`, 2026-09-24 18:44-18:53 UTC, the project's User-Agent
+  `AncientNerdsSiteAudit/1.0`, redirects followed, a 60 s bound, 1 s between two requests to one
+  host), the raw bytes kept under `opus_audit/pages/<sha256 of the URL>.body` (48 MB, gitignored;
+  `PAGES.jsonl` records every URL's status, final URL, Content-Type, size and body sha256). JSON (a
+  MediaWiki `api.php` answer, a Wikidata entity) is compared as served and as its decoded strings;
+  HTML as its visible text (tags removed, entities unescaped, `<script>`, `<style>`, `<template>`
+  and `<title>` dropped, a block element's edges read as a line break, an inline element's as
+  nothing); a PDF as the text `pdftotext -enc UTF-8` extracts (xpdf 4.00 here); other `text/*` as
+  served. A text page is decoded by its header's charset, else its first `<meta>` charset, else UTF-8
+  when the bytes are UTF-8 and windows-1252 when they are not (the HTML Standard's fallback: the
+  Wayback copies of two mincetur.gob.pe sheets declare nothing and are Latin-1 - read as UTF-8 their
+  accents were U+FFFD and two verbatim quotes failed, fixed test-first before the counts below). A
+  URL written with `&amp;` for `&` is the same URL; none of the 362 cited URLs carried one.
+
+**362 distinct URLs were cited; 361 were fetched once, 349 answered 2xx.** Not read: Historic England
+list entries 1005789, 1005850, 1007297, 1008695, 1017899 (403 to this User-Agent), whc.unesco.org
+list 560 (403), megalithic.co.uk sid 55192 (403), busquedas.elperuano.pe 2483726-1 (404),
+agora.ascsa.net (connection reset), ejournals.eu and www.ejournals.eu (TLS: unable to get the local
+issuer certificate), repositorio.unsaac.edu.pe (a PDF, read timeout) - and one never fetched:
+`https://ancientnerds.com/api/sites/...`, the production API of the database under audit (never
+touched here, and no evidence for itself). One page answered 200 but is not the article:
+pmc.ncbi.nlm.nih.gov PMC6258758 served "Checking your browser before accessing
+pmc.ncbi.nlm.nih.gov" - both judges of Península de Kola quote the article, so neither counts.
+
+| pass | verdicts checked | counted | failed | not found | fetch failed | not fetched | not the row's evidence file |
+|---|---|---|---|---|---|---|---|
+| p1 | 934 | **927** | 7 | 2 | 4 | 1 | 0 |
+| p2 | 432 | **421** | 11 | 1 | 9 | 0 | 1 |
+| tie | 64 | **60** | 4 | 0 | 4 | 0 | 0 |
+
+Of 2,727 quotes, 2,697 were found (2,181 as served, 509 in a page's visible text, 6 in a PDF's text,
+1 only in a decoded JSON string), 24 sat on a page that could not be fetched, 2 on the page that
+was not, 3 were not found and 1 cited another row's file. The failures, row by row (a verdict that
+fails does not count; the row is judged again):
+
+| row | column | route | failed | why |
+|---|---|---|---|---|
+| Padderbury Top | site_type | revert / revert | p1, p2 | Historic England 403 |
+| Old Winchester Hill | period_start | revert / revert | p1, p2 | Historic England 403 |
+| Paquime | period_start | revert / revert | p1, p2 | UNESCO 403 |
+| Artashat | period_start | revert / revert | p1, p2 | ejournals.eu TLS failure |
+| Península de Kola | site_type | wrong-both / wrong-both | p1, p2 | not found: the PMC page is a browser check |
+| Ta' Ċieda Tower | site_type | revert / revert | p1 | cites the production API (not fetched) |
+| Qhunqhu Wankani | site_type | revert / revert | p1 | not found: the judge wrote "Es considerado ..." where es.wikipedia reads "Además es considerado ..." |
+| Hamble Common Camp | site_type | revert / revert | p2 | Historic England 403 |
+| Muntham Court Romano-British Site | site_type | revert / revert | p2 | Historic England 403 |
+| Qhapaq Kancha | site_type | revert / revert | p2 | unsaac.edu.pe PDF timeout |
+| Tarmatambo | site_type | revert / revert | p2 | cites `batch-0052/evidence/60722e7e...%2Fenwiki.txt` - Stanydale Temple's evidence, "when Neolithic farmers first came to Shetland" - not a file of this row |
+| Ferrybridge Henge | period_start | revert / keep / keep | p2, tie | Historic England 403 |
+| Knockmaree Dolmen | period_start | revert / keep / revert | p2, tie | megalithic.co.uk 403 |
+| Stoa Poikile | site_type | wrong-both / keep / wrong-both | tie | agora.ascsa.net reset |
+| Inka Raqay, Ayacucho | site_type | revert / keep / keep | tie | elperuano.pe 404 |
+
+No pass-1 keep failed its check. Six found quotes drawn at random were read in their page: each sits
+in the page's own sentence. 36 found quotes are shorter than 20 characters ("Roman fort", "dolmen",
+"Q35509") - verbatim, so they count, but they carry little.
+
+### The decision (`decide.py`)
+
+Applied to counting verdicts only. **keep 513, revert 406, rejudge 15** (`DECISIONS.jsonl`, one line
+per INPUT row: the row, the decision, its basis - each route verdict with whether it counted -, the
+passes to judge again, the route's own decision, the proposals, whether it goes to the reversal and
+every quote's outcome; `COUNTS.json` the counts; `REJUDGE.json` the keys).
+
+| decision | route | rows |
+|---|---|---|
+| keep | pass-1 keep (rule 4) | 502 |
+| keep | pass 2 keep, third judge keep (rule 3) | 11 |
+| revert | pass 1 and pass 2 not keep (rule 3) | 357 |
+| revert | pass 2 keep, third judge revert or wrong-both (rule 3) | 49 |
+| rejudge | a route verdict failed the quote check | 15 (route: revert 13, keep 2) |
+
+**Revert by column:** site_type 218, period_start 182, country 6. **By superseded (rule 6):** 398 not
+superseded, **8 superseded - judged, never reverted**: the five Northern-Ireland country rows (Annadorn
+Dolmen, Dooey's Cairn, Giant's Ring, Craigs Dolmen, Moylehid: old "Ireland", written "United Kingdom",
+today "Northern Ireland"; the deciding judges said wrong-both and proposed "Northern Ireland", the
+value a later lane already wrote - for Craigs Dolmen pass 2 said keep and the third judge
+wrong-both), and three site_type rows whose cell already holds the old value again
+(Treasure of Osztrópataka, Witham Shield, Library of Ashurbanipal).
+
+**Rule 5, the wrong-both proposals:** 33 reverted rows carry a wrong-both on their route - 30 with one
+proposed value (6 of them superseded: the five "Northern Ireland" and Witham Shield's "Archaeological
+site"), 3 where the two judges named different values and nothing is proposed (Nine Stones,
+Winterbourne Abbas `period_start` -2000 / -2500; Altar of Athena Polias `site_type` Sanctuary /
+Religious; Chanhudaro `period_start` -2500 / -3000). **No proposal is written by this lane**: they
+go, as `proposed_value` in DECISIONS.jsonl, to a later correction lane that writes only with a
+machine-verified verbatim quote.
+
+**`REJUDGE.json`**: p1 7, p2 11, tie 4 verdicts over the 15 rows. Re-run p1 first (a new p1 keep
+ends the route); a counted p2 stays valid when p1 is re-run (p2 never sees p1); a row that reaches the
+tie again after a new p1 or p2 verdict needs a new tie, since the tie saw both reasonings.
+
+### The reversal input (`REVERSAL_3_INPUT.jsonl`, 398 rows)
+
+Every row decided revert and not superseded: site_type 215, period_start 182, country 1. **Nothing
+is planned or written here.** The lane that writes it already exists: the mechanical journal-reversal
+lane, `scripts/remediation/mechanical/reversal.py` (plan) and `apply.py --lane <lane>` (rehearsal,
+apply, read-back), as used for `journal-reversal-1` and `-2`. What that lane reads, and what each line
+here carries:
+
+* **`REASONS.json`** in the lane's directory, `{"_about", "reversals": [{journal_id, site_id, name,
+  column, reason, quotes: [{source, text}], residual}]}`, listing exactly the journal ids the lane
+  registers in `mechanical/lane.py` (`REVERSAL_LISTS`, a `Lane` with its own run stamp, test id, key
+  prefix, plan table and cells - site_type, period_start and period_name varchar/integer as for
+  reversal 2, plus country for the one country row). Each line of REVERSAL_3_INPUT.jsonl is such an
+  entry, with `old_value` (the value restored), `new_value` (the value the undone write wrote), the
+  judges' verdicts and reasons, and `journal_id: null`.
+* **The journal ids** are in neither INPUT.jsonl nor the local write logs: they are read from
+  production, read-only, by `change_key`
+  (`SELECT id, change_key FROM remediation_change_log WHERE change_key IN (...)`).
+* **The quotes' sources.** `reversal.quote_problem` checks only `description`, `enwiki:<title>`,
+  `wikidata:<QID>`, `gold_standard:<site_id>`, `journal` and `rereview:<change_key>`. The 1,193
+  quotes of the 398 rows (each source and text once per row) cite evidence files (820) and URLs
+  (373) - no kind the lane can check today. Lane 3 needs a source kind for them, e.g.
+  `opus:<change_key>` read from `DECISIONS.jsonl` (decision revert, the same change key, site,
+  column, old and new value), the way `rereview:` reads REREVIEW_1_FINAL.jsonl.
+* **The period labels.** `keep_the_period_label` refuses a period_start reversal that leaves its
+  `period_name` label behind. 39 of the 182 period_start rows restore a start in another bucket than
+  the written one (`period_bucket.changes`); where the period-name lane of 2026-09-22 re-derived the
+  label from the written start, that label's journal row has to join the list (reversal 2 carried 8
+  such rows).
+* Guard 5 (the named row is the cell's last write), the live-value guard and the curated-source
+  guard are the lane's own and are read live at plan time; INPUT.jsonl's snapshot shows every one of
+  the 398 cells still holding the written value.
+
+### Next
+
+1. **Judge the keep sample**: the 60 keys of `KEEP_SAMPLE.json`, each by an independent Opus judge
+   that does not see pass 1. More than 3 not keep: every pass-1 keep is judged a second time (rule 4).
+2. **Judge the 15 rows again** (`REJUDGE.json`, 22 verdicts, p1 first). The quotes must come from the
+   row's own evidence files or a page that answers `run.py fetch` - Historic England, UNESCO,
+   megalithic.co.uk and PMC do not answer this User-Agent. Then `run.py fetch` (new URLs only) and
+   `run.py decide` over the verdicts file with the new verdicts in place (its new sha256 recorded here).
+3. **Then the reversal**, through the journal-reversal lane as `journal-reversal-3`, from
+   REVERSAL_3_INPUT.jsonl as it stands after steps 1 and 2 - with its own plan, rehearsal, read-back
+   and rollback, and the owner's go before the write.
+
+| output | sha256 |
+|---|---|
+| `DECISIONS.jsonl` (934 lines) | `9db7c7dd7515fe8cd31068417c4a7a99a866c3e445ad5b41470de7778799e859` |
+| `COUNTS.json` | `5be6ecbce77de7e0e439b31ad58015e37b10b16422ca18e46a77cd81a0b37c8e` |
+| `REJUDGE.json` | `0c55c5a17c01b43749a1c524abed9d6d5cea3885c90923183580e873c0bec21c` |
+| `REVERSAL_3_INPUT.jsonl` (398 lines) | `e7c51dbd4dbb7f6e2bbcbdaee56c7589b14420b435f3110398c96c8cff2a6602` |
+| `PAGES.jsonl` (362 lines) | `35c9f45e66bf60d146385fc506cb844e0b26727b8583177b5a66e11bea554e9f` |
+
+`run.py decide` writes these byte-identically on a second run.
+
+### Tests, sweep, gates (main checkout, branch `integrate/wave1`, main venv)
+
+* 62 new test functions (77 cases with the parametrisations), each red before its code:
+  `test_opus_audit_quotes.py` 33 (the normaliser, every reading, every failure outcome, the fetch
+  once, the pace, the page index), `test_opus_audit_decide.py` 29 (every route, rejudge per failed
+  pass, rules 5 and 6, the verdicts' shape, the rejudge list, the keep sample and its write-once, the
+  reversal input, the counts, the seal, the whole run twice byte-identical). The run on the real
+  verdicts found two things no test had pinned (the Wayback pages' charset, a quote two judges share
+  listed twice in the reversal input); both were fixed test-first before the counts above.
+* `phase3/mutation_sweep.OPUS_AUDIT_MUTATIONS`: 46 cases (quotes.py 26, decide.py 20), registered
+  once; 2,019 labels, all unique, every anchor and test present. The sweep's own `main` over
+  **`"opus audit:"` only: 46/46 caught**, the tree byte-identical to the sweep's start for its 2
+  files, no `# mutant` left. `mutation_sweep.py` is imported by neither `opus_handoff.py` nor
+  anything it imports (checked before the edit); it is in `phase3/`, so `mass_run.package_digest`
+  changes with it - no Phase-3 mass run was in flight.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **5,960 passed, 6 skipped, 57 deselected, 0 failed** (409 s); the skips are two refactored-away
+  article tests, the opt-in Shining Ones regen and three card_stats tests whose gitignored export
+  this checkout does not hold.
+* `ruff check` and `ruff format --check` clean on the 7 new or touched Python files (ruff 0.15.11);
+  `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean.

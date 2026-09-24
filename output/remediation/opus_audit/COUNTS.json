@@ -1,0 +1,115 @@
+{
+ "inputs": {
+  "RULES.md": "671ef6d68faea2cdda5046c110a3dc53dce63e8cd727b5fccc5637b985469f31",
+  "INPUT.jsonl": "099c9380f252e77ca6a086a6a0b532dbfb1175b4f62817b7c15a9dfc553a6c11",
+  "VERDICTS_RAW.json": "98b88a54d5ccae5a219c88876e2338524bc90f3187333f4cc44015450fed9f57"
+ },
+ "normalisation": "Unicode NFC, then every maximal run of characters for which Python's str.isspace() is true becomes one U+0020 space, then both ends are stripped; nothing else",
+ "passes": {
+  "p1": {
+   "verdicts": 934,
+   "by_verdict": {
+    "keep": 502,
+    "revert": 401,
+    "wrong-both": 31
+   }
+  },
+  "p2": {
+   "verdicts": 432,
+   "by_verdict": {
+    "keep": 64,
+    "revert": 337,
+    "undecidable": 1,
+    "wrong-both": 30
+   }
+  },
+  "tie": {
+   "verdicts": 64,
+   "by_verdict": {
+    "keep": 13,
+    "revert": 47,
+    "wrong-both": 4
+   }
+  }
+ },
+ "quote_check": {
+  "p1": {
+   "checked": 934,
+   "counted": 927,
+   "failed": 7,
+   "failed_by_reason": {
+    "fetch failed": 4,
+    "not fetched": 1,
+    "not found": 2
+   }
+  },
+  "p2": {
+   "checked": 432,
+   "counted": 421,
+   "failed": 11,
+   "failed_by_reason": {
+    "fetch failed": 9,
+    "not an evidence file of this row": 1,
+    "not found": 1
+   }
+  },
+  "tie": {
+   "checked": 64,
+   "counted": 60,
+   "failed": 4,
+   "failed_by_reason": {
+    "fetch failed": 4
+   }
+  }
+ },
+ "quotes_by_outcome": {
+  "p1": {
+   "fetch failed": 6,
+   "found": 1658,
+   "not fetched": 2,
+   "not found": 2
+  },
+  "p2": {
+   "fetch failed": 11,
+   "found": 888,
+   "not an evidence file of this row": 1,
+   "not found": 1
+  },
+  "tie": {
+   "fetch failed": 7,
+   "found": 151
+  }
+ },
+ "decisions": {
+  "keep": 513,
+  "revert": 406,
+  "rejudge": 15
+ },
+ "revert_by_column": {
+  "country": 6,
+  "period_start": 182,
+  "site_type": 218
+ },
+ "revert_by_superseded": {
+  "false": 398,
+  "true": 8
+ },
+ "rejudge_by_pass": {
+  "p1": 7,
+  "p2": 11,
+  "tie": 4
+ },
+ "rejudge_by_route_decision": {
+  "keep": 2,
+  "revert": 13
+ },
+ "wrong_both_proposals": 30,
+ "wrong_both_disagreements": 3,
+ "reversal_rows": 398,
+ "reversal_by_column": {
+  "country": 1,
+  "period_start": 182,
+  "site_type": 215
+ },
+ "reversal_period_bucket_changes": 39
+}
