@@ -35,7 +35,7 @@ export type EventName =
   | 'globe_focus' // #focus= deep link resolved — site
   | 'globe_gate' // phone gate button — choice: globe | stories | radar | journal | lyra | db
   | 'globe_unsupported' // capability check failed, unsupported screen shown — reason: no_webgl2 | max_texture_size, detail
-  | 'globe_error' // globe failure — phase, message; start failures name their step, background failures carry 'bg:<task>', failures after globe_ready carry 'live'
+  | 'globe_error' // globe failure — phase, message; start failures name their step, background failures carry 'bg:<task>', failures after globe_ready carry 'live'; a start failure after another ending carries ending:'no'
   | 'globe_abandon' // page hidden/left before globe_ready — ms, phase: gate | sites | scene | basemap | labels | coastlines | countryBorders
   | 'globe_bg' // background task finished after the intro — task (BgTaskName), ms
   | 'vital' // Core Web Vital sample — name, value, rating, page

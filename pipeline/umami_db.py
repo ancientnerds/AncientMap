@@ -327,6 +327,11 @@ GLOBE_PATH = "/globe.html"
 #:                   or a loader failed later); both belong to loads that
 #:                   reached the globe, so they are excluded. left(), because
 #:                   a LIKE pattern needs the percent sign the guard test forbids.
+#:                   So is a start failure marked ending='no': the load had
+#:                   already ended (a tab switch while loading sent
+#:                   globe_abandon, the visitor came back to the error
+#:                   screen); it is sent for its phase and message only
+#:                   (src/hooks/useGlobeScreenEnding.ts).
 #:   context_lost  - webgl_lost{phase:'loading'}: the start failure the globe
 #:                   reported before globe_error existed. Uncounted, it would
 #:                   land in "no signal", which reads as a crash.
@@ -345,7 +350,8 @@ WITH ev AS (
     SELECT e.event_id, e.session_id, e.created_at, e.event_type, e.event_name,
            (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms,
            max(d.string_value) FILTER (WHERE d.data_key = 'choice') AS choice,
-           max(d.string_value) FILTER (WHERE d.data_key = 'phase')  AS phase
+           max(d.string_value) FILTER (WHERE d.data_key = 'phase')  AS phase,
+           max(d.string_value) FILTER (WHERE d.data_key = 'ending') AS ending
     FROM website_event e
     LEFT JOIN event_data d ON d.website_event_id = e.event_id
     WHERE e.website_id = :website_id AND e.url_path = :path
@@ -365,7 +371,8 @@ SELECT session_id,
        count(*) FILTER (WHERE event_name = 'globe_unsupported')                 AS unsupported,
        count(*) FILTER (WHERE event_name = 'globe_error'
                           AND (phase IS NULL
-                               OR (left(phase, 3) <> 'bg:' AND phase <> 'live'))) AS failed,
+                               OR (left(phase, 3) <> 'bg:' AND phase <> 'live'))
+                          AND ending IS DISTINCT FROM 'no')                     AS failed,
        count(*) FILTER (WHERE event_name = 'webgl_lost' AND phase = 'loading')  AS context_lost,
        count(*) FILTER (WHERE event_name = 'globe_abandon'
                           AND phase IS DISTINCT FROM 'gate')                    AS abandoned,

@@ -6,11 +6,17 @@
  * fail behind the gate, and a gate link used then is this load's ending
  * (globe_gate), not a failure the visitor never saw. The latch
  * (analytics/globeAbandon.ts) keeps it to one ending per load.
+ *
+ * A start failure whose load already ended - a tab switch while loading sent
+ * globe_abandon, and the visitor came back to the error screen - is still sent
+ * with its phase and message, marked `ending: 'no'`: they are the only
+ * diagnosis of a failed start, and SQL_GLOBE's `failed` skips the mark, so the
+ * load keeps one ending.
  */
 
 import { useEffect } from 'react'
 
-import type { EventProps } from '../analytics'
+import { track, type EventProps } from '../analytics'
 import type { GlobeEndingLatch } from '../analytics/globeAbandon'
 
 export interface ScreenEnding {
@@ -21,6 +27,7 @@ export interface ScreenEnding {
 export function useGlobeScreenEnding(latch: GlobeEndingLatch, ending: ScreenEnding | null, gateShowing: boolean): void {
   useEffect(() => {
     if (!ending || gateShowing) return
-    latch.end(ending.name, ending.props)
+    if (latch.end(ending.name, ending.props) || ending.name !== 'globe_error') return
+    track('globe_error', { ...ending.props, ending: 'no' })
   }, [latch, ending, gateShowing])
 }

@@ -204,6 +204,13 @@ def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends
         "components", "GlobeErrorBoundary.tsx"
     )
     assert "phase <> 'live'" in sql
+    # A start failure after the load already ended (a tab switch sent globe_abandon) keeps its
+    # diagnostics but is no second ending: the frontend marks it, `failed` skips the mark
+    assert "track('globe_error', { ...ending.props, ending: 'no' })" in read(
+        "hooks", "useGlobeScreenEnding.ts"
+    )
+    assert "max(d.string_value) FILTER (WHERE d.data_key = 'ending') AS ending" in sql
+    assert "ending IS DISTINCT FROM 'no'" in sql
     # Background failures carry 'bg:<task>', built in one place: every sender goes through
     # trackBackgroundFailure (the hi-res coastline too), none writes a bg: phase of its own
     assert "phase: `bg:${task}`" in read("analytics", "globeBackground.ts")

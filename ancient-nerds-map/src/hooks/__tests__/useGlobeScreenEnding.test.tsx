@@ -66,13 +66,32 @@ describe('useGlobeScreenEnding', () => {
     expect(trackMock).toHaveBeenCalledTimes(2)
   })
 
-  it('a gate link used while the failure waits is the ending; the failure is never sent', async () => {
+  it('a gate link used while the failure waits is the ending; the failure is no second one', async () => {
     const latch = createGlobeEndingLatch()
     await render(latch, SITES_FAILED, true)
     reportGateChoice('radar', latch)
     expect(trackMock.mock.calls).toEqual([['globe_gate', { choice: 'radar' }]])
     await render(latch, SITES_FAILED, false) // (a back/forward restore of this page)
-    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock.mock.calls).toEqual([
+      ['globe_gate', { choice: 'radar' }],
+      ['globe_error', { ...SITES_FAILED.props, ending: 'no' }],
+    ])
+  })
+
+  it('a start failure after a tab switch closed the latch keeps its phase and message, marked as no ending', async () => {
+    const latch = createGlobeEndingLatch()
+    const uninstall = installGlobeAbandon({ latch, getPhase: () => 'basemap', now: () => 10_000 })
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange')) // the visitor flips to another app...
+    visibility.mockReturnValue('visible') // ...and comes back
+    const BASEMAP_FAILED: ScreenEnding = { name: 'globe_error', props: { phase: 'basemap', message: 'decode failed' } }
+    await render(latch, BASEMAP_FAILED, false)
+    uninstall()
+    // One ending per load (the abandon); the failure still reaches Umami for diagnosis
+    expect(trackMock.mock.calls).toEqual([
+      ['globe_abandon', { ms: 10_000, phase: 'basemap' }],
+      ['globe_error', { phase: 'basemap', message: 'decode failed', ending: 'no' }],
+    ])
   })
 
   it('leaving while the gate shows is an abandon at the gate, not the hidden failure', async () => {

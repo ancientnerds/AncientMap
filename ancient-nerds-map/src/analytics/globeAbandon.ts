@@ -9,7 +9,8 @@
  *   globe_gate        a phone-gate choice other than the globe
  *   globe_unsupported the capability check failed, once its screen shows
  *   globe_error       a start failure (not 'bg:' or 'live'), once its screen shows
- *                     (App: failGlobe, hooks/useGlobeScreenEnding.ts; never behind the gate)
+ *                     (App: failGlobe, hooks/useGlobeScreenEnding.ts; never behind the gate).
+ *                     After another ending it is sent marked {ending:'no'}: diagnosis only
  *   globe_abandon     the page was hidden or left before globe_ready
  *   webgl_lost        {phase:'loading'}: the WebGL context died before globe_ready
  *
