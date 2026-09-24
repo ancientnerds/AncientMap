@@ -812,3 +812,8 @@ section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question")
   (`gold_prose_errors.json`) and `thresholds` (`PILOT_THRESHOLDS.md`, verbatim from the design).
 - `phase3.fetch_stage.HostPacer.wait` waits for a lock its holder is deleting (Windows answers the
   re-create with access denied while the file is "delete pending") instead of dying of it.
+- **Pilot 2** (2026-09-24, after pilot 1 failed T2, T5 and T8): `pilot4 build --after PILOT.jsonl
+  --seed 20260924` - pilot 1's fixed members, refused unless site for site and in order, and a fresh
+  draw of every seeded stratum excluding pilot 1's 62 draws (`PILOT2.jsonl`); `PILOT_THRESHOLDS.md`
+  and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is `PLAN4.pilot2.jsonl` and
+  its run `runs/pilot2-2026-09-24`. The fixes it runs with are section 7, "Pilot 1's fixes".

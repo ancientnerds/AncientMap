@@ -16776,7 +16776,7 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        and not gate.place_item\n",
         "        and True  # mutant\n",
         P4P2_SELECT_TEST,
-        "test_only_a_strong_own_verdict_counts_the_title_and_the_label[place-item]",
+        "test_only_a_strong_own_verdict_counts_the_title_and_the_label",
     ),
     (
         "p4 select: a witness that is not the pinned answer counts",
@@ -16784,7 +16784,7 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():\n        return None\n',
         "    if False:  # mutant\n        return None\n",
         P4P2_SELECT_TEST,
-        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[unpinned]",
+        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
     ),
     (
         "p4 select: another item's label counts",
@@ -16792,7 +16792,7 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)\n',
         '    entity = next(iter(json.loads(raw.decode("utf-8"))["entities"].values()))  # mutant\n',
         P4P2_SELECT_TEST,
-        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[another-item]",
+        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
     ),
     (
         "p4 select: also_named repeats a stored name",
@@ -16843,7 +16843,7 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():\n',
         "    if False:  # mutant\n",
         P4P2_VERIFY_TEST,
-        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[unpinned]",
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
     ),
     (
         "p4 verify4: another item's label counts",
@@ -16851,7 +16851,7 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)\n',
         '    entity = next(iter(json.loads(raw.decode("utf-8"))["entities"].values()))  # mutant\n',
         P4P2_VERIFY_TEST,
-        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[another-item]",
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
     ),
     (
         "p4 verify4: a witness meta filed under another id counts",
@@ -16859,7 +16859,7 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    if not isinstance(meta, Mapping) or meta.get("id") != M.SourceKind.D.value:\n',
         "    if not isinstance(meta, Mapping):  # mutant\n",
         P4P2_VERIFY_TEST,
-        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[not-d]",
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label",
     ),
     (
         "p4 verify4: the V6 hold hides why the witness adds no name",
@@ -16891,7 +16891,7 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        label = _witness_label(site, witness)\n",
         "        label = None  # mutant\n",
         P4P2_VERIFY_TEST,
-        "test_s3_and_v6_accept_the_same_names[strong]",
+        "test_s3_and_v6_accept_the_same_names",
     ),
     (
         "p4 run4: the review's S5 reads no witness",
