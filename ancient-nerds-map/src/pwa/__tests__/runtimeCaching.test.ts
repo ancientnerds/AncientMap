@@ -174,12 +174,6 @@ describe('RUNTIME_CACHING', () => {
       cacheName: 'external-images',
       urls: ['https://upload.wikimedia.org/wikipedia/commons/a/ab/X.jpg'],
     },
-    {
-      source: '^https:\\/\\/raw\\.githubusercontent\\.com\\/nvkelso\\/natural-earth-vector\\/',
-      handler: 'CacheFirst',
-      cacheName: 'natural-earth',
-      urls: ['https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/x.geojson'],
-    },
   ]
 
   it.each(EXISTING)('keeps the $cacheName rule ($handler)', ({ source, handler, cacheName, urls }) => {
@@ -195,11 +189,6 @@ describe('RUNTIME_CACHING', () => {
       cacheableResponse: { statuses: [0, 200] },
       expiration: { maxEntries: 1000, maxAgeSeconds: 60 * 60 * 24 * 30 },
     })
-    expect(ruleNamed('natural-earth', 'CacheFirst').options).toEqual({
-      cacheName: 'natural-earth',
-      cacheableResponse: { statuses: [0, 200] },
-      expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 365 },
-    })
     for (const [cacheName, handler] of [
       ['api-sources', 'StaleWhileRevalidate'],
       ['historical-data', 'CacheFirst'],
@@ -210,7 +199,12 @@ describe('RUNTIME_CACHING', () => {
     }
   })
 
-  it('has exactly the eleven rules (seven kept, basemaps fixed, globe layers and two sites payload caches new)', () => {
+  it('caches nothing from GitHub: the Natural Earth borders are self-hosted tiers now', () => {
+    expect(ruleFor('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/x.geojson')).toBe(-1)
+    expect(RUNTIME_CACHING.map(r => r.options?.cacheName)).not.toContain('natural-earth')
+  })
+
+  it('has exactly the ten rules (six kept, basemaps fixed, globe layers and two sites payload caches new)', () => {
     expect(RUNTIME_CACHING.map(r => `${r.options?.cacheName}:${r.handler}`)).toEqual([
       'api-sites-globe:NetworkFirst',
       'api-sites-sources:NetworkFirst',
@@ -222,7 +216,6 @@ describe('RUNTIME_CACHING', () => {
       'vector-layers:StaleWhileRevalidate',
       'static-data:StaleWhileRevalidate',
       'external-images:NetworkFirst',
-      'natural-earth:CacheFirst',
     ])
   })
 

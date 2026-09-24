@@ -133,14 +133,4 @@ export const RUNTIME_CACHING: RuntimeCaching = [
       },
     },
   },
-  // Natural Earth vector data from GitHub
-  {
-    urlPattern: /^https:\/\/raw\.githubusercontent\.com\/nvkelso\/natural-earth-vector\//,
-    handler: 'CacheFirst',
-    options: {
-      cacheName: 'natural-earth',
-      cacheableResponse: { statuses: [0, 200] },
-      expiration: { maxEntries: 50, maxAgeSeconds: ONE_YEAR },
-    },
-  },
 ]
