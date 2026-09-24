@@ -854,7 +854,7 @@ describe('every URL the loader fetches', () => {
 
 class FakeWorker {
   onmessage: ((e: MessageEvent<LayerWorkerResponse>) => void) | null = null
-  onerror: ((e: ErrorEvent) => void) | null = null
+  onerror: ((e: Event) => void) | null = null
   posted: Array<{ msg: LayerWorkerRequest; transfer: Transferable[] }> = []
   terminated = false
   postMessage(msg: LayerWorkerRequest, options: { transfer: Transferable[] }) {
@@ -896,13 +896,40 @@ describe('createLayerParser', () => {
     await expect(result).rejects.toThrow(/JSON/)
   })
 
-  it('fails every pending and later parse when the worker itself breaks', async () => {
+  /** Node has no ErrorEvent; this is the browser's shape for an exception inside a running worker. */
+  class FakeErrorEvent extends Event {
+    message: string
+    filename: string
+    lineno: number
+    constructor(type: string, init: { message: string; filename: string; lineno: number }) {
+      super(type)
+      this.message = init.message
+      this.filename = init.filename
+      this.lineno = init.lineno
+    }
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('ErrorEvent', FakeErrorEvent)
+  })
+
+  it('fails every pending and later parse when the worker crashes, with its message and place', async () => {
     const worker = new FakeWorker()
     const parser = createLayerParser(() => worker as unknown as Worker)
     const pending = parser.parse(bytes('{}'), [1], false)
-    worker.onerror?.({ message: 'chunk failed to load' } as ErrorEvent)
-    await expect(pending).rejects.toThrow('chunk failed to load')
-    await expect(parser.parse(bytes('{}'), [1], false)).rejects.toThrow('chunk failed to load')
+    worker.onerror?.(new FakeErrorEvent('error', { message: 'Uncaught RangeError: boom', filename: 'layerWorker.js', lineno: 7 }))
+    await expect(pending).rejects.toThrow('Layer worker failed: Uncaught RangeError: boom (layerWorker.js:7)')
+    await expect(parser.parse(bytes('{}'), [1], false)).rejects.toThrow('Layer worker failed: Uncaught RangeError: boom (layerWorker.js:7)')
+    expect(worker.terminated).toBe(true)
+  })
+
+  it('names a worker script that could not be loaded: the browser fires a plain Event without a message', async () => {
+    const worker = new FakeWorker()
+    const parser = createLayerParser(() => worker as unknown as Worker)
+    const pending = parser.parse(bytes('{}'), [1], false)
+    worker.onerror?.(new Event('error'))
+    await expect(pending).rejects.toThrow('Layer worker script could not be loaded')
+    await expect(parser.parse(bytes('{}'), [1], false)).rejects.toThrow('Layer worker script could not be loaded')
     expect(worker.terminated).toBe(true)
   })
 

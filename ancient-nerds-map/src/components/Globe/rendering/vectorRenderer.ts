@@ -127,7 +127,7 @@ export function isAbortError(err: unknown): boolean {
 /**
  * One layer worker per Globe, created on the first parse and terminated by dispose(). A worker
  * that fails (its chunk does not load, it crashes) fails every pending and later parse with
- * its message; it is not recreated.
+ * one error naming which of the two happened; it is not recreated.
  */
 export function createLayerParser(
   createWorker: () => Worker = () => new Worker(new URL('./layerWorker.ts', import.meta.url), { type: 'module' }),
@@ -153,8 +153,12 @@ export function createLayerParser(
       if ('error' in data) entry.reject(new Error(data.error))
       else entry.resolve({ positions: data.positions, labels: data.labels })
     }
-    w.onerror = (event: ErrorEvent) => {
-      broken = new Error(`Layer worker failed: ${event.message}`)
+    // An exception inside the running worker arrives as an ErrorEvent with a message; a worker
+    // script that could not be fetched or started arrives as a plain Event (HTML "run a worker").
+    w.onerror = (event: Event) => {
+      broken = new Error(event instanceof ErrorEvent
+        ? `Layer worker failed: ${event.message} (${event.filename}:${event.lineno})`
+        : 'Layer worker script could not be loaded')
       w.terminate()
       rejectAll(broken)
     }
