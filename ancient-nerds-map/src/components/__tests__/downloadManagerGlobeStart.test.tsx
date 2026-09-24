@@ -40,7 +40,6 @@ vi.mock('../../services/BasemapCache', () => ({
   BasemapCache: {
     getBasemapItems: () => [
       { id: 'satellite', name: 'Satellite', files: [{ url: '/s.webp', size: 10 }], totalSize: 10 },
-      { id: 'labels', name: 'Labels', files: [{ url: '/data/labels.json', size: 5 }], totalSize: 5 },
     ],
     getBasemapItemInfo: (id: string) => ({ id, name: id, files: [], totalSize: 10 }),
     // The old download: marked, but its files are not all cached

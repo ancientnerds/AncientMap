@@ -76,10 +76,10 @@ describe('BasemapCache satellite item', () => {
     ])
   })
 
-  it('keeps the item list and the labels item as they were', () => {
+  it('offers no Labels item: labels.json comes with every download (GlobeStartCache)', () => {
     env(DESKTOP)
-    expect(BasemapCache.getBasemapItems().map(i => [i.id, i.name])).toEqual([['satellite', 'Satellite'], ['labels', 'Labels']])
-    expect(BasemapCache.getBasemapItemInfo('labels').files.map(f => f.url)).toEqual(['/data/labels.json'])
+    // A separate item fetched and counted labels.json twice and showed it as not downloaded
+    expect(BasemapCache.getBasemapItems().map(i => [i.id, i.name])).toEqual([['satellite', 'Satellite']])
   })
 })
 
@@ -87,12 +87,18 @@ describe('BasemapCache.getCachedItems', () => {
   it('counts an item as downloaded only when every file is in the basemaps cache', async () => {
     env(DESKTOP)
     // A 'Satellite' download from before the tiers: satellite_high.webp only
-    markDownloaded(['satellite', 'labels'])
+    markDownloaded(['satellite'])
     stored.set('/data/basemaps/satellite_high.webp', 'basemaps')
-    stored.set('/data/labels.json', 'basemaps')
-    expect(await BasemapCache.getCachedItems()).toEqual(['labels'])
+    expect(await BasemapCache.getCachedItems()).toEqual([])
     expect(await BasemapCache.isBasemapItemCached('satellite')).toBe(false)
-    expect(await BasemapCache.isBasemapItemCached('labels')).toBe(true)
+  })
+
+  it('maps the mark of an old Labels download to nothing', async () => {
+    env(DESKTOP)
+    markDownloaded(['labels', 'satellite'])
+    stored.set('/data/labels.json', 'basemaps')
+    for (const file of BasemapCache.getBasemapItemInfo('satellite').files) stored.set(file.url, 'basemaps')
+    expect(await BasemapCache.getCachedItems()).toEqual(['satellite'])
   })
 
   it('counts a completed download of this build as downloaded', async () => {

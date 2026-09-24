@@ -21,7 +21,7 @@ interface OfflineContextValue {
   cachedEmpireIds: Set<string>
   cachedLayerIds: Set<string>
   cachedBasemapQualities: Set<string>
-  cachedBasemapItems: Set<string>  // New: 'satellite' | 'labels'
+  cachedBasemapItems: Set<string>  // BasemapType: 'satellite'
   hasMapboxTilesCached: boolean    // Derived: whether satellite basemap is downloaded
   refreshCacheState: () => Promise<void>
 }

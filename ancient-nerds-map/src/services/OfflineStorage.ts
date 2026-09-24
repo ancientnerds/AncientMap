@@ -52,7 +52,7 @@ export interface DownloadState {
   basemapQualities: ('low' | 'normal' | 'high')[]  // Legacy - kept for backward compat
   basemapQuality: 'none' | 'low' | 'normal' | 'high'  // Legacy - kept for backward compat
   // Absent in states from before these items and in the one clearAllSites writes
-  basemapItems?: string[]  // New: 'satellite' | 'labels'
+  basemapItems?: string[]  // 'satellite'; an old 'labels' mark names no item any more (BasemapCache)
   layers?: string[]  // Vector layers (coastlines, rivers, etc.)
   empires: string[]
   lastUpdated: string

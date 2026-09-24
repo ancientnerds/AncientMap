@@ -174,11 +174,11 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   }, [sources])
 
   const selectAllBasemaps = useCallback(() => {
-    const allIds: BasemapType[] = ['satellite', 'labels']
+    const allIds = basemapItems.map(item => item.id)
     setSelectedBasemaps(prev =>
       allIds.every(id => prev.has(id)) ? new Set() : new Set(allIds)
     )
-  }, [])
+  }, [basemapItems])
 
   const selectAllLayers = useCallback(() => {
     const allIds = vectorLayers.map(l => l.id)
@@ -642,10 +642,10 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
               <div className="dm-section-header">
                 <span className="dm-section-title">Basemap Data</span>
                 <button className="dm-select-all-btn" onClick={selectAllBasemaps} disabled={isDownloading}>
-                  {(['satellite', 'labels'] as BasemapType[]).every(id => selectedBasemaps.has(id)) ? 'Deselect All' : 'Select All'}
+                  {basemapItems.every(item => selectedBasemaps.has(item.id)) ? 'Deselect All' : 'Select All'}
                 </button>
               </div>
-              <p className="dm-section-note">Download satellite imagery and geographic labels for offline use.</p>
+              <p className="dm-section-note">Download satellite imagery for offline use. Geographic labels come with every download.</p>
               <div className="dm-list">
                 {basemapItems.map(item => (
                   <div

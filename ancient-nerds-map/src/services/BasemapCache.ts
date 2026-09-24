@@ -1,15 +1,15 @@
 /**
- * BasemapCache - Handles caching of satellite basemap imagery and labels
+ * BasemapCache - Handles caching of satellite basemap imagery
  * Uses Service Worker cache for large image files. The gray basemap and
  * labels.json, which the globe's start cannot do without, come with every
- * offline download (GlobeStartCache).
+ * offline download (GlobeStartCache); there is no separate 'Labels' item.
  */
 
 import { OfflineStorage } from './OfflineStorage'
 import { BASEMAP_CACHE } from '../pwa/cacheNames'
 import { BASEMAP_TIERS, getBasemapAssets, getBasemapTier, tierRank, type BasemapTier } from '../utils/deviceTier'
 
-export type BasemapType = 'satellite' | 'labels'
+export type BasemapType = 'satellite'
 
 interface BasemapItemInfo {
   id: BasemapType
@@ -54,14 +54,13 @@ function item(id: BasemapType, name: string, files: { url: string; size: number 
 function basemapItems(): Record<BasemapType, BasemapItemInfo> {
   return {
     satellite: item('satellite', 'Satellite', tierFiles('satellite')),
-    labels: item('labels', 'Labels', [LABELS_FILE]),
   }
 }
 
 
 class BasemapCacheClass {
   /**
-   * Get list of available basemap items (Satellite, Labels)
+   * Get list of available basemap items (Satellite)
    */
   getBasemapItems(): BasemapItemInfo[] {
     return Object.values(basemapItems())
@@ -136,13 +135,14 @@ class BasemapCacheClass {
    * and every file in the 'basemaps' cache. A 'Satellite' download from before
    * the basemap tiers holds satellite_high.webp only, so it is not complete and
    * the Download Manager offers it again (VectorLayerCache.getCachedLayers does
-   * the same for the layers).
+   * the same for the layers). The mark of a 'Labels' download from before the
+   * start files names no item any more: labels.json is a start file now.
    */
   async getCachedItems(): Promise<BasemapType[]> {
     const state = await OfflineStorage.getDownloadState()
-    const marked = (state.basemapItems || []) as BasemapType[]
-    const cache = await caches.open(BASEMAP_CACHE)
     const items = basemapItems()
+    const marked = (state.basemapItems || []).filter((id): id is BasemapType => id in items)
+    const cache = await caches.open(BASEMAP_CACHE)
     const complete = await Promise.all(marked.map(async id => {
       const hits = await Promise.all(items[id].files.map(file => cache.match(file.url)))
       return hits.every(Boolean)
