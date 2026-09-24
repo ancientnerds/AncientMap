@@ -2,7 +2,8 @@
  * Registers the service worker on globe.html. The other pages keep the inline
  * snippet that vite.config.ts writes (serviceWorkerSnippet.ts); the globe
  * does it here, as the last task of its background queue, because the
- * worker's install precaches ~6.9 MB (JS incl. the lazy Mapbox chunk, fonts)
+ * worker's install precaches ~8.8 MB (JS incl. the lazy Mapbox chunk, fonts,
+ * the globe's start tiers: globeStartPrecache.ts)
  * and on a first visit that download competed with the globe's critical load.
  *
  * Same semantics as SW_INSTALL: only where the browser has service workers
@@ -34,7 +35,8 @@ async function registerWorker(): Promise<ServiceWorkerRegistration | null> {
 
 /**
  * An offline download (DownloadManager) is unusable without an active worker:
- * its precache holds globe.html, the JS and the fonts an offline start needs,
+ * its precache holds globe.html, the JS, the fonts and the coastline and
+ * border start tiers an offline start needs,
  * and nothing else registers one for a globe-only visitor. The queue's `sw`
  * task may not have run yet (it is the last task, after the warp, and nothing
  * starts while the tab is hidden), so the download registers it itself

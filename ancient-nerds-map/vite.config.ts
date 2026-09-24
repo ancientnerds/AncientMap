@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 import { countryLinksHtml, pickSnapshotPath, type CountryHub } from './src/landing/hubsHtml'
+import { GLOBE_START_PRECACHE } from './src/pwa/globeStartPrecache'
 import { RUNTIME_CACHING } from './src/pwa/runtimeCaching'
 import { serviceWorkerSnippetFor } from './src/pwa/serviceWorkerSnippet'
 
@@ -292,6 +293,11 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         // Don't pre-cache large data files, nor the founders dashboard (other host)
         globIgnores: ['**/data/**', 'dashboard.html'],
+        // ...except the globe's coastline and border start tiers of this build
+        // (content-hashed, ~2.1 MB raw): an offline start of this globe.html needs
+        // exactly these, and the first visit after a deploy runs the old JS
+        // (src/pwa/globeStartPrecache.ts)
+        additionalManifestEntries: GLOBE_START_PRECACHE,
         // Increase file size limit for larger bundles
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6 MB
 
