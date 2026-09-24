@@ -1,8 +1,8 @@
 /**
  * The globe's background queue (contract C6). What the first frame does not
  * show loads after the intro warp: the site details, the coastline and border
- * detail tier, Mapbox, the satellite, the sharper gray basemap, the rivers and
- * lakes a toggle would need, and the service worker.
+ * detail tier, the geo label textures, Mapbox, the satellite, the sharper gray
+ * basemap, the rivers and lakes a toggle would need, and the service worker.
  *
  * - One task at a time, in add order; `promote` moves a pending task to the
  *   front (the satellite toggle asks for its texture before its turn).
@@ -20,7 +20,7 @@
  * browser only when it is called.
  */
 
-export type BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'
+export type BgTaskName = 'details' | 'layers' | 'labels' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'
 
 export interface BgTask {
   name: BgTaskName
@@ -178,6 +178,8 @@ export interface GlobeBackgroundRuns {
   details: BgTask['run']
   /** Coastlines and borders to their detail tier. */
   layers: BgTask['run']
+  /** The textures of the geo labels not drawn yet (each is otherwise drawn when it first shows). */
+  labels: BgTask['run']
   /** mapbox-gl import and map init. */
   mapbox: BgTask['run']
   /** The satellite at the start tier (desktops whose maximum tier is high; touch devices load it on the first toggle). */
@@ -195,6 +197,7 @@ export function globeBackgroundTasks(runs: GlobeBackgroundRuns): BgTask[] {
   const order: Array<[BgTaskName, BgTask['run'] | null]> = [
     ['details', runs.details],
     ['layers', runs.layers],
+    ['labels', runs.labels],
     ['mapbox', runs.mapbox],
     ['satellite', runs.satellite],
     ['basemap', runs.basemap],

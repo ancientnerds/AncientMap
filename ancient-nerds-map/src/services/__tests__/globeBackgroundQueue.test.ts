@@ -384,6 +384,7 @@ describe('globeBackgroundTasks', () => {
   const base = {
     details: run('details'),
     layers: run('layers'),
+    labels: run('labels'),
     mapbox: run('mapbox'),
     satellite: run('satellite'),
     basemap: run('basemap'),
@@ -391,15 +392,15 @@ describe('globeBackgroundTasks', () => {
     sw: run('sw'),
   }
 
-  it('orders the tasks: details, layers, mapbox, satellite, basemap, rivers_lakes, sw', () => {
+  it('orders the tasks: details, layers, labels, mapbox, satellite, basemap, rivers_lakes, sw', () => {
     const tasks = globeBackgroundTasks(base)
-    expect(tasks.map(t => t.name)).toEqual(['details', 'layers', 'mapbox', 'satellite', 'basemap', 'rivers_lakes', 'sw'])
+    expect(tasks.map(t => t.name)).toEqual(['details', 'layers', 'labels', 'mapbox', 'satellite', 'basemap', 'rivers_lakes', 'sw'])
     expect(tasks.map(t => (t.run as unknown as { label: string }).label)).toEqual(tasks.map(t => t.name))
   })
 
   it('leaves out what this device or build does not do in the background', () => {
     const tasks = globeBackgroundTasks({ ...base, satellite: null, basemap: null, sw: null })
-    expect(tasks.map(t => t.name)).toEqual(['details', 'layers', 'mapbox', 'rivers_lakes'])
+    expect(tasks.map(t => t.name)).toEqual(['details', 'layers', 'labels', 'mapbox', 'rivers_lakes'])
   })
 })
 

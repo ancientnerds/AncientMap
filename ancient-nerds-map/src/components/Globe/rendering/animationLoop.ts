@@ -8,34 +8,14 @@ import { SiteData } from '../../../data/sites'
 import type { MapboxGlobeService } from '../../../services/MapboxGlobeService'
 import { FadeManager } from '../../../utils/FadeManager'
 import {
-  fadeLabelIn,
-  fadeLabelOut,
   updateGlobeLabelScale,
   animateCuddleOffset,
   type GlobeLabelMesh,
 } from '../../../utils/LabelRenderer'
 import { GEO, THREEJS_CAMERA_MAX } from '../../../config/globeConstants'
+import { applyGeoLabelFades, type GlobeLabel } from './geoLabelSystem'
 
 const EARTH_RADIUS_KM = GEO.EARTH_RADIUS_KM
-
-interface GeoLabel {
-  name: string
-  lat: number
-  lng: number
-  type: 'continent' | 'country' | 'capital' | 'ocean' | 'sea' | 'region' | 'mountain' | 'desert' | 'lake' | 'river' | 'metropol' | 'city' | 'plate' | 'glacier' | 'coralReef'
-  rank: number
-  hidden?: boolean
-  layerBased?: boolean
-  country?: string
-  national?: boolean
-  detailLevel?: number
-}
-
-interface GlobeLabel {
-  label: GeoLabel
-  mesh: GlobeLabelMesh
-  position: THREE.Vector3
-}
 
 /** All external state/refs the animation loop reads or writes. */
 export interface AnimationLoopContext {
@@ -1067,34 +1047,10 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
     }
 
     if (ctx.geoLabelsVisibleRef.current) {
-      // Geo and layer labels - only apply fade visibility transitions
-      // Backside hiding is handled by the shader's vViewFade uniform
+      // Geo and layer labels - only apply fade visibility transitions (and draw a
+      // label's texture the first time it shows)
       // Bubble/stacking positions are calculated in updateGeoLabels (on zoom change only)
-      const geoAndLayerLabels = [
-        ...ctx.geoLabelsRef.current,
-        ...Object.values(ctx.layerLabelsRef.current).flat()
-      ]
-
-      const fm = ctx.fadeManagerRef.current
-      const visibilityState = ctx.labelVisibilityStateRef.current
-
-      for (const item of geoAndLayerLabels) {
-        const labelName = item.label.name
-
-        // Target visibility based on collision detection
-        const shouldBeVisible = ctx.visibleAfterCollisionRef.current.has(labelName)
-        const isCurrentlyVisible = visibilityState.get(labelName) ?? false
-
-        // Only trigger fade when visibility state changes
-        if (shouldBeVisible !== isCurrentlyVisible) {
-          visibilityState.set(labelName, shouldBeVisible)
-          if (shouldBeVisible) {
-            fadeLabelIn(item.mesh, fm, `geo-${labelName}`)
-          } else {
-            fadeLabelOut(item.mesh, fm, `geo-${labelName}`)
-          }
-        }
-      }
+      applyGeoLabelFades(ctx)
 
       // === Apply cuddle offsets for country labels (pushed away from their capitals) ===
       const cuddleOffsets = ctx.cuddleOffsetsRef.current

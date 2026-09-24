@@ -72,7 +72,7 @@ Each file is a GeoJSON `FeatureCollection` whose features are `MultiLineString`s
 | `globe_abandon` | `{ms: number, phase: 'gate'\|'sites'\|'scene'\|'basemap'\|'labels'\|'coastlines'\|'countryBorders'}` | `pagehide` / `visibilitychange→hidden` before `globe_ready` |
 | `globe_bg` | `{task: BgTaskName, ms: number}` | each finished background task |
 
-`BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'`. At most **one ending** (`globe_gate` with choice ≠ globe, `globe_unsupported`, a start `globe_error`, `globe_abandon`) per load.
+`BgTaskName = 'details' | 'layers' | 'labels' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'` (`labels` added in wave 3b, U13). At most **one ending** (`globe_gate` with choice ≠ globe, `globe_unsupported`, a start `globe_error`, `globe_abandon`) per load.
 
 **C4 — Mapbox load state** `src/services/mapboxLoader.ts`: `export type MapboxLoadState = 'idle' | 'loading' | 'ready' | 'failed'` and `runMapboxLoadTask(deps)` (shape in Task U5.4).
 
@@ -80,7 +80,7 @@ Each file is a GeoJSON `FeatureCollection` whose features are `MultiLineString`s
 
 **C6 — background queue** `src/services/globeBackgroundQueue.ts`:
 ```ts
-export type BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'
+export type BgTaskName = 'details' | 'layers' | 'labels' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'
 export interface BgTask { name: BgTaskName; run: (signal: AbortSignal) => Promise<void> }
 export interface GlobeBackgroundQueue {
   add(task: BgTask): void        // appends; order of add() = run order
@@ -315,6 +315,7 @@ def test_committed_manifest_points_at_committed_files_within_budget():
 - [ ] **U10.5 Verify:** vitest (Node 20), `tsc --noEmit`, knip, build; `probe.py load --target local --device desktop --gpu` shows the `globe_bg` events in order after the warp and no long task > 200 ms in the 30 s after the warp.
 - [ ] **U10.6 Commit** "Load what the first frame does not show after the intro, one task at a time".
 - As built: the queue's tasks are added once the basemap plan is known (before the start-tier gray, so before any warp) and `start()` runs from the loop's `onWarpComplete`; `globeBackgroundTasks()` fixes the order in one place. Only an abort by the queue itself (unmount) is a cancellation; any other rejection, an AbortError included, is reported (every task rejects with an AbortError only when its queue signal aborts). App's `sw` task exists only in production builds (dev serves no `/sw.js`). `__DEMO.enterMapbox` promotes the `mapbox` task and rejects when it failed; `isReady` stays the end of the warp.
+- U13 (wave 3b): geo labels on demand. Only the 1,117 labels the fade pass can show or collide with become meshes (the 2,356 state capitals no other label names are never shown); each mesh gets its texture's size from `measureLabel` and no texture, the fade pass (`applyGeoLabelFades`) draws a texture the first time a label shows, the labels visible at load are drawn before `labelsLoaded`, and the task `labels` (after `layers`) draws the textures the 1,089 showable ones do not have yet in ≤ 8 ms idle slices (the geo labels are off at start, so normally all of them).
 
 ## Wave 4 — Verification, audit, fixes
 

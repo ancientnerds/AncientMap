@@ -61,6 +61,7 @@ import {
   loadGeoLabels as loadGeoLabelsImpl,
   handleLabelReload as handleLabelReloadImpl,
   updateGeoLabels as updateGeoLabelsImpl,
+  textureGeoLabelsInBackground,
   updateEmpireLabelsVisibility as updateEmpireLabelsVisibilityImpl,
   type GeoLabelContext,
 } from './Globe/rendering/geoLabelSystem'
@@ -994,7 +995,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     ancientCitiesRef,
     ancientCitiesDataRef,
     showAncientCitiesRef,
-    updateGeoLabelsRef,
     setLabelsLoaded,
     needsLabelReloadRef,
     setLabelReloadTrigger,
@@ -1567,6 +1567,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     const tasks = globeBackgroundTasks({
       details: signal => appBackgroundTasksRef.current.details(signal),
       layers: signal => upgradeGlobeLayers(buildVectorRendererContext(), signal),
+      labels: signal => textureGeoLabelsInBackground(() => geoLabelsRef.current, browserQueueScheduling(), signal),
       mapbox: signal => runMapboxLoadTask({
         containerRef: mapboxContainerRef,
         serviceRef: mapboxServiceRef,

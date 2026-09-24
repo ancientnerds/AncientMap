@@ -1,0 +1,390 @@
+/**
+ * Geo labels on demand (U13). The start used to draw a 2D canvas with a
+ * shadow for each of the 3,473 labels before globe_ready, 2,360 of them state
+ * capitals the fade pass never shows. Now:
+ * - only labels the fade pass can show, or that take part in its collision,
+ *   become meshes;
+ * - a mesh is created with its texture's size but without the texture and
+ *   stays invisible until the show path draws the texture;
+ * - labels that would be visible at load are textured before labelsLoaded;
+ * - the background task textures the rest in short slices.
+ * Node environment, the 2D canvas faked (labelTestCanvas).
+ */
+
+import * as THREE from 'three'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { FadeManager } from '../../../../utils/FadeManager'
+import {
+  clearLabelTextureCache,
+  fadeLabelIn,
+  measureLabel,
+  type GlobeLabelMesh,
+} from '../../../../utils/LabelRenderer'
+import { fakeGlyphs, stubLabelCanvas, type FakeLabelCanvas } from '../../../../utils/__tests__/labelTestCanvas'
+import {
+  applyGeoLabelFades,
+  ensureLabelTexture,
+  handleLabelReload,
+  loadGeoLabels,
+  selectGeoLabels,
+  shownGeoLabels,
+  textureGeoLabelsInBackground,
+  type GeoLabel,
+  type GeoLabelContext,
+  type GlobeLabel,
+} from '../geoLabelSystem'
+
+const LABELS: GeoLabel[] = [
+  { name: 'Europe', lat: 50, lng: 15, type: 'continent', rank: 1 },
+  { name: 'Atlantic Ocean', lat: 30, lng: -40, type: 'ocean', rank: 1 },
+  { name: 'Atlantic Ocean', lat: -20, lng: -15, type: 'ocean', rank: 1 },
+  { name: 'Germany', lat: 51, lng: 10, type: 'country', rank: 2 },
+  { name: 'Mali', lat: 17, lng: -4, type: 'country', rank: 2 },
+  { name: 'Russia', lat: 60, lng: 90, type: 'country', rank: 2 },
+  { name: 'Seychelles', lat: -4.6, lng: 55.5, type: 'country', rank: 5 },
+  { name: 'Canada', lat: 60, lng: -100, type: 'country', rank: 2 },
+  { name: 'Berlin', lat: 52.5, lng: 13.4, type: 'capital', rank: 3, national: true, country: 'Germany' },
+  { name: 'Munich', lat: 48.1, lng: 11.6, type: 'capital', rank: 4, country: 'Germany' },
+  { name: 'Kaliningrad', lat: 54.7, lng: 20.5, type: 'capital', rank: 4, country: 'Russia' },
+  { name: 'Mali', lat: 13.5, lng: -7.5, type: 'capital', rank: 4, country: 'Mali' },
+  { name: 'Victoria', lat: 48.4, lng: -123.4, type: 'capital', rank: 4, country: 'Canada' },
+  { name: 'Victoria', lat: -4.6, lng: 55.5, type: 'capital', rank: 3, national: true, country: 'Seychelles' },
+  { name: 'Hamburg', lat: 53.6, lng: 10, type: 'city', rank: 5 },
+  { name: 'Ruhr', lat: 51.5, lng: 7.2, type: 'metropol', rank: 5 },
+  { name: 'Alps', lat: 46.5, lng: 10, type: 'mountain', rank: 3 },
+  { name: 'Kaliningrad', lat: 54.9, lng: 20, type: 'sea', rank: 5 },
+]
+
+const ALL_TYPES_ON = {
+  continent: true, ocean: true, country: true, sea: true, mountain: true, desert: true, capital: true,
+  lake: true, river: true, plate: true, glacier: true, coralReef: true,
+}
+
+function makeContext(overrides: { geoLabelsVisible?: boolean; setLabelsLoaded?: (loaded: boolean) => void } = {}) {
+  const scene = new THREE.Scene()
+  const ctx: GeoLabelContext = {
+    sceneRef: { current: { scene } as unknown as NonNullable<GeoLabelContext['sceneRef']['current']> },
+    labelsLoadedRef: { current: false },
+    labelsLoadingRef: { current: true },
+    totalLabelsCountRef: { current: 0 },
+    geoLabelsRef: { current: [] },
+    allLabelMeshesRef: { current: [] },
+    layerLabelsRef: { current: {} },
+    geoLabelsVisibleRef: { current: overrides.geoLabelsVisible ?? false },
+    labelTypesVisibleRef: { current: { ...ALL_TYPES_ON } },
+    vectorLayersRef: { current: {} as GeoLabelContext['vectorLayersRef']['current'] },
+    visibleLabelNamesRef: { current: new Set() },
+    visibleAfterCollisionRef: { current: new Set() },
+    labelVisibilityStateRef: { current: new Map() },
+    lastCalculatedZoomRef: { current: 0 },
+    fadeManagerRef: { current: new FadeManager() },
+    cuddleOffsetsRef: { current: new Map() },
+    zoomRef: { current: 0 },
+    // Tiny collision boxes: every eligible label survives the collision
+    kmPerPixelRef: { current: 0.0001 },
+    empireLabelsRef: { current: {} },
+    visibleEmpiresRef: { current: new Set() },
+    showEmpireLabelsRef: { current: false },
+    ancientCitiesRef: { current: {} },
+    ancientCitiesDataRef: { current: {} },
+    showAncientCitiesRef: { current: false },
+    setLabelsLoaded: overrides.setLabelsLoaded ?? vi.fn(),
+    needsLabelReloadRef: { current: false },
+    setLabelReloadTrigger: vi.fn(),
+  }
+  return { ctx, scene }
+}
+
+const textureOf = (mesh: THREE.Mesh) => (mesh.material as THREE.ShaderMaterial).uniforms.map.value as THREE.Texture | null
+const drawnTexts = (canvases: FakeLabelCanvas[]) =>
+  canvases.flatMap(c => c.context.drawn.filter(([method]) => method === 'fill').map(([, text]) => text))
+const find = (ctx: GeoLabelContext, name: string, type: string) =>
+  ctx.geoLabelsRef.current.find(item => item.label.name === name && item.label.type === type)!
+
+let canvases: FakeLabelCanvas[]
+
+beforeEach(() => {
+  clearLabelTextureCache()
+  fakeGlyphs.widthFactor = 1
+  canvases = stubLabelCanvas()
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ labels: LABELS }))))
+  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
+})
+
+afterEach(() => {
+  clearLabelTextureCache()
+  fakeGlyphs.widthFactor = 1
+  vi.unstubAllGlobals()
+})
+
+describe('selectGeoLabels', () => {
+  it('keeps what the fade pass can show or collide with, in file order', () => {
+    expect(selectGeoLabels(LABELS).map(l => `${l.type}:${l.name}`)).toEqual([
+      'continent:Europe',
+      'ocean:Atlantic Ocean',
+      'ocean:Atlantic Ocean',
+      'country:Germany',
+      'country:Mali',
+      'country:Russia',
+      'country:Seychelles',
+      'country:Canada',
+      'capital:Berlin',
+      // Munich (a state capital no other label names) is never shown and never collides
+      // State capitals that share a name with a label the pass shows take part in it by that name
+      'capital:Kaliningrad',
+      'capital:Mali',
+      'capital:Victoria',
+      'capital:Victoria',
+      'mountain:Alps',
+      'sea:Kaliningrad',
+    ])
+  })
+})
+
+describe('shownGeoLabels', () => {
+  it('is the first label of each name: the fade pass keys visibility by name', () => {
+    const items = selectGeoLabels(LABELS).map(label => ({ label }) as GlobeLabel)
+    expect(shownGeoLabels(items).map(i => `${i.label.type}:${i.label.name}`)).toEqual([
+      'continent:Europe',
+      'ocean:Atlantic Ocean',
+      'country:Germany',
+      'country:Mali',
+      'country:Russia',
+      'country:Seychelles',
+      'country:Canada',
+      'capital:Berlin',
+      'capital:Kaliningrad',
+      'capital:Victoria',
+      'mountain:Alps',
+    ])
+  })
+})
+
+describe('loadGeoLabels', () => {
+  it('creates every mesh at its texture size, without a texture and invisible', async () => {
+    const { ctx, scene } = makeContext()
+    await loadGeoLabels(ctx)
+
+    expect(ctx.geoLabelsRef.current).toHaveLength(selectGeoLabels(LABELS).length)
+    expect(ctx.allLabelMeshesRef.current).toHaveLength(ctx.geoLabelsRef.current.length)
+    expect(scene.children).toHaveLength(ctx.geoLabelsRef.current.length)
+    for (const { label, mesh } of ctx.geoLabelsRef.current) {
+      const { width, height } = measureLabel(label.name, label.type, label.national)
+      expect(mesh.userData.aspect).toBe(width / height)
+      expect(textureOf(mesh)).toBeNull()
+      expect(mesh.visible).toBe(false)
+    }
+    expect(drawnTexts(canvases)).toEqual([])
+    expect(ctx.labelsLoadedRef.current).toBe(true)
+    expect(ctx.setLabelsLoaded).toHaveBeenCalledWith(true)
+  })
+
+  it('textures every label the fade pass would show at load before labelsLoaded', async () => {
+    let texturedAtLoaded: string[] | null = null
+    const { ctx } = makeContext({
+      geoLabelsVisible: true,
+      setLabelsLoaded: () => {
+        texturedAtLoaded = ctx.geoLabelsRef.current
+          .filter(item => textureOf(item.mesh))
+          .map(item => `${item.label.type}:${item.label.name}`)
+      },
+    })
+    await loadGeoLabels(ctx)
+
+    const visible = ctx.visibleAfterCollisionRef.current
+    expect([...visible].sort()).toEqual(
+      ['Atlantic Ocean', 'Berlin', 'Canada', 'Europe', 'Germany', 'Kaliningrad', 'Mali', 'Alps', 'Russia', 'Seychelles', 'Victoria'].sort(),
+    )
+    const expected = shownGeoLabels(ctx.geoLabelsRef.current)
+      .filter(item => visible.has(item.label.name))
+      .map(item => `${item.label.type}:${item.label.name}`)
+    expect(texturedAtLoaded).toEqual(expected)
+
+    // The first frame's fades then find every texture in place: nothing is drawn, nothing untextured shows
+    const drawnBefore = drawnTexts(canvases).length
+    applyGeoLabelFades(ctx)
+    expect(drawnTexts(canvases)).toHaveLength(drawnBefore)
+    const shown = ctx.geoLabelsRef.current.filter(item => item.mesh.visible)
+    expect(shown.map(item => `${item.label.type}:${item.label.name}`)).toEqual(expected)
+    for (const item of shown) expect(textureOf(item.mesh)).not.toBeNull()
+  })
+})
+
+describe('the show path', () => {
+  it('draws a texture the first time a label shows, once', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    const germany = find(ctx, 'Germany', 'country')
+
+    ctx.visibleAfterCollisionRef.current = new Set(['Germany'])
+    applyGeoLabelFades(ctx)
+    expect(drawnTexts(canvases)).toEqual(['GERMANY'])
+    expect(textureOf(germany.mesh)).not.toBeNull()
+    expect(germany.mesh.visible).toBe(true)
+    const texture = textureOf(germany.mesh)
+
+    ctx.visibleAfterCollisionRef.current = new Set()
+    applyGeoLabelFades(ctx)
+    ctx.visibleAfterCollisionRef.current = new Set(['Germany'])
+    applyGeoLabelFades(ctx)
+    expect(drawnTexts(canvases)).toEqual(['GERMANY'])
+    expect(textureOf(germany.mesh)).toBe(texture)
+  })
+
+  it('shows only the first label of a shared name and leaves the others without a texture', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    ctx.visibleAfterCollisionRef.current = new Set(['Mali', 'Victoria'])
+    applyGeoLabelFades(ctx)
+
+    expect(find(ctx, 'Mali', 'country').mesh.visible).toBe(true)
+    expect(textureOf(find(ctx, 'Mali', 'capital').mesh)).toBeNull()
+    const victorias = ctx.geoLabelsRef.current.filter(item => item.label.name === 'Victoria')
+    expect(victorias.map(item => item.mesh.visible)).toEqual([true, false])
+    expect(textureOf(victorias[1].mesh)).toBeNull()
+  })
+
+  it('reuses the cached texture of a label with the same text and style', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    const [first, second] = ctx.geoLabelsRef.current.filter(item => item.label.name === 'Atlantic Ocean')
+    ensureLabelTexture(first)
+    ensureLabelTexture(second)
+    expect(drawnTexts(canvases)).toEqual(['ATLANTIC OCEAN'])
+    expect(textureOf(second.mesh)).toBe(textureOf(first.mesh))
+  })
+
+  it('sizes the mesh by the texture it drew when the font changed after the load', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    const alps = find(ctx, 'Alps', 'mountain')
+    const atLoad = alps.mesh.userData.aspect
+    fakeGlyphs.widthFactor = 1.25
+    const { width, height } = measureLabel('Alps', 'mountain')
+    ensureLabelTexture(alps)
+    const canvas = (textureOf(alps.mesh) as THREE.CanvasTexture).image as { width: number; height: number }
+    expect(alps.mesh.userData.aspect).not.toBe(atLoad)
+    expect(alps.mesh.userData.aspect).toBe(width / height)
+    expect(alps.mesh.userData.aspect).toBe(canvas.width / canvas.height)
+  })
+
+  it('refuses to show a label mesh that has no texture', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    const mesh = find(ctx, 'Europe', 'continent').mesh as GlobeLabelMesh
+    expect(() => fadeLabelIn(mesh, ctx.fadeManagerRef.current, 'geo-Europe')).toThrow(/without its texture/)
+    expect(mesh.visible).toBe(false)
+  })
+})
+
+describe('context loss', () => {
+  it('reloads the labels lazily the same way', async () => {
+    const { ctx, scene } = makeContext({ geoLabelsVisible: true })
+    await loadGeoLabels(ctx)
+    ctx.needsLabelReloadRef.current = true
+    handleLabelReload(ctx)
+    expect(ctx.geoLabelsRef.current).toEqual([])
+    expect(scene.children).toEqual([])
+    expect(ctx.setLabelReloadTrigger).toHaveBeenCalledTimes(1)
+
+    ctx.geoLabelsVisibleRef.current = false
+    await loadGeoLabels(ctx)
+    expect(ctx.geoLabelsRef.current).toHaveLength(selectGeoLabels(LABELS).length)
+    for (const { mesh } of ctx.geoLabelsRef.current) {
+      expect(textureOf(mesh)).toBeNull()
+      expect(mesh.visible).toBe(false)
+    }
+  })
+})
+
+describe('textureGeoLabelsInBackground', () => {
+  function scheduling() {
+    const idle: Array<() => void> = []
+    const clock = { t: 0 }
+    return {
+      idle,
+      clock,
+      deps: {
+        scheduleIdle: (cb: () => void) => {
+          idle.push(cb)
+          return () => {
+            const i = idle.indexOf(cb)
+            if (i !== -1) idle.splice(i, 1)
+          }
+        },
+        // Every reading of the clock is 3 ms after the last: three labels fit an 8 ms slice
+        now: () => (clock.t += 3),
+      },
+    }
+  }
+
+  it('textures every label the pass can show, a few per idle slice', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    const s = scheduling()
+    let settled = false
+    const done = textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, new AbortController().signal, 8)
+      .then(() => { settled = true })
+
+    const shown = shownGeoLabels(ctx.geoLabelsRef.current)
+    const perSlice: number[] = [drawnTexts(canvases).length]
+    while (s.idle.length > 0) {
+      expect(s.idle).toHaveLength(1)
+      s.idle.shift()!()
+      perSlice.push(drawnTexts(canvases).length - perSlice.reduce((a, b) => a + b, 0))
+    }
+    await done
+    expect(settled).toBe(true)
+    expect(perSlice.every(n => n <= 3)).toBe(true)
+    expect(perSlice.length).toBeGreaterThan(1)
+    for (const item of ctx.geoLabelsRef.current) {
+      expect(textureOf(item.mesh) !== null).toBe(shown.includes(item))
+      expect(item.mesh.visible).toBe(false)
+    }
+  })
+
+  it('skips labels that already have their texture', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    for (const item of shownGeoLabels(ctx.geoLabelsRef.current)) ensureLabelTexture(item)
+    const drawn = drawnTexts(canvases).length
+    const s = scheduling()
+    await textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, new AbortController().signal, 8)
+    expect(s.idle).toEqual([])
+    expect(drawnTexts(canvases)).toHaveLength(drawn)
+  })
+
+  it('stops at an abort between slices with the signal reason', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    const s = scheduling()
+    const ctrl = new AbortController()
+    const done = textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, ctrl.signal, 8)
+    expect(s.idle).toHaveLength(1)
+    const drawn = drawnTexts(canvases).length
+    const reason = new DOMException('The globe background queue was disposed', 'AbortError')
+    ctrl.abort(reason)
+    await expect(done).rejects.toBe(reason)
+    expect(s.idle).toEqual([])
+    expect(drawnTexts(canvases)).toHaveLength(drawn)
+  })
+
+  it('follows a reload: the labels of the new load are the ones textured', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    const s = scheduling()
+    const done = textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, new AbortController().signal, 8)
+    const before = ctx.geoLabelsRef.current
+
+    ctx.needsLabelReloadRef.current = true
+    handleLabelReload(ctx)
+    clearLabelTextureCache()
+    await loadGeoLabels(ctx)
+    expect(ctx.geoLabelsRef.current).not.toBe(before)
+    while (s.idle.length > 0) s.idle.shift()!()
+    await done
+    for (const item of shownGeoLabels(ctx.geoLabelsRef.current)) expect(textureOf(item.mesh)).not.toBeNull()
+  })
+})
