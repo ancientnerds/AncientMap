@@ -63,3 +63,11 @@ Under the failure rule of `PILOT_THRESHOLDS.md` (T1, T4 and T7 failed): STOP, fi
 re-pilot on a fresh draw in a new run directory. T8 is reported to the owner: the thresholds are
 never loosened after the data is seen, and the correct holds alone keep coverage under 80 %.
 Nothing was written to production.
+
+## Owner decision, 2026-09-24 (after this result, before pilot 4's answers)
+
+Asked whether T8 keeps gating the mass run of the defect sites, Martin chose **"T8 nur berichten"**:
+T1-T7, T9's parse bound and T10 stay hard gates; T8's coverage is reported with every pilot and
+every mass-run chunk but no longer stops the run. A held site keeps its current text and stays on
+the open list with its closed-list hold reason. `PILOT_THRESHOLDS.md` is unchanged (it is sealed);
+this note is where the change is recorded.
