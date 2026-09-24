@@ -16925,6 +16925,39 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4P2_ACCEPT_TEST,
         "test_the_read_back_is_verified_with_the_sites_pinned_wikidata_item",
     ),
+    # ── pilot 2: a fresh draw of the same strata, pilot 1's fixed members kept ───────────────
+    (
+        "p4 pilot: pilot 2 draws pilot 1's drawn sites again",
+        P4P_PILOT4,
+        "        before = set(strata) | earlier_drawn\n",
+        "        before = set(strata)  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_pilot_2_keeps_pilot_1s_fixed_members_and_draws_anew_without_its_draws",
+    ),
+    (
+        "p4 pilot: pilot 2 takes fixed members other than pilot 1's",
+        P4P_PILOT4,
+        "    if earlier and list(strata.items()) != earlier_fixed:\n",
+        "    if False:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_pilot_2_refuses_fixed_members_that_are_not_pilot_1s",
+    ),
+    (
+        "p4 pilot: an earlier line mixing a draw and a fixed stratum reads as drawn",
+        P4P_PILOT4,
+        "        elif strata == seeded and len(seeded) == 1:\n",
+        "        elif seeded:  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_an_earlier_line_that_is_neither_fixed_nor_one_draw_is_refused",
+    ),
+    (
+        "p4 pilot: build ignores the earlier pilot it is told",
+        P4P_PILOT4,
+        "    earlier = R.read_jsonl(Path(args.after)) if args.after else []\n",
+        "    earlier = []  # mutant\n",
+        P4P_PILOT_TEST,
+        "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
+    ),
 ]
 MUTATIONS += P4_PILOT2_MUTATIONS
 

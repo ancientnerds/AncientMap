@@ -50,6 +50,21 @@ placed before it; a stratum with fewer sites is taken whole:
   plan's own rows contradict.
 * `draw-extract-over-40000` 5 - a site of lane W, S or T whose lane source's pinned text is longer
   than 40,000 characters.
+
+**Pilot 2 (2026-09-24, seed 20260924, `PILOT2.jsonl`).** Pilot 1 failed T2, T5 and T8
+(`PILOT_RESULT_1.md`); the design's failure rule asks for "a fresh draw of the same strata in a new
+run directory". `build --after PILOT.jsonl --seed 20260924 --out PILOT2.jsonl` draws it over the
+same census, gold standard, Q309 repair plan and routeless read: **the fixed members are exactly
+pilot 1's** - the same code resolves them, and `build` refuses a list that is not PILOT.jsonl's fixed
+lines, site for site, in its order, with their strata - and **every seeded stratum is drawn anew with
+seed 20260924, excluding pilot 1's seeded draws** (all 62 of them, from every stratum) besides
+everything placed before it. A stratum left with fewer eligible sites than asked is taken whole,
+as in pilot 1. `PILOT_THRESHOLDS.md` and `gold_prose_errors.json` are pilot 1's, unchanged, byte
+for byte: the thresholds were sealed before the first model question and are never changed after.
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \\
+        --after PILOT.jsonl --seed 20260924 --out PILOT2.jsonl                   PILOT2.jsonl
+    plan4.py build --pilot PILOT2.jsonl --out PLAN4.pilot2.jsonl                   S0
 """
 
 from __future__ import annotations
@@ -95,6 +110,8 @@ DESIGN_SHA256 = "515601c3e91a770ce096ee001e6bfc1659c875d008f11d1b508d07a31d20e5a
 DESIGN_ENTRY = 6
 
 SEED = 20260922
+#: Pilot 2's seed (module docstring): its seeded strata are drawn anew, pilot 1's draws excluded.
+SEED_PILOT2 = 20260924
 EXTRACT_OVER = 40_000
 #: The design names 7 sites on Q309 'history' (entries [5] and [6]).
 Q309_SITES = 7
@@ -348,6 +365,31 @@ def populations(
     }
 
 
+#: Every seeded stratum's name: a pilot line is a draw when its stratum is one of these.
+DRAW_STRATA = frozenset(stratum for stratum, _ in DRAWS)
+
+
+def earlier_pilot(
+    lines: Sequence[Mapping[str, Any]],
+) -> tuple[list[tuple[str, list[str]]], set[str]]:
+    """An earlier pilot's fixed members (site id and strata, in its order) and its seeded draws.
+
+    A line is a draw when its one stratum is a seeded one, and fixed when none of its strata is;
+    a line that mixes the two, or names two draws, is no line `build_pilot` writes: refused."""
+    fixed: list[tuple[str, list[str]]] = []
+    drawn: set[str] = set()
+    for number, line in enumerate(lines, start=1):
+        site_id, strata = str(line["site_id"]), [str(s) for s in line["strata"]]
+        seeded = [stratum for stratum in strata if stratum in DRAW_STRATA]
+        if not seeded:
+            fixed.append((site_id, strata))
+        elif strata == seeded and len(seeded) == 1:
+            drawn.add(site_id)
+        else:
+            raise R.InputError(f"line {number}: {site_id} is neither fixed nor one draw: {strata}")
+    return fixed, drawn
+
+
 def build_pilot(
     sites: Mapping[str, M.PlanSite],
     census: Mapping[str, Census],
@@ -356,8 +398,12 @@ def build_pilot(
     q309: Sequence[str],
     routeless: set[str],
     seed: int,
+    earlier: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """The pilot's lines, in order, and the draw's summary (module docstring)."""
+    """The pilot's lines, in order, and the draw's summary (module docstring).
+
+    `earlier` is an earlier pilot's `PILOT.jsonl` lines (pilot 2): its fixed members must be exactly
+    this pilot's, and its seeded draws are excluded from every stratum of this one."""
     strata: dict[str, list[str]] = {}
 
     def place(site_id: str, stratum: str) -> None:
@@ -377,10 +423,15 @@ def build_pilot(
     for named in SPECIAL:
         place(resolve(named, sites), named.stratum)
     fixed = len(strata)
+    earlier_fixed, earlier_drawn = earlier_pilot(earlier)
+    if earlier and list(strata.items()) != earlier_fixed:
+        raise R.InputError(
+            "the fixed members are not the earlier pilot's, site for site and in order"
+        )
     pools = populations(sites, census, routeless)
     draws: dict[str, dict[str, int]] = {}
     for stratum, count in DRAWS:
-        before = set(strata)
+        before = set(strata) | earlier_drawn
         drawn = AU.draw_sample(pools[stratum], seed=seed, count=count, exclude=before)
         for site_id in drawn:
             place(site_id, stratum)
@@ -403,6 +454,8 @@ def build_pilot(
         for site_id, names in strata.items()
     ]
     summary = {"seed": seed, "fixed": fixed, "sites": len(lines), "draws": draws}
+    if earlier:
+        summary["earlier_draws_excluded"] = len(earlier_drawn)
     return lines, summary
 
 
@@ -805,6 +858,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     plan, run_dir = Path(args.plan), Path(args.run_dir)
     sites, census = read_census(plan, run_dir)
     routeless_payload = json.loads(Path(args.routeless).read_text(encoding="utf-8"))
+    earlier = R.read_jsonl(Path(args.after)) if args.after else []
     lines, summary = build_pilot(
         sites,
         census,
@@ -812,6 +866,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         q309=q309_sites(R.read_jsonl(Path(args.qid_repair)), sites),
         routeless=routeless_ids(routeless_payload["sites"], sites),
         seed=args.seed,
+        earlier=earlier,
     )
     out = Path(args.out)
     write_pilot(out, lines)
@@ -827,6 +882,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             "routeless": _sha256(Path(args.routeless)),
             "gold": _sha256(Path(args.gold)),
             "qid_repair": _sha256(Path(args.qid_repair)),
+            **({"after": _sha256(Path(args.after))} if args.after else {}),
         },
     )
     print(json.dumps(summary, indent=1, sort_keys=True))
@@ -874,6 +930,10 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--gold", default=str(P4.DEFAULT_GOLD))
     build.add_argument("--qid-repair", default=str(DEFAULT_QID_REPAIR))
     build.add_argument("--seed", type=int, default=SEED)
+    build.add_argument(
+        "--after",
+        help="an earlier pilot (PILOT.jsonl): keep its fixed members, exclude its seeded draws",
+    )
     build.add_argument("--out", default=str(P4.DEFAULT_PILOT))
     build.set_defaults(handler=cmd_build)
     prose = sub.add_parser("prose-errors", help="gold_prose_errors.json: the forbidden anchors")
