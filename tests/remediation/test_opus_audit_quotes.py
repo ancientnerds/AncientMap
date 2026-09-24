@@ -189,9 +189,34 @@ def test_html_is_compared_against_its_visible_text(tmp_path: Path) -> None:
 
 
 def test_an_html_page_is_decoded_by_its_declared_charset(tmp_path: Path) -> None:
-    body = "<p>Sitio arqueológico de Pucará</p>".encode("latin-1")
-    _page(tmp_path, ES_URL, body, content_type="text/html; charset=ISO-8859-1")
-    assert _check(tmp_path, (ES_URL, "Sitio arqueológico de Pucará")).counted
+    # Greek: windows-1252, the fallback for an undeclared page, would read other letters
+    body = "<p>Ακρόπολη των Μυκηνών</p>".encode("iso-8859-7")
+    _page(tmp_path, ES_URL, body, content_type="text/html; charset=ISO-8859-7")
+    assert _check(tmp_path, (ES_URL, "Ακρόπολη των Μυκηνών")).counted
+
+
+def test_an_undeclared_html_page_that_is_not_utf8_reads_as_windows_1252(tmp_path: Path) -> None:
+    """Measured 2026-09-24: the Wayback copies of the mincetur.gob.pe sheets declare no charset in
+    the header or the document, and their bytes are Latin-1: read as UTF-8 every accent was U+FFFD.
+    The HTML Standard's fallback for an undeclared page in a Latin-script locale is windows-1252."""
+    body = "<p>un asentamiento pre-hispánico</p>".encode("cp1252")
+    _page(tmp_path, ES_URL, body, content_type="text/html")
+    assert _check(tmp_path, (ES_URL, "un asentamiento pre-hispánico")).counted
+
+
+def test_an_undeclared_html_page_in_valid_utf8_reads_as_utf8(tmp_path: Path) -> None:
+    _page(
+        tmp_path, ES_URL, "<p>un asentamiento pre-hispánico</p>".encode(), content_type="text/html"
+    )
+    assert _check(tmp_path, (ES_URL, "un asentamiento pre-hispánico")).counted
+
+
+def test_a_meta_charset_after_an_injected_toolbar_is_still_the_documents(tmp_path: Path) -> None:
+    """The Wayback Machine puts its own scripts ahead of the archived page's `<head>`."""
+    toolbar = "<script>" + "x" * 8000 + "</script>"
+    html = f'{toolbar}<head><meta charset="iso-8859-7"></head><p>Μυκήνες</p>'
+    _page(tmp_path, ES_URL, html.encode("iso-8859-7"), content_type="text/html")
+    assert _check(tmp_path, (ES_URL, "Μυκήνες")).counted
 
 
 def test_a_mediawiki_api_answer_is_compared_against_its_json_text_fields(tmp_path: Path) -> None:

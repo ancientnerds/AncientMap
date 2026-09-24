@@ -277,6 +277,11 @@ def test_the_keep_sample_is_random_20260923_over_the_sorted_pass_1_keeps() -> No
 def test_the_reversal_input_restores_the_old_value_on_the_counted_quotes() -> None:
     r = row(column="period_start", old_value="-4500", written_value="-1000", current_value="-1000")
     v = verdicts("phase3:k1", "revert", "keep", "revert")
+    v["p2"]["phase3:k1"]["quotes"] = [{"source": EVIDENCE, "quote": "p2 keeps"}]
+    v["tie"]["phase3:k1"]["quotes"] = [
+        {"source": EVIDENCE, "quote": "q"},  # the same line p1 quoted: listed once
+        {"source": EVIDENCE, "quote": "tie reverts"},
+    ]
     decisions = D.decide([r], v, checks())
     (line,) = D.reversal_input(decisions, v)
     assert line["journal_id"] is None  # resolved read-only by change_key before the lane runs
@@ -287,7 +292,10 @@ def test_the_reversal_input_restores_the_old_value_on_the_counted_quotes() -> No
         "-1000",
     )
     # the quotes are the counted ones of the verdicts that decided to revert: p1 and the tie
-    assert line["quotes"] == [{"source": EVIDENCE, "text": "q"}, {"source": EVIDENCE, "text": "q"}]
+    assert line["quotes"] == [
+        {"source": EVIDENCE, "text": "q"},
+        {"source": EVIDENCE, "text": "tie reverts"},
+    ]
     assert [j["pass"] for j in line["judges"]] == ["p1", "p2", "tie"]
     assert line["period_bucket"] == {
         "restored": categorize_period(-4500),

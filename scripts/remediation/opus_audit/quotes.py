@@ -22,7 +22,9 @@ source's readings (`Source.texts`), and the reading that held it is recorded:
   entities unescaped, the content of `<script>`, `<style>`, `<template>` and `<title>` dropped, a
   block element's edges read as a line break and an inline element's as nothing); a PDF (by its
   `%PDF-` signature or its Content-Type) - the text `pdftotext -enc UTF-8` extracts; any other
-  `text/*` (plain text, MediaWiki `action=raw`) - as served. Anything else is unreadable.
+  `text/*` (plain text, MediaWiki `action=raw`) - as served. Anything else is unreadable. A text
+  page is decoded by the header's charset, else the document's first `<meta>` charset, else as
+  UTF-8 when its bytes are UTF-8 and as windows-1252 when they are not (`_charset`).
 
 **A verdict counts** only when it has at least one quote and every quote is found.
 
@@ -170,15 +172,22 @@ _META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_.:\-
 
 
 def _charset(content_type: str, body: bytes, html: bool) -> str:
-    """The HTTP header's charset, else (HTML) the document's own `<meta>`, else UTF-8."""
+    """The HTTP header's charset; else, for HTML, the document's first `<meta>` charset, wherever
+    it stands (the Wayback Machine puts its own toolbar ahead of the archived `<head>`); else UTF-8
+    when the bytes are UTF-8, and windows-1252 when they are not - the HTML Standard's fallback for
+    an undeclared page in a Latin-script locale."""
     for param in content_type.split(";")[1:]:
         name, _, value = param.strip().partition("=")
         if name.strip().lower() == "charset" and value.strip():
             return value.strip().strip("\"'")
     if html:
-        match = _META_CHARSET.search(body[:4096])
+        match = _META_CHARSET.search(body)
         if match:
             return match.group(1).decode("ascii")
+    try:
+        body.decode("utf-8")
+    except UnicodeDecodeError:
+        return "windows-1252"
     return "utf-8"
 
 

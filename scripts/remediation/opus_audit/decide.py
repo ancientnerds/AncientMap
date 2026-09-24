@@ -280,10 +280,12 @@ def reversal_input(
             "new_value": d["written_value"],
             "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md "
             "rule 3): " + ", ".join(f"{j['pass']} {j['verdict']}" for j in judges),
+            # each (source, text) once, in the order the judges quoted it
             "quotes": [
-                {"source": q["source"], "text": q["quote"]}
-                for p in against
-                for q in verdicts[p][key]["quotes"]
+                {"source": s, "text": t}
+                for s, t in dict.fromkeys(
+                    (q["source"], q["quote"]) for p in against for q in verdicts[p][key]["quotes"]
+                )
             ],
             "residual": residual,
             "judges": judges,
