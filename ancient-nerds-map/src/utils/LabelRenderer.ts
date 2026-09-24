@@ -17,8 +17,60 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => labelTextureCache.clear())
 }
 
+/** The typography of a label: what its texture is measured and drawn with. */
+interface LabelTypography {
+  style: (typeof LABEL_STYLES)[string]
+  /** Canvas font size: the style's size at 3x, so the text stays crisp when shown smaller */
+  fontSize: number
+  font: string
+  letterSpacing: string
+  displayText: string
+}
+
+function labelTypography(text: string, type: string, isNational?: boolean): LabelTypography {
+  const styleKey = (type === 'capital' && isNational) ? 'capitalNat' : type
+  const style = LABEL_STYLES[styleKey] || LABEL_STYLES.country
+  const fontSize = style.fontSize * 3
+
+  // Orbitron to match branding
+  const fontStyle = style.italic ? 'italic ' : ''
+  const fontWeight = style.bold ? '600 ' : '400 '
+
+  // Letter spacing scaled by font size
+  const baseSpacing = Math.round(2 + (style.fontSize - 18) * 14 / 46)
+  const spacingMultiplier = (type === 'continent' || type === 'ocean') ? 3 : ((type === 'sea' || type === 'country') ? 2 : 1)
+
+  return {
+    style,
+    fontSize,
+    font: `${fontStyle}${fontWeight}${fontSize}px ${ATLAS_FONT_FAMILY}`,
+    letterSpacing: `${baseSpacing * spacingMultiplier}px`,
+    displayText: style.uppercase ? text.toUpperCase() : text,
+  }
+}
+
+/** One 2D context for every measurement; created on the first call (no DOM at module scope). */
+let measureContext: CanvasRenderingContext2D | null = null
+
 /**
- * Create a canvas texture for a text label
+ * The size of the texture `createLabelTexture` draws for a label, in canvas
+ * pixels, from `measureText` alone: text width plus a shadow padding on each
+ * side. A geo label's mesh gets its aspect from this at load; the texture
+ * itself is drawn when the label is first shown.
+ */
+export function measureLabel(text: string, type: string, isNational?: boolean): { width: number; height: number } {
+  const t = labelTypography(text, type, isNational)
+  if (!measureContext) measureContext = document.createElement('canvas').getContext('2d')!
+  measureContext.font = t.font
+  measureContext.letterSpacing = t.letterSpacing
+  const textWidth = measureContext.measureText(t.displayText).width
+  const textHeight = t.fontSize * 1.4
+  const padding = t.fontSize * 0.6
+  return { width: Math.ceil(textWidth + padding * 2), height: Math.ceil(textHeight + padding * 2) }
+}
+
+/**
+ * Create a canvas texture for a text label, sized by `measureLabel`.
  * Uses cached textures when available for performance
  */
 export function createLabelTexture(
@@ -26,9 +78,7 @@ export function createLabelTexture(
   type: string,
   isNational?: boolean
 ): { texture: THREE.CanvasTexture; width: number; height: number } {
-  // Determine style key
   const styleKey = (type === 'capital' && isNational) ? 'capitalNat' : type
-  const style = LABEL_STYLES[styleKey] || LABEL_STYLES.country
 
   // Check cache
   const cacheKey = `${text}_${styleKey}`
@@ -37,52 +87,26 @@ export function createLabelTexture(
     return { texture: cached, width: cached.image.width, height: cached.image.height }
   }
 
+  const t = labelTypography(text, type, isNational)
+  const { width, height } = measureLabel(text, type, isNational)
+
   const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
   const ctx = canvas.getContext('2d', { willReadFrequently: false })!
 
   // Enable high-quality antialiasing
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-
-  // Scale factor for crisp text (render at 3x, display smaller)
-  const scale = 3
-  const fontSize = style.fontSize * scale
-
-  // Build font string - use Orbitron to match branding
-  const fontStyle = style.italic ? 'italic ' : ''
-  const fontWeight = style.bold ? '600 ' : '400 '
-  ctx.font = `${fontStyle}${fontWeight}${fontSize}px ${ATLAS_FONT_FAMILY}`
-
-  // Apply letter spacing scaled by font size
-  const displayText = style.uppercase ? text.toUpperCase() : text
-  const baseSpacing = Math.round(2 + (style.fontSize - 18) * 14 / 46)
-  const spacingMultiplier = (type === 'continent' || type === 'ocean') ? 3 : ((type === 'sea' || type === 'country') ? 2 : 1)
-  const letterSpacingPx = baseSpacing * spacingMultiplier
-  ctx.letterSpacing = `${letterSpacingPx}px`
-
-  // Measure text with letter spacing
-  const metrics = ctx.measureText(displayText)
-  const textWidth = metrics.width
-  const textHeight = fontSize * 1.4
-
-  // Size canvas with padding for shadow
-  const padding = fontSize * 0.6
-  canvas.width = Math.ceil(textWidth + padding * 2)
-  canvas.height = Math.ceil(textHeight + padding * 2)
-
-  // Re-apply font and letter spacing after canvas resize
-  ctx.font = `${fontStyle}${fontWeight}${fontSize}px ${ATLAS_FONT_FAMILY}`
-  ctx.letterSpacing = `${letterSpacingPx}px`
+  ctx.font = t.font
+  ctx.letterSpacing = t.letterSpacing
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'center'
 
-  const centerX = canvas.width / 2
-  const centerY = canvas.height / 2
-
   // Draw label with unified styling
-  drawUnifiedLabel(ctx, displayText, centerX, centerY, fontSize, style.color, {
-    bold: style.bold,
-    italic: style.italic,
+  drawUnifiedLabel(ctx, t.displayText, width / 2, height / 2, t.fontSize, t.style.color, {
+    bold: t.style.bold,
+    italic: t.style.italic,
   })
 
   // Create texture with high-quality filtering for stable appearance
@@ -96,7 +120,7 @@ export function createLabelTexture(
   // Cache it
   labelTextureCache.set(cacheKey, texture)
 
-  return { texture, width: canvas.width, height: canvas.height }
+  return { texture, width, height }
 }
 
 /**
@@ -172,7 +196,7 @@ const curvedLabelGeometry = new THREE.PlaneGeometry(1, 1, 32, 1)
  * All vertices are projected to the same distance from globe center as the label position
  * Labels fade in from horizon (edge) toward camera, hidden on back side
  */
-export function createCurvedLabelMaterial(texture: THREE.Texture): THREE.ShaderMaterial {
+export function createCurvedLabelMaterial(texture: THREE.Texture | null): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       map: { value: texture },
@@ -229,9 +253,11 @@ export function createCurvedLabelMaterial(texture: THREE.Texture): THREE.ShaderM
 /**
  * Create a label mesh that is tangent to the globe surface
  * Maintains constant screen size via dynamic scaling
+ * `texture` null: a geo label whose texture is drawn when it is first shown;
+ * `aspect` is then the texture's size to come (`measureLabel`).
  */
 export function createGlobeTangentLabel(
-  texture: THREE.Texture,
+  texture: THREE.Texture | null,
   position: THREE.Vector3,
   baseScale: number,
   aspect: number,
@@ -262,6 +288,10 @@ export function createGlobeTangentLabel(
  */
 export function fadeLabelIn(mesh: GlobeLabelMesh, fadeManager: FadeManager, key: string): void {
   const material = mesh.material as THREE.ShaderMaterial
+  // A geo label gets its texture on the show path; a mesh without one must never draw
+  if (material.uniforms?.map && !material.uniforms.map.value) {
+    throw new Error(`Label ${key} shown without its texture`)
+  }
   if (material.uniforms?.opacity) {
     mesh.visible = true
     fadeManager.fadeTo(key, [material], 1, { duration: ANIMATION.LABEL_FADE_DURATION })
@@ -355,10 +385,11 @@ export function getLabelBaseScale(type: string): number {
 }
 
 /**
- * Clear the texture cache (useful for hot reloading)
+ * Clear the texture cache and the measuring canvas (hot reloading, tests)
  */
 export function clearLabelTextureCache(): void {
   labelTextureCache.clear()
+  measureContext = null
 }
 
 /**
