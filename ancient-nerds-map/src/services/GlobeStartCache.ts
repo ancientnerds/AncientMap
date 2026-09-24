@@ -11,19 +11,28 @@
  * layer tiers through OfflineFetch (labels.json in 'basemaps', the tiers in
  * 'vector-layers' like the layer download).
  *
- * The running build's start tiers are also in the service worker's precache
- * (pwa/globeStartPrecache.ts), which OfflineFetch reads too, so an offline
- * start finds them even when no download stored them. isGlobeStartCached checks
- * only what a download stored: after a layer rebuild it reports the new tiers
- * missing, and the download that follows is answered from the precache
- * without the network.
+ * A file counts as present where its loader finds it offline: labels.json and
+ * the tiers wherever OfflineFetch reads (every app cache and the service
+ * worker's precache, which holds the running build's start tiers:
+ * pwa/globeStartPrecache.ts), the gray only in 'basemaps'. So a layer rebuild,
+ * which renames the tiers, does not make the Download Manager report them
+ * missing: the new worker precached them. A download fetches only the files
+ * that are missing.
  */
 
 import { GLOBE_LAYER_KEYS, getGlobeLayerUrl } from '../config/vectorLayers'
 import { BASEMAP_CACHE, VECTOR_LAYER_CACHE } from '../pwa/cacheNames'
 import { LABELS_FILE, grayBasemapFiles } from './BasemapCache'
+import { OfflineFetch } from './OfflineFetch'
 
-interface StartFile { url: string; size: number; cache: string }
+export interface StartFile {
+  url: string
+  size: number
+  /** Where a download stores it. */
+  cache: string
+  /** Its loader goes through OfflineFetch (every app cache and the precache); else it reads only `cache`. */
+  viaOfflineFetch: boolean
+}
 
 // Gzip-free byte sizes of the start tiers of the current manifest (2026-09-24),
 // for the size estimate and the progress bar only.
@@ -34,7 +43,7 @@ const START_LAYER_BYTES: Record<(typeof GLOBE_LAYER_KEYS)[number], number> = {
 
 /** The coastline and border start tiers, the one list both exports below read. */
 function startLayerFiles(): StartFile[] {
-  return GLOBE_LAYER_KEYS.map(key => ({ url: getGlobeLayerUrl(key, 'start'), size: START_LAYER_BYTES[key], cache: VECTOR_LAYER_CACHE }))
+  return GLOBE_LAYER_KEYS.map(key => ({ url: getGlobeLayerUrl(key, 'start'), size: START_LAYER_BYTES[key], cache: VECTOR_LAYER_CACHE, viaOfflineFetch: true }))
 }
 
 /**
@@ -48,27 +57,33 @@ export function globeStartLayerUrls(): string[] {
 
 export function globeStartFiles(): StartFile[] {
   return [
-    { ...LABELS_FILE, cache: BASEMAP_CACHE },
-    ...grayBasemapFiles().map(file => ({ ...file, cache: BASEMAP_CACHE })),
+    { ...LABELS_FILE, cache: BASEMAP_CACHE, viaOfflineFetch: true }, // geoLabelSystem / useGeoLabels: offlineFetch
+    ...grayBasemapFiles().map(file => ({ ...file, cache: BASEMAP_CACHE, viaOfflineFetch: false })), // plain fetch, the worker's basemap rule
     ...startLayerFiles(),
   ]
 }
 
-export function globeStartSize(): number {
-  return globeStartFiles().reduce((sum, file) => sum + file.size, 0)
+export function startFilesSize(files: StartFile[]): number {
+  return files.reduce((sum, file) => sum + file.size, 0)
 }
 
-/** Every start file is in the cache its loader reads. */
-export async function isGlobeStartCached(): Promise<boolean> {
-  const hits = await Promise.all(globeStartFiles().map(async file => (await caches.open(file.cache)).match(file.url)))
-  return hits.every(Boolean)
+async function isPresent(file: StartFile): Promise<boolean> {
+  if (file.viaOfflineFetch) return OfflineFetch.isCached(file.url)
+  return (await (await caches.open(file.cache)).match(file.url)) !== undefined
 }
 
-/** Fetches and stores every start file; a file that fails fails the download. */
-export async function downloadGlobeStart(onProgress?: (loaded: number, total: number) => void): Promise<void> {
-  const total = globeStartSize()
+/** The start files an offline start would not find, in globeStartFiles order. */
+export async function missingGlobeStartFiles(): Promise<StartFile[]> {
+  const files = globeStartFiles()
+  const present = await Promise.all(files.map(isPresent))
+  return files.filter((_, i) => !present[i])
+}
+
+/** Fetches and stores `files` (missingGlobeStartFiles); a file that fails fails the download. */
+export async function downloadGlobeStart(files: StartFile[], onProgress?: (loaded: number, total: number) => void): Promise<void> {
+  const total = startFilesSize(files)
   let loaded = 0
-  for (const file of globeStartFiles()) {
+  for (const file of files) {
     const response = await fetch(file.url)
     if (!response.ok) throw new Error(`Failed to download ${file.url}: HTTP ${response.status}`)
     await (await caches.open(file.cache)).put(file.url, response)

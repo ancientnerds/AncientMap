@@ -65,10 +65,18 @@ vi.mock('../../services/EmpireCache', () => ({
     estimateEmpireSize: () => 0,
   },
 }))
+// Missing start files: labels.json (600 B) and one gray tier (400 B)
+const MISSING = [
+  { url: '/data/labels.json', size: 600, cache: 'basemaps', viaOfflineFetch: true },
+  { url: '/data/basemaps/gray_dark_low.webp', size: 400, cache: 'basemaps', viaOfflineFetch: false },
+]
 vi.mock('../../services/GlobeStartCache', () => ({
-  globeStartSize: () => 1000,
-  isGlobeStartCached: vi.fn(async () => startCached),
-  downloadGlobeStart: vi.fn(async () => { calls.push('globe-start'); startCached = true }),
+  startFilesSize: (files: Array<{ size: number }>) => files.reduce((sum, f) => sum + f.size, 0),
+  missingGlobeStartFiles: vi.fn(async () => (startCached ? [] : MISSING)),
+  downloadGlobeStart: vi.fn(async (files: Array<{ url: string }>) => {
+    calls.push(`globe-start:${files.map(f => f.url).join(',')}`)
+    startCached = true
+  }),
 }))
 vi.mock('../../services/ImageCache', () => ({ ImageCache: {} }))
 vi.mock('../../utils/cardApi', () => ({ reportAchievementEvent: vi.fn() }))
@@ -115,7 +123,7 @@ describe('DownloadManager and the globe start files', () => {
     expect(container.querySelector('.ready-status')!.textContent).toBe('1 KB ready to download') // 100 B of layer + 1000 B of start files
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['globe-start', 'layer:coastlines'])
+    expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'layer:coastlines'])
   })
 
   it('offers nothing to download while nothing is ticked and nothing was downloaded', async () => {
@@ -140,7 +148,7 @@ describe('DownloadManager and the globe start files', () => {
     expect(download.disabled).toBe(false)
     await click(download)
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['globe-start'])
+    expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp'])
     expect(container.querySelector('.empty-status')).not.toBeNull()
     expect(download.disabled).toBe(true)
   })
@@ -167,7 +175,7 @@ describe('DownloadManager and the globe start files', () => {
     await click(container.querySelector('.dm-item'))
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['worker', 'globe-start', 'layer:coastlines'])
+    expect(calls).toEqual(['worker', 'globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'layer:coastlines'])
   })
 
   it('downloads nothing and says why when the service worker cannot be installed', async () => {
@@ -193,6 +201,6 @@ describe('DownloadManager and the globe start files', () => {
     expect(satellite.classList.contains('selected')).toBe(true)
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['globe-start', 'basemap:satellite'])
+    expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'basemap:satellite'])
   })
 })

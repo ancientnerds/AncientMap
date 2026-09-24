@@ -8,7 +8,7 @@ import { OfflineStorage, DownloadState, CompactSite } from '../services/OfflineS
 import { BasemapCache, BasemapType } from '../services/BasemapCache'
 import { VectorLayerCache } from '../services/VectorLayerCache'
 import { EmpireCache } from '../services/EmpireCache'
-import { downloadGlobeStart, globeStartSize, isGlobeStartCached } from '../services/GlobeStartCache'
+import { downloadGlobeStart, missingGlobeStartFiles, startFilesSize, type StartFile } from '../services/GlobeStartCache'
 import { reportAchievementEvent } from '../utils/cardApi'
 import { ImageCache } from '../services/ImageCache'
 import { config } from '../config'
@@ -78,9 +78,10 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   const [selectedBasemaps, setSelectedBasemaps] = useState<Set<BasemapType>>(new Set())
   // Basemap items whose download is complete (every file cached), not just marked downloaded
   const [downloadedBasemaps, setDownloadedBasemaps] = useState<Set<BasemapType>>(new Set())
-  // The files the globe's start cannot do without offline; every download stores them.
-  // null until checked: nothing is offered for them before the check has answered.
-  const [globeStartCached, setGlobeStartCached] = useState<boolean | null>(null)
+  // The files the globe's start cannot do without offline that it would not find;
+  // every download stores them. null until checked: nothing is offered for them
+  // before the check has answered.
+  const [globeStartMissing, setGlobeStartMissing] = useState<StartFile[] | null>(null)
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set())
   // Layers whose download is complete (every file cached), not just marked downloaded
   const [downloadedLayers, setDownloadedLayers] = useState<Set<string>>(new Set())
@@ -118,7 +119,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       const basemaps = await BasemapCache.getCachedItems(state)
       setDownloadedBasemaps(new Set(basemaps))
       setSelectedBasemaps(new Set(basemaps))
-      setGlobeStartCached(await isGlobeStartCached())
+      setGlobeStartMissing(await missingGlobeStartFiles())
       const layers = await VectorLayerCache.getCachedLayers(state)
       setDownloadedLayers(new Set(layers))
       setSelectedLayers(new Set(layers))
@@ -235,12 +236,12 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     // Any download brings the globe's start files along (handleDownload), and an
     // earlier download without them is offered them on their own
     const hasDownload = downloadState !== null && hasOfflineDownload(downloadState)
-    const startNeeded = globeStartCached === false && (size > 0 || hasDownload)
+    const startNeeded = globeStartMissing !== null && globeStartMissing.length > 0 && (size > 0 || hasDownload)
     return {
-      estimatedSize: size + (startNeeded ? globeStartSize() : 0),
+      estimatedSize: size + (startNeeded ? startFilesSize(globeStartMissing) : 0),
       startFilesOnly: startNeeded && size === 0,
     }
-  }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, downloadedLayers, downloadedBasemaps, globeStartCached, sources])
+  }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, downloadedLayers, downloadedBasemaps, globeStartMissing, sources])
 
   // Update progress with speed calculation
   const updateProgressWithSpeed = useCallback((loaded: number, total: number) => {
@@ -302,10 +303,11 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   /** What the globe's start cannot do without offline; a failure stops the whole download. */
   const downloadGlobeStartFiles = async () => {
-    if (await isGlobeStartCached()) return
-    setProgress({ type: 'basemap', id: 'globe-start', loaded: 0, total: globeStartSize(), label: 'Globe start files' })
+    const missing = await missingGlobeStartFiles()
+    if (missing.length === 0) return
+    setProgress({ type: 'basemap', id: 'globe-start', loaded: 0, total: startFilesSize(missing), label: 'Globe start files' })
     resetSpeedTracking()
-    await downloadGlobeStart((loaded, total) => updateProgressWithSpeed(loaded, total))
+    await downloadGlobeStart(missing, (loaded, total) => updateProgressWithSpeed(loaded, total))
   }
 
   const downloadBasemaps = async () => {
@@ -416,7 +418,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       setDownloadState(state)
       setDownloadedLayers(new Set(await VectorLayerCache.getCachedLayers(state)))
       setDownloadedBasemaps(new Set(await BasemapCache.getCachedItems(state)))
-      setGlobeStartCached(await isGlobeStartCached())
+      setGlobeStartMissing(await missingGlobeStartFiles())
 
       const estimate = await OfflineStorage.getStorageEstimate()
       setStorageUsed(estimate.used)
@@ -447,7 +449,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     setDownloadState(state)
     setDownloadedLayers(new Set())
     setDownloadedBasemaps(new Set())
-    setGlobeStartCached(false)
+    setGlobeStartMissing(await missingGlobeStartFiles())
 
     const estimate = await OfflineStorage.getStorageEstimate()
     setStorageUsed(estimate.used)
