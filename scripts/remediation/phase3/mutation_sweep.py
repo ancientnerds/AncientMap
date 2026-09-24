@@ -17496,6 +17496,8 @@ P4P4_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
 P4P4_PROMPTS = "scripts/remediation/phase4/prompts4.py"
 P4P4_SELECT_TEST = "tests/remediation/test_phase4_select.py"
 P4P4_MODEL_TEST = "tests/remediation/test_phase4_model.py"
+P4P4_REVIEW = "scripts/remediation/phase4/review4.py"
+P4P4_REVIEW_TEST = "tests/remediation/test_phase4_review.py"
 
 P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── T1/T4: a subject pronoun past the first word leans on the sentence before ──────────────
@@ -17590,6 +17592,70 @@ P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    "it names, and keep the card: the card "  # mutant\n',
         P4P4_SELECT_TEST,
         "test_the_reviewer_question_drops_a_dangling_pronoun_wherever_it_stands",
+    ),
+    # ── T7: a sentence the article contradicts, and the passage the reviewer needs to see it ───
+    (
+        "p4 prompts: the selector may pick a sentence the article contradicts",
+        P4P4_PROMPTS,
+        '    "(11) never pick a sentence that another listed sentence contradicts, or reduces to a "\n'
+        '    "presumption, an assumption or a dispute, even when it is the article\'s lead.\\n"\n',
+        "",
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_refuses_a_sentence_the_article_contradicts",
+    ),
+    (
+        "p4 prompts: the reviewer is not asked about a contradicted sentence",
+        P4P4_PROMPTS,
+        '    "DROP a sentence that another sentence of the passage contradicts, or reduces to a "\n',
+        '    "Keep a sentence that another sentence of the passage contradicts, or reduces to a "\n',
+        P4P4_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_sentence_the_passage_contradicts",
+    ),
+    (
+        "p4 prompts: the reviewer is not told it sees the passage",
+        P4P4_PROMPTS,
+        '    "see the passage the sentences were chosen from (PASSAGE). For each "\n',
+        '    "see nothing else. For each "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_sentence_the_passage_contradicts",
+    ),
+    (
+        "p4 prompts: the reviewer block leaves the passage out",
+        P4P4_PROMPTS,
+        "    lines = [site_element(site), passage]\n",
+        "    lines = [site_element(site)]  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_the_reviewer_sees_the_whole_passage_the_selector_chose_from",
+    ),
+    (
+        "p4 prompts: the passage shows only the first pool sentence",
+        P4P4_PROMPTS,
+        "    for sentence in pool:\n        section = sentence.section if sentence.section is not "
+        'None else "lead"\n        rows.append(f"{sentence.sid} [{section}] '
+        '{S.sentence_text(text, sentence)}")\n    rows.append("</source>")\n',
+        "    for sentence in pool[:1]:  # mutant\n        section = sentence.section if "
+        'sentence.section is not None else "lead"\n        rows.append(f"{sentence.sid} '
+        '[{section}] {S.sentence_text(text, sentence)}")\n    rows.append("</source>")\n',
+        P4P4_REVIEW_TEST,
+        "test_the_reviewer_sees_the_whole_passage_the_selector_chose_from",
+    ),
+    (
+        "p4 prompts: a page passage leaves the page's text out",
+        P4P4_PROMPTS,
+        '        rows.append(text)\n        rows.append("</source>")\n    return "\\n".join(rows)\n'
+        "\n\ndef reviewer_block(",
+        '        rows.append("</source>")  # mutant\n    return "\\n".join(rows)\n'
+        "\n\ndef reviewer_block(",
+        P4P4_REVIEW_TEST,
+        "test_a_lane_r_reviewer_sees_every_page_it_restated",
+    ),
+    (
+        "p4 review: lane R's reviewer is shown an empty pool",
+        P4P4_REVIEW,
+        "    if inputs.lane is M.Lane.R:\n        return P.page_passage(",
+        "    if False:  # mutant\n        return P.page_passage(",
+        P4P4_REVIEW_TEST,
+        "test_a_lane_r_reviewer_sees_every_page_it_restated",
     ),
 ]
 MUTATIONS += P4_PILOT4_MUTATIONS

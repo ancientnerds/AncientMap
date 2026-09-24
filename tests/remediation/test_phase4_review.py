@@ -153,6 +153,47 @@ def test_the_reviewer_sees_each_sentence_beside_its_untrimmed_source(tmp_path: P
     assert "A stored description." not in prompt
 
 
+def test_the_reviewer_sees_the_whole_passage_the_selector_chose_from(tmp_path: Path) -> None:
+    """Pilot 3 (T7): Partiscum's lead was published although the article's own body contradicts
+    it; the reviewer was shown each sentence's two source predecessors only - for a lead, nothing -
+    so no DROP could see the contradiction. It now sees the selector's pool, every candidate with
+    its sid and section, before the numbered sentences; the apparatus stays out, as in the pool."""
+    batch_dir = _assembled(tmp_path)
+    _, runner, _ = _review(batch_dir, ALL_KEEP)
+    prompt = runner.calls[0].prompt
+    block = prompt[prompt.index('<source id="PASSAGE" title="Stone Temple">') :]
+    block = block[: block.index("</source>")]
+    _, sites = B.read_batch(batch_dir)
+    lane = B.read_lanes(batch_dir, sites)["site-1"]
+    _, _, text, pool = SEL.site_pool(batch_dir, sites[0], lane)
+    for sentence in pool:
+        section = sentence.section or "lead"
+        assert f"\n{sentence.sid} [{section}] {text[sentence.start : sentence.end]}\n" in block
+    assert "W7 [History] Excavations in 1911 found pottery, figurines and animal bones." in block
+    assert "Smith, J." not in block  # the references section is no passage
+    assert prompt.index('<source id="PASSAGE"') < prompt.index('<source id="R1"')
+
+
+def test_a_lane_r_reviewer_sees_every_page_it_restated() -> None:
+    """Lane R selects no pool: its passage is the pages the restatement model read, whole."""
+    page = "The mound was raised in the Bronze Age. It was dug in 1901 and found empty."
+    doc = X.page_doc("R1", page, url="https://example.org/mound", title="The Mound")
+    inputs = A.SiteInputs(
+        site=X.plan_site(),
+        lane=M.Lane.R,
+        sources={"R1": doc},
+        texts={"R1": page},
+        pool=(),
+        selection=None,
+        translations=None,
+        restatements=(),
+    )
+    assert RV.passage(inputs) == (
+        '<source id="PASSAGE" url="https://example.org/mound" title="The Mound">\n'
+        f"{page}\n</source>"
+    )
+
+
 def test_all_kept_writes_the_same_assembly_and_marks_it_reviewed(tmp_path: Path) -> None:
     batch_dir = _assembled(tmp_path)
     before = _written(batch_dir)

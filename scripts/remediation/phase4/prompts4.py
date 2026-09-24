@@ -30,7 +30,10 @@ limestone ridge ..., it was ..."): rule (10) adds V6's and V10's reading past th
 personal pronoun that is a subject form right after the first comma, or right after "that" with no
 article before it (`model4.PERSONAL_PRONOUNS`, `SUBJECT_PRONOUNS`, `ARTICLES`) - rule (4) refers
 the card to it, and the reviewer drops such a sentence, or a card whose pronoun has no antecedent
-inside the card.
+inside the card. Pilot 3 failed T7 on Partiscum (CANARY-03), whose lead the article's own body
+contradicts: rule (11) refuses a sentence another listed sentence contradicts or reduces to a
+presumption, an assumption or a dispute, and the reviewer - shown, for the first time, the passage
+the sentences were chosen from (`pool_passage`, `page_passage`) - drops it.
 
 Every question ends with the project's LLM01 guard line (`GUARD_LINE`), and every third-party text
 in a prompt sits inside a `<source>` element, which is what that line names. The stored description
@@ -92,6 +95,8 @@ SELECTOR_QUESTION = (
     'stands right after the sentence\'s first comma, or right after "that" with no "the", "a" or '
     '"an" before it: "Standing on a ridge, it was made into a fort" and "Pottery sherds show that '
     'it was occupied" need the sentence before them.\n'
+    "(11) never pick a sentence that another listed sentence contradicts, or reduces to a "
+    "presumption, an assumption or a dispute, even when it is the article's lead.\n"
     "\n"
     "Answer with these lines and nothing else. A sentence id is followed by the ids of the spans "
     "you remove from it, each written as a space, a hyphen and the span id:\n"
@@ -134,7 +139,8 @@ RESTRICTED_QUESTION = (
 REVIEWER_QUESTION = (
     "You check a short factual description of ONE archaeological site that code assembled from "
     "source passages. For every numbered sentence you see the published text, the untrimmed "
-    "source sentence, the two source sentences before it and its section heading. For each "
+    "source sentence, the two source sentences before it and its section heading; before them you "
+    "see the passage the sentences were chosen from (PASSAGE). For each "
     "sentence ask: is it about this site, is it fully supported by its passage, does it keep the "
     "same hedging and restrictions, and did the removals change what it says? Ask the same of the "
     "card, against the description.\n"
@@ -149,6 +155,9 @@ REVIEWER_QUESTION = (
     "after a fronted phrase or in a that-clause - refers to something no published sentence before "
     "it names, and DROP the card when such a pronoun has no antecedent inside the card: the card "
     "is read on its own.\n"
+    "DROP a sentence that another sentence of the passage contradicts, or reduces to a "
+    "presumption, an assumption or a dispute, even when it is the article's lead; ask the same "
+    "of the card.\n"
     "\n"
     "Answer with one line per sentence and nothing else:\n"
     "R<i>: KEEP\n"
@@ -258,14 +267,41 @@ def cited_url(meta: M.SourceDoc) -> str:
     return meta.permalink
 
 
+def pool_passage(meta: M.SourceDoc, pool: Sequence[M.Sentence], text: str) -> str:
+    """The reviewer's PASSAGE for lanes W, S and T: the selector's pool - every candidate sentence
+    with its sid and section, as the selector was shown it, without the spans."""
+    rows = [f'<source id="PASSAGE" title="{attr(meta.title or "")}">']
+    for sentence in pool:
+        section = sentence.section if sentence.section is not None else "lead"
+        rows.append(f"{sentence.sid} [{section}] {S.sentence_text(text, sentence)}")
+    rows.append("</source>")
+    return "\n".join(rows)
+
+
+def page_passage(pages: Sequence[tuple[M.SourceDoc, str]]) -> str:
+    """The reviewer's PASSAGE for lane R: every page the restatement model read, whole."""
+    rows: list[str] = []
+    for meta, text in pages:
+        rows.append(
+            f'<source id="PASSAGE" url="{attr(cited_url(meta))}" title="{attr(meta.title or "")}">'
+        )
+        rows.append(text)
+        rows.append("</source>")
+    return "\n".join(rows)
+
+
 def reviewer_block(
     site: M.PlanSite,
     rows: Sequence[tuple[str, str, str, str | None]],
     card: str | None,
+    *,
+    passage: str,
 ) -> str:
-    """The reviewer's user block. `rows` is, per published sentence in order: the published text,
-    the untrimmed source sentence, the two source sentences before it, and the section heading."""
-    lines = [site_element(site)]
+    """The reviewer's user block. `passage` is the passage the sentences were chosen from
+    (`pool_passage`, `page_passage`; pilot 3, T7: a sentence the rest of the article contradicts is
+    visible only there). `rows` is, per published sentence in order: the published text, the
+    untrimmed source sentence, the two source sentences before it, and the section heading."""
+    lines = [site_element(site), passage]
     for number, (published, untrimmed, before, section) in enumerate(rows, start=1):
         lines.append(f'<source id="R{number}" section="{attr(section or "lead")}">')
         lines.append(f"published: {published}")
