@@ -6,8 +6,9 @@
  * whole page): globe_ready fires when the overlay fades - the sites, the
  * critical layers and the focus lookup are in, no error screen, a live context -
  * and not when the layers alone are in. Globe's loader bridge asks the same
- * question: a loader failure before the overlay fades is a start failure (the
- * error screen, one globe_error{phase}), after it a 'live' one.
+ * question: a loader failure before the overlay fades, or before a remounted
+ * Globe's own layers are up, is a start failure (the error screen, one
+ * globe_error{phase}), after it a 'live' one.
  */
 
 import { readFileSync } from 'node:fs'
@@ -48,13 +49,13 @@ describe('App: globe_ready when the overlay fades', () => {
 })
 
 describe("Globe's loader bridge uses App's ready moment", () => {
-  it('passes App.globeReadyRef to the bridge, not the layers flag', () => {
+  it("passes App.globeReadyRef and this instance's layers flag to the bridge", () => {
     const app = read('App.tsx')
     const globe = read('components/Globe.tsx')
     expect(callbackBody(app, 'isGlobeReady')).toContain('globeReadyRef.current')
     expect(app).toContain('isGlobeReady={isGlobeReady}')
     expect(globe).toContain('isGlobeReady: () => boolean')
-    expect(globe).toContain('const reportStartError = useStartErrorBridge(isGlobeReady)')
-    expect(globe).not.toMatch(/useStartErrorBridge\([^)]*layersReadyCalled/)
+    // App's moment alone stays true across a Globe remount (the phone-gate resize)
+    expect(globe).toContain('const reportStartError = useStartErrorBridge(isGlobeReady, refs.layersReadyCalled)')
   })
 })

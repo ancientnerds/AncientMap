@@ -227,10 +227,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   } = refs
 
   // Contract C0: every critical loader reports its failure here. Until App's globe_ready
-  // (the overlay fades: sites, layers and focus are in) it reaches GlobeErrorBoundary and
-  // App shows the error screen - also between the layers and the sites. Afterwards the
+  // (the overlay fades: sites, layers and focus are in) and this instance's own layers are
+  // up, it reaches GlobeErrorBoundary and App shows the error screen - also between the
+  // layers and the sites, and in a Globe remounted after the phone gate. Afterwards the
   // globe is on screen and stays up, and the failure is tracked as live.
-  const reportStartError = useStartErrorBridge(isGlobeReady)
+  const reportStartError = useStartErrorBridge(isGlobeReady, refs.layersReadyCalled)
 
   // Custom Hooks
   const ui = useUIState({ initialShowCoordinates: true })

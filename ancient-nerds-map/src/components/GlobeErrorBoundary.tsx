@@ -41,18 +41,25 @@ export type ReportStartError = (phase: string, err: unknown) => void
  * failure is kept in state and thrown during the next render, which the
  * boundary catches. The first failure wins.
  *
- * After App's globe_ready (isLive: the overlay has faded) nothing is torn down: the globe is on
- * screen, and a later failure of one of these loaders (a coastline switched
- * off and on again, labels reloaded after a context restore, a shader compiled
- * for a new layer) is logged and tracked as globe_error{phase: 'live'}.
+ * Live means this Globe instance is on screen: App's globe_ready has fired (the
+ * overlay has faded) and this instance's own layers are up. App's moment alone
+ * is not enough - it is page-wide and never reset, while Globe unmounts and
+ * mounts again when a desktop window is resized through the phone gate, and the
+ * new instance starts its loaders from scratch. Once live nothing is torn down:
+ * a later failure of one of these loaders (a coastline switched off and on
+ * again, labels reloaded after a context restore, a shader compiled for a new
+ * layer) is logged and tracked as globe_error{phase: 'live'}.
  */
-export function useStartErrorBridge(isLive: () => boolean): ReportStartError {
+export function useStartErrorBridge(
+  isGlobeReady: () => boolean,
+  layersUp: { readonly current: boolean },
+): ReportStartError {
   const [startError, setStartError] = useState<GlobeStartError | null>(null)
-  // isLive reads a ref of the caller; the report keeps one identity for every loader context
-  const isLiveRef = useRef(isLive)
-  isLiveRef.current = isLive
+  // isGlobeReady reads a ref of App; the report keeps one identity for every loader context
+  const isGlobeReadyRef = useRef(isGlobeReady)
+  isGlobeReadyRef.current = isGlobeReady
   const report = useCallback((phase: string, err: unknown) => {
-    if (isLiveRef.current()) {
+    if (isGlobeReadyRef.current() && layersUp.current) {
       console.error(`[globe ${LIVE_PHASE}] ${phase}`, err)
       const message = err instanceof Error ? err.message : String(err)
       track('globe_error', { phase: LIVE_PHASE, message: errorProps(`${phase}: ${message}`).message })
@@ -60,7 +67,7 @@ export function useStartErrorBridge(isLive: () => boolean): ReportStartError {
     }
     // App logs and reports what the boundary hands over (failGlobe)
     setStartError(prev => prev ?? new GlobeStartError(phase, err))
-  }, [])
+  }, [layersUp])
   if (startError) throw startError
   return report
 }

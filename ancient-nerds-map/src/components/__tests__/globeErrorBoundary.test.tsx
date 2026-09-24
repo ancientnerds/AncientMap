@@ -91,16 +91,19 @@ describe('GlobeErrorBoundary', () => {
 
 describe('useStartErrorBridge', () => {
   let report: ReportStartError | null = null
-  let live = false
+  // App's globe_ready (page-wide, never reset) and this Globe instance's layers
+  let appReady = false
+  const layersUp = { current: false }
 
   function Loader() {
-    report = useStartErrorBridge(() => live)
+    report = useStartErrorBridge(() => appReady, layersUp)
     return <p>loading</p>
   }
 
   beforeEach(() => {
     report = null
-    live = false
+    appReady = false
+    layersUp.current = false
   })
 
   it('brings an asynchronous failure to the boundary, with its phase; the first one wins', async () => {
@@ -127,11 +130,33 @@ describe('useStartErrorBridge', () => {
   it('once the globe is ready it tracks the failure as live and tears nothing down', async () => {
     const onError = vi.fn()
     await render(<GlobeErrorBoundary onError={onError}><Loader /></GlobeErrorBoundary>)
-    live = true
+    appReady = true
+    layersUp.current = true
     await act(async () => report!('coastlines', new Error('offline')))
     expect(onError).not.toHaveBeenCalled()
     expect(container.innerHTML).toBe('<p>loading</p>')
     expect(track).toHaveBeenCalledExactlyOnceWith('globe_error', { phase: LIVE_PHASE, message: 'coastlines: offline' })
+  })
+
+  it('between the layers and the sites a failure is still a start failure', async () => {
+    const onError = vi.fn()
+    await render(<GlobeErrorBoundary onError={onError}><Loader /></GlobeErrorBoundary>)
+    layersUp.current = true
+    await act(async () => report!('labels', new Error('HTTP 503')))
+    expect(onError).toHaveBeenCalledOnce()
+    expect(track).not.toHaveBeenCalled()
+  })
+
+  it('a remounted Globe (resized through the phone gate) reports its start failures to the boundary', async () => {
+    // App's globe_ready fired for the first Globe and stays true; this instance's layers are not up
+    const onError = vi.fn()
+    appReady = true
+    await render(<GlobeErrorBoundary onError={onError}><Loader /></GlobeErrorBoundary>)
+    await act(async () => report!('basemap', new Error('HTTP 502')))
+    expect(onError).toHaveBeenCalledOnce()
+    expect((onError.mock.calls[0][0] as GlobeStartError).phase).toBe('basemap')
+    expect(container.innerHTML).toBe('')
+    expect(track).not.toHaveBeenCalled()
   })
 
   it('keeps one identity across renders (loader contexts capture it once)', async () => {
