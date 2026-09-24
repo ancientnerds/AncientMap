@@ -84,7 +84,7 @@ export type BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basema
 export interface BgTask { name: BgTaskName; run: (signal: AbortSignal) => Promise<void> }
 export interface GlobeBackgroundQueue {
   add(task: BgTask): void        // appends; order of add() = run order
-  promote(name: BgTaskName): void // moves a pending task to the front
+  promote(name: BgTaskName): boolean // moves a pending task to the front; true while the task is pending or running (U10: the satellite toggle loads directly otherwise)
   start(): void                  // idempotent
   dispose(): void                // aborts the running task, drops the rest
 }
@@ -313,6 +313,7 @@ def test_committed_manifest_points_at_committed_files_within_budget():
 - [ ] **U10.4 Remove interim triggers** from U5 (mount-time Mapbox), U8 (details right after sites).
 - [ ] **U10.5 Verify:** vitest (Node 20), `tsc --noEmit`, knip, build; `probe.py load --target local --device desktop --gpu` shows the `globe_bg` events in order after the warp and no long task > 200 ms in the 30 s after the warp.
 - [ ] **U10.6 Commit** "Load what the first frame does not show after the intro, one task at a time".
+- As built: the queue's tasks are added once the basemap plan is known (before the start-tier gray, so before any warp) and `start()` runs from the loop's `onWarpComplete`; `globeBackgroundTasks()` fixes the order in one place. Only an abort by the queue itself (unmount) is a cancellation; any other rejection, an AbortError included, is reported (every task rejects with an AbortError only when its queue signal aborts). App's `sw` task exists only in production builds (dev serves no `/sw.js`). `__DEMO.enterMapbox` promotes the `mapbox` task and rejects when it failed; `isReady` stays the end of the warp.
 
 ## Wave 4 — Verification, audit, fixes
 
