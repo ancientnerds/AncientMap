@@ -27,7 +27,7 @@ function spread(t: GlobeTimes, low: string, high: string): string {
  */
 export function timesLine(g: GlobeData): string {
   const t = g.ready_ms
-  if (t.samples === 0) return 'No globe reached its layers in this window.'
+  if (t.samples === 0) return 'No globe came up in this window.'
   // One report is not a best and a worst. Eleven globe_ready events in the
   // live seven-day window (2026-09-19) and eight two days earlier: a quiet
   // week reaches one, and "9.4 s at best, 9.4 s at worst" out of a single

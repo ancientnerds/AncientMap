@@ -155,6 +155,28 @@ def test_the_ending_events_the_globe_query_reads_are_in_the_frontend_taxonomy():
         assert f"'{name}'" in u.SQL_GLOBE, name
 
 
+def test_the_globe_event_docs_name_the_senders_the_frontend_uses():
+    """The founders dashboard is read through these comments. globe_ready is
+    sent by App when the loading overlay fades (sites, critical layers, focus
+    lookup), not by Globe at onLayersReady, and App sends webgl_lost through
+    analytics/globeAbandon.ts. Docs naming the old sender invite reading
+    ready_ms as the layers moment."""
+    root = Path(__file__).resolve().parents[2]
+    src = root / "ancient-nerds-map" / "src"
+    umami_doc = Path(u.__file__).read_text(encoding="utf-8")
+    stats_doc = (root / "pipeline" / "stats_analysis.py").read_text(encoding="utf-8")
+    for doc in (umami_doc, stats_doc):
+        assert "onLayersReady" not in doc
+        assert "src/components/Globe.tsx sends" not in doc
+    assert "hooks/useGlobeReady.ts" in umami_doc
+    assert "track('globe_ready'" in (src / "hooks" / "useGlobeReady.ts").read_text(encoding="utf-8")
+    assert "analytics/globeAbandon.ts reportWebglLost" in umami_doc
+    assert "analytics/globeAbandon.ts reportWebglLost" in stats_doc
+    assert "export function reportWebglLost(" in (src / "analytics" / "globeAbandon.ts").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends():
     """SQL_GLOBE buckets the unreached loads by string literals that the
     frontend writes in another language: the gate choice 'globe' (not an

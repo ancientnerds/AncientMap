@@ -30,12 +30,13 @@ describe('GlobeReach secs', () => {
 })
 
 describe('GlobeReach timesLine', () => {
-  it('says so plainly when no globe reached its layers', () => {
+  it('says so plainly when no globe came up', () => {
     const none: GlobeData = {
       ...live,
       ready_ms: { min: null, median: null, max: null, samples: 0 },
     }
-    expect(timesLine(none)).toBe('No globe reached its layers in this window.')
+    // globe_ready fires when the overlay fades (sites, layers, focus), not at the layers
+    expect(timesLine(none)).toBe('No globe came up in this window.')
   })
 
   it('names only best and worst below the median floor, and never prints null', () => {

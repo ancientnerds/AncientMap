@@ -293,9 +293,14 @@ GLOBE_PATH = "/globe.html"
 #:              pushState (only AccountPage and ArticlesPage do), so Umami
 #:              cannot manufacture a virtual view here and views and
 #:              globe_ready are the same granularity.
-#:   ready    - globe_ready, fired once per load from onLayersReady.
+#:   ready    - globe_ready, sent once per load by App (hooks/useGlobeReady.ts)
+#:              when the loading overlay fades: the sites, the critical layers
+#:              and the focus lookup are in, no error screen, a live context.
 #:   ready_ms - the milliseconds each globe_ready carried, so the funnel and
-#:              the times come from ONE scan.
+#:              the times come from ONE scan. Samples from before the
+#:              globe-load deploy (2026-09) measured the layers moment only
+#:              (Globe's layers callback); later ones include the sites payload
+#:              and the focus lookup, so the two are not comparable.
 #: The LEFT JOIN is load-bearing: a page view has no event_data row.
 #: There is deliberately no "did the bundle boot" column. web-vitals' onTTFB
 #: waits for document.readyState === 'complete', so a visitor who leaves
@@ -459,10 +464,13 @@ GROUP BY 1, 2
 ORDER BY sessions DESC
 """
 
-#: A globe that lost its WebGL context. src/components/Globe.tsx sends this
-#: once per page view with `reason` (why the loop stopped) and `phase`
-#: ("loading" before onLayersReady, "live" after), so the panel can say
-#: whether the visitor ever saw a globe at all.
+#: A globe that lost its WebGL context. App sends this through
+#: analytics/globeAbandon.ts reportWebglLost with `reason` (why the loop
+#: stopped) and `phase`, so the panel can say whether the visitor ever saw a
+#: globe at all. "loading" means before globe_ready; it is the load's one
+#: ending, so it is sent at most once per load and not after another ending
+#: (a globe_abandon of the same load suppresses it). "live" means after
+#: globe_ready and is sent on every loss.
 SQL_WEBGL_LOST = (
     """
 WITH ev AS (

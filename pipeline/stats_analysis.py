@@ -329,7 +329,8 @@ SHALLOW_DEPTH = 25
 #: name, so a step carrying one is always the page view, never an action.
 SHALLOW_PAGES = {"story", "site"}
 #: What a lost WebGL context means for the visitor, by the phase the globe was
-#: in when it happened. src/components/Globe.tsx sends exactly these two.
+#: in when it happened. App sends exactly these two, computed in
+#: analytics/globeAbandon.ts reportWebglLost from whether globe_ready fired.
 WEBGL_PHASES = {
     "loading": "globe never started",
     "live": "globe froze after it had started",
