@@ -3,8 +3,10 @@
  * them is the error screen (contract C0). labels.json, the gray basemap (at
  * every tier up to the device's maximum: the start tier follows the window at
  * load time) and the coastline and border start tiers. Every offline download
- * stores them, whatever the visitor ticked (DownloadManager), so an offline
- * start works with any download, not only with the optional 'Satellite' item.
+ * stores them, whatever the visitor ticked (DownloadManager), together with the
+ * default source's sites (IndexedDB, not a file here: DataStore starts offline
+ * only when a source is stored), so an offline start works with any download,
+ * not only with the optional 'Satellite' item or a ticked source.
  *
  * Each file goes into the cache its loader reads offline: the gray is fetched
  * through the service worker's basemap rule ('basemaps'), labels.json and the

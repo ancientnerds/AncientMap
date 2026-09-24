@@ -21,9 +21,11 @@ const API_BASE_URL = config.api.baseUrl
 
 /**
  * The source the first request loads. Hardcoded because enabledByDefault is only
- * known after the sources load, and both requests run in parallel.
+ * known after the sources load, and both requests run in parallel. Every offline
+ * download stores it (DownloadManager): the offline start below reads IndexedDB
+ * only when a source is stored there.
  */
-const DEFAULT_SOURCE = 'ancient_nerds'
+export const DEFAULT_SOURCE = 'ancient_nerds'
 
 /**
  * Which site fields `/api/sites/all` sends (api/routes/sites.py `fields`): `globe` only

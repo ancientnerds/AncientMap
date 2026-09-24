@@ -8,6 +8,11 @@
  * offered again instead of showing as Cached. A download made before the start
  * files existed (every ticked item still complete) offers the start files on
  * their own, so an offline start works for it too.
+ *
+ * The default source ('ancient_nerds', the payload the globe starts on) is part
+ * of that set: DataStore starts offline from IndexedDB only when a source is
+ * stored there, so a download without it (Layers tab, no source ticked) would
+ * end an offline start on the error screen.
  */
 
 import { act } from 'react'
@@ -26,14 +31,18 @@ const SOURCE_ONLY = {
   ...NO_DOWNLOAD,
   sources: { ancient_nerds: { cached: true, downloadedAt: '2026-01-01', siteCount: 5004 } },
 }
+// Coastlines only, from before the default source came with every download; start files cached
+const LAYERS_ONLY = { ...NO_DOWNLOAD, layers: ['coastlines'] }
 let downloadState: object = OLD_SATELLITE
 let startCached = false
+// What GET /api/sites/all?source=ancient_nerds answers
+let sourceResponse: { ok: boolean; status: number; body: unknown } = { ok: true, status: 200, body: { sites: [{ id: 'a' }, { id: 'b' }] } }
 
 vi.mock('../../services/OfflineStorage', () => ({
   OfflineStorage: {
     getDownloadState: vi.fn(async () => downloadState),
     getStorageEstimate: vi.fn(async () => ({ used: 0, quota: 0 })),
-    saveSites: vi.fn(),
+    saveSites: vi.fn(async (id: string, sites: unknown[]) => { calls.push(`source:${id}:${sites.length}`) }),
   },
 }))
 vi.mock('../../services/BasemapCache', () => ({
@@ -88,12 +97,15 @@ import DownloadManager from '../DownloadManager'
 let root: Root | null = null
 let container: HTMLDivElement
 
+// The source list App passes (DataStore's sources): the default source, 20 sites (~1000 B)
+const SOURCES = [{ id: 'ancient_nerds', name: 'Ancient Nerds', count: 20, color: '#fff' }]
+
 async function open(ensureOfflineWorker: (() => Promise<void>) | null = null) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<DownloadManager isOpen onClose={() => {}} sources={[]} isOffline={false} onToggleOffline={() => {}} ensureOfflineWorker={ensureOfflineWorker} />)
+    root!.render(<DownloadManager isOpen onClose={() => {}} sources={SOURCES} isOffline={false} onToggleOffline={() => {}} ensureOfflineWorker={ensureOfflineWorker} />)
   })
   await act(async () => { await new Promise(r => setTimeout(r, 0)) })
 }
@@ -107,12 +119,20 @@ beforeEach(() => {
   calls.length = 0
   downloadState = OLD_SATELLITE
   startCached = false
+  sourceResponse = { ok: true, status: 200, body: { sites: [{ id: 'a' }, { id: 'b' }] } }
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input)
+    if (!url.includes('/sites/all?source=ancient_nerds&limit=100000')) throw new Error(`unexpected fetch ${url}`)
+    const { ok, status, body } = sourceResponse
+    return { ok, status, json: async () => body } as unknown as Response
+  })
 })
 
 afterEach(async () => {
   await act(async () => root?.unmount())
   root = null
   container.remove()
+  vi.restoreAllMocks()
 })
 
 describe('DownloadManager and the globe start files', () => {
@@ -120,10 +140,66 @@ describe('DownloadManager and the globe start files', () => {
     await open()
     // Layers tab: tick Coastlines only
     await click(container.querySelector('.dm-item'))
-    expect(container.querySelector('.ready-status')!.textContent).toBe('1 KB ready to download') // 100 B of layer + 1000 B of start files
+    // 100 B of layer + 1000 B of start files + 1000 B of the default source
+    expect(container.querySelector('.ready-status')!.textContent).toBe('2 KB ready to download')
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'layer:coastlines'])
+    expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'source:ancient_nerds:2', 'layer:coastlines'])
+  })
+
+  it('stores the default source with a download that ticks no source, so the offline start finds its sites', async () => {
+    startCached = true
+    await open()
+    await click(container.querySelector('.dm-item')) // Coastlines only
+    expect(container.querySelector('.ready-status')!.textContent).toBe('1 KB ready to download') // 100 B + 1000 B of the source
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual(['source:ancient_nerds:2', 'layer:coastlines'])
+  })
+
+  it('downloads the default source once when it is ticked as well', async () => {
+    startCached = true
+    await open()
+    await click([...container.querySelectorAll('.dm-tab')].find(b => b.textContent!.startsWith('Sources')))
+    await click(container.querySelector('.dm-item')) // Ancient Nerds
+    expect(container.querySelector('.ready-status')!.textContent).toBe('1000 B ready to download')
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual(['source:ancient_nerds:2'])
+  })
+
+  it('offers the default source on its own to a download made before it came with every download', async () => {
+    downloadState = LAYERS_ONLY
+    startCached = true
+    await open()
+    expect(container.querySelector('.ready-status')!.textContent).toBe('Globe start files missing: 1000 B ready to download')
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual(['source:ancient_nerds:2'])
+  })
+
+  it('stops the whole download when the default source cannot be fetched', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    startCached = true
+    sourceResponse = { ok: false, status: 503, body: null }
+    await open()
+    await click(container.querySelector('.dm-item'))
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual([])
+    expect(error).toHaveBeenCalledWith('Download error:', new Error('Failed to download source ancient_nerds: HTTP 503'))
+  })
+
+  it('does not store an answer without sites as the downloaded default source', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    startCached = true
+    sourceResponse = { ok: true, status: 200, body: { detail: 'maintenance' } }
+    await open()
+    await click(container.querySelector('.dm-item'))
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual([])
+    expect(error).toHaveBeenCalledWith('Download error:', new Error('Failed to download source ancient_nerds: the answer has no sites'))
   })
 
   it('offers nothing to download while nothing is ticked and nothing was downloaded', async () => {
@@ -167,7 +243,7 @@ describe('DownloadManager and the globe start files', () => {
     startCached = true // stored in the meantime (another tab)
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['layer:coastlines'])
+    expect(calls).toEqual(['source:ancient_nerds:2', 'layer:coastlines'])
   })
 
   it('has the service worker active before the first file (the sw task may not have run yet)', async () => {
@@ -175,7 +251,7 @@ describe('DownloadManager and the globe start files', () => {
     await click(container.querySelector('.dm-item'))
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['worker', 'globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'layer:coastlines'])
+    expect(calls).toEqual(['worker', 'globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'source:ancient_nerds:2', 'layer:coastlines'])
   })
 
   it('downloads nothing and says why when the service worker cannot be installed', async () => {
@@ -201,6 +277,6 @@ describe('DownloadManager and the globe start files', () => {
     expect(satellite.classList.contains('selected')).toBe(true)
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-    expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'basemap:satellite'])
+    expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'source:ancient_nerds:2', 'basemap:satellite'])
   })
 })
