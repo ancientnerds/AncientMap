@@ -68,11 +68,11 @@ Each file is a GeoJSON `FeatureCollection` whose features are `MultiLineString`s
 |---|---|---|
 | `globe_gate` | `{choice: 'globe'\|'stories'\|'radar'\|'journal'\|'lyra'\|'db'}` | phone-gate buttons |
 | `globe_unsupported` | `{reason: 'no_webgl2'\|'max_texture_size', detail?: string}` | capability check, when the screen shows |
-| `globe_error` | `{phase: string, message: string}` | start failures; background failures use `phase: 'bg:<task>'` |
+| `globe_error` | `{phase: string, message: string}` | start failures (phase = the step); background failures use `phase: 'bg:<task>'`, failures after `globe_ready` use `phase: 'live'` |
 | `globe_abandon` | `{ms: number, phase: 'gate'\|'sites'\|'scene'\|'basemap'\|'labels'\|'coastlines'\|'countryBorders'}` | `pagehide` / `visibilitychange→hidden` before `globe_ready` |
 | `globe_bg` | `{task: BgTaskName, ms: number}` | each finished background task |
 
-`BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'`. At most **one ending** (`globe_gate` with choice ≠ globe, `globe_unsupported`, a start `globe_error`, `globe_abandon`) per load.
+`BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'`. At most **one ending** (`globe_gate` with choice ≠ globe, `globe_unsupported`, a start `globe_error`, `globe_abandon`, `webgl_lost{phase:'loading'}`) per load. `globe_ready` (sent when the loading overlay fades, not when the layers are in) closes the latch.
 
 **C4 — Mapbox load state** `src/services/mapboxLoader.ts`: `export type MapboxLoadState = 'idle' | 'loading' | 'ready' | 'failed'` and `runMapboxLoadTask(deps)` (shape in Task U5.4).
 
