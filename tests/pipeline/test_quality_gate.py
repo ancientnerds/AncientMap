@@ -7,7 +7,12 @@ Five papers stayed held on that stale flag after their audits were repaired.
 
 from __future__ import annotations
 
-from pipeline.lyra.quality_gate import quality_gate_passed, recompute_quality_passed
+from pipeline.lyra.quality_gate import (
+    citation_coverage_score,
+    quality_gate_passed,
+    recompute_quality_passed,
+    reference_integrity_score,
+)
 
 
 def _clean(**over):
@@ -92,3 +97,55 @@ def test_missing_metrics_do_not_pass_by_accident():
     """An empty stored score must not read as a clean one."""
     fresh = {"passed": True, "placeholder_markers": [], "language_bleed": []}
     assert recompute_quality_passed({}, fresh) is False
+
+
+def test_stale_stored_metrics_do_not_hold_a_repaired_paper():
+    """Coverage and integrity are functions of the audit, so they must follow
+    the fresh one. 80c629b4 stayed held with integrity 8 stored from one
+    invalid marker at write time — after the marker was fixed, the stored 8
+    still failed the `== 10` rule, and nothing could ever lift it."""
+    stored = {**_STORED, "metrics": {"citation_coverage": 6, "reference_integrity": 8}}
+    fresh = {
+        "passed": True,
+        "uncited_paragraphs": 0,
+        "invalid_markers": [],
+        "orphaned_refs": [],
+        "placeholder_markers": [],
+        "language_bleed": [],
+    }
+    assert recompute_quality_passed(stored, fresh) is True
+
+
+def test_fresh_uncited_paragraphs_block_despite_clean_stored_metrics():
+    fresh = {
+        "passed": True,
+        "uncited_paragraphs": 3,
+        "invalid_markers": [],
+        "orphaned_refs": [],
+        "placeholder_markers": [],
+        "language_bleed": [],
+    }
+    assert recompute_quality_passed(_STORED, fresh) is False
+
+
+def test_fresh_invalid_marker_blocks_despite_clean_stored_metrics():
+    fresh = {
+        "passed": True,
+        "uncited_paragraphs": 0,
+        "invalid_markers": [42],
+        "orphaned_refs": [],
+        "placeholder_markers": [],
+        "language_bleed": [],
+    }
+    assert recompute_quality_passed(_STORED, fresh) is False
+
+
+def test_metric_formulas_match_the_judge_rubric():
+    """M1: 3 points per uncited paragraph off 15; M2: 2 points per invalid
+    marker or orphaned reference off 10; neither goes below zero."""
+    assert citation_coverage_score({"uncited_paragraphs": 0}) == 15
+    assert citation_coverage_score({"uncited_paragraphs": 2}) == 9
+    assert citation_coverage_score({"uncited_paragraphs": 9}) == 0
+    assert reference_integrity_score({"invalid_markers": [], "orphaned_refs": []}) == 10
+    assert reference_integrity_score({"invalid_markers": [3], "orphaned_refs": [7]}) == 6
+    assert reference_integrity_score({"invalid_markers": list(range(9)), "orphaned_refs": []}) == 0
