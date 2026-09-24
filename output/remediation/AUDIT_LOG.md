@@ -8499,3 +8499,180 @@ $PY $M/tools/write_gate4.py --group P5 --run pilot3-2026-09-24 --rehearse
   question (lane S is not in T8).
 * Pilot 3's ledger lives in its gitignored run directory; keep it with `HOLDS4.jsonl` and the audit
   verdicts in `pilot3_evidence/` when the result is recorded.
+
+## 2026-09-24 - Phase-4 pilot 4, sealed before its first model question (no model called, nothing written)
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`). Pilot 3 failed T1, T4, T7 and T8
+(`output/remediation/phase4_runner/PILOT_RESULT_3.md`, commit `67b4185`; the audit's verdicts are
+`pilot3_evidence/AUDIT_VERDICTS.json`). Under the failure rule of `PILOT_THRESHOLDS.md` the causes were
+fixed first, each with red-first tests and mutation cases, before this draw. The read-only
+measurements are `logs/p4_pilot4/extract_pronoun_corpus.py` (the census pools' 88,936 lane-W/S pool
+sentences of 4,100 sites with a pool, and pilots 1-3's 1,185 published sentences and cards with their
+audit verdicts), `measure_pronoun_rules.py`, `measure_v14_subnational.py` and
+`measure_follow_drops.py` (gitignored); the census run directory and pilot 3's run and handoff
+directories were only read (sha256 of every file, 31,727, identical before and after).
+
+* `a522227` (T1 + T4, one gap) - **the pronoun past the first word.** V6 held a sentence, and V10 a
+  card item, only when the *first* word was one of `model4.PRONOUN_OPENERS`. Stanydale Temple's "Pottery
+  sherds show that it was also occupied ..." and Dolebury Warren's card "Standing on a limestone ridge
+  ..., it was made into a hill fort ..." leaned on an unpublished source sentence past it. **The rule,
+  in one sentence:** a sentence also leans on the sentence before it in its source when its first word
+  of `model4.PERSONAL_PRONOUNS` (it, its, they, their, them, he, his, him, she, her; whole, any case) is
+  one of `SUBJECT_PRONOUNS` (it, they, he, she) and stands right after the sentence's first comma
+  (`, `), or right after the word `that` with no word of `ARTICLES` (the, a, an) before it. V6 holds
+  such a sentence unless its source predecessor is published right before it, as it holds an opener
+  (`verify4.leaning_pronoun`); V10 holds a card item that leans (card scope). Rule (10) states it, rule
+  (4) refers the card to it, and the reviewer gains "DROP a sentence in which it, its, ... - at its
+  start, after a fronted phrase or in a that-clause - refers to something no published sentence
+  before it names, and DROP the card when such a pronoun has no antecedent inside the card: the card
+  is read on its own." **Measured, every candidate** (census: pool sentences it binds beyond the
+  opener rule, those of them whose source predecessor is not in the pool - never publishable -, the
+  sites that keep a possible sentence 1 (names the site, does not lean; 3,806 of the 4,100 today),
+  card-length (80-200) plain sentences it holds beyond the opener rule of 42,401, the sites that keep
+  a whole-sentence card candidate (3,656 today); pilots 1-3: published sentences it would hold - it
+  fires and the source predecessor is not published right before - and cards):
+
+  | candidate | binds | never | sentence 1 | cards held | card sites | pilot sentences (1/2/3) | pilot cards | both cases |
+  |---|---|---|---|---|---|---|---|---|
+  | the opener list only (V6 until now) | 0 | 0 | 3,806 | 0 | 3,656 | 0 | 0 | neither |
+  | any personal pronoun | 15,632 | 2,975 | 3,750 | 8,265 | 3,562 | 68 (20/21/27) | 9 | yes |
+  | any subject pronoun | 8,605 | 1,445 | 3,781 | 4,438 | 3,604 | 40 (12/10/18) | 5 | yes |
+  | the first personal pronoun is a subject form | 7,826 | 1,295 | 3,784 | 4,080 | 3,609 | 36 (11/9/16) | 5 | yes |
+  | a subject pronoun right after the first `,`, or after any "that" | 2,523 | 268 | 3,805 | 1,316 | 3,640 | 13 (2/4/7) | 1 | yes |
+  | the first personal pronoun a subject form, no capitalised word but the first before it | 3,765 | 353 | 3,805 | 2,192 | 3,632 | 14 (6/4/4) | 2 | no: Dolebury's card |
+  | the first personal pronoun a subject form, no article before it | 2,784 | 292 | 3,802 | 1,463 | 3,642 | 7 (2/2/3) | 1 | no: Dolebury's card |
+  | the last, or a subject pronoun right after the first `,` | 3,690 | 386 | 3,802 | 1,960 | 3,634 | 11 (2/3/6) | 2 | yes |
+  | a subject pronoun right after the first `,`, alone | 1,710 | 146 | 3,805 | 922 | 3,643 | 7 (1/2/4) | 1 | no: Stanydale |
+  | the first personal pronoun a subject form right after "that", alone | 652 | 97 | 3,806 | 327 | 3,653 | 2 (0/1/1) | 0 | no: Dolebury |
+  | a subject pronoun right after the first `,`, or the first personal pronoun a subject form right after "that" | 2,361 | 243 | 3,805 | 1,249 | 3,640 | 9 (1/3/5) | 1 | yes |
+  | the first personal pronoun a subject form right after the first `,` or "that" | 2,193 | 234 | 3,805 | 1,151 | 3,642 | 7 (1/2/4) | 1 | yes |
+  | a subject pronoun right after the first `,`, or any after "that" with no article before it | 1,895 | 162 | 3,805 | 1,017 | 3,643 | 9 (1/3/5) | 1 | yes |
+  | the first personal pronoun a subject form right after the first `,`, or any after "that" with no article before it | 1,731 | 153 | 3,805 | 922 | 3,645 | 7 (1/2/4) | 1 | yes |
+  | the first personal pronoun a subject form right after the first `,`, or right after "that" with no article before it | 1,703 | 152 | 3,805 | 905 | 3,645 | 7 (1/2/4) | 1 | yes |
+  | **the chosen rule** (`verify4.leaning_pronoun`): the same, the first comma being the first `, ` | **1,738** | **158** | **3,805** | **915** | **3,645** | **7 (1/2/4)** | **1** | **yes** |
+
+  The chosen rule is the most precise that holds both pilot-3 cases: in pilots 1-3's published texts
+  it holds 7 sentences and 1 card - Stanydale's (UNSUPPORTED, the only one the audit found broken),
+  The Gop's "Oval in form, it is the second-largest Neolithic mound in Britain ..." (a fixed member,
+  in all three pilots), the Altar Stone's "Some believe that it always was recumbent.", Teman's
+  "Outside of the Bible, it was mentioned by Ptolemy ..." and Dolebury Warren's sentence 2, and
+  Dolebury's card - each a pronoun whose antecedent lies outside its sentence, as an opener's does.
+  The literal reading of "the first comma" (a `,` anywhere, so a digit group's) binds 35 fewer, and
+  those 35 are fronted phrases with a thousands comma ("With a population of 824,340, it is the third
+  most-populous city in Spain.", "Estimated to be 300,000 years old, they represent ..."): the comma
+  that ends a fronted phrase is followed by a space. Over a seeded sample of 60 of the 1,738 (seed
+  20260926, read by hand), 46 refer outside their sentence; of the 14 others, 9 are an expletive
+  *it* ("According to the material collected, it is possible that ...") and 5 refer inside it.
+  Selector question `0f64868f...`, reviewer question `3ec5024c...` after this commit.
+* `a59e535` (T7) - **a sentence the article contradicts.** Partiscum (Castra), CANARY-03: the selector
+  picked the lead ("a fort in the Roman province of Dacia", "the most Western fort of Dacia") that the
+  article's own body contradicts and reduces to a presumption; the pool showed W5 "the area was the
+  territory of the Iazyges", W16 "... only testifies to a Roman settlement", W17 "the presumed castle",
+  W40 "the assumed fort" and W49 "the direct road connection from Pannonia via Partiscum to Dacia". The
+  selector gains rule (11), "never pick a sentence that another listed sentence contradicts, or
+  reduces to a presumption, an assumption or a dispute, even when it is the article's lead". **The
+  gap in the reviewer's prompt:** it showed each published sentence, its untrimmed source sentence,
+  the two source sentences before it and its heading - for a lead, nothing before it - so none of
+  those sentences was ever in front of the reviewer and no DROP could see the contradiction. Closed in
+  the prompt builder: `review4.passage` puts the passage the sentences were chosen from before the
+  numbered sentences, as `<source id="PASSAGE">` - the selector's pool for lanes W, S and T (bounded
+  by `sentences.MAX_POOL_CHARS`, 24,000 characters), lane R's pages whole - and the reviewer question
+  says so and gains "DROP a sentence that another sentence of the passage contradicts, or reduces to a
+  presumption, an assumption or a dispute, even when it is the article's lead; ask the same of the
+  card." A general rule: no canary's words are in any code or prompt. Selector `751816c1...`,
+  reviewer `89e6035d...`.
+* `7d05cda` (V14) - **sub-national names.** Lake Mungo, "a dry lake located in New South Wales,
+  Australia", was held as placing the site in Wales. The scan of the census pools for a `NAME_TO_ISO`
+  name directly preceded by a capitalised word or inside a longer proper name found 263 distinct
+  runs; almost all are the country itself ("Upper Egypt", "Historic England", "South Wales", "Western
+  Australia"), a person ("Anatole France", "John Ireland", "Quaritch Wales", "Pescennius Niger") or an
+  organisation. Those whose real country differs from the name inside, each verified, are
+  `country_lookup.SUBNATIONAL_NAME_TO_ISO` (15): New South Wales AU, New Mexico US, New England US
+  (both census sentences are the US region), Central Macedonia, Western Macedonia, Eastern Macedonia
+  and Thrace, Greek Macedonia GR, West Azerbaijan province IR, Upper Jordan Valley IL, Jordan Hill GB
+  (Dorset), Kraku Lu Jordan RS, El Peru GT (El Perú-Waka'), Inner Niger Delta ML, Lapis Niger IT (the
+  Roman Forum), Denmark Fjord GL. Found and left out: New Guinea (PG and ID; the census's six sentences are
+  about a cave in Victoria), Belize River (GT and BZ), Caucasian and Caucasus Albania, British India, Middle
+  Niger (no one country), the bare "West Azerbaijan" (the census also uses it for western
+  Azerbaijan), British Honduras (the colony that is all of Belize, no sub-national place), Little
+  Canada (not verified). "South Wales" stays Wales. `verify4`'s country regex reads both tables,
+  longest first; V14 compares the whole name's code. Over the census pools V14's location holds fall
+  from **74 to 67 sentences (69 to 62 sites)**: Lake Mungo, Jordan Hill Roman Temple, Independence
+  Fjord, Kraku Lu Jordan, El Perú, Paradeisos, Azargoshnasp; Horvat Omrit stays held for "Syria" (the
+  demilitarised zone). V10 still holds a card that carries such a name (no card-length sentence's
+  country verdict changes).
+* `98f276b` (T8) - **the review's drop takes the sentence that leans on it along.**
+  `review4.follow_drops`, after the reviewer's verdict is parsed: a kept sentence that leans on the
+  sentence before it (`sentences.leans_on_predecessor`, the same rule in the review's own code, a
+  parity test over `tests/remediation/p4_pronoun_cases.py`) whose published predecessor is dropped is
+  dropped too, in order, so a chain goes whole; each is recorded in `review4.json` under `followed`
+  (`sentence`, `follows`, reason `leans-on-a-dropped-sentence`), the reviewer's lines stay as written,
+  and the site is judged on what remains (two sentences at least, V1-V15 again, V9 included).
+  Rebuilt read-only from pilot 3's stored selections and answered reviews: **3 of its 63 reviewed
+  sites** have such a drop - Stanydale Temple R6 (the T1 sentence), Mersinaki R4 ("Here the Swedish
+  Expedition found a lot of sculptures"), Diana Fort R4 ("It was built in the Tiberian-Claudian age
+  ...") - and nothing else changes.
+* `5f85ba3` (rule 7) - **the name V6 accepts, stated.** Pilot 3's selectors abstained on "Argos,
+  Peloponnese" and "Clare, Suffolk", never told when the stored name without its disambiguator counts
+  (pilot 2's `name_base`). Rule (7) now reads "... its name, an alias or an also_named name of the site
+  element, all of that name's words in their order with nothing but spaces or punctuation between
+  them (case and accents do not matter); a name written "X (Y)" - ending in one bracket with no
+  bracket inside it - or else "X, Y" - X before the first comma - is named by X alone only when
+  also_named lists X; if no listed sentence names the site so, answer ABSTAIN with that reason;". A
+  test reads the two forms literally and gets `name_base`'s base in verify4's and select_stage's code
+  for 17 names, and shows S3 lists "Argos" in `also_named` exactly where V6 accepts it (a strong 'own'
+  verdict). Selector `a0b422e7...`.
+* `76a5757` - `pilot4.SEED_PILOT4` 20260926.
+
+**The questions this pilot asks:** selector `a0b422e73474f6ba8cd59c7477d49f51c8aabd131f6e3d56742597c2a367ef93`
+(was `85e6e47b...` in pilot 3), reviewer
+`89e6035d1e295764b5a77e904bc24e080ff57d63b8d05ef786cc7f5fc71e7523` (was `59a1714e...`); the answer
+lines and both parsers are unchanged.
+
+**Nothing was written to production; no model and no MiniMax endpoint was called; production was not
+read for this draw** (the census, the export and the routeless read are pilot 1's, digests below).
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \
+        --after PILOT.jsonl --after PILOT2.jsonl --after PILOT3.jsonl --seed 20260926 \
+        --out PILOT4.jsonl
+
+(2026-09-24 11:48:17 UTC.) With this code `build --after PILOT.jsonl --after PILOT2.jsonl --seed
+20260925` still writes pilot 3's `PILOT3.jsonl`, byte for byte (`a4fa2f5f...`, rebuilt to a scratch
+path and compared).
+
+### The pilot set (`PILOT4.jsonl`, 132 sites)
+
+Fixed, 70 sites: **exactly the fixed members of pilots 1, 2 and 3** - `build` refuses any list that is
+not each earlier pilot's fixed lines, site for site and in order; the 70 lines are byte-identical to
+the first 70 of `PILOT.jsonl`. The seeded strata are drawn anew with seed **20260926**, each
+excluding everything placed before it **and all 186 seeded draws of pilots 1, 2 and 3**: 0 sites of
+any earlier draw are in pilot 4.
+
+| stratum | asked | population | eligible | taken |
+|---|---|---|---|---|
+| draw-W (census lane W) | 30 | 3,887 | 3,742 | 30 |
+| draw-S (census lane S) | 8 | 372 | 335 | 8 |
+| draw-T-candidate | 6 | 38 | 20 | 6 |
+| draw-R-candidate | 8 | 252 | 227 | 8 |
+| draw-B3-routeless | 5 | 20 | 5 | 5 |
+| draw-extract-over-40000 | 5 | 65 | 47 | 5 (all lane W) |
+
+No stratum was smaller than asked; **the B3 stratum is now used up** (20 routeless sites, 15 drawn by
+pilots 1-3, the last 5 here): a fifth pilot would find none. The census lanes of the 132: **W 79, S
+17, 0 36**. The T and R strata are again candidates held `search-stopped` (searches off, owner order
+2026-09-23), reported and never guessed into a lane.
+
+### The sealed artefacts
+
+| file | sha256 |
+|---|---|
+| `output/remediation/phase4_runner/PILOT4.jsonl` (new) | `30ab5e9d28b71388f79319b93e945dfd223d5d3edeb9a62e42064844757b2a26` |
+| `output/remediation/phase4_runner/PILOT_THRESHOLDS.md` (pilot 1's, unchanged) | `64ac53341068234c905cff00095a9d7244cd4703353f63bbd0997add63fe0c13` |
+| `output/remediation/phase4_runner/gold_prose_errors.json` (pilot 1's, unchanged) | `e4e63d56cbc9cca0f9cea018967fac40e897faddb9c43ad064e6203a74ebb7df` |
+
+The thresholds are the ones sealed before pilot 1's first question, byte for byte: nothing in them
+was changed or loosened after the data of pilots 1, 2 or 3 was seen (`test_phase4_pilot.py` pins all
+three digests to this section). `PILOT.jsonl` (`7f66f987...`), `PILOT2.jsonl` (`9caaaa03...`) and
+`PILOT3.jsonl` (`a4fa2f5f...`) are byte-identical. The draw's inputs: `PLAN4.census.jsonl`
+`644b9032...d4676b591`, `S0_ROUTELESS.json` `81c3b426...37997746`, `gold_standard/sites.json`
+`18653fc1...b2756`, `qid_repair/PLAN.jsonl` `9d57b431...a6ce4f`.

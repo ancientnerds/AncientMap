@@ -17804,6 +17804,23 @@ P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "tests/remediation/test_phase4_pilot.py",
         "test_pilot_4_keeps_the_fixed_members_and_excludes_all_three_earlier_pilots_draws",
     ),
+    # ── pilot 4's seal ────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: the audit log loses pilot 4's sealed digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`30ab5e9d28b71388f79319b93e945dfd223d5d3edeb9a62e42064844757b2a26`",
+        "`mutant`",
+        "tests/remediation/test_phase4_pilot.py",
+        "test_pilot_4_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+    (
+        "p4 pilot: pilot 4's thresholds are loosened after pilot 3's data",
+        "output/remediation/phase4_runner/PILOT_THRESHOLDS.md",
+        "- T7: 0 of the 25 gold or canary errors recur.",
+        "- T7: at most 1 of the 25 gold or canary errors recurs (mutant).",
+        "tests/remediation/test_phase4_pilot.py",
+        "test_pilot_4_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
 ]
 MUTATIONS += P4_PILOT4_MUTATIONS
 

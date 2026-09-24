@@ -906,3 +906,47 @@ def test_the_sealed_pilot_3_keeps_the_fixed_members_and_none_of_the_earlier_draw
     strata = [stratum for line in third for stratum in line["strata"]]
     for stratum, count in PL.DRAWS:
         assert strata.count(stratum) == count, stratum
+
+
+# ========================================================= pilot 4's seal (2026-09-24, seed 20260926)
+
+#: The audit log's section that sealed pilot 4 before its first model question was exported.
+PILOT4_SECTION = "## 2026-09-24 - Phase-4 pilot 4, sealed before its first model question"
+#: Pilot 4's new draw, and the two documents it keeps from pilot 1, byte for byte.
+SEALED_PILOT4 = {
+    "PILOT4.jsonl": "30ab5e9d28b71388f79319b93e945dfd223d5d3edeb9a62e42064844757b2a26",
+    "PILOT_THRESHOLDS.md": SEALED["PILOT_THRESHOLDS.md"],
+    "gold_prose_errors.json": SEALED["gold_prose_errors.json"],
+}
+
+
+def test_pilot_4_is_sealed_with_pilot_1s_thresholds_byte_for_byte() -> None:
+    """Pilot 3's failures changed code, never the thresholds: pilot 4 runs under the document
+    sealed before pilot 1's first question, byte for byte, and the audit log's pilot-4 section
+    records PILOT4.jsonl's digest beside the two unchanged ones before its first export."""
+    section = _section(AUDIT_LOG.read_text(encoding="utf-8"), PILOT4_SECTION)
+    for name, digest in SEALED_PILOT4.items():
+        assert PL._sha256(RUNNER / name) == digest, name
+        assert f"`{digest}`" in section, f"the pilot-4 section does not record {name}'s sha256"
+
+
+def test_the_sealed_pilot_4_keeps_the_fixed_members_and_none_of_the_earlier_draws() -> None:
+    earlier = [
+        R.read_jsonl(RUNNER / name) for name in ("PILOT.jsonl", "PILOT2.jsonl", "PILOT3.jsonl")
+    ]
+    fourth = R.read_jsonl(RUNNER / "PILOT4.jsonl")
+    fixed, _ = PL.earlier_pilot(earlier[0])
+    drawn_before = {site_id for lines in earlier for site_id in PL.earlier_pilot(lines)[1]}
+    fixed_fourth, drawn_fourth = PL.earlier_pilot(fourth)
+    assert fixed_fourth == fixed and len(fixed) == 70
+    lines = [
+        (RUNNER / name).read_bytes().splitlines(keepends=True)
+        for name in ("PILOT.jsonl", "PILOT4.jsonl")
+    ]
+    assert lines[1][:70] == lines[0][:70]  # the same census: the fixed lines, byte for byte
+    assert len(drawn_before) == 186 and not drawn_before & drawn_fourth and len(drawn_fourth) == 62
+    ids = [line["site_id"] for line in fourth]
+    assert len(ids) == len(set(ids)) == 132
+    strata = [stratum for line in fourth for stratum in line["strata"]]
+    for stratum, count in PL.DRAWS:
+        assert strata.count(stratum) == count, stratum
