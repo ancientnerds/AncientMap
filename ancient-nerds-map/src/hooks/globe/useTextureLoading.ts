@@ -6,7 +6,11 @@
  *   the main thread and uploaded before any render samples it. Its failure is
  *   a start failure (onStartError), never "counted as loaded".
  * - Background (queue tasks, see basemapPlan): the satellite at the start tier
- *   and the gray at the maximum tier, both through the strip upload.
+ *   and the gray at the maximum tier. loadTier strips only from 'med' up, so
+ *   the gray's maximum tier (loaded only above the start tier, hence never
+ *   'low') always goes through the strip upload, while a 'low' satellite start
+ *   tier is uploaded whole in one main-thread task: every DPR-1 window up to
+ *   about 1083 CSS px tall, a 1920x1080 desktop included (getStartTier).
  * - The satellite counts as ready once its texture is on the GPU
  *   (satelliteReady); while it is switched on and a texture of it is on the GPU
  *   (satelliteOnGpu), its maximum tier follows, and switching it off aborts
