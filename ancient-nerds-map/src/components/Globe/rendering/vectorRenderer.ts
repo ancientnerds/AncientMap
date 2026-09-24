@@ -515,23 +515,25 @@ function unlessDeferred(load: Promise<void>): Promise<void> {
  * preloadRiversLakes skips such files): not a task failure, and resumeDeferredGlobeLayers
  * loads it once offline mode is off. One layer's failure does not keep the next one coarse:
  * every key is tried, one after the other, and the task then rejects once with the first
- * failure (one bg:layers report). An abort ends the task at once.
+ * failure (one bg:layers report); every later failure is logged here with its layer, since
+ * the rejection does not carry it. An abort ends the task at once.
  */
 export async function upgradeGlobeLayers(
   ctx: VectorRendererContext,
   signal: AbortSignal,
   keys: readonly GlobeLayerKey[] = GLOBE_LAYER_KEYS,
 ): Promise<void> {
-  const failures: unknown[] = []
+  let firstFailure: { err: unknown } | null = null
   for (const key of keys) {
     try {
       await unlessDeferred(upgradeLayerTier(key, 'detail', ctx, signal))
     } catch (err) {
       if (signal.aborted || ctx.signal.aborted) throw err
-      failures.push(err)
+      if (firstFailure) console.error(`[Vector layers] ${key} detail tier failed to load:`, err)
+      else firstFailure = { err }
     }
   }
-  if (failures.length > 0) throw failures[0]
+  if (firstFailure) throw firstFailure.err
 }
 
 /**

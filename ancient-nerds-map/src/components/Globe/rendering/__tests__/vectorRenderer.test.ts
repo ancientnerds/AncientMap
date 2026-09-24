@@ -571,13 +571,19 @@ describe('upgradeGlobeLayers', () => {
     expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
   })
 
-  it('rejects with the first failure when every layer fails', async () => {
+  it('rejects with the first failure when every layer fails, and logs every later one with its layer', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const { ctx } = makeCtx()
     await startTier('coastlines', ctx)
     await startTier('countryBorders', ctx)
     routes.set(COAST_DETAIL, { status: 503 })
     await expect(upgradeGlobeLayers(ctx, new AbortController().signal)).rejects.toThrow(/HTTP 503/)
     expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
+    // The rejection carries the coastline's 503 (the task's one bg:layers report); the
+    // borders' 404 must not vanish
+    expect(logged).toHaveBeenCalledTimes(1)
+    expect(logged.mock.calls[0][0]).toContain('countryBorders')
+    expect(String(logged.mock.calls[0][1])).toMatch(/HTTP 404/)
   })
 
   it('stops at an abort: no layer after the cancelled one is fetched', async () => {
