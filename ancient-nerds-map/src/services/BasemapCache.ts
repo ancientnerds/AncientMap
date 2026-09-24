@@ -5,7 +5,7 @@
  * offline download (GlobeStartCache); there is no separate 'Labels' item.
  */
 
-import { OfflineStorage } from './OfflineStorage'
+import { OfflineStorage, type DownloadState } from './OfflineStorage'
 import { BASEMAP_CACHE } from '../pwa/cacheNames'
 import { BASEMAP_TIERS, getBasemapAssets, getBasemapTier, tierRank, type BasemapTier } from '../utils/deviceTier'
 
@@ -124,7 +124,7 @@ class BasemapCacheClass {
    * Check if a basemap item is cached (see getCachedItems)
    */
   async isBasemapItemCached(id: BasemapType): Promise<boolean> {
-    return (await this.getCachedItems()).includes(id)
+    return (await this.getCachedItems(await OfflineStorage.getDownloadState())).includes(id)
   }
 
   /**
@@ -134,11 +134,13 @@ class BasemapCacheClass {
    * the Download Manager offers it again (VectorLayerCache.getCachedLayers does
    * the same for the layers). The mark of a 'Labels' download from before the
    * start files names no item any more: labels.json is a start file now.
+   * `state` is the caller's read of the download state (OfflineContext polls
+   * this every 5 s: no second read, and no Cache Storage without a mark).
    */
-  async getCachedItems(): Promise<BasemapType[]> {
-    const state = await OfflineStorage.getDownloadState()
+  async getCachedItems(state: DownloadState): Promise<BasemapType[]> {
     const items = basemapItems()
     const marked = (state.basemapItems || []).filter((id): id is BasemapType => id in items)
+    if (marked.length === 0) return []
     const cache = await caches.open(BASEMAP_CACHE)
     const complete = await Promise.all(marked.map(async id => {
       const hits = await Promise.all(items[id].files.map(file => cache.match(file.url)))
@@ -184,10 +186,6 @@ class BasemapCacheClass {
   // Legacy compatibility methods
   getBasemapOptions() {
     return this.getBasemapItems()
-  }
-
-  async getCachedQualities(): Promise<string[]> {
-    return this.getCachedItems()
   }
 }
 

@@ -115,11 +115,11 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
       // Pre-select already cached items
       setSelectedSources(new Set(Object.keys(state.sources)))
-      const basemaps = await BasemapCache.getCachedItems()
+      const basemaps = await BasemapCache.getCachedItems(state)
       setDownloadedBasemaps(new Set(basemaps))
       setSelectedBasemaps(new Set(basemaps))
       setGlobeStartCached(await isGlobeStartCached())
-      const layers = await VectorLayerCache.getCachedLayers()
+      const layers = await VectorLayerCache.getCachedLayers(state)
       setDownloadedLayers(new Set(layers))
       setSelectedLayers(new Set(layers))
       setSelectedEmpires(new Set(state.empires))
@@ -414,8 +414,8 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       // Refresh state
       const state = await OfflineStorage.getDownloadState()
       setDownloadState(state)
-      setDownloadedLayers(new Set(await VectorLayerCache.getCachedLayers()))
-      setDownloadedBasemaps(new Set(await BasemapCache.getCachedItems()))
+      setDownloadedLayers(new Set(await VectorLayerCache.getCachedLayers(state)))
+      setDownloadedBasemaps(new Set(await BasemapCache.getCachedItems(state)))
       setGlobeStartCached(await isGlobeStartCached())
 
       const estimate = await OfflineStorage.getStorageEstimate()

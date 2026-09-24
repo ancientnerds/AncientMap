@@ -4,7 +4,7 @@
  */
 
 import { OfflineFetch } from './OfflineFetch'
-import { OfflineStorage } from './OfflineStorage'
+import { OfflineStorage, type DownloadState } from './OfflineStorage'
 import { LAYER_CONFIG, getLayerFiles, type VectorLayerKey } from '../config/vectorLayers'
 import { VECTOR_LAYER_CACHE } from '../pwa/cacheNames'
 
@@ -149,10 +149,10 @@ class VectorLayerCacheClass {
    * every file of getLayerFiles in the cache where offline mode reads it (OfflineFetch, exact
    * URL). A download from before the coastline/border tiers holds coast_hires only, so it is
    * not complete and the Download Manager offers the download again. Paleoshorelines are no
-   * globe layer files; they keep their download mark.
+   * globe layer files; they keep their download mark. `state` is the caller's read of the
+   * download state (OfflineContext polls this every 5 s: no second read).
    */
-  async getCachedLayers(): Promise<string[]> {
-    const state = await OfflineStorage.getDownloadState()
+  async getCachedLayers(state: DownloadState): Promise<string[]> {
     const marked = state.layers || []
     const complete = await Promise.all(marked.map(async id => {
       if (!isVectorLayerKey(id)) return id === 'paleoshorelines'

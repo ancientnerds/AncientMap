@@ -84,25 +84,25 @@ describe('VectorLayerCache', () => {
     cacheFiles(['/data/layers/coast_hires.geojson'])
     cacheFiles(getLayerFiles('countryBorders'))
     cacheFiles(getLayerFiles('rivers').slice(1))
-    expect(await VectorLayerCache.getCachedLayers()).toEqual(['countryBorders'])
+    expect(await VectorLayerCache.getCachedLayers(await OfflineStorage.getDownloadState())).toEqual(['countryBorders'])
   })
 
   it('counts a completed download of this build as downloaded', async () => {
     markDownloaded([])
     await VectorLayerCache.downloadLayer('coastlines')
     markDownloaded(['coastlines'])
-    expect(await VectorLayerCache.getCachedLayers()).toEqual(['coastlines'])
+    expect(await VectorLayerCache.getCachedLayers(await OfflineStorage.getDownloadState())).toEqual(['coastlines'])
   })
 
   it('does not count files the service worker cached without a download', async () => {
     markDownloaded([])
     cacheFiles(getLayerFiles('countryBorders'))
-    expect(await VectorLayerCache.getCachedLayers()).toEqual([])
+    expect(await VectorLayerCache.getCachedLayers(await OfflineStorage.getDownloadState())).toEqual([])
   })
 
   it('keeps the download mark of the paleoshorelines, which are not globe layer files', async () => {
     markDownloaded(['paleoshorelines'])
-    expect(await VectorLayerCache.getCachedLayers()).toEqual(['paleoshorelines'])
+    expect(await VectorLayerCache.getCachedLayers(await OfflineStorage.getDownloadState())).toEqual(['paleoshorelines'])
   })
 
   it('does not mark a layer downloaded when a file failed', async () => {

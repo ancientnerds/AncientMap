@@ -53,10 +53,17 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
   // Derived: whether Mapbox tiles (satellite basemap) are cached for offline use
   const hasMapboxTilesCached = cachedBasemapItems.has('satellite')
 
-  // Function to refresh cache state from OfflineStorage
+  // Function to refresh cache state from OfflineStorage. Every 5 s for the whole
+  // session, and App and Globe consume it: one read of the download state, and
+  // every setter after the last await, so React commits once per tick.
   const refreshCacheState = useCallback(async () => {
     try {
       const state = await OfflineStorage.getDownloadState()
+      // Basemap items (satellite) and layers: only downloads whose every file is in the cache
+      const [basemapItems, layerIds] = await Promise.all([
+        BasemapCache.getCachedItems(state),
+        VectorLayerCache.getCachedLayers(state),
+      ])
 
       // Extract cached source IDs
       const sourceIds = new Set<string>(
@@ -72,11 +79,8 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       // Extract cached basemap qualities
       setCachedBasemapQualities(new Set(state.basemapQualities || []))
 
-      // Cached basemap items (satellite): only downloads whose every file is in the cache
-      setCachedBasemapItems(new Set(await BasemapCache.getCachedItems()))
-
-      // Cached layer IDs: only downloads whose every file is in the cache
-      setCachedLayerIds(new Set(await VectorLayerCache.getCachedLayers()))
+      setCachedBasemapItems(new Set(basemapItems))
+      setCachedLayerIds(new Set(layerIds))
     } catch (e) {
       // OfflineStorage not available - leave empty sets
     }

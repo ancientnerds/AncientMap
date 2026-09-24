@@ -89,7 +89,7 @@ describe('BasemapCache.getCachedItems', () => {
     // A 'Satellite' download from before the tiers: satellite_high.webp only
     markDownloaded(['satellite'])
     stored.set('/data/basemaps/satellite_high.webp', 'basemaps')
-    expect(await BasemapCache.getCachedItems()).toEqual([])
+    expect(await BasemapCache.getCachedItems(await OfflineStorage.getDownloadState())).toEqual([])
     expect(await BasemapCache.isBasemapItemCached('satellite')).toBe(false)
   })
 
@@ -98,7 +98,7 @@ describe('BasemapCache.getCachedItems', () => {
     markDownloaded(['labels', 'satellite'])
     stored.set('/data/labels.json', 'basemaps')
     for (const file of BasemapCache.getBasemapItemInfo('satellite').files) stored.set(file.url, 'basemaps')
-    expect(await BasemapCache.getCachedItems()).toEqual(['satellite'])
+    expect(await BasemapCache.getCachedItems(await OfflineStorage.getDownloadState())).toEqual(['satellite'])
   })
 
   it('counts a completed download of this build as downloaded', async () => {
@@ -106,7 +106,15 @@ describe('BasemapCache.getCachedItems', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(url)))
     await BasemapCache.downloadBasemapItem('satellite')
     markDownloaded(['satellite'])
-    expect(await BasemapCache.getCachedItems()).toEqual(['satellite'])
+    expect(await BasemapCache.getCachedItems(await OfflineStorage.getDownloadState())).toEqual(['satellite'])
+  })
+
+  it('opens no cache for a visitor who never downloaded an item (the 5 s poll of every visitor)', async () => {
+    env(DESKTOP)
+    const open = vi.fn()
+    vi.stubGlobal('caches', { open })
+    expect(await BasemapCache.getCachedItems({ basemapItems: [] } as never)).toEqual([])
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('does not count files the service worker cached without a download', async () => {
@@ -114,6 +122,6 @@ describe('BasemapCache.getCachedItems', () => {
     markDownloaded([])
     stored.set('/data/basemaps/satellite_low.webp', 'basemaps')
     stored.set('/data/basemaps/satellite_med.webp', 'basemaps')
-    expect(await BasemapCache.getCachedItems()).toEqual([])
+    expect(await BasemapCache.getCachedItems(await OfflineStorage.getDownloadState())).toEqual([])
   })
 })
