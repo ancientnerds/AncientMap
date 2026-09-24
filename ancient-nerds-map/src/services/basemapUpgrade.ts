@@ -443,6 +443,11 @@ export function loadSatellite(ctx: BasemapContext, tier: BasemapTier, signal: Ab
  * the loop synchronously), so everything is put right here, while the context
  * is lost: pure JS, no GL call. Running loads are aborted and handed over;
  * both basemaps are dropped until the restore loads them again.
+ *
+ * The satellite stays ready (onSatelliteReady is not called): the active
+ * satellite also drives Mapbox's style and the dot colours, which do not
+ * depend on this canvas, and nothing renders here while the context is lost.
+ * Only a failed reload after the restore ends it (useTextureLoading).
  */
 export function releaseOnContextLost(ctx: BasemapContext): void {
   const reason = new Error('basemap: WebGL context lost')
@@ -454,7 +459,6 @@ export function releaseOnContextLost(ctx: BasemapContext): void {
   swapUniform(ctx.materials, 'uSatellite', null)
   ctx.satellite.tier = null
   ctx.satellite.texture = null
-  ctx.onSatelliteReady(false)
 }
 
 /**

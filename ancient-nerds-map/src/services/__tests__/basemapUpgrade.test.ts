@@ -820,7 +820,8 @@ describe('releaseOnContextLost', () => {
     expect(ctx.gray.texture).toBe(null)
     expect(ctx.satellite.tier).toBe(null)
     expect(ctx.satellite.texture).toBe(null)
-    expect(ctx.onSatelliteReady).toHaveBeenLastCalledWith(false)
+    // the active satellite also drives Mapbox and the dot colours: a loss of this canvas leaves it on
+    expect(ctx.onSatelliteReady).not.toHaveBeenCalledWith(false)
   })
 
   it('aborts running uploads and hands them over (no failure)', async () => {

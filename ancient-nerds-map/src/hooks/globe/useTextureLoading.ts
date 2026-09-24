@@ -12,7 +12,8 @@
  *   aborts that upload.
  * - A WebGL context loss drops both basemaps (every bitmap is closed once it is
  *   on the GPU); the restore loads the start tier again, then what had been
- *   loaded on top of it.
+ *   loaded on top of it. The satellite stays active through the loss (Mapbox
+ *   and the dot colours follow it, not this canvas); a failed reload ends it.
  * - Low FPS warning delay.
  */
 
@@ -108,17 +109,20 @@ export function useTextureLoading({
   }, [])
 
   /**
-   * The satellite at the start tier; a failure ends the toggle's wait, the caller
-   * reports it. That includes the background queue stopping the task at its
-   * deadline (an abort); only an unmount, which takes the scene along, leaves
-   * nobody waiting.
+   * The satellite at the start tier; a failure ends the toggle's wait (and a
+   * satellite a context restore could not bring back), the caller reports it.
+   * That includes the background queue stopping the task at its deadline (an
+   * abort); only an unmount, which takes the scene along, leaves nobody waiting.
    */
   const loadSatellite = useCallback(async (signal: AbortSignal): Promise<void> => {
     const ctx = sceneContext()
     try {
       await loadSatelliteTier(ctx, ctx.tiers.start, signal)
     } catch (err) {
-      if (ctxRef.current === ctx) onSatelliteFailedRef.current()
+      if (ctxRef.current === ctx) {
+        setSatelliteReady(false)
+        onSatelliteFailedRef.current()
+      }
       throw err
     }
   }, [sceneContext])
@@ -189,7 +193,15 @@ export function useTextureLoading({
     const onRestored = () => {
       const redo = reloadAfterContextRestored(ctx)
       if (redo.gray) runOwn('basemap', signal => restoreGray(ctx, signal))
-      if (redo.satellite) runOwn('satellite', loadSatellite)
+      // The satellite stayed ready through the loss, so the max-tier effect below
+      // does not run again: the restore brings back the highest tier asked for too.
+      if (redo.satellite) {
+        runOwn('satellite', async signal => {
+          await loadSatellite(signal)
+          const wanted = ctx.satellite.wanted
+          if (wanted !== null && tierRank(wanted) > tierRank(ctx.tiers.start)) await loadSatelliteTier(ctx, wanted, signal)
+        })
+      }
     }
     canvas.addEventListener('webglcontextlost', onLost)
     canvas.addEventListener('webglcontextrestored', onRestored)

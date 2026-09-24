@@ -375,7 +375,6 @@ describe('useTextureLoading', () => {
     await act(async () => { loseContext() })
     expect(materials()[0].uniforms.uGrayBasemap.value).toBe(null)
     expect(materials()[0].uniforms.uSatellite.value).toBe(null)
-    expect(latest.satelliteReady).toBe(false)
     await act(async () => { restoreContext() })
     await settle()
     // the start tier is back while the maximum tier still decodes
@@ -389,6 +388,50 @@ describe('useTextureLoading', () => {
     expect(latest.satelliteReady).toBe(true)
     expect((materials()[0].uniforms.uGrayBasemap.value.image as { width: number }).width).toBe(16383)
     expect(trackBackgroundFailure).not.toHaveBeenCalled()
+  })
+
+  // The active satellite drives Mapbox's style and the dot colours, neither of
+  // which depends on this canvas: a Three.js context loss must not switch the
+  // visitor's satellite view to dark and back.
+  it('keeps the satellite active across a context loss and brings back the tier it had', async () => {
+    const { refs, materials, loseContext, restoreContext } = makeRefs()
+    const p = props(refs)
+    await render(p)
+    await settle()
+    await act(async () => { latest.requestSatellite() })
+    await render({ ...p, satelliteRequested: true })
+    await settle()
+    expect(fetched.filter(u => u === SAT_HIGH)).toHaveLength(1)
+    await act(async () => { loseContext() })
+    expect(materials()[0].uniforms.uSatellite.value).toBe(null)
+    expect(latest.satelliteReady).toBe(true)
+    await act(async () => { restoreContext() })
+    await settle()
+    expect(latest.satelliteReady).toBe(true)
+    expect(fetched.filter(u => u === SAT_LOW)).toHaveLength(2)
+    expect(fetched.filter(u => u === SAT_HIGH)).toHaveLength(2)
+    expect((materials()[0].uniforms.uSatellite.value.image as { width: number }).width).toBe(16383)
+    expect(p.onSatelliteFailed).not.toHaveBeenCalled()
+    expect(trackBackgroundFailure).not.toHaveBeenCalled()
+  })
+
+  it("switches the satellite off when the restore cannot load it again", async () => {
+    const { refs, materials, loseContext, restoreContext } = makeRefs()
+    const p = props(refs)
+    await render(p)
+    await settle()
+    await act(async () => { latest.requestSatellite() })
+    await render({ ...p, satelliteRequested: true })
+    await settle()
+    await act(async () => { loseContext() })
+    failing.add(SAT_LOW)
+    await act(async () => { restoreContext() })
+    await settle()
+    expect(latest.satelliteReady).toBe(false)
+    expect(p.onSatelliteFailed).toHaveBeenCalledTimes(1)
+    expect(trackBackgroundFailure).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(trackBackgroundFailure).mock.calls[0][0]).toBe('satellite')
+    expect(materials()[0].uniforms.uSatellite.value).toBe(null)
   })
 
   it('never lets the first render after a restore sample a texture that cannot come back', async () => {
