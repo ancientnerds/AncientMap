@@ -513,6 +513,27 @@ def test_the_reviewer_ceiling_counts_this_pass_and_really_stops_the_queue() -> N
     assert not_reached == todo[3:]
 
 
+def test_a_reviewer_pass_is_one_half_of_an_opus_handoff_round(tmp_path: Path) -> None:
+    """The reviewer has no transport of its own: a pass exports its questions or imports answers,
+    and the argv it sends is one the real `run.py judge` takes (owner order 2026-09-23)."""
+    from phase3 import run as R
+
+    parser = review_all.build_parser()
+    with pytest.raises(SystemExit, match="only through the Opus handoff"):
+        review_all.handoff_flag(parser.parse_args([]))
+    for mode in ("export", "import"):
+        args = parser.parse_args([f"--handoff-{mode}", str(tmp_path / "handoff")])
+        argv = review_all.judge_argv(
+            "gap-0001",
+            run_dir=tmp_path,
+            ledger=tmp_path / "L",
+            handoff=review_all.handoff_flag(args),
+        )
+        parsed = R.build_parser().parse_args(argv[2:])
+        assert parsed.stage == "reviewer"
+        assert getattr(parsed, f"handoff_{mode}") == str(tmp_path / "handoff")
+
+
 # ── the dry planner ──────────────────────────────────────────────────────────────────────────────
 
 

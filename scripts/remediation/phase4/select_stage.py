@@ -1,4 +1,4 @@
-"""S3 SELECT: one Pi call per site, whose answer names sentence ids and span ids, and nothing else.
+"""S3 SELECT: one call per site (an Opus answer), naming sentence ids and span ids and nothing else.
 
 Source: entry [6] of `output/remediation/logs/design_texts_images_2026-09-22.json`, pipeline "S3
 SELECT" and writer "PROMPT CONTRACT"/"OUTPUT". Work item WB-B2.

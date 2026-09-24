@@ -1,9 +1,9 @@
 """The vision stage of the gallery audit: frozen prompts, the ledger, the current tiers, the label
 sets and the sealed rule table (`scripts/remediation/gallery_audit/{vision,worklist,labels,decide}.py`).
 
-Offline: the gateway is a fake that refuses what the real one refuses (a body that is not a JPEG,
-a prompt that is not text), the images are real files written here, and the tiers run through
-T10's own functions. Tests that need the gitignored snapshot or label file skip with a reason.
+Offline: the answers are Opus-handoff answer files the tests write (owner order 2026-09-23; no
+model is called), the images are real files written here, and the tiers run through T10's own
+functions. Tests that need the gitignored snapshot or label file skip with a reason.
 """
 
 from __future__ import annotations
@@ -18,16 +18,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import httpx
 import pytest
 from PIL import Image
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+import opus_handoff as OH  # noqa: E402
 from gallery_audit import decide, labels, liveness, planned, vision, worklist  # noqa: E402
 
-from pipeline.video.shorts_select import VLM_PROMPT  # noqa: E402
+from pipeline.video.shorts_select import VLM_PROMPT, vlm_bytes  # noqa: E402
 
 SNAPSHOT = REPO / "output" / "remediation" / "snapshot"
 CACHE = REPO / "output" / "remediation" / "cache"
@@ -196,103 +196,155 @@ def _image_tree(root: Path, *names: str) -> Path:
     return root
 
 
-class FakeGateway:
-    """`ask_once`'s contract: text prompt, a session, a JPEG body; answers as scripted."""
-
-    def __init__(self, *answers: Any) -> None:
-        self.answers = list(answers)
-        self.prompts: list[str] = []
-
-    def __call__(self, client: Any, session: str, prompt: str, jpeg: bytes) -> dict[str, Any]:
-        if not isinstance(prompt, str) or not prompt or not isinstance(session, str) or not session:
-            raise AssertionError(
-                "the gateway refuses a request without a text prompt and a session"
-            )
-        if not jpeg.startswith(b"\xff\xd8\xff"):
-            raise AssertionError("the gateway refuses an image that is not a JPEG")
-        self.prompts.append(prompt)
-        answer = self.answers.pop(0)
-        if isinstance(answer, BaseException):
-            raise answer
-        return answer
-
-
-def _answer(content: str, status: int = 200) -> dict[str, Any]:
-    return {
-        "http_status": status,
-        "latency_ms": 1200,
-        "raw_response": content,
-        "finish_reason": "stop",
-        "body_text": content,
-        "usage": {"prompt_tokens": 1000, "completion_tokens": 2000},
-    }
-
-
 GOOD = json.dumps(
     {"kind": "site_photo", "other_site": False, "other_place": "", "subject": "temple front"}
 )
 
 
-def _judge(tmp_path: Path, gateway: FakeGateway, sleeps: list[float] | None = None) -> vision.Judge:
+def _images(tmp_path: Path) -> vision.Images:
     main = _image_tree(tmp_path / "wiki", "Temple.webp")
     collisions = _image_tree(tmp_path / "collisions", "Gate.webp")
+    return vision.Images((main, collisions))
+
+
+def _answered(tmp_path: Path, job: vision.Job, text: str) -> Path:
+    """Export the job through the stage's own export and answer it as an Opus agent would."""
+    handoff = tmp_path / "handoff"
+    ledger = vision.Ledger(tmp_path / "unused" / "VERDICTS.jsonl")
+    counts, missing = vision.export_jobs([job], ledger, _images(tmp_path), handoff, dry_run=False)
+    assert missing == [] and counts["exported"] + counts["already"] == 1
+    OH.write_answer(
+        handoff,
+        batch_id=job.stage,
+        stage=vision.HANDOFF_STAGE,
+        label=vision.job_label(job),
+        text=text,
+        answered_by="test-agent",
+        now=lambda: "2026-09-23T12:00:00+00:00",
+    )
+    return handoff
+
+
+def _judge(tmp_path: Path) -> vision.Judge:
     return vision.Judge(
-        transport=gateway,
-        client=None,
-        session="session-1",
-        images=vision.Images((main, collisions)),
-        sleep=(sleeps.append if sleeps is not None else (lambda s: None)),
+        handoff=tmp_path / "handoff",
+        images=_images(tmp_path),
         now=lambda: "2026-09-23T10:00:00Z",
     )
 
 
-def test_a_verdict_line_records_the_bytes_the_prompt_and_the_cost(tmp_path: Path) -> None:
-    gateway = FakeGateway(_answer(GOOD))
-    line = _judge(tmp_path, gateway)(_job())
+def test_a_verdict_line_records_the_bytes_the_prompt_and_the_opus_answer(tmp_path: Path) -> None:
+    _answered(tmp_path, _job(), GOOD)
+    line = _judge(tmp_path)(_job())
     assert line["status"] == "ok" and line["verdict"]["kind"] == "site_photo"
     data = (tmp_path / "wiki" / SHARD / "Temple.webp").read_bytes()
     assert line["image_sha256"] == hashlib.sha256(data).hexdigest()
     assert line["image_file"] == f"{SHARD}/Temple.webp"
-    assert line["prompt"] == gateway.prompts[0] == vision.prompt_for(_job())
-    assert line["prompt_sha256"] == GALLERY_SHA and line["model"] == "deepseek-v4-flash-vision-exp"
-    assert line["cost_usd"] == pytest.approx((1000 * 0.15 + 2000 * 0.60) / 1e6)
-    assert line["attempts"] == 1 and line["session_id"] == "session-1"
+    assert line["prompt"] == vision.prompt_for(_job())
+    assert line["prompt_sha256"] == GALLERY_SHA
+    assert line["model"] == "anthropic/claude-opus-5-5 (Claude Code agent)"
+    assert (line["metering"], line["cost_usd"]) == ("unmetered", 0.0)
+    assert line["raw_response"] == GOOD and line["answered_by"] == "test-agent"
 
 
 def test_the_case_collision_tree_is_searched_by_exact_name(tmp_path: Path) -> None:
-    judge = _judge(tmp_path, FakeGateway(_answer(GOOD)))
+    _answered(tmp_path, _job(filename="Gate.webp"), GOOD)
+    judge = _judge(tmp_path)
     assert judge(_job(filename="Gate.webp"))["image_file"] == f"{SHARD}/Gate.webp"
     missing = judge(_job(filename="gate.webp"))  # a case-insensitive probe would accept this
     assert missing["status"] == "failed" and missing["error"].startswith("image: no offsite file")
 
 
-def test_no_parseable_verdict_after_three_attempts_is_a_failure_never_other(tmp_path: Path) -> None:
-    sleeps: list[float] = []
-    gateway = FakeGateway(
-        _answer("I think it is a temple"), _answer('{"kind": "ruin"}'), _answer("", 500)
-    )
-    line = _judge(tmp_path, gateway, sleeps)(_job())
-    assert line["status"] == "failed" and line["verdict"] is None and line["attempts"] == 3
-    assert "other" not in json.dumps(line["verdict"]) and line["error"].startswith("http 500")
-    assert sleeps == [8.0, 8.0]
-    assert line["cost_usd"] == pytest.approx(3 * (1000 * 0.15 + 2000 * 0.60) / 1e6)
+@pytest.mark.parametrize(
+    "answer",
+    ["I think it is a temple", '{"kind": "ruin"}', "", '{"kind": "other", "other_site": "no"}'],
+)
+def test_an_answer_that_is_no_in_vocabulary_verdict_is_a_failed_line_never_other(
+    tmp_path: Path, answer: str
+) -> None:
+    handoff = tmp_path / "handoff"
+    if answer:
+        _answered(tmp_path, _job(), answer)
+        line = _judge(tmp_path)(_job())
+        assert line["status"] == "failed" and line["verdict"] is None
+        assert "other" not in json.dumps(line["verdict"]) and line["error"]
+        assert line["raw_response"] == answer  # the answer is kept, never re-asked
+    else:  # an empty answer is no answer at all: the helper refuses to write it
+        vision.export_jobs(
+            [_job()], vision.Ledger(tmp_path / "x"), _images(tmp_path), handoff, dry_run=False
+        )
+        with pytest.raises(OH.HandoffError, match="the text is empty"):
+            OH.write_answer(
+                handoff,
+                batch_id="G3",
+                stage=vision.HANDOFF_STAGE,
+                label=vision.job_label(_job()),
+                text=answer,
+                answered_by="test-agent",
+            )
 
 
-def test_a_transport_failure_is_retried_and_a_later_verdict_counts(tmp_path: Path) -> None:
-    gateway = FakeGateway(httpx.ConnectError("reset"), _answer(GOOD))
-    line = _judge(tmp_path, gateway)(_job())
-    assert line["status"] == "ok" and line["attempts"] == 2
-    assert line["attempts_detail"][0]["transport_error"].startswith("ConnectError")
+def test_an_answer_about_other_bytes_than_todays_jpeg_is_a_failed_line(tmp_path: Path) -> None:
+    """The answer was given about the exported JPEG: an image replaced since is not what it judged."""
+    handoff = _answered(tmp_path, _job(), GOOD)
+    (handoff / "images" / "1.jpg").write_bytes(b"\xff\xd8\xff another picture")
+    line = _judge(tmp_path)(_job())
+    assert line["status"] == "failed" and "is not today's JPEG" in line["error"]
 
 
 def test_an_image_that_cannot_be_read_is_a_failed_line_and_costs_no_call(tmp_path: Path) -> None:
-    gateway = FakeGateway()
-    judge = _judge(tmp_path, gateway)
+    judge = _judge(tmp_path)
     (tmp_path / "wiki" / SHARD / "Broken.webp").write_bytes(b"not an image")
     judge.images = vision.Images((tmp_path / "wiki",))
-    line = judge(_job(filename="Broken.webp"))
+    line = judge(_job(filename="Broken.webp"))  # no answer exists: none is read
     assert line["status"] == "failed" and "cannot be read as an image" in line["error"]
-    assert gateway.prompts == []
+
+
+def test_the_export_hands_off_the_exact_jpeg_the_pilot_sent_and_the_import_writes_the_verdicts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _image_tree(tmp_path / "wiki", "Temple.webp")
+    real = vision.Images
+    monkeypatch.setattr(vision, "Images", lambda: real((root,)))
+    jobs = tmp_path / "JOBS.jsonl"
+    handoff = tmp_path / "handoff"
+    vision.write_jobs(jobs, [_job(1), _job(1, pass_=vision.HERO)])
+    base = ["--jobs", str(jobs), "--run-dir", str(tmp_path / "run"), "--handoff", str(handoff)]
+
+    assert vision.main(["import", *base]) == vision.EXIT_INPUT  # nothing handed off yet
+    assert not (tmp_path / "run" / "VERDICTS.jsonl").exists()
+    assert vision.main(["export", *base]) == vision.EXIT_OK
+    jpeg = vlm_bytes(root / SHARD / "Temple.webp")
+    assert (handoff / "images" / "1.jpg").read_bytes() == jpeg  # RGB, 1280, q85: the pilot's
+    lines = OH.manifest(handoff)
+    assert [(line["label"], line["field"]) for line in lines] == [
+        ("1/gallery-v1", "gallery"),
+        ("1/hero-v1", "hero"),
+    ]
+    assert (handoff / lines[1]["prompt_path"]).read_text(encoding="utf-8") == vision.prompt_for(
+        _job(1, pass_=vision.HERO)
+    )
+    answers = {
+        "gallery": GOOD,
+        "hero": '```json\n{"shows_archaeology": true, "structure": "temple", '
+        '"generic_landscape": false}\n```',
+    }
+    for line in lines:
+        OH.write_answer(
+            handoff,
+            batch_id=line["batch_id"],
+            stage=line["stage"],
+            label=line["label"],
+            text=answers[line["field"]],
+            answered_by="test-agent",
+        )
+    assert OH.validate(handoff).ok
+    assert vision.main(["import", *base]) == vision.EXIT_OK
+    ledger = vision.Ledger(tmp_path / "run" / "VERDICTS.jsonl")
+    assert [e.line["status"] for e in ledger.lines] == ["ok", "ok"]
+    assert set(vision.verdicts_by_image(ledger.lines, vision.HERO_PROMPT_ID)) == {1}
+    assert vision.main(["export", *base]) == vision.EXIT_OK  # nothing left to hand off
+    assert "2 already in the ledger, 0 handed off" in capsys.readouterr().out.splitlines()[-1]
 
 
 # ======================================================================= ledger and run
@@ -401,23 +453,13 @@ def test_a_verdict_counts_only_under_the_frozen_prompt_and_the_pilot_model() -> 
     other_prompt = [vision.LedgerLine("x", {**_ok_line(3), "prompt_sha256": "0" * 64})]
     with pytest.raises(vision.VisionError, match="another gallery-v1"):
         vision.verdicts_by_image(other_prompt, vision.GALLERY_PROMPT_ID)
-    other_model = [vision.LedgerLine("y", {**_ok_line(3), "model": "another-vision-model"})]
+    # The pilot's transport answered the calibration before the owner order; those count no more.
+    other_model = [vision.LedgerLine("y", {**_ok_line(3), "model": "deepseek-v4-flash-vision-exp"})]
     with pytest.raises(vision.VisionError, match="answered by"):
         vision.verdicts_by_image(other_model, vision.GALLERY_PROMPT_ID)
     twice = [vision.LedgerLine("a", _ok_line(4)), vision.LedgerLine("b", _ok_line(4))]
     with pytest.raises(vision.VisionError, match="two ok verdicts"):
         vision.verdicts_by_image(twice, vision.GALLERY_PROMPT_ID)
-
-
-def test_more_than_four_workers_need_a_clean_ramp_probe() -> None:
-    clean = [vision.LedgerLine(str(i), _ok_line(i)) for i in range(500)]
-    assert vision.ramp_allows([], 4)[0]
-    assert not vision.ramp_allows(clean[:499], 8)[0]
-    assert vision.ramp_allows(clean, 8)[0]
-    dirty = [*clean[:499], vision.LedgerLine("f", {**_ok_line(1), "status": "failed"})]
-    assert not vision.ramp_allows(dirty, 8)[0]
-    slow = [vision.LedgerLine(str(i), {**_ok_line(i), "latency_ms": 45_000}) for i in range(500)]
-    assert not vision.ramp_allows(slow, 8)[0]
 
 
 # ======================================================================= worklist
@@ -1374,7 +1416,8 @@ def test_the_dry_run_exits_3_when_an_image_is_missing(
     real = vision.Images
     monkeypatch.setattr(vision, "Images", lambda: real((root,)))
     jobs = tmp_path / "JOBS.jsonl"
-    argv = ["run", "--jobs", str(jobs), "--run-dir", str(tmp_path / "run"), "--dry-run"]
+    argv = ["export", "--jobs", str(jobs), "--run-dir", str(tmp_path / "run")]
+    argv += ["--handoff", str(tmp_path / "handoff"), "--dry-run"]
     vision.write_jobs(jobs, [_job(1)])
     assert vision.main(argv) == vision.EXIT_OK
     vision.write_jobs(jobs, [_job(1), _job(2, filename="Missing.webp")])

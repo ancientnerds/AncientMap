@@ -267,7 +267,10 @@ def test_site_detail_hands_the_disclosure_of_the_description_it_serves():
     row.description_provenance = {
         "lane": "W",
         "ai": "selected",
-        "ai_system": "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)",
+        "ai_system": (
+            "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+            "an-sites-remediation-2026-09"
+        ),
         "licence": "CC BY-SA 4.0",
         "attribution": {
             "title": "Borremose",

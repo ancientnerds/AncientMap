@@ -7,10 +7,11 @@ Source: entry [6] of `output/remediation/logs/design_texts_images_2026-09-22.jso
     run4.py prepare   --batch-id p4-0001          copy the batch's plan line to its input.json
     run4.py sources   --batch-id p4-0001 --live   S1  `sources_stage.sources_batch` (Track A)
     run4.py routes    --batch-id p4-0001 --live   S1b `route_stage.routes_batch` (Track A)
-    run4.py select    --batch-id p4-0001 --live   S3, S3T, S3R (this track)
+    run4.py select    --batch-id p4-0001 --handoff-export|--handoff-import DIR   S3, S3R
+    run4.py translate --batch-id p4-0001 --handoff-export|--handoff-import DIR   S3T
     run4.py assemble  --batch-id p4-0001          S4 (this track)
     run4.py verify    --batch-id p4-0001          S5  `verify4.verify_batch` (Track C)
-    run4.py review    --batch-id p4-0001 --live   S6 (this track), re-verifying through verify4
+    run4.py review    --batch-id p4-0001 --handoff-export|--handoff-import DIR   S6, re-verifying
     run4.py writeplan ...                         S7, forwarded to `write4.main` (Track D)
     run4.py holds                                 HOLDS4.jsonl: every batch's holds, once each
 
@@ -19,9 +20,20 @@ prints one JSON report (`indent=1`, so `mass_run.report_error` can read its top-
 then `STAGE_EXIT=<n>`, and exits with `n`. The line is what the mass driver reads. A command that
 dies before printing it has not finished, whatever its exit code says.
 
-Nothing is bought without `--live`: `sources`, `routes`, `select` and `review` then only say what
-they would do. The other tracks' modules are imported when their command runs (`importlib`), so
-this driver loads without them; a missing one fails loudly at that command.
+Nothing is bought without `--live`: `sources` and `routes` then only say what they would do.
+
+**The model calls are answered through the Opus handoff** (owner order 2026-09-23: "no DeepSeek any
+more - everything with Opus"; `scripts/remediation/opus_handoff.py`). `select`, `translate` and
+`review` each run one round: `--handoff-export DIR` hands the stage's questions to DIR (the stage
+itself runs, unchanged, over a scratch copy of the batch directory with a recording runner, so the
+exported prompts are the import's by construction and nothing it writes survives), and - once Opus
+agents answered and `opus_handoff.py validate --dir DIR` is clean - `--handoff-import DIR` runs the
+stage on those answers. Without either, the command only says what it would ask. `translate` is its
+own command because its questions are built from the selector's answers: S3 and S3R are one round,
+S3T the next.
+
+The other tracks' modules are imported when their command runs (`importlib`), so this driver loads
+without them; a missing one fails loudly at that command.
 """
 
 from __future__ import annotations
@@ -29,8 +41,10 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import shutil
 import sys
-from collections.abc import Callable, Mapping
+import tempfile
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
@@ -61,6 +75,8 @@ STAGE_EXIT = "STAGE_EXIT="
 #: The plan's batch prefix (contracts, section 4: `assign_batches(prefix="p4")`).
 BATCH_PREFIX = "p4-"
 DEFAULT_FETCH_TIMEOUT = 40.0
+
+Report = dict[str, Any]
 
 #: The other tracks' modules, by the contract's names (docs/procedures/PHASE4_CONTRACTS.md).
 PLAN4 = "phase4.plan4"
@@ -93,13 +109,62 @@ def batch_dir_of(args: argparse.Namespace) -> Path:
     return path
 
 
-def pi_runner(timeout: float) -> MS.ModelRunner:
-    return MS.PiRunner(timeout=timeout)
+#: A model stage as the handoff runs it: `(batch_dir, ledger, runner) -> exit code`.
+ModelStage = Callable[[Path, Path, MS.ModelRunner], int]
+
+
+def handed_off(
+    batch_dir: Path, stages: Sequence[tuple[str, ModelStage]], directory: Path
+) -> dict[str, Any]:
+    """Export: the calls `stages` would make, their exact prompts handed to `directory`.
+
+    The stages run for real and unchanged, one after the other, over a scratch copy of the batch
+    directory - under its own run and batch names, which the stages read - with a scratch ledger and
+    a `RecordingRunner` that answers every call with a text no stage's parser accepts. Every call is
+    therefore captured with the prompt the import will send (an answer already on disk is reused and
+    never recorded, as the import will reuse it), and nothing the stages write - holds, selections,
+    answers, reports, ledger lines - survives the export.
+    """
+    recorder = MS.RecordingRunner()
+    with tempfile.TemporaryDirectory() as scratch:
+        copy = Path(scratch) / B.run_name(batch_dir) / batch_dir.name
+        shutil.copytree(batch_dir, copy)
+        ledger = Path(scratch) / "LEDGER.jsonl"
+        for name, stage in stages:
+            if stage(copy, ledger, recorder) != 0:
+                raise InputError(f"{batch_dir.name}: the export's run of {name} did not complete")
+    counts = MS.export_calls(recorder.calls, directory=directory)
+    return {
+        "batch_id": batch_dir.name,
+        "handoff_export": str(directory),
+        "stages": [name for name, _ in stages],
+        "calls": len(recorder.calls),
+        "labels": [call.label for call in recorder.calls],
+        **counts,
+    }
+
+
+def run_on_answers(
+    batch_dir: Path, stages: Sequence[tuple[str, ModelStage, str]], *, ledger: Path, directory: Path
+) -> tuple[int, Report]:
+    """Import: `stages` on the Opus answers in `directory`; the first that cannot complete stops."""
+    runner = MS.HandoffRunner(directory=directory)
+    for name, stage, report in stages:
+        code = stage(batch_dir, ledger, runner)
+        if code != 0:
+            return code, {
+                "batch_id": batch_dir.name,
+                "stage": name,
+                "error": _stage_error(batch_dir, report),
+            }
+    return 0, {
+        "batch_id": batch_dir.name,
+        "handoff_import": str(directory),
+        "stages": [name for name, _, _ in stages],
+    }
 
 
 # -------------------------------------------------------------------------------- the commands
-
-Report = dict[str, Any]
 
 
 def cmd_forward(module: str) -> Callable[[argparse.Namespace], tuple[int, Report]]:
@@ -190,34 +255,52 @@ def _stage_error(batch_dir: Path, name: str) -> str | None:
     return error if isinstance(error, str) else None
 
 
+def _select(batch_dir: Path, ledger: Path, runner: MS.ModelRunner) -> int:
+    return SEL.select_batch(batch_dir, ledger=ledger, runner=runner)
+
+
+def _restricted(batch_dir: Path, ledger: Path, runner: MS.ModelRunner) -> int:
+    return RS.restricted_batch(batch_dir, ledger=ledger, runner=runner)
+
+
+def _translate(batch_dir: Path, ledger: Path, runner: MS.ModelRunner) -> int:
+    return TS.translate_batch(batch_dir, ledger=ledger, runner=runner)
+
+
 def cmd_select(args: argparse.Namespace) -> tuple[int, Report]:
-    """S3 for lanes W, S and T, then S3T for lane T, then S3R for lane R."""
+    """S3 for lanes W, S and T, then S3R for lane R: one handoff round, neither needs an answer."""
     batch_dir = batch_dir_of(args)
-    if not args.live:
+    stages = (
+        ("select", _select, B.SELECT_REPORT),
+        ("restricted", _restricted, B.RESTRICTED_REPORT),
+    )
+    if args.handoff_export:
+        exported = [(name, stage) for name, stage, _ in stages]
+        return 0, handed_off(batch_dir, exported, Path(args.handoff_export))
+    if not args.handoff_import:
         return 0, preview_select(batch_dir)
-    runner = pi_runner(args.timeout)
-    ledger = Path(args.ledger)
-    for name, stage, report in (
-        ("select", SEL.select_batch, B.SELECT_REPORT),
-        ("translate", TS.translate_batch, B.TRANSLATE_REPORT),
-        ("restricted", RS.restricted_batch, B.RESTRICTED_REPORT),
-    ):
-        code = stage(batch_dir, ledger=ledger, runner=runner)
-        if code != 0:
-            return code, {
-                "batch_id": args.batch_id,
-                "stage": name,
-                "error": _stage_error(batch_dir, report),
-            }
-    return 0, {
-        "batch_id": args.batch_id,
-        "live": True,
-        "stages": ["select", "translate", "restricted"],
-    }
+    return run_on_answers(
+        batch_dir, stages, ledger=Path(args.ledger), directory=Path(args.handoff_import)
+    )
+
+
+def cmd_translate(args: argparse.Namespace) -> tuple[int, Report]:
+    """S3T for lane T: its own round, because its questions are built from the selector's answers."""
+    batch_dir = batch_dir_of(args)
+    if args.handoff_export:
+        return 0, handed_off(batch_dir, [("translate", _translate)], Path(args.handoff_export))
+    if not args.handoff_import:
+        return 0, {"batch_id": args.batch_id, "live": False, "bought": 0}
+    return run_on_answers(
+        batch_dir,
+        [("translate", _translate, B.TRANSLATE_REPORT)],
+        ledger=Path(args.ledger),
+        directory=Path(args.handoff_import),
+    )
 
 
 def preview_select(batch_dir: Path) -> Report:
-    """What `select --live` would ask: the prompt size of every selecting site. Buys nothing."""
+    """What `select` would ask: the prompt size of every selecting site. Hands nothing off."""
     _, sites = B.read_batch(batch_dir)
     lanes = B.read_lanes(batch_dir, sites)
     held = B.site_held(B.read_holds(batch_dir))
@@ -229,7 +312,7 @@ def preview_select(batch_dir: Path) -> Report:
         source_id, meta, text, pool = SEL.site_pool(batch_dir, site, lane)
         prompt = SEL.selector_prompt(site, source_id, meta, pool, text).render()
         rows.append({"site_id": site.site_id, "pool": len(pool), "prompt_chars": len(prompt)})
-    return {"batch_id": batch_dir.name, "live": False, "argv": MS.pi_argv(), "sites": rows}
+    return {"batch_id": batch_dir.name, "live": False, "sites": rows}
 
 
 def cmd_assemble(args: argparse.Namespace) -> tuple[int, Report]:
@@ -276,17 +359,25 @@ def reverify_for(batch_dir: Path) -> RV.Reverify:
     return reverify
 
 
+def _review(batch_dir: Path, ledger: Path, runner: MS.ModelRunner) -> int:
+    """S6 with the review's S5 bound to the directory it runs in (the scratch copy, on export)."""
+    return RV.review_batch(
+        batch_dir, ledger=ledger, runner=runner, reverify=reverify_for(batch_dir)
+    )
+
+
 def cmd_review(args: argparse.Namespace) -> tuple[int, Report]:
     batch_dir = batch_dir_of(args)
-    if not args.live:
+    if args.handoff_export:
+        return 0, handed_off(batch_dir, [("review", _review)], Path(args.handoff_export))
+    if not args.handoff_import:
         return 0, {"batch_id": args.batch_id, "live": False, "bought": 0}
-    code = RV.review_batch(
+    code = _review(
         batch_dir,
-        ledger=Path(args.ledger),
-        runner=pi_runner(args.timeout),
-        reverify=reverify_for(batch_dir),
+        Path(args.ledger),
+        MS.HandoffRunner(directory=Path(args.handoff_import)),
     )
-    report: Report = {"batch_id": args.batch_id, "live": True}
+    report: Report = {"batch_id": args.batch_id, "handoff_import": args.handoff_import}
     if code != 0:
         report["error"] = _stage_error(batch_dir, B.REVIEW_REPORT)
     return code, report
@@ -365,9 +456,15 @@ def build_parser() -> argparse.ArgumentParser:
             )
         if name == "routes":
             command.add_argument("--max-searches", type=int, required=True)
-    for name, func in (("select", cmd_select), ("review", cmd_review)):
-        command = batch_command(name, func, live=True)
-        command.add_argument("--timeout", type=float, default=MS.DEFAULT_TIMEOUT)
+    for name, func in (
+        ("select", cmd_select),
+        ("translate", cmd_translate),
+        ("review", cmd_review),
+    ):
+        # The model stages buy nothing themselves: one handoff half, or a preview (`opus_handoff`).
+        half = batch_command(name, func, live=False).add_mutually_exclusive_group()
+        half.add_argument("--handoff-export", metavar="DIR", default=None)
+        half.add_argument("--handoff-import", metavar="DIR", default=None)
     batch_command("assemble", cmd_assemble, live=False)
     batch_command("verify", cmd_verify, live=False)
 

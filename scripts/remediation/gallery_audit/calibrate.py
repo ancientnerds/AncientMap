@@ -7,8 +7,12 @@ Order, enforced rather than promised
                 a threshold written after data exists is not a threshold.
 2. ``jobs``     writes the C1 ``JOBS.jsonl`` - and refuses unless the seal is in place and the
                 file on disk still hashes to it.
-3. the vision run (`vision.py run --jobs .../JOBS.jsonl --run-dir <this dir>`) - a production
-   operation, about 944 calls, about $1.65 at the pilot's measured $0.00175 per call.
+3. the vision round through the Opus handoff (owner order 2026-09-23): `vision.py export --jobs
+   .../JOBS.jsonl --run-dir <this dir> --handoff H`, the orchestrator's Opus agents answer,
+   `opus_handoff.py validate --dir H`, then `vision.py import` with the same arguments - a
+   production operation of 939 questions. The thresholds name the model (`vision.MODEL`), so a
+   directory sealed for another model (`calibration-2026-09-23/`, the pilot's DeepSeek transport)
+   admits nothing of an Opus ledger, and the Opus calibration is sealed in a directory of its own.
 4. ``evaluate`` refuses a thresholds file whose sha256 is not the sealed one, and a ledger line
    judged before the seal; then measures, and writes ``ADMISSION.json``, which `decide.py` reads.
    The eye labels are named explicitly (``--eye-labels`` a file of this repository, or

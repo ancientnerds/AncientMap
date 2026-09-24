@@ -68,7 +68,6 @@ needs_snapshot = pytest.mark.skipif(
 needs_worklist = pytest.mark.skipif(
     not WORKLIST.exists(), reason=f"phase-3 worklist not present ({WORKLIST})"
 )
-NO_EXTENSIONS = Path(__file__).resolve().parent / "fixtures" / "pi_probe_no_extensions.json"
 
 #: Piece 1's plan anchor, recorded in `PIECE1.md:120-124` and re-measured on 2026-09-21. The
 #: snapshot plan is a second plan; the worklist plan's bytes are not allowed to move because of it.
@@ -91,9 +90,8 @@ def _truth_ids() -> list[str]:
 
 
 def _answer() -> MS.ModelAnswer:
-    """The captured settled answer, parsed - the numbers every scripted call replays."""
-    lines = NO_EXTENSIONS.read_text(encoding="utf-8").splitlines()
-    return MS.parse_stream(lines, source=str(NO_EXTENSIONS))
+    """The answer every scripted call replays: what the Opus handoff returns, unmetered."""
+    return MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered())
 
 
 def _site_record(
@@ -162,12 +160,13 @@ class ReviewingRunner(ScriptedRunner):
 
 
 def _assert_no_process(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fail the test if anything starts a Pi process. Used by every dry-run path."""
+    """Fail the test if anything touches the Opus handoff. Used by every dry-run path."""
 
     def refuse(*args: Any, **kwargs: Any) -> None:
-        raise AssertionError(f"a dry run must not start a process: {args!r} {kwargs!r}")
+        raise AssertionError(f"a dry run must not touch the handoff: {args!r} {kwargs!r}")
 
-    monkeypatch.setattr(MS.subprocess, "run", refuse)
+    monkeypatch.setattr(MS.OH, "export", refuse)
+    monkeypatch.setattr(MS.OH, "read_answer", refuse)
 
 
 def _prepared_discover_run(
@@ -858,7 +857,6 @@ def test_judge_without_live_previews_the_discover_calls_and_starts_nothing(
     assert [site["field"] for site in payload["sites"][:2]] == ["description", "period_start"]
     for site in payload["sites"]:
         assert site["prompt_chars"] == len(site["prompt"])
-        assert site["prompt"] not in site["argv"]
         assert site["evidence"][0]["present"] is False  # the missing page is shown, not hidden
     assert not ledger.exists()
     assert not (run_dir / "batch-0001" / "answers").exists()
@@ -877,7 +875,7 @@ def test_judge_live_stores_one_answer_per_field_and_one_ledger_line_each(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Five calls for one site must leave five records. One answer key would lose four of them."""
-    monkeypatch.setattr(MS, "PiRunner", ScriptedRunner)
+    monkeypatch.setattr(MS, "HandoffRunner", ScriptedRunner)
     # The live path reads the catalogue's value list from the production snapshot; this test is about
     # the answer and ledger bookkeeping, so the list is pinned rather than read.
     monkeypatch.setattr(SP, "site_type_vocabulary", lambda: VOCAB)
@@ -894,7 +892,8 @@ def test_judge_live_stores_one_answer_per_field_and_one_ledger_line_each(
             "batch-0001",
             "--ledger",
             str(ledger),
-            "--live",
+            "--handoff-import",
+            str(tmp_path / "handoff"),
         ]
     )
 
@@ -949,7 +948,8 @@ def test_judge_refuses_the_reviewer_stage_when_the_batch_carries_no_finding(
                 "batch-0001",
                 "--stage",
                 "reviewer",
-                "--live",
+                "--handoff-import",
+                str(tmp_path / "handoff"),
             ]
         )
 
@@ -981,7 +981,8 @@ def test_judge_refuses_the_reviewer_stage_when_the_answers_folder_is_empty(
                 "batch-0001",
                 "--stage",
                 "reviewer",
-                "--live",
+                "--handoff-import",
+                str(tmp_path / "handoff"),
             ]
         )
 
@@ -995,7 +996,7 @@ def test_judge_reviews_a_batch_that_carries_the_finders_findings(
     unreviewable *with a reason* - a pass that reviewed one field and stayed silent about the other
     four would be indistinguishable from a pass that reviewed everything.
     """
-    monkeypatch.setattr(MS, "PiRunner", ReviewingRunner)
+    monkeypatch.setattr(MS, "HandoffRunner", ReviewingRunner)
     run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
     _evidence_store(run_dir / "batch-0001" / "evidence", "site-1")
     answers = F.EvidenceStore(run_dir / "batch-0001" / "answers")
@@ -1020,7 +1021,8 @@ def test_judge_reviews_a_batch_that_carries_the_finders_findings(
             "reviewer",
             "--ledger",
             str(ledger),
-            "--live",
+            "--handoff-import",
+            str(tmp_path / "handoff"),
         ]
     )
 
@@ -1409,7 +1411,7 @@ def test_an_unreadable_stream_for_one_field_is_a_hole_and_the_other_calls_are_bo
     the hole with the field's name, the other nine calls are answered, and the ledger holds nine
     lines - the hole is not written as a zero-usage line.
     """
-    monkeypatch.setattr(MS, "PiRunner", OneHoleRunner)
+    monkeypatch.setattr(MS, "HandoffRunner", OneHoleRunner)
     monkeypatch.setattr(SP, "site_type_vocabulary", lambda: VOCAB)
     run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"), _site_record("site-2"))
     _evidence_store(run_dir / "batch-0001" / "evidence", "site-1", "site-2")
@@ -1424,7 +1426,8 @@ def test_an_unreadable_stream_for_one_field_is_a_hole_and_the_other_calls_are_bo
             "batch-0001",
             "--ledger",
             str(ledger),
-            "--live",
+            "--handoff-import",
+            str(tmp_path / "handoff"),
         ]
     )
 
@@ -1460,7 +1463,7 @@ def test_the_reviewer_does_not_clear_a_field_whose_finder_call_was_a_hole(
     four fields. The reviewer is asked about the four; about `country` it says `asked=False`, and
     nothing in `review.json` can be read as "the record is right about the country".
     """
-    monkeypatch.setattr(MS, "PiRunner", ReviewingRunner)
+    monkeypatch.setattr(MS, "HandoffRunner", ReviewingRunner)
     run_dir = _prepared_discover_run(tmp_path, _site_record("site-1"))
     _evidence_store(run_dir / "batch-0001" / "evidence", "site-1")
     answered = [field for field in SP.DISCOVER_FIELDS if field != "country"]
@@ -1513,7 +1516,8 @@ def test_the_reviewer_does_not_clear_a_field_whose_finder_call_was_a_hole(
             "reviewer",
             "--ledger",
             str(ledger),
-            "--live",
+            "--handoff-import",
+            str(tmp_path / "handoff"),
         ]
     )
 

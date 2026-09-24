@@ -1,5 +1,11 @@
 """Ask the reachable vision model the pipeline's own question, once per sampled image.
 
+**Pilot history (2026-09-21).** Since the owner order of 2026-09-23 ("no DeepSeek any more -
+everything with Opus") nothing that runs imports this module: the gallery audit's vision stage is
+answered through the Opus handoff (`scripts/remediation/opus_handoff.py`), and the two pure helpers it
+read from here (`EXPECTED_KINDS`, `extract_json`) live in `common.py`. The gateway transport below is
+kept only as the record of how the pilot's 200 answers were bought; it is not to be run again.
+
 Run:
     PYTHONIOENCODING=utf-8 ./.venv/Scripts/python.exe \
         scripts/remediation/vlm_pilot/ask_vlm.py            # all 200, 4 workers
@@ -64,7 +70,13 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import httpx
-from common import OUT_DIR, read_jsonl, write_jsonl  # noqa: E402
+from common import (  # noqa: E402
+    EXPECTED_KINDS,
+    OUT_DIR,
+    extract_json,
+    read_jsonl,
+    write_jsonl,
+)
 
 from pipeline.video.shorts_select import (  # noqa: E402
     VLM_ATTEMPTS,
@@ -95,14 +107,6 @@ _ENUM_MATCH = _ENUM_RE.search(VLM_PROMPT)
 if _ENUM_MATCH is None:  # the question changed shape; refuse rather than guess
     raise SystemExit("REFUSING: VLM_PROMPT no longer prints a 'kind' enum")
 PROMPT_KINDS = tuple(re.findall(r'"([^"]+)"', _ENUM_MATCH.group(0))[1:])
-EXPECTED_KINDS = (
-    "site_photo",
-    "artifact",
-    "map_or_document",
-    "painting_or_artwork",
-    "people",
-    "other",
-)
 
 
 def load_api_key(auth_file: Path) -> str:
@@ -151,25 +155,6 @@ def usage_cost(usage: dict[str, Any]) -> dict[str, Any]:
         "reasoning_tokens": reasoning,
         "cost_usd": round(cost, 8),
     }
-
-
-def extract_json(text: str) -> dict[str, Any] | None:
-    """Outermost `{...}` of the response, or None. Mirrors `parse_fenced_json(extract_object=True)`."""
-    cleaned = (text or "").strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0].strip()
-    try:
-        parsed = json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
-        match = re.search(r"\{[\s\S]*\}", cleaned)
-        if not match:
-            return None
-        try:
-            parsed = json.loads(match.group(0))
-        except (json.JSONDecodeError, ValueError):
-            return None
-    return parsed if isinstance(parsed, dict) else None
 
 
 def ask_once(client: httpx.Client, session: str, prompt: str, jpeg: bytes) -> dict[str, Any]:
@@ -254,7 +239,9 @@ def judge(client: httpx.Client, session: str, row: dict[str, Any]) -> dict[str, 
         try:
             call = ask_once(client, session, prompt, jpeg)
         except Exception as exc:  # transport failure is data, not a crash
-            attempts_detail.append({"attempt": attempt, "transport_error": f"{type(exc).__name__}: {exc}"})
+            attempts_detail.append(
+                {"attempt": attempt, "transport_error": f"{type(exc).__name__}: {exc}"}
+            )
             record["error"] = f"transport: {type(exc).__name__}: {exc}"[:400]
             if attempt < VLM_ATTEMPTS:
                 time.sleep(VLM_RETRY_WAIT_S)
@@ -408,7 +395,9 @@ def main() -> int:
     print(f"verdicts parsed   : {parsed}")
     print(f"no verdict        : {len(ordered) - parsed}")
     print(f"kind distribution : {kinds}")
-    print(f"tokens            : in {prompt_tokens} (cached {cached_tokens}), out {completion_tokens}")
+    print(
+        f"tokens            : in {prompt_tokens} (cached {cached_tokens}), out {completion_tokens}"
+    )
     print(
         f"cost at 0.15/0.60/0.003 per 1M : ${total_cost:.5f} "
         f"(in ${(prompt_tokens - cached_tokens) * USD_PER_M_INPUT / 1e6:.5f}, "
@@ -417,10 +406,14 @@ def main() -> int:
     )
     print(f"wall clock        : {time.monotonic() - wall_start:.0f}s")
     if failed:
-        print(f"\nFAILED ROWS ({failed}) - kind is null, an error is recorded, never a fake 'other':")
+        print(
+            f"\nFAILED ROWS ({failed}) - kind is null, an error is recorded, never a fake 'other':"
+        )
         for record in ordered:
             if record["kind"] is None:
-                print(f"  image {record['image_id']} http={record['http_status']}: {record['error']}")
+                print(
+                    f"  image {record['image_id']} http={record['http_status']}: {record['error']}"
+                )
         print(f"\nwrote {out_path} (exit 3: at least one image has no verdict)")
         return 3
     print(f"\nwrote {out_path}")
