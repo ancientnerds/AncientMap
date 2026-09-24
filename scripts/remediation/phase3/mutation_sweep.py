@@ -16978,6 +16978,41 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += P4_PILOT2_MUTATIONS
 
 
+# ── pilot 2's root causes fixed (2026-09-24), and pilot 3's draw ─────────────────────────────────
+#: Pilot 2 failed T3 (a `p` drop took House of the Faun's correction "actually a satyr"), T4/T6 (V10
+#: had no demonym table: "a Danish hill", "the first Greek site"), T5's rule gaps (a mid-sentence
+#: ". " before a lowercase word, a preposition before a comma, a garbled source sentence) and T8 (V6
+#: refused a stored name with a disambiguator under a strong 'own' verdict):
+#: `output/remediation/phase4_runner/PILOT_RESULT_2.md`.
+P4P3_MODEL = "scripts/remediation/phase4/model4.py"
+P4P3_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
+P4P3_SENT_TEST = "tests/remediation/test_phase4_sentences.py"
+
+P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── T3: correction and contrast markers are protected ────────────────────────────────────
+    (
+        "p4 model: a correction or contrast marker is not protected",
+        P4P3_MODEL,
+        '        "contrast": (\n            "actually", "in fact", "in reality", "instead", '
+        '"rather", "whilst", "nevertheless",\n            "nonetheless", "contrary", "unlike",\n'
+        "        ),\n",
+        "",
+        P4P3_VERIFY_TEST,
+        "test_a_correction_or_contrast_marker_is_protected",
+    ),
+    (
+        "p4 model: a misidentification or an error word is not protected",
+        P4P3_MODEL,
+        '            "unknown", "wrongly", "mistaken*", "erroneous*", "incorrect*", "misidentif*",\n'
+        '            "misattribut*",\n',
+        '            "unknown",\n',
+        P4P3_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+]
+MUTATIONS += P4_PILOT3_MUTATIONS
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

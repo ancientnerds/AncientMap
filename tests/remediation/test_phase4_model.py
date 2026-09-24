@@ -853,7 +853,20 @@ ADDED_PROTECTED = {
         "possible probable maybe"
     ).split(),
     "negations": ["cannot", "*n't", "*n’t"],
-    "refutation": ["unknown"],
+    # pilot 2 (2026-09-24, T3): the correction and contrast markers a dropped span took with it -
+    # House of the Faun lost "(actually a satyr, since the lower body is that of a man)"
+    "contrast": (
+        "actually;in fact;in reality;instead;rather;whilst;nevertheless;nonetheless;contrary;unlike"
+    ).split(";"),
+    "refutation": [
+        "unknown",
+        "wrongly",
+        "mistaken*",
+        "erroneous*",
+        "incorrect*",
+        "misidentif*",
+        "misattribut*",
+    ],
 }
 
 

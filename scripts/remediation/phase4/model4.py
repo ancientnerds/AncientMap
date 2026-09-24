@@ -339,6 +339,12 @@ DESIGN_PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
 #: with the design's list alone and 0 carry one with it (2026-09-23). `*n't` is every contracted
 #: negation (`don't`, `won't`, `oughtn't`), in both apostrophes the extracts carry: `\bnot\b` never
 #: matches inside one (nor inside `cannot`).
+#:
+#: Pilot 2 (2026-09-24, T3; accepted by the orchestrator under D1) added the correction and contrast
+#: markers: a `p` drop published House of the Faun's statue as "a dancing faun" after removing
+#: "(actually a satyr, since the lower body is that of a man)", the passage's own correction. Over
+#: the 4,259 lane-W/S pools of the census run (89,072 pool sentences, 86,343 offered spans), 472
+#: offered spans carried one of these entries and are offered no more (2026-09-24).
 PROTECTED_TOKEN_ADDITIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         "hedges": (
@@ -346,7 +352,14 @@ PROTECTED_TOKEN_ADDITIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "purported*", "evidently", "assum*", "possible", "probable", "maybe",
         ),
         "negations": ("cannot", "*n't", "*n’t"),
-        "refutation": ("unknown",),
+        "contrast": (
+            "actually", "in fact", "in reality", "instead", "rather", "whilst", "nevertheless",
+            "nonetheless", "contrary", "unlike",
+        ),
+        "refutation": (
+            "unknown", "wrongly", "mistaken*", "erroneous*", "incorrect*", "misidentif*",
+            "misattribut*",
+        ),
     }
 )  # fmt: skip
 

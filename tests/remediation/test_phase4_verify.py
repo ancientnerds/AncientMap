@@ -190,6 +190,27 @@ def test_a_span_with_a_protected_token_is_never_offered() -> None:
     assert V.protected_in("the etc. list") == ()
 
 
+def test_a_correction_or_contrast_marker_is_protected() -> None:
+    """Pilot 2, T3: House of the Faun published its statue as 'a dancing faun' after a `p` drop
+    removed '(actually a satyr, since the lower body is that of a man)', the passage's own
+    correction. V4 now refuses that drop like a hedge's."""
+    faun = (
+        "The bronze statue of a dancing faun (actually a satyr, since the lower body is that of a "
+        "man) is what the House of the Faun is named after."
+    )
+    correction = " (actually a satyr, since the lower body is that of a man)"
+    assert (faun.index(correction), faun.index(correction) + len(correction)) in (
+        V.candidate_spans("W", faun, 0, len(faun))
+    )
+    assert _offered(faun) == []
+    assert V.protected_in(correction) == ("actually",)
+    assert V.protected_in("In fact, ") == ("in fact",)
+    assert V.protected_in(", rather than in the town") == ("rather",)
+    assert V.protected_in(", instead of a temple,") == ("instead",)
+    assert V.protected_in(" (wrongly so named)") == ("wrongly",)
+    assert V.protected_in(" (sometimes erroneously written Bara)") == ("erroneous*",)
+
+
 def test_a_number_comma_and_a_bracketed_comma_are_no_delimiters() -> None:
     sentence = "The hoard of 2,500 coins (found in 1920, near the gate) lies in the museum store."
     assert _offered(sentence) == [" (found in 1920, near the gate)"]

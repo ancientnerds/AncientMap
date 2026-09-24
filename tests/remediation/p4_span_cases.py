@@ -208,6 +208,34 @@ SPAN_CASES: list[tuple[str, str, dict[str, str]]] = [
         "The hall, built c. 300 BC, stood on the hill above.",
         {"l1": "The hall, ", "t1": ", stood on the hill above"},
     ),
+    # rule 9, correction and contrast markers (pilot 2, T3): House of the Faun W's parenthesis
+    # corrects its head noun and was dropped; each marker now refuses the span that carries it
+    (
+        "W",
+        "The bronze statue of a dancing faun (actually a satyr, since the lower body is that of a "
+        "man) is what the House of the Faun is named after.",
+        {},
+    ),
+    (
+        "W",
+        "The fort lay on the hill, rather than in the town.",
+        {"l1": "The fort lay on the hill, "},
+    ),
+    (
+        "W",
+        "In fact, the ditch was cut after the bank had been raised.",
+        {"t1": ", the ditch was cut after the bank had been raised"},
+    ),
+    (
+        "W",
+        "The shrine, instead of a temple, stood on the hill above the ford.",
+        {"l1": "The shrine, ", "t1": ", stood on the hill above the ford"},
+    ),
+    (
+        "W",
+        "The temple of Neptune (wrongly so named) stands on the plain above the sea.",
+        {},
+    ),
     # rule 1: a parenthesis opened and never closed (depth ends above 0) offers nothing, not even
     # the leading phrase and the last segment before and around it
     ("W", "In 1900, the temple (built by giants stands on the hill above.", {}),
