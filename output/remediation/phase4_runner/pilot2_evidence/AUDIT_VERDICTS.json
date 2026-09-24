@@ -1,0 +1,4003 @@
+[
+ {
+  "site_id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe",
+  "name": "Belgrade Fortress",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the Serbian/Hungarian name parenthetical was dropped. Names the site and Serbia, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the '(Upper and Lower Town)' and '(Large and Little Kalemegdan)' glosses were dropped. 'It' refers back to the fortress in S1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the unit conversion '(412 ft)' was dropped."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'the city' has its antecedent in S4 ('urban area of Belgrade'). The sentence is about the settlement inside the fortress, which is this site."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Leaving out the source's bridging sentence (the Roman conquest) does not make it unclear."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the hedge 'around 535'."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 147,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to S6 without the marker."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "0529af31-7573-467e-88ff-12dbca48f94d",
+  "name": "Bulls of Guisando",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The Spanish-name parenthetical was dropped. Uses the correct spelling 'El Tiemblo', so gold error BG-1 ('El Tiémblo') does not recur. Spain matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Keeps 'bulls or pigs'."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedges 'balance of opinion' and 'interpreted as' are kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'They' refers to the Bulls."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'may have been' is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'debatable' is kept."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'may mean' is kept."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 184,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "S1 cut before ', Spain', plus S6. Both parts are substrings of the description. The glyph 'Á' in Ávila is correct. The hedge 'may have been' is kept. BG-1 does not recur."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "0569a73d-875d-4d49-bc8a-74c9a7fa4704",
+  "name": "Justinianopolis (Epirus)",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "One published unit holds two source sentences. Only the Greek-name parenthetical was dropped. This leaves the source's comma before 'was' ('Ioustinianoupolis, was a town'), which is awkward punctuation but not garbled. The sentence ties the town to Justinian I (6th c. AD), so CANARY-06 (3rd-century BC dating) does not recur."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The restriction 'rather than to Justinianopolis' is kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Its' follows 'Justinianopolis' at the end of S2. Albania matches the stored country and coordinates."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 84,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Prefix of S1, cut before the appositive. Carries no date, so CANARY-06 ('3rd-century BC') does not recur. Epirus and Illyricum are ancient regions, not countries. It keeps the source's stray comma before 'was'."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "09327f42-d9bb-438f-8e78-ebba2c24fa42",
+  "name": "Eileithyia Cave",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the alias '(also the Cave of Eileithyia)' was dropped."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Use starts in the Neolithic, so CANARY-07 (use starting c. 500 BC) does not recur."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(0.6 mi)' was dropped. 'It' refers to the cave/site."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including 'around 400 BCE'. Its end date differs from S2's 'to the Roman era', but both come from the source: S4 is about occupation by settlers, S2 about use and worship."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'could be of Greek origin' is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. It stands without the skipped Isis/Horus sentence."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 106,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to S4. It dates occupation from the Neolithic, so CANARY-07 does not recur."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "1010b3bf-a7d5-4e2c-9f70-8212a2cd1699",
+  "name": "La Corona",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Guatemala/Petén matches the stored country and coordinates."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'appears to have been' is kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'a then-unknown city' reads as Site Q, given S1."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim apart from collapsing a double space. The missing article before 'La Corona Archaeological Project' is in the source."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 102,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to S6."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "1ef25b31-5c42-4ee6-aae1-1bd9c2640bff",
+  "name": "Areni-1 Cave",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the Armenian-name parenthetical was dropped. Armenia matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. \"the country's\" resolves to Armenia in S1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the leading 'Later,' was dropped. The explicit date 'September 2011' keeps the timing, so the meaning is unchanged."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the gloss '(\"Bird's Eye\")' was dropped. The date parenthetical '(c. 5700–6250 years BP)' stays; parentheses are allowed in the description."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 189,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "S1 cut before ', located near the Areni village in southern Armenia', plus S5. Both parts are substrings. Armenia was left out of the card."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "2817ce5e-3b43-445e-9a10-d4115a7036bb",
+  "name": "Barranc de Gàfols",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Ginestar, Catalonia fits the stored country (Spain) and coordinates."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(0.62 mi)' was dropped."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'at least 17' is kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'The structures' refers to S4's buildings."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'these buildings' has its antecedent in S4/S5. The exception clause is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'possibly' is kept."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'the Rivera' is the source's own wording."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 154,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to S4."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "2968fd35-9b61-4dfb-bb1b-cc4489827fd6",
+  "name": "Hatunmarka",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the source's etymology parenthetical, which is allowed in the description. Peru matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Junín/Jauja/Marco fits the stored coordinates (-11.74, -75.57). Nothing about Choquequirao or the Apurímac, so CANARY-01 does not recur."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim apart from collapsing a double space."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 111,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to S3. Neither 'Choquequirao' nor 'Apurimac gorge' appears, so CANARY-01 does not recur. The glyph 'ó' in Resolución is correct."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "3dd6b568-007f-4a95-877b-12324e031893",
+  "name": "Maray Qalla",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the etymology parenthetical. Peru matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' refers to Maray Qalla in S1. Ancash/Carlos Fermín Fitzcarrald fits the stored coordinates."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. It names the Qhapaq Ñan without the '30,000 km' length, so CANARY-05 does not recur in the description. No card was written: no sentence could be used alone as an 80-200-character card without the country. The writer has a P5 card-clear path, but this sheet cannot show whether the stored CANARY-05 card ('30,000 km') is actually cleared; that belongs to the write/acceptance check."
+   }
+  ],
+  "card": null,
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "411cacb0-6312-4465-81f2-76417d209c17",
+  "name": "Kit Hill",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim apart from the dropped ', UK' tail."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'This' refers to the magma intrusion in the published sentence 3, so it has an antecedent."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. It is about a mine on the hill, which is part of this site."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 85,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Verbatim sentence 2. CANARY-02 ('hillfort') does not come back: neither the description nor the card claims a fortification. The stored type 'Fortification' still does not match a text about a hill and its mines, but that is a type-field issue, not a wrong-site description (the coordinates are Kit Hill's)."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "434a12f5-3cdd-4669-9db0-4cb31fd322d4",
+  "name": "Bejsebakke",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Names Denmark, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim with the double space collapsed. The source's grammar error 'The area have' carries over."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": true,
+    "gold_error": null,
+    "note": "Garbled, copied word for word from the source: 'This excavation was found among other traces more than 350 pit houses...' reads as if the excavation itself was found. 'This excavation' is also unclear, because sentence 3 names two excavations (1958, and 1999-2000). The content is supported."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": null,
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "4e158e46-2cf3-422f-b0da-6868bedb431e",
+  "name": "Krzemionki",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops the IPA and gloss parenthetical; nothing else changes. 'Polish city' matches the stored Poland."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and both 'about' hedges are kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'the pits' clearly means the mines already described."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the source's awkward 'depths of 9 meters deep'."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 82,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Verbatim sentence 2. No missing glyphs in orbitron-700."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "5752ff6c-ce00-4b78-aad7-f80a4d61c4e7",
+  "name": "House of the Faun, Pompeii",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops only '(Italian: Casa del Fauno)'. Names Italy, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'this impressive estate' refers back to the house in sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": true,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The 'p' drop removed '(actually a satyr, since the lower body is that of a man)'. That parenthetical is the passage's own correction: the figure is not a faun. The published sentence presents the statue as a dancing faun with no correction. Its main claim (the house is named after the bronze statue) is still supported, but the passage's corrective restriction is lost. The rule gap: a top-level parenthetical that corrects the head noun ('actually ...') is offered as droppable."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped tail ', and today it is one of the most visited of the ruins' is extra information, not a restriction."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 159,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Not a verbatim substring: it is sentence 1 with '(180 BCE)' and ', Italy' dropped. Everything it says is in sentence 1, and there are no parentheses and no country. The description is 1,089 characters without markers (1,121 with), just inside V9's 1,100."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+  "name": "Ahu Tongariki",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops only the pronunciation parenthetical."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. AT-1 ('constructed between 1-500 AD') does not come back: the description gives no construction date."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 173,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Verbatim sentence 7. No date, so AT-1 does not come back."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "5d1b5446-41d9-46db-98c9-ac4d1996a3c1",
+  "name": "Grange Stone Circle",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops the Irish-name parenthetical. Names Ireland, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and the hedge 'estimated' is kept. 'It' comes right after the road sentence, the same order as the source; context makes clear it means the circle."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops only the translation '(Crom Dubh's Division)'."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'this' refers to the second circle in sentence 7, so it has an antecedent."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 81,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Verbatim sentence 6, one character above the 80 floor."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "60212fa1-b2c0-4262-a434-adb4ade54b04",
+  "name": "Posbury Hill Fort",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, taken from the article's 'Posbury Hill Fort' section; the article's own subject is the hamlet."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' refers to the hill fort."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and the hedge 'likely site' is kept. In the source, 'this' comes after a sentence about a Roman road and fort near Colebrooke; the section subject and the Posentesburg/Posbury name tie it to the hill fort, which is how the published order reads it (checked against the revision)."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 99,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 with ', Devon' dropped. Not a verbatim substring, but everything it says is in the description."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "60722e7e-587a-46fb-b09c-e6e82f1b74f7",
+  "name": "Stanydale Temple",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Names Scotland, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops only '(34 km)', and the hedge 'roughly' is kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'uncertainty' and 'possibly' are kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and 'may well' is kept. 'The settlement' has no explicit antecedent here (in the source it follows the houses and mounds in the field), but it reads as the site itself, so this is not a dangling pronoun."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped tail ', as are other neolithic buildings in Shetland' is a comparison, not a restriction; without it the sentence does not claim the shape is unique."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 169,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 with ', Scotland' dropped, followed by sentence 5 verbatim. The en dash renders in orbitron-700."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "66b6fcb0-605a-4988-9c26-50d92bdb45dd",
+  "name": "Boscawen-Un",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops '(grid reference SW412273)' and ', UK'. It names the site as 'Boscawen-Ûn', the stored name with a diacritic."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and 'may have formed' is kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Drops only the imperial conversion '(82 and 72 ft)'."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and 'it is possible' is kept."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and the restriction 'only fully' is kept. 'The rock art' refers to the petroglyph in sentence 6."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 185,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Verbatim sentence 8."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "6c4d8b74-697a-46f7-a000-bf92b702f87a",
+  "name": "Windbury Head",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim lead sentence; country England matches stored record."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(330 ft)' dropped; 'approximately 100 metres' kept."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 116,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 minus the trailing ', England'; no parentheses, no marker."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "6f6cebaa-d125-4f80-8625-a9f7dfdf3864",
+  "name": "Altar Stone - Stonehenge",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim lead sentence."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'It' resolves to the Altar Stone in sentence 1, which comes right before it in the source."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The hedges 'was thought to have originated' and 'though this has not been fully established' are both kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The hedge 'claims to show' is kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; the hedge 'is thought to have fallen' is kept."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The skipped dimensions fragment sat between sentences 5 and 6. In the published text, 'it' resolves to Stone 80 (Altar Stone), the last 'it' of sentence 5, which is the same referent as in the source. It is slightly ambiguous next to Stone 55, but not dangling."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Comes right after sentence 6 in the source; 'sometimes' is kept."
+   }
+  ],
+  "card": null,
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "72980dbd-dee9-446e-b694-a16515924c10",
+  "name": "Station Stones - Stonehenge",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The negation 'never contained burials' is kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The skipped ring-ditch sentence is not needed; 'the other two corners of the rectangle' refers back to sentences 2-3."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'Their' resolves to the stones of sentence 5, as in the source; 'perhaps' is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The scepticism and 'cannot be said with certainty' are kept."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 164,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 2 verbatim without its marker. The description is 992 characters without markers, within 200-1100."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+  "name": "Aubrey Holes - Stonehenge",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'still unknown' and 'has often been suggested' are kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'the holes' resolves to the Aubrey holes of sentence 1; the skipped Pitts sentences are not needed."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(so named from its reddish coloration)' dropped; 'may have encountered' is kept."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'It' is expletive (it was found that); comes right after sentence 5 in the source."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'may have secured' is kept."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'Their' resolves to the cremation burials of sentence 7, which comes right before it in the source."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 132,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Two items: sentence 1 minus ', named after seventeenth-century antiquarian John Aubrey', plus sentence 4. Not one contiguous substring of the description, but each item is a published sentence minus a removable clause, and the meaning is unchanged. The description is 996 characters without markers."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "77127fe3-8116-4567-9b04-aebbe719e5a7",
+  "name": "Fortifications of Chania",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only ', Greece' dropped; the meaning is intact."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Background on Cydonia, the ancient settlement whose walls are the first phase of these fortifications; not a different site."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the source's 'the Cydonia'; 'in around' is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'These' resolves to the walls of sentence 6, which comes right before it in the source."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 93,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 6 verbatim. On its own the card never names Chania or the fortifications, only 'the Cydonia'. That is accurate but weakly tied to the site; no rule is violated."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "7bd8951e-8693-423f-ae6f-f56713813262",
+  "name": "Verulamium",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "England matches stored country."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'This settlement' resolves to the tribal centre of sentence 4, which comes right before it in the source; 'usually' is kept."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'The settlement' resolves to Verlamion in sentence 5, the same referent as in the source. The skipped etymology sentences are not needed."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'around AD 50' is kept."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(for example at Camulodunum)' dropped; 'has been claimed' is kept."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 183,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 7 verbatim without its marker."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "8126681d-e2a2-49f2-ab9a-4695c751ce23",
+  "name": "Sillustani",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only ', southern Peru' dropped."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'It' resolves to Sillustani; comes right after sentence 1 in the source."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The trailing clause about the esplanade and slopes is dropped; 'about 31 km' is kept; no meaning change."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'nearby' and 'approximately' are kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "A find from the site itself, near the Lizard chullpa; not a different site."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 102,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 8 verbatim. The description is about 1071 characters without markers (V9 counts without markers, so it passes) and 1103 with the ' [1]' markers. It is the closest to the 1100 limit in this range."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+  "name": "Pyramid of Caius Cestius",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the Italian-name parenthetical dropped. 'Italy' matches the stored country. It names the site by its article title, Pyramid of Cestius."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'its' and 'it' resolve to the pyramid of sentence 1, and 'the city' to Rome. The skipped Nubian-style and roads sentences are not needed."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'about 18–12 BC' is kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'It' resolves to the pyramid; comes right after sentence 3 in the source."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only ', which had been attacked by Rome in 23 BC' dropped. The style is Nubian/Meroitic, consistent with the source; gold error PC-1 ('copied Egyptian style') does not recur."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 146,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 3 minus ', the Septemviri Epulonum'. It makes no Egyptian claim, so PC-1 does not recur. 'Rome' is a city, not a country; the en dash glyph is present."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "94776f9f-ea10-4b05-87bd-fd30c2cbdf6f",
+  "name": "Agri Bavnehøj",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(or Agri Bavnehoej)' dropped."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(25 mi)' dropped; Denmark matches the stored country."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the example ', such as invasions' dropped; no restriction lost."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the source's '650.000', a European thousands separator that English readers may take for 650. 'approximately' is kept."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'this seize' is a source typo for 'this size' and is published as is; 'this' resolves to the mound size in sentence 5, which comes right before it in the source."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 114,
+   "names_country": true,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 verbatim without its marker. It names the country through the demonym 'Danish' ('a Danish hill'), which breaks the design's V10 and T6 rule of no country, alias or demonym."
+  },
+  "verifier_false_pass": [
+   "V10 card country rule: the design says the card contains no country value, alias or demonym (country_lookup vocabulary plus a demonym table). This card says 'a Danish hill'. scripts/remediation/phase4/verify4.py card_countries checks only NAME_TO_ISO names and country_name_variants(stored country); no demonym table exists anywhere in scripts/remediation/phase4. So the demonym passes V10."
+  ]
+ },
+ {
+  "site_id": "95e422e4-a53f-4038-b260-1c5ef0d7e76f",
+  "name": "Devil's Dyke, Hertfordshire",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim apart from the dropped ', England'. The stored country and the coordinates (Wheathampstead, 51.81/-0.29) agree."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' refers back to Devil's Dyke in sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'generally agreed' is kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. It reads correctly after sentence 3 even though the oppidum context is not included."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'The western section' refers to the two sections in sentence 4."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' refers to the Devil's Dyke section in sentence 5, and 'around' and 'at its largest' are kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim (only a double space is collapsed). The restriction 'a candidate' is kept."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped '(for example, Ravensburgh Castle, Hexton)' removes only examples. 'Neither supports nor disproves' is kept."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 137,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 without its marker. Hertfordshire is a county, not a country."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "98299c91-a01b-4dfc-bc31-f8f8ce1b84a5",
+  "name": "Bziza Roman Temple",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped appositive only explains who Azizos was. The claim is unchanged."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'The deity' has its antecedent, Azizos, in sentence 1."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped tail ('at a time when Roman hegemony ... consolidated') is background only. The dating is intact."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Further excavated' implies earlier work (the Krencker survey) that the description never mentions. This is a small context gap, not a dangling reference."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the imperial conversions were dropped."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 88,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 4 verbatim, without its marker."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "9b998265-3719-4901-97b4-40275ec38f4e",
+  "name": "America's Stonehenge",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'(12 hectares)' and ', in the United States' were dropped. 'Roughly' is kept. The coordinates match Salem NH."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The negating judgement 'regarded as pseudoarchaeological' is kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the source's missing possessive ('Archaeologists radio-carbon'). It claims human occupation of the area, not that the structures are 4,000 years old."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Mystery Hill', the site's former name, is never introduced: the lead sentence that explains it was not selected. A reader cannot tell it is this site. I did not mark this broken because it is a proper name, not a pronoun, but it is a readability gap."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'His' refers to Stewart-Smith in sentence 4."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The restriction 'although no date could be ascertained' is kept."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 125,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 3 verbatim. It is accurate, but on its own, as the card for a 'Megalithic stones' site, it could suggest ancient structures. The description's pseudoarchaeology sentence and the article's colonial-farming explanation are not on the card. Not a violation of any threshold."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "9e2b99df-4b4c-41cb-80d3-879a5812e7ed",
+  "name": "La basilique Sainte-Crispine",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The stored name is French, but the Tebessa Basilica is the basilica of St Crispina (sentence 3 confirms), so this is the same site. The country (Algeria) and the coordinates (Tebessa) agree."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'One of the largest' is kept as written."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. It gives the passage's date, 305 CE."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hedge 'originally thought' is kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(20 m)' was dropped. 'About' is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'The atrium' refers to the atrium in sentence 7."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 143,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 5 verbatim. All ASCII. It names no country."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+  "name": "The Gop",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the Welsh-name parenthetical was dropped. The coordinates match Gop Cairn."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(823 feet)' was dropped. It gives 75-80m and 12m, as the passage does, so neither GP-1 anchor ('14 m high', '101 m') recurs."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The negation 'have not uncovered' and the hedge 'may indicate' are both kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim (a double space is collapsed)."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'The cave' refers to Gop Cave in sentence 5."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 103,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 with the trailing ', Wales' dropped. Every word and claim appears in the description. The GP-3 anchor '5th-4th millennium BC' is absent."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "a90e4406-25e6-4646-ae73-0730696a22d4",
+  "name": "Bury Hill",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(2.4 km)' was dropped. The coordinates match Bury Hill near Andover."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(8.9 ha)' was dropped. 'About' is kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The qualifier that recent research places the battle in Essex is kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(330 ft)' was dropped."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 103,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 with the trailing ', Hampshire' (a county) dropped. Every claim is in the description, though bare 'Andover' is less specific."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "afb20664-90a8-4e20-bc76-d6c524f5ede0",
+  "name": "Nina Kiru",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The etymology parenthetical and '(chullpa)' were dropped. The claim is unchanged."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' refers back to Nina Kiru."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(Andamarca)' was dropped. Separately, the stored coordinates (-14.6937, -74.1241) appear to sit at Puquio town, the Lucanas provincial capital, about 35 km from Andamarca and outside Carmen Salcedo District; the pinned article (fetched) gives no coordinates. That is a coordinate defect only. The description is about the named site, so this is not WRONG_SITE, and no V-rule claims to check coordinates."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 97,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 3 verbatim, without its marker. Ayacucho Region is a region, not a country."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "b0526108-102b-4092-9666-ae9947e68cf7",
+  "name": "Ambleside Roman Fort",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Tentatively' and 'either ... or' are kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped tail (the Lake District National Park) is a location detail only. '1st or 2nd century' is kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped ', by way of Hardknott Roman Fort' leaves the route claim true. Clanoventa (sentence 2) and Glannoventa (here) are the source's own confusingly similar names."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(AD 80–5)' was dropped. 'Probably' and 'at least' are kept."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Appears' and 'apparently' are kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped relative clause (Collingwood's fundraising) is not needed for the claim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the imperial conversions were dropped. 'Approximately' and 'almost' are kept."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 135,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 5 verbatim, without its marker. The hedge 'probably' is kept."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "b539ba9e-5d7e-4ce8-a9ff-943ac3247297",
+  "name": "Carnac Stones",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The Breton name and the three glosses were dropped. The claim is unchanged."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Probably around 3300 BC' and 'some may date' are kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the life dates '(1819–1881)' were dropped. 'Fewer than 700 of the 3,000' is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The dropped tail about the papers and the megalithic yard leaves the survey claim intact. 'More recent' reads correctly after the 1860s sentence."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 133,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 4 verbatim, with its hedges. No circa rewrite was needed."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "b622ebae-c26d-4aef-a028-15edc1596f02",
+  "name": "Quirigua (Parque Arqueológico y Ruinas de Quiriguá)",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim apart from the dropped IPA pronunciation. The stored record (Guatemala, 15.2696/-89.0403) matches the archaeological site, not the modern town. The description is 1075 characters without markers (V9's measure) and 1107 with them."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the unit conversions were dropped. 'It' refers back to Quiriguá in sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the 'except' restriction and the c. dates. The thin spaces come from the source."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Copán is a proper name, so the skipped sentence that introduces it leaves no dangling reference."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 124,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to sentence 6 without its marker. card_fit reports no missing glyphs, no country and no parentheses."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+  "name": "The Merry Maidens",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the grid reference and '(3 km)' were dropped; the hedge 'a likely corruption' is kept. The dating is 'Late Neolithic', as in the passage. MM-1's '4500-3000 BC' does not recur."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; the hedge 'thought to be complete' is kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'They' refers to the stones in sentence 3."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, framed as myth ('suggests')."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The preceding parenthetical '(Dans Maen translates as Stone Dance.)' was dropped. 'are said to be' is kept, and 'the dancers' refers back to sentence 6."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 87,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 8 without its trailing non-restrictive clause ', who also reported a second equally large circle of stones', ending with a full stop. The card says nothing beyond sentence 8."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "b797259e-3000-4217-b0cb-b5ace91112ea",
+  "name": "Holzbrücke Rapperswil-Hurden",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The record (bridge, Switzerland, 47.2226/8.8150) lies on the crossing. Names Switzerland, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'The wooden bridge' refers back to sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; the hedge 'possibly' is kept. It describes predecessor structures at the same crossing, as the source presents them ('many predecessors'), not another site."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'also' still makes sense after sentence 4, which names the same Hurden Rosshorn site."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the reign dates '(161–180)' were dropped. 'The Roman bridge' refers back to the Roman-era remains in sentence 5."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. This is the medieval predecessor bridge at the same crossing."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'This bridge' refers to the bridge in sentence 7."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 161,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to sentence 4 without its marker; 'possibly' is kept. No country, no parentheses, no missing glyph."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "c292f83a-933b-40e3-a658-ad7aa6c19d33",
+  "name": "Les Combarelles",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; 'approximately' is kept. Names France, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the unit conversions were dropped."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' refers to 'the cave' in sentence 3."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the gloss '(i.e. upward-pointing wedges)' was dropped."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 123,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to sentence 6 without its marker."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "c63b0df7-79e5-4734-bb99-b17ccd8f54eb",
+  "name": "Langdale Axe Industry",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(or factory)' was dropped."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; 'around' is kept."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'The area' refers to Great Langdale in sentence 1."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; the hedge 'or perhaps just collected' is kept."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the parenthetical '(or so-called \"rough-outs\")' was dropped."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the source's 'product were'. 'Ireland' here is a trade destination, not a location claim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 116,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to sentence 2 without its marker."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "c7459d30-d8e5-46af-ad54-46fcf6b1384a",
+  "name": "Vindobala",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": true,
+    "gold_error": null,
+    "note": "Garbled: 'a Roman fort with the modern name, and in the hamlet of, Rudchester, Northumberland' is ungrammatical. The garble is in the source itself and was copied verbatim; dropping the etymology parenthetical did not cause it. Rule gap: no V-rule checks that a selected sentence is well-formed, so a garbled opening sentence passes."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the conversion '(6.8 mi)' was dropped. 'It' refers to Vindobala."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the unit conversions were dropped."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' is the fort (sentence 3) and 'the wall' is Hadrian's Wall (sentence 2)."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, including the attribution 'according to the Notitia Dignitatum'."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The trailing museum clause was dropped; the meaning is unchanged."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 123,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to sentence 5 without its marker."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "c9066b1a-0da8-436f-ad87-cdec31e99366",
+  "name": "San Pawl Milqi",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the Maltese gloss was dropped. Names Malta, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; 'possibly' is kept. It repeats the passage's wording, which places the Zebbug phase under 'the Maltese Bronze Age' (externally, Żebbuġ is a Neolithic phase), but the published text adds nothing to the passage."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; the hedge 'probably' is kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'this period' refers to the Phoenician-Punic period in sentence 3."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the gloss explaining 'trapetum' was dropped. After sentence 5 on olive-oil production, the sentence still reads coherently."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 136,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to sentence 3 without its marker; 'probably' is kept."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "cac95409-52f9-4a26-bf59-fd7af98d054e",
+  "name": "Anim Synagogue",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The description opens with 'The site', whose antecedent in the passage is Horvat ʽAnim, the ruined hamlet in the unselected first lead sentence. Read as the site this description is about, it still makes sense and the sentence names the Anim Synagogue. Borderline, not marked broken. The description never states a region or country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the dimensions '(approx. 14.5 × 8.5 m)' were dropped."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The interpretive trailing clause 'reflecting the Christianisation patterns ...' was dropped; that is not a restriction and the meaning is unchanged. Sentence 1's lower/upper settlements make 'Lower ʽAnim' understandable."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 172,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Identical to sentence 2 without its marker. The ʽ character appears only in the description, not the card; card_fit reports no missing glyph."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "de42523e-9322-4dba-9448-016174872c48",
+  "name": "Teotihuacan",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The pronunciations and ', 40 kilometers (25 mi) northeast of modern-day Mexico City' were dropped; nothing becomes wrong. The description is 1070 characters without markers (1098 with). The sheet says no card is written for this site."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; a double space was normalised."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; the hedge 'perhaps' is kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'the pyramids' refers back to sentence 2."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; 'is thought to' and 'about' are kept."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim; 'may have lasted' is kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the conversion '(32 sq mi)' was dropped."
+   }
+  ],
+  "card": null,
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca",
+  "name": "Alphen aan den Rijn",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Names the site. The stored record is the town (City/town/settlement, coordinates in the town centre where Albaniana lies), so a description of the town's Roman past fits the record."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. This is background on the Oude Rijn, the river at the site. It does not credit the site with anything that belongs to another place."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'here' refers back to the Alphen area and the Oude Rijn named in sentences 1-2."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The leading 'Consequently,' was dropped. That removes a connective, not a hedge, and the claim stays the same."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'therefore' still follows from the fort and bridge in sentences 4-5, as it does in the source."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 118,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 4 exactly, without its marker. ASCII only."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "e180ea7b-079b-44f8-88db-128ddc3ee492",
+  "name": "Tiryns",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The pronunciation and Greek-name parenthetical was dropped, along with the trailing Heracles clause. The claim that remains is unchanged."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(12 mi)' was dropped. 'It' opens the sentence, and its source predecessor is sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' follows its source predecessor, sentence 3."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Its' follows its source predecessor, sentence 4."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The trailing ', within the foundations of a Mycenaean house' was dropped. That removes locational detail only: 'in Tiryns's lower town' is still true and nothing is hedged."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 118,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 3 exactly."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa",
+  "name": "Ocriticum",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. Names Italy, which matches the stored country."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. No date is attached to the Jupiter temple, so gold error OC-1 ('Roman temple to Jupiter (1st c. AD)') does not recur. 'There' opens the sentence, and its source predecessor is sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the parenthetical gloss '(copy of an original Roman military road map)' was dropped."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(where the Sun rises)' was dropped. The dating (end of the 4th century BC) matches the passage."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and the hedge 'probably' is kept. 'the sacellum' refers back to 'a sacellum of Ceres and Venus' in sentence 2."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 96,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 with its trailing span dropped (', in the province of L'Aquila in the Abruzzo region of Italy'). It is not a contiguous substring, but it adds nothing and drops only the location detail that names the country."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "e8764512-a557-49a6-b4ca-1ec9452e9563",
+  "name": "Metsamor Historical-Archaeological Museum-Reserve",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. It names the site through the article title 'Metsamor site'. Armenia matches the stored country. The museum-reserve record is about this archaeological site."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' follows its source predecessor, sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The attributions 'According to tradition' and 'researchers now believe' are kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The trailing ', in the Bronze Age or Chalcolithic; the youngest date to the 17th century CE' was dropped. The date claim is unchanged. The dropped 'or' only covered which period applies, not the date, so no hedge is lost."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'the hill' refers back to sentence 4."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 136,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentences 4 and 6 joined, without markers. They are not adjacent in the description, but both are published."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "e8ef9219-a255-457a-8f69-f365b1741038",
+  "name": "Hitzacker Archaeological Centre",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The German-name parenthetical was dropped. 'German state' matches the stored country, Germany. The Museum record fits the description."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the German-term parentheticals were dropped, and the double space was collapsed."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, with the double space collapsed."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(Hitzacker See)' was dropped."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The causal clause 'because the expansion of the lake ... endangered the cultural monuments' was dropped. 'Not until 1987' is kept, so the claim is unchanged."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'these discoveries' still has an antecedent: the 1969 discoveries in sentence 5 and the digs in sentence 6. In the source it also covered the finds of the following years, which is a minor narrowing and not a change of meaning."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 137,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 5 exactly."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "eed2d08c-3d09-4d93-885a-0b0b2eb7126d",
+  "name": "Mam Tor",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'(1,696 ft)' and ', England' were dropped."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The hill fort fits the stored Fortress/citadel record."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and the hedges 'suggests' and 'around' are kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'the paving' has no earlier mention in the description, but readers take it as the summit's paving. This is a definite noun phrase, not a dangling pronoun, and the source section words it the same way, so it is not counted as broken."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 96,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 2 exactly."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "f4f9740d-f83e-4252-a014-f34c09583cf7",
+  "name": "Bassae",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "The Latin and Greek parenthetical and ', Greece' were dropped. The claim is unchanged."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": true,
+    "gold_error": null,
+    "note": "The content matches the passage word for word, but the published text is garbled: '...on the slopes of Cotylion Mountain. near the village of Skliros, ...' has a full stop in the middle of the sentence followed by a lowercase continuation. That leaves 'near the village of Skliros ... west of Megalopolis.' as a fragment. The source typo was carried over unrepaired. This is a rule gap: V5's checks (is_complete_sentence only tests how the sentence starts and ends, plus the artefact list including 'doubled punctuation') do not catch a full stop followed by a lowercase word inside a sentence, and the shared sentence splitter did not split there either."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'Greek' matches the stored country, Greece."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. It names Bassae, which satisfies lane S."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 183,
+   "names_country": true,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentences 1 and 3 joined, without markers. The card says 'the first Greek site to be inscribed on the World Heritage List'. 'Greek' is the demonym of the stored country, Greece, and here it means 'site of Greece'. Design V10 forbids any 'country value, alias or demonym' in a card, so this fails T6's country-name rule."
+  },
+  "verifier_false_pass": [
+   "V10 (card has no country value, alias or demonym): the card contains the demonym 'Greek' ('Bassae was the first Greek site to be inscribed on the World Heritage List'). The design text of V10 promises 'country_lookup vocabulary plus a demonym table', but verify4.card_countries() uses only NAME_TO_ISO plus country_name_variants('Greece') = ['greece']. No demonym table exists in scripts/remediation/phase4 or pipeline/utils/country_lookup.py. Run on this card with stored country 'Greece', card_countries() returns [], so the card passes V10."
+  ]
+ },
+ {
+  "site_id": "f6b8fa8a-775c-4ee3-babd-1723dc03ba86",
+  "name": "Abri de la Madeleine",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. France matches the stored country. 'Aquitaine région' is the passage's own wording."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. 'It' follows its source predecessor, sentence 1."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim. The missing accents in 'Musee des Antiquites' are in the source itself and are not a glyph problem."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   }
+  ],
+  "card": {
+   "verdict": "CONTAINED",
+   "chars": 111,
+   "names_country": false,
+   "has_marker_or_missing_glyph": false,
+   "gold_error": null,
+   "note": "Sentence 1 with '(Magdalene Shelter)' and the trailing location clause (the one naming France) dropped. It is not a contiguous substring, but it adds nothing. No parentheses, ASCII only."
+  },
+  "verifier_false_pass": []
+ },
+ {
+  "site_id": "fc553d2e-73db-4bfb-b3a7-ba8f95597304",
+  "name": "Bury Walls",
+  "sentences": [
+   {
+    "n": 1,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "'(1.6 km)' and ', England' were dropped."
+   },
+   {
+    "n": 2,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 3,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only the imperial and acre conversions were dropped, and 'about' is kept."
+   },
+   {
+    "n": 4,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Only '(26 ft)' was dropped. The restriction 'except the north' is kept. 'There' opens the sentence, and its source predecessor is sentence 3."
+   },
+   {
+    "n": 5,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 6,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and both hedges ('thought at the time', 'more recently thought') are kept."
+   },
+   {
+    "n": 7,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim."
+   },
+   {
+    "n": 8,
+    "verdict": "SUPPORTED",
+    "hedge_or_negation_lost": false,
+    "meaning_flipped_by_drop": false,
+    "broken": false,
+    "gold_error": null,
+    "note": "Verbatim, and 'apparently' is kept."
+   }
+  ],
+  "card": null,
+  "verifier_false_pass": []
+ }
+]
