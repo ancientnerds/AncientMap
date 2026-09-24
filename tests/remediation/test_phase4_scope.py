@@ -287,6 +287,11 @@ def test_the_committed_scope_is_the_pinned_one_with_the_recorded_counts() -> Non
     }
 
 
+def test_the_audit_log_records_the_pinned_scope() -> None:
+    log = (MAIN_OUTPUT / "AUDIT_LOG.md").read_text(encoding="utf-8")
+    assert f"`{S.SCOPE_SHA256}`" in log
+
+
 needs_inputs = pytest.mark.skipif(
     not (RUNNER / "S0_ROWS.jsonl").exists()
     or not (MAIN_OUTPUT / "logs" / "_write_dry" / "ALL_REFUSED.jsonl").exists(),

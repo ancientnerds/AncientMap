@@ -8830,3 +8830,175 @@ $PY $M/tools/write_gate4.py --group P5 --run pilot4-2026-09-24 --rehearse
 * Pilot 4's 90 selector questions wait for their answers (runbook above); its ledger lives in its
   gitignored run directory - keep it with `HOLDS4.jsonl` and the audit verdicts in
   `pilot4_evidence/` when the result is recorded.
+
+## 2026-09-24 - The owner's defect scope: Phases 4/5 write only proven text defects (nothing written)
+
+**Decision** (Martin, 2026-09-23, answer "Nur Defekt-Sites (Recommended)"): after a passing Phase-4
+pilot, Phases 4/5 write only the sites with proven text defects - the Phase-3 cleared defects plus
+the 904 ungrounded card texts, in the design's order; every other site's description and card stay
+exactly as they are. Pilot 4 passed T1-T7 (`PILOT_RESULT_4.md`); its P4 plan then planned 128 rows for
+all 64 write-eligible pilot sites, 44 of them without any defect flag, and nothing in the code knew
+the decision. Contracts: `docs/procedures/PHASE4_CONTRACTS.md` section 9.
+
+### The 904: no list existed, so it was recomputed
+
+Searched for a list of the 904 site ids: `output/remediation` of the main checkout and of this
+worktree (every `.md`, `.json`, `.jsonl`, `.py`, `.txt`, `.log` outside the HTTP cache), the census
+runs (`run_t01` .. `run_t11`, `CENSUS.md`: no test measures card grounding), `AUDIT_LOG.md`,
+`HANDOVER.md`, `HUMAN_ONLY.md`. Only the plan (section 5.1, O3) and the design log name the number;
+no file lists the sites. **Recomputed with the documented method** (plan section 5.1: every number in
+the card checked against the generator's input, `LEFT(description, 500)` of snapshot d4526691,
+`scripts/export_card_sites.py:36`) from the S0 export `S0_ROWS.jsonl`
+(`2c99f96f...72a8`, the census's and every pilot's), whose `card` and `description` are
+byte-identical to the census snapshot of 2026-09-20 for all 5,004 sites (checked) and whose
+`snapshot_description` is d4526691's text (`snapshot_rows`). `phase4/scope4.py` states the reading:
+a number is a numeral as written - ASCII digits, comma thousands separators, a decimal part - read
+as its value (`10,000` = `10000`, `7.10` = `7.1`); it appeared when the same value is a numeral of the
+input's first 500 characters, never a digit run inside a longer numeral (`50` is not in `500`).
+
+**876 ungrounded cards** (the documented cohort: 904). The plan's three named examples are among
+them (House of Taga `10,000 BC`, Hatunmarka, Maray Qalla). One more card writes numbers but its site
+is not in d4526691 (Temple of Baalshamin 95b33efa, created after it): its generator input is unknown,
+so it is **not claimed** and the file lists it under `unclaimed`. The 2026-09-19 matcher was not
+kept, so 904 is not reproducible to the site: 40 readings measured on the same data give 788-897
+(counting Baalshamin, as the plan's table did - it places every carded site; this reading gives 877
+so). Digit runs matched as substrings give 788-793 and miss House of Taga, because `10` hides in
+`10th` and `000` in `1,200`. None reproduces the plan's other cohorts (1,225 / 1,925 / 943; cards
+without a digit are 942 here): the 2026-09-19 measurement read something this export does not
+reproduce - another number reading, or a card state before the census snapshot.
+
+### The scope (`output/remediation/phase4_runner/SCOPE4.json`, v1)
+
+sha256 `19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a`, pinned in
+`scope4.SCOPE_SHA256`; built by `plan4.py scope` from `S0_ROWS.jsonl` (`2c99f96f...`) and
+`logs/_write_dry/ALL_REFUSED.jsonl` (`7b4026d0...`), byte for byte again on every build (a test
+rebuilds it). Every site id with the lists it came from, the inputs' digests, each list's method and
+the site list's own digest (`sites_sha256`).
+
+| list | source | sites |
+|---|---|---|
+| `phase3-cleared-description` | `ALL_REFUSED.jsonl`, rule `report-only-field`, field `description` | 322 |
+| `phase3-cleared-card` | the same, field `card_description` | 709 |
+| `ungrounded-card` | plan section 5.1, recomputed (above) | 876 |
+| **the scope** | the union | **1,623** |
+
+Overlaps: description and card 85, description and ungrounded 69, card and ungrounded 157, all three
+27; the cleared defects are 946 sites (the design's number), 677 sites are in the scope for an
+ungrounded card alone. By combination: ungrounded only 677, card only 494, description only 195,
+card and ungrounded 130, description and card 58, description and ungrounded 42, all three 27. 37
+scope sites are `scope-pending` (S1 holds them before any model question).
+
+**Which flags count.** `cleared-description-defect`, `cleared-card-defect` and the ungrounded cards.
+Not `t03` (its own comment: order only; counted, it would add 555 sites) and not `t03-severe` on its
+own (it would add 101 of its 185 sites; 84 are in the scope already): T03 says the text's years and
+the period bucket disagree, not which is wrong - the census counts 0 of its findings applicable
+(proposals for human review), plan section 4.3 lists severe T03 patterns 7 and 8 as false alarms, V14
+holds a severe finding "for reading" for that reason, and on the 185 sites Phase 3's reviewer cleared
+the description defect of 18 (in the scope), refuted it on 16, left 2 unresolved and was not asked on
+149 (no usable finding). V9's floor waiver needs less than the owner's "proven" - it lets a shorter
+text replace one that may be wrong - so `t03-severe` keeps that job, and the order, inside the scope.
+
+### The rule
+
+`write4.RULE_OUT_OF_SCOPE = "outside-defect-scope"`, the writer's new refusal (contracts section 9;
+not a `model4.HoldReason`: no stage holds a site for the scope, the mass run's plan never carries
+one). `plan_p4`, `plan_legacy` and `plan_cards` take `scope` as a required keyword and ask it before
+every other rule - an out-of-scope site is counted under it whatever else holds it, and nothing of it
+is verified or read. `write_gate4` loads the pinned file for P4, L and P5 alike (a file that is not
+the pin: `WRITE_EXIT=1`), prints it, and counts the refusals on its "refused by rule" line; it has no
+flag to switch the rule off.
+
+* **L is scoped too.** L marks only a scope site Phase 4 held; an out-of-scope site gets no legacy
+  provenance and no HUMAN_ONLY line. The owner said the other sites stay as they are, and the design
+  sized L for the few hundred sites Phase 4 would hold ("about 300-600 L rows"), not for every site
+  outside the scope. What that leaves open is recorded, not decided: an out-of-scope site whose text
+  the March chain changed keeps it **without** the legacy AI marking the design meant for every held
+  site ("so no LLM-processed text stays unmarked"); whether those sites get it is the owner's
+  question (HUMAN_ONLY), not a write this gate makes.
+* **P5**: no card and no clear outside the scope; a held card that is only ungrounded keeps its text
+  (the design clears the 709 alone).
+* **V9 inside the scope**: its floor stays waived only for description defects and `t03-severe`. A
+  site in the scope for its card alone keeps the 50 % floor on its description, so
+  `PILOT_RESULT_4.md`'s "this hold cannot occur for the defect sites of the mass run" is true for the
+  description defects only - Brewer's Castle, held V9 in pilot 4, is an ungrounded-card site.
+* **Stale statements**: the scope emptied pilot 4's `p4-0004`, and its `APPLY.sql` from the unscoped
+  dry run (22:25, never rehearsed or applied) stayed beside the new, empty `PLAN.jsonl`. The gate now
+  drops the statements of a round whose new plan has no row (`drop_unwritten_statements`), never a
+  round's record (`APPLIED.json`, `REVERTED.json`) nor a stopped batch's; re-running the dry plan
+  removed them.
+
+### Pilot 4 under the scope (`runs/pilot4-2026-09-24`; 45 of its 132 sites are in the scope)
+
+| group | before the scope | with the scope |
+|---|---|---|
+| P4 (dry, sends nothing) | 128 rows (64 sites), `site-held` 68 | **52 rows (26 sites)**; `outside-defect-scope` 87, `site-held` 19; 7 open batches (`p4-0004`, `p4-0008` plan no row) |
+| P5 (dry; one read-only SELECT: live phase-4 provenance 0 of 132) | - | **22 rows, all `P5/card-clear`**; `no-card` 23, `outside-defect-scope` 87; 9 open batches |
+| L (dry; the same read) | - | 45 rows; `outside-defect-scope` 87 |
+
+The 26 P4 sites: 4 carry a description defect, 12 a card defect, 16 an ungrounded card (with
+overlaps); 38 of the 64 eligible sites are outside the scope (the 44 without a defect flag less 9
+ungrounded cards; 3 flagged `t03` only). P5's clears are what P5 plans while no P4 provenance is
+live: after the P4 pilot write a written site's card is written (`P5/card`), not cleared - the P5
+sitting follows P4 (design, production_write), so this plan is a rehearsal object, not the P5 write.
+L likewise waits for the final held set.
+
+**Rehearsed against production** (`--rehearse`: each batch's APPLY ending in ROLLBACK, then the
+read-back): **P4 7 batches, 52 rows; P5 9 batches, 22 rows** - every row still at its old value, 0
+journal rows under every stamp, no batch blocked, `every open batch rehearsed`, `WRITE_EXIT=0` both
+(`logs/p4_pilot4/scope_rehearse_p4.log` `89b676a5...`, `scope_rehearse_p5.log` `c146f562...`,
+gitignored). Plan digests, P4 `d6f0b44b` `c14e0e57` `fcc85d8f` `e395bb18` `8e192554` `151f94e4`
+`e7ff6470`; P5 `6e733f80` `44febdb2` `c6303a56` `2b43a5ac` `2756d8be` `f9f60024` `421c480d`
+`6beea591` `8e7a8e91`. Nothing was applied.
+
+### The mass run's plan
+
+`plan4.py build --pilot PILOT4.jsonl --defect-scope --out PLAN4.scope.jsonl` (sha256
+`fec903797a36f9616598fca9e7e228d0e38a15fa51f07fef2706f41de7077d22`, gitignored; offline, no model
+call): **1,578 sites in 106 batches, `p4-0010` .. `p4-0115`** (the last 3 sites), numbered after
+pilot 4's 9 so no journal stamp reuses a pilot batch id. Its sites are exactly pilot 4's plan
+(`PLAN4.pilot4.jsonl` `e99f3f7f...`, unchanged) after the pilot, filtered to the scope, same records,
+same order: 918 cleared-defect sites, then 143 T03-flagged, then 517 others. Lists over it:
+cleared card 687, cleared description 313, ungrounded card 850; flags `t03-severe` 83,
+`scope-pending` 35 (held at S1, no question), `shared-title` 51, `shared-qid` 43, `duplicate-pair` 3.
+
+* **Excluded: pilot 4's 132 sites** (45 of them in the scope: 26 write-eligible, 19 held with their
+  closed-list reasons). They are the pilot run's - the design runs the pilot first and the mass run
+  on the plan's later batches - and "hold, never retry" keeps a held pilot site held.
+* **Included: the draws of pilots 1-3** that are in the scope (59 sites). Those pilots failed their
+  thresholds and were re-drawn (the design's failure rule); nothing of theirs was written, and their
+  answers were given to prompts since changed.
+* Without the scope the mass part of pilot 4's plan is 4,872 sites in 325 batches; the scope removes
+  3,294 of them. `mass4.py` dry over `PLAN4.scope.jsonl`: `0 site(s) of the open batches outside it`;
+  over `PLAN4.pilot4.jsonl` in pilot 4's run directory: 3,294 (its 9 pilot batches are done and ask
+  nothing) - a live round with a model stage over it is refused.
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 37 new test functions (48 items): `test_phase4_scope.py` 29 (40 items), `test_phase4_write.py` 7,
+  `test_phase4_legacy.py` 1; every existing planner call passes the scope (a scope of every site where
+  a test asks another rule, `phase4_write_fixtures.EVERY_SITE`). Red first: the scope's tests before
+  `scope4` existed, the writer's and the gate's before `scope` and `_defect_scope` did, the
+  stale-statement test before its fix. Two were written after their code - a reverted round's record
+  survives a re-plan, and `--only` narrows the mass run's guard - and go red under their mutants.
+* 42 new sweep cases (`P4_SCOPE_MUTATIONS`); 2,106 labels, all unique, every anchor and test present.
+  The sweep's own `main` (driver `logs/p4_pilot4/sweep_scope.py`) over **every case whose target the
+  change touched** (write4 103, mass4 50, write_gate4 40, plan4 32, scope4 19, AUDIT_LOG 5,
+  mutation_sweep 3): **252/252 caught**, the tree byte-identical for its 7 files
+  (`logs/p4_pilot4/sweep_scope.log`; the eight touched files' sha256 checked again by hand); no
+  `# mutant` left.
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`): **6,242 passed, 111
+  skipped, 57 deselected, 0 failed** (216 s), the same 111 skips (gitignored data) as before.
+* `ruff check` and `ruff format --check` clean on the 10 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
+### Open
+
+* **The legacy AI marking of the out-of-scope March texts** (L above): the owner's question.
+* **876, not 904**: the owner decided on "the 904"; the scope is the documented method's 876 on the
+  pinned export, the 2026-09-19 list being lost. If the owner holds the old count to be the scope,
+  the 2026-09-19 inventory would have to be found and pinned as a new scope version.
+* Which run directory the mass run uses (a new one, or pilot 4's, whose 9 batches are done): the
+  plan's batch ids are after the pilot's either way.

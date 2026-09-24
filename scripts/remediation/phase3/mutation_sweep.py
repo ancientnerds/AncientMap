@@ -18191,6 +18191,15 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4S_SCOPE_TEST,
         "test_a_model_round_over_the_scopes_sites_runs",
     ),
+    # ── the audit log records the pinned scope ───────────────────────────────────────────────
+    (
+        "p4 scope: the audit log loses the pinned scope's digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a`",
+        "`mutant`",
+        P4S_SCOPE_TEST,
+        "test_the_audit_log_records_the_pinned_scope",
+    ),
 ]
 MUTATIONS += P4_SCOPE_MUTATIONS
 
