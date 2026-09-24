@@ -1025,7 +1025,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     return () => window.removeEventListener('webgl-labels-need-reload', handleLabelReload)
   }, [buildGeoLabelContext])
 
-  // When user enables labels, just show them (already preloaded)
+  // When the user enables labels, run the visibility pass (the fade pass draws their textures)
   useEffect(() => {
     if (geoLabelsVisible && labelsLoadedRef.current) updateGeoLabelsRef.current?.()
   }, [geoLabelsVisible])

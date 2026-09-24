@@ -126,7 +126,7 @@ export interface GeoLabelContext {
 }
 
 // =============================================================================
-// LABEL PRELOADING
+// LABEL LOADING - meshes at load, textures on first show
 // =============================================================================
 
 /**
