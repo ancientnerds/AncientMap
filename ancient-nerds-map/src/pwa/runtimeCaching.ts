@@ -17,8 +17,6 @@ import { BASEMAP_CACHE, VECTOR_LAYER_CACHE } from './cacheNames'
 
 type RuntimeCaching = NonNullable<NonNullable<Partial<VitePWAOptions>['workbox']>['runtimeCaching']>
 
-const ONE_YEAR = 60 * 60 * 24 * 365
-
 /**
  * The three caches of /api/sites/ answers. workbox-expiration bounds each
  * cacheName as one LRU over every URL it wrote, so the kinds are split: the
@@ -69,15 +67,18 @@ export const RUNTIME_CACHING: RuntimeCaching = [
   },
   // Basemap images - Cache First. The tiers are .webp (the old `(jpg|png)$`
   // rule never matched them, so repeat visits re-downloaded every basemap).
-  // Unversioned file names: the content is stable. The offline download
-  // (BasemapCache) writes into the same cache under the same URL.
+  // Unversioned file names: the content is stable. The offline downloads
+  // (GlobeStartCache's gray, BasemapCache's satellite) write into the same cache
+  // under the same URL. No maxAgeSeconds: the gray is stored with its network
+  // Date header and CacheFirst never renews it, so an age limit would drop it at
+  // the first offline start past that age (workbox-expiration answers null).
   {
     urlPattern: /\/data\/basemaps\/[^/?]+\.(webp|jpg|png)(\?|$)/,
     handler: 'CacheFirst',
     options: {
       cacheName: BASEMAP_CACHE,
       cacheableResponse: { statuses: [0, 200] },
-      expiration: { maxEntries: 10, maxAgeSeconds: ONE_YEAR },
+      expiration: { maxEntries: 10 },
     },
   },
   // Historical empire GeoJSON - Cache First (manually cached)

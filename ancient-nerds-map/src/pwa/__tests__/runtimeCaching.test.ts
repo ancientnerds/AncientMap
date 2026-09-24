@@ -54,8 +54,15 @@ describe('RUNTIME_CACHING', () => {
     ]) {
       expect(ruleFor(url), url).toBe(index)
     }
-    expect(rule.options?.expiration).toEqual({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 })
     expect(rule.options?.cacheableResponse).toEqual({ statuses: [0, 200] })
+  })
+
+  it('never expires a basemap by age: the offline start reads the gray the download stored', () => {
+    // GlobeStartCache stores the gray with its network Date header. CacheFirst does not
+    // renew it while fresh, so with a maxAgeSeconds workbox-expiration would drop it
+    // (cachedResponseWillBeUsed -> null) at the first offline start past that age, while
+    // the Download Manager still reports the start files as cached. maxEntries bounds it.
+    expect(ruleNamed('basemaps', 'CacheFirst').options?.expiration).toEqual({ maxEntries: 10 })
   })
 
   it('caches the hashed globe layer files CacheFirst, before the generic layer rule', () => {
