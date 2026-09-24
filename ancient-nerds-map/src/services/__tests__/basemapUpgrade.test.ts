@@ -16,6 +16,7 @@ import {
   nextAnimationFrame,
   releaseOnContextLost,
   reloadAfterContextRestored,
+  restoreGray,
   STRIP_ROWS,
   stripPlan,
   swapUniform,
@@ -441,7 +442,7 @@ const uniformOf = (ctx: BasemapContext, name: 'uGrayBasemap' | 'uSatellite') =>
   ctx.materials.map(m => m.uniforms[name].value as THREE.Texture | null)
 
 describe('loadStartGray', () => {
-  it('uploads the start-tier gray whole, before assigning it, and keeps its bitmap for a context restore', async () => {
+  it('uploads the start-tier gray whole, before assigning it, and closes its bitmap (a restore decodes it again)', async () => {
     const dec = stubDecoding(SIZES)
     const { ctx, log } = makeCtx({ start: 'med', max: 'high' })
     let assignedBeforeInit = false
@@ -457,12 +458,31 @@ describe('loadStartGray', () => {
     expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === tex)).toBe(true)
     expect(ctx.gray.tier).toBe('med')
     expect(ctx.gray.texture).toBe(tex)
-    expect(ctx.gray.keeper).toBe(tex)
-    expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).not.toHaveBeenCalled()
+    // 8192x4096 RGBA = 128 MiB of memory the page would hold for a context loss most sessions never have
+    expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).toHaveBeenCalledTimes(1)
     expect(log).not.toContain('copy')
   })
 
-  it('never replaces a higher gray that landed first, but keeps its bitmap for a context restore', async () => {
+  it('closes the bitmap of a high start tier too (512 MiB)', async () => {
+    const dec = stubDecoding(SIZES)
+    const { ctx, log } = makeCtx({ start: 'high', max: 'high' })
+    await loadStartGray(ctx, new AbortController().signal)
+    expect(ctx.gray.tier).toBe('high')
+    expect(log).not.toContain('copy')
+    expect(dec.bitmaps.get('/data/basemaps/gray_dark_high.webp')!.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not commit a start gray uploaded into a lost context, and resolves (the restore loads it)', async () => {
+    stubDecoding(SIZES)
+    const lost = { value: true }
+    const { ctx } = makeCtx({ start: 'med', max: 'high' }, lost)
+    await expect(loadStartGray(ctx, new AbortController().signal)).resolves.toBeUndefined()
+    expect(ctx.gray.texture).toBe(null)
+    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === null)).toBe(true)
+    expect(ctx.gray.wanted).toBe('med')
+  })
+
+  it('never replaces a higher gray that landed first', async () => {
     const dec = stubDecoding(SIZES)
     const release = dec.hold('/data/basemaps/gray_dark_med.webp')
     const { ctx } = makeCtx({ start: 'med', max: 'high' })
@@ -475,13 +495,10 @@ describe('loadStartGray', () => {
     expect(ctx.gray.tier).toBe('high')
     expect(ctx.gray.texture).toBe(high)
     expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === high)).toBe(true)
-    const keeper = ctx.gray.keeper!
-    expect(keeper).not.toBe(high)
-    expect(keeper.image).toBe(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp'))
-    // its GPU copy is freed at once; the open bitmap brings it back after a restore
+    // the late start texture was built and thrown away, its bitmap closed
     expect(disposeSpy).toHaveBeenCalledTimes(1)
-    expect(disposeSpy.mock.contexts[0]).toBe(keeper)
-    expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).not.toHaveBeenCalled()
+    expect(disposeSpy.mock.contexts[0]).not.toBe(high)
+    expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -499,10 +516,9 @@ describe('upgradeGray', () => {
     expect(copies.length).toBe(stripPlan(16383, 8192, STRIP_ROWS).length + 1)
     expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === high)).toBe(true)
     expect(ctx.gray.tier).toBe('high')
-    // GPU copy of the start tier is freed; its bitmap stays for a context restore
+    // GPU copy of the start tier is freed; its bitmap was closed after its upload
     expect(disposeStart).toHaveBeenCalledTimes(1)
-    expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).not.toHaveBeenCalled()
-    expect(ctx.gray.keeper).toBe(start)
+    expect(dec.bitmaps.get('/data/basemaps/gray_dark_med.webp')!.close).toHaveBeenCalledTimes(1)
   })
 
   it('does nothing when the start tier is the maximum', async () => {
@@ -615,7 +631,7 @@ describe('loadSatellite', () => {
 })
 
 describe('disposeBasemaps', () => {
-  it('aborts running loads, frees every texture, closes the kept bitmap and clears the uniforms', async () => {
+  it('aborts running loads, frees every texture, closes every bitmap and clears the uniforms', async () => {
     const dec = stubDecoding(SIZES)
     const { ctx } = makeCtx({ start: 'med', max: 'high' })
     await loadStartGray(ctx, new AbortController().signal)
@@ -638,16 +654,15 @@ describe('disposeBasemaps', () => {
     expect(dec.bitmaps.get('/data/basemaps/gray_dark_high.webp')!.close).toHaveBeenCalledTimes(1)
     expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === null)).toBe(true)
     expect(uniformOf(ctx, 'uSatellite').every(v => v === null)).toBe(true)
-    expect(ctx.gray.keeper).toBe(null)
+    expect(ctx.gray.texture).toBe(null)
   })
 })
 
 describe('releaseOnContextLost', () => {
-  it('points the gray back at the kept start texture and drops strip-built textures, without any GL call', async () => {
+  it('drops every basemap texture (none can come back from a closed bitmap), without any GL call', async () => {
     stubDecoding(SIZES)
     const { ctx, log } = makeCtx({ start: 'med', max: 'high' })
     await loadStartGray(ctx, new AbortController().signal)
-    const start = ctx.gray.keeper!
     await upgradeGray(ctx, new AbortController().signal)
     await loadSatellite(ctx, 'med', new AbortController().signal)
     const high = ctx.gray.texture!
@@ -658,27 +673,17 @@ describe('releaseOnContextLost', () => {
 
     releaseOnContextLost(ctx)
 
-    // the renderer is not touched: the context is gone, and three re-uploads the keeper at its first render
+    // the renderer is not touched: the context is gone
     expect(log.slice(before)).toEqual([])
-    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === start)).toBe(true)
+    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === null)).toBe(true)
     expect(uniformOf(ctx, 'uSatellite').every(v => v === null)).toBe(true)
     expect(disposeHigh).toHaveBeenCalledTimes(1)
     expect(disposeSat).toHaveBeenCalledTimes(1)
-    expect(ctx.gray.tier).toBe('med')
-    expect(ctx.gray.texture).toBe(start)
+    expect(ctx.gray.tier).toBe(null)
+    expect(ctx.gray.texture).toBe(null)
     expect(ctx.satellite.tier).toBe(null)
     expect(ctx.satellite.texture).toBe(null)
     expect(ctx.onSatelliteReady).toHaveBeenLastCalledWith(false)
-  })
-
-  it('clears the gray when no start texture is kept', async () => {
-    stubDecoding(SIZES)
-    const { ctx } = makeCtx({ start: 'med', max: 'high' })
-    await upgradeGray(ctx, new AbortController().signal)
-    releaseOnContextLost(ctx)
-    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === null)).toBe(true)
-    expect(ctx.gray.tier).toBe(null)
-    expect(ctx.gray.texture).toBe(null)
   })
 
   it('aborts running uploads and hands them over (no failure)', async () => {
@@ -697,22 +702,24 @@ describe('releaseOnContextLost', () => {
 })
 
 describe('reloadAfterContextRestored', () => {
-  it('names the upgrades to redo', async () => {
+  it('names what to load again', async () => {
     stubDecoding(SIZES)
     const { ctx } = makeCtx({ start: 'med', max: 'high' })
     await loadStartGray(ctx, new AbortController().signal)
     await upgradeGray(ctx, new AbortController().signal)
     await loadSatellite(ctx, 'med', new AbortController().signal)
     releaseOnContextLost(ctx)
-    expect(reloadAfterContextRestored(ctx)).toEqual({ grayUpgrade: true, satellite: true })
+    expect(reloadAfterContextRestored(ctx)).toEqual({ gray: true, satellite: true })
   })
 
-  it('asks for nothing that was never asked for', async () => {
+  it('asks for the start gray again, and for nothing that was never asked for', async () => {
     stubDecoding(SIZES)
     const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    releaseOnContextLost(ctx)
+    expect(reloadAfterContextRestored(ctx)).toEqual({ gray: false, satellite: false })
     await loadStartGray(ctx, new AbortController().signal)
     releaseOnContextLost(ctx)
-    expect(reloadAfterContextRestored(ctx)).toEqual({ grayUpgrade: false, satellite: false })
+    expect(reloadAfterContextRestored(ctx)).toEqual({ gray: true, satellite: false })
   })
 
   it('aborts loads started while the context was lost (their uploads went nowhere) and hands them over', async () => {
@@ -731,5 +738,39 @@ describe('reloadAfterContextRestored', () => {
     expect(redo.satellite).toBe(true)
     expect(ctx.satellite.texture).toBe(null)
     expect(dec.bitmaps.get('/data/basemaps/satellite_med.webp')!.close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('restoreGray', () => {
+  it('after a restore: the start tier whole first (the globe has a gray again at once), then the maximum tier', async () => {
+    const dec = stubDecoding(SIZES)
+    const { ctx, log } = makeCtx({ start: 'med', max: 'high' })
+    await loadStartGray(ctx, new AbortController().signal)
+    await upgradeGray(ctx, new AbortController().signal)
+    releaseOnContextLost(ctx)
+    reloadAfterContextRestored(ctx)
+    dec.fetched.length = 0
+    const copiesBefore = log.filter(e => e === 'copy').length
+    const release = dec.hold('/data/basemaps/gray_dark_high.webp')
+    const restoring = restoreGray(ctx, new AbortController().signal)
+    await vi.waitFor(() => expect(ctx.gray.tier).toBe('med'))
+    expect(log.filter(e => e === 'copy').length).toBe(copiesBefore) // whole: no strips
+    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === ctx.gray.texture)).toBe(true)
+    release()
+    await restoring
+    expect(dec.fetched).toEqual(['/data/basemaps/gray_dark_med.webp', '/data/basemaps/gray_dark_high.webp'])
+    expect(ctx.gray.tier).toBe('high')
+    expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === ctx.gray.texture)).toBe(true)
+  })
+
+  it('loads only the start tier when that is the maximum', async () => {
+    const dec = stubDecoding(SIZES)
+    const { ctx } = makeCtx({ start: 'med', max: 'med' })
+    await loadStartGray(ctx, new AbortController().signal)
+    releaseOnContextLost(ctx)
+    reloadAfterContextRestored(ctx)
+    await restoreGray(ctx, new AbortController().signal)
+    expect(dec.fetched).toEqual(['/data/basemaps/gray_dark_med.webp', '/data/basemaps/gray_dark_med.webp'])
+    expect(ctx.gray.tier).toBe('med')
   })
 })

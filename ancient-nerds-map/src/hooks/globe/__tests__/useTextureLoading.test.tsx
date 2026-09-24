@@ -1,8 +1,9 @@
 /**
  * The texture hook over a duck-typed renderer: only the start-tier gray is on
  * the critical path, a failure reaches onStartError instead of counting as
- * loaded, the satellite loads on request and waits for its texture, and a
- * context restore brings the start tier back.
+ * loaded, the satellite loads on request and waits for its texture, every
+ * bitmap is closed once it is on the GPU, and a context restore loads the
+ * start tier again.
  *
  * @vitest-environment jsdom
  */
@@ -326,10 +327,12 @@ describe('useTextureLoading', () => {
     expect(bitmaps.get(GRAY_LOW)!.close).toHaveBeenCalledTimes(1)
   })
 
-  it('frees the textures and closes the kept bitmap on unmount', async () => {
+  it('closes the start bitmap once it is on the GPU, and frees the textures on unmount', async () => {
     const { refs, materials } = makeRefs()
     await render(props(refs))
     await settle()
+    expect(latest.texturesReady).toBe(true)
+    expect(bitmaps.get(GRAY_LOW)!.close).toHaveBeenCalledTimes(1)
     await act(async () => { root!.unmount() })
     root = null
     expect(materials().every(m => m.uniforms.uGrayBasemap.value === null)).toBe(true)
@@ -356,7 +359,7 @@ describe('useTextureLoading', () => {
     expect(latest.satelliteReady).toBe(true)
   })
 
-  it('brings the start tier back after a context restore and asks for the upgrades again', async () => {
+  it('loads the start tier again after a context restore, then the upgrades', async () => {
     const { refs, materials, loseContext, restoreContext } = makeRefs()
     await render(props(refs))
     await settle()
@@ -370,10 +373,14 @@ describe('useTextureLoading', () => {
     holds.set(GRAY_HIGH, new Promise<void>(r => { releaseGray = r }))
     holds.set(SAT_LOW, new Promise<void>(r => { releaseSat = r }))
     await act(async () => { loseContext() })
-    expect(materials()[0].uniforms.uGrayBasemap.value).toBe(start)
+    expect(materials()[0].uniforms.uGrayBasemap.value).toBe(null)
     expect(materials()[0].uniforms.uSatellite.value).toBe(null)
     expect(latest.satelliteReady).toBe(false)
     await act(async () => { restoreContext() })
+    await settle()
+    // the start tier is back while the maximum tier still decodes
+    expect(fetched.filter(u => u === GRAY_LOW)).toHaveLength(2)
+    expect((materials()[0].uniforms.uGrayBasemap.value.image as { width: number }).width).toBe(4096)
     releaseGray()
     releaseSat()
     await settle()
@@ -393,13 +400,33 @@ describe('useTextureLoading', () => {
     })
     await render(props(refs))
     await settle()
-    const start = materials()[0].uniforms.uGrayBasemap.value
     await act(async () => { await latest.upgradeGray(new AbortController().signal) })
     await act(async () => { await latest.loadSatellite(new AbortController().signal) })
     await act(async () => { loseContext() })
     await act(async () => { restoreContext() })
-    expect(seen).toEqual([{ gray: start, sat: null }])
+    expect(seen).toEqual([{ gray: null, sat: null }])
     await settle()
+  })
+
+  it('a start gray that landed in a lost context: the start goes on, the restore loads it', async () => {
+    let release!: () => void
+    holds.set(GRAY_LOW, new Promise<void>(r => { release = r }))
+    const { refs, materials, loseContext, restoreContext } = makeRefs()
+    const p = props(refs)
+    await render(p)
+    await settle()
+    await act(async () => { loseContext() })
+    holds.delete(GRAY_LOW)
+    release()
+    await settle()
+    expect(p.onStartError).not.toHaveBeenCalled()
+    expect(latest.texturesReady).toBe(true)
+    expect(materials()[0].uniforms.uGrayBasemap.value).toBe(null)
+    await act(async () => { restoreContext() })
+    await settle()
+    expect(fetched.filter(u => u === GRAY_LOW)).toHaveLength(2)
+    expect(materials()[0].uniforms.uGrayBasemap.value).toBeInstanceOf(THREE.Texture)
+    expect(trackBackgroundFailure).not.toHaveBeenCalled()
   })
 
   it('does not commit a satellite that finished uploading while the context was lost; the restore loads it again', async () => {

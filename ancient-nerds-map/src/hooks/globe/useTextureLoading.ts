@@ -10,8 +10,9 @@
  * - The satellite shows only once its texture is on the GPU (satelliteReady);
  *   while it is switched on, its maximum tier follows, and switching it off
  *   aborts that upload.
- * - A WebGL context loss falls back to the start tier (its bitmap stays
- *   open); the restore asks again for what had been loaded on top of it.
+ * - A WebGL context loss drops both basemaps (every bitmap is closed once it is
+ *   on the GPU); the restore loads the start tier again, then what had been
+ *   loaded on top of it.
  * - Low FPS warning delay.
  */
 
@@ -27,6 +28,7 @@ import {
   nextAnimationFrame,
   releaseOnContextLost,
   reloadAfterContextRestored,
+  restoreGray,
   upgradeGray as upgradeGrayTier,
   type BasemapContext,
 } from '../../services/basemapUpgrade'
@@ -165,6 +167,8 @@ export function useTextureLoading({
     const start = new AbortController()
     loadStartGray(ctx, start.signal).then(
       () => {
+        // Unmounted: the load was cut short and handed over (disposeBasemaps), nothing to mark
+        if (start.signal.aborted) return
         refs.backgroundLoadingComplete.current = true
         setBackgroundLoadingComplete(true)
         setTexturesReady(true)
@@ -175,14 +179,14 @@ export function useTextureLoading({
       },
     )
 
-    // Textures that cannot come back from their image leave the materials on
-    // the loss: the first render after the restore may run in a listener before
-    // ours (sceneInit restarts the loop). The restore only asks for them again.
+    // The basemaps cannot come back from their (closed) images: they leave the
+    // materials on the loss, since the first render after the restore may run in
+    // a listener before ours (sceneInit restarts the loop). The restore loads them again.
     const canvas = renderer.domElement
     const onLost = () => releaseOnContextLost(ctx)
     const onRestored = () => {
       const redo = reloadAfterContextRestored(ctx)
-      if (redo.grayUpgrade) runOwn('basemap', signal => upgradeGrayTier(ctx, signal))
+      if (redo.gray) runOwn('basemap', signal => restoreGray(ctx, signal))
       if (redo.satellite) runOwn('satellite', loadSatellite)
     }
     canvas.addEventListener('webglcontextlost', onLost)
