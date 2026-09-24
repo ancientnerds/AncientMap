@@ -6,3 +6,6 @@
 
 /** Coastlines, borders, rivers, lakes and the other vector layers. */
 export const VECTOR_LAYER_CACHE = 'vector-layers'
+
+/** The basemap images (the service worker's basemap rule and the offline download) and labels.json. */
+export const BASEMAP_CACHE = 'basemaps'

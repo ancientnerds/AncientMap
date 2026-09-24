@@ -13,7 +13,7 @@
 
 import type { VitePWAOptions } from 'vite-plugin-pwa'
 
-import { VECTOR_LAYER_CACHE } from './cacheNames'
+import { BASEMAP_CACHE, VECTOR_LAYER_CACHE } from './cacheNames'
 
 type RuntimeCaching = NonNullable<NonNullable<Partial<VitePWAOptions>['workbox']>['runtimeCaching']>
 
@@ -75,7 +75,7 @@ export const RUNTIME_CACHING: RuntimeCaching = [
     urlPattern: /\/data\/basemaps\/[^/?]+\.(webp|jpg|png)(\?|$)/,
     handler: 'CacheFirst',
     options: {
-      cacheName: 'basemaps',
+      cacheName: BASEMAP_CACHE,
       cacheableResponse: { statuses: [0, 200] },
       expiration: { maxEntries: 10, maxAgeSeconds: ONE_YEAR },
     },

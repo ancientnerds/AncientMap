@@ -45,9 +45,10 @@
  *   the 16k allocation measured 458-499 ms. The one out-of-memory check runs a
  *   frame after the mip copy. `isContextLost` reads a flag, it is no query.
  *
- * Plain `fetch`, not offlineFetch: today's <img> loads never failed in app
- * offline mode, and the service worker's basemap rule (src/pwa/runtimeCaching)
- * serves the offline download from the 'basemaps' cache.
+ * Plain `fetch`, not offlineFetch: the service worker's basemap rule
+ * (src/pwa/runtimeCaching) serves these URLs from the 'basemaps' cache, which
+ * every offline download fills with the gray tiers (services/GlobeStartCache)
+ * and the 'Satellite' download with the satellite tiers.
  */
 
 import * as THREE from 'three'
