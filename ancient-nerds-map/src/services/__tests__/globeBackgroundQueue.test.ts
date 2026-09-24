@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  BG_TASK_DEADLINE_MS,
   browserQueueScheduling,
   createGlobeBackgroundQueue,
   globeBackgroundTasks,
@@ -53,6 +54,8 @@ function harness() {
   const idle: Array<() => void> = []
   const visibility = new Set<() => void>()
   const page = { hidden: false, time: 0 }
+  /** Timers on the injected clock; `advance` fires the due ones. */
+  const timers: Array<{ at: number; cb: () => void }> = []
   const done: Array<[BgTaskName, number]> = []
   const failed: Array<[BgTaskName, unknown]> = []
   const queue = createGlobeBackgroundQueue({
@@ -69,9 +72,30 @@ function harness() {
       return () => { visibility.delete(cb) }
     },
     now: () => page.time,
+    setTimer: (cb, ms) => {
+      const timer = { at: page.time + ms, cb }
+      timers.push(timer)
+      return () => {
+        const i = timers.indexOf(timer)
+        if (i !== -1) timers.splice(i, 1)
+      }
+    },
     onTaskDone: (name, ms) => { done.push([name, ms]) },
     onTaskFailed: (name, err) => { failed.push([name, err]) },
   })
+  /** Moves the clock on, firing every timer that falls due on the way. */
+  const advance = async (ms: number) => {
+    const until = page.time + ms
+    for (;;) {
+      const due = timers.filter(t => t.at <= until).sort((a, b) => a.at - b.at)[0]
+      if (!due) break
+      timers.splice(timers.indexOf(due), 1)
+      page.time = due.at
+      due.cb()
+    }
+    page.time = until
+    await flush()
+  }
   /** Fires the oldest idle callback, then lets the promise chains settle. */
   const runIdle = async () => {
     const cb = idle.shift()
@@ -84,7 +108,7 @@ function harness() {
     for (const cb of [...visibility]) cb()
     await flush()
   }
-  return { queue, idle, visibility, page, done, failed, runIdle, setHidden }
+  return { queue, idle, visibility, page, timers, done, failed, runIdle, setHidden, advance }
 }
 
 describe('createGlobeBackgroundQueue', () => {
@@ -163,10 +187,12 @@ describe('createGlobeBackgroundQueue', () => {
     await h.runIdle()
     expect(a.starts).toBe(1)
     await h.setHidden(true) // hidden while running: the task itself decides (rAF pauses, deadlines count visible time)
-    expect(h.visibility.size).toBe(0)
+    expect(h.visibility.size).toBe(1) // only the running task's deadline listens (it counts visible time)
+    expect(h.idle).toHaveLength(0)
     a.resolve()
     await flush()
     expect(h.done).toEqual([['details', 0]])
+    expect(h.visibility.size).toBe(0)
   })
 
   it('reports a failing task and still runs the next one', async () => {
@@ -379,6 +405,150 @@ describe('createGlobeBackgroundQueue', () => {
   })
 })
 
+describe('the per-task deadline', () => {
+  const message = (name: BgTaskName) => `Background task ${name} did not finish within 90 s of visible time`
+
+  it('is 90 s of visible time', () => {
+    expect(BG_TASK_DEADLINE_MS).toBe(90_000)
+  })
+
+  it('aborts a task that does not finish in time, reports it and moves on', async () => {
+    const h = harness()
+    const a = deferred('details')
+    const b = deferred('layers')
+    h.queue.add(a.task)
+    h.queue.add(b.task)
+    h.queue.start()
+    await h.runIdle()
+    await h.advance(89_999)
+    expect(a.signal?.aborted).toBe(false)
+    expect(h.failed).toEqual([])
+    await h.advance(1)
+    expect(a.signal?.aborted).toBe(true)
+    expect(h.failed).toHaveLength(1)
+    const [name, err] = h.failed[0]
+    expect(name).toBe('details')
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toBe(message('details'))
+    expect(a.signal?.reason).toBe(err) // the task sees why it was stopped
+    expect(h.queue.promote('details')).toBe(false) // over: a caller does the work itself
+    expect(h.idle).toHaveLength(1)
+    await h.runIdle()
+    expect(b.starts).toBe(1)
+  })
+
+  it('counts only visible time', async () => {
+    const h = harness()
+    const a = deferred('mapbox')
+    h.queue.add(a.task)
+    h.queue.start()
+    await h.runIdle()
+    await h.advance(60_000)
+    await h.setHidden(true)
+    await h.advance(10 * 60_000) // a hidden tab: the task may not get a single frame
+    expect(a.signal?.aborted).toBe(false)
+    await h.setHidden(false)
+    await h.advance(29_999)
+    expect(a.signal?.aborted).toBe(false)
+    await h.advance(1)
+    expect(a.signal?.aborted).toBe(true)
+    expect(h.failed.map(([name]) => name)).toEqual(['mapbox'])
+  })
+
+  it('a visibilitychange that stays visible changes nothing', async () => {
+    const h = harness()
+    const a = deferred('layers')
+    h.queue.add(a.task)
+    h.queue.start()
+    await h.runIdle()
+    await h.advance(40_000)
+    await h.setHidden(false)
+    await h.advance(49_999)
+    expect(a.signal?.aborted).toBe(false)
+    await h.advance(1)
+    expect(a.signal?.aborted).toBe(true)
+  })
+
+  it('ends with the task: no timer and no listener stay behind, nothing is reported later', async () => {
+    const h = harness()
+    const a = deferred('satellite')
+    h.queue.add(a.task)
+    h.queue.start()
+    await h.runIdle()
+    await h.advance(1_000)
+    a.resolve()
+    await flush()
+    expect(h.timers).toHaveLength(0)
+    expect(h.visibility.size).toBe(0)
+    await h.advance(200_000)
+    expect(h.done).toEqual([['satellite', 1_000]])
+    expect(h.failed).toEqual([])
+  })
+
+  it('a failing task stops its deadline too', async () => {
+    const h = harness()
+    const a = deferred('layers')
+    h.queue.add(a.task)
+    h.queue.start()
+    await h.runIdle()
+    a.reject(new Error('/data/layers/globe/coast_detail.json: HTTP 404'))
+    await flush()
+    expect(h.timers).toHaveLength(0)
+    expect(h.visibility.size).toBe(0)
+    await h.advance(200_000)
+    expect(h.failed).toHaveLength(1)
+  })
+
+  it('a task that settles after its deadline is not reported a second time', async () => {
+    const h = harness()
+    const a = deferred('details')
+    const b = deferred('sw')
+    h.queue.add(a.task)
+    h.queue.add(b.task)
+    h.queue.start()
+    await h.runIdle()
+    await h.advance(90_000)
+    await h.runIdle()
+    expect(b.starts).toBe(1)
+    a.resolve() // the late answer
+    await flush()
+    expect(h.done).toEqual([])
+    expect(h.failed.map(([name]) => name)).toEqual(['details'])
+    expect(h.queue.promote('sw')).toBe(true) // the next task keeps running
+  })
+
+  it('every task gets its own 90 s', async () => {
+    const h = harness()
+    const a = deferred('details')
+    const b = deferred('layers')
+    h.queue.add(a.task)
+    h.queue.add(b.task)
+    h.queue.start()
+    await h.runIdle()
+    await h.advance(80_000)
+    a.resolve()
+    await flush()
+    await h.runIdle()
+    await h.advance(89_999)
+    expect(b.signal?.aborted).toBe(false)
+    await h.advance(1)
+    expect(b.signal?.aborted).toBe(true)
+  })
+
+  it('dispose stops the deadline of the running task', async () => {
+    const h = harness()
+    const a = deferred('mapbox')
+    h.queue.add(a.task)
+    h.queue.start()
+    await h.runIdle()
+    h.queue.dispose()
+    expect(h.timers).toHaveLength(0)
+    expect(h.visibility.size).toBe(0)
+    await h.advance(200_000)
+    expect(h.failed).toEqual([])
+  })
+})
+
 describe('globeBackgroundTasks', () => {
   const run = (label: string) => Object.assign(async () => {}, { label })
   const base = {
@@ -436,6 +606,22 @@ describe('browserQueueScheduling', () => {
     const stop = browserQueueScheduling().scheduleIdle(cb2)
     stop()
     vi.advanceTimersByTime(100)
+    expect(cb2).not.toHaveBeenCalled()
+  })
+
+  it('sets its deadline timers with setTimeout', () => {
+    vi.useFakeTimers()
+    const cb = vi.fn()
+    const s = browserQueueScheduling()
+    s.setTimer(cb, 1000)
+    vi.advanceTimersByTime(999)
+    expect(cb).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(cb).toHaveBeenCalledTimes(1)
+    const cb2 = vi.fn()
+    const cancel = s.setTimer(cb2, 1000)
+    cancel()
+    vi.advanceTimersByTime(2000)
     expect(cb2).not.toHaveBeenCalled()
   })
 

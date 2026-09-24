@@ -12,9 +12,15 @@
  *   visible again. A task that is already running decides for itself (strip
  *   uploads pause with requestAnimationFrame, Mapbox deadlines count visible
  *   time).
+ * - A task that has not finished after BG_TASK_DEADLINE_MS of visible time
+ *   is aborted (its signal carries the reason), reported through
+ *   `onTaskFailed`, and the queue moves on: a request that never answers must
+ *   not hold everything queued behind it. What the task still does after that
+ *   is not reported. Tasks with tighter limits of their own (Mapbox: 60 s for
+ *   the chunk, 20 s for the map) keep them.
  * - A failure is reported through `onTaskFailed` and the queue moves on. A
- *   task the queue aborted itself (dispose) is neither done nor failed; any
- *   other rejection, an AbortError included, is a failure.
+ *   task the queue aborted on dispose is neither done nor failed; any other
+ *   rejection, an AbortError included, is a failure.
  *
  * No browser access at module scope; `browserQueueScheduling` reads the
  * browser only when it is called.
@@ -42,6 +48,9 @@ export interface GlobeBackgroundQueue {
   dispose(): void
 }
 
+/** Visible time a task gets before the queue aborts it and moves on. */
+export const BG_TASK_DEADLINE_MS = 90_000
+
 export interface GlobeBackgroundQueueDeps {
   /** Calls `cb` at the next idle moment; returns a cancel function. */
   scheduleIdle: (cb: () => void) => () => void
@@ -49,6 +58,8 @@ export interface GlobeBackgroundQueueDeps {
   /** Subscribes to visibility changes; returns an unsubscribe function. */
   onVisibilityChange: (cb: () => void) => () => void
   now: () => number
+  /** Calls `cb` after `ms`; returns a cancel function (the per-task deadline). */
+  setTimer: (cb: () => void, ms: number) => () => void
   onTaskDone: (name: BgTaskName, ms: number) => void
   onTaskFailed: (name: BgTaskName, err: unknown) => void
 }
@@ -57,8 +68,8 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
   const pending: BgTask[] = []
   let started = false
   let disposed = false
-  /** The running task and its controller; null between tasks. */
-  let running: { name: BgTaskName; ctrl: AbortController } | null = null
+  /** The running task, its controller and the stop of its deadline; null between tasks. */
+  let running: { name: BgTaskName; ctrl: AbortController; stopDeadline: () => void } | null = null
   /** Cancels the scheduled idle callback or the visibility wait; null when neither is booked. */
   let cancelWait: (() => void) | null = null
 
@@ -87,11 +98,53 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
     cancelWait = unsubscribe
   }
 
+  /**
+   * Calls `onExpire` once `ms` of visible time have passed: the clock stops
+   * while the tab is hidden and goes on with what was left when it is visible
+   * again. Returns the stop.
+   */
+  function visibleDeadline(ms: number, onExpire: () => void): () => void {
+    let left = ms
+    let since = 0
+    let cancelTimer: (() => void) | null = null
+    const arm = () => {
+      since = deps.now()
+      cancelTimer = deps.setTimer(expire, Math.max(0, left))
+    }
+    const unsubscribe = deps.onVisibilityChange(() => {
+      if (deps.isHidden() && cancelTimer) {
+        cancelTimer()
+        cancelTimer = null
+        left -= deps.now() - since
+      } else if (!deps.isHidden() && !cancelTimer) {
+        arm()
+      }
+    })
+    function expire(): void {
+      cancelTimer = null
+      unsubscribe()
+      onExpire()
+    }
+    if (!deps.isHidden()) arm()
+    return () => {
+      cancelTimer?.()
+      cancelTimer = null
+      unsubscribe()
+    }
+  }
+
   function runNext(): void {
     const task = pending.shift()
     if (!task) return
     const ctrl = new AbortController()
-    running = { name: task.name, ctrl }
+    const stopDeadline = visibleDeadline(BG_TASK_DEADLINE_MS, () => {
+      const err = new Error(`Background task ${task.name} did not finish within ${BG_TASK_DEADLINE_MS / 1000} s of visible time`)
+      ctrl.abort(err)
+      running = null
+      deps.onTaskFailed(task.name, err)
+      scheduleNext()
+    })
+    running = { name: task.name, ctrl, stopDeadline }
     const startedAt = deps.now()
     let result: Promise<void>
     try {
@@ -101,13 +154,15 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
     }
     result.then(
       () => {
-        if (ctrl.signal.aborted) return // disposed while it ran
+        if (ctrl.signal.aborted) return // disposed or past its deadline: already settled for the queue
+        stopDeadline()
         running = null
         deps.onTaskDone(task.name, deps.now() - startedAt)
         scheduleNext()
       },
       (err: unknown) => {
-        if (ctrl.signal.aborted) return // the queue cancelled it: not a failure
+        if (ctrl.signal.aborted) return // the queue stopped it (dispose, deadline): reported there or not at all
+        stopDeadline()
         running = null
         deps.onTaskFailed(task.name, err)
         scheduleNext()
@@ -141,6 +196,7 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
       pending.length = 0
       cancelWait?.()
       cancelWait = null
+      running?.stopDeadline()
       running?.ctrl.abort(new DOMException('The globe background queue was disposed', 'AbortError'))
       running = null
     },
@@ -153,7 +209,7 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
  * stands in (feature detection, not a fallback: the queue only needs "not in
  * this frame").
  */
-export function browserQueueScheduling(): Pick<GlobeBackgroundQueueDeps, 'scheduleIdle' | 'isHidden' | 'onVisibilityChange' | 'now'> {
+export function browserQueueScheduling(): Pick<GlobeBackgroundQueueDeps, 'scheduleIdle' | 'isHidden' | 'onVisibilityChange' | 'now' | 'setTimer'> {
   return {
     scheduleIdle: cb => {
       if (typeof requestIdleCallback === 'function') {
@@ -169,6 +225,10 @@ export function browserQueueScheduling(): Pick<GlobeBackgroundQueueDeps, 'schedu
       return () => document.removeEventListener('visibilitychange', cb)
     },
     now: () => performance.now(),
+    setTimer: (cb, ms) => {
+      const id = setTimeout(cb, ms)
+      return () => clearTimeout(id)
+    },
   }
 }
 
