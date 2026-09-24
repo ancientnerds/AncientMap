@@ -184,9 +184,8 @@ export function ensureLabelTexture(item: GlobeLabel): void {
  *
  * Each mesh is created at its texture's size but without the texture and stays
  * invisible; the texture is drawn when the label is first shown (the fade pass,
- * `applyGeoLabelFades`) or earlier by the background task `labels`. The labels
- * visible right now are textured here, before labelsLoaded, so globe_ready
- * still means that every label on screen is drawn.
+ * `applyGeoLabelFades`). The labels visible right now are textured here, before
+ * labelsLoaded, so globe_ready still means that every label on screen is drawn.
  */
 export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
   if (!ctx.sceneRef.current) return
@@ -241,74 +240,6 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
 
   ctx.labelsLoadedRef.current = true
   ctx.setLabelsLoaded(true)
-}
-
-/**
- * Background task `labels`: draws the textures of the labels the fade pass can
- * show and that have none yet, a few per slice (at most `sliceMs` of drawing,
- * at least one label), each slice after an idle moment. A later zoom or the
- * labels toggle then finds them drawn instead of drawing dozens in one frame.
- * `getLabels` is read every slice: a context-loss reload replaces the list,
- * and the walk starts over on the new one. Rejects with the signal's reason
- * when aborted.
- */
-export function textureGeoLabelsInBackground(
-  getLabels: () => GlobeLabel[],
-  scheduling: { scheduleIdle: (cb: () => void) => () => void; now: () => number },
-  signal: AbortSignal,
-  sliceMs = 8,
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    let source: GlobeLabel[] | null = null
-    let todo: GlobeLabel[] = []
-    let next = 0
-    let cancelIdle: (() => void) | null = null
-
-    const onAbort = () => {
-      cancelIdle?.()
-      cancelIdle = null
-      reject(signal.reason)
-    }
-
-    const step = () => {
-      try {
-        slice()
-      } catch (err) {
-        signal.removeEventListener('abort', onAbort)
-        reject(err)
-      }
-    }
-
-    const slice = () => {
-      cancelIdle = null
-      const labels = getLabels()
-      if (labels !== source) {
-        source = labels
-        todo = shownGeoLabels(labels)
-        next = 0
-      }
-      const sliceStart = scheduling.now()
-      while (next < todo.length) {
-        const item = todo[next++]
-        if (hasTexture(item)) continue
-        ensureLabelTexture(item)
-        if (scheduling.now() - sliceStart >= sliceMs) break
-      }
-      if (next < todo.length) {
-        cancelIdle = scheduling.scheduleIdle(step)
-        return
-      }
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }
-
-    if (signal.aborted) {
-      reject(signal.reason)
-      return
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    step()
-  })
 }
 
 // =============================================================================
@@ -801,18 +732,36 @@ export function updateGeoLabels(ctx: GeoLabelContext): void {
 // =============================================================================
 
 /**
+ * Texture drawing the fade pass may do in one frame. A zoom to the closest
+ * Three.js view with labels on makes ~970 labels eligible at once (the
+ * collision is global): drawn in one frame that was a 206 ms task on the
+ * desktop probe and 1.37 s on the emulated phone (CPU x4). With the budget
+ * they appear over the next frames instead, in the fade pass's order.
+ */
+export const LABEL_TEXTURE_BUDGET_MS = 8
+
+/**
  * Fades geo and layer labels in or out when their collision result changed.
  * Backside hiding is the shader's vViewFade. Visibility is keyed by name: of
  * labels sharing a name only the first (geo labels come first) changes state.
- * A label's texture is drawn here the first time it is shown.
+ *
+ * A label's texture is drawn here the first time it is shown, at most
+ * `budgetMs` of drawing per call (the first texture of a call always).
+ * A label over the budget keeps its old state until a later frame, and so does
+ * every later label of its name, so a same-named label never shows in its
+ * place.
  */
-export function applyGeoLabelFades(ctx: {
-  geoLabelsRef: { current: GlobeLabel[] }
-  layerLabelsRef: { current: Record<string, GlobeLabel[]> }
-  fadeManagerRef: { current: FadeManager }
-  labelVisibilityStateRef: { current: Map<string, boolean> }
-  visibleAfterCollisionRef: { current: Set<string> }
-}): void {
+export function applyGeoLabelFades(
+  ctx: {
+    geoLabelsRef: { current: GlobeLabel[] }
+    layerLabelsRef: { current: Record<string, GlobeLabel[]> }
+    fadeManagerRef: { current: FadeManager }
+    labelVisibilityStateRef: { current: Map<string, boolean> }
+    visibleAfterCollisionRef: { current: Set<string> }
+  },
+  now: () => number = () => performance.now(),
+  budgetMs: number = LABEL_TEXTURE_BUDGET_MS,
+): void {
   const geoAndLayerLabels = [
     ...ctx.geoLabelsRef.current,
     ...Object.values(ctx.layerLabelsRef.current).flat()
@@ -820,23 +769,37 @@ export function applyGeoLabelFades(ctx: {
 
   const fm = ctx.fadeManagerRef.current
   const visibilityState = ctx.labelVisibilityStateRef.current
+  /** When this call drew its first texture; null until it draws one. */
+  let drawingSince: number | null = null
+  let budgetSpent = false
+  let waiting: Set<string> | null = null
 
   for (const item of geoAndLayerLabels) {
     const labelName = item.label.name
+    if (waiting?.has(labelName)) continue
 
     // Target visibility based on collision detection
     const shouldBeVisible = ctx.visibleAfterCollisionRef.current.has(labelName)
     const isCurrentlyVisible = visibilityState.get(labelName) ?? false
 
     // Only trigger fade when visibility state changes
-    if (shouldBeVisible !== isCurrentlyVisible) {
-      visibilityState.set(labelName, shouldBeVisible)
-      if (shouldBeVisible) {
-        ensureLabelTexture(item)
-        fadeLabelIn(item.mesh, fm, `geo-${labelName}`)
-      } else {
-        fadeLabelOut(item.mesh, fm, `geo-${labelName}`)
+    if (shouldBeVisible === isCurrentlyVisible) continue
+
+    if (shouldBeVisible && !hasTexture(item)) {
+      if (budgetSpent) {
+        (waiting ??= new Set()).add(labelName)
+        continue
       }
+      drawingSince ??= now()
+      ensureLabelTexture(item)
+      budgetSpent = now() - drawingSince >= budgetMs
+    }
+
+    visibilityState.set(labelName, shouldBeVisible)
+    if (shouldBeVisible) {
+      fadeLabelIn(item.mesh, fm, `geo-${labelName}`)
+    } else {
+      fadeLabelOut(item.mesh, fm, `geo-${labelName}`)
     }
   }
 }

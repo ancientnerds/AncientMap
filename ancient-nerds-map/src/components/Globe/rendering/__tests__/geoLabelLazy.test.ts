@@ -7,7 +7,8 @@
  * - a mesh is created with its texture's size but without the texture and
  *   stays invisible until the show path draws the texture;
  * - labels that would be visible at load are textured before labelsLoaded;
- * - the background task textures the rest in short slices.
+ * - the show path draws at most a frame budget of textures per frame, so a
+ *   zoom that reveals hundreds of labels never draws them in one task.
  * Node environment, the 2D canvas faked (labelTestCanvas).
  */
 
@@ -29,7 +30,6 @@ import {
   loadGeoLabels,
   selectGeoLabels,
   shownGeoLabels,
-  textureGeoLabelsInBackground,
   type GeoLabel,
   type GeoLabelContext,
   type GlobeLabel,
@@ -299,92 +299,83 @@ describe('context loss', () => {
   })
 })
 
-describe('textureGeoLabelsInBackground', () => {
-  function scheduling() {
-    const idle: Array<() => void> = []
-    const clock = { t: 0 }
-    return {
-      idle,
-      clock,
-      deps: {
-        scheduleIdle: (cb: () => void) => {
-          idle.push(cb)
-          return () => {
-            const i = idle.indexOf(cb)
-            if (i !== -1) idle.splice(i, 1)
-          }
-        },
-        // Every reading of the clock is 3 ms after the last: three labels fit an 8 ms slice
-        now: () => (clock.t += 3),
-      },
-    }
+describe('the frame budget of the show path', () => {
+  /** A clock that moves 3 ms per reading: with an 8 ms budget a frame draws three textures. */
+  const steppingClock = () => {
+    let t = 0
+    return () => (t += 3)
   }
+  const shownNames = (ctx: GeoLabelContext) =>
+    ctx.geoLabelsRef.current.filter(item => item.mesh.visible).map(item => `${item.label.type}:${item.label.name}`)
 
-  it('textures every label the pass can show, a few per idle slice', async () => {
+  it('draws at most a budget of textures per frame and shows the rest in the next frames', async () => {
     const { ctx } = makeContext()
     await loadGeoLabels(ctx)
-    const s = scheduling()
-    let settled = false
-    const done = textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, new AbortController().signal, 8)
-      .then(() => { settled = true })
+    const names = ['Europe', 'Germany', 'Russia', 'Canada', 'Seychelles', 'Berlin', 'Alps']
+    ctx.visibleAfterCollisionRef.current = new Set(names)
+    const clock = steppingClock()
 
-    const shown = shownGeoLabels(ctx.geoLabelsRef.current)
-    const perSlice: number[] = [drawnTexts(canvases).length]
-    while (s.idle.length > 0) {
-      expect(s.idle).toHaveLength(1)
-      s.idle.shift()!()
-      perSlice.push(drawnTexts(canvases).length - perSlice.reduce((a, b) => a + b, 0))
-    }
-    await done
-    expect(settled).toBe(true)
-    expect(perSlice.every(n => n <= 3)).toBe(true)
-    expect(perSlice.length).toBeGreaterThan(1)
+    applyGeoLabelFades(ctx, clock, 8)
+    expect(drawnTexts(canvases)).toHaveLength(3)
+    expect(shownNames(ctx)).toEqual(['continent:Europe', 'country:Germany', 'country:Russia'])
+
+    applyGeoLabelFades(ctx, clock, 8)
+    applyGeoLabelFades(ctx, clock, 8)
+    expect(drawnTexts(canvases)).toHaveLength(7)
+    expect(shownNames(ctx)).toHaveLength(7)
+    // Waiting labels stayed hidden and untextured until their frame
     for (const item of ctx.geoLabelsRef.current) {
-      expect(textureOf(item.mesh) !== null).toBe(shown.includes(item))
-      expect(item.mesh.visible).toBe(false)
+      expect(item.mesh.visible).toBe(names.includes(item.label.name) && item === find(ctx, item.label.name, item.label.type))
     }
   })
 
-  it('skips labels that already have their texture', async () => {
+  it('never shows another label of the same name while the first waits for its texture', async () => {
     const { ctx } = makeContext()
     await loadGeoLabels(ctx)
-    for (const item of shownGeoLabels(ctx.geoLabelsRef.current)) ensureLabelTexture(item)
-    const drawn = drawnTexts(canvases).length
-    const s = scheduling()
-    await textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, new AbortController().signal, 8)
-    expect(s.idle).toEqual([])
-    expect(drawnTexts(canvases)).toHaveLength(drawn)
+    // A layer label named like a waiting geo label: textured, but not the one the pass shows
+    const lake = { label: { name: 'Victoria', lat: -1, lng: 33, type: 'lake', rank: 1 } as GeoLabel } as GlobeLabel
+    lake.mesh = find(ctx, 'Berlin', 'capital').mesh.clone() as GlobeLabelMesh
+    lake.mesh.material = (lake.mesh.material as THREE.ShaderMaterial).clone()
+    ;(lake.mesh.material as THREE.ShaderMaterial).uniforms.map.value = new THREE.Texture()
+    ctx.layerLabelsRef.current = { lakes: [lake] }
+    ctx.visibleAfterCollisionRef.current = new Set(['Europe', 'Germany', 'Russia', 'Victoria'])
+    const clock = steppingClock()
+
+    applyGeoLabelFades(ctx, clock, 8)
+    const victorias = ctx.geoLabelsRef.current.filter(item => item.label.name === 'Victoria')
+    expect(victorias.map(item => item.mesh.visible)).toEqual([false, false])
+    expect(lake.mesh.visible).toBe(false)
+    expect(ctx.labelVisibilityStateRef.current.get('Victoria')).toBeUndefined()
+
+    applyGeoLabelFades(ctx, clock, 8)
+    expect(victorias.map(item => item.mesh.visible)).toEqual([true, false])
+    expect(lake.mesh.visible).toBe(false)
   })
 
-  it('stops at an abort between slices with the signal reason', async () => {
+  it('hides and shows textured labels whatever the budget', async () => {
     const { ctx } = makeContext()
     await loadGeoLabels(ctx)
-    const s = scheduling()
-    const ctrl = new AbortController()
-    const done = textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, ctrl.signal, 8)
-    expect(s.idle).toHaveLength(1)
-    const drawn = drawnTexts(canvases).length
-    const reason = new DOMException('The globe background queue was disposed', 'AbortError')
-    ctrl.abort(reason)
-    await expect(done).rejects.toBe(reason)
-    expect(s.idle).toEqual([])
-    expect(drawnTexts(canvases)).toHaveLength(drawn)
+    for (const name of ['Europe', 'Germany', 'Russia', 'Canada']) ensureLabelTexture(shownGeoLabels(ctx.geoLabelsRef.current).find(i => i.label.name === name)!)
+    ctx.visibleAfterCollisionRef.current = new Set(['Europe', 'Germany', 'Russia', 'Canada'])
+    const spent = () => 1000 // every reading says the budget is gone
+
+    applyGeoLabelFades(ctx, spent, 8)
+    expect(shownNames(ctx)).toEqual(['continent:Europe', 'country:Germany', 'country:Russia', 'country:Canada'])
+
+    ctx.visibleAfterCollisionRef.current = new Set(['Europe'])
+    applyGeoLabelFades(ctx, spent, 8)
+    expect(['Germany', 'Russia', 'Canada'].map(n => ctx.labelVisibilityStateRef.current.get(n))).toEqual([false, false, false])
   })
 
-  it('follows a reload: the labels of the new load are the ones textured', async () => {
+  it('draws the first texture of a frame even when that one label is over the budget', async () => {
     const { ctx } = makeContext()
     await loadGeoLabels(ctx)
-    const s = scheduling()
-    const done = textureGeoLabelsInBackground(() => ctx.geoLabelsRef.current, s.deps, new AbortController().signal, 8)
-    const before = ctx.geoLabelsRef.current
-
-    ctx.needsLabelReloadRef.current = true
-    handleLabelReload(ctx)
-    clearLabelTextureCache()
-    await loadGeoLabels(ctx)
-    expect(ctx.geoLabelsRef.current).not.toBe(before)
-    while (s.idle.length > 0) s.idle.shift()!()
-    await done
-    for (const item of shownGeoLabels(ctx.geoLabelsRef.current)) expect(textureOf(item.mesh)).not.toBeNull()
+    ctx.visibleAfterCollisionRef.current = new Set(['Europe', 'Germany'])
+    let t = 0
+    const slow = () => (t += 50)
+    applyGeoLabelFades(ctx, slow, 8)
+    expect(shownNames(ctx)).toEqual(['continent:Europe'])
+    applyGeoLabelFades(ctx, slow, 8)
+    expect(shownNames(ctx)).toEqual(['continent:Europe', 'country:Germany'])
   })
 })
