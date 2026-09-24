@@ -157,6 +157,34 @@ describe('useFlyToAnimation', () => {
     expect(booked).not.toHaveBeenCalled()
   })
 
+  // Globe calls useGlobeRefs() on every render, which builds a fresh object
+  // around the same stable refs: a re-render (cursor move, zoom, a prop from
+  // App) with an unchanged flyTo must not fly again.
+  it('does not fly again when the globe re-renders with the same target after the warp has started', async () => {
+    const { refs } = makeRefs(1234)
+    const athens: [number, number] = [23.7, 37.98]
+    await render(refs, athens)
+    expect(booked).toHaveBeenCalledOnce()
+    runFlight(refs)
+    expect(refs.isAutoRotating.current).toBe(true)
+    booked.mockClear()
+    await render({ ...refs }, athens)
+    await render({ ...refs }, athens)
+    expect(booked).not.toHaveBeenCalled()
+    expect(refs.isAutoRotating.current).toBe(true)
+  })
+
+  it('a waiting fly-to is not flown by a re-render during the warp, only at its end', async () => {
+    const { refs } = makeRefs(null)
+    const athens: [number, number] = [23.7, 37.98]
+    await render(refs, athens)
+    refs.warpStartTime.current = 1000 // the warp's first frame
+    await render({ ...refs }, athens) // setZoom from the warp re-renders Globe
+    expect(booked).not.toHaveBeenCalled()
+    await act(async () => replay())
+    expect(booked).toHaveBeenCalledOnce()
+  })
+
   it('the warp ending without a waiting fly-to does nothing', async () => {
     const { refs } = makeRefs(null)
     await render(refs, null)

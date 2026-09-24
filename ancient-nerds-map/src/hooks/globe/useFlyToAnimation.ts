@@ -49,7 +49,11 @@ export function useFlyToAnimation({
     }
     pendingRef.current = null
     flyCamera(refs, flyTo)
-  }, [flyTo, refs])
+    // The members, not `refs`: useGlobeRefs() builds a fresh object around the
+    // same refs on every Globe render, and flyTo stays set after a flight, so
+    // `refs` here would fly back to the last target on every re-render (and
+    // start a waiting fly-to mid-warp). Only a new target flies.
+  }, [flyTo, refs.warpStartTime, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
 
   const replayPendingFlyTo = useCallback(() => {
     const pending = pendingRef.current
@@ -60,7 +64,7 @@ export function useFlyToAnimation({
     const warpTarget = refs.warpTargetCameraPos.current
     if (warpTarget && latLngToCartesian(pending[1], pending[0]).angleTo(warpTarget) < SAME_TARGET_RAD) return
     flyCamera(refs, pending)
-  }, [refs])
+  }, [refs.warpTargetCameraPos, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
 
   return { replayPendingFlyTo }
 }
