@@ -411,15 +411,17 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     onStartError: reportStartError,
     onSatelliteFailed: () => setTileLayers(prev => ({ ...prev, satellite: false })),
   })
-  // Active tile layers: the satellite counts once its texture is on the GPU
-  // (until then the toggle shows satellitePending and the view stays gray).
+  // Active tile layers: the satellite counts once a texture of it has reached the
+  // GPU (satelliteReady; it stays active through a context loss, only a failed load
+  // ends it). Until then the toggle shows satellitePending and the view stays gray.
   const satelliteActive = requestedTileLayers.satellite && satelliteReady
   const tileLayers = useMemo(
     () => ({ ...requestedTileLayers, satellite: satelliteActive }),
     [requestedTileLayers, satelliteActive],
   )
-  // A requested satellite that is not on the GPU yet: useGlobeBackgroundQueue (below)
-  // moves its task to the front or loads it directly.
+  // A requested satellite that never reached the GPU (or whose last load failed):
+  // useGlobeBackgroundQueue (below) moves its task to the front or loads it directly.
+  // A context loss does not make it pending: the restore reloads it (useTextureLoading).
   const satellitePending = requestedTileLayers.satellite && !satelliteReady
 
   // Satellite mode: toggle between gray basemap and satellite imagery. The shader

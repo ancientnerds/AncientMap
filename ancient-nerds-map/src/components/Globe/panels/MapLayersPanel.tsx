@@ -16,7 +16,7 @@ interface MapLayersPanelProps {
 
   // Tile layers (satellite/streets): what the visitor switched on
   tileLayers: { satellite: boolean; streets: boolean }
-  /** Satellite switched on, its texture not on the GPU yet */
+  /** Satellite switched on and not ready: never loaded, or its last load failed (a context loss does not count) */
   satellitePending: boolean
   onTileLayerToggle: (layer: 'satellite' | 'streets') => void
 

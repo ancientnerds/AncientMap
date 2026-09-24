@@ -42,7 +42,7 @@ import { trackBackgroundFailure } from '../../analytics/globeBackground'
 interface UseTextureLoadingOptions {
   refs: GlobeRefs
   sceneReady: boolean
-  /** The visitor switched the satellite on (it shows once satelliteReady). */
+  /** The visitor switched the satellite on (the shader shows it while satelliteOnGpu). */
   satelliteRequested: boolean
   /** Contract C0: the start-tier gray failed. Called once; the load is never retried. */
   onStartError: (phase: string, err: unknown) => void

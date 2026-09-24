@@ -34,7 +34,8 @@ export function useSatelliteMode({
   mapboxServiceRef,
 }: UseSatelliteModeOptions): void {
   // Handle satellite mode toggle. `satellite` is the active state: switched on
-  // AND its texture on the GPU (useTextureLoading's satelliteReady).
+  // AND loaded once (useTextureLoading's satelliteReady, which stays true through a
+  // context loss); the shader follows `satelliteShown` instead.
   useEffect(() => {
     // Sync ref for useCallback closures
     refs.satelliteMode.current = satellite

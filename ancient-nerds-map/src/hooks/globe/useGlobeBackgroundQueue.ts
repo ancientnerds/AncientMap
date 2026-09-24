@@ -8,10 +8,11 @@
  *   and drops the rest.
  * - The plan exists before the start-tier gray is on the GPU, so always before the warp
  *   that starts the queue.
- * - A requested satellite that is not on the GPU loads at once, whoever asked for it (the
- *   panel toggle, demoApi.setSatellite): where the queue preloads it (desktops) its task
- *   moves to the front or is already running; elsewhere (touch devices, or its task is
- *   over) `requestSatellite` loads it directly.
+ * - A requested satellite that is not ready (never loaded, or its last load failed) loads
+ *   at once, whoever asked for it (the panel toggle, demoApi.setSatellite): where the
+ *   queue preloads it (desktops) its task moves to the front or is already running;
+ *   elsewhere (touch devices, or its task is over) `requestSatellite` loads it directly.
+ *   A context loss does not make it pending: useTextureLoading's restore reloads it.
  *
  * Every run is read when its task runs, so it may close over refs and context builders.
  */
@@ -81,7 +82,7 @@ interface UseGlobeBackgroundQueueOptions {
   /** null until the scene exists (useTextureLoading). */
   plan: BasemapPlan | null
   runs: GlobeBackgroundRuns
-  /** The satellite is switched on and not on the GPU yet. */
+  /** The satellite is switched on and not ready: never loaded, or its last load failed (a context loss does not count). */
   satellitePending: boolean
   /** Loads the satellite outside the queue (useTextureLoading), reporting a failure itself. */
   requestSatellite: () => void
@@ -135,7 +136,7 @@ export function useGlobeBackgroundQueue({
     for (const task of tasks) background.queue.add(task)
   }, [plan])
 
-  // A requested satellite that is not on the GPU: its task first, or a direct load
+  // A requested satellite that is not ready: its task first, or a direct load
   useEffect(() => {
     if (!satellitePending || !plan) return
     if (backgroundRef.current?.queue.promote('satellite')) return

@@ -281,7 +281,12 @@ export class BasemapState {
   tier: BasemapTier | null = null
   /** The texture the materials sample. */
   texture: THREE.Texture | null = null
-  /** Highest tier ever asked for; a context restore asks for it again. */
+  /**
+   * Highest tier ever asked for. The gray's restore asks for it again
+   * (restoreGray); for the satellite it only says that a restore reloads the
+   * start tier, and the maximum tier comes back through useTextureLoading's
+   * max-tier effect, and only while the satellite is switched on.
+   */
   wanted: BasemapTier | null = null
   private flights = new Map<BasemapTier, { ctrl: AbortController; handedOver: boolean; done: Promise<void> }>()
 
@@ -364,7 +369,8 @@ export interface BasemapContext {
  * Loads `tier` of `kind`, strips from med up unless `whole` (the start gray: on
  * the GPU before the render that needs it), and commits it unless a higher tier
  * landed meanwhile. While the context is lost nothing is decoded: the upload
- * would go nowhere, and the restore asks for `wanted` (run recorded it) again.
+ * would go nowhere, and the restore loads the kind again (run recorded `wanted`):
+ * the gray up to `wanted`, the satellite at its start tier (see BasemapState.wanted).
  */
 async function loadTier(ctx: BasemapContext, kind: BasemapKind, tier: BasemapTier, signal: AbortSignal, whole = false): Promise<void> {
   if (ctx.renderer.getContext().isContextLost()) return
@@ -392,7 +398,7 @@ async function loadTier(ctx: BasemapContext, kind: BasemapKind, tier: BasemapTie
   }
   const state = ctx[kind]
   // Uploaded into a lost context: the storage is gone, and releaseOnContextLost
-  // has run or is about to. The restore asks for `wanted` again.
+  // has run or is about to. The restore loads it again (see BasemapState.wanted).
   if (!state.accepts(tier) || ctx.renderer.getContext().isContextLost()) {
     texture.dispose()
     return
