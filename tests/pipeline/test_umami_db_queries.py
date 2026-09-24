@@ -197,6 +197,19 @@ def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends
     assert "if (gateShowing) return 'gate'" in abandon
     assert "installGlobeAbandon" in read("App.tsx")
     assert "phase = 'gate'" in sql
+    # The prop keys the phase and the wait travel under: renamed keys would read as NULL, so
+    # every gate quit would count as 'Left while loading' and the abandon median would vanish
+    assert (
+        "opts.latch.end('globe_abandon', { ms: Math.round(opts.now()), phase: opts.getPhase() })"
+        in abandon
+    )
+    assert "max(d.string_value) FILTER (WHERE d.data_key = 'phase')" in sql
+    assert "(max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms" in sql
+    # A start failure's globe_error, sent when its screen shows, carries its phase the same way
+    assert (
+        "return { name: 'globe_error', props: { phase: globeFailure.phase, message: globeFailure.message } }"
+        in read("App.tsx")
+    )
     # Errors after globe_ready carry 'live', from App (boundary) and the Globe's loaders
     assert "export const LIVE_PHASE = 'live'" in read("utils", "globeStartError.ts")
     assert "if (phase === LIVE_PHASE) track('globe_error', { phase, message })" in read("App.tsx")
