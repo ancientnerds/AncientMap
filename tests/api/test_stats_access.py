@@ -63,9 +63,19 @@ def test_gate_lets_a_stats_session_through():
     assert resp.status_code == 204
 
 
+def test_gate_keeps_a_founder_signed_in_for_30_days():
+    # Owner decision 2026-09-24: one Discord login per month, not per half day.
+    day_29 = sa.mint_stats_token("42", "martin", now=datetime.now(UTC) - timedelta(days=29))
+    assert asyncio.run(sa.stats_gate(_request({sa.COOKIE_NAME: day_29}))).status_code == 204
+    day_31 = sa.mint_stats_token("42", "martin", now=datetime.now(UTC) - timedelta(days=31))
+    assert asyncio.run(sa.stats_gate(_request({sa.COOKIE_NAME: day_31}))).status_code == 401
+
+
 def test_gate_rejects_missing_expired_foreign_and_login_tokens():
     assert asyncio.run(sa.stats_gate(_request())).status_code == 401
-    expired = sa.mint_stats_token("42", "martin", now=datetime.now(UTC) - timedelta(hours=13))
+    expired = sa.mint_stats_token(
+        "42", "martin", now=datetime.now(UTC) - timedelta(days=sa.SESSION_DAYS, hours=1)
+    )
     assert asyncio.run(sa.stats_gate(_request({sa.COOKIE_NAME: expired}))).status_code == 401
     foreign = jwt.encode({"sub": "42", "scope": "stats"}, "another-key", algorithm="HS256")
     assert asyncio.run(sa.stats_gate(_request({sa.COOKIE_NAME: foreign}))).status_code == 401
@@ -94,6 +104,9 @@ def test_handoff_issues_the_cookie_and_the_umami_sso_hop_for_a_founder(monkeypat
     token = cookie.split(";")[0].split("=", 1)[1]
     payload = jwt.decode(token, KEY, algorithms=["HS256"])
     assert payload["scope"] == "stats" and payload["sub"] == "42" and payload["name"] == "martin"
+    # Cookie and token end together, after 30 days.
+    assert "max-age=2592000" in cookie.lower()
+    assert payload["exp"] - payload["iat"] == 30 * 24 * 3600
 
 
 def test_handoff_refuses_without_founder_role(monkeypatch):
