@@ -37,6 +37,7 @@ from phase3 import fetch_stage as F  # noqa: E402
 from phase3.run import Batch  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402 - only for the V6 names parity test
 from phase4 import model4 as M  # noqa: E402
+from phase4 import prompts4 as P  # noqa: E402 - only for rule (7)'s wording test
 from phase4 import select_stage as SEL  # noqa: E402 - only for the V6 names parity test
 from phase4 import sentences as S  # noqa: E402 - only for the D3 parity test
 from phase4 import verify4 as V  # noqa: E402
@@ -397,6 +398,70 @@ def test_s3_and_v6_accept_the_same_base_name(
     v6 = V.v6_names(site, B.read_meta(batch_dir, "site-1", "W"), V.read_witness(store, "site-1"))
     assert list(s3) == v6
     assert (base in v6) is (base is not None and title_counts), (name, v6)
+
+
+def _stated_base(name: str) -> str | None:
+    """Rule (7)'s words, read literally: "X (Y)" - ending in one bracket with no bracket inside it -
+    or else "X, Y" - X before the first comma; no X, no base."""
+    stripped = name.strip()
+    bracket = re.fullmatch(r"(?P<x>.*\S)\s*\([^()]*\)", stripped)
+    if bracket is not None:
+        return bracket["x"]
+    x, comma, _ = stripped.partition(",")
+    return (x.strip() or None) if comma else None
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        *(case[0] for case in NAME_BASE_CASES),
+        "Argos, Peloponnese",
+        "Marion, Cyprus",
+        "Beacon Hill (Burghclere, Hampshire)",
+        "Temple of Bel (Palmyra) ",
+        "Nuraghe (Is Paras)  ",
+    ],
+)
+def test_rule_7_states_exactly_the_name_base_v6_accepts(name: str) -> None:
+    """Pilot 3 (T8): the selectors abstained on 'Argos, Peloponnese' and 'Clare, Suffolk', never
+    told when the name without its disambiguator counts. Rule (7) now states it; its two forms,
+    read literally, give `name_base`'s base in V6's code and in S3's, name for name."""
+    assert '"X (Y)" - ending in one bracket with no bracket inside it - or else "X, Y" - X ' in (
+        P.SELECTOR_QUESTION
+    )
+    assert V.name_base(name) == SEL.name_base(name) == _stated_base(name), name
+
+
+@pytest.mark.parametrize(
+    ("gate_over", "counts"),
+    [({}, True), ({"place_item": True}, False), ({"km": None}, False)],
+    ids=["strong", "place-item", "no-distance"],
+)
+def test_rule_7s_base_counts_exactly_when_also_named_lists_it(
+    tmp_path: Path, gate_over: dict, counts: bool
+) -> None:
+    """ "... is named by X alone only when also_named lists X": S3 lists the base in `also_named`
+    exactly where V6 accepts it, a strong 'own' verdict; 'Argos' then names 'Argos, Peloponnese'.
+    The rest of the rule is `name_in`: all the name's words in order, only spaces or punctuation
+    between them, case and accents aside."""
+    gate_dict = {**X.STRONG_OWN.to_dict(), **gate_over}
+    article = X.wiki_doc("W", X.ARTICLE).to_dict()
+    doc = M.SourceDoc.from_dict({**article, "subject_gate": gate_dict})
+    site = X.plan_site("site-1", name="Argos, Peloponnese", aliases=())
+    batch_dir = X.make_batch(
+        tmp_path, [X.SiteSetup(site=site, lane=M.Lane.W, sources={"W": (doc, X.ARTICLE)})]
+    )
+    store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    meta, _ = B.read_source(batch_dir, "site-1", "W")
+    also = SEL.also_named(site, SEL.v6_names(site, meta, SEL.site_witness(batch_dir, "site-1")))
+    v6 = V.v6_names(site, B.read_meta(batch_dir, "site-1", "W"), V.read_witness(store, "site-1"))
+    first = "Argos is one of the oldest continuously inhabited cities of the Peloponnese."
+    assert ("Argos" in also) is ("Argos" in v6) is counts
+    assert any(V.name_in(name, first) for name in v6) is counts
+    assert V.name_in("Argos, Peloponnese", "The city of Argos, Peloponnese, is old.")
+    assert V.name_in("Argos, Peloponnese", "The city of ARGOS PELOPONNESE is old.")
+    assert not V.name_in("Argos, Peloponnese", "Argos lies in the Peloponnese.")
+    assert V.name_in("Chichén-Itzá", "The ruins of Chichen Itza lie in Yucatan.")
 
 
 def test_the_edit_list_removes_repairs_restores_and_marks() -> None:

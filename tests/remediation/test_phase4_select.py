@@ -63,8 +63,11 @@ from tests.remediation import p4_fixtures as X  # noqa: E402
 #: selector's rule (11) refuses such a sentence (`CONTRADICTION_RULE`), and the reviewer, now shown
 #: the passage the sentences were chosen from (`REVIEWER_SEES`), drops it
 #: (`PILOT3_REVIEWER_CONTRADICTION_RULE`).
+#: Re-pinned 2026-09-24 (selector 751816c1... -> a0b422e7...): pilot 3's selectors abstained on
+#: "Argos, Peloponnese" and "Clare, Suffolk", never told when V6 accepts the name without its
+#: disambiguator; rule (7) now states V6's name match and `name_base` exactly (`RULE_7`).
 FROZEN_SHA256 = {
-    "SELECTOR_QUESTION": "751816c1295929ec7a501e7fcb1a881401c878fdba4d506222938dc56fdf8bca",
+    "SELECTOR_QUESTION": "a0b422e73474f6ba8cd59c7477d49f51c8aabd131f6e3d56742597c2a367ef93",
     "TRANSLATE_QUESTION": "adeb6f7b27d7429e17d54f89acc004b77588226ff2760c40dd2eec88644913ee",
     "RESTRICTED_QUESTION": "648da472587fb1f02d1bda57bd70e0e5988d8dfeb887542845d476edc192eaa8",
     "REVIEWER_QUESTION": "89e6035d1e295764b5a77e904bc24e080ff57d63b8d05ef786cc7f5fc71e7523",
@@ -78,13 +81,24 @@ DESIGN_RULES = (
     "(3) remove a span only if the rest still says the same thing about the site;",
     "(5) if no listed sentence is about this site, answer ABSTAIN.",
 )
+#: Pilot 1's rule (7), stated since pilot 3 as exactly what V6 accepts (T8: the selectors abstained on
+#: "Argos, Peloponnese" and "Clare, Suffolk", not told when the name without its disambiguator
+#: counts): `verify4.name_in`'s match, and `name_base`'s two forms, which count only when S3 lists
+#: the base in `also_named` (a strong 'own' verdict). `test_phase4_verify.py` proves the wording.
+RULE_7 = (
+    "(7) your first DESC sentence must name the site: its name, an alias or an also_named name of "
+    "the site element, all of that name's words in their order with nothing but spaces or "
+    'punctuation between them (case and accents do not matter); a name written "X (Y)" - '
+    'ending in one bracket with no bracket inside it - or else "X, Y" - X before the first comma '
+    "- is named by X alone only when also_named lists X; if no listed sentence names the site so, "
+    "answer ABSTAIN with that reason;"
+)
 #: What pilot 1 added to the selector after its T2, T5 and T8 failures (2026-09-24,
 #: `output/remediation/phase4_runner/PILOT_RESULT_1.md`), verbatim and in this order after (5).
 PILOT1_SELECTOR_RULES = (
     "(6) the description is your DESC sentences after their removals, joined by spaces: it must "
     "be 200-1100 characters long in total;",
-    "(7) your first DESC sentence must name the site: its name, an alias or an also_named name of "
-    "the site element;",
+    RULE_7,
     "(8) never pick a sentence about the modern village, town or municipality (its "
     "administration, its population, its modern founding), even when it names the site; if the "
     "only sentence that names the site is such a sentence, answer ABSTAIN with that reason;",

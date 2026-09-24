@@ -33,7 +33,10 @@ the card to it, and the reviewer drops such a sentence, or a card whose pronoun 
 inside the card. Pilot 3 failed T7 on Partiscum (CANARY-03), whose lead the article's own body
 contradicts: rule (11) refuses a sentence another listed sentence contradicts or reduces to a
 presumption, an assumption or a dispute, and the reviewer - shown, for the first time, the passage
-the sentences were chosen from (`pool_passage`, `page_passage`) - drops it.
+the sentences were chosen from (`pool_passage`, `page_passage`) - drops it. Its selectors abstained
+on "Argos, Peloponnese" and "Clare, Suffolk", never told when V6 accepts the stored name without
+its disambiguator (pilot 2's `name_base`): rule (7) now states V6's name match and both forms of
+the base, which counts only when `also_named` lists it (a strong 'own' verdict).
 
 Every question ends with the project's LLM01 guard line (`GUARD_LINE`), and every third-party text
 in a prompt sits inside a `<source>` element, which is what that line names. The stored description
@@ -80,7 +83,11 @@ SELECTOR_QUESTION = (
     "(6) the description is your DESC sentences after their removals, joined by spaces: it must "
     "be 200-1100 characters long in total;\n"
     "(7) your first DESC sentence must name the site: its name, an alias or an also_named name of "
-    "the site element;\n"
+    "the site element, all of that name's words in their order with nothing but spaces or "
+    'punctuation between them (case and accents do not matter); a name written "X (Y)" - '
+    'ending in one bracket with no bracket inside it - or else "X, Y" - X before the first comma '
+    "- is named by X alone only when also_named lists X; if no listed sentence names the site so, "
+    "answer ABSTAIN with that reason;\n"
     "(8) never pick a sentence about the modern village, town or municipality (its "
     "administration, its population, its modern founding), even when it names the site; if the "
     "only sentence that names the site is such a sentence, answer ABSTAIN with that reason;\n"

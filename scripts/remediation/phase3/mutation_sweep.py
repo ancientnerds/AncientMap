@@ -16702,8 +16702,8 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "p4 prompts: the selector's first sentence need not name the site",
         P4P2_PROMPTS,
         '    "(7) your first DESC sentence must name the site: its name, an alias or an also_named '
-        'name of "\n    "the site element;\\n"\n',
-        "    # mutant: rule (7) gone\n",
+        'name of "\n',
+        "    # mutant: rule (7)'s head gone\n",
         P4P2_SELECT_TEST,
         "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
     ),
@@ -17500,6 +17500,7 @@ P4P4_REVIEW = "scripts/remediation/phase4/review4.py"
 P4P4_REVIEW_TEST = "tests/remediation/test_phase4_review.py"
 P4P4_COUNTRY = "pipeline/utils/country_lookup.py"
 P4P4_SENT = "scripts/remediation/phase4/sentences.py"
+P4P4_SELECT = "scripts/remediation/phase4/select_stage.py"
 P4P4_SUBNATIONAL_TEST = "tests/pipeline/test_country_subnational_names.py"
 
 P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -17766,6 +17767,33 @@ P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "            and True  # mutant\n",
         P4P4_VERIFY_TEST,
         "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    # ── rule (7) states the name V6 accepts, and its base ─────────────────────────────────────
+    (
+        "p4 prompts: rule (7) misstates the base's two forms",
+        P4P4_PROMPTS,
+        '    \'ending in one bracket with no bracket inside it - or else "X, Y" - X before the '
+        "first comma '\n",
+        "    'ending in a bracket - or else \"X, Y\" - X before the last comma '  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_rule_7_states_exactly_the_name_base_v6_accepts",
+    ),
+    (
+        "p4 prompts: rule (7) lets the base alone always name the site",
+        P4P4_PROMPTS,
+        '    "- is named by X alone only when also_named lists X; if no listed sentence names the '
+        'site so, "\n',
+        '    "- is named by X alone; if no listed sentence names the site so, "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 select: S3's base is the text before the last comma",
+        P4P4_SELECT,
+        '    first, comma, _ = name.strip().partition(",")\n',
+        '    first, comma, _ = name.strip().rpartition(",")  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_rule_7_states_exactly_the_name_base_v6_accepts",
     ),
 ]
 MUTATIONS += P4_PILOT4_MUTATIONS
