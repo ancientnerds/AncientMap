@@ -380,6 +380,12 @@ D1; rule 1 of section 1 otherwise holds):
 - **`PREPOSITIONS_NO_COMMA`** (wip/p4-pilot, 2026-09-24, T5; accepted under D1): the closed list of
   prepositions V5 holds and S2's pool refuses directly before a comma - section 7, "Pilot 2's fixes".
 - **`LEDGER_FILE`** (wip/p4-pilot, 2026-09-24): the run's own ledger, section 4.
+- **`PERSONAL_PRONOUNS`, `SUBJECT_PRONOUNS`, `ARTICLES`** (wip/p4-pilot, 2026-09-24, pilot 3's T1/T4;
+  accepted under D1): the words of the pronoun rule past the first word, which V6, V10 and the
+  review's drops read - section 7, "Pilot 3's fixes".
+- **`country_lookup.SUBNATIONAL_NAME_TO_ISO`** (not `model4`'s; beside `NAME_TO_ISO`, pilot 3's V14
+  false hold): sub-national place names that carry a country's name, each with the ISO code of the
+  country it lies in - section 7, "Pilot 3's fixes".
 - **The demonym table is not `model4`'s** but `pipeline/utils/country_lookup.ISO_TO_DEMONYMS`, beside
   `NAME_TO_ISO` - the country vocabulary it completes (T4/T6, 2026-09-24, on the orchestrator's
   order). **Decision taken 2026-09-24 (the owner): design entry [6] wins** - its card_texts, RULES:
@@ -636,8 +642,9 @@ apply the same rule, or read `HOLDS4.jsonl`.
 `prompts/`, `answers/`, `reviews/` (write-once, `EvidenceStore`); each LLM stage writes its file
 even when empty, and an absent one means the stage never ran. Reports: `select.json`,
 `translate.json`, `restricted.json` (per site: `label`, `prompt_sha256`, `answer_sha256`,
-`cost_usd`, `outcome`) and `review4.json` (per site: the reviewer's `lines`, `kept`, `card`, and at
-the top `assembly_sha256`). `assembly.jsonl` is written by `assemble` and rewritten by `review`
+`cost_usd`, `outcome`) and `review4.json` (per site: the reviewer's `lines`, `kept`, `followed` -
+the sentences dropped with a dropped predecessor they lean on, since pilot 3 - `card`, and at the
+top `assembly_sha256`). `assembly.jsonl` is written by `assemble` and rewritten by `review`
 with exactly the sites that passed; it counts as reviewed only when `review4.json` has
 `error: null` and its `assembly_sha256` is the file's (the design's "the reviewer answered").
 
@@ -839,6 +846,88 @@ AUDIT_LOG). No threshold changed, no model was asked.
 are unchanged; rule (9) stays verbatim. Mutation cases: 12 new in `P4_PILOT3_MUTATIONS` ("pilot 3,
 decision 1" and "decision 2"), four re-anchored on the lines this rewrote.
 
+### Pilot 3's fixes (2026-09-24, after its audit): the pronoun past the first word, the contradicted lead, sub-national names, the review's drops, the name V6 accepts
+
+Pilot 3 (`output/remediation/phase4_runner/PILOT_RESULT_3.md`, run `pilot3-2026-09-24`) failed T1
+(Stanydale Temple: "Pottery sherds show that it was also occupied ..." published without the sentence
+*it* refers to), T4 (Dolebury Warren's card "Standing on a limestone ridge ..., it was made into a
+hill fort ...", which V10 let through), T7 (Partiscum, CANARY-03: the lead the article's own body
+contradicts) and T8 (57 of 78 lane-W sites write-eligible, three of the holds pipeline defects).
+Under the thresholds' failure rule the causes were fixed before pilot 4; no threshold changed. The
+measurements are in AUDIT_LOG, "Phase-4 pilot 4, sealed before its first model question".
+
+- **T1 + T4, one gap: the pronoun past the first word.** The rule, in one sentence: *a sentence also
+  leans on the sentence before it in its source when its first word of `model4.PERSONAL_PRONOUNS`
+  (it, its, they, their, them, he, his, him, she, her; whole, any case) is one of `SUBJECT_PRONOUNS`
+  (it, they, he, she) and stands right after the sentence's first comma (`, `), or right after the
+  word "that" with no word of `ARTICLES` (the, a, an) before it.* A word is whole when no word
+  character, apostrophe or hyphen stands beside it (`item`, `it's` are no *it*). V6 holds such a
+  sentence unless its source predecessor is published right before it - exactly as it holds an
+  opener of `PRONOUN_OPENERS`, which still counts (`verify4.leaning_pronoun`, read after the edits);
+  V10 holds a card item that leans (card scope). **Measured cost**, over the census run's 88,936
+  lane-W/S pool sentences of 4,100 sites: the rule binds 1,738 beyond the opener rule (158 of them
+  have no adjacent predecessor in their pool, so they can never be published), 1 site loses its
+  last possible sentence 1 (3,806 -> 3,805), 915 of the 42,401 card-length plain sentences are held
+  as cards and 11 sites lose their last whole-sentence card candidate (3,656 -> 3,645); over pilots
+  1-3's published texts it holds 7 sentences and 1 card, every one a pronoun whose antecedent lies
+  outside its sentence (Stanydale's, the one the audit found broken; The Gop, the Altar Stone, Teman,
+  Dolebury Warren; Dolebury's card). Of fifteen candidates measured beside the opener rule it is the
+  most precise that holds both pilot-3 cases; a seeded sample of 60 of the 1,738, read by hand: 46
+  refer outside their sentence, 9 are an expletive *it*, 5 refer inside it. The selector's rule (10) adds: "The same
+  holds for a DESC sentence whose first it, its, they, their, them, he, his, him, she or her (after
+  its removals) is it, they, he or she and stands right after the sentence's first comma, or right
+  after "that" with no "the", "a" or "an" before it: "Standing on a ridge, it was made into a fort"
+  and "Pottery sherds show that it was occupied" need the sentence before them."; rule (4) says the
+  card "carries no pronoun that rule (10) ties to the sentence before it"; the reviewer gains "DROP a
+  sentence in which it, its, they, their, them, he, his, him, she or her - at its start, after a
+  fronted phrase or in a that-clause - refers to something no published sentence before it names, and
+  DROP the card when such a pronoun has no antecedent inside the card: the card is read on its own."
+  Tests tie the rule's words to the three lists, in their order.
+- **T7: a sentence another sentence of the article contradicts.** The selector's rule (11): "never
+  pick a sentence that another listed sentence contradicts, or reduces to a presumption, an
+  assumption or a dispute, even when it is the article's lead." **The gap:** the reviewer was shown,
+  per published sentence, the untrimmed source sentence, the two source sentences before it and its
+  heading - for a lead, nothing - so the sentences that contradict a published one were never in
+  front of it. `review4.passage` closes it: the reviewer's block (`prompts4.reviewer_block(site, rows,
+  card, *, passage)`) opens with `<source id="PASSAGE">`, the passage the sentences were chosen from -
+  the selector's pool for lanes W, S and T (`prompts4.pool_passage`: sid, section and text of every
+  candidate, bounded by the pool's 24,000 characters), every cited page whole for lane R
+  (`page_passage`). The question says "before them you see the passage the sentences were chosen
+  from (PASSAGE)" and gains "DROP a sentence that another sentence of the passage contradicts, or
+  reduces to a presumption, an assumption or a dispute, even when it is the article's lead; ask the
+  same of the card." No gold or canary anchor is matched in code or named in a prompt.
+- **V14: sub-national names that carry a country's name.** `country_lookup.SUBNATIONAL_NAME_TO_ISO`
+  (15 verified entries from a scan of the census pools for a `NAME_TO_ISO` name directly preceded by
+  a capitalised word or inside a longer proper name: New South Wales AU, New Mexico US, New England
+  US, Central, Western and Greek Macedonia and Eastern Macedonia and Thrace GR, West Azerbaijan
+  province IR, Upper Jordan Valley IL, Jordan Hill GB, Kraku Lu Jordan RS, El Peru GT, Inner Niger
+  Delta ML, Lapis Niger IT, Denmark Fjord GL). `verify4`'s country regex reads both tables, longest
+  first, so the whole name is read before the country inside it, and V14 compares the whole name's
+  code; "South Wales" stays Wales. V10 still holds a card that carries such a name. Measured: V14's
+  location holds over the census pools 74 -> 67 sentences (69 -> 62 sites).
+- **T8: a review drop takes along the sentence that leans on it.** `review4.follow_drops` runs after
+  the reviewer's verdict is parsed: a kept sentence that leans on the sentence before it
+  (`sentences.leans_on_predecessor`, the pronoun rule above in the review's own code) whose published
+  predecessor is dropped is dropped too, in order, so a chain goes whole; each is recorded in
+  `review4.json` under `followed` (`sentence`, `follows`, `reason`: `review4.FOLLOWS_A_DROP`,
+  `leans-on-a-dropped-sentence`), the reviewer's `lines` stay as written, and the site is judged on
+  what remains (two sentences at least; S4 and S5 again, V9 included). A parity test runs both
+  readings over `tests/remediation/p4_pronoun_cases.py`. Measured on pilot 3's answered reviews
+  (rebuilt read-only): 3 of 63 reviewed sites - Stanydale R6, Mersinaki R4, Diana Fort R4.
+- **Rule (7): the name V6 accepts, stated.** It now reads "(7) your first DESC sentence must name the
+  site: its name, an alias or an also_named name of the site element, all of that name's words in
+  their order with nothing but spaces or punctuation between them (case and accents do not matter); a
+  name written "X (Y)" - ending in one bracket with no bracket inside it - or else "X, Y" - X before
+  the first comma - is named by X alone only when also_named lists X; if no listed sentence names the
+  site so, answer ABSTAIN with that reason;" - `verify4.name_in` and pilot 2's `name_base`, which S3
+  lists in `also_named` exactly for a strong 'own' verdict. A test reads the two forms literally and
+  gets `name_base`'s base in verify4's and select_stage's code for 17 names.
+
+`SELECTOR_QUESTION` sha256 `a0b422e7...2a367ef93` (was `85e6e47b...9066b701`), `REVIEWER_QUESTION`
+`89e6035d...fc71e7523` (was `59a1714e...a7d999`), each re-pinned per fix in `test_phase4_select.py`
+with its reason. The answer lines and both parsers are unchanged. Mutation cases:
+`P4_PILOT4_MUTATIONS`, and five older ones re-anchored on the lines this rewrote.
+
 ## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
 
 Track D (WB-D1 ... WB-D5, branch `wip/p4-write`) built against sections 1-6 unchanged; its
@@ -997,3 +1086,12 @@ section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question")
   its first answer, section 7's "Pilot 3's decisions" changed the selector question, and its select
   questions were exported again (`handoff/p4-pilot3-select`, 87 questions, the S0/S1/S1b results of
   its run directory unchanged).
+- **Pilot 4** (2026-09-24, after pilot 3 failed T1, T4, T7 and T8): `pilot4 build --after PILOT.jsonl
+  --after PILOT2.jsonl --after PILOT3.jsonl --seed 20260926` (`pilot4.SEED_PILOT4`) - the same 70
+  fixed members, a fresh draw of every seeded stratum excluding the 186 draws of pilots 1-3
+  (`PILOT4.jsonl`, sha256 `30ab5e9d...57b2a26`; the B3 stratum's last 5 routeless sites);
+  `PILOT_THRESHOLDS.md` and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is
+  `PLAN4.pilot4.jsonl` and its run `runs/pilot4-2026-09-24` (its own ledger inside), its logs
+  `output/remediation/logs/p4_pilot4`. The fixes it runs with are section 7, "Pilot 1's fixes",
+  "Pilot 2's fixes", "Pilot 3's decisions" and "Pilot 3's fixes"; its select questions are in
+  `handoff/p4-pilot4-select` (90 questions, none answered).
