@@ -65,9 +65,14 @@ function formatBytes(bytes: number): string {
   }
 }
 
-/** Rough size of a source's offline records: 50 bytes per site. */
-function sourceSize(count: number): number {
-  return count * 50
+// The default source's full payload (downloadSource: /sites/all without `fields`), measured
+// on production 2026-09-23: 5,004 sites, 10,067,793 B raw (what IndexedDB stores), 3,137,180 B
+// gzip on the wire. Every download stores it, so its estimate uses this and not the guess.
+const DEFAULT_SOURCE_BYTES_PER_SITE = 2_012
+
+/** Size of a source's offline records: measured for the default source, a rough 50 bytes per site for the others. */
+function sourceSize(sourceId: string, count: number): number {
+  return count * (sourceId === DEFAULT_SOURCE ? DEFAULT_SOURCE_BYTES_PER_SITE : 50)
 }
 
 /** Fetches one source's records and stores them in IndexedDB; rejects when there is nothing to store. Resolves with the site count. */
@@ -220,17 +225,17 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     )
   }, [allEmpires])
 
-  // Calculate estimated download size; startFilesOnly: nothing ticked is new, but an
+  // Calculate estimated download size; startOnlyLabel: nothing ticked is new, but an
   // earlier download lacks the globe's start files or the default source (made
-  // before every download stored them)
-  const { estimatedSize, startFilesOnly } = useMemo(() => {
+  // before every download stored them), and the footer names what it lacks
+  const { estimatedSize, startOnlyLabel } = useMemo(() => {
     let size = 0
 
     // Sources; the default source comes with the start files (below)
     for (const sourceId of selectedSources) {
       if (sourceId === DEFAULT_SOURCE || downloadState?.sources[sourceId]?.cached) continue
       const source = sources.find(s => s.id === sourceId)
-      if (source) size += sourceSize(source.count)
+      if (source) size += sourceSize(source.id, source.count)
     }
 
     // Basemaps
@@ -259,10 +264,13 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     const startNeeded = globeStartMissing !== null && (globeStartMissing.length > 0 || startSourceMissing) && (ticked || hasDownload)
     const startSource = sources.find(s => s.id === DEFAULT_SOURCE)
     const startSize = !startNeeded ? 0
-      : startFilesSize(globeStartMissing) + (startSourceMissing && startSource ? sourceSize(startSource.count) : 0)
+      : startFilesSize(globeStartMissing) + (startSourceMissing && startSource ? sourceSize(startSource.id, startSource.count) : 0)
+    const startFilesMissing = globeStartMissing !== null && globeStartMissing.length > 0
+    const missingParts = startFilesMissing && startSourceMissing ? 'Globe start files and default sites'
+      : startFilesMissing ? 'Globe start files' : 'Default sites'
     return {
       estimatedSize: size + startSize,
-      startFilesOnly: startNeeded && !ticked,
+      startOnlyLabel: startNeeded && !ticked ? `${missingParts} missing: ` : '',
     }
   }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, downloadedLayers, downloadedBasemaps, globeStartMissing, sources])
 
@@ -646,7 +654,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                       </button>
                     )}
                     <span className="item-meta">
-                      {source.count.toLocaleString()} sites (~{formatBytes(source.count * 50)})
+                      {source.count.toLocaleString()} sites (~{formatBytes(sourceSize(source.id, source.count))})
                     </span>
                   </div>
                 ))}
@@ -776,7 +784,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                   : `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}${downloadSpeed > 0 ? ` - ${formatBytes(downloadSpeed)}/s` : ''}`}
               </span>
             ) : estimatedSize > 0 ? (
-              <span className="ready-status">{startFilesOnly && 'Globe start files missing: '}{formatBytes(estimatedSize)} ready to download</span>
+              <span className="ready-status">{startOnlyLabel}{formatBytes(estimatedSize)} ready to download</span>
             ) : (
               <span className="empty-status">Select items to download</span>
             )}

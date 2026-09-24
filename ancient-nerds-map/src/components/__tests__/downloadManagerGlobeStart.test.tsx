@@ -97,7 +97,8 @@ import DownloadManager from '../DownloadManager'
 let root: Root | null = null
 let container: HTMLDivElement
 
-// The source list App passes (DataStore's sources): the default source, 20 sites (~1000 B)
+// The source list App passes (DataStore's sources): the default source, 20 sites. Its full
+// payload (what downloadSource stores) measured 2,012 B per site on production, so 40,240 B.
 const SOURCES = [{ id: 'ancient_nerds', name: 'Ancient Nerds', count: 20, color: '#fff' }]
 
 async function open(ensureOfflineWorker: (() => Promise<void>) | null = null) {
@@ -140,8 +141,8 @@ describe('DownloadManager and the globe start files', () => {
     await open()
     // Layers tab: tick Coastlines only
     await click(container.querySelector('.dm-item'))
-    // 100 B of layer + 1000 B of start files + 1000 B of the default source
-    expect(container.querySelector('.ready-status')!.textContent).toBe('2 KB ready to download')
+    // 100 B of layer + 1000 B of start files + 40,240 B of the default source
+    expect(container.querySelector('.ready-status')!.textContent).toBe('40 KB ready to download')
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     expect(calls).toEqual(['globe-start:/data/labels.json,/data/basemaps/gray_dark_low.webp', 'source:ancient_nerds:2', 'layer:coastlines'])
@@ -151,7 +152,7 @@ describe('DownloadManager and the globe start files', () => {
     startCached = true
     await open()
     await click(container.querySelector('.dm-item')) // Coastlines only
-    expect(container.querySelector('.ready-status')!.textContent).toBe('1 KB ready to download') // 100 B + 1000 B of the source
+    expect(container.querySelector('.ready-status')!.textContent).toBe('39 KB ready to download') // 100 B + 40,240 B of the source
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     expect(calls).toEqual(['source:ancient_nerds:2', 'layer:coastlines'])
@@ -161,8 +162,11 @@ describe('DownloadManager and the globe start files', () => {
     startCached = true
     await open()
     await click([...container.querySelectorAll('.dm-tab')].find(b => b.textContent!.startsWith('Sources')))
-    await click(container.querySelector('.dm-item')) // Ancient Nerds
-    expect(container.querySelector('.ready-status')!.textContent).toBe('1000 B ready to download')
+    const row = container.querySelector('.dm-item')! // Ancient Nerds
+    // The row and the footer give the same measured size
+    expect(row.querySelector('.item-meta')!.textContent).toBe('20 sites (~39 KB)')
+    await click(row)
+    expect(container.querySelector('.ready-status')!.textContent).toBe('39 KB ready to download')
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     expect(calls).toEqual(['source:ancient_nerds:2'])
@@ -172,10 +176,17 @@ describe('DownloadManager and the globe start files', () => {
     downloadState = LAYERS_ONLY
     startCached = true
     await open()
-    expect(container.querySelector('.ready-status')!.textContent).toBe('Globe start files missing: 1000 B ready to download')
+    expect(container.querySelector('.ready-status')!.textContent).toBe('Default sites missing: 39 KB ready to download')
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     expect(calls).toEqual(['source:ancient_nerds:2'])
+  })
+
+  it('names both when an earlier download lacks the start files and the default source', async () => {
+    downloadState = LAYERS_ONLY
+    await open()
+    // 1000 B of start files + 40,240 B of the default source
+    expect(container.querySelector('.ready-status')!.textContent).toBe('Globe start files and default sites missing: 40 KB ready to download')
   })
 
   it('stops the whole download when the default source cannot be fetched', async () => {
