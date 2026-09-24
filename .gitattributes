@@ -29,6 +29,8 @@ output/remediation/bcases/coords_plan_wave2/*.sql text eol=lf
 output/remediation/bcases/coords3/*.jsonl text eol=lf
 output/remediation/opus_audit/*.jsonl text eol=lf
 output/remediation/opus_audit/*.md text eol=lf
+# AUDIT_LOG.md records the sha256 of VERDICTS_RAW.json and of the audit's JSON outputs as LF bytes.
+output/remediation/opus_audit/*.json text eol=lf
 # The Phase-4 pilot's sealed artefacts (PILOT.jsonl, gold_prose_errors.json, PILOT_THRESHOLDS.md) and
 # the reads and ledgers beside them: AUDIT_LOG.md records the sha256 of these exact LF bytes before
 # the first model question, so a CRLF checkout must not make that check disagree.

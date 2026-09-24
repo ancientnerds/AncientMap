@@ -401,3 +401,6 @@ output/remediation/vlm_pilot/*.partial.jsonl
 # The Opus re-verification of every DeepSeek-decided production row (2026-09-23): its sealed rules,
 # its input and every verdict are the proof behind any reversal it leads to.
 !output/remediation/opus_audit/
+# The third-party pages the quote check fetched (raw bytes, PDFs among them) stay local; PAGES.jsonl
+# records each one's status and the sha256 of its bytes.
+output/remediation/opus_audit/pages/

@@ -52,13 +52,17 @@ def fetch(audit: Path) -> dict[str, object]:
     pages = audit / "pages"
     with Q.http_client() as client:
         counts = Q.collect(urls, pages, client, now=_now)
-    statuses: Counter[str] = Counter()
-    for url in {Q.canonical_url(u)[0] for u in urls}:
-        meta_path = pages / f"{Q.url_key(url)}.json"
-        if meta_path.exists():
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            statuses[str(meta["status"] if meta["status"] is not None else meta["error"][:40])] += 1
-    return {"urls": len(urls), **counts, "status": dict(sorted(statuses.items()))}
+    index = Q.page_index(urls, pages)
+    (audit / "PAGES.jsonl").write_text(
+        "".join(json.dumps(x, ensure_ascii=False) + "\n" for x in index),
+        encoding="utf-8",
+        newline="\n",
+    )
+    statuses = Counter(
+        "not fetched" if "not_fetched" in x else str(x["status"] or x["error"].split(":")[0])
+        for x in index
+    )
+    return {"urls": len(index), **counts, "status": dict(sorted(statuses.items()))}
 
 
 def main(argv: list[str] | None = None) -> int:

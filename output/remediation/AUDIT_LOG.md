@@ -8164,3 +8164,66 @@ the run (or give pilot 2's model rounds their own `--ledger`) before step 6's co
   .vulture_whitelist.py --min-confidence 80` clean.
 * `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
   this branch: merge it while no Phase-3 mass run is in flight.
+
+## 2026-09-24 - the Opus re-verification applied: quote check, decision rule, keep sample (no model called, nothing written)
+
+Branch `integrate/wave1` (main checkout). The owner's order of 2026-09-23 - no DeepSeek any more,
+everything with Opus - put the 934 production rows a DeepSeek finder and reviewer decided in front
+of Opus judges, under rules sealed before the first verdict (`output/remediation/opus_audit/RULES.md`,
+commit `02260ee`). The judging is done. This section applies the rules to it: the machine quote
+check RULES.md demands, the decision rule, rule 4's keep sample, the list of rows to judge again and
+the input of the reversal. Code: `scripts/remediation/opus_audit/` (`quotes.py` the check,
+`decide.py` the rule, `run.py` the command line), tests `tests/remediation/test_opus_audit_quotes.py`
+and `test_opus_audit_decide.py`. **Nothing was written to production, production was not read, and
+no model was called.**
+
+| file | sha256 |
+|---|---|
+| `output/remediation/opus_audit/RULES.md` (sealed in `02260ee`, unchanged) | `671ef6d68faea2cdda5046c110a3dc53dce63e8cd727b5fccc5637b985469f31` |
+| `output/remediation/opus_audit/INPUT.jsonl` (sealed in `02260ee`, unchanged; 934 rows) | `099c9380f252e77ca6a086a6a0b532dbfb1175b4f62817b7c15a9dfc553a6c11` |
+| `output/remediation/opus_audit/VERDICTS_RAW.json` (the judges' verdicts, committed with this section) | `98b88a54d5ccae5a219c88876e2338524bc90f3187333f4cc44015450fed9f57` |
+
+`decide.py` pins the first two digests (`RULES_SHA256`, `INPUT_SHA256`) and refuses to run on other
+bytes; `.gitattributes` now pins `opus_audit/*.json` to LF, so a checkout keeps VERDICTS_RAW.json's
+digest.
+
+### The verdicts
+
+| pass | verdicts | keep | revert | wrong-both | undecidable |
+|---|---|---|---|---|---|
+| p1 (one judge per row) | 934 | 502 | 401 | 31 | 0 |
+| p2 (independent, every pass-1 non-keep) | 432 | 64 | 337 | 30 | 1 |
+| tie (every pass-2 keep) | 64 | 13 | 47 | 4 | - |
+
+`decide.validate` holds the verdicts to the routes RULES.md gives: p1 covers exactly INPUT.jsonl, p2
+exactly the pass-1 verdicts that are not keep, the tie exactly the pass-2 keeps; every verdict is
+filed under its own change key, every wrong-both names its right value, no tie is undecidable. All
+three hold. Where a keep or revert carries a `right_value` too, it is the written value (keep: 164)
+or the old one (revert: 88), never a third value.
+
+**`VERDICTS_partial_1.jsonl` is not a prefix of the raw pass 1.** The partial copy (commit `ac869cc`,
+the 705 pass-1 verdicts written before the pause) was compared line by line with the raw file's p1:
+one of its lines carries a cut change key, `phase3:71148c9835936`, which is the prefix of exactly one
+INPUT key (`phase3:71148c98...6099670`, compared under that key); **only 15 of the 705 are identical**
+(the first batch, `p1:1-15`), and 83 name another verdict (keep -> revert 33, revert -> keep 40,
+keep -> wrong-both 5, wrong-both -> keep 2, wrong-both -> revert 2, revert -> wrong-both 1); the
+reasons differ on 690, the quotes on 482. Pass 1 was judged again after the pause; the raw file
+supersedes the partial, which stays as committed and is not read by anything here.
+
+### Rule 4's keep sample, stated before any judge sees it
+
+`output/remediation/opus_audit/KEEP_SAMPLE.json` (sha256
+`96da2842e2f5423026a68898d5c2ce773a3576c72b8de20f0725493361bb1053`), written by
+`run.py sample` (`decide.keep_sample`):
+
+* **method**: `random.Random(20260923).sample(population, 60)`, where the population is the change
+  keys of the pass-1 verdicts that are `keep` - all of them, before and regardless of the quote check -
+  sorted ascending in Python's string order; the keys stand in the order `sample` returns them;
+* **population**: 502 keys, sha256 of the keys joined with `\n`
+  `bdb5eb41884c5ed18c1446c6069f056172e423ad2cb5b77fee25ff02451ebf7f`;
+* **rule**: if more than 3 of the 60 (5 %) come back not `keep`, every pass-1 keep is judged a second
+  time under rule 3.
+
+The draw was checked independently of the module (the same call over the raw file gives the same 60
+keys). `write_keep_sample` never writes a second, different sample over it. Nobody has judged the
+sample yet; the orchestrator runs the Opus judges on it.

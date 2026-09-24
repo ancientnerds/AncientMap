@@ -314,6 +314,24 @@ def test_a_second_request_to_one_host_waits_and_another_host_does_not(tmp_path: 
     assert len(waits) == 1 and 0 < waits[0] <= 30
 
 
+def test_the_page_index_names_every_cited_url_its_status_and_its_bytes(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"<p>x</p>", headers={"Content-Type": "text/html"})
+
+    urls = [ES_URL, "https://ancientnerds.com/api/sites/x", API_URL.replace("&", "&amp;")]
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        Q.collect(urls, tmp_path / "pages", client, now=lambda: NOW, sleep=lambda _s: None)
+    index = Q.page_index(urls, tmp_path / "pages")
+    assert [x["url"] for x in index] == sorted([ES_URL, API_URL, urls[1]])
+    fetched = {x["url"]: x for x in index}
+    assert fetched[ES_URL]["status"] == 200 and fetched[ES_URL]["key"] == Q.url_key(ES_URL)
+    assert fetched[ES_URL]["body_sha256"] == Q.hashlib.sha256(b"<p>x</p>").hexdigest()
+    assert (
+        fetched[urls[1]]["not_fetched"]
+        == "ancientnerds.com is production: the audit does not touch it"
+    )
+
+
 def test_a_fetch_that_fails_is_recorded_with_its_error(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectTimeout("timed out", request=request)

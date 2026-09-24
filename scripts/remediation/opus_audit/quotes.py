@@ -354,6 +354,21 @@ def collect(
     return counts
 
 
+def page_index(urls: Iterable[str], pages: Path) -> list[dict[str, Any]]:
+    """One line per cited URL (PAGES.jsonl): its fetch record, or why it was never fetched."""
+    out: list[dict[str, Any]] = []
+    for url in sorted({canonical_url(u)[0] for u in urls}):
+        refused = not_fetchable(url)
+        if refused:
+            out.append({"url": url, "key": url_key(url), "not_fetched": refused})
+            continue
+        meta = json.loads((pages / f"{url_key(url)}.json").read_text(encoding="utf-8"))
+        out.append(
+            {"url": url, "key": url_key(url), **{k: v for k, v in meta.items() if k != "url"}}
+        )
+    return out
+
+
 def http_client() -> httpx.Client:
     return httpx.Client(headers=HEADERS, follow_redirects=True, timeout=TIMEOUT_SECONDS)
 
