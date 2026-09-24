@@ -16996,6 +16996,8 @@ P4P3_WRITE_TEST = "tests/remediation/test_phase4_write.py"
 P4P3_RUN4 = "scripts/remediation/phase4/run4.py"
 P4P3_MASS4 = "scripts/remediation/phase4/mass4.py"
 P4P3_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4P3_PILOT4 = "scripts/remediation/phase4/pilot4.py"
+P4P3_PILOT_TEST = "tests/remediation/test_phase4_pilot.py"
 P4P3_COUNTRY = "pipeline/utils/country_lookup.py"
 P4P3_DEMONYM_TEST = "tests/pipeline/test_country_demonyms.py"
 P4P3_PROMPTS = "scripts/remediation/phase4/prompts4.py"
@@ -17317,6 +17319,31 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    ledger = run_dir.parent / M.LEDGER_FILE  # mutant\n",
         P4P3_RUNNER_TEST,
         "test_a_run_with_searches_off_is_not_stopped_by_the_search_ceiling",
+    ),
+    # ── pilot 3's draw: every earlier pilot's fixed members, none of any earlier pilot's draws ──
+    (
+        "p4 pilot: pilot 3 may draw a site an earlier pilot but the last drew",
+        P4P3_PILOT4,
+        "        earlier_drawn |= drawn_before\n",
+        "        earlier_drawn = set(drawn_before)  # mutant\n",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_keeps_the_fixed_members_and_excludes_both_earlier_pilots_draws",
+    ),
+    (
+        "p4 pilot: only the first earlier pilot's fixed members are checked",
+        P4P3_PILOT4,
+        "        if list(strata.items()) != earlier_fixed:\n",
+        "        if number == 1 and list(strata.items()) != earlier_fixed:  # mutant\n",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_refuses_an_earlier_pilot_whose_fixed_members_differ",
+    ),
+    (
+        "p4 pilot: build reads only the last --after pilot",
+        P4P3_PILOT4,
+        "    earlier = [R.read_jsonl(Path(path)) for path in args.after]\n",
+        "    earlier = [R.read_jsonl(Path(path)) for path in args.after[-1:]]  # mutant\n",
+        P4P3_PILOT_TEST,
+        "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
     ),
 ]
 MUTATIONS += P4_PILOT3_MUTATIONS

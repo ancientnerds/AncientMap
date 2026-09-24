@@ -264,7 +264,7 @@ def test_pilot_2_keeps_pilot_1s_fixed_members_and_draws_anew_without_its_draws()
     )
     first, _ = build(sites, census)
     second, summary = PL.build_pilot(
-        sites, census, gold=[], q309=Q309, routeless=set(), seed=PL.SEED_PILOT2, earlier=first
+        sites, census, gold=[], q309=Q309, routeless=set(), seed=PL.SEED_PILOT2, earlier=[first]
     )
 
     assert PL.SEED_PILOT2 == 20260924
@@ -295,8 +295,51 @@ def test_pilot_2_refuses_fixed_members_that_are_not_pilot_1s() -> None:
     for earlier in (first[1:], [first[1], first[0], *first[2:]]):
         with pytest.raises(R.InputError, match="not the earlier pilot's"):
             PL.build_pilot(
-                sites, census, gold=[], q309=Q309, routeless=set(), seed=1, earlier=earlier
+                sites, census, gold=[], q309=Q309, routeless=set(), seed=1, earlier=[earlier]
             )
+
+
+def test_pilot_3_keeps_the_fixed_members_and_excludes_both_earlier_pilots_draws() -> None:
+    """Pilot 2 failed too (T3, T4, T6, T8): pilot 3 is a fresh draw of the same strata with its own
+    seed, the fixed members exactly pilots 1's and 2's, and none of either pilot's draws."""
+    sites = named_sites()
+    census = census_of(
+        sites, {**lane_sites("0b0b0b0b", 100, M.Lane.W), **lane_sites("0c0c0c0c", 20, M.Lane.S)}
+    )
+    first, _ = build(sites, census)
+    kwargs: dict[str, Any] = {"gold": [], "q309": Q309, "routeless": set()}
+    second, _ = PL.build_pilot(sites, census, seed=PL.SEED_PILOT2, earlier=[first], **kwargs)
+    third, summary = PL.build_pilot(
+        sites, census, seed=PL.SEED_PILOT3, earlier=[first, second], **kwargs
+    )
+
+    assert PL.SEED_PILOT3 == 20260925
+    assert third[: summary["fixed"]] == first[: summary["fixed"]] == second[: summary["fixed"]]
+    before = set(drawn(first, PL.DRAW_W)) | set(drawn(second, PL.DRAW_W))
+    eligible = sorted({sid("0b0b0b0b", n) for n in range(1, 101)} - before)
+    w3 = drawn(third, PL.DRAW_W)
+    assert w3 == sorted(random.Random(PL.SEED_PILOT3).sample(eligible, 30))  # noqa: S311
+    assert summary["draws"][PL.DRAW_W]["eligible"] == 40
+    # 20 lane-S sites, 16 drawn by the two earlier pilots: the stratum is taken whole
+    assert drawn(third, PL.DRAW_S) == sorted(
+        {sid("0c0c0c0c", n) for n in range(1, 21)}
+        - set(drawn(first, PL.DRAW_S))
+        - set(drawn(second, PL.DRAW_S))
+    )
+    assert summary["earlier_draws_excluded"] == 76
+
+
+def test_pilot_3_refuses_an_earlier_pilot_whose_fixed_members_differ() -> None:
+    """Every earlier pilot is checked, not only the first: a second whose fixed lines moved is
+    refused, since the pilots would no longer share one fixed set."""
+    sites = named_sites()
+    census = census_of(sites, lane_sites("0b0b0b0b", 90, M.Lane.W))
+    first, _ = build(sites, census)
+    kwargs: dict[str, Any] = {"gold": [], "q309": Q309, "routeless": set()}
+    second, _ = PL.build_pilot(sites, census, seed=PL.SEED_PILOT2, earlier=[first], **kwargs)
+    moved = [second[1], second[0], *second[2:]]
+    with pytest.raises(R.InputError, match="not the earlier pilot's"):
+        PL.build_pilot(sites, census, seed=PL.SEED_PILOT3, earlier=[first, moved], **kwargs)
 
 
 def test_an_earlier_line_that_is_neither_fixed_nor_one_draw_is_refused() -> None:
@@ -512,9 +555,19 @@ def test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line(
     printed = capsys.readouterr().out
     summary = json.loads(printed[: printed.rindex("STAGE_EXIT=")])
     assert summary["earlier_draws_excluded"] == 2
-    assert summary["inputs"]["after"] == PL._sha256(tmp_path / "a.jsonl")
+    assert summary["inputs"]["after"] == [PL._sha256(tmp_path / "a.jsonl")]
     lines2 = R.read_jsonl(second)
     assert fixed_lines(lines2) == fixed_lines(lines) and drawn(lines2, PL.DRAW_W) == []
+
+    # pilot 3: `--after` once per earlier pilot, each one's digest named in order
+    third = tmp_path / "third.jsonl"
+    after3 = [f"--after={tmp_path / 'a.jsonl'}", f"--after={second}", f"--seed={PL.SEED_PILOT3}"]
+    assert PL.main([*argv, *after3, f"--out={third}"]) == 0
+    printed = capsys.readouterr().out
+    summary = json.loads(printed[: printed.rindex("STAGE_EXIT=")])
+    assert summary["inputs"]["after"] == [PL._sha256(tmp_path / "a.jsonl"), PL._sha256(second)]
+    assert summary["earlier_draws_excluded"] == 2
+    assert fixed_lines(R.read_jsonl(third)) == fixed_lines(lines)
 
 
 # =========================================================================== the prose errors
