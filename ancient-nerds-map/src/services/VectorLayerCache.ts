@@ -6,6 +6,7 @@
 import { OfflineFetch } from './OfflineFetch'
 import { OfflineStorage } from './OfflineStorage'
 import { LAYER_CONFIG, getLayerFiles, type VectorLayerKey } from '../config/vectorLayers'
+import { VECTOR_LAYER_CACHE } from '../pwa/cacheNames'
 
 export interface VectorLayerInfo {
   id: string
@@ -51,7 +52,7 @@ for (let i = -150; i <= 6; i++) {
   SEA_LEVELS.push(i)
 }
 
-const CACHE_NAME = 'vector-layers'
+const CACHE_NAME = VECTOR_LAYER_CACHE
 
 class VectorLayerCacheClass {
   /**

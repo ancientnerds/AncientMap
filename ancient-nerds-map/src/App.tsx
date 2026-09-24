@@ -41,7 +41,7 @@ import { BRAND_ASSETS } from './constants/brand'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { offlineFetch } from './services/OfflineFetch'
-import { registerServiceWorker } from './pwa/registerServiceWorker'
+import { serviceWorkerTask } from './pwa/registerServiceWorker'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
 import { haversineDistance } from './utils/geoMath'
@@ -685,11 +685,12 @@ function AppContent() {
   }, [])
 
   // App's part of the globe's background queue, after the intro: the site details
-  // first, the service worker last. Only production builds have a /sw.js (the
-  // PWA plugin serves none in dev), so dev registers none, as before.
+  // first, the service worker (and the removal of caches earlier workers left) last.
+  // Only production builds have a /sw.js (the PWA plugin serves none in dev), so dev
+  // registers none, as before.
   const appBackgroundTasks = useMemo((): AppBackgroundTasks => ({
     details: () => loadDetails(),
-    sw: import.meta.env.PROD ? () => registerServiceWorker() : null,
+    sw: import.meta.env.PROD ? () => serviceWorkerTask() : null,
   }), [loadDetails])
 
   /** The globe cannot start (or broke after it had: phase 'live'): error screen, one globe_error. */

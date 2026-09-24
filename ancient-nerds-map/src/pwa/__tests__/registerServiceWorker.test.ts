@@ -49,7 +49,7 @@ describe('registerServiceWorker', () => {
     const register = vi.fn().mockResolvedValue({})
     stubPage({ readyState: 'complete', register })
     const { registerServiceWorker } = await import('../registerServiceWorker')
-    await expect(registerServiceWorker()).resolves.toBeUndefined()
+    await expect(registerServiceWorker()).resolves.toBe(true)
     expect(register).toHaveBeenCalledTimes(1)
     expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' })
   })
@@ -70,7 +70,7 @@ describe('registerServiceWorker', () => {
   it('does nothing where the browser has no service workers', async () => {
     stubPage({ readyState: 'complete', register: null })
     const { registerServiceWorker } = await import('../registerServiceWorker')
-    await expect(registerServiceWorker()).resolves.toBeUndefined()
+    await expect(registerServiceWorker()).resolves.toBe(false)
   })
 
   it('rejects with the refusal so the caller reports it', async () => {

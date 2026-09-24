@@ -6,9 +6,11 @@
  * All fetch() calls in the app should use this service.
  */
 
+import { VECTOR_LAYER_CACHE } from '../pwa/cacheNames'
+
 // Cache names used by the app
 const CACHE_NAMES = [
-  'vector-layers',      // Coastlines, rivers, lakes, borders, paleoshorelines
+  VECTOR_LAYER_CACHE,   // Coastlines, rivers, lakes, borders, paleoshorelines
   'historical-data',    // Empire boundaries, metadata
   'basemaps',          // Satellite imagery
 ]

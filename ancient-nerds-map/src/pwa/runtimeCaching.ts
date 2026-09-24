@@ -13,6 +13,8 @@
 
 import type { VitePWAOptions } from 'vite-plugin-pwa'
 
+import { VECTOR_LAYER_CACHE } from './cacheNames'
+
 type RuntimeCaching = NonNullable<NonNullable<Partial<VitePWAOptions>['workbox']>['runtimeCaching']>
 
 const ONE_YEAR = 60 * 60 * 24 * 365
@@ -96,7 +98,7 @@ export const RUNTIME_CACHING: RuntimeCaching = [
     urlPattern: /\/data\/layers\/globe\/[^/?]+\.json(\?|$)/,
     handler: 'CacheFirst',
     options: {
-      cacheName: 'vector-layers',
+      cacheName: VECTOR_LAYER_CACHE,
       cacheableResponse: { statuses: [0, 200] },
       expiration: { maxEntries: 16 },
     },
@@ -106,7 +108,7 @@ export const RUNTIME_CACHING: RuntimeCaching = [
     urlPattern: /\/data\/layers\/.*\.json(\?|$)/,
     handler: 'StaleWhileRevalidate',
     options: {
-      cacheName: 'vector-layers',
+      cacheName: VECTOR_LAYER_CACHE,
       cacheableResponse: { statuses: [0, 200] },
     },
   },
