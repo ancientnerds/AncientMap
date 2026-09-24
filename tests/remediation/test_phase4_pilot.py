@@ -735,3 +735,46 @@ def test_the_sealed_thresholds_are_the_designs_blocks_verbatim() -> None:
     thresholds, failure = PL.threshold_blocks(entry["pilot_and_thresholds"])
     assert f"\n{thresholds}\n\n{failure}\n" in text
     assert text == PL.thresholds_document(entry)
+
+
+# ========================================================= pilot 2's seal (2026-09-24, seed 20260924)
+
+#: The audit log's section that sealed pilot 2 before its first model question was exported.
+PILOT2_SECTION = "## 2026-09-24 - Phase-4 pilot 2, sealed before its first model question"
+#: Pilot 2's new draw, and the two documents it keeps from pilot 1, byte for byte.
+SEALED_PILOT2 = {
+    "PILOT2.jsonl": "9caaaa0312369155bb489a0c96ba6fb1b5e57ec988e787a0206c10503cc9f81c",
+    "PILOT_THRESHOLDS.md": SEALED["PILOT_THRESHOLDS.md"],
+    "gold_prose_errors.json": SEALED["gold_prose_errors.json"],
+}
+
+
+def _section(log: str, heading: str) -> str:
+    start = log.index(heading)
+    end = log.find("\n## ", start + len(heading))
+    return log[start:] if end == -1 else log[start:end]
+
+
+def test_pilot_2_is_sealed_with_pilot_1s_thresholds_byte_for_byte() -> None:
+    """The thresholds are "never loosened after the data is seen": pilot 2 runs under the document
+    sealed before pilot 1's first question, byte for byte, and the audit log's pilot-2 section
+    records PILOT2.jsonl's digest beside the two unchanged ones before its first export."""
+    section = _section(AUDIT_LOG.read_text(encoding="utf-8"), PILOT2_SECTION)
+    for name, digest in SEALED_PILOT2.items():
+        assert PL._sha256(RUNNER / name) == digest, name
+        assert f"`{digest}`" in section, f"the pilot-2 section does not record {name}'s sha256"
+
+
+def test_the_sealed_pilot_2_keeps_pilot_1s_fixed_members_and_none_of_its_draws() -> None:
+    first = R.read_jsonl(RUNNER / "PILOT.jsonl")
+    second = R.read_jsonl(RUNNER / "PILOT2.jsonl")
+    fixed, drawn_first = PL.earlier_pilot(first)
+    fixed_second, drawn_second = PL.earlier_pilot(second)
+    assert fixed_second == fixed and len(fixed) == 70
+    assert second[:70] == first[:70]  # the same census: the fixed lines are pilot 1's, whole
+    assert not drawn_first & drawn_second and len(drawn_second) == 62
+    ids = [line["site_id"] for line in second]
+    assert len(ids) == len(set(ids)) == 132
+    strata = [stratum for line in second for stratum in line["strata"]]
+    for stratum, count in PL.DRAWS:
+        assert strata.count(stratum) == count, stratum

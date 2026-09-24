@@ -7970,3 +7970,67 @@ no row; `--open-lanes` names only lanes whose pilot passed (W and S at most; T a
   `phase3/` changes with this branch: merge it while no Phase-3 mass run is in flight.
   `docs/procedures/PHASE4_CONTRACTS.md` section 8 records the additions (`write_plan` now takes
   `pilot`).
+
+## 2026-09-24 - Phase-4 pilot 2, sealed before its first model question (no model called, nothing written)
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`). Pilot 1 failed T2, T5 and T8
+(`output/remediation/phase4_runner/PILOT_RESULT_1.md`, commit `087e38f`). Under the failure rule of
+`PILOT_THRESHOLDS.md` ("STOP, find the root cause, fix it, and re-pilot on a fresh draw of the same
+strata in a new run directory") the causes were fixed first, each with red-first tests and mutation
+cases, before this draw:
+
+* `ba14b94` - the selector question carries rules (6)-(9) after the design's five: the description's
+  200-1100 characters (V9), a first sentence that names the site (V6), never a sentence about the
+  modern village, town or municipality - ABSTAIN when only such a sentence names the site (T2,
+  Orolik) - and no definite reference whose antecedent is not picked (T5); the reviewer question
+  the two matching DROP criteria. Answer lines and parsers unchanged.
+* `0e397cd` - V6 accepts, beside the stored name and aliases, the pinned article's title and the
+  pinned Wikidata item's English label, for a strong 'own' verdict only (QID + coordinates + no
+  place-level item: the subject gate already tied article and item to the site); S3 reads the same
+  rule in its own code and shows the extra names to the selector as `also_named`. Re-measured on a
+  scratch copy of pilot 1's run: its V6 name holds fall from 14 to 9.
+* `a1ab602` - `pilot4.py build --after`: pilot 2's draw.
+
+**Nothing was written to production; no model and no MiniMax endpoint was called; production was not
+read for this draw** (the census, the export and the routeless read are pilot 1's, digests below).
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \
+        --after PILOT.jsonl --seed 20260924 --out PILOT2.jsonl
+
+### The pilot set (`PILOT2.jsonl`, 132 sites)
+
+Fixed, 70 sites: **exactly pilot 1's fixed members** - the same code resolved them from the same
+census, and `build` refuses any list that is not PILOT.jsonl's fixed lines, site for site, in its
+order, with their strata; the 70 lines are byte-identical to PILOT.jsonl's first 70. The seeded strata
+are drawn anew with seed **20260924**, each excluding everything placed before it **and all 62 of
+pilot 1's seeded draws**: 0 sites of pilot 1's draws are in pilot 2.
+
+| stratum | asked | population | eligible | taken |
+|---|---|---|---|---|
+| draw-W (census lane W) | 30 | 3,887 | 3,810 | 30 |
+| draw-S (census lane S) | 8 | 372 | 353 | 8 |
+| draw-T-candidate | 6 | 38 | 32 | 6 |
+| draw-R-candidate | 8 | 252 | 243 | 8 |
+| draw-B3-routeless | 5 | 20 | 15 | 5 |
+| draw-extract-over-40000 | 5 | 65 | 58 | 5 (4 W, 1 S) |
+
+No stratum was smaller than asked. The census lanes of the 132: **W 78, S 18, 0 36** (pilot 1: W 77,
+S 19, 0 36). As in pilot 1, the T and R strata are candidates held `search-stopped` (searches off,
+owner order 2026-09-23): they stay held and are reported, never guessed into a lane.
+
+### The sealed artefacts
+
+| file | sha256 |
+|---|---|
+| `output/remediation/phase4_runner/PILOT2.jsonl` (new) | `9caaaa0312369155bb489a0c96ba6fb1b5e57ec988e787a0206c10503cc9f81c` |
+| `output/remediation/phase4_runner/PILOT_THRESHOLDS.md` (pilot 1's, unchanged) | `64ac53341068234c905cff00095a9d7244cd4703353f63bbd0997add63fe0c13` |
+| `output/remediation/phase4_runner/gold_prose_errors.json` (pilot 1's, unchanged) | `e4e63d56cbc9cca0f9cea018967fac40e897faddb9c43ad064e6203a74ebb7df` |
+
+The thresholds are the ones sealed before pilot 1's first question, byte for byte: nothing in them
+was changed or loosened after the data was seen (`test_phase4_pilot.py` pins all three digests to
+this section). The draw's inputs: `PILOT.jsonl` (sealed in pilot 1's section, `7f66f987...e063fc`),
+`PLAN4.census.jsonl` `644b9032ed43e8ecc285cc9c783a7852c6546fefcc2501e33534897d4676b591`,
+`S0_ROUTELESS.json` `81c3b426421e5958ee4e6fbe43ab139fe967f7dad030bd795c77d68d37997746`,
+`gold_standard/sites.json` `18653fc12607bc7b25c160ab022d114b86500c5dd15641979dc4cfdb72d2b756`,
+`qid_repair/PLAN.jsonl` `9d57b4315bea6fe6c7cfc1d94cae8776b442bce1443159eef2328579f9a6ce4f`. Without
+`--after`, the same build rewrites pilot 1's `PILOT.jsonl` byte-identically (checked before this draw).

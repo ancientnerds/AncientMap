@@ -16958,6 +16958,22 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4P_PILOT_TEST,
         "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
     ),
+    (
+        "p4 pilot: the audit log loses pilot 2's sealed digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`9caaaa0312369155bb489a0c96ba6fb1b5e57ec988e787a0206c10503cc9f81c`",
+        "`mutant`",
+        P4P_PILOT_TEST,
+        "test_pilot_2_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+    (
+        "p4 pilot: pilot 2's thresholds are loosened after pilot 1's data",
+        "output/remediation/phase4_runner/PILOT_THRESHOLDS.md",
+        "- T8: at least 80% of the pilot's lane-W sites are write-eligible (coverage).\n",
+        "- T8: at least 60% of the pilot's lane-W sites are write-eligible (coverage). (mutant)\n",
+        P4P_PILOT_TEST,
+        "test_pilot_2_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
 ]
 MUTATIONS += P4_PILOT2_MUTATIONS
 
