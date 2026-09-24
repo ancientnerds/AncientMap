@@ -49,6 +49,7 @@ import { reportAchievementEvent } from './utils/cardApi'
 import AchievementToast from './components/AchievementToast'
 import { useSiteSearch } from './hooks/useSiteSearch'
 import { useGlobeScreenEnding, type ScreenEnding } from './hooks/useGlobeScreenEnding'
+import { useGlobeReady } from './hooks/useGlobeReady'
 
 export type FilterMode = 'category' | 'age' | 'source' | 'country'
 
@@ -166,7 +167,7 @@ function AppContent() {
   const startItemsRef = useRef(new Set<StartItem>())
   const watchdogRef = useRef<StallWatchdog | null>(null)
   const [loadStalled, setLoadStalled] = useState(false)
-  // globe_ready has fired: later failures are 'live', not start failures
+  // globe_ready has fired (useGlobeReady): later failures are 'live', not start failures
   const globeReadyRef = useRef(false)
 
   const [sites, setSites] = useState<SiteData[]>([])
@@ -206,7 +207,7 @@ function AppContent() {
     lastActivityTime: Date.now(),
   })
   const speedIntervalRef = useRef<number | null>(null)
-  // globe_idle: armed when the layers are ready, disarmed by the first
+  // globe_idle: armed at globe_ready, disarmed by the first
   // site popup, search input or source toggle. Fires once after 30 s.
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const markGlobeActivity = useCallback(() => {
@@ -1658,6 +1659,13 @@ function AppContent() {
     if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)
   }, [loadingComplete, overlayRendered, overlayFading])
 
+  // globe_ready when the visitor sees the globe: the overlay fades on loadingComplete,
+  // with no error screen over it and a live WebGL context under it
+  const armGlobeIdle = useCallback(() => {
+    idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
+  }, [])
+  useGlobeReady(loadingComplete && !globeFailure && !webglLost, endingLatch, globeReadyRef, armGlobeIdle)
+
   const gateShowing = isMobile && !mobileWarningDismissed
   const gateShowingRef = useRef(gateShowing)
   gateShowingRef.current = gateShowing
@@ -1712,16 +1720,13 @@ function AppContent() {
     }
   }, [startWatched])
 
+  // The critical layers are in. The load is not ready yet: the overlay may still wait
+  // for the sites or the focus lookup (globe_ready: useGlobeReady, above)
   const handleLayersReady = useCallback(() => {
-    // Before globe_ready: from here on this load sends no ending (no abandon either)
-    globeReadyRef.current = true
-    endingLatch.close()
     updateLoadingStatus('Map layers ready!')
     setLoadingProgress(100)
     setLayersReady(true)
-    track('globe_ready', { ms: Math.round(performance.now()) })
-    idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
-  }, [endingLatch, updateLoadingStatus])
+  }, [updateLoadingStatus])
 
   // Standalone mode: show only the popup in a minimal container
   if (standaloneSiteId) {

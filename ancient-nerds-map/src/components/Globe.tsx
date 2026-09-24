@@ -224,8 +224,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     logoAnimationStarted: logoAnimationStartedRef,
   } = refs
 
-  // Contract C0: every critical loader reports its failure here; before globe_ready it
-  // reaches GlobeErrorBoundary (App shows the error screen), afterwards it is tracked as live.
+  // Contract C0: every critical loader reports its failure here; until the layers are ready
+  // it reaches GlobeErrorBoundary (App shows the error screen), afterwards the globe is
+  // drawn and stays up, and the failure is tracked as live.
   const reportStartError = useStartErrorBridge(() => refs.layersReadyCalled.current)
 
   // Custom Hooks

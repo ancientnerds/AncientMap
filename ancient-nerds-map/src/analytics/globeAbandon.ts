@@ -74,7 +74,8 @@ export function reportGateChoice(choice: GateChoice, latch: GlobeEndingLatch): v
 /**
  * Where the load is: 'gate' while the phone gate shows, else the first
  * critical item not yet in. Once every item is in, the load waits only for
- * the globe_ready check itself, and the last item names that step.
+ * the focus lookup (focus links) and globe_ready itself, and the last item
+ * names that step.
  */
 export function loadPhase(gateShowing: boolean, done: ReadonlySet<StartItem>): AbandonPhase {
   if (gateShowing) return 'gate'
