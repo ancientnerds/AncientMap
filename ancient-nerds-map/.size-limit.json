@@ -4,5 +4,11 @@
     "path": ["dist/assets/landing-*.js"],
     "limit": "12 kB",
     "brotli": true
+  },
+  {
+    "name": "globe entry JS (mapbox-gl stays out: it loads after the intro)",
+    "path": ["dist/assets/main-*.js"],
+    "limit": "136 kB",
+    "brotli": true
   }
 ]
