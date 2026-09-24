@@ -290,7 +290,23 @@ def render(
             f"{out}: its next write is round {reverted_round(out) + 1}, not --round {write_round}"
         )
     W4.write_plan_files(out, plan, chunk)
+    if chunk is None:
+        drop_unwritten_statements(out, write_round=write_round)
     return Planned(out=out, plan=plan, chunk=chunk)
+
+
+def drop_unwritten_statements(out: pathlib.Path, *, write_round: int) -> None:
+    """A plan of the batch without a row: the statements an earlier plan rendered for this round
+    are not this plan's, and beside an empty `PLAN.jsonl` they would still write the old rows by
+    hand. They go - never a round's record (`APPLIED.json`, `REVERTED.json`) nor a stopped batch's
+    statements, which are what was attempted."""
+    directory = out / W4.CHUNKS_DIR / f"chunk-{write_round:04d}"
+    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)
+    if not directory.is_dir() or any(path.exists() for path in kept):
+        return
+    for name in (W4.APPLY_FILE, W4.REHEARSE_FILE, W4.ROLLBACK_FILE):
+        (directory / name).unlink()
+    directory.rmdir()
 
 
 def _read(path: pathlib.Path) -> dict[str, Any]:

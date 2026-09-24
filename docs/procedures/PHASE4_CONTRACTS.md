@@ -1164,3 +1164,8 @@ owner decision, ranks above the design.
   failed pilots 1-3 were never written and go in like any site. `mass4` prints, on every run, how
   many sites of its open batches lie outside the scope, and refuses a live round that holds a model
   stage while one does (a done batch asks nothing again, so re-driving a pilot's run is not refused).
+- **A re-plan without rows drops the statements an earlier plan rendered** for that round
+  (`write_gate4.drop_unwritten_statements`): the scope emptied pilot 4's `p4-0004`, whose
+  `APPLY.sql` from the unscoped dry run would otherwise have stayed beside an empty `PLAN.jsonl`. A
+  round's record (`APPLIED.json`, `REVERTED.json`) and a stopped batch's statements are never
+  touched.

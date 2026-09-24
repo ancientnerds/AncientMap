@@ -18075,6 +18075,30 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4S_WRITE_TEST,
         "test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it",
     ),
+    (
+        "p4 write_gate4: a re-plan without rows keeps the old plan's statements",
+        P4S_GATE,
+        "    if chunk is None:\n        drop_unwritten_statements(out, write_round=write_round)\n",
+        "    if False:  # mutant\n        drop_unwritten_statements(out, write_round=write_round)\n",
+        P4S_WRITE_TEST,
+        P4S_STATEMENTS,
+    ),
+    (
+        "p4 write_gate4: a stopped batch's statements are dropped",
+        P4S_GATE,
+        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)\n",
+        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE)  # mutant\n",
+        P4S_WRITE_TEST,
+        P4S_STATEMENTS,
+    ),
+    (
+        "p4 write_gate4: a reverted round's statements are dropped",
+        P4S_GATE,
+        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)\n",
+        "    kept = (out / STOPPED_FILE,)  # mutant\n",
+        P4S_WRITE_TEST,
+        "test_a_reverted_rounds_record_survives_a_re_plan_without_rows",
+    ),
     # ── plan4: the mass run's plan is the scope after the pilot ──────────────────────────────
     (
         "p4 plan4: the scoped plan keeps a site outside the scope",

@@ -1032,6 +1032,49 @@ def test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it(
     assert json.loads(refused)["rule"] == "outside-defect-scope"
 
 
+def test_a_re_plan_without_rows_drops_the_statements_an_earlier_dry_run_rendered(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """A dry run renders a batch's statements; a later plan of that batch with no row (here: its
+    site left the scope) must not leave them beside an empty PLAN.jsonl, where they would still
+    write the old plan's rows by hand. A stopped batch keeps them: they are what was attempted."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    site = "00000001-0000-4000-8000-000000000001"
+    statements = tmp_path / "apply" / "p4-0001" / W4.CHUNKS_DIR / "chunk-0001"
+    assert G.main(_gate_args(tmp_path), runner=_db(site)) == 0
+    assert (statements / W4.APPLY_FILE).exists()
+    _scope_file(monkeypatch, tmp_path, "00000009-0000-4000-8000-000000000009")
+    assert G.main(_gate_args(tmp_path), runner=_db(site)) == 0
+    assert not statements.exists()
+    assert (tmp_path / "apply" / "p4-0001" / W4.PLAN_FILE).read_text(encoding="utf-8") == ""
+
+    monkeypatch.setattr(G, "_defect_scope", lambda: FX.EVERY_SITE)
+    assert G.main(_gate_args(tmp_path), runner=_db(site)) == 0
+    (tmp_path / "apply" / "p4-0001" / G.STOPPED_FILE).write_text("{}", encoding="utf-8")
+    _scope_file(monkeypatch, tmp_path, "00000009-0000-4000-8000-000000000009")
+    assert G.main(_gate_args(tmp_path), runner=_db(site)) == 0
+    assert (statements / W4.APPLY_FILE).exists()
+
+
+def test_a_reverted_rounds_record_survives_a_re_plan_without_rows(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """Round 1 written, reverted and archived beside its statements (`chunks/chunk-0001/` with
+    APPLIED.json and REVERTED.json); the site then leaves the scope. The re-plan has no row, and
+    the reverted round's record - its statements included - stays exactly as it was."""
+    db, out = _gate_written(tmp_path, monkeypatch)
+    _revert_round(db, out, 1)
+    assert G.main(_gate_args(tmp_path, "--round", "2"), runner=db) == 0  # re-opens, archives
+    kept = out / W4.CHUNKS_DIR / "chunk-0001"
+    before = {path.name: path.read_bytes() for path in kept.iterdir()}
+    assert {G.APPLIED_FILE, G.REVERTED_FILE, W4.APPLY_FILE} <= set(before)
+    _scope_file(monkeypatch, tmp_path, "00000009-0000-4000-8000-000000000009")
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path), runner=db) == 0
+    assert {path.name: path.read_bytes() for path in kept.iterdir()} == before
+
+
 def test_the_gate_refuses_a_scope_file_that_is_not_the_pinned_one(
     tmp_path, monkeypatch, capsys
 ) -> None:
