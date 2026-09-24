@@ -97,7 +97,8 @@ the world (a text, a marker, a hash), not a shape `model4` would refuse first.
   exact spans) and asserts identical span sets. Before the pilot the orchestrator also runs both
   finders over the same pools: any difference is a contract bug, fixed in the design reading, not
   by making one import the other. What both import is data, never a matcher of the other's:
-  `model4.PROTECTED_TOKENS` and `model4.CIRCA_PATTERN`. Measured on wip/p4-verify-sup
+  `model4.PROTECTED_TOKENS`, `model4.CIRCA_PATTERN` and (pilot 2's T5, section 7)
+  `model4.PREPOSITIONS_NO_COMMA`. Measured on wip/p4-verify-sup
   (2026-09-23, section 7 with the shared-comma refusal), read-only over the 3,661 local enwiki
   extracts: 170,528 sentences (81,979 of them in a lane-W pool, 144,272 spans offered by S2),
   **0** sentences on which the two finders differ, and every S2 sentence range is one sentence
@@ -123,6 +124,16 @@ Batch directory: `output/remediation/phase4_runner/runs/<run>/<batch>/` with `in
 `LANES_FILE`, `ASSEMBLY_FILE`, `HOLDS_FILE`). Cross-track JSONL is written with
 `model4.dump_jsonl` and read with `model4.load_jsonl`. Model answers stay write-once under the
 stage's own folder (`answers/`, `reviews/`), as in Phase 3.
+
+**The run's ledger is `<run>/LEDGER.jsonl`** (`model4.LEDGER_FILE`, 2026-09-24): every ledger line
+of the run's stages - fetches, searches, model calls - goes there, and it is the only ledger a reader
+of the run's per-batch lines reads (the writer's journal evidence, `write4.ledger_labels`; the
+routes stage's search count, `route_stage.queries_on_record`). `run4` derives it from `--run-dir`,
+`mass4` from its run directory (budget and search allowance included), `write_gate4` from `--run`;
+none of the three takes a `--ledger`. Why: batch ids repeat across runs - every pilot is `p4-0001`
+.. `p4-0009` - and pilots 1 and 2 shared `phase4_runner/LEDGER.jsonl`, so pilot 2's evidence would
+have listed pilot 1's calls for the 70 fixed members. That shared file (and `LEDGER.census.jsonl`)
+stays as the record of the runs that wrote it; no Phase-4 tool reads it any more.
 
 ## 5. What each track owns and must provide
 
@@ -179,7 +190,8 @@ Provides:
   datetime, probe, wait, sleep=time.sleep) -> int`: writes `src.T.*`, `src.R*` (and `src.W`, `src.D`
   for the sites S1b anchors), then `lanes.jsonl` (one `LaneAssignment` per site, lane 0 included),
   `routes.fetch.json`, `search.json`, `routes.json` (its report and completion mark; `queries` and
-  `search_requests` count the batch's route searches over every run of the stage, from the ledger)
+  `search_requests` count the batch's route searches over every run of the stage, from the run's
+  own ledger, section 4)
   and holds `no-source`, `search-stopped` (the budget), `fetch-failed` (a route that could not be
   asked, whenever no own English article was found), `moved-during-fetch` and `revision-too-fresh`
   (an article S1b found). `max_searches` bounds the queries this run may still send. `probe` is
@@ -349,7 +361,40 @@ D1; rule 1 of section 1 otherwise holds):
   survive by construction (card_texts; pilot T3 stops the run on one lost), and with the design
   list alone 990 offered spans of the 3,681 local enwiki pools carried one of these words
   (`Presumably, `, `, arguably,`, `, it seems,`, `don't`, `cannot`); with the additions 0.
-- **`CIRCA_PATTERN`** (wip/p4-select-sup, decision D2): the one definition of the card's spoken
+- **Pilot 2's additions to the protected tokens** (wip/p4-pilot, 2026-09-24, T3; accepted by the
+  orchestrator under D1). Pilot 2's audit found House of the Faun published as "a dancing faun": a
+  `p` drop removed "(actually a satyr, since the lower body is that of a man)", the passage's own
+  correction of its head noun, and no entry named a correction. `PROTECTED_TOKEN_ADDITIONS` gains
+  `contrast`: `actually`, `in fact`, `in reality`, `instead`, `rather` (so `rather than`),
+  `whilst`, `nevertheless`, `nonetheless`, `contrary`, `unlike` (`however` and `although` are the
+  design's already), and `refutation`: `wrongly`, `mistaken*`, `erroneous*`, `incorrect*`,
+  `misidentif*`, `misattribut*` (the pools offered "(sometimes erroneously written Barà)" - Arc de
+  Berà, a gold fixture - and "(which he misidentified as biblical Ramah)"). Measured over the census
+  run's 4,259 lane-W/S pools (`runs/census-2026-09-24`: 89,072 pool sentences, 86,343 offered
+  spans): **472** offered spans carried one of these entries and are offered no more (t 249, l 139,
+  a 56, p 28; per entry: rather 117, instead 76, unlike 71, in fact 43, actually 37, nevertheless
+  37, whilst 36, nonetheless 11, contrary 10, erroneous* 8, incorrect* 8, mistaken* 7, wrongly 6,
+  in reality 3, misidentif* 2, misattribut* 0). `indeed`, `really` and `so-called` were measured
+  (24, 4, 63) and left out: emphasis and labelling, not corrections. Both finders read the data, so
+  S2 and V4 refuse the same spans (five new `SPAN_CASES`).
+- **`PREPOSITIONS_NO_COMMA`** (wip/p4-pilot, 2026-09-24, T5; accepted under D1): the closed list of
+  prepositions V5 holds and S2's pool refuses directly before a comma - section 7, "Pilot 2's fixes".
+- **`LEDGER_FILE`** (wip/p4-pilot, 2026-09-24): the run's own ledger, section 4.
+- **The demonym table is not `model4`'s** but `pipeline/utils/country_lookup.ISO_TO_DEMONYMS`, beside
+  `NAME_TO_ISO` - the country vocabulary it completes (T4/T6, 2026-09-24, on the orchestrator's
+  order). V10 reads it; the selector's card rule names its two examples. **Any use of a modern
+  country's demonym is held, an ancient culture's too ("Greek temple", "Egyptian", "Macedonian
+  tomb") - the safe reading** of the card rule "no country value, alias or demonym (country_lookup
+  vocabulary plus a demonym table)", which is the wording of design entry **[0]** (its V10, and its
+  card_texts: "No country, alias or demonym, which is the existing style rule"; the retired style
+  rule is `scripts/verify_descriptions.py`'s `DEMONYM_MAP`). **It departs from one sentence of the
+  final design:** entry [6], card_texts, RULES says "No country name. ... Cultural adjectives such as
+  Roman, Egyptian or Maya are allowed." Roman and Maya are no country's demonym and stay allowed;
+  `Egyptian`, `Greek`, `Macedonian`, `Indian`, ... are held. The
+  orchestrator ordered the safe reading after pilot 2's audit counted "a Danish hill" and "the first
+  Greek site" as country names (T6); a held card keeps the site's old card (card scope), it never
+  holds the description. The owner may still decide that ancient-culture uses pass; that would need
+  a rule that tells them apart, which no table can.
   edit; `assemble.spoken` (S4) and V10 import it, and no other phase-4 module compiles a circa
   pattern of its own (the splitter's abbreviation rule in `text_sentences` is not the edit).
   Section 7 states it.
@@ -669,6 +714,68 @@ now asks the selector for that first name.
   stays the stored names only: it mirrors V7, not V6, and lane S's verdict is `shared`, never a
   strong 'own'.
 
+### Pilot 2's fixes (2026-09-24): a correction, the demonyms, two garbles, the name's base
+
+Pilot 2 (`output/remediation/phase4_runner/PILOT_RESULT_2.md`, run `pilot2-2026-09-24`) passed T1, T2,
+T5 and T7 and failed T3 (House of the Faun: a `p` drop removed the passage's own correction "actually
+a satyr"), T4 and T6 (V10 let "a Danish hill" and "the first Greek site" through: no demonym table)
+and T8 (52 of 78 lane-W sites write-eligible); its T5 pass still named three rule gaps (Bassae,
+Vindobala, Bejsebakke). Under the thresholds' failure rule the causes were fixed before pilot 3; no
+threshold changed. Each fix keeps D3: the selection side and verify4 implement the rule each in its
+own code, and a parity test runs both over shared fixtures.
+
+- **T3, the protected tokens** - section 6 (`contrast` and `refutation` additions, 472 offered spans
+  fewer over the census pools); both finders read the data, five new `SPAN_CASES` hold them together.
+- **T4/T6, V10's demonyms** - `verify4.card_demonyms` matches `country_lookup.ISO_TO_DEMONYMS`
+  (section 6; 199 country codes, 251 distinct demonyms) as whole words written as proper nouns, alone or
+  with a plural `s` or a `-man`/`-men`/`-woman`/`-women` noun ("Greeks", "Englishman"), and V10 holds
+  the card ("the card names a nationality: [...]", card scope). The selection side is the selector
+  question: rule (4) now reads
+
+      (4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no country and no nationality adjective such as Greek or Danish, has no parentheses, does not open with a pronoun, and states something concrete; prefer one that carries a date;
+
+  (`SELECTOR_QUESTION` sha256 `ce36085f...afb79c`, was `8969add9...baad046`; a test ties "Greek" and
+  "Danish" to the table). Measured: 3 of pilot 1's 47 cards and 2 of pilot 2's 49 carry a demonym;
+  over the census pools 4,924 of 58,622 sentences of card length (80-200 characters) do, and the
+  sites with at least one whole-sentence card candidate without a country, a demonym, parentheses or
+  a pronoun opener fall from 3,680 to 3,646 of 4,259.
+- **T5, two garbles V5 holds and S2 never offers.** `verify4.ill_formed` (V5) and
+  `sentences.garbled` (S2's `publishable`, so the pool) each implement: (a) a full stop, then
+  whitespace, then a lowercase word inside the sentence - unless the word the stop ends is a single
+  letter or carries a full stop of its own (an initialism: `B.C. and`, `i.e. the`, `a.m. and`,
+  `F. da Silva`), since that stop ends no sentence; the shared splitter never splits before a
+  lowercase word, so Bassae's source typo "Cotylion Mountain. near the village" reached the pool
+  whole; (b) a word of `model4.PREPOSITIONS_NO_COMMA` (`of at by for from into onto to upon with than
+  until during towards toward among amongst amid via`: the prepositions that stand as no adverb or
+  particle) in lower case, as a whole word, directly before a comma (Vindobala: "the hamlet of,
+  Rudchester"). A preposition stranded in a coordination ("1 km west of, and within sight of, the
+  town") is fine English and is refused too (D7). Measured over the census pools: (a) 186 and (b) 66
+  of the 89,072 pool sentences (156 and 65 sites; 251 sentences together) are offered no more; (a)
+  without the initialism exemption would have been 431, mostly `B.C.`, `i.e.`, `A.D.`.
+  `tests/remediation/p4_garble_cases.py` (27 cases) is the shared fixture. Bejsebakke's garble
+  ("This excavation was found among other traces more than 350 pit houses") has no deterministic
+  shape; **the reviewer question** gains, after the dangling-reference criterion:
+
+      DROP a sentence that is garbled or ungrammatical, even when it copies the source word for word.
+
+  (`REVIEWER_QUESTION` sha256 `59a1714e...a7d999`, was `529c9678...461d0cb3`.) The answer lines and
+  both parsers are unchanged; the pins in `test_phase4_select.py` were re-pinned with the reasons.
+- **T8, the stored name's base.** For a strong 'own' verdict of sentence 1's source (the same
+  condition as the title and the item label), V6 also accepts the stored name without its
+  disambiguator: `X (Y)` -> X when the name ends in one flat parenthetical group, else `X, Y` -> X
+  (the text before the first comma). Fold and token rules are unchanged (`name_in`); under any other
+  verdict nothing is added - "Clare, Suffolk", "Argos, Peloponnese" and "Marion, Cyprus" (place-level
+  or unverified articles) stay held, the Orolik/Clare trap. `verify4.name_base` and
+  `select_stage.name_base` each implement it; S3 shows the base as `also_named` (rule (7) already
+  names those); the parity test `test_s3_and_v6_accept_the_same_base_name` runs both over 12 names x
+  the 10 gate and witness cases of `NAME_PARITY_CASES`. **Measured on a scratch copy of pilot 2's run**
+  (its stored selections re-assembled and re-verified with this code): V6 holds fall from **16 to 14**
+  - Partiscum (Castra) and Al Thumamah, Riyadh pass; 9 of the 14 left are pronoun-adjacency holds, 5
+  name holds (Odeon Theatre and Ancient City of Perrin carry no disambiguator; the three traps above).
+  The same re-verification now holds every pilot-2 audit finding but Bejsebakke's deterministically:
+  House of the Faun (V4, `actually`), Arc de Berà (V4, `erroneous*`), Bassae and Vindobala (V5), and
+  the Danish, Greek, Australian and British cards (V10).
+
 ## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
 
 Track D (WB-D1 ... WB-D5, branch `wip/p4-write`) built against sections 1-6 unchanged; its
@@ -817,3 +924,10 @@ section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question")
   draw of every seeded stratum excluding pilot 1's 62 draws (`PILOT2.jsonl`); `PILOT_THRESHOLDS.md`
   and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is `PLAN4.pilot2.jsonl` and
   its run `runs/pilot2-2026-09-24`. The fixes it runs with are section 7, "Pilot 1's fixes".
+- **Pilot 3** (2026-09-24, after pilot 2 failed T3, T4, T6 and T8): `pilot4 build --after PILOT.jsonl
+  --after PILOT2.jsonl --seed 20260925` - `--after` once per earlier pilot, each one's fixed members
+  refused unless site for site and in order, and a fresh draw of every seeded stratum excluding the
+  124 draws of pilots 1 and 2 (`PILOT3.jsonl`, sha256 `a4fa2f5f...f04152fc`); `PILOT_THRESHOLDS.md`
+  and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is `PLAN4.pilot3.jsonl` and
+  its run `runs/pilot3-2026-09-24`, whose ledger is its own (`runs/pilot3-2026-09-24/LEDGER.jsonl`,
+  section 4). The fixes it runs with are section 7, "Pilot 1's fixes" and "Pilot 2's fixes".
