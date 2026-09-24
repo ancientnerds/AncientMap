@@ -671,7 +671,10 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     split actually counted feed it, the latest ones of the session. A
     globe_abandon sent on visibilitychange->hidden can be followed by the same
     load's globe_ready (a tab switched away and back); that one is no "left
-    while loading" measurement.
+    while loading" measurement. It can also be followed by the same load's
+    start failure: that globe_error arrives marked ``ending='no'`` (diagnosis
+    only), SQL_GLOBE's `failed` skips it, and the load stays "left while
+    loading" - one ending per load, as the frontend promises.
     """
     loads = 0
     reached = 0
