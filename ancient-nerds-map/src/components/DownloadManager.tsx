@@ -58,6 +58,13 @@ function formatBytes(bytes: number): string {
   }
 }
 
+/** Some offline download was made (the legacy basemap quality included). */
+function hasOfflineDownload(state: DownloadState): boolean {
+  return Object.keys(state.sources).length > 0 || state.empires.length > 0
+    || (state.layers ?? []).length > 0 || (state.basemapItems ?? []).length > 0
+    || state.basemapQuality !== 'none'
+}
+
 export default function DownloadManager({ isOpen, onClose, sources, isOffline, onToggleOffline }: DownloadManagerProps) {
   // State
   const [downloadState, setDownloadState] = useState<DownloadState | null>(null)
@@ -65,8 +72,9 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   const [selectedBasemaps, setSelectedBasemaps] = useState<Set<BasemapType>>(new Set())
   // Basemap items whose download is complete (every file cached), not just marked downloaded
   const [downloadedBasemaps, setDownloadedBasemaps] = useState<Set<BasemapType>>(new Set())
-  // The files the globe's start cannot do without offline; every download stores them
-  const [globeStartCached, setGlobeStartCached] = useState(false)
+  // The files the globe's start cannot do without offline; every download stores them.
+  // null until checked: nothing is offered for them before the check has answered.
+  const [globeStartCached, setGlobeStartCached] = useState<boolean | null>(null)
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set())
   // Layers whose download is complete (every file cached), not just marked downloaded
   const [downloadedLayers, setDownloadedLayers] = useState<Set<string>>(new Set())
@@ -186,8 +194,9 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     )
   }, [allEmpires])
 
-  // Calculate estimated download size
-  const estimatedSize = useMemo(() => {
+  // Calculate estimated download size; startFilesOnly: nothing ticked is new, but an
+  // earlier download lacks the globe's start files (made before every download stored them)
+  const { estimatedSize, startFilesOnly } = useMemo(() => {
     let size = 0
 
     // Sources (rough estimate: 50 bytes per site)
@@ -215,10 +224,14 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       size += EmpireCache.estimateEmpireSize(empireId)
     }
 
-    // Any download brings the globe's start files along (handleDownload)
-    if (size > 0 && !globeStartCached) size += globeStartSize()
-
-    return size
+    // Any download brings the globe's start files along (handleDownload), and an
+    // earlier download without them is offered them on their own
+    const hasDownload = downloadState !== null && hasOfflineDownload(downloadState)
+    const startNeeded = globeStartCached === false && (size > 0 || hasDownload)
+    return {
+      estimatedSize: size + (startNeeded ? globeStartSize() : 0),
+      startFilesOnly: startNeeded && size === 0,
+    }
   }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, downloadedLayers, downloadedBasemaps, globeStartCached, sources])
 
   // Update progress with speed calculation
@@ -281,7 +294,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   /** What the globe's start cannot do without offline; a failure stops the whole download. */
   const downloadGlobeStartFiles = async () => {
-    if (globeStartCached) return
+    if (await isGlobeStartCached()) return
     setProgress({ type: 'basemap', id: 'globe-start', loaded: 0, total: globeStartSize(), label: 'Globe start files' })
     resetSpeedTracking()
     await downloadGlobeStart((loaded, total) => updateProgressWithSpeed(loaded, total))
@@ -713,7 +726,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                   : `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}${downloadSpeed > 0 ? ` - ${formatBytes(downloadSpeed)}/s` : ''}`}
               </span>
             ) : estimatedSize > 0 ? (
-              <span className="ready-status">{formatBytes(estimatedSize)} ready to download</span>
+              <span className="ready-status">{startFilesOnly && 'Globe start files missing: '}{formatBytes(estimatedSize)} ready to download</span>
             ) : (
               <span className="empty-status">Select items to download</span>
             )}

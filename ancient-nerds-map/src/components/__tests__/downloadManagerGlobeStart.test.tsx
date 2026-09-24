@@ -5,7 +5,9 @@
  * stores the files the start cannot do without (GlobeStartCache), whatever
  * was ticked, and a basemap item counts as downloaded only when all of its
  * files are cached - a 'Satellite' download from before the basemap tiers is
- * offered again instead of showing as Cached.
+ * offered again instead of showing as Cached. A download made before the start
+ * files existed (every ticked item still complete) offers the start files on
+ * their own, so an offline start works for it too.
  */
 
 import { act } from 'react'
@@ -14,9 +16,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const calls: string[] = []
 
+const NO_DOWNLOAD = { sources: {}, basemapQuality: 'none', empires: [], layers: [], basemapItems: [] }
+// What OfflineStorage.clearAllSites writes: no layers, no basemapItems
+const CLEARED = { sources: {}, basemapQuality: 'none', empires: [] }
+// The old download: 'Satellite' marked, but its files are not all cached
+const OLD_SATELLITE = { ...NO_DOWNLOAD, basemapItems: ['satellite'] }
+// Only the default source, downloaded before the start files existed; complete
+const SOURCE_ONLY = {
+  ...NO_DOWNLOAD,
+  sources: { ancient_nerds: { cached: true, downloadedAt: '2026-01-01', siteCount: 5004 } },
+}
+let downloadState: object = OLD_SATELLITE
+let startCached = false
+
 vi.mock('../../services/OfflineStorage', () => ({
   OfflineStorage: {
-    getDownloadState: vi.fn(async () => ({ sources: {}, empires: [], layers: [], basemapItems: ['satellite'] })),
+    getDownloadState: vi.fn(async () => downloadState),
     getStorageEstimate: vi.fn(async () => ({ used: 0, quota: 0 })),
     saveSites: vi.fn(),
   },
@@ -53,8 +68,8 @@ vi.mock('../../services/EmpireCache', () => ({
 }))
 vi.mock('../../services/GlobeStartCache', () => ({
   globeStartSize: () => 1000,
-  isGlobeStartCached: vi.fn(async () => false),
-  downloadGlobeStart: vi.fn(async () => { calls.push('globe-start') }),
+  isGlobeStartCached: vi.fn(async () => startCached),
+  downloadGlobeStart: vi.fn(async () => { calls.push('globe-start'); startCached = true }),
 }))
 vi.mock('../../services/ImageCache', () => ({ ImageCache: {} }))
 vi.mock('../../utils/cardApi', () => ({ reportAchievementEvent: vi.fn() }))
@@ -81,7 +96,11 @@ function click(el: Element | null | undefined) {
   return act(async () => { (el as HTMLElement).click() })
 }
 
-beforeEach(() => { calls.length = 0 })
+beforeEach(() => {
+  calls.length = 0
+  downloadState = OLD_SATELLITE
+  startCached = false
+})
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -100,9 +119,48 @@ describe('DownloadManager and the globe start files', () => {
     expect(calls).toEqual(['globe-start', 'layer:coastlines'])
   })
 
-  it('offers nothing to download while nothing is ticked', async () => {
+  it('offers nothing to download while nothing is ticked and nothing was downloaded', async () => {
+    downloadState = NO_DOWNLOAD
     await open()
     expect(container.querySelector('.empty-status')).not.toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('.dm-download-btn')!.disabled).toBe(true)
+  })
+
+  it('reads a state without layers and basemap items (after Clear All) as no download', async () => {
+    downloadState = CLEARED
+    await open()
+    expect(container.querySelector('.empty-status')).not.toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('.dm-download-btn')!.disabled).toBe(true)
+  })
+
+  it('offers the missing start files to a complete download made before they existed', async () => {
+    downloadState = SOURCE_ONLY
+    await open()
+    expect(container.querySelector('.ready-status')!.textContent).toBe('Globe start files missing: 1000 B ready to download')
+    const download = container.querySelector<HTMLButtonElement>('.dm-download-btn')!
+    expect(download.disabled).toBe(false)
+    await click(download)
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual(['globe-start'])
+    expect(container.querySelector('.empty-status')).not.toBeNull()
+    expect(download.disabled).toBe(true)
+  })
+
+  it('offers nothing to such a download once its start files are cached', async () => {
+    downloadState = SOURCE_ONLY
+    startCached = true
+    await open()
+    expect(container.querySelector('.empty-status')).not.toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('.dm-download-btn')!.disabled).toBe(true)
+  })
+
+  it('does not fetch the start files again when they were cached since the dialog opened', async () => {
+    await open()
+    await click(container.querySelector('.dm-item'))
+    startCached = true // stored in the meantime (another tab)
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual(['layer:coastlines'])
   })
 
   it('does not show an incomplete Satellite download as Cached, and lets it be ticked again', async () => {
