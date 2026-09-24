@@ -513,16 +513,25 @@ function unlessDeferred(load: Promise<void>): Promise<void> {
  * Background task `layers`: coastlines and borders to their detail tier. In app offline mode a
  * detail file no cache holds is left for later (upgradeLayerTier marks it deferred, as
  * preloadRiversLakes skips such files): not a task failure, and resumeDeferredGlobeLayers
- * loads it once offline mode is off.
+ * loads it once offline mode is off. One layer's failure does not keep the next one coarse:
+ * every key is tried, one after the other, and the task then rejects once with the first
+ * failure (one bg:layers report). An abort ends the task at once.
  */
 export async function upgradeGlobeLayers(
   ctx: VectorRendererContext,
   signal: AbortSignal,
   keys: readonly GlobeLayerKey[] = GLOBE_LAYER_KEYS,
 ): Promise<void> {
+  const failures: unknown[] = []
   for (const key of keys) {
-    await unlessDeferred(upgradeLayerTier(key, 'detail', ctx, signal))
+    try {
+      await unlessDeferred(upgradeLayerTier(key, 'detail', ctx, signal))
+    } catch (err) {
+      if (signal.aborted || ctx.signal.aborted) throw err
+      failures.push(err)
+    }
   }
+  if (failures.length > 0) throw failures[0]
 }
 
 /**

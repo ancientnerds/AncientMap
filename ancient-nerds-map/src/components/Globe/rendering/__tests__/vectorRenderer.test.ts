@@ -559,6 +559,42 @@ describe('upgradeGlobeLayers', () => {
     expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
   })
 
+  it('loads the borders even when the coastline fails, then rejects once with the coastline failure', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    await startTier('countryBorders', ctx)
+    // No route for the coastline detail tier: its fetch fails (HTTP 404)
+    routes.set(BORDERS_DETAIL, { features: lines(2) })
+    await expect(upgradeGlobeLayers(ctx, new AbortController().signal)).rejects.toThrow(/HTTP 404/)
+    expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('start')
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
+  })
+
+  it('rejects with the first failure when every layer fails', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    await startTier('countryBorders', ctx)
+    routes.set(COAST_DETAIL, { status: 503 })
+    await expect(upgradeGlobeLayers(ctx, new AbortController().signal)).rejects.toThrow(/HTTP 503/)
+    expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
+  })
+
+  it('stops at an abort: no layer after the cancelled one is fetched', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    await startTier('countryBorders', ctx)
+    routes.set(COAST_DETAIL, { features: lines(2) })
+    routes.set(BORDERS_DETAIL, { features: lines(2) })
+    hold(COAST_DETAIL)
+    const task = new AbortController()
+    const done = upgradeGlobeLayers(ctx, task.signal)
+    task.abort()
+    await expect(done).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetched.slice(2)).toEqual([COAST_DETAIL])
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('start')
+  })
+
   it('defers a detail tier app offline mode cannot fetch, and loads it once offline mode is off', async () => {
     const { ctx } = makeCtx()
     await startTier('coastlines', ctx)
@@ -586,7 +622,7 @@ describe('upgradeGlobeLayers', () => {
     expect(resumeDeferredGlobeLayers(ctx)).toBeNull() // nothing deferred any more
   })
 
-  it('ends the deferral when the resumed load fails: one rejection, then the next deferred layer, never the failed one again', async () => {
+  it('ends the deferral when the resumed load fails: the other deferred layer loads in the same resume, one rejection, never the failed one again', async () => {
     const { ctx } = makeCtx()
     await startTier('coastlines', ctx)
     await startTier('countryBorders', ctx)
@@ -599,14 +635,17 @@ describe('upgradeGlobeLayers', () => {
     } finally {
       OfflineFetch.setOfflineMode(false)
     }
-    // First switch off: the coastline fails once, which Globe reports as bg:layers
+    // First switch off: the coastline fails once, which Globe reports as bg:layers; the
+    // borders still reach their detail tier in that same resume
     await expect(resumeDeferredGlobeLayers(ctx)).rejects.toThrow(/HTTP 404/)
     expect(ctx.globeLayerTiersRef.current.coastlines.deferred).toEqual({})
-    // Next switch off: the failed coastline is not resumed (no second report), the borders are
-    await expect(resumeDeferredGlobeLayers(ctx)).resolves.toBeUndefined()
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('start')
     expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
+    expect(ctx.globeLayerTiersRef.current.countryBorders.deferred).toEqual({})
     expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
+    // Next switch off: nothing is deferred, so no second load and no second report
     expect(resumeDeferredGlobeLayers(ctx)).toBeNull()
+    expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
   })
 
   it('offline, loads a detail tier a Coastlines download holds', async () => {
