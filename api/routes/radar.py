@@ -303,9 +303,25 @@ def _build_radar_query(status_clause: str, order_clause: str, single_id: bool = 
               AND uc.mention_count >= :min_mentions
               {id_filter}
         ),
+        -- Match on the raw name AND the AI-corrected one. The pipeline keys
+        -- contributions on normalize_name(corrected_name or name)
+        -- (site_matcher.py:_upsert_lyra_suggestion), so joining on the name
+        -- alone left 25 cards with no videos, facts, screenshot or
+        -- last_mentioned even though their news items existed. One row per
+        -- (card, key) so the join below is an equality - a hash join. The
+        -- old `... IN (<raw>, <corrected>)` planned as a nested loop over
+        -- every card x every news item: 1.57 M comparisons, 2.0 of the 2.3 s
+        -- a cold /radar/list took (EXPLAIN ANALYZE on prod, 2026-09-24).
+        -- UNION, not UNION ALL: a name equal to its correction is one key,
+        -- so that card's news items still count once.
+        contrib_keys AS (
+            SELECT id, lower(trim(name)) AS name_key FROM contrib
+            UNION
+            SELECT id, lower(trim(COALESCE(corrected_name, name))) FROM contrib
+        ),
         video_agg AS (
             SELECT
-                c.id AS contrib_id,
+                ck.id AS contrib_id,
                 jsonb_agg(DISTINCT jsonb_build_object(
                     'video_id', ni.video_id,
                     'channel_name', nc.name,
@@ -320,17 +336,11 @@ def _build_radar_query(status_clause: str, order_clause: str, single_id: bool = 
                 MODE() WITHIN GROUP (ORDER BY ni.news_category) FILTER (WHERE ni.news_category IS NOT NULL) AS top_news_category,
                 BOOL_OR(ni.speculative_tag IS NOT NULL) AS is_speculative,
                 (ARRAY_AGG(ni.speculative_tag) FILTER (WHERE ni.speculative_tag IS NOT NULL))[1] AS speculative_tag
-            FROM contrib c
-            -- Match on the raw name AND the AI-corrected one. The pipeline
-            -- keys contributions on normalize_name(corrected_name or name)
-            -- (site_matcher.py:_upsert_lyra_suggestion), so joining on c.name
-            -- alone left 25 cards with no videos, facts, screenshot or
-            -- last_mentioned even though their news items existed.
-            JOIN news_items ni ON lower(trim(ni.site_name_extracted))
-                 IN (lower(trim(c.name)), lower(trim(COALESCE(c.corrected_name, c.name))))
+            FROM contrib_keys ck
+            JOIN news_items ni ON lower(trim(ni.site_name_extracted)) = ck.name_key
             JOIN news_videos nv ON nv.id = ni.video_id
             JOIN news_channels nc ON nc.id = nv.channel_id
-            GROUP BY c.id
+            GROUP BY ck.id
             -- No HAVING here: a predicate inside this CTE cannot filter the
             -- outer LEFT JOIN, it only deletes the group, which silently
             -- stripped the evidence off every non-matching card while the row
