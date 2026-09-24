@@ -183,4 +183,13 @@ describe('GlobeErrorScreen', () => {
     expect(reload).toHaveBeenCalledOnce()
     vi.unstubAllGlobals()
   })
+
+  it('says the globe stopped, not that it could not start, for a failure after it was up', async () => {
+    const container = await mount(<GlobeErrorScreen phase="live" message="Cannot read properties of null" />)
+    const text = container.textContent ?? ''
+    expect(text).toContain('The 3D globe stopped')
+    expect(text).toContain('Something went wrong while it was running: Cannot read properties of null')
+    expect(text).not.toContain('could not start')
+    expect(container.querySelector('button')!.textContent).toBe('Reload the globe')
+  })
 })

@@ -1883,7 +1883,12 @@ function AppContent() {
         initialPosition={initialNav?.coords ?? focusLocation ?? userLocation}
         onLayersReady={handleLayersReady}
         onStartProgress={markStartProgress}
-        onWebglLost={() => setWebglLost(true)}
+        onWebglLost={() => {
+          setWebglLost(true)
+          // webgl_lost{phase:'loading'} is this load's ending on the dashboard (an error):
+          // no globe_abandon after it. Once the globe was ready the latch is closed anyway.
+          endingLatch.close()
+        }}
         onWebglRestored={() => setWebglLost(false)}
         onContributeClick={() => setShowContributeModal(true)}
         onAIAgentClick={handleAIAgentClick}
