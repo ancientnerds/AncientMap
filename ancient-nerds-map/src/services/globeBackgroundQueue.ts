@@ -30,7 +30,11 @@ export interface BgTask {
 export interface GlobeBackgroundQueue {
   /** Appends; the order of add() is the run order. Inert after dispose. */
   add(task: BgTask): void
-  /** Moves a pending task to the front. True when it did; false for a task that is running, done or was never added. */
+  /**
+   * Moves a pending task to the front. True when the task is still to come
+   * (now next in line) or running; false when it is done, failed, was dropped
+   * or never added (the caller then does the work itself).
+   */
   promote(name: BgTaskName): boolean
   /** Starts running (idempotent). */
   start(): void
@@ -53,8 +57,8 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
   const pending: BgTask[] = []
   let started = false
   let disposed = false
-  /** The running task's controller; null between tasks. */
-  let running: AbortController | null = null
+  /** The running task and its controller; null between tasks. */
+  let running: { name: BgTaskName; ctrl: AbortController } | null = null
   /** Cancels the scheduled idle callback or the visibility wait; null when neither is booked. */
   let cancelWait: (() => void) | null = null
 
@@ -87,7 +91,7 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
     const task = pending.shift()
     if (!task) return
     const ctrl = new AbortController()
-    running = ctrl
+    running = { name: task.name, ctrl }
     const startedAt = deps.now()
     let result: Promise<void>
     try {
@@ -119,6 +123,7 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
     },
     promote(name) {
       if (disposed) return false
+      if (running?.name === name) return true
       const index = pending.findIndex(task => task.name === name)
       if (index === -1) return false
       const [task] = pending.splice(index, 1)
@@ -136,7 +141,7 @@ export function createGlobeBackgroundQueue(deps: GlobeBackgroundQueueDeps): Glob
       pending.length = 0
       cancelWait?.()
       cancelWait = null
-      running?.abort(new DOMException('The globe background queue was disposed', 'AbortError'))
+      running?.ctrl.abort(new DOMException('The globe background queue was disposed', 'AbortError'))
       running = null
     },
   }

@@ -211,7 +211,7 @@ describe('createGlobeBackgroundQueue', () => {
     expect(h.failed).toEqual([['mapbox', err]])
   })
 
-  it('promote moves a pending task to the front and says whether it did', async () => {
+  it('promote moves a pending task to the front; true while the task is still to come or running', async () => {
     const h = harness()
     const a = deferred('details')
     const b = deferred('layers')
@@ -221,7 +221,7 @@ describe('createGlobeBackgroundQueue', () => {
     h.queue.add(c.task)
     h.queue.start()
     await h.runIdle()
-    expect(h.queue.promote('details')).toBe(false) // running: no effect
+    expect(h.queue.promote('details')).toBe(true) // running: nothing moves, the caller just waits for it
     expect(h.queue.promote('basemap')).toBe(false) // never added
     expect(h.queue.promote('satellite')).toBe(true)
     expect(a.starts).toBe(1)

@@ -10,6 +10,7 @@
 
 import type { FilterMode } from '../App'
 import { withSiteDetails, type SiteData } from '../data/sites'
+import type { MapboxLoadState } from '../services/mapboxLoader'
 
 export interface CameraState {
   distance: number
@@ -57,6 +58,7 @@ export interface DemoAPI {
   setDemoPopups(visible: boolean): void
 
   // Mapbox street-level
+  /** Moves Mapbox to the front of the background queue and enters it once loaded; rejects if it failed. */
   enterMapbox(): Promise<void>
   exitMapbox(): void
   mapboxJumpTo(lng: number, lat: number, zoom: number, bearing?: number, pitch?: number): void
@@ -206,6 +208,9 @@ export interface GlobeDemoRefs {
   enterMapboxMode: () => void
   exitMapboxMode: () => void
   mapboxServiceRef: React.MutableRefObject<any>
+  mapboxStateRef: React.MutableRefObject<MapboxLoadState>
+  /** Moves the Mapbox task to the front of the globe's background queue. */
+  requestMapbox: () => void
 }
 
 type Vec3 = [number, number, number]
@@ -339,11 +344,15 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       refs.setIsFrozen(false)
     },
     enterMapbox: () => {
-      return new Promise<void>((resolve) => {
-        // Wait for Mapbox to be initialized. The service itself is created
-        // lazily (mapboxLoader), so read the ref on every poll.
+      return new Promise<void>((resolve, reject) => {
+        // Mapbox loads in the globe's background queue after the intro: ask
+        // for it now, then wait until its task settles. The service itself is
+        // created lazily (mapboxLoader), so read the refs on every poll.
+        refs.requestMapbox()
         const waitForInit = () => {
-          if (refs.mapboxServiceRef.current?.getIsInitialized()) {
+          if (refs.mapboxStateRef.current === 'failed') {
+            reject(new Error('Mapbox failed to load (see the console for the reason)'))
+          } else if (refs.mapboxServiceRef.current?.getIsInitialized()) {
             refs.enterMapboxMode()
             // Wait for the 300ms CSS transition + React state update
             setTimeout(resolve, 500)

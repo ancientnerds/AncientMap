@@ -9,7 +9,7 @@ import {
   type GateChoice,
   type StartItem,
 } from './analytics/globeAbandon'
-import Globe from './components/Globe'
+import Globe, { type AppBackgroundTasks } from './components/Globe'
 import GlobeErrorBoundary from './components/GlobeErrorBoundary'
 import GlobeErrorScreen from './components/GlobeErrorScreen'
 import GlobeUnsupported from './components/GlobeUnsupported'
@@ -40,6 +40,7 @@ import { BRAND_ASSETS } from './constants/brand'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { offlineFetch } from './services/OfflineFetch'
+import { registerServiceWorker } from './pwa/registerServiceWorker'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
 import { haversineDistance } from './utils/geoMath'
@@ -681,6 +682,14 @@ function AppContent() {
     }
   }, [])
 
+  // App's part of the globe's background queue, after the intro: the site details
+  // first, the service worker last. Only production builds have a /sw.js (the
+  // PWA plugin serves none in dev), so dev registers none, as before.
+  const appBackgroundTasks = useMemo((): AppBackgroundTasks => ({
+    details: () => loadDetails(),
+    sw: import.meta.env.PROD ? () => registerServiceWorker() : null,
+  }), [loadDetails])
+
   /** The globe cannot start (or broke after it had: phase 'live'): error screen, one globe_error. */
   const failGlobe = useCallback((phase: string, err: unknown) => {
     const message = errorProps(err instanceof Error ? err.message : err).message
@@ -847,12 +856,7 @@ function AppContent() {
       setLoadingProgress(p => Math.max(p, 65))
       markStartProgress('sites')
       // Note: Additional sources are NOT loaded automatically - user must click "Load Sources" button
-
-      // Interim until the background queue (U10) runs this as its `details` task
-      loadDetails().catch((err: unknown) => {
-        console.error('[globe bg] details', err)
-        track('globe_error', { phase: 'bg:details', message: err instanceof Error ? err.message : String(err) })
-      })
+      // The detail fields follow in the globe's background queue (appBackgroundTasks.details)
     }
     // The globe cannot start without its sites: the error screen, not an empty globe
     loadData().catch((err: unknown) => {
@@ -862,7 +866,7 @@ function AppContent() {
       cancelled = true
       lookups.abort(new Error('app unmounted'))
     }
-  }, [standaloneSiteId, openSitePopup, loadDetails, globeSupport, initialNav, focusSiteId, updateLoadingStatus, markStartProgress, failGlobe])
+  }, [standaloneSiteId, openSitePopup, globeSupport, initialNav, focusSiteId, updateLoadingStatus, markStartProgress, failGlobe])
 
   // Load specific sources when user clicks on them or "Load All"
   const handleLoadSources = useCallback((sourceIdsToLoad: string[]) => {
@@ -1883,6 +1887,7 @@ function AppContent() {
         initialPosition={initialNav?.coords ?? focusLocation ?? userLocation}
         onLayersReady={handleLayersReady}
         onStartProgress={markStartProgress}
+        appBackgroundTasks={appBackgroundTasks}
         onWebglLost={() => {
           setWebglLost(true)
           // webgl_lost{phase:'loading'} is this load's ending on the dashboard (an error):
