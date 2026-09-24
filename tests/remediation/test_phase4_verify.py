@@ -310,6 +310,21 @@ NAME_PARITY_CASES = [
     ("no-english-label", {}, X.witness_answer(label=None), {}, True, False),
     ("not-d", {}, X.witness_answer(), {"id": "W"}, True, False),
 ]
+#: The stored name without its disambiguator (pilot 2, T8): `X (Y)` -> X, `X, Y` -> X, else none.
+NAME_BASE_CASES = [
+    ("Partiscum (Castra)", "Partiscum"),
+    ("Clare, Suffolk", "Clare"),
+    ("Beacon Hill, Burghclere, Hampshire", "Beacon Hill"),
+    ("Quirigua (Parque Arqueológico y Ruinas de Quiriguá)", "Quirigua"),
+    ("Justinianopolis (Epirus)", "Justinianopolis"),
+    ("Tarxien Temples, Paola (Malta)", "Tarxien Temples, Paola"),
+    ("Stonehenge", None),
+    ("Altar Stone - Stonehenge", None),
+    ("House (of the Faun) Pompeii", None),
+    ("Temple (of Bel (Palmyra))", None),
+    ("(Castra)", None),
+    (", Suffolk", None),
+]
 
 
 @pytest.mark.parametrize(
@@ -345,6 +360,41 @@ def test_s3_and_v6_accept_the_same_names(
     expected += ["Stone Temple of Gozo"] if title_counts else []
     expected += ["Stone Temple"] if label_counts else []
     assert list(s3) == v6 == expected
+
+
+@pytest.mark.parametrize(
+    ("gate_over", "raw", "d_over", "title_counts", "label_counts"),
+    [case[1:] for case in NAME_PARITY_CASES],
+    ids=[case[0] for case in NAME_PARITY_CASES],
+)
+@pytest.mark.parametrize(("name", "base"), NAME_BASE_CASES)
+def test_s3_and_v6_accept_the_same_base_name(
+    tmp_path: Path,
+    gate_over: dict,
+    raw: bytes | None,
+    d_over: dict,
+    title_counts: bool,
+    label_counts: bool,
+    name: str,
+    base: str | None,
+) -> None:
+    """Pilot 2's T8 fix on both sides: the stored name's base (`X (Y)` -> X, `X, Y` -> X) counts
+    exactly where the title does - a strong 'own' verdict of the source - in S3's code and in
+    V6's, over the same store and names."""
+    gate_dict = {**X.STRONG_OWN.to_dict(), **gate_over}
+    article = X.wiki_doc("W", X.ARTICLE, title="Stone Temple of Gozo").to_dict()
+    doc = M.SourceDoc.from_dict({**article, "subject_gate": gate_dict})
+    site = X.plan_site("site-1", name=name, aliases=())
+    setup = X.SiteSetup(site=site, lane=M.Lane.W, sources={"W": (doc, X.ARTICLE)})
+    batch_dir = X.make_batch(tmp_path, [setup])
+    if raw is not None:
+        X.pin_witness(batch_dir, "site-1", raw, **d_over)
+    store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    meta, _ = B.read_source(batch_dir, "site-1", "W")
+    s3 = SEL.v6_names(site, meta, SEL.site_witness(batch_dir, "site-1"))
+    v6 = V.v6_names(site, B.read_meta(batch_dir, "site-1", "W"), V.read_witness(store, "site-1"))
+    assert list(s3) == v6
+    assert (base in v6) is (base is not None and title_counts), (name, v6)
 
 
 def test_the_edit_list_removes_repairs_restores_and_marks() -> None:
@@ -901,6 +951,35 @@ def test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label(
     case = dataclasses.replace(_label_only(), witness=witness(raw, **over))
     assert "sentence 1 names none" in case.detail("V6")
     assert f"the Wikidata witness adds no name: {why}" in case.detail("V6")
+
+
+@pytest.mark.parametrize(("name", "base"), NAME_BASE_CASES)
+def test_v6_the_base_of_a_stored_name(name: str, base: str | None) -> None:
+    assert V.name_base(name) == base
+
+
+def _base_only(name: str, subject_gate: M.SubjectGate | None = None) -> Case:
+    """Pilot 2's T8 case (Partiscum (Castra), Clare, Suffolk): neither the stored name, nor the
+    article title, nor an item label stands in sentence 1 - only the stored name's base."""
+    site = plan_site(name=name, aliases=())
+    return retitle(make_case(site=site, subject_gate=subject_gate), "Ħal Tarxien (Paola)")
+
+
+@pytest.mark.parametrize("name", ["Tarxien Temples (Paola)", "Tarxien Temples, Paola, Malta"])
+def test_v6_the_stored_names_base_counts_for_a_strong_own_verdict(name: str) -> None:
+    """The subject gate tied the article to the site (QID, coordinates, no place item), so the
+    stored name without its disambiguator names the verified site."""
+    assert _base_only(name).run() == ()
+
+
+@pytest.mark.parametrize(
+    "over", [{"qid_match": False}, {"place_item": True}, {"km": None}], ids=str
+)
+def test_v6_the_base_counts_only_for_a_strong_own_verdict(over: dict) -> None:
+    """The Orolik/Clare trap: a town's article ('Clare' for 'Clare, Suffolk') is a place-level item,
+    and its bare name then names the town, not the site."""
+    case = _base_only("Tarxien Temples (Paola)", subject_gate=gate(**over))
+    assert "sentence 1 names none of ['Tarxien Temples (Paola)']" in case.detail("V6")
 
 
 def test_v6_reads_the_witness_the_store_pins(tmp_path: Path, write4: None) -> None:

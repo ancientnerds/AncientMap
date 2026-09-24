@@ -978,16 +978,38 @@ def witness_label(site: M.PlanSite, witness: tuple[Any, bytes | None]) -> tuple[
     return label, ""
 
 
+#: V6 (pilot 2, T8): a stored name that ends in one flat parenthetical group, `X (Y)`.
+_DISAMBIGUATED = re.compile(r"(?P<base>.*?\S)\s*\([^()]*\)")
+
+
+def name_base(name: str) -> str | None:
+    """V6: the stored name without its disambiguator - `X (Y)` -> X (one flat group at the end),
+    else `X, Y` -> X (before the first comma) - or `None` when it carries none ('Partiscum
+    (Castra)' -> 'Partiscum', 'Beacon Hill, Burghclere, Hampshire' -> 'Beacon Hill')."""
+    stripped = name.strip()
+    match = _DISAMBIGUATED.fullmatch(stripped)
+    if match is not None:
+        return match["base"]
+    if "," in stripped:
+        return stripped.split(",", 1)[0].strip() or None
+    return None
+
+
 def v6_names(site: M.PlanSite, meta: Any, witness: tuple[Any, bytes | None]) -> list[str]:
     """V6: the names sentence 1 may name the site by, when its source has the raw meta `meta`:
     the stored name and the `unified_site_names` aliases; for a strong 'own' verdict also the
-    pinned article title and the English label of the pinned item (`witness_label`). The subject
-    gate already tied that article and that item to the site (QID, coordinates, no place item), so
-    these are the site's names, not a loosening of its identity. S3 reads the same rule in its own
-    code (`select_stage.v6_names`); a parity test holds the two together."""
+    stored name's base (`name_base`, pilot 2: 'Partiscum (Castra)' -> 'Partiscum'), the pinned
+    article title and the English label of the pinned item (`witness_label`). The subject gate
+    already tied that article and that item to the site (QID, coordinates, no place item), so these
+    are the site's names, not a loosening of its identity; under any other verdict a bare base
+    could name the town ('Clare, Suffolk'). S3 reads the same rule in its own code
+    (`select_stage.v6_names`); a parity test holds the two together."""
     names = [site.name, *site.aliases]
     gate = meta.get("subject_gate") if isinstance(meta, Mapping) else None
     if _strong_own(gate if isinstance(gate, Mapping) else None):
+        base = name_base(site.name)
+        if base is not None:
+            names.append(base)
         title = meta.get("title")
         if isinstance(title, str) and title.strip():
             names.append(title)

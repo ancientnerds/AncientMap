@@ -16989,6 +16989,7 @@ P4P3_VERIFY = "scripts/remediation/phase4/verify4.py"
 P4P3_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
 P4P3_SENT_TEST = "tests/remediation/test_phase4_sentences.py"
 P4P3_SENT = "scripts/remediation/phase4/sentences.py"
+P4P3_SELECT = "scripts/remediation/phase4/select_stage.py"
 P4P3_COUNTRY = "pipeline/utils/country_lookup.py"
 P4P3_DEMONYM_TEST = "tests/pipeline/test_country_demonyms.py"
 P4P3_PROMPTS = "scripts/remediation/phase4/prompts4.py"
@@ -17204,6 +17205,79 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "",
         P4P3_SELECT_TEST,
         "test_the_reviewer_question_drops_a_garbled_sentence",
+    ),
+    # ── T8: the stored name's base under a strong 'own' verdict, on both sides ────────────────
+    (
+        "p4 verify4: the stored name's base is no name",
+        P4P3_VERIFY,
+        "        base = name_base(site.name)\n        if base is not None:\n"
+        '            names.append(base)\n        title = meta.get("title")\n',
+        '        title = meta.get("title")\n',
+        P4P3_VERIFY_TEST,
+        "test_v6_the_stored_names_base_counts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: the stored name's base counts for any verdict",
+        P4P3_VERIFY,
+        "    if _strong_own(gate if isinstance(gate, Mapping) else None):\n"
+        "        base = name_base(site.name)\n        if base is not None:\n"
+        "            names.append(base)\n",
+        "    base = name_base(site.name)  # mutant\n    if base is not None:\n"
+        "        names.append(base)\n"
+        "    if _strong_own(gate if isinstance(gate, Mapping) else None):\n",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_counts_only_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: a name's final parenthesis is no disambiguator",
+        P4P3_VERIFY,
+        "    match = _DISAMBIGUATED.fullmatch(stripped)\n",
+        "    match = None  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_of_a_stored_name",
+    ),
+    (
+        "p4 verify4: a parenthesis inside the name is a disambiguator",
+        P4P3_VERIFY,
+        "    match = _DISAMBIGUATED.fullmatch(stripped)\n",
+        "    match = _DISAMBIGUATED.match(stripped)  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_of_a_stored_name",
+    ),
+    (
+        "p4 verify4: a name's comma is no disambiguator",
+        P4P3_VERIFY,
+        '    if "," in stripped:\n        return stripped.split(",", 1)[0].strip() or None\n',
+        "",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_of_a_stored_name",
+    ),
+    (
+        "p4 select: the stored name's base is no name",
+        P4P3_SELECT,
+        "        base = name_base(site.name)\n        if base is not None:\n"
+        "            names.append(base)\n",
+        "",
+        P4P3_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_base_name",
+    ),
+    (
+        "p4 select: the stored name's base counts for any verdict",
+        P4P3_SELECT,
+        "    if _strong_own(meta.subject_gate):\n        base = name_base(site.name)\n"
+        "        if base is not None:\n            names.append(base)\n",
+        "    base = name_base(site.name)  # mutant\n    if base is not None:\n"
+        "        names.append(base)\n    if _strong_own(meta.subject_gate):\n",
+        P4P3_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_base_name",
+    ),
+    (
+        "p4 select: a nested parenthesis is a disambiguator",
+        P4P3_SELECT,
+        '    if bracket and group.endswith(")") and ")" not in group[:-1] and head.strip():\n',
+        '    if bracket and group.endswith(")") and head.strip():  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_base_name",
     ),
 ]
 MUTATIONS += P4_PILOT3_MUTATIONS
