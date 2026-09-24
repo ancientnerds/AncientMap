@@ -482,9 +482,13 @@ async function loadTier(layerKey: GlobeLayerKey, tier: UpgradeTier, ctx: VectorR
     parsed = await fetchAndParse(getGlobeLayerUrl(layerKey, tier), layerKey, ctx, linked.signal)
     throwIfAborted(linked.signal)
   } catch (err) {
-    // Cancelled is not failed, nor is offline without a cached file: only a failure bars the tier
+    // Cancelled is not failed, nor is offline without a cached file: only a failure bars the
+    // tier, and it ends a deferral, so a resume never asks for (and reports) the tier again
     if (err instanceof OfflineNotCachedError) state.deferred[tier] = true
-    else if (!linked.signal.aborted) state.failed[tier] = err
+    else if (!linked.signal.aborted) {
+      state.failed[tier] = err
+      delete state.deferred[tier]
+    }
     throw err
   } finally {
     linked.release()

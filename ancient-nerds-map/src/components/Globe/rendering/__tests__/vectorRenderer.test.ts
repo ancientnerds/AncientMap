@@ -586,6 +586,29 @@ describe('upgradeGlobeLayers', () => {
     expect(resumeDeferredGlobeLayers(ctx)).toBeNull() // nothing deferred any more
   })
 
+  it('ends the deferral when the resumed load fails: one rejection, then the next deferred layer, never the failed one again', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    await startTier('countryBorders', ctx)
+    // No route for the coastline detail tier: the resumed fetch fails (HTTP 404)
+    routes.set(BORDERS_DETAIL, { features: lines(2) })
+    vi.stubGlobal('caches', { open: async () => ({ match: async () => undefined }) })
+    OfflineFetch.setOfflineMode(true)
+    try {
+      await upgradeGlobeLayers(ctx, new AbortController().signal)
+    } finally {
+      OfflineFetch.setOfflineMode(false)
+    }
+    // First switch off: the coastline fails once, which Globe reports as bg:layers
+    await expect(resumeDeferredGlobeLayers(ctx)).rejects.toThrow(/HTTP 404/)
+    expect(ctx.globeLayerTiersRef.current.coastlines.deferred).toEqual({})
+    // Next switch off: the failed coastline is not resumed (no second report), the borders are
+    await expect(resumeDeferredGlobeLayers(ctx)).resolves.toBeUndefined()
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
+    expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
+    expect(resumeDeferredGlobeLayers(ctx)).toBeNull()
+  })
+
   it('offline, loads a detail tier a Coastlines download holds', async () => {
     const { ctx } = makeCtx()
     await startTier('coastlines', ctx)
