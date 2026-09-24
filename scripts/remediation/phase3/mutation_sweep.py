@@ -17825,6 +17825,284 @@ P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += P4_PILOT4_MUTATIONS
 
 
+# ── The owner's defect scope (2026-09-24): `phase4/scope4.py`, the writer's refusal, the scoped
+#    plan and the mass run's guard ──────────────────────────────────────────────────────────────────
+#: Owner decision 2026-09-23 ("Nur Defekt-Sites"): Phases 4/5 write only the sites with proven text
+#: defects. Each case breaks one guard of the scope and names the test that goes red: the numeral
+#: reading of plan section 5.1, the generator's input, the scope file's pin and form, the writer's
+#: refusal in P4, L and P5, the gate's pinned loader and its statement clean-up, the scoped plan,
+#: and the mass run's refusal of a model round over a site outside the scope.
+P4S_SCOPE = "scripts/remediation/phase4/scope4.py"
+P4S_PLAN = "scripts/remediation/phase4/plan4.py"
+P4S_WRITE = "scripts/remediation/phase4/write4.py"
+P4S_GATE = "output/remediation/tools/write_gate4.py"
+P4S_MASS = "scripts/remediation/phase4/mass4.py"
+P4S_SCOPE_TEST = "tests/remediation/test_phase4_scope.py"
+P4S_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4S_LEGACY_TEST = "tests/remediation/test_phase4_legacy.py"
+P4S_MALFORMED = "test_a_malformed_scope_is_refused"
+P4S_GROUNDED = "test_a_number_the_input_writes_otherwise_is_grounded"
+P4S_P4 = "test_p4_refuses_a_site_outside_the_defect_scope_before_any_other_rule"
+P4S_L = "test_a_held_site_outside_the_defect_scope_gets_no_row_and_no_listing"
+P4S_STATEMENTS = "test_a_re_plan_without_rows_drops_the_statements_an_earlier_dry_run_rendered"
+P4S_SCOPED_PLAN = "test_the_scoped_plan_is_the_scopes_sites_after_the_pilot_in_the_plans_order"
+
+P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── scope4: plan section 5.1's reading of an ungrounded card ─────────────────────────────
+    (
+        "p4 scope4: a numeral loses its thousands separator reading",
+        P4S_SCOPE,
+        '_NUMERAL = re.compile(r"[0-9]{1,3}(?:,[0-9]{3})+(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?")\n',
+        '_NUMERAL = re.compile(r"[0-9]+(?:\\.[0-9]+)?")  # mutant\n',
+        P4S_SCOPE_TEST,
+        P4S_GROUNDED,
+    ),
+    (
+        "p4 scope4: a number is compared as written, not as its value",
+        P4S_SCOPE,
+        '    return [Decimal(found.replace(",", "")) for found in _NUMERAL.findall(text)]\n',
+        '    return [found.replace(",", "") for found in _NUMERAL.findall(text)]  # mutant\n',
+        P4S_SCOPE_TEST,
+        P4S_GROUNDED,
+    ),
+    (
+        "p4 scope4: a number inside a longer numeral counts as appeared",
+        P4S_SCOPE,
+        "    return any(number not in given for number in numerals(card))\n",
+        "    return any(  # mutant\n"
+        "        str(number) not in generator_input(snapshot_description) for number in numerals(card)\n"
+        "    )\n",
+        P4S_SCOPE_TEST,
+        "test_a_number_inside_a_longer_numeral_never_appeared",
+    ),
+    (
+        "p4 scope4: a card without a number counts as ungrounded",
+        P4S_SCOPE,
+        "    return any(number not in given for number in numerals(card))\n",
+        "    return not numerals(card) or any(number not in given for number in numerals(card))"
+        "  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_card_without_a_number_or_without_a_card_is_not_ungrounded",
+    ),
+    (
+        "p4 scope4: the generator's input is the whole snapshot text",
+        P4S_SCOPE,
+        '    return (snapshot_description or "")[:GENERATOR_INPUT_CHARS]\n',
+        '    return snapshot_description or ""  # mutant\n',
+        P4S_SCOPE_TEST,
+        "test_only_the_first_500_characters_were_the_generators_input",
+    ),
+    (
+        "p4 scope4: the generator's input is today's description",
+        P4S_SCOPE,
+        '        if ungrounded_card(row["card"], row["snapshot_description"]):\n',
+        '        if ungrounded_card(row["card"], row["description"]):  # mutant\n',
+        P4S_SCOPE_TEST,
+        "test_the_input_is_the_pre_march_snapshots_text_not_todays",
+    ),
+    (
+        "p4 scope4: a site the snapshot does not have is claimed",
+        P4S_SCOPE,
+        '            (claimed if row["in_snapshot"] else unknown).append(str(row["id"]))\n',
+        '            claimed.append(str(row["id"]))  # mutant\n',
+        P4S_SCOPE_TEST,
+        "test_a_site_the_snapshot_does_not_have_is_not_claimed",
+    ),
+    # ── scope4: the scope from its lists ─────────────────────────────────────────────────────
+    (
+        "p4 scope4: an ungrounded card is left out of the scope",
+        P4S_SCOPE,
+        "    members[UNGROUNDED_CARD].update(claimed)\n",
+        "    pass  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scope_is_the_three_lists_and_each_site_names_its_lists",
+    ),
+    (
+        "p4 scope4: a cleared defect of a site that is no curated row is taken",
+        P4S_SCOPE,
+        '    if unknown:\n        raise ScopeError(f"cleared defects name sites',
+        '    if False:  # mutant\n        raise ScopeError(f"cleared defects name sites',
+        P4S_SCOPE_TEST,
+        "test_a_cleared_defect_of_a_site_that_is_no_curated_row_stops_the_scope",
+    ),
+    (
+        "p4 scope4: a cleared defect of another field is taken",
+        P4S_SCOPE,
+        "            if field_name not in CLEARED_LISTS:\n",
+        "            if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_cleared_defect_of_another_field_stops_the_scope",
+    ),
+    # ── scope4: the file is read strictly, and only when it is the pinned one ────────────────
+    (
+        "p4 scope4: a scope file other than the pinned one is read",
+        P4S_SCOPE,
+        "    if found != SCOPE_SHA256:\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scope_is_read_only_from_the_pinned_file",
+    ),
+    (
+        "p4 scope4: the pin is not the committed scope's digest",
+        P4S_SCOPE,
+        'SCOPE_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a"\n',
+        'SCOPE_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6b"'
+        "  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_committed_scope_is_the_pinned_one_with_the_recorded_counts",
+    ),
+    (
+        "p4 scope4: a site list that is not its digest is read",
+        P4S_SCOPE,
+        '    if payload["sites_sha256"] != sites_digest(payload["sites"]):\n',
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_site_list_that_is_not_its_digest_is_refused",
+    ),
+    (
+        "p4 scope4: an unsorted or repeated site is read",
+        P4S_SCOPE,
+        "    if order != sorted(set(order)):\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: the list counts are not checked",
+        P4S_SCOPE,
+        '    if payload["lists"] != counts:\n',
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a scope site id need not be a UUID",
+        P4S_SCOPE,
+        "            uuid.UUID(site_id)\n",
+        "            pass  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a list outside the three is read",
+        P4S_SCOPE,
+        "            if name not in LISTS:\n",
+        "            if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a site's lists may come in any order",
+        P4S_SCOPE,
+        "        if list(lists) != sorted(set(lists), key=LISTS.index):\n",
+        "        if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a scope of another version is read",
+        P4S_SCOPE,
+        '    if payload["version"] != SCOPE_VERSION:\n',
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    # ── plan4: the mass run's plan is the scope after the pilot ──────────────────────────────
+    (
+        "p4 plan4: the scoped plan keeps a site outside the scope",
+        P4S_PLAN,
+        "    tail = [site for site in sites[pilot:] if site.site_id in scope]\n",
+        "    tail = list(sites[pilot:])  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_SCOPED_PLAN,
+    ),
+    (
+        "p4 plan4: the scoped plan asks the pilot's sites again",
+        P4S_PLAN,
+        "    tail = [site for site in sites[pilot:] if site.site_id in scope]\n",
+        "    tail = [site for site in sites if site.site_id in scope]  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_SCOPED_PLAN,
+    ),
+    (
+        "p4 plan4: the scoped plan reuses the pilot's batch ids",
+        P4S_PLAN,
+        "    first = -(-pilot // BATCH_SIZE)\n",
+        "    first = 0  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scoped_plan_continues_the_numbering_after_the_pilots_batches",
+    ),
+    (
+        "p4 plan4: a scoped plan is written without a pilot",
+        P4S_PLAN,
+        "    if not 0 < pilot <= len(sites):\n",
+        "    if not 0 <= pilot <= len(sites):  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scoped_plan_is_built_only_after_a_pilot",
+    ),
+    (
+        "p4 plan4: --defect-scope is taken without --pilot",
+        P4S_PLAN,
+        "    if args.defect_scope and not args.pilot:\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_build_with_the_defect_scope_needs_the_pilot",
+    ),
+    (
+        "p4 plan4: build --defect-scope writes the whole plan",
+        P4S_PLAN,
+        "    if args.defect_scope:\n        return _scoped_summary(",
+        "    if False:  # mutant\n        return _scoped_summary(",
+        P4S_SCOPE_TEST,
+        "test_build_with_the_defect_scope_writes_the_mass_runs_plan",
+    ),
+    # ── mass4: no model question for a site outside the scope ────────────────────────────────
+    (
+        "p4 mass4: a model round asks about a site outside the scope",
+        P4S_MASS,
+        "    if args.live and MODEL_STAGES & set(stages) and outside:\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_model_round_over_a_site_outside_the_scope_is_refused",
+    ),
+    (
+        "p4 mass4: a round without a model stage is refused over the scope",
+        P4S_MASS,
+        "    if args.live and MODEL_STAGES & set(stages) and outside:\n",
+        "    if args.live and outside:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_round_without_a_model_stage_is_not_refused",
+    ),
+    (
+        "p4 mass4: a done batch counts against the scope",
+        P4S_MASS,
+        "        if not batch_done(run_dir, line.batch_id)[0]\n",
+        "        if True  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_done_batch_asks_nothing_and_refuses_no_round",
+    ),
+    (
+        "p4 mass4: the guard reads batches the round does not run",
+        P4S_MASS,
+        "        [line for line in [*planned, *requeued] if line.batch_id in chosen], scope, "
+        "run_dir=run_dir\n",
+        "        [*planned, *requeued], scope, run_dir=run_dir  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_only_the_rounds_own_batches_are_asked_about",
+    ),
+    (
+        "p4 mass4: the run does not say how many sites lie outside the scope",
+        P4S_MASS,
+        '    print(f"defect scope  {scope.label}: {len(outside)} site(s) of the open batches '
+        'outside it")\n',
+        "    pass  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_model_round_over_the_scopes_sites_runs",
+    ),
+]
+MUTATIONS += P4_SCOPE_MUTATIONS
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

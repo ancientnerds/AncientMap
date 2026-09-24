@@ -20,7 +20,11 @@ rebuilt from it offline, byte for byte:
             (`--pilot PILOT.jsonl`, drawn by `phase4/pilot4.py`), or the 36 gold-standard sites
             (`--gold`, the default) - then `write_plan`: `PLAN4.jsonl`, batches of 15 named
             `p4-NNNN`. Its summary lists the stored titles MediaWiki refuses (`invalid_titles`)
-            for the data repair.
+            for the data repair. `build --pilot PILOT.jsonl --defect-scope` writes the mass run's
+            plan instead: the plan's sites after the pilot's, only those of the owner's defect
+            scope, numbered after the pilot's batches (`write_scoped_plan`).
+* `scope` - offline: the owner's defect scope (`phase4/scope4.py`) from the rows and Phase 3's
+            refusals, written to `SCOPE4.json`; its sha256 is pinned in `scope4.SCOPE_SHA256`.
 
 Derived here, from data and not from the B block's temp files (`SiteFlag`):
 
@@ -66,6 +70,7 @@ from phase3 import run as R  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
 
 from phase4 import model4 as M  # noqa: E402
+from phase4 import scope4 as S  # noqa: E402
 from phase4 import sources_stage as S1  # noqa: E402
 from phase4 import subject_gate as SG  # noqa: E402
 from pipeline.normalizers.dates import passes_date_cutoff  # noqa: E402
@@ -359,15 +364,36 @@ def write_plan(path: Path, sites: Sequence[M.PlanSite], *, pilot: int) -> None:
         raise R.InputError(f"a pilot of {pilot} sites is no leading part of {len(sites)} sites")
     records = [site.to_dict() for site in sites]
     head = R.assign_batches(records[:pilot], BATCH_SIZE, prefix=BATCH_PREFIX)
-    tail = [
+    tail = batches_after(records[pilot:], len(head))
+    R.write_batches(path, [*head, *tail])
+
+
+def batches_after(records: Sequence[Mapping[str, Any]], taken: int) -> list[R.Batch]:
+    """`records` in batches of 15, numbered after the `taken` batches before them."""
+    return [
         R.Batch(
-            batch_id=f"{BATCH_PREFIX}-{batch.ordinal + len(head):04d}",
-            ordinal=batch.ordinal + len(head),
+            batch_id=f"{BATCH_PREFIX}-{batch.ordinal + taken:04d}",
+            ordinal=batch.ordinal + taken,
             sites=batch.sites,
         )
-        for batch in R.assign_batches(records[pilot:], BATCH_SIZE, prefix=BATCH_PREFIX)
+        for batch in R.assign_batches(records, BATCH_SIZE, prefix=BATCH_PREFIX)
     ]
-    R.write_batches(path, [*head, *tail])
+
+
+def write_scoped_plan(
+    path: Path, sites: Sequence[M.PlanSite], *, pilot: int, scope: S.DefectScope
+) -> list[M.PlanSite]:
+    """The mass run's plan under the owner's decision of 2026-09-23: the plan's sites after the
+    pilot's, in the plan's order (the design's: cleared defects, T03, the rest), only those in the
+    defect scope, in batches of 15 numbered after the pilot's own batches. The pilot's sites are the
+    pilot run's - written or held there - and are never asked again; a batch id is never the
+    pilot's, because a journal stamp names its batch. Returns the plan's sites."""
+    if not 0 < pilot <= len(sites):
+        raise R.InputError(f"the mass run's plan follows a pilot: {pilot} of {len(sites)} sites")
+    tail = [site for site in sites[pilot:] if site.site_id in scope]
+    first = -(-pilot // BATCH_SIZE)
+    R.write_batches(path, batches_after([site.to_dict() for site in tail], first))
+    return tail
 
 
 def pilot_site_ids(path: Path) -> list[str]:
@@ -498,6 +524,10 @@ def cmd_names(args: argparse.Namespace, *, fetcher: F.Fetcher | None = None) -> 
 
 
 def cmd_build(args: argparse.Namespace) -> int:
+    if args.defect_scope and not args.pilot:
+        raise R.InputError(
+            "--defect-scope builds the mass run after its pilot: name it with --pilot"
+        )
     rows = R.read_jsonl(Path(args.rows))
     names = json.loads(Path(args.names).read_text(encoding="utf-8"))
     pilot = pilot_site_ids(Path(args.pilot)) if args.pilot else R._gold_site_ids(Path(args.gold))
@@ -509,6 +539,8 @@ def cmd_build(args: argparse.Namespace) -> int:
         item_names=names,
     )
     out = Path(args.out)
+    if args.defect_scope:
+        return _scoped_summary(out, sites, pilot=pilot, pilot_path=args.pilot)
     write_plan(out, sites, pilot=len(pilot))
     flags = collections.Counter(flag.value for site in sites for flag in site.flags)
     pilot_batches = -(-len(pilot) // BATCH_SIZE)
@@ -522,6 +554,58 @@ def cmd_build(args: argparse.Namespace) -> int:
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "invalid_titles": invalid_titles(rows),
         "sites": len(sites),
+    }
+    print(json.dumps(summary, indent=1, sort_keys=True))
+    return 0
+
+
+def _scoped_summary(
+    out: Path, sites: Sequence[M.PlanSite], *, pilot: Sequence[str], pilot_path: str
+) -> int:
+    scope = S.load_scope()
+    tail = write_scoped_plan(out, sites, pilot=len(pilot), scope=scope)
+    batches = R.read_jsonl(out)
+    lists = collections.Counter(name for site in tail for name in scope.sites[site.site_id])
+    summary = {
+        "batches": len(batches),
+        "first_batch": batches[0]["batch_id"] if batches else None,
+        "flags": dict(sorted(collections.Counter(f.value for s in tail for f in s.flags).items())),
+        "lists": dict(sorted(lists.items())),
+        "out": str(out),
+        "pilot": pilot_path,
+        "pilot_batches": -(-len(pilot) // BATCH_SIZE),
+        "pilot_sites": len(pilot),
+        "pilot_sites_in_scope": sum(site_id in scope for site_id in pilot),
+        "scope": scope.label,
+        "scope_sites": len(scope.sites),
+        "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
+        "sites": len(tail),
+    }
+    print(json.dumps(summary, indent=1, sort_keys=True))
+    return 0
+
+
+def cmd_scope(args: argparse.Namespace) -> int:
+    """`SCOPE4.json` from the S0 rows and Phase 3's refusals (`phase4/scope4.py`)."""
+    rows_path, refused_path = Path(args.rows), Path(args.refused)
+    rows = R.read_jsonl(rows_path)
+    for row in rows:
+        _check_row(row)
+    inputs = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (rows_path, refused_path)
+    }
+    payload = S.scope_payload(rows, cleared_defects(R.read_jsonl(refused_path)), inputs=inputs)
+    data = S.render_scope(payload)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    summary = {
+        "lists": payload["lists"],
+        "out": str(out),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "sites": len(payload["sites"]),
+        "unclaimed": payload["unclaimed"],
     }
     print(json.dumps(summary, indent=1, sort_keys=True))
     return 0
@@ -550,7 +634,17 @@ def build_parser() -> argparse.ArgumentParser:
     pilot.add_argument("--gold", default=str(DEFAULT_GOLD), help="the pilot: the gold standard")
     pilot.add_argument("--pilot", default=None, help="the pilot: PILOT.jsonl (phase4/pilot4.py)")
     build.add_argument("--out", default=str(DEFAULT_PLAN))
+    build.add_argument(
+        "--defect-scope",
+        action="store_true",
+        help="the mass run's plan: the owner's defect scope after the pilot (needs --pilot)",
+    )
     build.set_defaults(handler=cmd_build)
+    scope = sub.add_parser("scope", help="the owner's defect scope, SCOPE4.json, offline")
+    scope.add_argument("--rows", default=str(DEFAULT_ROWS))
+    scope.add_argument("--refused", default=str(DEFAULT_REFUSED))
+    scope.add_argument("--out", default=str(S.SCOPE_FILE))
+    scope.set_defaults(handler=cmd_scope)
     return parser
 
 
