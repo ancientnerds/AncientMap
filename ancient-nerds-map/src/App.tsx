@@ -1995,7 +1995,7 @@ function AppContent() {
         searchAllSources={searchAllSources}
         searchResults={searchResults}
         isSearching={isSearching}
-        searchError={detailsStatus === 'failed' ? 'Search unavailable: site details failed to load. Reload the page.' : null}
+        searchError={detailsStatus === 'failed' ? 'Search unavailable: site details failed to load. Reload the page.' : siteSearch.searchError}
         filterMode={filterMode}
         ageRange={ageRange}
         onCategoryChange={handleCategoryChange}

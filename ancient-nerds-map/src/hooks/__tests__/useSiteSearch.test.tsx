@@ -86,6 +86,7 @@ afterEach(() => {
   latest = null
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('useSiteSearch while the site details are pending', () => {
@@ -140,6 +141,56 @@ describe('useSiteSearch with "All sources"', () => {
     expect(latest!.isSearching).toBe(false)
     act(() => { vi.advanceTimersByTime(1200) })
     expect(track).toHaveBeenCalledWith('search_empty', expect.objectContaining({ q: 'zzzz', results: 0 }))
+  })
+
+  // A 429 from the search limiter (20/min per IP), a 5xx or a network error is
+  // no answer: not a finished search with the local preview as its result, and
+  // no `search` / `search_empty` event for it.
+  it.each([
+    ['a rate-limited request', () => new Response(JSON.stringify({ detail: 'Too many requests' }), { status: 429 }), 'HTTP 429'],
+    ['a server error', () => new Response('boom', { status: 502 }), 'HTTP 502'],
+    ['a network error', () => { throw new TypeError('Failed to fetch') }, 'Failed to fetch'],
+  ])('reports %s as a failed search, not as an answer', async (_what, respond, reason) => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => respond()))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(baseOptions([TEMPLE], { searchAllSources: true }))
+    type('alpha')
+    await act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve() })
+    expect(latest!.isSearching).toBe(false)
+    expect(latest!.searchError).toBe(`All-sources search failed (${reason}). Try again.`)
+    expect(latest!.searchResults).toEqual([]) // not the local preview (Alpha) as the final answer
+    act(() => { vi.advanceTimersByTime(5000) })
+    expect(track).not.toHaveBeenCalled()
+  })
+
+  it('a new query after a failed one searches again and clears the error', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sites: [] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(baseOptions([TEMPLE], { searchAllSources: true }))
+    type('alph')
+    await act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve() })
+    expect(latest!.searchError).not.toBe(null)
+    type('alpha')
+    expect(latest!.searchError).toBe(null)
+    expect(latest!.isSearching).toBe(true)
+    await act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve() })
+    expect(latest!.isSearching).toBe(false)
+    expect(latest!.searchError).toBe(null)
+  })
+
+  it('treats a 200 without a sites list as a failure (no silent empty answer)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'x' }), { status: 200 })))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(baseOptions([TEMPLE], { searchAllSources: true }))
+    type('zzzz')
+    await act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve() })
+    expect(latest!.isSearching).toBe(false)
+    expect(latest!.searchError).toMatch(/^All-sources search failed \(/)
+    act(() => { vi.advanceTimersByTime(5000) })
+    expect(track).not.toHaveBeenCalled()
   })
 
   it('is searching again when "All sources" is switched off and on for the same query', async () => {

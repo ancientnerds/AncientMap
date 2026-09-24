@@ -80,6 +80,8 @@ export interface UseSiteSearchReturn {
   searchResults: SearchResult[]
   apiSearchResults: SiteData[]
   isSearching: boolean
+  /** The "All sources" API search for the current query failed (no answer): what to show instead of a count. */
+  searchError: string | null
   handleSearchResultSelect: (siteId: string, openPopup: boolean, onSiteClick: (site: SiteData) => void) => Promise<void>
 }
 
@@ -106,6 +108,8 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   const [apiSearchResults, setApiSearchResults] = useState<SiteData[]>([])
   // The query the API last answered (with or without sites); pending while it differs.
   const [apiAnsweredQuery, setApiAnsweredQuery] = useState<string | null>(null)
+  // The query whose API search failed (HTTP error, network, no sites list): no answer, not pending.
+  const [apiFailure, setApiFailure] = useState<{ query: string; reason: string } | null>(null)
   const apiSearchAbortRef = useRef<AbortController | null>(null)
 
   // Debounce search query (200ms)
@@ -128,6 +132,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     if (!searchAllSources || debouncedQuery.trim().length < 3) {
       setApiSearchResults([])
       setApiAnsweredQuery(null)
+      setApiFailure(null)
       return
     }
 
@@ -137,11 +142,16 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
 
     const query = debouncedQuery.trim()
     const encoded = encodeURIComponent(query)
+    setApiFailure(null)
     fetch(`${config.api.baseUrl}/sites/search?q=${encoded}&limit=50`, { signal: controller.signal })
-      .then(res => res.json())
+      .then(res => {
+        // A 429 from the search limiter or a 5xx carries no sites: no answer
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
       .then(data => {
         if (controller.signal.aborted) return
-        const parsed: SiteData[] = (data.sites || []).map((s: { id: string; n: string; la: number; lo: number; s: string; t?: string; p?: number; pn?: string; d?: string; cd?: string; c?: string; u?: string }) => ({
+        const parsed: SiteData[] = data.sites.map((s: { id: string; n: string; la: number; lo: number; s: string; t?: string; p?: number; pn?: string; d?: string; cd?: string; c?: string; u?: string }) => ({
           id: s.id,
           title: s.n,
           coordinates: [s.lo, s.la] as [number, number],
@@ -158,11 +168,10 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
         setApiAnsweredQuery(query)
       })
       .catch(err => {
-        if (err.name !== 'AbortError') {
-          console.warn('API search failed:', err)
-          setApiSearchResults([])
-          setApiAnsweredQuery(query)
-        }
+        if (err.name === 'AbortError') return
+        console.warn('API search failed:', err)
+        setApiSearchResults([])
+        setApiFailure({ query, reason: err.message })
       })
 
     return () => controller.abort()
@@ -170,10 +179,14 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
 
   // Generate search results
   const detailsPending = !detailsReady && debouncedQuery.trim().length > 0
+  const apiFailureReason = searchAllSources && apiFailure?.query === debouncedQuery.trim() ? apiFailure.reason : null
+  const apiFailed = apiFailureReason !== null
 
   const searchResults = useMemo((): SearchResult[] => {
     if (!debouncedQuery.trim()) return []
     if (detailsPending) return []
+    // The local preview is no answer to an all-sources query the API failed on
+    if (apiFailed) return []
 
     // When "All sources" is checked and API results have arrived, use them.
     if (searchAllSources && apiSearchResults.length > 0) {
@@ -331,7 +344,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           coordinates: site.coordinates,
         }
       })
-  }, [debouncedQuery, detailsPending, searchAllSources, apiSearchResults, sites, selectedSources, sourceNameMap, applyFiltersToSearch, ageRange, selectedCategories, allCategories, selectedCountries, allCountries, spatialFilter, empireFilter])
+  }, [debouncedQuery, detailsPending, apiFailed, searchAllSources, apiSearchResults, sites, selectedSources, sourceNameMap, applyFiltersToSearch, ageRange, selectedCategories, allCategories, selectedCountries, allCountries, spatialFilter, empireFilter])
 
   // Handle search result selection — resolves site data and calls the provided click handler
   const handleSearchResultSelect = async (siteId: string, openPopup: boolean, onSiteClick: (site: SiteData) => void) => {
@@ -357,8 +370,9 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     }
   }
 
-  const apiPending = searchAllSources && debouncedQuery.trim().length >= 3 && apiAnsweredQuery !== debouncedQuery.trim()
+  const apiPending = searchAllSources && debouncedQuery.trim().length >= 3 && apiAnsweredQuery !== debouncedQuery.trim() && !apiFailed
   const isSearching = detailsPending || apiPending
+  const searchError = apiFailed ? `All-sources search failed (${apiFailureReason}). Try again.` : null
 
   // One `search` event per query the user actually settled on (1.2 s without
   // further typing), with the result count; `search_empty` on top when
@@ -366,13 +380,13 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   // The count is read through a ref, not a dep: results keep changing while data
   // loads, and every change would restart the timer and swallow the event. While
   // details or API results are pending there is no count to report; the timer
-  // starts once `isSearching` turns false.
+  // starts once `isSearching` turns false. A failed API search has no count either.
   const trackedQueryRef = useRef('')
   const resultCountRef = useRef(0)
   resultCountRef.current = searchResults.length
   useEffect(() => {
     const q = debouncedQuery.trim()
-    if (isSearching || q.length < 2 || trackedQueryRef.current === q) return
+    if (isSearching || apiFailed || q.length < 2 || trackedQueryRef.current === q) return
     const timer = setTimeout(() => {
       trackedQueryRef.current = q
       const results = resultCountRef.current
@@ -381,7 +395,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
       if (results === 0) track('search_empty', props)
     }, 1200)
     return () => clearTimeout(timer)
-  }, [debouncedQuery, isSearching])
+  }, [debouncedQuery, isSearching, apiFailed])
 
   return {
     searchQuery,
@@ -390,6 +404,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     searchResults,
     apiSearchResults,
     isSearching,
+    searchError,
     handleSearchResultSelect,
   }
 }
