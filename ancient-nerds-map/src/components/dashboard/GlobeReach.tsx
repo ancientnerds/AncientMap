@@ -49,6 +49,14 @@ export function abandonLine(g: GlobeData): string {
   return `The ${fmtInt(t.samples)} loads left while loading had waited ${spread(t, 'at the shortest', 'at the longest')}.`
 }
 
+/** Printed after abandonLine whenever it says something: the two spreads look
+ *  alike and are not measured alike. globe_ready's ms counts from navigation
+ *  (useGlobeReady), the abandon's from the start of the load (createLoadClock),
+ *  so on a phone the ready times carry the time spent reading the gate. */
+const CLOCKS_NOTE =
+  ' These waits count from the start of the load, on a phone the tap on 3D Globe; the globe_ready' +
+  ' times above count from the page load, reading the phone gate included, so on phones the two do not compare.'
+
 /** One label per ending. The literal's key order is the row order: the order
  *  a load meets them (gate, capability check, start, leaving), then what
  *  nothing explains. A Record, so a new ending without a label does not compile. */
@@ -116,7 +124,8 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
               <h3>How the other loads ended</h3>
               <BarList items={endingItems(g)} empty="No load ended without the globe in this window." />
               <p className="dash-note">
-                {abandonLine(g)} Counts per load, but Umami ties an event to a visitor and never to one
+                {abandonLine(g)}
+                {g.abandon_ms.samples > 0 && CLOCKS_NOTE} Counts per load, but Umami ties an event to a visitor and never to one
                 page load, so a visitor's endings are matched to their loads in this order. No signal:
                 the page loaded and nothing else arrived — a crashed tab, or a visitor gone before the
                 tracker loaded.

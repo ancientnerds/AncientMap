@@ -243,6 +243,18 @@ describe('GlobeReach', () => {
     expect(html).not.toContain('Data unavailable.')
   })
 
+  it('says the abandon waits and the globe_ready times run on different clocks', () => {
+    // globe_ready's ms counts from navigation (useGlobeReady), the abandon's from
+    // the start of the load (createLoadClock): on a phone, 30 s on the gate and a
+    // 6 s load read 36 s ready against 6 s abandoned, the same wait.
+    const html = renderToString(<GlobeReach state={ok(some)} />)
+    expect(html).toContain(
+      'These waits count from the start of the load, on a phone the tap on 3D Globe; the globe_ready times above count from the page load, reading the phone gate included, so on phones the two do not compare.',
+    )
+    const unmeasured = { ...some, abandon_ms: { min: null, median: null, max: null, samples: 0 } }
+    expect(renderToString(<GlobeReach state={ok(unmeasured)} />)).not.toContain('These waits count')
+  })
+
   it('names the loads from before the endings were recorded while there are any', () => {
     const older = { ...some, not_reached: { ...some.not_reached, no_signal: 0, unmeasured: 2 } }
     const html = renderToString(<GlobeReach state={ok(older)} />)
