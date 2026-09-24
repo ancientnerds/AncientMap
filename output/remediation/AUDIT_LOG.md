@@ -8133,3 +8133,34 @@ and site id, not by run. The 70 fixed members sit in the same batch ids in both 
 journal evidence would list pilot 1's select and review labels beside pilot 2's (the evidence check
 itself passes: it compares sets). Nothing is written before a pilot passes; scope the ledger read to
 the run (or give pilot 2's model rounds their own `--ledger`) before step 6's committed write.
+
+### Tests, sweep, gates for pilot 1's fixes and pilot 2 (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 20 new test functions, each red before its code (the pilot-2 seal tests red before this log's
+  seal section): `test_phase4_select.py` +7 (the four selector rules and the two reviewer DROP
+  criteria verbatim, `also_named` shown and escaped, the names only for a strong 'own' verdict and
+  only from a pinned witness of the stored item), `test_phase4_verify.py` +5 (the label counts for a
+  strong 'own' verdict only, never from an unpinned witness, another item, a meta under another id or
+  an item without an English label; `verify_batch` reads the store's `src.D`; the S3/V6 names parity
+  over 10 cases), `test_phase4_runner.py` +1 (the select preview and export carry the names) and one
+  test extended (the review's S5 hands over the witness), `test_phase4_write.py` +1,
+  `test_phase4_accept.py` +1 (the P4 plan and the acceptance verify with the site's witness),
+  `test_phase4_pilot.py` +5 (pilot 2's draw, its refusals, the CLI's `--after`, the seal).
+* `mutation_sweep.P4_PILOT2_MUTATIONS`: 34 cases (`p4 prompts` 7, `p4 select` 8, `p4 verify4` 8,
+  `p4 run4` 2, `p4 write4` 2, `p4 verify_writes4` 1, `p4 pilot` 6 - the draw 4, the seal 2),
+  registered once; two existing cases re-anchored on the calls the witness wrapped (`p4 write4: the
+  verifier is shown other raw_data than the row writes`, `p4 verify_writes4: the store's slices
+  replace the journal quotes`); 1,973 labels, all unique, every anchor and test present. The sweep's
+  own `main` over **every case whose target is a file this branch changed** (verify4 173, write4 97,
+  verify_writes4 33, pilot4 30, run4 26, select_stage 17, review4 13, prompts4 10, AUDIT_LOG.md 2,
+  PILOT_THRESHOLDS.md 2): **403/403 caught**, the tree byte-identical to the sweep's start for its
+  10 files, no `# mutant` left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **5,778 passed, 111 skipped, 57 deselected, 0 failed** (312 s); every skip names gitignored data this
+  worktree does not have (Natural Earth, the snapshot, the worklist, the bcases cache, ...) or an
+  opt-in live test.
+* `ruff check` and `ruff format --check` clean on the 18 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
