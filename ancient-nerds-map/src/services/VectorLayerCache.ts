@@ -3,6 +3,7 @@
  * Uses Service Worker cache for GeoJSON data
  */
 
+import { globeStartLayerUrls } from './GlobeStartCache'
 import { OfflineFetch } from './OfflineFetch'
 import { OfflineStorage, type DownloadState } from './OfflineStorage'
 import { LAYER_CONFIG, getLayerFiles, type VectorLayerKey } from '../config/vectorLayers'
@@ -23,15 +24,28 @@ function isVectorLayerKey(id: string): id is VectorLayerKey {
   return id in LAYER_CONFIG
 }
 
-/** A globe vector layer: the files are exactly what the globe fetches (getLayerFiles). */
-function globeLayer(id: VectorLayerKey, name: string, color: string, estimatedSize: number): VectorLayerInfo {
-  return { id, name, color, fileCount: getLayerFiles(id).length, estimatedSize }
+/**
+ * The files a layer download fetches, stores and clears: exactly what the globe fetches
+ * (getLayerFiles), without the coastline and border start tiers. Those belong to the
+ * globe's start files (GlobeStartCache), which every download stores first
+ * (DownloadManager.handleDownload), so fetching them here fetched and counted them twice,
+ * and clearing a layer must not break the offline start. getCachedLayers still checks
+ * every file of getLayerFiles.
+ */
+function layerDownloadFiles(id: VectorLayerKey): string[] {
+  const startFiles = new Set(globeStartLayerUrls())
+  return getLayerFiles(id).filter(url => !startFiles.has(url))
 }
 
-// Sizes are the sums of the files getLayerFiles lists (measured 2026-09-23).
+/** A globe vector layer and the files its download fetches. */
+function globeLayer(id: VectorLayerKey, name: string, color: string, estimatedSize: number): VectorLayerInfo {
+  return { id, name, color, fileCount: layerDownloadFiles(id).length, estimatedSize }
+}
+
+// Sizes are the sums of the files layerDownloadFiles lists (measured 2026-09-23).
 const VECTOR_LAYERS: VectorLayerInfo[] = [
-  globeLayer('coastlines', 'Coastlines', '#00e0d0', 36.6 * 1024 * 1024),   // start 1.7 + detail 9.8 + hires 25.0 MB
-  globeLayer('countryBorders', 'Country Borders', '#00e0d0', 1.8 * 1024 * 1024),  // start 0.4 + detail 1.4 MB
+  globeLayer('coastlines', 'Coastlines', '#00e0d0', 34.8 * 1024 * 1024),   // detail 9.8 + hires 25.0 MB (start 1.7: start files)
+  globeLayer('countryBorders', 'Country Borders', '#00e0d0', 1.4 * 1024 * 1024),  // detail 1.4 MB (start 0.4: start files)
   globeLayer('rivers', 'Rivers', '#2196f3', 8.2 * 1024 * 1024),    // Natural Earth 110m, 50m, 10m
   globeLayer('lakes', 'Lakes', '#1976d2', 6.0 * 1024 * 1024),      // Natural Earth 110m, 50m, 10m
   globeLayer('coralReefs', 'Coral Reefs', '#ff6b9d', 42.6 * 1024 * 1024),  // 110m, 50m, 10m + labels
@@ -127,7 +141,7 @@ class VectorLayerCacheClass {
       if (!isVectorLayerKey(layerId)) throw new Error(`Unknown layer: ${layerId}`)
       // Exactly the URLs the globe fetches, so OfflineFetch's exact-URL match finds them.
       // A file that fails fails the download: the layer is not marked downloaded.
-      const files = getLayerFiles(layerId)
+      const files = layerDownloadFiles(layerId)
       for (const url of files) {
         const response = await fetch(url)
         if (!response.ok) throw new Error(`Failed to download ${url}: HTTP ${response.status}`)
@@ -179,7 +193,7 @@ class VectorLayerCacheClass {
       }
     } else {
       if (!isVectorLayerKey(layerId)) throw new Error(`Unknown layer: ${layerId}`)
-      for (const url of getLayerFiles(layerId)) {
+      for (const url of layerDownloadFiles(layerId)) {
         await cache.delete(url)
       }
     }
