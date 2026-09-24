@@ -22,7 +22,7 @@ lines, 90 selector and 66 reviewer lines, all `unmetered`) are in `pilot4_eviden
 | T7 0 recurring gold errors | PASS | PASS | FAIL (1) | **PASS** (0) - every gold or canary site is written clean or held with a closed-list reason |
 | T8 >= 80 % lane-W eligible | 67.5 % | 66.7 % | 73.1 % | 63 of 79 = **79.7 %**, reported, not gating (owner decision of 2026-09-24 in `PILOT_RESULT_3.md`) |
 | T9 parse failures | 0 | 0 | 0 | **0** (cost unmetered: Opus through the handoff) |
-| T10 writer | not reached | not reached | not reached | next: P4/P5 rehearsal, the pilot write, acceptance |
+| T10 writer | not reached | not reached | not reached | **PASS (P4)** - scoped to the owner's defect sites (`SCOPE4.json` v1): 52 rows at 26 sites written in 7 batches, every batch's read-back and inverse proof passed, 0 rows left by the inverse; `verify_writes4 --lane p4`: 52 of 52 rows carried, V1-V15 re-run on the 26 sites, **0 deviations**, step 1 accepted. P5 (cards) waits for the owner's D5 sitting |
 | T11 / T12 lanes R / T | closed | closed | closed | closed (searches off): their sites stay held |
 | T13 MiniMax | not used | not used | not used | not used |
 
@@ -36,4 +36,7 @@ defective (Brewer's Castle, Dumpdon Hill, Gaya Tumuli, V9 - this hold cannot occ
 sites of the mass run, whose stored text is proven defective). The random `draw-W` stratum: 24 of 30
 eligible.
 
-The pilot passes T1-T7 and T9; only lanes W and S open. Nothing has been written to production yet.
+The pilot passes T1-T7, T9 and T10 (P4); only lanes W and S open. Written 2026-09-24 ~23:25 CEST under
+the stamps `phase4:p4-000N:chunk-0001`; the live SSR page of Lake Mungo shows the new text and its
+attribution line. The 87 pilot sites outside the defect scope were refused by the gate
+(`outside-defect-scope`) and keep their text.
