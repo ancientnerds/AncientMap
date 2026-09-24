@@ -19,6 +19,7 @@ import {
   installGlobeAbandon,
   loadPhase,
   reportGateChoice,
+  reportWebglLost,
   type StartItem,
 } from '../globeAbandon'
 
@@ -142,5 +143,42 @@ describe('installGlobeAbandon', () => {
     setVisibility('hidden')
     expect(trackMock).not.toHaveBeenCalled()
     expect(latch.open).toBe(true)
+  })
+})
+
+describe('reportWebglLost', () => {
+  beforeEach(() => {
+    trackMock.mockClear()
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+  })
+
+  it('a loss before globe_ready is this load\'s ending: webgl_lost{loading}, then no abandon', () => {
+    const latch = createGlobeEndingLatch()
+    const uninstall = installGlobeAbandon({ latch, getPhase: () => 'basemap', now: () => 3200 })
+    reportWebglLost(latch, 'context_lost', false)
+    window.dispatchEvent(new Event('pagehide'))
+    uninstall()
+    expect(trackMock.mock.calls).toEqual([['webgl_lost', { reason: 'context_lost', phase: 'loading' }]])
+    expect(latch.open).toBe(false)
+  })
+
+  it('an abandon first (a hidden phone tab), then the context loss: one ending, the abandon', () => {
+    const latch = createGlobeEndingLatch()
+    const uninstall = installGlobeAbandon({ latch, getPhase: () => 'basemap', now: () => 3200 })
+    setVisibility('hidden')
+    reportWebglLost(latch, 'context_lost', false)
+    uninstall()
+    expect(trackMock.mock.calls).toEqual([['globe_abandon', { ms: 3200, phase: 'basemap' }]])
+  })
+
+  it('a loss after globe_ready is no ending: webgl_lost{live}, sent although the latch is closed', () => {
+    const latch = createGlobeEndingLatch()
+    latch.close()
+    reportWebglLost(latch, 'context_lost', true)
+    reportWebglLost(latch, 'context_lost', true) // lost again after a restore
+    expect(trackMock.mock.calls).toEqual([
+      ['webgl_lost', { reason: 'context_lost', phase: 'live' }],
+      ['webgl_lost', { reason: 'context_lost', phase: 'live' }],
+    ])
   })
 })

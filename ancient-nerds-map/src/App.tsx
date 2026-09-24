@@ -6,6 +6,7 @@ import {
   installGlobeAbandon,
   loadPhase,
   reportGateChoice,
+  reportWebglLost,
   type GateChoice,
   type StartItem,
 } from './analytics/globeAbandon'
@@ -1895,11 +1896,10 @@ function AppContent() {
         onLayersReady={handleLayersReady}
         onStartProgress={markStartProgress}
         appBackgroundTasks={appBackgroundTasks}
-        onWebglLost={() => {
+        onWebglLost={(reason) => {
           setWebglLost(true)
-          // webgl_lost{phase:'loading'} is this load's ending on the dashboard (an error):
-          // no globe_abandon after it. Once the globe was ready the latch is closed anyway.
-          endingLatch.close()
+          // Before globe_ready this is the load's ending (through the latch), after it a live loss
+          reportWebglLost(endingLatch, reason, globeReadyRef.current)
         }}
         onWebglRestored={() => setWebglLost(false)}
         onContributeClick={() => setShowContributeModal(true)}

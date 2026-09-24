@@ -135,7 +135,7 @@ interface GlobeProps {
   onStartProgress?: (item: StartItem) => void  // A critical item of the start is in (scene, basemap, labels, coastlines, countryBorders), once each
   onWarpComplete?: () => void  // The intro warp has ended (once per warp); the background queue starts here
   appBackgroundTasks: AppBackgroundTasks  // App's work in the background queue (site details, service worker)
-  onWebglLost?: (reason: string, phase: string) => void  // WebGL context died - the globe is frozen until the page reloads
+  onWebglLost: (reason: string) => void  // WebGL context died - the globe is frozen until it comes back; App reports it (webgl_lost)
   onWebglRestored?: () => void  // Context came back and the animation loop was restarted
   // Contribute feature
   onContributeClick?: () => void  // Callback when contribute button is clicked
@@ -664,11 +664,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const handleContextLost = useCallback((reason: string) => {
     if (webglLostReportedRef.current) return
     webglLostReportedRef.current = true
-    // 'loading' means the visitor never saw a globe at all - the dashboard
-    // ranks that harder than a globe that froze after it had started.
-    const phase = layersReadyCalledRef.current ? 'live' : 'loading'
-    track('webgl_lost', { reason, phase })
-    onWebglLostRef.current?.(reason, phase)
+    // App knows whether the visitor saw the globe yet (webgl_lost's phase) and
+    // whether the load already ended (analytics/globeAbandon.ts reportWebglLost)
+    onWebglLostRef.current(reason)
   }, [])
 
   // The intro's end, for the [] scene effect's loop context (same ref pattern as above)

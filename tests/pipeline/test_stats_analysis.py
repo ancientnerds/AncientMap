@@ -1070,22 +1070,23 @@ def test_problems_rank_a_lost_webgl_context_by_the_visitors_it_reached():
 
 def test_the_webgl_phases_are_the_ones_the_globe_sends():
     """WEBGL_PHASES has no default (the test above pins the KeyError), and the
-    vocabulary is written in another language in another repo tree: Globe.tsx
-    computes `layersReadyCalledRef.current ? 'live' : 'loading'` and sends that
-    string. A third phase there would turn every /api/stats/problems call into
+    vocabulary is written in another language in another repo tree:
+    analytics/globeAbandon.ts reportWebglLost computes
+    `globeReady ? 'live' : 'loading'` and sends that string. A third phase there would turn every /api/stats/problems call into
     a 500 and every founder's Problems panel into "Data unavailable." Same
     guard as tests/api/test_goto_discord.py::TestAllowlistSync."""
-    globe_tsx = (
+    abandon_ts = (
         Path(__file__).resolve().parents[2]
         / "ancient-nerds-map"
         / "src"
-        / "components"
-        / "Globe.tsx"
+        / "analytics"
+        / "globeAbandon.ts"
     ).read_text(encoding="utf-8")
-    m = re.search(r"const phase = \w+\.current \? '(\w+)' : '(\w+)'", globe_tsx)
-    assert m, "the webgl_lost phase ternary is not in Globe.tsx any more"
+    m = re.search(r"const phase = globeReady \? '(\w+)' : '(\w+)'", abandon_ts)
+    assert m, "the webgl_lost phase ternary is not in globeAbandon.ts any more"
     assert set(m.groups()) == set(fs.WEBGL_PHASES)
-    assert "track('webgl_lost', { reason, phase })" in globe_tsx
+    assert "if (phase === 'live') track('webgl_lost', { reason, phase })" in abandon_ts
+    assert "else latch.end('webgl_lost', { reason, phase })" in abandon_ts
 
 
 def test_problems_list_eight_rows_by_default():

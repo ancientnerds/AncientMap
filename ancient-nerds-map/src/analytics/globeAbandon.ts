@@ -11,8 +11,9 @@
  *   globe_error       a start failure (not 'bg:' or 'live'), once its screen shows
  *                     (App: failGlobe, hooks/useGlobeScreenEnding.ts; never behind the gate)
  *   globe_abandon     the page was hidden or left before globe_ready
+ *   webgl_lost        {phase:'loading'}: the WebGL context died before globe_ready
  *
- * All four go through one latch per load; globe_ready closes it too, so a
+ * All five go through one latch per load; globe_ready closes it too, so a
  * load that reached the globe never sends an ending afterwards.
  *
  * globe_abandon rides on the tracker's own transport: Umami 3.4's
@@ -36,7 +37,7 @@ export type AbandonPhase = 'gate' | StartItem
 /** The phone gate's controls (globe_gate's choice). */
 export type GateChoice = 'globe' | 'stories' | 'radar' | 'journal' | 'lyra' | 'db'
 
-type GlobeEnding = 'globe_gate' | 'globe_unsupported' | 'globe_error' | 'globe_abandon'
+type GlobeEnding = 'globe_gate' | 'globe_unsupported' | 'globe_error' | 'globe_abandon' | 'webgl_lost'
 
 export interface GlobeEndingLatch {
   /** Nothing has ended this load yet, and the globe is not ready. */
@@ -69,6 +70,19 @@ export function createGlobeEndingLatch(): GlobeEndingLatch {
 export function reportGateChoice(choice: GateChoice, latch: GlobeEndingLatch): void {
   if (choice === 'globe') track('globe_gate', { choice })
   else latch.end('globe_gate', { choice })
+}
+
+/**
+ * The globe's WebGL context died: webgl_lost{reason, phase}. 'loading' means the
+ * visitor never saw a globe; the dashboard counts it as this load's ending (an
+ * error), so it goes through the latch, and a load that already ended (a hidden
+ * phone tab that sent globe_abandon, then lost its context) sends nothing more.
+ * 'live' follows globe_ready and is no ending: it is sent on every loss.
+ */
+export function reportWebglLost(latch: GlobeEndingLatch, reason: string, globeReady: boolean): void {
+  const phase = globeReady ? 'live' : 'loading'
+  if (phase === 'live') track('webgl_lost', { reason, phase })
+  else latch.end('webgl_lost', { reason, phase })
 }
 
 /**

@@ -186,7 +186,8 @@ def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends
     assert "phase: 'bg:hires'" in read("components", "Globe.tsx")
     assert "left(phase, 3) <> 'bg:'" in sql
     # webgl_lost before globe_ready is a start failure (test_stats_analysis pins the ternary too)
-    assert "layersReadyCalledRef.current ? 'live' : 'loading'" in read("components", "Globe.tsx")
+    assert "const phase = globeReady ? 'live' : 'loading'" in abandon
+    assert "reportWebglLost(endingLatch, reason, globeReadyRef.current)" in read("App.tsx")
     assert "phase = 'loading'" in sql
 
 
