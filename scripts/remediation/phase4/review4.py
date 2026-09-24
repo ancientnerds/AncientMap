@@ -8,7 +8,10 @@ For every site in `assembly.jsonl` that no stage has held (the verifier's pre-re
 included), one call shows, per published sentence, the published text, the untrimmed source
 sentence, the two source sentences before it and the section heading, plus the card and the site's
 name, aliases, type, country and coordinates. The answer is one line per sentence, `R<i>: KEEP` or
-`R<i>: DROP <why>`, and one `CARD: KEEP`/`CARD: DROP <why>` when a card is shown.
+`R<i>: DROP <why>`, and one `CARD: KEEP`/`CARD: DROP <why>` when a card is shown. Since pilot 1
+(2026-09-24, T2 and T5) the question (`prompts4.REVIEWER_QUESTION`) also names two DROP cases: a
+sentence about the modern village, town or municipality, and a definite reference whose antecedent
+is in no published sentence before it (the source sentences shown before it are not published).
 
 The verdict can only remove, and it fails closed:
 

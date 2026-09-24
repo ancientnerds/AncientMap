@@ -35,11 +35,14 @@ if str(PHASE4_PARENT) not in sys.path:
 
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3.run import Batch  # noqa: E402
+from phase4 import batch4 as B  # noqa: E402 - only for the V6 names parity test
 from phase4 import model4 as M  # noqa: E402
+from phase4 import select_stage as SEL  # noqa: E402 - only for the V6 names parity test
 from phase4 import sentences as S  # noqa: E402 - only for the D3 parity test
 from phase4 import verify4 as V  # noqa: E402
 
 from pipeline.video import shorts_audit, shorts_brand  # noqa: E402
+from tests.remediation import p4_fixtures as X  # noqa: E402
 from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 from tests.remediation.phase4_cases import (  # noqa: E402
     A1,
@@ -81,8 +84,11 @@ from tests.remediation.phase4_cases import (  # noqa: E402
     plan_site,
     reprovenance,
     republish,
+    retitle,
     sha,
     with_marker,
+    witness,
+    witness_answer,
     write4_stand_in,
     write_batch,
 )
@@ -268,6 +274,57 @@ def test_both_finders_offer_the_same_ranges(source_id: str, text: str) -> None:
     assert sorted(V.offered_spans(source_id, text, sentence.start, sentence.end)) == s2
 
 
+#: V6's names on both sides (pilot 1, T8): the gate over the article, `src.D` as stored, and which
+#: of the two extra names count - the pinned title, and the pinned item's English label.
+NAME_PARITY_CASES = [
+    ("strong", {}, X.witness_answer(label="Stone Temple"), {}, True, True),
+    ("no-distance", {"km": None}, X.witness_answer(), {}, False, False),
+    ("qid-mismatch", {"qid_match": False}, X.witness_answer(), {}, False, False),
+    ("place-item", {"place_item": True}, X.witness_answer(), {}, False, False),
+    ("shared", {"verdict": "shared", "shared": True}, X.witness_answer(), {}, False, False),
+    ("no-witness", {}, None, {}, True, False),
+    ("another-item", {}, X.witness_answer(qid="Q2"), {}, True, False),
+    ("unpinned", {}, X.witness_answer(), {"sha256_raw": "0" * 64}, True, False),
+    ("no-english-label", {}, X.witness_answer(label=None), {}, True, False),
+    ("not-d", {}, X.witness_answer(), {"id": "W"}, True, False),
+]
+
+
+@pytest.mark.parametrize(
+    ("gate_over", "raw", "d_over", "title_counts", "label_counts"),
+    [case[1:] for case in NAME_PARITY_CASES],
+    ids=[case[0] for case in NAME_PARITY_CASES],
+)
+def test_s3_and_v6_accept_the_same_names(
+    tmp_path: Path,
+    gate_over: dict,
+    raw: bytes | None,
+    d_over: dict,
+    title_counts: bool,
+    label_counts: bool,
+) -> None:
+    """The D3 idea for V6's names (pilot 1, T8, 2026-09-24): S3 (`select_stage.v6_names`, what the
+    selector is shown as `also_named`) and V6 (`verify4.v6_names`) read the same rule - the stored
+    names, and for a strong 'own' verdict the pinned title and the pinned item's English label - in
+    their own code, from the same store. Neither imports the other; this test imports both."""
+    gate_dict = {**X.STRONG_OWN.to_dict(), **gate_over}
+    article = X.wiki_doc("W", X.ARTICLE, title="Stone Temple of Gozo").to_dict()
+    doc = M.SourceDoc.from_dict({**article, "subject_gate": gate_dict})
+    site = X.plan_site("site-1", name="Ggantija South", aliases=("Ta' Ġgantija",))
+    setup = X.SiteSetup(site=site, lane=M.Lane.W, sources={"W": (doc, X.ARTICLE)})
+    batch_dir = X.make_batch(tmp_path, [setup])
+    if raw is not None:
+        X.pin_witness(batch_dir, "site-1", raw, **d_over)
+    store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    meta, _ = B.read_source(batch_dir, "site-1", "W")
+    s3 = SEL.v6_names(site, meta, SEL.site_witness(batch_dir, "site-1"))
+    v6 = V.v6_names(site, B.read_meta(batch_dir, "site-1", "W"), V.read_witness(store, "site-1"))
+    expected = ["Ggantija South", "Ta' Ġgantija"]
+    expected += ["Stone Temple of Gozo"] if title_counts else []
+    expected += ["Stone Temple"] if label_counts else []
+    assert list(s3) == v6 == expected
+
+
 def test_the_edit_list_removes_repairs_restores_and_marks() -> None:
     start, end = locate(TEXT, S4)
     low, high = piece_range(TEXT, S4, L4)
@@ -345,6 +402,7 @@ def test_an_assembly_of_another_site_is_refused() -> None:
             texts=case.texts,
             quotes=case.quotes,
             new_raw_data={},
+            witness=V.Witness(meta=None, raw=None),
         )
 
 
@@ -739,6 +797,66 @@ def test_v6_a_title_without_its_qid_or_of_a_place_item_is_no_strong_own(over: di
     site = plan_site(name="Ħal Tarxien megaliths", aliases=())
     weak = make_case(site=site, card=None, subject_gate=gate(**over))
     assert "sentence 1 names none" in weak.detail("V6")
+
+
+def _label_only(subject_gate: M.SubjectGate | None = None) -> Case:
+    """Pilot 1's T8 case (Beacon Hill, Burghclere, Hampshire): neither the stored name nor the
+    article title stands in sentence 1, but the pinned item's English label does."""
+    site = plan_site(name="Ħal Tarxien megaliths", aliases=())
+    case = retitle(make_case(site=site, subject_gate=subject_gate), "Ħal Tarxien (Paola)")
+    return dataclasses.replace(case, witness=witness())
+
+
+def test_v6_the_pinned_items_english_label_counts_for_a_strong_own_verdict() -> None:
+    assert _label_only().run() == ()
+    bare = dataclasses.replace(_label_only(), witness=V.Witness(meta=None, raw=None))
+    assert "sentence 1 names none of ['Ħal Tarxien megaliths', 'Ħal Tarxien (Paola)']" in (
+        bare.detail("V6")
+    )
+    assert "the Wikidata witness adds no name: no src.D is pinned" in bare.detail("V6")
+
+
+@pytest.mark.parametrize(
+    "over", [{"qid_match": False}, {"place_item": True}, {"km": None}], ids=str
+)
+def test_v6_the_label_counts_only_for_a_strong_own_verdict(over: dict) -> None:
+    """The design: 'The article title and Wikidata labels count only for a strong own verdict
+    (QID + coordinates + not place-level)' - a town's label ('Clare') names no site in it."""
+    case = _label_only(subject_gate=gate(**over))
+    assert "sentence 1 names none of ['Ħal Tarxien megaliths']" in case.detail("V6")
+
+
+@pytest.mark.parametrize(
+    ("raw", "over", "why"),
+    [
+        (
+            witness_answer(),
+            {"sha256_raw": "0" * 64},
+            "the stored src.D answer is not its pinned sha256_raw",
+        ),
+        (witness_answer(qid="Q2"), {}, "src.D is not the stored item Q1353330"),
+        (witness_answer(label=None), {}, "the item Q1353330 carries no English label"),
+        (witness_answer(), {"id": "W"}, "src.D.meta names 'W'"),
+    ],
+    ids=["unpinned", "another-item", "no-english-label", "not-d"],
+)
+def test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label(
+    raw: bytes, over: dict, why: str
+) -> None:
+    case = dataclasses.replace(_label_only(), witness=witness(raw, **over))
+    assert "sentence 1 names none" in case.detail("V6")
+    assert f"the Wikidata witness adds no name: {why}" in case.detail("V6")
+
+
+def test_v6_reads_the_witness_the_store_pins(tmp_path: Path, write4: None) -> None:
+    """S5 over a batch reads the site's `src.D` from the evidence store, as S1 left it."""
+    batch_dir = write_batch(tmp_path, _label_only())
+    assert V.verify_batch(batch_dir) == 0
+    holds = M.load_jsonl(batch_dir / M.HOLDS_FILE, M.Hold)
+    assert not [h for h in holds if h.reason is M.HoldReason.V6]
+    assert V.read_witness(F.EvidenceStore(batch_dir / M.EVIDENCE_DIR), HELD_SITE) == V.Witness(
+        meta=None, raw=None
+    )
 
 
 def test_v7_a_verdict_that_does_not_allow_the_lane_is_held() -> None:

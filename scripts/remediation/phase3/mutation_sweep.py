@@ -5141,8 +5141,9 @@ PHASE4_WRITE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write4: the verifier is shown other raw_data than the row writes",
         P4_WRITE,
-        "quotes=quotes, new_raw_data=raw)",
-        "quotes=quotes, new_raw_data=dict(site.raw_data or {}))  # mutant",
+        "        new_raw_data=raw,\n        witness=witness_files(batch.evidence, site_id),\n",
+        "        new_raw_data=dict(site.raw_data or {}),  # mutant\n"
+        "        witness=witness_files(batch.evidence, site_id),\n",
         P4_WRITE_TEST,
         "test_the_verifier_is_shown_exactly_the_bytes_the_rows_write",
     ),
@@ -7309,8 +7310,10 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: the store's slices replace the journal quotes",
         P4_ACCEPT,
-        "            entry.site, assembly, metas=metas, texts=texts, quotes=quotes, new_raw_data=raw\n",
-        "            entry.site, assembly, metas=metas, texts=texts, new_raw_data=raw,  # mutant\n            quotes=[texts[s.src][s.start : s.end] for s in provenance.sentences],\n",
+        "            quotes=quotes,\n            new_raw_data=raw,\n"
+        "            witness=V4.read_witness(store, site_id),\n",
+        "            quotes=[texts[s.src][s.start : s.end] for s in provenance.sentences],  # mutant\n"
+        "            new_raw_data=raw,\n            witness=V4.read_witness(store, site_id),\n",
         P4_ACCEPT_TEST,
         "test_the_journal_quotes_are_the_ones_verified",
     ),
@@ -16676,6 +16679,12 @@ P4P2_SELECT = "scripts/remediation/phase4/select_stage.py"
 P4P2_SELECT_TEST = "tests/remediation/test_phase4_select.py"
 P4P2_RUN4 = "scripts/remediation/phase4/run4.py"
 P4P2_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4P2_VERIFY = "scripts/remediation/phase4/verify4.py"
+P4P2_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
+P4P2_WRITE = "scripts/remediation/phase4/write4.py"
+P4P2_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4P2_ACCEPT = "output/remediation/tools/verify_writes4.py"
+P4P2_ACCEPT_TEST = "tests/remediation/test_phase4_accept.py"
 
 P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── the two questions ────────────────────────────────────────────────────────────────────
@@ -16810,6 +16819,111 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "  # mutant\n",
         P4P2_RUNNER_TEST,
         "test_the_select_preview_and_export_show_the_names_v6_accepts",
+    ),
+    # ── the names V6 accepts, verify4's reading, and every caller that hands it the witness ──
+    (
+        "p4 verify4: the pinned item's label is not a name",
+        P4P2_VERIFY,
+        "        if label is not None:\n            names.append(label)\n",
+        "        if False:  # mutant\n            names.append(label)\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_the_pinned_items_english_label_counts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: the label counts for any verdict",
+        P4P2_VERIFY,
+        "    if _strong_own(gate if isinstance(gate, Mapping) else None):\n",
+        "    if True:  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_the_label_counts_only_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: a witness that is not the pinned answer counts",
+        P4P2_VERIFY,
+        '    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():\n',
+        "    if False:  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[unpinned]",
+    ),
+    (
+        "p4 verify4: another item's label counts",
+        P4P2_VERIFY,
+        '    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)\n',
+        '    entity = next(iter(json.loads(raw.decode("utf-8"))["entities"].values()))  # mutant\n',
+        P4P2_VERIFY_TEST,
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[another-item]",
+    ),
+    (
+        "p4 verify4: a witness meta filed under another id counts",
+        P4P2_VERIFY,
+        '    if not isinstance(meta, Mapping) or meta.get("id") != M.SourceKind.D.value:\n',
+        "    if not isinstance(meta, Mapping):  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[not-d]",
+    ),
+    (
+        "p4 verify4: the V6 hold hides why the witness adds no name",
+        P4P2_VERIFY,
+        '            problem += f" (the Wikidata witness adds no name: {why})"\n',
+        "            pass  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_the_pinned_items_english_label_counts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: the batch verifies without the store's witness",
+        P4P2_VERIFY,
+        "                witness=read_witness(store, site.site_id),\n",
+        "                witness=Witness(meta=None, raw=None),  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_reads_the_witness_the_store_pins",
+    ),
+    (
+        "p4 verify4: read_witness reads no answer",
+        P4P2_VERIFY,
+        "    return Witness(meta=meta, raw=raw_path.read_bytes() if raw_path.exists() else None)\n",
+        "    return Witness(meta=meta, raw=None)  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_v6_reads_the_witness_the_store_pins",
+    ),
+    (
+        "p4 select: S3 reads no label where V6 does (the names parity)",
+        P4P2_SELECT,
+        "        label = _witness_label(site, witness)\n",
+        "        label = None  # mutant\n",
+        P4P2_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_names[strong]",
+    ),
+    (
+        "p4 run4: the review's S5 reads no witness",
+        P4P2_RUN4,
+        "                witness=verify4.read_witness(store, site.site_id),\n",
+        "                witness=(None, None),  # mutant\n",
+        P4P2_RUNNER_TEST,
+        "test_review_re_verifies_through_verify_site_with_the_contracts_arguments",
+    ),
+    (
+        "p4 write4: the plan verifies without the site's witness",
+        P4P2_WRITE,
+        "        witness=witness_files(batch.evidence, site_id),\n",
+        "        witness=(None, None),  # mutant\n",
+        P4P2_WRITE_TEST,
+        "test_the_verifier_is_shown_the_sites_pinned_wikidata_item",
+    ),
+    (
+        "p4 write4: witness_files reads no answer",
+        P4P2_WRITE,
+        "    return meta, raw_path.read_bytes() if raw_path.exists() else None\n",
+        "    return meta, None  # mutant\n",
+        P4P2_WRITE_TEST,
+        "test_the_verifier_is_shown_the_sites_pinned_wikidata_item",
+    ),
+    (
+        "p4 verify_writes4: the read-back is verified without the run's witness",
+        P4P2_ACCEPT,
+        "            witness=V4.read_witness(store, site_id),\n",
+        "            witness=(None, None),  # mutant\n",
+        P4P2_ACCEPT_TEST,
+        "test_the_read_back_is_verified_with_the_sites_pinned_wikidata_item",
     ),
 ]
 MUTATIONS += P4_PILOT2_MUTATIONS

@@ -41,7 +41,10 @@ from tests.remediation.phase4_cases import (  # noqa: E402
     fake_card_fit,
     make_case,
     new_raw,
+    plan_site,
+    retitle,
     sha,
+    witness,
     write_batch,
 )
 
@@ -196,12 +199,15 @@ def _evidence(case: Case) -> dict[str, Any]:
     }
 
 
-def written_p4(tmp_path: Path, *, cards: bool = False, card_held: bool = False) -> Written:
+def written_p4(
+    tmp_path: Path, *, cards: bool = False, card_held: bool = False, case: Case | None = None
+) -> Written:
     """The P4 rows of one site applied and journalled; with `cards`, the P5 row after them. With
     `card_held` the site is written as `write4.without_card` writes a site whose card a CARD-scope
     hold keeps back: description and raw_data with `provenance.card: null`, while the run's
-    `assembly.jsonl` still carries the assembled card."""
-    case = make_case()
+    `assembly.jsonl` still carries the assembled card. `case` is the clean lane-W site unless
+    given."""
+    case = case or make_case()
     run_dir = tmp_path / "runs" / "pilot"
     write_batch(run_dir, case)
     written = case.assembly
@@ -585,6 +591,15 @@ def test_a_written_site_that_no_longer_verifies_is_a_deviation(tmp_path: Path) -
     path.write_bytes(path.read_bytes().replace(b"Tarxien.", b"Tarxien!"))
     deviations = accept(written, tmp_path)
     assert any(d.startswith(f"REVERIFY {SITE_ID} V1") for d in deviations)
+
+
+def test_the_read_back_is_verified_with_the_sites_pinned_wikidata_item(tmp_path: Path) -> None:
+    """V6 accepts the pinned item's English label for a strong 'own' verdict (pilot 1, T8): the
+    acceptance re-verifies with the run's `src.D`, as the batch was verified before the write."""
+    case = make_case(site=plan_site(name="Ħal Tarxien megaliths", aliases=()))
+    case = dataclasses.replace(retitle(case, "Ħal Tarxien (Paola)"), witness=witness())
+    written = written_p4(tmp_path, case=case)
+    assert accept(written, tmp_path) == []
 
 
 def test_the_journal_quotes_are_the_ones_verified(tmp_path: Path) -> None:

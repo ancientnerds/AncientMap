@@ -23,6 +23,7 @@ what it is given (`phase4_write_fixtures.FakeDb`). Nothing here opens a socket o
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -35,6 +36,7 @@ for _path in (REPO / "scripts" / "remediation", REPO / "output" / "remediation" 
         sys.path.insert(0, str(_path))
 
 import write_gate4 as G  # noqa: E402
+from phase3 import fetch_stage as F  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402
 
 from tests.remediation import phase4_write_fixtures as FX  # noqa: E402
@@ -179,6 +181,25 @@ def test_the_verifier_is_shown_exactly_the_bytes_the_rows_write(tmp_path: Path) 
     assert call["quotes"] == [FX.TEXT[FX.S1[0] : FX.S1[1]], FX.TEXT[FX.S2[0] : FX.S2[1]]]
     assert call["texts"] == {"W": FX.TEXT}
     assert call["metas"]["W"] == FX.source_doc().to_dict()
+    assert call["witness"] == (None, None)  # this site's S1 pinned no Wikidata item
+
+
+def test_the_verifier_is_shown_the_sites_pinned_wikidata_item(tmp_path: Path) -> None:
+    """V6 accepts the English label of the site's pinned item (`src.D`) for a strong 'own'
+    verdict: the plan hands the verifier exactly the meta and the bytes S1 stored."""
+    batch_dir = FX.write_batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
+    raw = b'{"entities": {"Q1": {"id": "Q1", "labels": {"en": {"value": "The Temple"}}}}}'
+    meta = {"id": "D", "sha256_raw": hashlib.sha256(raw).hexdigest()}
+    store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    store.write(site_id=FX.SITE_A, feature=M.source_feature("D", "raw"), body=raw)
+    store.write(
+        site_id=FX.SITE_A,
+        feature=M.source_feature("D", "meta"),
+        body=json.dumps(meta).encode("utf-8"),
+    )
+    verify = FX.Verify()
+    _p4(W4.load_batch(batch_dir), verify=verify)
+    assert verify.calls[0]["witness"] == (meta, raw)
 
 
 def test_a_verifier_hold_refuses_the_site(tmp_path: Path) -> None:

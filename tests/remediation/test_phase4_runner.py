@@ -46,6 +46,7 @@ from phase4 import route_stage as RS  # noqa: E402
 from phase4 import run4 as R4  # noqa: E402
 from phase4 import select_stage as SEL  # noqa: E402
 from phase4 import sources_stage as S1  # noqa: E402
+from phase4 import verify4 as V4  # noqa: E402
 from phase4 import write4 as W4  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
@@ -472,6 +473,8 @@ def test_review_re_verifies_through_verify_site_with_the_contracts_arguments(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     batch_dir = _selected_batch(tmp_path)
+    raw = X.witness_answer(label="Stone Temple")
+    X.pin_witness(batch_dir, "site-1", raw)
     seen: list[dict[str, Any]] = []
 
     def verify_site(site: M.PlanSite, assembly: M.Assembly, **kw: Any) -> tuple[M.Hold, ...]:
@@ -481,7 +484,7 @@ def test_review_re_verifies_through_verify_site_with_the_contracts_arguments(
     def new_raw_data(old: dict | None, assembly: M.Assembly) -> dict:
         return {**(old or {}), "made_by": "write4"}
 
-    _fake(monkeypatch, R4.VERIFY4, verify_site=verify_site)
+    _fake(monkeypatch, R4.VERIFY4, verify_site=verify_site, read_witness=V4.read_witness)
     _fake(monkeypatch, R4.WRITE4, new_raw_data=new_raw_data)
     answer = "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: KEEP\nCARD: KEEP"
     monkeypatch.setattr(
@@ -494,8 +497,10 @@ def test_review_re_verifies_through_verify_site_with_the_contracts_arguments(
     )
     assert code == 0
     (call,) = seen
-    assert set(call) == {"site", "assembly", "metas", "texts", "quotes", "new_raw_data"}
+    assert set(call) == {"site", "assembly", "metas", "texts", "quotes", "new_raw_data", "witness"}
     assert call["metas"]["W"] == json.loads(X.wiki_doc("W", X.ARTICLE).to_json())
+    # V6 reads the site's pinned Wikidata item (its English label) from the same store
+    assert call["witness"] == V4.Witness(meta=B.read_meta(batch_dir, "site-1", "D"), raw=raw)
     assert call["texts"] == {"W": X.ARTICLE}
     assert call["quotes"] == A.quotes_of(call["assembly"], {"W": X.ARTICLE})
     assert call["new_raw_data"] == {"description_citations": [], "k": 1, "made_by": "write4"}
@@ -505,7 +510,12 @@ def test_a_review_that_could_not_call_names_the_error_for_the_spawn_retry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     batch_dir = _selected_batch(tmp_path)
-    _fake(monkeypatch, R4.VERIFY4, verify_site=lambda site, assembly, **kw: ())
+    _fake(
+        monkeypatch,
+        R4.VERIFY4,
+        verify_site=lambda site, assembly, **kw: (),
+        read_witness=V4.read_witness,
+    )
     _fake(monkeypatch, R4.WRITE4, new_raw_data=lambda old, assembly: {})
     argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     empty = str(tmp_path / "handoff")  # nothing was answered: the import cannot call
@@ -1072,7 +1082,12 @@ def test_the_journal_evidence_of_a_site_answered_through_the_handoff_is_complete
         "no reviews/review: this lane's site needs that call"
     ]
 
-    _fake(monkeypatch, R4.VERIFY4, verify_site=lambda site, assembly, **kw: ())
+    _fake(
+        monkeypatch,
+        R4.VERIFY4,
+        verify_site=lambda site, assembly, **kw: (),
+        read_witness=V4.read_witness,
+    )
     _fake(monkeypatch, R4.WRITE4, new_raw_data=lambda old, assembly: {})
     review = tmp_path / "handoff-review"
     _run(capsys, ["review", *argv, "--handoff-export", str(review)])

@@ -216,9 +216,10 @@ def witness_answer(qid: str = "Q1", label: str | None = "Stone Temple") -> bytes
 
 
 def pin_witness(
-    batch_dir: Path, site_id: str, raw: bytes, *, sha256_raw: str | None = None
+    batch_dir: Path, site_id: str, raw: bytes, *, sha256_raw: str | None = None, **over: object
 ) -> None:
-    """Store `raw` as the site's `src.D` with its meta, pinned by `sha256_raw` (default: its own)."""
+    """Store `raw` as the site's `src.D` with its meta, pinned by `sha256_raw` (default: its own);
+    `over` replaces fields of the stored meta (a meta filed under another id, say)."""
     import hashlib
 
     meta = M.SourceDoc(
@@ -242,9 +243,8 @@ def pin_witness(
     )
     store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
     store.write(site_id=site_id, feature=M.source_feature("D", "raw"), body=raw)
-    store.write(
-        site_id=site_id, feature=M.source_feature("D", "meta"), body=meta.to_json().encode("utf-8")
-    )
+    body = json.dumps({**meta.to_dict(), **over}, ensure_ascii=False).encode("utf-8")
+    store.write(site_id=site_id, feature=M.source_feature("D", "meta"), body=body)
 
 
 #: What the Opus handoff declares for every answer: no meter, zeros that say so.

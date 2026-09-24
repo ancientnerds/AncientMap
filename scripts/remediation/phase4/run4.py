@@ -339,11 +339,14 @@ def reverify_for(batch_dir: Path) -> RV.Reverify:
     """`verify4.verify_site` bound to this batch's evidence (the review's S5 again).
 
     `metas` are the raw `src.<id>.meta` objects, `texts` the pinned texts, `quotes` the store slice
-    of every published sentence (`assemble.quotes_of`), and `new_raw_data` the writer's
-    `write4.new_raw_data(old, assembly)` - the contract's own wiring.
+    of every published sentence (`assemble.quotes_of`), `new_raw_data` the writer's
+    `write4.new_raw_data(old, assembly)` - the contract's own wiring - and `witness` the site's
+    pinned Wikidata item (`verify4.read_witness`), whose English label V6 accepts for a strong
+    'own' verdict.
     """
     verify4 = track(VERIFY4)
     write4 = track(WRITE4)
+    store = B.evidence_store(batch_dir)
 
     def reverify(site: M.PlanSite, assembly: M.Assembly) -> tuple[M.Hold, ...]:
         ids = [source.id for source in assembly.provenance.sources]
@@ -361,6 +364,7 @@ def reverify_for(batch_dir: Path) -> RV.Reverify:
                 texts=texts,
                 quotes=A.quotes_of(assembly, texts),
                 new_raw_data=write4.new_raw_data(site.raw_data, assembly),
+                witness=verify4.read_witness(store, site.site_id),
             )
         )
 

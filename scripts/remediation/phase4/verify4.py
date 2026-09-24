@@ -41,11 +41,17 @@ cut. Published sentences are joined by one space. A card item is edits 1-4 on it
 drop list, then the spoken edit: every `model4.CIRCA_PATTERN` match -> `circa ` (`Circa ` for a
 capital); items are joined by one space and carry no marker. Lanes T and R build no card (V10).
 
-What the verifier cannot see
-----------------------------
-`verify_site` gets the raw `src.<id>.meta` objects, the pinned texts and the quotes, not the
-Wikidata entity, so V6's "Wikidata labels count for a strong own verdict" is read as the article
-title only (a stricter name set). T03 parses English, so V11's year comparison by interval runs
+What the verifier cannot see, and what it reads besides the cited sources
+------------------------------------------------------------------------
+`verify_site` gets the raw `src.<id>.meta` objects of the cited sources, the pinned texts and the
+quotes, and - for V6 - the site's Wikidata witness (`src.D`, never cited) as S1 pinned it: its raw
+meta and the raw answer's bytes (`Witness`, `read_witness`). V6's "the article title and Wikidata
+labels count only for a strong 'own' verdict" is read as the pinned title and the item's
+**English** label (S1 fetches the entity with `languages=en`), and the label counts only when the
+witness is the stored QID's item and its answer hashes to the meta's `sha256_raw` (pilot 1,
+2026-09-24: 14 sites were held V6 because sentence 1 carried none of the names, although the gate
+had tied the article to the site for most of them, e.g. 'Beacon Hill, Burghclere, Hampshire', item
+label 'Beacon Hill'). T03 parses English, so V11's year comparison by interval runs
 for lane R (English pages); lane T compares numerals only. V10's "unattributed" superlative has
 no attribution rule in the design; every listed superlative is refused (stricter).
 
@@ -59,13 +65,15 @@ again. Everything else holds the site.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import sys
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import parse_qs, urlsplit
 
 if __package__ in (None, ""):
@@ -549,6 +557,15 @@ def card_fit(name: str, card: str) -> CardFit:
 Problem = tuple[M.HoldScope, str]
 
 
+class Witness(NamedTuple):
+    """The site's Wikidata item as S1 pinned it, `src.D`: the raw meta object and the raw answer's
+    bytes, each `None` when S1 stored none (a site without a QID, an item S1 could not pin). Data,
+    like `metas` and `texts`: a caller that reads the store itself hands the plain pair."""
+
+    meta: Any
+    raw: bytes | None
+
+
 @dataclass(frozen=True)
 class _Case:
     site: M.PlanSite
@@ -558,6 +575,7 @@ class _Case:
     quotes: tuple[str, ...]
     new_raw_data: Any
     segments: tuple[Segment, ...] | None
+    witness: tuple[Any, bytes | None]
 
     @property
     def provenance(self) -> M.Provenance:
@@ -595,8 +613,8 @@ class _Case:
 
 
 def _strong_own(gate: Mapping[str, Any] | None) -> bool:
-    """V6: the article title counts only for a strong 'own' verdict: QID + coordinates + not a
-    place-level item."""
+    """V6: the article title and the item's label count only for a strong 'own' verdict: QID +
+    coordinates + not a place-level item."""
     return (
         gate is not None
         and gate.get("verdict") == M.SubjectVerdict.OWN.value
@@ -906,12 +924,45 @@ def opens_with_pronoun(text: str) -> bool:
     return bool(_PRONOUN.match(text))
 
 
-def _names(c: _Case, source_id: str) -> list[str]:
-    names = [c.site.name, *c.site.aliases]
-    if _strong_own(c.gate(source_id)):
-        title = c.metas[source_id].get("title")
+def witness_label(site: M.PlanSite, witness: tuple[Any, bytes | None]) -> tuple[str | None, str]:
+    """V6: the English label of the site's pinned Wikidata item, or `None` and why it adds none.
+
+    The witness counts only as S1 pinned it: its meta is `src.D`'s, the stored answer hashes to the
+    meta's `sha256_raw`, and the answer carries the stored QID - the item a strong 'own' verdict
+    matched the article to (`qid_match`)."""
+    meta, raw = witness
+    if meta is None or raw is None:
+        return None, "no src.D is pinned"
+    if not isinstance(meta, Mapping) or meta.get("id") != M.SourceKind.D.value:
+        found = meta.get("id") if isinstance(meta, Mapping) else meta
+        return None, f"src.D.meta names {found!r}"
+    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():
+        return None, "the stored src.D answer is not its pinned sha256_raw"
+    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)
+    if not isinstance(entity, Mapping):
+        return None, f"src.D is not the stored item {site.wikidata_qid}"
+    label = ((entity.get("labels") or {}).get("en") or {}).get("value")
+    if not isinstance(label, str) or not label.strip():
+        return None, f"the item {site.wikidata_qid} carries no English label"
+    return label, ""
+
+
+def v6_names(site: M.PlanSite, meta: Any, witness: tuple[Any, bytes | None]) -> list[str]:
+    """V6: the names sentence 1 may name the site by, when its source has the raw meta `meta`:
+    the stored name and the `unified_site_names` aliases; for a strong 'own' verdict also the
+    pinned article title and the English label of the pinned item (`witness_label`). The subject
+    gate already tied that article and that item to the site (QID, coordinates, no place item), so
+    these are the site's names, not a loosening of its identity. S3 reads the same rule in its own
+    code (`select_stage.v6_names`); a parity test holds the two together."""
+    names = [site.name, *site.aliases]
+    gate = meta.get("subject_gate") if isinstance(meta, Mapping) else None
+    if _strong_own(gate if isinstance(gate, Mapping) else None):
+        title = meta.get("title")
         if isinstance(title, str) and title.strip():
             names.append(title)
+        label, _ = witness_label(site, witness)
+        if label is not None:
+            names.append(label)
     return names
 
 
@@ -938,9 +989,14 @@ def _v6(c: _Case) -> list[Problem]:
                 "the sentence published before it"
             )
     first = c.published[0].text
-    names = _names(c, c.sentences[0].src)
+    source_id = c.sentences[0].src
+    names = v6_names(c.site, c.metas.get(source_id), c.witness)
     if not any(name_in(name, first) for name in names):
-        problems.append(f"sentence 1 names none of {names}")
+        problem = f"sentence 1 names none of {names}"
+        _, why = witness_label(c.site, c.witness)
+        if _strong_own(c.gate(source_id)) and why:
+            problem += f" (the Wikidata witness adds no name: {why})"
+        problems.append(problem)
     return [(SITE, problem) for problem in problems]
 
 
@@ -1337,13 +1393,15 @@ def verify_site(
     texts: Mapping[str, str],
     quotes: Sequence[str],
     new_raw_data: Mapping[str, Any],
+    witness: tuple[Any, bytes | None],
 ) -> tuple[M.Hold, ...]:
     """V1-V15 for one site: one `Hold` per failing rule and scope, empty when every rule passes.
 
     `metas` are the raw `src.<id>.meta` objects, `texts` the pinned texts, `quotes` the quote per
-    published sentence (the store slice in a batch, the journal's at acceptance) and
+    published sentence (the store slice in a batch, the journal's at acceptance),
     `new_raw_data` the `raw_data` that is (to be) written (`write4.new_raw_data`, or production's
-    read-back at acceptance).
+    read-back at acceptance) and `witness` the site's `src.D` as S1 pinned it (`read_witness`;
+    V6 reads its English label).
     """
     if assembly.site_id != site.site_id:
         raise ValueError(f"the assembly of {assembly.site_id} is not the site {site.site_id}")
@@ -1355,6 +1413,7 @@ def verify_site(
         quotes=tuple(quotes),
         new_raw_data=new_raw_data,
         segments=split_published(assembly.description),
+        witness=witness,
     )
     holds: list[M.Hold] = []
     for reason, rule in _RULES:
@@ -1384,6 +1443,15 @@ def read_store(store: F.EvidenceStore, site_id: str, source_id: str) -> tuple[An
     meta = M.parse_json(meta_path.read_bytes().decode("utf-8")) if meta_path.exists() else None
     text = text_path.read_bytes().decode("utf-8") if text_path.exists() else None
     return meta, text
+
+
+def read_witness(store: F.EvidenceStore, site_id: str) -> Witness:
+    """The site's `src.D` as S1 stored it: the raw meta object and the answer's bytes, each `None`
+    when absent. Public for the review's S5 (`run4`) and the acceptance (`verify_writes4`)."""
+    meta_path = store.path_for(site_id, M.source_feature("D", "meta"))
+    raw_path = store.path_for(site_id, M.source_feature("D", "raw"))
+    meta = M.parse_json(meta_path.read_bytes().decode("utf-8")) if meta_path.exists() else None
+    return Witness(meta=meta, raw=raw_path.read_bytes() if raw_path.exists() else None)
 
 
 @dataclass(frozen=True)
@@ -1488,6 +1556,7 @@ def verify_batch(batch_dir: Path) -> int:
                 texts=texts,
                 quotes=quotes,
                 new_raw_data=write4.new_raw_data(site.raw_data, assembly),
+                witness=read_witness(store, site.site_id),
             )
         )
 
