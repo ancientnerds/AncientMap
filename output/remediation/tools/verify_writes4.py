@@ -35,7 +35,7 @@ Every deviation is printed by name; the last line is `ACCEPT_EXIT=0` (none) or `
 and that line - not the process status of a wrapper - is what is read. The five sampled SSR pages
 of the design are a Playwright check against production and not part of this tool.
 
-    verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>>
+    verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> [--run <runs/<run2>>]
     verify_writes4.py --lane p4l --plan <PLAN.jsonl>
     verify_writes4.py --lane p5 --plan <PLAN.jsonl> --run <runs/<run>> --card-check
     verify_writes4.py --boot-logs --since 2026-09-24T10:00:00Z
@@ -386,6 +386,21 @@ def index_run(run_dir: pathlib.Path) -> dict[str, RunSite]:
     return found
 
 
+def index_runs(run_dirs: Iterable[pathlib.Path]) -> dict[str, RunSite]:
+    """`index_run` over every run a lane was written from (the pilot's and the mass run's share the
+    `phase4:` stamps). A site two runs carry is refused: which run's pinned texts it was written
+    from would be a guess."""
+    found: dict[str, RunSite] = {}
+    for run_dir in run_dirs:
+        for site_id, entry in index_run(run_dir).items():
+            if site_id in found:
+                raise SystemExit(
+                    f"{site_id} is in two runs: {found[site_id].batch_dir.parent} and {run_dir}"
+                )
+            found[site_id] = entry
+    return found
+
+
 def journal_quotes(
     evidence_rows: Iterable[Mapping[str, Any]], provenance: M.Provenance, site_id: str
 ) -> tuple[list[str] | None, str | None]:
@@ -635,7 +650,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             if production.live.get(("card_stats", "card_description", site)) is not None
         }
     if lane in ("p4", "p5"):
-        if args.run is None:
+        if not args.run:
             raise SystemExit(f"lane {lane} re-runs V1-V15 on the written sites: --run is required")
         evidence_rows: list[dict[str, Any]] = []
         ordered = sorted(written)
@@ -646,7 +661,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             lane=lane,
             production=production,
             evidence_rows=evidence_rows,
-            run=index_run(pathlib.Path(args.run)),
+            run=index_runs(pathlib.Path(path) for path in args.run),
         )
         print(f"re-verified {len(written)} written site(s) with V1-V15")
     return deviations
@@ -658,7 +673,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="verify-writes4")
     parser.add_argument("--lane", choices=sorted(LANE_COLUMNS))
     parser.add_argument("--plan", help="the lane's PLAN.jsonl (write4)")
-    parser.add_argument("--run", help="the Phase-4 run directory (runs/<run>)")
+    parser.add_argument(
+        "--run",
+        action="append",
+        help="a Phase-4 run directory (runs/<run>); once per run the lane was written from",
+    )
     parser.add_argument("--stamp-like", default=None, help="override the lane's stamp pattern")
     parser.add_argument("--complete", action="store_true", help="every planned row is written")
     parser.add_argument("--card-check", action="store_true", help="run card_json.py --check")

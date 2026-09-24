@@ -283,7 +283,7 @@ def _args(written: Written, tmp_path: Path, lane: str = "p4", **over: Any) -> An
     values = {
         "lane": lane,
         "plan": str(plan),
-        "run": str(written.run_dir),
+        "run": [str(written.run_dir)],
         "stamp_like": {"p4": "phase4:%", "p4l": "phase4l:%", "p5": "phase5:%"}[lane],
         "complete": False,
     }
@@ -338,11 +338,11 @@ def test_main_prints_its_own_exit_line_and_reads_the_lane_from_lanes(
         return type("Lane", (), {"stamp_like": "phase4:%"})()
 
     monkeypatch.setattr(lanes, "lane", lane)
-    code = A.main(["--lane", "p4", "--plan", args.plan, "--run", args.run])
+    code = A.main(["--lane", "p4", "--plan", args.plan, "--run", *args.run])
     out = capsys.readouterr().out.strip().splitlines()
     assert (code, out[-1], seen) == (0, "ACCEPT_EXIT=0", ["p4"])
     written.production.sites[SITE_ID]["description"] = "Changed by hand."
-    assert A.main(["--lane", "p4", "--plan", args.plan, "--run", args.run]) == 1
+    assert A.main(["--lane", "p4", "--plan", args.plan, "--run", *args.run]) == 1
     assert capsys.readouterr().out.strip().splitlines()[-1] == "ACCEPT_EXIT=1"
 
 
@@ -796,3 +796,18 @@ def test_the_run_index_carries_the_plan_record_and_the_assembly(tmp_path: Path) 
     entry = index[SITE_ID]
     assert entry.site == written.case.site and entry.assembly == written.case.assembly
     assert dataclasses.replace(entry, assembly=None).assembly is None
+
+
+def test_a_lane_written_from_two_runs_is_read_from_both(tmp_path: Path) -> None:
+    written = written_p4(tmp_path / "pilot")
+    empty = tmp_path / "mass"
+    empty.mkdir()
+    assert accept(written, tmp_path, run=[str(empty), str(written.run_dir)]) == []
+    assert A.index_runs([empty, written.run_dir]) == A.index_run(written.run_dir)
+
+
+def test_a_site_two_runs_carry_is_refused(tmp_path: Path) -> None:
+    first = written_p4(tmp_path / "a")
+    second = written_p4(tmp_path / "b")
+    with pytest.raises(SystemExit, match="is in two runs"):
+        A.index_runs([first.run_dir, second.run_dir])

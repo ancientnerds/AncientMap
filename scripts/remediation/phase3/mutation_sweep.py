@@ -7244,6 +7244,14 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_planned_row_the_lane_has_not_written_yet_must_hold_its_old_value",
     ),
     (
+        "p4 verify_writes4: a site two runs carry is taken from the last",
+        P4_ACCEPT,
+        "            if site_id in found:\n",
+        "            if False:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_site_two_runs_carry_is_refused",
+    ),
+    (
         "p4 verify_writes4: another value than the plan passes",
         P4_ACCEPT,
         "                if (link.old, link.new) != want:\n",
