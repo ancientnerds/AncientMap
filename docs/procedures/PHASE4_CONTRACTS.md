@@ -1028,8 +1028,9 @@ fields section 6 lists. What the design left open, and how the writer settled it
   held), so no row is planned from a verification of other bytes. `write_gate4` imports
   `phase4.verify4` when it plans P4.
 - **Entry points.** `write4.plan_writes(batch, *, group, **inputs)` dispatches to `plan_p4(batch,
-  *, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, written)` and `plan_cards(batch,
-  *, written, card_findings)`; `write4.load_batch(batch_dir)` reads the section-4 files strictly (a
+  *, scope, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, scope, written)` and
+  `plan_cards(batch, *, scope, written, card_findings)` (`scope` since 2026-09-24, section 9);
+  `write4.load_batch(batch_dir)` reads the section-4 files strictly (a
   site with neither an assembly nor a site hold is a hole and raises); `write4.render_apply(chunk,
   *, rehearse=False)`, `render_rollback(chunk)`, `apply_chunk(chunk, *, out, rehearse, runner,
   host)`; `write4.journal_evidence(assembly, *, texts, subject_gate, lane_detail, files, reviews,
@@ -1095,3 +1096,71 @@ section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question")
   `output/remediation/logs/p4_pilot4`. The fixes it runs with are section 7, "Pilot 1's fixes",
   "Pilot 2's fixes", "Pilot 3's decisions" and "Pilot 3's fixes"; its select questions are in
   `handoff/p4-pilot4-select` (90 questions, none answered).
+
+## 9. The owner's defect scope (wip/p4-pilot, 2026-09-24)
+
+Owner decision 2026-09-23 (Martin, "Nur Defekt-Sites (Recommended)"): after a passing Phase-4 pilot,
+Phases 4/5 write **only the sites with proven text defects** - the Phase-3 cleared defects plus the
+ungrounded card texts, in the design's order; every other site's description and card stay exactly
+as they are. Pilot 4 passed T1-T7 (`PILOT_RESULT_4.md`). The decision narrows the populations the
+design gives P4, L and P5 (production_write, VOLUME: "about 4,300-4,500 P4 sites") and, like every
+owner decision, ranks above the design.
+
+- **The scope is data, pinned.** `phase4/scope4.py` derives it; `phase4_runner/SCOPE4.json` (v1,
+  sha256 `19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a`, pinned in
+  `scope4.SCOPE_SHA256`) holds every site id with the lists it came from, the inputs' sha256 and the
+  site list's own digest; `plan4.py scope` rebuilds it byte for byte from `S0_ROWS.jsonl`
+  (`2c99f96f...`) and `logs/_write_dry/ALL_REFUSED.jsonl` (`7b4026d0...`). Three lists:
+  `phase3-cleared-description` 322, `phase3-cleared-card` 709, `ungrounded-card` 876 - 1,623 sites.
+  Its readers take that file or none: a file whose bytes are not the pin is refused (the gate ends
+  `WRITE_EXIT=1`). A new scope is a new version and a new pin, never an edit of the file.
+- **Which flags are a proven text defect.** `cleared-description-defect` and `cleared-card-defect`
+  (a defect Phase 3's reviewer cleared) and an ungrounded card (no `SiteFlag`; `scope4` derives it).
+  Not `t03` - its own comment says "order only" - and not `t03-severe` on its own: T03 names a
+  contradiction between the text's years and the period bucket, not which side is wrong. Its
+  findings are proposals for human review (the census counts 0 of them applicable), plan section 4.3
+  names two severe T03 patterns as false alarms (7, 8), V14 holds a severe finding "for reading" for
+  that reason, and of the 185 sites flagged severe on the description Phase 3's reviewer cleared the
+  description defect of 18 (in the scope already) and refuted it on 16. V9's waiver is a lower bar -
+  it lets a shorter text replace one that may be wrong - than the owner's "proven"; `t03-severe`
+  keeps that job, and the order, inside the scope. Counted, it would add 101 sites.
+- **The ungrounded cards, recomputed.** Plan section 5.1 counted 904 on 2026-09-19 (a card number
+  that never appeared in the generator's input, `LEFT(description, 500)` of snapshot d4526691) and
+  kept no list; `output/remediation` holds none. `scope4.ungrounded_card` applies the documented
+  method to `S0_ROWS.jsonl`, whose cards and descriptions are byte-identical to the census snapshot of
+  2026-09-20 for all 5,004 sites: a number is a numeral as written (ASCII digits, comma thousands
+  separators, a decimal part) read as its value, and it appeared when the same value is a numeral of
+  the input's first 500 characters - not a digit run inside a longer numeral. 876 cards; the plan's
+  three named examples (House of Taga, Hatunmarka, Maray Qalla) among them. One card that writes
+  numbers belongs to a site the snapshot does not have (Temple of Baalshamin, created after
+  d4526691): its input is unknown, so it is not claimed and the file lists it under `unclaimed`. The
+  2026-09-19 matcher was not kept, so 904 cannot be reproduced exactly; 40 readings of it measured on
+  the same data give 788-897 with Baalshamin counted (this one 877), and a digit-run substring match
+  does not even catch House of Taga (AUDIT_LOG, "The owner's defect scope").
+- **The refusal is the writer's, not a `HoldReason`.** `write4.RULE_OUT_OF_SCOPE =
+  "outside-defect-scope"` joins the writer's refusal rules (section 7): every planner takes `scope`
+  as a required keyword (no default: a plan without it is a `TypeError`) and asks it **before every
+  other rule**, so a site outside the scope is counted under it whatever else would hold it, and
+  nothing of it is verified or read. `write_gate4` loads the pinned scope for P4, L and P5 alike,
+  prints it, counts the refusals on its "refused by rule" line, and has no flag to switch it off.
+  `model4` is unchanged (section 1, rule 1): no stage holds a site for the scope, because the mass
+  run's plan never carries one (below).
+- **L.** The scope applies to lane L: L marks only a scope site Phase 4 held. A site outside it gets
+  no legacy provenance and is not listed for HUMAN_ONLY - it was never Phase 4's to write. The
+  consequence, recorded: an out-of-scope site whose text the March chain changed keeps it without
+  the legacy AI marking the design gave every held site ("so no LLM-processed text stays
+  unmarked"). Whether those sites get that marking is the owner's question, not a write of this gate.
+- **P5.** No card and no card clear outside the scope. A held card that is only ungrounded (not one
+  of the 709) keeps its text: the design clears the 709 alone.
+- **V9 inside the scope.** Its floor stays waived only for `cleared-description-defect` and
+  `t03-severe`. A site in the scope for its card alone keeps V9's 50 % floor on its description, so
+  `PILOT_RESULT_4.md`'s "this hold cannot occur for the defect sites of the mass run" holds for the
+  description defects only: Brewer's Castle, held V9 in pilot 4, is an ungrounded-card site.
+- **The mass run's plan** is `plan4.py build --pilot PILOT4.jsonl --defect-scope --out
+  PLAN4.scope.jsonl` (`plan4.write_scoped_plan`): the full plan's sites after the pilot's, in the
+  design's order (cleared defects, T03, the rest), only the scope's, in batches of 15 numbered after
+  the pilot's own (`p4-0010` on) - a journal stamp names its batch, so no mass batch reuses a pilot
+  id. Pilot 4's sites stay its run's (written or held there, never asked again); the draws of the
+  failed pilots 1-3 were never written and go in like any site. `mass4` prints, on every run, how
+  many sites of its open batches lie outside the scope, and refuses a live round that holds a model
+  stage while one does (a done batch asks nothing again, so re-driving a pilot's run is not refused).

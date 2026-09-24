@@ -18007,6 +18007,74 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4S_SCOPE_TEST,
         P4S_MALFORMED,
     ),
+    # ── write4: P4, L and P5 refuse a site outside the scope, before every other rule ────────
+    (
+        "p4 write4: P4 writes a site outside the defect scope",
+        P4S_WRITE,
+        '        outside = outside_scope(scope, site.site_id, "description")\n',
+        "        outside = None  # mutant\n",
+        P4S_WRITE_TEST,
+        P4S_P4,
+    ),
+    (
+        "p4 write4: a site in the defect scope is refused as outside it",
+        P4S_WRITE,
+        "    if site_id in scope:\n        return None\n",
+        "    if False:  # mutant\n        return None\n",
+        P4S_WRITE_TEST,
+        P4S_P4,
+    ),
+    (
+        "p4 write4: L marks a site outside the defect scope",
+        P4S_WRITE,
+        '        outside = outside_scope(scope, site.site_id, "raw_data")\n',
+        "        outside = None  # mutant\n",
+        P4S_LEGACY_TEST,
+        P4S_L,
+    ),
+    (
+        "p4 write4: L lists a site outside the defect scope for HUMAN_ONLY",
+        P4S_WRITE,
+        "    held = legacy4.held_sites(inside, written=live)\n",
+        "    held = legacy4.held_sites(batch.sites, written=live)  # mutant\n",
+        P4S_LEGACY_TEST,
+        P4S_L,
+    ),
+    (
+        "p4 write4: L's written rule reads the sites outside the scope too",
+        P4S_WRITE,
+        "    for site in inside:\n        if site.site_id in live:\n",
+        "    for site in batch.sites:  # mutant\n        if site.site_id in live:\n",
+        P4S_LEGACY_TEST,
+        P4S_L,
+    ),
+    (
+        "p4 write4: P5 writes or clears a card outside the defect scope",
+        P4S_WRITE,
+        '        outside = outside_scope(scope, site.site_id, "card_description")\n',
+        "        outside = None  # mutant\n",
+        P4S_WRITE_TEST,
+        "test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear",
+    ),
+    # ── write_gate4: the pinned scope for every group, and no stale statements ───────────────
+    (
+        "p4 write_gate4: the gate reads a scope file that is not the pin",
+        P4S_GATE,
+        "        return S.load_scope()\n",
+        "        return S.parse_scope(S.SCOPE_FILE.read_bytes())  # mutant\n",
+        P4S_WRITE_TEST,
+        "test_the_gate_refuses_a_scope_file_that_is_not_the_pinned_one",
+    ),
+    (
+        "p4 write_gate4: the gate plans under a scope of its own run's sites",
+        P4S_GATE,
+        '    options: dict[str, Any] = {"scope": scope}\n',
+        "    options: dict[str, Any] = {  # mutant\n"
+        '        "scope": S.DefectScope(scope.version, scope.sha256, dict.fromkeys(site_ids, ("x",)))\n'
+        "    }\n",
+        P4S_WRITE_TEST,
+        "test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it",
+    ),
     # ── plan4: the mass run's plan is the scope after the pilot ──────────────────────────────
     (
         "p4 plan4: the scoped plan keeps a site outside the scope",

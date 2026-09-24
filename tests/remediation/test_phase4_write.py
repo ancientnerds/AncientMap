@@ -50,9 +50,10 @@ def _batch(tmp_path: Path, **kwargs):
     return W4.load_batch(FX.write_batch(tmp_path, **kwargs))
 
 
-def _p4(batch, *, verify=None, open_lanes=OPEN_WS, audited=frozenset(), ledger=None):
+def _p4(batch, *, verify=None, open_lanes=OPEN_WS, audited=frozenset(), ledger=None, scope=None):
     return W4.plan_p4(
         batch,
+        scope=FX.EVERY_SITE if scope is None else scope,
         open_lanes=open_lanes,
         audited=audited,
         verify=verify or FX.Verify(),
@@ -62,6 +63,14 @@ def _p4(batch, *, verify=None, open_lanes=OPEN_WS, audited=frozenset(), ledger=N
 
 def _hold(site_id: str, reason: M.HoldReason, scope: M.HoldScope = M.HoldScope.SITE) -> M.Hold:
     return M.Hold(site_id=site_id, scope=scope, reason=reason, detail="the detail")
+
+
+@pytest.fixture(autouse=True)
+def _gate_plans_under_every_site(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The gate's tests of steps, rounds and acceptances write fixture sites that no scope file
+    lists; they plan under a scope of every site. The owner's scope rule is asked by its own tests
+    below, which put a real scope file in place of the pinned one."""
+    monkeypatch.setattr(G, "_defect_scope", lambda: FX.EVERY_SITE)
 
 
 def _db(*site_ids: str, **fields) -> FX.FakeDb:
@@ -569,12 +578,13 @@ def test_model_files_are_only_the_sites_own(tmp_path: Path) -> None:
 
 def test_plan_writes_is_each_groups_own_planner_with_its_own_inputs(tmp_path: Path) -> None:
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
-    legacy = W4.plan_writes(batch, group=W4.Group.L, written=[FX.SITE_A])
+    every = FX.EVERY_SITE
+    legacy = W4.plan_writes(batch, group=W4.Group.L, scope=every, written=[FX.SITE_A])
     assert legacy.batch_id == "p4l-0003" and legacy.refusals[0].rule == W4.RULE_WRITTEN
     with pytest.raises(TypeError):
-        W4.plan_writes(batch, group=W4.Group.L, written=[], open_lanes=OPEN_WS)
+        W4.plan_writes(batch, group=W4.Group.L, scope=every, written=[], open_lanes=OPEN_WS)
     with pytest.raises(TypeError):
-        W4.plan_writes(batch, group=W4.Group.P5, written={})  # card_findings is required
+        W4.plan_writes(batch, group=W4.Group.P5, scope=every, written={})  # card_findings
 
 
 # ── chunks and stamps ────────────────────────────────────────────────────────────────────────────
@@ -637,7 +647,9 @@ def test_the_allow_list_is_rendered_from_the_groups_rows(tmp_path: Path, p4_chun
         "('unified_sites', 'raw_data', 'id', 'P4/raw_data'))"
     ) in sql
     batch = _batch(tmp_path / "p5", sites=[FX.plan_site()], assemblies=[FX.assembly()])
-    cards = W4.plan_cards(batch, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={})
+    cards = W4.plan_cards(
+        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+    )
     assert (
         "NOT IN (VALUES ('card_stats', 'card_description', 'site_id', 'P5/card'), "
         "('card_stats', 'card_description', 'site_id', 'P5/card-clear'))"
@@ -872,7 +884,9 @@ def test_a_site_outside_the_curated_source_is_blocked_before_anything_is_sent(
 
 def test_a_card_without_its_card_stats_row_is_blocked_before_anything_is_sent(tmp_path) -> None:
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
-    cards = W4.plan_cards(batch, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={})
+    cards = W4.plan_cards(
+        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+    )
     chunk = W4.chunk_for(cards)
     out = _rendered(tmp_path, chunk)
     db = _db(FX.SITE_A, card_row=False)
@@ -901,6 +915,138 @@ def test_every_exit_line_is_printed_on_utf8_streams(monkeypatch, capsys) -> None
     assert seen == ["utf-8"] and capsys.readouterr().out == "WRITE_EXIT=0\n"
 
 
+# ── the owner's defect scope: P4, L and P5 write no other site ──────────────────────────────────
+
+
+def test_p4_refuses_a_site_outside_the_defect_scope_before_any_other_rule(tmp_path: Path) -> None:
+    """Owner decision 2026-09-23: only the sites with proven text defects are written. A site
+    outside the scope is refused under its own rule whatever else holds it (SITE_C is also held),
+    and nothing of it is verified or read."""
+    sites = [FX.plan_site(), FX.plan_site(FX.SITE_B), FX.plan_site(FX.SITE_C)]
+    batch = _batch(
+        tmp_path,
+        sites=sites,
+        assemblies=[FX.assembly(), FX.assembly(FX.SITE_B), FX.assembly(FX.SITE_C)],
+        holds=[_hold(FX.SITE_C, M.HoldReason.V9)],
+    )
+    verify = FX.Verify()
+    scope = FX.scope(FX.SITE_A)
+    plan = _p4(
+        batch,
+        verify=verify,
+        scope=scope,
+        ledger=FX.ledger_rows(FX.SITE_A, FX.SITE_B, FX.SITE_C),
+    )
+    assert {row.site_id for row in plan.rows} == {FX.SITE_A}
+    assert [(r.site_id, r.field, r.rule) for r in plan.refusals] == [
+        (FX.SITE_B, "description", W4.RULE_OUT_OF_SCOPE),
+        (FX.SITE_C, "description", W4.RULE_OUT_OF_SCOPE),
+    ]
+    assert scope.label in plan.refusals[0].detail
+    assert "description and card stay as they are" in plan.refusals[0].detail
+    assert [call["site"].site_id for call in verify.calls] == [FX.SITE_A]
+    assert plan.refusals_by_rule() == {"outside-defect-scope": 2}
+
+
+def test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear(tmp_path: Path) -> None:
+    """A written card and a card clear are both writes: neither happens outside the scope."""
+    flagged = FX.plan_site(FX.SITE_B, flags=[M.SiteFlag.CLEARED_CARD_DEFECT])
+    batch = _batch(
+        tmp_path,
+        sites=[FX.plan_site(), flagged],
+        assemblies=[FX.assembly()],
+        holds=[_hold(FX.SITE_B, M.HoldReason.NO_SOURCE)],
+    )
+    finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
+    plan = W4.plan_cards(
+        batch,
+        scope=FX.scope(),
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={FX.SITE_B: [finding]},
+    )
+    assert not plan.rows
+    assert [(r.site_id, r.field, r.rule) for r in plan.refusals] == [
+        (FX.SITE_A, "card_description", W4.RULE_OUT_OF_SCOPE),
+        (FX.SITE_B, "card_description", W4.RULE_OUT_OF_SCOPE),
+    ]
+    inside = W4.plan_cards(
+        batch,
+        scope=FX.scope(FX.SITE_A, FX.SITE_B),
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={FX.SITE_B: [finding]},
+    )
+    assert [r.test_id for r in inside.rows] == ["P5/card", "P5/card-clear"]
+
+
+def test_every_planner_needs_the_defect_scope(tmp_path: Path) -> None:
+    """No default: a plan without the owner's scope is a TypeError, never a plan of every site."""
+    batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
+    with pytest.raises(TypeError):
+        W4.plan_writes(batch, group=W4.Group.L, written=[])
+    with pytest.raises(TypeError):
+        W4.plan_writes(batch, group=W4.Group.P5, written={}, card_findings={})
+    with pytest.raises(TypeError):
+        W4.plan_p4(batch, open_lanes=OPEN_WS, audited=frozenset(), verify=FX.Verify(), ledger=[])
+
+
+def _scope_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *site_ids: str) -> Path:
+    """A real scope file of these sites, put in place of the pinned one (file and pin)."""
+    payload: dict = {
+        "version": G.S.SCOPE_VERSION,
+        "decision": "a test",
+        "inputs": {},
+        "methods": {},
+        "lists": dict.fromkeys(G.S.LISTS, 0),
+        "unclaimed": {G.S.UNGROUNDED_CARD: {G.S.NOT_IN_SNAPSHOT: []}},
+        "sites": [{"site_id": s, "lists": [G.S.CLEARED_CARD]} for s in sorted(site_ids)],
+    }
+    payload["lists"][G.S.CLEARED_CARD] = len(site_ids)
+    payload["sites_sha256"] = G.S.sites_digest(payload["sites"])
+    data = G.S.render_scope(payload)
+    path = tmp_path / "SCOPE4.json"
+    path.write_bytes(data)
+    monkeypatch.setattr(G.S, "SCOPE_FILE", path)
+    monkeypatch.setattr(G.S, "SCOPE_SHA256", hashlib.sha256(data).hexdigest())
+    monkeypatch.setattr(G, "_defect_scope", REAL_DEFECT_SCOPE)
+    return path
+
+
+#: The gate's own loader, kept before the autouse fixture replaces it for the other gate tests.
+REAL_DEFECT_SCOPE = G._defect_scope
+
+
+def test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """The gate plans under the pinned scope and no other - there is no flag - and the refusals are
+    counted on the 'refused by rule' line like every other rule's."""
+    _gate_run(tmp_path, 2)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    first, second = [f"{n:08x}-0000-4000-8000-00000000000{n}" for n in (1, 2)]
+    _scope_file(monkeypatch, tmp_path, first)
+    assert G.main(_gate_args(tmp_path), runner=_db(first, second)) == 0
+    out = capsys.readouterr().out
+    assert "rows planned: 2 | refused by rule: {'outside-defect-scope': 1}" in out
+    assert "defect scope: SCOPE4.json v1 " in out
+    refused = (tmp_path / "apply" / "p4-0002" / W4.REFUSED_FILE).read_text(encoding="utf-8")
+    assert json.loads(refused)["rule"] == "outside-defect-scope"
+
+
+def test_the_gate_refuses_a_scope_file_that_is_not_the_pinned_one(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    site = "00000001-0000-4000-8000-000000000001"
+    path = _scope_file(monkeypatch, tmp_path, site)
+    path.write_bytes(path.read_bytes() + b"\n")
+    assert G.main(_gate_args(tmp_path), runner=_db(site)) == 1
+    captured = capsys.readouterr()
+    assert "is not the pinned scope" in captured.err
+    assert captured.out.rstrip().endswith("WRITE_EXIT=1")
+    assert not (tmp_path / "apply").exists()
+
+
 # ── L and P5 ─────────────────────────────────────────────────────────────────────────────────────
 
 
@@ -911,7 +1057,7 @@ def test_p5_writes_a_card_only_where_live_provenance_names_it(tmp_path: Path) ->
         assemblies=[FX.assembly(), FX.assembly(FX.SITE_B), FX.assembly(FX.SITE_C)],
     )
     written = {FX.SITE_A: M.text_sha256(FX.CARD), FX.SITE_B: None}
-    plan = W4.plan_cards(batch, written=written, card_findings={})
+    plan = W4.plan_cards(batch, scope=FX.EVERY_SITE, written=written, card_findings={})
     assert [(r.site_id, r.test_id, r.new_value) for r in plan.rows] == [
         (FX.SITE_A, "P5/card", FX.CARD)
     ]
@@ -931,7 +1077,9 @@ def test_a_held_card_with_a_cleared_phase3_defect_is_cleared_with_its_finding(
         holds=[_hold(FX.SITE_A, M.HoldReason.CARD_TOO_SHORT_AFTER_REVIEW, M.HoldScope.CARD)],
     )
     finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
-    plan = W4.plan_cards(batch, written={FX.SITE_A: None}, card_findings={FX.SITE_A: [finding]})
+    plan = W4.plan_cards(
+        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: None}, card_findings={FX.SITE_A: [finding]}
+    )
     (row,) = plan.rows
     assert (row.test_id, row.old_value, row.new_value) == ("P5/card-clear", FX.OLD_CARD, None)
     assert row.evidence["phase3_findings"] == [finding]
@@ -942,13 +1090,15 @@ def test_a_clear_without_its_phase3_finding_is_refused_loudly(tmp_path: Path, fi
     flagged = FX.plan_site(flags=[M.SiteFlag.CLEARED_CARD_DEFECT])
     batch = _batch(tmp_path, sites=[flagged], holds=[_hold(FX.SITE_A, M.HoldReason.NO_SOURCE)])
     with pytest.raises(W4.PlanInputError, match="without its evidence"):
-        W4.plan_cards(batch, written={}, card_findings=findings)
+        W4.plan_cards(batch, scope=FX.EVERY_SITE, written={}, card_findings=findings)
 
 
 def test_a_card_longer_than_the_column_is_refused(tmp_path: Path) -> None:
     long_card = "A" * 201
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly(card=long_card)])
-    plan = W4.plan_cards(batch, written={FX.SITE_A: M.text_sha256(long_card)}, card_findings={})
+    plan = W4.plan_cards(
+        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(long_card)}, card_findings={}
+    )
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_CARD_TOO_LONG
 
 
@@ -957,7 +1107,9 @@ def test_a_p5_card_is_written_and_its_hash_matches_the_live_provenance(tmp_path:
     p4 = _p4(batch)
     db = _db(FX.SITE_A)
     db(W4.render_apply(W4.chunk_for(p4)), host="fake")
-    plan = W4.plan_cards(batch, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={})
+    plan = W4.plan_cards(
+        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+    )
     chunk, out = _written(tmp_path, plan)
     outcome = W4.apply_chunk(chunk, out=out, rehearse=False, runner=db)
     assert outcome.ok and db.sites[FX.SITE_A].card == FX.CARD
@@ -968,7 +1120,9 @@ def test_the_card_invariant_refuses_a_card_the_provenance_does_not_name(tmp_path
     db = _db(FX.SITE_A)
     db(W4.render_apply(W4.chunk_for(_p4(batch))), host="fake")
     db.sites[FX.SITE_A].raw_data[M.PROVENANCE_KEY]["card"]["text_sha256"] = "0" * 64
-    plan = W4.plan_cards(batch, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={})
+    plan = W4.plan_cards(
+        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+    )
     with pytest.raises(W.WriteRefused, match="invariant 4"):
         db(W4.render_apply(W4.chunk_for(plan)), host="fake")
 

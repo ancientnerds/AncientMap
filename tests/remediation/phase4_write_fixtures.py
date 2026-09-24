@@ -27,11 +27,32 @@ from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402
+from phase4 import scope4 as S  # noqa: E402
 from phase4 import write4 as W4  # noqa: E402
 
 SITE_A = "4a5a324f-0000-4000-8000-000000000001"
 SITE_B = "318414bc-0000-4000-8000-000000000002"
 SITE_C = "72980dbd-0000-4000-8000-000000000003"
+
+
+def scope(*site_ids: str) -> S.DefectScope:
+    """A defect scope of exactly these sites, each on the cleared-card list."""
+    return S.DefectScope(
+        version=S.SCOPE_VERSION,
+        sha256="d" * 64,
+        sites=dict.fromkeys(site_ids, (S.CLEARED_CARD,)),
+    )
+
+
+class EverySite(S.DefectScope):
+    """A defect scope that holds every site: the scope the writer's tests of its other rules plan
+    under. The owner's rule itself is asked with `scope(...)` and with real scope files."""
+
+    def __contains__(self, site_id: object) -> bool:
+        return True
+
+
+EVERY_SITE = EverySite(version=S.SCOPE_VERSION, sha256="e" * 64, sites={})
 BATCH = "p4-0003"
 REVID = 1234567
 TITLE = "Tarxien Temples"

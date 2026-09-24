@@ -54,6 +54,12 @@ Which lanes may write (`--open-lanes`) is the pilot's verdict, and lanes T and R
 audit's cleared list (`--audited`, one site id per line). The verifier is `phase4.verify4`
 (`verify_site`, V1-V15), imported when group P4 is planned.
 
+**Every group plans under the owner's defect scope** (decision 2026-09-23, `phase4/scope4.py`):
+`SCOPE4.json`, read only when its bytes hash to the pin in `scope4.SCOPE_SHA256`. A site outside it
+is refused (`outside-defect-scope`, counted on the "refused by rule" line) in P4, L and P5 alike.
+There is no flag to switch it off: it is the owner's standing decision, and a new scope is a new
+pinned version, never an option of this tool.
+
 Every run prints its own `WRITE_EXIT=` line; that line is what is read.
 """
 
@@ -79,6 +85,7 @@ from phase3 import write_stage as W  # noqa: E402
 from phase3.run import read_jsonl  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402 - the reversal read: what "reverted" means
+from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 from phase4 import write4 as W4  # noqa: E402
 
 APPLIED_FILE = "APPLIED.json"
@@ -199,6 +206,15 @@ def phase3_card_findings(
             }
         )
     return findings
+
+
+def _defect_scope() -> S.DefectScope:
+    """The owner's defect scope: the pinned `SCOPE4.json` and no other. A file that is not the pin
+    ends the run (`WRITE_EXIT=1`) before anything is planned."""
+    try:
+        return S.load_scope()
+    except S.ScopeError as exc:
+        raise SystemExit(str(exc)) from None
 
 
 def _verifier() -> W4.Verifier:
@@ -634,9 +650,14 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         return close_reverted_step(apply_root, runner=runner, host=args.host)
     batches = [W4.load_batch(path) for path in batch_dirs(run_dir, args.batch)]
     site_ids = [site.site_id for batch in batches for site in batch.sites]
+    scope = _defect_scope()
     print(f"group {group.value} | run {run_dir} | apply root {apply_root} | {len(batches)} batches")
+    print(
+        f"defect scope: {scope.label}, {len(scope.sites)} sites (owner decision 2026-09-23): "
+        f"{sum(site_id in scope for site_id in site_ids)} of the run's {len(site_ids)} sites"
+    )
 
-    options: dict[str, Any] = {}
+    options: dict[str, Any] = {"scope": scope}
     if group is W4.Group.P4:
         options["open_lanes"] = open_lanes(args.open_lanes)
         if not options["open_lanes"]:
