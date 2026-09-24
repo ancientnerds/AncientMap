@@ -132,13 +132,32 @@ def test_the_globe_query_reads_how_the_unreached_loads_ended():
     assert ":since" not in sub and ":until" not in sub
     assert "e2.website_id = :website_id" in sub and "e2.url_path = :path" in sub
     # Before it, per load and not per session: an Umami session is one browser
-    # for a calendar month, so its loads after the endings began are measured.
+    # for a calendar month, so it holds loads from both sides.
     flat = " ".join(sql.split())
-    before = "(f.endings_since IS NULL OR created_at < f.endings_since)"
+    before = "(m.measured_from IS NULL OR created_at < m.measured_from)"
     assert f"WHERE event_type = 1 AND {before}) AS views_before" in flat
     assert f"WHERE event_name = 'globe_ready' AND {before}) AS ready_before" in flat
-    assert "FROM ev CROSS JOIN first_ending f" in flat
+    assert "FROM ev LEFT JOIN measured m USING (session_id)" in flat
     assert "AS first_view" not in sql
+    # Except the session's first load at or after endings_since, when the session
+    # had opened the globe before it: the globe page installed the service
+    # worker, which serves globe.html and its JS cache-first, so that load still
+    # ran the previous build, which sends no ending
+    # (ancient-nerds-map/src/pwa/globeStartPrecache.ts). The next one is measured.
+    sub = " ".join(sql[sql.index("measured AS (") : sql.index("SELECT session_id,")].split())
+    assert (
+        "CASE WHEN bool_or(v.created_at < f.endings_since) "
+        "THEN (array_agg(v.created_at ORDER BY v.created_at) "
+        "FILTER (WHERE v.created_at >= f.endings_since))[2] "
+        "ELSE f.endings_since END AS measured_from"
+    ) in sub
+    # The session's whole history on the path, not the window: the view before the
+    # endings began can lie before :since while the stale load lies inside it
+    assert ":since" not in sub and ":until" not in sub
+    assert "v.website_id = :website_id AND v.url_path = :path AND v.event_type = 1" in sub
+    assert "v.session_id IN (SELECT session_id FROM ev)" in sub
+    assert "FROM website_event v CROSS JOIN first_ending f" in sub
+    assert "GROUP BY v.session_id, f.endings_since" in sub
 
 
 def test_the_ending_events_the_globe_query_reads_are_in_the_frontend_taxonomy():

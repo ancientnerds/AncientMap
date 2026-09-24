@@ -661,15 +661,18 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     is an error: it is a start failure, and uncounted it would read as a
     crash. What no ending claims is `no_signal` - the page loaded and nothing
     else arrived (a crashed tab, or a visitor gone before the tracker loaded) -
-    except the loads that came before the first ending event was ever recorded
-    and did not reach the globe (SQL_GLOBE's `views_before` minus
-    `ready_before`, capped like `ready`). Such a load could not have sent one,
-    so it is `unmeasured`: otherwise every load from before the
+    except the loads that ran a build without the endings and did not reach
+    the globe (SQL_GLOBE's `views_before` minus `ready_before`, capped like
+    `ready`): the loads before the first ending event was ever recorded, and
+    a returning visitor's first load after it, which the service worker
+    still served from the previous build. Such a load could not have sent
+    one, so it is `unmeasured`: otherwise every load from before the
     instrumentation would read as a crash for as long as the window reaches
     back. This is counted per load, not per session: an Umami session is one
-    browser for a calendar month, and its silent loads after the endings
-    began are `no_signal`. Endings still claim loads first, and the
-    unmeasured part is capped by what they leave.
+    browser for a calendar month, and its silent loads on the new build are
+    `no_signal`. SQL_GLOBE's comment names the stale loads it cannot tell
+    apart. Endings still claim loads first, and the unmeasured part is
+    capped by what they leave.
 
     `abandon_ms` is capped where `ready_ms` is not: only the abandons that the
     split actually counted feed it, the latest ones of the session. A

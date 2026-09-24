@@ -245,7 +245,15 @@ describe('GlobeReach', () => {
 
   it('names the loads from before the endings were recorded while there are any', () => {
     const older = { ...some, not_reached: { ...some.not_reached, no_signal: 0, unmeasured: 2 } }
-    expect(renderToString(<GlobeReach state={ok(older)} />)).toContain('Before these were recorded')
+    const html = renderToString(<GlobeReach state={ok(older)} />)
+    expect(html).toContain('Before these were recorded')
+    // The stale first load after the deploy belongs there too: the service worker
+    // served it from the previous build, which sends no ending (SQL_GLOBE)
+    expect(html).toContain(
+      'Before these were recorded: loads from before the globe started reporting how a load ends, and the first load after that by a returning visitor, which their browser still ran from the previous build.',
+    )
+    // Not all of them: a returning visitor from an earlier month is a new Umami session
+    expect(html).toContain('Some of those still land in No signal: to Umami a visit in an earlier month is another visitor.')
   })
 
   it('prints one sentence instead of an all-zero list when every load arrived', () => {

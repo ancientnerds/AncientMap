@@ -341,17 +341,36 @@ GLOBE_PATH = "/globe.html"
 #:                   the phone gate went away (analytics/globeAbandon.ts
 #:                   createLoadClock) - reading the gate is no loading wait.
 #:                   ready_ms counts from navigation, the gate included.
-#:   views_before  - the session's page views before endings_since, the first
-#:                   ending event ever recorded on the path (not the first in
-#:                   the window): the moment the instrumentation went live. A
-#:                   load before it cannot have sent an ending, so if it did
-#:                   not reach the globe it is "unmeasured", not "no signal".
+#:   views_before  - the session's page views that ran a build without the
+#:                   endings, so if they did not reach the globe they are
+#:                   "unmeasured", not "no signal". The cut is measured_from:
+#:                   - endings_since, the first ending event ever recorded on
+#:                     the path (not the first in the window): the moment the
+#:                     instrumentation went live. Every view while no ending
+#:                     exists yet.
+#:                   - For a session that opened the globe before it, the
+#:                     second view at or after it: the globe page installed
+#:                     the service worker, which serves globe.html and its JS
+#:                     cache-first, so the first load after the deploy still
+#:                     ran the previous build and the next one runs the new
+#:                     (src/pwa/globeStartPrecache.ts). No such view yet: all
+#:                     of the session's views.
 #:                   Counted per load, not decided per session: an Umami
 #:                   session is one browser for a calendar month, so it holds
-#:                   loads from both sides, and the later ones are measured.
-#:                   Every view while no ending exists yet.
-#:   ready_before  - the session's globe_ready events before endings_since:
-#:                   the loads before it that reached the globe.
+#:                   loads from both sides. The `measured` CTE reads the
+#:                   session's whole history on the path, not the window: the
+#:                   view before the endings began can lie before :since.
+#:                   What this cannot see, so a stale first load still reads
+#:                   as "no signal": a browser whose earlier globe visit fell
+#:                   in an earlier month (another Umami session), or whose
+#:                   worker came from another page. The other way round, one
+#:                   view too many counts as before when the session's first
+#:                   load after the deploy came before the first ending, or
+#:                   when another page had already switched it to the new
+#:                   worker.
+#:   ready_before  - the session's globe_ready events before measured_from:
+#:                   the loads before it that reached the globe, the stale
+#:                   first load after the deploy included.
 #: choice and phase are strings (event_data.string_value); ms is a number and
 #: lives in number_value.
 SQL_GLOBE = """
@@ -372,6 +391,17 @@ ev AS (
     WHERE e.website_id = :website_id AND e.url_path = :path
       AND e.created_at >= :since AND e.created_at < :until
     GROUP BY e.event_id, e.session_id, e.created_at, e.event_type, e.event_name
+),
+measured AS (
+    SELECT v.session_id,
+           CASE WHEN bool_or(v.created_at < f.endings_since)
+                THEN (array_agg(v.created_at ORDER BY v.created_at)
+                          FILTER (WHERE v.created_at >= f.endings_since))[2]
+                ELSE f.endings_since END AS measured_from
+    FROM website_event v CROSS JOIN first_ending f
+    WHERE v.website_id = :website_id AND v.url_path = :path AND v.event_type = 1
+      AND v.session_id IN (SELECT session_id FROM ev)
+    GROUP BY v.session_id, f.endings_since
 )
 SELECT session_id,
        count(*) FILTER (WHERE event_type = 1)             AS views,
@@ -398,10 +428,10 @@ SELECT session_id,
                NULL),
            ARRAY[]::float8[]) AS abandon_ms,
        count(*) FILTER (WHERE event_type = 1
-                          AND (f.endings_since IS NULL OR created_at < f.endings_since)) AS views_before,
+                          AND (m.measured_from IS NULL OR created_at < m.measured_from)) AS views_before,
        count(*) FILTER (WHERE event_name = 'globe_ready'
-                          AND (f.endings_since IS NULL OR created_at < f.endings_since)) AS ready_before
-FROM ev CROSS JOIN first_ending f
+                          AND (m.measured_from IS NULL OR created_at < m.measured_from)) AS ready_before
+FROM ev LEFT JOIN measured m USING (session_id)
 GROUP BY session_id
 """
 

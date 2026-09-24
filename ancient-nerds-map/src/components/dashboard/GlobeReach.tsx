@@ -121,7 +121,10 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
                 the page loaded and nothing else arrived — a crashed tab, or a visitor gone before the
                 tracker loaded.
                 {g.not_reached.unmeasured > 0 &&
-                  ' Before these were recorded: loads from before the globe started reporting how a load ends.'}
+                  ' Before these were recorded: loads from before the globe started reporting how a load ends,' +
+                    ' and the first load after that by a returning visitor, which their browser still ran from' +
+                    ' the previous build. Some of those still land in No signal: to Umami a visit in an earlier' +
+                    ' month is another visitor.'}
               </p>
             </>
           )}

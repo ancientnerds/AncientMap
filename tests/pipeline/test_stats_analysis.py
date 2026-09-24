@@ -818,12 +818,37 @@ def test_globe_funnel_calls_everything_unmeasured_before_any_ending_was_sent():
 def test_globe_funnel_calls_a_silent_load_after_the_endings_began_no_signal_in_a_session_from_before():
     """An Umami session is one browser for a calendar month, so one session
     holds loads from before and after the instrumentation went live. A silent
-    load after it could have sent an ending: it is the crash signature, not
-    "before these were recorded". Measured on a row from the audit: the load
-    of 2026-09-20 reached the globe, the one of 2026-09-26 crashed."""
-    row = _globe_row("month", views=2, ready=1, ready_ms=[8000.0], views_before=1, ready_before=1)
+    load that ran the new build could have sent an ending: it is the crash
+    signature, not "before these were recorded". The load of 2026-09-20
+    reached the globe; the first one after the deploy (09-26) ran the previous
+    build from the service-worker cache and reached it too, so SQL_GLOBE counts
+    both "before"; the one of 09-27 crashed."""
+    row = _globe_row(
+        "month", views=3, ready=2, ready_ms=[8000.0, 7000.0], views_before=2, ready_before=2
+    )
     out = fs.globe_funnel([row])
     assert out["not_reached"]["no_signal"] == 1 and out["not_reached"]["unmeasured"] == 0
+
+
+def test_globe_funnel_calls_the_stale_first_load_after_the_deploy_unmeasured():
+    """The first load after the deploy of a browser that had opened the globe
+    before ran the previous build, served cache-first by the service worker,
+    which sends no ending (SQL_GLOBE counts it "before"). One view before the
+    endings began, the stale load after it, both unreached, then a silent
+    crash on the new build: two unmeasured, one no signal."""
+    row = _globe_row("month", views=3, views_before=2)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["unmeasured"] == 2 and out["not_reached"]["no_signal"] == 1
+    assert sum(out["not_reached"].values()) == out["gave_up"]
+
+
+def test_globe_funnel_calls_the_stale_load_unmeasured_when_the_earlier_one_reached_the_globe():
+    """The review's row: 09-20 reached the globe, the deploy followed, and on
+    09-26 the old service worker served the old bundle and the visitor left
+    while it loaded. That load could not have sent globe_abandon."""
+    row = _globe_row("month", views=2, ready=1, ready_ms=[8000.0], views_before=2, ready_before=1)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 0
 
 
 def test_globe_funnel_calls_unmeasured_only_as_many_loads_as_went_unreached_before():
