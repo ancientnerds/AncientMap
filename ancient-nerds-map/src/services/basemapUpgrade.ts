@@ -44,6 +44,12 @@
  * - Synchronous GL queries wait for the GPU process: a `getError` right after
  *   the 16k allocation measured 458-499 ms. The one out-of-memory check runs a
  *   frame after the mip copy. `isContextLost` reads a flag, it is no query.
+ * - GL error flags cannot be attributed to a call, and a strip upload leaves
+ *   its allocation's flag unread for 30+ frames. The gray upgrade (queue task)
+ *   and the satellite (the toggle, its max-tier effect) run independently, so
+ *   one basemap upload runs at a time per context (UploadLock, from allocation
+ *   to check): a check reads the flags of its own upload, and a failed
+ *   allocation is never committed by a load that did not check it.
  *
  * Plain `fetch`, not offlineFetch: the service worker's basemap rule
  * (src/pwa/runtimeCaching) serves these URLs from the 'basemaps' cache, which
@@ -233,6 +239,38 @@ export function swapUniform(materials: THREE.ShaderMaterial[], uniform: BasemapU
   previous.forEach(old => old.dispose())
 }
 
+/**
+ * One basemap upload at a time (see the header). `acquire` resolves with the
+ * release once every earlier holder has released; an abort while waiting
+ * rejects at once with the abort reason and does not hold up later callers.
+ */
+export class UploadLock {
+  private tail: Promise<void> = Promise.resolve()
+
+  acquire(signal: AbortSignal): Promise<() => void> {
+    const previous = this.tail
+    let release!: () => void
+    const released = new Promise<void>(resolve => { release = resolve })
+    this.tail = previous.then(() => released)
+    return new Promise((resolve, reject) => {
+      const onAbort = () => {
+        release()
+        reject(signal.reason)
+      }
+      if (signal.aborted) {
+        onAbort()
+        return
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      void previous.then(() => {
+        if (signal.aborted) return // rejected and released by onAbort
+        signal.removeEventListener('abort', onAbort)
+        resolve(release)
+      })
+    })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Per-kind state and the loaders
 // ---------------------------------------------------------------------------
@@ -315,6 +353,8 @@ export interface BasemapContext {
   tiers: { start: BasemapTier; max: BasemapTier }
   gray: BasemapState
   satellite: BasemapState
+  /** Shared by both kinds: one upload at a time, so each out-of-memory check reads its own upload's flags. */
+  uploads: UploadLock
   nextFrame: (signal: AbortSignal) => Promise<void>
   onSatelliteReady: (ready: boolean) => void
 }
@@ -328,15 +368,26 @@ export interface BasemapContext {
 async function loadTier(ctx: BasemapContext, kind: BasemapKind, tier: BasemapTier, signal: AbortSignal, whole = false): Promise<void> {
   if (ctx.renderer.getContext().isContextLost()) return
   const bitmap = await decodeBasemap(getBasemapAssets(tier)[kind], signal)
+  let release: () => void
+  try {
+    release = await ctx.uploads.acquire(signal)
+  } catch (err) {
+    bitmap.close() // aborted while another upload ran: never uploaded
+    throw err
+  }
   let texture: THREE.Texture
-  if (!whole && tierRank(tier) >= tierRank('med')) {
-    texture = await uploadInStrips(ctx.renderer, bitmap, { rows: STRIP_ROWS, nextFrame: ctx.nextFrame, signal })
-  } else {
-    try {
-      texture = uploadWhole(ctx.renderer, bitmap)
-    } finally {
-      bitmap.close() // on the GPU now; a context restore drops this texture instead of re-uploading it
+  try {
+    if (!whole && tierRank(tier) >= tierRank('med')) {
+      texture = await uploadInStrips(ctx.renderer, bitmap, { rows: STRIP_ROWS, nextFrame: ctx.nextFrame, signal })
+    } else {
+      try {
+        texture = uploadWhole(ctx.renderer, bitmap)
+      } finally {
+        bitmap.close() // on the GPU now; a context restore drops this texture instead of re-uploading it
+      }
     }
+  } finally {
+    release()
   }
   const state = ctx[kind]
   // Uploaded into a lost context: the storage is gone, and releaseOnContextLost

@@ -23,6 +23,7 @@ import {
   upgradeGray,
   uploadInStrips,
   uploadWhole,
+  UploadLock,
   type BasemapContext,
   type Uploader,
 } from '../basemapUpgrade'
@@ -432,6 +433,7 @@ function makeCtx(tiers: BasemapContext['tiers'] = { start: 'med', max: 'high' },
     tiers,
     gray: new BasemapState(),
     satellite: new BasemapState(),
+    uploads: new UploadLock(),
     nextFrame: frames(r.log),
     onSatelliteReady,
   }
@@ -674,6 +676,94 @@ describe('loadSatellite', () => {
     await expect(loadSatellite(ctx, 'high', ctrl.signal)).rejects.toThrow('off')
     expect(ctx.satellite.texture).toBe(med)
     expect(uniformOf(ctx, 'uSatellite').every(v => v === med)).toBe(true)
+  })
+})
+
+/**
+ * GL error flags cannot be attributed to a call: the out-of-memory check reads
+ * whatever flags are set. The 16k gray strips (queue task) and the satellite
+ * (the toggle, its max-tier effect) run outside each other, and a strip upload
+ * leaves its allocation's flag unread for 30+ frames. Only one basemap upload
+ * runs at a time per context, so a check reads the flags of its own upload.
+ */
+describe('one basemap upload at a time', () => {
+  /** An allocation of `width` raises OUT_OF_MEMORY, set until a getError reads it. */
+  function failAllocationOf(ctx: BasemapContext, log: string[], width: number) {
+    let oom = false
+    const init = ctx.renderer.initTexture
+    ctx.renderer.initTexture = vi.fn((t: THREE.Texture) => {
+      init(t)
+      if ((t.image as { width: number }).width === width) oom = true
+    }) as Uploader['initTexture']
+    const gl = ctx.renderer.getContext()
+    ctx.renderer.getContext = vi.fn(() => ({
+      ...gl,
+      getError: () => {
+        log.push('getError')
+        if (!oom) return 0
+        oom = false
+        return OOM
+      },
+    })) as unknown as Uploader['getContext']
+  }
+
+  /** A nextFrame that holds every frame until the returned opener is called; an abort rejects it at once. */
+  function heldFrames(ctx: BasemapContext, log: string[]) {
+    const gate = deferred<void>()
+    ctx.nextFrame = vi.fn((signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+      if (signal.aborted) {
+        reject(signal.reason)
+        return
+      }
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      void gate.promise.then(() => {
+        if (signal.aborted) return
+        log.push('frame')
+        resolve()
+      })
+    }))
+    return () => gate.resolve()
+  }
+
+  it('fails the strip upload whose allocation ran out of memory, not the satellite that started meanwhile', async () => {
+    const dec = stubDecoding(SIZES)
+    const { ctx, log, onSatelliteReady } = makeCtx({ start: 'low', max: 'med' })
+    failAllocationOf(ctx, log, 8192) // tablet: the gray med allocation fails
+    const openFrames = heldFrames(ctx, log)
+    const gray = upgradeGray(ctx, new AbortController().signal).then(() => 'resolved', (err: Error) => err.message)
+    await vi.waitFor(() => expect(log).toContain('init')) // the gray med strips are running
+    const satellite = loadSatellite(ctx, 'low', new AbortController().signal).then(() => 'resolved', (err: Error) => err.message)
+    await vi.waitFor(() => expect(dec.fetched).toContain('/data/basemaps/satellite_low.webp'))
+    await new Promise(resolve => setTimeout(resolve, 0)) // the satellite's decode has landed
+    openFrames()
+    expect(await gray).toMatch(/out of memory/)
+    expect(await satellite).toBe('resolved')
+    expect(ctx.gray.texture).toBe(null) // no storage-less gray committed
+    expect(ctx.satellite.tier).toBe('low')
+    expect(onSatelliteReady).toHaveBeenCalledWith(true)
+    // the satellite's allocation came after the gray's check
+    expect(log.indexOf('getError')).toBeLessThan(log.lastIndexOf('init'))
+  })
+
+  it('a load aborted while it waits for its turn rejects at once, closes its bitmap and does not hold up the next', async () => {
+    const dec = stubDecoding(SIZES)
+    const { ctx, log } = makeCtx({ start: 'low', max: 'med' })
+    const openFrames = heldFrames(ctx, log)
+    const gray = upgradeGray(ctx, new AbortController().signal)
+    await vi.waitFor(() => expect(log).toContain('init'))
+    const off = new AbortController()
+    const waiting = loadSatellite(ctx, 'med', off.signal).then(() => 'resolved', (err: Error) => err.message)
+    await vi.waitFor(() => expect(dec.bitmaps.has('/data/basemaps/satellite_med.webp')).toBe(true))
+    off.abort(new Error('basemap: satellite switched off'))
+    expect(await waiting).toBe('basemap: satellite switched off')
+    expect(dec.bitmaps.get('/data/basemaps/satellite_med.webp')!.close).toHaveBeenCalledTimes(1)
+    expect(log.filter(e => e === 'init')).toHaveLength(1) // it never allocated
+    const next = loadSatellite(ctx, 'low', new AbortController().signal)
+    openFrames()
+    await gray
+    await next
+    expect(ctx.gray.tier).toBe('med')
+    expect(ctx.satellite.tier).toBe('low')
   })
 })
 

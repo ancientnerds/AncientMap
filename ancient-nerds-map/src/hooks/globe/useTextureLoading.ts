@@ -30,6 +30,7 @@ import {
   reloadAfterContextRestored,
   restoreGray,
   upgradeGray as upgradeGrayTier,
+  UploadLock,
   type BasemapContext,
 } from '../../services/basemapUpgrade'
 import { trackBackgroundFailure } from '../../analytics/globeBackground'
@@ -156,6 +157,7 @@ export function useTextureLoading({
       tiers,
       gray: new BasemapState(),
       satellite: new BasemapState(),
+      uploads: new UploadLock(),
       nextFrame: nextAnimationFrame,
       onSatelliteReady: setSatelliteReady,
     }
