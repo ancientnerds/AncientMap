@@ -6,9 +6,10 @@ candidates the routes stage held for a search that is switched off; B3 from the 
 extracts over 40,000 characters), the census read from a run directory, the forbidden anchors of
 `gold_prose_errors.json` and the verbatim threshold blocks. No socket, database or model is touched:
 the production read goes through a recording runner. Pilot 2 (seed 20260924): pilot 1's fixed members
-kept, its draws excluded, its sealed thresholds unchanged. The mutation cases are
-`P4_PILOT_MUTATIONS` and `P4_PILOT2_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py`
-(label `p4 pilot: `).
+kept, its draws excluded, its sealed thresholds unchanged. Pilot 3 (seed 20260925): the same fixed
+members, the draws of pilots 1 and 2 excluded, the thresholds still pilot 1's. The mutation cases are
+`P4_PILOT_MUTATIONS`, `P4_PILOT2_MUTATIONS` and `P4_PILOT3_MUTATIONS` in
+`scripts/remediation/phase3/mutation_sweep.py` (label `p4 pilot: `).
 """
 
 from __future__ import annotations
@@ -829,5 +830,48 @@ def test_the_sealed_pilot_2_keeps_pilot_1s_fixed_members_and_none_of_its_draws()
     ids = [line["site_id"] for line in second]
     assert len(ids) == len(set(ids)) == 132
     strata = [stratum for line in second for stratum in line["strata"]]
+    for stratum, count in PL.DRAWS:
+        assert strata.count(stratum) == count, stratum
+
+
+# ========================================================= pilot 3's seal (2026-09-24, seed 20260925)
+
+#: The audit log's section that sealed pilot 3 before its first model question was exported.
+PILOT3_SECTION = "## 2026-09-24 - Phase-4 pilot 3, sealed before its first model question"
+#: Pilot 3's new draw, and the two documents it keeps from pilot 1, byte for byte.
+SEALED_PILOT3 = {
+    "PILOT3.jsonl": "a4fa2f5ff26676374a48ced6fa249fc530d2003d340647e84581ef87f04152fc",
+    "PILOT_THRESHOLDS.md": SEALED["PILOT_THRESHOLDS.md"],
+    "gold_prose_errors.json": SEALED["gold_prose_errors.json"],
+}
+
+
+def test_pilot_3_is_sealed_with_pilot_1s_thresholds_byte_for_byte() -> None:
+    """Pilot 2's failures changed code, never the thresholds: pilot 3 runs under the document
+    sealed before pilot 1's first question, byte for byte, and the audit log's pilot-3 section
+    records PILOT3.jsonl's digest beside the two unchanged ones before its first export."""
+    section = _section(AUDIT_LOG.read_text(encoding="utf-8"), PILOT3_SECTION)
+    for name, digest in SEALED_PILOT3.items():
+        assert PL._sha256(RUNNER / name) == digest, name
+        assert f"`{digest}`" in section, f"the pilot-3 section does not record {name}'s sha256"
+
+
+def test_the_sealed_pilot_3_keeps_the_fixed_members_and_none_of_the_earlier_draws() -> None:
+    first = R.read_jsonl(RUNNER / "PILOT.jsonl")
+    second = R.read_jsonl(RUNNER / "PILOT2.jsonl")
+    third = R.read_jsonl(RUNNER / "PILOT3.jsonl")
+    fixed, drawn_first = PL.earlier_pilot(first)
+    _, drawn_second = PL.earlier_pilot(second)
+    fixed_third, drawn_third = PL.earlier_pilot(third)
+    assert fixed_third == fixed and len(fixed) == 70
+    lines = [
+        (RUNNER / name).read_bytes().splitlines(keepends=True)
+        for name in ("PILOT.jsonl", "PILOT3.jsonl")
+    ]
+    assert lines[1][:70] == lines[0][:70]  # the same census: the fixed lines, byte for byte
+    assert not (drawn_first | drawn_second) & drawn_third and len(drawn_third) == 62
+    ids = [line["site_id"] for line in third]
+    assert len(ids) == len(set(ids)) == 132
+    strata = [stratum for line in third for stratum in line["strata"]]
     for stratum, count in PL.DRAWS:
         assert strata.count(stratum) == count, stratum

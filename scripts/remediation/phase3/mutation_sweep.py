@@ -17345,6 +17345,23 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4P3_PILOT_TEST,
         "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
     ),
+    # ── pilot 3's seal ─────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: the audit log loses pilot 3's sealed digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`a4fa2f5ff26676374a48ced6fa249fc530d2003d340647e84581ef87f04152fc`",
+        "`mutant`",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+    (
+        "p4 pilot: pilot 3's thresholds are loosened after pilot 2's data",
+        "output/remediation/phase4_runner/PILOT_THRESHOLDS.md",
+        "- T3: 0 lost hedges, negations or restrictions, and 0 flipped meanings from span drops.\n",
+        "- T3: at most 1 lost hedge (mutant).\n",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
 ]
 MUTATIONS += P4_PILOT3_MUTATIONS
 

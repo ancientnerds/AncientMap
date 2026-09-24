@@ -8164,3 +8164,87 @@ the run (or give pilot 2's model rounds their own `--ledger`) before step 6's co
   .vulture_whitelist.py --min-confidence 80` clean.
 * `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
   this branch: merge it while no Phase-3 mass run is in flight.
+
+## 2026-09-24 - Phase-4 pilot 3, sealed before its first model question (no model called, nothing written)
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`). Pilot 2 failed T3, T4, T6 and T8
+(`output/remediation/phase4_runner/PILOT_RESULT_2.md`, commit `5773608`; the audit's verdicts are
+`pilot2_evidence/AUDIT_VERDICTS.json`). Under the failure rule of `PILOT_THRESHOLDS.md` the causes were
+fixed first, each with red-first tests and mutation cases, before this draw:
+
+* `c4614a0` (T3) - the protected tokens gain correction and contrast markers (`actually`, `in fact`,
+  `in reality`, `instead`, `rather`, `whilst`, `nevertheless`, `nonetheless`, `contrary`, `unlike`) and
+  error words (`wrongly`, `mistaken*`, `erroneous*`, `incorrect*`, `misidentif*`, `misattribut*`):
+  House of the Faun's `p` drop removed "(actually a satyr, since the lower body is that of a man)".
+  Over the census run's 4,259 lane-W/S pools (89,072 pool sentences, 86,343 offered spans) **472**
+  offered spans carried one and are offered no more.
+* `fff21ba` (T4/T6) - `pipeline/utils/country_lookup.ISO_TO_DEMONYMS`, the demonym table the design's
+  V10 promises: every one of `NAME_TO_ISO`'s 199 country codes with its nationality adjective and
+  people noun (the retired style rule's `DEMONYM_MAP` kept, completed). V10 holds a card with any
+  country's demonym (plural and `-man` nouns too; an ancient culture's use as well - the safe
+  reading); the selector's card rule (4) says "names no country and no nationality adjective such as
+  Greek or Danish". 3 of pilot 1's 47 and 2 of pilot 2's 49 cards carry one ("a Danish hill", "the
+  first Greek site"); over the census pools 4,924 of 58,622 card-length sentences do, and the sites
+  with a clean whole-sentence card candidate fall from 3,680 to 3,646.
+* `bc17222` (T5) - V5 holds, and S2's pool never offers, a sentence with a full stop before a
+  lowercase word (not after an initialism or a single letter; Bassae "Cotylion Mountain. near") or a
+  preposition of `model4.PREPOSITIONS_NO_COMMA` right before a comma (Vindobala "the hamlet of,
+  Rudchester"): 186 + 66 of the 89,072 pool sentences (251 together); the reviewer question gains
+  "DROP a sentence that is garbled or ungrammatical, even when it copies the source word for word."
+  (Bejsebakke). Selector question `ce36085f...`, reviewer question `59a1714e...`.
+* `1d5049b` (T8) - for a strong 'own' verdict V6 (and S3, in its own code) accepts the stored name's
+  base, `X (Y)` -> X and `X, Y` -> X; never for another verdict (Clare, Suffolk; Argos, Peloponnese;
+  Marion, Cyprus stay held). Re-verified on a scratch copy of pilot 2's run: V6 holds **16 -> 14**
+  (Partiscum (Castra); Al Thumamah, Riyadh). The same re-verification now holds House of the Faun (V4,
+  `actually`), Arc de Berà (V4, `erroneous*`), Bassae and Vindobala (V5) and the Danish, Greek,
+  Australian and British cards (V10).
+* `f7886af` (pilot 2's open item) - every run has its own ledger, `<run>/LEDGER.jsonl`
+  (`model4.LEDGER_FILE`); run4, mass4 and write_gate4 take no other, so pilot 1's calls in the shared
+  batch ids can never enter pilot 2's (or 3's) journal evidence.
+* `a1a5181` - `pilot4.py build --after` once per earlier pilot.
+
+**Nothing was written to production; no model and no MiniMax endpoint was called; production was not
+read for this draw** (the census, the export and the routeless read are pilot 1's, digests below).
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \
+        --after PILOT.jsonl --after PILOT2.jsonl --seed 20260925 --out PILOT3.jsonl
+
+(2026-09-24 06:59:32 UTC.) With this code, `build` without `--after` still writes pilot 1's
+`PILOT.jsonl` and `--after PILOT.jsonl --seed 20260924` pilot 2's `PILOT2.jsonl`, each byte for byte.
+
+### The pilot set (`PILOT3.jsonl`, 132 sites)
+
+Fixed, 70 sites: **exactly pilots 1's and 2's fixed members** - `build` refuses any list that is not
+each earlier pilot's fixed lines, site for site and in order; the 70 lines are byte-identical to the
+first 70 of `PILOT.jsonl` and of `PILOT2.jsonl`. The seeded strata are drawn anew with seed
+**20260925**, each excluding everything placed before it **and all 124 seeded draws of pilots 1 and
+2**: 0 sites of either earlier draw are in pilot 3.
+
+| stratum | asked | population | eligible | taken |
+|---|---|---|---|---|
+| draw-W (census lane W) | 30 | 3,887 | 3,776 | 30 |
+| draw-S (census lane S) | 8 | 372 | 344 | 8 |
+| draw-T-candidate | 6 | 38 | 26 | 6 |
+| draw-R-candidate | 8 | 252 | 235 | 8 |
+| draw-B3-routeless | 5 | 20 | 10 | 5 |
+| draw-extract-over-40000 | 5 | 65 | 53 | 5 (4 W, 1 S) |
+
+No stratum was smaller than asked. The census lanes of the 132: **W 78, S 18, 0 36**, as in pilot 2.
+The T and R strata are again candidates held `search-stopped` (searches off, owner order
+2026-09-23), reported and never guessed into a lane. The B3 stratum had 10 routeless sites left of
+20; a fourth pilot could draw only 5 more.
+
+### The sealed artefacts
+
+| file | sha256 |
+|---|---|
+| `output/remediation/phase4_runner/PILOT3.jsonl` (new) | `a4fa2f5ff26676374a48ced6fa249fc530d2003d340647e84581ef87f04152fc` |
+| `output/remediation/phase4_runner/PILOT_THRESHOLDS.md` (pilot 1's, unchanged) | `64ac53341068234c905cff00095a9d7244cd4703353f63bbd0997add63fe0c13` |
+| `output/remediation/phase4_runner/gold_prose_errors.json` (pilot 1's, unchanged) | `e4e63d56cbc9cca0f9cea018967fac40e897faddb9c43ad064e6203a74ebb7df` |
+
+The thresholds are the ones sealed before pilot 1's first question, byte for byte: nothing in them
+was changed or loosened after pilot 1's or pilot 2's data was seen (`test_phase4_pilot.py` pins all
+three digests to this section). The draw's inputs: `PILOT.jsonl` `7f66f987...e063fc`, `PILOT2.jsonl`
+`9caaaa03...cc9f81c`, `PLAN4.census.jsonl` `644b9032...d4676b591`, `S0_ROUTELESS.json`
+`81c3b426...37997746`, `gold_standard/sites.json` `18653fc1...b2756`, `qid_repair/PLAN.jsonl`
+`9d57b431...a6ce4f`.
