@@ -851,7 +851,7 @@ function AppContent() {
 
       // NOW show the globe (default source is loaded)
       setIsLoading(false)
-      // Monotonic: the layers may have finished first (the bar is at 100 then)
+      // Monotonic: the layers may have finished first (the bar is at 90 then)
       setLoadingProgress(p => Math.max(p, 65))
       markStartProgress('sites')
       // Note: Additional sources are NOT loaded automatically - user must click "Load Sources" button
@@ -1658,6 +1658,10 @@ function AppContent() {
   // The overlay fades as soon as the sites, the critical layers and (focus mode)
   // the focus site's position are in; the warp starts with the fade.
   const loadingComplete = !isLoading && layersReady && focusResolved
+  // The bar's 100 %, the READY stamp and ALL SYSTEMS NOMINAL mean this moment too
+  useEffect(() => {
+    if (loadingComplete) setLoadingProgress(100)
+  }, [loadingComplete])
   useEffect(() => {
     if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)
   }, [loadingComplete, overlayRendered, overlayFading])
@@ -1724,12 +1728,12 @@ function AppContent() {
   }, [startWatched])
 
   // The critical layers are in. The load is not ready yet: the overlay may still wait
-  // for the sites or the focus lookup (globe_ready: useGlobeReady, above)
+  // for the sites or the focus lookup (globe_ready: useGlobeReady, above), so the bar
+  // stops short of 100 % and the status keeps naming the step still pending
   const handleLayersReady = useCallback(() => {
-    updateLoadingStatus('Map layers ready!')
-    setLoadingProgress(100)
+    setLoadingProgress(p => Math.max(p, 90))
     setLayersReady(true)
-  }, [updateLoadingStatus])
+  }, [])
 
   // Standalone mode: show only the popup in a minimal container
   if (standaloneSiteId) {
@@ -1795,7 +1799,7 @@ function AppContent() {
             <div className="loading-ct" /><div className="loading-ctr" />
             <div className="loading-cbl" /><div className="loading-cbr" />
             <div className="loading-bar-header">
-              <span className="loading-bar-stamp">{webglLost ? 'GPU LOST' : layersReady ? 'READY' : 'LOADING'}</span>
+              <span className="loading-bar-stamp">{webglLost ? 'GPU LOST' : loadingComplete ? 'READY' : 'LOADING'}</span>
               {downloadedMB > 0.1 && <span className="loading-bar-counter">{downloadedMB.toFixed(1)} MB</span>}
               {downloadSpeed && <span className="loading-bar-speed">{downloadSpeed}</span>}
             </div>
@@ -1807,7 +1811,7 @@ function AppContent() {
                 <div key={i} className={`loading-bar-led led-${i}`} />
               ))}
             </div>
-            <div className="loading-text">{webglLost ? 'GRAPHICS CONTEXT LOST' : layersReady ? 'ALL SYSTEMS NOMINAL' : loadingStatus.toUpperCase()}</div>
+            <div className="loading-text">{webglLost ? 'GRAPHICS CONTEXT LOST' : loadingComplete ? 'ALL SYSTEMS NOMINAL' : loadingStatus.toUpperCase()}</div>
             {/* The button takes the hint's place rather than joining it: the bar
                 keeps its height, and the visitor gets the one action left. */}
             {webglLost ? (

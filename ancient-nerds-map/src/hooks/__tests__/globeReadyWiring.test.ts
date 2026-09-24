@@ -41,6 +41,18 @@ describe('App: globe_ready when the overlay fades', () => {
     expect(layersReady).not.toMatch(/globe_ready|endingLatch|globeReadyRef/)
   })
 
+  it("the overlay says READY at the same moment, not when the layers alone are in", () => {
+    // The layers often land before the sites (the Globe mounts in parallel with the sites
+    // fetch): the bar, stamp and text must keep showing the step still pending
+    const layersReady = callbackBody(app, 'handleLayersReady')
+    expect(layersReady).not.toContain('setLoadingProgress(100)')
+    expect(layersReady).not.toContain('updateLoadingStatus(')
+    expect(app).toContain("{webglLost ? 'GPU LOST' : loadingComplete ? 'READY' : 'LOADING'}")
+    expect(app).toContain("{webglLost ? 'GRAPHICS CONTEXT LOST' : loadingComplete ? 'ALL SYSTEMS NOMINAL' : loadingStatus.toUpperCase()}")
+    expect(app).toContain('if (loadingComplete) setLoadingProgress(100)')
+    expect(app).not.toMatch(/layersReady \? '(READY|ALL SYSTEMS NOMINAL)'/)
+  })
+
   it('sends globe_ready from useGlobeReady only', () => {
     expect(app).not.toContain("track('globe_ready'")
     expect(read('components/Globe.tsx')).not.toContain("track('globe_ready'")
