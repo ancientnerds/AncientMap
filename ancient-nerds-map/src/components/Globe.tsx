@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SiteData, getDataSource } from '../data/sites'
 import { FilterMode } from '../App'
-import { offlineFetch } from '../services/OfflineFetch'
+import { OfflineFetch, offlineFetch } from '../services/OfflineFetch'
 import { runMapboxLoadTask } from '../services/mapboxLoader'
 import { browserQueueScheduling } from '../services/globeBackgroundQueue'
 import { useGlobeBackgroundQueue, type GlobeBackgroundRuns } from '../hooks/globe/useGlobeBackgroundQueue'
@@ -65,6 +65,7 @@ import {
   loadVectorLayer as loadVectorLayerImpl,
   pickLayersToLoad,
   preloadRiversLakes,
+  resumeDeferredGlobeLayers,
   upgradeGlobeLayers,
   type HiresCoastlineGate,
   type ParseLayer,
@@ -2321,6 +2322,17 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     controls.addEventListener('change', onChange)
     return () => controls.removeEventListener('change', onChange)
   }, [buildVectorRendererContext])
+
+  // The `layers` task defers a detail tier app offline mode cannot fetch (nothing cached);
+  // switching offline mode off loads it, so coastlines and borders do not stay coarse
+  useEffect(() => OfflineFetch.onOfflineModeChange(offline => {
+    if (offline) return
+    resumeDeferredGlobeLayers(buildVectorRendererContext())?.catch((err: unknown) => {
+      // Unmounted while it loaded: cancelled, not failed
+      if (isAbortError(err)) return
+      trackBackgroundFailure('layers', err)
+    })
+  }), [buildVectorRendererContext])
 
   // Handle layer visibility changes with fade animation (unified)
   useEffect(() => {

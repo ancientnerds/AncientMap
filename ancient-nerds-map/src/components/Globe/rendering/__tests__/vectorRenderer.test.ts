@@ -30,6 +30,7 @@ import {
   loadVectorLayer,
   pickLayersToLoad,
   preloadRiversLakes,
+  resumeDeferredGlobeLayers,
   upgradeGlobeLayers,
   upgradeLayerTier,
   type ParseLayer,
@@ -200,7 +201,7 @@ describe('loadVectorLayer', () => {
     expect(ctx.shaderMaterialsRef.current).toEqual([front.material, back.material])
     expect(loaded.coastlines).toBe(true)
     expect(bothExistedWhenLoaded).toBe(true)
-    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'start', inFlight: {}, failed: {} })
+    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'start', inFlight: {}, failed: {}, deferred: false })
   })
 
   it('fades a visible layer in from zero, front and back, as today', async () => {
@@ -429,7 +430,7 @@ describe('upgradeLayerTier', () => {
     expect(fade).not.toHaveBeenCalled()
     expect(ctx.setIsLoadingLayers).not.toHaveBeenCalled()
     expect(ctx.setLayersLoaded).not.toHaveBeenCalled()
-    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'detail', inFlight: {}, failed: {} })
+    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'detail', inFlight: {}, failed: {}, deferred: false })
   })
 
   it('never downgrades: a detail tier that arrives after hires is discarded', async () => {
@@ -556,6 +557,58 @@ describe('upgradeGlobeLayers', () => {
     expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('detail')
     expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
     expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
+  })
+
+  it('defers a detail tier app offline mode cannot fetch, and loads it once offline mode is off', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    await startTier('countryBorders', ctx)
+    routes.set(COAST_DETAIL, { features: lines(2) })
+    routes.set(BORDERS_DETAIL, { features: lines(2) })
+    // The Offline-Mode button during the intro, or one browser 'offline' event; nothing cached
+    vi.stubGlobal('caches', { open: async () => ({ match: async () => undefined }) })
+    OfflineFetch.setOfflineMode(true)
+    try {
+      // Not now is not failed: no rejection (no false globe_error{bg:layers}), no barred tier
+      await expect(upgradeGlobeLayers(ctx, new AbortController().signal)).resolves.toBeUndefined()
+      expect(fetched.slice(2)).toEqual([])
+      expect(ctx.globeLayerTiersRef.current.coastlines.failed).toEqual({})
+      expect(ctx.globeLayerTiersRef.current.countryBorders.failed).toEqual({})
+      expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('start')
+      expect(resumeDeferredGlobeLayers(ctx)).toBeNull() // still offline
+    } finally {
+      OfflineFetch.setOfflineMode(false)
+    }
+    await resumeDeferredGlobeLayers(ctx)
+    expect(fetched.slice(2)).toEqual([COAST_DETAIL, BORDERS_DETAIL])
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('detail')
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
+    expect(resumeDeferredGlobeLayers(ctx)).toBeNull() // nothing deferred any more
+  })
+
+  it('offline, loads a detail tier a Coastlines download holds', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    await startTier('countryBorders', ctx)
+    const body = JSON.stringify({ type: 'FeatureCollection', features: lines(2) })
+    vi.stubGlobal('caches', {
+      open: async () => ({ match: async (url: string) => (url === COAST_DETAIL ? new Response(body) : undefined) }),
+    })
+    OfflineFetch.setOfflineMode(true)
+    try {
+      await upgradeGlobeLayers(ctx, new AbortController().signal)
+    } finally {
+      OfflineFetch.setOfflineMode(false)
+    }
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('detail')
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('start')
+    expect(fetched.slice(2)).toEqual([])
+  })
+
+  it('Globe resumes the deferred tiers when app offline mode is switched off', async () => {
+    const { readFileSync } = await import('node:fs')
+    const globe = readFileSync(new URL('../../../Globe.tsx', import.meta.url), 'utf-8')
+    expect(globe).toMatch(/OfflineFetch\.onOfflineModeChange\(offline => \{\s*if \(offline\) return\s*resumeDeferredGlobeLayers\(buildVectorRendererContext\(\)\)/)
   })
 })
 

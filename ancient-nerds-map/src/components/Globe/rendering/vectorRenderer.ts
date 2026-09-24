@@ -494,11 +494,33 @@ async function loadTier(layerKey: GlobeLayerKey, tier: UpgradeTier, ctx: VectorR
   state.committed = tier
 }
 
-/** Background task `layers`: coastlines and borders to their detail tier. */
-export async function upgradeGlobeLayers(ctx: VectorRendererContext, signal: AbortSignal): Promise<void> {
-  for (const key of GLOBE_LAYER_KEYS) {
-    await upgradeLayerTier(key, 'detail', ctx, signal)
+/**
+ * Background task `layers`: coastlines and borders to their detail tier. In app offline mode a
+ * detail file no cache holds is not fetched (offlineFetch would refuse it without asking the
+ * network, and the refusal would bar the tier for the session): the layer is marked deferred,
+ * like preloadRiversLakes skips such files, and resumeDeferredGlobeLayers loads it later.
+ */
+export async function upgradeGlobeLayers(
+  ctx: VectorRendererContext,
+  signal: AbortSignal,
+  keys: readonly GlobeLayerKey[] = GLOBE_LAYER_KEYS,
+): Promise<void> {
+  for (const key of keys) {
+    const state = ctx.globeLayerTiersRef.current[key]
+    state.deferred = OfflineFetch.isOffline && !(await OfflineFetch.isCached(getGlobeLayerUrl(key, 'detail')))
+    if (!state.deferred) await upgradeLayerTier(key, 'detail', ctx, signal)
   }
+}
+
+/**
+ * App offline mode is off: the detail tiers the `layers` task deferred. Null while offline
+ * mode is on or nothing is deferred; otherwise the load, which rejects like the task would.
+ */
+export function resumeDeferredGlobeLayers(ctx: VectorRendererContext): Promise<void> | null {
+  if (OfflineFetch.isOffline) return null
+  const keys = GLOBE_LAYER_KEYS.filter(key => ctx.globeLayerTiersRef.current[key].deferred)
+  if (keys.length === 0) return null
+  return upgradeGlobeLayers(ctx, ctx.signal, keys)
 }
 
 /**
