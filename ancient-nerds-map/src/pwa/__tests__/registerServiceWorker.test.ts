@@ -80,3 +80,71 @@ describe('registerServiceWorker', () => {
     await expect(registerServiceWorker()).rejects.toBe(refusal)
   })
 })
+
+/** A worker that moves through its states when the test says so. */
+function fakeWorker(state: ServiceWorkerState) {
+  const listeners = new Set<() => void>()
+  const worker = {
+    state,
+    addEventListener: (_type: string, cb: () => void) => { listeners.add(cb) },
+    removeEventListener: (_type: string, cb: () => void) => { listeners.delete(cb) },
+  }
+  return {
+    worker,
+    listeners,
+    move(next: ServiceWorkerState) {
+      worker.state = next
+      for (const cb of [...listeners]) cb()
+    },
+  }
+}
+
+describe('ensureServiceWorkerActive (before an offline download)', () => {
+  it('resolves at once when a worker is active', async () => {
+    const register = vi.fn().mockResolvedValue({ active: {}, installing: null, waiting: null })
+    stubPage({ readyState: 'complete', register })
+    const { ensureServiceWorkerActive } = await import('../registerServiceWorker')
+    await expect(ensureServiceWorkerActive()).resolves.toBeUndefined()
+    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' })
+  })
+
+  it('waits until the first worker has installed (its precache) and activated', async () => {
+    const w = fakeWorker('installing')
+    stubPage({ readyState: 'complete', register: vi.fn().mockResolvedValue({ active: null, installing: w.worker, waiting: null }) })
+    const { ensureServiceWorkerActive } = await import('../registerServiceWorker')
+    let done = false
+    const ensured = ensureServiceWorkerActive().then(() => { done = true })
+    await flush()
+    w.move('installed')
+    w.move('activating')
+    await flush()
+    expect(done).toBe(false)
+    w.move('activated')
+    await ensured
+    expect(done).toBe(true)
+    expect(w.listeners.size).toBe(0)
+  })
+
+  it('rejects when the install fails (the worker turns redundant)', async () => {
+    const w = fakeWorker('installing')
+    stubPage({ readyState: 'complete', register: vi.fn().mockResolvedValue({ active: null, installing: w.worker, waiting: null }) })
+    const { ensureServiceWorkerActive } = await import('../registerServiceWorker')
+    const ensured = ensureServiceWorkerActive()
+    await flush()
+    w.move('redundant')
+    await expect(ensured).rejects.toThrow('the service worker could not install')
+  })
+
+  it('rejects where the browser has no service workers', async () => {
+    stubPage({ readyState: 'complete', register: null })
+    const { ensureServiceWorkerActive } = await import('../registerServiceWorker')
+    await expect(ensureServiceWorkerActive()).rejects.toThrow('this browser has no service workers')
+  })
+
+  it('rejects with a refusal', async () => {
+    const refusal = new Error('Failed to register a ServiceWorker: The operation is insecure.')
+    stubPage({ readyState: 'complete', register: vi.fn().mockRejectedValue(refusal) })
+    const { ensureServiceWorkerActive } = await import('../registerServiceWorker')
+    await expect(ensureServiceWorkerActive()).rejects.toBe(refusal)
+  })
+})

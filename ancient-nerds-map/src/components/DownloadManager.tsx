@@ -25,6 +25,12 @@ interface DownloadManagerProps {
   }>
   isOffline: boolean
   onToggleOffline: () => void
+  /**
+   * Resolves once the service worker that serves the page offline is active
+   * (pwa/registerServiceWorker.ts ensureServiceWorkerActive); rejects with why
+   * it cannot be. null where no worker exists (dev builds have no /sw.js).
+   */
+  ensureOfflineWorker: (() => Promise<void>) | null
 }
 
 interface DownloadProgress {
@@ -65,7 +71,7 @@ function hasOfflineDownload(state: DownloadState): boolean {
     || state.basemapQuality !== 'none'
 }
 
-export default function DownloadManager({ isOpen, onClose, sources, isOffline, onToggleOffline }: DownloadManagerProps) {
+export default function DownloadManager({ isOpen, onClose, sources, isOffline, onToggleOffline, ensureOfflineWorker }: DownloadManagerProps) {
   // State
   const [downloadState, setDownloadState] = useState<DownloadState | null>(null)
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set())
@@ -86,6 +92,8 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   const [storageUsed, setStorageUsed] = useState(0)
   const [activeTab, setActiveTab] = useState<'sources' | 'layers' | 'basemap' | 'empires'>('layers')
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  // Why offline use cannot work in this browser (no service worker); the download did not start
+  const [workerError, setWorkerError] = useState<string | null>(null)
 
   // Image pre-download state
   const [downloadingImagesSourceId, setDownloadingImagesSourceId] = useState<string | null>(null)
@@ -384,8 +392,19 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   const handleDownload = async () => {
     setIsDownloading(true)
+    setWorkerError(null)
 
     try {
+      // Without the worker's precache the next offline visit does not load at all
+      if (ensureOfflineWorker) {
+        try {
+          await ensureOfflineWorker()
+        } catch (error) {
+          console.error('[DownloadManager] service worker:', error)
+          setWorkerError(`Offline use is not possible in this browser: ${error instanceof Error ? error.message : String(error)}`)
+          return
+        }
+      }
       await downloadGlobeStartFiles()
       await downloadSources()
       await downloadLayers()
@@ -719,7 +738,9 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
         {/* Footer */}
         <div className="dm-footer">
           <div className="dm-status">
-            {isDownloading && progress ? (
+            {workerError ? (
+              <span className="empty-status" role="alert">{workerError}</span>
+            ) : isDownloading && progress ? (
               <span className="download-status">
                 {progress.type === 'source'
                   ? `${progress.loaded.toLocaleString()} / ${progress.total.toLocaleString()} sites`

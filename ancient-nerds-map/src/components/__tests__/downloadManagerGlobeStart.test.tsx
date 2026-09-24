@@ -80,12 +80,12 @@ import DownloadManager from '../DownloadManager'
 let root: Root | null = null
 let container: HTMLDivElement
 
-async function open() {
+async function open(ensureOfflineWorker: (() => Promise<void>) | null = null) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<DownloadManager isOpen onClose={() => {}} sources={[]} isOffline={false} onToggleOffline={() => {}} />)
+    root!.render(<DownloadManager isOpen onClose={() => {}} sources={[]} isOffline={false} onToggleOffline={() => {}} ensureOfflineWorker={ensureOfflineWorker} />)
   })
   await act(async () => { await new Promise(r => setTimeout(r, 0)) })
 }
@@ -160,6 +160,26 @@ describe('DownloadManager and the globe start files', () => {
     await click(container.querySelector('.dm-download-btn'))
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     expect(calls).toEqual(['layer:coastlines'])
+  })
+
+  it('has the service worker active before the first file (the sw task may not have run yet)', async () => {
+    await open(async () => { calls.push('worker') })
+    await click(container.querySelector('.dm-item'))
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual(['worker', 'globe-start', 'layer:coastlines'])
+  })
+
+  it('downloads nothing and says why when the service worker cannot be installed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await open(async () => { throw new Error('this browser has no service workers') })
+    await click(container.querySelector('.dm-item'))
+    await click(container.querySelector('.dm-download-btn'))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(calls).toEqual([])
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe(
+      'Offline use is not possible in this browser: this browser has no service workers',
+    )
   })
 
   it('does not show an incomplete Satellite download as Cached, and lets it be ticked again', async () => {

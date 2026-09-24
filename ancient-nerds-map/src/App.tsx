@@ -42,7 +42,7 @@ import { BRAND_ASSETS } from './constants/brand'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { offlineFetch } from './services/OfflineFetch'
-import { serviceWorkerTask } from './pwa/registerServiceWorker'
+import { ensureServiceWorkerActive, serviceWorkerTask } from './pwa/registerServiceWorker'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
 import { haversineDistance } from './utils/geoMath'
@@ -2227,6 +2227,7 @@ function AppContent() {
           sources={sources}
           isOffline={isOffline}
           onToggleOffline={() => setOfflineMode(!isOffline)}
+          ensureOfflineWorker={import.meta.env.PROD ? ensureServiceWorkerActive : null}
         />
 
         {/* Lyra Chat Modal */}

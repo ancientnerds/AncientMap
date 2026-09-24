@@ -20,12 +20,47 @@
 import { pruneOrphanedCaches } from './orphanedCaches'
 
 export async function registerServiceWorker(): Promise<boolean> {
-  if (!('serviceWorker' in navigator)) return false
+  return (await registerWorker()) !== null
+}
+
+/** The registration; null where the browser has no service workers. */
+async function registerWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null
   if (document.readyState !== 'complete') {
     await new Promise<void>(resolve => window.addEventListener('load', () => resolve(), { once: true }))
   }
-  await navigator.serviceWorker.register('/sw.js', { scope: '/' })
-  return true
+  return navigator.serviceWorker.register('/sw.js', { scope: '/' })
+}
+
+/**
+ * An offline download (DownloadManager) is unusable without an active worker:
+ * its precache holds globe.html, the JS and the fonts an offline start needs,
+ * and nothing else registers one for a globe-only visitor. The queue's `sw`
+ * task may not have run yet (it is the last task, after the warp, and nothing
+ * starts while the tab is hidden), so the download registers it itself
+ * (idempotent) and waits until a worker is active. Rejects where the browser
+ * has no service workers, on a refusal, and when the install fails (the worker
+ * turns redundant, e.g. its precache could not be fetched).
+ */
+export async function ensureServiceWorkerActive(): Promise<void> {
+  const registration = await registerWorker()
+  if (!registration) throw new Error('this browser has no service workers')
+  if (registration.active) return
+  const worker = registration.installing ?? registration.waiting
+  if (!worker) throw new Error('the service worker registration has no worker')
+  await new Promise<void>((resolve, reject) => {
+    const onStateChange = () => {
+      if (worker.state === 'activated') {
+        worker.removeEventListener('statechange', onStateChange)
+        resolve()
+      } else if (worker.state === 'redundant') {
+        worker.removeEventListener('statechange', onStateChange)
+        reject(new Error('the service worker could not install'))
+      }
+    }
+    worker.addEventListener('statechange', onStateChange)
+    onStateChange()
+  })
 }
 
 /**
