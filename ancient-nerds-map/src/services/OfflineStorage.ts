@@ -362,7 +362,7 @@ class OfflineStorageClass {
   }
 
   /**
-   * Add a basemap item to download state (satellite, labels)
+   * Add a basemap item to download state (BasemapType: satellite)
    */
   async addBasemapItem(itemId: string): Promise<void> {
     const state = await this.getDownloadState()

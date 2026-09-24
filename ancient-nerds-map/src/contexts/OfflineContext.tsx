@@ -72,7 +72,7 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       // Extract cached basemap qualities
       setCachedBasemapQualities(new Set(state.basemapQualities || []))
 
-      // Cached basemap items (satellite, labels): only downloads whose every file is in the cache
+      // Cached basemap items (satellite): only downloads whose every file is in the cache
       setCachedBasemapItems(new Set(await BasemapCache.getCachedItems()))
 
       // Cached layer IDs: only downloads whose every file is in the cache

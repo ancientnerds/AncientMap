@@ -106,14 +106,11 @@ class BasemapCacheClass {
         onProgress?.(totalLoaded, totalSize)
       }
 
-      // Combine chunks and cache
-      const contentType = file.url.endsWith('.json') ? 'application/json' :
-                          file.url.endsWith('.webp') ? 'image/webp' :
-                          file.url.endsWith('.png') ? 'image/png' : 'image/jpeg'
-      const blob = new Blob(chunks as BlobPart[], { type: contentType })
+      // Combine chunks and cache. Every file of the item is a .webp tier (getBasemapAssets)
+      const blob = new Blob(chunks as BlobPart[], { type: 'image/webp' })
       await cache.put(file.url, new Response(blob, {
         headers: {
-          'Content-Type': contentType,
+          'Content-Type': 'image/webp',
           'Content-Length': String(blob.size)
         }
       }))

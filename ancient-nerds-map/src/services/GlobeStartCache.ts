@@ -4,14 +4,13 @@
  * every tier up to the device's maximum: the start tier follows the window at
  * load time) and the coastline and border start tiers. Every offline download
  * stores them, whatever the visitor ticked (DownloadManager), so an offline
- * start works with any download - not only with the optional 'Labels' and
- * 'Satellite' items, which used to be the only ones holding labels and gray.
+ * start works with any download, not only with the optional 'Satellite' item.
  *
  * Each file goes into the cache its loader reads offline: the gray is fetched
  * through the service worker's basemap rule ('basemaps'), labels.json and the
- * layer tiers through OfflineFetch (labels in 'basemaps' like the 'Labels'
- * download, the tiers in 'vector-layers' like the layer download and the
- * service worker's globe layer rule).
+ * layer tiers through OfflineFetch (labels.json in 'basemaps', the tiers in
+ * 'vector-layers' like the layer download and the service worker's globe
+ * layer rule).
  */
 
 import { GLOBE_LAYER_KEYS, getGlobeLayerUrl } from '../config/vectorLayers'
