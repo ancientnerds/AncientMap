@@ -858,7 +858,9 @@ def _search_stop(routing: Routing) -> str | None:
 
 
 def queries_on_record(ledger: Path, batch_id: str, sites: Sequence[M.PlanSite]) -> tuple[int, int]:
-    """`(queries, requests)` the batch's route searches have cost over every run of this stage.
+    """`(queries, requests)` the batch's route searches have cost over every run of this stage in
+    this run directory: `ledger` is the run's own (`model4.LEDGER_FILE`), since batch ids repeat
+    across runs.
 
     `search_slot` writes each request's ledger line before it reads the answer, so the ledger is the
     one record a stopped or crashed run cannot lose: a query is its first attempt's line, a request

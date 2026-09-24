@@ -13212,8 +13212,9 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 model: unknown is not protected",
         P4_MODEL,
-        '        "refutation": ("unknown",),\n',
-        "",
+        # re-anchored 2026-09-24: pilot 2 (T3) made the refutation additions a multi-line tuple
+        '            "unknown", "wrongly", "mistaken*",',
+        '            "wrongly", "mistaken*",',
         P4B_SENT_TEST,
         "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
     ),
@@ -16990,6 +16991,11 @@ P4P3_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
 P4P3_SENT_TEST = "tests/remediation/test_phase4_sentences.py"
 P4P3_SENT = "scripts/remediation/phase4/sentences.py"
 P4P3_SELECT = "scripts/remediation/phase4/select_stage.py"
+P4P3_WRITE_GATE = "output/remediation/tools/write_gate4.py"
+P4P3_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4P3_RUN4 = "scripts/remediation/phase4/run4.py"
+P4P3_MASS4 = "scripts/remediation/phase4/mass4.py"
+P4P3_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
 P4P3_COUNTRY = "pipeline/utils/country_lookup.py"
 P4P3_DEMONYM_TEST = "tests/pipeline/test_country_demonyms.py"
 P4P3_PROMPTS = "scripts/remediation/phase4/prompts4.py"
@@ -17278,6 +17284,39 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    if bracket and group.endswith(")") and head.strip():  # mutant\n',
         P4P3_VERIFY_TEST,
         "test_s3_and_v6_accept_the_same_base_name",
+    ),
+    # ── pilot 2's open item: a run reads and writes its own ledger only ───────────────────────
+    (
+        "p4 write_gate4: the P4 plan reads the ledger shared across runs",
+        P4P3_WRITE_GATE,
+        '        options["ledger"] = read_jsonl(run_dir / M.LEDGER_FILE)\n',
+        '        options["ledger"] = read_jsonl(run_dir.parent / M.LEDGER_FILE)  # mutant\n',
+        P4P3_WRITE_TEST,
+        "test_the_gate_reads_only_the_ledger_of_its_own_run",
+    ),
+    (
+        "p4 run4: a stage writes the ledger shared across runs",
+        P4P3_RUN4,
+        "    return Path(args.run_dir) / M.LEDGER_FILE\n",
+        "    return Path(args.run_dir).parent / M.LEDGER_FILE  # mutant\n",
+        P4P3_RUNNER_TEST,
+        "test_select_and_translate_are_two_handoff_rounds_and_only_the_import_writes",
+    ),
+    (
+        "p4 run4: S1 and S1b are handed a ledger outside the run",
+        P4P3_RUN4,
+        "    return Path(args.run_dir) / M.LEDGER_FILE\n",
+        '    return Path(args.run_dir).parent / "LEDGER.jsonl"  # mutant\n',
+        P4P3_RUNNER_TEST,
+        "test_sources_hands_track_a_its_own_live_fetcher_and_the_phase3_run",
+    ),
+    (
+        "p4 mass4: the run's budget and search count read a ledger outside the run",
+        P4P3_MASS4,
+        "    ledger = run_dir / M.LEDGER_FILE\n",
+        "    ledger = run_dir.parent / M.LEDGER_FILE  # mutant\n",
+        P4P3_RUNNER_TEST,
+        "test_a_run_with_searches_off_is_not_stopped_by_the_search_ceiling",
     ),
 ]
 MUTATIONS += P4_PILOT3_MUTATIONS

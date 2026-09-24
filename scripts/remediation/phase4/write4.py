@@ -277,7 +277,10 @@ def ledger_labels(
     ledger: Sequence[Mapping[str, Any]], *, batch_id: str, site_id: str
 ) -> tuple[str, ...]:
     """The labels of this site's model calls in this batch (`<site_id>/<answer_key>`, the phase-3
-    ledger's call label), in ledger order."""
+    ledger's call label), in ledger order. `ledger` is the rows of the batch's own run's ledger
+    (`<run>/LEDGER.jsonl`, `model4.LEDGER_FILE`; `write_gate4` reads no other): batch ids repeat
+    across runs - every pilot is `p4-0001` .. - so a ledger shared across runs would put one
+    pilot's calls into another's evidence (pilot 2's open item, 2026-09-24)."""
     return tuple(
         str(row["label"])
         for row in ledger

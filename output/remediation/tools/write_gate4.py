@@ -596,7 +596,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--apply-root", default=None, help="override the lane's apply root")
     parser.add_argument("--open-lanes", default="", help="P4: lanes whose pilot passed, e.g. W,S")
     parser.add_argument("--audited", default=None, help="P4: the audit's cleared ids (T and R)")
-    parser.add_argument("--ledger", default=str(lanes.PHASE4_LEDGER))
     parser.add_argument("--phase3-refused", default=str(lanes.lane().refused))
     parser.add_argument("--phase3-run", default=str(lanes.lane().run_dir))
     parser.add_argument("--step", type=int, default=100, help="sites per step (--apply)")
@@ -644,7 +643,9 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
             raise SystemExit("--open-lanes: P4 writes only lanes whose pilot passed; name them")
         options["audited"] = read_audited(pathlib.Path(args.audited) if args.audited else None)
         options["verify"] = _verifier()
-        options["ledger"] = read_jsonl(pathlib.Path(args.ledger))
+        # The run's own ledger and no other: pilots reuse the batch ids p4-0001 .., so a ledger
+        # shared across runs would put one pilot's calls into another's journal evidence.
+        options["ledger"] = read_jsonl(run_dir / M.LEDGER_FILE)
     else:
         live = written_sites(site_ids, run=lambda sql: W._exec(runner, sql, host=args.host))
         options["written"] = live

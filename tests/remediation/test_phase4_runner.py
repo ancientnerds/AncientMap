@@ -214,12 +214,13 @@ def test_sources_hands_track_a_its_own_live_fetcher_and_the_phase3_run(
     seen: dict[str, Any] = {}
     monkeypatch.setattr(S1, "sources_batch", _bound(S1.sources_batch, seen, 3))
     argv = ["sources", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
-    assert _run(capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl")])[0] == 0  # no --live
+    assert _run(capsys, argv)[0] == 0  # no --live
     assert seen == {}
     live = [*argv, "--live", "--pacing-dir", str(tmp_path / "pace")]
     code, _, _ = _run(capsys, [*live, "--phase3-run", str(tmp_path / "mass")])
     assert code == 3  # the stage's own code is the exit line
     assert seen["batch_dir"] == batch_dir and seen["phase3_run"] == tmp_path / "mass"
+    assert seen["ledger"] == batch_dir.parent / M.LEDGER_FILE  # the run's own, never a shared one
     assert isinstance(seen["fetcher"], F.PacedFetcher)
     assert isinstance(seen["fetcher"]._inner, S1.HostCappedFetcher)
     assert seen["now"].tzinfo is not None
@@ -251,6 +252,8 @@ def test_routes_gets_the_live_fetcher_the_search_seams_and_its_search_allowance(
     assert opened == {"pacing_dir": tmp_path}
     assert (seen["searcher"], seen["probe"], seen["wait"]) == seams
     assert seen["max_searches"] == 7 and seen["now"].tzinfo is not None
+    # the search count (`route_stage.queries_on_record`) reads the run's own ledger
+    assert seen["ledger"] == batch_dir.parent / M.LEDGER_FILE
     assert isinstance(seen["fetcher"], F.PacedFetcher)
     assert isinstance(seen["fetcher"]._inner, S1.HostCappedFetcher)
     assert search.closed
@@ -383,7 +386,7 @@ def test_the_select_preview_and_export_show_the_names_v6_accepts(
     )
     prompt = SEL.site_selector_prompt(batch_dir, site, "W", meta, pool, text).render()
     assert 'also_named="Stone Temple of Gozo; Stone Temple"' in prompt
-    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--ledger", "L.jsonl"]
+    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     _, report, _ = _run(capsys, ["select", *argv])
     assert report["sites"] == [
         {"site_id": "site-1", "pool": len(pool), "prompt_chars": len(prompt)}
@@ -404,9 +407,9 @@ def test_select_and_translate_are_two_handoff_rounds_and_only_the_import_writes(
     digest, and the import refuses any other).
     """
     batch_dir = _three_lanes(tmp_path)
-    ledger = tmp_path / "L.jsonl"
+    ledger = batch_dir.parent / M.LEDGER_FILE  # the run's own
     handoff = tmp_path / "handoff"
-    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--ledger", str(ledger)]
+    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     before = _tree(batch_dir)
 
     code, report, _ = _run(capsys, ["select", *argv])
@@ -445,9 +448,7 @@ def test_a_select_import_without_its_answers_stops_and_names_the_error(
     batch_dir = _prepared(tmp_path)
     argv = ["select", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     empty = str(tmp_path / "handoff")
-    code, report, _ = _run(
-        capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl"), "--handoff-import", empty]
-    )
+    code, report, _ = _run(capsys, [*argv, "--handoff-import", empty])
     assert code == 2 and report["stage"] == "select" and "no answer at" in report["error"]
     assert X.holds_of(batch_dir) == []
 
@@ -491,10 +492,7 @@ def test_review_re_verifies_through_verify_site_with_the_contracts_arguments(
         MS, "HandoffRunner", lambda directory: X.ScriptedRunner({("site-1", "review"): answer})
     )
     argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
-    code, _, _ = _run(
-        capsys,
-        [*argv, "--ledger", str(tmp_path / "L.jsonl"), "--handoff-import", str(tmp_path / "h")],
-    )
+    code, _, _ = _run(capsys, [*argv, "--handoff-import", str(tmp_path / "h")])
     assert code == 0
     (call,) = seen
     assert set(call) == {"site", "assembly", "metas", "texts", "quotes", "new_raw_data", "witness"}
@@ -519,9 +517,7 @@ def test_a_review_that_could_not_call_names_the_error_for_the_spawn_retry(
     _fake(monkeypatch, R4.WRITE4, new_raw_data=lambda old, assembly: {})
     argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     empty = str(tmp_path / "handoff")  # nothing was answered: the import cannot call
-    code, report, _ = _run(
-        capsys, [*argv, "--ledger", str(tmp_path / "L.jsonl"), "--handoff-import", empty]
-    )
+    code, report, _ = _run(capsys, [*argv, "--handoff-import", empty])
     stage = json.loads((batch_dir / B.REVIEW_REPORT).read_text(encoding="utf-8"))
     assert code != 0 and "no answer at" in report["error"] and report["error"] == stage["error"]
 
@@ -779,7 +775,7 @@ def test_the_mass_driver_refuses_an_unknown_batch_and_a_count_below_one(
     plan = _plan(tmp_path, [X.plan_site("s1")])
     argv = ["--plan", str(plan), "--run-dir", str(tmp_path / "runs" / "r")]
     with pytest.raises(ValueError, match=match):
-        M4.main([*argv, "--ledger", str(tmp_path / "L.jsonl"), *extra])
+        M4.main([*argv, *extra])
 
 
 def test_a_site_neither_assembled_nor_held_is_not_done(tmp_path: Path) -> None:
@@ -1066,8 +1062,8 @@ def test_the_journal_evidence_of_a_site_answered_through_the_handoff_is_complete
     """Decision D5 holds for Opus answers: the selector's answer by name, the reviewer's, each with
     the prompt it answered and its ledger line (`write4.evidence_problems`)."""
     batch_dir = _prepared(tmp_path)
-    ledger = tmp_path / "L.jsonl"
-    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--ledger", str(ledger)]
+    ledger = batch_dir.parent / M.LEDGER_FILE  # the run's own
+    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     select = tmp_path / "handoff-select"
     _run(capsys, ["select", *argv, "--handoff-export", str(select)])
     _answer_all(select)
@@ -1106,7 +1102,7 @@ def test_the_journal_evidence_of_a_site_answered_through_the_handoff_is_complete
 def _args(tmp_path: Path, plan: Path, *extra: str) -> argparse.Namespace:
     return M4.build_parser().parse_args(
         ["--plan", str(plan), "--run-dir", str(tmp_path / "runs" / "pilot"),
-         "--ledger", str(tmp_path / "L.jsonl"), "--log-dir", str(tmp_path / "logs"), *extra]
+         "--log-dir", str(tmp_path / "logs"), *extra]
     )  # fmt: skip
 
 
@@ -1162,7 +1158,8 @@ def test_a_run_with_searches_off_is_not_stopped_by_the_search_ceiling(
     assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND, "--searches-off")) == 0
 
     assert seen["budget"].max_searches is None
-    assert seen["budget"].stop_reason(MR.Spend.from_ledger(tmp_path / "L.jsonl")) is None
+    assert seen["ledger"] == tmp_path / "runs" / "pilot" / M.LEDGER_FILE  # the run's own
+    assert seen["budget"].stop_reason(MR.Spend.from_ledger(seen["ledger"])) is None
 
 
 def test_searches_off_and_a_search_allowance_are_never_asked_together(tmp_path: Path) -> None:

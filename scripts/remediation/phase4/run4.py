@@ -69,7 +69,6 @@ from phase4 import translate_stage as TS  # noqa: E402
 REPO = Path(__file__).resolve().parents[3]
 RUNNER_ROOT = REPO / "output" / "remediation" / "phase4_runner"
 DEFAULT_PLAN = RUNNER_ROOT / "PLAN4.jsonl"
-DEFAULT_LEDGER = RUNNER_ROOT / "LEDGER.jsonl"
 HOLDS4_FILE = "HOLDS4.jsonl"
 STAGE_EXIT = "STAGE_EXIT="
 #: The plan's batch prefix (contracts, section 4: `assign_batches(prefix="p4")`).
@@ -97,6 +96,14 @@ def utf8_streams() -> None:
 def track(module: str) -> ModuleType:
     """Another track's module, imported when its command runs."""
     return importlib.import_module(module)
+
+
+def run_ledger(args: argparse.Namespace) -> Path:
+    """The run's own ledger, `<run>/LEDGER.jsonl` (`model4.LEDGER_FILE`): every stage of the run
+    writes its lines there, and no command takes another. Pilots reuse the batch ids `p4-0001` ..,
+    so a ledger shared across runs put one pilot's calls into another's journal evidence and search
+    count (pilot 2's open item, 2026-09-24)."""
+    return Path(args.run_dir) / M.LEDGER_FILE
 
 
 def batch_dir_of(args: argparse.Namespace) -> Path:
@@ -214,7 +221,7 @@ def cmd_sources(args: argparse.Namespace) -> tuple[int, Report]:
     with sources.open_fetcher(pacing_dir=Path(args.pacing_dir), timeout=args.timeout) as fetcher:
         code = sources.sources_batch(
             batch_dir,
-            ledger=Path(args.ledger),
+            ledger=run_ledger(args),
             fetcher=fetcher,
             now=datetime.now(UTC),
             phase3_run=Path(args.phase3_run),
@@ -245,7 +252,7 @@ def cmd_routes(args: argparse.Namespace) -> tuple[int, Report]:
     ):
         code = routes.routes_batch(
             batch_dir,
-            ledger=Path(args.ledger),
+            ledger=run_ledger(args),
             fetcher=fetcher,
             searcher=searcher,
             max_searches=args.max_searches,
@@ -288,7 +295,7 @@ def cmd_select(args: argparse.Namespace) -> tuple[int, Report]:
     if not args.handoff_import:
         return 0, preview_select(batch_dir)
     return run_on_answers(
-        batch_dir, stages, ledger=Path(args.ledger), directory=Path(args.handoff_import)
+        batch_dir, stages, ledger=run_ledger(args), directory=Path(args.handoff_import)
     )
 
 
@@ -302,7 +309,7 @@ def cmd_translate(args: argparse.Namespace) -> tuple[int, Report]:
     return run_on_answers(
         batch_dir,
         [("translate", _translate, B.TRANSLATE_REPORT)],
-        ledger=Path(args.ledger),
+        ledger=run_ledger(args),
         directory=Path(args.handoff_import),
     )
 
@@ -386,7 +393,7 @@ def cmd_review(args: argparse.Namespace) -> tuple[int, Report]:
         return 0, {"batch_id": args.batch_id, "live": False, "bought": 0}
     code = _review(
         batch_dir,
-        Path(args.ledger),
+        run_ledger(args),
         MS.HandoffRunner(directory=Path(args.handoff_import)),
     )
     report: Report = {"batch_id": args.batch_id, "handoff_import": args.handoff_import}
@@ -444,7 +451,6 @@ def build_parser() -> argparse.ArgumentParser:
         command = sub.add_parser(name)
         command.add_argument("--run-dir", required=True)
         command.add_argument("--batch-id", required=True)
-        command.add_argument("--ledger", default=str(DEFAULT_LEDGER))
         if live:
             command.add_argument("--live", action="store_true", help="buy; without it, only say")
         command.set_defaults(func=func)

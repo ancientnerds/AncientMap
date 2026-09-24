@@ -416,6 +416,12 @@ FETCH_FAILURES_FILE = "fetch.json"  #: model_stage.read_fetch_failures shape (A)
 LANES_FILE = "lanes.jsonl"  #: LaneAssignment, one per site of the batch (A3 -> B)
 ASSEMBLY_FILE = "assembly.jsonl"  #: Assembly after review (B3 -> C, D)
 HOLDS_FILE = "holds.jsonl"  #: Hold, every stage's (all -> D)
+#: The run's ledger, in the run directory (not a batch's): every ledger line the run's stages write -
+#: fetches, searches, model calls - and the only ledger a run's reader reads (the writer's journal
+#: evidence, the routes stage's search count). Pilots reuse the batch ids `p4-0001` .., so a ledger
+#: shared across runs mixed one pilot's calls into another's evidence (pilot 2's open item,
+#: 2026-09-24).
+LEDGER_FILE = "LEDGER.jsonl"
 
 #: The feature of each model call: its answer file (`answers/`, the reviewer's under `reviews/`),
 #: its prompt (`prompts/`, stored before the call) and its ledger label (`<site_id>/<feature>`).

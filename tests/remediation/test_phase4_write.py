@@ -1125,7 +1125,7 @@ def test_the_reversal_read_is_parsed_strictly(answer: str) -> None:
 # ── write_gate4 ──────────────────────────────────────────────────────────────────────────────────
 
 
-def _gate_run(tmp_path: Path, sites: int) -> Path:
+def _gate_run(tmp_path: Path, sites: int) -> None:
     """A run with one batch per site, so the step boundary falls between batches."""
     run = tmp_path / "runs" / "pilot"
     ids = [f"{n:08x}-0000-4000-8000-00000000000{n}" for n in range(1, sites + 1)]
@@ -1136,8 +1136,7 @@ def _gate_run(tmp_path: Path, sites: int) -> Path:
             assemblies=[FX.assembly(site_id)],
             batch_id=f"p4-{number:04d}",
         )
-    ledger = tmp_path / "LEDGER.jsonl"
-    ledger.write_text(
+    (run / M.LEDGER_FILE).write_text(
         "".join(
             json.dumps(row) + "\n"
             for number, site_id in enumerate(ids, start=1)
@@ -1145,13 +1144,12 @@ def _gate_run(tmp_path: Path, sites: int) -> Path:
         ),
         encoding="utf-8",
     )
-    return ledger
 
 
-def _gate_args(tmp_path: Path, ledger: Path, *extra: str) -> list[str]:
+def _gate_args(tmp_path: Path, *extra: str) -> list[str]:
     return [
         "--group", "P4", "--run", "pilot", "--run-root", str(tmp_path / "runs"),
-        "--apply-root", str(tmp_path / "apply"), "--open-lanes", "W,S", "--ledger", str(ledger),
+        "--apply-root", str(tmp_path / "apply"), "--open-lanes", "W,S",
         *extra,
     ]  # fmt: skip
 
@@ -1176,11 +1174,11 @@ def _acceptance(
 def test_the_gate_writes_one_step_and_stops_for_the_acceptance(
     tmp_path, monkeypatch, capsys
 ) -> None:
-    ledger = _gate_run(tmp_path, 3)
+    _gate_run(tmp_path, 3)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     ids = [f"{n:08x}-0000-4000-8000-00000000000{n}" for n in range(1, 4)]
     db = _db(*ids)
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "2"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "2"), runner=db) == 0
     out = capsys.readouterr().out
     assert "STEP COMPLETE: 2 site(s)" in out and out.rstrip().endswith("WRITE_EXIT=0")
     applied = sorted(p.parent.name for p in (tmp_path / "apply").glob("*/APPLIED.json"))
@@ -1190,11 +1188,11 @@ def test_the_gate_writes_one_step_and_stops_for_the_acceptance(
     plan_rows = (tmp_path / "apply" / G.LANE_PLAN_FILE).read_text(encoding="utf-8").splitlines()
     assert len(plan_rows) == 6  # every rendered batch's plan: the acceptance's --plan
 
-    accept = _gate_args(tmp_path, ledger, "--accept", str(_acceptance(tmp_path, journal_rows=4)))
+    accept = _gate_args(tmp_path, "--accept", str(_acceptance(tmp_path, journal_rows=4)))
     assert G.main(accept, runner=db) == 0
     assert "ACCEPTED step 1" in capsys.readouterr().out
     assert not (tmp_path / "apply" / G.STEP_FILE).exists()
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "2"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "2"), runner=db) == 0
     assert (tmp_path / "apply" / "p4-0003" / "APPLIED.json").exists()
 
 
@@ -1204,10 +1202,10 @@ def test_the_gate_prints_the_acceptance_command_it_will_accept(
     """The step ends with the command to run: `verify_writes4.py` re-runs V1-V15 for lanes p4 and
     p5 and refuses to start without `--run` (wip/p4-verify, `accept_lane`), so the printed command
     names the lane, the lane plan and the run directory - copied as printed, it runs."""
-    ledger = _gate_run(tmp_path, 1)
+    _gate_run(tmp_path, 1)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db("00000001-0000-4000-8000-000000000001")
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "1"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
     out = capsys.readouterr().out
     plan = tmp_path / "apply" / G.LANE_PLAN_FILE
     run = tmp_path / "runs" / "pilot"
@@ -1217,20 +1215,20 @@ def test_the_gate_prints_the_acceptance_command_it_will_accept(
 def test_a_step_without_its_acceptance_blocks_the_next_step(tmp_path, monkeypatch, capsys) -> None:
     """The owner's "after every hundred, a check, and only then continue" is a precondition: a
     driver that calls the gate in a loop writes one step and no more."""
-    ledger = _gate_run(tmp_path, 3)
+    _gate_run(tmp_path, 3)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db(*[f"{n:08x}-0000-4000-8000-00000000000{n}" for n in range(1, 4)])
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "1"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
     sent = len(db.sent)
     capsys.readouterr()
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "1"), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 1
     out = capsys.readouterr().out
     assert "has no acceptance" in out and out.rstrip().endswith("WRITE_EXIT=1")
     assert len(db.sent) == sent  # nothing was sent, not even a preflight
     assert sorted(p.parent.name for p in (tmp_path / "apply").glob("*/APPLIED.json")) == ["p4-0001"]
 
 
-def _gate_run_of(tmp_path: Path, *, batches: int, sites: int) -> tuple[Path, list[str]]:
+def _gate_run_of(tmp_path: Path, *, batches: int, sites: int) -> list[str]:
     """A run of `batches` plan batches of `sites` sites each (the design's batches of 15)."""
     run = tmp_path / "runs" / "pilot"
     ids: list[str] = []
@@ -1247,28 +1245,67 @@ def _gate_run_of(tmp_path: Path, *, batches: int, sites: int) -> tuple[Path, lis
         )
         ledger_rows.extend(FX.ledger_rows(*batch, batch=f"p4-{number:04d}"))
         ids.extend(batch)
-    ledger = tmp_path / "LEDGER.jsonl"
-    ledger.write_text("".join(json.dumps(row) + "\n" for row in ledger_rows), encoding="utf-8")
-    return ledger, ids
+    (run / M.LEDGER_FILE).write_text(
+        "".join(json.dumps(row) + "\n" for row in ledger_rows), encoding="utf-8"
+    )
+    return ids
+
+
+def test_the_gate_reads_only_the_ledger_of_its_own_run(tmp_path, monkeypatch, capsys) -> None:
+    """Pilots reuse the batch ids `p4-0001` .. (pilot 2's open item, 2026-09-24): pilot 1 asked the
+    same site in the same batch id, in its own run directory. The P4 plan of pilot 2 reads pilot
+    2's ledger (`<run>/LEDGER.jsonl`, `model4.LEDGER_FILE`) and nothing else, so no label of pilot
+    1's calls - here a second select and review, and a translate - appears in its evidence; the
+    runner root's shared ledger, which both pilots wrote before, is not read at all."""
+    site_id = GATE_SITE
+    pilot1 = FX.ledger_rows(site_id, batch="p4-0001") * 2 + [
+        {**FX.ledger_rows(site_id, batch="p4-0001")[0], "label": f"{site_id}/translate"}
+    ]
+    pilot2 = FX.ledger_rows(site_id, batch="p4-0001")
+    for run, rows in (("pilot1", pilot1), ("pilot2", pilot2)):
+        run_dir = tmp_path / "runs" / run
+        FX.write_batch(
+            run_dir,
+            sites=[FX.plan_site(site_id)],
+            assemblies=[FX.assembly(site_id)],
+            batch_id="p4-0001",
+        )
+        (run_dir / M.LEDGER_FILE).write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+    (tmp_path / "runs" / M.LEDGER_FILE).write_text(
+        "".join(json.dumps(row) + "\n" for row in [*pilot1, *pilot2]), encoding="utf-8"
+    )
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    args = [
+        "--group", "P4", "--run", "pilot2", "--run-root", str(tmp_path / "runs"),
+        "--apply-root", str(tmp_path / "apply"), "--open-lanes", "W,S",
+    ]  # fmt: skip
+    assert G.main(args, runner=_db(site_id)) == 0
+    assert "refused by rule: {}" in capsys.readouterr().out
+    rows = W4.read_plan(tmp_path / "apply" / "p4-0001", group=W4.Group.P4)
+    assert rows
+    for row in rows:
+        assert row.evidence["ledger_labels"] == [f"{site_id}/select", f"{site_id}/review"]
 
 
 def test_a_step_of_100_sites_never_writes_more_than_100(tmp_path, monkeypatch, capsys) -> None:
     """Batches of 15: the step stops before the batch that would carry it past 100 - 90 sites, not
     105 (design: CHUNK = ONE STEP = 100 SITES)."""
-    ledger, ids = _gate_run_of(tmp_path, batches=8, sites=15)
+    ids = _gate_run_of(tmp_path, batches=8, sites=15)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db(*ids)
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "100"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "100"), runner=db) == 0
     assert "STEP COMPLETE: 90 site(s) written in 6 batch(es)" in capsys.readouterr().out
     written = {entry["site_id_ref"] for entry in db.journal}
     assert len(written) == 90
 
 
 def test_a_batch_larger_than_the_step_is_refused(tmp_path, monkeypatch, capsys) -> None:
-    ledger, ids = _gate_run_of(tmp_path, batches=1, sites=3)
+    ids = _gate_run_of(tmp_path, batches=1, sites=3)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db(*ids)
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "2"), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "2"), runner=db) == 1
     assert "3 sites in one batch; the step is 2" in capsys.readouterr().out and not db.journal
 
 
@@ -1298,27 +1335,27 @@ def test_a_batch_larger_than_the_step_is_refused(tmp_path, monkeypatch, capsys) 
 def test_an_acceptance_that_does_not_accept_this_step_is_refused(
     tmp_path, monkeypatch, capsys, overrides, journal_rows, problem
 ) -> None:
-    ledger = _gate_run(tmp_path, 1)
+    _gate_run(tmp_path, 1)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db("00000001-0000-4000-8000-000000000001")
-    assert G.main(_gate_args(tmp_path, ledger, "--apply"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
     capsys.readouterr()
     output = _acceptance(tmp_path, journal_rows=journal_rows, **overrides)
-    assert G.main(_gate_args(tmp_path, ledger, "--accept", str(output)), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
     assert problem in capsys.readouterr().out
     assert (tmp_path / "apply" / G.STEP_FILE).exists()
 
 
 def test_one_acceptance_output_never_accepts_two_steps(tmp_path, monkeypatch, capsys) -> None:
-    ledger = _gate_run(tmp_path, 2)
+    _gate_run(tmp_path, 2)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db(*[f"{n:08x}-0000-4000-8000-00000000000{n}" for n in range(1, 3)])
     output = _acceptance(tmp_path, journal_rows=4)
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "1"), runner=db) == 0
-    assert G.main(_gate_args(tmp_path, ledger, "--accept", str(output)), runner=db) == 0
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "1"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
     capsys.readouterr()
-    assert G.main(_gate_args(tmp_path, ledger, "--accept", str(output)), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
     assert "an earlier step was accepted on this very output" in capsys.readouterr().out
 
 
@@ -1330,10 +1367,10 @@ def test_like_matches_is_sql_like() -> None:
 
 
 def test_the_dry_run_sends_nothing(tmp_path, monkeypatch, capsys) -> None:
-    ledger = _gate_run(tmp_path, 1)
+    _gate_run(tmp_path, 1)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db("00000001-0000-4000-8000-000000000001")
-    assert G.main(_gate_args(tmp_path, ledger), runner=db) == 0
+    assert G.main(_gate_args(tmp_path), runner=db) == 0
     assert db.sent == [] and "dry run, nothing is sent" in capsys.readouterr().out
     assert (tmp_path / "apply" / "p4-0001" / "chunks" / "chunk-0001" / "APPLY.sql").exists()
 
@@ -1341,29 +1378,29 @@ def test_the_dry_run_sends_nothing(tmp_path, monkeypatch, capsys) -> None:
 def test_a_blocked_batch_stops_the_run_and_is_refused_until_read(
     tmp_path, monkeypatch, capsys
 ) -> None:
-    ledger = _gate_run(tmp_path, 2)
+    _gate_run(tmp_path, 2)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     first = "00000001-0000-4000-8000-000000000001"
     db = _db(first, "00000002-0000-4000-8000-000000000002")
     db.sites[first].description = "moved"
-    assert G.main(_gate_args(tmp_path, ledger, "--apply"), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 1
     assert (tmp_path / "apply" / "p4-0001" / "STOPPED.json").exists()
     assert not (tmp_path / "apply" / "p4-0002" / "APPLIED.json").exists()
     db.sites[first].description = FX.OLD_DESCRIPTION
-    assert G.main(_gate_args(tmp_path, ledger, "--apply"), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 1
     assert "stopped in an earlier run" in capsys.readouterr().out
 
 
 def test_a_written_batch_keeps_the_plan_it_was_written_from(tmp_path, monkeypatch) -> None:
-    ledger = _gate_run(tmp_path, 1)
+    _gate_run(tmp_path, 1)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db("00000001-0000-4000-8000-000000000001")
-    assert G.main(_gate_args(tmp_path, ledger, "--apply"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
     monkeypatch.setattr(
         G, "_verifier", lambda: FX.Verify({"00000001-0000-4000-8000-000000000001": [
             _hold("00000001-0000-4000-8000-000000000001", M.HoldReason.V9)]})
     )  # fmt: skip
-    assert G.main(_gate_args(tmp_path, ledger), runner=db) == 1
+    assert G.main(_gate_args(tmp_path), runner=db) == 1
 
 
 # ── write rounds through the gate: a reverted batch is written again as its next round ─────────
@@ -1383,14 +1420,14 @@ def _revert_round(db: FX.FakeDb, out: Path, write_round: int = 1) -> None:
 
 def _gate_written(tmp_path: Path, monkeypatch, *, accept: bool = True):
     """One batch of one site written through the gate as round 1 (and its step accepted)."""
-    ledger = _gate_run(tmp_path, 1)
+    _gate_run(tmp_path, 1)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db(GATE_SITE)
-    assert G.main(_gate_args(tmp_path, ledger, "--apply"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
     if accept:
         output = _acceptance(tmp_path, journal_rows=2, name="round-1.log")
-        assert G.main(_gate_args(tmp_path, ledger, "--accept", str(output)), runner=db) == 0
-    return ledger, db, tmp_path / "apply" / "p4-0001"
+        assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 0
+    return db, tmp_path / "apply" / "p4-0001"
 
 
 def _stamp_of(path: Path) -> str:
@@ -1401,10 +1438,10 @@ def test_a_reverted_batch_is_written_again_as_round_2(tmp_path, monkeypatch, cap
     """The documented recovery - write, revert (`revert4`), `--apply --round 2` - writes chunk-0002.
     The gate re-opens the batch on production's word that round 1 is reverted, and keeps round 1's
     record beside its statements; it never answers 'no open batch' over a reverted batch."""
-    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    db, out = _gate_written(tmp_path, monkeypatch)
     _revert_round(db, out, 1)
     capsys.readouterr()
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 0
     assert "STEP COMPLETE: 1 site(s) written in 1 batch(es)" in capsys.readouterr().out
     assert [entry["run_stamp"] for entry in db.journal].count(ROUND_2) == 2
     assert _stamp_of(out / G.APPLIED_FILE) == ROUND_2
@@ -1434,14 +1471,14 @@ def test_a_batch_is_re_opened_only_when_production_holds_its_reversal(
 ) -> None:
     """Round 2 needs every row of round 1's stamp journalled, as many as round 1 wrote, each with its
     own reversal kept. Without that proof the record stays, nothing is rendered and nothing written."""
-    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    db, out = _gate_written(tmp_path, monkeypatch)
     if revert:
         _revert_round(db, out, 1)
     if damage is not None:
         damage(db)
     journal = list(db.journal)
     capsys.readouterr()
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 1
     captured = capsys.readouterr()
     assert "round 1 is not reverted in production" in captured.err
     assert captured.out.rstrip().endswith("WRITE_EXIT=1")
@@ -1452,11 +1489,11 @@ def test_a_batch_is_re_opened_only_when_production_holds_its_reversal(
 
 def _reopened(tmp_path: Path, monkeypatch):
     """Round 1 written, reverted, and the batch re-opened for round 2 by a dry run."""
-    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    db, out = _gate_written(tmp_path, monkeypatch)
     _revert_round(db, out, 1)
-    assert G.main(_gate_args(tmp_path, ledger, "--round", "2"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--round", "2"), runner=db) == 0
     assert not (out / G.APPLIED_FILE).exists()
-    return ledger, db, out
+    return db, out
 
 
 @pytest.mark.parametrize(
@@ -1474,17 +1511,17 @@ def test_a_round_the_batch_cannot_take_is_refused_loudly(
     round 2, a batch never written starts at round 1, and a re-opened batch never writes round 1's
     stamp again (its statements are the reverted round's record)."""
     if state == "reverted":
-        ledger, db, out = _gate_written(tmp_path, monkeypatch)
+        db, out = _gate_written(tmp_path, monkeypatch)
         _revert_round(db, out, 1)
     elif state == "never-written":
-        ledger = _gate_run(tmp_path, 1)
+        _gate_run(tmp_path, 1)
         monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
         db, out = _db(GATE_SITE), tmp_path / "apply" / "p4-0001"
     else:
-        ledger, db, out = _reopened(tmp_path, monkeypatch)
+        db, out = _reopened(tmp_path, monkeypatch)
     journal = list(db.journal)
     capsys.readouterr()
-    args = _gate_args(tmp_path, ledger, "--apply", "--round", write_round)
+    args = _gate_args(tmp_path, "--apply", "--round", write_round)
     assert G.main(args, runner=db) == 1
     assert problem in capsys.readouterr().err
     assert db.journal == journal and not (out / G.STOPPED_FILE).exists()
@@ -1501,14 +1538,14 @@ def test_a_reverted_step_is_closed_on_its_reversal_and_written_again(
     link it wrote now has a later one. `--close-reverted` records it as closed on production's word
     that every row of every stamp is reverted, and its batches are then written as round 2. Until
     then the batch is frozen: `--round 2` does not re-open a batch of the pending step."""
-    ledger, db, out = _gate_written(tmp_path, monkeypatch, accept=False)
+    db, out = _gate_written(tmp_path, monkeypatch, accept=False)
     _revert_round(db, out, 1)
     capsys.readouterr()
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 1
     assert "belongs to the written step that awaits its acceptance" in capsys.readouterr().err
     assert _stamp_of(out / G.APPLIED_FILE) == ROUND_1
 
-    assert G.main(_gate_args(tmp_path, ledger, "--close-reverted"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--close-reverted"), runner=db) == 0
     assert "CLOSED step 1 by its reversal: 1 site(s) in 1 batch(es)" in capsys.readouterr().out
     assert not (tmp_path / "apply" / G.STEP_FILE).exists()
     assert not (tmp_path / "apply" / G.ACCEPTED_DIR).exists()  # closed, never accepted
@@ -1518,14 +1555,14 @@ def test_a_reverted_step_is_closed_on_its_reversal_and_written_again(
     assert closed["stamps"] == [ROUND_1] and closed["proofs"][0]["reversals_kept"] == 2
     assert _stamp_of(out / W4.CHUNKS_DIR / "chunk-0001" / G.APPLIED_FILE) == ROUND_1
 
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 0
     assert [entry["run_stamp"] for entry in db.journal].count(ROUND_2) == 2
 
 
 def test_a_step_whose_rows_are_live_is_not_closed(tmp_path, monkeypatch, capsys) -> None:
-    ledger, db, out = _gate_written(tmp_path, monkeypatch, accept=False)
+    db, out = _gate_written(tmp_path, monkeypatch, accept=False)
     capsys.readouterr()
-    assert G.main(_gate_args(tmp_path, ledger, "--close-reverted"), runner=db) == 1
+    assert G.main(_gate_args(tmp_path, "--close-reverted"), runner=db) == 1
     assert "round 1 is not reverted in production" in capsys.readouterr().err
     assert (tmp_path / "apply" / G.STEP_FILE).exists()
     assert _stamp_of(out / G.APPLIED_FILE) == ROUND_1
@@ -1546,16 +1583,16 @@ def test_the_acceptance_must_have_read_every_round_its_stamps_cover(
     """'Read at least the rows written so far' counts every written round - the reverted one's
     record is kept, not dropped - under the stamps the output read. Counting only the live rounds
     would let an output taken after the revert, before round 2, accept round 2."""
-    ledger, db, out = _gate_written(tmp_path, monkeypatch)
+    db, out = _gate_written(tmp_path, monkeypatch)
     _revert_round(db, out, 1)
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--round", "2"), runner=db) == 0
+    assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 0
     head = (
         f"lane p4 | stamps {stamps} | planned rows 2 | lane journal rows {journal_rows} | "
         f"carried 2 | not yet written 0"
     )
     output = _acceptance(tmp_path, journal_rows=journal_rows, name="round-2.log", head=head)
     capsys.readouterr()
-    code = G.main(_gate_args(tmp_path, ledger, "--accept", str(output)), runner=db)
+    code = G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db)
     printed = capsys.readouterr().out
     assert code == (0 if accepted else 1)
     assert ("it was run before this step" in printed) is not accepted
@@ -1596,9 +1633,9 @@ def test_the_open_lanes_name_only_lanes_that_publish() -> None:
 
 
 def test_p4_is_never_planned_without_an_open_lane(tmp_path, monkeypatch, capsys) -> None:
-    ledger = _gate_run(tmp_path, 1)
+    _gate_run(tmp_path, 1)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
-    args = _gate_args(tmp_path, ledger)
+    args = _gate_args(tmp_path)
     args[args.index("--open-lanes") + 1] = ""
     assert G.main(args, runner=_db()) == 1
     assert "P4 writes only lanes whose pilot passed" in capsys.readouterr().err
@@ -1606,8 +1643,8 @@ def test_p4_is_never_planned_without_an_open_lane(tmp_path, monkeypatch, capsys)
 
 
 def test_a_step_of_no_site_is_refused(tmp_path, monkeypatch, capsys) -> None:
-    ledger = _gate_run(tmp_path, 1)
-    assert G.main(_gate_args(tmp_path, ledger, "--apply", "--step", "0"), runner=_db()) == 1
+    _gate_run(tmp_path, 1)
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "0"), runner=_db()) == 1
     assert "at least one site per step" in capsys.readouterr().err
 
 

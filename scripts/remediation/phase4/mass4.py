@@ -388,7 +388,6 @@ class Phase4StageRunner(MR.StageRunner):
         if stage == "prepare":
             plan = self.run_dir / REQUEUE_FILE if batch_id in self.requeued else self.plan
             return [*argv, "--plan", str(plan)]
-        argv += ["--ledger", str(self.ledger)]
         if stage in MODEL_STAGES:
             # A model stage buys nothing itself: it is one half of a handoff round (`opus_handoff`).
             return argv if self.handoff is None else [*argv, *self.handoff.flag]
@@ -435,7 +434,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="phase4-mass", description=__doc__.splitlines()[0])
     parser.add_argument("--plan", default=str(R4.DEFAULT_PLAN))
     parser.add_argument("--run-dir", required=True)
-    parser.add_argument("--ledger", default=str(R4.DEFAULT_LEDGER))
     parser.add_argument("--log-dir", default=str(DEFAULT_LOG_DIR))
     parser.add_argument("--progress", default=None, help="default: <log-dir>/progress.json")
     parser.add_argument("--jobs", type=int, default=MR.DEFAULT_JOBS)
@@ -472,7 +470,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def drive(args: argparse.Namespace) -> int:
-    plan, run_dir, ledger = Path(args.plan), Path(args.run_dir), Path(args.ledger)
+    plan, run_dir = Path(args.plan), Path(args.run_dir)
+    # The run's own ledger (`model4.LEDGER_FILE`); no other is ever passed to its stages.
+    ledger = run_dir / M.LEDGER_FILE
     log_dir = Path(args.log_dir)
     stages = read_stages(args.stages)
     handoff = None

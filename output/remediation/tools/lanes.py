@@ -57,9 +57,9 @@ from phase4 import write4 as W4  # noqa: E402 - the phase-4/5 row groups: lane n
 REMEDIATION = REPO / "output" / "remediation"
 LOGS = REMEDIATION / "logs"
 RUNS = REMEDIATION / "phase3_runner" / "runs"
-#: Where the phase-4 runs live (design, pipeline: `phase4_runner/runs/<run>/`) and their ledger.
+#: Where the phase-4 runs live (design, pipeline: `phase4_runner/runs/<run>/`). Each run's ledger is
+#: its own `<run>/LEDGER.jsonl` (`model4.LEDGER_FILE`), never one shared across runs.
 PHASE4_RUNS = REMEDIATION / "phase4_runner" / "runs"
-PHASE4_LEDGER = REMEDIATION / "phase4_runner" / "LEDGER.jsonl"
 LEDGER = REMEDIATION / "phase3_runner" / "LEDGER.jsonl"
 WRITER = REPO / "scripts" / "remediation" / "phase3" / "write_stage.py"
 RUNNER = REPO / "scripts" / "remediation" / "phase3" / "run.py"
