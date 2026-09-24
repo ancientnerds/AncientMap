@@ -13,15 +13,13 @@ export const LAYER_CONFIG = {
     color: 0x00e0d0, // Teal
     radius: 1.002,
     label: 'Coastlines',
-    custom: true
   },
   countryBorders: {
-    file: 'admin_0_boundary_lines_land',  // Natural Earth 10 m, self-hosted in tiers (scripts/build_globe_layers.py)
+    // Natural Earth 10 m in tiers, file names from the manifest (getGlobeLayerUrl, scripts/build_globe_layers.py)
     category: 'cultural',
     color: 0x00e0d0, // Teal (same as coastlines)
     radius: 1.002, // Same as all other layers - no parallax
     label: 'Country Borders',
-    custom: false
   },
   rivers: {
     file: 'rivers',  // Base name - LOD adds ne_XXm_ prefix or _hires suffix
@@ -29,7 +27,6 @@ export const LAYER_CONFIG = {
     color: 0x2196f3,
     radius: 1.002, // Same as coastlines
     label: 'Rivers',
-    custom: true,
     hasLOD: true  // Enable 4-level LOD switching
   },
   lakes: {
@@ -38,7 +35,6 @@ export const LAYER_CONFIG = {
     color: 0x1976d2,
     radius: 1.002, // Same as coastlines
     label: 'Lakes',
-    custom: true,
     hasLOD: true  // Enable 4-level LOD switching
   },
   coralReefs: {
@@ -47,7 +43,6 @@ export const LAYER_CONFIG = {
     color: 0xff6b9d, // Coral pink
     radius: 1.002,
     label: 'Coral Reefs',
-    custom: true,
     hasLOD: true,  // Enable 4-level LOD switching (ne_10m_, ne_50m_, ne_110m_)
     labelsFile: '/data/layers/coral_reef_labels.geojson',
   },
@@ -57,7 +52,6 @@ export const LAYER_CONFIG = {
     color: 0x88ddff, // Ice blue
     radius: 1.002,
     label: 'Glaciers',
-    custom: true,
     hasLOD: true,  // Enable 4-level LOD switching (ne_10m_, ne_50m_, ne_110m_)
     labelsFile: '/data/layers/glacier_labels.geojson',
   },
@@ -67,7 +61,6 @@ export const LAYER_CONFIG = {
     color: 0xFF6B6B,  // Coral red
     radius: 1.002,
     label: 'Tectonic Plates',
-    custom: true,
     hasLOD: false,
     labelsFile: '/data/layers/tectonic_plate_labels.geojson',
   }

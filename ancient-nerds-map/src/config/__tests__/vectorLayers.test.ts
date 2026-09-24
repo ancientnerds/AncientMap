@@ -113,3 +113,10 @@ describe('config and services', () => {
     }
   })
 })
+
+describe('LAYER_CONFIG', () => {
+  it('carries no field the loaders ignore: no `custom` flag, and the border file comes from the manifest only', () => {
+    for (const key of KEYS) expect('custom' in LAYER_CONFIG[key], key).toBe(false)
+    expect('file' in LAYER_CONFIG.countryBorders).toBe(false)
+  })
+})
