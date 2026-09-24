@@ -336,7 +336,11 @@ GLOBE_PATH = "/globe.html"
 #:                   reported before globe_error existed. Uncounted, it would
 #:                   land in "no signal", which reads as a crash.
 #:   abandoned     - globe_abandon in any phase after the gate.
-#:   abandon_ms    - their ms, oldest first, so the fold keeps the latest.
+#:   abandon_ms    - their ms, oldest first, so the fold keeps the latest. The
+#:                   wait since the load started: navigation, or the moment
+#:                   the phone gate went away (analytics/globeAbandon.ts
+#:                   createLoadClock) - reading the gate is no loading wait.
+#:                   ready_ms counts from navigation, the gate included.
 #:   views_before  - the session's page views before endings_since, the first
 #:                   ending event ever recorded on the path (not the first in
 #:                   the window): the moment the instrumentation went live. A

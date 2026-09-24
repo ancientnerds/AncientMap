@@ -107,6 +107,35 @@ export function dropGlobeStartItems(done: Set<StartItem>): void {
   for (const item of START_ITEMS) if (item !== 'sites') done.delete(item)
 }
 
+/** How long this load has been going (globe_abandon's ms). */
+export interface LoadClock {
+  /** App's gateShowing, on every render. */
+  gate(showing: boolean): void
+  elapsed(): number
+}
+
+/**
+ * globe_abandon's wait: the time since this load started - navigation, or the
+ * last moment the phone gate went away. App renders the gate instead of the
+ * Globe, so on a phone the load only starts with the tap on '3D Globe' (or when
+ * a gate that appeared mid-load goes away and a fresh Globe starts from its
+ * scene); the time spent reading the gate is no loading wait. App observes the
+ * gate in its render, so the moment is taken before the fresh Globe's effects run.
+ */
+export function createLoadClock(now: () => number, gateShowing: boolean): LoadClock {
+  let start = 0
+  let gate = gateShowing
+  return {
+    gate(showing) {
+      if (gate && !showing) start = now()
+      gate = showing
+    },
+    elapsed() {
+      return now() - start
+    },
+  }
+}
+
 /**
  * Sends globe_abandon{ms, phase} through the latch on pagehide or when the
  * page turns hidden. pagehide, not unload/beforeunload: it keeps the page

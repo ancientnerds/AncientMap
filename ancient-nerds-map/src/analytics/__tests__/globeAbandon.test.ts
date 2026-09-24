@@ -16,6 +16,7 @@ import { track } from '../index'
 import {
   START_ITEMS,
   createGlobeEndingLatch,
+  createLoadClock,
   dropGlobeStartItems,
   installGlobeAbandon,
   loadPhase,
@@ -94,6 +95,44 @@ describe('dropGlobeStartItems', () => {
     dropGlobeStartItems(done)
     expect([...done]).toEqual(['sites'])
     expect(loadPhase(false, done)).toBe('scene')
+  })
+})
+
+describe('createLoadClock', () => {
+  let t = 0
+  const now = () => t
+
+  it('counts from navigation when no gate showed', () => {
+    t = 0
+    const clock = createLoadClock(now, false)
+    clock.gate(false)
+    t = 4000
+    expect(clock.elapsed()).toBe(4000)
+  })
+
+  it('counts from the globe tap, not from navigation: reading the gate is no loading wait', () => {
+    // A phone visitor reads the gate for 30 s, taps '3D Globe' and leaves 4 s into the load
+    t = 0
+    const clock = createLoadClock(now, true)
+    t = 30_000
+    clock.gate(true)
+    expect(clock.elapsed()).toBe(30_000)
+    clock.gate(false)
+    t = 34_000
+    expect(clock.elapsed()).toBe(4000)
+  })
+
+  it('starts again when a gate that appeared mid-load goes away (the fresh Globe starts from its scene)', () => {
+    t = 0
+    const clock = createLoadClock(now, false)
+    t = 5000
+    clock.gate(true) // a rotation below 768 px
+    t = 20_000
+    clock.gate(false)
+    t = 21_000
+    clock.gate(false) // later renders move nothing
+    t = 23_000
+    expect(clock.elapsed()).toBe(3000)
   })
 })
 

@@ -3,6 +3,7 @@ import { track } from './analytics'
 import { errorProps } from './analytics/boot'
 import {
   createGlobeEndingLatch,
+  createLoadClock,
   dropGlobeStartItems,
   installGlobeAbandon,
   loadPhase,
@@ -1661,6 +1662,11 @@ function AppContent() {
   const gateShowing = isMobile && !mobileWarningDismissed
   const gateShowingRef = useRef(gateShowing)
   gateShowingRef.current = gateShowing
+  // globe_abandon's wait counts from the start of the load: navigation, or the moment the
+  // phone gate went away (the Globe mounts only then). Observed here, in the render, so the
+  // moment is taken before the fresh Globe's effects run.
+  const [loadClock] = useState(() => createLoadClock(() => performance.now(), gateShowing))
+  loadClock.gate(gateShowing)
 
   // The overlay fades as soon as the sites, the critical layers and (focus mode)
   // the focus site's position are in; the warp starts with the fade. Never behind
@@ -1700,9 +1706,9 @@ function AppContent() {
     return installGlobeAbandon({
       latch: endingLatch,
       getPhase: () => loadPhase(gateShowingRef.current, startItemsRef.current),
-      now: () => performance.now(),
+      now: () => loadClock.elapsed(),
     })
-  }, [standaloneSiteId, endingLatch])
+  }, [standaloneSiteId, endingLatch, loadClock])
 
   // globe_unsupported or a start failure's globe_error, once, when its screen actually
   // shows: after the phone gate (App renders the gate first)

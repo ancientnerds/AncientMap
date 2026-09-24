@@ -85,3 +85,16 @@ describe("Globe's loader bridge uses App's ready moment", () => {
     expect(read('App.tsx')).toMatch(/const \{ phase, error \} = boundaryFailure\(err, globeReadyRef\.current\)\s*failGlobe\(phase, error\)/)
   })
 })
+
+describe('App: globe_abandon waits from the start of the load', () => {
+  const app = read('App.tsx')
+
+  it("measures from the moment the phone gate went away, observed in App's render before the fresh Globe's effects run", () => {
+    expect(app).toContain('const [loadClock] = useState(() => createLoadClock(() => performance.now(), gateShowing))')
+    // A statement of App's body (two spaces in), not inside an effect: child effects run first
+    const observe = app.search(/^ {2}loadClock\.gate\(gateShowing\)\r?$/m)
+    expect(observe).toBeGreaterThan(app.indexOf('const gateShowing = isMobile && !mobileWarningDismissed'))
+    expect(app).toContain('now: () => loadClock.elapsed(),')
+    expect(app).not.toContain('now: () => performance.now(),')
+  })
+})

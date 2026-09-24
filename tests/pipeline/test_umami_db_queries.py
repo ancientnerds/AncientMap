@@ -213,6 +213,10 @@ def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends
     )
     assert "max(d.string_value) FILTER (WHERE d.data_key = 'phase')" in sql
     assert "(max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms" in sql
+    # The abandon wait counts from the start of the load, not from navigation: on a phone the
+    # Globe mounts only once the gate goes away, and reading the gate is no loading wait
+    assert "now: () => loadClock.elapsed()," in read("App.tsx")
+    assert "if (gate && !showing) start = now()" in abandon
     # A start failure's globe_error, sent when its screen shows, carries its phase the same way
     assert (
         "return { name: 'globe_error', props: { phase: globeFailure.phase, message: globeFailure.message } }"
