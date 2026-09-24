@@ -168,6 +168,7 @@ def test_committed_manifest_points_at_committed_files_within_budget():
 - [ ] **U1.5 `.gitattributes`:** add `public/data/layers/globe/*.json -text` (byte-exact on every checkout; never `.json.gz`).
 - [ ] **U1.6 Tests pass**; `ruff check scripts/build_globe_layers.py tests/scripts/test_build_globe_layers.py` and `ruff format --check` on both.
 - [ ] **U1.7 Commit** "Build the globe's coastline and border tiers offline".
+- As built: the `borders_detail` gzip budget is **500 kB**, not the 450 kB of U1.1. The tier as planned (the 10 m border lines unsimplified, tolerance 0, 4 decimals) measures 467,995 B gzip-6 (2026-09-23; rebuilt byte-identical with shapely 2.1.2 / GEOS 3.13.1). Simplifying it to fit 450 kB would coarsen the one view that shows it as today (the Three.js globe closer than the Mapbox switch when Mapbox failed), so the budget moved instead of the tier; the test comment in `tests/scripts/test_build_globe_layers.py` says the same. The build prints the shapely/GEOS versions: identical bytes are promised only for the same inputs and the same shapely/GEOS.
 
 ## U2 — Sites API: `fields=globe` and a pre-compressed shared cache
 
