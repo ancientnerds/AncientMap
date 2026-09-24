@@ -39,6 +39,11 @@ if TYPE_CHECKING:
     from playwright.sync_api import Browser, BrowserContext, CDPSession, Page, Playwright, Route
 
 ROOT = Path(__file__).resolve().parents[2]
+# Run as a script, only scripts/globe_probe/ is on sys.path; the fields=globe projection
+# (contract C2 of the globe-load plan) is the route's own, from pipeline/
+sys.path.insert(0, str(ROOT))
+from pipeline.utils.globe_payload import GLOBE_KEYS, globe_projection  # noqa: E402
+
 DIST = ROOT / "ancient-nerds-map" / "dist"
 GLOBE_LAYERS = ROOT / "public" / "data" / "layers" / "globe"
 OUT_ROOT = ROOT / "output" / "globe_probe"
@@ -46,9 +51,6 @@ OUT_ROOT = ROOT / "output" / "globe_probe"
 PROD_HOST = "ancientnerds.com"
 PROD_ORIGIN = f"https://{PROD_HOST}"
 GLOBE_LAYER_PREFIX = "/data/layers/globe/"
-
-# The keys `/api/sites/all?fields=globe` keeps (contract C2 of the globe-load plan).
-GLOBE_KEYS = ("id", "n", "la", "lo", "s", "t", "p", "pn", "c")
 
 # ancientnerds-nginx-config: gzip_comp_level 6, gzip_min_length 1024 and these
 # gzip_types (text/html is always on in nginx). Images and woff2 go out as they are.
@@ -195,12 +197,6 @@ PROBE_STATE_JS = r"""
 
 
 # --- pure helpers -------------------------------------------------------------------
-
-
-def project_globe_payload(payload: dict) -> dict:
-    """What `fields=globe` returns: the same envelope, each site cut to GLOBE_KEYS."""
-    sites = [{k: s[k] for k in GLOBE_KEYS if k in s} for s in payload["sites"]]
-    return {**payload, "sites": sites}
 
 
 def is_globe_projected(payload: dict) -> bool:
@@ -609,7 +605,7 @@ def install_routes(
                     raise RuntimeError(f"simulated fields=globe: {full_url} answered {resp.status}")
                 payload = resp.json()
                 body = json.dumps(
-                    project_globe_payload(payload), ensure_ascii=False, separators=(",", ":")
+                    globe_projection(payload), ensure_ascii=False, separators=(",", ":")
                 ).encode()
                 counted = counted_bytes(body, "application/json")
                 ledger.fulfilled_locally(url, counted)

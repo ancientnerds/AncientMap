@@ -19,6 +19,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from pipeline.utils.globe_payload import GLOBE_KEYS, globe_projection
+
 # By file: a dependency installs a top-level package named `scripts` into
 # site-packages, which shadows our scripts/ directory for a plain import.
 _SPEC = importlib.util.spec_from_file_location(
@@ -53,9 +55,16 @@ def _full_site(**extra: object) -> dict:
     return site
 
 
+def test_the_probe_simulates_the_routes_own_projection():
+    # One definition for the route (tests/api/test_sites_all_fields.py pins the route's use)
+    # and the probe: a key added there reaches the probe's simulated fields=globe and its check
+    assert probe.GLOBE_KEYS is GLOBE_KEYS
+    assert probe.globe_projection is globe_projection
+
+
 def test_projection_keeps_only_the_globe_keys_and_the_envelope():
     payload = {"count": 1, "sites": [_full_site()], "dataSource": "postgres"}
-    out = probe.project_globe_payload(payload)
+    out = globe_projection(payload)
     assert out["count"] == 1 and out["dataSource"] == "postgres"
     assert set(out["sites"][0]) == {"id", "n", "la", "lo", "s", "t", "p", "pn", "c"}
     assert payload["sites"][0]["d"] == "A long description"  # input untouched
@@ -63,13 +72,13 @@ def test_projection_keeps_only_the_globe_keys_and_the_envelope():
 
 def test_projection_leaves_absent_keys_absent():
     site = {"id": "b", "n": "Pin", "la": 1.0, "lo": 2.0, "s": "ancient_nerds", "d": "x"}
-    out = probe.project_globe_payload({"count": 1, "sites": [site], "dataSource": "postgres"})
+    out = globe_projection({"count": 1, "sites": [site], "dataSource": "postgres"})
     assert out["sites"] == [{"id": "b", "n": "Pin", "la": 1.0, "lo": 2.0, "s": "ancient_nerds"}]
 
 
 def test_is_globe_projected_detects_a_server_that_ignores_fields():
     assert not probe.is_globe_projected({"count": 1, "sites": [_full_site()]})
-    projected = probe.project_globe_payload({"count": 1, "sites": [_full_site()]})
+    projected = globe_projection({"count": 1, "sites": [_full_site()]})
     assert probe.is_globe_projected(projected)
 
 

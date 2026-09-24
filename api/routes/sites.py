@@ -39,6 +39,7 @@ from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.utils.globe_payload import globe_projection
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
 
 _heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
@@ -204,9 +205,6 @@ def _load_pinned_sites(
     return sites
 
 
-# The fields the globe's first frame draws: dots (la/lo), their colours and filters (s, t, c,
-# p/pn), tooltips and the result list (n). Everything else loads after the intro (fields=all).
-_GLOBE_KEYS = ("id", "n", "la", "lo", "s", "t", "p", "pn", "c")
 _ALL_CACHE_TTL_S = 1800
 _DEFAULT_ALL_SOURCES = frozenset({"ancient_nerds", "lyra", "ancient_nerds_community"})
 
@@ -241,15 +239,6 @@ def _gzip_json(payload: dict) -> bytes:
     """
     body = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     return gzip.compress(body.encode("utf-8"), compresslevel=6, mtime=0)
-
-
-def _globe_projection(payload: dict) -> dict:
-    """The payload with each site cut to _GLOBE_KEYS; keys a site lacks stay absent
-    (snapshot sites omit t/p/pn/c when empty)."""
-    return {
-        **payload,
-        "sites": [{k: s[k] for k in _GLOBE_KEYS if k in s} for s in payload["sites"]],
-    }
 
 
 @router.get("/all")
@@ -302,7 +291,7 @@ def get_all_sites(
         payload = _build_sites_payload(db, plan, site_type, period_max, skip, limit)
         # Both variants from the same read: the globe's later fields=all request then matches
         # the dots it already drew, unless an invalidation came in between.
-        variants = {"all": _gzip_json(payload), "globe": _gzip_json(_globe_projection(payload))}
+        variants = {"all": _gzip_json(payload), "globe": _gzip_json(globe_projection(payload))}
         for variant, data in variants.items():
             cache_set_bytes(f"{key_base}:f={variant}", data, ttl=_ALL_CACHE_TTL_S)
         body = variants[fields]

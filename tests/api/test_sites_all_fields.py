@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient
 from api import cache
 from api.routes import sites as sr
 from pipeline.database import get_db
+from pipeline.utils import globe_payload
 from tests.fake_sql import RecordingSession
 
 URL = "/api/sites/all?limit=100000&source=ancient_nerds"
@@ -201,6 +202,13 @@ EXPECTED_ALL: dict = {
 
 def _globe(payload: dict) -> dict:
     return {**payload, "sites": [{k: s[k] for k in GLOBE_KEYS if k in s} for s in payload["sites"]]}
+
+
+def test_the_route_projects_with_the_shared_definition():
+    # The globe load probe simulates fields=globe with the same function
+    # (tests/scripts/test_globe_probe.py), so the two cannot drift apart
+    assert sr.globe_projection is globe_payload.globe_projection
+    assert globe_payload.GLOBE_KEYS == GLOBE_KEYS
 
 
 class FakeRedis:
