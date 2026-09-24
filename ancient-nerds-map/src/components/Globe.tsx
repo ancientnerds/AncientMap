@@ -359,8 +359,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     listHighlightedPositions, setListHighlightedPositions,
   } = highlightedSitesHook
 
-  // Fly-to animation: camera movement to coordinates from search results
-  useFlyToAnimation({ refs, flyTo })
+  // Fly-to animation: camera movement to coordinates from search results. A fly-to
+  // that arrives before the intro warp is flown when the warp ends (onWarpComplete).
+  const { replayPendingFlyTo } = useFlyToAnimation({ refs, flyTo })
 
   // Contribute picker: map picker mode for adding new sites
   useContributePicker({
@@ -775,9 +776,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       warpProgressRef, warpLinearProgressRef, warpStartTimeRef,
       warpCompleteForLabelsRef, warpInitialCameraPosRef, warpTargetCameraPosRef,
       layersReadyCalledRef, dotsAnimationCompleteRef, logoAnimationStartedRef,
-      // Runs inside the frame that ends the warp: start() only books an idle callback
+      // Runs inside the frame that ends the warp: start() only books an idle callback,
+      // the fly-to only books its first frame
       onWarpComplete: () => {
         background.start()
+        replayPendingFlyTo()
         onWarpCompleteRef.current?.()
       },
       logoSpriteRef, logoMaterialRef, basemapMeshRef, basemapBackMeshRef,
