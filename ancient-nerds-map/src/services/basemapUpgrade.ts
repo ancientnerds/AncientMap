@@ -255,12 +255,14 @@ export class BasemapState {
   /**
    * Runs `load` for `tier` unless that tier or a higher one is held; a caller
    * asking for a tier that is already loading joins that load, unless that load
-   * was aborted: it stays in the map until its decode ends (createImageBitmap
-   * cannot be aborted), and joining it would reject with the old reason. The load's
-   * signal aborts with the caller's signal (the promise rejects with its
-   * reason) or with `abortAll` (the promise resolves: the context restore or
-   * the unmount that cut it short owns what happens next, it is not a
-   * failure of the load).
+   * was aborted: joining it would reject with the old reason. Its decode still
+   * runs (createImageBitmap cannot be aborted), so the new load starts once the
+   * aborted one has settled - one full-size bitmap per tier at a time, however
+   * often the satellite is switched off and on during a decode - and does not
+   * start at all if it was aborted while it waited. The load's signal aborts
+   * with the caller's signal (the promise rejects with its reason) or with
+   * `abortAll` (the promise resolves: the context restore or the unmount that
+   * cut it short owns what happens next, it is not a failure of the load).
    */
   run(tier: BasemapTier, signal: AbortSignal, load: (signal: AbortSignal) => Promise<void>): Promise<void> {
     if (this.wanted === null || tierRank(tier) > tierRank(this.wanted)) this.wanted = tier
@@ -272,7 +274,14 @@ export class BasemapState {
     const onAbort = () => ctrl.abort(signal.reason)
     signal.addEventListener('abort', onAbort, { once: true })
     const flight = { ctrl, handedOver: false, done: Promise.resolve() }
-    flight.done = load(ctrl.signal)
+    // The aborted load's own caller receives its outcome; this one only waits for it to end
+    const started = running
+      ? Promise.allSettled([running.done]).then(() => {
+        if (ctrl.signal.aborted) throw ctrl.signal.reason
+        return load(ctrl.signal)
+      })
+      : load(ctrl.signal)
+    flight.done = started
       .catch((err: unknown) => {
         if (flight.handedOver) return
         throw err

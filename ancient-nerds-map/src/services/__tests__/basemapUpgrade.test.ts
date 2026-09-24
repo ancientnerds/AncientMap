@@ -581,6 +581,37 @@ describe('loadSatellite', () => {
     expect(ctx.satellite.tier).toBe('high')
   })
 
+  it('decodes a tier at most once at a time: off/on toggles during a decode wait for it', async () => {
+    const dec = stubDecoding(SIZES)
+    const release = dec.hold('/data/basemaps/satellite_high.webp')
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    const toggles: AbortController[] = []
+    const settled: Array<Promise<string>> = []
+    const on = () => {
+      const ctrl = new AbortController()
+      toggles.push(ctrl)
+      settled.push(loadSatellite(ctx, 'high', ctrl.signal).then(() => 'resolved', (err: Error) => err.message))
+    }
+    on()
+    await vi.waitFor(() => expect(dec.fetched).toHaveLength(1)) // decoding: createImageBitmap cannot be aborted
+    // Two more off/on pairs inside the held decode: no second 512 MiB decode alongside it
+    for (let i = 0; i < 2; i++) {
+      toggles[toggles.length - 1].abort(new Error('basemap: satellite switched off'))
+      on()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(dec.fetched).toHaveLength(1)
+    }
+    release()
+    expect(await Promise.all(settled)).toEqual([
+      'basemap: satellite switched off',
+      'basemap: satellite switched off',
+      'resolved',
+    ])
+    // The aborted decode, then the one load the visitor still wants
+    expect(dec.fetched).toEqual(['/data/basemaps/satellite_high.webp', '/data/basemaps/satellite_high.webp'])
+    expect(ctx.satellite.tier).toBe('high')
+  })
+
   it('never replaces a higher tier with a lower one that arrives later', async () => {
     const dec = stubDecoding(SIZES)
     const releaseMed = dec.hold('/data/basemaps/satellite_med.webp')
