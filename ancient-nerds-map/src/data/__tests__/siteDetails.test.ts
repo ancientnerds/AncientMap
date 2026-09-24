@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DataStoreClass } from '../DataStore'
 import { OfflineStorage, type DownloadState } from '../../services/OfflineStorage'
+import { OfflineFetch } from '../../services/OfflineFetch'
 
 const SOURCES = { sources: [{ id: 'ancient_nerds', name: 'Ancient Nerds', color: '#fff', count: 2, enabledByDefault: true }] }
 
@@ -193,6 +194,20 @@ describe('DataStore.loadSiteDetails()', () => {
     await expect(store.loadSiteDetails()).rejects.toThrow('HTTP 503')
     expect(sitesAllCalls().filter(url => url.includes('fields=all'))).toHaveLength(1)
     expect(store.detailsReady).toBe(false)
+  })
+
+  it('still fetches when app offline mode was switched on after an online start', async () => {
+    routeFetch()
+    const store = new DataStoreClass()
+    await store.initialize('globe')
+    // The Offline-Mode button during the intro, or a phone that briefly lost its network
+    OfflineFetch.setOfflineMode(true)
+    try {
+      await expect(store.loadSiteDetails()).resolves.toHaveLength(2)
+    } finally {
+      OfflineFetch.setOfflineMode(false)
+    }
+    expect(store.getSiteById('a')!.description).toBe('A temple on a hill')
   })
 
   it('rejects when called before initialize()', async () => {

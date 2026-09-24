@@ -228,7 +228,11 @@ class DataStoreClass {
     await init
     if (this.hasSiteDetails) return []
 
-    const response = await offlineFetch(defaultSourceSitesUrl('all'))
+    // Plain fetch, not offlineFetch: app offline mode switched on after an online start
+    // (the button during the intro, or any 'offline' event) would throw without asking
+    // the network, and the memoised failure would last the session. The service worker's
+    // api-sites-globe rule answers this URL from its cache when there is no network.
+    const response = await fetch(defaultSourceSitesUrl('all'))
     if (!response.ok) {
       throw new Error(`Failed to load site details: HTTP ${response.status}`)
     }
