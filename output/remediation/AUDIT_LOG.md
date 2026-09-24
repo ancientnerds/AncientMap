@@ -8344,3 +8344,64 @@ $PY $M/tools/write_gate4.py --group P4 --run pilot3-2026-09-24 --open-lanes W,S 
 $PY $M/tools/write_gate4.py --group P4 --run pilot3-2026-09-24 --open-lanes W,S --rehearse
 $PY $M/tools/write_gate4.py --group P5 --run pilot3-2026-09-24 --rehearse
 ```
+
+### Tests, sweep, gates for pilot 2's fixes and pilot 3 (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 22 new test functions, each red before its code: `test_phase4_verify.py` +9 (the correction
+  markers V4 refuses; a card naming a nationality; the two garbles V5 holds, over the shared
+  `p4_garble_cases.py` and against S2's; the stored name's base, for a strong 'own' verdict only,
+  and its S3/V6 parity over 12 names x 10 gate and witness cases), `test_phase4_pilot.py` +4 (pilot
+  3's draw, its refusal of an earlier pilot whose fixed members moved, the seal, the sealed file),
+  `tests/pipeline/test_country_demonyms.py` +4 (new: the table covers `NAME_TO_ISO` exactly, proper
+  nouns, the modern adjectives, the retired style rule's demonyms kept), `test_phase4_select.py` +2
+  (card rule (4), the reviewer's garble DROP), `test_phase4_sentences.py` +2 (the garble fixture, the
+  pool), `test_phase4_write.py` +1 (the gate reads the ledger of its own run only: pilot 1's labels
+  never reach pilot 2's evidence). Extended: 5 `SPAN_CASES`, 16 S2 protected-token cases, the
+  `model4` additions pin, S1, S1b and the select round handed the run's ledger, mass4's ledger, and
+  the 47 write-gate call sites moved to the run's ledger. Red first, measured: T3 28 failures, T4/T6
+  two collection errors (no table), T5 77 failures, T8 50, the ledger `AttributeError` (no
+  `LEDGER_FILE`), pilot 3 5 failures.
+* `mutation_sweep.P4_PILOT3_MUTATIONS`: 42 cases (`p4 verify4` 16, `p4 sentences` 6, `p4 pilot` 5,
+  `p4 model` 3, `p4 country_lookup` 3, `p4 select` 3, `p4 prompts` 2, `p4 run4` 2, `p4 write_gate4`
+  1, `p4 mass4` 1), registered once; three older cases re-anchored on lines this branch rewrote (`p4
+  model: unknown is not protected`, `p4 pilot: pilot 2 takes fixed members other than pilot 1's`,
+  `p4 pilot: build ignores the earlier pilot it is told`); 2,015 labels, all unique, every anchor and
+  test present. The sweep's own `main` over **every case whose target is a file this branch changed
+  since `5773608`** (verify4 189, write4 97, model4 80, sentences 61, route_stage 56, mass4 45,
+  write_gate4 35, pilot4 33, run4 28, select_stage 20, prompts4 12, mutation_sweep 3, lanes 3,
+  PILOT_THRESHOLDS.md 3, AUDIT_LOG.md 3, country_lookup 3): **671 cases, 670 caught on the first run**
+  - `p4 sentences: an overlong sentence is offered` survived because the new garble rule refused its
+  test's long sentence ("old. and a fragment.") before the length bound was read; the test was
+  re-isolated (`e338225`) and the case is caught - **671/671**; the tree byte-identical to the
+  sweep's start for its 16 files; no `# mutant` left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **6,060 passed, 111 skipped, 57 deselected, 0 failed** (318.7 s). The first run had 1 failure,
+  `test_every_mutation_names_an_anchor_and_a_test_that_exist` (the two pilot-2 cases above; fixed in
+  `c88d72a`). The skips are the same 111 as before: gitignored data (Natural Earth, the snapshot, the
+  worklist, the bcases cache, the Phase-3 enwiki extracts, ...), two tests of refactored-out legacy
+  functions and one opt-in live test. After `e338225` (one test's data) the Phase-4 files and the
+  sweep test were run again: 1,580 passed.
+* `ruff check` and `ruff format --check` clean on the 24 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check (country_lookup is under
+  `pipeline/`, which both images ship) passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
+### Open
+
+* **The demonym table's safe reading departs from one sentence of the final design** (entry [6],
+  card_texts: "Cultural adjectives such as Roman, Egyptian or Maya are allowed"): `Egyptian`, `Greek`,
+  `Macedonian` hold a card here. Ordered by the orchestrator after pilot 2's T6; recorded in
+  PHASE4_CONTRACTS.md section 6 for the owner.
+* **T8 may fail again.** Pilot 2's own selections, re-verified with this branch: 51 of 78 lane-W
+  sites pass before review (V6 14 - 9 of them the pronoun rule, a sentence opening with It, This,
+  These, ... whose immediate source predecessor is not published right before it - abstained 7, V14
+  6, V4 2, V8 1, V5 1; a site may carry several). The selector question does not state V6's
+  positional pronoun rule; rule (9) asks only for an antecedent among the picks. Pilot 3's selector
+  picks anew, so the number is not its result; the rule could still be added before pilot 3's 87
+  questions are answered (a re-export - no model has been called).
+* 5 of pilot 3's 8 new lane-S draws offer no name-bearing sentence and are held `no-source` without a
+  question (lane S is not in T8).
+* Pilot 3's ledger lives in its gitignored run directory; keep it with `HOLDS4.jsonl` and the audit
+  verdicts in `pilot3_evidence/` when the result is recorded.
