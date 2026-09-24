@@ -886,7 +886,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     warpTargetCameraPosRef.current = target
   }, [initialPosition])
 
-
   // No orbit closer than the Mapbox switch distance until Mapbox is ready
   // (or has failed): the Three.js globe was never shown closer than that.
   useEffect(() => {
