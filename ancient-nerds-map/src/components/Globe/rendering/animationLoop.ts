@@ -1050,7 +1050,7 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
       // Geo and layer labels - only apply fade visibility transitions (and draw a
       // label's texture the first time it shows)
       // Bubble/stacking positions are calculated in updateGeoLabels (on zoom change only)
-      applyGeoLabelFades(ctx)
+      applyGeoLabelFades(ctx, camera.position)
 
       // === Apply cuddle offsets for country labels (pushed away from their capitals) ===
       const cuddleOffsets = ctx.cuddleOffsetsRef.current

@@ -96,6 +96,9 @@ function makeContext(overrides: { geoLabelsVisible?: boolean; setLabelsLoaded?: 
   return { ctx, scene }
 }
 
+/** A camera that every fixture label but the southern Atlantic faces. */
+const OVER_NORTH_POLE = new THREE.Vector3(0, 2.44, 0)
+
 const textureOf = (mesh: THREE.Mesh) => (mesh.material as THREE.ShaderMaterial).uniforms.map.value as THREE.Texture | null
 const drawnTexts = (canvases: FakeLabelCanvas[]) =>
   canvases.flatMap(c => c.context.drawn.filter(([method]) => method === 'fill').map(([, text]) => text))
@@ -204,7 +207,7 @@ describe('loadGeoLabels', () => {
 
     // The first frame's fades then find every texture in place: nothing is drawn, nothing untextured shows
     const drawnBefore = drawnTexts(canvases).length
-    applyGeoLabelFades(ctx)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE)
     expect(drawnTexts(canvases)).toHaveLength(drawnBefore)
     const shown = ctx.geoLabelsRef.current.filter(item => item.mesh.visible)
     expect(shown.map(item => `${item.label.type}:${item.label.name}`)).toEqual(expected)
@@ -219,16 +222,16 @@ describe('the show path', () => {
     const germany = find(ctx, 'Germany', 'country')
 
     ctx.visibleAfterCollisionRef.current = new Set(['Germany'])
-    applyGeoLabelFades(ctx)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE)
     expect(drawnTexts(canvases)).toEqual(['GERMANY'])
     expect(textureOf(germany.mesh)).not.toBeNull()
     expect(germany.mesh.visible).toBe(true)
     const texture = textureOf(germany.mesh)
 
     ctx.visibleAfterCollisionRef.current = new Set()
-    applyGeoLabelFades(ctx)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE)
     ctx.visibleAfterCollisionRef.current = new Set(['Germany'])
-    applyGeoLabelFades(ctx)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE)
     expect(drawnTexts(canvases)).toEqual(['GERMANY'])
     expect(textureOf(germany.mesh)).toBe(texture)
   })
@@ -237,7 +240,7 @@ describe('the show path', () => {
     const { ctx } = makeContext()
     await loadGeoLabels(ctx)
     ctx.visibleAfterCollisionRef.current = new Set(['Mali', 'Victoria'])
-    applyGeoLabelFades(ctx)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE)
 
     expect(find(ctx, 'Mali', 'country').mesh.visible).toBe(true)
     expect(textureOf(find(ctx, 'Mali', 'capital').mesh)).toBeNull()
@@ -306,27 +309,48 @@ describe('the frame budget of the show path', () => {
     return () => (t += 3)
   }
   const shownNames = (ctx: GeoLabelContext) =>
-    ctx.geoLabelsRef.current.filter(item => item.mesh.visible).map(item => `${item.label.type}:${item.label.name}`)
+    ctx.geoLabelsRef.current.filter(item => item.mesh.visible).map(item => item.label.name)
+  const above = (ctx: GeoLabelContext, name: string, type: string, distance = 2.44) =>
+    find(ctx, name, type).position.clone().setLength(distance)
 
-  it('draws at most a budget of textures per frame and shows the rest in the next frames', async () => {
+  it('draws a budget of textures per frame, the labels facing the camera first', async () => {
     const { ctx } = makeContext()
     await loadGeoLabels(ctx)
-    const names = ['Europe', 'Germany', 'Russia', 'Canada', 'Seychelles', 'Berlin', 'Alps']
-    ctx.visibleAfterCollisionRef.current = new Set(names)
+    ctx.visibleAfterCollisionRef.current = new Set(['Europe', 'Germany', 'Russia', 'Canada', 'Seychelles', 'Berlin', 'Alps'])
+    const camera = above(ctx, 'Germany', 'country')
     const clock = steppingClock()
 
-    applyGeoLabelFades(ctx, clock, 8)
-    expect(drawnTexts(canvases)).toHaveLength(3)
-    expect(shownNames(ctx)).toEqual(['continent:Europe', 'country:Germany', 'country:Russia'])
+    applyGeoLabelFades(ctx, camera, clock, 8)
+    expect(drawnTexts(canvases)).toEqual(['GERMANY', 'Berlin', 'EUROPE'])
+    expect(shownNames(ctx).sort()).toEqual(['Berlin', 'Europe', 'Germany'])
 
-    applyGeoLabelFades(ctx, clock, 8)
-    applyGeoLabelFades(ctx, clock, 8)
-    expect(drawnTexts(canvases)).toHaveLength(7)
+    applyGeoLabelFades(ctx, camera, clock, 8)
+    expect(drawnTexts(canvases).slice(3)).toEqual(['Alps', 'RUSSIA', 'CANADA'])
+    applyGeoLabelFades(ctx, camera, clock, 8)
+    expect(drawnTexts(canvases).slice(6)).toEqual(['SEYCHELLES'])
     expect(shownNames(ctx)).toHaveLength(7)
-    // Waiting labels stayed hidden and untextured until their frame
+    // Nothing else was drawn or shown
     for (const item of ctx.geoLabelsRef.current) {
-      expect(item.mesh.visible).toBe(names.includes(item.label.name) && item === find(ctx, item.label.name, item.label.type))
+      if (!ctx.visibleAfterCollisionRef.current.has(item.label.name)) expect(textureOf(item.mesh)).toBeNull()
     }
+  })
+
+  it('leaves a label on the far side untextured until it turns toward the camera', async () => {
+    const { ctx } = makeContext()
+    await loadGeoLabels(ctx)
+    ensureLabelTexture(find(ctx, 'Europe', 'continent'))
+    ctx.visibleAfterCollisionRef.current = new Set(['Germany', 'Mali', 'Europe'])
+    const farSide = above(ctx, 'Germany', 'country').negate()
+
+    applyGeoLabelFades(ctx, farSide, steppingClock(), 8)
+    applyGeoLabelFades(ctx, farSide, steppingClock(), 8)
+    expect(drawnTexts(canvases)).toEqual(['EUROPE'])
+    // A label that has its texture shows as before (the shader hides the far side)
+    expect(shownNames(ctx)).toEqual(['Europe'])
+    expect(ctx.labelVisibilityStateRef.current.get('Germany')).toBeUndefined()
+
+    applyGeoLabelFades(ctx, above(ctx, 'Germany', 'country'), steppingClock(), 8)
+    expect(shownNames(ctx).sort()).toEqual(['Europe', 'Germany', 'Mali'])
   })
 
   it('never shows another label of the same name while the first waits for its texture', async () => {
@@ -341,13 +365,13 @@ describe('the frame budget of the show path', () => {
     ctx.visibleAfterCollisionRef.current = new Set(['Europe', 'Germany', 'Russia', 'Victoria'])
     const clock = steppingClock()
 
-    applyGeoLabelFades(ctx, clock, 8)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE, clock, 8)
     const victorias = ctx.geoLabelsRef.current.filter(item => item.label.name === 'Victoria')
     expect(victorias.map(item => item.mesh.visible)).toEqual([false, false])
     expect(lake.mesh.visible).toBe(false)
     expect(ctx.labelVisibilityStateRef.current.get('Victoria')).toBeUndefined()
 
-    applyGeoLabelFades(ctx, clock, 8)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE, clock, 8)
     expect(victorias.map(item => item.mesh.visible)).toEqual([true, false])
     expect(lake.mesh.visible).toBe(false)
   })
@@ -359,11 +383,11 @@ describe('the frame budget of the show path', () => {
     ctx.visibleAfterCollisionRef.current = new Set(['Europe', 'Germany', 'Russia', 'Canada'])
     const spent = () => 1000 // every reading says the budget is gone
 
-    applyGeoLabelFades(ctx, spent, 8)
-    expect(shownNames(ctx)).toEqual(['continent:Europe', 'country:Germany', 'country:Russia', 'country:Canada'])
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE, spent, 8)
+    expect(shownNames(ctx)).toEqual(['Europe', 'Germany', 'Russia', 'Canada'])
 
     ctx.visibleAfterCollisionRef.current = new Set(['Europe'])
-    applyGeoLabelFades(ctx, spent, 8)
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE, spent, 8)
     expect(['Germany', 'Russia', 'Canada'].map(n => ctx.labelVisibilityStateRef.current.get(n))).toEqual([false, false, false])
   })
 
@@ -373,9 +397,9 @@ describe('the frame budget of the show path', () => {
     ctx.visibleAfterCollisionRef.current = new Set(['Europe', 'Germany'])
     let t = 0
     const slow = () => (t += 50)
-    applyGeoLabelFades(ctx, slow, 8)
-    expect(shownNames(ctx)).toEqual(['continent:Europe'])
-    applyGeoLabelFades(ctx, slow, 8)
-    expect(shownNames(ctx)).toEqual(['continent:Europe', 'country:Germany'])
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE, slow, 8)
+    expect(shownNames(ctx)).toEqual(['Germany'])
+    applyGeoLabelFades(ctx, OVER_NORTH_POLE, slow, 8)
+    expect(shownNames(ctx)).toEqual(['Europe', 'Germany'])
   })
 })

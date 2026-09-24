@@ -10,6 +10,7 @@ import {
   LABEL_STYLES,
   LABEL_BASE_SCALE,
   CUDDLE,
+  EFFECTS,
   GEO,
 } from '../../../config/globeConstants'
 import {
@@ -736,20 +737,25 @@ export function updateGeoLabels(ctx: GeoLabelContext): void {
  * Three.js view with labels on makes ~970 labels eligible at once (the
  * collision is global): drawn in one frame that was a 206 ms task on the
  * desktop probe and 1.37 s on the emulated phone (CPU x4). With the budget
- * they appear over the next frames instead, in the fade pass's order.
+ * they appear over the next frames instead, those facing the camera first.
  */
 export const LABEL_TEXTURE_BUDGET_MS = 8
+
+const _cameraDir = new THREE.Vector3()
+const _labelDir = new THREE.Vector3()
 
 /**
  * Fades geo and layer labels in or out when their collision result changed.
  * Backside hiding is the shader's vViewFade. Visibility is keyed by name: of
  * labels sharing a name only the first (geo labels come first) changes state.
  *
- * A label's texture is drawn here the first time it is shown, at most
- * `budgetMs` of drawing per call (the first texture of a call always).
- * A label over the budget keeps its old state until a later frame, and so does
- * every later label of its name, so a same-named label never shows in its
- * place.
+ * A label's texture is drawn here the first time it is shown, the labels
+ * facing the camera most first, at most `budgetMs` of drawing per call (the
+ * first texture of a call always). A label on the far side, where vViewFade
+ * leaves nothing of it (below HORIZON_FADE_START), gets its texture once it
+ * turns toward the camera. A label still without its texture keeps its old
+ * state until a later frame, and so does every later label of its name, so a
+ * same-named label never shows in its place.
  */
 export function applyGeoLabelFades(
   ctx: {
@@ -759,6 +765,7 @@ export function applyGeoLabelFades(
     labelVisibilityStateRef: { current: Map<string, boolean> }
     visibleAfterCollisionRef: { current: Set<string> }
   },
+  cameraPosition: THREE.Vector3,
   now: () => number = () => performance.now(),
   budgetMs: number = LABEL_TEXTURE_BUDGET_MS,
 ): void {
@@ -769,10 +776,10 @@ export function applyGeoLabelFades(
 
   const fm = ctx.fadeManagerRef.current
   const visibilityState = ctx.labelVisibilityStateRef.current
-  /** When this call drew its first texture; null until it draws one. */
-  let drawingSince: number | null = null
-  let budgetSpent = false
+  _cameraDir.copy(cameraPosition).normalize()
+  /** Names whose first label waits for its texture: none of that name changes state this frame. */
   let waiting: Set<string> | null = null
+  let toDraw: Array<{ item: GlobeLabel; facing: number }> | null = null
 
   for (const item of geoAndLayerLabels) {
     const labelName = item.label.name
@@ -786,13 +793,10 @@ export function applyGeoLabelFades(
     if (shouldBeVisible === isCurrentlyVisible) continue
 
     if (shouldBeVisible && !hasTexture(item)) {
-      if (budgetSpent) {
-        (waiting ??= new Set()).add(labelName)
-        continue
-      }
-      drawingSince ??= now()
-      ensureLabelTexture(item)
-      budgetSpent = now() - drawingSince >= budgetMs
+      (waiting ??= new Set()).add(labelName)
+      const facing = _labelDir.copy(item.mesh.position).normalize().dot(_cameraDir)
+      if (facing > EFFECTS.HORIZON_FADE_START) (toDraw ??= []).push({ item, facing })
+      continue
     }
 
     visibilityState.set(labelName, shouldBeVisible)
@@ -801,6 +805,16 @@ export function applyGeoLabelFades(
     } else {
       fadeLabelOut(item.mesh, fm, `geo-${labelName}`)
     }
+  }
+
+  if (!toDraw) return
+  toDraw.sort((a, b) => b.facing - a.facing)
+  const drawingSince = now()
+  for (const { item } of toDraw) {
+    ensureLabelTexture(item)
+    visibilityState.set(item.label.name, true)
+    fadeLabelIn(item.mesh, fm, `geo-${item.label.name}`)
+    if (now() - drawingSince >= budgetMs) break
   }
 }
 
