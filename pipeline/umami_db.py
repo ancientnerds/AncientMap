@@ -337,16 +337,27 @@ GLOBE_PATH = "/globe.html"
 #:                   land in "no signal", which reads as a crash.
 #:   abandoned     - globe_abandon in any phase after the gate.
 #:   abandon_ms    - their ms, oldest first, so the fold keeps the latest.
-#:   first_view    - the session's first page view in the window.
-#:   endings_since - the first ending event ever recorded on the path (not
-#:                   the first in the window): the moment the instrumentation
-#:                   went live. A session that started before it cannot have
-#:                   sent an ending, so its silent loads are "unmeasured", not
-#:                   "no signal". The same value on every row.
+#:   views_before  - the session's page views before endings_since, the first
+#:                   ending event ever recorded on the path (not the first in
+#:                   the window): the moment the instrumentation went live. A
+#:                   load before it cannot have sent an ending, so if it did
+#:                   not reach the globe it is "unmeasured", not "no signal".
+#:                   Counted per load, not decided per session: an Umami
+#:                   session is one browser for a calendar month, so it holds
+#:                   loads from both sides, and the later ones are measured.
+#:                   Every view while no ending exists yet.
+#:   ready_before  - the session's globe_ready events before endings_since:
+#:                   the loads before it that reached the globe.
 #: choice and phase are strings (event_data.string_value); ms is a number and
 #: lives in number_value.
 SQL_GLOBE = """
-WITH ev AS (
+WITH first_ending AS (
+    SELECT min(e2.created_at) AS endings_since
+    FROM website_event e2
+    WHERE e2.website_id = :website_id AND e2.url_path = :path
+      AND e2.event_name IN ('globe_gate', 'globe_unsupported', 'globe_error', 'globe_abandon')
+),
+ev AS (
     SELECT e.event_id, e.session_id, e.created_at, e.event_type, e.event_name,
            (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms,
            max(d.string_value) FILTER (WHERE d.data_key = 'choice') AS choice,
@@ -382,12 +393,11 @@ SELECT session_id,
                    WHERE event_name = 'globe_abandon' AND phase IS DISTINCT FROM 'gate'),
                NULL),
            ARRAY[]::float8[]) AS abandon_ms,
-       min(created_at) FILTER (WHERE event_type = 1) AS first_view,
-       (SELECT min(e2.created_at) FROM website_event e2
-         WHERE e2.website_id = :website_id AND e2.url_path = :path
-           AND e2.event_name IN ('globe_gate', 'globe_unsupported', 'globe_error', 'globe_abandon'))
-           AS endings_since
-FROM ev
+       count(*) FILTER (WHERE event_type = 1
+                          AND (f.endings_since IS NULL OR created_at < f.endings_since)) AS views_before,
+       count(*) FILTER (WHERE event_name = 'globe_ready'
+                          AND (f.endings_since IS NULL OR created_at < f.endings_since)) AS ready_before
+FROM ev CROSS JOIN first_ending f
 GROUP BY session_id
 """
 

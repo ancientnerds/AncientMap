@@ -124,13 +124,21 @@ def test_the_globe_query_reads_how_the_unreached_loads_ended():
     assert "'webgl_lost'" in sql and "phase = 'loading'" in sql
     # globe_bg fires after the globe is up: nothing here may count it.
     assert "'globe_bg'" not in sql
-    assert "AS first_view" in sql and "AS endings_since" in sql
     # endings_since is the first ending ever recorded on the path, not the
     # first inside the window: a window that starts after the instrumentation
     # went live must not call its own early loads "before these were recorded".
-    sub = sql[sql.index("SELECT min(e2.created_at)") : sql.index("AS endings_since")]
+    sub = sql[sql.index("WITH first_ending AS (") : sql.index("ev AS (")]
+    assert "SELECT min(e2.created_at) AS endings_since" in sub
     assert ":since" not in sub and ":until" not in sub
     assert "e2.website_id = :website_id" in sub and "e2.url_path = :path" in sub
+    # Before it, per load and not per session: an Umami session is one browser
+    # for a calendar month, so its loads after the endings began are measured.
+    flat = " ".join(sql.split())
+    before = "(f.endings_since IS NULL OR created_at < f.endings_since)"
+    assert f"WHERE event_type = 1 AND {before}) AS views_before" in flat
+    assert f"WHERE event_name = 'globe_ready' AND {before}) AS ready_before" in flat
+    assert "FROM ev CROSS JOIN first_ending f" in flat
+    assert "AS first_view" not in sql
 
 
 def test_the_ending_events_the_globe_query_reads_are_in_the_frontend_taxonomy():

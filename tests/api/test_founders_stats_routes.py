@@ -269,7 +269,6 @@ def test_sources_bucket_a_bare_perplexity_as_ai(monkeypatch):
 
 
 def test_globe_asks_only_for_the_globe_path(monkeypatch):
-    since = datetime(2026, 9, 24, 8, 0, tzinfo=UTC)
     rows = [
         {
             "session_id": "a",
@@ -283,8 +282,8 @@ def test_globe_asks_only_for_the_globe_path(monkeypatch):
             "context_lost": 0,
             "abandoned": 1,
             "abandon_ms": [6100.0],
-            "first_view": since + timedelta(hours=2),
-            "endings_since": since,
+            "views_before": 0,
+            "ready_before": 0,
         }
     ]
     fetch = Fetch(**{"'globe_ready'": rows})

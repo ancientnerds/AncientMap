@@ -661,11 +661,15 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     is an error: it is a start failure, and uncounted it would read as a
     crash. What no ending claims is `no_signal` - the page loaded and nothing
     else arrived (a crashed tab, or a visitor gone before the tracker loaded) -
-    unless the session began before the first ending event was ever recorded
-    (SQL_GLOBE's `endings_since`, None while there is none). Such a load could
-    not have sent one, so it is `unmeasured`: otherwise every load from before
-    the instrumentation would read as a crash for as long as the window
-    reaches back. Its endings, if it has any, still count first.
+    except the loads that came before the first ending event was ever recorded
+    and did not reach the globe (SQL_GLOBE's `views_before` minus
+    `ready_before`, capped like `ready`). Such a load could not have sent one,
+    so it is `unmeasured`: otherwise every load from before the
+    instrumentation would read as a crash for as long as the window reaches
+    back. This is counted per load, not per session: an Umami session is one
+    browser for a calendar month, and its silent loads after the endings
+    began are `no_signal`. Endings still claim loads first, and the
+    unmeasured part is capped by what they leave.
 
     `abandon_ms` is capped where `ready_ms` is not: only the abandons that the
     split actually counted feed it, the latest ones of the session. A
@@ -701,11 +705,10 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
             # `and take` is load-bearing: xs[-0:] is the whole list.
             if name == "abandoned" and take:
                 left_times.extend(float(ms) for ms in (r["abandon_ms"] or [])[-take:])
-        since = r["endings_since"]
-        if since is None or r["first_view"] < since:
-            unmeasured += left
-        else:
-            no_signal += left
+        views_before = int(r["views_before"] or 0)
+        silent_before = min(views_before - min(int(r["ready_before"] or 0), views_before), left)
+        unmeasured += silent_before
+        no_signal += left - silent_before
     return {
         "loads": loads,
         "reached": reached,

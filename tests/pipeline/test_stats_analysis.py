@@ -609,11 +609,6 @@ def test_hourly_sessions_ignores_rows_outside_the_strip():
 # ---- globe ----------------------------------------------------------------
 
 
-#: The first ending event on /globe.html (SQL_GLOBE's endings_since) and a
-#: session that started after it: every default row is a measured one.
-ENDINGS_SINCE = T - timedelta(days=3)
-
-
 def _globe_row(
     session="a",
     views=1,
@@ -627,9 +622,12 @@ def _globe_row(
     context_lost=0,
     abandoned=0,
     abandon_ms=(),
-    first_view=T,
-    endings_since=ENDINGS_SINCE,
+    views_before=0,
+    ready_before=0,
 ):
+    """views_before / ready_before: the session's page views and globe_readys
+    before the first ending event was ever recorded (SQL_GLOBE). 0 by default:
+    every default row is a measured one."""
     return {
         "session_id": session,
         "views": views,
@@ -642,8 +640,8 @@ def _globe_row(
         "context_lost": context_lost,
         "abandoned": abandoned,
         "abandon_ms": list(abandon_ms),
-        "first_view": first_view,
-        "endings_since": endings_since,
+        "views_before": views_before,
+        "ready_before": ready_before,
     }
 
 
@@ -791,9 +789,8 @@ def test_globe_funnel_does_not_call_loads_before_the_endings_existed_no_signal()
     """A load before the instrumentation went live carries none of the ending
     events. As "no signal" it would read as the crash signature for as long as
     the window reaches back, exactly in the weeks the change is judged."""
-    before = T - timedelta(days=5)
     rows = [
-        _globe_row("old", views=3, ready=1, ready_ms=[9000.0], first_view=before),
+        _globe_row("old", views=3, ready=1, ready_ms=[9000.0], views_before=3, ready_before=1),
         _globe_row("new", views=1),
     ]
     out = fs.globe_funnel(rows)
@@ -806,22 +803,35 @@ def test_globe_funnel_still_counts_the_endings_of_the_session_that_sent_the_firs
     """The very first ending ever recorded belongs to a session whose page
     view came a few seconds earlier - that session is instrumented, and its
     ending counts. Only what would otherwise be "no signal" is unmeasured."""
-    first = ENDINGS_SINCE
-    row = _globe_row(
-        "first",
-        views=2,
-        gate_left=1,
-        first_view=first - timedelta(seconds=4),
-        endings_since=first,
-    )
+    row = _globe_row("first", views=2, gate_left=1, views_before=2)
     out = fs.globe_funnel([row])
     assert out["not_reached"]["gate"] == 1
     assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 0
 
 
 def test_globe_funnel_calls_everything_unmeasured_before_any_ending_was_sent():
-    out = fs.globe_funnel([_globe_row("a", views=2, endings_since=None)])
+    # SQL_GLOBE counts every view as "before" while no ending exists
+    out = fs.globe_funnel([_globe_row("a", views=2, views_before=2)])
     assert out["not_reached"]["unmeasured"] == 2 and out["not_reached"]["no_signal"] == 0
+
+
+def test_globe_funnel_calls_a_silent_load_after_the_endings_began_no_signal_in_a_session_from_before():
+    """An Umami session is one browser for a calendar month, so one session
+    holds loads from before and after the instrumentation went live. A silent
+    load after it could have sent an ending: it is the crash signature, not
+    "before these were recorded". Measured on a row from the audit: the load
+    of 2026-09-20 reached the globe, the one of 2026-09-26 crashed."""
+    row = _globe_row("month", views=2, ready=1, ready_ms=[8000.0], views_before=1, ready_before=1)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["no_signal"] == 1 and out["not_reached"]["unmeasured"] == 0
+
+
+def test_globe_funnel_calls_unmeasured_only_as_many_loads_as_went_unreached_before():
+    """One unreached load before the endings began, two silent ones after."""
+    row = _globe_row("month", views=3, views_before=1)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 2
+    assert sum(out["not_reached"].values()) == out["gave_up"]
 
 
 # ---- clusters -------------------------------------------------------------

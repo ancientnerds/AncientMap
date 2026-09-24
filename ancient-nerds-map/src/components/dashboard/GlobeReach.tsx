@@ -121,7 +121,7 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
                 the page loaded and nothing else arrived — a crashed tab, or a visitor gone before the
                 tracker loaded.
                 {g.not_reached.unmeasured > 0 &&
-                  ' Before these were recorded: visitors who came before the globe started reporting how a load ends.'}
+                  ' Before these were recorded: loads from before the globe started reporting how a load ends.'}
               </p>
             </>
           )}
