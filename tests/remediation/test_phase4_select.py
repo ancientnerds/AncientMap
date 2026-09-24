@@ -31,7 +31,10 @@ from phase4 import prompts4 as P  # noqa: E402
 from phase4 import select_stage as SEL  # noqa: E402
 from phase4 import sentences as S  # noqa: E402
 
-from pipeline.utils.country_lookup import ISO_TO_DEMONYMS  # noqa: E402
+from pipeline.utils.country_lookup import (  # noqa: E402
+    ANCIENT_CULTURE_ADJECTIVES,
+    MODERN_NATIONALITY_DEMONYMS,
+)
 from tests.remediation import p4_fixtures as X  # noqa: E402
 
 #: The frozen questions, byte for byte (the W1 pattern). A change is a decision: re-pin it here
@@ -45,8 +48,13 @@ from tests.remediation import p4_fixtures as X  # noqa: E402
 #: Re-pinned 2026-09-24 (reviewer 529c9678... -> 59a1714e...): pilot 2 failed T5's rule-gap
 #: clause on Bejsebakke, a sentence garbled word for word from its source that the reviewer kept;
 #: the reviewer now drops a garbled or ungrammatical sentence (`PILOT2_REVIEWER_RULE` below).
+#: Re-pinned 2026-09-24 (selector ce36085f... -> 85e6e47b...), before any of pilot 3's 87 questions
+#: was answered, on two owner decisions: design entry [6] wins, so rule (4) holds only modern
+#: nationality adjectives and says cultural adjectives such as Roman, Egyptian or Maya are fine
+#: (`CARD_RULE`); and the selector is told V6's positional pronoun rule as rule (10)
+#: (`PRONOUN_RULE`), which 9 of pilot 2's 14 re-verified V6 holds broke.
 FROZEN_SHA256 = {
-    "SELECTOR_QUESTION": "ce36085fc946da4275e66014ea2770b0b9f3fe1125f57fe3b1c3fd9e00afb79c",
+    "SELECTOR_QUESTION": "85e6e47b17aa30abdf415e797e8c95def4a83aef489f7d617e658bb39066b701",
     "TRANSLATE_QUESTION": "adeb6f7b27d7429e17d54f89acc004b77588226ff2760c40dd2eec88644913ee",
     "RESTRICTED_QUESTION": "648da472587fb1f02d1bda57bd70e0e5988d8dfeb887542845d476edc192eaa8",
     "REVIEWER_QUESTION": "59a1714e48260867b08a372f89f072c2c54a2a1f59359d7ce98441f4f4a7d999",
@@ -122,23 +130,49 @@ def test_the_selector_question_carries_pilot_1s_rules_after_the_designs() -> Non
     T8 (V9's 200-1100 bounds the selector was never told; V6's first-sentence name): each rule on
     its own line, after the design's (5) and before the answer lines, which stay as they were."""
     rules = "\n".join(PILOT1_SELECTOR_RULES)
-    assert f"{DESIGN_RULES[2]}\n{rules}\n\nAnswer with these lines" in P.SELECTOR_QUESTION
+    assert f"{DESIGN_RULES[2]}\n{rules}\n" in P.SELECTOR_QUESTION
 
 
-#: Pilot 2 (T4/T6, 2026-09-24): the design's card rule (4), with the nationality adjectives V10
-#: now holds ('a Danish hill', 'the first Greek site'), verbatim.
-PILOT2_CARD_RULE = (
+#: The design's card rule (4) with the demonyms V10 holds, verbatim. Pilot 2 (T4/T6) added "no
+#: nationality adjective such as Greek or Danish" (the safe reading); the owner's decision of
+#: 2026-09-24 (design entry [6] wins: "Cultural adjectives such as Roman, Egyptian or Maya are
+#: allowed") narrows it to the modern nationality adjectives and names the allowed cultural ones.
+CARD_RULE = (
     "(4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no "
-    "country and no nationality adjective such as Greek or Danish, has no parentheses, does not "
-    "open with a pronoun, and states something concrete; prefer one that carries a date;"
+    "country and no modern nationality adjective such as Danish or Spanish, has no parentheses, "
+    "does not open with a pronoun, and states something concrete; cultural adjectives such as "
+    "Roman, Egyptian or Maya are fine; prefer one that carries a date;"
 )
 
 
 def test_the_selector_card_rule_names_no_nationality_adjective() -> None:
-    """The selector is told what V10 holds: the two examples are the demonym table's own words
-    (`country_lookup.ISO_TO_DEMONYMS`, the data V10 reads)."""
-    assert f"\n{PILOT2_CARD_RULE}\n" in P.SELECTOR_QUESTION
-    assert "Greek" in ISO_TO_DEMONYMS["GR"] and "Danish" in ISO_TO_DEMONYMS["DK"]
+    """The selector is told what V10 holds and what it passes: the held examples are modern
+    nationality demonyms and the fine ones ancient-culture adjectives, in the data V10 reads
+    (`country_lookup.MODERN_NATIONALITY_DEMONYMS`, `ANCIENT_CULTURE_ADJECTIVES`)."""
+    assert f"\n{CARD_RULE}\n" in P.SELECTOR_QUESTION
+    assert {"Danish", "Spanish"} <= MODERN_NATIONALITY_DEMONYMS
+    assert {"Roman", "Egyptian", "Maya"} <= ANCIENT_CULTURE_ADJECTIVES
+    assert not {"Roman", "Egyptian", "Maya"} & MODERN_NATIONALITY_DEMONYMS
+
+
+#: Pilot 3 (2026-09-24, before any of its questions was answered): V6's positional pronoun rule,
+#: which the selector was never told - 9 of pilot 2's 14 re-verified V6 holds were a sentence
+#: opening with a word of the closed list whose source predecessor was not published before it.
+PRONOUN_RULE = (
+    "(10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, Her, "
+    "The latter, The former, Here or There (after its removals) only if the sentence numbered one "
+    "lower, in the same section, is also one of your DESC sentences; so your first DESC sentence "
+    "never opens with one of these words."
+)
+
+
+def test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules() -> None:
+    """Rule (10) follows (9) and precedes the answer lines, which stay as they were; its words are
+    V6's closed list (`model4.PRONOUN_OPENERS`), in its order."""
+    last = PILOT1_SELECTOR_RULES[-1]
+    assert f"{last}\n{PRONOUN_RULE}\n\nAnswer with these lines" in P.SELECTOR_QUESTION
+    listed = ", ".join(M.PRONOUN_OPENERS[:-1]) + f" or {M.PRONOUN_OPENERS[-1]}"
+    assert f" with {listed} (after its removals) " in PRONOUN_RULE
 
 
 #: Pilot 2 (T5, 2026-09-24): Bejsebakke published "This excavation was found among other traces

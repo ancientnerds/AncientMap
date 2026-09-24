@@ -595,17 +595,15 @@ def country_name_variants(name: str) -> list[str]:
 
 # Country (ISO code of NAME_TO_ISO) -> its demonyms: the English nationality adjective(s) and the
 # people noun where it differs (Danish/Dane, Spanish/Spaniard), written as proper nouns. The Phase-4
-# card rule (scripts/remediation/phase4/verify4.py, V10) reads it: a card names no country value,
-# alias or demonym (design entry [0] of logs/design_texts_images_2026-09-22.json; pilot 2 published
-# "a Danish hill" and "the first Greek site"). Any use counts, an ancient culture's too ("Greek
-# temple", "Egyptian"): the safe reading, recorded against the final design's "Cultural adjectives
-# such as Roman, Egyptian or Maya are allowed" in docs/procedures/PHASE4_CONTRACTS.md section 6.
-# Data only, like NAME_TO_ISO; each reader implements
-# its own match. Written 2026-09-24 from the card style rule the design calls "the existing style
-# rule" (scripts/verify_descriptions.py DEMONYM_MAP, whose modern adjectives it keeps) and completed
-# with the standard English demonym of every other country NAME_TO_ISO knows. Ethnonyms and
-# historic names (Khmer, Magyar, Persian, Mongol) are not demonyms of a modern country and are not
-# listed. A country name that is also its adjective ("New Zealand") is NAME_TO_ISO's already.
+# card rule (scripts/remediation/phase4/verify4.py, V10) holds a card that names a modern
+# nationality (pilot 2 published "a Danish hill"); what it holds is this table without the
+# ancient-culture adjectives below (MODERN_NATIONALITY_DEMONYMS). Data only, like NAME_TO_ISO; each
+# reader implements its own match. Written 2026-09-24 from the card style rule the design calls "the
+# existing style rule" (scripts/verify_descriptions.py DEMONYM_MAP, whose modern adjectives it
+# keeps) and completed with the standard English demonym of every other country NAME_TO_ISO knows.
+# Ethnonyms and historic names (Khmer, Magyar, Persian, Mongol) are not demonyms of a modern country
+# and are not listed. A country name that is also its adjective ("New Zealand") is NAME_TO_ISO's
+# already.
 ISO_TO_DEMONYMS: dict[str, tuple[str, ...]] = {
     # Middle East & Near East
     "EG": ("Egyptian",),
@@ -817,6 +815,55 @@ ISO_TO_DEMONYMS: dict[str, tuple[str, ...]] = {
     "HK": ("Hongkonger", "Hong Konger"),
     "MO": ("Macanese",),
 }
+
+# The Phase-4 card rule splits the demonyms in two (owner decision 2026-09-24: the final design,
+# entry [6] of output/remediation/logs/design_texts_images_2026-09-22.json, wins - card_texts, RULES:
+# "No country name. ... Cultural adjectives such as Roman, Egyptian or Maya are allowed";
+# docs/procedures/PHASE4_CONTRACTS.md section 6).
+#
+# (a) The adjectives of an ancient culture (and a people noun the table carries, "Hellene"): a card
+# may carry one even where the same word is a modern country's demonym ("Greek", "Egyptian",
+# "Macedonian"), and V10 never holds one - its plural, its -man noun or a demonym inside it
+# ("Romano-British") neither. Each entry is an ancient culture, following the design's line: the
+# design's three examples, the owner's list of 2026-09-24, and - chosen here - the ancient cultures
+# whose word the table carries (Hellenic, Hellene, Macedonian: ancient Greece and Macedon), the
+# culture of Roman Britain and of Roman Gaul, two spellings (Incan, Nasca, Nabatean) and the ancient
+# cultures of the catalogue's regions the owner's list does not name. The rule cannot tell a culture
+# from a nationality in the same word ("the first Greek site to be inscribed" means Greece): what
+# the card says is the reviewer's CARD line and the audit's to judge.
+ANCIENT_CULTURE_ADJECTIVES: frozenset[str] = frozenset({
+    # the design's examples and the owner's list
+    "Roman", "Greek", "Egyptian", "Maya", "Mayan", "Inca", "Aztec", "Olmec", "Toltec", "Zapotec",
+    "Mixtec", "Moche", "Nazca", "Etruscan", "Celtic", "Gallic", "Iberian", "Phoenician", "Punic",
+    "Carthaginian", "Persian", "Assyrian", "Babylonian", "Sumerian", "Akkadian", "Hittite",
+    "Minoan", "Mycenaean", "Nabataean", "Thracian", "Dacian", "Scythian", "Norse", "Viking",
+    "Anglo-Saxon", "Pictish", "Khmer", "Nubian", "Kushite", "Byzantine", "Hellenistic",
+    "Mesopotamian",
+    # ancient Greece and Macedon, whose words the table carries under GR and MK
+    "Hellenic", "Hellene", "Macedonian",
+    # Roman Britain and Roman Gaul ("Romano-British" carries the modern "British")
+    "Romano-British", "Gallo-Roman",
+    # other spellings of the owner's
+    "Incan", "Nasca", "Nabatean",
+    # Europe and the Mediterranean
+    "Italic", "Samnite", "Cycladic", "Nuragic", "Illyrian", "Celtiberian", "Sarmatian",
+    # Anatolia, the Near East and Iran
+    "Phrygian", "Lydian", "Lycian", "Urartian", "Achaemenid", "Parthian", "Sasanian", "Elamite",
+    "Canaanite",
+    # Africa and South Asia
+    "Meroitic", "Aksumite", "Harappan",
+    # the Americas before 1500
+    "Chavín", "Tiwanaku", "Wari", "Chimú", "Puebloan",
+})  # fmt: skip
+
+# (b) The modern-nationality demonyms V10 holds: every demonym of ISO_TO_DEMONYMS that is no word of
+# (a) - derived, never written twice, so a word of (a) is never held whatever the table carries.
+MODERN_NATIONALITY_DEMONYMS: frozenset[str] = frozenset(
+    demonym
+    for demonyms in ISO_TO_DEMONYMS.values()
+    for demonym in demonyms
+    if demonym not in ANCIENT_CULTURE_ADJECTIVES
+)
 
 
 def download_country_boundaries():

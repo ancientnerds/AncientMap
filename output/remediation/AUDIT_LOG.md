@@ -8304,6 +8304,67 @@ answered, 0 stale, 0 malformed, 0 orphans (exit 1 until they are answered). The 
 (Font dels Coms) and TD-1 (Temple of Dedun) sit on sites held `search-stopped`, AM-1 (Amyntas Rock
 Tombs) on a lane-S site the import holds `no-source` - closed-list reasons; the other 20 are asked.
 
+### The select questions re-exported before any answer (two owner decisions, 2026-09-24)
+
+None of the 87 questions above had been answered (`opus_handoff.py validate`: 87 questions, 0
+answered, 87 missing) when the owner took two decisions; both are recorded in PHASE4_CONTRACTS.md
+(section 6, and section 7 "Pilot 3's decisions"):
+
+1. **Design entry [6] wins** - "Cultural adjectives such as Roman, Egyptian or Maya are allowed".
+   `pipeline/utils/country_lookup.py` splits the demonyms into `ANCIENT_CULTURE_ADJECTIVES` (74
+   words, each an ancient culture: the design's three examples, the owner's list of 42, Hellenic,
+   Hellene and Macedonian - ancient Greece and Macedon, which the table carries as modern demonyms -,
+   Romano-British and Gallo-Roman, three spellings and 24 more ancient cultures of the catalogue's
+   regions; never held, nor their plurals, `-man` nouns or a demonym inside them) and
+   `MODERN_NATIONALITY_DEMONYMS` (the table without them: what V10 holds). Pilot 2's safe reading
+   is retired. Measured (`verify4.card_demonyms`, safe reading -> split): pilot 1's held cards 3 -> 1
+   and pilot 2's 2 -> 1 - "Bulgarian" and "a Danish hill" stay held; Al-Mnaykhrat's "Greek
+   rock-tomb", "the Bronze Age and Romano-British period" and Bassae's "the first Greek site to be
+   inscribed on the World Heritage List" pass (the last means Greece: the reviewer's CARD line and
+   the audit, T6, judge it now); over the census run's lane-W/S pools the card-length sentences with
+   a held demonym fall from 4,912 to 3,553 of 58,570, and the sites with a clean whole-sentence card
+   candidate rise from 3,645 to 3,656 of 4,259.
+2. **V6's positional pronoun rule is the selector's rule (10)**, after (9): "(10) a DESC sentence
+   may open with It, Its, This, These, They, Their, He, She, His, Her, The latter, The former, Here
+   or There (after its removals) only if the sentence numbered one lower, in the same section, is
+   also one of your DESC sentences; so your first DESC sentence never opens with one of these
+   words." Rule (4) now reads "... names no country and no modern nationality adjective such as
+   Danish or Spanish, has no parentheses, does not open with a pronoun, and states something
+   concrete; cultural adjectives such as Roman, Egyptian or Maya are fine; prefer one that carries a
+   date;". The wording "numbered one lower, in the same section" agrees with V6's adjacency (same
+   source, only whitespace between) on all 6,575 consecutive sentence pairs of pilot 3's 96 pinned
+   texts, and on 207,655 of 207,656 over the census run's 4,259 (one article repeats its "See also"
+   heading; there V6 is the stricter and holds).
+
+Selector question sha256 `85e6e47b17aa30abdf415e797e8c95def4a83aef489f7d617e658bb39066b701` (was
+`ce36085f...afb79c`); the reviewer question `59a1714e...a7d999`, the answer lines and the parsers are
+unchanged.
+
+**The re-export.** The first export was moved out of the tree, compared with the new one below and
+deleted; then only S3's export ran again, over the S0/S1/S1b results already in the run directory:
+
+    mass4.py --plan PLAN4.pilot3.jsonl --run-dir runs/pilot3-2026-09-24 --log-dir logs/p4_pilot3 \
+        --only p4-0001,..,p4-0009 --live --stages select --searches-off \
+        --handoff-export output/remediation/handoff/p4-pilot3-select --jobs 3
+
+2026-09-24 08:21:13-08:21:20 UTC, `STAGE_EXIT=0`, every batch "done" for its round. **No per-batch
+state had to be reset**: the first export ran the stage over a scratch copy of each batch directory
+(`run4.handed_off`), so none of its selections, answers, reports, holds or ledger lines was ever in
+the run directory, and `mass4` keeps no other round state than `batch_done` (the review's
+`review4.json`, absent) and its progress file, which every run rewrites
+(`logs/p4_pilot3/progress.json`). **Nothing was fetched**: the run directory's 764 files - ledger,
+`HOLDS4.jsonl` (rewritten to the same bytes, 36 holds), lanes, evidence, the stage reports - are
+byte-identical before and after (sha256 of every file), and the ledger still has its 231 fetch lines,
+0 searches and 0 model calls. **87 questions** again (p4-0001 .. p4-0009: 12, 12, 12, 10, 8, 15, 12, 1,
+5), the same 87 labels; every prompt's site block is byte-identical to the first export's and only
+its question differs (`ce36085f...` -> `85e6e47b...`, 382 characters longer: prompts 2,848-30,192
+characters, median 5,849). `opus_handoff.py validate`: 87 questions, 0 answered, 87 missing, 0 stale,
+0 malformed, 0 orphans (969 KB). `PILOT3.jsonl` (`a4fa2f5f...`), `PILOT_THRESHOLDS.md` (`64ac5334...`)
+and `PLAN4.pilot3.jsonl` (`58544863...`) are byte-identical. No model and no MiniMax endpoint was
+called; production was neither read nor written. The read-only measurements are
+`logs/p4_pilot3/measure_v10_split.py`, `check_rule10_adjacency.py` and `compare_reexport.py`
+(gitignored).
+
 ### The orchestrator's next commands (from this worktree, main venv)
 
 ```bash
@@ -8314,7 +8375,7 @@ RUN=$R4/runs/pilot3-2026-09-24; ONLY=p4-0001,p4-0002,p4-0003,p4-0004,p4-0005,p4-
 ROUND="--plan $R4/PLAN4.pilot3.jsonl --run-dir $RUN --log-dir $M/logs/p4_pilot3 --only $ONLY --searches-off --live"
 # every stage writes the run's own ledger, $RUN/LEDGER.jsonl; no command takes --ledger any more
 # 1. answer the 87 selector questions: for each line of $H-select/*/MANIFEST.jsonl, an Opus agent reads
-#    $H-select/<prompt_path>, follows the question's rules (1)-(9), writes only DESC:/CARD: lines (or
+#    $H-select/<prompt_path>, follows the question's rules (1)-(10), writes only DESC:/CARD: lines (or
 #    ABSTAIN:) to a file, and runs
 $PY $OH answer --dir $H-select --batch-id <batch_id> --stage finder --label <site_id>/select \
     --answered-by <agent> --text-file <answer.txt>
@@ -8388,19 +8449,52 @@ $PY $M/tools/write_gate4.py --group P5 --run pilot3-2026-09-24 --rehearse
 * `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
   this branch: merge it while no Phase-3 mass run is in flight.
 
+### Tests, sweep, gates for the two decisions (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 9 new test functions, each red before its code (33 new test items with the parametrizations):
+  `tests/pipeline/test_country_demonyms.py` +5 (the owner's cultures are in (a); (a) is written as
+  proper nouns and names no country; (b) is the table without (a) and disjoint from it; 16 modern
+  nationalities held; Greek, Hellenic, Hellene, Egyptian, Macedonian in the table and not held),
+  `test_phase4_verify.py` +3 (six culture cards pass V10 - Egyptian, Roman, Maya, Greek, Greeks,
+  Hellenistic, Hellenic, Macedonian(s), Romano-British, Egyptians, Hellenes, Norsemen; no word of (a)
+  is ever held, alone, as a plural or a `-men` noun; a full V10 case holds "Danish" and passes
+  "Egyptian"), `test_phase4_select.py` +1 (rule (10) verbatim after (9), its words
+  `model4.PRONOUN_OPENERS` in order). Rewritten: the card-rule test (the new rule (4); Danish and
+  Spanish in (b), Roman, Egyptian and Maya in (a) and not in (b)) and the V10 nationality test (its
+  Greek examples moved to the culture test); pilot 1's rules test no longer ends at the answer lines.
+  Red first, measured: all three files a collection error (no `ANCIENT_CULTURE_ADJECTIVES`); with the
+  data alone, 10 failures (8 V10, 2 selector question).
+* `mutation_sweep.P4_PILOT3_MUTATIONS`: 12 new cases ("pilot 3, decision 1": `p4 country_lookup` 5,
+  `p4 verify4` 3, `p4 prompts` 1; "decision 2": `p4 prompts` 2, `p4 model` 1) and 4 re-anchored on
+  the lines this rewrote (`p4 verify4`: plural or -man noun, lower-case word, inside a longer word;
+  `p4 prompts`: the card's nationality adjective); 2,027 labels, all unique, every anchor and test
+  present. The sweep's own `main` over **every case whose target this change touched** (verify4 192,
+  prompts4 15, country_lookup 8, mutation_sweep 3, AUDIT_LOG.md 3) plus the new `p4 model` case:
+  **222/222 caught**; the tree byte-identical to the sweep's start for its 6 files; no `# mutant` left
+  (driver `logs/p4_pilot3/sweep_decisions.py`, log `sweep_decisions.log`).
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **6,093 passed, 111 skipped, 57 deselected, 0 failed** (310.8 s); the skips are the same 111.
+* `ruff check` and `ruff format --check` clean on the 7 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check (`country_lookup` is under
+  `pipeline/`) passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
 ### Open
 
-* **The demonym table's safe reading departs from one sentence of the final design** (entry [6],
-  card_texts: "Cultural adjectives such as Roman, Egyptian or Maya are allowed"): `Egyptian`, `Greek`,
-  `Macedonian` hold a card here. Ordered by the orchestrator after pilot 2's T6; recorded in
-  PHASE4_CONTRACTS.md section 6 for the owner.
+* ~~The demonym table's safe reading departs from one sentence of the final design~~ - **decided
+  2026-09-24 by the owner: design entry [6] wins** (cultural adjectives pass V10; "The select
+  questions re-exported before any answer" above). Open with it: a word that is both a culture and a
+  nationality passes whatever it means ("the first Greek site to be inscribed" means Greece) - the
+  reviewer's CARD line and the audit judge such a card.
 * **T8 may fail again.** Pilot 2's own selections, re-verified with this branch: 51 of 78 lane-W
   sites pass before review (V6 14 - 9 of them the pronoun rule, a sentence opening with It, This,
   These, ... whose immediate source predecessor is not published right before it - abstained 7, V14
   6, V4 2, V8 1, V5 1; a site may carry several). The selector question does not state V6's
   positional pronoun rule; rule (9) asks only for an antecedent among the picks. Pilot 3's selector
-  picks anew, so the number is not its result; the rule could still be added before pilot 3's 87
-  questions are answered (a re-export - no model has been called).
+  picks anew, so the number is not its result. **Done 2026-09-24:** the rule is the selector's rule
+  (10), and the 87 questions were re-exported before any answer (above).
 * 5 of pilot 3's 8 new lane-S draws offer no name-bearing sentence and are held `no-source` without a
   question (lane S is not in T8).
 * Pilot 3's ledger lives in its gitignored run directory; keep it with `HOLDS4.jsonl` and the audit

@@ -16,6 +16,14 @@ such a sentence names it (T2, Orolik); (9) no definite reference whose anteceden
 (T5) - and the reviewer question the matching two DROP criteria. The answer lines and the parsers
 are unchanged. `docs/procedures/PHASE4_CONTRACTS.md` section 7 records the decision.
 
+**Before pilot 3's first answer (2026-09-24, two owner decisions).** Rule (4) names the demonyms V10
+holds as modern nationality adjectives ("such as Danish or Spanish") and says cultural adjectives
+such as Roman, Egyptian or Maya are fine (design entry [6] wins; `country_lookup`'s split into
+`ANCIENT_CULTURE_ADJECTIVES` and `MODERN_NATIONALITY_DEMONYMS`). Rule (10) states V6's positional
+pronoun rule, which the selector was never told: a DESC sentence may open with a word of V6's closed
+list (`model4.PRONOUN_OPENERS`, after its removals) only right after its source predecessor, so the
+first never does. Section 7 of the contracts records both.
+
 Every question ends with the project's LLM01 guard line (`GUARD_LINE`), and every third-party text
 in a prompt sits inside a `<source>` element, which is what that line names. The stored description
 is never shown to the selector, so it cannot anchor on unsourced text; the site element carries only
@@ -53,8 +61,9 @@ SELECTOR_QUESTION = (
     "avoid tourism, access, opening hours, modern events and statements about the article itself;\n"
     "(3) remove a span only if the rest still says the same thing about the site;\n"
     "(4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no "
-    "country and no nationality adjective such as Greek or Danish, has no parentheses, does not "
-    "open with a pronoun, and states something concrete; prefer one that carries a date;\n"
+    "country and no modern nationality adjective such as Danish or Spanish, has no parentheses, "
+    "does not open with a pronoun, and states something concrete; cultural adjectives such as "
+    "Roman, Egyptian or Maya are fine; prefer one that carries a date;\n"
     "(5) if no listed sentence is about this site, answer ABSTAIN.\n"
     "(6) the description is your DESC sentences after their removals, joined by spaces: it must "
     "be 200-1100 characters long in total;\n"
@@ -66,6 +75,10 @@ SELECTOR_QUESTION = (
     "(9) every picked sentence must be understandable from your picked sentences alone: never "
     'pick a sentence with a definite reference ("the valley", "the mountain", "other ...", '
     '"it") whose antecedent is not among your picks.\n'
+    "(10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, Her, "
+    "The latter, The former, Here or There (after its removals) only if the sentence numbered one "
+    "lower, in the same section, is also one of your DESC sentences; so your first DESC sentence "
+    "never opens with one of these words.\n"
     "\n"
     "Answer with these lines and nothing else. A sentence id is followed by the ids of the spans "
     "you remove from it, each written as a space, a hyphen and the span id:\n"

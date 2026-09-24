@@ -41,6 +41,7 @@ from phase4 import select_stage as SEL  # noqa: E402 - only for the V6 names par
 from phase4 import sentences as S  # noqa: E402 - only for the D3 parity test
 from phase4 import verify4 as V  # noqa: E402
 
+from pipeline.utils.country_lookup import ANCIENT_CULTURE_ADJECTIVES  # noqa: E402
 from pipeline.video import shorts_audit, shorts_brand  # noqa: E402
 from tests.remediation import p4_fixtures as X  # noqa: E402
 from tests.remediation.p4_garble_cases import GARBLE_CASES  # noqa: E402
@@ -1210,11 +1211,9 @@ def test_v10_a_card_that_names_a_country_is_held() -> None:
 
 
 def test_v10_a_card_that_names_a_nationality_is_held() -> None:
-    """Pilot 2 (T4/T6): 'a Danish hill' (Agri Bavnehøj) and 'the first Greek site' (Bassae) passed
-    V10, which knew country names only. The design's card rule is 'no country value, alias or
-    demonym (country_lookup vocabulary plus a demonym table)'; the table is
-    `country_lookup.ISO_TO_DEMONYMS`, any country's, and an ancient culture's use of a modern
-    country's adjective ('Greek temple') is held too - the safe reading."""
+    """Pilot 2 (T4/T6): 'a Danish hill' (Agri Bavnehøj) passed V10, which knew country names only.
+    The card rule holds a modern nationality's demonym (`country_lookup.MODERN_NATIONALITY_DEMONYMS`:
+    `ISO_TO_DEMONYMS` without the ancient cultures, the owner's decision of 2026-09-24)."""
     sentence = "The Tarxien Temples are a complex of four Maltese megalithic structures near Paola."
     text = f"{sentence} {S2} {S3}"
     case = make_case(
@@ -1229,18 +1228,59 @@ def test_v10_a_card_that_names_a_nationality_is_held() -> None:
         "Agri Bavnehøj is a Danish hill, located in the Mols Bjerge National Park on Djursland."
     )
     assert V.card_demonyms(bavnehoj) == ["Danish"]
-    bassae = "Bassae was the first Greek site to be inscribed on the World Heritage List."
-    assert V.card_demonyms(bassae) == ["Greek"]
-    assert V.card_demonyms("A Greek temple built by the Greeks and an Englishman's map.") == [
-        "Greek",
-        "Greeks",
+    assert V.card_demonyms("A Spanish fort built by the Danes and an Englishman's map.") == [
+        "Spanish",
+        "Danes",
         "Englishman",
     ]
-    assert V.card_demonyms("The Egyptian and Roman builders of the Etruscan wall.") == ["Egyptian"]
     # a demonym is a proper noun, whole word: no hit inside a word or in lower case
-    assert V.card_demonyms("The danish pastry and the Greekness of the old town.") == []
-    assert V.card_demonyms("A Hellenistic stoa of the Mesoamerican ball court.") == []
-    assert V.card_demonyms("THE MESOAMERICAN BALL COURT OF THE GREEKS") == ["GREEKS"]
+    assert V.card_demonyms("The danish pastry and the Danishness of the old town.") == []
+    assert V.card_demonyms("THE MESOAMERICAN BALL COURT OF THE SPANIARDS") == ["SPANIARDS"]
+    assert V.card_demonyms("The British Museum holds the Irish hoard.") == ["British", "Irish"]
+
+
+#: The design's examples ("Cultural adjectives such as Roman, Egyptian or Maya are allowed", entry
+#: [6], card_texts) and the ancient cultures whose word is also a modern country's demonym.
+CULTURE_CARDS = (
+    "The Egyptian and Roman builders of the Etruscan wall left a Maya stela behind.",
+    "A Greek temple built by the Greeks, with a Hellenistic stoa and Hellenic inscriptions.",
+    "Al-Mnaykhrat is a late sixth-century BC Greek rock-tomb near Marj.",
+    "A Macedonian tomb of the 4th century BC, built for the Macedonians of the royal court.",
+    "Finds included pottery of the Bronze Age and Romano-British period.",
+    "The Egyptians, the Hellenes and the Norsemen all came to trade here.",
+)
+
+
+@pytest.mark.parametrize("card", CULTURE_CARDS)
+def test_v10_a_cultural_adjective_is_not_held(card: str) -> None:
+    """The owner's decision (2026-09-24): design entry [6] wins, and a cultural adjective passes V10
+    even where the same word is a modern demonym ('Greek', 'Egyptian', 'Macedonian'), its plural
+    and `-man` noun too, and inside a culture's compound ('Romano-British'). Pilot 1's Al-Mnaykhrat
+    and Romano-British cards were held under the safe reading; they pass now."""
+    assert V.card_demonyms(card) == []
+
+
+def test_v10_no_word_of_an_ancient_culture_is_ever_held() -> None:
+    """(a) is never held: each word, its plural and its `-man` noun, alone and in a sentence."""
+    for word in sorted(ANCIENT_CULTURE_ADJECTIVES):
+        for form in (word, f"{word}s", f"{word}men"):
+            assert V.card_demonyms(f"The {form} site of the old kingdom.") == [], form
+    # the modern word beside the culture's is still held
+    assert V.card_demonyms("A Romano-British villa in the British countryside.") == ["British"]
+
+
+def test_v10_passes_a_card_with_a_cultural_adjective_and_holds_one_with_a_nationality() -> None:
+    held = "The Tarxien Temples are a complex of four Danish megalithic structures near Paola."
+    passed = "The Tarxien Temples are a complex of four Egyptian megalithic structures near Paola."
+    for sentence, wanted in ((held, ["the card names a nationality: ['Danish']"]), (passed, [])):
+        case = make_case(
+            text=f"{sentence} {S2} {S3}",
+            picks=(Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2]),
+            card=sentence,
+            card_items=((0, ()),),
+        )
+        found = [h.detail for h in case.run() if h.reason is M.HoldReason.V10]
+        assert found == wanted, sentence
 
 
 def test_v10_a_card_with_an_evaluative_superlative_is_held() -> None:

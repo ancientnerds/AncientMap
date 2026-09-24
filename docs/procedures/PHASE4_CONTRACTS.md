@@ -382,19 +382,40 @@ D1; rule 1 of section 1 otherwise holds):
 - **`LEDGER_FILE`** (wip/p4-pilot, 2026-09-24): the run's own ledger, section 4.
 - **The demonym table is not `model4`'s** but `pipeline/utils/country_lookup.ISO_TO_DEMONYMS`, beside
   `NAME_TO_ISO` - the country vocabulary it completes (T4/T6, 2026-09-24, on the orchestrator's
-  order). V10 reads it; the selector's card rule names its two examples. **Any use of a modern
-  country's demonym is held, an ancient culture's too ("Greek temple", "Egyptian", "Macedonian
-  tomb") - the safe reading** of the card rule "no country value, alias or demonym (country_lookup
-  vocabulary plus a demonym table)", which is the wording of design entry **[0]** (its V10, and its
-  card_texts: "No country, alias or demonym, which is the existing style rule"; the retired style
-  rule is `scripts/verify_descriptions.py`'s `DEMONYM_MAP`). **It departs from one sentence of the
-  final design:** entry [6], card_texts, RULES says "No country name. ... Cultural adjectives such as
-  Roman, Egyptian or Maya are allowed." Roman and Maya are no country's demonym and stay allowed;
-  `Egyptian`, `Greek`, `Macedonian`, `Indian`, ... are held. The
-  orchestrator ordered the safe reading after pilot 2's audit counted "a Danish hill" and "the first
-  Greek site" as country names (T6); a held card keeps the site's old card (card scope), it never
-  holds the description. The owner may still decide that ancient-culture uses pass; that would need
-  a rule that tells them apart, which no table can.
+  order). **Decision taken 2026-09-24 (the owner): design entry [6] wins** - its card_texts, RULES:
+  "No country name. That is the existing style rule ... Cultural adjectives such as Roman, Egyptian
+  or Maya are allowed." `country_lookup` splits the words in two, and V10 and the selector's rule (4)
+  read the split (section 7, "Pilot 3's decisions"):
+  (a) `ANCIENT_CULTURE_ADJECTIVES`, 74 words, each an ancient culture - the design's three examples,
+  the owner's list (Roman, Greek, Egyptian, Maya, Mayan, Inca, Aztec, Olmec, Toltec, Zapotec, Mixtec,
+  Moche, Nazca, Etruscan, Celtic, Gallic, Iberian, Phoenician, Punic, Carthaginian, Persian,
+  Assyrian, Babylonian, Sumerian, Akkadian, Hittite, Minoan, Mycenaean, Nabataean, Thracian, Dacian,
+  Scythian, Norse, Viking, Anglo-Saxon, Pictish, Khmer, Nubian, Kushite, Byzantine, Hellenistic,
+  Mesopotamian) and, chosen on the branch, the ancient cultures whose word the table carries
+  (Hellenic, Hellene, Macedonian: ancient Greece and Macedon), Roman Britain and Roman Gaul
+  (Romano-British, Gallo-Roman), three spellings (Incan, Nasca, Nabatean) and the ancient cultures of
+  the catalogue's regions the list does not name (Italic, Samnite, Cycladic, Nuragic, Illyrian,
+  Celtiberian, Sarmatian, Phrygian, Lydian, Lycian, Urartian, Achaemenid, Parthian, Sasanian,
+  Elamite, Canaanite, Meroitic, Aksumite, Harappan, Chavín, Tiwanaku, Wari, Chimú, Puebloan). A word
+  of (a) is never held, even where the same word is a modern demonym, nor its plural or `-man` noun,
+  nor a demonym inside it ("British" in "Romano-British"). (b) `MODERN_NATIONALITY_DEMONYMS`:
+  derived, every demonym of the table that is no word of (a) - 246 of its 251 distinct demonyms
+  (Egyptian, Greek, Hellene, Hellenic and Macedonian go to (a)) - what V10 holds (Danish, Spanish,
+  French, Italian, Turkish, Mexican, Peruvian, British, English, Irish, Maltese, ...). This retires
+  pilot 2's **safe reading** (any use held, an ancient culture's too: the orchestrator's order after
+  pilot 2's T6, from design entry **[0]**'s "no country value, alias or demonym", recorded here as a
+  departure from entry [6]). **What it costs:** a table cannot tell a culture from a nationality in
+  the same word - Bassae's "the first Greek site to be inscribed on the World Heritage List" means
+  Greece and passes V10 again; what such a card says is the reviewer's CARD line's and the audit's
+  (T6) to judge. A held card still keeps the site's old card (card scope), never the description.
+  Measured with `verify4.card_demonyms`, safe reading -> split: pilot 1's cards held 3 -> 1
+  (Al-Mnaykhrat "Greek rock-tomb" and "the Bronze Age and Romano-British period" pass, "Bulgarian"
+  stays held), pilot 2's 2 -> 1 (Bassae passes, "a Danish hill" stays held); over the census run's
+  4,259 lane-W/S pools, card-length (80-200 characters) sentences with a held demonym 4,912 -> 3,553
+  of 58,570 (Greek 1,104, Egyptian 153 and Greeks 100 no more, British 428 -> 322: the 106
+  Romano-British), and sites with a clean whole-sentence card candidate (no country, no held demonym,
+  no parentheses, no pronoun opener) 3,645 -> 3,656.
+- **`CIRCA_PATTERN`** (wip/p4-select-sup, decision D2): the one definition of the card's spoken
   edit; `assemble.spoken` (S4) and V10 import it, and no other phase-4 module compiles a circa
   pattern of its own (the splitter's abbreviation rule in `text_sentences` is not the edit).
   Section 7 states it.
@@ -726,7 +747,8 @@ own code, and a parity test runs both over shared fixtures.
 
 - **T3, the protected tokens** - section 6 (`contrast` and `refutation` additions, 472 offered spans
   fewer over the census pools); both finders read the data, five new `SPAN_CASES` hold them together.
-- **T4/T6, V10's demonyms** - `verify4.card_demonyms` matches `country_lookup.ISO_TO_DEMONYMS`
+- **T4/T6, V10's demonyms** (narrowed before pilot 3's first answer: "Pilot 3's decisions" below) -
+  `verify4.card_demonyms` matches `country_lookup.ISO_TO_DEMONYMS`
   (section 6; 199 country codes, 251 distinct demonyms) as whole words written as proper nouns, alone or
   with a plural `s` or a `-man`/`-men`/`-woman`/`-women` noun ("Greeks", "Englishman"), and V10 holds
   the card ("the card names a nationality: [...]", card scope). The selection side is the selector
@@ -775,6 +797,47 @@ own code, and a parity test runs both over shared fixtures.
   The same re-verification now holds every pilot-2 audit finding but Bejsebakke's deterministically:
   House of the Faun (V4, `actually`), Arc de Berà (V4, `erroneous*`), Bassae and Vindobala (V5), and
   the Danish, Greek, Australian and British cards (V10).
+
+### Pilot 3's decisions (2026-09-24, before its first answer): cultural adjectives, V6's pronoun rule
+
+Two owner decisions, taken after pilot 3's select export (87 questions, `ce36085f...`) and before any
+of them was answered; the questions were re-exported with the new selector question (section 8,
+AUDIT_LOG). No threshold changed, no model was asked.
+
+- **Decision 1 - design entry [6] wins** (section 6: `country_lookup`'s split into
+  `ANCIENT_CULTURE_ADJECTIVES` and `MODERN_NATIONALITY_DEMONYMS`). `verify4.card_demonyms` (V10)
+  matches (b) only - a whole word written as a proper noun, alone or with a plural `s` or a
+  `-man`/`-men`/`-woman`/`-women` noun - and drops a match that lies inside a match of (a), so
+  "Romano-British" passes and "a Romano-British villa in the British countryside" is held for the
+  second "British". The selection side is the selector question: rule (4) now reads
+
+      (4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no country and no modern nationality adjective such as Danish or Spanish, has no parentheses, does not open with a pronoun, and states something concrete; cultural adjectives such as Roman, Egyptian or Maya are fine; prefer one that carries a date;
+
+  A test ties its examples to the data V10 reads: Danish and Spanish are in (b); Roman, Egyptian and
+  Maya are in (a) and not in (b).
+- **Decision 2 - V6's positional pronoun rule is stated to the selector as rule (10).** V6 holds a
+  published sentence that opens with a word of its closed list (`model4.PRONOUN_OPENERS`: It, Its,
+  This, These, They, Their, He, She, His, Her, The latter, The former, Here, There), read after the
+  edits - so a removed leading phrase can expose one - unless the sentence published right before it
+  is its source predecessor (the same source, nothing but whitespace between the two); sentence 1
+  therefore never opens with one, and no card item does (V10). Rule (9) only asks for an antecedent
+  among the picks, and 9 of pilot 2's 14 re-verified V6 holds broke this rule. The selector question
+  adds, after (9) and before the answer lines:
+
+      (10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, Her, The latter, The former, Here or There (after its removals) only if the sentence numbered one lower, in the same section, is also one of your DESC sentences; so your first DESC sentence never opens with one of these words.
+
+  "Numbered one lower, in the same section" is V6's adjacency as the selector sees its pool: the
+  published order is the source order (S4), sids number every sentence of the pinned text
+  consecutively (`split_source`), and a heading lies between two sections. Measured over every
+  consecutive sentence pair of the pinned texts: pilot 3's 96 texts, 6,575 pairs, all agree (same
+  section <=> only whitespace between); the census run's 4,259 texts, 207,655 of 207,656 - the one
+  exception is an article whose "See also" heading comes twice, where the rule is looser than V6 and
+  V6 holds. A test ties the rule's words to `model4.PRONOUN_OPENERS`, in its order.
+
+`SELECTOR_QUESTION` sha256 `85e6e47b...9066b701`, was `ce36085f...afb79c` (re-pinned in
+`test_phase4_select.py` with the reasons). The reviewer question, the answer lines and both parsers
+are unchanged; rule (9) stays verbatim. Mutation cases: 12 new in `P4_PILOT3_MUTATIONS` ("pilot 3,
+decision 1" and "decision 2"), four re-anchored on the lines this rewrote.
 
 ## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
 
@@ -930,4 +993,7 @@ section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question")
   124 draws of pilots 1 and 2 (`PILOT3.jsonl`, sha256 `a4fa2f5f...f04152fc`); `PILOT_THRESHOLDS.md`
   and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is `PLAN4.pilot3.jsonl` and
   its run `runs/pilot3-2026-09-24`, whose ledger is its own (`runs/pilot3-2026-09-24/LEDGER.jsonl`,
-  section 4). The fixes it runs with are section 7, "Pilot 1's fixes" and "Pilot 2's fixes".
+  section 4). The fixes it runs with are section 7, "Pilot 1's fixes" and "Pilot 2's fixes". Before
+  its first answer, section 7's "Pilot 3's decisions" changed the selector question, and its select
+  questions were exported again (`handoff/p4-pilot3-select`, 87 questions, the S0/S1/S1b results of
+  its run directory unchanged).

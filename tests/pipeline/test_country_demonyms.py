@@ -6,6 +6,11 @@ only, although the design's card rule is "no country value, alias or demonym (co
 vocabulary plus a demonym table)". The table lives beside `NAME_TO_ISO`, so the verifier and the
 selector's rule text read the same data. These tests hold the table to the vocabulary it serves:
 every country code `NAME_TO_ISO` knows has its demonyms, and nothing else is in it.
+
+The owner's decision of 2026-09-24 (the final design, entry [6], wins: "Cultural adjectives such as
+Roman, Egyptian or Maya are allowed") splits the card's words in two: the ancient-culture adjectives
+a card may carry even where the same word is a modern nationality (`ANCIENT_CULTURE_ADJECTIVES`), and
+the modern-nationality demonyms V10 holds (`MODERN_NATIONALITY_DEMONYMS`, the table without them).
 """
 
 from __future__ import annotations
@@ -15,7 +20,12 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.utils.country_lookup import ISO_TO_DEMONYMS, NAME_TO_ISO
+from pipeline.utils.country_lookup import (
+    ANCIENT_CULTURE_ADJECTIVES,
+    ISO_TO_DEMONYMS,
+    MODERN_NATIONALITY_DEMONYMS,
+    NAME_TO_ISO,
+)
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -91,3 +101,52 @@ def test_the_table_keeps_every_demonym_of_the_retired_card_style_rule() -> None:
         for word in words:
             if word not in NOT_A_DEMONYM:
                 assert word in kept, (country, word)
+
+
+# ------------------------------------------------ the owner's split (2026-09-24, design entry [6])
+
+#: The design's own examples ("Cultural adjectives such as Roman, Egyptian or Maya are allowed") and
+#: the ancient cultures the owner's decision names, each allowed in a card.
+OWNERS_CULTURES = (
+    "Roman", "Greek", "Egyptian", "Maya", "Mayan", "Inca", "Aztec", "Olmec", "Toltec", "Zapotec",
+    "Mixtec", "Moche", "Nazca", "Etruscan", "Celtic", "Gallic", "Iberian", "Phoenician", "Punic",
+    "Carthaginian", "Persian", "Assyrian", "Babylonian", "Sumerian", "Akkadian", "Hittite",
+    "Minoan", "Mycenaean", "Nabataean", "Thracian", "Dacian", "Scythian", "Norse", "Viking",
+    "Anglo-Saxon", "Pictish", "Khmer", "Nubian", "Kushite", "Byzantine", "Hellenistic",
+    "Mesopotamian",
+)  # fmt: skip
+
+
+def test_the_owners_ancient_cultures_are_allowed() -> None:
+    for word in OWNERS_CULTURES:
+        assert word in ANCIENT_CULTURE_ADJECTIVES, word
+
+
+def test_every_ancient_culture_word_is_written_as_a_proper_noun_and_is_no_country_name() -> None:
+    for word in ANCIENT_CULTURE_ADJECTIVES:
+        assert word == word.strip() and word[0].isupper(), word
+        assert word.lower() not in NAME_TO_ISO, word
+
+
+def test_the_held_demonyms_are_the_table_without_the_ancient_cultures() -> None:
+    """(b) is derived, never written twice: every demonym of the table that is no ancient culture's
+    word, and nothing else - so a word of (a) is never held, whatever the table carries."""
+    table = {demonym for demonyms in ISO_TO_DEMONYMS.values() for demonym in demonyms}
+    assert MODERN_NATIONALITY_DEMONYMS == table - ANCIENT_CULTURE_ADJECTIVES
+    assert not MODERN_NATIONALITY_DEMONYMS & ANCIENT_CULTURE_ADJECTIVES
+
+
+@pytest.mark.parametrize(
+    "word",
+    ["Danish", "Spanish", "French", "Italian", "Turkish", "Mexican", "Peruvian", "British",
+     "English", "Maltese", "Dane", "Spaniard", "Irish", "Scottish", "Welsh", "Cypriot"],
+)  # fmt: skip
+def test_a_modern_nationality_is_held(word: str) -> None:
+    assert word in MODERN_NATIONALITY_DEMONYMS
+
+
+@pytest.mark.parametrize("word", ["Greek", "Hellenic", "Hellene", "Egyptian", "Macedonian"])
+def test_an_ancient_culture_that_is_also_a_modern_demonym_is_not_held(word: str) -> None:
+    """The words where the split matters: the table carries them (GR, EG, MK) and (a) takes them."""
+    assert any(word in demonyms for demonyms in ISO_TO_DEMONYMS.values()), word
+    assert word in ANCIENT_CULTURE_ADJECTIVES and word not in MODERN_NATIONALITY_DEMONYMS

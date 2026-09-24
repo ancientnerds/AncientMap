@@ -17039,24 +17039,25 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify4: a demonym's plural or -man noun is no demonym",
         P4P3_VERIFY,
-        '    + r")(?:s|m[ae]n|wom[ae]n)?(?!\\w)",\n',
-        '    + r")(?!\\w)",  # mutant\n',
+        '        + r")(?:s|m[ae]n|wom[ae]n)?(?!\\w)",\n',
+        '        + r")(?!\\w)",  # mutant\n',
         P4P3_VERIFY_TEST,
         "test_v10_a_card_that_names_a_nationality_is_held",
     ),
     (
         "p4 verify4: a lower-case word counts as a demonym",
         P4P3_VERIFY,
-        "    return [m.group(0) for m in _DEMONYM.finditer(card) if m.group(0)[0].isupper()]\n",
-        "    return [m.group(0) for m in _DEMONYM.finditer(card)]  # mutant\n",
+        "        if m.group(0)[0].isupper()\n"
+        "        and not any(start <= m.start() and m.end() <= end for start, end in cultures)\n",
+        "        if not any(start <= m.start() and m.end() <= end for start, end in cultures)  # m\n",
         P4P3_VERIFY_TEST,
         "test_v10_a_card_that_names_a_nationality_is_held",
     ),
     (
         "p4 verify4: a demonym inside a longer word counts",
         P4P3_VERIFY,
-        '_DEMONYM = re.compile(\n    r"(?<!\\w)(?:"\n',
-        '_DEMONYM = re.compile(\n    r"(?:"  # mutant\n',
+        '    return re.compile(\n        r"(?<!\\w)(?:"\n',
+        '    return re.compile(\n        r"(?:"  # mutant\n',
         P4P3_VERIFY_TEST,
         "test_v10_a_card_that_names_a_nationality_is_held",
     ),
@@ -17087,11 +17088,117 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 prompts: the selector's card may carry a nationality adjective",
         P4P3_PROMPTS,
-        '    "country and no nationality adjective such as Greek or Danish, has no parentheses, '
-        'does not "\n',
-        '    "country, has no parentheses, does not "  # mutant\n',
+        '    "country and no modern nationality adjective such as Danish or Spanish, has no '
+        'parentheses, "\n',
+        '    "country, has no parentheses, "  # mutant\n',
         P4P3_SELECT_TEST,
         "test_the_selector_card_rule_names_no_nationality_adjective",
+    ),
+    # ── pilot 3, decision 1: design entry [6] wins - cultural adjectives pass V10 ───────────────
+    (
+        "p4 country_lookup: an ancient culture's word is held as a modern demonym",
+        P4P3_COUNTRY,
+        "    if demonym not in ANCIENT_CULTURE_ADJECTIVES\n",
+        "",
+        P4P3_DEMONYM_TEST,
+        "test_the_held_demonyms_are_the_table_without_the_ancient_cultures",
+    ),
+    (
+        "p4 country_lookup: Egyptian is no ancient culture",
+        P4P3_COUNTRY,
+        '"Roman", "Greek", "Egyptian", "Maya",',
+        '"Roman", "Greek", "Maya",',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 country_lookup: Greek is no ancient culture",
+        P4P3_COUNTRY,
+        '"Roman", "Greek", "Egyptian", "Maya",',
+        '"Roman", "Egyptian", "Maya",',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 country_lookup: Macedonian is no ancient culture",
+        P4P3_COUNTRY,
+        '    "Hellenic", "Hellene", "Macedonian",\n',
+        '    "Hellenic", "Hellene",\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 country_lookup: Romano-British is no ancient culture",
+        P4P3_COUNTRY,
+        '    "Romano-British", "Gallo-Roman",\n',
+        '    "Gallo-Roman",\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 verify4: V10 holds the ancient cultures, not the modern nationalities",
+        P4P3_VERIFY,
+        "_DEMONYM = _word_forms(MODERN_NATIONALITY_DEMONYMS)\n",
+        "_DEMONYM = _word_forms(ANCIENT_CULTURE_ADJECTIVES)  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a demonym inside a culture's word is held",
+        P4P3_VERIFY,
+        "        if m.group(0)[0].isupper()\n"
+        "        and not any(start <= m.start() and m.end() <= end for start, end in cultures)\n",
+        "        if m.group(0)[0].isupper()  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 verify4: a demonym after a culture's word is not held",
+        P4P3_VERIFY,
+        "        and not any(start <= m.start() and m.end() <= end for start, end in cultures)\n",
+        "        and not any(start <= m.start() for start, end in cultures)  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_no_word_of_an_ancient_culture_is_ever_held",
+    ),
+    (
+        "p4 prompts: the selector's card rule forbids a cultural adjective",
+        P4P3_PROMPTS,
+        'cultural adjectives such as "\n    "Roman, Egyptian or Maya are fine; ',
+        '"\n    "',
+        P4P3_SELECT_TEST,
+        "test_the_selector_card_rule_names_no_nationality_adjective",
+    ),
+    # ── pilot 3, decision 2: the selector is told V6's positional pronoun rule ─────────────────
+    (
+        "p4 prompts: the selector is not told V6's pronoun rule",
+        P4P3_PROMPTS,
+        '    "(10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, '
+        'Her, "\n'
+        '    "The latter, The former, Here or There (after its removals) only if the sentence '
+        'numbered one "\n'
+        '    "lower, in the same section, is also one of your DESC sentences; so your first DESC '
+        'sentence "\n'
+        '    "never opens with one of these words.\\n"\n',
+        "",
+        P4P3_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 prompts: rule (10) lets the first DESC sentence open with a pronoun",
+        P4P3_PROMPTS,
+        '"lower, in the same section, is also one of your DESC sentences; so your first DESC '
+        'sentence "\n    "never opens with one of these words.\\n"\n',
+        '"lower, in the same section, is also one of your DESC sentences.\\n"  # mutant\n',
+        P4P3_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 model: V6's pronoun list gains a word the selector is not told",
+        P4P3_MODEL,
+        '    "The former", "Here", "There",\n)  # fmt: skip\n',
+        '    "The former", "Here", "There", "Those",\n)  # fmt: skip\n',
+        P4P3_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
     ),
     # ── T5: the two garbles V5 holds and S2's pool refuses, and the reviewer's DROP ────────────
     (

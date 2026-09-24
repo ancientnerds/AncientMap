@@ -70,7 +70,7 @@ import json
 import re
 import sys
 import unicodedata
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -90,7 +90,12 @@ from rapidfuzz import fuzz
 from phase4 import model4 as M
 from phase4 import subject_gate as SG
 from pipeline.lyra.text_sentences import is_complete_sentence, split_sentences
-from pipeline.utils.country_lookup import ISO_TO_DEMONYMS, NAME_TO_ISO, country_name_variants
+from pipeline.utils.country_lookup import (
+    ANCIENT_CULTURE_ADJECTIVES,
+    MODERN_NATIONALITY_DEMONYMS,
+    NAME_TO_ISO,
+    country_name_variants,
+)
 from pipeline.utils.text import normalize_name
 from pipeline.video import shorts_audit, shorts_brand
 from pipeline.video.shorts_render import W as FRAME_WIDTH
@@ -1189,26 +1194,37 @@ def card_countries(card: str, stored: str | None) -> list[str]:
     return named
 
 
-_DEMONYM = re.compile(
-    r"(?<!\w)(?:"
-    + "|".join(
-        re.escape(demonym)
-        for demonym in sorted(
-            {d for demonyms in ISO_TO_DEMONYMS.values() for d in demonyms}, key=len, reverse=True
-        )
+def _word_forms(words: Iterable[str]) -> re.Pattern[str]:
+    """V10: a whole word of `words` (the longest first), alone or as its plural or its `-man`/
+    `-woman` noun ('Danes', 'Englishman', 'Norsemen'), in any case."""
+    return re.compile(
+        r"(?<!\w)(?:"
+        + "|".join(re.escape(word) for word in sorted(words, key=lambda w: (-len(w), w)))
+        + r")(?:s|m[ae]n|wom[ae]n)?(?!\w)",
+        re.IGNORECASE,
     )
-    + r")(?:s|m[ae]n|wom[ae]n)?(?!\w)",
-    re.IGNORECASE,
-)
+
+
+_DEMONYM = _word_forms(MODERN_NATIONALITY_DEMONYMS)
+_CULTURE = _word_forms(ANCIENT_CULTURE_ADJECTIVES)
 
 
 def card_demonyms(card: str) -> list[str]:
-    """V10: the demonyms a card carries - any country's nationality adjective or people noun
-    (`country_lookup.ISO_TO_DEMONYMS`), alone or as its plural or its `-man`/`-woman` noun ('Greeks',
-    'Englishman'), as a whole word written as a proper noun. An ancient culture's use of a modern
-    country's adjective ('Greek temple') counts too: the safe reading of the design's 'no country
-    value, alias or demonym' (pilot 2: 'a Danish hill', 'the first Greek site')."""
-    return [m.group(0) for m in _DEMONYM.finditer(card) if m.group(0)[0].isupper()]
+    """V10: the modern nationalities a card names - a demonym of
+    `country_lookup.MODERN_NATIONALITY_DEMONYMS` ('Danish', 'Spaniard'), alone or as its plural or
+    its `-man`/`-woman` noun, as a whole word written as a proper noun, and not inside a word of an
+    ancient culture ('British' in 'Romano-British'). An ancient culture's adjective
+    (`ANCIENT_CULTURE_ADJECTIVES`: 'Roman', 'Greek', 'Egyptian', 'Maya', ...) is never held, even
+    where the same word is a modern demonym: design entry [6] - 'Cultural adjectives such as Roman,
+    Egyptian or Maya are allowed' - wins (owner decision 2026-09-24; pilot 2 had held them under
+    the safe reading of entry [0])."""
+    cultures = [m.span() for m in _CULTURE.finditer(card)]
+    return [
+        m.group(0)
+        for m in _DEMONYM.finditer(card)
+        if m.group(0)[0].isupper()
+        and not any(start <= m.start() and m.end() <= end for start, end in cultures)
+    ]
 
 
 def _v10(c: _Case) -> list[Problem]:
