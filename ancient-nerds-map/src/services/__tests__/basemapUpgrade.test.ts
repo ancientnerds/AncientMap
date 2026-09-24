@@ -634,18 +634,34 @@ describe('loadSatellite', () => {
   })
 
   it('does not commit a texture uploaded into a lost context (the restore asks for it again)', async () => {
-    stubDecoding(SIZES)
+    const dec = stubDecoding(SIZES)
+    const release = dec.hold('/data/basemaps/satellite_med.webp')
     const lost = { value: false }
     const { ctx, onSatelliteReady } = makeCtx({ start: 'med', max: 'high' }, lost)
-    lost.value = true // lost before the webglcontextlost event reached any listener
+    const loading = loadSatellite(ctx, 'med', new AbortController().signal)
+    await vi.waitFor(() => expect(dec.fetched).toHaveLength(1))
+    lost.value = true // lost during the decode, before the webglcontextlost event reached any listener
     const disposeSpy = vi.spyOn(THREE.Texture.prototype, 'dispose')
-    await expect(loadSatellite(ctx, 'med', new AbortController().signal)).resolves.toBeUndefined()
+    release()
+    await expect(loading).resolves.toBeUndefined()
     expect(ctx.satellite.texture).toBe(null)
     expect(ctx.satellite.tier).toBe(null)
     expect(uniformOf(ctx, 'uSatellite').every(v => v === null)).toBe(true)
     expect(onSatelliteReady).not.toHaveBeenCalled()
     expect(disposeSpy).toHaveBeenCalledTimes(1)
     expect(ctx.satellite.wanted).toBe('med')
+  })
+
+  it('does not decode at all while the context is lost (the restore asks for the tier again)', async () => {
+    const dec = stubDecoding(SIZES)
+    const lost = { value: true }
+    const { ctx, onSatelliteReady } = makeCtx({ start: 'med', max: 'high' }, lost)
+    await expect(loadSatellite(ctx, 'med', new AbortController().signal)).resolves.toBeUndefined()
+    expect(dec.fetched).toEqual([])
+    expect(onSatelliteReady).not.toHaveBeenCalled()
+    expect(ctx.satellite.wanted).toBe('med')
+    lost.value = false
+    expect(reloadAfterContextRestored(ctx).satellite).toBe(true)
   })
 
   it('aborting one tier leaves the uniforms and the held texture alone', async () => {
@@ -753,21 +769,25 @@ describe('reloadAfterContextRestored', () => {
     expect(reloadAfterContextRestored(ctx)).toEqual({ gray: true, satellite: false })
   })
 
-  it('aborts loads started while the context was lost (their uploads went nowhere) and hands them over', async () => {
+  it('aborts loads started while the context was lost (their uploads would go nowhere) and hands them over', async () => {
     const dec = stubDecoding(SIZES)
     const release = dec.hold('/data/basemaps/satellite_med.webp')
     const lost = { value: false }
     const { ctx } = makeCtx({ start: 'med', max: 'high' }, lost)
     await loadStartGray(ctx, new AbortController().signal)
+    const cutShort = loadSatellite(ctx, 'med', new AbortController().signal)
+    await vi.waitFor(() => expect(dec.fetched).toContain('/data/basemaps/satellite_med.webp'))
     lost.value = true
     releaseOnContextLost(ctx)
+    // Waits for the decode the loss cut short; the restore aborts it before it starts one
     const duringLoss = loadSatellite(ctx, 'med', new AbortController().signal)
     lost.value = false
     const redo = reloadAfterContextRestored(ctx)
     release()
-    await expect(duringLoss).resolves.toBeUndefined()
+    await expect(Promise.all([cutShort, duringLoss])).resolves.toEqual([undefined, undefined])
     expect(redo.satellite).toBe(true)
     expect(ctx.satellite.texture).toBe(null)
+    expect(dec.fetched.filter(u => u.endsWith('satellite_med.webp'))).toHaveLength(1)
     expect(dec.bitmaps.get('/data/basemaps/satellite_med.webp')!.close).toHaveBeenCalledTimes(1)
   })
 })
@@ -792,6 +812,47 @@ describe('restoreGray', () => {
     expect(dec.fetched).toEqual(['/data/basemaps/gray_dark_med.webp', '/data/basemaps/gray_dark_high.webp'])
     expect(ctx.gray.tier).toBe('high')
     expect(uniformOf(ctx, 'uGrayBasemap').every(v => v === ctx.gray.texture)).toBe(true)
+  })
+
+  it('decodes a tier at most once at a time across a context loss: the restore waits for the decode the loss cut short', async () => {
+    const dec = stubDecoding(SIZES)
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    await loadStartGray(ctx, new AbortController().signal)
+    const release = dec.hold('/data/basemaps/gray_dark_high.webp')
+    const upgrading = upgradeGray(ctx, new AbortController().signal)
+    await vi.waitFor(() => expect(dec.fetched).toContain('/data/basemaps/gray_dark_high.webp')) // decoding
+    releaseOnContextLost(ctx)
+    reloadAfterContextRestored(ctx)
+    const restoring = restoreGray(ctx, new AbortController().signal)
+    await vi.waitFor(() => expect(ctx.gray.tier).toBe('med'))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    // No second 512 MiB decode beside the one createImageBitmap is still running
+    expect(dec.fetched.filter(u => u.endsWith('gray_dark_high.webp'))).toHaveLength(1)
+    release()
+    await expect(upgrading).resolves.toBeUndefined() // handed over
+    await restoring
+    expect(dec.fetched.filter(u => u.endsWith('gray_dark_high.webp'))).toHaveLength(2)
+    expect(ctx.gray.tier).toBe('high')
+  })
+
+  it('a satellite requested during the loss and again at the restore decodes one at a time', async () => {
+    const dec = stubDecoding(SIZES)
+    const release = dec.hold('/data/basemaps/satellite_med.webp')
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    await loadStartGray(ctx, new AbortController().signal)
+    const before = loadSatellite(ctx, 'med', new AbortController().signal)
+    await vi.waitFor(() => expect(dec.fetched).toContain('/data/basemaps/satellite_med.webp'))
+    releaseOnContextLost(ctx)
+    const duringLoss = loadSatellite(ctx, 'med', new AbortController().signal)
+    reloadAfterContextRestored(ctx)
+    const afterRestore = loadSatellite(ctx, 'med', new AbortController().signal)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(dec.fetched.filter(u => u.endsWith('satellite_med.webp'))).toHaveLength(1)
+    release()
+    await expect(Promise.all([before, duringLoss, afterRestore])).resolves.toEqual([undefined, undefined, undefined])
+    // The decode the loss cut short, then the restore's; the one asked for during the loss never started
+    expect(dec.fetched.filter(u => u.endsWith('satellite_med.webp'))).toHaveLength(2)
+    expect(ctx.satellite.tier).toBe('med')
   })
 
   it('loads only the start tier when that is the maximum', async () => {

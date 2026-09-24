@@ -294,13 +294,17 @@ export class BasemapState {
     return flight.done
   }
 
-  /** Aborts every running load of this kind; their callers' promises resolve (handed over). */
+  /**
+   * Aborts every running load of this kind; their callers' promises resolve
+   * (handed over). The flights stay listed until they settle (run's `finally`
+   * drops them): their decodes still run, and the restore's request for the
+   * same tier waits for them like for any aborted flight.
+   */
   abortAll(reason: unknown): void {
     this.flights.forEach(flight => {
       flight.handedOver = true
       flight.ctrl.abort(reason)
     })
-    this.flights.clear()
   }
 }
 
@@ -318,9 +322,11 @@ export interface BasemapContext {
 /**
  * Loads `tier` of `kind`, strips from med up unless `whole` (the start gray: on
  * the GPU before the render that needs it), and commits it unless a higher tier
- * landed meanwhile.
+ * landed meanwhile. While the context is lost nothing is decoded: the upload
+ * would go nowhere, and the restore asks for `wanted` (run recorded it) again.
  */
 async function loadTier(ctx: BasemapContext, kind: BasemapKind, tier: BasemapTier, signal: AbortSignal, whole = false): Promise<void> {
+  if (ctx.renderer.getContext().isContextLost()) return
   const bitmap = await decodeBasemap(getBasemapAssets(tier)[kind], signal)
   let texture: THREE.Texture
   if (!whole && tierRank(tier) >= tierRank('med')) {
