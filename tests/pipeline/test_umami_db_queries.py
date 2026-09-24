@@ -9,6 +9,7 @@ nicht knallen) und dass fetch() die Fensterparameter wirklich bindet.
 from __future__ import annotations
 
 import importlib
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -181,9 +182,18 @@ def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends
         "components", "GlobeErrorBoundary.tsx"
     )
     assert "phase <> 'live'" in sql
-    # Background failures carry 'bg:<task>'
+    # Background failures carry 'bg:<task>', built in one place: every sender goes through
+    # trackBackgroundFailure (the hi-res coastline too), none writes a bg: phase of its own
     assert "phase: `bg:${task}`" in read("analytics", "globeBackground.ts")
-    assert "phase: 'bg:hires'" in read("components", "Globe.tsx")
+    assert "trackBackgroundFailure('hires', err)" in read("components", "Globe.tsx")
+    own_bg_phase = [
+        str(f.relative_to(src))
+        for f in src.rglob("*.ts*")
+        if "__tests__" not in f.parts
+        and f.name != "globeBackground.ts"
+        and re.search(r"phase: ['`]bg:", f.read_text(encoding="utf-8"))
+    ]
+    assert own_bg_phase == []
     assert "left(phase, 3) <> 'bg:'" in sql
     # webgl_lost before globe_ready is a start failure (test_stats_analysis pins the ternary too)
     assert "const phase = globeReady ? 'live' : 'loading'" in abandon

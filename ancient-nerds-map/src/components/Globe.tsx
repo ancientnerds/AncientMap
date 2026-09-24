@@ -7,7 +7,7 @@ import { runMapboxLoadTask } from '../services/mapboxLoader'
 import { browserQueueScheduling } from '../services/globeBackgroundQueue'
 import { useGlobeBackgroundQueue, type GlobeBackgroundRuns } from '../hooks/globe/useGlobeBackgroundQueue'
 import { useOffline } from '../contexts/OfflineContext'
-import { track } from '../analytics'
+import { trackBackgroundFailure } from '../analytics/globeBackground'
 import { EMPIRES } from '../config/empireData'
 import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
@@ -61,6 +61,7 @@ import {
 import {
   createLayerParser,
   ensureHiresCoastline,
+  isAbortError,
   loadVectorLayer as loadVectorLayerImpl,
   pickLayersToLoad,
   preloadRiversLakes,
@@ -2310,9 +2311,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     const onChange = () => {
       ensureHiresCoastline(gate, buildVectorRendererContext)?.catch((err: unknown) => {
         // Unmounted while it loaded: cancelled, not failed
-        if (err instanceof DOMException && err.name === 'AbortError') return
-        console.error('[Vector layers] hi-res coastline failed:', err)
-        track('globe_error', { phase: 'bg:hires', message: err instanceof Error ? err.message : String(err) })
+        if (isAbortError(err)) return
+        trackBackgroundFailure('hires', err)
       })
     }
     controls.addEventListener('change', onChange)

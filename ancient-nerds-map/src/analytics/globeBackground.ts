@@ -14,7 +14,8 @@ export function trackBackgroundDone(task: BgTaskName, ms: number): void {
   track('globe_bg', { task, ms: Math.round(ms) })
 }
 
-export function trackBackgroundFailure(task: string, err: unknown): void {
+/** A queue task, or the hi-res coastline (loaded on zoom when Mapbox is out, outside the queue). */
+export function trackBackgroundFailure(task: BgTaskName | 'hires', err: unknown): void {
   console.error(`[globe bg] ${task}`, err)
   track('globe_error', { phase: `bg:${task}`, message: errorProps(err instanceof Error ? err.message : err).message })
 }

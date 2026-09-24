@@ -120,7 +120,7 @@ function abortError(what: string): DOMException {
   return new DOMException(what, 'AbortError')
 }
 
-function isAbortError(err: unknown): boolean {
+export function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'AbortError'
 }
 
