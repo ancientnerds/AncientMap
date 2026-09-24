@@ -1,18 +1,34 @@
 /**
  * Browsers that installed an earlier service worker keep Cache Storage that
  * nothing reads any more: the `natural-earth` bucket of the old GitHub border
- * rule, and GitHub URLs that old Download Manager runs put into
- * `vector-layers` (the globe's layers are self-hosted now). The globe's `sw`
- * background task removes them once the worker is registered. Node
- * environment: `caches`, `navigator`, `document` and `window` are stubbed.
+ * rule, GitHub URLs that old Download Manager runs put into `vector-layers`
+ * (the globe's layers are self-hosted now), and the coastline and border tiers
+ * of an earlier layer build (content-hashed names the running build no longer
+ * asks for; an offline download stored them with a plain cache.put, which the
+ * runtime rule's expiration never sees, and clearing the layer deletes only the
+ * current names). The globe's `sw` background task removes them once the
+ * worker is registered. Node environment: `caches`, `navigator`, `document`
+ * and `window` are stubbed.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import manifest from '../../data/globeLayers.generated.json'
+
+const ORIGIN = 'https://ancientnerds.com'
 const GITHUB = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_boundary_lines_land.geojson'
 const GITHUB_RIVERS = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson'
-const LOCAL_COAST = 'https://ancientnerds.com/data/layers/globe/coast_start.1a2b3c4d.json'
-const LOCAL_RIVERS = 'https://ancientnerds.com/data/layers/ne_110m_rivers.geojson'
+// The running build's tiers (globeLayers.generated.json)
+const LOCAL_COAST = ORIGIN + manifest.coastlines.start
+const LOCAL_COAST_DETAIL = ORIGIN + manifest.coastlines.detail
+const LOCAL_BORDERS_START = ORIGIN + manifest.countryBorders.start
+const LOCAL_BORDERS_DETAIL = ORIGIN + manifest.countryBorders.detail
+// An earlier layer build's tiers: names the running build does not know
+const OLD_COAST_START = `${ORIGIN}/data/layers/globe/coast_start.1a2b3c4d.json`
+const OLD_COAST_DETAIL = `${ORIGIN}/data/layers/globe/coast_detail.1a2b3c4d.json`
+const OLD_BORDERS_DETAIL = `${ORIGIN}/data/layers/globe/borders_detail.1a2b3c4d.json`
+const LOCAL_RIVERS = `${ORIGIN}/data/layers/ne_110m_rivers.geojson`
+const COAST_HIRES = `${ORIGIN}/data/layers/coast_hires.geojson`
 
 /** A CacheStorage over plain maps, with the calls the browser API has. */
 function fakeCacheStorage(initial: Record<string, string[]>) {
@@ -55,6 +71,21 @@ describe('pruneOrphanedCaches', () => {
     expect(c.urls('natural-earth')).toBeNull()
     expect(c.urls('vector-layers')).toEqual([LOCAL_COAST, LOCAL_RIVERS])
     expect(c.urls('basemaps')).toEqual(['https://ancientnerds.com/data/basemaps/gray_dark_med.webp'])
+  })
+
+  it('deletes the coastline and border tiers of an earlier layer build, keeps the running build\'s and every other layer file', async () => {
+    const { pruneOrphanedCaches } = await import('../orphanedCaches')
+    const c = fakeCacheStorage({
+      'vector-layers': [
+        OLD_COAST_START, OLD_COAST_DETAIL, OLD_BORDERS_DETAIL,
+        LOCAL_COAST, LOCAL_COAST_DETAIL, LOCAL_BORDERS_START, LOCAL_BORDERS_DETAIL,
+        COAST_HIRES, LOCAL_RIVERS,
+      ],
+    })
+    await pruneOrphanedCaches(c.storage)
+    expect(c.urls('vector-layers')).toEqual([
+      LOCAL_COAST, LOCAL_COAST_DETAIL, LOCAL_BORDERS_START, LOCAL_BORDERS_DETAIL, COAST_HIRES, LOCAL_RIVERS,
+    ])
   })
 
   it('does not create a vector-layers cache that is not there', async () => {
