@@ -17499,6 +17499,7 @@ P4P4_MODEL_TEST = "tests/remediation/test_phase4_model.py"
 P4P4_REVIEW = "scripts/remediation/phase4/review4.py"
 P4P4_REVIEW_TEST = "tests/remediation/test_phase4_review.py"
 P4P4_COUNTRY = "pipeline/utils/country_lookup.py"
+P4P4_SENT = "scripts/remediation/phase4/sentences.py"
 P4P4_SUBNATIONAL_TEST = "tests/pipeline/test_country_subnational_names.py"
 
 P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
@@ -17699,6 +17700,72 @@ P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    return NAME_TO_ISO.get(name.strip().lower()) if name else None  # mutant\n",
         P4P4_VERIFY_TEST,
         "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    # ── T8: a review drop takes the sentences that lean on it along ───────────────────────────
+    (
+        "p4 review: a drop takes no leaning sentence along",
+        P4P4_REVIEW,
+        "        verdict, followed = follow_drops(verdict, built.sentences)\n",
+        "        followed: tuple = ()  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along",
+    ),
+    (
+        "p4 review: a chain of leaning sentences stops after the first",
+        P4P4_REVIEW,
+        "            and number - 1 not in kept\n",
+        "            and number - 1 not in verdict.kept  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along",
+    ),
+    (
+        "p4 review: a leaning sentence goes although its predecessor stays",
+        P4P4_REVIEW,
+        "            and number - 1 not in kept\n",
+        "            and True  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_pronoun_whose_predecessor_is_kept_stays",
+    ),
+    (
+        "p4 review: a followed drop is not recorded",
+        P4P4_REVIEW,
+        '            followed.append({"sentence": number, "follows": number - 1, "reason": '
+        "FOLLOWS_A_DROP})\n",
+        "            pass  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along",
+    ),
+    (
+        "p4 sentences: the review reads only a sentence's opener",
+        P4P4_SENT,
+        "    words = list(_WORD.finditer(s))\n",
+        "    words: list = []  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    (
+        "p4 sentences: a pronoun after any comma leans for the review",
+        P4P4_SENT,
+        '        if head.endswith(", ") and head.find(", ") == len(head) - 2:\n',
+        '        if head.endswith(", "):  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    (
+        "p4 sentences: any word before the pronoun is taken for 'that'",
+        P4P4_SENT,
+        '            before.lower() == "that"\n',
+        "            True  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    (
+        "p4 sentences: an article no longer spares a that-clause pronoun for the review",
+        P4P4_SENT,
+        "            and not any(w.group().lower() in M.ARTICLES for w in words[:index])\n",
+        "            and True  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
     ),
 ]
 MUTATIONS += P4_PILOT4_MUTATIONS

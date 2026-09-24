@@ -858,6 +858,13 @@ def test_the_pronoun_cases_v6_judges_exactly(text: str, leans: bool) -> None:
     assert (V.leaning_pronoun(text) is not None) is leans
 
 
+@pytest.mark.parametrize(("text", "leans"), PRONOUN_CASES)
+def test_the_review_and_v6_read_the_same_pronoun_rule(text: str, leans: bool) -> None:
+    """D3 parity for T8: the review's drops (`sentences.leans_on_predecessor`) and V6
+    (`verify4.leaning_pronoun`) judge the shared fixture alike; neither imports the other."""
+    assert S.leans_on_predecessor(text) is (V.leaning_pronoun(text) is not None) is leans
+
+
 #: Pilot 3 (T1): Stanydale Temple's "it" stands in a that-clause, not at the start; its source
 #: predecessor, "The settlement ...", was dropped by the review.
 SETTLEMENT = "The settlement may well have been established in 2500 BC by farmers."

@@ -404,8 +404,8 @@ PRONOUN_OPENERS: tuple[str, ...] = (
 #: ..., it was made into a hill fort ...". The most precise of the measured candidates that holds
 #: both (AUDIT_LOG, pilot 4): over the census run's 88,936 pool sentences it binds 1,738 beyond the
 #: opener rule (46 of a sample of 60 refer outside their sentence), and in pilots 1-3's published
-#: texts it would have held 7 sentences and 1 card. Data only: `verify4` (V6, V10) implements the
-#: match.
+#: texts it would have held 7 sentences and 1 card. Data only: `verify4` (V6, V10) and `sentences`
+#: (the review's drops) each implement the match.
 PERSONAL_PRONOUNS: tuple[str, ...] = (
     "it", "its", "they", "their", "them", "he", "his", "him", "she", "her",
 )  # fmt: skip

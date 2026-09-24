@@ -217,6 +217,72 @@ def test_a_dropped_sentence_is_assembled_away(tmp_path: Path) -> None:
     assert assembly.provenance.desc_sha256 == M.text_sha256(assembly.description)
 
 
+#: Pilot 3 (T8, Mersinaki and Diana Fort): the reviewer dropped a sentence whose published successor
+#: leans on it, and V6 then held the whole site. W3 opens with a pronoun and leans on W2; W4 carries
+#: one after its first comma and leans on W3; W5 stands alone; W7's "that it" leans on W6.
+CHAIN = (
+    "The Stone Temple is a megalithic temple on the island of Gozo. "
+    "The temple was built c. 2500 BC by a farming community on a low ridge. "
+    "It was enlarged in the Bronze Age with a second court and an altar. "
+    "Standing on the ridge above the sea, it was later made into a small fort. "
+    "Excavations in 1911 found pottery, figurines and animal bones in the courts. "
+    "The settlement around it may have been founded when farmers came to the island. "
+    "Pottery sherds show that it was also occupied in the Iron Age.\n"
+)
+CHAIN_SELECT = "".join(f"DESC: W{n}\n" for n in range(1, 8)) + "CARD: W5\n"
+
+
+def _chain(tmp_path: Path, answer: str) -> tuple[Path, dict]:
+    setup = X.SiteSetup(
+        site=X.plan_site("site-1"), lane=M.Lane.W, sources={"W": (X.wiki_doc("W", CHAIN), CHAIN)}
+    )
+    batch_dir = X.make_batch(tmp_path, [setup])
+    runner = X.ScriptedRunner({("site-1", "select"): CHAIN_SELECT})
+    assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir) == 0
+    assert _review(batch_dir, answer)[0] == 0
+    report = json.loads((batch_dir / B.REVIEW_REPORT).read_text(encoding="utf-8"))
+    return batch_dir, report["sites"][0]
+
+
+def _answer(*dropped: int) -> str:
+    lines = [f"R{n}: DROP x" if n in dropped else f"R{n}: KEEP" for n in range(1, 8)]
+    return "\n".join([*lines, "CARD: KEEP"])
+
+
+def test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along(tmp_path: Path) -> None:
+    """The import drops a kept sentence that leans on the sentence before it (`sentences.
+    leans_on_predecessor`, V6's rule) when that sentence is dropped - transitively, and recorded
+    under its own reason - so the site is judged on what remains instead of held by V6."""
+    batch_dir, row = _chain(tmp_path, _answer(2, 6))
+    assert row["lines"][1] == "R2: DROP x"  # the reviewer's own lines stay as it wrote them
+    assert row["kept"] == [1, 5]
+    assert row["followed"] == [
+        {"sentence": 3, "follows": 2, "reason": RV.FOLLOWS_A_DROP},
+        {"sentence": 4, "follows": 3, "reason": RV.FOLLOWS_A_DROP},
+        {"sentence": 7, "follows": 6, "reason": RV.FOLLOWS_A_DROP},
+    ]
+    (assembly,) = _written(batch_dir)
+    assert len(assembly.provenance.sentences) == 2
+    assert "It was enlarged" not in assembly.description
+    assert "Pottery sherds" not in assembly.description
+
+
+def test_a_pronoun_whose_predecessor_is_kept_stays(tmp_path: Path) -> None:
+    _, row = _chain(tmp_path, _answer(5))
+    assert row["kept"] == [1, 2, 3, 4, 6, 7] and row["followed"] == []
+
+
+def test_the_followed_drops_can_leave_too_few_sentences(tmp_path: Path) -> None:
+    """V9's floor and the two-sentence minimum still apply to what remains."""
+    batch_dir, row = _chain(tmp_path, _answer(2, 5, 6))
+    assert row["kept"] == [1] and row["outcome"] == "held"
+    (hold,) = X.holds_of(batch_dir)
+    assert hold.reason is M.HoldReason.REVIEW_TOO_FEW_SENTENCES
+
+
 def test_a_dropped_card_sentence_rebuilds_the_card_from_the_rest(tmp_path: Path) -> None:
     batch_dir = _assembled(tmp_path)
     answer = "R1: KEEP\nR2: KEEP\nR3: DROP changed meaning\nR4: KEEP\nCARD: KEEP"

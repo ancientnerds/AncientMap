@@ -12,8 +12,9 @@ The rule, measured over the census pools and pilots 1-3's published texts (AUDIT
 sentence also leans on the sentence before it in its source when its first word of
 `model4.PERSONAL_PRONOUNS` (whole, any case) is a word of `model4.SUBJECT_PRONOUNS` and stands right
 after the sentence's first comma (`, `), or right after the word `that` with no word of
-`model4.ARTICLES` before it. `verify4.leaning_pronoun` (V6, V10) implements it and must judge
-these texts exactly; the selector is told the rule as its rule (10).
+`model4.ARTICLES` before it. `verify4.leaning_pronoun` (V6, V10) and `sentences.leans_on_predecessor`
+(the review's drops, T8) each implement it in their own code; a parity test runs both over these
+texts. The selector is told the rule as its rule (10).
 """
 
 from __future__ import annotations

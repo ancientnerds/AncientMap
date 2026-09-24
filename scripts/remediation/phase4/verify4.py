@@ -991,7 +991,8 @@ def leaning_pronoun(text: str) -> str | None:
     fort"), or right after the word `that` with no word of `model4.ARTICLES` before it ("Pottery
     sherds show that it was also occupied"). An article before the pronoun names something it may
     refer to inside the sentence; a pronoun elsewhere usually refers inside it too. The selector is
-    told the rule as its rule (10)."""
+    told the rule as its rule (10); `sentences.leans_on_predecessor` reads it in its own code for
+    the review's drops, and a parity test holds the two together."""
     if opens_with_pronoun(text):
         return "opens with a pronoun"
     first = _PERSONAL.search(text)

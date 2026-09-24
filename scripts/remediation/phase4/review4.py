@@ -19,7 +19,10 @@ presumption, an assumption or a dispute.
 
 The verdict can only remove, and it fails closed:
 
-* `DROP`, a missing line, or a second line for the same sentence removes that sentence;
+* `DROP`, a missing line, or a second line for the same sentence removes that sentence; and -
+  pilot 3, T8 - a kept sentence that leans on the published sentence before it (a pronoun, V6's
+  rule) goes with that sentence when it is removed, transitively, recorded under its own reason
+  (`follow_drops`, `FOLLOWS_A_DROP`: `followed` in `review4.json`);
 * a line in no contract shape (`KEEP` takes nothing after it), an `R<i>` that names no shown
   sentence, or a `CARD` line where no card was shown makes the whole answer unparseable:
   `review-unparseable` holds the site;
@@ -111,6 +114,35 @@ def parse_review(answer: str, *, sentences: int, card: bool) -> Verdict:
     return Verdict(
         kept=kept, card_kept=(card_lines == [True]) if card else None, lines=tuple(lines)
     )
+
+
+#: Pilot 3 (T8): the reason a sentence is dropped with the published sentence before it.
+FOLLOWS_A_DROP = "leans-on-a-dropped-sentence"
+
+
+def follow_drops(
+    verdict: Verdict, published: Sequence[str]
+) -> tuple[Verdict, tuple[dict[str, Any], ...]]:
+    """The verdict with every kept sentence that leans on a dropped one dropped too.
+
+    Pilot 3 (T8, Mersinaki and Diana Fort): the reviewer dropped a sentence whose published
+    successor opens with a pronoun, and V6 then held the whole site. A kept sentence that leans on
+    the sentence before it (`sentences.leans_on_predecessor`, V6's rule in the review's own code)
+    whose published predecessor is dropped goes with it - in order, so a chain goes whole - and is
+    recorded as `{"sentence", "follows", "reason": FOLLOWS_A_DROP}`; the site is then judged on
+    what remains (the two-sentence minimum, V1-V15 again). Before the review V6 passed, so such a
+    sentence was published right after its source predecessor."""
+    kept = set(verdict.kept)
+    followed: list[dict[str, Any]] = []
+    for number in range(2, len(published) + 1):
+        if (
+            number in kept
+            and number - 1 not in kept
+            and S.leans_on_predecessor(published[number - 1])
+        ):
+            kept.discard(number)
+            followed.append({"sentence": number, "follows": number - 1, "reason": FOLLOWS_A_DROP})
+    return dataclasses.replace(verdict, kept=tuple(sorted(kept))), tuple(followed)
 
 
 # -------------------------------------------------------------------------------- the prompt
@@ -347,9 +379,15 @@ def review_batch(
             holds.append(_site_hold(site_id, M.HoldReason.REVIEW_UNPARSEABLE, str(exc)))
             row["outcome"] = "held"
             continue
+        verdict, followed = follow_drops(verdict, built.sentences)
         outcome = settle(site_inputs, built, verdict, reverify, run=run)
         holds.extend(outcome.holds)
-        row.update(lines=list(verdict.lines), kept=list(verdict.kept), card=outcome.card)
+        row.update(
+            lines=list(verdict.lines),
+            kept=list(verdict.kept),
+            followed=list(followed),
+            card=outcome.card,
+        )
         if outcome.assembly is None:
             row["outcome"] = "held"
             continue

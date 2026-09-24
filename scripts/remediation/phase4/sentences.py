@@ -416,6 +416,40 @@ def garbled(s: str) -> bool:
     return _PREPOSITION_THEN_COMMA.search(s) is not None
 
 
+#: A word as the pronoun rule reads it: a run of word characters, apostrophes and hyphens (`it's`
+#: and `self-it` are one word each, and neither is `it`).
+_WORD = re.compile(r"[\w'’-]+")
+
+
+def leans_on_predecessor(s: str) -> bool:
+    """Pilot 3 (T1, T4, T8): does the published sentence `s` lean on the sentence before it in its
+    source? It opens with a word of `model4.PRONOUN_OPENERS` that no letter follows; or its first
+    word of `model4.PERSONAL_PRONOUNS` (any case) is one of `model4.SUBJECT_PRONOUNS` and stands
+    right after the sentence's first comma, or right after the word `that` with no word of
+    `model4.ARTICLES` before it. The review's reading of V6's rule, in its own code (the review
+    drops such a sentence with a dropped predecessor, `review4.follow_drops`); `verify4.
+    leaning_pronoun` is V6's, and a parity test holds the two together."""
+    for opener in M.PRONOUN_OPENERS:
+        if s.startswith(opener) and not s[len(opener) : len(opener) + 1].isalpha():
+            return True
+    words = list(_WORD.finditer(s))
+    for index, word in enumerate(words):
+        if word.group().lower() not in M.PERSONAL_PRONOUNS:
+            continue
+        if word.group().lower() not in M.SUBJECT_PRONOUNS:
+            return False
+        head = s[: word.start()]
+        if head.endswith(", ") and head.find(", ") == len(head) - 2:
+            return True
+        before = words[index - 1].group() if index else ""
+        return (
+            before.lower() == "that"
+            and head.endswith(f"{before} ")
+            and not any(w.group().lower() in M.ARTICLES for w in words[:index])
+        )
+    return False
+
+
 def publishable(text: str, sentence: M.Sentence) -> bool:
     """Can this sentence be offered at all: complete, terminated, 25-400 characters, and not
     `garbled` (V5 holds a published sentence that is)."""
