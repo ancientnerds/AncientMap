@@ -2,10 +2,12 @@
    Lyra Discoveries Page
    ============================================================================= */
 
+/* 100dvh, not 100vh: on a phone 100vh is the height with the address bar
+   hidden, so the bottom of the card pane sat behind the browser's own bar. */
 .lyra-discoveries-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--surface-page);
   color: rgba(255, 255, 255, 0.85);
@@ -779,9 +781,12 @@
    Split-view layout: map (left) + card list (right)
    ============================================================================= */
 
+/* Basis 0, not auto: with `auto` the split's tall content made the page's
+   column shrink its neighbours too, and the stats bar was squeezed to 11px
+   (desktop) and 8px (phone) under its own text. */
 .radar-split-view {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
   overflow: hidden;
 }
@@ -868,23 +873,27 @@
    with `flex: 0 1 <basis>` the columns shrink to fit rather than overflow. */
 .radar-split-cards .lyra-discoveries-column {
   flex: 1 1 var(--radar-column-width, 320px);
-  min-width: var(--radar-column-width, 320px);
+  /* Capped at the grid: below 320px (a 320px phone leaves 296px) the single
+     column overflowed and cut every card off at the right edge. */
+  min-width: min(var(--radar-column-width, 320px), 100%);
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-/* Mobile: stacked layout */
+/* Mobile: stacked layout. The split takes what header, filters and stats
+   leave, and the card pane takes the rest of it. It used to be fixed at
+   max-height 50vh under a 40vh map, so once scrolling collapsed the globe the
+   lower half of the screen stayed empty. */
 @media (max-width: 768px) {
   .radar-split-view {
     flex-direction: column;
-    height: calc(100vh - 120px);
   }
 
   .radar-split-map {
     flex: 0 0 auto;
     width: 100%;
-    height: 40vh;
+    height: 40dvh;
   }
 
   .radar-split-map .radar-map-container {
@@ -893,8 +902,8 @@
   }
 
   .radar-split-cards {
-    flex: 0 0 auto;
-    max-height: 50vh;
+    flex: 1 1 0%;
+    min-height: 0;
     border-top: 2px solid rgba(78, 205, 196, 0.3);
   }
 }
