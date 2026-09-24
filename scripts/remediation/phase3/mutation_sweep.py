@@ -16938,8 +16938,9 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 pilot: pilot 2 takes fixed members other than pilot 1's",
         P4P_PILOT4,
-        "    if earlier and list(strata.items()) != earlier_fixed:\n",
-        "    if False:  # mutant\n",
+        # re-anchored 2026-09-24: pilot 3's build checks every earlier pilot in a loop
+        "        if list(strata.items()) != earlier_fixed:\n",
+        "        if False:  # mutant\n",
         P4P_PILOT_TEST,
         "test_pilot_2_refuses_fixed_members_that_are_not_pilot_1s",
     ),
@@ -16954,7 +16955,8 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 pilot: build ignores the earlier pilot it is told",
         P4P_PILOT4,
-        "    earlier = R.read_jsonl(Path(args.after)) if args.after else []\n",
+        # re-anchored 2026-09-24: pilot 3's --after is given once per earlier pilot
+        "    earlier = [R.read_jsonl(Path(path)) for path in args.after]\n",
         "    earlier = []  # mutant\n",
         P4P_PILOT_TEST,
         "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
