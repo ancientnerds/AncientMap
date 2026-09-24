@@ -133,6 +133,7 @@ interface GlobeProps {
   onProximityHover?: (coords: [number, number] | null) => void  // Callback when hovering in proximity mode
   initialPosition?: [number, number] | null  // [lng, lat] initial camera position (user location)
   onLayersReady?: () => void  // Callback when essential layers (coastlines, borders) are loaded
+  isGlobeReady: () => boolean  // App's globe_ready has fired (the overlay faded): loader failures are 'live' from then on
   onStartProgress?: (item: StartItem) => void  // A critical item of the start is in (scene, basemap, labels, coastlines, countryBorders), once each
   onWarpComplete?: () => void  // The intro warp has ended (once per warp); the background queue starts here
   appBackgroundTasks: AppBackgroundTasks  // App's work in the background queue (site details, service worker)
@@ -185,7 +186,7 @@ interface GlobeProps {
   isOffline?: boolean  // Whether currently offline (no network)
 }
 
-export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onStartProgress, onWarpComplete, appBackgroundTasks, onWebglLost, onWebglRestored, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
+export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, isGlobeReady, onStartProgress, onWarpComplete, appBackgroundTasks, onWebglLost, onWebglRestored, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
   const refs = useGlobeRefs()
 
   // Batch destructure refs
@@ -225,10 +226,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     logoAnimationStarted: logoAnimationStartedRef,
   } = refs
 
-  // Contract C0: every critical loader reports its failure here; until the layers are ready
-  // it reaches GlobeErrorBoundary (App shows the error screen), afterwards the globe is
-  // drawn and stays up, and the failure is tracked as live.
-  const reportStartError = useStartErrorBridge(() => refs.layersReadyCalled.current)
+  // Contract C0: every critical loader reports its failure here. Until App's globe_ready
+  // (the overlay fades: sites, layers and focus are in) it reaches GlobeErrorBoundary and
+  // App shows the error screen - also between the layers and the sites. Afterwards the
+  // globe is on screen and stays up, and the failure is tracked as live.
+  const reportStartError = useStartErrorBridge(isGlobeReady)
 
   // Custom Hooks
   const ui = useUIState({ initialShowCoordinates: true })

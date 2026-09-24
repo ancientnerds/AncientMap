@@ -170,6 +170,8 @@ function AppContent() {
   const [loadStalled, setLoadStalled] = useState(false)
   // globe_ready has fired (useGlobeReady): later failures are 'live', not start failures
   const globeReadyRef = useRef(false)
+  // Globe's loader bridge asks the same question (useStartErrorBridge)
+  const isGlobeReady = useCallback(() => globeReadyRef.current, [])
 
   const [sites, setSites] = useState<SiteData[]>([])
   const sitesRef = useRef<SiteData[]>([])
@@ -1894,6 +1896,7 @@ function AppContent() {
         onProximityHover={handleProximityHover}
         initialPosition={initialNav?.coords ?? focusLocation ?? userLocation}
         onLayersReady={handleLayersReady}
+        isGlobeReady={isGlobeReady}
         onStartProgress={markStartProgress}
         appBackgroundTasks={appBackgroundTasks}
         onWebglLost={(reason) => {

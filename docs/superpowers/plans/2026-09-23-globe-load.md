@@ -72,7 +72,7 @@ Each file is a GeoJSON `FeatureCollection` whose features are `MultiLineString`s
 | `globe_abandon` | `{ms: number, phase: 'gate'\|'sites'\|'scene'\|'basemap'\|'labels'\|'coastlines'\|'countryBorders'}` | `pagehide` / `visibilitychange→hidden` before `globe_ready` |
 | `globe_bg` | `{task: BgTaskName, ms: number}` | each finished background task |
 
-`BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'`. At most **one ending** (`globe_gate` with choice ≠ globe, `globe_unsupported`, a start `globe_error`, `globe_abandon`, `webgl_lost{phase:'loading'}`) per load. `globe_ready` (sent when the loading overlay fades, not when the layers are in) closes the latch.
+`BgTaskName = 'details' | 'layers' | 'mapbox' | 'satellite' | 'basemap' | 'rivers_lakes' | 'sw'`. At most **one ending** (`globe_gate` with choice ≠ globe, `globe_unsupported`, a start `globe_error`, `globe_abandon`, `webgl_lost{phase:'loading'}`) per load. `globe_ready` (sent when the loading overlay fades, not when the layers are in) closes the latch. It is the one "ready" of the load: App's boundary and Globe's loader bridge (C0, `isGlobeReady`) both read it, so a loader failure between the layers and the sites is a start failure with the error screen, and `'live'` means after `globe_ready` everywhere.
 
 **C4 — Mapbox load state** `src/services/mapboxLoader.ts`: `export type MapboxLoadState = 'idle' | 'loading' | 'ready' | 'failed'` and `runMapboxLoadTask(deps)` (shape in Task U5.4).
 

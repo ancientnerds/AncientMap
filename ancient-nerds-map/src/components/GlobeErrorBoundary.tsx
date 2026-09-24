@@ -41,7 +41,7 @@ export type ReportStartError = (phase: string, err: unknown) => void
  * failure is kept in state and thrown during the next render, which the
  * boundary catches. The first failure wins.
  *
- * After the globe is ready (isLive) nothing is torn down: the globe is on
+ * After App's globe_ready (isLive: the overlay has faded) nothing is torn down: the globe is on
  * screen, and a later failure of one of these loaders (a coastline switched
  * off and on again, labels reloaded after a context restore, a shader compiled
  * for a new layer) is logged and tracked as globe_error{phase: 'live'}.
