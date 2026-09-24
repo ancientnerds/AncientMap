@@ -13,6 +13,8 @@
  * Module scope touches no browser global (SSR-safe import).
  */
 
+import { fetchJsonWithDeadline } from './fetchWithDeadline'
+
 export const IP_LOOKUP_DEADLINE_MS = 2000
 
 type LngLat = [number, number]
@@ -46,22 +48,6 @@ const PROVIDERS: readonly Provider[] = [
     },
   },
 ]
-
-/** GET JSON with a deadline that also covers the body; the outer signal aborts it too. */
-async function fetchJsonWithDeadline(url: string, outer: AbortSignal, ms: number): Promise<unknown> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(new Error(`${url}: no answer within ${ms} ms`)), ms)
-  const onOuter = () => ctrl.abort(outer.reason)
-  outer.addEventListener('abort', onOuter)
-  try {
-    const res = await fetch(url, { signal: ctrl.signal })
-    if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`)
-    return await res.json()
-  } finally {
-    clearTimeout(timer)
-    outer.removeEventListener('abort', onOuter)
-  }
-}
 
 export async function lookupIpLocation(signal: AbortSignal): Promise<LngLat | null> {
   for (const provider of PROVIDERS) {

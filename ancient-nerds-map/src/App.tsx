@@ -22,6 +22,7 @@ import { EMPIRES } from './config/empireData'
 import { isPhoneOrSmallScreen } from './utils/deviceTier'
 import { checkGlobeSupport } from './utils/globeSupport'
 import { GlobeStartError, LIVE_PHASE, failurePhase } from './utils/globeStartError'
+import { lookupFocusLocation } from './utils/focusLocation'
 import { lookupIpLocation } from './utils/ipLocation'
 import { START_STALL_MS, createStallWatchdog, type StallWatchdog } from './utils/loadWatchdog'
 
@@ -770,25 +771,16 @@ function AppContent() {
     }
 
     // Focus mode: the warp lands on the site. The overlay waits for this lookup
-    // (focusResolved); when it fails the intro aims at the IP location, as always.
+    // (focusResolved), at most its deadline (utils/focusLocation.ts); when it
+    // fails the intro aims at the IP location, as always.
     if (focusSiteId) {
-      fetch(`${config.api.baseUrl}/sites/${focusSiteId}`, { signal: lookups.signal })
-        .then(res => {
-          if (!res.ok) throw new Error(`/sites/${focusSiteId}: HTTP ${res.status}`)
-          return res.json()
-        })
-        .then(detail => {
-          const coords = apiDetailToSiteData(detail).coordinates
-          if (coords && !isNaN(coords[0]) && !isNaN(coords[1])) setFocusLocation(coords)
-          else console.warn(`[globe] focus site ${focusSiteId} has no position`)
-        })
-        .catch((err: unknown) => {
-          if (lookups.signal.aborted) return // unmounted
-          console.warn(`[globe] focus site ${focusSiteId}: position lookup failed`, err)
-        })
-        .finally(() => {
-          if (!lookups.signal.aborted) setFocusResolved(true)
-        })
+      lookupFocusLocation(focusSiteId, lookups.signal).then(
+        location => {
+          if (location) setFocusLocation(location)
+          setFocusResolved(true)
+        },
+        (reason: unknown) => { if (!lookups.signal.aborted) throw reason }, // rejects only when aborted
+      )
     }
 
     // Normal mode: the default source first, then the globe shows its dots
