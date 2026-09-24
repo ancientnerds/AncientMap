@@ -118,7 +118,10 @@ their source and date; a "no longer valid" section names what the 2026-09-20 dec
 - **Generated frontend data**: `ancient-nerds-map/src/data/*.generated.json` come from Python
   constants (`pipeline/historical_boundaries/empire_metadata.py`, `api/cardgame/constants.py`).
   Edit the Python, then run `./.venv/Scripts/python.exe pipeline/generate_shared_data.py`; CI
-  fails on stale output (`--verify`).
+  fails on stale output (`--verify`). One exception: `globeLayers.generated.json` and the
+  coastline/border tiers in `public/data/layers/globe/` are built by
+  `scripts/build_globe_layers.py` (never by hand) and checked by
+  `tests/scripts/test_build_globe_layers.py`, not by `generate_shared_data.py --verify`.
 
 ### Key data flow
 1. Connectors in `pipeline/connectors/` fetch from external APIs → write to `unified_sites` table
