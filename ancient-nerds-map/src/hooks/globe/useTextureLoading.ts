@@ -99,13 +99,18 @@ export function useTextureLoading({
     return ctx
   }, [])
 
-  /** The satellite at the start tier; a failure ends the toggle's wait, the caller reports it. */
+  /**
+   * The satellite at the start tier; a failure ends the toggle's wait, the caller
+   * reports it. That includes the background queue stopping the task at its
+   * deadline (an abort); only an unmount, which takes the scene along, leaves
+   * nobody waiting.
+   */
   const loadSatellite = useCallback(async (signal: AbortSignal): Promise<void> => {
     const ctx = sceneContext()
     try {
       await loadSatelliteTier(ctx, ctx.tiers.start, signal)
     } catch (err) {
-      if (!signal.aborted) onSatelliteFailedRef.current()
+      if (ctxRef.current === ctx) onSatelliteFailedRef.current()
       throw err
     }
   }, [sceneContext])

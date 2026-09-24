@@ -273,6 +273,44 @@ describe('useTextureLoading', () => {
     expect(trackBackgroundFailure).not.toHaveBeenCalled()
   })
 
+  it('ends the wait when the queue stops the satellite task at its deadline', async () => {
+    let release!: () => void
+    holds.set(SAT_LOW, new Promise<void>(r => { release = r })) // a download that takes too long
+    const { refs } = makeRefs()
+    const p = props(refs)
+    await render(p)
+    await settle()
+    const task = new AbortController()
+    let error: unknown = null
+    let settled: Promise<void> = Promise.resolve()
+    await act(async () => { settled = latest.loadSatellite(task.signal).catch(e => { error = e }) })
+    await settle()
+    const deadline = new Error('Background task satellite did not finish within 90 s of visible time')
+    await act(async () => { task.abort(deadline) })
+    release()
+    await act(async () => { await settled })
+    expect(error).toBe(deadline)
+    expect(p.onSatelliteFailed).toHaveBeenCalledTimes(1)
+    expect(latest.satelliteReady).toBe(false)
+  })
+
+  it('leaves the toggle alone when the unmount cuts a satellite load short', async () => {
+    let release!: () => void
+    holds.set(SAT_LOW, new Promise<void>(r => { release = r }))
+    const { refs } = makeRefs()
+    const p = props(refs)
+    await render(p)
+    await settle()
+    await act(async () => { latest.requestSatellite() })
+    await settle()
+    await act(async () => { root!.unmount() })
+    root = null
+    release()
+    await settle()
+    expect(p.onSatelliteFailed).not.toHaveBeenCalled()
+    expect(trackBackgroundFailure).not.toHaveBeenCalled()
+  })
+
   it('reports nothing for a load cut short by the unmount', async () => {
     let release!: () => void
     holds.set(GRAY_LOW, new Promise<void>(r => { release = r }))
