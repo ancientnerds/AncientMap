@@ -547,6 +547,24 @@ describe('loadSatellite', () => {
     expect(dec.fetched).toEqual(['/data/basemaps/satellite_med.webp'])
   })
 
+  it('starts a new load instead of joining one its caller aborted (satellite off and on during the decode)', async () => {
+    const dec = stubDecoding(SIZES)
+    const release = dec.hold('/data/basemaps/satellite_high.webp')
+    const { ctx } = makeCtx({ start: 'med', max: 'high' })
+    const off = new AbortController()
+    const first = loadSatellite(ctx, 'high', off.signal)
+    const firstSettled = first.then(() => 'resolved', (err: Error) => err.message)
+    await vi.waitFor(() => expect(dec.fetched).toHaveLength(1)) // decoding: createImageBitmap cannot be aborted
+    off.abort(new Error('basemap: satellite switched off'))
+    const on = new AbortController()
+    const second = loadSatellite(ctx, 'high', on.signal)
+    release()
+    await expect(second).resolves.toBeUndefined()
+    expect(await firstSettled).toBe('basemap: satellite switched off')
+    expect(dec.fetched).toEqual(['/data/basemaps/satellite_high.webp', '/data/basemaps/satellite_high.webp'])
+    expect(ctx.satellite.tier).toBe('high')
+  })
+
   it('never replaces a higher tier with a lower one that arrives later', async () => {
     const dec = stubDecoding(SIZES)
     const releaseMed = dec.hold('/data/basemaps/satellite_med.webp')

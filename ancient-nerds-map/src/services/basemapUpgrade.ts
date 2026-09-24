@@ -248,7 +248,9 @@ export class BasemapState {
 
   /**
    * Runs `load` for `tier` unless that tier or a higher one is held; a caller
-   * asking for a tier that is already loading joins that load. The load's
+   * asking for a tier that is already loading joins that load, unless that load
+   * was aborted: it stays in the map until its decode ends (createImageBitmap
+   * cannot be aborted), and joining it would reject with the old reason. The load's
    * signal aborts with the caller's signal (the promise rejects with its
    * reason) or with `abortAll` (the promise resolves: the context restore or
    * the unmount that cut it short owns what happens next, it is not a
@@ -258,7 +260,7 @@ export class BasemapState {
     if (this.wanted === null || tierRank(tier) > tierRank(this.wanted)) this.wanted = tier
     if (!this.accepts(tier)) return Promise.resolve()
     const running = this.flights.get(tier)
-    if (running) return running.done
+    if (running && !running.ctrl.signal.aborted) return running.done
     if (signal.aborted) return Promise.reject(signal.reason)
     const ctrl = new AbortController()
     const onAbort = () => ctrl.abort(signal.reason)
