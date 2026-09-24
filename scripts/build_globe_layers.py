@@ -17,8 +17,10 @@ imports, `ancient-nerds-map/src/data/globeLayers.generated.json`, maps layer and
 tier to those URLs. Never edit either by hand; rerun this script.
 
 Inputs are downloaded into a temporary directory at build time only, never at
-runtime, and checked against pinned sha256 digests so every run on every machine
-produces the same bytes:
+runtime, and checked against pinned sha256 digests. A run with the same inputs
+and the same shapely/GEOS produces the same bytes; the simplification is GEOS's
+Douglas-Peucker, so another GEOS may keep other points. The build prints both
+versions next to the sizes. The inputs:
 
   --coast    the repo's LFS file `public/data/layers/coast_hires.geojson`
              (default: the copy production serves; the worktree holds a pointer)
@@ -41,6 +43,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from urllib.parse import urlparse
 
+import shapely
 from shapely.geometry import LineString
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -254,7 +257,7 @@ def hashed_name(stem: str, data: bytes) -> str:
 
 
 def write_outputs(outputs: dict[str, bytes], out_dir: Path, manifest_path: Path) -> dict:
-    """Write one file per tier, remove every other `*.json` in `out_dir`, write the manifest.
+    """Write one file per tier and the manifest, then remove every other `*.json` in `out_dir`.
 
     The manifest is source code, not data: sorted keys, 2-space indent, LF, trailing newline.
     """
@@ -262,9 +265,6 @@ def write_outputs(outputs: dict[str, bytes], out_dir: Path, manifest_path: Path)
         raise ValueError(f"outputs {sorted(outputs)} do not match the tiers {sorted(TIERS)}")
     out_dir.mkdir(parents=True, exist_ok=True)
     names = {stem: hashed_name(stem, data) for stem, data in outputs.items()}
-    for stale in out_dir.glob("*.json"):
-        if stale.name not in names.values():
-            stale.unlink()
     manifest: dict[str, dict[str, str]] = {}
     for stem, data in outputs.items():
         (out_dir / names[stem]).write_bytes(data)
@@ -272,6 +272,11 @@ def write_outputs(outputs: dict[str, bytes], out_dir: Path, manifest_path: Path)
         manifest.setdefault(str(spec["layer"]), {})[str(spec["tier"])] = URL_PREFIX + names[stem]
     text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     manifest_path.write_bytes(text.encode("utf-8"))
+    # Only now that the new files and the manifest are written: a run that stops
+    # halfway leaves an extra file behind, never a manifest pointing at a deleted one.
+    for stale in out_dir.glob("*.json"):
+        if stale.name not in names.values():
+            stale.unlink()
     return manifest
 
 
@@ -305,6 +310,7 @@ def build(coast: str, borders: str) -> dict[str, bytes]:
             "coast": flatten_lines(json.loads(read_source(coast, COAST_SHA256, tmp_dir))),
             "borders": flatten_lines(json.loads(read_source(borders, BORDERS_SHA256, tmp_dir))),
         }
+    print(f"Simplified with shapely {shapely.__version__}, GEOS {shapely.geos_version_string}")
     for name, lines in sources.items():
         print(f"{name:8s} source: {len(lines):>7,} lines {sum(map(len, lines)):>9,} points")
     outputs: dict[str, bytes] = {}

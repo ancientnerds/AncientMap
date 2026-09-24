@@ -201,6 +201,60 @@ def test_write_outputs_replaces_stale_files_and_writes_the_manifest(mod, tmp_pat
     assert text == json.dumps(manifest, indent=2, sort_keys=True) + "\n"
 
 
+def test_write_outputs_deletes_stale_files_only_after_the_new_ones_and_the_manifest(
+    mod, tmp_path, monkeypatch
+):
+    out_dir = tmp_path / "globe"
+    out_dir.mkdir()
+    (out_dir / "coast_start.00000000.json").write_bytes(b"{}")
+    manifest_path = tmp_path / "globeLayers.generated.json"
+    outputs = {stem: f'{{"stem":"{stem}"}}'.encode() for stem in mod.TIERS}
+    new_files = [out_dir / mod.hashed_name(stem, data) for stem, data in outputs.items()]
+    seen_at_unlink: list[bool] = []
+    real_unlink = Path.unlink
+
+    def unlink(self, *args, **kwargs):
+        seen_at_unlink.append(manifest_path.exists() and all(p.exists() for p in new_files))
+        real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    mod.write_outputs(outputs, out_dir, manifest_path)
+
+    assert seen_at_unlink == [True]
+    assert not (out_dir / "coast_start.00000000.json").exists()
+
+
+def test_build_prints_the_shapely_and_geos_versions_with_the_sizes(mod, monkeypatch, capsys):
+    import shapely
+
+    fc = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1], [2, 0]]},
+                }
+            ],
+        }
+    ).encode()
+    monkeypatch.setattr(mod, "read_source", lambda source, sha, tmp_dir: fc)
+
+    mod.build("coast.geojson", "borders.geojson")
+
+    out = capsys.readouterr().out
+    versions = f"shapely {shapely.__version__}, GEOS {shapely.geos_version_string}"
+    assert versions in out
+    assert out.index(versions) < out.index("coast_start")
+
+
+def test_docstring_claims_reproducibility_only_for_the_same_inputs_and_geometry_library(mod):
+    doc = " ".join(mod.__doc__.split())
+    assert "same inputs and the same shapely/GEOS" in doc
+    assert "every run on every machine" not in doc
+
+
 def test_committed_manifest_points_at_committed_files_within_budget():
     root = Path(__file__).resolve().parents[2]
     manifest = json.loads(
