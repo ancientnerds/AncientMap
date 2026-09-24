@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { _resetForTests, MAX_VALUE_CHARS } from '../index'
-import { trackBackgroundFailure } from '../globeBackground'
+import { trackBackgroundDone, trackBackgroundFailure } from '../globeBackground'
 
 const g = globalThis as unknown as { window?: unknown }
 
@@ -33,5 +33,14 @@ describe('trackBackgroundFailure', () => {
     const props = spy.mock.calls[0][1] as { phase: string; message: string }
     expect(props.phase).toBe('bg:basemap')
     expect(props.message).toHaveLength(MAX_VALUE_CHARS)
+  })
+})
+
+describe('trackBackgroundDone', () => {
+  it('sends globe_bg with the task and its whole milliseconds', () => {
+    const spy = vi.fn()
+    g.window = { umami: { track: spy } }
+    trackBackgroundDone('layers', 1234.56)
+    expect(spy).toHaveBeenCalledWith('globe_bg', { task: 'layers', ms: 1235 })
   })
 })
