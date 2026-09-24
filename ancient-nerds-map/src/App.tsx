@@ -48,6 +48,7 @@ import { haversineDistance } from './utils/geoMath'
 import { reportAchievementEvent } from './utils/cardApi'
 import AchievementToast from './components/AchievementToast'
 import { useSiteSearch } from './hooks/useSiteSearch'
+import { useGlobeScreenEnding, type ScreenEnding } from './hooks/useGlobeScreenEnding'
 
 export type FilterMode = 'category' | 'age' | 'source' | 'country'
 
@@ -699,10 +700,11 @@ function AppContent() {
     setGlobeFailure(prev => prev ?? { phase, message })
     if (globeFailureTrackedRef.current) return
     globeFailureTrackedRef.current = true
-    // A start failure is this load's ending; a live one follows globe_ready, which closed the latch
+    // A live failure follows globe_ready, which closed the latch. A start failure is this
+    // load's ending, sent when its screen shows (useGlobeScreenEnding, below): not behind
+    // the phone gate, where a gate link used first is the ending instead.
     if (phase === LIVE_PHASE) track('globe_error', { phase, message })
-    else endingLatch.end('globe_error', { phase, message })
-  }, [endingLatch])
+  }, [])
 
   const handleGlobeError = useCallback((err: unknown) => {
     failGlobe(failurePhase(err, globeReadyRef.current), err instanceof GlobeStartError ? err.cause : err)
@@ -1674,11 +1676,18 @@ function AppContent() {
     })
   }, [standaloneSiteId, endingLatch])
 
-  // globe_unsupported, once, when the unsupported screen actually shows
-  useEffect(() => {
-    if (!globeSupport || globeSupport.ok || gateShowing) return
-    endingLatch.end('globe_unsupported', { reason: globeSupport.reason, detail: globeSupport.detail })
-  }, [globeSupport, gateShowing, endingLatch])
+  // globe_unsupported or a start failure's globe_error, once, when its screen actually
+  // shows: after the phone gate (App renders the gate first)
+  const screenEnding = useMemo((): ScreenEnding | null => {
+    if (globeSupport && !globeSupport.ok) {
+      return { name: 'globe_unsupported', props: { reason: globeSupport.reason, detail: globeSupport.detail } }
+    }
+    if (globeFailure && globeFailure.phase !== LIVE_PHASE) {
+      return { name: 'globe_error', props: { phase: globeFailure.phase, message: globeFailure.message } }
+    }
+    return null
+  }, [globeSupport, globeFailure])
+  useGlobeScreenEnding(endingLatch, screenEnding, gateShowing)
 
   // Loading watchdog: while the globe starts, 20 s of visible time without any
   // critical item progressing offers a reload in the hint box. Loading goes on.

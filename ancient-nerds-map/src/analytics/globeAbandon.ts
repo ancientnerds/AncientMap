@@ -7,8 +7,9 @@
  * trusts the frontend to send AT MOST ONE ending per load:
  *
  *   globe_gate        a phone-gate choice other than the globe
- *   globe_unsupported the capability check failed (App)
- *   globe_error       a start failure (App's failGlobe; not 'bg:' or 'live')
+ *   globe_unsupported the capability check failed, once its screen shows
+ *   globe_error       a start failure (not 'bg:' or 'live'), once its screen shows
+ *                     (App: failGlobe, hooks/useGlobeScreenEnding.ts; never behind the gate)
  *   globe_abandon     the page was hidden or left before globe_ready
  *
  * All four go through one latch per load; globe_ready closes it too, so a
