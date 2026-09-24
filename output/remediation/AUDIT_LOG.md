@@ -8773,3 +8773,60 @@ $PY $M/tools/write_gate4.py --group P4 --run pilot4-2026-09-24 --open-lanes W,S 
 $PY $M/tools/write_gate4.py --group P4 --run pilot4-2026-09-24 --open-lanes W,S --rehearse
 $PY $M/tools/write_gate4.py --group P5 --run pilot4-2026-09-24 --rehearse
 ```
+
+### Tests, sweep, gates for pilot 3's fixes and pilot 4 (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 22 new test functions (101 new test items with the parametrizations), 20 of them red before their
+  code; the other two check a claim about existing code or data (rule (7)'s "only when also_named
+  lists X", the sealed draw's members): `test_phase4_verify.py` +7 (the 31 `PRONOUN_CASES` V6 judges
+  exactly, and the review's reading alike; V6 past the first word, after a comma and after "that";
+  V10's card; V14's sub-national names; rule (7)'s two forms read literally against `name_base` in
+  both modules for 17 names, and its also_named clause), `test_phase4_review.py` +5 (the PASSAGE for
+  lanes W and R; the followed drops, a kept predecessor, too few left), `test_phase4_select.py` +3
+  (the reviewer's pronoun and contradiction lines, rule (11)),
+  `tests/pipeline/test_country_subnational_names.py` +3 (new: the table pinned, each entry carries a
+  country name and maps elsewhere, South Wales stays Wales), `test_phase4_model.py` +1 (the three
+  word lists), `test_phase4_pilot.py` +3 (pilot 4's draw after three pilots, its seal, the sealed
+  file). Rewritten: the pronoun rule (10), card rule (4), rule (7) and the reviewer's DROP-order pins
+  in `test_phase4_select.py`, with the four re-pins and their reasons. New shared fixture
+  `tests/remediation/p4_pronoun_cases.py`. Red first, measured: T1/T4 38 failures, T7 5, V14 a
+  collection error and 1, T8 34, rule (7) 18, pilot 4's seed 1, its seal 1.
+* `mutation_sweep.P4_PILOT4_MUTATIONS`: 37 cases (`p4 verify4` 8, `p4 prompts` 11, `p4 review` 5,
+  `p4 sentences` 4, `p4 country_lookup` 3, `p4 model` 2, `p4 select` 1, `p4 pilot` 3), registered once;
+  five older cases re-anchored on lines this rewrote (`p4 verify4: V10 a card may open with a
+  pronoun`, `p4 prompts: the selector's card rule forbids a cultural adjective`, `... the selector is
+  not told V6's pronoun rule`, `... rule (10) lets the first DESC sentence open with a pronoun`,
+  `... the selector's first sentence need not name the site`); 2,064 labels, all unique, every anchor
+  and test present. The sweep's own `main` (drivers `logs/p4_pilot4/sweep_targets.py` and
+  `sweep_labels.py`): over **every case whose target is a file the five fixes changed** (verify4
+  200, model4 83, sentences 65, prompts4 26, review4 18, country_lookup 11, mutation_sweep 3, and the
+  new `p4 select` case) **407/407 caught**, the tree byte-identical for its 8 files (`sweep_fixes.log`);
+  after the draw, over every case targeting `pilot4.py`, `AUDIT_LOG.md`, `mutation_sweep.py` or the
+  contracts plus all 37 new cases **76/76 caught**, byte-identical for its 11 files
+  (`sweep_final.log`); no `# mutant` left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`,
+  `-rs`): **6,194 passed, 111 skipped, 57 deselected, 0 failed** (325.6 s) on the final tree, the same
+  111 skips (gitignored data) as before; after the five fixes alone, 6,191 passed.
+* `ruff check` and `ruff format --check` clean on the 15 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check (`country_lookup` is under
+  `pipeline/`) passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
+### Open
+
+* **T8 may fail again**, and not for a defect: pilot 3's 18 correct holds alone kept its coverage
+  under 80 % (at most 60 of 78 with its three defects removed). Pilot 4 draws other sites; the
+  thresholds are never loosened after the data is seen, so a shortfall goes to the owner as pilot 3's
+  did.
+* The pronoun rule's cost stays: 158 census pool sentences can never be published (their source
+  predecessor is not in the pool), and an expletive *it* after a fronted phrase is held like a
+  pronoun (9 of the 60 sampled); the reviewer and the audit see what it holds.
+* V10 still holds a card that carries a sub-national name ("New South Wales"): conservative, not
+  measured as a loss (no census card-length sentence's verdict changed).
+* The B3 stratum is used up (20 routeless sites, all drawn by pilots 1-4): a fifth pilot would draw
+  none.
+* Pilot 4's 90 selector questions wait for their answers (runbook above); its ledger lives in its
+  gitignored run directory - keep it with `HOLDS4.jsonl` and the audit verdicts in
+  `pilot4_evidence/` when the result is recorded.
