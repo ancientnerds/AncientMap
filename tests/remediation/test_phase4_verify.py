@@ -1546,6 +1546,32 @@ def test_v14_a_location_sentence_naming_another_country_is_held() -> None:
     assert V._iso("United Kingdom") == V._iso(england.country)
 
 
+def _located(place: str, country: str) -> Case:
+    sentence = f"The Tarxien Temples are a group of megalithic temples located in {place}."
+    text = f"{sentence} {S2} {S3}"
+    picks = (Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2])
+    return make_case(text=text, picks=picks, card=None, site=plan_site(country=country))
+
+
+def test_v14_a_sub_national_name_is_read_as_its_own_countrys() -> None:
+    """Pilot 3 (T8): Lake Mungo, "a dry lake located in New South Wales, Australia", was held as
+    placing the site in Wales. The country regex reads `country_lookup.SUBNATIONAL_NAME_TO_ISO`
+    beside `NAME_TO_ISO`, longest first: the whole name, with its own country's code."""
+    assert V.countries_named("A dry lake located in New South Wales, Australia.") == [
+        "New South Wales",
+        "Australia",
+    ]
+    assert "V14" not in _located("New South Wales, Australia", "Australia").reasons()
+    assert "V14" not in _located("Central Macedonia, Greece", "Greece").reasons()
+    held = _located("New South Wales", "England")
+    assert "places the site in New South Wales, the stored country is 'England'" in (
+        held.detail("V14")
+    )
+    # "South Wales" is Wales
+    assert "V14" not in _located("South Wales", "England").reasons()
+    assert "places the site in Wales" in _located("South Wales", "Australia").detail("V14")
+
+
 def test_v14_a_stored_country_of_comma_parts_is_read_part_by_part() -> None:
     """C7: the 8 Rapa Nui sites store 'Chile, Easter Island', which is no single NAME_TO_ISO name;
     a location sentence naming Easter Island or Chile agrees with it, Italy does not."""

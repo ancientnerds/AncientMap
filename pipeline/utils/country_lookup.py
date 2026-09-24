@@ -534,6 +534,36 @@ NAME_TO_ISO: dict[str, str] = {
     "macau": "MO",
 }
 
+# Sub-national place names that contain a country's name as a whole word, each mapped to the ISO code
+# of the country it really lies in (never the contained name's). Phase 4's V14 (scripts/remediation/
+# phase4/verify4.py) reads them beside NAME_TO_ISO, longest first, so "New South Wales" is Australia
+# and not Wales: pilot 3 (2026-09-24) held Lake Mungo, "a dry lake located in New South Wales,
+# Australia", as a site placed in Wales. Derived from data - the census run's 88,936 pool sentences
+# scanned for a NAME_TO_ISO name directly preceded by a capitalised word or inside a longer proper
+# name - and each entry verified (output/remediation/AUDIT_LOG.md, pilot 4). Left out: names without
+# one country ("New Guinea": PG and ID; "Belize River": GT and BZ; "Caucasian Albania", "British
+# India", "Middle Niger"), the bare "West Azerbaijan" (the census also uses it for western
+# Azerbaijan), and names that are no sub-national place ("British Honduras", the colony that is all
+# of Belize). "South Wales" is Wales and is not listed. Not in NAME_TO_ISO, so country_name_variants
+# and normalize_country never return one of these names.
+SUBNATIONAL_NAME_TO_ISO: dict[str, str] = {
+    "new south wales": "AU",
+    "new mexico": "US",
+    "new england": "US",
+    "central macedonia": "GR",
+    "western macedonia": "GR",
+    "eastern macedonia and thrace": "GR",
+    "greek macedonia": "GR",
+    "west azerbaijan province": "IR",
+    "upper jordan valley": "IL",
+    "jordan hill": "GB",  # Dorset
+    "kraku lu jordan": "RS",
+    "el peru": "GT",  # El Perú-Waka', Petén
+    "inner niger delta": "ML",
+    "lapis niger": "IT",  # the Roman Forum
+    "denmark fjord": "GL",
+}
+
 # Reverse mapping: ISO code → list of known name variants (for context text checking)
 _ISO_TO_NAMES: dict[str, list[str]] = {}
 for _name, _iso in NAME_TO_ISO.items():

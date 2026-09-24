@@ -17498,6 +17498,8 @@ P4P4_SELECT_TEST = "tests/remediation/test_phase4_select.py"
 P4P4_MODEL_TEST = "tests/remediation/test_phase4_model.py"
 P4P4_REVIEW = "scripts/remediation/phase4/review4.py"
 P4P4_REVIEW_TEST = "tests/remediation/test_phase4_review.py"
+P4P4_COUNTRY = "pipeline/utils/country_lookup.py"
+P4P4_SUBNATIONAL_TEST = "tests/pipeline/test_country_subnational_names.py"
 
 P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── T1/T4: a subject pronoun past the first word leans on the sentence before ──────────────
@@ -17656,6 +17658,47 @@ P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n        return P.page_passage(",
         P4P4_REVIEW_TEST,
         "test_a_lane_r_reviewer_sees_every_page_it_restated",
+    ),
+    # ── V14: a sub-national name that carries a country's name is read with its own country ───
+    (
+        "p4 country_lookup: New South Wales is read as Wales again",
+        P4P4_COUNTRY,
+        '    "new south wales": "AU",\n',
+        "",
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    (
+        "p4 country_lookup: South Wales is taken for New South Wales",
+        P4P4_COUNTRY,
+        '    "new south wales": "AU",\n',
+        '    "new south wales": "AU",\n    "south wales": "AU",  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    (
+        "p4 country_lookup: a sub-national name maps to the country inside it",
+        P4P4_COUNTRY,
+        '    "central macedonia": "GR",\n',
+        '    "central macedonia": "MK",  # mutant\n',
+        P4P4_SUBNATIONAL_TEST,
+        "test_every_name_carries_a_country_name_and_maps_to_another_country",
+    ),
+    (
+        "p4 verify4: the country regex reads country names only",
+        P4P4_VERIFY,
+        "_PLACES = {**NAME_TO_ISO, **SUBNATIONAL_NAME_TO_ISO}\n",
+        "_PLACES = {**NAME_TO_ISO}  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    (
+        "p4 verify4: V14 reads a sub-national name without its country",
+        P4P4_VERIFY,
+        "    return _PLACES.get(name.strip().lower()) if name else None\n",
+        "    return NAME_TO_ISO.get(name.strip().lower()) if name else None  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
     ),
 ]
 MUTATIONS += P4_PILOT4_MUTATIONS

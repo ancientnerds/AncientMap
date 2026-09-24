@@ -94,6 +94,7 @@ from pipeline.utils.country_lookup import (
     ANCIENT_CULTURE_ADJECTIVES,
     MODERN_NATIONALITY_DEMONYMS,
     NAME_TO_ISO,
+    SUBNATIONAL_NAME_TO_ISO,
     country_name_variants,
 )
 from pipeline.utils.text import normalize_name
@@ -501,21 +502,28 @@ def heading_before(text: str, position: int) -> str | None:
     return heading
 
 
+#: The country names and - pilot 3, V14 - the sub-national place names that contain one
+#: (`country_lookup.SUBNATIONAL_NAME_TO_ISO`: "New South Wales" is Australia, not Wales), longest
+#: first, so the whole place name is read before the country name inside it.
+_PLACES = {**NAME_TO_ISO, **SUBNATIONAL_NAME_TO_ISO}
 _COUNTRY = re.compile(
     r"(?<!\w)(?:"
-    + "|".join(re.escape(name) for name in sorted(NAME_TO_ISO, key=len, reverse=True))
+    + "|".join(re.escape(name) for name in sorted(_PLACES, key=len, reverse=True))
     + r")(?!\w)",
     re.IGNORECASE,
 )
 
 
 def countries_named(text: str) -> list[str]:
-    """Country names (`country_lookup.NAME_TO_ISO`) written as proper nouns, longest first."""
+    """Country names (`country_lookup.NAME_TO_ISO`) written as proper nouns, longest first; a
+    sub-national name that carries one (`SUBNATIONAL_NAME_TO_ISO`) comes back whole. V10 holds
+    either in a card (a card still names no 'Wales', even inside 'New South Wales'); V14 reads each
+    with its own country's code (`_iso`)."""
     return [m.group(0) for m in _COUNTRY.finditer(text) if m.group(0)[0].isupper()]
 
 
 def _iso(name: str | None) -> str | None:
-    return NAME_TO_ISO.get(name.strip().lower()) if name else None
+    return _PLACES.get(name.strip().lower()) if name else None
 
 
 def stored_isos(country: str | None) -> frozenset[str]:
