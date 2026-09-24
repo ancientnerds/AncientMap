@@ -960,6 +960,43 @@ def opens_with_pronoun(text: str) -> bool:
     return bool(_PRONOUN.match(text))
 
 
+def _whole_words(words: Iterable[str]) -> re.Pattern[str]:
+    """A whole word of `words`, in any case: no word character, apostrophe or hyphen on either side
+    (`it` is not in `item`, nor in the contraction `it's`)."""
+    return re.compile(
+        r"(?<![\w'’-])(?:" + "|".join(map(re.escape, words)) + r")(?![\w'’-])", re.IGNORECASE
+    )
+
+
+_PERSONAL = _whole_words(M.PERSONAL_PRONOUNS)
+_ARTICLE = _whole_words(M.ARTICLES)
+#: ... the word `that` and one space, ending the text before the pronoun.
+_THAT_BEFORE = re.compile(r"(?<![\w'’-])that \Z", re.IGNORECASE)
+
+
+def leaning_pronoun(text: str) -> str | None:
+    """V6/V10: how `text` leans on the sentence before it in its source, or `None`.
+
+    It opens with a word of the closed list (`opens_with_pronoun`); or - pilot 3, T1 and T4 - its
+    first word of `model4.PERSONAL_PRONOUNS` is one of `model4.SUBJECT_PRONOUNS` and stands right
+    after the sentence's first comma ("Standing on a limestone ridge ..., it was made into a hill
+    fort"), or right after the word `that` with no word of `model4.ARTICLES` before it ("Pottery
+    sherds show that it was also occupied"). An article before the pronoun names something it may
+    refer to inside the sentence; a pronoun elsewhere usually refers inside it too. The selector is
+    told the rule as its rule (10)."""
+    if opens_with_pronoun(text):
+        return "opens with a pronoun"
+    first = _PERSONAL.search(text)
+    if first is None or first.group(0).lower() not in M.SUBJECT_PRONOUNS:
+        return None
+    before = text[: first.start()]
+    if before.endswith(", ") and ", " not in before[:-2]:
+        return f"carries {first.group(0)!r} right after its first comma"
+    if _THAT_BEFORE.search(before) and not _ARTICLE.search(before):
+        return f"carries {first.group(0)!r} right after 'that'"
+    return None
+
+
 def witness_label(site: M.PlanSite, witness: tuple[Any, bytes | None]) -> tuple[str | None, str]:
     """V6: the English label of the site's pinned Wikidata item, or `None` and why it adds none.
 
@@ -1029,7 +1066,8 @@ def _v6(c: _Case) -> list[Problem]:
         return []
     problems: list[str] = []
     for index, segment in enumerate(c.published):
-        if not opens_with_pronoun(segment.body):
+        lean = leaning_pronoun(segment.body)
+        if lean is None:
             continue
         sentence = c.sentences[index]
         previous = c.sentences[index - 1] if index else None
@@ -1043,8 +1081,8 @@ def _v6(c: _Case) -> list[Problem]:
         )
         if not adjacent:
             problems.append(
-                f"sentence {index + 1} opens with a pronoun and its source predecessor is not "
-                "the sentence published before it"
+                f"sentence {index + 1} {lean} and its source predecessor is not the sentence "
+                "published before it"
             )
     first = c.published[0].text
     source_id = c.sentences[0].src
@@ -1250,10 +1288,11 @@ def _v10(c: _Case) -> list[Problem]:
         problems.append("the card carries parentheses")
     for index, (item, sentence) in enumerate(c.card_sentence_items(), 1):
         text = c.text_of(sentence.src)
-        if text is not None and opens_with_pronoun(
-            spoken(edited(text, sentence.start, sentence.end, item.drop))
-        ):
-            problems.append(f"card item {index} opens with a pronoun")
+        if text is None:
+            continue
+        lean = leaning_pronoun(spoken(edited(text, sentence.start, sentence.end, item.drop)))
+        if lean is not None:
+            problems.append(f"card item {index} {lean}")
     named = card_countries(card, c.site.country)
     if named:
         problems.append(f"the card names a country: {named}")

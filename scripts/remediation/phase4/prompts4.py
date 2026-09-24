@@ -24,6 +24,14 @@ pronoun rule, which the selector was never told: a DESC sentence may open with a
 list (`model4.PRONOUN_OPENERS`, after its removals) only right after its source predecessor, so the
 first never does. Section 7 of the contracts records both.
 
+**Pilot 3's fixes (2026-09-24).** Pilot 3 failed T1 and T4 on subject pronouns past the first word
+(Stanydale Temple's "Pottery sherds show that it was ...", Dolebury Warren's card "Standing on a
+limestone ridge ..., it was ..."): rule (10) adds V6's and V10's reading past the opener - a first
+personal pronoun that is a subject form right after the first comma, or right after "that" with no
+article before it (`model4.PERSONAL_PRONOUNS`, `SUBJECT_PRONOUNS`, `ARTICLES`) - rule (4) refers
+the card to it, and the reviewer drops such a sentence, or a card whose pronoun has no antecedent
+inside the card.
+
 Every question ends with the project's LLM01 guard line (`GUARD_LINE`), and every third-party text
 in a prompt sits inside a `<source>` element, which is what that line names. The stored description
 is never shown to the selector, so it cannot anchor on unsourced text; the site element carries only
@@ -62,8 +70,9 @@ SELECTOR_QUESTION = (
     "(3) remove a span only if the rest still says the same thing about the site;\n"
     "(4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no "
     "country and no modern nationality adjective such as Danish or Spanish, has no parentheses, "
-    "does not open with a pronoun, and states something concrete; cultural adjectives such as "
-    "Roman, Egyptian or Maya are fine; prefer one that carries a date;\n"
+    "carries no pronoun that rule (10) ties to the sentence before it, and states something "
+    "concrete; cultural adjectives such as Roman, Egyptian or Maya are fine; prefer one that "
+    "carries a date;\n"
     "(5) if no listed sentence is about this site, answer ABSTAIN.\n"
     "(6) the description is your DESC sentences after their removals, joined by spaces: it must "
     "be 200-1100 characters long in total;\n"
@@ -78,7 +87,11 @@ SELECTOR_QUESTION = (
     "(10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, Her, "
     "The latter, The former, Here or There (after its removals) only if the sentence numbered one "
     "lower, in the same section, is also one of your DESC sentences; so your first DESC sentence "
-    "never opens with one of these words.\n"
+    "never opens with one of these words. The same holds for a DESC sentence whose first it, its, "
+    "they, their, them, he, his, him, she or her (after its removals) is it, they, he or she and "
+    'stands right after the sentence\'s first comma, or right after "that" with no "the", "a" or '
+    '"an" before it: "Standing on a ridge, it was made into a fort" and "Pottery sherds show that '
+    'it was occupied" need the sentence before them.\n'
     "\n"
     "Answer with these lines and nothing else. A sentence id is followed by the ids of the spans "
     "you remove from it, each written as a space, a hyphen and the span id:\n"
@@ -132,6 +145,10 @@ REVIEWER_QUESTION = (
     "not published.\n"
     "DROP a sentence that is garbled or ungrammatical, even when it copies the source word for "
     "word.\n"
+    "DROP a sentence in which it, its, they, their, them, he, his, him, she or her - at its start, "
+    "after a fronted phrase or in a that-clause - refers to something no published sentence before "
+    "it names, and DROP the card when such a pronoun has no antecedent inside the card: the card "
+    "is read on its own.\n"
     "\n"
     "Answer with one line per sentence and nothing else:\n"
     "R<i>: KEEP\n"

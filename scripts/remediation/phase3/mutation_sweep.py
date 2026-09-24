@@ -7062,8 +7062,8 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify4: V10 a card may open with a pronoun",
         P4_VERIFY,
-        "        if text is not None and opens_with_pronoun(\n",
-        "        if False and opens_with_pronoun(  # mutant\n",
+        "        if lean is not None:\n",
+        "        if False:  # mutant\n",
         P4_VERIFY_TEST,
         "test_v10_a_card_opening_with_a_pronoun_is_held",
     ),
@@ -17163,8 +17163,8 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 prompts: the selector's card rule forbids a cultural adjective",
         P4P3_PROMPTS,
-        'cultural adjectives such as "\n    "Roman, Egyptian or Maya are fine; ',
-        '"\n    "',
+        "cultural adjectives such as Roman, Egyptian or Maya are fine; ",
+        "",
         P4P3_SELECT_TEST,
         "test_the_selector_card_rule_names_no_nationality_adjective",
     ),
@@ -17178,7 +17178,15 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         'numbered one "\n'
         '    "lower, in the same section, is also one of your DESC sentences; so your first DESC '
         'sentence "\n'
-        '    "never opens with one of these words.\\n"\n',
+        '    "never opens with one of these words. The same holds for a DESC sentence whose first '
+        'it, its, "\n'
+        '    "they, their, them, he, his, him, she or her (after its removals) is it, they, he or '
+        'she and "\n'
+        "    'stands right after the sentence\\'s first comma, or right after \"that\" with no "
+        '"the", "a" or \'\n'
+        '    \'"an" before it: "Standing on a ridge, it was made into a fort" and "Pottery '
+        "sherds show that '\n"
+        "    'it was occupied\" need the sentence before them.\\n'\n",
         "",
         P4P3_SELECT_TEST,
         "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
@@ -17187,8 +17195,10 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "p4 prompts: rule (10) lets the first DESC sentence open with a pronoun",
         P4P3_PROMPTS,
         '"lower, in the same section, is also one of your DESC sentences; so your first DESC '
-        'sentence "\n    "never opens with one of these words.\\n"\n',
-        '"lower, in the same section, is also one of your DESC sentences.\\n"  # mutant\n',
+        'sentence "\n    "never opens with one of these words. The same holds for a DESC sentence '
+        'whose first it, its, "\n',
+        '"lower, in the same section, is also one of your DESC sentences. The same holds for a "'
+        '  # mutant\n    "DESC sentence whose first it, its, "\n',
         P4P3_SELECT_TEST,
         "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
     ),
@@ -17473,6 +17483,116 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += P4_PILOT3_MUTATIONS
+
+# ================================================================================================
+# Phase-4 pilot 3's fixes and pilot 4 (wip/p4-pilot, 2026-09-24): the pronoun past the first word
+# (T1/T4), the contradicted lead (T7), the sub-national place names (V14), the review's pronoun
+# drops (T8) and the name base the selector is told (rule 7). Each case breaks one rule and names the
+# red-first test that must go red.
+# ================================================================================================
+P4P4_MODEL = "scripts/remediation/phase4/model4.py"
+P4P4_VERIFY = "scripts/remediation/phase4/verify4.py"
+P4P4_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
+P4P4_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4P4_SELECT_TEST = "tests/remediation/test_phase4_select.py"
+P4P4_MODEL_TEST = "tests/remediation/test_phase4_model.py"
+
+P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── T1/T4: a subject pronoun past the first word leans on the sentence before ──────────────
+    (
+        "p4 verify4: V6 reads only a sentence's opener again",
+        P4P4_VERIFY,
+        "        lean = leaning_pronoun(segment.body)\n",
+        '        lean = "opens with a pronoun" if opens_with_pronoun(segment.body) else None  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_v6_a_pronoun_past_the_first_word_without_its_source_predecessor_is_held",
+    ),
+    (
+        "p4 verify4: V10 reads only a card item's opener again",
+        P4P4_VERIFY,
+        "        lean = leaning_pronoun(spoken(edited(text, sentence.start, sentence.end, item.drop)))\n",
+        "        lean = (  # mutant\n"
+        '            "opens with a pronoun"\n'
+        "            if opens_with_pronoun(spoken(edited(text, sentence.start, sentence.end, item.drop)))\n"
+        "            else None\n"
+        "        )\n",
+        P4P4_VERIFY_TEST,
+        "test_v10_a_card_with_a_pronoun_past_its_first_word_is_held",
+    ),
+    (
+        "p4 verify4: a pronoun after any comma leans, not only after the first",
+        P4P4_VERIFY,
+        '    if before.endswith(", ") and ", " not in before[:-2]:\n',
+        '    if before.endswith(", "):  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 verify4: an article before 'that' no longer spares the pronoun",
+        P4P4_VERIFY,
+        "    if _THAT_BEFORE.search(before) and not _ARTICLE.search(before):\n",
+        "    if _THAT_BEFORE.search(before):  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 verify4: a possessive first pronoun counts like a subject one",
+        P4P4_VERIFY,
+        "    if first is None or first.group(0).lower() not in M.SUBJECT_PRONOUNS:\n",
+        "    if first is None:  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 verify4: a pronoun inside a longer word counts",
+        P4P4_VERIFY,
+        '        r"(?<![\\w\'’-])(?:" + "|".join(map(re.escape, words)) + r")(?![\\w\'’-])", re.IGNORECASE\n',
+        '        r"(?:" + "|".join(map(re.escape, words)) + r")", re.IGNORECASE  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 model: a subject pronoun is dropped from the rule",
+        P4P4_MODEL,
+        'SUBJECT_PRONOUNS: tuple[str, ...] = ("it", "they", "he", "she")\n',
+        'SUBJECT_PRONOUNS: tuple[str, ...] = ("it", "they", "he")  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 model: the articles lose 'an'",
+        P4P4_MODEL,
+        'ARTICLES: tuple[str, ...] = ("the", "a", "an")\n',
+        'ARTICLES: tuple[str, ...] = ("the", "a")  # mutant\n',
+        P4P4_MODEL_TEST,
+        "test_the_leaning_pronouns_are_the_subject_forms_of_the_personal_pronouns",
+    ),
+    (
+        "p4 prompts: rule (10) no longer states the pronoun past the first word",
+        P4P4_PROMPTS,
+        "    'it was occupied\" need the sentence before them.\\n'\n",
+        "    'it was occupied\" need it.\\n'  # mutant\n",
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 prompts: the card rule (4) reads only the card's opener",
+        P4P4_PROMPTS,
+        '    "carries no pronoun that rule (10) ties to the sentence before it, and states something "\n',
+        '    "does not open with a pronoun, and states something "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_selector_card_rule_names_no_nationality_adjective",
+    ),
+    (
+        "p4 prompts: the reviewer keeps a card whose pronoun dangles",
+        P4P4_PROMPTS,
+        '    "it names, and DROP the card when such a pronoun has no antecedent inside the card: the card "\n',
+        '    "it names, and keep the card: the card "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_dangling_pronoun_wherever_it_stands",
+    ),
+]
+MUTATIONS += P4_PILOT4_MUTATIONS
 
 
 def digest(path: Path) -> str:

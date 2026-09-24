@@ -45,6 +45,7 @@ from pipeline.utils.country_lookup import ANCIENT_CULTURE_ADJECTIVES  # noqa: E4
 from pipeline.video import shorts_audit, shorts_brand  # noqa: E402
 from tests.remediation import p4_fixtures as X  # noqa: E402
 from tests.remediation.p4_garble_cases import GARBLE_CASES  # noqa: E402
+from tests.remediation.p4_pronoun_cases import PRONOUN_CASES  # noqa: E402
 from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 from tests.remediation.phase4_cases import (  # noqa: E402
     A1,
@@ -850,6 +851,53 @@ def test_v6_a_pronoun_without_its_source_predecessor_is_held() -> None:
     assert V.opens_with_pronoun("The latter was built later.")
     assert not V.opens_with_pronoun("Items were found.")
     assert not V.opens_with_pronoun("Thereafter it was used.")
+
+
+@pytest.mark.parametrize(("text", "leans"), PRONOUN_CASES)
+def test_the_pronoun_cases_v6_judges_exactly(text: str, leans: bool) -> None:
+    assert (V.leaning_pronoun(text) is not None) is leans
+
+
+#: Pilot 3 (T1): Stanydale Temple's "it" stands in a that-clause, not at the start; its source
+#: predecessor, "The settlement ...", was dropped by the review.
+SETTLEMENT = "The settlement may well have been established in 2500 BC by farmers."
+SHERDS = "Pottery sherds show that it was also occupied in the late Bronze Age."
+RIDGE = "Standing on a low ridge above the sea, it was made into a hill fort in the Iron Age."
+
+
+@pytest.mark.parametrize(
+    ("leaning", "label"),
+    [
+        (SHERDS, "carries 'it' right after 'that'"),
+        (RIDGE, "carries 'it' right after its first comma"),
+    ],
+)
+def test_v6_a_pronoun_past_the_first_word_without_its_source_predecessor_is_held(
+    leaning: str, label: str
+) -> None:
+    """Pilot 3 (T1, T4): V6 read only the first word, so a subject pronoun after a fronted phrase
+    or in a that-clause was published without the source sentence it refers to."""
+    text = f"{S1} {SETTLEMENT} {leaning} {S4}"
+    alone = make_case(text=text, picks=(W_PICKS[0], Pick(leaning, (), leaning)), card=None)
+    assert (
+        f"sentence 2 {label} and its source predecessor is not the sentence published before it"
+    ) in alone.detail("V6")
+    after = (W_PICKS[0], Pick(SETTLEMENT, (), SETTLEMENT), Pick(leaning, (), leaning))
+    assert "V6" not in make_case(text=text, picks=after, card=None).reasons()
+
+
+def test_v10_a_card_with_a_pronoun_past_its_first_word_is_held() -> None:
+    """Pilot 3 (T4): Dolebury Warren's card, "Standing on a limestone ridge ..., it was made into a
+    hill fort ...", names nothing *it* could be; V10 read only the card's first word."""
+    text = f"{S1} {RIDGE} {S4}"
+    case = make_case(
+        text=text,
+        picks=(W_PICKS[0], Pick(RIDGE, (), RIDGE)),
+        card=RIDGE,
+        card_items=((1, ()),),
+    )
+    assert "card item 1 carries 'it' right after its first comma" in case.detail("V10")
+    assert [h.scope for h in case.run() if h.reason is M.HoldReason.V10] == [M.HoldScope.CARD]
 
 
 def test_v6_the_first_sentence_must_name_the_site() -> None:

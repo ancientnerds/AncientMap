@@ -395,6 +395,23 @@ PRONOUN_OPENERS: tuple[str, ...] = (
     "The former", "Here", "There",
 )  # fmt: skip
 
+#: V6 and V10 past the first word (pilot 3, 2026-09-24, T1 and T4; accepted by the orchestrator
+#: under D1). A sentence also leans on the sentence before it in its source when its first word of
+#: `PERSONAL_PRONOUNS` (whole, any case) is a word of `SUBJECT_PRONOUNS` and stands right after the
+#: sentence's first comma (`, `), or right after the word `that` with no word of `ARTICLES` before
+#: it. Pilot 3 published Stanydale Temple's "Pottery sherds show that it was also occupied ..."
+#: without the sentence *it* refers to, and Dolebury Warren's card "Standing on a limestone ridge
+#: ..., it was made into a hill fort ...". The most precise of the measured candidates that holds
+#: both (AUDIT_LOG, pilot 4): over the census run's 88,936 pool sentences it binds 1,738 beyond the
+#: opener rule (46 of a sample of 60 refer outside their sentence), and in pilots 1-3's published
+#: texts it would have held 7 sentences and 1 card. Data only: `verify4` (V6, V10) implements the
+#: match.
+PERSONAL_PRONOUNS: tuple[str, ...] = (
+    "it", "its", "they", "their", "them", "he", "his", "him", "she", "her",
+)  # fmt: skip
+SUBJECT_PRONOUNS: tuple[str, ...] = ("it", "they", "he", "she")
+ARTICLES: tuple[str, ...] = ("the", "a", "an")
+
 #: The card's one spoken edit (card_texts: "the closed spoken-form rule 'c.'/'ca.' -> 'circa', so
 #: the narrator never reads a bare 'c'"), the one definition S4 (`assemble.spoken`) and V10 import
 #: (orchestrator decision D2, 2026-09-23). A match is `c.` or `ca.` (either with a capital `C`) in

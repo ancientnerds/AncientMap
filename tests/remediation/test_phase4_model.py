@@ -890,6 +890,18 @@ def test_the_pronoun_openers_are_the_design_list_verbatim() -> None:
     assert list(M.PRONOUN_OPENERS) == DESIGN_PRONOUNS
 
 
+def test_the_leaning_pronouns_are_the_subject_forms_of_the_personal_pronouns() -> None:
+    """Pilot 3 (T1, T4): past the opener, V6 and V10 read a sentence's first personal pronoun; it
+    leans on the sentence before when it is a subject form after the first comma, or after 'that'
+    with no article before it. Lower case, whole words: the matchers fold the case."""
+    assert M.PERSONAL_PRONOUNS == (
+        "it", "its", "they", "their", "them", "he", "his", "him", "she", "her",
+    )  # fmt: skip
+    assert M.SUBJECT_PRONOUNS == ("it", "they", "he", "she")
+    assert set(M.SUBJECT_PRONOUNS) <= set(M.PERSONAL_PRONOUNS)
+    assert M.ARTICLES == ("the", "a", "an")
+
+
 @pytest.mark.parametrize(
     ("text", "circa"),
     [
