@@ -31,6 +31,7 @@ from phase4 import prompts4 as P  # noqa: E402
 from phase4 import select_stage as SEL  # noqa: E402
 from phase4 import sentences as S  # noqa: E402
 
+from pipeline.utils.country_lookup import ISO_TO_DEMONYMS  # noqa: E402
 from tests.remediation import p4_fixtures as X  # noqa: E402
 
 #: The frozen questions, byte for byte (the W1 pattern). A change is a decision: re-pin it here
@@ -38,8 +39,11 @@ from tests.remediation import p4_fixtures as X  # noqa: E402
 #: Re-pinned 2026-09-24 (selector a9dad5c0... -> 8969add9..., reviewer 8d2362a9... -> 529c9678...):
 #: pilot 1 failed T2, T5 and T8, and the root causes were rules neither question named
 #: (`PILOT1_SELECTOR_RULES`, `PILOT1_REVIEWER_RULES` below; PHASE4_CONTRACTS.md section 7).
+#: Re-pinned 2026-09-24 (selector 8969add9... -> ce36085f...): pilot 2 failed T4/T6 on two cards
+#: that name a country by its demonym, and the card rule (4) now names the nationality adjectives
+#: V10 holds (`PILOT2_CARD_RULE` below).
 FROZEN_SHA256 = {
-    "SELECTOR_QUESTION": "8969add9bc3ad58c772540738b529fdc263111c7136d2546467d5ca74baad046",
+    "SELECTOR_QUESTION": "ce36085fc946da4275e66014ea2770b0b9f3fe1125f57fe3b1c3fd9e00afb79c",
     "TRANSLATE_QUESTION": "adeb6f7b27d7429e17d54f89acc004b77588226ff2760c40dd2eec88644913ee",
     "RESTRICTED_QUESTION": "648da472587fb1f02d1bda57bd70e0e5988d8dfeb887542845d476edc192eaa8",
     "REVIEWER_QUESTION": "529c96781f8a27915130af524dc5b0f4e45a5755911971e6142f7b4c461d0cb3",
@@ -116,6 +120,22 @@ def test_the_selector_question_carries_pilot_1s_rules_after_the_designs() -> Non
     its own line, after the design's (5) and before the answer lines, which stay as they were."""
     rules = "\n".join(PILOT1_SELECTOR_RULES)
     assert f"{DESIGN_RULES[2]}\n{rules}\n\nAnswer with these lines" in P.SELECTOR_QUESTION
+
+
+#: Pilot 2 (T4/T6, 2026-09-24): the design's card rule (4), with the nationality adjectives V10
+#: now holds ('a Danish hill', 'the first Greek site'), verbatim.
+PILOT2_CARD_RULE = (
+    "(4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no "
+    "country and no nationality adjective such as Greek or Danish, has no parentheses, does not "
+    "open with a pronoun, and states something concrete; prefer one that carries a date;"
+)
+
+
+def test_the_selector_card_rule_names_no_nationality_adjective() -> None:
+    """The selector is told what V10 holds: the two examples are the demonym table's own words
+    (`country_lookup.ISO_TO_DEMONYMS`, the data V10 reads)."""
+    assert f"\n{PILOT2_CARD_RULE}\n" in P.SELECTOR_QUESTION
+    assert "Greek" in ISO_TO_DEMONYMS["GR"] and "Danish" in ISO_TO_DEMONYMS["DK"]
 
 
 def test_the_reviewer_question_drops_modern_place_and_dangling_sentences() -> None:

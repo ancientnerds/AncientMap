@@ -90,7 +90,7 @@ from rapidfuzz import fuzz
 from phase4 import model4 as M
 from phase4 import subject_gate as SG
 from pipeline.lyra.text_sentences import is_complete_sentence, split_sentences
-from pipeline.utils.country_lookup import NAME_TO_ISO, country_name_variants
+from pipeline.utils.country_lookup import ISO_TO_DEMONYMS, NAME_TO_ISO, country_name_variants
 from pipeline.utils.text import normalize_name
 from pipeline.video import shorts_audit, shorts_brand
 from pipeline.video.shorts_render import W as FRAME_WIDTH
@@ -1136,6 +1136,28 @@ def card_countries(card: str, stored: str | None) -> list[str]:
     return named
 
 
+_DEMONYM = re.compile(
+    r"(?<!\w)(?:"
+    + "|".join(
+        re.escape(demonym)
+        for demonym in sorted(
+            {d for demonyms in ISO_TO_DEMONYMS.values() for d in demonyms}, key=len, reverse=True
+        )
+    )
+    + r")(?:s|m[ae]n|wom[ae]n)?(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def card_demonyms(card: str) -> list[str]:
+    """V10: the demonyms a card carries - any country's nationality adjective or people noun
+    (`country_lookup.ISO_TO_DEMONYMS`), alone or as its plural or its `-man`/`-woman` noun ('Greeks',
+    'Englishman'), as a whole word written as a proper noun. An ancient culture's use of a modern
+    country's adjective ('Greek temple') counts too: the safe reading of the design's 'no country
+    value, alias or demonym' (pilot 2: 'a Danish hill', 'the first Greek site')."""
+    return [m.group(0) for m in _DEMONYM.finditer(card) if m.group(0)[0].isupper()]
+
+
 def _v10(c: _Case) -> list[Problem]:
     card = c.assembly.card
     if card is None:
@@ -1166,6 +1188,9 @@ def _v10(c: _Case) -> list[Problem]:
     named = card_countries(card, c.site.country)
     if named:
         problems.append(f"the card names a country: {named}")
+    nationality = card_demonyms(card)
+    if nationality:
+        problems.append(f"the card names a nationality: {nationality}")
     lowered = card.lower()
     found = [phrase for phrase in SUPERLATIVES if phrase in lowered]
     if found:

@@ -16985,8 +16985,13 @@ MUTATIONS += P4_PILOT2_MUTATIONS
 #: refused a stored name with a disambiguator under a strong 'own' verdict):
 #: `output/remediation/phase4_runner/PILOT_RESULT_2.md`.
 P4P3_MODEL = "scripts/remediation/phase4/model4.py"
+P4P3_VERIFY = "scripts/remediation/phase4/verify4.py"
 P4P3_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
 P4P3_SENT_TEST = "tests/remediation/test_phase4_sentences.py"
+P4P3_COUNTRY = "pipeline/utils/country_lookup.py"
+P4P3_DEMONYM_TEST = "tests/pipeline/test_country_demonyms.py"
+P4P3_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4P3_SELECT_TEST = "tests/remediation/test_phase4_select.py"
 
 P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── T3: correction and contrast markers are protected ────────────────────────────────────
@@ -17008,6 +17013,73 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '            "unknown",\n',
         P4P3_SENT_TEST,
         "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+    # ── T4/T6: the demonym table and V10 ─────────────────────────────────────────────────────
+    (
+        "p4 verify4: a card that names a nationality passes V10",
+        P4P3_VERIFY,
+        "    if nationality:\n"
+        '        problems.append(f"the card names a nationality: {nationality}")\n',
+        "",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a demonym's plural or -man noun is no demonym",
+        P4P3_VERIFY,
+        '    + r")(?:s|m[ae]n|wom[ae]n)?(?!\\w)",\n',
+        '    + r")(?!\\w)",  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a lower-case word counts as a demonym",
+        P4P3_VERIFY,
+        "    return [m.group(0) for m in _DEMONYM.finditer(card) if m.group(0)[0].isupper()]\n",
+        "    return [m.group(0) for m in _DEMONYM.finditer(card)]  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a demonym inside a longer word counts",
+        P4P3_VERIFY,
+        '_DEMONYM = re.compile(\n    r"(?<!\\w)(?:"\n',
+        '_DEMONYM = re.compile(\n    r"(?:"  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 country_lookup: Denmark's adjective is no demonym",
+        P4P3_COUNTRY,
+        '    "DK": ("Danish", "Dane"),\n',
+        '    "DK": ("Dane",),  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 country_lookup: a country of the vocabulary has no demonym",
+        P4P3_COUNTRY,
+        '    "PE": ("Peruvian",),\n',
+        "",
+        P4P3_DEMONYM_TEST,
+        "test_every_country_of_the_vocabulary_has_its_demonyms_and_nothing_else",
+    ),
+    (
+        "p4 country_lookup: the table drops a demonym of the retired style rule",
+        P4P3_COUNTRY,
+        '    "SY": ("Syrian",),\n',
+        '    "SY": ("Syrians",),  # mutant\n',
+        P4P3_DEMONYM_TEST,
+        "test_the_table_keeps_every_demonym_of_the_retired_card_style_rule",
+    ),
+    (
+        "p4 prompts: the selector's card may carry a nationality adjective",
+        P4P3_PROMPTS,
+        '    "country and no nationality adjective such as Greek or Danish, has no parentheses, '
+        'does not "\n',
+        '    "country, has no parentheses, does not "  # mutant\n',
+        P4P3_SELECT_TEST,
+        "test_the_selector_card_rule_names_no_nationality_adjective",
     ),
 ]
 MUTATIONS += P4_PILOT3_MUTATIONS

@@ -1096,6 +1096,40 @@ def test_v10_a_card_that_names_a_country_is_held() -> None:
     assert V.card_countries("The Egyptian and Roman builders.", "Egypt") == []
 
 
+def test_v10_a_card_that_names_a_nationality_is_held() -> None:
+    """Pilot 2 (T4/T6): 'a Danish hill' (Agri Bavnehøj) and 'the first Greek site' (Bassae) passed
+    V10, which knew country names only. The design's card rule is 'no country value, alias or
+    demonym (country_lookup vocabulary plus a demonym table)'; the table is
+    `country_lookup.ISO_TO_DEMONYMS`, any country's, and an ancient culture's use of a modern
+    country's adjective ('Greek temple') is held too - the safe reading."""
+    sentence = "The Tarxien Temples are a complex of four Maltese megalithic structures near Paola."
+    text = f"{sentence} {S2} {S3}"
+    case = make_case(
+        text=text,
+        picks=(Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2]),
+        card=sentence,
+        card_items=((0, ()),),
+    )
+    assert "names a nationality: ['Maltese']" in case.detail("V10")
+    assert [h.scope for h in case.run() if h.reason is M.HoldReason.V10] == [M.HoldScope.CARD]
+    bavnehoj = (
+        "Agri Bavnehøj is a Danish hill, located in the Mols Bjerge National Park on Djursland."
+    )
+    assert V.card_demonyms(bavnehoj) == ["Danish"]
+    bassae = "Bassae was the first Greek site to be inscribed on the World Heritage List."
+    assert V.card_demonyms(bassae) == ["Greek"]
+    assert V.card_demonyms("A Greek temple built by the Greeks and an Englishman's map.") == [
+        "Greek",
+        "Greeks",
+        "Englishman",
+    ]
+    assert V.card_demonyms("The Egyptian and Roman builders of the Etruscan wall.") == ["Egyptian"]
+    # a demonym is a proper noun, whole word: no hit inside a word or in lower case
+    assert V.card_demonyms("The danish pastry and the Greekness of the old town.") == []
+    assert V.card_demonyms("A Hellenistic stoa of the Mesoamerican ball court.") == []
+    assert V.card_demonyms("THE MESOAMERICAN BALL COURT OF THE GREEKS") == ["GREEKS"]
+
+
 def test_v10_a_card_with_an_evaluative_superlative_is_held() -> None:
     sentence = "The Tarxien Temples are one of the most elaborate megalithic complexes near Paola."
     text = f"{sentence} {S2} {S3}"
