@@ -18,7 +18,7 @@ vi.mock('../../../../utils/LabelRenderer', async () => {
 })
 
 import manifest from '../../../../data/globeLayers.generated.json'
-import { getLayerFiles, getLayerUrl, type GlobeLayerKey, type VectorLayerKey } from '../../../../config/vectorLayers'
+import { createGlobeLayerTiers, getLayerFiles, getLayerUrl, type GlobeLayerKey, type VectorLayerKey } from '../../../../config/vectorLayers'
 import type { FadeManager } from '../../../../utils/FadeManager'
 import type { GlobeLabel } from '../vectorRenderer'
 import {
@@ -134,7 +134,7 @@ function makeCtx(overrides: Partial<VectorRendererContext> = {}) {
     vectorLayersRef: { current: { coastlines: true, countryBorders: true, rivers: true, lakes: true, coralReefs: false, glaciers: false, plateBoundaries: false } },
     satelliteModeRef: { current: false },
     layerLoadIdsRef: { current: {} },
-    globeLayerTiersRef: { current: { coastlines: { committed: null, requested: null }, countryBorders: { committed: null, requested: null } } },
+    globeLayerTiersRef: { current: createGlobeLayerTiers() },
     failedLayersRef: { current: {} },
     setIsLoadingLayers: vi.fn(update => Object.assign(loading, typeof update === 'function' ? update({ ...loading }) : update)),
     setLayersLoaded: vi.fn(update => Object.assign(loaded, typeof update === 'function' ? update({ ...loaded }) : update)),
@@ -199,7 +199,7 @@ describe('loadVectorLayer', () => {
     expect(ctx.shaderMaterialsRef.current).toEqual([front.material, back.material])
     expect(loaded.coastlines).toBe(true)
     expect(bothExistedWhenLoaded).toBe(true)
-    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'start', requested: 'start' })
+    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'start', inFlight: {}, failed: {} })
   })
 
   it('fades a visible layer in from zero, front and back, as today', async () => {
@@ -411,7 +411,7 @@ describe('upgradeLayerTier', () => {
     expect(fade).not.toHaveBeenCalled()
     expect(ctx.setIsLoadingLayers).not.toHaveBeenCalled()
     expect(ctx.setLayersLoaded).not.toHaveBeenCalled()
-    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'detail', requested: 'detail' })
+    expect(ctx.globeLayerTiersRef.current.coastlines).toEqual({ committed: 'detail', inFlight: {}, failed: {} })
   })
 
   it('never downgrades: a detail tier that arrives after hires is discarded', async () => {
@@ -431,15 +431,70 @@ describe('upgradeLayerTier', () => {
     expect(fetched.filter(u => u === COAST_DETAIL)).toHaveLength(1)
   })
 
-  it('does not fetch a tier twice while it is on its way, nor after it failed', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  it('does not fetch a tier twice while it is on its way: a second request joins the load', async () => {
+    const { ctx } = makeCtx()
+    await startTier('countryBorders', ctx)
+    routes.set(BORDERS_DETAIL, { features: lines(2) })
+    const release = hold(BORDERS_DETAIL)
+    const signal = new AbortController().signal
+    const first = upgradeLayerTier('countryBorders', 'detail', ctx, signal)
+    const second = upgradeLayerTier('countryBorders', 'detail', ctx, signal)
+    release()
+    await Promise.all([first, second])
+    expect(fetched.filter(u => u === BORDERS_DETAIL)).toHaveLength(1)
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
+  })
+
+  it('never fetches a failed tier again, and never resolves without it', async () => {
     const { ctx } = makeCtx()
     await startTier('countryBorders', ctx)
     const signal = new AbortController().signal
     await expect(upgradeLayerTier('countryBorders', 'detail', ctx, signal)).rejects.toThrow(`${BORDERS_DETAIL}: HTTP 404`)
-    await upgradeLayerTier('countryBorders', 'detail', ctx, signal)
+    await expect(upgradeLayerTier('countryBorders', 'detail', ctx, signal)).rejects.toThrow(`${BORDERS_DETAIL}: HTTP 404`)
     expect(fetched.filter(u => u === BORDERS_DETAIL)).toHaveLength(1)
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('start')
     expect(ctx.onStartError).not.toHaveBeenCalled()
+  })
+
+  it('loads the detail tier while hires is on its way, and hires still lands on top', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    routes.set(COAST_DETAIL, { features: lines(5) })
+    routes.set(COAST_HIRES, { features: lines(9) })
+    const releaseHires = hold(COAST_HIRES)
+    const signal = new AbortController().signal
+    const hires = upgradeLayerTier('coastlines', 'hires', ctx, signal)
+    await upgradeLayerTier('coastlines', 'detail', ctx, signal)
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('detail')
+    expect(ctx.frontLineLayersRef.current.coastlines[0].geometry.getAttribute('position').count).toBe(10)
+    releaseHires()
+    await hires
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('hires')
+    expect(ctx.frontLineLayersRef.current.coastlines[0].geometry.getAttribute('position').count).toBe(18)
+  })
+
+  it('loads the detail tier after a failed hires tier', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    const signal = new AbortController().signal
+    await expect(upgradeLayerTier('coastlines', 'hires', ctx, signal)).rejects.toThrow(`${COAST_HIRES}: HTTP 404`)
+    routes.set(COAST_DETAIL, { features: lines(5) })
+    await upgradeLayerTier('coastlines', 'detail', ctx, signal)
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('detail')
+  })
+
+  it('lets a cancelled tier be asked for again', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    routes.set(COAST_DETAIL, { features: lines(5) })
+    hold(COAST_DETAIL)
+    const task = new AbortController()
+    const cancelled = upgradeLayerTier('coastlines', 'detail', ctx, task.signal)
+    task.abort()
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+    held.clear()
+    await upgradeLayerTier('coastlines', 'detail', ctx, new AbortController().signal)
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('detail')
   })
 
   it('fails loudly when the start tier is not on the globe', async () => {
@@ -461,6 +516,18 @@ describe('upgradeLayerTier', () => {
 })
 
 describe('upgradeGlobeLayers', () => {
+  it('commits the detail tier even when a hi-res coastline failed first', async () => {
+    const { ctx } = makeCtx()
+    await startTier('coastlines', ctx)
+    await startTier('countryBorders', ctx)
+    await expect(upgradeLayerTier('coastlines', 'hires', ctx, new AbortController().signal)).rejects.toThrow(/HTTP 404/)
+    routes.set(COAST_DETAIL, { features: lines(2) })
+    routes.set(BORDERS_DETAIL, { features: lines(2) })
+    await upgradeGlobeLayers(ctx, new AbortController().signal)
+    expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('detail')
+    expect(ctx.globeLayerTiersRef.current.countryBorders.committed).toBe('detail')
+  })
+
   it('brings coastlines and borders to the detail tier', async () => {
     const { ctx } = makeCtx()
     await startTier('coastlines', ctx)
@@ -475,25 +542,52 @@ describe('upgradeGlobeLayers', () => {
 })
 
 describe('ensureHiresCoastline', () => {
+  function gateFor(camera: THREE.Camera, mapbox: { state: string }) {
+    return { getMapboxState: () => mapbox.state, getCameraDistance: () => camera.position.length(), switchDistance: 1.304 }
+  }
+
   it('loads coast_hires once, only when Mapbox failed and the camera is closer than the switch', async () => {
     const { ctx, camera } = makeCtx()
     await startTier('coastlines', ctx)
     routes.set(COAST_HIRES, { features: lines(3) })
-    let state = 'ready'
-    const gate = { getMapboxState: () => state, switchDistance: 1.304 }
+    const mapbox = { state: 'ready' }
+    const gate = gateFor(camera, mapbox)
+    const build = () => ctx
 
     camera.position.set(0, 0, 1.2)
-    expect(ensureHiresCoastline(ctx, gate)).toBeNull()
-    state = 'failed'
+    expect(ensureHiresCoastline(gate, build)).toBeNull()
+    mapbox.state = 'failed'
     camera.position.set(0, 0, 1.5)
-    expect(ensureHiresCoastline(ctx, gate)).toBeNull()
+    expect(ensureHiresCoastline(gate, build)).toBeNull()
     camera.position.set(0, 0, 1.2)
-    const first = ensureHiresCoastline(ctx, gate)
-    expect(ensureHiresCoastline(ctx, gate)).toBeNull()
+    const first = ensureHiresCoastline(gate, build)
+    expect(ensureHiresCoastline(gate, build)).toBeNull()
     await first
-    expect(ensureHiresCoastline(ctx, gate)).toBeNull()
+    expect(ensureHiresCoastline(gate, build)).toBeNull()
     expect(fetched.filter(u => u === COAST_HIRES)).toHaveLength(1)
     expect(ctx.globeLayerTiersRef.current.coastlines.committed).toBe('hires')
+  })
+
+  it('builds no context while the gate is closed', () => {
+    const { ctx, camera } = makeCtx()
+    const build = vi.fn(() => ctx)
+    const mapbox = { state: 'ready' }
+    camera.position.set(0, 0, 1.2)
+    expect(ensureHiresCoastline(gateFor(camera, mapbox), build)).toBeNull()
+    mapbox.state = 'failed'
+    camera.position.set(0, 0, 2.44)
+    expect(ensureHiresCoastline(gateFor(camera, mapbox), build)).toBeNull()
+    expect(build).not.toHaveBeenCalled()
+  })
+
+  it('does not ask again for a hi-res coastline that failed', async () => {
+    const { ctx, camera } = makeCtx()
+    await startTier('coastlines', ctx)
+    const gate = gateFor(camera, { state: 'failed' })
+    camera.position.set(0, 0, 1.2)
+    await expect(ensureHiresCoastline(gate, () => ctx)).rejects.toThrow(/HTTP 404/)
+    expect(ensureHiresCoastline(gate, () => ctx)).toBeNull()
+    expect(fetched.filter(u => u === COAST_HIRES)).toHaveLength(1)
   })
 })
 

@@ -146,7 +146,7 @@ export interface GlobeRefs {
   backLineLayers: React.MutableRefObject<Record<VectorLayerKey, THREE.Line[]>>
   /** Newest load id per layer (vectorRenderer.loadVectorLayer): a newer load supersedes an older one */
   layerLoadIds: React.MutableRefObject<Record<string, number>>
-  /** Coastline/border tier on the globe and the highest one requested (start < detail < hires) */
+  /** Coastline/border tier on the globe, and the upgrades on their way or failed (start < detail < hires) */
   globeLayerTiers: React.MutableRefObject<Record<GlobeLayerKey, GlobeLayerTierState>>
   /** Layers whose load failed: the load effect does not start them again while they stay on */
   failedLayers: React.MutableRefObject<Partial<Record<VectorLayerKey, boolean>>>

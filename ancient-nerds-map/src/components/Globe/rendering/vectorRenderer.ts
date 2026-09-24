@@ -18,6 +18,7 @@ import {
   tierRank,
   type GlobeLayerKey,
   type GlobeLayerTierState,
+  type UpgradeTier,
   type VectorLayerKey,
   type VectorLayerVisibility,
 } from '../../../config/vectorLayers'
@@ -102,6 +103,7 @@ export interface VectorRendererContext {
 /** When the hi-res coastline may load (plan U6.5): Mapbox cannot take over below the switch. */
 export interface HiresCoastlineGate {
   getMapboxState: () => string
+  getCameraDistance: () => number
   switchDistance: number
 }
 
@@ -385,11 +387,7 @@ function commitLayer(layerKey: VectorLayerKey, parsed: ParsedLayer, loadId: numb
   globe.add(back)
   ctx.frontLineLayersRef.current[layerKey] = [front]
   ctx.backLineLayersRef.current[layerKey] = [back]
-  if (isGlobeLayerKey(layerKey)) {
-    const tiers = ctx.globeLayerTiersRef.current[layerKey]
-    tiers.committed = 'start'
-    if (tierRank(tiers.requested) < tierRank('start')) tiers.requested = 'start'
-  }
+  if (isGlobeLayerKey(layerKey)) ctx.globeLayerTiersRef.current[layerKey].committed = 'start'
   delete ctx.failedLayersRef.current[layerKey]
   ctx.setLayersLoaded(prev => ({ ...prev, [layerKey]: true }))
   ctx.setIsLoadingLayers(prev => ({ ...prev, [layerKey]: false }))
@@ -447,30 +445,43 @@ export async function loadVectorLayer(layerKey: VectorLayerKey, ctx: VectorRende
 }
 
 /**
- * Swap a coastline/border layer up to a higher tier in place. Never downgrades, never fetches a
- * tier twice (a failed tier is not retried), rejects on failure and with an AbortError when
- * `signal` or the Globe aborts.
+ * Swap a coastline/border layer up to a higher tier in place. Resolves only once this tier (or
+ * a higher one) is on the globe; never downgrades. A request for a tier that is on its way
+ * joins that load; a tier that failed is never fetched again and rejects with its error. Each
+ * tier stands alone: a hi-res load on its way or failed does not stand in for the detail tier.
+ * Rejects with an AbortError when `signal` or the Globe aborts; that tier may be asked for again.
  */
 export async function upgradeLayerTier(
   layerKey: GlobeLayerKey,
-  tier: 'detail' | 'hires',
+  tier: UpgradeTier,
   ctx: VectorRendererContext,
   signal: AbortSignal,
 ): Promise<void> {
   const state = ctx.globeLayerTiersRef.current[layerKey]
-  if (tierRank(state.requested) >= tierRank(tier)) return
+  if (tierRank(state.committed) >= tierRank(tier)) return
+  if (tier in state.failed) throw state.failed[tier]
+  const running = state.inFlight[tier]
+  if (running) return running
   if (ctx.frontLineLayersRef.current[layerKey].length === 0 || ctx.backLineLayersRef.current[layerKey].length === 0) {
     throw new Error(`${layerKey}: the ${tier} tier needs the start tier on the globe first`)
   }
-  state.requested = tier
+  const load = loadTier(layerKey, tier, ctx, signal).finally(() => {
+    delete state.inFlight[tier]
+  })
+  state.inFlight[tier] = load
+  return load
+}
+
+async function loadTier(layerKey: GlobeLayerKey, tier: UpgradeTier, ctx: VectorRendererContext, signal: AbortSignal): Promise<void> {
+  const state = ctx.globeLayerTiersRef.current[layerKey]
   const linked = linkSignals(signal, ctx.signal)
   let parsed: ParsedLayer
   try {
     parsed = await fetchAndParse(getGlobeLayerUrl(layerKey, tier), layerKey, ctx, linked.signal)
     throwIfAborted(linked.signal)
   } catch (err) {
-    // Cancelled, not failed: the tier may be asked for again
-    if (linked.signal.aborted && state.requested === tier) state.requested = state.committed
+    // Cancelled is not failed: only a failure bars the tier
+    if (!linked.signal.aborted) state.failed[tier] = err
     throw err
   } finally {
     linked.release()
@@ -492,15 +503,14 @@ export async function upgradeGlobeLayers(ctx: VectorRendererContext, signal: Abo
 
 /**
  * The hi-res coastline (today's coast_hires) where the Three.js globe is the only view closer
- * than the Mapbox switch: Mapbox failed. Called on every camera change; returns the load when
- * it starts one, null otherwise.
+ * than the Mapbox switch: Mapbox failed. Called on every camera change, so the gate is checked
+ * before the context is built; returns the load when it starts one, null otherwise.
  */
-export function ensureHiresCoastline(ctx: VectorRendererContext, gate: HiresCoastlineGate): Promise<void> | null {
-  if (gate.getMapboxState() !== 'failed') return null
-  const camera = ctx.sceneRef.current?.camera
-  if (!camera || camera.position.length() >= gate.switchDistance) return null
+export function ensureHiresCoastline(gate: HiresCoastlineGate, buildContext: () => VectorRendererContext): Promise<void> | null {
+  if (gate.getMapboxState() !== 'failed' || gate.getCameraDistance() >= gate.switchDistance) return null
+  const ctx = buildContext()
   const tiers = ctx.globeLayerTiersRef.current.coastlines
-  if (tiers.committed === null || tierRank(tiers.requested) >= tierRank('hires')) return null
+  if (tiers.committed === null || tiers.committed === 'hires' || tiers.inFlight.hires || 'hires' in tiers.failed) return null
   return upgradeLayerTier('coastlines', 'hires', ctx, ctx.signal)
 }
 

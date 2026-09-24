@@ -10,7 +10,7 @@ import { useRef } from 'react'
 import * as THREE from 'three'
 import type { GlobeRefs, SceneObjectRefs, GlobeLabel, MeasurementLabelData, MeasurementLineData, MeasurementMarkerData } from './types'
 import type { SiteData } from '../../data/sites'
-import type { GlobeLayerKey, GlobeLayerTierState, VectorLayerKey } from '../../config/vectorLayers'
+import { createGlobeLayerTiers, type GlobeLayerKey, type GlobeLayerTierState, type VectorLayerKey } from '../../config/vectorLayers'
 import type { GlobeLabelMesh } from '../../utils/LabelRenderer'
 import { FadeManager } from '../../utils/FadeManager'
 import type { MapboxGlobeService } from '../../services/MapboxGlobeService'
@@ -95,10 +95,7 @@ export function useGlobeRefs(): GlobeRefs {
     plateBoundaries: []
   })
   const layerLoadIds = useRef<Record<string, number>>({})
-  const globeLayerTiers = useRef<Record<GlobeLayerKey, GlobeLayerTierState>>({
-    coastlines: { committed: null, requested: null },
-    countryBorders: { committed: null, requested: null },
-  })
+  const globeLayerTiers = useRef<Record<GlobeLayerKey, GlobeLayerTierState>>(createGlobeLayerTiers())
   const failedLayers = useRef<Partial<Record<VectorLayerKey, boolean>>>({})
 
   // ========== Paleoshoreline Refs ==========

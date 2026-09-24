@@ -94,12 +94,29 @@ export interface VectorLayerVisibility {
  */
 export type GlobeLayerKey = 'coastlines' | 'countryBorders'
 export type LayerTier = 'start' | 'detail' | 'hires'
-/** Which tier of a coastline/border layer is on the globe, and the highest one asked for. */
+/** The tiers that replace the start tier in place. */
+export type UpgradeTier = Exclude<LayerTier, 'start'>
+/**
+ * A coastline/border layer's tiers. In-flight and failed upgrades are kept per tier, so a
+ * hi-res load that is on its way or failed never stands in for the detail tier.
+ */
 export interface GlobeLayerTierState {
+  /** The tier on the globe; null until the start tier landed. */
   committed: LayerTier | null
-  requested: LayerTier | null
+  /** Upgrades on their way; a second request for the same tier joins the load. */
+  inFlight: Partial<Record<UpgradeTier, Promise<void>>>
+  /** Upgrades that failed, with their error: never fetched again. */
+  failed: Partial<Record<UpgradeTier, unknown>>
 }
 export const GLOBE_LAYER_KEYS: readonly GlobeLayerKey[] = ['coastlines', 'countryBorders']
+
+/** Nothing on the globe, nothing asked for. */
+export function createGlobeLayerTiers(): Record<GlobeLayerKey, GlobeLayerTierState> {
+  return {
+    coastlines: { committed: null, inFlight: {}, failed: {} },
+    countryBorders: { committed: null, inFlight: {}, failed: {} },
+  }
+}
 
 const COAST_HIRES_URL = `/data/layers/${LAYER_CONFIG.coastlines.file}.geojson`
 const TIER_RANK: Record<LayerTier, number> = { start: 0, detail: 1, hires: 2 }

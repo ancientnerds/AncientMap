@@ -2327,15 +2327,18 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
   // Hi-res coastline where the Three.js globe is the only view closer than the Mapbox switch
   // (Mapbox failed). The controls fire 'change' on every camera move: wheel, drag and slider.
+  // The gate (Mapbox failed, camera below the switch) is checked before any context is built.
   useEffect(() => {
-    const controls = sceneRef.current?.controls
-    if (!controls) return
+    const sceneData = sceneRef.current
+    if (!sceneData) return
+    const { controls, camera } = sceneData
     const gate: HiresCoastlineGate = {
       getMapboxState: () => mapboxStateRef.current,
+      getCameraDistance: () => camera.position.length(),
       switchDistance: MAPBOX_SWITCH_DISTANCE,
     }
     const onChange = () => {
-      ensureHiresCoastline(buildVectorRendererContext(), gate)?.catch((err: unknown) => {
+      ensureHiresCoastline(gate, buildVectorRendererContext)?.catch((err: unknown) => {
         // Unmounted while it loaded: cancelled, not failed
         if (err instanceof DOMException && err.name === 'AbortError') return
         console.error('[Vector layers] hi-res coastline failed:', err)
