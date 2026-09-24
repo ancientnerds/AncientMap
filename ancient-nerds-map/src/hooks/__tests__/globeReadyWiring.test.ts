@@ -78,4 +78,8 @@ describe("Globe's loader bridge uses App's ready moment", () => {
     // App's moment alone stays true across a Globe remount (the phone-gate resize)
     expect(globe).toContain('const reportStartError = useStartErrorBridge(isGlobeReady, refs.layersReadyCalled)')
   })
+
+  it("hands what the boundary caught to failGlobe through boundaryFailure (a remounted Globe's step stays in a live message)", () => {
+    expect(read('App.tsx')).toMatch(/const \{ phase, error \} = boundaryFailure\(err, globeReadyRef\.current\)\s*failGlobe\(phase, error\)/)
+  })
 })

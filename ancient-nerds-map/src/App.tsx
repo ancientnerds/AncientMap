@@ -22,7 +22,7 @@ import LazyErrorBoundary from './components/LazyErrorBoundary'
 import { EMPIRES } from './config/empireData'
 import { isPhoneOrSmallScreen } from './utils/deviceTier'
 import { checkGlobeSupport } from './utils/globeSupport'
-import { GlobeStartError, LIVE_PHASE, failurePhase } from './utils/globeStartError'
+import { LIVE_PHASE, boundaryFailure } from './utils/globeStartError'
 import { lookupFocusLocation } from './utils/focusLocation'
 import { lookupIpLocation } from './utils/ipLocation'
 import { START_STALL_MS, createStallWatchdog, type StallWatchdog } from './utils/loadWatchdog'
@@ -713,7 +713,8 @@ function AppContent() {
   }, [])
 
   const handleGlobeError = useCallback((err: unknown) => {
-    failGlobe(failurePhase(err, globeReadyRef.current), err instanceof GlobeStartError ? err.cause : err)
+    const { phase, error } = boundaryFailure(err, globeReadyRef.current)
+    failGlobe(phase, error)
   }, [failGlobe])
 
   /** A critical item of the start is in: the watchdog waits again. */

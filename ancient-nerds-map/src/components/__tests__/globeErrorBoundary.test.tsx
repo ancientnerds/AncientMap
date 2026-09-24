@@ -19,7 +19,7 @@ vi.mock('../../analytics', async importOriginal => ({
 
 import { track } from '../../analytics'
 import GlobeErrorBoundary, { useStartErrorBridge, type ReportStartError } from '../GlobeErrorBoundary'
-import { GlobeStartError, LIVE_PHASE, failurePhase } from '../../utils/globeStartError'
+import { GlobeStartError, LIVE_PHASE, boundaryFailure } from '../../utils/globeStartError'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -167,15 +167,25 @@ describe('useStartErrorBridge', () => {
   })
 })
 
-describe('failurePhase', () => {
+describe('boundaryFailure', () => {
   it('is live once the globe was ready, whatever threw', () => {
-    expect(failurePhase(new GlobeStartError('labels', 'x'), true)).toBe(LIVE_PHASE)
-    expect(failurePhase(new Error('panel'), true)).toBe(LIVE_PHASE)
+    expect(boundaryFailure(new GlobeStartError('labels', 'x'), true).phase).toBe(LIVE_PHASE)
+    expect(boundaryFailure(new Error('panel'), true).phase).toBe(LIVE_PHASE)
   })
 
-  it('is the start step of a GlobeStartError, else start', () => {
-    expect(failurePhase(new GlobeStartError('renderer', 'x'), false)).toBe('renderer')
-    expect(failurePhase(new TypeError('x'), false)).toBe('start')
+  it('is the start step of a GlobeStartError with its cause, else start with the error', () => {
+    const cause = new Error('HTTP 502')
+    expect(boundaryFailure(new GlobeStartError('renderer', cause), false)).toEqual({ phase: 'renderer', error: cause })
+    const other = new TypeError('x')
+    expect(boundaryFailure(other, false)).toEqual({ phase: 'start', error: other })
+    expect(boundaryFailure(other, true)).toEqual({ phase: LIVE_PHASE, error: other })
+  })
+
+  it("keeps a remounted Globe's step in a live failure's message, as the bridge's own live path does", () => {
+    // App's globe_ready fired for the first Globe; the one mounted after the phone gate fails its basemap
+    const { phase, error } = boundaryFailure(new GlobeStartError('basemap', new Error('HTTP 502')), true)
+    expect(phase).toBe(LIVE_PHASE)
+    expect((error as Error).message).toBe('basemap: HTTP 502')
   })
 
   it('live is the literal the dashboard excludes', () => {

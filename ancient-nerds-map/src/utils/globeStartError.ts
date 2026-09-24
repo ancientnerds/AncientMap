@@ -25,8 +25,14 @@ export class GlobeStartError extends Error {
   }
 }
 
-/** The phase an error caught by the globe's boundary is reported under. */
-export function failurePhase(error: unknown, globeReady: boolean): string {
-  if (globeReady) return LIVE_PHASE
-  return error instanceof GlobeStartError ? error.phase : 'start'
+/**
+ * The phase and the error App's failGlobe gets for an error the globe's boundary
+ * caught. After globe_ready the phase is LIVE_PHASE; a GlobeStartError then comes
+ * from a Globe mounted again after the phone gate, and its step stays in the
+ * message ('basemap: HTTP 502'), as the loader bridge's own live path keeps it.
+ */
+export function boundaryFailure(error: unknown, globeReady: boolean): { phase: string; error: unknown } {
+  if (!(error instanceof GlobeStartError)) return { phase: globeReady ? LIVE_PHASE : 'start', error }
+  if (!globeReady) return { phase: error.phase, error: error.cause }
+  return { phase: LIVE_PHASE, error: new Error(`${error.phase}: ${error.message}`) }
 }
