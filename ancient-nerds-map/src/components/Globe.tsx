@@ -403,7 +403,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   // Texture loading and application
   const {
     texturesReady, backgroundLoadingComplete, lowFpsReady,
-    satelliteReady, basemapPlan, loadSatellite, upgradeGray, requestSatellite,
+    satelliteReady, satelliteOnGpu, basemapPlan, loadSatellite, upgradeGray, requestSatellite,
   } = useTextureLoading({
     refs,
     sceneReady,
@@ -422,8 +422,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   // moves its task to the front or loads it directly.
   const satellitePending = requestedTileLayers.satellite && !satelliteReady
 
-  // Satellite mode: toggle between gray basemap and satellite imagery
-  useSatelliteMode({ refs, satellite: tileLayers.satellite, vectorLayers, showMapbox, mapboxServiceRef })
+  // Satellite mode: toggle between gray basemap and satellite imagery. The shader
+  // samples the satellite only while its texture is on the GPU (a context restore
+  // reloads it); Mapbox and the dots follow the active satellite throughout.
+  useSatelliteMode({ refs, satellite: tileLayers.satellite, satelliteShown: tileLayers.satellite && satelliteOnGpu, vectorLayers, showMapbox, mapboxServiceRef })
 
   // Layers ready coordination hook called below (after labelsLoaded and layersLoaded are declared)
 

@@ -356,7 +356,8 @@ export interface BasemapContext {
   /** Shared by both kinds: one upload at a time, so each out-of-memory check reads its own upload's flags. */
   uploads: UploadLock
   nextFrame: (signal: AbortSignal) => Promise<void>
-  onSatelliteReady: (ready: boolean) => void
+  /** A satellite texture was committed to the materials (true), or the context loss dropped it (false). */
+  onSatelliteTexture: (onGpu: boolean) => void
 }
 
 /**
@@ -399,7 +400,7 @@ async function loadTier(ctx: BasemapContext, kind: BasemapKind, tier: BasemapTie
   swapUniform(ctx.materials, UNIFORM[kind], texture)
   state.tier = tier
   state.texture = texture
-  if (kind === 'satellite') ctx.onSatelliteReady(true)
+  if (kind === 'satellite') ctx.onSatelliteTexture(true)
 }
 
 /**
@@ -444,10 +445,10 @@ export function loadSatellite(ctx: BasemapContext, tier: BasemapTier, signal: Ab
  * is lost: pure JS, no GL call. Running loads are aborted and handed over;
  * both basemaps are dropped until the restore loads them again.
  *
- * The satellite stays ready (onSatelliteReady is not called): the active
- * satellite also drives Mapbox's style and the dot colours, which do not
- * depend on this canvas, and nothing renders here while the context is lost.
- * Only a failed reload after the restore ends it (useTextureLoading).
+ * onSatelliteTexture(false) reports only that the texture is gone: the shader
+ * shows the gray until the restore commits a satellite again. The active
+ * satellite (Mapbox's style, the dot colours) does not depend on this canvas
+ * and stays on; only a failed reload after the restore ends it (useTextureLoading).
  */
 export function releaseOnContextLost(ctx: BasemapContext): void {
   const reason = new Error('basemap: WebGL context lost')
@@ -459,6 +460,7 @@ export function releaseOnContextLost(ctx: BasemapContext): void {
   swapUniform(ctx.materials, 'uSatellite', null)
   ctx.satellite.tier = null
   ctx.satellite.texture = null
+  ctx.onSatelliteTexture(false)
 }
 
 /**

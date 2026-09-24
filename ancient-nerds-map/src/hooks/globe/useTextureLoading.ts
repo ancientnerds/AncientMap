@@ -7,13 +7,16 @@
  *   a start failure (onStartError), never "counted as loaded".
  * - Background (queue tasks, see basemapPlan): the satellite at the start tier
  *   and the gray at the maximum tier, both through the strip upload.
- * - The satellite shows only once its texture is on the GPU (satelliteReady);
- *   while it is switched on, its maximum tier follows, and switching it off
- *   aborts that upload.
+ * - The satellite counts as ready once its texture is on the GPU
+ *   (satelliteReady); while it is switched on and a texture of it is on the GPU
+ *   (satelliteOnGpu), its maximum tier follows, and switching it off aborts
+ *   that upload.
  * - A WebGL context loss drops both basemaps (every bitmap is closed once it is
  *   on the GPU); the restore loads the start tier again, then what had been
- *   loaded on top of it. The satellite stays active through the loss (Mapbox
- *   and the dot colours follow it, not this canvas); a failed reload ends it.
+ *   loaded on top of it: the gray's maximum tier, and the satellite's while it
+ *   is switched on (the max-tier effect, once satelliteOnGpu is back). The
+ *   satellite stays ready through the loss (Mapbox and the dot colours follow
+ *   it, not this canvas); a failed reload ends it.
  * - Low FPS warning delay.
  */
 
@@ -66,8 +69,10 @@ interface UseTextureLoadingReturn {
   /** Same moment as texturesReady (rotation gate and the Offline-Mode button keep their timing). */
   backgroundLoadingComplete: boolean
   lowFpsReady: boolean
-  /** A satellite texture is on the GPU and in every basemap material. */
+  /** A satellite texture reached the GPU and no reload of it failed since; stays true through a context loss. */
   satelliteReady: boolean
+  /** A satellite texture is in every basemap material now (false from a context loss until the restore commits one). */
+  satelliteOnGpu: boolean
   /** null until the scene exists. */
   basemapPlan: BasemapPlan | null
   /** Queue task 'satellite': the satellite at the start tier. Rejects on failure. */
@@ -89,6 +94,7 @@ export function useTextureLoading({
   const [backgroundLoadingComplete, setBackgroundLoadingComplete] = useState(false)
   const [lowFpsReady, setLowFpsReady] = useState(false)
   const [satelliteReady, setSatelliteReady] = useState(false)
+  const [satelliteOnGpu, setSatelliteOnGpu] = useState(false)
   const [basemapPlan, setBasemapPlan] = useState<BasemapPlan | null>(null)
 
   // Callbacks from the parent change identity every render; the effects read them here.
@@ -163,7 +169,10 @@ export function useTextureLoading({
       satellite: new BasemapState(),
       uploads: new UploadLock(),
       nextFrame: nextAnimationFrame,
-      onSatelliteReady: setSatelliteReady,
+      onSatelliteTexture: onGpu => {
+        setSatelliteOnGpu(onGpu)
+        if (onGpu) setSatelliteReady(true)
+      },
     }
     ctxRef.current = ctx
     const own = new AbortController()
@@ -193,15 +202,9 @@ export function useTextureLoading({
     const onRestored = () => {
       const redo = reloadAfterContextRestored(ctx)
       if (redo.gray) runOwn('basemap', signal => restoreGray(ctx, signal))
-      // The satellite stayed ready through the loss, so the max-tier effect below
-      // does not run again: the restore brings back the highest tier asked for too.
-      if (redo.satellite) {
-        runOwn('satellite', async signal => {
-          await loadSatellite(signal)
-          const wanted = ctx.satellite.wanted
-          if (wanted !== null && tierRank(wanted) > tierRank(ctx.tiers.start)) await loadSatelliteTier(ctx, wanted, signal)
-        })
-      }
+      // The start tier only: its commit brings satelliteOnGpu back, and the
+      // max-tier effect below loads the maximum tier if the satellite is on.
+      if (redo.satellite) runOwn('satellite', loadSatellite)
     }
     canvas.addEventListener('webglcontextlost', onLost)
     canvas.addEventListener('webglcontextrestored', onRestored)
@@ -217,10 +220,11 @@ export function useTextureLoading({
     }
   }, [sceneReady, refs.scene, refs.basemapMesh, refs.basemapBackMesh, refs.basemapSectionMeshes, refs.backgroundLoadingComplete, runOwn, loadSatellite])
 
-  // While the satellite is on, its maximum tier follows; switching it off aborts that upload.
+  // While the satellite is on, its maximum tier follows; switching it off aborts
+  // that upload. After a context restore it runs again once the start tier is back.
   useEffect(() => {
     const ctx = ctxRef.current
-    if (!ctx || !satelliteRequested || !satelliteReady) return
+    if (!ctx || !satelliteRequested || !satelliteOnGpu) return
     const held = ctx.satellite.tier
     if (held !== null && tierRank(held) >= tierRank(ctx.tiers.max)) return
     const upgrade = new AbortController()
@@ -229,7 +233,7 @@ export function useTextureLoading({
       trackBackgroundFailure('satellite', err)
     })
     return () => upgrade.abort(new Error('basemap: satellite switched off'))
-  }, [satelliteRequested, satelliteReady])
+  }, [satelliteRequested, satelliteOnGpu])
 
   // Delay low FPS warning until scene is fully loaded + 3 second buffer
   useEffect(() => {
@@ -271,6 +275,7 @@ export function useTextureLoading({
     backgroundLoadingComplete,
     lowFpsReady,
     satelliteReady,
+    satelliteOnGpu,
     basemapPlan,
     loadSatellite,
     upgradeGray,

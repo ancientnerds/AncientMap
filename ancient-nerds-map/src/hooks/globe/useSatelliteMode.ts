@@ -16,7 +16,10 @@ import type { MapboxGlobeService } from '../../services/MapboxGlobeService'
 
 interface UseSatelliteModeOptions {
   refs: GlobeRefs
+  /** The active satellite: switched on and loaded (stays on through a context loss). */
   satellite: boolean
+  /** The shader samples the satellite: active and its texture on the GPU (false while a restore reloads it). */
+  satelliteShown: boolean
   vectorLayers: Record<VectorLayerKey, boolean>
   showMapbox: boolean
   mapboxServiceRef?: React.MutableRefObject<MapboxGlobeService | null>
@@ -25,6 +28,7 @@ interface UseSatelliteModeOptions {
 export function useSatelliteMode({
   refs,
   satellite,
+  satelliteShown,
   vectorLayers,
   showMapbox,
   mapboxServiceRef,
@@ -53,10 +57,6 @@ export function useSatelliteMode({
     const globeBase = refs.scene.current?.globe
     if (!basemapMesh) return
 
-    const material = basemapMesh.material as THREE.ShaderMaterial
-    const sectionMaterials = refs.basemapSectionMeshes.current.map(m => m.material as THREE.ShaderMaterial)
-    const allMaterials = [material, ...sectionMaterials]
-
     // FORCE basemap visible once the start-tier gray is on the GPU (fixes initial load issue)
     if (refs.texturesReady.current && !basemapMesh.visible) {
       basemapMesh.visible = true
@@ -68,12 +68,6 @@ export function useSatelliteMode({
       const globeMaterial = globeBase.material as THREE.MeshBasicMaterial
       globeMaterial.opacity = 0
     }
-
-    // Toggle satellite mode uniform
-    allMaterials.forEach(mat => {
-      mat.uniforms.uUseSatellite.value = satellite
-      mat.needsUpdate = true
-    })
 
     // Also update back mesh (glass blur effect)
     if (basemapBackMesh) {
@@ -132,4 +126,17 @@ export function useSatelliteMode({
       }
     }
   }, [satellite, vectorLayers, showMapbox, refs.satelliteMode, refs.basemapMesh, refs.basemapBackMesh, refs.basemapSectionMeshes, refs.texturesReady, refs.backLineLayers, refs.scene, refs.stars])
+
+  // The shader samples the satellite only while its texture is on the GPU: after
+  // a context loss the restore shows the gray until the satellite is back, not
+  // an empty texture.
+  useEffect(() => {
+    const basemapMesh = refs.basemapMesh.current
+    if (!basemapMesh) return
+    const allMaterials = [basemapMesh, ...refs.basemapSectionMeshes.current].map(m => m.material as THREE.ShaderMaterial)
+    allMaterials.forEach(mat => {
+      mat.uniforms.uUseSatellite.value = satelliteShown
+      mat.needsUpdate = true
+    })
+  }, [satelliteShown, refs.basemapMesh, refs.basemapSectionMeshes])
 }

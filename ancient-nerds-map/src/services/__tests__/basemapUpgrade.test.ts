@@ -426,7 +426,7 @@ function makeCtx(tiers: BasemapContext['tiers'] = { start: 'med', max: 'high' },
   const materials = Array.from({ length: 6 }, () => new THREE.ShaderMaterial({
     uniforms: { uGrayBasemap: { value: null }, uSatellite: { value: null } },
   }))
-  const onSatelliteReady = vi.fn()
+  const onSatelliteTexture = vi.fn()
   const ctx: BasemapContext = {
     renderer: r.renderer,
     materials,
@@ -435,9 +435,9 @@ function makeCtx(tiers: BasemapContext['tiers'] = { start: 'med', max: 'high' },
     satellite: new BasemapState(),
     uploads: new UploadLock(),
     nextFrame: frames(r.log),
-    onSatelliteReady,
+    onSatelliteTexture,
   }
-  return { ctx, ...r, materials, onSatelliteReady }
+  return { ctx, ...r, materials, onSatelliteTexture }
 }
 
 const uniformOf = (ctx: BasemapContext, name: 'uGrayBasemap' | 'uSatellite') =>
@@ -533,15 +533,15 @@ describe('upgradeGray', () => {
 })
 
 describe('loadSatellite', () => {
-  it('uses the strip path from med up and publishes readiness after the swap', async () => {
+  it('uses the strip path from med up and reports the texture after the swap', async () => {
     stubDecoding(SIZES)
-    const { ctx, copies, onSatelliteReady } = makeCtx({ start: 'med', max: 'high' })
-    onSatelliteReady.mockImplementation(() => {
+    const { ctx, copies, onSatelliteTexture } = makeCtx({ start: 'med', max: 'high' })
+    onSatelliteTexture.mockImplementation(() => {
       expect(uniformOf(ctx, 'uSatellite').every(v => v === ctx.satellite.texture)).toBe(true)
     })
     await loadSatellite(ctx, 'med', new AbortController().signal)
     expect(copies.length).toBe(stripPlan(8192, 4096, STRIP_ROWS).length + 1)
-    expect(onSatelliteReady).toHaveBeenCalledWith(true)
+    expect(onSatelliteTexture).toHaveBeenCalledWith(true)
     expect(ctx.satellite.tier).toBe('med')
   })
 
@@ -639,7 +639,7 @@ describe('loadSatellite', () => {
     const dec = stubDecoding(SIZES)
     const release = dec.hold('/data/basemaps/satellite_med.webp')
     const lost = { value: false }
-    const { ctx, onSatelliteReady } = makeCtx({ start: 'med', max: 'high' }, lost)
+    const { ctx, onSatelliteTexture } = makeCtx({ start: 'med', max: 'high' }, lost)
     const loading = loadSatellite(ctx, 'med', new AbortController().signal)
     await vi.waitFor(() => expect(dec.fetched).toHaveLength(1))
     lost.value = true // lost during the decode, before the webglcontextlost event reached any listener
@@ -649,7 +649,7 @@ describe('loadSatellite', () => {
     expect(ctx.satellite.texture).toBe(null)
     expect(ctx.satellite.tier).toBe(null)
     expect(uniformOf(ctx, 'uSatellite').every(v => v === null)).toBe(true)
-    expect(onSatelliteReady).not.toHaveBeenCalled()
+    expect(onSatelliteTexture).not.toHaveBeenCalled()
     expect(disposeSpy).toHaveBeenCalledTimes(1)
     expect(ctx.satellite.wanted).toBe('med')
   })
@@ -657,10 +657,10 @@ describe('loadSatellite', () => {
   it('does not decode at all while the context is lost (the restore asks for the tier again)', async () => {
     const dec = stubDecoding(SIZES)
     const lost = { value: true }
-    const { ctx, onSatelliteReady } = makeCtx({ start: 'med', max: 'high' }, lost)
+    const { ctx, onSatelliteTexture } = makeCtx({ start: 'med', max: 'high' }, lost)
     await expect(loadSatellite(ctx, 'med', new AbortController().signal)).resolves.toBeUndefined()
     expect(dec.fetched).toEqual([])
-    expect(onSatelliteReady).not.toHaveBeenCalled()
+    expect(onSatelliteTexture).not.toHaveBeenCalled()
     expect(ctx.satellite.wanted).toBe('med')
     lost.value = false
     expect(reloadAfterContextRestored(ctx).satellite).toBe(true)
@@ -727,7 +727,7 @@ describe('one basemap upload at a time', () => {
 
   it('fails the strip upload whose allocation ran out of memory, not the satellite that started meanwhile', async () => {
     const dec = stubDecoding(SIZES)
-    const { ctx, log, onSatelliteReady } = makeCtx({ start: 'low', max: 'med' })
+    const { ctx, log, onSatelliteTexture } = makeCtx({ start: 'low', max: 'med' })
     failAllocationOf(ctx, log, 8192) // tablet: the gray med allocation fails
     const openFrames = heldFrames(ctx, log)
     const gray = upgradeGray(ctx, new AbortController().signal).then(() => 'resolved', (err: Error) => err.message)
@@ -740,7 +740,7 @@ describe('one basemap upload at a time', () => {
     expect(await satellite).toBe('resolved')
     expect(ctx.gray.texture).toBe(null) // no storage-less gray committed
     expect(ctx.satellite.tier).toBe('low')
-    expect(onSatelliteReady).toHaveBeenCalledWith(true)
+    expect(onSatelliteTexture).toHaveBeenCalledWith(true)
     // the satellite's allocation came after the gray's check
     expect(log.indexOf('getError')).toBeLessThan(log.lastIndexOf('init'))
   })
@@ -820,8 +820,8 @@ describe('releaseOnContextLost', () => {
     expect(ctx.gray.texture).toBe(null)
     expect(ctx.satellite.tier).toBe(null)
     expect(ctx.satellite.texture).toBe(null)
-    // the active satellite also drives Mapbox and the dot colours: a loss of this canvas leaves it on
-    expect(ctx.onSatelliteReady).not.toHaveBeenCalledWith(false)
+    // the texture is gone (the shader goes back to the gray until the restore brings one back)
+    expect(ctx.onSatelliteTexture).toHaveBeenLastCalledWith(false)
   })
 
   it('aborts running uploads and hands them over (no failure)', async () => {

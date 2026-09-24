@@ -1,7 +1,9 @@
 /**
  * useSatelliteMode forces the basemap visible once the start-tier gray is on
  * the GPU; the satellite texture loads in the background and must not be a
- * condition for it any more.
+ * condition for it any more. The shader samples the satellite only while its
+ * texture is on the GPU; Mapbox, the page style and the back layers follow the
+ * active satellite, which a context loss of this canvas leaves on.
  *
  * @vitest-environment jsdom
  */
@@ -39,16 +41,18 @@ function makeRefs(texturesReady: boolean) {
   return { refs, basemapMesh, globeMaterial }
 }
 
-function Harness({ refs, satellite }: { refs: GlobeRefs; satellite: boolean }) {
-  useSatelliteMode({ refs, satellite, vectorLayers: LAYERS, showMapbox: false })
+function Harness({ refs, satellite, satelliteShown }: { refs: GlobeRefs; satellite: boolean; satelliteShown: boolean }) {
+  useSatelliteMode({ refs, satellite, satelliteShown, vectorLayers: LAYERS, showMapbox: false })
   return null
 }
 
-async function render(refs: GlobeRefs, satellite: boolean) {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  root = createRoot(container)
-  await act(async () => { root!.render(<Harness refs={refs} satellite={satellite} />) })
+async function render(refs: GlobeRefs, satellite: boolean, satelliteShown = satellite) {
+  if (!root) {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  }
+  await act(async () => { root!.render(<Harness refs={refs} satellite={satellite} satelliteShown={satelliteShown} />) })
 }
 
 afterEach(async () => {
@@ -77,5 +81,19 @@ describe('useSatelliteMode', () => {
     expect((basemapMesh.material as THREE.ShaderMaterial).uniforms.uUseSatellite.value).toBe(true)
     expect(refs.satelliteMode.current).toBe(true)
     expect(document.body.classList.contains('satellite-mode')).toBe(true)
+  })
+
+  it('keeps the shader on the gray while the active satellite has no texture on the GPU (context restore)', async () => {
+    const { refs, basemapMesh } = makeRefs(true)
+    const uniforms = () => [basemapMesh, ...refs.basemapSectionMeshes.current]
+      .map(m => (m.material as THREE.ShaderMaterial).uniforms.uUseSatellite.value)
+    await render(refs, true, true)
+    expect(uniforms()).toEqual([true, true])
+    await render(refs, true, false) // the loss dropped the texture; the restore reloads it
+    expect(uniforms()).toEqual([false, false])
+    expect(refs.satelliteMode.current).toBe(true)
+    expect(document.body.classList.contains('satellite-mode')).toBe(true)
+    await render(refs, true, true)
+    expect(uniforms()).toEqual([true, true])
   })
 })
