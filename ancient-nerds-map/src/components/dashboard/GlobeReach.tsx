@@ -70,8 +70,10 @@ const ENDING_LABELS: Record<keyof GlobeEndings, string> = {
 }
 
 /** The rows of the split, in fixed order — zeros stay, the order is the
- *  reading. `unmeasured` only while the window still reaches back before the
- *  first ending event. */
+ *  reading. `unmeasured` only when the window holds loads that ran a build
+ *  without the endings: loads from before the first ending event, or a
+ *  returning visitor's first load after it (SQL_GLOBE measured_from), which
+ *  can fall in any later window, so never hide the row by date. */
 export function endingItems(g: GlobeData): BarItem[] {
   const n = g.not_reached
   const median = g.abandon_ms.median
