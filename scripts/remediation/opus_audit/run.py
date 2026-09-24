@@ -30,12 +30,14 @@ from opus_audit import quotes as Q  # noqa: E402
 AUDIT = REPO / "output" / "remediation" / "opus_audit"
 
 
-def cited_urls(verdicts: dict) -> list[str]:
+def cited_urls(*rounds: dict) -> list[str]:
+    """Every URL a verdict of any round cites, in any of its passes or sections."""
     return sorted(
         {
             q["source"]
-            for stage in D.PASSES
-            for v in verdicts[stage].values()
+            for verdicts in rounds
+            for section in verdicts.values()
+            for v in section.values()
             for q in v["quotes"]
             if Q.is_url(q["source"])
         }
@@ -47,8 +49,8 @@ def _now() -> str:
 
 
 def fetch(audit: Path) -> dict[str, object]:
-    _rows, verdicts, _inputs = D.load(audit, D.RULES_SHA256, D.INPUT_SHA256)
-    urls = cited_urls(verdicts)
+    _rows, raw, round2, _inputs = D.load_rounds(audit, D.RULES_SHA256, D.INPUT_SHA256)
+    urls = cited_urls(raw, round2)
     pages = audit / "pages"
     with Q.http_client() as client:
         counts = Q.collect(urls, pages, client, now=_now)
@@ -78,8 +80,25 @@ def main(argv: list[str] | None = None) -> int:
             out = fetch(args.dir)
         else:
             summary = D.run(args.dir)
-            out = {k: summary[k] for k in ("quote_check", "decisions", "rejudge_by_pass")}
-            out["reversal_rows"] = summary["reversal_rows"]  # type: ignore[index]
+            out = {
+                "round_2": {s: summary["round_2"][s]["failed"] for s in D.ROUND_2_SECTIONS},
+                "overlay": summary["overlay"],
+                "rule_4": {
+                    k: summary["rule_4"][k]
+                    for k in ("sample", "counted", "not_keep", "threshold", "fired")
+                },
+                **{
+                    k: summary[k]
+                    for k in (
+                        "decisions",
+                        "rejudge_by_pass",
+                        "pending_by_pass",
+                        "second_judge",
+                        "tie_round_2",
+                        "reversal_rows",
+                    )
+                },
+            }
     except Q.AuditError as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
