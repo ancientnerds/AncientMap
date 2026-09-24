@@ -508,6 +508,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--bg-tasks", default="layers,basemap", help="globe_bg tasks --after-bg waits for"
     )
     shot.add_argument("--settle", type=float, default=1.5, help="seconds after the pose")
+    shot.add_argument(
+        "--labels",
+        action="store_true",
+        help="turn the geo labels on (off at start) before the pose",
+    )
 
     diff = sub.add_parser("diff", help="pixel difference of two screenshots")
     diff.add_argument("a", type=Path)
@@ -851,6 +856,8 @@ def cmd_shot(args: argparse.Namespace) -> int:
                 f"background tasks {tasks} did not all finish within {args.timeout:.0f} s"
             )
         page.evaluate("() => { window.__DEMO.hideAllUI(); window.__DEMO.setAutoRotate(false) }")
+        if args.labels:
+            page.evaluate("() => window.__DEMO.setGeoLabels(true)")
         page.evaluate(
             "([lng, lat, d]) => window.__DEMO.setCameraPose(lng, lat, d)", [lng, lat, distance]
         )

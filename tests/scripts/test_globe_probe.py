@@ -315,7 +315,8 @@ def test_parser_defaults_block_mapbox_for_load_but_not_for_shot():
     assert load.net == "none" and load.gpu is False
     shot = p.parse_args(["shot", "--target", "prod", "--pose", "10,51,2.44"])
     assert shot.block_mapbox is False and shot.dpr == 1.0 and shot.after_bg is False
-    assert shot.bg_tasks == "layers,basemap"
+    assert shot.bg_tasks == "layers,basemap" and shot.labels is False
+    assert p.parse_args(["shot", "--target", "local", "--pose", "1,2,3", "--labels"]).labels
     assert p.parse_args(
         ["shot", "--target", "local", "--pose", "1,2,3", "--block-mapbox"]
     ).block_mapbox

@@ -82,7 +82,8 @@ The probe waits for `__DEMO.isReady()`. With `--after-bg` it also waits for a `g
 event of each task in `--bg-tasks` (default `layers,basemap`). A device whose maximum
 basemap tier equals its start tier never sends `basemap`, so pass `--bg-tasks layers`
 there. Then the probe calls `__DEMO.hideAllUI()` (the `demo-mode` class hides the panels),
-`setAutoRotate(false)` and `setCameraPose(lng, lat, distance)`. It waits `--settle`
+`setAutoRotate(false)`, with `--labels` `setGeoLabels(true)` (the geo labels are off at start),
+and `setCameraPose(lng, lat, distance)`. It waits `--settle`
 seconds (1.5) and screenshots `.globe-container > canvas`. The screenshot covers the
 canvas area, so the footer links (IMPRINT PRIVACY TERMS) are in the image, the same in
 every shot. The report records `__DEMO.getCameraState()`.
