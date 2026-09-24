@@ -31,8 +31,16 @@ describe('App: globe_ready when the overlay fades', () => {
   const app = read('App.tsx')
 
   it('fires on loadingComplete (sites, layers, focus) with no error screen and a live context', () => {
-    expect(app).toContain('const loadingComplete = !isLoading && layersReady && focusResolved')
+    expect(app).toContain('const loadingComplete = !gateShowing && !isLoading && layersReady && focusResolved')
     expect(app).toContain('useGlobeReady(loadingComplete && !globeFailure && !webglLost, endingLatch, globeReadyRef, armGlobeIdle)')
+  })
+
+  it('completes nothing behind the phone gate, which unmounts the overlay and the Globe (useGlobeBehindGate.test.tsx)', () => {
+    // gateShowing is known before loadingComplete reads it
+    expect(app.indexOf('const gateShowing = isMobile && !mobileWarningDismissed'))
+      .toBeLessThan(app.indexOf('const loadingComplete ='))
+    expect(app).toContain('if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)')
+    expect(app).toMatch(/useGlobeBehindGate\(gateShowing, overlayFading, \{\s*resetLayers: \(\) => setLayersReady\(false\),\s*removeOverlay: \(\) => setOverlayRendered\(false\),\s*\}\)/)
   })
 
   it('does not treat the layers alone as ready', () => {

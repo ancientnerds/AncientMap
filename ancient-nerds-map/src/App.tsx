@@ -50,6 +50,7 @@ import { reportAchievementEvent } from './utils/cardApi'
 import AchievementToast from './components/AchievementToast'
 import { useSiteSearch } from './hooks/useSiteSearch'
 import { useGlobeScreenEnding, type ScreenEnding } from './hooks/useGlobeScreenEnding'
+import { useGlobeBehindGate } from './hooks/useGlobeBehindGate'
 import { useGlobeReady } from './hooks/useGlobeReady'
 
 export type FilterMode = 'category' | 'age' | 'source' | 'country'
@@ -1655,9 +1656,14 @@ function AppContent() {
     return () => clearInterval(interval)
   }, [isLoading, layersReady])
 
+  const gateShowing = isMobile && !mobileWarningDismissed
+  const gateShowingRef = useRef(gateShowing)
+  gateShowingRef.current = gateShowing
+
   // The overlay fades as soon as the sites, the critical layers and (focus mode)
-  // the focus site's position are in; the warp starts with the fade.
-  const loadingComplete = !isLoading && layersReady && focusResolved
+  // the focus site's position are in; the warp starts with the fade. Never behind
+  // the phone gate, which unmounts the overlay and the Globe (useGlobeBehindGate).
+  const loadingComplete = !gateShowing && !isLoading && layersReady && focusResolved
   // The bar's 100 %, the READY stamp and ALL SYSTEMS NOMINAL mean this moment too
   useEffect(() => {
     if (loadingComplete) setLoadingProgress(100)
@@ -1665,6 +1671,10 @@ function AppContent() {
   useEffect(() => {
     if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)
   }, [loadingComplete, overlayRendered, overlayFading])
+  useGlobeBehindGate(gateShowing, overlayFading, {
+    resetLayers: () => setLayersReady(false),
+    removeOverlay: () => setOverlayRendered(false),
+  })
 
   // globe_ready when the visitor sees the globe: the overlay fades on loadingComplete,
   // with no error screen over it and a live WebGL context under it
@@ -1672,10 +1682,6 @@ function AppContent() {
     idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
   }, [])
   useGlobeReady(loadingComplete && !globeFailure && !webglLost, endingLatch, globeReadyRef, armGlobeIdle)
-
-  const gateShowing = isMobile && !mobileWarningDismissed
-  const gateShowingRef = useRef(gateShowing)
-  gateShowingRef.current = gateShowing
 
   const handleGateChoice = useCallback((choice: GateChoice) => {
     reportGateChoice(choice, endingLatch)
