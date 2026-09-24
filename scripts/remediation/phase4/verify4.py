@@ -887,6 +887,36 @@ def balanced(text: str) -> bool:
 
 _STARTS = re.compile(r"[\"'“‘«]|[^\W\d_]|\d")
 
+#: V5 (pilot 2, T5): a full stop followed by whitespace and a word character, inside a sentence.
+_INNER_STOP = re.compile(r"\.\s+(?=\w)")
+#: ... the run of non-space characters right before it (the word the stop ends).
+_WORD_BEFORE = re.compile(r"\S*\Z")
+#: V5 (pilot 2, T5): a word of `model4.PREPOSITIONS_NO_COMMA`, in lower case, directly before a
+#: comma and not the end of a longer word (`VIa,`, `Xi'an,`).
+_PREPOSITION_COMMA = re.compile(
+    r"(?<![\w'’-])(?:" + "|".join(map(re.escape, M.PREPOSITIONS_NO_COMMA)) + r"),"
+)
+
+
+def ill_formed(text: str) -> list[str]:
+    """V5's two rules pilot 2 added (T5), as labels: a full stop inside the sentence before a
+    lowercase word (Bassae: "... Cotylion Mountain. near the village"; the shared splitter never
+    splits there, so the source's typo travels whole) - not after an initialism or a single letter
+    (`B.C. and`, `i.e. the`: that stop ends no sentence) - and a preposition directly before a comma
+    (Vindobala: "in the hamlet of, Rudchester"). This module's own code; S2 refuses the same
+    sentences for the pool (`sentences.garbled`), and a parity test holds the two together."""
+    labels: list[str] = []
+    for match in _INNER_STOP.finditer(text):
+        before = _WORD_BEFORE.search(text, 0, match.start())
+        word = (before.group(0) if before else "").lstrip("([\"'“‘«")
+        initialism = "." in word or (len(word) == 1 and word.isalpha())
+        if text[match.end()].islower() and not initialism:
+            labels.append("a full stop inside the sentence before a lowercase word")
+            break
+    if _PREPOSITION_COMMA.search(text):
+        labels.append("a preposition directly before a comma")
+    return labels
+
 
 def _v5(c: _Case) -> list[Problem]:
     if c.published is None:
@@ -909,6 +939,7 @@ def _v5(c: _Case) -> list[Problem]:
         for label, pattern in ARTEFACTS:
             if pattern.search(text):
                 problems.append(f"{where}: artefact {label}")
+        problems.extend(f"{where}: {label}" for label in ill_formed(text))
     return [(SITE, problem) for problem in problems]
 
 

@@ -26,6 +26,7 @@ from phase4 import sentences as S  # noqa: E402
 from phase4 import subject_gate as SG  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
+from tests.remediation.p4_garble_cases import GARBLE_CASES  # noqa: E402
 from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 
 
@@ -436,6 +437,32 @@ def test_a_sentence_cut_at_an_initial_is_never_in_the_pool() -> None:
     assert [S.sentence_text(text, s) for s in pool] == [
         "The temple stands on the ridge above the sea."
     ]
+
+
+@pytest.mark.parametrize(("text", "garbled"), GARBLE_CASES)
+def test_the_garble_cases_s2_judges_exactly(text: str, garbled: bool) -> None:
+    """Pilot 2 (T5): the fixture V5's own check is held to as well (`p4_garble_cases`)."""
+    assert S.garbled(text) is garbled
+
+
+def test_a_garbled_source_sentence_is_never_in_the_pool() -> None:
+    """Bassae and Vindobala, pilot 2: complete, terminated and long enough, but each carries its
+    source's garble - a full stop before a lowercase word, a preposition before a comma. The
+    selector is never offered either, so V5 never has to hold the site for it."""
+    bassae = (
+        "Bassae lies at an elevation of 1,131 m above sea level on the slopes of Cotylion "
+        "Mountain. near the village of Skliros, northeast of Figaleia."
+    )
+    vindobala = (
+        "Vindobala was a Roman fort with the modern name, and in the hamlet of, Rudchester, "
+        "Northumberland."
+    )
+    good = "The temple stands on the ridge above the sea."
+    text = f"{good}\n{bassae}\n{vindobala}\n"
+    sentences = S.split_source("W", text)
+    assert {bassae, vindobala} <= {S.sentence_text(text, s) for s in sentences}
+    pool = S.candidate_pool(sentences, lane=M.Lane.W, names=["X"], text=text)
+    assert [S.sentence_text(text, s) for s in pool] == [good]
 
 
 def test_the_pool_stops_at_120_sentences() -> None:

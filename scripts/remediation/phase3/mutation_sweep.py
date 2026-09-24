@@ -16988,6 +16988,7 @@ P4P3_MODEL = "scripts/remediation/phase4/model4.py"
 P4P3_VERIFY = "scripts/remediation/phase4/verify4.py"
 P4P3_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
 P4P3_SENT_TEST = "tests/remediation/test_phase4_sentences.py"
+P4P3_SENT = "scripts/remediation/phase4/sentences.py"
 P4P3_COUNTRY = "pipeline/utils/country_lookup.py"
 P4P3_DEMONYM_TEST = "tests/pipeline/test_country_demonyms.py"
 P4P3_PROMPTS = "scripts/remediation/phase4/prompts4.py"
@@ -17080,6 +17081,129 @@ P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    "country, has no parentheses, does not "  # mutant\n',
         P4P3_SELECT_TEST,
         "test_the_selector_card_rule_names_no_nationality_adjective",
+    ),
+    # ── T5: the two garbles V5 holds and S2's pool refuses, and the reviewer's DROP ────────────
+    (
+        "p4 verify4: a full stop before a lowercase word passes V5",
+        P4P3_VERIFY,
+        "        if text[match.end()].islower() and not initialism:\n",
+        "        if False:  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v5_a_garbled_sentence_is_held",
+    ),
+    (
+        "p4 verify4: the stop of an initialism is held",
+        P4P3_VERIFY,
+        "        if text[match.end()].islower() and not initialism:\n",
+        "        if text[match.end()].islower():  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: the stop of a single letter is held",
+        P4P3_VERIFY,
+        '        initialism = "." in word or (len(word) == 1 and word.isalpha())\n',
+        '        initialism = "." in word  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: a stop after a bracket's initialism is held",
+        P4P3_VERIFY,
+        '        word = (before.group(0) if before else "").lstrip("([\\"\'“‘«")\n',
+        '        word = before.group(0) if before else ""  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: a preposition before a comma passes V5",
+        P4P3_VERIFY,
+        "    if _PREPOSITION_COMMA.search(text):\n",
+        "    if False:  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v5_a_garbled_sentence_is_held",
+    ),
+    (
+        "p4 verify4: the end of a longer word counts as a preposition",
+        P4P3_VERIFY,
+        '    r"(?<![\\w\'’-])(?:" + "|".join(map(re.escape, M.PREPOSITIONS_NO_COMMA)) + r"),"\n',
+        '    r"(?:" + "|".join(map(re.escape, M.PREPOSITIONS_NO_COMMA)) + r"),"  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: V5 does not read the garble rules",
+        P4P3_VERIFY,
+        '        problems.extend(f"{where}: {label}" for label in ill_formed(text))\n',
+        "",
+        P4P3_VERIFY_TEST,
+        "test_v5_a_garbled_sentence_is_held",
+    ),
+    (
+        "p4 sentences: a garbled sentence is offered in the pool",
+        P4P3_SENT,
+        "        and not garbled(s)\n",
+        "",
+        P4P3_SENT_TEST,
+        "test_a_garbled_source_sentence_is_never_in_the_pool",
+    ),
+    (
+        "p4 sentences: a full stop before a lowercase word is no garble",
+        P4P3_SENT,
+        "        if match.group(2).islower() and not abbreviation:\n",
+        "        if False:  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: the stop of an initialism is a garble",
+        P4P3_SENT,
+        '        abbreviation = "." in word or (len(word) == 1 and word.isalpha())\n',
+        "        abbreviation = False  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: a stop after a bracket's initial is a garble",
+        P4P3_SENT,
+        "        word = match.group(1).lstrip(_OPENERS)\n",
+        "        word = match.group(1)  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: a preposition before a comma is no garble",
+        P4P3_SENT,
+        "    return _PREPOSITION_THEN_COMMA.search(s) is not None\n",
+        "    return False  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: the end of a longer word counts as a preposition",
+        P4P3_SENT,
+        '    r"(?<![\\w\'’-])(?:" + "|".join(re.escape(word) for word in M.PREPOSITIONS_NO_COMMA) '
+        '+ r"),"\n',
+        '    r"(?:" + "|".join(re.escape(word) for word in M.PREPOSITIONS_NO_COMMA) + r"),"  # m\n',
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 model: of may stand before a comma",
+        P4P3_MODEL,
+        '    "of", "at", "by", "for", "from", "into", "onto", "to", "upon", "with", "than", "until",\n',
+        '    "at", "by", "for", "from", "into", "onto", "to", "upon", "with", "than", "until",\n',
+        P4P3_VERIFY_TEST,
+        "test_s2_and_v5_judge_the_same_sentences_garbled",
+    ),
+    (
+        "p4 prompts: the reviewer keeps a garbled sentence",
+        P4P3_PROMPTS,
+        '    "DROP a sentence that is garbled or ungrammatical, even when it copies the source word '
+        'for "\n    "word.\\n"\n',
+        "",
+        P4P3_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_garbled_sentence",
     ),
 ]
 MUTATIONS += P4_PILOT3_MUTATIONS

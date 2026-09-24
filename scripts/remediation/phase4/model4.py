@@ -376,6 +376,17 @@ PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     }
 )
 
+#: V5 and S2's pool (pilot 2, 2026-09-24, T5; accepted by the orchestrator under D1): a word of this
+#: closed list is never directly followed by a comma in a published sentence. Vindobala published
+#: its source's "... and in the hamlet of, Rudchester, Northumberland." The list is the prepositions
+#: that take an object and stand as no adverb or particle (`later on,`, `inside,`, `built over,` are
+#: fine English and are not in it); matched in lower case as whole words. Data only: `sentences`
+#: and `verify4` each implement the match.
+PREPOSITIONS_NO_COMMA: tuple[str, ...] = (
+    "of", "at", "by", "for", "from", "into", "onto", "to", "upon", "with", "than", "until",
+    "during", "towards", "toward", "among", "amongst", "amid", "via",
+)  # fmt: skip
+
 #: V6's closed pronoun list. A sentence opening with one (as its first word or words, exactly as
 #: written here, followed by a non-letter) needs its source predecessor published right before
 #: it; a card never opens with one.

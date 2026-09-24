@@ -43,6 +43,7 @@ from phase4 import verify4 as V  # noqa: E402
 
 from pipeline.video import shorts_audit, shorts_brand  # noqa: E402
 from tests.remediation import p4_fixtures as X  # noqa: E402
+from tests.remediation.p4_garble_cases import GARBLE_CASES  # noqa: E402
 from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 from tests.remediation.phase4_cases import (  # noqa: E402
     A1,
@@ -757,6 +758,39 @@ def test_v5_every_extract_artefact_is_held(label: str, bad: str) -> None:
     text = f"{S1} {bad}"
     case = make_case(text=text, picks=(W_PICKS[0], Pick(bad, (), bad)))
     assert f"artefact {label}" in case.detail("V5")
+
+
+@pytest.mark.parametrize(
+    ("label", "bad"),
+    [
+        (
+            "a full stop inside the sentence before a lowercase word",
+            "The temple lies on the slopes of Cotylion Mountain. near the village of Skliros.",
+        ),
+        (
+            "a preposition directly before a comma",
+            "The temple was a Roman shrine, and in the hamlet of, Rudchester, Northumberland.",
+        ),
+    ],
+)
+def test_v5_a_garbled_sentence_is_held(label: str, bad: str) -> None:
+    """Pilot 2 (T5): Bassae and Vindobala published their sources' garbles word for word; V5 now
+    holds either shape of a published sentence."""
+    text = f"{S1} {bad}"
+    case = make_case(text=text, picks=(W_PICKS[0], Pick(bad, (), bad)))
+    assert f"sentence 2: {label}" in case.detail("V5")
+
+
+@pytest.mark.parametrize(("text", "garbled"), GARBLE_CASES)
+def test_the_garble_cases_v5_judges_exactly(text: str, garbled: bool) -> None:
+    assert bool(V.ill_formed(text)) is garbled
+
+
+@pytest.mark.parametrize(("text", "garbled"), GARBLE_CASES)
+def test_s2_and_v5_judge_the_same_sentences_garbled(text: str, garbled: bool) -> None:
+    """D3 parity for T5: S2's pool (`sentences.garbled`) and V5 (`verify4.ill_formed`) judge the
+    shared fixture alike; neither module imports the other."""
+    assert S.garbled(text) is bool(V.ill_formed(text)) is garbled
 
 
 def test_v6_a_pronoun_without_its_source_predecessor_is_held() -> None:

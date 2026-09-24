@@ -117,6 +117,8 @@ REVIEWER_QUESTION = (
     'DROP a sentence with a definite reference ("the valley", "the mountain", "other ...", "it") '
     "whose antecedent is in no published sentence before it: the source sentences before it are "
     "not published.\n"
+    "DROP a sentence that is garbled or ungrammatical, even when it copies the source word for "
+    "word.\n"
     "\n"
     "Answer with one line per sentence and nothing else:\n"
     "R<i>: KEEP\n"
