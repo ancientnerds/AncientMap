@@ -40,7 +40,9 @@ describe('App: globe_ready when the overlay fades', () => {
     expect(app.indexOf('const gateShowing = isMobile && !mobileWarningDismissed'))
       .toBeLessThan(app.indexOf('const loadingComplete ='))
     expect(app).toContain('if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)')
-    expect(app).toMatch(/useGlobeBehindGate\(gateShowing, overlayFading, \{\s*resetLayers: \(\) => setLayersReady\(false\),\s*removeOverlay: \(\) => setOverlayRendered\(false\),\s*\}\)/)
+    expect(app).toMatch(/useGlobeBehindGate\(gateShowing, overlayFading, \{\s*resetLayers: \(\) => \{\s*setLayersReady\(false\)\s*dropGlobeStartItems\(startItemsRef\.current\)\s*\},\s*removeOverlay: \(\) => setOverlayRendered\(false\),\s*\}\)/)
+    // globe_abandon's phase reads the same set
+    expect(app).toContain('getPhase: () => loadPhase(gateShowingRef.current, startItemsRef.current)')
   })
 
   it('does not treat the layers alone as ready', () => {

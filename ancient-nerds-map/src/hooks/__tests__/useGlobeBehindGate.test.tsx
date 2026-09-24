@@ -20,7 +20,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../analytics', () => ({ track: vi.fn() }))
 
 import { track } from '../../analytics'
-import { createGlobeEndingLatch } from '../../analytics/globeAbandon'
+import {
+  START_ITEMS,
+  createGlobeEndingLatch,
+  dropGlobeStartItems,
+  loadPhase,
+  type AbandonPhase,
+  type StartItem,
+} from '../../analytics/globeAbandon'
 import { useGlobeBehindGate } from '../useGlobeBehindGate'
 import { useGlobeReady } from '../useGlobeReady'
 
@@ -32,6 +39,8 @@ interface Controls {
   setGate: (on: boolean) => void
   setSitesIn: () => void
   setLayersIn: () => void
+  markItem: (item: StartItem) => void
+  phase: () => AbandonPhase
 }
 
 function Harness({ controls }: { controls: Controls }) {
@@ -42,7 +51,10 @@ function Harness({ controls }: { controls: Controls }) {
   const [overlayRendered, setOverlayRendered] = React.useState(true)
   const [latch] = React.useState(createGlobeEndingLatch)
   const readyRef = React.useRef(false)
+  const startItemsRef = React.useRef(new Set<StartItem>())
   controls.setGate = setGateShowing
+  controls.markItem = item => startItemsRef.current.add(item)
+  controls.phase = () => loadPhase(gateShowing, startItemsRef.current)
   controls.setSitesIn = () => setIsLoading(false)
   controls.setLayersIn = () => setLayersReady(true)
 
@@ -52,7 +64,10 @@ function Harness({ controls }: { controls: Controls }) {
   }, [loadingComplete, overlayRendered, overlayFading])
   useGlobeReady(loadingComplete, latch, readyRef, () => {})
   useGlobeBehindGate(gateShowing, overlayFading, {
-    resetLayers: () => setLayersReady(false),
+    resetLayers: () => {
+      setLayersReady(false)
+      dropGlobeStartItems(startItemsRef.current)
+    },
     removeOverlay: () => setOverlayRendered(false),
   })
 
@@ -80,7 +95,13 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  controls = { setGate: () => {}, setSitesIn: () => {}, setLayersIn: () => {} }
+  controls = {
+    setGate: () => {},
+    setSitesIn: () => {},
+    setLayersIn: () => {},
+    markItem: () => {},
+    phase: () => 'gate',
+  }
   act(() => root.render(<Harness controls={controls} />))
 })
 
@@ -117,5 +138,19 @@ describe('useGlobeBehindGate', () => {
     expect(overlay()).toBeNull()
     expect(container.querySelector('#globe')).not.toBeNull()
     expect(readyEvents()).toHaveLength(1)
+  })
+
+  it("a gate before completion: globe_abandon's phase follows the fresh Globe, not the unmounted one", () => {
+    // The old Globe had every critical item in; the sites had not arrived yet
+    for (const item of START_ITEMS) if (item !== 'sites') act(() => controls.markItem(item))
+    act(() => controls.setLayersIn())
+    act(() => controls.setGate(true))
+    expect(controls.phase()).toBe('gate')
+    act(() => controls.markItem('sites'))
+    act(() => controls.setSitesIn())
+    act(() => controls.setGate(false)) // a fresh Globe mounts and starts from its scene
+    expect(controls.phase()).toBe('scene')
+    act(() => controls.markItem('scene'))
+    expect(controls.phase()).toBe('basemap')
   })
 })

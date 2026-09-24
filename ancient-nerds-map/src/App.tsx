@@ -3,6 +3,7 @@ import { track } from './analytics'
 import { errorProps } from './analytics/boot'
 import {
   createGlobeEndingLatch,
+  dropGlobeStartItems,
   installGlobeAbandon,
   loadPhase,
   reportGateChoice,
@@ -1673,7 +1674,10 @@ function AppContent() {
     if (loadingComplete && overlayRendered && !overlayFading) setOverlayFading(true)
   }, [loadingComplete, overlayRendered, overlayFading])
   useGlobeBehindGate(gateShowing, overlayFading, {
-    resetLayers: () => setLayersReady(false),
+    resetLayers: () => {
+      setLayersReady(false)
+      dropGlobeStartItems(startItemsRef.current)
+    },
     removeOverlay: () => setOverlayRendered(false),
   })
 

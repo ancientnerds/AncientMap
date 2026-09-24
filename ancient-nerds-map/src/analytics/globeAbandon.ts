@@ -98,6 +98,16 @@ export function loadPhase(gateShowing: boolean, done: ReadonlySet<StartItem>): A
 }
 
 /**
+ * The phone gate unmounted the Globe before the load was complete
+ * (useGlobeBehindGate): the Globe that mounts after it starts again from its
+ * scene, so the unmounted Globe's items are no longer in. 'sites' is App's own
+ * item and survives the remount.
+ */
+export function dropGlobeStartItems(done: Set<StartItem>): void {
+  for (const item of START_ITEMS) if (item !== 'sites') done.delete(item)
+}
+
+/**
  * Sends globe_abandon{ms, phase} through the latch on pagehide or when the
  * page turns hidden. pagehide, not unload/beforeunload: it keeps the page
  * eligible for the back/forward cache and fires on mobile. Returns the uninstall.

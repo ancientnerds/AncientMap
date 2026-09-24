@@ -3,8 +3,10 @@
  * renders it instead of the loading overlay and the Globe, which unmount, and
  * a fresh Globe mounts when it goes away. The load's ready moment belongs to the
  * Globe on screen (App's loadingComplete also requires the gate to be gone):
- * - before the load was complete, the old Globe's layers flag is dropped, so the
- *   overlay waits for the fresh Globe's own layers and globe_ready follows them;
+ * - before the load was complete, the old Globe's layers flag and its critical
+ *   start items are dropped, so the overlay waits for the fresh Globe's own
+ *   layers, globe_ready follows them and globe_abandon's phase names the fresh
+ *   Globe's step;
  * - after it (the overlay faded or was fading), the overlay is removed: a fading
  *   overlay unmounted by the gate would come back with its fade already applied,
  *   so its transitionend, the only thing that removes it, never comes and the

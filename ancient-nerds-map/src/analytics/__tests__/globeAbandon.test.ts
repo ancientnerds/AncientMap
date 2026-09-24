@@ -16,6 +16,7 @@ import { track } from '../index'
 import {
   START_ITEMS,
   createGlobeEndingLatch,
+  dropGlobeStartItems,
   installGlobeAbandon,
   loadPhase,
   reportGateChoice,
@@ -84,6 +85,15 @@ describe('loadPhase', () => {
 
   it('is the last item once every item is in (the globe_ready check is its last step)', () => {
     expect(loadPhase(false, new Set(START_ITEMS))).toBe('countryBorders')
+  })
+})
+
+describe('dropGlobeStartItems', () => {
+  it("drops the unmounted Globe's items and keeps App's sites: the fresh Globe starts from its scene", () => {
+    const done = new Set<StartItem>(START_ITEMS)
+    dropGlobeStartItems(done)
+    expect([...done]).toEqual(['sites'])
+    expect(loadPhase(false, done)).toBe('scene')
   })
 })
 
