@@ -260,6 +260,13 @@ def test_a_url_that_was_never_collected_stops_the_check(tmp_path: Path) -> None:
         _check(tmp_path, (ES_URL, "Tarmatambo"))
 
 
+def test_a_kept_body_that_is_not_the_one_its_record_names_stops_the_check(tmp_path: Path) -> None:
+    _page(tmp_path, ES_URL, "<p>Tarmatambo es un sitio</p>")
+    (tmp_path / "pages" / f"{Q.url_key(ES_URL)}.body").write_bytes(b"<p>Tarmatambo es otro</p>")
+    with pytest.raises(Q.AuditError, match="not the body its record names"):
+        _check(tmp_path, (ES_URL, "Tarmatambo es otro"))
+
+
 def test_the_projects_own_site_is_never_fetched_and_never_counts(tmp_path: Path) -> None:
     """ancientnerds.com is production: the audit does not touch it, and it cannot vouch for itself."""
     url = "https://ancientnerds.com/api/sites/b5627c73"
