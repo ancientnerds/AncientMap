@@ -19,6 +19,7 @@ vi.mock('../../../../utils/LabelRenderer', async () => {
 
 import manifest from '../../../../data/globeLayers.generated.json'
 import { createGlobeLayerTiers, getLayerFiles, getLayerUrl, type GlobeLayerKey, type VectorLayerKey } from '../../../../config/vectorLayers'
+import { OfflineFetch, OfflineNotCachedError } from '../../../../services/OfflineFetch'
 import type { FadeManager } from '../../../../utils/FadeManager'
 import type { GlobeLabel } from '../vectorRenderer'
 import {
@@ -264,6 +265,23 @@ describe('loadVectorLayer', () => {
     expect(loading.coastlines).toBe(false)
     expect(ctx.frontLineLayersRef.current.coastlines).toEqual([])
     expect(error).toHaveBeenCalled()
+  })
+
+  it('reports an offline start whose start tier is not cached, naming the file', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    routes.set(COAST_START, { features: lines(1) })
+    vi.stubGlobal('caches', { open: async () => ({ match: async () => undefined }) })
+    OfflineFetch.setOfflineMode(true)
+    try {
+      const { ctx } = makeCtx()
+      await loadVectorLayer('coastlines', ctx)
+      expect(fetched).toEqual([])
+      expect(ctx.onStartError).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(ctx.onStartError).mock.calls[0][1]).toBeInstanceOf(OfflineNotCachedError)
+      expect(String(vi.mocked(ctx.onStartError).mock.calls[0][1])).toContain(COAST_START)
+    } finally {
+      OfflineFetch.setOfflineMode(false)
+    }
   })
 
   it('reports a body the worker cannot parse with the URL', async () => {

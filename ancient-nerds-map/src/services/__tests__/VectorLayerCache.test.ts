@@ -37,6 +37,7 @@ beforeEach(() => {
     open: async () => ({
       put: async (url: string, res: Response) => { stored.set(url, res) },
       delete: async (url: string) => { deleted.push(url); return true },
+      match: async (url: string) => stored.get(url),
     }),
   })
 })
@@ -44,7 +45,17 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.mocked(OfflineStorage.addDownloadedLayer).mockClear()
+  vi.mocked(OfflineStorage.getDownloadState).mockReset()
+  vi.mocked(OfflineStorage.getDownloadState).mockImplementation(async () => ({ layers: [] }) as never)
 })
+
+function markDownloaded(layers: string[]) {
+  vi.mocked(OfflineStorage.getDownloadState).mockImplementation(async () => ({ layers }) as never)
+}
+
+function cacheFiles(urls: string[]) {
+  for (const url of urls) stored.set(url, new Response('{}'))
+}
 
 describe('VectorLayerCache', () => {
   it('offers every vector layer of the globe with its real file count', () => {
@@ -65,6 +76,33 @@ describe('VectorLayerCache', () => {
   it('clears exactly getLayerFiles', async () => {
     await VectorLayerCache.clearLayer('coastlines')
     expect(deleted).toEqual(getLayerFiles('coastlines'))
+  })
+
+  it('counts a layer as downloaded only when every file of getLayerFiles is in the cache', async () => {
+    markDownloaded(['coastlines', 'countryBorders', 'rivers'])
+    // A download from before the tiers: coast_hires only
+    cacheFiles(['/data/layers/coast_hires.geojson'])
+    cacheFiles(getLayerFiles('countryBorders'))
+    cacheFiles(getLayerFiles('rivers').slice(1))
+    expect(await VectorLayerCache.getCachedLayers()).toEqual(['countryBorders'])
+  })
+
+  it('counts a completed download of this build as downloaded', async () => {
+    markDownloaded([])
+    await VectorLayerCache.downloadLayer('coastlines')
+    markDownloaded(['coastlines'])
+    expect(await VectorLayerCache.getCachedLayers()).toEqual(['coastlines'])
+  })
+
+  it('does not count files the service worker cached without a download', async () => {
+    markDownloaded([])
+    cacheFiles(getLayerFiles('countryBorders'))
+    expect(await VectorLayerCache.getCachedLayers()).toEqual([])
+  })
+
+  it('keeps the download mark of the paleoshorelines, which are not globe layer files', async () => {
+    markDownloaded(['paleoshorelines'])
+    expect(await VectorLayerCache.getCachedLayers()).toEqual(['paleoshorelines'])
   })
 
   it('does not mark a layer downloaded when a file failed', async () => {

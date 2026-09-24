@@ -63,6 +63,8 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set())
   const [selectedBasemaps, setSelectedBasemaps] = useState<Set<BasemapType>>(new Set())
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set())
+  // Layers whose download is complete (every file cached), not just marked downloaded
+  const [downloadedLayers, setDownloadedLayers] = useState<Set<string>>(new Set())
   const [selectedEmpires, setSelectedEmpires] = useState<Set<string>>(new Set())
   const [progress, setProgress] = useState<DownloadProgress | null>(null)
   const [downloadSpeed, setDownloadSpeed] = useState(0) // bytes per second
@@ -93,7 +95,9 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       // Pre-select already cached items
       setSelectedSources(new Set(Object.keys(state.sources)))
       setSelectedBasemaps(new Set((state.basemapItems || []) as BasemapType[]))
-      setSelectedLayers(new Set(state.layers || []))
+      const layers = await VectorLayerCache.getCachedLayers()
+      setDownloadedLayers(new Set(layers))
+      setSelectedLayers(new Set(layers))
       setSelectedEmpires(new Set(state.empires))
 
       // Get storage estimate
@@ -127,13 +131,13 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   const toggleLayer = useCallback((id: string) => {
     // Don't allow unchecking cached items
-    if (downloadState?.layers?.includes(id)) return
+    if (downloadedLayers.has(id)) return
     setSelectedLayers(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
-  }, [downloadState])
+  }, [downloadedLayers])
 
   const toggleEmpire = useCallback((id: string) => {
     // Don't allow unchecking cached items
@@ -193,7 +197,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
     // Vector layers
     const newLayers = [...selectedLayers].filter(
-      id => !downloadState?.layers?.includes(id)
+      id => !downloadedLayers.has(id)
     )
     size += VectorLayerCache.estimateSize(newLayers)
 
@@ -204,7 +208,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     }
 
     return size
-  }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, sources])
+  }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, downloadedLayers, sources])
 
   // Update progress with speed calculation
   const updateProgressWithSpeed = useCallback((loaded: number, total: number) => {
@@ -292,7 +296,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   const downloadLayers = async () => {
     const toDownload = [...selectedLayers].filter(
-      id => !downloadState?.layers?.includes(id)
+      id => !downloadedLayers.has(id)
     )
 
     for (const layerId of toDownload) {
@@ -358,6 +362,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       // Refresh state
       const state = await OfflineStorage.getDownloadState()
       setDownloadState(state)
+      setDownloadedLayers(new Set(await VectorLayerCache.getCachedLayers()))
 
       const estimate = await OfflineStorage.getStorageEstimate()
       setStorageUsed(estimate.used)
@@ -386,6 +391,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
     const state = await OfflineStorage.getDownloadState()
     setDownloadState(state)
+    setDownloadedLayers(new Set())
 
     const estimate = await OfflineStorage.getStorageEstimate()
     setStorageUsed(estimate.used)
@@ -583,7 +589,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                     {renderCheckbox(selectedLayers.has(layer.id))}
                     <span className="item-color" style={{ backgroundColor: layer.color }} />
                     <span className="item-name">{layer.name}</span>
-                    {downloadState?.layers?.includes(layer.id) && <span className="cached-badge">Cached</span>}
+                    {downloadedLayers.has(layer.id) && <span className="cached-badge">Cached</span>}
                     <span className="item-meta">
                       {layer.fileCount} files ({formatBytes(layer.estimatedSize)})
                     </span>

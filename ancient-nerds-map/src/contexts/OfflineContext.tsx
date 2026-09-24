@@ -9,6 +9,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { OfflineFetch } from '../services/OfflineFetch'
 import { OfflineStorage } from '../services/OfflineStorage'
+import { VectorLayerCache } from '../services/VectorLayerCache'
 
 interface OfflineContextValue {
   isOffline: boolean
@@ -67,14 +68,14 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       // Extract cached empire IDs
       setCachedEmpireIds(new Set(state.empires || []))
 
-      // Extract cached layer IDs
-      setCachedLayerIds(new Set(state.layers || []))
-
       // Extract cached basemap qualities
       setCachedBasemapQualities(new Set(state.basemapQualities || []))
 
       // Extract cached basemap items (satellite, labels)
       setCachedBasemapItems(new Set(state.basemapItems || []))
+
+      // Cached layer IDs: only downloads whose every file is in the cache
+      setCachedLayerIds(new Set(await VectorLayerCache.getCachedLayers()))
     } catch (e) {
       // OfflineStorage not available - leave empty sets
     }

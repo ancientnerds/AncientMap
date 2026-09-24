@@ -3,6 +3,7 @@
  * Uses Service Worker cache for GeoJSON data
  */
 
+import { OfflineFetch } from './OfflineFetch'
 import { OfflineStorage } from './OfflineStorage'
 import { LAYER_CONFIG, getLayerFiles, type VectorLayerKey } from '../config/vectorLayers'
 
@@ -143,19 +144,21 @@ class VectorLayerCacheClass {
   }
 
   /**
-   * Check if a layer is cached
-   */
-  async isLayerCached(layerId: string): Promise<boolean> {
-    const state = await OfflineStorage.getDownloadState()
-    return state.layers?.includes(layerId) ?? false
-  }
-
-  /**
-   * Get list of cached layer IDs
+   * The layers whose offline download is complete: marked downloaded, and for a globe layer
+   * every file of getLayerFiles in the cache where offline mode reads it (OfflineFetch, exact
+   * URL). A download from before the coastline/border tiers holds coast_hires only, so it is
+   * not complete and the Download Manager offers the download again. Paleoshorelines are no
+   * globe layer files; they keep their download mark.
    */
   async getCachedLayers(): Promise<string[]> {
     const state = await OfflineStorage.getDownloadState()
-    return state.layers || []
+    const marked = state.layers || []
+    const complete = await Promise.all(marked.map(async id => {
+      if (!isVectorLayerKey(id)) return id === 'paleoshorelines'
+      const cached = await Promise.all(getLayerFiles(id).map(url => OfflineFetch.isCached(url)))
+      return cached.every(Boolean)
+    }))
+    return marked.filter((_, i) => complete[i])
   }
 
   /**
