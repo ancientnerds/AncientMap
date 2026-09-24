@@ -777,6 +777,51 @@ describe('preloadRiversLakes', () => {
     expect(ctx.frontLineLayersRef.current.lakes[0].geometry.getAttribute('position').count).toBe(6)
   })
 
+  it("a toggle that joined the preload keeps its load when the queue aborts the task", async () => {
+    const rivers = getLayerUrl('rivers', 'ultra-low')
+    routes.set(rivers, { features: lines(2) })
+    const release = hold(rivers)
+    const { ctx } = makeCtx()
+    const task = new AbortController()
+    const preload = preloadRiversLakes(ctx, task.signal)
+    const toggle = loadVectorLayer('rivers', ctx) // joins the preload's fetch
+    // The queue's deadline: the task ends, the visitor's load does not
+    const deadline = new Error('Background task rivers_lakes did not finish within 90 s of visible time')
+    task.abort(deadline)
+    await expect(preload).rejects.toBe(deadline)
+    release()
+    await toggle
+    expect(ctx.failedLayersRef.current.rivers).toBeUndefined()
+    expect(ctx.onStartError).not.toHaveBeenCalled()
+    expect(ctx.frontLineLayersRef.current.rivers).toHaveLength(1)
+    expect(fetched).toEqual([rivers])
+  })
+
+  it('an aborted task leaves the load it started in the cache for a later toggle', async () => {
+    const rivers = getLayerUrl('rivers', 'ultra-low')
+    routes.set(rivers, { features: lines(2) })
+    const release = hold(rivers)
+    const { ctx } = makeCtx()
+    const task = new AbortController()
+    const preload = preloadRiversLakes(ctx, task.signal)
+    task.abort(new Error('deadline'))
+    await expect(preload).rejects.toThrow('deadline')
+    release()
+    await loadVectorLayer('rivers', ctx)
+    expect(ctx.frontLineLayersRef.current.rivers).toHaveLength(1)
+    expect(fetched).toEqual([rivers])
+  })
+
+  it('the Globe unmount cancels the preload fetch', async () => {
+    const rivers = getLayerUrl('rivers', 'ultra-low')
+    routes.set(rivers, { features: lines(2) })
+    hold(rivers)
+    const { ctx, abort } = makeCtx()
+    const preload = preloadRiversLakes(ctx, new AbortController().signal)
+    abort.abort()
+    await expect(preload).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('rejects when a file fails, and a later toggle fetches again', async () => {
     const { ctx } = makeCtx()
     await expect(preloadRiversLakes(ctx, new AbortController().signal)).rejects.toThrow(/HTTP 404/)

@@ -564,24 +564,44 @@ export function ensureHiresCoastline(gate: HiresCoastlineGate, buildContext: () 
   return unlessDeferred(upgradeLayerTier('coastlines', 'hires', ctx, ctx.signal))
 }
 
+/** Settles with `work`, or rejects with the signal's reason once it aborts; `work` goes on. */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason)
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    signal.addEventListener('abort', onAbort, { once: true })
+    work.then(
+      value => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (err: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(err)
+      },
+    )
+  })
+}
+
 /**
  * Background task `rivers_lakes`: parse the rivers and lakes files a toggle at the current zoom
  * would load (normally ne_110m, 38 kB each) into the parsed cache loadVectorLayer reads first.
  * Offline, only files that are already cached are touched. Rejects on the first failure.
+ * A cached load belongs to the Globe (ctx.signal), not to the task: a toggle joins it, so the
+ * task's signal (the queue's deadline) ends only the task's wait and never the toggle's load.
  */
 export async function preloadRiversLakes(ctx: VectorRendererContext, signal: AbortSignal): Promise<void> {
   for (const key of ['rivers', 'lakes'] as const) {
     const url = getLayerUrl(key, ctx.detailLevelRef.current)
     if (parsedLayerCache.has(url)) continue
     if (OfflineFetch.isOffline && !(await OfflineFetch.isCached(url))) continue
-    const linked = linkSignals(signal, ctx.signal)
-    const pending = fetchAndParse(url, key, ctx, linked.signal)
+    if (signal.aborted) throw signal.reason
+    const pending = fetchAndParse(url, key, ctx, ctx.signal)
     parsedLayerCache.set(url, pending)
-    pending.then(linked.release, () => {
-      linked.release()
+    pending.catch(() => {
       // A failed parse is not cached: a later toggle fetches the file itself
       if (parsedLayerCache.get(url) === pending) parsedLayerCache.delete(url)
     })
-    await pending
+    await untilAborted(pending, signal)
   }
 }
