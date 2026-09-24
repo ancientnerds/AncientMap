@@ -343,6 +343,37 @@ def test_pilot_3_refuses_an_earlier_pilot_whose_fixed_members_differ() -> None:
         PL.build_pilot(sites, census, seed=PL.SEED_PILOT3, earlier=[first, moved], **kwargs)
 
 
+def test_pilot_4_keeps_the_fixed_members_and_excludes_all_three_earlier_pilots_draws() -> None:
+    """Pilot 3 failed T1, T4, T7 and T8: pilot 4 is a fresh draw of the same strata with its own
+    seed, the fixed members exactly the three earlier pilots', and none of their draws; a stratum
+    the earlier pilots nearly used up is taken whole."""
+    sites = named_sites()
+    census = census_of(
+        sites, {**lane_sites("0b0b0b0b", 130, M.Lane.W), **lane_sites("0c0c0c0c", 30, M.Lane.S)}
+    )
+    first, _ = build(sites, census)
+    kwargs: dict[str, Any] = {"gold": [], "q309": Q309, "routeless": set()}
+    second, _ = PL.build_pilot(sites, census, seed=PL.SEED_PILOT2, earlier=[first], **kwargs)
+    third, _ = PL.build_pilot(sites, census, seed=PL.SEED_PILOT3, earlier=[first, second], **kwargs)
+    fourth, summary = PL.build_pilot(
+        sites, census, seed=PL.SEED_PILOT4, earlier=[first, second, third], **kwargs
+    )
+
+    assert PL.SEED_PILOT4 == 20260926
+    fixed = summary["fixed"]
+    assert fourth[:fixed] == first[:fixed] == second[:fixed] == third[:fixed]
+    before = {s for pilot in (first, second, third) for s in drawn(pilot, PL.DRAW_W)}
+    eligible = sorted({sid("0b0b0b0b", n) for n in range(1, 131)} - before)
+    assert drawn(fourth, PL.DRAW_W) == sorted(
+        random.Random(PL.SEED_PILOT4).sample(eligible, 30)  # noqa: S311
+    )
+    assert summary["draws"][PL.DRAW_W]["eligible"] == 40
+    # 30 lane-S sites, 24 drawn by the three earlier pilots: the stratum is taken whole
+    taken = {s for pilot in (first, second, third) for s in drawn(pilot, PL.DRAW_S)}
+    assert drawn(fourth, PL.DRAW_S) == sorted({sid("0c0c0c0c", n) for n in range(1, 31)} - taken)
+    assert summary["earlier_draws_excluded"] == 114
+
+
 def test_an_earlier_line_that_is_neither_fixed_nor_one_draw_is_refused() -> None:
     mixed = {"site_id": sid("0b0b0b0b"), "strata": ["gold-standard", PL.DRAW_W]}
     with pytest.raises(R.InputError, match="neither fixed nor one draw"):

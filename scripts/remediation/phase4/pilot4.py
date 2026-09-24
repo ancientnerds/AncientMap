@@ -74,6 +74,15 @@ this pilot's, site for site and in order, and the seeded draws of all of them ar
     pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \\
         --after PILOT.jsonl --after PILOT2.jsonl --seed 20260925 --out PILOT3.jsonl
     plan4.py build --pilot PILOT3.jsonl --out PLAN4.pilot3.jsonl                   S0
+
+**Pilot 4 (2026-09-24, seed 20260926, `PILOT4.jsonl`).** Pilot 3 failed T1, T4, T7 and T8
+(`PILOT_RESULT_3.md`). The same fixed members again, every seeded stratum drawn anew excluding the
+seeded draws of pilots 1, 2 and 3 (186 sites); the thresholds and the prose errors stay pilot 1's.
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \\
+        --after PILOT.jsonl --after PILOT2.jsonl --after PILOT3.jsonl --seed 20260926 \\
+        --out PILOT4.jsonl
+    plan4.py build --pilot PILOT4.jsonl --out PLAN4.pilot4.jsonl                   S0
 """
 
 from __future__ import annotations
@@ -123,6 +132,8 @@ SEED = 20260922
 SEED_PILOT2 = 20260924
 #: Pilot 3's seed (module docstring): drawn anew again, pilots 1's and 2's draws excluded.
 SEED_PILOT3 = 20260925
+#: Pilot 4's seed (module docstring): drawn anew again, the draws of pilots 1-3 excluded.
+SEED_PILOT4 = 20260926
 EXTRACT_OVER = 40_000
 #: The design names 7 sites on Q309 'history' (entries [5] and [6]).
 Q309_SITES = 7

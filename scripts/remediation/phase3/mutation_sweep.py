@@ -17795,6 +17795,15 @@ P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4P4_VERIFY_TEST,
         "test_rule_7_states_exactly_the_name_base_v6_accepts",
     ),
+    # ── pilot 4's draw ────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: pilot 4 draws with pilot 3's seed",
+        "scripts/remediation/phase4/pilot4.py",
+        "SEED_PILOT4 = 20260926\n",
+        "SEED_PILOT4 = 20260925  # mutant\n",
+        "tests/remediation/test_phase4_pilot.py",
+        "test_pilot_4_keeps_the_fixed_members_and_excludes_all_three_earlier_pilots_draws",
+    ),
 ]
 MUTATIONS += P4_PILOT4_MUTATIONS
 
