@@ -94,7 +94,11 @@ export const RUNTIME_CACHING: RuntimeCaching = [
   // (scripts/build_globe_layers.py), so a cached copy is never stale. Before
   // the generic layer rule, which would catch these URLs first. Same cache
   // name as the offline layer download, which OfflineFetch looks up.
-  // maxEntries: four files per build, room for a few builds.
+  // The worker's precache route is registered before these rules, so with an
+  // active worker the running build's start tiers come from the precache
+  // (globeStartPrecache.ts) and this rule stores the detail tiers (the hi-res
+  // coastline lies outside /globe/). maxEntries: two files per build, room for
+  // several builds.
   {
     urlPattern: /\/data\/layers\/globe\/[^/?]+\.json(\?|$)/,
     handler: 'CacheFirst',

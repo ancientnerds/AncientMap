@@ -9,8 +9,14 @@
  * Each file goes into the cache its loader reads offline: the gray is fetched
  * through the service worker's basemap rule ('basemaps'), labels.json and the
  * layer tiers through OfflineFetch (labels.json in 'basemaps', the tiers in
- * 'vector-layers' like the layer download and the service worker's globe
- * layer rule).
+ * 'vector-layers' like the layer download).
+ *
+ * The running build's start tiers are also in the service worker's precache
+ * (pwa/globeStartPrecache.ts), which OfflineFetch reads too, so an offline
+ * start finds them even when no download stored them. isGlobeStartCached checks
+ * only what a download stored: after a layer rebuild it reports the new tiers
+ * missing, and the download that follows is answered from the precache
+ * without the network.
  */
 
 import { GLOBE_LAYER_KEYS, getGlobeLayerUrl } from '../config/vectorLayers'
