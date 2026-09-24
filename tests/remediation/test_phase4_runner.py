@@ -364,6 +364,35 @@ def _answer_all(handoff: Path, answers: dict[tuple[str, str, str], str] = ANSWER
     return len(lines)
 
 
+def test_the_select_preview_and_export_show_the_names_v6_accepts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Pilot 1's rule (7): the selector's first sentence names the site by a stored name or an
+    `also_named` name - the pinned title and item label V6 accepts for a strong 'own' verdict.
+    The preview measures, and the export hands off, exactly the prompt the stage asks with."""
+    doc = X.wiki_doc("W", X.ARTICLE, title="Stone Temple of Gozo")
+    doc = M.SourceDoc.from_dict({**doc.to_dict(), "subject_gate": X.STRONG_OWN.to_dict()})
+    site = X.plan_site("site-1", name="Ggantija South")
+    batch_dir = X.make_batch(
+        tmp_path, [X.SiteSetup(site=site, lane=M.Lane.W, sources={"W": (doc, X.ARTICLE)})]
+    )
+    X.pin_witness(batch_dir, "site-1", X.witness_answer(label="Stone Temple"))
+    (_, meta, text, pool) = SEL.site_pool(
+        batch_dir, site, B.read_lanes(batch_dir, [site])["site-1"]
+    )
+    prompt = SEL.site_selector_prompt(batch_dir, site, "W", meta, pool, text).render()
+    assert 'also_named="Stone Temple of Gozo; Stone Temple"' in prompt
+    argv = ["--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001", "--ledger", "L.jsonl"]
+    _, report, _ = _run(capsys, ["select", *argv])
+    assert report["sites"] == [
+        {"site_id": "site-1", "pool": len(pool), "prompt_chars": len(prompt)}
+    ]
+    handoff = tmp_path / "handoff"
+    _run(capsys, ["select", *argv, "--handoff-export", str(handoff)])
+    (line,) = OH.manifest(handoff)
+    assert (handoff / line["prompt_path"]).read_bytes().decode("utf-8") == prompt
+
+
 def test_select_and_translate_are_two_handoff_rounds_and_only_the_import_writes(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

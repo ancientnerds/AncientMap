@@ -318,7 +318,7 @@ def preview_select(batch_dir: Path) -> Report:
         if lane.lane not in SEL.SELECTING_LANES or site.site_id in held:
             continue
         source_id, meta, text, pool = SEL.site_pool(batch_dir, site, lane)
-        prompt = SEL.selector_prompt(site, source_id, meta, pool, text).render()
+        prompt = SEL.site_selector_prompt(batch_dir, site, source_id, meta, pool, text).render()
         rows.append({"site_id": site.site_id, "pool": len(pool), "prompt_chars": len(prompt)})
     return {"batch_id": batch_dir.name, "live": False, "sites": rows}
 

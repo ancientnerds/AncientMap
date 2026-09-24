@@ -16665,6 +16665,156 @@ P4_PILOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += P4_PILOT_MUTATIONS
 
 
+# ── pilot 1's root causes fixed (2026-09-24), and pilot 2's draw ─────────────────────────────────
+#: Pilot 1 failed T2 (a sentence about the modern village), T5 (dangling definite references) and
+#: T8 (V9 bounds the selector was never told; V6 accepting no name the gate had tied to the site):
+#: `output/remediation/phase4_runner/PILOT_RESULT_1.md`. The selector and reviewer questions carry
+#: the rules, V6 accepts the pinned title and the pinned item's English label for a strong 'own'
+#: verdict - in verify4 and, in its own code, on S3's side, which shows them to the selector.
+P4P2_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4P2_SELECT = "scripts/remediation/phase4/select_stage.py"
+P4P2_SELECT_TEST = "tests/remediation/test_phase4_select.py"
+P4P2_RUN4 = "scripts/remediation/phase4/run4.py"
+P4P2_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+
+P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── the two questions ────────────────────────────────────────────────────────────────────
+    (
+        "p4 prompts: the selector is not told the 200-1100 characters",
+        P4P2_PROMPTS,
+        '    "(6) the description is your DESC sentences after their removals, joined by spaces: '
+        'it must "\n    "be 200-1100 characters long in total;\\n"\n',
+        "    # mutant: rule (6) gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the selector's first sentence need not name the site",
+        P4P2_PROMPTS,
+        '    "(7) your first DESC sentence must name the site: its name, an alias or an also_named '
+        'name of "\n    "the site element;\\n"\n',
+        "    # mutant: rule (7) gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the selector may pick the modern village's sentence",
+        P4P2_PROMPTS,
+        '    "(8) never pick a sentence about the modern village, town or municipality (its "\n'
+        '    "administration, its population, its modern founding), even when it names the site; '
+        'if the "\n    "only sentence that names the site is such a sentence, answer ABSTAIN with '
+        'that reason;\\n"\n',
+        "    # mutant: rule (8) gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the selector may pick a dangling definite reference",
+        P4P2_PROMPTS,
+        '    "(9) every picked sentence must be understandable from your picked sentences alone: '
+        'never "\n',
+        '    "(9) every picked sentence should read well: never "  # mutant\n',
+        P4P2_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 prompts: the reviewer keeps the modern village's sentence",
+        P4P2_PROMPTS,
+        '    "DROP a sentence about the modern village, town or municipality (its administration, '
+        'its "\n    "population, its modern founding) rather than the site, even when it names the '
+        'site.\\n"\n',
+        "    # mutant: the modern-place DROP gone\n",
+        P4P2_SELECT_TEST,
+        "test_the_reviewer_question_drops_modern_place_and_dangling_sentences",
+    ),
+    (
+        "p4 prompts: the reviewer keeps a dangling definite reference",
+        P4P2_PROMPTS,
+        '    \'DROP a sentence with a definite reference ("the valley", "the mountain", '
+        '"other ...", "it") \'\n',
+        "    'DROP a sentence with a reference '  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_the_reviewer_question_drops_modern_place_and_dangling_sentences",
+    ),
+    (
+        "p4 prompts: the selector's site element hides also_named",
+        P4P2_PROMPTS,
+        '    also = "" if also_named is None else f\'also_named="{attr("; ".join(also_named))}" \'\n',
+        '    also = ""  # mutant\n',
+        P4P2_SELECT_TEST,
+        "test_the_selector_is_shown_the_names_v6_accepts_for_a_strong_own_verdict",
+    ),
+    # ── the names V6 accepts, S3's reading ─────────────────────────────────────────────────────
+    (
+        "p4 select: the pinned item's label is not a name",
+        P4P2_SELECT,
+        "        if label is not None:\n            names.append(label)\n",
+        "        if False:  # mutant\n            names.append(label)\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_is_shown_the_names_v6_accepts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 select: any verdict counts the title and the label",
+        P4P2_SELECT,
+        "    if _strong_own(meta.subject_gate):\n",
+        "    if True:  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_only_a_strong_own_verdict_counts_the_title_and_the_label",
+    ),
+    (
+        "p4 select: a place-level item is a strong own",
+        P4P2_SELECT,
+        "        and not gate.place_item\n",
+        "        and True  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_only_a_strong_own_verdict_counts_the_title_and_the_label[place-item]",
+    ),
+    (
+        "p4 select: a witness that is not the pinned answer counts",
+        P4P2_SELECT,
+        '    if meta.get("sha256_raw") != hashlib.sha256(raw).hexdigest():\n        return None\n',
+        "    if False:  # mutant\n        return None\n",
+        P4P2_SELECT_TEST,
+        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[unpinned]",
+    ),
+    (
+        "p4 select: another item's label counts",
+        P4P2_SELECT,
+        '    entity = json.loads(raw.decode("utf-8"))["entities"].get(site.wikidata_qid)\n',
+        '    entity = next(iter(json.loads(raw.decode("utf-8"))["entities"].values()))  # mutant\n',
+        P4P2_SELECT_TEST,
+        "test_a_witness_that_is_not_the_pinned_stored_item_adds_no_label[another-item]",
+    ),
+    (
+        "p4 select: also_named repeats a stored name",
+        P4P2_SELECT,
+        "    seen = {SG.fold(name) for name in (site.name, *site.aliases)}\n",
+        "    seen: set[str] = set()  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_also_named_lists_only_what_the_stored_names_do_not_already_say",
+    ),
+    (
+        "p4 select: the stage asks without the names V6 accepts",
+        P4P2_SELECT,
+        "                prompt=site_selector_prompt(batch_dir, site, source_id, meta, pool, text),\n",
+        "                prompt=selector_prompt(site, source_id, meta, pool, text, also=()),  # mutant\n",
+        P4P2_SELECT_TEST,
+        "test_the_selector_is_shown_the_names_v6_accepts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 run4: the select preview measures another prompt than the stage asks",
+        P4P2_RUN4,
+        "        prompt = SEL.site_selector_prompt(batch_dir, site, source_id, meta, pool, text)"
+        ".render()\n",
+        "        prompt = SEL.selector_prompt(site, source_id, meta, pool, text, also=()).render()"
+        "  # mutant\n",
+        P4P2_RUNNER_TEST,
+        "test_the_select_preview_and_export_show_the_names_v6_accepts",
+    ),
+]
+MUTATIONS += P4_PILOT2_MUTATIONS
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
