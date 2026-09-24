@@ -12,9 +12,14 @@
  * with its phase and message, marked `ending: 'no'`: they are the only
  * diagnosis of a failed start, and SQL_GLOBE's `failed` skips the mark, so the
  * load keeps one ending.
+ *
+ * Each ending is handled once: the effect runs again whenever the window passes
+ * through the phone gate (a resize across the phone width), and a second pass
+ * must not send the failure again - the latch would read it as closed by
+ * another ending and send a marked copy of a failure already sent.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { track, type EventProps } from '../analytics'
 import type { GlobeEndingLatch } from '../analytics/globeAbandon'
@@ -25,8 +30,10 @@ export interface ScreenEnding {
 }
 
 export function useGlobeScreenEnding(latch: GlobeEndingLatch, ending: ScreenEnding | null, gateShowing: boolean): void {
+  const handled = useRef<ScreenEnding | null>(null)
   useEffect(() => {
-    if (!ending || gateShowing) return
+    if (!ending || gateShowing || handled.current === ending) return
+    handled.current = ending
     if (latch.end(ending.name, ending.props) || ending.name !== 'globe_error') return
     track('globe_error', { ...ending.props, ending: 'no' })
   }, [latch, ending, gateShowing])
