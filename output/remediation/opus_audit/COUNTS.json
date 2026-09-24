@@ -2,16 +2,32 @@
  "inputs": {
   "RULES.md": "671ef6d68faea2cdda5046c110a3dc53dce63e8cd727b5fccc5637b985469f31",
   "INPUT.jsonl": "099c9380f252e77ca6a086a6a0b532dbfb1175b4f62817b7c15a9dfc553a6c11",
-  "VERDICTS_RAW.json": "98b88a54d5ccae5a219c88876e2338524bc90f3187333f4cc44015450fed9f57"
+  "VERDICTS_RAW.json": "98b88a54d5ccae5a219c88876e2338524bc90f3187333f4cc44015450fed9f57",
+  "KEEP_SAMPLE.json": "96da2842e2f5423026a68898d5c2ce773a3576c72b8de20f0725493361bb1053",
+  "VERDICTS_ROUND2.json": "56471faf9cb40363f281383a39e6c9a6857ce5173a725cee3c6139b330b25ea8"
  },
  "normalisation": "Unicode NFC, then every maximal run of characters for which Python's str.isspace() is true becomes one U+0020 space, then both ends are stripped; nothing else",
- "passes": {
+ "pair_rule": "A round-1 tie counts only while the p1 and the p2 verdict on the row's route are, as JSON records, the very VERDICTS_RAW.json p1 and p2 of the row it was shown; once a later round replaces either, the tie is set aside as stale, and a pair that still disagrees needs a new tie.",
+ "round_1": {
   "p1": {
    "verdicts": 934,
    "by_verdict": {
     "keep": 502,
     "revert": 401,
     "wrong-both": 31
+   },
+   "counted": 927,
+   "failed": 7,
+   "failed_by_reason": {
+    "fetch failed": 4,
+    "not fetched": 1,
+    "not found": 2
+   },
+   "quotes_by_outcome": {
+    "fetch failed": 6,
+    "found": 1658,
+    "not fetched": 2,
+    "not found": 2
    }
   },
   "p2": {
@@ -21,6 +37,19 @@
     "revert": 337,
     "undecidable": 1,
     "wrong-both": 30
+   },
+   "counted": 421,
+   "failed": 11,
+   "failed_by_reason": {
+    "fetch failed": 9,
+    "not an evidence file of this row": 1,
+    "not found": 1
+   },
+   "quotes_by_outcome": {
+    "fetch failed": 11,
+    "found": 888,
+    "not an evidence file of this row": 1,
+    "not found": 1
    }
   },
   "tie": {
@@ -29,87 +58,185 @@
     "keep": 13,
     "revert": 47,
     "wrong-both": 4
-   }
-  }
- },
- "quote_check": {
-  "p1": {
-   "checked": 934,
-   "counted": 927,
-   "failed": 7,
-   "failed_by_reason": {
-    "fetch failed": 4,
-    "not fetched": 1,
-    "not found": 2
-   }
-  },
-  "p2": {
-   "checked": 432,
-   "counted": 421,
-   "failed": 11,
-   "failed_by_reason": {
-    "fetch failed": 9,
-    "not an evidence file of this row": 1,
-    "not found": 1
-   }
-  },
-  "tie": {
-   "checked": 64,
+   },
    "counted": 60,
    "failed": 4,
    "failed_by_reason": {
     "fetch failed": 4
+   },
+   "quotes_by_outcome": {
+    "fetch failed": 7,
+    "found": 151
    }
   }
  },
- "quotes_by_outcome": {
+ "round_2": {
+  "sample": {
+   "verdicts": 60,
+   "by_verdict": {
+    "keep": 51,
+    "revert": 7,
+    "wrong-both": 2
+   },
+   "counted": 60,
+   "failed": 0,
+   "failed_by_reason": {},
+   "quotes_by_outcome": {
+    "found": 111
+   }
+  },
   "p1": {
-   "fetch failed": 6,
-   "found": 1658,
-   "not fetched": 2,
-   "not found": 2
+   "verdicts": 7,
+   "by_verdict": {
+    "keep": 3,
+    "revert": 4
+   },
+   "counted": 7,
+   "failed": 0,
+   "failed_by_reason": {},
+   "quotes_by_outcome": {
+    "found": 14
+   }
   },
   "p2": {
-   "fetch failed": 11,
-   "found": 888,
-   "not an evidence file of this row": 1,
-   "not found": 1
+   "verdicts": 11,
+   "by_verdict": {
+    "keep": 2,
+    "revert": 8,
+    "wrong-both": 1
+   },
+   "counted": 10,
+   "failed": 1,
+   "failed_by_reason": {
+    "unreadable content": 1
+   },
+   "quotes_by_outcome": {
+    "found": 22,
+    "unreadable content": 2
+   }
+  }
+ },
+ "overlay": {
+  "replaced": {
+   "p1": 7,
+   "p2": 10
+  },
+  "sample_as_p2": 60,
+  "not_counted": {
+   "sample": 0,
+   "p1": 0,
+   "p2": 1
+  },
+  "ties_set_aside": 2
+ },
+ "rule_4": {
+  "rule": "RULES.md rule 4: if more than 3 of the 60 (5 %) come back not 'keep', every pass-1 'keep' is judged a second time under rule 3",
+  "sample": 60,
+  "counted": 60,
+  "not_counted": [],
+  "by_verdict": {
+   "keep": 51,
+   "revert": 7,
+   "wrong-both": 2
+  },
+  "not_keep": 9,
+  "not_keep_keys": [
+   "phase3:075c3aee655bd9a4237b45bd4347b825c6d3616169f258f6422964bba763645d",
+   "phase3:08327e6e837d309aa7632ac2675e780896b361d46c58a2a25db30c471405cc93",
+   "phase3:357b2bf8ef9fb408e8ab743549a383d83a2c291417aa91f5d64a92cd31689228",
+   "phase3:5e2ca6ea34264860b73c194cec4e49d4541cc7b0bea8caa27bccbf4ae6dd40e5",
+   "phase3:6a1ea7d80584b6923ee2b099f873945bc98929dca080df49a1cca0724361d53e",
+   "phase3:80a1a41ff44e04f0d4043b3a42d7c75e68de46f7b9f446a5e3ed872fbd1c22b2",
+   "phase3:981ef3c4f9740447561766696e8d6316576c33845672b9c227b67f3fe1cad9d5",
+   "phase3:b635033941bb78abce2b22fd9dc0017b61255c3250633988eca33327b822e296",
+   "phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716"
+  ],
+  "threshold": 3,
+  "fired": true
+ },
+ "on_the_routes": {
+  "p1": {
+   "verdicts": 934,
+   "by_verdict": {
+    "keep": 505,
+    "revert": 399,
+    "wrong-both": 30
+   },
+   "counted": 934,
+   "failed": 0,
+   "failed_by_reason": {},
+   "quotes_by_outcome": {
+    "found": 1664
+   }
+  },
+  "p2": {
+   "verdicts": 492,
+   "by_verdict": {
+    "keep": 115,
+    "revert": 344,
+    "undecidable": 1,
+    "wrong-both": 32
+   },
+   "counted": 491,
+   "failed": 1,
+   "failed_by_reason": {
+    "not found": 1
+   },
+   "quotes_by_outcome": {
+    "found": 1007,
+    "not found": 1
+   }
   },
   "tie": {
-   "fetch failed": 7,
-   "found": 151
+   "verdicts": 62,
+   "by_verdict": {
+    "keep": 12,
+    "revert": 46,
+    "wrong-both": 4
+   },
+   "counted": 60,
+   "failed": 2,
+   "failed_by_reason": {
+    "fetch failed": 2
+   },
+   "quotes_by_outcome": {
+    "fetch failed": 2,
+    "found": 146
+   }
   }
  },
  "decisions": {
-  "keep": 513,
-  "revert": 406,
-  "rejudge": 15
+  "keep": 64,
+  "revert": 416,
+  "rejudge": 0,
+  "pending": 454
  },
  "revert_by_column": {
   "country": 6,
-  "period_start": 182,
-  "site_type": 218
+  "period_start": 186,
+  "site_type": 224
  },
  "revert_by_superseded": {
-  "false": 398,
+  "false": 408,
   "true": 8
  },
  "rejudge_by_pass": {
-  "p1": 7,
-  "p2": 11,
-  "tie": 4
+  "p1": 0,
+  "p2": 0
  },
- "rejudge_by_route_decision": {
-  "keep": 2,
-  "revert": 13
+ "pending_by_pass": {
+  "p2": 443,
+  "tie": 11
  },
  "wrong_both_proposals": 30,
  "wrong_both_disagreements": 3,
- "reversal_rows": 398,
+ "reversal_rows": 408,
  "reversal_by_column": {
   "country": 1,
-  "period_start": 182,
-  "site_type": 215
+  "period_start": 186,
+  "site_type": 221
  },
- "reversal_period_bucket_changes": 39
+ "reversal_period_bucket_changes": 42,
+ "second_judge": 443,
+ "tie_round_2": 11
 }

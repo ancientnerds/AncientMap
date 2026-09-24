@@ -1,0 +1,1229 @@
+{
+ "sample": {
+  "phase3:537d4c9102745eb368a38ee0731154eb63158cf0e1dac1142f4ee0b986d94386": {
+   "change_key": "phase3:537d4c9102745eb368a38ee0731154eb63158cf0e1dac1142f4ee0b986d94386",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Paracas Candelabra, a geoglyph. The only dating in the evidence puts it in the Paracas period: pottery found nearby was radiocarbon-dated to 200 BCE, and Wikidata's P571 is -0400 at century precision. Both are BC. The stored 1 falls in the '1 - 500 AD' bucket and nothing supports it. The written -200 matches the stated radiocarbon date and sits in the '500 BC - 1 AD' bucket, so the correction was warranted and the value is right.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0182/evidence/9989d873-9183-41e1-aeda-d543deb038ce%2Fenwiki.txt",
+     "quote": "Pottery found nearby has been radio carbon dated to 200 BCE, the time of the Paracas culture."
+    }
+   ]
+  },
+  "phase3:3df9e1df198196fd6f78058b51302d39029b067184eff8986ab675410ac90fbe": {
+   "change_key": "phase3:3df9e1df198196fd6f78058b51302d39029b067184eff8986ab675410ac90fbe",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Marden Henge is a Neolithic henge enclosure, not a settlement. Wikipedia and Wikidata both describe it as a henge. 'Henge' is a canonical type (a fixed point of normalize_site_type) and is the exact type of this monument. The old 'City/town/settlement' was wrong.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0163/evidence/ccf92317-4881-4850-a573-4ccd961772d5%2Fenwiki.txt",
+     "quote": "Marden Henge (also known as Hatfield Earthworks) is the largest Neolithic henge enclosure discovered to date in the United Kingdom."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0163/evidence/ccf92317-4881-4850-a573-4ccd961772d5%2Fwikidata_entity.txt",
+     "quote": "Neolithic henge monument"
+    }
+   ]
+  },
+  "phase3:473833f5a75106d9693b474958b3c3b5d48214486e4421df2048cb5a728f6fc0": {
+   "change_key": "phase3:473833f5a75106d9693b474958b3c3b5d48214486e4421df2048cb5a728f6fc0",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Tiddis (Castellum Tidditanorum) is an ancient Numidian and Roman town with a forum, streets, baths, cisterns and houses. Wikidata calls it a Roman city. The protohistoric bazinas and funerary circles are only in its surrounding cemeteries and do not make the site a 'Megalithic stones' site. 'City/town/settlement' is canonical and right; the old value was wrong.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0020/evidence/b30f9252-e3c4-4d53-a13e-7a10b1c6a501%2Fwikidata_entity.txt",
+     "quote": "a Roman city located in the Constantine Province in Algeria."
+    },
+    {
+     "source": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Tiddis&format=json",
+     "quote": "was an ancient settlement in Numidia, in what is now Constantine Province in eastern Algeria."
+    },
+    {
+     "source": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Tiddis&format=json",
+     "quote": "During the Roman imperial period the steep eastern slope was densely occupied, with streets, terraces and buildings adapted to the terrain."
+    }
+   ]
+  },
+  "phase3:5b182e1c22ec16432efd4f5a08aae5a2a134e6738fc9aab8da514c481fb91a70": {
+   "change_key": "phase3:5b182e1c22ec16432efd4f5a08aae5a2a134e6738fc9aab8da514c481fb91a70",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Tintignac is a Gallic and Gallo-Roman sanctuary site. The evidence mentions no megaliths, so the old 'Megalithic structures' was wrong. The written 'Archaeological site' is canonical and true of this site. 'Sanctuary' would be finer, but a correct generic value is not an error, and it replaced a wrong one.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0193/evidence/e6bfc8ce-6dd4-43b8-9e58-3a56b6ee7163%2Fenwiki.txt",
+     "quote": "It is primarily known for the archaeological remains of a sanctuary where Gallic and Gallo-Roman artefacts have been found, including seven carnyces (war trumpets) and ornamented helmets."
+    }
+   ]
+  },
+  "phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716": {
+   "change_key": "phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The finder's only reason is that Wikipedia and Wikidata call Marayniyoq 'an archaeological site'. That is the listed false alarm: a less specific source label does not refute a finer stored type. The excavation literature calls it 'un establecimiento wari', a Wari settlement or establishment specialised in grain processing and chicha production. So the old 'City/town/settlement' is at least as well supported as the generic 'Archaeological site', and the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0082/evidence/fd79f148-d931-42c7-8883-41732a93d209%2Fenwiki.txt",
+     "quote": "is an archaeological site in the region of Ayacucho in Peru."
+    },
+    {
+     "source": "https://revistas.pucp.edu.pe/index.php/boletindearqueologia/es/article/view/2242",
+     "quote": "Marayniyoq, un establecimiento wari en el valle de Ayacucho"
+    },
+    {
+     "source": "https://revistas.pucp.edu.pe/index.php/boletindearqueologia/es/article/view/2242",
+     "quote": "un centro especializado wari del valle de Ayacucho"
+    }
+   ]
+  },
+  "phase3:fc69de6e7a98e9fd78201f55a03bb52040aa5aafaeb2dd7541ebf4bddb0aafd6": {
+   "change_key": "phase3:fc69de6e7a98e9fd78201f55a03bb52040aa5aafaeb2dd7541ebf4bddb0aafd6",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Aguada Fénix is a monumental Preclassic Maya ceremonial platform complex. The evidence says outright that it had no residential sections, so the old 'City/town/settlement' is contradicted by the evidence rather than just less specific. The written 'Archaeological site' is canonical and true. A finer ceremonial type would be possible, but the written value is not wrong.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0001/evidence/e78d7b42-77f0-4191-91a4-1415fb7bd961%2Fenwiki.txt",
+     "quote": "This conjecture is supported by the fact that the temple complex had no residential sections."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0001/evidence/e78d7b42-77f0-4191-91a4-1415fb7bd961%2Fenwiki.txt",
+     "quote": "is described as the oldest and the largest known Mayan ceremonial site."
+    }
+   ]
+  },
+  "phase3:3de2e29996117a83c03f67678064159a79b0953efd9cf4824fa0116318df17ec": {
+   "change_key": "phase3:3de2e29996117a83c03f67678064159a79b0953efd9cf4824fa0116318df17ec",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Keskese is a pre-Aksumite (D'mt) stelae site. The only explicit date in the evidence is 'around 500 BCE', which Spanish Wikipedia repeats. Spanish Wikipedia also calls it a first-millennium-BC ritual centre. Nothing supports the stored -1500 (Bronze Age, '1500 - 500 BC' bucket). The written -500 follows the one attested date.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0281/evidence/f292ac8c-041c-4740-906c-af202af10489%2Fenwiki.txt",
+     "quote": "Dating from around 500 BCE, it is renowned for its ancient steles."
+    }
+   ]
+  },
+  "phase3:6ac35e8ec03faba5af664d8fef8978184ce124a1123bb8cab5dae64de0ba4f04": {
+   "change_key": "phase3:6ac35e8ec03faba5af664d8fef8978184ce124a1123bb8cab5dae64de0ba4f04",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The record is the island of Samsø as a whole: 114 km2 with 18 villages and hamlets, plus towns such as Tranebjerg and Nordby. It is not one city, town or settlement. Both Wikipedia and Wikidata describe the entity as an island. 'Natural feature' is canonical and describes this entity correctly; the old 'City/town/settlement' did not.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0207/evidence/49835383-20b8-44e0-9bf1-9e06cf2ecbb1%2Fenwiki.txt",
+     "quote": "is a Danish island in the Kattegat 15 kilometers (9.3 mi) off the Jutland Peninsula."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0207/evidence/49835383-20b8-44e0-9bf1-9e06cf2ecbb1%2Fwikidata_entity.txt",
+     "quote": "island in Denmark"
+    }
+   ]
+  },
+  "phase3:7d70c1dff72c0def93ea7f70ae0ed56b4867a9214082f50afba305cbd6f54f0d": {
+   "change_key": "phase3:7d70c1dff72c0def93ea7f70ae0ed56b4867a9214082f50afba305cbd6f54f0d",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The Temple of Apollo Patroos is a single small temple, with a tiny adjoining shrine, on the west side of the Athenian Agora. It is not a temple complex. 'Temple' is canonical and exact; 'Temple complex' overstated it.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0237/evidence/0b2dbda6-0bd0-4e07-89e8-bbe4792cdfcf%2Fenwiki.txt",
+     "quote": "is a small ruined temple on the west side of the Ancient Agora of Athens."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0237/evidence/0b2dbda6-0bd0-4e07-89e8-bbe4792cdfcf%2Fwikidata_entity.txt",
+     "quote": "temple in the Ancient Agora of Athens"
+    }
+   ]
+  },
+  "phase3:357b2bf8ef9fb408e8ab743549a383d83a2c291417aa91f5d64a92cd31689228": {
+   "change_key": "phase3:357b2bf8ef9fb408e8ab743549a383d83a2c291417aa91f5d64a92cd31689228",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The stored 'Earthwork' was not wrong. Wikipedia itself hedges ('enclosure or hill fort'). The Exmoor HER summary describes Roborough Castle as a univallate hillslope enclosure of about 0.4 ha, a probable Iron Age settlement on a gentle slope with an extremely weak downhill bank. It lists HILLSLOPE ENCLOSURE alongside UNIVALLATE HILLFORT. 'Fortress/citadel' overstates such a site, and the project's normaliser maps 'hillfort' to 'Fort', not 'Fortress/citadel'. The old value is at least as well supported, so the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0135/evidence/91d662b0-f64e-4b15-81c6-bb5a05a1796e%2Fenwiki.txt",
+     "quote": "Roborough Castle is an Iron Age enclosure or hill fort situated close to Lynton in Devon, England."
+    },
+    {
+     "source": "https://www.exmoorher.co.uk/monument/MDE1246",
+     "quote": "Roborough Castle is a univallate hillslope enclosure, probably of Iron Age date, on a gentle north facing slope."
+    },
+    {
+     "source": "https://www.exmoorher.co.uk/monument/MDE1246",
+     "quote": "HILLSLOPE ENCLOSURE (Iron Age - 800 BC to 42 AD)"
+    }
+   ]
+  },
+  "phase3:075c3aee655bd9a4237b45bd4347b825c6d3616169f258f6422964bba763645d": {
+   "change_key": "phase3:075c3aee655bd9a4237b45bd4347b825c6d3616169f258f6422964bba763645d",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The finder's evidence was a disambiguation line and Wikidata's generic label 'archaeological site'. The finder's reason is exactly the listed false alarm: a less specific source label does not refute a finer stored type. Nothing in the evidence shows that Inka Raqay (an Inca ruin complex near Sipe Sipe, Cochabamba) was not a settlement. The old 'City/town/settlement' is not refuted and is at least as well supported, so the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0098/evidence/5d0819e0-a352-4ea1-9d64-067da2e428f9%2Fenwiki.txt",
+     "quote": "Inka Raqay, Bolivia, an archaeological site in the Cochabamba Department, Bolivia"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0098/evidence/5d0819e0-a352-4ea1-9d64-067da2e428f9%2Fwikidata_entity.txt",
+     "quote": "archaeological site in the Cochabamba Department, Bolivia"
+    }
+   ]
+  },
+  "phase3:cd7c0a05f4d335bc1b748f730dc7d7050e21ea428f7bf1317e883b93d2d29bd2": {
+   "change_key": "phase3:cd7c0a05f4d335bc1b748f730dc7d7050e21ea428f7bf1317e883b93d2d29bd2",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The King's Grave at Kivik is a Nordic Bronze Age cairn and cist. It is dated to circa the 15th century BC, and radiocarbon dates put the burials between approximately 1400 and 800 BCE. The stored -3000 is Neolithic ('3000 - 1500 BC' bucket) and is contradicted. The written -1400 matches the attested start and falls in the '1500 - 500 BC' bucket.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0290/evidence/d7c688fd-ca27-4a8b-91fd-affbcc948eee%2Fenwiki.txt",
+     "quote": "The site is what remains of an unusually grand Nordic Bronze Age double burial dating from circa the 15th century BC."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0290/evidence/d7c688fd-ca27-4a8b-91fd-affbcc948eee%2Fenwiki.txt",
+     "quote": "Radiocarbon dating showed that the burials took place during at least three separate periods between approximately 1400 and 800 BCE."
+    }
+   ]
+  },
+  "phase3:a533918aea4f4d2e9466940fbb824fd8aef3e5ce86e674ea3b9cc016132dfce9": {
+   "change_key": "phase3:a533918aea4f4d2e9466940fbb824fd8aef3e5ce86e674ea3b9cc016132dfce9",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The site's coordinates (45.7386, 7.3224) match Wikidata's Roman Theatre of Aosta (45.7384, 7.3223), which is described as an ancient Roman theatre or odeon. 'Megalithic stones' was wrong. 'Theatre' is canonical and exact.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0029/evidence/2a9a96d5-f85c-4ff5-b2ef-1e92c5c9b6ca%2Fwikidata_entity.txt",
+     "quote": "ancient Roman theatre or odeon in Aosta, Italy"
+    }
+   ]
+  },
+  "phase3:08361ac5c9c4d0af7d3eb6077202217ec4db57ade2cbad7acd2c3d101e74ad57": {
+   "change_key": "phase3:08361ac5c9c4d0af7d3eb6077202217ec4db57ade2cbad7acd2c3d101e74ad57",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The Torre dels Escipions is a Roman funerary tower, a tower-tomb with a burial chamber. Wikidata describes it as a funerary monument. Its function is a tomb: the tower shape is only its form, and the 'Minaret/tower' category belongs to the religious group. 'Tomb' is canonical (the normaliser also maps mausoleum to Tomb) and fits this monument better than the old value.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0288/evidence/3d576cfb-2228-45a3-a05e-8433b80d88bc%2Fenwiki.txt",
+     "quote": "is a funerary tower built by the Romans on the outskirts of Tarraco"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0288/evidence/3d576cfb-2228-45a3-a05e-8433b80d88bc%2Fenwiki.txt",
+     "quote": "there is a burial chamber that housed the furnishings of the deceased"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0288/evidence/3d576cfb-2228-45a3-a05e-8433b80d88bc%2Fwikidata_entity.txt",
+     "quote": "funerary monument"
+    }
+   ]
+  },
+  "phase3:852be72618673947081f31a7b79a983c6c6b3bc38884591e80c679a39c854f9d": {
+   "change_key": "phase3:852be72618673947081f31a7b79a983c6c6b3bc38884591e80c679a39c854f9d",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Neanderthals built the stalagmite ring structures in Bruniquel Cave. Uranium-series dating puts them at about 176,500 years ago (176.5 +/- 2.1 ka, 2 sigma). The stored -500 is absurdly late. The written -176500 is in the correct '< 4500 BC' bucket. Its roughly 2,000-year offset from converting years-ago into a BC year lies inside the stated dating uncertainty, so it is not an error for a sort key.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0157/evidence/9d58f665-8cc3-4438-9dc5-99885deb90d0%2Fenwiki.txt",
+     "quote": "The constructions have been dated to approximately 176,500 years ago."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0157/evidence/9d58f665-8cc3-4438-9dc5-99885deb90d0%2Fenwiki.txt",
+     "quote": "The artificial ring structures made of broken stalagmites now have been dated by uranium series dating as 176.5"
+    }
+   ]
+  },
+  "phase3:dace505d5a95351920e385daca51c55aabc55dc63aab46af2dfce7bad358abc8": {
+   "change_key": "phase3:dace505d5a95351920e385daca51c55aabc55dc63aab46af2dfce7bad358abc8",
+   "verdict": "keep",
+   "right_value": "Bath",
+   "reason": "This is a Roman bath complex: the rooms include a tepidarium, frigidarium and caldarium, plus a latrine and changing rooms. Wikidata describes it as 'Ancient Roman baths'. Nothing in the evidence supports 'Megalithic structures'. 'Bath' is canonical and a fixed point of normalize_site_type.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0147/evidence/87b7df7d-023f-43ce-b644-4c12394a8f9f%2Fenwiki.txt",
+     "quote": "These represent the full repertoire seen in other Roman baths, including the tepidarium, frigidarium and caldarium."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0147/evidence/87b7df7d-023f-43ce-b644-4c12394a8f9f%2Fenwiki.txt",
+     "quote": "There is also a latrine and a corridor connecting small rooms which are usually interpreted to be changing or bedrooms."
+    }
+   ]
+  },
+  "phase3:36862c8861aa36c21dbdceedddd0a808974915f41020b8d8037e90709a0ca42a": {
+   "change_key": "phase3:36862c8861aa36c21dbdceedddd0a808974915f41020b8d8037e90709a0ca42a",
+   "verdict": "keep",
+   "right_value": "Tomb",
+   "reasoning_note": "",
+   "reason": "The site is one Bronze Age shaft grave: a single burial in a stone-lined shaft, and Wikidata P31 is shaft tomb (Q1969077). It is not a necropolis or a complex of tombs, so the stored 'Necropolis/tombs complex' misdescribes it. 'Tomb' is canonical and exact.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0128/evidence/28d08d27-d959-42d0-922c-8e91c795d432%2Fenwiki.txt",
+     "quote": "The Griffin Warrior Tomb is a Bronze Age shaft tomb dating to around 1450 BC, near the ancient city of Pylos in Greece."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0128/evidence/28d08d27-d959-42d0-922c-8e91c795d432%2Fwikidata_entity.txt",
+     "quote": "Bronze age early mycenean tomb in Pylos, Greece"
+    }
+   ]
+  },
+  "phase3:85162510f31f72c35615bfa6ee814c61298d4d6e8c6e79e19358fafaa2934429": {
+   "change_key": "phase3:85162510f31f72c35615bfa6ee814c61298d4d6e8c6e79e19358fafaa2934429",
+   "verdict": "keep",
+   "right_value": "Ruin",
+   "reason": "The site is the ruin of a Roman fish-salting factory, an industrial installation, not a city, town or settlement. The old type is contradicted by what the site is, not merely by a coarser source. The catalogue has no industrial type, so 'Ruin' (canonical, fixed point) fits. Wikidata P31 is Q1922209 with a Roman-period qualifier.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0085/evidence/e578e7e9-a9ec-48d0-9f9f-64f3f1b64a5e%2Fwikidata_entity.txt",
+     "quote": "ruins of a Roman fish salting factory in Spain"
+    }
+   ]
+  },
+  "phase3:93c9a197bce92032bbc74bd18f8d4e0ddb0d131fe81d56f75c96b0437816b5e1": {
+   "change_key": "phase3:93c9a197bce92032bbc74bd18f8d4e0ddb0d131fe81d56f75c96b0437816b5e1",
+   "verdict": "keep",
+   "right_value": "City/town/settlement",
+   "reason": "Kyaneai (Cyaneae) is an ancient Lycian city; Wikidata P31 is ancient city. It is not a group of megalithic stones. 'City/town/settlement' is canonical and matches.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0011/evidence/ac628dfb-ee59-4329-84dd-d5358e0adeb3%2Fwikidata_entity.txt",
+     "quote": "ancient city of Lycia in modern-day Turkey"
+    }
+   ]
+  },
+  "phase3:0dcf9f3a319441dc13427d1b05ed1843cc45bf62eed5a05cd303da7caaac4f1f": {
+   "change_key": "phase3:0dcf9f3a319441dc13427d1b05ed1843cc45bf62eed5a05cd303da7caaac4f1f",
+   "verdict": "keep",
+   "right_value": "-200",
+   "reason": "Ratae is the native (Brittonic) name of a pre-Roman settlement at the same spot, which the Roman town grew out of. Occupation of this site therefore starts in the 2nd or 1st century BC. Both ends of that range fall in the bucket 500 BC - 1 AD, so -200 is a valid round era sort key. The stored 1 sits in the 1-500 AD bucket, which is wrong for the site's start.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0322/evidence/cc8b3804-e27e-4dc3-b6bf-5ffeeaef0018%2Fenwiki.txt",
+     "quote": "The native settlement encountered by the Romans at the site seems to have developed in the 2nd or 1st centuries BC."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0322/evidence/cc8b3804-e27e-4dc3-b6bf-5ffeeaef0018%2Fenwiki.txt",
+     "quote": "suggesting the site was an Iron Age oppidum."
+    }
+   ]
+  },
+  "phase3:7c22fe72898e4c46a49adda397a94c89ce393900c8d3494d9e761f7d0ed3fa20": {
+   "change_key": "phase3:7c22fe72898e4c46a49adda397a94c89ce393900c8d3494d9e761f7d0ed3fa20",
+   "verdict": "keep",
+   "right_value": "-500",
+   "reason": "The acropolis belongs to the city of Rhodes, founded by synoecism in 408 BC, and the article dates it from the 5th century BC. -500 and -408 fall in the same bucket (500 BC - 1 AD), so -500 is an acceptable round era value. The stored -1500 put the site in the 1500-500 BC bucket, which nothing supports.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0219/evidence/2c9bdc10-4f98-4737-bab7-fc73822d584a%2Fenwiki.txt",
+     "quote": "is the acropolis, or upper town, of ancient Rhodes dating from the 5th century BC and located 3 kilometers SW from the centre of the modern city."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0219/evidence/2c9bdc10-4f98-4737-bab7-fc73822d584a%2Fenwiki.txt",
+     "quote": "In 408 BC, towards the end of the Peloponnesian War, the three cities on the island, Lindos, Kameiros and Ialysos, combined in a synoecism, building a new city as the federal capital in the Ialysia region of the island."
+    }
+   ]
+  },
+  "phase3:a8c77beb9f7c1b06643e56783278fb3f1a212a295a44fcc97c167ffb773055e3": {
+   "change_key": "phase3:a8c77beb9f7c1b06643e56783278fb3f1a212a295a44fcc97c167ffb773055e3",
+   "verdict": "keep",
+   "right_value": "-49000",
+   "reason": "The earliest dated habitation of the Warratyi rock shelter is 49,000 years ago. The stored -500 (bucket 500 BC - 1 AD) is wrong by tens of millennia. -49000 is a close sort key and falls in the correct bucket, < 4500 BC.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0262/evidence/a4f216bd-ef7d-4764-aa03-c88b3d5a588e%2Fenwiki.txt",
+     "quote": "This revealed that the shelter had been used in a number of phases over tens of thousands of years, with the earliest evidence of habitation 49,000 years ago."
+    }
+   ]
+  },
+  "phase3:f3b8ad750b795da66abba4aa225464bbe156c305ecac8b3e034fca7d61254c12": {
+   "change_key": "phase3:f3b8ad750b795da66abba4aa225464bbe156c305ecac8b3e034fca7d61254c12",
+   "verdict": "keep",
+   "right_value": "Amphitheatre",
+   "reason": "The site is a Roman amphitheatre, which 'Megalithic structures' plainly misdescribes. 'Amphitheatre' is canonical and exact.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0229/evidence/f4b7cc8f-4508-4ebe-adc4-881fdd374e94%2Fenwiki.txt",
+     "quote": "Chester Amphitheatre is a Roman amphitheatre in Chester, Cheshire."
+    }
+   ]
+  },
+  "phase3:aeb1320ae172d243e9c0f3469165e7a0818b7236c78fd56a1dbad6941e3eae3e": {
+   "change_key": "phase3:aeb1320ae172d243e9c0f3469165e7a0818b7236c78fd56a1dbad6941e3eae3e",
+   "verdict": "keep",
+   "right_value": "Archaeological site",
+   "reason": "Huaca Casa Rosada is a single square adobe and rammed-earth platform, about 36 m a side, on a 5,300 m2 plot, and its function is unknown. It is not a city, town or settlement, so the old type is refuted by what the structure is, not merely by a coarser source. With the function unknown, 'Archaeological site' (canonical) is a correct value.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0282/evidence/d765c593-eb36-4978-b73f-534333b85bda%2Fenwiki.txt",
+     "quote": "The archaeological site consists of a square-shaped structure of approximately 36 meters on each side and around 3 to 4 meters high, formed by rammed earth and adobe to build a platform."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0282/evidence/d765c593-eb36-4978-b73f-534333b85bda%2Fenwiki.txt",
+     "quote": "Huaca Casa Rosada is an archaeological site located in San Miguel District, in Lima, Peru, which occupies a total of 5300 square meters in the current urban area."
+    }
+   ]
+  },
+  "phase3:143aca6c704a12c726da1249c2293bcde207b4fa25810ab4ffc93d789786cd57": {
+   "change_key": "phase3:143aca6c704a12c726da1249c2293bcde207b4fa25810ab4ffc93d789786cd57",
+   "verdict": "keep",
+   "right_value": "Theatre",
+   "reason": "The site is the Roman theatre, with a stage, at Verulamium, not megalithic stones. 'Theatre' is canonical and a fixed point.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0050/evidence/1dd3a790-bf81-49e2-b516-dcc04a14328f%2Fenwiki.txt",
+     "quote": "being a theatre with a stage rather than an amphitheatre."
+    }
+   ]
+  },
+  "phase3:0ff038d67dfc56ccbfe6d91b80a0fa946fdcefb5bd94c24099f2633c3a30ba39": {
+   "change_key": "phase3:0ff038d67dfc56ccbfe6d91b80a0fa946fdcefb5bd94c24099f2633c3a30ba39",
+   "verdict": "keep",
+   "right_value": "-3000",
+   "reason": "The article's only date is 'circa 3000 BC', and the excavators say the Neolithic traces are faint while the substantial remains start at the beginning of the Bronze Age, around 3000 BC. So -3000 encodes the securely attested start. The stored -4500 (the start of the Final Neolithic) is about 1,500 years earlier than anything attested for this site. Caveats: the finder and reviewer both got the buckets wrong (-4500 is in 4500-3000 BC, not < 4500 BC). The true start sits right at the 3000 BC boundary between the two buckets. On balance -3000 is better supported than -4500.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0151/evidence/e7b1d5cc-4481-4f5e-a1b6-d759ce1bd666%2Fenwiki.txt",
+     "quote": "It appears to have been first settled in the Final Neolithic, circa 3000 BC."
+    },
+    {
+     "source": "https://www.iihsa.ie/projects/the-priniatikos-pyrgos-project",
+     "quote": "Our excavations revealed some faint traces of Neolithic activity, but more substantial remains come from the beginning of the Bronze Age"
+    }
+   ]
+  },
+  "phase3:eba1ac83dfbd30bfc5d7c13a0d473218ef757560bc52e730bfecedec801635c1": {
+   "change_key": "phase3:eba1ac83dfbd30bfc5d7c13a0d473218ef757560bc52e730bfecedec801635c1",
+   "verdict": "keep",
+   "right_value": "Settlement",
+   "reason": "Asseria was a Liburnian tribal centre ('hillfort settlement') that became a Roman municipium, with a forum, basilica, walls, triumphal arch and aqueduct. It is a walled town, not a fortress or citadel. Both sources call it a settlement. 'Settlement' is canonical and fits; 'City/town/settlement' would also fit, but 'Settlement' is not wrong. The old type is a different category, not a finer one, so the coarser-source rule does not protect it.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0030/evidence/3d5420dd-9557-4c54-89a8-a4a8d84ea0b6%2Fwikidata_entity.txt",
+     "quote": "ancient hillfort settlement in Croatia"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0030/evidence/3d5420dd-9557-4c54-89a8-a4a8d84ea0b6%2Fenwiki.txt",
+     "quote": "It was probably granted municipium status under Claudius and enrolled in the tribus Claudia."
+    }
+   ]
+  },
+  "phase3:4fb244c325e23d8aae85104219e3f26393bff7bb1f20ace946309404c257115b": {
+   "change_key": "phase3:4fb244c325e23d8aae85104219e3f26393bff7bb1f20ace946309404c257115b",
+   "verdict": "keep",
+   "right_value": "-4000",
+   "reason": "The site is a Neolithic dolmen, and the Neolithic in Wales begins about 4000 BC. The stored -5000 is in the < 4500 BC bucket, which is Mesolithic for Britain, so it is impossible for a Neolithic tomb. -4000 is the round era value for the start of the Neolithic and falls in the 4500-3000 BC bucket, where Early and Middle Neolithic chambered tombs belong.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0120/evidence/e77b1f25-4675-472d-b63d-ff76fae4c08d%2Fenwiki.txt",
+     "quote": "Ty Mawr Burial Chamber is a Neolithic dolmen located northeast of the town Llanfairpwllgwyngyll in Anglesey, Wales."
+    },
+    {
+     "source": "https://en.wikipedia.org/wiki/Prehistoric_Wales",
+     "quote": "The earliest farming communities are now believed to date from about 4000 BC, marking the beginning of the"
+    }
+   ]
+  },
+  "phase3:ed335c3ee264c41c15961a0aba3f66b7dbfcb894e715ee5250f9a024a7118763": {
+   "change_key": "phase3:ed335c3ee264c41c15961a0aba3f66b7dbfcb894e715ee5250f9a024a7118763",
+   "verdict": "keep",
+   "right_value": "-480",
+   "reason": "The site is the Bull of the Corcyreans itself, a votive monument whose base survives at Delphi. It was dedicated around 480 BC. That is the construction date of this monument, not a person's dates and not the text's terminus. The stored -1500 matches no part of this monument.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0144/evidence/563693f3-5fa9-485d-940f-66f26210a9f4%2Fenwiki.txt",
+     "quote": "one sees the base of the bull that the Corcyraeans dedicated at about 480 B.C., in order to commemorate an exceptionally good catch of tuna fish."
+    }
+   ]
+  },
+  "phase3:387d70b75eda7281bba0610835d52a98b92b069eddc671f807faf06b6c3cb24b": {
+   "change_key": "phase3:387d70b75eda7281bba0610835d52a98b92b069eddc671f807faf06b6c3cb24b",
+   "verdict": "keep",
+   "right_value": "-100",
+   "reason": "The Iron Age hillfort is dated by its pottery to about 100 BC. The stored -3000 (bucket 3000-1500 BC) is unsupported. -100 falls in the correct bucket, 500 BC - 1 AD.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0289/evidence/59aaf6d8-4d0d-424b-bfba-cadddf848c1c%2Fenwiki.txt",
+     "quote": "King John's Hill is a small multivallate hillfort, a fort with multiple defensive rings, and has been dated on ceramic evidence to approximately 100 BC."
+    }
+   ]
+  },
+  "phase3:08327e6e837d309aa7632ac2675e780896b361d46c58a2a25db30c471405cc93": {
+   "change_key": "phase3:08327e6e837d309aa7632ac2675e780896b361d46c58a2a25db30c471405cc93",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The evidence puts the cromlech's construction in the 8th-6th centuries BC, so -800 is the more precise year. But the stored -1500 and the written -800 fall in the same bucket: categorize_period gives '1500 - 500 BC' for both. The finder's bucket arithmetic was wrong; it put -800 in '500 BC - 1 AD'. Under the first entry in FALSE_ALARMS (a round era value on its own is not an error; only a value from another bucket is), the old bucket-floor value was not an error. So this is a same-bucket move, not a correction, and the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0299/evidence/8230ee02-ce60-4b34-b0cd-3beca70274fb%2Fenwiki.txt",
+     "quote": "These date the construction of the cromlech to the second phase of the Early Iron Age"
+    }
+   ]
+  },
+  "phase3:cc8d02bc8c7dd05a10d06e1e6d775a009abe3e61a30bc415cf47322aa358be68": {
+   "change_key": "phase3:cc8d02bc8c7dd05a10d06e1e6d775a009abe3e61a30bc415cf47322aa358be68",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Cavustepe/Sardurihinilli is an Urartian fortress (Cavustepe Kalesi) with a citadel, a palace and a temple inside its fortification walls. 'Megalithic stones' names a different kind of thing. 'Fortress' is a canonical type and fits the site.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0064/evidence/1c57a5dc-3c82-4bea-b749-ca00c6f357b7%2Fenwiki.txt",
+     "quote": "is an ancient Urartian fortified site located on a ridge on the northeastern edge of the village of"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0064/evidence/1c57a5dc-3c82-4bea-b749-ca00c6f357b7%2Fenwiki.txt",
+     "quote": "There are upper and lower sections of the fortress in which the Temple of Khaldi or Irmushini"
+    }
+   ]
+  },
+  "phase3:8f150bf80f485f50cf6f5ddf9c8410dd46811d888b34b97a148aab5d0a2f7a6d": {
+   "change_key": "phase3:8f150bf80f485f50cf6f5ddf9c8410dd46811d888b34b97a148aab5d0a2f7a6d",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The site's first vestiges date to 3000-2500 BC (Final Preceramic). -3000 falls in the '3000 - 1500 BC' bucket. The stored -4500 falls in '4500 - 3000 BC', a different bucket that nothing supports. The written value is the attested start.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0102/evidence/df70e98f-a1d1-4998-966a-d9a4ee2a945f%2Fenwiki.txt",
+     "quote": "Its first vestiges date from 3000 to 2500 years B.C. (Final Preceramic)"
+    }
+   ]
+  },
+  "phase3:deaac272e9743f698cbabfc35de08085a4ef1bad832909948f8b4c8008712194": {
+   "change_key": "phase3:deaac272e9743f698cbabfc35de08085a4ef1bad832909948f8b4c8008712194",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Laugerie-Basse is an Upper Paleolithic (Magdalenian) rock shelter, occupied from about 17,000 BP (about 15,000 BC). -15000 falls in '< 4500 BC'. The stored -500 ('500 BC - 1 AD') is plainly the wrong bucket.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0197/evidence/588e9b03-5d4a-44cd-a6f4-f1de7c8ff3aa%2Fenwiki.txt",
+     "quote": "Laugerie-Basse is an important Upper Paleolithic archaeological site"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0197/evidence/588e9b03-5d4a-44cd-a6f4-f1de7c8ff3aa%2Fenwiki.txt",
+     "quote": "it had been inhabited during the entire Magdalenian and into the Neolithic which corresponds to the time segment from 17,000 until 7,000 years BP"
+    }
+   ]
+  },
+  "phase3:5ab027ca54247d343f05482700efb713cf271ce0dec76a1e6fec347afb8a7898": {
+   "change_key": "phase3:5ab027ca54247d343f05482700efb713cf271ce0dec76a1e6fec347afb8a7898",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The Stabian Baths are Roman public baths in Pompeii. Wikidata P31 lists thermae and Roman bath. 'Bath' is canonical and exact, and 'Megalithic structures' is wrong in kind.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0256/evidence/b33b1575-195d-4c86-b927-cd5804b41528%2Fwikidata_entity.txt",
+     "quote": "public baths at Pompeii located at the intersection of the Via Stabiana and the Via dell'Abbondanza."
+    }
+   ]
+  },
+  "phase3:52c672c33b3887716baebfdf94ca55d769b67c9004246b37f35190df49aa849e": {
+   "change_key": "phase3:52c672c33b3887716baebfdf94ca55d769b67c9004246b37f35190df49aa849e",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Viracochapampa is a Wari (Middle Horizon) administrative centre occupied in the 7th-8th centuries AD. 601 falls in '500 - 1000 AD'. The stored 1 ('1 - 500 AD') is a different bucket with no support.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0177/evidence/28579aa8-dab5-444d-9ee0-61c95cd1c073%2Fenwiki.txt",
+     "quote": "It was one of the administrative centers of the Wari culture."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0177/evidence/28579aa8-dab5-444d-9ee0-61c95cd1c073%2Fenwiki.txt",
+     "quote": "These correspond to the 7th and 8th centuries of our era."
+    }
+   ]
+  },
+  "phase3:0387926e0df1ce3352bd6bd3eff231a9d6d366224d986ff6d44b40df7a583451": {
+   "change_key": "phase3:0387926e0df1ce3352bd6bd3eff231a9d6d366224d986ff6d44b40df7a583451",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "This is a Roman theatre (Wikidata P31 Q19757, ancient Roman theatre). 'Theatre' is canonical and exact, and 'Megalithic structures' is wrong in kind.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0122/evidence/068a88b3-505e-4998-add2-6b985b255371%2Fenwiki.txt",
+     "quote": "is a Roman theatre in Lyon, France."
+    }
+   ]
+  },
+  "phase3:b635033941bb78abce2b22fd9dc0017b61255c3250633988eca33327b822e296": {
+   "change_key": "phase3:b635033941bb78abce2b22fd9dc0017b61255c3250633988eca33327b822e296",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The finder's only ground is that the evidence calls the site 'an archaeological site'. That is the coarser-source false alarm: 'archaeological site' does not refute a finer stored type. Nothing in the evidence contradicts 'City/town/settlement'. A regional report (Correo, 2015, via Wayback) on Huanacaure in the same Chinchao district describes it as an Inca and pre-Inca settlement. I could not confirm it is the same site: that article gives no coordinates. So the old value is at least as well supported, and the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0276/evidence/9aaa53a6-b89d-4511-b9ae-e5e89e640bea%2Fenwiki.txt",
+     "quote": "Wanakawri (Quechua, Hispanicized and mixed spellings Huanacaure, Wanacaure) is an archaeological site in Peru."
+    },
+    {
+     "source": "https://web.archive.org/web/20160917194610/http://diariocorreo.pe/ciudad/huanacaure-belleza-inca-en-huanuco-589035/",
+     "quote": "como un asentamiento inca y pre inca, que se erige en el cerro Huanacaure con construcciones impresionantes"
+    }
+   ]
+  },
+  "phase3:f69662cfad26619dad5e5741230b3b2fb8b9756f1aadc094b64b2934dbe39d0f": {
+   "change_key": "phase3:f69662cfad26619dad5e5741230b3b2fb8b9756f1aadc094b64b2934dbe39d0f",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The castro was occupied for about one century, from the late 1st century BCE to about AD 70, with no earlier occupation. Its start falls in '500 BC - 1 AD', and -100 is a round value in that bucket. The stored -1000 ('1500 - 500 BC') is the wrong bucket.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0079/evidence/67b015db-bcdf-4250-92e0-d43ef1237e4b%2Fenwiki.txt",
+     "quote": "from the late 1st century BCE to the first half of the 1st century AD, or as late as the year 70"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0079/evidence/67b015db-bcdf-4250-92e0-d43ef1237e4b%2Fenwiki.txt",
+     "quote": "There were no indications that the spaces were occupied prior to this period."
+    }
+   ]
+  },
+  "phase3:3070428baf7c7c547a5720e297985493491798da46edf553bfb4dbb7721b7054": {
+   "change_key": "phase3:3070428baf7c7c547a5720e297985493491798da46edf553bfb4dbb7721b7054",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Kuninkaanhauta is a Bronze Age cairn dated to c. 1500-1300 BC. -1500 is the stated start and falls in '1500 - 500 BC'. The stored -3000 ('3000 - 1500 BC') is a Neolithic-era value that no source supports. Finnish Wikipedia also calls it a Bronze Age cairn.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0317/evidence/24951d4a-ac38-4098-8f55-6e10e5a59c35%2Fenwiki.txt",
+     "quote": "is a Bronze Age tumulus in the village of Panelia in Eura, Finland, dating back to c. 1500"
+    }
+   ]
+  },
+  "phase3:8f1359b25a2fd9f142623827bde51d5e4c4308726074126dc20755a4a67b59a8": {
+   "change_key": "phase3:8f1359b25a2fd9f142623827bde51d5e4c4308726074126dc20755a4a67b59a8",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The site is the Asklepieion of Epidaurus. Its name and the article call it a sanctuary, Wikidata P31 lists hieron (Q1617500), and its description is 'healing shrine'. The precinct holds a theatre, abaton, tholos, stadium and guest house as well as temples. 'Sanctuary' is canonical and at least as specific as 'Temple complex', and better supported. This is not a coarser value replacing a finer one.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0151/evidence/ce101d86-8313-4fe1-bb90-9c74fba2a76e%2Fenwiki.txt",
+     "quote": "The Sanctuary of Asclepius was a sanctuary in Epidaurus dedicated to Asclepius."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0151/evidence/ce101d86-8313-4fe1-bb90-9c74fba2a76e%2Fwikidata_entity.txt",
+     "quote": "healing shrine on the territory of ancient Epidauros, Argolid, Greece"
+    }
+   ]
+  },
+  "phase3:a22101b9b21ee0c07caa82d679098a2db6df58ac0c155a798ea88208e9815680": {
+   "change_key": "phase3:a22101b9b21ee0c07caa82d679098a2db6df58ac0c155a798ea88208e9815680",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The tombs were built in the late 4th century BC, so their start falls in '500 BC - 1 AD'. -400 is a round era value in that bucket. The stored 1 ('1 - 500 AD') is the wrong bucket for Hellenistic Macedonian tombs.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0091/evidence/211bbc3a-1c61-4c8c-b5c2-0e49e027c18a%2Fenwiki.txt",
+     "quote": "Recent findings show, that the construction of tombs took place during the late 4th century BC and they were in use until the beginning of the 3rd century BC."
+    }
+   ]
+  },
+  "phase3:a4538c262756a029cefca3c0c164da4e242f46ff04124551007e1d6479ebf6b6": {
+   "change_key": "phase3:a4538c262756a029cefca3c0c164da4e242f46ff04124551007e1d6479ebf6b6",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Waqrapukara ('horn fortress') is described as an Inca sanctuary and a citadel on a rock spur. No source calls it a town or settlement, so the stored 'City/town/settlement' names a different kind of thing. 'Archaeological site' is canonical and true for it (Wikidata P31 Q839954). It is generic, but not wrong.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0226/evidence/b8244ad8-45ad-411c-a3f3-053aa0a3d4aa%2Fenwiki.txt",
+     "quote": "The building is said to be an Inca sanctuary."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0226/evidence/b8244ad8-45ad-411c-a3f3-053aa0a3d4aa%2Fwikidata_entity.txt",
+     "quote": "archaeological site in Peru"
+    },
+    {
+     "source": "https://fr.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&titles=Waqrapukara&format=json",
+     "quote": "Waqrapukara est une citadelle"
+    }
+   ]
+  },
+  "phase3:e3f445d6c393f6e5c121eb911d3f67acf9b181adf80eef196a21c13294067e85": {
+   "change_key": "phase3:e3f445d6c393f6e5c121eb911d3f67acf9b181adf80eef196a21c13294067e85",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "The site is the town of Tepoztlan (Wikidata Q1020785, stored type City/town/settlement). Its earliest attested occupation is pottery from about 1500 BCE, and -1500 falls in '1500 - 500 BC'. Nothing supports the stored -3000 ('3000 - 1500 BC').",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0325/evidence/62131a06-8c8c-4c55-bf8a-c19abbca2048%2Fenwiki.txt",
+     "quote": "The earliest findings of pottery and other ceramic utensils date back to approximately 1500 BCE."
+    }
+   ]
+  },
+  "phase3:5e2ca6ea34264860b73c194cec4e49d4541cc7b0bea8caa27bccbf4ae6dd40e5": {
+   "change_key": "phase3:5e2ca6ea34264860b73c194cec4e49d4541cc7b0bea8caa27bccbf4ae6dd40e5",
+   "verdict": "wrong-both",
+   "right_value": "-500",
+   "reason": "The site is the Aquae Calidae thermal baths and town (stored type Bath). The German and Bulgarian Wikipedia articles say the Neolithic evidence is three settlements NEAR the spring, so -6000 dates other sites, not this one. The site's own attested start is the Thracian sanctuary of the Three Nymphs at the spring, built in the middle of the 1st millennium BC; its oldest coin is 5th century BC, and the first Roman baths date to 72 BC. That puts the start in '500 BC - 1 AD', about -500. The stored 1 ('1 - 500 AD') is also the wrong bucket.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0305/evidence/424eed88-76e7-402b-8d62-3f598eb9c9ce%2Fenwiki.txt",
+     "quote": "The Thracians built a sanctuary of the Three Nymphs in the 1st millennium BC around the spring."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0305/evidence/424eed88-76e7-402b-8d62-3f598eb9c9ce%2Fenwiki.txt",
+     "quote": "the oldest from Apollonia Pontica from the 5th century BC"
+    },
+    {
+     "source": "https://de.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&titles=Aquae%20Calidae%20(Thrakien)&format=json",
+     "quote": "Nach archäologischen Untersuchungen wurden die warmen Quellen bereits in der Jungsteinzeit genutzt, als zwischen dem 6. und 5. Jahrtausend v. Chr. in der Nähe drei Siedlungen entstanden."
+    },
+    {
+     "source": "https://bg.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&titles=%D0%90%D0%BA%D0%B2%D0%B5%20%D0%9A%D0%B0%D0%BB%D0%B8%D0%B4%D0%B5&format=json",
+     "quote": "Траките превърнали извора в средата на I хил. пр. Хр. в най-почитаното"
+    }
+   ]
+  },
+  "phase3:85f6d1945e4717e40dbd48a8f79c627fd7c8ca18669a970b5ca653caa682e8aa": {
+   "change_key": "phase3:85f6d1945e4717e40dbd48a8f79c627fd7c8ca18669a970b5ca653caa682e8aa",
+   "verdict": "keep",
+   "right_value": "Stadium",
+   "reason": "The site is the stadium of Delphi: a 177.55 m running track with tiers, built in the 4th or mid-3rd century BC. 'Megalithic structures' was a category error. 'Stadium' is a canonical type and a normalizer fixed point, and it is the exact type of this monument.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0258/evidence/8b1bec65-9c91-4ba1-a8c9-ccde8579e04c%2Fenwiki.txt",
+     "quote": "The Stadium of Delphi is the best preserved ancient stadium in Greece."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0258/evidence/8b1bec65-9c91-4ba1-a8c9-ccde8579e04c%2Fenwiki.txt",
+     "quote": "Its track is 177.55 m long (about 550 ft.), and 25.50 m wide."
+    }
+   ]
+  },
+  "phase3:509acbc0447c019b6d1dab9b5c2ca6c82ca1e1a48a8e1a30818f3f3222afd355": {
+   "change_key": "phase3:509acbc0447c019b6d1dab9b5c2ca6c82ca1e1a48a8e1a30818f3f3222afd355",
+   "verdict": "keep",
+   "right_value": "-500",
+   "reason": "The site is two Achaemenid royal inscriptions, one of Darius I (r. 522-486 BC) and one of Xerxes I (r. 486-465 BC). Wikidata P571 gives the inception as -0500 at century precision (5th century BC). The written -500 is therefore a round era value for c. 500 BC, which the field definition accepts. The old -1500 is about 1,000 years too early, and nothing supports a Bronze Age start. Darius's inscription is not dated more precisely than his reign, which straddles the -500 bucket boundary. So nothing shows the old value in the true bucket, and the change stands.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0176/evidence/3d801ecb-4453-4ce3-85db-dce392c67c9d%2Fwikidata_entity.txt",
+     "quote": "-0500-00-00T00:00:00Z"
+    },
+    {
+     "source": "https://en.wikipedia.org/w/index.php?title=Ganjnameh&action=raw",
+     "quote": "The inscription on the upper left was created on the order of Achaemenid King [[Darius the Great]] ({{reign}}522–486 BC) and the one on the right by his son King [[Xerxes the Great]] ({{reign}}486–465 BC)."
+    }
+   ]
+  },
+  "phase3:90573149ec444939eca4db3dbe870f9e39332e7b7a632d1978be055e682ac446": {
+   "change_key": "phase3:90573149ec444939eca4db3dbe870f9e39332e7b7a632d1978be055e682ac446",
+   "verdict": "keep",
+   "right_value": "Archaeological site",
+   "reason": "The Garden of the Fugitives is one plot inside Pompeii: a vineyard with an outdoor triclinium, where 13 victims were found. It is not a city, town or settlement in its own right, so 'City/town/settlement' was a category error borrowed from Pompeii, not a finer correct type. 'Archaeological site' (Wikidata P31/description) is accurate and canonical, and no finer canonical type fits a garden plot better. The reviewer's text about a 'present' value is irrelevant, but the written value is right.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0334/evidence/6f6c5cc0-b0ac-4222-bb04-747352eb83d1%2Fwikidata_entity.txt",
+     "quote": "archeological site in Pompeii"
+    },
+    {
+     "source": "https://pompeiisites.org/en/archaeological-site/garden-of-the-fugitives/",
+     "quote": "This area, once hosting homes, had been transformed in a vineyard in the years preceding the eruption, with a triclinium for outdoor banquets covered by a pergola."
+    }
+   ]
+  },
+  "phase3:e50d511c4ab18e057791f9b279c9a3043324433ef33566386965bd2e9ee99cdf": {
+   "change_key": "phase3:e50d511c4ab18e057791f9b279c9a3043324433ef33566386965bd2e9ee99cdf",
+   "verdict": "keep",
+   "right_value": "Monument",
+   "reason": "The Manikyala Stupa is a single Buddhist stupa built to commemorate a spot from the Jataka tales. It is one commemorative monument, not a temple complex of several structures. There is no canonical 'Stupa' type, and 'Monument' is canonical, a fixed point, and describes a commemorative stupa correctly. Other stupas in this remediation got the same value.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0281/evidence/dd425ddf-0128-45e2-84dd-c442978149e3%2Fenwiki.txt",
+     "quote": "The stupa was built to commemorate the spot, where according to the Jataka tales, an incarnation of the Buddha called Prince Sattva sacrificed himself to feed seven hungry tiger cubs."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0281/evidence/dd425ddf-0128-45e2-84dd-c442978149e3%2Fwikidata_entity.txt",
+     "quote": "2nd-century Buddhist stupa near the village of Tope Mankiala, Punjab, Pakistan"
+    }
+   ]
+  },
+  "phase3:6a1ea7d80584b6923ee2b099f873945bc98929dca080df49a1cca0724361d53e": {
+   "change_key": "phase3:6a1ea7d80584b6923ee2b099f873945bc98929dca080df49a1cca0724361d53e",
+   "verdict": "wrong-both",
+   "right_value": "-500",
+   "reason": "The written -1000 rests only on enwiki's 'c. 1,000 BC'. The primary sources behind that sentence do not say 1000 BC. The Cadw watching-brief report that enwiki cites dates the settlement to the late first millennium BC, with earlier activity from the late third millennium BC. RCAHMW Coflein says radiocarbon points to occupation from the middle years of the first millennium BC. So the hut settlement starts c. 500 BC, bucket '500 BC - 1 AD'. -1000 is in '1500 - 500 BC', so it is wrong. The old -2000 ('3000 - 1500 BC') matches only the pre-settlement 'activity on the site' (flints and pottery), not the construction or occupation of the hut circles, so it is wrong too. Right value: -500.",
+   "quotes": [
+    {
+     "source": "https://coflein.gov.uk/en/site/93837/",
+     "quote": "Finds have included pottery and a coin hoard of the Roman period, although radio-carbon determinations point to occupation from the middle years of the first millennium BC."
+    },
+    {
+     "source": "https://coflein.gov.uk/media/38/725/aent40_15.pdf",
+     "quote": "The most important results to come out of the last excavations were the dating of the settlement to the late first millennium BC, with evidence of activity on the site from the late third millennium BC and also the first century AD."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0009/evidence/9705b676-7ba1-465f-aebd-a21f346de5a1%2Fenwiki.txt",
+     "quote": "However, through Radiocarbon dating the site was determined to be from c. 1,000 BC."
+    }
+   ]
+  },
+  "phase3:981ef3c4f9740447561766696e8d6316576c33845672b9c227b67f3fe1cad9d5": {
+   "change_key": "phase3:981ef3c4f9740447561766696e8d6316576c33845672b9c227b67f3fe1cad9d5",
+   "verdict": "revert",
+   "right_value": "City/town/settlement",
+   "reason": "The finder's only ground was that enwiki and Wikidata call the site 'an archaeological site'. That is false alarm #4: a coarser source does not refute a finer stored type. The stored type is supported. The National Museum of Natural Science names Huilai among the places where prehistoric Taichung people lived. zh-wiki describes cultural layers running from the Neolithic to the late Qing, i.e. a long-lived habitation site. 'City/town/settlement' is therefore at least as well supported as the generic 'Archaeological site', and the change was not warranted.",
+   "quotes": [
+    {
+     "source": "https://web.archive.org/web/20101115232313/http://www.nmns.edu.tw/public/exhibit/2010/metropolitian/index.htm",
+     "quote": "在史前台中人居住的地方如台中公園、惠來遺址、中興大學等，近年來經由挖掘出土的史前遺跡與遺物而有了初步的輪廓。"
+    },
+    {
+     "source": "https://zh.wikipedia.org/w/index.php?title=%E6%83%A0%E4%BE%86%E9%81%BA%E5%9D%80&action=raw",
+     "quote": "該遺址最早的文化層可推到史前[[新石器時代]]，最晚的文化層為[[清代]]晚年的漢人文化層"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0315/evidence/316b3d27-1295-41ce-a5c0-3b9c8251647e%2Fenwiki.txt",
+     "quote": "is an archaeological site at Xitun District, Taichung, Taiwan."
+    }
+   ]
+  },
+  "phase3:2622c54700b67ff05a58123847795942a9a626c0a7d1b850e138bb0503cc6921": {
+   "change_key": "phase3:2622c54700b67ff05a58123847795942a9a626c0a7d1b850e138bb0503cc6921",
+   "verdict": "keep",
+   "right_value": "Inscription",
+   "reason": "The Einang stone is a runestone: a raised stone bearing a 4th-century Elder Futhark inscription, and its significance is that inscription (Wikidata P31 runestone). It is not a relief or carving on a rock surface. 'Inscription' is canonical, a fixed point, and the exact type.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0079/evidence/d8256f75-7b93-49b5-8910-801bd1591397%2Fenwiki.txt",
+     "quote": "The Einang stone bears an Elder Futhark inscription, written from right to left, in Proto-Norse that has been dated to the 4th century."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0079/evidence/d8256f75-7b93-49b5-8910-801bd1591397%2Fenwiki.txt",
+     "quote": "The stone is notable for the age of its runic inscription."
+    }
+   ]
+  },
+  "phase3:b9b2842cbb26de98937217018484c3ff6ab84be3e434c0d1e57c81f09365e64d": {
+   "change_key": "phase3:b9b2842cbb26de98937217018484c3ff6ab84be3e434c0d1e57c81f09365e64d",
+   "verdict": "keep",
+   "right_value": "Temple",
+   "reason": "The Heraion at Olympia is a single Archaic Doric temple inside the Altis. The site record is the temple itself, not the whole sanctuary complex. 'Temple' is canonical, a fixed point, and exact. Wikidata describes it as 'temple in Greece'.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0259/evidence/4c7f6521-241f-48c0-93da-f8d7893f5446%2Fenwiki.txt",
+     "quote": "The Temple of Hera, or Heraion, is an ancient Archaic Greek temple at Olympia, Greece, that was dedicated to Hera, queen of the Greek gods."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0259/evidence/4c7f6521-241f-48c0-93da-f8d7893f5446%2Fwikidata_entity.txt",
+     "quote": "temple in Greece"
+    }
+   ]
+  },
+  "phase3:40c929a915ea487a5faeaf9adc946e9c1a07abca537297a52a62ba7122a1807f": {
+   "change_key": "phase3:40c929a915ea487a5faeaf9adc946e9c1a07abca537297a52a62ba7122a1807f",
+   "verdict": "keep",
+   "right_value": "Sanctuary",
+   "reason": "Yeronisos is a small islet whose main archaeological remains are a late Hellenistic sanctuary of Apollo; that phase saw the most intense activity. The Chalcolithic and Byzantine phases are minor, and nothing describes a city or town. 'Sanctuary' is canonical, a fixed point, and fits the site better than 'City/town/settlement'.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0289/evidence/ba74c51b-0b28-4e93-aadb-7da862f574da%2Fenwiki.txt",
+     "quote": "Uninhabited since the 15th century, recent excavations have revealed it once held a sanctuary dedicated to Apollo in the late Hellenistic period."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0289/evidence/ba74c51b-0b28-4e93-aadb-7da862f574da%2Fenwiki.txt",
+     "quote": "The most intense of this activity is the late Hellenistic period at a time when Cleopatra ruled Cyprus."
+    }
+   ]
+  },
+  "phase3:e9bad8ab84b047093853638d6899eb5362c33d48d716606210362812ccbc2cfe": {
+   "change_key": "phase3:e9bad8ab84b047093853638d6899eb5362c33d48d716606210362812ccbc2cfe",
+   "verdict": "keep",
+   "right_value": "Theatre",
+   "reason": "The site is the Roman theatre of Aspendos: a 2nd-century theatre with a cavea and a stage building. 'Megalithic stones' was a category error. 'Theatre' is canonical and a normalizer fixed point.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0023/evidence/7b01e094-e250-46f9-97f3-a03a2a4b4dfa%2Fenwiki.txt",
+     "quote": "The Roman theatre of Aspendos is a Roman theatre in the ancient city of Aspendos in Turkey."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0023/evidence/7b01e094-e250-46f9-97f3-a03a2a4b4dfa%2Fenwiki.txt",
+     "quote": "Technically, the structure is a theatre, not an amphitheatre, the latter being fully round or oval shaped."
+    }
+   ]
+  },
+  "phase3:1b4f6519b239f3e4a381839729f371a7f89c1b50b17baad70d3fc022a6067603": {
+   "change_key": "phase3:1b4f6519b239f3e4a381839729f371a7f89c1b50b17baad70d3fc022a6067603",
+   "verdict": "keep",
+   "right_value": "Temple",
+   "reason": "The Temple of Satet on Elephantine is one temple, enlarged and rebuilt in place from c. 3200 BC to the Ptolemaic period. It is not a complex of several temples. 'Temple' is canonical, a fixed point, and exact; Wikidata describes it as 'ancient Egyptian temple'.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0259/evidence/248951cd-2522-4a50-8cb4-aeeef742576e%2Fenwiki.txt",
+     "quote": "The Temple of Satet or Satis was an ancient Egyptian temple dedicated to the goddess Satet, a personification of the Nile inundation."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0259/evidence/248951cd-2522-4a50-8cb4-aeeef742576e%2Fenwiki.txt",
+     "quote": "The temple of Satet is the best example of an ancient Egyptian temple whose construction is attested over the entire pharaonic period."
+    }
+   ]
+  },
+  "phase3:4b04c574715b9062b87429ac605e32f12e7455ef9e26d4a1195eaa34ae2cda71": {
+   "change_key": "phase3:4b04c574715b9062b87429ac605e32f12e7455ef9e26d4a1195eaa34ae2cda71",
+   "verdict": "keep",
+   "right_value": "Gate/archway/bridge",
+   "reason": "The site is the Arch of Augustus at Susa (Wikidata Q1892101, P31 Q143912 'triumphal arch'): a single-archway Roman marble arch of 9-8 BC. 'Megalithic stones' was a category error. 'Gate/archway/bridge' is canonical, a fixed point, and the catalogue's class for arches.",
+   "quotes": [
+    {
+     "source": "https://en.wikipedia.org/w/index.php?title=Arch_of_Augustus_(Susa)&action=raw",
+     "quote": "It rests on two large bases and there is only one archway."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0123/evidence/3199f739-6eaf-4065-8a07-4e44ec4695f7%2Fwikidata_entity.txt",
+     "quote": "Arch of Augustus"
+    },
+    {
+     "source": "https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q143912&props=labels&languages=en&format=json",
+     "quote": "triumphal arch"
+    }
+   ]
+  },
+  "phase3:f818e278f3695ddebf09a587b14ce823f081f37e0ea3db2aa0fbbf92be76073b": {
+   "change_key": "phase3:f818e278f3695ddebf09a587b14ce823f081f37e0ea3db2aa0fbbf92be76073b",
+   "verdict": "keep",
+   "right_value": "-17000",
+   "reason": "Font-de-Gaume is an Upper Palaeolithic decorated cave: paintings c. 17,000 BC and first occupation of the cave mouth c. 25,000 BC. The old -500 ('500 BC - 1 AD') is plainly wrong. The written -17000 is in the correct bucket '< 4500 BC'. The earlier occupation date (-25000) falls in the same bucket, so under the bucket rule the difference is not an error.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0231/evidence/6be9a7f1-53c8-447b-8c63-d6cc40f2281e%2Fenwiki.txt",
+     "quote": "The paintings date from around 17,000 BC, during the Magdalenian period."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0231/evidence/6be9a7f1-53c8-447b-8c63-d6cc40f2281e%2Fenwiki.txt",
+     "quote": "Prehistoric people living in the Dordogne Valley first settled in the mouth of Font-de-Gaume around 25,000 BC."
+    }
+   ]
+  },
+  "phase3:80a1a41ff44e04f0d4043b3a42d7c75e68de46f7b9f446a5e3ed872fbd1c22b2": {
+   "change_key": "phase3:80a1a41ff44e04f0d4043b3a42d7c75e68de46f7b9f446a5e3ed872fbd1c22b2",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The attested construction date is c. 600 BC (radiocarbon), so -600 is the more precise value. But the change was not warranted under the project's period rule. categorize_period (year < hi) puts both -1500 and -600 in the bucket '1500 - 500 BC'. The finder and reviewer justified the write only by claiming -600 falls in '500 BC - 1 AD', which is an arithmetic error. FALSE_ALARMS #1 says a round era value is not an error and only a value from a different bucket is. The stored -1500 was therefore not an error by the field contract, and the finder's reason, correctly computed, is that false alarm (RULES: revert when 'the finder's reason is one of the false alarms'). No right_value is proposed: -600 is better attested but in the same bucket.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0251/evidence/cea5eebe-1a8a-4132-8867-12102672ecc0%2Fenwiki.txt",
+     "quote": "Radiocarbon dating indicates that the ramparts defending Maiden Castle were built in around 600 BC."
+    }
+   ]
+  },
+  "phase3:8203badbc8cce7ac36d4bb11d7d6dfb57df74a00e348bf12b565a35ff5b24814": {
+   "change_key": "phase3:8203badbc8cce7ac36d4bb11d7d6dfb57df74a00e348bf12b565a35ff5b24814",
+   "verdict": "keep",
+   "right_value": "Dolmen",
+   "reason": "Sømarkedyssen is a single Neolithic megalithic tomb: an octagonal chamber under one capstone, with a passage. Wikidata's P31 and description are 'dolmen', and 'dysse' means dolmen. It is not a necropolis or a complex of several tombs. 'Dolmen' is canonical, a fixed point, and finer and correct.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0278/evidence/861136bb-c3b6-4cf6-8e0c-ff756d744c12%2Fenwiki.txt",
+     "quote": "Sømarkedyssen is a Neolithic megalithic tomb located in Borre on the Danish island of Møn."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0278/evidence/861136bb-c3b6-4cf6-8e0c-ff756d744c12%2Fwikidata_entity.txt",
+     "quote": "dolmen"
+    }
+   ]
+  }
+ },
+ "p1": {
+  "phase3:f96d5a702a347897a8492efb2e89c9525bd8e7519cccf9ee705b6acc9b8cab82": {
+   "change_key": "phase3:f96d5a702a347897a8492efb2e89c9525bd8e7519cccf9ee705b6acc9b8cab82",
+   "verdict": "keep",
+   "right_value": "Fortress/citadel",
+   "reason": "Padderbury Top is a hillfort: the enwiki lead and the Wikidata description both say so, and Wikidata P31 is Q28045079 ('contour fort'). A hillfort is a fortified enclosure, and Fortress/citadel is a canonical type. It is also how the catalogue types hillforts: 369 ancient_nerds hillforts in the static index carry Fortress/citadel, against 38 with City/town/settlement. The article's aside that the fort 'is classed as a \"defended settlement\"' gives the old City/town/settlement some support, but less than the primary identification as a hillfort gives the written value.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0015/evidence/5c3a138c-7052-4cb4-a482-10df27239b2e%2Fenwiki.txt",
+     "quote": "Padderbury Top is a hillfort about 2 miles (3.2 km) south-east of Menheniot, in Cornwall, England, named after the hill on which it is situated."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0015/evidence/5c3a138c-7052-4cb4-a482-10df27239b2e%2Fwikidata_entity.txt",
+     "quote": "hillfort in Cornwall, England, UK"
+    }
+   ]
+  },
+  "phase3:f4b53d07266bbac31c9108e5d62cb1f725f17f4fd9d0d9771bf3bd1e93c74ac0": {
+   "change_key": "phase3:f4b53d07266bbac31c9108e5d62cb1f725f17f4fd9d0d9771bf3bd1e93c74ac0",
+   "verdict": "keep",
+   "right_value": "-176",
+   "reason": "The site's coordinates (39.885, 44.576) are the ruins of ancient Artaxata beside Khor Virap, not the modern town. Artaxias I founded the city in 176 BC; that is the securely attested start of this site. The only hint of earlier occupation is a hedged 'may indicate' of an Urartian settlement. That would be Iron Age at most and nowhere near 3000 BC, so the old -3000 falls in a bucket ('3000 - 1500 BC') with no attested activity at all. -176 sits in '500 BC - 1 AD', and so does the 189 BC in Wikidata's P1376 qualifier.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0034/evidence/d030a021-0623-49bb-983a-e8f0ce66ea25%2Fenwiki.txt",
+     "quote": "King Artaxias I founded Artaxata as his new capital in 176 BC"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0034/evidence/d030a021-0623-49bb-983a-e8f0ce66ea25%2Fenwiki.txt",
+     "quote": "Archaeological evidence may indicate that Artaxata was built upon the remains of an older Urartian settlement."
+    }
+   ]
+  },
+  "phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756": {
+   "change_key": "phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756",
+   "verdict": "revert",
+   "right_value": "1000",
+   "reason": "The stored 1000 and the written 1130 fall in the same PERIOD_BUCKET ('1000 - 1500 AD'), and the finder's answer admits the spans are the same. FALSE_ALARMS says period_start is a sort key and only a value from a different bucket is an error, so a round value in the right bucket was not an error. The finder's reason is therefore a listed false alarm and the change was not warranted. The 1130 date is also only a terminus post quem ('after 1130').",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0048/evidence/875c0673-36e1-4296-a7af-29637effcec3%2Fenwiki.txt",
+     "quote": "Settlement began after 1130 AD, and the larger buildings developed into multi-storied dwellings after 1350 AD."
+    }
+   ]
+  },
+  "phase3:53aa972359f4eb9f48b8fc14ff450c2f27f7f5b662d41cedc451969cab424098": {
+   "change_key": "phase3:53aa972359f4eb9f48b8fc14ff450c2f27f7f5b662d41cedc451969cab424098",
+   "verdict": "revert",
+   "right_value": "Minaret/tower",
+   "reason": "In this catalogue 'Minaret/tower' is the canonical tower category. All 30 ancient_nerds sites that carry it are non-Islamic towers: brochs, Hadrian's Wall turrets, signal towers, and the Punic-Roman towers of Malta, including the sister site Ta' Ġawhar Tower. The finder read the label as 'Islamic minaret', which is a misreading. The evidence calls the site a tower (enwiki 'Punic-Roman tower'; Wikidata P31 Q12518 'tower'), so the stored value fits directly. Its function is disputed: a defensive chain, or possibly a Roman folly overlooking olive plantations. That makes 'Fortification' less supported than the stored type. The old value is at least as well supported, so the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0119/evidence/a2df5acf-6b70-48e1-a8e6-869e1d0dffbc%2Fenwiki.txt",
+     "quote": "is a Punic-Roman tower in San"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0119/evidence/a2df5acf-6b70-48e1-a8e6-869e1d0dffbc%2Fenwiki.txt",
+     "quote": "From the findings it is also suggested that the Romans may have built it in the form of a folly to overlook the plantation of the olive trees which originate in the area since Roman times."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0119/evidence/a2df5acf-6b70-48e1-a8e6-869e1d0dffbc%2Fwikidata_entity.txt",
+     "quote": "Ancient tower in San"
+    }
+   ]
+  },
+  "phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208": {
+   "change_key": "phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208",
+   "verdict": "keep",
+   "right_value": "Natural feature",
+   "reason": "The record's name ('Península de Kola') and its coordinates (67.29979, 37.55085) both match Wikidata Q165608, the Kola Peninsula (P31 Q34763 'peninsula'; P625 67.2994, 37.5508). The thing the record names and locates is therefore a peninsula, and 'Natural feature' is the canonical type for that. Nothing in the evidence points to a city, town or settlement at this point. The stored text only speaks vaguely of a Bronze Age aDNA site somewhere on the peninsula, and that does not support the old City/town/settlement.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0121/evidence/7bbee517-515c-4fe4-9271-036ea36791e1%2Fwikidata_entity.txt",
+     "quote": "peninsula in the northwest of Russia"
+    }
+   ]
+  },
+  "phase3:926f268e74dc41826cc4a2fe4a96bde0ee62f71ac446074646fd6b58e93dcd1b": {
+   "change_key": "phase3:926f268e74dc41826cc4a2fe4a96bde0ee62f71ac446074646fd6b58e93dcd1b",
+   "verdict": "revert",
+   "right_value": "-3000",
+   "reason": "The site (Old Winchester Hill, summit hillfort) contains Bronze Age barrows dated 2100-750 BCE inside the fort, so the earliest attested construction on this site is about 2100 BC. The stored description '(2100 - 100 BC)' covers both phases. -2100 falls in the '3000 - 1500 BC' bucket, the same bucket as the stored round -3000, so the old value's bucket was right. The finder's claim that -2100 falls in '1500 - 500 BC' is an arithmetic error, and the reviewer repeated it. The written -600 dates only the Iron Age fort, drops the earlier barrows, and moves the site into the wrong bucket. The change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0272/evidence/a0f4690e-06d0-457b-92da-40207bfeec25%2Fenwiki.txt",
+     "quote": "Within the hill fort can also be found Bronze Age barrows dating between 2100 and 750 BCE."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0272/evidence/a0f4690e-06d0-457b-92da-40207bfeec25%2Fenwiki.txt",
+     "quote": "On the summit of the hill is an Iron Age hill fort."
+    }
+   ]
+  },
+  "phase3:969f0d81afaf27c6f68a954777c9a15ff21a746024a53bcc1cdf7635be0939a6": {
+   "change_key": "phase3:969f0d81afaf27c6f68a954777c9a15ff21a746024a53bcc1cdf7635be0939a6",
+   "verdict": "revert",
+   "right_value": "City/town/settlement",
+   "reason": "This is the listed false alarm of a less specific value replacing a finer stored one. The enwiki extract and Wikidata only say 'archaeological site', which cannot refute the finer City/town/settlement. Khonkho Wankane was in fact a Late Formative politico-ritual centre of about 7 ha with houses and an estimated 1,000 inhabitants. Spanish Wikipedia calls it the second most important city of the Tiwanaku people after Tiwanaku, which supports the stored value.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0281/evidence/29924a49-a6ce-430e-a5f7-a048a20d7dca%2Fenwiki.txt",
+     "quote": "is an archaeological site in Bolivia located in the La Paz Department, Ingavi Province"
+    },
+    {
+     "source": "https://es.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Khonkho%20Wankane&format=json&formatversion=2",
+     "quote": "Además es considerado la segunda ciudad en importancia de los tiahuanacotas, después de Tiwanaku."
+    },
+    {
+     "source": "https://es.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Khonkho%20Wankane&format=json&formatversion=2",
+     "quote": "se cree que fue habitado por un número de 1000 personas durante su mayor apogeo"
+    }
+   ]
+  }
+ },
+ "p2": {
+  "phase3:0542944ad9281b8560a944bda9b861ab5d1e81a8b8591b5b8a80ead9d2660c68": {
+   "change_key": "phase3:0542944ad9281b8560a944bda9b861ab5d1e81a8b8591b5b8a80ead9d2660c68",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "Hamble Common Camp is an Iron Age linear bank and ditch cutting off a promontory. Historic England's official name is 'Promontory defined by an Iron Age linear earthwork' (cited in the article's wikitext), and Wikipedia's List of hillforts in England includes the site as a hillfort. The evidence calls it a 'believed' settlement whose ditch was defensive and adds that it 'could have been a promontory fort'. In this DB hillforts and promontory forts are typed 'Fortress/citadel', so the old value is at least as well supported as 'Settlement'. The change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0036/evidence/5e710f8a-fc74-40b6-ab42-424a3ded4713%2Fenwiki.txt",
+     "quote": "This is believed to be an Iron Age settlement, with the ditch being a defensive structure."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0036/evidence/5e710f8a-fc74-40b6-ab42-424a3ded4713%2Fenwiki.txt",
+     "quote": "Some have suggested this site could have been a promontory fort."
+    },
+    {
+     "source": "https://en.wikipedia.org/w/api.php?action=parse&page=List_of_hillforts_in_England&prop=wikitext&format=json",
+     "quote": "Hamble Common camp Hillfort"
+    }
+   ]
+  },
+  "phase3:29f48c3fc32861550077620c84986c8cc02d6489df213694313fb91ec76161d3": {
+   "change_key": "phase3:29f48c3fc32861550077620c84986c8cc02d6489df213694313fb91ec76161d3",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The evidence dates activity on the site to 3500-3000 BC, before the henge (3000-2500 BC), and the record's own card says 'activity on the site from 3500 BC'. So the site's attested start is about -3500, in the '4500 - 3000 BC' bucket. The old -4500 is also in that bucket, because categorize_period(-4500) gives '4500 - 3000 BC', so it is a round era value in the right bucket and not an error. The finder wrongly placed -4500 in '< 4500 BC'. The written -3000 moves the site into '3000 - 1500 BC', which leaves out its attested 3500 BC start. The change was not warranted; the exact value would be -3500.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0187/evidence/b3c4825c-79ff-48c7-bb38-015e73fc7ae2%2Fenwiki.txt",
+     "quote": "There was activity on the site before the current henge in the form of circular monuments and hengiform monuments dating from 3500 BC to 3000 BC."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0187/evidence/b3c4825c-79ff-48c7-bb38-015e73fc7ae2%2Fenwiki.txt",
+     "quote": "Ferrybridge Henge dates from 3000 BC to 2500 BC."
+    }
+   ]
+  },
+  "phase3:82d1c776c75f02cd28e3c6b93615939dceeedf7900851653a8f380d08fcb945e": {
+   "change_key": "phase3:82d1c776c75f02cd28e3c6b93615939dceeedf7900851653a8f380d08fcb945e",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The finder's only reason is the coarser 'archaeological site' label from enwiki and Wikidata. That is the listed false alarm: a coarser source does not refute a finer stored type. The official Peruvian inventory record (MINCETUR, archived) describes an Inca-period complex on the summit: a main plaza on terraces, three large stone enclosures with niches, two streets and many lesser buildings. That fits 'City/town/settlement' at least as well as the coarse label, so the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0073/evidence/7240c7dc-cd45-45f3-a291-7db1f48ce667%2Fenwiki.txt",
+     "quote": "is an archaeological site in Peru of the Inca period on top of a mountain of the same name."
+    },
+    {
+     "source": "https://web.archive.org/web/20160304043912/http://www.mincetur.gob.pe/TURISMO/OTROS/inventario%20turistico/Ficha.asp?cod_Ficha=8420",
+     "quote": "divididos por dos calles de 2.10 de ancho"
+    },
+    {
+     "source": "https://web.archive.org/web/20160304043912/http://www.mincetur.gob.pe/TURISMO/OTROS/inventario%20turistico/Ficha.asp?cod_Ficha=8420",
+     "quote": "construcciones de menor importancia, que actualmente se encuentran en un estado"
+    }
+   ]
+  },
+  "phase3:8b3fb47d8cbbfc11b1b33dcb596bed0f2bf557a8515df553e04149a539bc7131": {
+   "change_key": "phase3:8b3fb47d8cbbfc11b1b33dcb596bed0f2bf557a8515df553e04149a539bc7131",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The enwiki figure of 3000-2500 BC rests on popular websites. German Wikipedia (citing Archaeology Ireland 2019) dates the cist's construction to 3500-3000 BC, and the Friends of the Phoenix Park page gives 3500-2500 BC. Knockmaree is a Linkardstown-type burial, and the type site dates to 3700-3400 BC. So the securely attested start is about -3500, in the '4500 - 3000 BC' bucket. The old -4500 is in that same bucket (the finder wrongly put it in '< 4500 BC'), so it was not an error by the bucket rule. The written -3000 moves the site into '3000 - 1500 BC'. The change was not warranted; the exact value would be -3500.",
+   "quotes": [
+    {
+     "source": "https://de.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Steinkiste%20von%20Knockmaree&format=json",
+     "quote": "Die zwischen 3500 und 3000 v. Chr. errichtete"
+    },
+    {
+     "source": "http://www.frg.ie/local-history/knockmaree-linkardstown-burial/",
+     "quote": "dates to the Neolithic period (3500-2500B.C.)"
+    },
+    {
+     "source": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Tinryland&format=json",
+     "quote": "Evidence of settlement in the Neolithic Period (3700-3400 BC) was found at the ancient burial site in Linkardstown in 1943."
+    }
+   ]
+  },
+  "phase3:926f268e74dc41826cc4a2fe4a96bde0ee62f71ac446074646fd6b58e93dcd1b": {
+   "change_key": "phase3:926f268e74dc41826cc4a2fe4a96bde0ee62f71ac446074646fd6b58e93dcd1b",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The record covers the whole hilltop. Its description and card give the Bronze Age barrows inside the fort (2100-750 BCE) alongside the Iron Age hillfort (600-300 BCE). The site's earliest securely attested phase is therefore about -2100, in the '3000 - 1500 BC' bucket. The old -3000 is in that same bucket; the finder wrongly put -2100 in '1500 - 500 BC'. A round era value in the right bucket is not an error. The written -600 dates only the fort and drops the barrow phase, so the change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0272/evidence/a0f4690e-06d0-457b-92da-40207bfeec25%2Fenwiki.txt",
+     "quote": "Within the hill fort can also be found Bronze Age barrows dating between 2100 and 750 BCE."
+    }
+   ]
+  },
+  "phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208": {
+   "change_key": "phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208",
+   "verdict": "wrong-both",
+   "right_value": "Cemetery",
+   "reason": "The record is named after the peninsula, but its description and card are about the Bronze Age ancient-DNA burial site at Bolshoy Oleni Ostrov on the Kola Peninsula. Lamnidis et al. 2018 describe that site as an archaeological site and cite it as the 'Kola Oleneostrovskiy Grave Field', a burial ground. 'Natural feature' misclassifies an archaeological record, and the old 'City/town/settlement' was also wrong because it is a grave field, not a settlement. The canonical type for a grave field is 'Cemetery'.",
+   "quotes": [
+    {
+     "source": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC6258758/fullTextXML",
+     "quote": "Kola Oleneostrovskiy Grave Field: A Unique Burial Site In The European Arctic"
+    },
+    {
+     "source": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC6258758/fullTextXML",
+     "quote": "obtained from an archaeological site at Bolshoy Oleni Ostrov in the Murmansk Region on the Kola Peninsula"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0121/evidence/7bbee517-515c-4fe4-9271-036ea36791e1%2Fwikidata_entity.txt",
+     "quote": "peninsula in the northwest of Russia"
+    }
+   ]
+  },
+  "phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756": {
+   "change_key": "phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The old 1000 and the written 1130 are both in the '1000 - 1500 AD' bucket; the finder admitted the span was the same. Replacing a round era value within its own bucket is the listed false alarm: period_start is a sort key, and only a value from a different bucket is an error. The change was not warranted.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0048/evidence/875c0673-36e1-4296-a7af-29637effcec3%2Fenwiki.txt",
+     "quote": "Settlement began after 1130 AD, and the larger buildings developed into multi-storied dwellings after 1350 AD."
+    }
+   ]
+  },
+  "phase3:ea2a6f8479a6b21537cce5c969ec476fbeaa8903a7aded3ff93be14d097bcbc6": {
+   "change_key": "phase3:ea2a6f8479a6b21537cce5c969ec476fbeaa8903a7aded3ff93be14d097bcbc6",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The only reason given is Wikidata's coarse 'archaeological site', which is the listed false alarm. English Wikipedia's Findon article calls the scheduled monument at Muntham Court 'a late Iron Age and Romano-British settlement site'. The record's own description (an Iron Age settlement with a Romano-British shrine) agrees. The finer 'City/town/settlement' is right, so the change was not warranted.",
+   "quotes": [
+    {
+     "source": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Findon%2C%20West%20Sussex&format=json",
+     "quote": "Near Muntham Court to the west of the village can be found a late Iron Age and Romano-British settlement site designated as a scheduled monument."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0046/evidence/3eee3fb1-0f33-4eb3-99b9-ddabd93495e5%2Fwikidata_entity.txt",
+     "quote": "archaeological site in Findon, Arun, West Sussex, England, UK"
+    }
+   ]
+  },
+  "phase3:f4b53d07266bbac31c9108e5d62cb1f725f17f4fd9d0d9771bf3bd1e93c74ac0": {
+   "change_key": "phase3:f4b53d07266bbac31c9108e5d62cb1f725f17f4fd9d0d9771bf3bd1e93c74ac0",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Artashat/Artaxata is the Artaxiad capital founded by Artaxias I in 176 BC (other accounts give 185-190 BC, the same '500 BC - 1 AD' bucket). A possible older Urartian settlement is described only as something the evidence 'may indicate', and nothing attests occupation around 3000 BC. The old -3000 is unsupported and in a different bucket; the written -176 is the site's securely attested start.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0034/evidence/d030a021-0623-49bb-983a-e8f0ce66ea25%2Fenwiki.txt",
+     "quote": "King Artaxias I founded Artaxata as his new capital in 176 BC"
+    }
+   ]
+  },
+  "phase3:f96d5a702a347897a8492efb2e89c9525bd8e7519cccf9ee705b6acc9b8cab82": {
+   "change_key": "phase3:f96d5a702a347897a8492efb2e89c9525bd8e7519cccf9ee705b6acc9b8cab82",
+   "verdict": "keep",
+   "right_value": null,
+   "reason": "Padderbury Top is primarily a hillfort: enwiki's first sentence and Wikidata's description and P31 both say so. 'Defended settlement' is only a secondary classification noting its small size. In this DB hillforts are typed 'Fortress/citadel', which is canonical, so the written value fits the site's main identity better than 'City/town/settlement'.",
+   "quotes": [
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0015/evidence/5c3a138c-7052-4cb4-a482-10df27239b2e%2Fenwiki.txt",
+     "quote": "Padderbury Top is a hillfort about 2 miles (3.2 km) south-east of Menheniot, in Cornwall, England, named after the hill on which it is situated."
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0015/evidence/5c3a138c-7052-4cb4-a482-10df27239b2e%2Fwikidata_entity.txt",
+     "quote": "hillfort in Cornwall, England, UK"
+    }
+   ]
+  },
+  "phase3:faff3a9fa29162f6e82563969fdb04fa78789530a1675b76ca1a24ace0649858": {
+   "change_key": "phase3:faff3a9fa29162f6e82563969fdb04fa78789530a1675b76ca1a24ace0649858",
+   "verdict": "revert",
+   "right_value": null,
+   "reason": "The only reason given is the coarse 'archaeological site' label, which is the listed false alarm. Spanish Wikipedia (the site's own article) says Tarmatambo was an old Inca llacta (town) and a mid-ranking administrative centre under Pumpu. The record's description agrees: an Inca highland settlement with storehouses. The finer 'City/town/settlement' is right, so the change was not warranted.",
+   "quotes": [
+    {
+     "source": "https://es.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Tarmatambo&format=json",
+     "quote": "correspondiente a una antigua llacta inca"
+    },
+    {
+     "source": "https://es.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=Tarmatambo&format=json",
+     "quote": "un centro administrativo de rango medio supeditado a Pumpu"
+    },
+    {
+     "source": "output/remediation/phase3_runner/runs/mass/batch-0052/evidence/33e2399e-fd68-4aab-bf79-c5695a6c0bf0%2Fenwiki.txt",
+     "quote": "is an archaeological site in the Jun"
+    }
+   ]
+  }
+ }
+}

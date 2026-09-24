@@ -8412,3 +8412,248 @@ here carries:
 * `ruff check` and `ruff format --check` clean on the 7 new or touched Python files (ruff 0.15.11);
   `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
   .vulture_whitelist.py --min-confidence 80` clean.
+
+### Round 2: the sample judged again, the failed verdicts judged anew (quote check, overlay, rule 4 fired)
+
+Branch `integrate/wave1` (main checkout), code in commits `0b37911` (the overlay, rule 4, `pending`
+and the two lists, test-first) and `b44e904` (the mutation cases); the data and this subsection are
+committed together after them. Opus judges, run outside this checkout with the pass-1 judge prompt
+plus a note to cite only sources that answer a plain fetch, judged **rule 4's 60 sample keys again,
+independently** (never shown pass 1), and **the 18 failed p1 and p2 verdicts of `REJUDGE.json`
+anew**. The four failed ties were left out: whether their rows still reach a tie depends on the new
+p1 and p2. The verdicts: `output/remediation/opus_audit/VERDICTS_ROUND2.json`, `{"sample", "p1",
+"p2"}`, sha256 `56471faf9cb40363f281383a39e6c9a6857ce5173a725cee3c6139b330b25ea8` (committed with
+this subsection; LF only, so the checkout keeps the digest). **No model was called here, and
+production was neither read nor written.**
+
+| section | verdicts | keep | revert | wrong-both | undecidable |
+|---|---|---|---|---|---|
+| sample (the 60 keys of `KEEP_SAMPLE.json`) | 60 | 51 | 7 | 2 | 0 |
+| p1 (`REJUDGE.json` p1) | 7 | 3 | 4 | 0 | 0 |
+| p2 (`REJUDGE.json` p2) | 11 | 2 | 8 | 1 | 0 |
+
+`decide.read_round_2` holds the file to round 1's shape: every verdict filed under its own key, a
+verdict name of RULES.md, a wrong-both with its right value, quotes a list. It also holds the sample
+to exactly the keys `KEEP_SAMPLE.json` states, and each p1 or p2 verdict to a round-1 verdict of its
+pass. `decide.load_rounds` refuses a `KEEP_SAMPLE.json` that is not rule 4's draw from
+`VERDICTS_RAW.json`. All of this holds. One sample verdict carries an extra, empty `reasoning_note`.
+Nothing reads it.
+
+#### Round 2's quote check
+
+It is **exactly round 1's check**: `quotes.py` is unchanged (the same normaliser and readings, only
+the row's own evidence files, a page fetched once). `run.py fetch` now collects the URLs that verdicts
+of both rounds cite. That makes 386 URLs. The 362 of round 1 were left as kept, and their
+`PAGES.jsonl` lines are unchanged. **24 URLs only round 2 cites were fetched once**, on 2026-09-24
+from 20:48:30 to 20:48:46 UTC (5.2 MB), and **all 24 answered 200**:
+
+* 11 JSON answers (10 MediaWiki `api.php`, 1 Wikidata entity);
+* 3 MediaWiki `action=raw`;
+* 8 HTML pages, 3 of them Wayback copies;
+* 1 PDF (coflein.gov.uk);
+* 1 `application/xml`.
+
+| section | verdicts | counted | failed | quotes | found |
+|---|---|---|---|---|---|
+| sample | 60 | **60** | 0 | 111 | 111 |
+| p1 | 7 | **7** | 0 | 14 | 14 |
+| p2 | 11 | **10** | 1 | 24 | 22 |
+
+The 147 found quotes break down as follows: 129 found as served, 13 in a page's visible text, 4 only
+in a decoded JSON string and 1 in a PDF's text. **The one failure** is Península de Kola's p2
+(`wrong-both`, proposing "Cemetery"). Two of its three quotes cite Europe PMC's full text of
+PMC6258758 as `application/xml`
+(`https://www.ebi.ac.uk/europepmc/webservices/rest/PMC6258758/fullTextXML`). The check has no reading
+for that type, so both are "unreadable content". Its third quote is found in the row's evidence file.
+Measured outside the check: **both quotes stand verbatim in that XML**, both as served and with its
+tags removed. The check was not widened between rounds, so this verdict does not count. Whether an
+XML reading is added is open (see "Next"). Either way the row stays `pending`: without this verdict
+it waits on a second judgement, with it on a tie.
+
+#### The overlay (`decide.overlay`)
+
+* **p1**: all 7 round-2 verdicts count, and each replaces the failed round-1 p1 of its row.
+* **p2**: 10 of the 11 count and replace. Kola's does not, so its failed round-1 p2 stays on the
+  route, uncounted.
+* **sample**: all 60 count. Each is its pass-1 keep's second, independent judgement under rule 3 and
+  stands as the row's p2 (`from: VERDICTS_ROUND2.json sample`).
+* **A counted verdict is never judged again.** A round-2 p1 or p2 over a counted round-1 verdict is
+  refused, and so is one with no round-1 verdict of its pass. A round-2 verdict that fails replaces
+  nothing.
+* **The ties, and how "the pair is unchanged" is decided.** A round-1 tie counts only while the p1
+  and the p2 verdicts on the row's route are, compared as JSON records, the very `VERDICTS_RAW.json`
+  p1 and p2 of that row. Those are the two reasonings the third judge was shown. Once a later round
+  replaces either one, the tie is set aside as stale, and if the new pair still disagrees it needs a
+  new tie. A round-2 verdict is another judge's record (its reason and quotes differ), so any
+  replacement changes the pair. **62 of the 64 round-1 ties stand.** That covers the 60 counted ties
+  whose pair nothing touched, plus the failed ties of Stoa Poikile and Inka Raqay, Ayacucho: there
+  only the tie had failed, so the pair is unchanged and the row waits on a new tie. **2 ties are set
+  aside as stale**: Ferrybridge Henge and Knockmaree Dolmen. Each tie had been shown a p2 `keep`, and
+  that p2 is now `revert`, so the pair agrees and needs no tie.
+
+Every `DECISIONS.jsonl` line now names, for each route verdict, the file and section it came from
+(`basis[].from`). It also lists the verdicts set aside and why (`set_aside`). The 15 rows of round 1's
+`REJUDGE.json`:
+
+| row | column | route now (r1 = VERDICTS_RAW, r2 = VERDICTS_ROUND2) | decision |
+|---|---|---|---|
+| Padderbury Top | site_type | p1 keep (r2), p2 keep (r2) | keep |
+| Artashat | period_start | p1 keep (r2), p2 keep (r2) | keep |
+| Paquime | period_start | revert (r2) / revert (r2) | revert |
+| Old Winchester Hill | period_start | revert (r2) / revert (r2) | revert |
+| Qhunqhu Wankani | site_type | revert (r2) / revert (r1) | revert |
+| Ta' Ċieda Tower | site_type | revert (r2) / revert (r1) | revert |
+| Hamble Common Camp | site_type | revert (r1) / revert (r2) | revert |
+| Muntham Court Romano-British Site | site_type | revert (r1) / revert (r2) | revert |
+| Qhapaq Kancha | site_type | revert (r1) / revert (r2) | revert |
+| Tarmatambo | site_type | revert (r1) / revert (r2) | revert |
+| Ferrybridge Henge | period_start | revert (r1) / revert (r2); r1 tie stale | revert |
+| Knockmaree Dolmen | period_start | revert (r1) / revert (r2); r1 tie stale | revert |
+| Península de Kola | site_type | keep (r2) / wrong-both (r1, failed; r2 failed too) | pending: second judgement |
+| Stoa Poikile | site_type | wrong-both / keep / tie failed, pair unchanged | pending: tie |
+| Inka Raqay, Ayacucho | site_type | revert / keep / tie failed, pair unchanged | pending: tie |
+
+#### Rule 4 fired
+
+All 60 sample verdicts count: 51 `keep`, 7 `revert`, 2 `wrong-both` (both propose -500). **9 of the
+60 are not keep. The threshold is "more than 3 of the 60 (5 %)", so rule 4 fires**: every pass-1
+keep is judged a second time under rule 3. `decide.rule_4` counts only counted sample verdicts. Had
+failed ones been able to tip the count, the run would have refused until they were judged again.
+After the overlay, the pass-1 keeps are the 502 of round 1 plus the three new p1 keeps (Padderbury
+Top, Artashat, Península de Kola). Their round-2 p2 never saw pass 1, so it is their second judgement
+wherever it counts. Under rule 3, a second `keep` keeps the row, and any other verdict calls the third
+judge. The 9 sample rows not kept:
+
+| row | column | old -> written | sample verdict |
+|---|---|---|---|
+| Marayniyoq | site_type | City/town/settlement -> Archaeological site | revert |
+| Roborough Castle | site_type | Earthwork -> Fortress/citadel | revert |
+| Inka Raqay | site_type | City/town/settlement -> Archaeological site | revert |
+| Dolni Glavanak Cromlech | period_start | -1500 -> -800 | revert |
+| Wanakawri, Huánuco | site_type | City/town/settlement -> Archaeological site | revert |
+| Huilai Monument Archaeology Park | site_type | City/town/settlement -> Archaeological site | revert |
+| Maiden Castle, Cheshire | period_start | -1500 -> -600 | revert |
+| Aquae Calidae, Bulgaria | period_start | 1 -> -6000 | wrong-both, -500 |
+| Holyhead Mountain Hut Circles | period_start | -2000 -> -1000 | wrong-both, -500 |
+
+#### The two lists
+
+* **`SECOND_JUDGE.json`: 443 keys.** These are the pass-1 keeps without a counted second judgement:
+  the 442 round-1 keeps outside the sample, plus Península de Kola (its p2 failed in both rounds).
+  The file carries rule 4's numbers (sample 60, counted 60, not keep 9, threshold 3, fired).
+* **`TIE_ROUND2.json`: 11 rows**, each `{change_key, judge_1, judge_2}`: judge_1 is the p1 and
+  judge_2 the p2 on the route, each with verdict, right_value, reason and quotes. That is the shape
+  the third judge needs, with the evidence read from the row in INPUT.jsonl. The 11 are the 9 sample
+  splits above (p1 keep, second judgement not keep), plus Stoa Poikile (wrong-both / keep) and Inka
+  Raqay, Ayacucho (revert / keep). The file states the pair rule.
+
+#### The decision now (`run.py decide`, both rounds)
+
+**keep 64, revert 416, rejudge 0, pending 454** (443 wait on a second judgement, 11 on a tie).
+`pending` is new: a row whose route lacks a counted verdict it waits for. The two cases are rule 4's
+second judgement of a pass-1 keep, and a third judge for a pair that disagrees, whether that verdict
+was never given or was given and failed. `rejudge` now means only a failed pass 1, or a failed pass 2
+of a pass-1 verdict that is not keep (`REJUDGE.json`, now empty: `{"p1": [], "p2": []}`). A row waits
+for the first verdict its route lacks, never a later one. So Ferrybridge-like rows (pass 2 and tie
+both failed) re-judge pass 2 first.
+
+| decision | route | rows |
+|---|---|---|
+| keep | p1 keep, second judgement keep (rule 4 under rule 3) | 53 (51 sample, Padderbury Top, Artashat) |
+| keep | p1 not keep, p2 keep, third judge keep | 11 |
+| revert | p1 and p2 not keep | 367 |
+| revert | p2 keep, third judge revert or wrong-both | 49 |
+| pending | a pass-1 keep waiting on its second judgement | 443 |
+| pending | a pair that disagrees, waiting on a third judge | 11 |
+
+The move from round 1's decisions:
+
+* keep -> keep 62 (the 51 sample keeps and the 11 tie keeps);
+* keep -> pending 451 (442 unsampled, 9 sample splits);
+* revert -> revert 406 (unchanged);
+* rejudge -> revert 10, rejudge -> keep 2, rejudge -> pending 3.
+
+**A "keep" is final for 64 rows only.** The other 443 pass-1 keeps are undecided until judged a second
+time.
+
+* **Revert by column:** site_type 224, period_start 186, country 6.
+* **By superseded (rule 6):** 408 not superseded. 8 superseded, the same eight as in round 1: none of
+  the 10 new reverts is superseded.
+* **Rule 5:** 30 reverted rows carry one proposed value and 3 carry two different values, unchanged
+  from round 1. Nothing is written.
+
+#### `REVERSAL_3_INPUT.jsonl` (408 rows)
+
+These are regenerated from final reverts only: a line is written only for `decision == "revert"` and
+not superseded, so `pending` and `rejudge` rows can never reach it (tested, and guarded by mutation
+cases). **The 398 lines of round 1 are unchanged** (compared as JSON records), and 10 are new:
+
+| row | column | restored (written -> old) |
+|---|---|---|
+| Hamble Common Camp | site_type | Settlement -> Fortress/citadel |
+| Muntham Court Romano-British Site | site_type | Archaeological site -> City/town/settlement |
+| Tarmatambo | site_type | Archaeological site -> City/town/settlement |
+| Qhapaq Kancha | site_type | Archaeological site -> City/town/settlement |
+| Qhunqhu Wankani | site_type | Archaeological site -> City/town/settlement |
+| Ta' Ċieda Tower | site_type | Fortification -> Minaret/tower |
+| Paquime | period_start | 1130 -> 1000 |
+| Ferrybridge Henge | period_start | -3000 -> -4500 (bucket changes) |
+| Old Winchester Hill | period_start | -600 -> -3000 (bucket changes) |
+| Knockmaree Dolmen | period_start | -3000 -> -4500 (bucket changes) |
+
+By column: site_type 221, period_start 186, country 1. 42 period_start rows restore a start in
+another bucket (round 1's 39 plus the three above). **This input is not final.** Of the 454 pending
+rows, those that end in `revert` join it once their second judgements and ties are decided.
+
+#### Next
+
+1. **Judge `SECOND_JUDGE.json`'s 443 keys.** Each gets an independent Opus judge that is not shown
+   pass 1 (the pass-1 prompt), and the verdicts go into a round-3 file as p2.
+2. **Judge `TIE_ROUND2.json`'s 11 rows** with the third judge, which sees the evidence and both
+   judgements and answers keep, revert or wrong-both.
+3. Among the 443, every second judgement that is not keep splits its pair and needs a tie as well.
+4. **Open: the XML reading.** Europe PMC answers `application/xml`, and both of Kola's quotes stand
+   in it verbatim. Adding the reading would be a change to the check, stated here and test-first, as
+   the Latin-1 fix was in round 1.
+5. `decide.py` reads rounds 1 and 2. A round-3 file (p2 for the SECOND_JUDGE keys, ties for the
+   current pairs) needs its own overlay step, test-first: a counted verdict is never judged again,
+   and a tie counts only for the pair it was shown.
+6. Then the reversal, through the journal-reversal lane as `journal-reversal-3`. It gets its own
+   plan, rehearsal, read-back and rollback, and the owner's go before the write.
+
+| output | sha256 |
+|---|---|
+| `DECISIONS.jsonl` (934 lines) | `022da98563914992e32abd606e22bfaf823f703a8a556403fe92163657b3bb00` |
+| `COUNTS.json` | `a8dcb32975ee1ec29309863ba1e59c2a21ed41af078df944c6649e60d3c967db` |
+| `REJUDGE.json` | `9bc2e5bda9a5e75f569b247d893e30a15a33960df2a0c93f09ad551f1e93b649` |
+| `REVERSAL_3_INPUT.jsonl` (408 lines) | `9344be9c8c3da21d68a03d765a06a15925cb72614f07c54de4cd7d0f25ac5037` |
+| `SECOND_JUDGE.json` (443 keys) | `f2ca9b2b99332a42ea41f3e93a6c0f39303058b3b5040dfeb2ef571bd9ef04c2` |
+| `TIE_ROUND2.json` (11 rows) | `4196b2a6bd6d7b5fd205508f7264196110f1e208565e5c98b881df75e2caf974` |
+| `PAGES.jsonl` (386 lines) | `7d0c7d0050726f37d98c8c93acb58026600aefc3d708d27c36006d3ecd5626e6` |
+
+`run.py decide` writes these byte-identically on a second run (checked). Inputs, as `COUNTS.json`
+records them: RULES.md and INPUT.jsonl the sealed digests, VERDICTS_RAW.json `98b88a54...`,
+KEEP_SAMPLE.json `96da2842...`, VERDICTS_ROUND2.json `56471faf...`.
+
+#### Tests, sweep, gates (main checkout, branch `integrate/wave1`, main venv)
+
+* `test_opus_audit_decide.py`: 28 new test functions, each red before its code. They cover the route
+  once rule 4 fires, rejudge against pending, rule 4 and its refusal, the overlay (replace, fail,
+  refuse, sample as p2, stale ties by p1 and by p2), the trace, the round-2 file and the stated
+  sample, both lists, no pending row in the reversal, and the fetch of round 2's URLs. The round-1
+  whole-run test became a round-2 whole-run test (62 keeps, the draw, the overlay, all six outputs
+  written twice byte-identically). Three round-1 tests follow the new meaning: a failed tie waits as
+  `pending`, `REJUDGE.json` lists p1 and p2 only, and the counts are split into `verdict_counts` and
+  `decision_counts`. 75 cases in the file.
+* `phase3/mutation_sweep.OPUS_ROUND2_MUTATIONS`: 31 cases in a block of their own after the round-1
+  block (decide.py 30, run.py 1). Four round-1 anchors follow the reshaped `decide_row` and
+  `_verdict_shape`. That makes 2,050 labels, all unique, and `test_every_mutation_names_an_anchor_and_a_test_that_exist`
+  passes. **`mutation_sweep.py "opus audit:" "opus round 2:"`: 77/77 caught** (46 + 31), each at
+  its intended assertion. The tree is byte-identical to the sweep's start for its 3 files, and no
+  `# mutant` is left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **5,991 passed, 6 skipped, 57 deselected, 0 failed** (249 s). The skips are the same six as in
+  round 1.
+* `ruff check` and `ruff format --check` are clean on the 4 touched Python files (ruff 0.15.11).
+  `ruff check api/ pipeline/` is clean, `lint-imports` shows 2 kept and 0 broken, and `vulture api/
+  pipeline/ .vulture_whitelist.py --min-confidence 80` is clean.

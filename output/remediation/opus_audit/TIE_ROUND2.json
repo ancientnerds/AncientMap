@@ -1,0 +1,386 @@
+{
+ "about": "RULES.md rule 3: the p1 and p2 verdicts of each row disagree (one keep, one not) and no counted third verdict decides the pair. A third judge sees the evidence and both judgements (judge_1 = p1, judge_2 = p2) and decides keep or revert.",
+ "pair_rule": "A round-1 tie counts only while the p1 and the p2 verdict on the row's route are, as JSON records, the very VERDICTS_RAW.json p1 and p2 of the row it was shown; once a later round replaces either, the tie is set aside as stale, and a pair that still disagrees needs a new tie.",
+ "count": 11,
+ "rows": [
+  {
+   "change_key": "phase3:075c3aee655bd9a4237b45bd4347b825c6d3616169f258f6422964bba763645d",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "The finder's reason was only the generic label, but the old value turns out to be wrong anyway. Spanish Wikipedia lists Incarracay among Cochabamba's Inca military constructions, and the stored card also calls it a stronghold. Nothing supports it being a city, town or settlement. The written 'Archaeological site' is canonical and true. It is coarse ('Fortress' would be finer), but it is not wrong.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0098/evidence/5d0819e0-a352-4ea1-9d64-067da2e428f9%2Fwikidata_entity.txt",
+      "quote": "archaeological site in the Cochabamba Department, Bolivia"
+     },
+     {
+      "source": "https://es.wikipedia.org/wiki/Cultura_de_Bolivia",
+      "quote": "se destacan las construcciones militares incas como Incallajta e Incarracay, en Cochabamba"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "revert",
+    "right_value": null,
+    "reason": "The finder's evidence was a disambiguation line and Wikidata's generic label 'archaeological site'. The finder's reason is exactly the listed false alarm: a less specific source label does not refute a finer stored type. Nothing in the evidence shows that Inka Raqay (an Inca ruin complex near Sipe Sipe, Cochabamba) was not a settlement. The old 'City/town/settlement' is not refuted and is at least as well supported, so the change was not warranted.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0098/evidence/5d0819e0-a352-4ea1-9d64-067da2e428f9%2Fenwiki.txt",
+      "quote": "Inka Raqay, Bolivia, an archaeological site in the Cochabamba Department, Bolivia"
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0098/evidence/5d0819e0-a352-4ea1-9d64-067da2e428f9%2Fwikidata_entity.txt",
+      "quote": "archaeological site in the Cochabamba Department, Bolivia"
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:08327e6e837d309aa7632ac2675e780896b361d46c58a2a25db30c471405cc93",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "Excavation finds date the cromlech's construction to the second phase of the Early Iron Age (8th-6th c. BC), so the securely attested start is -800. The stored -1500 is 700 years early and unsupported: an explicitly dated site, not a mere round-era value. Caveat: -1500 and -800 fall in the same bucket (1500-500 BC). This row belongs to the HUMAN_ONLY B11 same-bucket class, so the owner's group decision may override this verdict.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0299/evidence/8230ee02-ce60-4b34-b0cd-3beca70274fb%2Fenwiki.txt",
+      "quote": "These date the construction of the cromlech to the second phase of the Early Iron Age"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "revert",
+    "right_value": null,
+    "reason": "The evidence puts the cromlech's construction in the 8th-6th centuries BC, so -800 is the more precise year. But the stored -1500 and the written -800 fall in the same bucket: categorize_period gives '1500 - 500 BC' for both. The finder's bucket arithmetic was wrong; it put -800 in '500 BC - 1 AD'. Under the first entry in FALSE_ALARMS (a round era value on its own is not an error; only a value from another bucket is), the old bucket-floor value was not an error. So this is a same-bucket move, not a correction, and the change was not warranted.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0299/evidence/8230ee02-ce60-4b34-b0cd-3beca70274fb%2Fenwiki.txt",
+      "quote": "These date the construction of the cromlech to the second phase of the Early Iron Age"
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:357b2bf8ef9fb408e8ab743549a383d83a2c291417aa91f5d64a92cd31689228",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "Roborough Castle is an Iron Age hill fort: enwiki, the Wikidata description and Wikidata P31 Q744099 (hillfort) all say so. 'Earthwork' only names its physical form. 'Fortress/citadel' is canonical and is the catalogue's usual class for hillforts (about 119 hillfort/castle-named sites against 10 as Earthwork). The written value fits the site's function and does not replace a finer correct type.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0135/evidence/91d662b0-f64e-4b15-81c6-bb5a05a1796e%2Fenwiki.txt",
+      "quote": "Roborough Castle is an Iron Age enclosure or hill fort situated close to Lynton in Devon, England."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0135/evidence/91d662b0-f64e-4b15-81c6-bb5a05a1796e%2Fwikidata_entity.txt",
+      "quote": "hillfort in Lynton, Devon, England, UK"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "revert",
+    "right_value": null,
+    "reason": "The stored 'Earthwork' was not wrong. Wikipedia itself hedges ('enclosure or hill fort'). The Exmoor HER summary describes Roborough Castle as a univallate hillslope enclosure of about 0.4 ha, a probable Iron Age settlement on a gentle slope with an extremely weak downhill bank. It lists HILLSLOPE ENCLOSURE alongside UNIVALLATE HILLFORT. 'Fortress/citadel' overstates such a site, and the project's normaliser maps 'hillfort' to 'Fort', not 'Fortress/citadel'. The old value is at least as well supported, so the change was not warranted.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0135/evidence/91d662b0-f64e-4b15-81c6-bb5a05a1796e%2Fenwiki.txt",
+      "quote": "Roborough Castle is an Iron Age enclosure or hill fort situated close to Lynton in Devon, England."
+     },
+     {
+      "source": "https://www.exmoorher.co.uk/monument/MDE1246",
+      "quote": "Roborough Castle is a univallate hillslope enclosure, probably of Iron Age date, on a gentle north facing slope."
+     },
+     {
+      "source": "https://www.exmoorher.co.uk/monument/MDE1246",
+      "quote": "HILLSLOPE ENCLOSURE (Iron Age - 800 BC to 42 AD)"
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:47731ff7e088555f65fe1c3ab0992a6957bd1f8ddbb710e9b02b9b3cf4f79372",
+   "judge_1": {
+    "verdict": "wrong-both",
+    "right_value": "Monument",
+    "reason": "Both values are wrong. 'Megalithic stones' is wrong because this is a Classical Doric stoa. 'Infrastructure' is also wrong: in the canonical scheme that group holds utilitarian works (road, bridge, mine, quarry, aqueduct/canal, earthwork, well). The Stoa Poikile was a monumental public hall that displayed paintings and war trophies and served as a law court and philosophers' venue. The ASCSA Agora database files it as an 'Agora Monument' (function: social, military display, museum). The canonical type that fits is 'Monument', which is also what this run wrote for the Stoa of Attalos, the Stoa of the Athenians and the Echo Stoa.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0258/evidence/bfa06d13-88b7-4e88-913b-1f06f7c5305b%2Fenwiki.txt",
+      "quote": "It was one of the most famous sites in ancient Athens, owing its fame to the paintings and war-booty displayed within it and to its association with ancient Greek philosophy, especially Stoicism."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0258/evidence/bfa06d13-88b7-4e88-913b-1f06f7c5305b%2Fenwiki.txt",
+      "quote": "Sources from the mid-fourth century BC mention its use as a law court and as the venue for official arbitrations."
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "The Stoa Poikile was a built Doric portico of cut poros with Doric and Ionic columns, so the old value 'Megalithic stones' is plainly wrong and the change was warranted. The written 'Infrastructure' is a canonical type and a fixed point (normalize_site_type('Infrastructure') == 'Infrastructure'). It fits the building as a public covered walkway. On Wikidata the item is an instance of stoa (Q327328), and stoa is a subclass of covered walkway, which leads to passageway and then to thoroughfare. Nothing in the evidence contradicts it. 'Monument' or 'Memorial' would also be defensible, but no finer canonical type exists that would make 'Infrastructure' wrong.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0258/evidence/bfa06d13-88b7-4e88-913b-1f06f7c5305b%2Fenwiki.txt",
+      "quote": "or Painted Portico was a Doric stoa (a covered walkway or portico) erected around 460 BC on the north side of the Ancient Agora of Athens."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0258/evidence/bfa06d13-88b7-4e88-913b-1f06f7c5305b%2Fenwiki.txt",
+      "quote": "Sources from the mid-fourth century BC mention its use as a law court and as the venue for official arbitrations."
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:5e2ca6ea34264860b73c194cec4e49d4541cc7b0bea8caa27bccbf4ae6dd40e5",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "The site is the ancient spa town built around the hot springs. The pinned enwiki says archaeology shows the springs themselves were used in the 6th-5th millennium BC, so -6000 is the attested start of human use of this site and falls in the '< 4500 BC' bucket. The old value 1 ('1 - 500 AD') is wrong in any reading: the same article places the Thracian sanctuary in the 1st millennium BC and the first baths in 72 BC. One caveat: bg.wikipedia describes the Neolithic evidence as settlements near the spring, but the pinned evidence ties the use to the springs, and -6000 is at least far better supported than 1.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0305/evidence/424eed88-76e7-402b-8d62-3f598eb9c9ce%2Fenwiki.txt",
+      "quote": "Archaeology has shown that the hot springs were already used in the Neolithic between the 6th and 5th millennium BC."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0305/evidence/424eed88-76e7-402b-8d62-3f598eb9c9ce%2Fenwiki.txt",
+      "quote": "The Thracians built a sanctuary of the Three Nymphs in the 1st millennium BC around the spring."
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "wrong-both",
+    "right_value": "-500",
+    "reason": "The site is the Aquae Calidae thermal baths and town (stored type Bath). The German and Bulgarian Wikipedia articles say the Neolithic evidence is three settlements NEAR the spring, so -6000 dates other sites, not this one. The site's own attested start is the Thracian sanctuary of the Three Nymphs at the spring, built in the middle of the 1st millennium BC; its oldest coin is 5th century BC, and the first Roman baths date to 72 BC. That puts the start in '500 BC - 1 AD', about -500. The stored 1 ('1 - 500 AD') is also the wrong bucket.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0305/evidence/424eed88-76e7-402b-8d62-3f598eb9c9ce%2Fenwiki.txt",
+      "quote": "The Thracians built a sanctuary of the Three Nymphs in the 1st millennium BC around the spring."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0305/evidence/424eed88-76e7-402b-8d62-3f598eb9c9ce%2Fenwiki.txt",
+      "quote": "the oldest from Apollonia Pontica from the 5th century BC"
+     },
+     {
+      "source": "https://de.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&titles=Aquae%20Calidae%20(Thrakien)&format=json",
+      "quote": "Nach archäologischen Untersuchungen wurden die warmen Quellen bereits in der Jungsteinzeit genutzt, als zwischen dem 6. und 5. Jahrtausend v. Chr. in der Nähe drei Siedlungen entstanden."
+     },
+     {
+      "source": "https://bg.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&titles=%D0%90%D0%BA%D0%B2%D0%B5%20%D0%9A%D0%B0%D0%BB%D0%B8%D0%B4%D0%B5&format=json",
+      "quote": "Траките превърнали извора в средата на I хил. пр. Хр. в най-почитаното"
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:6a1ea7d80584b6923ee2b099f873945bc98929dca080df49a1cca0724361d53e",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "Radiocarbon dates the settlement to c. 1000 BC (Wikipedia). Coflein, the Welsh national monuments record, puts the start of occupation in the middle of the first millennium BC. Stray late-Neolithic and Early Bronze Age artefacts and a 'may have been in existence from the Neolithic' do not securely date the settlement. The stored -2000 (bucket 3000-1500 BC) is therefore unsupported, and -1000 (bucket 1500-500 BC) fits the securely attested start.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0009/evidence/9705b676-7ba1-465f-aebd-a21f346de5a1%2Fenwiki.txt",
+      "quote": "However, through Radiocarbon dating the site was determined to be from c."
+     },
+     {
+      "source": "https://coflein.gov.uk/en/site/93837/",
+      "quote": "radio-carbon determinations point to occupation from the middle years of the first millennium BC"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "wrong-both",
+    "right_value": "-500",
+    "reason": "The written -1000 rests only on enwiki's 'c. 1,000 BC'. The primary sources behind that sentence do not say 1000 BC. The Cadw watching-brief report that enwiki cites dates the settlement to the late first millennium BC, with earlier activity from the late third millennium BC. RCAHMW Coflein says radiocarbon points to occupation from the middle years of the first millennium BC. So the hut settlement starts c. 500 BC, bucket '500 BC - 1 AD'. -1000 is in '1500 - 500 BC', so it is wrong. The old -2000 ('3000 - 1500 BC') matches only the pre-settlement 'activity on the site' (flints and pottery), not the construction or occupation of the hut circles, so it is wrong too. Right value: -500.",
+    "quotes": [
+     {
+      "source": "https://coflein.gov.uk/en/site/93837/",
+      "quote": "Finds have included pottery and a coin hoard of the Roman period, although radio-carbon determinations point to occupation from the middle years of the first millennium BC."
+     },
+     {
+      "source": "https://coflein.gov.uk/media/38/725/aent40_15.pdf",
+      "quote": "The most important results to come out of the last excavations were the dating of the settlement to the late first millennium BC, with evidence of activity on the site from the late third millennium BC and also the first century AD."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0009/evidence/9705b676-7ba1-465f-aebd-a21f346de5a1%2Fenwiki.txt",
+      "quote": "However, through Radiocarbon dating the site was determined to be from c. 1,000 BC."
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:80a1a41ff44e04f0d4043b3a42d7c75e68de46f7b9f446a5e3ed872fbd1c22b2",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "The written -600 is the site's securely attested start: radiocarbon dates the ramparts of this Iron Age hill fort to c. 600 BC. The old -1500 is a Middle Bronze Age year with no support in the evidence. The finder's and reviewer's bucket arithmetic is wrong, though: -600 and -1500 are both in '1500 - 500 BC' under categorize_period. That puts this row in the 170 written same-bucket rows (WRITTEN_SAME_BUCKET.jsonl, HUMAN_ONLY.md B11), where Martin decides keep-or-revert for same-bucket moves. On the merits the written value is correct and better supported than the old one, so the verdict is keep; the same-bucket policy question stays with the human under B11.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0251/evidence/cea5eebe-1a8a-4132-8867-12102672ecc0%2Fenwiki.txt",
+      "quote": "Radiocarbon dating indicates that the ramparts defending Maiden Castle were built in around 600 BC."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0251/evidence/cea5eebe-1a8a-4132-8867-12102672ecc0%2Fenwiki.txt",
+      "quote": "Maiden Castle is an Iron Age hill fort"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "revert",
+    "right_value": null,
+    "reason": "The attested construction date is c. 600 BC (radiocarbon), so -600 is the more precise value. But the change was not warranted under the project's period rule. categorize_period (year < hi) puts both -1500 and -600 in the bucket '1500 - 500 BC'. The finder and reviewer justified the write only by claiming -600 falls in '500 BC - 1 AD', which is an arithmetic error. FALSE_ALARMS #1 says a round era value is not an error and only a value from a different bucket is. The stored -1500 was therefore not an error by the field contract, and the finder's reason, correctly computed, is that false alarm (RULES: revert when 'the finder's reason is one of the false alarms'). No right_value is proposed: -600 is better attested but in the same bucket.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0251/evidence/cea5eebe-1a8a-4132-8867-12102672ecc0%2Fenwiki.txt",
+      "quote": "Radiocarbon dating indicates that the ramparts defending Maiden Castle were built in around 600 BC."
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:8f6a33d17e7d651f7bf455f977a64050c17d12daa927c0e34bc243b984abeffb",
+   "judge_1": {
+    "verdict": "revert",
+    "right_value": null,
+    "reason": "The enwiki stub and Wikidata (P31 Q839954; the es-wiki article likewise calls it 'un sitio arqueológico perteneciente a la civilización incaica') give only the generic class 'archaeological site' plus location. Nothing contradicts the finer stored City/town/settlement. The finder's reason (the source says 'archaeological site' and does not mention a settlement) is the listed false alarm: a less specific source does not make a finer stored type wrong (plan 4.3.5). The change was not warranted.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0269/evidence/184dfea2-b710-4c3a-a3e8-d8cea0738290%2Fenwiki.txt",
+      "quote": "is an archaeological site in the Ayacucho Region in Peru."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0269/evidence/184dfea2-b710-4c3a-a3e8-d8cea0738290%2Fwikidata_entity.txt",
+      "quote": "archaeological site in the Ayacucho Region, Peru"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "Inka Raqay/Allqu Willka is an Inca-period site on a mountain summit. Enwiki, eswiki, Wikidata and Valdez & Valdez 2000 (the enwiki source) all call it only an archaeological site. None calls it a town or settlement. The old City/town/settlement was the catalogue's default for Peruvian stubs and has no source behind it. The written canonical 'Archaeological site' is correct. The finder's argument follows the coarser-source pattern, and the stored finer type has no support to protect.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0269/evidence/184dfea2-b710-4c3a-a3e8-d8cea0738290%2Fenwiki.txt",
+      "quote": "is an archaeological site in the Ayacucho Region in Peru. It is located in the Huanta Province, Iguain District, on top of the mountain named Allqu Willka."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0269/evidence/184dfea2-b710-4c3a-a3e8-d8cea0738290%2Fwikidata_entity.txt",
+      "quote": "archaeological site in the Ayacucho Region, Peru"
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:981ef3c4f9740447561766696e8d6316576c33845672b9c227b67f3fe1cad9d5",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": null,
+    "reason": "The Huilai site is a multi-period archaeological site: cultural layers from the Neolithic to the Qing, and burials of the Fanzaiyuan culture. The enwiki extract, the Wikidata description and P31 (Q839954) all call it an archaeological site. Neither the evidence nor Chinese Wikipedia says it was a city, town or settlement, so the old value had no support and 'Archaeological site' is the correct canonical type. This is not the 'coarser source against a finer type' false alarm, because the finer stored value is unattested.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0315/evidence/316b3d27-1295-41ce-a5c0-3b9c8251647e%2Fenwiki.txt",
+      "quote": "is an archaeological site at Xitun District, Taichung, Taiwan."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0315/evidence/316b3d27-1295-41ce-a5c0-3b9c8251647e%2Fwikidata_entity.txt",
+      "quote": "Archaeological site in Xitun, Taichung, Taiwan"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "revert",
+    "right_value": "City/town/settlement",
+    "reason": "The finder's only ground was that enwiki and Wikidata call the site 'an archaeological site'. That is false alarm #4: a coarser source does not refute a finer stored type. The stored type is supported. The National Museum of Natural Science names Huilai among the places where prehistoric Taichung people lived. zh-wiki describes cultural layers running from the Neolithic to the late Qing, i.e. a long-lived habitation site. 'City/town/settlement' is therefore at least as well supported as the generic 'Archaeological site', and the change was not warranted.",
+    "quotes": [
+     {
+      "source": "https://web.archive.org/web/20101115232313/http://www.nmns.edu.tw/public/exhibit/2010/metropolitian/index.htm",
+      "quote": "在史前台中人居住的地方如台中公園、惠來遺址、中興大學等，近年來經由挖掘出土的史前遺跡與遺物而有了初步的輪廓。"
+     },
+     {
+      "source": "https://zh.wikipedia.org/w/index.php?title=%E6%83%A0%E4%BE%86%E9%81%BA%E5%9D%80&action=raw",
+      "quote": "該遺址最早的文化層可推到史前[[新石器時代]]，最晚的文化層為[[清代]]晚年的漢人文化層"
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0315/evidence/316b3d27-1295-41ce-a5c0-3b9c8251647e%2Fenwiki.txt",
+      "quote": "is an archaeological site at Xitun District, Taichung, Taiwan."
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:b635033941bb78abce2b22fd9dc0017b61255c3250633988eca33327b822e296",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": "Archaeological site",
+    "reason": "The finder's own reason was the coarse-source false alarm. However, the MINCETUR inventory record behind the enwiki stub describes an Inca-era huaca (a shrine where offerings were made), not a settlement. That is a different kind of thing from 'City/town/settlement', so the old value had no support. 'Archaeological site' is supported by every source and is canonical. 'Sacred site' would be finer; that is for a later lane.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0276/evidence/9aaa53a6-b89d-4511-b9ae-e5e89e640bea%2Fenwiki.txt",
+      "quote": "Wanakawri (Quechua, Hispanicized and mixed spellings Huanacaure, Wanacaure) is an archaeological site in Peru."
+     },
+     {
+      "source": "https://web.archive.org/web/20140224121949/http://www.mincetur.gob.pe/TURISMO/OTROS/inventario%20turistico/Ficha.asp?cod_Ficha=2198",
+      "quote": "uno de esos lugares fue la Huaca Huanacaure"
+     },
+     {
+      "source": "https://web.archive.org/web/20140224121949/http://www.mincetur.gob.pe/TURISMO/OTROS/inventario%20turistico/Ficha.asp?cod_Ficha=2198",
+      "quote": "la huaca huanacaure, que es en su tierra de Paucar"
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "revert",
+    "right_value": null,
+    "reason": "The finder's only ground is that the evidence calls the site 'an archaeological site'. That is the coarser-source false alarm: 'archaeological site' does not refute a finer stored type. Nothing in the evidence contradicts 'City/town/settlement'. A regional report (Correo, 2015, via Wayback) on Huanacaure in the same Chinchao district describes it as an Inca and pre-Inca settlement. I could not confirm it is the same site: that article gives no coordinates. So the old value is at least as well supported, and the change was not warranted.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0276/evidence/9aaa53a6-b89d-4511-b9ae-e5e89e640bea%2Fenwiki.txt",
+      "quote": "Wanakawri (Quechua, Hispanicized and mixed spellings Huanacaure, Wanacaure) is an archaeological site in Peru."
+     },
+     {
+      "source": "https://web.archive.org/web/20160917194610/http://diariocorreo.pe/ciudad/huanacaure-belleza-inca-en-huanuco-589035/",
+      "quote": "como un asentamiento inca y pre inca, que se erige en el cerro Huanacaure con construcciones impresionantes"
+     }
+    ]
+   }
+  },
+  {
+   "change_key": "phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716",
+   "judge_1": {
+    "verdict": "keep",
+    "right_value": "Archaeological site",
+    "reason": "The evidence calls Marayniyoq an archaeological site and a Wari site (P31 Q839954). The site's own stored description presents it as a specialised facility for grinding grain for chicha, not a town. Nothing supports the old 'City/town/settlement'. 'Archaeological site' is canonical and correct.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0082/evidence/fd79f148-d931-42c7-8883-41732a93d209%2Fenwiki.txt",
+      "quote": "is an archaeological site in the region of Ayacucho in Peru."
+     },
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0082/evidence/fd79f148-d931-42c7-8883-41732a93d209%2Fenwiki.txt",
+      "quote": "It is considered a Wari site."
+     }
+    ]
+   },
+   "judge_2": {
+    "verdict": "revert",
+    "right_value": null,
+    "reason": "The finder's only reason is that Wikipedia and Wikidata call Marayniyoq 'an archaeological site'. That is the listed false alarm: a less specific source label does not refute a finer stored type. The excavation literature calls it 'un establecimiento wari', a Wari settlement or establishment specialised in grain processing and chicha production. So the old 'City/town/settlement' is at least as well supported as the generic 'Archaeological site', and the change was not warranted.",
+    "quotes": [
+     {
+      "source": "output/remediation/phase3_runner/runs/mass/batch-0082/evidence/fd79f148-d931-42c7-8883-41732a93d209%2Fenwiki.txt",
+      "quote": "is an archaeological site in the region of Ayacucho in Peru."
+     },
+     {
+      "source": "https://revistas.pucp.edu.pe/index.php/boletindearqueologia/es/article/view/2242",
+      "quote": "Marayniyoq, un establecimiento wari en el valle de Ayacucho"
+     },
+     {
+      "source": "https://revistas.pucp.edu.pe/index.php/boletindearqueologia/es/article/view/2242",
+      "quote": "un centro especializado wari del valle de Ayacucho"
+     }
+    ]
+   }
+  }
+ ]
+}
