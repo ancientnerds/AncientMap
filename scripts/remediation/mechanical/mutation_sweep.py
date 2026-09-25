@@ -3940,6 +3940,43 @@ WRONG_BOTH_CASES: list[Case] = [
 ]
 CASES += WRONG_BOTH_CASES
 
+# ------------------------------------------ the card_stats basis next to Phase 5 (2026-09-25)
+#: Phase 5 journals `card_stats.card_description` (`phase4/write4.py`); the basis pointer reads
+#: the twelve columns only, so a card text never makes a later wave refuse to plan - and a write
+#: to one of the twelve that no wave made still does, whoever made it.
+_BASIS_ROWS = (
+    '    cards = [j for j in journal if j["table_name"] == "card_stats" and j["column_name"] in '
+    "COLUMNS]"
+)
+CARD_STATS_P5_CASES: list[Case] = [
+    Case(f"card_stats: {label}", CARD_STATS, _BASIS_ROWS, new, test, CARD_TESTS)
+    for label, new, test in (
+        (
+            "a Phase-5 card text names no basis",
+            '    cards = [j for j in journal if j["table_name"] == "card_stats"]',
+            "test_a_phase_5_card_text_is_no_basis_of_the_stats",
+        ),
+        (
+            "the next wave plans after Phase 5",
+            '    cards = [j for j in journal if j["table_name"] == "card_stats"]',
+            "test_the_next_wave_plans_after_phase_5_wrote_card_texts",
+        ),
+        (
+            "the twelve columns name the basis",
+            '    cards = [j for j in journal if j["table_name"] == "card_stats" and j["column_name"] '
+            "not in COLUMNS]",
+            "test_the_write_and_the_undo_name_their_own_sides",
+        ),
+        (
+            "a stats cell of Phase 5 still refuses",
+            '    cards = [j for j in journal if j["table_name"] == "card_stats" and not '
+            'str(j["run_stamp"]).startswith("phase5:")]',
+            "test_a_stats_cell_written_by_phase_5_still_refuses",
+        ),
+    )
+]
+CASES += CARD_STATS_P5_CASES
+
 
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
