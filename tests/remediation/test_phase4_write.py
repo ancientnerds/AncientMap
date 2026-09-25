@@ -2615,3 +2615,17 @@ def test_a_p4_revert_is_refused_while_the_sites_p5_card_is_live() -> None:
     assert FX.journal_sqlite([*entries, reversal]).execute(query).fetchone()[0] == 0
     sql = R.render_revert("phase4:%")
     assert R.card_left_live("l") in sql and "revert the phase-5 card first" in sql
+
+
+def test_raw_data_holds_a_value_only_as_jsonb_compares_it() -> None:
+    """2026-09-25 audit m20: the preflight compared raw_data parsed as Python floats, guard 4 as
+    jsonb numerics. A number beyond float precision then passed the preflight and failed guard 4 -
+    closed, but taking the whole chunk down with it. Both sides are read as exact decimals now."""
+    import types
+
+    row = types.SimpleNamespace(column="raw_data")
+    chunk = types.SimpleNamespace(site_ids=[GATE_SITE])
+    answer = '{"id": "' + GATE_SITE + '", "raw_data": {"lat": 0.1, "n": 1}}\n'
+    stored = W4._stored(chunk, lambda sql, host: answer, "h")[GATE_SITE]
+    assert W4.holds_value(stored, row, '{"lat": 0.10, "n": 1.0}')
+    assert not W4.holds_value(stored, row, '{"lat": 0.1000000000000000055511151231257827, "n": 1}')

@@ -1628,10 +1628,11 @@ def stored_values_sql(site_ids: Sequence[str]) -> str:
 
 def holds_value(stored: Mapping[str, Any], row: Row4, planned: str | None) -> bool:
     """Does the stored row hold `planned` in the column's own sense? raw_data compares as JSON
-    values (jsonb equality), text columns byte for byte; `None` is a value of its own."""
+    values (jsonb equality: numbers as exact decimals, like guard 4 - audit 2026-09-25 m20), text
+    columns byte for byte; `None` is a value of its own."""
     observed = stored.get(row.column)
     if row.column == "raw_data":
-        return observed == (None if planned is None else M.parse_json(planned))
+        return observed == (None if planned is None else M.parse_json(planned, exact=True))
     return observed == planned
 
 
@@ -1662,8 +1663,10 @@ def invariant_problems(stored: Mapping[str, Any], rows: Sequence[Row4]) -> list[
 
 
 def _stored(chunk: Chunk4, runner: W.SqlRunner | None, host: str) -> dict[str, dict[str, Any]]:
+    """The stored rows by site id, numbers read exactly (`holds_value` compares as jsonb does)."""
     text = W._exec(runner, stored_values_sql(chunk.site_ids), host=host)
-    return {str(entry["id"]): entry for entry in W._json_rows(text)}
+    rows = [M.parse_json(line, exact=True) for line in W.jsonl_lines(text) if line.strip()]
+    return {str(entry["id"]): entry for entry in rows}
 
 
 def preflight(

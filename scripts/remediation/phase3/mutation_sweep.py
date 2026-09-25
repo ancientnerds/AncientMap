@@ -21380,6 +21380,22 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_p4_revert_is_refused_while_the_sites_p5_card_is_live",
     ),
     (
+        "audit-fix: m20 exact JSON numbers are read as floats",
+        P4_MODEL,
+        "parse_float=Decimal if exact else float",
+        "parse_float=float",
+        P4_WRITE_TEST,
+        "test_raw_data_holds_a_value_only_as_jsonb_compares_it",
+    ),
+    (
+        "audit-fix: m20 the planned raw_data is read as floats",
+        P4_WRITE,
+        "M.parse_json(planned, exact=True))",
+        "M.parse_json(planned))",
+        P4_WRITE_TEST,
+        "test_raw_data_holds_a_value_only_as_jsonb_compares_it",
+    ),
+    (
         "audit-fix: m18 the acceptance keeps its own stream rule",
         P4_ACCEPT,
         "    W.utf8_streams()\n    parser = argparse",
