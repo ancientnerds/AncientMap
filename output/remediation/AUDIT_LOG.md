@@ -11421,3 +11421,51 @@ What those cards get is the Phase-5 sitting's.
   `integrate/wave1`'s five Phase-6 commits `ff9a570` .. `a2ac917`.
 * The selector's rule (8) keeps the gap the reviewer line closes (entry above): a decision for a
   later run.
+
+## 2026-09-25 - `verify_writes4 --allow-stamp`: the two sites P4 took back and lane L then marked are superseded, not MOVED (read-only, nothing written)
+
+After lane L was written in full, the P4 acceptance (`verify_writes4.py --lane p4 --plan
+logs/_write_apply_p4/LANE_PLAN.jsonl --run runs/pilot4-2026-09-24 --run runs/mass-2026-09-25`)
+reported **2 deviations**: `MOVED 70037a24-... unified_sites.raw_data` (Roman Bath, York) and `MOVED
+78c18ef3-... unified_sites.raw_data` (Altar of Athena Polias). Both were written by P4, taken back
+with `revert4.py --site` (own reversals kept) and held (`audit-wrong-site`); their description is the
+March text again, so lane L rightly wrote its legacy provenance into their raw_data. Journal, read
+only: 34910 (`phase4:p4-0036:chunk-0001`) -> 36607 (its `-rollback`) -> 65295
+(`phase4l:p4l-1144:chunk-0001`), and 34982 -> 36611 -> 65572 (`phase4l:p4l-1155:chunk-0001`).
+The acceptance judges an all-reverted row like one not yet written, and the raw_data no longer held
+its planned old value.
+
+**The fix** (`a9a52b0`, test-first), after Phase 3's `verify_writes --allow-stamp`:
+
+* `--allow-stamp` is repeatable and takes SQL LIKE patterns (`write_gate4.like_matches`, imported).
+* A planned row the lane did not write, or whose lane rows are all reverted, that no longer holds its
+  planned old value is **superseded** (counted per allowed pattern) when its chain after the lane's
+  last own link - a write or its own reversal (`reverses`, the predicate `reverted` already used) -
+  runs continuously (`verify_writes.check_chain`) from the planned old value to the live value, every
+  link by an allowed stamp that is not one of the lane's own or their `-rollback`. With no own link in
+  the chain the whole chain must be that run, so an earlier link of another stamp leaves the row
+  MOVED (the stricter reading; no such row exists today). Anything else stays MOVED, word for word.
+* **Written rows, mirrored from `verify_writes`** (its docstring: "superseded when every later link
+  belongs to a stamp the operator names"): a lane row after which only allowed stamps wrote is
+  superseded instead of CHANGED LATER and is not carried, so its site is not re-verified as the
+  lane's. A later stamp that is not allowed stays CHANGED LATER.
+* The lane line gains `| superseded N`, then `allowed later:` and `superseded by <pattern>: N`.
+  `write_gate4 --accept` matches the lane line by its prefix (`_ACCEPT_LANE`), so the parser is
+  unchanged; a test feeds the tool's real output to `acceptance_problems`, and the gate tests'
+  fixture lines carry the new field.
+
+**Acceptance, 2026-09-25, from the main checkout, read-only** (logs in
+`output/remediation/logs/p4_accept_allow/`, gitignored):
+
+| run | planned / journal / carried / not yet written | superseded | re-verified | RESULT | sha256 |
+|---|---|---|---|---|---|
+| `--lane p4`, both runs, `--allow-stamp 'phase4l:%'` | 1,972 / 1,972 / 1,968 / 2 | 2 (`phase4l:%`) | 984 | **0 deviations**, `ACCEPT_EXIT=0` | `20a0d5b1` |
+| the same without `--allow-stamp` | 1,972 / 1,972 / 1,968 / 2 | 0 | 984 | the 2 MOVED lines as before, `ACCEPT_EXIT=1` | |
+| `--lane p4l --complete` | 4,003 / 4,003 / 4,003 / 0 | 0 | | **0 deviations** | `c8d765f3` |
+| `--lane p5`, both runs, `--complete --card-check` | 1,107 / 1,107 / 1,107 / 0 | 0 | 756 | **0 deviations** | `1de10782` |
+
+Gates: full suite 6,918 passed, 4 skipped, 57 deselected; `ruff check` and `ruff format --check` on
+the touched files, `ruff check api/ pipeline/`, `lint-imports` (2 kept), `vulture` clean.
+`mutation_sweep.py verify_writes4`: **50/50 caught** (35 earlier cases, two of them re-anchored
+because the reversal predicate moved into `reverses`; 15 new), the tree byte-identical, no mutant
+left.
