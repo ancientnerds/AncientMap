@@ -463,14 +463,31 @@ def resolve_duplicates(
     """The lane's own duplicates and the listed ones as one set, one retirement per loser.
 
     A loser both name with the same survivor is one duplicate carrying both evidences; with two
-    different survivors it is refused - which row stays is then a question, not a rule. A pair
-    touching a site held for the owner is refused whoever found it.
+    different survivors it is refused - which row stays is then a question, not a rule. The same
+    holds for a loser this lane's own rule finds with two survivors (a triangle of pairs): refused,
+    never decided by whichever pair came last (audit 2026-09-25 M8). A pair touching a site held
+    for the owner is refused whoever found it.
     """
     by_id = {s["id"]: s for s in export.sites}
-    by_loser: dict[str, Duplicate] = {d.loser: d for d in found}
+    by_loser: dict[str, Duplicate] = {}
     refused: list[Refusal] = []
     disputed: set[str] = set()
+    for dup in found:
+        own = by_loser.get(dup.loser)
+        if own is None:
+            by_loser[dup.loser] = dup
+        elif dup.loser not in disputed:
+            disputed.add(dup.loser)
+            refused.append(
+                (
+                    by_id[dup.loser],
+                    "survivors-disagree",
+                    f"this lane's rule finds it beside {own.survivor} and {dup.survivor}",
+                )
+            )
     for dup in listed:
+        if dup.loser in disputed:
+            continue
         own = by_loser.get(dup.loser)
         if own is None:
             by_loser[dup.loser] = dup

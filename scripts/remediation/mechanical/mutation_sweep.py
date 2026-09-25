@@ -4735,6 +4735,14 @@ AUDIT_FIX_CASES: list[Case] = [
         "test_a_year_without_its_era_or_in_another_does_not",
         "tests/remediation/test_mechanical_wrong_both.py",
     ),
+    Case(
+        "audit-fix: M8 a found loser keeps its last pair",
+        SCOPE,
+        "    for dup in found:\n        own = by_loser.get(dup.loser)\n",
+        "    for dup in found:\n        own = None  # mutant\n",
+        "test_a_loser_found_with_two_survivors_is_refused_in_any_pair_order",
+        SCOPE_TESTS,
+    ),
 ]
 CASES += AUDIT_FIX_CASES
 
