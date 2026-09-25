@@ -1,0 +1,124 @@
+{
+ "T-X1": {
+  "foreign_rows_resolved_min": 60,
+  "gold_correct_flagged_max": 1,
+  "gold_foreign_flagged": "all",
+  "precision_min": 0.85,
+  "recall_min": 0.7,
+  "rule": "other_site exclusions (X1) only if all hold"
+ },
+ "T-X2": {
+  "flags_min": 10,
+  "precision_min": 0.85,
+  "rule": "kind people exclusions (X2)"
+ },
+ "T-X3": {
+  "flags_min": 10,
+  "precision_min": 0.85,
+  "rule": "kind other exclusions (X3)"
+ },
+ "T-kind": {
+  "non_photo_precision_min": 0.9,
+  "pilot_agreement_min": 0.9,
+  "rule": "image_kind writes (K1, K2) only if both hold"
+ },
+ "T-strict": {
+  "owner_spot_check": "at least 36 of 40 agree (non-blocking; a failure reverses the hero moves)",
+  "precision_min": 0.9,
+  "recall_min": 0.6,
+  "rule": "HERO_PROMPT (K2, H1) only if both hold on the tier-A pilot tiles the eye labels judged",
+  "tier": "A",
+  "tiles": 50
+ },
+ "T0": {
+  "rule": "every C1 job has an in-vocabulary verdict, else STOP and admit nothing"
+ },
+ "definitions": {
+  "foreign_label": "fremde_staette",
+  "gallery_prompt_sha256": "b9a91ed10d1cba6dff89e394b85a9a03139f1056818b8b56f9a044aa2873c9f8",
+  "gold_correct": [
+   86275,
+   86276,
+   86277,
+   86278,
+   86279,
+   86280,
+   86281,
+   86282,
+   95878,
+   95882,
+   95883,
+   97035,
+   97039
+  ],
+  "gold_foreign": [
+   86273,
+   86274,
+   86283,
+   86284,
+   95876,
+   95877,
+   95879,
+   95880,
+   95881,
+   97034,
+   97038,
+   97051
+  ],
+  "gold_sites": [
+   "94776f9f-ea10-4b05-87bd-fd30c2cbdf6f",
+   "c63b0df7-79e5-4734-bb99-b17ccd8f54eb",
+   "cad0ee78-1954-4ca9-b8e4-dde794c99117"
+  ],
+  "hero_prompt_sha256": "56adb6fbe0f82541423a722740636995a2b9744ce9d4b7063d8d24062a30849b",
+  "interval": "Clopper-Pearson 95 %",
+  "model": "anthropic/claude-opus-5-5 (Claude Code agent)",
+  "non_photo_kinds": [
+   "map_or_document",
+   "painting_or_artwork"
+  ],
+  "non_photo_labels": [
+   "gemaelde_oder_zeichnung",
+   "karte_oder_plan",
+   "diagramm_oder_text"
+  ],
+  "not_this_site_labels": [
+   "fremde_staette",
+   "gemaelde_oder_zeichnung",
+   "karte_oder_plan",
+   "diagramm_oder_text",
+   "modernes_umfeld"
+  ]
+ },
+ "early_gate": {
+  "after_sites": 300,
+  "blind_tiles": {
+   "excluded": 30,
+   "judged_and_kept": 30
+  },
+  "pass": "at most 3 exclusions wrong AND at most 3 kept tiles show another place"
+ },
+ "final_acceptance": {
+  "excluded_rows": {
+   "correct_min": 90,
+   "n": 100
+  },
+  "gold": "every gold-foreign row excluded, no gold-correct row excluded, all 3 served heroes strict-confirmed",
+  "journal_two_way_deviations_max": 0,
+  "judged_kept_rows": {
+   "n": 100,
+   "other_place_max": 5
+  },
+  "seed": 20260923,
+  "served_heroes": {
+   "n": 50,
+   "shows_archaeology_min": 45
+  },
+  "tier_d_zero_call_rows": {
+   "foreign_max": 3,
+   "n": 50
+  }
+ },
+ "source": "output/remediation/logs/design_texts_images_2026-09-22.json, entry 7, pilot_and_thresholds",
+ "version": "c1-v1"
+}

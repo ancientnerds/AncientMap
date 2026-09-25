@@ -701,6 +701,48 @@ def test_a_directory_sealed_for_another_model_is_never_fixed_asked_or_measured(
     assert {p.name: p.read_bytes() for p in run.iterdir()} == before
 
 
+OPUS_CALIBRATION = REPO / "output" / "remediation" / "gallery_audit" / "calibration-2026-09-25-opus"
+#: The sample the DeepSeek seal fixed on 2026-09-23 (its JOBS.jsonl, 939 questions).
+DEEPSEEK_JOBS_SHA = "f0c4ccd6833f2de456e2d1ca110d2520ae6772cd9c3ebd4ec789a032de70e5c9"
+
+
+def test_the_opus_c1_directory_was_sealed_for_opus_and_fixed_its_sample_before_any_answer() -> None:
+    """The Opus calibration (owner order 2026-09-23): today's thresholds and the C1 sample, each
+    hashed into SEAL.jsonl before the first question was handed off - the very 939 questions the
+    DeepSeek seal fixed, rebuilt from the same inputs byte for byte."""
+    thresholds, digest, sealed_at = calibrate.sealed_for_model(OPUS_CALIBRATION)
+    assert digest == THRESHOLDS_SHA and thresholds["definitions"]["model"] == vision.MODEL
+    assert thresholds == json.loads(calibrate.thresholds_text())
+    assert hashlib.sha256((OPUS_CALIBRATION / "THRESHOLDS.json").read_bytes()).hexdigest() == (
+        THRESHOLDS_SHA
+    )
+    jobs, fixed = calibrate.sealed_jobs(OPUS_CALIBRATION)
+    assert hashlib.sha256((OPUS_CALIBRATION / "JOBS.jsonl").read_bytes()).hexdigest() == fixed
+    assert fixed == DEEPSEEK_JOBS_SHA
+    assert len(jobs) == 939 and sum(job.pass_ == vision.HERO for job in jobs) == 50
+    log = _log(OPUS_CALIBRATION)
+    assert [sorted(entry) for entry in log] == [
+        ["sealed_at", "thresholds_sha256"],
+        ["fixed_at", "jobs", "jobs_sha256"],
+    ]
+    assert sealed_at == log[0]["sealed_at"] <= log[1]["fixed_at"] and log[1]["jobs"] == 939
+    note = (OPUS_CALIBRATION / "README.md").read_text(encoding="utf-8")
+    for words in (
+        vision.MODEL,
+        "opus_handoff.py",
+        "2026-09-23",
+        "everything with Opus",
+        "failed-deepseek-401/VERDICTS.jsonl",
+        "produced no verdict",
+    ):
+        assert words in note, words
+    ledger = OPUS_CALIBRATION / "VERDICTS.jsonl"
+    if ledger.exists():  # the answers come after the seal and the fixed sample, and by Opus only
+        for entry in vision.Ledger(ledger).lines:
+            assert str(entry.line["judged_at"]) >= log[1]["fixed_at"]
+            assert entry.line["model"] == vision.MODEL
+
+
 def test_the_jobs_command_fixes_the_sample_it_builds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
