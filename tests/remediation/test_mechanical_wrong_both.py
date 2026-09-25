@@ -316,6 +316,16 @@ class TestTheCandidates:
         assert got[KEPT_KEY].decision == "keep"
         assert [j.stage for j in got[KEPT_KEY].judges] == ["p1", "p2", "tie"]
 
+    def test_missing_decisions_are_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(P.PlanError, match="is missing"):
+            W.load_candidates(tmp_path)
+
+    def test_a_basis_that_did_not_count_is_read_as_one(self, tmp_path: Path) -> None:
+        lines = decisions()
+        lines[0]["basis"][1]["counted"] = False
+        (arles, *_rest) = W.load_candidates(write_audit(tmp_path, lines))
+        assert [j.counted for j in arles.judges] == [True, False]
+
     def test_a_decision_named_twice_is_refused(self, tmp_path: Path) -> None:
         lines = decisions()
         with pytest.raises(P.PlanError, match="twice"):
@@ -520,7 +530,7 @@ class TestTheCountryConvention:
         assert W.country_problem(value, VOCABULARY) is None
 
     @pytest.mark.parametrize(
-        "value", ["United Kingdom", "UK", "Great Britain", "Atlantis", "Georgia (country)"]
+        "value", ["United Kingdom", "UK", "Great Britain", "Atlantis", "Georgia (country)", "Guam"]
     )
     def test_a_country_outside_the_convention_is_named(self, value: str) -> None:
         assert W.country_problem(value, VOCABULARY)
@@ -575,6 +585,7 @@ class TestWhatAQuoteStates:
                 "archaeological site",
             ),
             ("Barrow", "had a large barrow with a circle", "barrow"),
+            ("Fortress/citadel", "a Fortress/citadel above the river", "Fortress/citadel"),
         ],
     )
     def test_a_term_the_normalizer_resolves_to_the_type_states_it(
@@ -631,11 +642,27 @@ class TestWhatAQuoteStates:
             (-3700, "about 3700 years old"),
             (-500, "the middle years of the first millennium BC"),
             (0, "0 BC"),
+            (0, "AD 0"),
             (-1500, "1500 CENTURY"),
+            (1500, "1500 CENTURY"),
+            (900, "BAD 900"),
+            (900, "rebuilt in AD 800"),
+            (-35, "35,000 BC"),
         ],
     )
     def test_a_year_without_its_era_or_in_another_does_not(self, value: int, text: str) -> None:
         assert W.states("period_start", str(value), text) is None
+
+    def test_no_synonym_is_longer_than_the_longest_canonical_type(self) -> None:
+        from pipeline.normalizers.site_type import _SYNONYMS, normalize_site_type
+
+        longest = max(len(W._WORD.findall(k.replace("_", " "))) for k in _SYNONYMS)
+        assert longest <= W.MAX_TERM_WORDS
+        assert all(normalize_site_type(t) == t for t in W.CANONICAL_TYPES)
+
+    def test_a_column_the_lane_does_not_correct_is_refused(self) -> None:
+        with pytest.raises(P.PlanError, match="not a column"):
+            W.states("name", "Stonehenge", "Stonehenge")
 
     def test_a_country_is_stated_by_its_name_standing_whole(self) -> None:
         assert (
@@ -645,6 +672,7 @@ class TestWhatAQuoteStates:
         assert W.states("country", "Ireland", "in County Down, Northern Ireland.") is None
         assert W.states("country", "Ireland", "a dolmen in Ireland.") == "Ireland"
         assert W.states("country", "Oman", "the Romans came") is None
+        assert W.states("country", "Iran", "the Iranian plateau") is None
 
 
 # ------------------------------------------------------------------------------ the list and the plan
@@ -742,6 +770,27 @@ def test_write_refuses_a_plan_that_is_not_the_lane_s_list(
     assert run_main(tmp_path, monkeypatch, "--write") == 1
     assert "run --list" in capsys.readouterr().err
     assert not (tmp_path / "out" / "PLAN.jsonl").exists()
+
+
+def test_list_and_write_in_one_run_are_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse() -> Any:
+        raise AssertionError("production was read")
+
+    monkeypatch.setattr(W, "psql_json_reader", refuse)
+    with pytest.raises(SystemExit) as info:
+        W.main(["--list", "--write", "--out", str(tmp_path)])
+    assert info.value.code == 2
+
+
+def test_no_flag_reads_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse() -> Any:
+        raise AssertionError("production was read")
+
+    monkeypatch.setattr(W, "psql_json_reader", refuse)
+    assert W.main(["--out", str(tmp_path)]) == 0
+    assert not list(tmp_path.iterdir())
 
 
 def test_write_plans_the_lane_s_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

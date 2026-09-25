@@ -30,7 +30,8 @@ refused where the decision and its verdict file disagree (the checks `reversal.l
    names the written value and a `revert` the old one, and either is a judge naming another value.
 4. **(c) The value is valid for the field**: not the old value (`not-a-change`) nor the written one
    (`proposes-the-reverted-value`); a `site_type` is a canonical type and a fixed point of the
-   pipeline's normalizer, `normalize_site_type(v) == v` (`not-a-site-type`); a `period_start` is an
+   pipeline's normalizer, `normalize_site_type(v) == v` (`not-a-site-type`; the canonical list is
+   the lane's guard 4, and every type on it is a fixed point); a `period_start` is an
    integer year as the database prints it (`not-an-integer-year`), whose bucket the pipeline's
    `categorize_period` and the frontend's `categorizePeriod` agree on (`bucket-rules-disagree`) - the
    rule the period-name lane uses; a `country` is a spelling the census T05 predicate accepts, that
@@ -284,7 +285,8 @@ _WORD = re.compile(r"[^\W\d_]+(?:/[^\W\d_]+)*")
 #: of the normalizer is shorter - pinned by a test).
 MAX_TERM_WORDS = max(len(_WORD.findall(t)) for t in CANONICAL_TYPES)
 
-_NUMBER = r"(?<![\d.,])(?P<n>\d{1,3}(?:,\d{3})+|\d+)(?!\d|,\d)"
+#: A whole number - thousands commas allowed - read from where `_DIGIT` says one starts.
+_NUMBER = r"(?P<n>\d{1,3}(?:,\d{3})+|\d+)"
 _RANGE = r"(?:\s?[–—\-/]\s?\d[\d,]*|\s(?:to|and)\s\d[\d,]*)*"
 _BC = r"B\.\s?C\.\s?E\.|B\.\s?C\.|BCE|BC|a\.\s?C\.|v\.\s?Chr\.|av\.\s?J\.-C\.|пр\.\s?Хр\."
 _AD = r"A\.\s?D\.|C\.\s?E\.|AD|CE|d\.\s?C\.|n\.\s?Chr\.|ap\.\s?J\.-C\."
@@ -292,6 +294,7 @@ _SUFFIX = re.compile(
     _NUMBER + _RANGE + r"\s?(?:(?P<bc>" + _BC + r")|(?P<ad>" + _AD + r"))(?![^\W\d_])"
 )
 _PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER)
+#: Where a whole number starts: no digit, point or comma before it ("13700", "1.700", "1,700").
 _DIGIT = re.compile(r"(?<![\d.,])\d")
 
 
@@ -306,8 +309,6 @@ def _states_type(value: str, text: str) -> str | None:
 
 
 def _states_year(year: int, text: str) -> str | None:
-    if year == 0:
-        return None
     for digit in _DIGIT.finditer(text):
         match = _SUFFIX.match(text, digit.start())
         if match is None or int(match["n"].replace(",", "")) != abs(year):
@@ -515,11 +516,13 @@ def classify(
         )
     label: tuple[str | None, str] | None = None
     if c.column == SITE_TYPE:
-        if value not in CANONICAL_TYPES or normalize_site_type(value) != value:
+        # every canonical type is a fixed point of the normalizer (pinned by a test), so this is
+        # `normalize_site_type(value) == value` without the pass-through of an unknown word
+        if value not in CANONICAL_TYPES:
             return refuse(
                 "not-a-site-type",
-                f"{value!r} is not a canonical type the normalizer keeps as it is "
-                f"(normalize_site_type gives {normalize_site_type(value)!r})",
+                f"{value!r} is not a canonical type (normalize_site_type gives "
+                f"{normalize_site_type(value)!r})",
             )
     elif c.column == PERIOD_START:
         try:
