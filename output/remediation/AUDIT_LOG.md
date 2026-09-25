@@ -8997,6 +8997,8 @@ cleared card 687, cleared description 313, ungrounded card 850; flags `t03-sever
 ### Open
 
 * **The legacy AI marking of the out-of-scope March texts** (L above): the owner's question.
+  Decided 2026-09-24, "Alle kennzeichnen": every March-AI text is marked (entry of 2026-09-25,
+  "Lane L marks every March-AI text").
 * **876, not 904**: the owner decided on "the 904"; the scope is the documented method's 876 on the
   pinned export, the 2026-09-19 list being lost. If the owner holds the old count to be the scope,
   the 2026-09-19 inventory would have to be found and pinned as a new scope version.
@@ -9197,3 +9199,124 @@ further hit takes the same path: `audit4.py hold` with the check's verdict file,
   answered under the new reviewer pin; the old answers stay in the stale directory.
 * **The selector's rule (8)** carries the same gap. It stays frozen while the mass run's selector
   answers are given; whether to widen it for a later run is a decision for then.
+
+## 2026-09-25 - Lane L marks every March-AI text: the owner's decision, L's own plan over the curated population, its dry plan and first step rehearsed (nothing applied)
+
+**Decision** (Martin, 2026-09-24, answer "Alle kennzeichnen (Recommended)"): lane L - which writes
+no text, only the provenance that makes a site show the existing "AI-generated text" footnote (EU AI
+Act Art. 50) - marks **every** March-AI text, not only the 1,623 sites of the defect scope. The open
+question of the defect-scope entry above ("The legacy AI marking of the out-of-scope March texts")
+is answered. c9cf66e's scope refusal is undone for L only; P4 and P5 stay scoped ("Nur
+Defekt-Sites"). What stays: a text equal to d4526691's gets no marking (HUMAN_ONLY D7, listed in
+`UNCLAIMED.jsonl`), so does a site the snapshot lacks; a site with live phase-4 provenance is never
+touched by L; L never changes a description. Branch `wip/p4-L` (from `wip/p4-pilot` 0a2a9a4);
+contracts: `PHASE4_CONTRACTS.md` section 9, "Lane L marks every March-AI text".
+
+### How L selected its sites, before and after
+
+* **Before** (c9cf66e): `write_gate4.py --group L --run <run>` read one Phase-4 run's plan batches
+  (`p4-NNNN` directories, `input.json` values from the S0 read) and planned one L write batch per
+  plan batch (`p4l-NNNN`). `plan_legacy` refused every site outside the pinned scope first
+  (`outside-defect-scope`, not listed for HUMAN_ONLY), then the sites production shows with a
+  full (W/S/T/R) provenance (`written-by-p4`); the rest were "held" and marked where their text
+  differs from d4526691. Its population was therefore the scope sites of that run's batches that P4
+  did not write - and since the mass run's plan holds only scope sites, no invocation could reach a
+  curated site outside the scope.
+* **After**: the population is every curated site whose live description differs from d4526691's
+  and that carries no live phase-4 provenance - the design's own reach (entry [6], "L (legacy
+  disclosure; held sites only; no LLM)", with P4's population then every curated site, and
+  licensing_and_ai_act, "so no LLM-processed text stays unmarked"); `legacy4`'s docstring already
+  said "A site Phase 4 does not write keeps its stored description ... it must not stay live
+  unmarked". `plan_legacy(batch, *, written)` takes no scope. L plans from **its own plan**:
+  `plan4.py read --out LEGACY4_ROWS.jsonl` (the one read-only SELECT, a fresh read) and `plan4.py
+  legacy` write `LEGACY4.jsonl` - every curated site in site-id order, batches of 15 marked
+  `pass: phase4-legacy`, numbered from p4-1001 - and `write_gate4.py --group L --legacy-plan
+  <file>` plans it; L never takes `--run`, P4 and P5 never take the L plan (one L population per
+  lane). An apply root holding another L plan's write batches is refused by name.
+
+### The plan (read-only read, offline build; worktree `.claude/worktrees/p4-L`, gitignored files)
+
+* `plan4.py read --out phase4_runner/LEGACY4_ROWS.jsonl` (2026-09-25 07:54, one SELECT): **5,004
+  rows**, sha256 `756455392d99503f825c3294802d6d0945a5225fe086f4fdbd2e5812b604fbba`.
+* `plan4.py legacy`: `phase4_runner/LEGACY4.jsonl` sha256
+  `b8c4f2e20c19e0a33ead4255b243a7f30597ca338c86914181618a93a6a9f6f1`, **334 batches p4-1001 ..
+  p4-1334**, 5,004 sites; provenance at the read: W 477, S 10, none 4,517.
+* A census the same morning, read-only and independent of the tool (one SELECT over
+  `unified_sites` and `snapshot_rows`): 5,004 curated sites, 487 with W/S/T/R provenance, 0 with any
+  other; without it 4,499 differ from d4526691, 10 equal it, 8 are not in it, 0 have no
+  description - the dry run's numbers below, site for site in count.
+
+### The dry run (`write_gate4.py --group L --legacy-plan phase4_runner/LEGACY4.jsonl`, read-only)
+
+`logs/p4l/dry.log` sha256 `2732344aa1e6efcd31cc2a9d02965771cca22c2962b0c6ac69d8a8e1c46f85cc`,
+`WRITE_EXIT=0`, 24 s (26 read-only SELECTs of the live provenance):
+
+| | sites |
+|---|---|
+| curated sites in the plan | 5,004 |
+| excluded as P4-written (live phase-4 provenance, `written-by-p4`) | 487 |
+| UNCLAIMED, HUMAN_ONLY D7 (`no-legacy-claim`): same as d4526691 | 10 |
+| UNCLAIMED, HUMAN_ONLY D7: not in d4526691 | 8 |
+| provenance already present (`provenance-present`) | 0 |
+| **rows planned = March-AI texts to mark** (`P4/legacy-provenance`) | **4,499** |
+
+By the pinned scope (`SCOPE4.json` `19a57e9f...`, read from `wip/p4-pilot`'s runner): 3,365 of the
+4,499 rows are outside the scope (the sites this decision adds), 1,134 inside it - **1,115 of them
+sites of the mass run's plan** (`PLAN4.scope.jsonl`) that P4 may still write, 19 pilot 4's held
+scope sites. Of the 18 unclaimed, 2 are scope sites. All 487 P4-written sites are scope sites. The
+design sized L at "about 300-600 L rows" because its P4 would have written about 4,400 sites; with
+P4 scoped, L carries the rest. At 100 sites per step the plan is **49 steps** (the first 94 sites in
+p4l-1001 .. p4l-1007, the last 54, the largest 100).
+
+`verify_writes4.py --lane p4l --plan logs/_write_apply_p4l/LANE_PLAN.jsonl` over the dry plan
+(read-only; the lane plan written by `write_gate4.write_lane_plan`): "lane p4l | stamps
+phase4l:p4l-% | planned rows 4499 | lane journal rows 0 | carried 0 | not yet written 4499",
+`RESULT: 0 deviation(s)`, `ACCEPT_EXIT=0` (`logs/p4l/accept-before-any-write.log` `fbba7e3b...`):
+the acceptance reads this plan and finds every row at its old value.
+
+### The first step rehearsed against production (ROLLBACK)
+
+`write_gate4.py --group L --legacy-plan phase4_runner/LEGACY4.jsonl --batch p4-1001 .. --batch
+p4-1007 --rehearse` (each REHEARSE.sql checked first: `ROLLBACK;`, no `COMMIT;`): **7 batches, 94
+rows over 94 sites** (14, 11, 14, 15, 14, 12, 14; 11 sites of the 105 refused `written-by-p4`),
+every guard and invariant 3 held inside each transaction, every row read back at its old value, 0
+journal rows under each stamp, no batch blocked, `every open batch rehearsed`, `WRITE_EXIT=0`
+(`logs/p4l/rehearse_step1.log` `c4c99aa9133432927656ab7b98c517174d87ca9d5a2bc38a98c9eeb5ee86fef3`).
+Plan digests `d2c05f2b` `cf25b72c` `73c07bc6` `d4516ca8` `dd5d58e1` `9b741c57` `1d421ca4`. Read
+afterwards: 0 journal rows under `phase4l:%`, 0 curated sites with a lane-L provenance, 487 with
+W/S/T/R. Nothing was applied.
+
+### When L is written
+
+The design's order (production_write, ORDER: "then the L rows once the held set is final") binds
+the apply: an L row changes `raw_data`, and a scope site P4 writes after its L row no longer holds
+the `raw_data` its P4 plan names - P4's preflight then refuses the whole P4 batch (fail-closed; the
+way back is `revert4.py --stamp-like 'phase4l:...' --site <id>`). The first step alone holds 29
+sites of the mass run's plan. So the plan is **read and built again after the last P4 step of the
+mass run is accepted** (and after the Roman Bath revert and the re-verification), and L's 49-odd
+steps follow; the plan of this entry is the rehearsal object, not the one to apply. A site held
+because its lane (T, R) has not passed its pilot is marked like any held site; should such a lane
+open later, its L row is reverted before its P4 write. The per-run L dry plans of pilot 4 in
+`wip/p4-pilot`'s `logs/_write_apply_p4l` (`p4l-0001` .. `p4l-0009`, never rehearsed or written)
+are moved aside first - the gate refuses the apply root otherwise.
+
+**The apply and its acceptance (the orchestrator's; from the merged worktree, main venv):**
+
+    PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+    mv $M/logs/_write_apply_p4l $M/logs/_write_apply_p4l.per-run-dry-2026-09-24
+    $PY scripts/remediation/phase4/plan4.py read --out $R4/LEGACY4_ROWS.jsonl     # one read-only SELECT
+    $PY scripts/remediation/phase4/plan4.py legacy                                 # offline: $R4/LEGACY4.jsonl
+    $PY $M/tools/write_gate4.py --group L --legacy-plan $R4/LEGACY4.jsonl             # dry, read-only
+    $PY $M/tools/write_gate4.py --group L --legacy-plan $R4/LEGACY4.jsonl --rehearse  # every batch, ROLLBACK
+    # per step, until the gate says "done: no open batch left to write":
+    $PY $M/tools/write_gate4.py --group L --legacy-plan $R4/LEGACY4.jsonl --apply --step 100
+    $PY $M/tools/verify_writes4.py --lane p4l --plan $M/logs/_write_apply_p4l/LANE_PLAN.jsonl > $M/logs/p4l/accept-step-NN.log
+    $PY $M/tools/write_gate4.py --group L --accept $M/logs/p4l/accept-step-NN.log
+    # at the end: every planned row written
+    $PY $M/tools/verify_writes4.py --lane p4l --plan $M/logs/_write_apply_p4l/LANE_PLAN.jsonl --complete
+
+### Open
+
+* **L's apply**, after the mass run's last P4 step is accepted: the commands above.
+* **HUMAN_ONLY D7**: 18 unclaimed today (10 same as d4526691, 8 not in it), listed per batch in
+  `logs/_write_apply_p4l/*/UNCLAIMED.jsonl` of the apply's plan.

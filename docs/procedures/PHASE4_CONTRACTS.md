@@ -1028,8 +1028,10 @@ fields section 6 lists. What the design left open, and how the writer settled it
   held), so no row is planned from a verification of other bytes. `write_gate4` imports
   `phase4.verify4` when it plans P4.
 - **Entry points.** `write4.plan_writes(batch, *, group, **inputs)` dispatches to `plan_p4(batch,
-  *, scope, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, scope, written)` and
-  `plan_cards(batch, *, scope, written, card_findings)` (`scope` since 2026-09-24, section 9);
+  *, scope, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, written)` and
+  `plan_cards(batch, *, scope, written, card_findings)` (`scope` for P4 and P5 since 2026-09-24,
+  section 9; L takes none since the owner's decision of the same day, "Lane L marks every March-AI
+  text" there); `write4.load_legacy_plan(path)` reads lane L's own plan (section 9);
   `write4.load_batch(batch_dir)` reads the section-4 files strictly (a
   site with neither an assembly nor a site hold is a hole and raises); `write4.render_apply(chunk,
   *, rehearse=False)`, `render_rollback(chunk)`, `apply_chunk(chunk, *, out, rehearse, runner,
@@ -1138,18 +1140,18 @@ owner decision, ranks above the design.
   the same data give 788-897 with Baalshamin counted (this one 877), and a digit-run substring match
   does not even catch House of Taga (AUDIT_LOG, "The owner's defect scope").
 - **The refusal is the writer's, not a `HoldReason`.** `write4.RULE_OUT_OF_SCOPE =
-  "outside-defect-scope"` joins the writer's refusal rules (section 7): every planner takes `scope`
-  as a required keyword (no default: a plan without it is a `TypeError`) and asks it **before every
-  other rule**, so a site outside the scope is counted under it whatever else would hold it, and
-  nothing of it is verified or read. `write_gate4` loads the pinned scope for P4, L and P5 alike,
-  prints it, counts the refusals on its "refused by rule" line, and has no flag to switch it off.
+  "outside-defect-scope"` joins the writer's refusal rules (section 7): `plan_p4` and `plan_cards`
+  take `scope` as a required keyword (no default: a plan without it is a `TypeError`) and ask it
+  **before every other rule**, so a site outside the scope is counted under it whatever else would
+  hold it, and nothing of it is verified or read. `write_gate4` loads the pinned scope for P4 and
+  P5, prints it, counts the refusals on its "refused by rule" line, and has no flag to switch it
+  off.
+  (Until 2026-09-24 L was scoped too; see "Lane L marks every March-AI text" below.)
   `model4` is unchanged (section 1, rule 1): no stage holds a site for the scope, because the mass
   run's plan never carries one (below).
-- **L.** The scope applies to lane L: L marks only a scope site Phase 4 held. A site outside it gets
-  no legacy provenance and is not listed for HUMAN_ONLY - it was never Phase 4's to write. The
-  consequence, recorded: an out-of-scope site whose text the March chain changed keeps it without
-  the legacy AI marking the design gave every held site ("so no LLM-processed text stays
-  unmarked"). Whether those sites get that marking is the owner's question, not a write of this gate.
+- **L.** Not scoped since the owner's decision of 2026-09-24 ("Lane L marks every March-AI text",
+  below). From c9cf66e to that decision L marked only a scope site Phase 4 held, and the March texts
+  outside the scope stayed unmarked - the owner's question this section recorded as open.
 - **P5.** No card and no card clear outside the scope. A held card that is only ungrounded (not one
   of the 709) keeps its text: the design clears the 709 alone.
 - **V9 inside the scope.** Its floor stays waived only for `cleared-description-defect` and
@@ -1169,6 +1171,57 @@ owner decision, ranks above the design.
   `APPLY.sql` from the unscoped dry run would otherwise have stayed beside an empty `PLAN.jsonl`. A
   round's record (`APPLIED.json`, `REVERTED.json`) and a stopped batch's statements are never
   touched.
+
+### Lane L marks every March-AI text (owner decision 2026-09-24; wip/p4-L, 2026-09-25)
+
+Owner decision 2026-09-24 (Martin, "Alle kennzeichnen (Recommended)"): lane L - which writes no
+text, only the provenance that makes a site show the existing "AI-generated text" footnote (EU AI
+Act Art. 50) - marks **every** March-AI text, not only the 1,623 sites of the defect scope. P4 and
+P5 stay scoped ("Nur Defekt-Sites"). What stays: a text equal to its pre-March state (d4526691) gets
+no marking (HUMAN_ONLY D7: its origin is not provable; `UNCLAIMED.jsonl`), and so does a site the
+snapshot lacks; a site whose description P4 wrote (live phase-4 provenance) is never touched by L; a
+provenance already present is never overwritten; L never changes a description. This restores the
+design's own reach: its P4 population was every curated site, so its "held sites" were every site P4
+did not write (licensing_and_ai_act: "so no LLM-processed text stays unmarked").
+
+- **The population.** Every curated site whose live description differs from d4526691's and that
+  carries no live phase-4 provenance - inside the scope or not. `write4.plan_legacy(batch, *,
+  written)` takes no scope (one handed to it is a `TypeError`); `write_gate4` neither reads nor asks
+  the scope for L and prints `LEGACY_UNSCOPED` instead of the scope line.
+- **L's own plan, not a run's batches.** Until this decision `write_gate4 --group L --run <run>`
+  planned the held sites of one run's plan batches (`p4l-NNNN` for `p4-NNNN`); a run's batches hold
+  only its own sites, so no plan over runs could reach the curated sites outside the scope. Now:
+  `plan4.py read --out LEGACY4_ROWS.jsonl` (the one read-only SELECT, a fresh read - never S0's
+  rows) and `plan4.py legacy` (offline) write `phase4_runner/LEGACY4.jsonl`: every curated site in
+  site-id order as a `PlanSite` without flags (they steer Phase 4's stages; L asks none), in batches
+  of 15 marked `pass: phase4-legacy` (`legacy4.PLAN_MARK`; a P4 plan's batches carry no `pass`) and
+  numbered from **p4-1001** (`legacy4.FIRST_BATCH`): past every P4 plan batch (unscoped p4-0334,
+  scoped mass run p4-0115), so no write batch `p4l-1001` .. or journal stamp
+  `phase4l:p4l-1NNN:chunk-NNNN` names a P4 plan batch or one of the per-run L plans rendered before.
+  `write4.load_legacy_plan` reads it strictly (the mark, a plan batch id, no batch id or site
+  twice); an L batch carries no stage outcome (no lanes, assemblies or holds - `holds` in an L row's
+  evidence is therefore empty; a scope site's P4 holds stay in its run's `HOLDS4.jsonl`).
+- **The gate.** `write_gate4.py --group L --legacy-plan <LEGACY4.jsonl>`, dry, `--rehearse` or
+  `--apply --step 100`, and `--accept` / `--close-reverted` like every group. L never takes `--run`;
+  P4 and P5 never take `--legacy-plan` (`plan_source_problem`): one L population, because a per-run
+  L plan beside it would put a site into two write batches of one lane. Production is asked,
+  read-only, which of the plan's sites carry a live phase-4 provenance (`written_sites`, windows of
+  200); they are refused `written-by-p4`. An apply root holding write batches of another L plan is
+  refused by name (`legacy_batches`): the acceptance's lane plan is every `PLAN.jsonl` in it. The
+  step's acceptance command names no run: `verify_writes4.py --lane p4l --plan <apply
+  root>/LANE_PLAN.jsonl` (lane p4l re-runs no verifier).
+- **When L is written: once the held set is final** (design, production_write, ORDER: "then the L
+  rows once the held set is final"). An L row changes `raw_data`; a scope site P4 writes after its L
+  row no longer holds the `raw_data` its P4 plan names, and P4's preflight refuses the whole P4
+  batch (fail-closed, never a silent overwrite; the way back is `revert4.py --stamp-like
+  'phase4l:...' --site <id>`). So `plan4.py read` and `plan4.py legacy` run **after the last P4 step
+  of the mass run is accepted**, and L's steps follow. Measured on 2026-09-25 (AUDIT_LOG): 1,115 of
+  L's 4,499 rows are sites of the mass run's plan, 29 of them in L's first step. A site P4 holds
+  under a lane whose pilot has not passed (T, R) is marked like any held site; should that lane open
+  later, its L row is reverted before its P4 write.
+- **The per-run L dry plans** rendered before (pilot 4: `logs/_write_apply_p4l/p4l-0001` ..
+  `p4l-0009`, dry, never rehearsed or written; `phase4l:%` journals 0 rows) are moved aside before
+  the first L plan is rendered into that apply root - the gate refuses otherwise.
 
 ## 10. The mass run's mid-run audit: the later namesake building, and one written site taken back (wip/p4-pilot, 2026-09-25)
 
