@@ -8825,3 +8825,213 @@ final: the 34 ties and the 2 second judgements decide the rest.
 `run.py decide` writes these byte-identically on a second run (checked). Inputs, as `COUNTS.json`
 records them: RULES.md and INPUT.jsonl the sealed digests, VERDICTS_RAW.json `98b88a54...`,
 KEEP_SAMPLE.json `96da2842...`, VERDICTS_ROUND2.json `56471faf...`, VERDICTS_ROUND3.json `2c56ba19...`.
+The tests, sweeps and gates of this round are recorded with journal-reversal-3's, at the end of the
+next section.
+
+## 2026-09-25 - journal-reversal-3: the Opus re-verification's reverts as a reversal list (planned, checked and rehearsed on production; not applied)
+
+Branch `integrate/wave1` (main checkout), commits `0492fd8` (the source kind, the list's builder,
+the lane, its list and plan, test-first) and `dffe140` (the mechanical sweep cases). The mechanical
+journal-reversal lane (`scripts/remediation/mechanical/reversal.py`, `apply.py`, `lane.py`) now
+takes the Opus re-verification's `REVERSAL_3_INPUT.jsonl`. The four gaps the section "The reversal
+input" named are closed as follows. **Production was read (SELECTs) and rehearsed (every statement
+ended in ROLLBACK, 0 journal rows left); nothing was applied, and no model was called.**
+
+### (b) The source kind `opus:<change_key>` (`reversal.load_opus`, `_opus_text`)
+
+A quote `{"source": "opus:<change_key>", "text": ...}` is checked against the audit's own files,
+read where the audit keeps them (`output/remediation/opus_audit/`):
+
+* `DECISIONS.jsonl` must hold that change key with `reversal: true` (a final `revert`, not
+  superseded; `keep`, `pending`, `rejudge` and a superseded revert are refused), and the write it
+  judged - change key, site, column, old and written value - must be exactly the write the undone
+  journal row made;
+* the text must stand in the quotes of that row's **deciding verdicts**: the verdicts on its route
+  that count and are not `keep`, read from the verdict file and section each `basis[].from` names
+  (`VERDICTS_RAW.json` or `VERDICTS_ROUND<n>.json` only), and of those only the quotes the audit's
+  machine quote check recorded as `found`. `load_opus` refuses a decision whose verdict file holds
+  another verdict name or no verdict, or whose quote check is not that verdict's (another list of
+  sources).
+
+So the lane's check stays machine-verifiable end to end: the lane proves the quote is one the audit
+found, and the audit proved it against the cited evidence file or fetched page. The other kinds
+(`description`, `enwiki`, `wikidata`, `gold_standard`, `journal`, `rereview`) and lanes 1 and 2 are
+untouched: the new `opus` parameter defaults to no audit, their tests, plans and pinned statements
+are byte-identical, and all 470 existing mechanical sweep needles still match once.
+
+### (a) The journal ids and the list (`mechanical/reversal_opus.py --write`)
+
+The builder reads REVERSAL_3_INPUT.jsonl, then production read-only:
+
+* each change key's journal row (`SELECT ... FROM remediation_change_log WHERE change_key IN
+  (...)`; only `phase3:<64 hex>` keys are ever sent), refused unless it is exactly one row and
+  exactly the write the line names (`unified_sites`, site, column, old and written value);
+* the `period_name` journal rows of the sites whose restored `period_start` falls in another bucket
+  (gap (c) below).
+
+It writes `output/remediation/mechanical_reversal_3/REASONS.json` (each audit row quoting its
+input quotes as `opus:<change_key>`, each label quoting its own journal evidence as `journal`, and
+the input's sha256) and the generated module `scripts/remediation/mechanical/reversal_3_list.py`
+(`JOURNAL_IDS`, 13 to a line, `# fmt: skip`, the input's sha256 in its docstring), which `lane.py`
+imports as `REVERSAL_3_JOURNAL_IDS`. `reversal.load_reasons` still refuses unless the two name the
+same rows, and `test_the_delivered_list_is_the_lane_s_and_every_audit_row_is_on_it` refuses a
+REASONS.json built from another input than the committed REVERSAL_3_INPUT.jsonl.
+
+### (c) The period labels, in the same run
+
+44 of the input's 190 `period_start` rows restore a start in another bucket. For each, the label
+row is the period-name lane's journal row (`2026-09-22_mechanical-period-name`) whose evidence names
+the start's own journal row (`remediation_change_log:<id>`, "... the write that left the label
+behind"); two such rows for one start are refused. **42 have one** and join the list (the lane's
+`keep_the_period_label` then checks the list as a whole: every restored label is the bucket of the
+start the list leaves, no start leaves its label behind). **2 have none**: Elche (-500 -> -1500) and
+Elephanta Caves (500 -> -500). Their live labels ('1500 - 500 BC', '500 BC - 1 AD') are already the
+buckets of the restored starts - the pair is broken today (both are among the 11 curated rows whose
+label is not their start's bucket), and restoring the start mends it; `keep_the_period_label`
+accepts both starts alone.
+
+### (d) The lane `journal-reversal-3` (`lane.py`)
+
+Run stamp `2026-09-25_mechanical-journal-reversal-3`, test id `P6/journal-reversal-3`, change keys
+`journal-reversal-3:<site_id>:<column>`, plan table `_journal_reversal_3_plan`, directory
+`mechanical_reversal_3/`, the lock and statement bounds of lanes 1 and 2 (10 s, 120 s), cells
+`site_type`, `period_start` (integer), `period_name` and `country`, `reverses_journal` (guard 6).
+Its read-back is lane 2's (the residual - curated sites still holding a value the list undoes - and
+the listed rows a later write superseded, plus the period pair) with lane 1's card-country metric
+added for the country row. It is registered **below** the lists of lanes 1 and 2
+(`REVERSAL_LISTS[...] = ...`, `LANES[...]`, `LANE_READBACKS[...]`), so their definitions stay byte
+for byte as written - the sweep case "reversal: the second list reads back the period pair" pins
+the text that ends lane 2's read-back. `.gitignore` versions the lane directory except its
+`REHEARSAL.sql`, as for lanes 1 and 2.
+
+### The run on the current input (round 3's REVERSAL_3_INPUT.jsonl, 419 rows), 2026-09-25
+
+* **Builder** (01:52 UTC, read-only): 419 change keys, each exactly one journal row and exactly the
+  judged write; 44 bucket changes, 42 labels, 2 unlabelled (Elche, Elephanta Caves). **461 journal
+  rows over 413 sites** (site_type 228, period_start 190, country 1, period_name 42).
+* **Plan** (`reversal.py --lane journal-reversal-3 --collect --write`, 01:56 UTC, read-only; no page
+  to collect): 461 reversals, **458 cells over 410 sites** (site_type 228, period_start 188,
+  period_name 42; 414 of the mass run's rows, 2 of the gap lane's, 42 labels), **3 refused**, each
+  `not-the-last-write`: Stanydale Temple `period_start` (28018), Ahin Posh Tape `country` (28384),
+  Agri Bavnehøj `period_start` (28638). These are journal-reversal-1's three rows: that lane undid
+  them on 2026-09-23 (journal rows 32328-32330), after the audit's INPUT.jsonl snapshot, and each
+  cell already holds exactly the value the audit would restore (-3000, Afghanistan, -3000; read
+  2026-09-25). They are done, and stay visibly refused in SKIPPED.jsonl. `apply.py --emit` pinned
+  APPLY.sql to the plan.
+* **Check**: `--check-primitive` the 0022 body (casts the value to the column type, casts the old
+  value, re-reads the stored value); `--verify` before the apply: curated sites 5,004, **curated
+  sites still holding a value this reversal list undoes 410**, journal rows of this list a later
+  write superseded 3 (the three above), curated rows whose period_name is not the bucket of
+  period_start 11, card_stats rows whose civilization differs from the site country 61, every journal
+  metric of the lane's stamp, test id and rollback stamp 0; `--interests` 148 (column, value) rows with their live counts;
+  **`--probe-guards` exit 0: 7 probes, each refused by its own guard, 0 journal rows left**
+  (guard3-foreign-old-value, guard2-no-op, guard2-foreign-column, guard2-too-long,
+  guard1-other-source, guard6-journal-row, guard6-not-the-inverse).
+* **Rehearsal** (`--rehearse`, 02:06 UTC): `NOTICE: journal reversal: 458 of 458 planned cell(s)
+  changed and journalled over 410 curated site(s)`, `ROLLBACK`; afterwards journal rows for this run
+  stamp 0, the residual 410, the temp table gone. A second `--verify` read the same numbers as before.
+* **Acceptance before** (`verify_writes.py`, read-only, 01:44 UTC): mass lane 938 carried, 56
+  superseded (uk-parts 5, site-type-shape 3, reversal-1 3, reversal-2 45), 80 withheld unchanged,
+  **0 deviations**; gap lane 17 carried, 12 withheld unchanged, **0 deviations**.
+
+| file (`mechanical_reversal_3/`) | sha256 |
+|---|---|
+| `REASONS.json` (461 reversals) | `c402301a5115ff4e4108cca0495bc194490bd5a36d3b76a2f0551639647aac5f` |
+| `PLAN.jsonl` (458 cells) | `40f5656f4201c1bbbc237b730d5139d101778b8dbabc8cd7b7d748b96d1f1751` |
+| `SKIPPED.jsonl` (3) | `7164ab1ab38a54a053e8667f85840415225f86b2d0bbaaba9c7a29d83f3b9bc1` |
+| `APPLY.sql` | `d5c9e4bf2f17ed1af640d471d6b5e349cdd904caa3dda142ad470ba30ac31aed` |
+| `ROLLBACK.sql` | `beb954cc3b869013ec470be2237f1a9f0df2348bdc5b856b1f3e1394b20cfa05` |
+
+**This plan is the rehearsal of an input that is not final** (36 rows are pending in round 3). The
+apply runs on the list regenerated after the last round.
+
+### The apply (the orchestrator runs it, after the last round is decided; the owner's go first)
+
+From the repo root, main venv, `export PYTHONIOENCODING=utf-8`,
+`A=scripts/remediation/mechanical/apply.py`:
+
+0. **The final input.** After the last round's verdicts are in place:
+   `./.venv/Scripts/python.exe scripts/remediation/opus_audit/run.py fetch`, then
+   `./.venv/Scripts/python.exe scripts/remediation/opus_audit/run.py decide` -> `pending` 0 and
+   `rejudge` 0 in its output, or the list is not final.
+1. **Plan.**
+   `./.venv/Scripts/python.exe scripts/remediation/mechanical/reversal_opus.py --write` (production
+   read-only: REASONS.json and reversal_3_list.py; read its `unlabelled` and refusals), then
+   `./.venv/Scripts/python.exe scripts/remediation/mechanical/reversal.py --lane journal-reversal-3 --collect --write`
+   (PLAN.jsonl, PLAN.md, SKIPPED.jsonl, ROLLBACK.sql; expect Stanydale Temple, Ahin Posh Tape and
+   Agri Bavnehøj refused `not-the-last-write` and nothing else unexplained), then
+   `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --emit` (APPLY.sql). Then
+   `./.venv/Scripts/python.exe -m pytest tests/remediation/test_mechanical.py tests/remediation/test_mechanical_reversal.py tests/remediation/test_mechanical_reversal_opus.py -q -m "not integration and not live_llm"`
+   green, and commit `reversal_3_list.py` and `mechanical_reversal_3/` (the list, the plan and the
+   two statements).
+2. **Check.** `./.venv/Scripts/python.exe $A --check-primitive` (the 0022 body);
+   `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --verify` (the residual = the plan's
+   site count; journal rows for the stamp 0); `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --interests`;
+   `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --probe-guards` -> exit 0, the same 7
+   probes each refused by its own guard.
+3. **Rehearse.** `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --rehearse` -> NOTICE
+   `journal reversal: <n> of <n> planned cell(s) changed and journalled over <s> curated site(s)`,
+   ROLLBACK, 0 journal rows.
+4. **Apply.** `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --apply` -> `APPLY OK: the
+   read-back matches the plan, row for row` (exit 0; exit 3 NOT COMMITTED, 5 OUTCOME UNKNOWN - read
+   the journal for the stamp before anything else, never apply twice).
+5. **Read back.** `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --verify` -> journal rows
+   for this run stamp and for this test id = n, the residual 0, the listed rows a later write
+   superseded 3 (lane 1's), 0 outside the lane's cells, on non-curated rows or with another site's
+   `site_id_ref`. On today's plan: 458 journal rows, period-pair residual 11 -> 9 (Elche and
+   Elephanta Caves mended; computed read-only from the plan and the live pairs), card country 61
+   unchanged. The period-name lane's own read-back (`journal rows for this run whose value is not the
+   row's bucket`) rises by the label count (42 today) - its labels are undone with the starts they
+   came from, by design, as for lane 2.
+6. **Rehearse the rollback on the landed rows.** `./.venv/Scripts/python.exe $A --lane journal-reversal-3 --rehearse-rollback`
+   -> the reversal's own NOTICE, ROLLBACK, the cells still holding the restored values; commit
+   `REHEARSAL_ROLLBACK.sql` as for lanes 1 and 2. (Before the apply it refuses, correctly.)
+7. **Acceptance.**
+   `./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py --allow-stamp 2026-09-22_mechanical-uk-parts --allow-stamp 2026-09-22_mechanical-site-type-shape --allow-stamp 2026-09-23_mechanical-journal-reversal-1 --allow-stamp 2026-09-23_mechanical-journal-reversal-2 --allow-stamp 2026-09-25_mechanical-journal-reversal-3`
+   -> `RESULT: 0 deviation(s)` (on today's plan: 938 - 414 = 524 carried, 56 + 414 = 470
+   superseded, reversal-3 414), and
+   `./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py --lane gap --allow-stamp 2026-09-25_mechanical-journal-reversal-3`
+   -> 0 deviations (on today's plan: 15 carried, 2 superseded by reversal-3).
+
+Afterwards: re-plan the scope lane and the card_stats recompute (their premises and cards derive
+from these columns, `reversal.write_plan_md`), and the static export - none of them is run here.
+
+### Tests, sweeps, gates for round 3 and journal-reversal-3 (main checkout, branch `integrate/wave1`, main venv)
+
+* **Round 3 / one code path** (`test_opus_audit_decide.py`, 103 cases): 19 new test functions,
+  each red before its code (the overlay's new signature did not exist): the round files in number
+  order, a gap, a stray name, the sections a round may hold, a `second` as the keep's p2 (and the
+  Kola case: a failed p2 replaced by a later second), a `second` before rule 4 fired or for a row
+  that waits on none, the sample in one round only and an empty sample section, a later tie on the
+  pair the round before left split, a later tie over a failed tie, every tie refusal, a round laid
+  on the routes as they stood before it, REJUDGE_ROUND<n>, the whole run over rounds 2 and 3 (twice,
+  byte-identical, TIE_ROUND2.json left alone), the run's refusals (no sample judged, a row INPUT does
+  not hold) and the fetch of every round. The round-2 tests call the one overlay (`lay`); one of
+  them now reaches its refusal through the overlay instead of the round-2 reader, one gained the
+  stale-tie count.
+* **journal-reversal-3** (`test_mechanical_reversal.py` +16 test functions, the new
+  `test_mechanical_reversal_opus.py` 17 functions / 22 cases): every `opus:` refusal, the loader's
+  refusals, the lane's cells, registration and read-back, a start the audit reverts with its label,
+  `--write` through the audit's files; the builder's refusals, labels and generated list, the
+  readers' statements, and two tests on the delivered list (it is the lane's, built from the
+  committed input; every delivered `opus:` quote stands in its row's deciding verdicts in the real
+  audit files). Red before the code: 26 of the reversal tests, the whole builder file (no module).
+  Mechanical tests (`tests/remediation/test_mechanical*.py`, `tests/api/test_cardgame_generator_stats.py`):
+  **786 passed, 3 skipped** (the card_stats export, gitignored); lanes 1 and 2 byte-identical.
+* **`phase3/mutation_sweep.py "opus audit:" "opus round 2:" "opus round 3:"`: 112/112 caught**
+  (46 + 31 + the new block `OPUS_ROUND3_MUTATIONS`, 35 cases); eleven round-2 anchors follow the one
+  code path, labels and tests unchanged; the tree byte-identical to the sweep's start for its 3
+  files, no `# mutant` left. 2,085 labels, all unique; `test_phase3_sweep.py` green.
+* **`mechanical/mutation_sweep.py reversal`: cases 93, fired 93** (skipped, survived, invalid,
+  unproven, errored 0) - the existing reversal cases and the new block `REVERSAL_3_CASES` (43
+  cases, "reversal 3" alone: 43 of 43 fired); every needle of all 513 cases matches once
+  (`test_mechanical_sweep.py` green), the files restored byte for byte.
+* **Full gate suite** (`-m "not integration and not live_llm"`, `--timeout 300`,
+  `-p no:cacheprovider`): **6,093 passed, 6 skipped, 57 deselected, 0 failed** (548 s); the skips
+  are the same six as in rounds 1 and 2.
+* `ruff check` and `ruff format --check` clean on the 11 touched Python files (ruff 0.15.11);
+  `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean. `opus_handoff.py`, `phase3/fetch_stage.py` and
+  `phase3/ledger.py` are untouched; `phase3/mutation_sweep.py` changed only in its Opus blocks and is
+  imported by neither `opus_handoff.py` nor anything it imports (it moves `mass_run.package_digest`;
+  no Phase-3 mass run was in flight).
