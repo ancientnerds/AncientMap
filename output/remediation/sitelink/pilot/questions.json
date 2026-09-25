@@ -1,0 +1,474 @@
+[
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 14,
+  "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa",
+  "source_batch": "batch-0014",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 5,
+  "site_id": "972ded7c-665e-4ca6-98cc-af4dff9ac8f3",
+  "source_batch": "batch-0016",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 5,
+  "site_id": "972ded7c-665e-4ca6-98cc-af4dff9ac8f3",
+  "source_batch": "batch-0016",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 0,
+  "site_id": "eed2d08c-3d09-4d93-885a-0b0b2eb7126d",
+  "source_batch": "batch-0045",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 14,
+  "site_id": "f12d3b76-a0e0-44e6-94cb-5dedd8203b90",
+  "source_batch": "batch-0081",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 14,
+  "site_id": "f12d3b76-a0e0-44e6-94cb-5dedd8203b90",
+  "source_batch": "batch-0081",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "site_type",
+  "position": 14,
+  "site_id": "f12d3b76-a0e0-44e6-94cb-5dedd8203b90",
+  "source_batch": "batch-0081",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 14,
+  "site_id": "f12d3b76-a0e0-44e6-94cb-5dedd8203b90",
+  "source_batch": "batch-0081",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 4,
+  "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+  "source_batch": "batch-0092",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 4,
+  "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+  "source_batch": "batch-0092",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "site_type",
+  "position": 4,
+  "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+  "source_batch": "batch-0092",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 4,
+  "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699",
+  "source_batch": "batch-0092",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 12,
+  "site_id": "e8764512-a557-49a6-b4ca-1ec9452e9563",
+  "source_batch": "batch-0112",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 12,
+  "site_id": "e8764512-a557-49a6-b4ca-1ec9452e9563",
+  "source_batch": "batch-0112",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 12,
+  "site_id": "e8764512-a557-49a6-b4ca-1ec9452e9563",
+  "source_batch": "batch-0112",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 13,
+  "site_id": "afb20664-90a8-4e20-bc76-d6c524f5ede0",
+  "source_batch": "batch-0112",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 11,
+  "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+  "source_batch": "batch-0137",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 11,
+  "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+  "source_batch": "batch-0137",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "site_type",
+  "position": 11,
+  "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+  "source_batch": "batch-0137",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "country",
+  "position": 11,
+  "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+  "source_batch": "batch-0137",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 11,
+  "site_id": "da62b3af-331d-461c-a715-d64e35870466",
+  "source_batch": "batch-0137",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 2,
+  "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725",
+  "source_batch": "batch-0138",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 5,
+  "site_id": "68677772-b461-49a3-bf2b-376e2b0e970b",
+  "source_batch": "batch-0162",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "site_type",
+  "position": 5,
+  "site_id": "68677772-b461-49a3-bf2b-376e2b0e970b",
+  "source_batch": "batch-0162",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 10,
+  "site_id": "c63b0df7-79e5-4734-bb99-b17ccd8f54eb",
+  "source_batch": "batch-0162",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 10,
+  "site_id": "c63b0df7-79e5-4734-bb99-b17ccd8f54eb",
+  "source_batch": "batch-0162",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 10,
+  "site_id": "c63b0df7-79e5-4734-bb99-b17ccd8f54eb",
+  "source_batch": "batch-0162",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 9,
+  "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+  "source_batch": "batch-0165",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 9,
+  "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+  "source_batch": "batch-0165",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 7,
+  "site_id": "1ef25b31-5c42-4ee6-aae1-1bd9c2640bff",
+  "source_batch": "batch-0170",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 3,
+  "site_id": "3a28b216-d9f2-410d-a12e-050fc4759a98",
+  "source_batch": "batch-0182",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 3,
+  "site_id": "3a28b216-d9f2-410d-a12e-050fc4759a98",
+  "source_batch": "batch-0182",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 3,
+  "site_id": "3a28b216-d9f2-410d-a12e-050fc4759a98",
+  "source_batch": "batch-0182",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 10,
+  "site_id": "a90e4406-25e6-4646-ae73-0730696a22d4",
+  "source_batch": "batch-0210",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 11,
+  "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+  "source_batch": "batch-0218",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 11,
+  "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+  "source_batch": "batch-0218",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "site_type",
+  "position": 11,
+  "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+  "source_batch": "batch-0218",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "country",
+  "position": 11,
+  "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+  "source_batch": "batch-0218",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 11,
+  "site_id": "58a2be59-ec1e-4667-96b9-3313ce406bc1",
+  "source_batch": "batch-0218",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 13,
+  "site_id": "6c4d8b74-697a-46f7-a000-bf92b702f87a",
+  "source_batch": "batch-0225",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 3,
+  "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+  "source_batch": "batch-0240",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 3,
+  "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+  "source_batch": "batch-0240",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "site_type",
+  "position": 3,
+  "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0",
+  "source_batch": "batch-0240",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 6,
+  "site_id": "3f27e34a-1817-4b2b-bc19-c3c17a7e6374",
+  "source_batch": "batch-0252",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 6,
+  "site_id": "3f27e34a-1817-4b2b-bc19-c3c17a7e6374",
+  "source_batch": "batch-0252",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 14,
+  "site_id": "cad0ee78-1954-4ca9-b8e4-dde794c99117",
+  "source_batch": "batch-0262",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 8,
+  "site_id": "6a20e653-5320-440d-ac6c-2e86bb56e09e",
+  "source_batch": "batch-0270",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 8,
+  "site_id": "6a20e653-5320-440d-ac6c-2e86bb56e09e",
+  "source_batch": "batch-0270",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 9,
+  "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc",
+  "source_batch": "batch-0287",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 7,
+  "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+  "source_batch": "batch-0297",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 7,
+  "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+  "source_batch": "batch-0297",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "site_type",
+  "position": 7,
+  "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+  "source_batch": "batch-0297",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 7,
+  "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe",
+  "source_batch": "batch-0297",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 4,
+  "site_id": "57828dbd-9f7f-49e7-92bc-0f4eebae4829",
+  "source_batch": "batch-0299",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 4,
+  "site_id": "57828dbd-9f7f-49e7-92bc-0f4eebae4829",
+  "source_batch": "batch-0299",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 1,
+  "site_id": "ca92ce8c-e9ce-4fe8-9120-98aaae243224",
+  "source_batch": "batch-0311",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "description",
+  "position": 6,
+  "site_id": "e19f7af0-539c-474c-9404-b11f22f48846",
+  "source_batch": "batch-0331",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "period_start",
+  "position": 6,
+  "site_id": "e19f7af0-539c-474c-9404-b11f22f48846",
+  "source_batch": "batch-0331",
+  "why": "unverifiable"
+ },
+ {
+  "detail": "the mass run's finder answered UNVERIFIABLE",
+  "field": "card_description",
+  "position": 6,
+  "site_id": "e19f7af0-539c-474c-9404-b11f22f48846",
+  "source_batch": "batch-0331",
+  "why": "unverifiable"
+ }
+]

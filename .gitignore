@@ -418,3 +418,13 @@ output/remediation/acceptance/draw-*/CANARIES.jsonl
 # The name-key lane (Phase 6 item 2): its production read and chunks, versioned like the image
 # lanes' (the chunk's ROLLBACK.sql is the undo of a write).
 !output/remediation/name_key/
+# The sitelink pilot's question list is one of the acceptance draw's fixed exclusion sources
+# (scripts/remediation/acceptance/draw.py FIXED_EXCLUSIONS, pinned in EXCLUSIONS.sha256.json):
+# the draw reads it and tests/remediation/test_acceptance_draw.py checks its sha256, so it must
+# exist on every checkout, CI included (a clean checkout failed that test on 2026-09-25). The
+# rest of the sitelink directories (plans, production exports, fetched sitelinks) stays local.
+!output/remediation/sitelink/
+output/remediation/sitelink/*
+!output/remediation/sitelink/pilot/
+output/remediation/sitelink/pilot/*
+!output/remediation/sitelink/pilot/questions.json
