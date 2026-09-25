@@ -70,11 +70,13 @@ are removed; nothing else is written:**
   in their order, and a numbering gap stays: renumbering would rewrite the text.
 
 This follows from how an entry is read. The popup builds its source links from **every** entry,
-cited or not (`SitePopup/sections/DescriptionSection.tsx`, `citationSources`). Each link carries
-the entry's `[n]` in its tooltip and presents the entry as a source of the text. The text never
-cites that `n`, so the claim is not true, and the page's attribution only stays true without the
-entry. The server-rendered page and the meta surfaces render an entry only through its marker, so
-nothing there changes. The removed entries survive in the journal's old value, so a human can put
+cited or not (`SitePopup/sections/DescriptionSection.tsx`, `citationSources`). The only exception
+is entries on the domain of the site's own `source_url`, which the source line already links.
+Each link carries the entry's `[n]` in its tooltip and presents the entry as a source of the text.
+The text never cites that `n`, so the claim is not true, and the page's attribution only stays true
+without the entry. On 2026-09-25 this applies to 8 of the 69 planned sites; the other 61 keep the
+same links. The server-rendered page and the meta surfaces render an entry only through its marker,
+so nothing there changes. The removed entries survive in the journal's old value, so a human can put
 one back together with its marker. Temple of Baalshamin shows the risk of keeping them: its one
 orphan entry cites "Byzantine settlements in northwestern Syria", which is not about this temple.
 

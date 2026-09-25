@@ -11469,3 +11469,320 @@ the touched files, `ruff check api/ pipeline/`, `lint-imports` (2 kept), `vultur
 `mutation_sweep.py verify_writes4`: **50/50 caught** (35 earlier cases, two of them re-anchored
 because the reversal predicate moved into `reverses`; 15 new), the tree byte-identical, no mutant
 left.
+
+## 2026-09-25 - Acceptance draw-2026-09-25 ends FAIL on A3 (D1); the D1 class measured over all curated sites, root-caused, and its repair lane `orphan-citations` (planned, checked and rehearsed on production; not applied)
+
+### The run's result (PROTOCOL.md sections 9 and 10)
+
+`judge.py deterministic` (15:34:43 UTC, `DETERMINISTIC.json`, commit `c546b0f`): **D1 fails on
+Kuntur Amaya** (`fc514046-4f2c-42b1-a3f6-ca88404d2e18`). Its description has no `[N]` marker, but
+`raw_data.description_citations` holds entry 1 (census T08 `no-markers`; the T08 docstring names
+this site). D2-D6 hold. Under rule A3 the run can only end FAIL (or VOID). It is recorded as
+**FAIL** under section 10: `output/remediation/acceptance/draw-2026-09-25/RESULT.md`, written by
+hand because `judge.py result` scores only a finished run (commit `9c7f1eb`, with `CANARIES.jsonl`).
+
+* **Stages 1-3 were not run.** Stage 1 was exported (653 questions, 54 batches) and got 0 answers.
+  V1 and V2 were not assessed. V3 holds: at 15:51:53 UTC the journal's maximum id was still the
+  draw's mark 73180.
+* **No artefact of this run is reused.** The next draw uses seed 20260926, canaries 20260927 and
+  excludes this draw's 60 (see "The fresh acceptance" below).
+
+### The class over all 5,004 curated sites (read-only, 15:41 UTC, journal max 73180)
+
+The exact D1 rule of `checks.d1` (the census's `marker_sequence` and `entries`) was run over every
+`source_id = 'ancient_nerds'` row:
+
+| subclass (T08 name) | sites | lane-L provenance | none | last writer of the description |
+|---|---|---|---|---|
+| no marker, entries present (`no-markers`) | **64** | 62 | 2 (Huichún, Temple of Baalshamin) | none: no journal row |
+| every marker answered, entries no marker cites (`entry-never-cited`) | **5** | 5 | 0 | none |
+| a marker without an entry (`marker-without-entry`) | **7** | 7 | 0 | none |
+| both halves (Absalom's Tomb, Killa Mach'ay) | **2** | 2 | 0 | none |
+| **D1 fails** | **78** | 76 | 2 | |
+
+* **4,926 sites hold D1**, including every one of the 984 live Phase-4 texts. Their arrays are
+  assembled by code, V8. None of the 78 is retired or pending.
+* **Journal.** None of the 78 descriptions has a journal row. On `raw_data` the 76 carry lane L's
+  row only and the 2 carry none. So no journalled writer (Phase 3, Phase 4, the mechanical lanes)
+  touched the class.
+* **The census.** On 2026-09-20 census T08 found 76 no-markers, 11 marker-without-entry and 8
+  entry-never-cited (the 4 numbering-gap findings are no D1 failure). Today's class is exactly
+  that set minus the 15 sites Phase 4 rewrote (12, 2 and 1). No instance is new since the census.
+* **History.** Each of the 78 is byte-identical, description and array, to snapshot `e4652afe`
+  (`db_snapshots`, 2026-04-24, "Before Turkey -> Türkiye backfill"). None had an array in
+  `d4526691` (2026-03-05, before the March chain). The snapshots between them are the
+  byte-identical replace-source copies.
+* **The SQL form of D1** (`lane.CITATIONS_UNCITED` / `CITATIONS_UNANSWERED`, the census marker
+  `\[(\d+)\]`) finds the same 78 ids (71 with an uncited entry, 9 with an unanswered marker). No
+  curated description carries a grouped or range marker, so the plain form is every marker.
+
+### Root cause
+
+The March chain wrote the text and the array as two values, and nothing compared them:
+
+* **`scripts/audit_enrich.py::merge_verification`** (`:2667`) stored the verifier's
+  `verified_description` and `verified_citations` as they came. The prompt
+  (`VERIFICATION_AGENT_PROMPT`, `:2420`) told the model to "remove the ENTIRE sentence
+  containing the unverifiable [N]", "renumber remaining [N] citations" and "update the citations
+  array to match". No code checked it. `merge_cited_descriptions` validated the entries' fields,
+  not the markers.
+  * The **marker-without-entry**, **entry-never-cited** and **both** rows are that renumbering
+    done on one side only.
+  * Absalom's Tomb: the text cites [6], [7] and [8], while the array's 4, 5 and 6 carry those
+    sentences almost word for word.
+  * Kinal's last sentence is marked [1][2], and entry 3's claim is that sentence.
+  * Killa Mach'ay cites [4], and entry 2 ("3,400 metres") is cited by nothing.
+* **`api/routes/sites.py::batch_upload_sites`** (`:1795-1822`) wrote the description, and then
+  the array only if the upload carried one. It never removed an array.
+  **`audit_enrich.py::sync_from_production`** (`:196`) overwrote the local description from
+  production without touching `raw_data`. Either path pairs a text with the array of another
+  state.
+  * The **no-markers** rows are that kind of pairing. **Huichún** proves it: its description is
+    byte-identical to its pre-March text, which never had a marker, and its array is the chain's.
+  * For the other 63 the data cannot tell which path lost the markers. No intermediate state
+    survives: the March batch files are not on this machine, and no snapshot between 03-06 and
+    04-24 holds these rows.
+* **Not the cause:**
+  * The Phase-4 write path: none of the 78 has a `phase4:` row, and P4 fixed 15 of the census's.
+  * The boot citation seed removed in Push #1: it covered 10 other sites (`52c19d4`), none of
+    the 78.
+  * The boot marker strip (`52c19d4`..`4cda8c3`): it removed markers only where the key was
+    absent, so it cannot leave an array behind.
+* **Why it survived.** The census filed every T08 finding `REVIEW`, and plan Phase 1 item 8
+  ("immediately actionable") never got a lane.
+
+### What a reader sees (`ancient-nerds-map/src`, `api/`, `pipeline/`)
+
+* **The popup** (`SitePopup/sections/DescriptionSection.tsx:46-65, 131-152`) builds its source
+  links from every entry, cited or not, grouped by domain, with the entry's `[n]` in the tooltip.
+  The one exception is entries on the domain of the site's own `source_url`, which the source line
+  already links. **Measured over the 69 planned sites:** 61 show the same links after the write.
+  8 lose a link:
+  * Carmona: artsandculture.google.com;
+  * Altar of the Twelve Gods: perseus.tufts.edu, topostext.org;
+  * Belören Kalesi: beloren.wordpress.com;
+  * Borough Hill, Sawston: eprints.oxfordarchaeology.com;
+  * Temple of Khonsuirdis: en.wikipedia.org. Its entries are the general articles "List of
+    Egyptian temples", "Psamtik I" and "Luxor", and it has no `source_url`, so after the write
+    its popup shows no source link;
+  * Agios Georgios Hill: ledroimuseum.com;
+  * Bedd Taliesin: coflein.gov.uk;
+  * Agri Bavnehøj: visitaarhus.com.
+* **The server-rendered body** (`pages/SitePage.tsx:114` -> `CitationText.tsx`) reaches an
+  entry only through its marker. An orphan entry is invisible there, and a marker without an
+  entry is a bare `<sup>[N]</sup>`. The same holds for the meta description and JSON-LD
+  (`stripCitations`; `isBasedOn` comes from the provenance only) and the listing cards.
+* **The library and the popup's References tab** (`pipeline/library_aggregator.py:265-316`)
+  register every entry with a URL. `_flush_to_db` never deletes, and it replaces `parent_refs`
+  only for the URLs a refresh sees. Measured today (read-only): **521 site references at 429
+  curated sites** point at a URL the site no longer cites, almost all from Phase 4's replaced
+  arrays. This lane adds its removed entries to that. It is an open item of its own, below.
+
+### The repair, per subclass (field contract: never rewrite the text, never invent a source)
+
+* **no-markers, 64 sites: the `description_citations` key is removed**, and every other
+  `raw_data` key stays as it is. A row whose only key was the array keeps `{}`. The text cites
+  nothing, so an entry cites nothing. Where the popup shows it, it presents a source of a claim
+  the text does not mark. Temple of Baalshamin's one entry ("Byzantine settlements in
+  northwestern Syria") is not even about the temple.
+* **entry-never-cited, 5 sites: only the entries no marker cites are removed.** The cited
+  entries stay byte for byte and in order. A numbering gap stays, because renumbering would
+  rewrite the text.
+* **marker-without-entry, 7 sites, and both halves, 2 sites: listed for a human, nothing
+  written**, not even the uncited entries of the 2 (HUMAN_ONLY.md D9). The source of a marker is
+  not in the data. On the two sites with both halves, the uncited entries are the evidence for
+  the right array-only repair.
+* The removed entries survive in the journal's `old_value`. Putting one back means putting its
+  marker into the text.
+
+### The lane (`scripts/remediation/mechanical/citations.py`, `lane.ORPHAN_CITATIONS`)
+
+* **Cell lane `orphan-citations`.** One cell, `unified_sites.raw_data` as `jsonb`. Run stamp
+  `2026-09-25_mechanical-orphan-citations`, test id `T08/orphan-citations`, the server bounds of
+  the later lanes. Output: `output/remediation/mechanical_citations/`.
+* **The premise** (guard 5) is `encode(sha256(convert_to(coalesce(u.description, ''), 'UTF8')),
+  'hex')`: the description the markers were read from, as `_description_provenance.desc_sha256`
+  pins it. It equals that pin on all 67 lane-L planned sites.
+* **Residual** (post-commit and rehearsal): the SQL form of D1. The read-back adds:
+  * each half of D1;
+  * the rows carrying an array;
+  * D4 in SQL (the description vs its provenance hash);
+  * this run's journal rows that changed another `raw_data` key;
+  * this run's journal rows that added an entry.
+* **`citations.py --export`** reads, in one repeatable-read snapshot, every curated row (the
+  description, `raw_data::text`, the premise) and the `raw_data` journal of the curated rows. The
+  export is gitignored.
+* **`--write`** plans from the export alone. It refuses `citations-not-readable`,
+  `marker-without-entry`, a raw_data journal that does not end at the live value (compared as
+  JSON with sorted keys) and a value the planner would not print as Postgres prints jsonb. Every
+  planned value is read with `acceptance.checks.d1` before the plan is kept.
+* **Tests:** `tests/remediation/test_mechanical_citations.py`, 26, all red before the module (a
+  collection error). The registry tests of `test_mechanical.py` cover the new lane through its
+  committed plan.
+* **Sweep:** `mutation_sweep.py orphan-citations`: **20 cases, 20 fired**. The files come back
+  byte-identical and no mutant is left.
+
+**The plan** (`PLAN.jsonl` sha256 `86671d1a704b9732b32138421968750c21e670ab24d980be59192c273aabf372`,
+export 16:00:18 UTC):
+
+* **69 cells over 69 sites**: 64 `citations-without-markers` and 5 `uncited-entries`. 51 lose 1
+  entry, 9 lose 2, 7 lose 3 and 2 lose 4.
+* **9 listed**, all `marker-without-entry`: `SKIPPED.jsonl`, with the text excerpt and every entry.
+* No other refusal fired.
+* The first rendering had `generic-api-key` findings from gitleaks. A note ended in "...raw_data
+  key stay as they are'" right before the premise hash. The note was reworded rather than the
+  finding allowlisted. Scanning the staged plan now finds no leaks.
+
+### On production (read-only, and ROLLBACK only), 2026-09-25 16:00-16:05 UTC
+
+* `--check-primitive`: the 0022 body (t, t, t).
+* **`--verify` before:**
+  * curated sites 5,004;
+  * **D1 fails 78**; uncited entry 71; unanswered marker 9;
+  * carrying `description_citations` 2,749;
+  * description not the one its provenance hashes 0;
+  * every journal metric of the stamp, the test id and the rollback stamp 0.
+* **`--probe-guards` exit 0**: 5 probes (guard3-foreign-old-value, guard2-no-op,
+  guard2-foreign-column, guard1-other-source, guard5-premise). Each was refused by its own guard,
+  and 0 journal rows were left.
+* **`--rehearse`**: `orphan citation removal: 69 of 69 planned cell(s) changed and journalled over
+  69 curated site(s)`, then ROLLBACK. Afterwards the stamp has 0 journal rows, D1 still fails on
+  78, and the temp table is gone.
+* **The write and its reversal in one transaction**, a one-off beyond the framework (the
+  framework rehearses the undo only on landed rows). The script is APPLY.sql up to its COMMIT,
+  reads, then ROLLBACK.sql's body, reads, then ROLLBACK (`logs/orphan_citations/WRITE_AND_UNDO.sql`
+  and `write-and-undo.txt`, gitignored):
+
+  | read | D1 fails | uncited | unanswered | carrying | provenance hash differs | journal rows (stamp / rollback) | another raw_data key changed |
+  |---|---|---|---|---|---|---|---|
+  | after the write | **9** | 2 | 9 | 2,685 | 0 | 69 / 0 | 0 |
+  | after the reversal | 78 | 71 | 9 | 2,749 | 0 | 69 / 69 | 0 |
+  | after ROLLBACK | 78 | 71 | 9 | 2,749 | 0 | 0 / 0 | 0 |
+
+### The apply (the orchestrator runs it)
+
+Repository root, main venv, `export PYTHONIOENCODING=utf-8`, `PY=./.venv/Scripts/python.exe`,
+`A=scripts/remediation/mechanical/apply.py`, `W=.claude/worktrees/p4-pilot/output/remediation`
+(where the Phase-4 lane plans live).
+
+0. **The plan still stands.** `$PY $A --lane orphan-citations --verify` -> D1 fails 78, journal
+   rows for this run stamp 0.
+   * Watch for writes that touched a planned site's `raw_data` or description, above all the
+     re-queue of the 19 `revision-too-fresh` sites from 2026-09-26T21:30Z. Guards 3 and 5 refuse
+     them in any case.
+   * If anything moved:
+     `$PY scripts/remediation/mechanical/citations.py --export --write`, then
+     `$PY $A --lane orphan-citations --emit`, then
+     `$PY -m pytest tests/remediation/test_mechanical_citations.py tests/remediation/test_mechanical.py -q -m "not integration and not live_llm"`
+     green. Run gitleaks over the staged lane directory, and commit it before going on.
+1. **Check.** `$PY $A --check-primitive`, then `$PY $A --lane orphan-citations --probe-guards`
+   -> exit 0, the same 5 probes, each refused by its own guard.
+2. **Rehearse.** `$PY $A --lane orphan-citations --rehearse` -> `69 of 69 planned cell(s) changed
+   and journalled over 69 curated site(s)`, ROLLBACK, 0 journal rows.
+3. **Apply.** `$PY $A --lane orphan-citations --apply` -> `APPLY OK: the read-back matches the
+   plan, row for row` (exit 0). Exit 3 is NOT COMMITTED and exit 5 OUTCOME UNKNOWN: read the
+   journal for the stamp before anything else, and never apply twice.
+4. **Read back.** `$PY $A --lane orphan-citations --verify` -> the expected values:
+   * journal rows for this run stamp 69 and for this test id 69;
+   * **D1 fails 9**; uncited entry 2; unanswered marker 9;
+   * carrying `description_citations` 2,685;
+   * provenance hash differs 0;
+   * 0 for: another raw_data key changed, an added entry, outside `raw_data`, non-curated rows,
+     another site's `site_id_ref`.
+5. **Rehearse the rollback on the landed rows.** `$PY $A --lane orphan-citations
+   --rehearse-rollback` -> `69 of 69`, ROLLBACK, the cells still holding the written value.
+   Commit `REHEARSAL_ROLLBACK.sql`, as for the other lanes.
+6. **Acceptance.**
+   * (a) D1 by the acceptance's own function over every curated row:
+     `$PY scripts/remediation/mechanical/citations.py --export --write --out output/remediation/logs/orphan_citations/after`
+     -> `"d1_fails": 9, "marker-without-entry": 9`, no planned cell (the delivered plan stays
+     untouched).
+   * (b) Lane L, whose 67 rows this lane supersedes:
+     `$PY output/remediation/tools/verify_writes4.py --lane p4l --plan $W/logs/_write_apply_p4l/LANE_PLAN.jsonl --complete --allow-stamp '2026-09-25_mechanical-orphan-citations'`
+     -> 4,003 planned, 4,003 journal, 3,936 carried, **superseded 67**, **0 deviations**.
+     Without `--allow-stamp` the same run names the 67 as changed later.
+   * (c) Phase 4 and Phase 5 are unchanged, since no P4-written or P5 cell is touched:
+     `$PY output/remediation/tools/verify_writes4.py --lane p4 --plan $W/logs/_write_apply_p4/LANE_PLAN.jsonl --run $W/phase4_runner/runs/pilot4-2026-09-24 --run $W/phase4_runner/runs/mass-2026-09-25 --allow-stamp 'phase4l:%'`
+     -> 0 deviations, as on 2026-09-25.
+7. **Static export** (the globe's popup reads `dc` from `/data/sites/index.json`; the SSR page and
+   the API read the database, `/api/sites/all` through a Redis TTL):
+   * the Phase-6 runbook step 3 commands (chown, then
+     `ssh ancientnerds "docker exec ancient_nerds_api python -m pipeline.static_exporter --no-library"`);
+   * check: `ssh ancientnerds "grep -c 'Kuntur_Amaya' /var/www/ancientnerds/public/data/sites/index.json"`
+     -> 0.
+
+### The fresh acceptance (section 10)
+
+**`draw.py` cannot take it.** `SEED = 20260925` is a module constant (`take_draw`,
+`command_draw`; the canaries use `SEED + 1`), and there is no exclusion source for a previous
+draw. Passing the old `SAMPLE.jsonl` through `--phase4-audit-samples` would mislabel it and still
+draw with 20260925. `draw.py` is sealed (SEAL.json, the first `DRAW.json`), so it stays byte for
+byte.
+
+**`scripts/remediation/acceptance/redraw.py`** (commit `1f08d20`, test-first) imports draw.py's
+reads, exclusions, canaries and files, and adds two things:
+
+* **The seed**: one past the highest seed of the `--after` draws, so 20260926 and canaries
+  20260927.
+* **The previous draws' sites** as exclusion records `previous-draw-<name>`. Each previous
+  `SAMPLE.jsonl` is read only as its `DRAW.json` pins it, only once its `RESULT.md` exists, and
+  only its drawn `site_id`s are excluded.
+* **`DRAW.json`** keeps every key `judge.py` reads and adds `canary_seed`, `after` and
+  `redraw_py_sha256`.
+* **Tests:** `test_acceptance_redraw.py`, 16. The committed draw-2026-09-25 reads as 60 pinned
+  sites, with seed 20260926 next.
+* **Sweep:** `mutation_sweep.py acceptance-redraw`, **12 cases, 12 fired**.
+  `test_the_seal_holds` is unchanged and green.
+
+**Seal for the fresh draw** (sha256 over LF bytes; record it again at the draw if anything
+changes):
+
+* `PROTOCOL.md` `f40fac87230a26e7b1a4818e9d50d16dedfcb6936fc795b532e2cb35789f8bff` (unchanged);
+* `draw.py` `0a12beb461eb6aca6c921a4677b08472b4c8ff5068afd06af88a1baaf452515e` (unchanged);
+* `redraw.py` `fd12f2091066841ea46be120b81b0cc93ff98d05290326dc176d41c94d733fc9`;
+* `EXCLUSIONS.sha256.json` `dff9dd9a48a3199ebc6e7bb08bcafa31707f993f8f0a4a73c45bedbb0cf5dfb3`
+  (unchanged).
+
+**When:** after the apply above, and after the 19 `revision-too-fresh` sites' re-queue has
+written or held them (a P4 write on a drawn site after the draw voids the run, V3).
+
+    $PY scripts/remediation/acceptance/redraw.py --out output/remediation/acceptance/draw-<date> \
+        --after output/remediation/acceptance/draw-2026-09-25 \
+        --phase4-audit-samples .claude/worktrees/p4-pilot/output/remediation/logs/p4_mass/midrun_sample.txt \
+            .claude/worktrees/p4-pilot/output/remediation/logs/p4_mass/audit500_sample.txt \
+            output/remediation/phase4_runner/PILOT3.jsonl output/remediation/phase4_runner/PILOT4.jsonl
+
+These are the first draw's four Phase-4 audit sources. Then commit `FRAME.jsonl`,
+`EXCLUDED.json`, `SAMPLE.jsonl` and `DRAW.json`, and run `judge.py deterministic` **first**: this
+time it decided A3 before a single question was answered. Then stages 1-3 and `result`.
+
+**The residual risk.** The 9 listed sites stay D1 failures until a human repairs them
+(HUMAN_ONLY.md D9). All 9 are in the next pool: 4,194 sites, counting the first draw's frame
+minus its exclusions and its 60. A sample of 60 then hits at least one with probability **12.2 %**
+(`1 - C(4185,60)/C(4194,60)`). The recommended path is D9 before the draw.
+
+### Open
+
+* **HUMAN_ONLY.md D9**: the 9 sites with a marker without an entry.
+* **The library's stale "Cited in" links.** 521 references at 429 curated sites, from Phase 4
+  and after this lane from its removals. `library_aggregator._flush_to_db` never drops a site
+  from a URL it no longer sees. That is a code change in `pipeline/` (prune `parent_refs` per
+  refresh, like `_STRIP_RETIRED_REFS` does for retired sites). It is not made here.
+
+### Tests, sweeps, gates (main checkout, branch `integrate/wave1`, main venv)
+
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`,
+  `-p no:cacheprovider`): **7,071 passed, 4 skipped, 57 deselected, 0 failed** (221.7 s). The
+  skips are the known four.
+* New tests: `test_mechanical_citations.py` (26) and `test_acceptance_redraw.py` (16). Each was red
+  before its module existed (a collection error). The registry tests of `test_mechanical.py` take
+  the new lane from its committed plan.
+* Sweeps: `mutation_sweep.py orphan-citations` **20/20 fired** and `acceptance-redraw`
+  **12/12 fired**. None skipped, survived, invalid, unproven or errored. The swept files came back
+  byte-identical and no mutant is left. `test_mechanical_sweep.py` is green (21).
+* Linters: `ruff check` and `ruff format --check` clean on the 6 touched Python files (ruff
+  0.15.11). `ruff check api/ pipeline/` clean. `lint-imports` 2 kept, 0 broken.
+  `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80` clean.
+* gitleaks over the staged lane directory: no leaks.
+* Not applicable: nothing under `ancient-nerds-map/`, `api/` or `pipeline/` was touched, so
+  there is no frontend gate and no Lyra-image import check.
