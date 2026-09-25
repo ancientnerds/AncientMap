@@ -21364,6 +21364,22 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step",
     ),
     (
+        "audit-fix: m19 a P4 revert leaves a live P5 card behind",
+        P4_REVERT,
+        "        f\"     WHERE l.id = ANY(ids) AND {card_left_live('l')};\",\n",
+        '        "     WHERE false;",  # mutant\n',
+        P4_WRITE_TEST,
+        "test_revert4_carries_exactly_the_reviewed_guards",
+    ),
+    (
+        "audit-fix: m19 a reverted card still blocks the text's revert",
+        P4_REVERT,
+        "                      AND NOT {_reversed('p')})",
+        "                      AND true)",
+        P4_WRITE_TEST,
+        "test_a_p4_revert_is_refused_while_the_sites_p5_card_is_live",
+    ),
+    (
         "audit-fix: m18 the acceptance keeps its own stream rule",
         P4_ACCEPT,
         "    W.utf8_streams()\n    parser = argparse",

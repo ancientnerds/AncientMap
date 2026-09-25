@@ -2591,3 +2591,27 @@ def test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step(
     assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
     assert problem in capsys.readouterr().out
     assert (tmp_path / "apply" / G.STEP_FILE).exists()
+
+
+def test_a_p4_revert_is_refused_while_the_sites_p5_card_is_live() -> None:
+    """2026-09-25 audit m19: reverting a site's `phase4:` rows took its provenance - and with it
+    the pin of the card - while a `phase5:` card written on that provenance stayed live. The guard
+    counts such rows; it is evaluated here as rendered, over a real SQL journal."""
+    site = "00000001-0000-4000-8000-000000000001"
+    entries = [
+        {"id": 1, "run_stamp": "phase4:p4-0001:chunk-0001", "change_key": "k-desc",
+         "table_name": "unified_sites", "column_name": "description", "row_pk": site,
+         "old_value": "old", "new_value": "new", "test_id": "P4/description", "site_id_ref": site},
+        {"id": 2, "run_stamp": "phase5:p5-0001:chunk-0001", "change_key": "k-card",
+         "table_name": "card_stats", "column_name": "card_description", "row_pk": site,
+         "old_value": "old card", "new_value": "card", "test_id": "P5/card", "site_id_ref": site},
+    ]  # fmt: skip
+    query = "SELECT count(*) FROM remediation_change_log l WHERE " + R.card_left_live("l")
+    assert FX.journal_sqlite(entries).execute(query).fetchone()[0] == 1
+    reversal = dict(
+        entries[1], id=3, run_stamp=entries[1]["run_stamp"] + "-rollback",
+        change_key="k-card-rollback", old_value="card", new_value="old card",
+    )  # fmt: skip
+    assert FX.journal_sqlite([*entries, reversal]).execute(query).fetchone()[0] == 0
+    sql = R.render_revert("phase4:%")
+    assert R.card_left_live("l") in sql and "revert the phase-5 card first" in sql
