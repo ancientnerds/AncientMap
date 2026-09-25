@@ -9918,8 +9918,9 @@ GALLERY_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "gallery: the dry run exits 0 with images missing",
         GALLERY + "vision.py",
-        "        return EXIT_NO_VERDICT if missing else EXIT_OK\n",
-        "        return EXIT_OK  # mutant\n",
+        # `command_export` since 2026-09-25 (vision's CLI and `calibrate.py vision` share it)
+        "    return EXIT_NO_VERDICT if missing else EXIT_OK\n",
+        "    return EXIT_OK  # mutant\n",
         VISION_TEST,
         "test_the_dry_run_exits_3_when_an_image_is_missing",
     ),
@@ -10218,6 +10219,120 @@ GALLERY_REVIEW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += GALLERY_REVIEW_MUTATIONS
+
+#: The Opus C1 calibration (2026-09-25): the sample fixed in the seal log, the round through the
+#: Opus handoff read only from it, and no directory sealed for another model asked or measured.
+#: Same "gallery:" prefix, so `mutation_sweep.py gallery:` runs them with the others.
+GALLERY_OPUS_C1_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "gallery: a seal-log line of neither kind is read",
+        GALLERY + "calibrate.py",
+        "        if (SEALED_KEY in entry) == (FIXED_KEY in entry):\n",
+        "        if False:  # mutant\n",
+        CALIBRATE_TEST,
+        "test_a_seal_log_line_that_is_neither_seal_nor_sample_is_refused",
+    ),
+    (
+        "gallery: the fixed sample's line is read as a thresholds seal",
+        GALLERY + "calibrate.py",
+        "    entries = [entry for entry in _seal_log(run_dir) if SEALED_KEY in entry]\n",
+        "    entries = _seal_log(run_dir)  # mutant\n",
+        CALIBRATE_TEST,
+        "test_the_c1_sample_is_fixed_in_the_seal_log_after_the_thresholds",
+    ),
+    (
+        "gallery: a directory sealed for another model is asked",
+        GALLERY + "calibrate.py",
+        "    if model != vision.MODEL:\n",
+        "    if False:  # mutant\n",
+        CALIBRATE_TEST,
+        "test_a_directory_sealed_for_another_model_is_never_fixed_asked_or_measured",
+    ),
+    (
+        "gallery: the C1 sample is fixed after the first answer",
+        GALLERY + "calibrate.py",
+        "    if (run_dir / LEDGER_FILE).exists():\n        raise CalibrationError(\n"
+        '            f"{run_dir / LEDGER_FILE} exists - the C1 job list',
+        "    if False:  # mutant\n        raise CalibrationError(\n"
+        '            f"{run_dir / LEDGER_FILE} exists - the C1 job list',
+        CALIBRATE_TEST,
+        "test_the_sample_is_fixed_once_and_before_the_first_answer",
+    ),
+    (
+        "gallery: a fixed C1 sample is rewritten",
+        GALLERY + "calibrate.py",
+        "    if fixed - {digest}:\n",
+        "    if False:  # mutant\n",
+        CALIBRATE_TEST,
+        "test_a_fixed_sample_is_never_rewritten_and_not_read_once_edited",
+    ),
+    (
+        "gallery: the same C1 sample again is logged twice",
+        GALLERY + "calibrate.py",
+        "    if not fixed:\n        with open(run_dir / SEAL_LOG",
+        "    if True:  # mutant\n        with open(run_dir / SEAL_LOG",
+        CALIBRATE_TEST,
+        "test_the_c1_sample_is_fixed_in_the_seal_log_after_the_thresholds",
+    ),
+    (
+        "gallery: a seal log that fixes no sample or two is read",
+        GALLERY + "calibrate.py",
+        "    if len(fixed) != 1:\n",
+        "    if False:  # mutant\n",
+        CALIBRATE_TEST,
+        "test_the_sample_is_fixed_once_and_before_the_first_answer",
+    ),
+    (
+        "gallery: a C1 sample edited after it was fixed is read",
+        GALLERY + "calibrate.py",
+        "    if digest != fixed[0]:\n",
+        "    if False:  # mutant\n",
+        CALIBRATE_TEST,
+        "test_a_fixed_sample_is_never_rewritten_and_not_read_once_edited",
+    ),
+    (
+        "gallery: the C1 round asks the sample on disk, not the fixed one",
+        GALLERY + "calibrate.py",
+        "    jobs, _ = sealed_jobs(run_dir)\n    if export:\n",
+        "    jobs = vision.read_jobs(run_dir / JOBS_FILE)  # mutant\n    if export:\n",
+        CALIBRATE_TEST,
+        "test_a_sample_edited_after_it_was_fixed_is_neither_asked_nor_measured",
+    ),
+    (
+        "gallery: the C1 import half exports instead",
+        GALLERY + "calibrate.py",
+        "    if export:\n        return vision.command_export(",
+        "    if True:  # mutant\n        return vision.command_export(",
+        CALIBRATE_TEST,
+        "test_the_c1_questions_go_through_the_handoff_and_are_measured_by_the_sealed_rules",
+    ),
+    (
+        "gallery: the admission measures a sample that was never fixed",
+        GALLERY + "calibrate.py",
+        "    jobs, jobs_digest = sealed_jobs(run_dir)\n",
+        "    jobs = vision.read_jobs(run_dir / JOBS_FILE)  # mutant\n"
+        '    jobs_digest = _sha((run_dir / JOBS_FILE).read_text(encoding="utf-8"))\n',
+        CALIBRATE_TEST,
+        "test_a_sample_edited_after_it_was_fixed_is_neither_asked_nor_measured",
+    ),
+    (
+        "gallery: the jobs command writes a sample it does not fix",
+        GALLERY + "calibrate.py",
+        "        digest = fix_jobs(run_dir, jobs)\n",
+        "        digest = vision.write_jobs(run_dir / JOBS_FILE, jobs)  # mutant\n",
+        CALIBRATE_TEST,
+        "test_the_jobs_command_fixes_the_sample_it_builds",
+    ),
+    (
+        "gallery: the jobs command builds the state before it checks the directory",
+        GALLERY + "calibrate.py",
+        "        _fixable(run_dir)  # before the state is built",
+        "        pass  # mutant; before the state is built",
+        CALIBRATE_TEST,
+        "test_a_directory_sealed_for_another_model_is_never_fixed_asked_or_measured",
+    ),
+]
+MUTATIONS += GALLERY_OPUS_C1_MUTATIONS
 
 #: The liveness lane's write (2026-09-23): `liveness.py chunk` turns PLANNED.jsonl into a chunk of
 #: the shared image writer. Labels start with "liveness chunk: " so the list runs on its own.
