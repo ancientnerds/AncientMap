@@ -92,6 +92,10 @@ button {
   align-items: center;
 }
 
+.dash-logo {
+  margin-right: 0.7em;
+}
+
 .dash-mark b {
   color: var(--dash-paper);
   font-weight: 700;

@@ -6,6 +6,8 @@
  */
 import { useState } from 'react'
 
+import anLogo from '../components/dashboard/an-logo-green.svg'
+
 import { Devices } from '../components/dashboard/Devices'
 import { FeedbackInbox } from '../components/dashboard/FeedbackInbox'
 import { GlobeReach } from '../components/dashboard/GlobeReach'
@@ -91,6 +93,7 @@ export default function DashboardPage() {
     <main className="dash">
       <header className="dash-header">
         <a className="dash-mark" href="/">
+          <img className="dash-logo" src={anLogo} alt="" width={22} height={20} />
           <b>Ancient Nerds</b> · Founders
         </a>
         <div className="dash-range" role="group" aria-label="Time range">
