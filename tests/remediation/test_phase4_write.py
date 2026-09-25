@@ -1123,8 +1123,8 @@ def _legacy_acceptance(tmp_path: Path, *, journal_rows: int, planned: int) -> Pa
     path = tmp_path / f"accept-l-{journal_rows}.log"
     path.write_text(
         f"lane p4l | stamps phase4l:p4l-% | planned rows {planned} | lane journal rows "
-        f"{journal_rows} | carried {journal_rows} | not yet written {planned - journal_rows}\n"
-        "RESULT: 0 deviation(s)\nACCEPT_EXIT=0\n",
+        f"{journal_rows} | carried {journal_rows} | not yet written {planned - journal_rows} | "
+        "superseded 0\nRESULT: 0 deviation(s)\nACCEPT_EXIT=0\n",
         encoding="utf-8",
     )
     return path
@@ -1645,7 +1645,7 @@ def _acceptance(
     """What `verify_writes4.py --lane p4` prints for a clean step (its own lines, WB-C3)."""
     lines = {
         "head": f"lane p4 | stamps phase4:% | planned rows 6 | lane journal rows {journal_rows} | "
-        f"carried {journal_rows} | not yet written 0",
+        f"carried {journal_rows} | not yet written 0 | superseded 0",
         "verified": "re-verified 2 written site(s) with V1-V15",
         "result": "RESULT: 0 deviation(s)",
         "exit": "ACCEPT_EXIT=0",
@@ -2073,7 +2073,7 @@ def test_the_acceptance_must_have_read_every_round_its_stamps_cover(
     assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 0
     head = (
         f"lane p4 | stamps {stamps} | planned rows 2 | lane journal rows {journal_rows} | "
-        f"carried 2 | not yet written 0"
+        f"carried 2 | not yet written 0 | superseded 0"
     )
     output = _acceptance(tmp_path, journal_rows=journal_rows, name="round-2.log", head=head)
     capsys.readouterr()

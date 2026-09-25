@@ -15,6 +15,17 @@ production directly, read-only, after every step of 100 sites and once more at t
    `_reversed` - is **reverted**: it is not "changed later" and not a second write of its row, and
    a planned row whose lane rows are all reverted is judged like one not yet written. So a batch
    reverted and written again as round 2 (`write_gate4 --round 2`) is accepted on its round-2 rows.
+   **A later lane the operator allows** (`--allow-stamp`, repeatable, a SQL LIKE pattern such as
+   `phase4l:%`; Phase 3's `verify_writes --allow-stamp`, 2026-09-25): a planned row the lane did
+   not write, or whose lane rows are all reverted, that no longer holds its old value is
+   **superseded**, not MOVED, when its field's chain after the lane's last own link (a write or
+   its own reversal; the whole chain when the lane has none in it) is a continuous run of links
+   from the planned old value to the live value, every one by an allowed stamp that is not the
+   lane's own. As in `verify_writes`, the same holds after a written lane row: superseded instead
+   of CHANGED LATER, and not carried (production holds the later lane's value, so the site is not
+   verified again as the lane's). The count is printed per allowed pattern. Anything else stays a
+   deviation. Roman Bath, York and Altar of Athena Polias are the case: written by P4, taken back
+   with `revert4 --site`, held, then marked by lane L, whose raw_data is now L's.
 2. **V1-V15 again** (`--run`, lanes `p4` and `p5`): every written site's description and
    `raw_data` read back from production, its card from production (`p5`) or from the run's
    `assembly.jsonl` (`p4`, before the cards are written; only where production's
@@ -36,6 +47,7 @@ and that line - not the process status of a wrapper - is what is read. The five 
 of the design are a Playwright check against production and not part of this tool.
 
     verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> [--run <runs/<run2>>]
+    verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> --allow-stamp 'phase4l:%'
     verify_writes4.py --lane p4l --plan <PLAN.jsonl>
     verify_writes4.py --lane p5 --plan <PLAN.jsonl> --run <runs/<run>> --card-check
     verify_writes4.py --boot-logs --since 2026-09-24T10:00:00Z
@@ -53,7 +65,7 @@ import pathlib
 import re
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -61,6 +73,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import lanes  # noqa: E402 - paths, the JSON-lines reader and the database seam
 import verify_writes as VW  # noqa: E402 - the Phase-3 journal-chain reader (Link, check_chain)
+import write_gate4  # noqa: E402 - like_matches: SQL LIKE over one stamp, as the gate reads stamps
 from census.tests import t08_citation_markers as T08  # noqa: E402 - on sys.path via lanes
 from journal_chain import ROLLBACK_SUFFIX  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
@@ -127,22 +140,72 @@ class Acceptance4:
 
     carried: set[Key] = field(default_factory=set)  #: lane rows that hold their new value
     untouched: int = 0  #: planned rows not yet written that still hold their old value
+    #: rows only allowed later stamps changed after the lane, by the `--allow-stamp` pattern that
+    #: allowed the last of those links (`superseding`)
+    superseded: dict[str, int] = field(default_factory=collections.Counter)
     deviations: list[str] = field(default_factory=list)
+
+
+def reverses(other: VW.Link, link: VW.Link, change_keys: Mapping[int, str | None]) -> bool:
+    """`other` is the lane row `link`'s own kept reversal: a row under its change key **and** its
+    run stamp, each plus `-rollback` (revert4 `_reversed`). The key alone names a transition, which
+    a round-2 write journals again; only the stamp tells the rounds apart. A row journalled without
+    a change key has no reversal of its own (SQL: `NULL || '-rollback'`)."""
+    key = change_keys[link.id]
+    return (
+        key is not None
+        and other.stamp == link.stamp + ROLLBACK_SUFFIX
+        and change_keys[other.id] == key + ROLLBACK_SUFFIX
+    )
 
 
 def reverted(
     link: VW.Link, chain: Sequence[VW.Link], change_keys: Mapping[int, str | None]
 ) -> bool:
-    """The lane row `link` has its own kept reversal in its field's chain: a row under its change
-    key **and** its run stamp, each plus `-rollback` (revert4 `_reversed`). The key alone names a
-    transition, which a round-2 write journals again; only the stamp tells the rounds apart. A row
-    journalled without a change key has no reversal of its own (SQL: `NULL || '-rollback'`)."""
-    key = change_keys[link.id]
-    return key is not None and any(
-        other.stamp == link.stamp + ROLLBACK_SUFFIX
-        and change_keys[other.id] == key + ROLLBACK_SUFFIX
-        for other in chain
-    )
+    """The lane row `link` has its own kept reversal in its field's chain (`reverses`)."""
+    return any(reverses(other, link, change_keys) for other in chain)
+
+
+def after_the_lane(
+    chain: Sequence[VW.Link], links: Sequence[VW.Link], change_keys: Mapping[int, str | None]
+) -> list[VW.Link]:
+    """The links of a field's `chain` after the lane's last own link - one of its writes `links` or
+    their own reversals (`reverses`). With no own link in the chain, all of it: there is no point
+    after which the lane left the field."""
+    own = [
+        index
+        for index, other in enumerate(chain)
+        if any(other.id == link.id or reverses(other, link, change_keys) for link in links)
+    ]
+    return list(chain[own[-1] + 1 :]) if own else list(chain)
+
+
+def superseding(
+    key: Key,
+    run: Sequence[VW.Link],
+    *,
+    start: str | None,
+    live: str | None,
+    allowed: Sequence[str],
+    own_stamps: Collection[str],
+) -> str | None:
+    """The `--allow-stamp` pattern that allowed the last link of `run` when `run` is a continuous
+    sequence of links from `start` to the live value (the Phase-3 chain reader), every one of them
+    by a stamp an allowed SQL LIKE pattern matches and that is not one of the lane's own - else
+    `None`. The lane never supersedes itself. `verify_writes` counts a superseded row under its
+    last later link's stamp; here that link's pattern is the first listed one that matches it."""
+    if not run or run[0].old != start:
+        return None
+    problems, _ = VW.check_chain(key, list(run), live, missing=False)
+    if problems:
+        return None
+    patterns = [
+        None
+        if link.stamp in own_stamps
+        else next((p for p in allowed if write_gate4.like_matches(p, link.stamp)), None)
+        for link in run
+    ]
+    return None if None in patterns else patterns[-1]
 
 
 def accept4(
@@ -155,13 +218,15 @@ def accept4(
     columns: frozenset[tuple[str, str]],
     complete: bool,
     change_keys: Mapping[int, str | None],
+    allowed: Sequence[str],
 ) -> Acceptance4:
     """The chain acceptance as a pure function of what the database returned.
 
     `lane_links`, `chains` and `live` carry canonical values (`canonical`); `present` holds the
     `(table, pk)` rows the live read found; `columns` are the lane's; `complete` makes a planned row
     that the lane did not write a deviation rather than a later step; `change_keys` are the change
-    keys of every journal row read, by id (`reverted`).
+    keys of every journal row read, by id (`reverted`); `allowed` are the SQL LIKE patterns of the
+    later stamps that may change a planned row after the lane (`--allow-stamp`, `superseding`).
     """
     result = Acceptance4()
     plan: dict[Key, Mapping[str, Any]] = {}
@@ -182,6 +247,8 @@ def accept4(
             )
             continue
         lane_by_key[link.key].append(link)
+    lane_stamps = {link.stamp for links in lane_by_key.values() for link in links}
+    own_stamps = lane_stamps | {stamp + ROLLBACK_SUFFIX for stamp in lane_stamps}
 
     written: set[Key] = set()  #: rows the lane wrote and did not revert
     for key, links in sorted(lane_by_key.items()):
@@ -224,8 +291,21 @@ def accept4(
             later = chain[ids_in_chain.index(link.id) + 1 :]
             if later:
                 sound = False
-                stamps = list(dict.fromkeys(other.stamp for other in later))
-                result.deviations.append(f"CHANGED LATER {where}: {stamps} wrote after {link.id}")
+                pattern = superseding(
+                    key,
+                    later,
+                    start=link.new,
+                    live=live.get(key),
+                    allowed=allowed,
+                    own_stamps=own_stamps,
+                )
+                if pattern is not None:
+                    result.superseded[pattern] += 1  # not carried: the value is a later lane's
+                else:
+                    stamps = list(dict.fromkeys(other.stamp for other in later))
+                    result.deviations.append(
+                        f"CHANGED LATER {where}: {stamps} wrote after {link.id}"
+                    )
         if open_links:
             written.add(key)
         if sound:
@@ -240,10 +320,21 @@ def accept4(
         elif complete:
             result.deviations.append(f"NOT WRITTEN {where}: the acceptance is --complete")
         elif live.get(key) != canonical(key[0], key[1], row["old_value"]):
-            result.deviations.append(
-                f"MOVED {where}: not written by the lane, and it no longer holds its planned old "
-                "value (a write elsewhere, or a chunk refused as matched_0)"
+            pattern = superseding(
+                key,
+                after_the_lane(chains.get(key, []), lane_by_key.get(key, []), change_keys),
+                start=canonical(key[0], key[1], row["old_value"]),
+                live=live.get(key),
+                allowed=allowed,
+                own_stamps=own_stamps,
             )
+            if pattern is not None:
+                result.superseded[pattern] += 1
+            else:
+                result.deviations.append(
+                    f"MOVED {where}: not written by the lane, and it no longer holds its planned "
+                    "old value (a write elsewhere, or a chunk refused as matched_0)"
+                )
         else:
             result.untouched += 1
     return result
@@ -640,12 +731,17 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
         columns=columns,
         complete=args.complete,
         change_keys=production.change_keys,
+        allowed=args.allow_stamp,
     )
     print(
         f"lane {lane} | stamps {stamp_like} | planned rows {len(planned)} | lane journal rows "
         f"{len(production.lane_links)} | carried {len(result.carried)} | not yet written "
-        f"{result.untouched}"
+        f"{result.untouched} | superseded {sum(result.superseded.values())}"
     )
+    if args.allow_stamp:
+        print(f"allowed later: {' '.join(args.allow_stamp)}")
+    for pattern, count in sorted(result.superseded.items()):
+        print(f"superseded by {pattern}: {count}")
     deviations = list(result.deviations)
     deviations += invariant_deviations(lane=lane, carried=result.carried, production=production)
     written = {key[2] for key in result.carried}
@@ -693,6 +789,13 @@ def main(argv: list[str] | None = None) -> int:
         help="a Phase-4 run directory (runs/<run>); once per run the lane was written from",
     )
     parser.add_argument("--stamp-like", default=None, help="override the lane's stamp pattern")
+    parser.add_argument(
+        "--allow-stamp",
+        action="append",
+        default=[],
+        help="a SQL LIKE pattern of later stamps that may change the lane's rows (repeatable), "
+        "e.g. lane L's 'phase4l:%%'",
+    )
     parser.add_argument("--complete", action="store_true", help="every planned row is written")
     parser.add_argument("--card-check", action="store_true", help="run card_json.py --check")
     parser.add_argument("--boot-logs", action="store_true", help="read both API boot logs")

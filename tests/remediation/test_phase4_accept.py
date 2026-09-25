@@ -28,6 +28,7 @@ for path in (TOOLS, REPO / "scripts" / "remediation"):
 import lanes  # noqa: E402
 import verify_writes as VW  # noqa: E402
 import verify_writes4 as A  # noqa: E402
+import write_gate4 as G  # noqa: E402 - its --accept reads this tool's output
 from phase3 import fetch_stage as F  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import verify4 as V  # noqa: E402
@@ -286,6 +287,7 @@ def _args(written: Written, tmp_path: Path, lane: str = "p4", **over: Any) -> An
         "run": [str(written.run_dir)],
         "stamp_like": {"p4": "phase4:%", "p4l": "phase4l:%", "p5": "phase5:%"}[lane],
         "complete": False,
+        "allow_stamp": [],
     }
     values.update(over)
     return type("Args", (), values)()
@@ -363,7 +365,9 @@ def test_main_needs_exactly_one_mode_and_a_run_for_the_text_lanes(
 # ------------------------------------------------------------------------------------------------
 
 
-def _accept4(written: Written, *, complete: bool = False, lane: str = "p4") -> A.Acceptance4:
+def _accept4(
+    written: Written, *, complete: bool = False, lane: str = "p4", allowed: tuple[str, ...] = ()
+) -> A.Acceptance4:
     columns = A.LANE_COLUMNS[lane]
     production = A.read_production(
         sorted({row["pk"] for row in written.plan}),
@@ -380,6 +384,7 @@ def _accept4(written: Written, *, complete: bool = False, lane: str = "p4") -> A
         columns=columns,
         complete=complete,
         change_keys=production.change_keys,
+        allowed=allowed,
     )
 
 
@@ -597,6 +602,197 @@ def test_only_a_rows_own_reversal_closes_it(tmp_path: Path) -> None:
     for row in written.production.journal:
         row["change_key"] = None
     assert any(d.startswith("CHANGED LATER") for d in _accept4(written).deviations)
+
+
+# ------------------------------------------------------------------------------------------------
+# A later lane the operator allows (`--allow-stamp`, as Phase 3's acceptance, verify_writes.py)
+# ------------------------------------------------------------------------------------------------
+
+P4L_STAMP = "phase4l:p4l-1144:chunk-0001"
+MOVED_RAW = f"MOVED {SITE_ID} unified_sites.raw_data"
+
+
+def _legacy_raw() -> dict[str, Any]:
+    """What lane L writes over a March text P4 does not hold (owner decision 2026-09-24)."""
+    legacy = M.LegacyProvenance(desc_sha256=sha(STORED))
+    return dict(OLD_RAW, **{M.PROVENANCE_KEY: legacy.to_dict()})
+
+
+def _later(
+    written: Written, *, old: Any, new: Any, stamp: str = P4L_STAMP, column: str = "raw_data"
+) -> None:
+    """A later lane's journal row of the site's `column` (raw_data dumped as the writer dumps it),
+    and production holding its new value."""
+    serial = dumps if column == "raw_data" else str
+    written.production.journal.append(
+        {
+            "id": max((row["id"] for row in written.production.journal), default=0) + 1,
+            "table_name": "unified_sites",
+            "column_name": column,
+            "row_pk": SITE_ID,
+            "old_value": serial(old),
+            "new_value": serial(new),
+            "run_stamp": stamp,
+            "change_key": f"{stamp.split(':')[0]}:k-later",
+            "evidence": {},
+        }
+    )
+    written.production.sites[SITE_ID][column] = new
+
+
+def _moved(result: A.Acceptance4) -> bool:
+    return any(d.startswith(MOVED_RAW) for d in result.deviations)
+
+
+def test_a_reverted_row_an_allowed_later_lane_moved_is_superseded(tmp_path: Path) -> None:
+    """Roman Bath, York and Altar of Athena Polias (2026-09-25): written by P4, taken back with
+    `revert4 --site` (their own reversals kept) and held; lane L then marked their March text, so
+    their raw_data moved on from the planned old value. After the lane's last own link - the
+    reversal - the chain runs from the planned old value to the live value through lane L's links
+    only: superseded under `--allow-stamp 'phase4l:%'`, MOVED without it. The description, still at
+    its old value, is not yet written, as before."""
+    written = written_p4(tmp_path)
+    _revert(written)
+    _later(written, old=OLD_RAW, new=_legacy_raw())
+    assert [d.split(":")[0] for d in _accept4(written).deviations] == [MOVED_RAW]
+    result = _accept4(written, allowed=("phase4l:%",))
+    assert (result.deviations, result.carried, result.untouched) == ([], set(), 1)
+    assert result.superseded == {"phase4l:%": 1}
+    assert accept(written, tmp_path, allow_stamp=["phase4l:%"]) == []
+    assert [d.split(":")[0] for d in accept(written, tmp_path)] == [MOVED_RAW]
+
+
+def test_a_later_lane_that_is_not_allowed_leaves_the_row_moved(tmp_path: Path) -> None:
+    """Only the stamps the operator names supersede: another stamp after the lane's last own link -
+    alone, or before an allowed one - leaves the row MOVED."""
+    written = written_p4(tmp_path)
+    _revert(written)
+    _later(written, old=OLD_RAW, new=_legacy_raw(), stamp="2026-09-25_mechanical-other")
+    result = _accept4(written, allowed=("phase4l:%",))
+    assert _moved(result) and not result.superseded
+    written = written_p4(tmp_path / "mixed")
+    _revert(written)
+    between = dict(OLD_RAW, k="another lane")
+    _later(written, old=OLD_RAW, new=between, stamp="2026-09-25_mechanical-other")
+    _later(written, old=between, new=_legacy_raw())
+    result = _accept4(written, allowed=("phase4l:%",))
+    assert _moved(result) and not result.superseded
+
+
+def test_a_superseding_run_starts_at_the_planned_old_value(tmp_path: Path) -> None:
+    """An allowed run that does not start at the planned old value does not supersede - whether the
+    lane wrote the row and took it back (its whole chain breaks as well) or never wrote it (only
+    this rule sees it)."""
+    elsewhere = dict(OLD_RAW, k="elsewhere")
+    written = written_p4(tmp_path)
+    _revert(written)
+    _later(written, old=elsewhere, new=_legacy_raw())
+    assert _moved(_accept4(written, allowed=("phase4l:%",)))
+    written = written_p4(tmp_path / "never")
+    written.production.journal = []
+    written.production.sites[SITE_ID].update(description=STORED, raw_data=OLD_RAW)
+    _later(written, old=elsewhere, new=_legacy_raw())
+    result = _accept4(written, allowed=("phase4l:%",))
+    assert [d.split(":")[0] for d in result.deviations] == [MOVED_RAW]
+
+
+def test_a_superseding_run_is_continuous_and_ends_in_the_live_value(tmp_path: Path) -> None:
+    written = written_p4(tmp_path)
+    _revert(written)
+    halfway = dict(OLD_RAW, k="halfway")
+    _later(written, old=OLD_RAW, new=halfway)
+    _later(written, old=dict(OLD_RAW, k="elsewhere"), new=_legacy_raw())
+    assert _moved(_accept4(written, allowed=("phase4l:%",)))
+    written = written_p4(tmp_path / "live")
+    _revert(written)
+    _later(written, old=OLD_RAW, new=_legacy_raw())
+    written.production.sites[SITE_ID]["raw_data"] = dict(OLD_RAW, k="edited by hand")
+    assert _moved(_accept4(written, allowed=("phase4l:%",)))
+
+
+def test_a_row_the_lane_never_wrote_is_superseded_only_by_a_chain_of_allowed_links(
+    tmp_path: Path,
+) -> None:
+    """With no link of the lane in the field's chain there is no own link to start after: the whole
+    chain must be the allowed run from the planned old value to the live value. A link of any other
+    stamp in it - even one before the planned old value - leaves the row MOVED."""
+    written = written_p4(tmp_path)
+    written.production.journal = []
+    written.production.sites[SITE_ID].update(description=STORED, raw_data=OLD_RAW)
+    _later(written, old=OLD_RAW, new=_legacy_raw())
+    result = _accept4(written, allowed=("phase4l:%",))
+    assert (result.deviations, result.untouched, result.superseded) == ([], 1, {"phase4l:%": 1})
+    written = written_p4(tmp_path / "earlier")
+    written.production.journal = []
+    written.production.sites[SITE_ID].update(description=STORED, raw_data=OLD_RAW)
+    earlier = dict(OLD_RAW, k="earlier")
+    _later(written, old=earlier, new=OLD_RAW, stamp="2026-09-20_mechanical-earlier")
+    _later(written, old=OLD_RAW, new=_legacy_raw())
+    assert _moved(_accept4(written, allowed=("phase4l:%",)))
+
+
+def test_a_written_row_an_allowed_later_lane_changed_is_superseded_not_carried(
+    tmp_path: Path,
+) -> None:
+    """As in Phase 3's acceptance (`verify_writes`): a lane row after which only allowed stamps
+    wrote is superseded - no CHANGED LATER, and not carried either: production no longer holds the
+    lane's value, so the site is not verified again as the lane's."""
+    written = written_p4(tmp_path)
+    raw = written.production.sites[SITE_ID]["raw_data"]
+    _later(written, old=raw, new=dict(raw, k="later"))
+    assert any(d.startswith("CHANGED LATER") for d in _accept4(written).deviations)
+    result = _accept4(written, allowed=("phase4l:%",))
+    assert (result.deviations, result.superseded) == ([], {"phase4l:%": 1})
+    assert result.carried == {("unified_sites", "description", SITE_ID)}
+    assert accept(written, tmp_path, allow_stamp=["phase4l:%"]) == []
+    written = written_p4(tmp_path / "other")
+    raw = written.production.sites[SITE_ID]["raw_data"]
+    _later(written, old=raw, new=dict(raw, k="later"), stamp="phase5:p5-0001:chunk-0001")
+    assert any(
+        d.startswith("CHANGED LATER") for d in _accept4(written, allowed=("phase4l:%",)).deviations
+    )
+
+
+def test_the_lane_never_supersedes_itself(tmp_path: Path) -> None:
+    """A pattern that also matches the lane's own stamps does not make the lane's own later links a
+    later lane's: a reversal under another key and a second write stay CHANGED LATER."""
+    written = written_p4(tmp_path)
+    _revert(written, key_suffix="-other")
+    deviations = _accept4(written, allowed=("phase4%",)).deviations
+    assert any(d.startswith("CHANGED LATER") for d in deviations)
+    written = written_p4(tmp_path / "again")
+    first = written.production.journal[0]
+    again = dict(first, id=21, old_value=first["new_value"], new_value="Once more.")
+    written.production.journal.append(dict(again, run_stamp=P4_ROUND_2))
+    written.production.sites[SITE_ID]["description"] = "Once more."
+    deviations = _accept4(written, allowed=("phase4%",)).deviations
+    assert any(d.startswith("CHANGED LATER") for d in deviations)
+
+
+def test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--allow-stamp` repeats and takes SQL LIKE patterns; the output counts the superseded rows
+    per allowed pattern, and `write_gate4 --accept` still reads its lane line."""
+    written = written_p4(tmp_path)
+    _revert(written)
+    _later(written, old=OLD_RAW, new=_legacy_raw())
+    args = _args(written, tmp_path)
+    monkeypatch.setattr(lanes, "psql", lambda sql, *, host: written.production(sql))
+    monkeypatch.setattr(lanes, "lane", lambda name: type("Lane", (), {"stamp_like": "phase4:%"})())
+    argv = ["--lane", "p4", "--plan", args.plan, "--run", *args.run]
+    assert A.main(argv) == 1
+    capsys.readouterr()
+    assert A.main([*argv, "--allow-stamp", "phase4l:%", "--allow-stamp", "phase5:%"]) == 0
+    text = capsys.readouterr().out
+    lines = text.strip().splitlines()
+    assert lines[0].endswith("| carried 0 | not yet written 1 | superseded 1")
+    assert "allowed later: phase4l:% phase5:%" in lines
+    assert "superseded by phase4l:%: 1" in lines
+    assert lines[-2:] == ["RESULT: 0 deviation(s)", "ACCEPT_EXIT=0"]
+    step = {"lane": "p4", "stamps": [P4_STAMP]}
+    written_rounds = [{"run_stamp": P4_STAMP, "rows_written": 2}]
+    assert G.acceptance_problems(text, step=step, written=written_rounds, used=set()) == []
 
 
 def test_a_planned_row_outside_the_lanes_columns_is_a_deviation(tmp_path: Path) -> None:

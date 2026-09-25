@@ -8254,8 +8254,10 @@ PHASE4_VERIFY_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: the key alone closes a lane row",
         P4_ACCEPT,
-        "        other.stamp == link.stamp + ROLLBACK_SUFFIX\n",
-        "        True  # mutant\n",
+        # re-anchored 2026-09-25: the predicate moved into `reverses`, which the run after the
+        # lane's last own link (`after_the_lane`, --allow-stamp) reads too
+        "        and other.stamp == link.stamp + ROLLBACK_SUFFIX\n",
+        "        and True  # mutant\n",
         P4_ACCEPT_TEST,
         "test_only_a_rows_own_reversal_closes_it",
     ),
@@ -8270,8 +8272,9 @@ PHASE4_VERIFY_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: a row without a change key has a reversal",
         P4_ACCEPT,
-        "    return key is not None and any(\n",
-        "    return any(  # mutant\n",
+        # re-anchored 2026-09-25: the predicate moved into `reverses`
+        "        key is not None\n",
+        "        True  # mutant\n",
         P4_ACCEPT_TEST,
         "test_only_a_rows_own_reversal_closes_it",
     ),
@@ -19817,6 +19820,137 @@ P4_MIDRUN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += P4_MIDRUN_MUTATIONS
+
+#: `verify_writes4 --allow-stamp` (2026-09-25): Roman Bath, York and Altar of Athena Polias were
+#: written by P4, taken back with `revert4 --site` and held, and lane L then marked their March text
+#: in raw_data - two MOVED rows. A row only allowed later stamps (SQL LIKE) changed after the lane's
+#: last own link, continuously from the planned old value to the live value, is superseded, as in
+#: Phase 3's `verify_writes`; everything else stays a deviation. One guard, one test.
+P4_ALLOW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "p4 verify_writes4: a reverted row an allowed lane moved stays MOVED",
+        P4_ACCEPT,
+        "            if pattern is not None:\n                result.superseded[pattern] += 1\n"
+        "            else:\n",
+        "            if False:  # mutant\n                result.superseded[pattern] += 1\n"
+        "            else:\n",
+        P4_ACCEPT_TEST,
+        "test_a_reverted_row_an_allowed_later_lane_moved_is_superseded",
+    ),
+    (
+        "p4 verify_writes4: a written row an allowed lane changed is CHANGED LATER",
+        P4_ACCEPT,
+        "                if pattern is not None:\n",
+        "                if False:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_written_row_an_allowed_later_lane_changed_is_superseded_not_carried",
+    ),
+    (
+        "p4 verify_writes4: a superseded written row is carried",
+        P4_ACCEPT,
+        "            if later:\n                sound = False\n",
+        "            if later:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_written_row_an_allowed_later_lane_changed_is_superseded_not_carried",
+    ),
+    (
+        "p4 verify_writes4: a stamp no pattern allows supersedes",
+        P4_ACCEPT,
+        "        else next((p for p in allowed if write_gate4.like_matches(p, link.stamp)), None)\n",
+        "        else next(iter(allowed), None)  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_later_lane_that_is_not_allowed_leaves_the_row_moved",
+    ),
+    (
+        "p4 verify_writes4: the lane's own stamps supersede",
+        P4_ACCEPT,
+        "        if link.stamp in own_stamps\n",
+        "        if False  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_the_lane_never_supersedes_itself",
+    ),
+    (
+        "p4 verify_writes4: the lane's reversal stamps supersede",
+        P4_ACCEPT,
+        "    own_stamps = lane_stamps | {stamp + ROLLBACK_SUFFIX for stamp in lane_stamps}\n",
+        "    own_stamps = lane_stamps  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_the_lane_never_supersedes_itself",
+    ),
+    (
+        "p4 verify_writes4: a superseding run starts anywhere",
+        P4_ACCEPT,
+        "    if not run or run[0].old != start:\n",
+        "    if not run:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_superseding_run_starts_at_the_planned_old_value",
+    ),
+    (
+        "p4 verify_writes4: a superseding run is not read as a chain",
+        P4_ACCEPT,
+        "    if problems:\n        return None\n",
+        "    if False:  # mutant\n        return None\n",
+        P4_ACCEPT_TEST,
+        "test_a_superseding_run_is_continuous_and_ends_in_the_live_value",
+    ),
+    (
+        "p4 verify_writes4: the run after the lane ignores its reversals",
+        P4_ACCEPT,
+        "        if any(other.id == link.id or reverses(other, link, change_keys) for link in links)\n",
+        "        if any(other.id == link.id for link in links)  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_reverted_row_an_allowed_later_lane_moved_is_superseded",
+    ),
+    (
+        "p4 verify_writes4: the run after the lane is the whole chain",
+        P4_ACCEPT,
+        "    return list(chain[own[-1] + 1 :]) if own else list(chain)\n",
+        "    return list(chain)  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_reverted_row_an_allowed_later_lane_moved_is_superseded",
+    ),
+    (
+        "p4 verify_writes4: a row the lane never wrote is never superseded",
+        P4_ACCEPT,
+        "    return list(chain[own[-1] + 1 :]) if own else list(chain)\n",
+        "    return list(chain[own[-1] + 1 :]) if own else []  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_row_the_lane_never_wrote_is_superseded_only_by_a_chain_of_allowed_links",
+    ),
+    (
+        "p4 verify_writes4: --allow-stamp keeps only its last pattern",
+        P4_ACCEPT,
+        '        "--allow-stamp",\n        action="append",\n',
+        '        "--allow-stamp",\n        action="store",  # mutant\n',
+        P4_ACCEPT_TEST,
+        "test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line",
+    ),
+    (
+        "p4 verify_writes4: the allowed stamps never reach the acceptance",
+        P4_ACCEPT,
+        "        allowed=args.allow_stamp,\n",
+        "        allowed=[],  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line",
+    ),
+    (
+        "p4 verify_writes4: the superseded rows are not counted per pattern",
+        P4_ACCEPT,
+        '        print(f"superseded by {pattern}: {count}")\n',
+        "        pass  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line",
+    ),
+    (
+        "p4 verify_writes4: the lane line drops the superseded count",
+        P4_ACCEPT,
+        '        f"{result.untouched} | superseded {sum(result.superseded.values())}"\n',
+        '        f"{result.untouched}"  # mutant\n',
+        P4_ACCEPT_TEST,
+        "test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line",
+    ),
+]
+MUTATIONS += P4_ALLOW_MUTATIONS
 
 
 def digest(path: Path) -> str:
