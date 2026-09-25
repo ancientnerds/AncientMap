@@ -32,6 +32,20 @@ function translate(root: Element): void {
   }
 }
 
+/** The other shape: every text node kept, but moved into a wrapper of the
+ *  translator's (an extension or Edge's translator) - still inside the parent
+ *  React knows, one level deeper. */
+function wrap(root: Element): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const nodes: Text[] = []
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text)
+  for (const node of nodes) {
+    const wrapper = document.createElement('font')
+    node.parentNode!.insertBefore(wrapper, node)
+    wrapper.appendChild(node)
+  }
+}
+
 let setDone: (done: boolean) => void = () => {}
 
 /** SitePopup's connector summary: one span, its text split by JSX. */
@@ -107,6 +121,40 @@ describe('tolerateDetachedNodes', () => {
     translate(container)
     await act(async () => setDone(true))
     expect(container.querySelector('b i')!.textContent).toBe('new')
+  })
+
+  it('reproduces the second crash: a wrapped text node empties the root too', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const quiet = (e: ErrorEvent) => e.preventDefault()
+    window.addEventListener('error', quiet)
+    const container = await mount(<Summary sources={2} />)
+    wrap(container)
+    let thrown: unknown = null
+    try {
+      await act(async () => setDone(true))
+    } catch (e) {
+      thrown = e
+    }
+    window.removeEventListener('error', quiet)
+    expect(String(thrown)).toContain('NotFoundError')
+    expect(container.childElementCount).toBe(0)
+  })
+
+  it('keeps a page alive when React removes a text node a translator wrapped', async () => {
+    uninstall = tolerateDetachedNodes(Node.prototype)
+    const container = await mount(<Summary sources={2} />)
+    wrap(container)
+    await act(async () => setDone(true))
+    expect(container.querySelector('.summary')!.textContent).toBe('Found in 2 sources')
+  })
+
+  it('keeps a page alive when React inserts before a text node a translator wrapped', async () => {
+    uninstall = tolerateDetachedNodes(Node.prototype)
+    const container = await mount(<Label />)
+    wrap(container)
+    await act(async () => setDone(true))
+    expect(container.querySelector('b')!.textContent).toBe('newLabel')
+    expect(container.querySelector('b')!.firstChild!.nodeName).toBe('I')
   })
 
   it('still throws for a node that sits under a different parent: that is our bug, not the translator', () => {

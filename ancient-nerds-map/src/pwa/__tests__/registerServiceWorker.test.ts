@@ -148,3 +148,32 @@ describe('ensureServiceWorkerActive (before an offline download)', () => {
     await expect(ensureServiceWorkerActive()).rejects.toBe(refusal)
   })
 })
+
+describe('updateInstalledServiceWorker', () => {
+  it('asks an installed worker for a new build', async () => {
+    const update = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { serviceWorker: { getRegistration: vi.fn().mockResolvedValue({ update }) } })
+    const { updateInstalledServiceWorker } = await import('../registerServiceWorker')
+    await expect(updateInstalledServiceWorker()).resolves.toBe(true)
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('installs nothing on a first visit: the queue does that, after the globe', async () => {
+    const register = vi.fn()
+    vi.stubGlobal('navigator', { serviceWorker: { register, getRegistration: vi.fn().mockResolvedValue(undefined) } })
+    const { updateInstalledServiceWorker } = await import('../registerServiceWorker')
+    await expect(updateInstalledServiceWorker()).resolves.toBe(false)
+    expect(register).not.toHaveBeenCalled()
+  })
+
+  it('resolves false without service workers and passes a failed check on', async () => {
+    vi.stubGlobal('navigator', {})
+    const { updateInstalledServiceWorker } = await import('../registerServiceWorker')
+    await expect(updateInstalledServiceWorker()).resolves.toBe(false)
+    vi.resetModules()
+    const update = vi.fn().mockRejectedValue(new TypeError('Failed to update a ServiceWorker'))
+    vi.stubGlobal('navigator', { serviceWorker: { getRegistration: vi.fn().mockResolvedValue({ update }) } })
+    const again = await import('../registerServiceWorker')
+    await expect(again.updateInstalledServiceWorker()).rejects.toThrow('Failed to update')
+  })
+})

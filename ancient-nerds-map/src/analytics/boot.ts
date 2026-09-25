@@ -71,16 +71,32 @@ function reportVital(metric: Metric): void {
   track('vital', { name: metric.name, value, rating: metric.rating, page: pageType(location.pathname) })
 }
 
+const EXTENSION_URL = /(chrome|moz|safari|safari-web|ms-browser)-extension:\/\//
+
+/** An error that is not ours to fix, so no js_error: code a browser extension
+ *  injected into the page (its file or its stack is an extension URL - live
+ *  2026-09-25: "Failed to connect to MetaMask" on two pages of one session),
+ *  and the ResizeObserver loop notice, which browsers raise when an observer's
+ *  callback changes layout and which by the spec only delays the notification
+ *  (six sessions on site pages, 2026-09-18..25, nothing broken). */
+export function isForeignError(message: unknown, filename?: string, stack?: string): boolean {
+  if (EXTENSION_URL.test(filename ?? '') || EXTENSION_URL.test(stack ?? '')) return true
+  return /^(Uncaught )?ResizeObserver loop/.test(String(message ?? ''))
+}
+
 function installErrorCapture(page: string): void {
   let sent = 0
   window.addEventListener('error', event => {
+    const stack = event.error instanceof Error ? event.error.stack : undefined
+    if (isForeignError(event.message, event.filename, stack)) return
     if (sent++ >= MAX_ERRORS_PER_PAGE) return
     track('js_error', { ...errorProps(event.message, event.filename), page })
   })
   window.addEventListener('unhandledrejection', event => {
-    if (sent++ >= MAX_ERRORS_PER_PAGE) return
     const reason = event.reason
     const message = reason instanceof Error ? reason.message : reason
+    if (isForeignError(message, undefined, reason instanceof Error ? reason.stack : undefined)) return
+    if (sent++ >= MAX_ERRORS_PER_PAGE) return
     track('js_error', { ...errorProps(message, 'promise'), page })
   })
 }
@@ -125,6 +141,28 @@ function installOutboundClicks(page: string): void {
   })
 }
 
+/** The key the Umami tracker reads before every send (/pulse.js): set, and
+ *  this browser sends nothing, page views and events alike. */
+export const TRACKING_OFF_KEY = 'umami.disabled'
+
+/** `?notrack=1` keeps this browser out of the numbers from now on,
+ *  `?notrack=0` counts it again; the founders dashboard links both. On
+ *  2026-09-25 the most opened site of the week, 24 opens, was six sessions of
+ *  one German laptop - us looking at our own pages. Returns what it did, and
+ *  the URL without the parameter. */
+export function applyTrackingChoice(url: URL, storage: Pick<Storage, 'setItem' | 'removeItem'>): {
+  choice: 'off' | 'on' | null
+  url: URL
+} {
+  const value = url.searchParams.get('notrack')
+  if (value !== '1' && value !== '0') return { choice: null, url }
+  if (value === '1') storage.setItem(TRACKING_OFF_KEY, '1')
+  else storage.removeItem(TRACKING_OFF_KEY)
+  const clean = new URL(url)
+  clean.searchParams.delete('notrack')
+  return { choice: value === '1' ? 'off' : 'on', url: clean }
+}
+
 declare global {
   interface Window {
     __anAnalyticsBooted?: boolean
@@ -136,6 +174,14 @@ export function bootAnalytics(): void {
   if (window.__anAnalyticsBooted) return
   window.__anAnalyticsBooted = true
   tolerateDetachedNodes(Node.prototype)
+  // Before the tracker's first send: module scripts run ahead of the deferred
+  // /pulse.js, which the build appends at the end of <head>. localStorage is
+  // touched only when the parameter is there - where storage is blocked, the
+  // getter itself throws, and boot has to run for every other visitor.
+  if (location.search.includes('notrack=')) {
+    const { choice, url } = applyTrackingChoice(new URL(location.href), localStorage)
+    if (choice) history.replaceState(history.state, '', url)
+  }
   const page = pageType(location.pathname)
   onLCP(reportVital)
   onCLS(reportVital)
