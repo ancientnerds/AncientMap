@@ -300,7 +300,7 @@ def classify(site: Site, links: Sequence[JournalLink]) -> Verdict | None:
                     "quote": _excerpt(text, n),
                 }
                 for n in unanswered
-            ),  # fmt: skip
+            ),
             {
                 "source": "unified_sites.raw_data.description_citations",
                 "url": "unified_sites.raw_data",
@@ -317,7 +317,7 @@ def classify(site: Site, links: Sequence[JournalLink]) -> Verdict | None:
                 canonical(link.new_value),
             )
             for link in links
-        ],  # fmt: skip
+        ],
         canonical(site.raw_data),
     )
     if broken is not None:

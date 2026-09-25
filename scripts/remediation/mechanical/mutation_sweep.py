@@ -4257,6 +4257,146 @@ ACCEPTANCE_CASES: list[Case] = [
 ]
 CASES += ACCEPTANCE_CASES
 
+# -------------------------------------------------- the orphan-citations lane (D1, 2026-09-25)
+#: The repair of the acceptance's D1 class (`citations.py`) and its registration in `lane.py`.
+#: Every label starts with "orphan-citations" - `mutation_sweep.py orphan-citations` runs these.
+CITATIONS = MECHANICAL / "citations.py"
+CITATIONS_TESTS = "tests/remediation/test_mechanical_citations.py"
+_LANE_TEST = "test_the_lane_writes_one_jsonb_cell_conditioned_on_the_description"
+ORPHAN_CITATIONS_CASES: list[Case] = [
+    *(
+        guard(f"orphan-citations: {label}", CITATIONS, needle, test, CITATIONS_TESTS)
+        for label, needle, test in (
+            (
+                "a site D1 holds on is no candidate",
+                "    if failure is None:",
+                "test_a_site_d1_holds_on_is_no_candidate",
+            ),
+            (
+                "a marker without an entry lists the site",
+                "    if unanswered:",
+                "test_a_marker_without_an_entry_is_listed_and_nothing_of_the_site_is_written",
+            ),
+            (
+                "the journal ends at the live value",
+                "    if broken is not None:",
+                "test_a_journal_that_does_not_end_at_the_live_value_is_listed",
+            ),
+            (
+                "the value is printed as Postgres prints it",
+                "    if site.raw_data is None or reprint(raw) != site.raw_data:",
+                "test_a_raw_data_the_writer_would_not_print_as_postgres_does_is_listed",
+            ),
+            (
+                "the plan is read against D1",
+                "            if after is not None:",
+                "test_a_plan_whose_value_would_not_make_d1_hold_is_refused",
+            ),
+            (
+                "--write plans",
+                "        if args.write:",
+                "test_write_writes_the_lane_s_files_from_the_export_alone",
+            ),
+            (
+                "--export reads production",
+                "        if args.export:",
+                "test_export_reads_production_into_the_lane_s_export_directory",
+            ),
+        )
+    ),
+    *(
+        Case(f"orphan-citations: {label}", CITATIONS, old, new, test, CITATIONS_TESTS)
+        for label, old, new, test in (
+            (
+                "unreadable entries are listed",
+                "    except ValueError as exc:\n        return listed(NOT_READABLE",
+                "    except KeyError as exc:\n        return listed(NOT_READABLE",
+                "test_unreadable_citations_are_listed",
+            ),
+            (
+                "the journal is compared as JSON",
+                "                canonical(link.new_value),",
+                "                link.new_value,",
+                "test_the_raw_data_journal_is_compared_as_json",
+            ),
+            (
+                "a text without markers loses the key",
+                "if key != CITATIONS_KEY}",
+                "if True}",
+                "test_entries_of_a_text_without_markers_go_with_their_key_and_nothing_else_moves",
+            ),
+            (
+                "only the uncited entries go",
+                'key: [e for e in value if e["n"] in markers] if key',
+                "key: [e for e in value] if key",
+                "test_uncited_entries_go_and_the_cited_stay_byte_for_byte",
+            ),
+            (
+                "the journal is read in id order",
+                'for r in sorted(rows["journal"], key=lambda r: int(r["id"])):',
+                'for r in rows["journal"]:',
+                "test_the_export_is_parsed_into_sites_and_each_site_s_journal",
+            ),
+            (
+                "the export reads the raw_data journal",
+                "l.column_name = 'raw_data'",
+                "l.column_name = 'description'",
+                "test_the_export_is_one_read_only_snapshot_of_the_curated_rows_and_their_raw_data"
+                "_journal",
+            ),
+            (
+                "the write is conditioned on its premise",
+                "        premise=site.premise,\n",
+                "",
+                "test_the_plan_is_one_the_framework_renders_and_reverses",
+            ),
+        )
+    ),
+    *(
+        Case(f"orphan-citations: {label}", LANE, old, new, test, CITATIONS_TESTS)
+        for label, old, new, test in (
+            (
+                "the lane is registered",
+                "LANES[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS\n",
+                "",
+                _LANE_TEST,
+            ),
+            (
+                "the lane reads back",
+                "LANE_READBACKS[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS_READBACK\n",
+                "",
+                _LANE_TEST,
+            ),
+            (
+                "the premise is the description's sha256",
+                "    premise_sql=\"encode(sha256(convert_to(coalesce(u.description, ''), 'UTF8')), "
+                "'hex')\",\n",
+                "    premise_sql=\"md5(coalesce(u.description, ''))\",\n",
+                _LANE_TEST,
+            ),
+            (
+                "the residual reads both halves",
+                '    f"({CITATIONS_UNCITED} OR {CITATIONS_UNANSWERED})",',
+                '    f"({CITATIONS_UNCITED})",',
+                "test_the_residual_is_d1_read_with_the_census_marker",
+            ),
+            (
+                "the residual reads the census marker",
+                "(\\d+)\\]', 'g')",
+                "(\\d)\\]', 'g')",
+                "test_the_residual_is_d1_read_with_the_census_marker",
+            ),
+            (
+                "the readback counts added entries",
+                '            "journal rows for this run that added a citation entry",\n',
+                '            "journal rows for this run that removed a citation entry",\n',
+                "test_the_readback_measures_both_halves_and_that_nothing_else_moved",
+            ),
+        )
+    ),
+]
+CASES += ORPHAN_CITATIONS_CASES
+
 
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
