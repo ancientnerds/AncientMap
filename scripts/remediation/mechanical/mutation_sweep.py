@@ -4788,6 +4788,13 @@ AUDIT_FIX_CASES: list[Case] = [
         "test_a_quote_without_text_is_no_evidence",
         REVERSAL_TESTS,
     ),
+    guard(
+        "audit-fix: m7 a list provenance crashes the premise",
+        MECHANICAL / "dangling_markers.py",
+        "    if isinstance(provenance, list):",
+        "test_a_provenance_that_is_no_object_is_listed_not_a_crash",
+        "tests/remediation/test_mechanical_dangling_markers.py",
+    ),
 ]
 CASES += AUDIT_FIX_CASES
 
