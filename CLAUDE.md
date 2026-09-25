@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Where the 2026-09 sites remediation stands
 
-All 5,004 `ancient_nerds` sites have been examined; **994 corrections are in the production database**
-(1,022 sites, 0 deviations, each with a journal entry and a rollback file). Start with
-`output/remediation/HANDOVER.md` - task, state, commands, decisions, open work and the traps that
-cost time here. The evidence behind every number is `output/remediation/AUDIT_LOG.md`; what only
-Martin can decide is `output/remediation/HUMAN_ONLY.md`. Two things are open: five Northern-Ireland
-spelling rows (route: the mechanical lane, never the frozen discover prompt) and the search route for
-the 7,761 unverifiable fields (decided: MiniMax).
+All 5,004 `ancient_nerds` sites have been examined. In production (2026-09-25, every write journalled,
+0 deviations): Phase 3's 994 field writes, of which 499 stand (Opus re-judged the 934 DeepSeek decided:
+481 kept, 453 reverted by `journal-reversal-3`); further lanes (wrong-both, coordinates, ids, images,
+scope-e4: 78 sites retired); and Phase 4's **984 defect sites with a new Wikipedia-based description**.
+Every model judgement runs through Opus agents via `scripts/remediation/opus_handoff.py`: no DeepSeek,
+Pi or opencode (owner, 2026-09-23), no MiniMax. Start with `output/remediation/HANDOVER.md` (state,
+next steps in order, traps); evidence `AUDIT_LOG.md`, owner items `HUMAN_ONLY.md`. Open: lane L
+(running), the `wip/p4-pilot` merge, Phase 6 incl. Push #2 and the final acceptance.
 
 ## Code Quality Standards
 
