@@ -43,10 +43,20 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   und brechen alle MiniMax-Aufrufe. *(`reference-deployment-lessons`, 2026-08-25)*
 - **Nie `… | tail` hinter `gh run watch --exit-status` oder `ruff check`** — die Pipe
   maskiert den Exit-Code. *(`reference-deployment-lessons:10`, 2026-09-17)*
-- **Betriebs-Fallen auf dem VPS:** Statik-Export braucht `-u root`; `docker exec -i` frisst
-  stdin-geskriptete Eingaben; `docker logs --since` rechnet in Host-Lokalzeit (CEST), nicht
-  UTC; `pkill -f` matcht die eigene SSH-Session (stattdessen PID-Dateien).
+- **Betriebs-Fallen auf dem VPS:** `docker exec -i` frisst stdin-geskriptete Eingaben;
+  `docker logs --since` rechnet in Host-Lokalzeit (CEST), nicht UTC; `pkill -f` matcht die
+  eigene SSH-Session (stattdessen PID-Dateien).
   *(`reference-deployment-lessons:44,47,48,59`, 2026-09-17)*
+- **Den Statik-Export nie mit `-u root` fahren** (die frühere Lektion „Statik-Export braucht
+  `-u root`" war die Ursache, nicht die Lösung). Der Root-Lauf vom 2026-08-18 hat `sites/`,
+  `sources.json`, `links.json` und `images/index.json` root-eigen hinterlassen; der
+  Rebuild-Job läuft als uid 1000 und scheitert daran (Plan 9.4, gemessen 2026-09-25). Seit
+  2026-09-25 verweigert `pipeline/static_exporter.py` den Lauf als root und nennt vor dem
+  ersten Schreiben jede Datei, die er nicht schreiben kann. Abhilfe ohne sudo:
+  `docker exec -u root ancient_nerds_api chown -R 1000:1000 /app/public/data/<pfad>`, dann
+  `docker exec ancient_nerds_api python -m pipeline.static_exporter --no-library`.
+  Die Export-Dateien sind gitignoriert und entstehen nur auf dem VPS; kein Commit, kein LFS.
+  *(Phase 6, 2026-09-25)*
 - **Der Deploy scheitert am `git pull`, nicht an den Gates — drei Ursachen, je ein Deploy
   (2026-09-22):** (1) Eine Datei, die erst als ungetrackte Kopie auf den VPS kam und später
   committet wurde, blockiert den Merge („untracked working tree files would be overwritten“).

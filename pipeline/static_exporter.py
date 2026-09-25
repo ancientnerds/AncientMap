@@ -22,6 +22,7 @@ Usage:
 
 import gzip
 import json
+import os
 import shutil
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -96,6 +97,76 @@ def _slugify_period(period_name: str) -> str:
     while "--" in s:
         s = s.replace("--", "-")
     return s.strip("-")
+
+
+#: What to run on the VPS when the preflight refuses: the API container shares the checkout's
+#: public/data (docker-compose bind mount) and runs as appuser, uid 1000 - the host's deploy
+#: user - and root inside the container can hand the files back to it without sudo on the host.
+CHOWN_REMEDY = (
+    "docker exec -u root ancient_nerds_api chown -R 1000:1000 /app/public/data/<path>, then "
+    "run the export again as the container user (never with -u root)"
+)
+
+
+def _writable(path: Path) -> bool:
+    """Whether the effective user may write ``path`` (replace a file, create in a directory)."""
+    return os.access(path, os.W_OK)
+
+
+def export_targets(
+    output_dir: Path, *, sites_only: bool = False, library: bool = True
+) -> list[Path]:
+    """Every file ``StaticExporter.export_all`` writes, and every existing file of the
+    directories whose file names come from the database (content types, library periods).
+
+    The file snapshot's own name is a timestamp; its directory (a new file is created there,
+    old ones are pruned) and manifest.json stand for it.
+    """
+    targets = [output_dir / "sources.json", output_dir / "sites" / "index.json"]
+    targets += [output_dir / "sites" / "details" / f"{region}.json" for region in REGIONS]
+    targets.append(output_dir / "images" / "index.json")
+    if not sites_only:
+        targets.append(output_dir / "links.json")
+    files = [p for t in targets for p in (t, t.with_suffix(t.suffix + ".gz"))]
+    snapshots = output_dir / "snapshots"
+    files += [output_dir / HUBS_SNAPSHOT_NAME, snapshots, snapshots / "manifest.json"]
+    dynamic = [] if sites_only else ["content"] + (["library"] if library else [])
+    for name in dynamic:
+        directory = output_dir / name
+        files.append(directory)
+        if directory.is_dir():
+            files += sorted(p for p in directory.rglob("*") if p.is_file() or p.is_dir())
+    return files
+
+
+def preflight(targets: list[Path]) -> None:
+    """Refuse the export before its first write: as root, or with any target it cannot write.
+
+    A root run (``docker exec -u root``, 2026-08-18) leaves root-owned files that the rebuild
+    job, which runs as uid 1000, can never replace (plan 9.4). A target that exists must be
+    writable; one that does not must have a writable nearest existing ancestor. Every failing
+    path is named, not just the first.
+    """
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        raise PermissionError(
+            "the static export refuses to run as root: its files would be owned by root and "
+            "the rebuild job (uid 1000) could never replace them - run it as the container "
+            "user, e.g. docker exec ancient_nerds_api python -m pipeline.static_exporter"
+        )
+    blocked: list[str] = []
+    for target in targets:
+        probe = target
+        while not probe.exists() and probe.parent != probe:
+            probe = probe.parent
+        if not _writable(probe):
+            blocked.append(str(probe))
+    if blocked:
+        unique = sorted(set(blocked))
+        raise PermissionError(
+            f"the static export cannot write {len(unique)} path(s), nothing was written: "
+            + ", ".join(unique)
+            + f". Remedy: {CHOWN_REMEDY}"
+        )
 
 
 def save_json(path: Path, data: Any, compress: bool = True):
@@ -304,6 +375,7 @@ def export_hubs_snapshot(output_dir: Path = OUTPUT_DIR) -> Path:
     dev/CI baseline (scripts/export_hubs.py --baseline).
     """
     path = output_dir / HUBS_SNAPSHOT_NAME
+    preflight([path])
     save_json(path, build_hubs_snapshot(), compress=False)
     return path
 
@@ -322,7 +394,10 @@ class StaticExporter:
         library has its own job (POST /api/library/refresh), which aggregates the
         citations first and then writes the same files - two jobs under two locks would
         otherwise write them at the same time.
+
+        Nothing is read or written unless every target is writable (``preflight``).
         """
+        preflight(export_targets(self.output_dir, sites_only=sites_only, library=library))
         logger.info("=" * 60)
         logger.info("STATIC EXPORT - Ancient Nerds Map")
         logger.info("=" * 60)

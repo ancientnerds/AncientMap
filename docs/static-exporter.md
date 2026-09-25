@@ -145,4 +145,19 @@ Manual deploy / data refresh:
 The files must be writable by the container user (uid 1000). Files created as root (as on
 2026-08-18) make the export fail with a PermissionError, which the job status reports.
 
+**Preflight (2026-09-25).** `export_all()` and `export_hubs_snapshot()` refuse to run as root
+and, before the first database read or file write, check every target (`export_targets()`):
+an existing file must be writable, a missing one must have a writable nearest ancestor. A
+refusal names every failing path and the remedy - nothing is written, so an export is never
+left half new. Root-owned targets are handed back without sudo on the host:
+
+```
+docker exec -u root ancient_nerds_api chown -R 1000:1000 /app/public/data/<path>
+docker exec ancient_nerds_api python -m pipeline.static_exporter --no-library
+```
+
+The export files are gitignored (`.gitignore`, "PUBLIC DATA — generated on VPS"): they are
+produced on the VPS and survive a deploy (`git clean -fd` without `-x` keeps ignored files).
+Nothing of them is committed or pushed.
+
 News feed is served live by the FastAPI endpoint `GET /news/feed`.
