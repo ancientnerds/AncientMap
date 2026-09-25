@@ -37,6 +37,10 @@
     <!-- Self-hosted fonts (public/fonts/fonts.css): same files Google served,
          no cross-origin render-blocking stylesheet on the SSR pages. -->
     <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/jetbrains-mono-400-latin.woff2" />
+    <!-- The first card's thumbnail is the page's largest paint, and Wikimedia is
+         the one host it needs that the page has not talked to yet: connect while
+         the bundle and the list load (phone LCP p75 5.6 s, 2026-09-26). -->
+    <link rel="preconnect" href="https://upload.wikimedia.org" />
     <link rel="stylesheet" href="/fonts/fonts.css" />
   </head>
   <body>
