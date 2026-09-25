@@ -1,0 +1,21 @@
+{
+ "canaries": 10,
+ "draw_py_sha256": "0a12beb461eb6aca6c921a4677b08472b4c8ff5068afd06af88a1baaf452515e",
+ "drawn_at": "2026-09-25T14:21:03Z",
+ "excluded": 664,
+ "frame": 4918,
+ "journal_at_draw": {
+  "max_applied_at": "2026-09-25 13:58:40.397758+00",
+  "max_id": 73180,
+  "rows": 19101
+ },
+ "pool": 4254,
+ "sample_size": 60,
+ "seed": 20260925,
+ "sha256": {
+  "CANARIES.jsonl": "c25821753fdb4dede2172d77809c8175f4ae8a0325b43c0e61a0647d07b1f34c",
+  "EXCLUDED.json": "2589b69482a8c0ec3c64d6edf4dec21f019638e194962c6f60a504b3be444a89",
+  "FRAME.jsonl": "c60624588173cb87b52f2cf4e19b1492bd24e04743050af647339c099e06ee3a",
+  "SAMPLE.jsonl": "9511373575fc7cd603da8e149d04afedd63c8755cba81e7907a0fb03748e2097"
+ }
+}
