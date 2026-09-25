@@ -1,12 +1,12 @@
 {
  "_about": "The basis of one card_stats wave (scripts/remediation/mechanical/card_stats.py, resolve_basis). Written by --write; the applied plan's only when it comes from the --write run that was applied.",
  "wave": "2026-09-23",
- "export_sha256": "090323805599231afd4c646ec751db2c8db747d127db8ab61dca8464ecdd2f6a",
- "exported_at": "2026-09-25 07:30:33.486561+00",
- "journal_max_id": 37675,
- "journal_rows": 2894,
- "cells": 3982,
- "cells_sha256": "65468b3f69f004b2971eda71e1774950cfa6ad975e1bef052b15d8be9f990941",
+ "export_sha256": "d65d0c3df8f22029d7e17bfc6f0eba61dcd1f6178f48a1510e87c08e8b05db73",
+ "exported_at": "2026-09-25 12:21:51.637605+00",
+ "journal_max_id": 51782,
+ "journal_rows": 5236,
+ "cells": 4106,
+ "cells_sha256": "e00bb918f10473a5e616123e95d7e7cbed93e79142297efe39d8dad361337692",
  "refused_cells": [],
  "proof_basis": null,
  "unjournalled": {

@@ -1,12 +1,12 @@
 # Phase 6 item 4 - card_stats recomputed as the generator would: plan (card-stats-2026-09-23)
 
-Built 2026-09-25T07:30:42+00:00 by `scripts/remediation/mechanical/card_stats.py` from the production export `090323805599231afd4c646ec751db2c8db747d127db8ab61dca8464ecdd2f6a` (2026-09-25 07:30:33.486561+00). Lane `card-stats-2026-09-23`: run stamp `2026-09-23_mechanical-card-stats`, journal test id `P6/card-stats-recompute`, change keys `card-stats-2026-09-23:<site_id>:<column>`, target `card_stats.site_id`.
+Built 2026-09-25T12:22:22+00:00 by `scripts/remediation/mechanical/card_stats.py` from the production export `d65d0c3df8f22029d7e17bfc6f0eba61dcd1f6178f48a1510e87c08e8b05db73` (2026-09-25 12:21:51.637605+00). Lane `card-stats-2026-09-23`: run stamp `2026-09-23_mechanical-card-stats`, journal test id `P6/card-stats-recompute`, change keys `card-stats-2026-09-23:<site_id>:<column>`, target `card_stats.site_id`.
 
-**3982 cell(s) over 1055 of 5004 card(s) will be written, 0 refused.** 659 of the changed cards belong to sites with a journalled field write; the others change only because a `(site_type, period_name)` share moved.
+**4106 cell(s) over 1082 of 5004 card(s) will be written, 0 refused.** 733 of the changed cards belong to sites with a journalled field write; the others change only because a `(site_type, period_name)` share moved.
 
 ## The model is the generator's, and it reproduces the stored cards
 
-Counterfactual: 2390 journalled input value(s) put back, recomputed with `generator.site_card_stats()`: **0 of 60048 cells differ** from the stored `card_stats`. The empires are ordered as production lists its boundary directories: `shang`, `mitanni`, `assyrian`, `carolingian`, `han`, `gupta`, `kush`, `mycenaean`, `achaemenid`, `seleucid`, `metadata.json`, `parthian`, `qin`, `axum`, `greek`, `byzantine`, `carthaginian`, `sassanid`, `capitals.json`, `zapotec`, `elam`, `zhou`, `roman`, `olmec`, `babylonian`, `teotihuacan`, `kushan`, `hittite`, `regions.json`, `indus_valley`, `aztec`, `roman.geojson`, `etruscan`, `minoan`, `inca`, `maya`, `akkadian`, `phoenician`, `maurya`, `macedonian`, `egyptian`.
+Counterfactual: 2888 journalled input value(s) put back, recomputed with `generator.site_card_stats()`: **0 of 60048 cells differ** from the stored `card_stats`. The empires are ordered as production lists its boundary directories: `shang`, `mitanni`, `assyrian`, `carolingian`, `han`, `gupta`, `kush`, `mycenaean`, `achaemenid`, `seleucid`, `metadata.json`, `parthian`, `qin`, `axum`, `greek`, `byzantine`, `carthaginian`, `sassanid`, `capitals.json`, `zapotec`, `elam`, `zhou`, `roman`, `olmec`, `babylonian`, `teotihuacan`, `kushan`, `hittite`, `regions.json`, `indus_valley`, `aztec`, `roman.geojson`, `etruscan`, `minoan`, `inca`, `maya`, `akkadian`, `phoenician`, `maurya`, `macedonian`, `egyptian`.
 
 The basis the proof stood on: the first wave's: every journalled input value put back, the unjournalled inputs as exported (journal horizon 0, `card_stats.resolve_basis`). This plan's own basis is in `BASIS.json` next to this file: the export's journal horizon, every curated site's content links, images, likes and bookmarks, and the cells planned. The next wave's proof reads it - commit it with the plan that is applied, and never re-plan an applied wave (`--write` refuses one whose run stamp is in the journal).
 
@@ -20,12 +20,12 @@ The basis the proof stood on: the first wave's: every journalled input value put
 |---|---|
 | `antiquity` | 180 |
 | `fortification` | 257 |
-| `cultural_influence` | 0 |
+| `cultural_influence` | 1 |
 | `mystery` | 894 |
-| `legacy` | 27 |
-| `total_power` | 961 |
-| `rarity_score` | 916 |
-| `rarity_tier` | 356 |
+| `legacy` | 66 |
+| `total_power` | 988 |
+| `rarity_score` | 944 |
+| `rarity_tier` | 385 |
 | `category_group` | 257 |
 | `civilization` | 61 |
 | `empires` | 37 |
@@ -41,13 +41,13 @@ The basis the proof stood on: the first wave's: every journalled input value put
 | 2 Uncommon | 3 Rare | 123 |
 | 2 Uncommon | 4 Epic | 3 |
 | 3 Rare | 1 Common | 3 |
-| 3 Rare | 2 Uncommon | 55 |
+| 3 Rare | 2 Uncommon | 63 |
 | 3 Rare | 4 Epic | 71 |
-| 4 Epic | 3 Rare | 49 |
+| 4 Epic | 3 Rare | 69 |
 | 4 Epic | 5 Legendary | 5 |
-| 5 Legendary | 4 Epic | 3 |
+| 5 Legendary | 4 Epic | 4 |
 
-236 card(s) move up, 120 down.
+236 card(s) move up, 149 down.
 
 ## category_group moves
 
