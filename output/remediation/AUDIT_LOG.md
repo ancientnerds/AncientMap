@@ -12376,3 +12376,14 @@ Repository root, main venv, `export PYTHONIOENCODING=utf-8`, `PY=./.venv/Scripts
   * `--lane p5`: 1,113 carried, 762 re-verified, **0 deviations**.
 * Not applicable: nothing under `ancient-nerds-map/`, `api/` or `pipeline/` was touched, so there is
   no frontend gate and no Lyra-image import check.
+
+## 2026-09-25 - the fresh acceptance draw (PROTOCOL.md section 10), sealed before it runs
+
+After the last writes of the session (the D9 run, orphan-citations, dangling-markers; D1 and D4 hold
+on all 5,004 curated sites; static export, Qdrant and IndexNow done), the orchestrator seals the
+re-draw before running it: `PROTOCOL.md` `f40fac87230a26e7b1a4818e9d50d16dedfcb6936fc795b532e2cb35789f8bff`
+(unchanged), `draw.py` `0a12beb461eb6aca6c921a4677b08472b4c8ff5068afd06af88a1baaf452515e`
+(unchanged), `redraw.py` `fd12f2091066841ea46be120b81b0cc93ff98d05290326dc176d41c94d733fc9` (as
+recorded with its commit 1f08d20). Seed 20260926, canaries 20260927, excluding draw-2026-09-25's
+60 and the Phase-4 audit samples (mid-run 45, 500-site 10, pilots 3 and 4), into
+`draw-2026-09-25b/`.
