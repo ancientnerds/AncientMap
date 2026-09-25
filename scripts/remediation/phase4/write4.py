@@ -1567,11 +1567,18 @@ def read_plan(out: Path, *, group: Group) -> list[Row4]:
     return rows
 
 
+#: psql did not answer: whether a COMMIT landed is unknown until the journal is read. The same code
+#: as `mechanical.apply.EXIT_UNKNOWN`, so every writer's exit line says it the same way.
+EXIT_UNKNOWN = 5
+
+
 def exit_line(tag: str, run: Callable[[], int]) -> int:
     """Run one tool body and print its own `<TAG>_EXIT=` line - the line that is read, never a
     wrapper's status (design, DRIVER). The streams are UTF-8 first: a console that cannot encode a
     site name once killed a write wave before its first row (`write_stage.utf8_streams`). A
-    refusal is printed, not swallowed: the code is the refusal's."""
+    refusal is printed, not swallowed: the code is the refusal's. A psql timeout is neither a
+    success nor a refusal: it is `EXIT_UNKNOWN` (audit 2026-09-25 M3 - it used to escape as a
+    traceback with no exit line at all)."""
     W.utf8_streams()
     try:
         code = run()
@@ -1584,6 +1591,9 @@ def exit_line(tag: str, run: Callable[[], int]) -> int:
     except W.WriteRefused as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         code = 1
+    except W.OutcomeUnknown as exc:
+        print(f"OUTCOME UNKNOWN: {exc}", file=sys.stderr)
+        code = EXIT_UNKNOWN
     print(f"{tag}_EXIT={code}", flush=True)
     return code
 

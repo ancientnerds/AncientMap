@@ -2353,3 +2353,46 @@ def test_a_written_batch_is_never_re_planned_to_other_rows(tmp_path, monkeypatch
     capsys.readouterr()
     assert G.main(_gate_args(tmp_path), runner=db) == 1
     assert "this batch was written from another plan" in capsys.readouterr().err
+
+
+# ── a psql timeout is an unknown outcome: STOPPED.json says so and the exit line is 5 (M3) ──────
+
+
+def test_an_unknown_outcome_prints_its_own_exit_line(capsys) -> None:
+    """2026-09-25 audit M3: a timeout escaped `exit_line` as a traceback, so no `WRITE_EXIT=` line
+    was printed at all. It is exit 5, the code `mechanical.apply.EXIT_UNKNOWN` uses."""
+    import prod_write
+
+    def timeout() -> int:
+        raise prod_write.OutcomeUnknown("psql did not answer within 900s")
+
+    assert W4.exit_line("WRITE", timeout) == W4.EXIT_UNKNOWN == 5
+    captured = capsys.readouterr()
+    assert captured.out == "WRITE_EXIT=5\n"
+    assert "OUTCOME UNKNOWN: psql did not answer" in captured.err
+
+
+def test_a_timeout_during_a_write_stops_the_batch_as_an_unknown_outcome(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """The batch whose COMMIT went unanswered is marked STOPPED with `outcome: unknown`, so the
+    next run refuses it until the journal was read - and the run ends with `WRITE_EXIT=5`."""
+    import prod_write
+
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+
+    def runner(sql: str, *, host: str) -> str:
+        if "\nCOMMIT;" in sql:
+            raise prod_write.OutcomeUnknown("psql did not answer within 900s")
+        return db(sql, host=host)
+
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=runner) == 5
+    captured = capsys.readouterr()
+    assert captured.out.rstrip().endswith("WRITE_EXIT=5")
+    stopped = tmp_path / "apply" / "p4-0001" / G.STOPPED_FILE
+    record = json.loads(stopped.read_text(encoding="utf-8"))
+    assert record["outcome"] == "unknown" and "900s" in record["error"]
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 1
+    assert "stopped in an earlier run" in capsys.readouterr().out

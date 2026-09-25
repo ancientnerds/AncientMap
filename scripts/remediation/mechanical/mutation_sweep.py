@@ -4715,6 +4715,22 @@ DANGLING_MARKERS_CASES: list[Case] = [
 CASES += DANGLING_MARKERS_CASES
 
 
+#: The fixes of the 2026-09-25 code audit (`output/remediation/CODE_AUDIT_2026-09-25.md`) in the
+#: mechanical lanes and the shared transport. Every label starts with "audit-fix:", so the list runs
+#: on its own: `mutation_sweep.py audit-fix:`.
+AUDIT_FIX_CASES: list[Case] = [
+    Case(
+        "audit-fix: M2 send delivers LF as LF",
+        PROD_WRITE,
+        '            input=sql.encode("utf-8"),',
+        '            input=sql.replace("\\n", "\\r\\n").encode("utf-8"),',
+        "test_send_delivers_a_newline_as_lf_on_every_platform",
+        PROD_TESTS,
+    ),
+]
+CASES += AUDIT_FIX_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""

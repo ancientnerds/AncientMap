@@ -21174,6 +21174,61 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 ]
 MUTATIONS += P4_D9_MUTATIONS
 
+# ── the fixes of the 2026-09-25 code audit (`output/remediation/CODE_AUDIT_2026-09-25.md`) ───────
+# Every name starts with "audit-fix:", so the list runs on its own: `mutation_sweep.py audit-fix:`.
+AF_PROD_TEST = "tests/remediation/test_prod_write.py"
+AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "audit-fix: M2 run_sql sends through a CRLF-translating pipe",
+        WRITE_STAGE,
+        "    proc = send(sql, host=host, timeout=timeout, rows=True)\n",
+        '    proc = send(sql.replace("\\n", "\\r\\n"), host=host, timeout=timeout, rows=True)\n',
+        AF_PROD_TEST,
+        "test_the_phase_stages_send_through_prod_write",
+    ),
+    (
+        "audit-fix: M2 run_sql reads without -t -A",
+        WRITE_STAGE,
+        "    proc = send(sql, host=host, timeout=timeout, rows=True)\n",
+        "    proc = send(sql, host=host, timeout=timeout, rows=False)  # mutant\n",
+        AF_PROD_TEST,
+        "test_the_phase_stages_send_through_prod_write",
+    ),
+    (
+        "audit-fix: M3 exit_line lets an unknown outcome escape",
+        P4_WRITE,
+        '    except W.OutcomeUnknown as exc:\n        print(f"OUTCOME UNKNOWN',
+        '    except KeyError as exc:  # mutant\n        print(f"OUTCOME UNKNOWN',
+        P4_WRITE_TEST,
+        "test_an_unknown_outcome_prints_its_own_exit_line",
+    ),
+    (
+        "audit-fix: M3 exit_line reports an unknown outcome as a refusal",
+        P4_WRITE,
+        "        code = EXIT_UNKNOWN\n",
+        "        code = 1  # mutant\n",
+        P4_WRITE_TEST,
+        "test_an_unknown_outcome_prints_its_own_exit_line",
+    ),
+    (
+        "audit-fix: M3 the gate leaves no STOPPED.json on a timeout",
+        P4_WRITE_GATE,
+        "            if not rehearse:\n                _mark(\n                    item.out,\n",
+        "            if False:  # mutant\n                _mark(\n                    item.out,\n",
+        P4_WRITE_TEST,
+        "test_a_timeout_during_a_write_stops_the_batch_as_an_unknown_outcome",
+    ),
+    (
+        "audit-fix: M3 the STOPPED.json does not say unknown",
+        P4_WRITE_GATE,
+        '{"batch_id": item.out.name, "outcome": "unknown", "error": str(exc)},',
+        '{"batch_id": item.out.name, "error": str(exc)},  # mutant',
+        P4_WRITE_TEST,
+        "test_a_timeout_during_a_write_stops_the_batch_as_an_unknown_outcome",
+    ),
+]
+MUTATIONS += AUDIT_FIX_MUTATIONS
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()

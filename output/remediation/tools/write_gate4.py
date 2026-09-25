@@ -710,6 +710,17 @@ def run_batches(
                 _mark(item.out, STOPPED_FILE, {"batch_id": item.out.name, "error": str(exc)})
             print(f"STOP at {item.out.name}: {exc}")
             return 1
+        except W.OutcomeUnknown as exc:
+            # psql did not answer: the COMMIT may have landed. The batch is stopped as unknown, so
+            # the next run refuses it until the journal was read; the exit line says 5.
+            if not rehearse:
+                _mark(
+                    item.out,
+                    STOPPED_FILE,
+                    {"batch_id": item.out.name, "outcome": "unknown", "error": str(exc)},
+                )
+            print(f"STOP at {item.out.name}: the outcome is UNKNOWN")
+            raise
         report = outcome.to_dict()
         print(json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
         if not outcome.ok:

@@ -1000,7 +1000,7 @@ def test_the_hero_transport_is_prod_writes_with_its_channel_timeouts(monkeypatch
 
     def fake_run(args, **kwargs):
         argv.append(args)
-        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=b"", stderr=b"")
 
     monkeypatch.setattr("prod_write.subprocess.run", fake_run)
     HA.run_psql("SELECT 1;")

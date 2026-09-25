@@ -43,14 +43,17 @@ def send(
 
     The caller decides what a non-zero exit means; a timeout is decided here, because it is the
     one outcome no exit code describes.
+
+    The statement travels as UTF-8 bytes, never through a text-mode pipe: on Windows a text-mode
+    stdin turns every LF into CR LF, so a multi-line literal would be stored with a stray CR -
+    and every guard, rehearsal and read-back would send the same translated literal and agree with
+    it (2026-09-25 audit M2). psql's answer is decoded as it arrived, CRs included.
     """
     try:
-        return subprocess.run(
+        proc = subprocess.run(
             shlex.split(f"ssh {SSH_OPTIONS} {host} {PSQL_ROWS if rows else PSQL}"),
-            input=sql,
+            input=sql.encode("utf-8"),
             capture_output=True,
-            text=True,
-            encoding="utf-8",
             timeout=timeout,
             check=False,
         )
@@ -59,6 +62,9 @@ def send(
             f"psql did not answer within {timeout}s: whether the transaction committed is UNKNOWN. "
             "Do not retry before reading the journal."
         ) from exc
+    return subprocess.CompletedProcess(
+        proc.args, proc.returncode, proc.stdout.decode("utf-8"), proc.stderr.decode("utf-8")
+    )
 
 
 def pin_line(digest: str) -> str:
