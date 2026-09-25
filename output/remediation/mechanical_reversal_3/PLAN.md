@@ -1,8 +1,8 @@
 # Journal reversal - plan (journal-reversal-3)
 
-Built 2026-09-25T01:56:20+00:00 by `scripts/remediation/mechanical/reversal.py`. Lane `journal-reversal-3`: run stamp `2026-09-25_mechanical-journal-reversal-3`, journal test id `P6/journal-reversal-3`, change keys `journal-reversal-3:<site_id>:<column>`.
+Built 2026-09-25T03:21:27+00:00 by `scripts/remediation/mechanical/reversal.py`. Lane `journal-reversal-3`: run stamp `2026-09-25_mechanical-journal-reversal-3`, journal test id `P6/journal-reversal-3`, change keys `journal-reversal-3:<site_id>:<column>`.
 
-**458 cell(s) will be written, 3 refused.** Each restores the value a journal row replaced, conditioned on the live value being the value that row wrote, and on that row being the last write of its cell (guard 6).
+**488 cell(s) will be written, 3 refused.** Each restores the value a journal row replaced, conditioned on the live value being the value that row wrote, and on that row being the last write of its cell (guard 6).
 
 ## Aguada Fénix - `period_start` -1000 -> -1500
 
@@ -332,6 +332,19 @@ Site `29bbdfce-7b18-4530-b668-8a2fb289694b`, journal row 27836.
 * remediation_change_log:27836: phase3:batch-0016:chunk-0001 (P3/site_type): site_type 'City/town/settlement' -> 'Archaeological site' - the write this row undoes
 * opus:phase3:f5fd196402889f8ca50a08cf492464b0868366d9b34adf38896fbe1448d2a5f8: From 3660 BP onwards, Qillqatani was inhabited by pastoralist camelid-herders who built houses and began to occupy the site long-term.
 * opus:phase3:f5fd196402889f8ca50a08cf492464b0868366d9b34adf38896fbe1448d2a5f8: Qillqatani is known for its elaborate rock art panels.
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Pilluchu - `site_type` Archaeological site -> City/town/settlement
+
+Site `adc55f80-0185-4eae-a227-ccc3885007be`, journal row 27839.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:27839: phase3:batch-0016:chunk-0001 (P3/site_type): site_type 'City/town/settlement' -> 'Archaeological site' - the write this row undoes
+* opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15: is an archaeological site in the Ayacucho Region in Peru on top of a mountain of the same name.
+* opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15: los trabajos de Torres en Pillucho (1969), lugar cercano al poblado, confirman que la zona arqueológica de Vilcashuamán estuvo ocupada con anterioridad a la llegada de los incas por los chancas
+* opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15: Los poblados chancas se encuentran siempre en la cima de los cerros o en espolones rocosos de difícil acceso
+* opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15: Es un cerro elevado de difícil acceso.
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Rock Shelter of Solhapa - `site_type` Rock art -> Rock relief/carving
@@ -794,6 +807,20 @@ Site `50fdb577-af39-425e-a038-a0f8205f66fc`, journal row 27992.
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-500) = '500 BC - 1 AD' - another bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Oxkintok - `period_start` -600 -> -1500
+
+Site `02dbd963-d64f-4c40-a267-2ad5b2ea821a`, journal row 27996.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:27996: phase3:batch-0048:chunk-0002 (P3/period_start): period_start '-1500' -> '-600' - the write this row undoes
+* opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513: The chronology of the site starts at ~600 BCE and lasts until ~1500 CE
+* opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513: The site has provided evidence of habitation from the Late Preclassic through the Late Postclassic periods of Maya prehistory.
+* opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513: The first two phases are weakly defined
+* opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513: of the Late Preclassic period (300 BC) until the close of the
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-600) = '1500 - 500 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Paquime - `period_start` 1130 -> 1000
 
 Site `875c0673-36e1-4296-a7af-29637effcec3`, journal row 27998.
@@ -803,6 +830,17 @@ Site `875c0673-36e1-4296-a7af-29637effcec3`, journal row 27998.
 * remediation_change_log:27998: phase3:batch-0048:chunk-0003 (P3/period_start): period_start '1000' -> '1130' - the write this row undoes
 * opus:phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756: Settlement began after 1130 AD, and the larger buildings developed into multi-storied dwellings after 1350 AD.
 * pipeline/utils/text.py:categorize_period: categorize_period(1000) = '1000 - 1500 AD', categorize_period(1130) = '1000 - 1500 AD' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Pyramid G1-a - `period_start` -2600 -> -3000
+
+Site `d47439dd-6349-4633-bf0b-eb97094ac743`, journal row 28002.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28002: phase3:batch-0049:chunk-0001 (P3/period_start): period_start '-3000' -> '-2600' - the write this row undoes
+* opus:phase3:59a899923c7e1988956889b3beac57d02f32acf629cbf95975d36902b67ed244: It was  built during the Fourth Dynasty of Egypt.
+* pipeline/utils/text.py:categorize_period: categorize_period(-3000) = '3000 - 1500 BC', categorize_period(-2600) = '3000 - 1500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Pumamarka, Urubamba - `site_type` Archaeological site -> City/town/settlement
@@ -893,6 +931,18 @@ Site `6763f7a6-45af-4b74-8ef6-2cbda7cdd0e8`, journal row 28053.
 * opus:phase3:610587417aef934ea3d91291f74519527ba0d9ec80573b1f7e35f87da1150975: is an archaeological site in Peru. It is situated in the
 * opus:phase3:610587417aef934ea3d91291f74519527ba0d9ec80573b1f7e35f87da1150975: archaeological site in Peru
 * opus:phase3:610587417aef934ea3d91291f74519527ba0d9ec80573b1f7e35f87da1150975: Hispanicized spelling Ango) is an archaeological site in Peru.
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Castle Close - `site_type` Fortress/citadel -> Earthwork
+
+Site `8e4daf07-4633-4481-865a-9243993c227c`, journal row 28054.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28054: phase3:batch-0059:chunk-0001 (P3/site_type): site_type 'Earthwork' -> 'Fortress/citadel' - the write this row undoes
+* opus:phase3:176918fc319b0d27b2d102da038f183701a1b2faf879814a3747e3e5c2b0ca05: Castle Close is a circular earthwork located near Stoodleigh in Mid Devon, England at OS grid reference SS937181.
+* opus:phase3:176918fc319b0d27b2d102da038f183701a1b2faf879814a3747e3e5c2b0ca05: Situated some 208 metres above sea level, overlooking the River Exe, it is most likely to be an Iron Age Hill fort or enclosure.
+* opus:phase3:176918fc319b0d27b2d102da038f183701a1b2faf879814a3747e3e5c2b0ca05: it is most likely to be an Iron Age Hill fort or enclosure.
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Ca n'Oliver Iberian Settlement and Museum - `period_start` -600 -> -1500
@@ -1136,6 +1186,19 @@ Site `fd79f148-d931-42c7-8883-41732a93d209`, journal row 28153.
 * opus:phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716: La evidencia mas antigua de ocupacion del sitio es un piso de diatomita
 * opus:phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716: asentamientos rurales wari del valle de Ayacucho
 * opus:phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716: que el centro urbano y otros asentamientos wari de la region consumieron
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Mullu Q'awa - `site_type` Archaeological site -> City/town/settlement
+
+Site `54e2461b-5a65-4da6-9e73-10b14a813736`, journal row 28156.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28156: phase3:batch-0083:chunk-0004 (P3/site_type): site_type 'City/town/settlement' -> 'Archaeological site' - the write this row undoes
+* opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805: Molloqhawa es considerado como el mayor centro urbano de origen pre - inca
+* opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805: un sector para viviendas
+* opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805: is an archaeological site in Peru on a mountain of that name.
+* opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805: It is situated on top of the mountain at a height of about 4,000 m (13,000 ft).
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Osmantəpə - `period_start` -9500 -> -6000
@@ -1806,6 +1869,18 @@ Site `cfd8864a-f9c2-47e8-aab1-5dbe86522c38`, journal row 28350.
 * pipeline/utils/text.py:categorize_period: categorize_period(-3000) = '3000 - 1500 BC', categorize_period(-2200) = '3000 - 1500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## El Salt - `site_type` Archaeological site -> Cave Structures
+
+Site `f4931c71-9e14-4bdc-ad9d-88bf763b6985`, journal row 28352.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28352: phase3:batch-0116:chunk-0001 (P3/site_type): site_type 'Cave Structures' -> 'Archaeological site' - the write this row undoes
+* opus:phase3:85a294009baee559dc98ab251dac2a278c52724ae23723a823a2959a74c445ea: It is an open-air rock shelter at 680 (or 700) meters above sea level
+* opus:phase3:85a294009baee559dc98ab251dac2a278c52724ae23723a823a2959a74c445ea: The site has a 6.3 meters thick stratified deposit, at the bottom of a limestone wall, 38 meters high, which is covered with tufa and travertine deposits.
+* opus:phase3:85a294009baee559dc98ab251dac2a278c52724ae23723a823a2959a74c445ea: Der Abri El Salt ist eine archäologische Stätte aus dem Mittelpaläolithikum
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Dooey's Cairn - `period_start` -4000 -> -4500
 
 Site `f5ca382a-3725-4cbb-961a-6afbf5c21507`, journal row 28354.
@@ -1857,6 +1932,18 @@ Site `8a30c67b-4f3e-4e14-b249-bf7de6d7ff31`, journal row 28372.
 * opus:phase3:0965a78c4f491c8d425ebfddd9c88556a3992f0df0267cbc6769f897ca9aec73: Tholos type tombs emerged in Mycenaean Greece in c. 1500-1450 BC as the resting places of the local royal families.
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-1250) = '1500 - 500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Península de Kola - `site_type` Natural feature -> City/town/settlement
+
+Site `7bbee517-515c-4fe4-9271-036ea36791e1`, journal row 28382.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both.
+
+* remediation_change_log:28382: phase3:batch-0121:chunk-0005 (P3/site_type): site_type 'City/town/settlement' -> 'Natural feature' - the write this row undoes
+* opus:phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208: The six early Metal Age individuals were obtained from an archaeological site at Bolshoy Oleni Ostrov in the Murmansk Region on the Kola Peninsula (Bolshoy from here on).
+* opus:phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208: peninsula in the northwest of Russia
+* opus:phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208: The six early Metal Age individuals were obtained from an archaeological site at Bolshoy Oleni Ostrov in the Murmansk Region on the Kola Peninsula
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed 'Archaeological site'; it is not written here (RULES.md rule 5).
 
 ## Berbati Valley - `period_start` -100000 -> -5000
 
@@ -2612,6 +2699,18 @@ Site `f82d4a70-4581-4e06-858a-d52019ecbd0f`, journal row 28677.
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-1000) = '1500 - 500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Usnu, Huánuco - `site_type` Archaeological site -> City/town/settlement
+
+Site `810d09d7-37a5-443b-84de-e1101e44e855`, journal row 28684.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28684: phase3:batch-0179:chunk-0001 (P3/site_type): site_type 'City/town/settlement' -> 'Archaeological site' - the write this row undoes
+* opus:phase3:56e71f496a2aa8733e70cd481ed7f20da42c6a7c15d6a37a1812098bb4e8ebd5: Usnu (Quechua for altar / a special platform for important celebrations, also spelled Ushnu) is an archaeological site in Peru.
+* opus:phase3:56e71f496a2aa8733e70cd481ed7f20da42c6a7c15d6a37a1812098bb4e8ebd5: is an archaeological site in Peru.
+* opus:phase3:56e71f496a2aa8733e70cd481ed7f20da42c6a7c15d6a37a1812098bb4e8ebd5: recinto religioso y administrativo
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Alvastra Pile-Dwelling - `site_type` Monument -> City/town/settlement
 
 Site `5583b792-3239-4362-a627-1923a30356dc`, journal row 28690.
@@ -2652,6 +2751,21 @@ Site `612ff287-3919-4ae9-bb6b-50ea7548b64b`, journal row 28693.
 * opus:phase3:e80f6eb5a3ddc7512cc0b7957b622668e271d43a712a678a418f04172e470160: El asentamiento se situó a 4000 m s. n. m., en la cúspide de un cerro que dominaba los valles de Potaca y Vesubio.
 * opus:phase3:e80f6eb5a3ddc7512cc0b7957b622668e271d43a712a678a418f04172e470160: Se cree que Huacramarca albergó a buena parte de su población dedicada al pastoreo de auquenidos en el valle del río Potaca.
 * opus:phase3:e80f6eb5a3ddc7512cc0b7957b622668e271d43a712a678a418f04172e470160: possibly from Quechua waqra horn, marka village
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## South Stoa I, Athens - `site_type` Infrastructure -> Megalithic structures
+
+Site `9bec7da2-8ff6-46be-a2cf-34d689358bf2`, journal row 28708.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both.
+
+* remediation_change_log:28708: phase3:batch-0182:chunk-0001 (P3/site_type): site_type 'Megalithic structures' -> 'Infrastructure' - the write this row undoes
+* opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae: It probably served as the headquarters and dining rooms for various boards of Athenian officials.
+* opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae: Since the new stoa did not cover the eastern portion of South Stoa I, the foundations of that section are better preserved.
+* opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae: The remains of the stoa were uncovered during the American School of Classical Studies' excavations of the Agora.
+* opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae: stoa in the Agora of Athens
+* opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae: The foundations were made of poros stone. Most of the walls were made of unbaked bricks
+* opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae: Agora Monument: South Stoa I
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Pirca Pirca, La Libertad - `site_type` Archaeological site -> City/town/settlement
@@ -2750,6 +2864,33 @@ Site `21e1b481-d738-49de-a4ae-227bc73c55da`, journal row 28745.
 * opus:phase3:cca9f01f8b367a68568164e4768435b6542983c22f3f24baeb953dcc01413922: The archaeological culture can be dated back to 2,000 to 5,200 years ago, and the cultural layers includes Tapenkeng Culture, Fengpitou Type of Niuchoutzi Culture, and Fengpitou Culture, demonstrating the prehistoric development of southwestern Taiwan.
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Gåseborg - `period_start` 500 -> 1
+
+Site `3b4ceaf0-0e07-4f25-bf33-83728e8aa49c`, journal row 28746.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28746: phase3:batch-0187:chunk-0001 (P3/period_start): period_start '1' -> '500' - the write this row undoes
+* opus:phase3:7fbb9b13198391d32994cc034d93a19fe7f4534f5692dcc97139f16fd0d4cd68: Med hjälp av dessa daterades borgen till 300–500-talet e. Kr.
+* opus:phase3:7fbb9b13198391d32994cc034d93a19fe7f4534f5692dcc97139f16fd0d4cd68: Gåseborg byggdes någon gång under tidsperioderna yngre järnålder och vikingatiden, 400 e.Kr. - 1100 e.Kr.
+* opus:phase3:7fbb9b13198391d32994cc034d93a19fe7f4534f5692dcc97139f16fd0d4cd68: probably sometime during the late iron age (500-1100 AD)
+* pipeline/utils/text.py:categorize_period: categorize_period(1) = '1 - 500 AD', categorize_period(500) = '500 - 1000 AD' - another bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Hastings Hill - `period_start` -2000 -> -3000
+
+Site `4fe33206-24d7-4d57-9bde-670139eed9cb`, journal row 28747.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28747: phase3:batch-0187:chunk-0001 (P3/period_start): period_start '-3000' -> '-2000' - the write this row undoes
+* opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e: The estate stands close to Hasting Hill, where a burial ground used by prehistoric man in about 2,000BC was excavated in 1911.
+* opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e: In 1911 Trechmann excavated the Hasting Hill barrow and found, among other things, fragments of two Neolithic pots.
+* opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e: where a burial ground used by prehistoric man in about 2,000BC was excavated in 1911
+* opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e: it could have been derived from an earlier occupation preserved by the construction of the barrow
+* pipeline/utils/text.py:categorize_period: categorize_period(-3000) = '3000 - 1500 BC', categorize_period(-2000) = '3000 - 1500 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Ferrybridge Henge - `period_start` -3000 -> -4500
 
 Site `b3c4825c-79ff-48c7-bb38-015e73fc7ae2`, journal row 28748.
@@ -2771,6 +2912,29 @@ Site `3bee62b6-a82c-4191-86a1-24aad78dab71`, journal row 28756.
 * remediation_change_log:28756: phase3:batch-0188:chunk-0001 (P3/site_type): site_type 'City/town/settlement' -> 'Archaeological site' - the write this row undoes
 * opus:phase3:f1dcc2ca0765415d17edb755c315dfd38a7a57ffb7c21ac899e0a0f4cd86f4c4: La Centinela was the Incan capital of the kingdom of the Chincha.
 * opus:phase3:f1dcc2ca0765415d17edb755c315dfd38a7a57ffb7c21ac899e0a0f4cd86f4c4: This means that the residents of La Centinela exploited plant, animal and marine resources.
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Pampas Gramalote - `period_start` -2000 -> -3000
+
+Site `ab80e2e4-7195-48ad-84fc-582925fe9504`, journal row 28762.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both.
+
+* remediation_change_log:28762: phase3:batch-0190:chunk-0001 (P3/period_start): period_start '-3000' -> '-2000' - the write this row undoes
+* opus:phase3:1493dd38aeb7c27742fafe2760402126ba8a36f5779836d0b06ecc234224dbc2: The Gramalote site is an early Initial Period (1500–1200 B.C.E.) fishing village located in the Moche valley in northern Peru.
+* opus:phase3:1493dd38aeb7c27742fafe2760402126ba8a36f5779836d0b06ecc234224dbc2: Pampas Gramalote was a Prehispanic fishing village near the town of Huanchaco, Peru that existed between 2000 and 1200 B.C.
+* pipeline/utils/text.py:categorize_period: categorize_period(-3000) = '3000 - 1500 BC', categorize_period(-2000) = '3000 - 1500 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed '-1500'; it is not written here (RULES.md rule 5).
+
+## Post Track - `period_start` -3838 -> -4500
+
+Site `dd567577-49dc-45a4-99a9-7beffeb43afe`, journal row 28764.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28764: phase3:batch-0190:chunk-0001 (P3/period_start): period_start '-4500' -> '-3838' - the write this row undoes
+* opus:phase3:7d8a00a777727b756a8c4ea8dd2e9c0d336e6847d378d64e1e81a4ddaca6d704: It is dated back to around 3838 BCE, making it some 30 years older than the Sweet Track in the same area.
+* pipeline/utils/text.py:categorize_period: categorize_period(-4500) = '4500 - 3000 BC', categorize_period(-3838) = '4500 - 3000 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Sitio Arqueológico La Blanca, Peten - `site_type` Archaeological site -> City/town/settlement
@@ -2799,6 +2963,20 @@ Site `a939e800-06e4-4719-a000-165e7f5efe92`, journal row 28780.
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-323) = '500 BC - 1 AD' - another bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Legananny Dolmen - `period_start` -3000 -> -4500
+
+Site `ec838509-a1e6-4f6a-b216-3f1791c16d67`, journal row 28787.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28787: phase3:batch-0194:chunk-0001 (P3/period_start): period_start '-4500' -> '-3000' - the write this row undoes
+* opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22: It dates to the Neolithic period, making the monument around 5,000 years old. Such portal tombs were funerary sites for the disposal of the dead in Neolithic society.
+* opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22: Most date from the Late Neolithic period
+* opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22: It dates to the Neolithic period, making the monument around 5,000 years old.
+* opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22: but it has not been archaeologically excavated.
+* pipeline/utils/text.py:categorize_period: categorize_period(-4500) = '4500 - 3000 BC', categorize_period(-3000) = '3000 - 1500 BC' - another bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Edin's Hall Broch - `site_type` Monument -> Minaret/tower
 
 Site `3324d203-1f5a-4b13-b6d0-c23382ac8d3c`, journal row 28794.
@@ -2808,6 +2986,17 @@ Site `3324d203-1f5a-4b13-b6d0-c23382ac8d3c`, journal row 28794.
 * remediation_change_log:28794: phase3:batch-0195:chunk-0001 (P3/site_type): site_type 'Minaret/tower' -> 'Monument' - the write this row undoes
 * opus:phase3:ae53b4d257b46b28a8eccad2e4a61ec27aca554fc9155267b21c6b190e473da1: A massive circular stone tower, the broch, was built into the northwest corner of the hillfort.
 * opus:phase3:ae53b4d257b46b28a8eccad2e4a61ec27aca554fc9155267b21c6b190e473da1: Long before the tower appeared, this hilltop was already fortified.
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Parion - `period_start` -709 -> -1500
+
+Site `9803a37d-458e-445c-9fec-8d94a0f89f1c`, journal row 28796.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28796: phase3:batch-0195:chunk-0001 (P3/period_start): period_start '-1500' -> '-709' - the write this row undoes
+* opus:phase3:fcc8e27a1dfa77a59ffdeaffc6c639e5e99fc8e1c551f88101fc267ffac27233: Founded in 709 B.C., the ancient city of Parion is located in the village of Kemer in the township of Biga in
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-709) = '1500 - 500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Wilca - `site_type` Archaeological site -> City/town/settlement
@@ -2911,6 +3100,20 @@ Site `3ac6b54d-0231-4b56-b1c0-b7fac461bbcc`, journal row 28839.
 * opus:phase3:0b8cfddc0a18c38c1320fb8ec085527e242c9bafe2c9fb93f7f4755adb9026d3: though the inhabitants were initially mobile foragers, long term habitation was marked at a later phase by residential architecture.
 * opus:phase3:0b8cfddc0a18c38c1320fb8ec085527e242c9bafe2c9fb93f7f4755adb9026d3: Up to 5000 BP, settlement became more permanent.
 * opus:phase3:0b8cfddc0a18c38c1320fb8ec085527e242c9bafe2c9fb93f7f4755adb9026d3: long term habitation was marked at a later phase by residential architecture.
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Temple of Apollo Epicurius - `period_start` -450 -> -1500
+
+Site `7bffddb6-2fc1-49cf-987a-d7e78bdc98c5`, journal row 28842.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:28842: phase3:batch-0202:chunk-0001 (P3/period_start): period_start '-1500' -> '-450' - the write this row undoes
+* opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad: Archaeology has found some architectural pieces in the area probably belonging to the Archaic temple which was in continuous use since the archaic period, and had one or two building phases around 600 and 500 BC while the present temple of Apollo is the last of four on the site and designated Apollo IV.
+* opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad: The temple in its present form was built between 450 and 400 BC during the Peloponnesian War
+* opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad: In the Archaic period (7th BC) the people of Phigaleia, helped by their neighbour Oresthasium, retrieved their land from the Spartans and erected a temple in a sanctuary dedicated to Apollo worshipped as
+* opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad: while the present temple of Apollo is the last of four on the site and designated Apollo IV.
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-450) = '500 BC - 1 AD' - another bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Maleme - `site_type` Settlement -> Necropolis/tombs complex
@@ -3495,6 +3698,17 @@ Site `0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3`, journal row 29088.
 * opus:phase3:8aeff8776ed9b5f07a67ab6295f00d24c390c74de3620edd0308fb4e2b886ece: The fortification wall had a towered gateway in the northeast and was 5.6 meters wide with 6.36 meter wide buttresses.
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Trebeništa - `period_start` -700 -> -1500
+
+Site `64a2c786-64cc-43e4-945f-52bc889ac3b1`, journal row 29096.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29096: phase3:batch-0238:chunk-0001 (P3/period_start): period_start '-1500' -> '-700' - the write this row undoes
+* opus:phase3:0c2ed44856e84b7da2f53dcc94b738c1ef76436ad5e8dfa9c1afa075ceedc289: is an ancient necropolis from the Iron Age (around the 7th century BC)
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-700) = '1500 - 500 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Tres Islas - `site_type` Archaeological site -> City/town/settlement
 
 Site `b740c74a-83ce-4e01-a07c-87ab90574750`, journal row 29099.
@@ -3744,6 +3958,20 @@ Site `cea5eebe-1a8a-4132-8867-12102672ecc0`, journal row 29190.
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-600) = '1500 - 500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Maa Palaeokastro - `period_start` -1300 -> -3000
+
+Site `e1edddb2-56c8-498b-b926-78642bc312e2`, journal row 29191.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both.
+
+* remediation_change_log:29191: phase3:batch-0251:chunk-0001 (P3/period_start): period_start '-3000' -> '-1300' - the write this row undoes
+* opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4: On the site where the settlers established themselves, the excavators brought to light an earlier occupation of the Early Chalcolithic period consisting of houses formed from cavities in the rock and with light timber superstructures.
+* opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4: The excavations have established three periods of occupation on Yeronisos. Early Chalcolithic (3800 BC)
+* opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4: The settlement was occupied by Ancient Greeks from the late 13th century BC to the middle of the 12th century BC.
+* opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4: Early Chalcolithic (3800 BC)
+* pipeline/utils/text.py:categorize_period: categorize_period(-3000) = '3000 - 1500 BC', categorize_period(-1300) = '1500 - 500 BC' - another bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed '-3800'; it is not written here (RULES.md rule 5).
+
 ## Palaestra at Delphi - `site_type` Bath -> Megalithic structures
 
 Site `4695356b-52be-4152-8707-b1db00ef4707`, journal row 29196.
@@ -3769,6 +3997,17 @@ Site `54c10788-8f83-470d-9a0b-6eb03f502572`, journal row 29197.
 * opus:phase3:382ce33335b75cfe5a27b5200edf6acbfd62484295a6a4783574e0feaf16f033: reconstructed the city, probably using it as an administrative center.
 * opus:phase3:382ce33335b75cfe5a27b5200edf6acbfd62484295a6a4783574e0feaf16f033: The site was first settled around A.D. 200
 * opus:phase3:382ce33335b75cfe5a27b5200edf6acbfd62484295a6a4783574e0feaf16f033: Pachacamac covers about 600 hectares (1480 acres) of land.
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Prehistoric Rock Art Sites in the Côa Valley and Siega Verde - `period_start` -22000 -> -18000
+
+Site `74ef6000-7bfa-4e7c-a745-b29b55f35030`, journal row 29202.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29202: phase3:batch-0254:chunk-0001 (P3/period_start): period_start '-18000' -> '-22000' - the write this row undoes
+* opus:phase3:d4bbf731d4823c08b1e45715dd271e7558cf8179ec348d314266db3c79db2b61: They include thousands of engraved rock drawings of horses, bovines and other animals, human and abstract figures, dated from 22,000 to 10,000 years B.C.
+* pipeline/utils/text.py:categorize_period: categorize_period(-18000) = '< 4500 BC', categorize_period(-22000) = '< 4500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Quishuar Archaeological Site - `site_type` Archaeological site -> City/town/settlement
@@ -3965,6 +4204,17 @@ Site `54bbb6a0-65d3-42c2-a995-0469957a1313`, journal row 29287.
 * pipeline/utils/text.py:categorize_period: categorize_period(-3000) = '3000 - 1500 BC', categorize_period(-1750) = '3000 - 1500 BC' - the same bucket
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Mynydd Maendy - `period_start` -800 -> -1500
+
+Site `2e8550b6-1358-471f-9be5-9957b2613c9d`, journal row 29297.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29297: phase3:batch-0267:chunk-0001 (P3/period_start): period_start '-1500' -> '-800' - the write this row undoes
+* opus:phase3:7e09f10591bbd5edfbd893b6891c7c5741212adca84e3a10a6188ee1fef4ad89: A wind farm and an Iron Age Celtic hillfort are located on the summit.
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-800) = '1500 - 500 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Carn Kenidjack - `site_type` Natural feature -> Megalithic stones
 
 Site `37065cce-99dd-4055-bd92-4906840149e6`, journal row 29298.
@@ -4023,6 +4273,17 @@ Site `86d27903-d193-4c17-b760-072129d86c0b`, journal row 29311.
 * opus:phase3:18509311f3a153bdaa36392597d7894bbee572c9746ec0b08e47c18fdfe68b22: Roman fort (castrum) on Hadrian's Wall
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Cnidian Treasury - `period_start` -550 -> -1500
+
+Site `9e827a4b-0855-4414-946b-b5fc3e3efb9b`, journal row 29312.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29312: phase3:batch-0269:chunk-0001 (P3/period_start): period_start '-1500' -> '-550' - the write this row undoes
+* opus:phase3:c008f6d8cc33e69784fe0bd30b1a103bf956cd493e82c7f93372568fc647c912: It was a marble building, erected before Cnidus was conquered by the Persians in 544 B.C. Its features remind of the mid-sixth century B.C.
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-550) = '1500 - 500 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Cnidian Treasury - `site_type` Treasury -> Megalithic structures
 
 Site `9e827a4b-0855-4414-946b-b5fc3e3efb9b`, journal row 29313.
@@ -4035,6 +4296,30 @@ Site `9e827a4b-0855-4414-946b-b5fc3e3efb9b`, journal row 29313.
 * opus:phase3:60342af6e570538c48a239a94e37435f125b60ed47be9584f56ec00a7af9ecc7: It was a marble building, erected before Cnidus was conquered by the Persians in 544 B.C. Its features remind of the mid-sixth century B.C.
 * opus:phase3:60342af6e570538c48a239a94e37435f125b60ed47be9584f56ec00a7af9ecc7: It was a marble building, erected before Cnidus was conquered by the Persians in 544 B.C.
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed 'Religious'; it is not written here (RULES.md rule 5).
+
+## Ħal Ġinwi Temple - `period_start` -3600 -> -4500
+
+Site `af1d02d6-bf17-4ce3-bf83-92bb82b8401a`, journal row 29314.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29314: phase3:batch-0269:chunk-0001 (P3/period_start): period_start '-4500' -> '-3600' - the write this row undoes
+* opus:phase3:0b7a262a30b491b0108cd45104e9f7c060aee6c8899a1926a8df12196b30b565: was a prehistoric megalithic temple site located southeast of Żejtun, Malta dating back to the Ġgantija phase (3600–3200 BCE).
+* opus:phase3:0b7a262a30b491b0108cd45104e9f7c060aee6c8899a1926a8df12196b30b565: dating back to the Ġgantija phase (3600–3200 BCE)
+* opus:phase3:0b7a262a30b491b0108cd45104e9f7c060aee6c8899a1926a8df12196b30b565: was a prehistoric megalithic temple site located southeast of
+* pipeline/utils/text.py:categorize_period: categorize_period(-4500) = '4500 - 3000 BC', categorize_period(-3600) = '4500 - 3000 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Pantikapaion - `period_start` -600 -> -1500
+
+Site `ddd6cdfa-6891-4f6f-932a-e276f2be47bd`, journal row 29315.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29315: phase3:batch-0269:chunk-0001 (P3/period_start): period_start '-1500' -> '-600' - the write this row undoes
+* opus:phase3:d59cc0a52ba0941c525d673b3ff9eaf1bd8566236ccbf185a8d529c1db697fe3: was founded by Milesians in the late 7th or early 6th century BC
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-600) = '1500 - 500 BC' - the same bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Laqaya - `site_type` Archaeological site -> City/town/settlement
 
@@ -4805,6 +5090,19 @@ Site `1949a2b8-9e93-4091-b404-915fb9bd8f52`, journal row 29568.
 * opus:phase3:e1bc43210a5994990684e180dcf655f887a52839d734846adaa4edd3b9195cd8: Burroughston Broch is an Iron Age broch located on the island of Shapinsay in the Orkney Islands
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
+## Burrington Combe - `site_type` Natural feature -> Cave Structures
+
+Site `3d8cb484-8b57-41fa-ab0d-203449c1c821`, journal row 29569.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29569: phase3:batch-0308:chunk-0001 (P3/site_type): site_type 'Cave Structures' -> 'Natural feature' - the write this row undoes
+* opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135: Various cave entrances are exposed which have been occupied by humans for over 10,000 years, with a hillfort being built beside the combe in the Iron Age.
+* opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135: The combe contains the entrances to many of the caves of the Mendip Hills, including Aveline's Hole, Sidcot Swallet and Goatchurch Cavern.
+* opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135: The earliest scientifically dated cemetery in Great Britain was found at Aveline's Hole.
+* opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135: Archaeological discoveries of early cemeteries demonstrate human occupation of the combe and its caves from the Bronze Age with some evidence of occupation during the Upper Palaeolithic period.
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
 ## Carteia - `period_start` -940 -> -3000
 
 Site `504bf30a-c4a0-48e7-8bbc-378b585b59b5`, journal row 29579.
@@ -4831,6 +5129,17 @@ Site `661343e6-b314-4d63-9926-dd7de564aad5`, journal row 29580.
 * remediation_change_log:29580: phase3:batch-0309:chunk-0001 (P3/period_start): period_start '-1500' -> '-500' - the write this row undoes
 * opus:phase3:c53f0f33831cb86521b19de0476d29298e08aadd88520adaae40b3040be2ab36: The settlement, which seems to have been inhabited from the 6th century BC to the 1st century AD, was protected by a wall and two square towers.
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-500) = '500 BC - 1 AD' - another bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Carrock Fell - `site_type` Fortification -> Fortress/citadel
+
+Site `ed3e4264-7d20-4bbc-ba73-2d11563f2006`, journal row 29582.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:29582: phase3:batch-0309:chunk-0001 (P3/site_type): site_type 'Fortress/citadel' -> 'Fortification' - the write this row undoes
+* opus:phase3:752dfbedf970e27afe0e9d111f0d10ad57152f7df0e7653e183747eb2c2e59e2: Carrock Fell is also the site of an Iron Age hill fort which crowns the summit.
+* opus:phase3:752dfbedf970e27afe0e9d111f0d10ad57152f7df0e7653e183747eb2c2e59e2: The fort is oval shaped and is believed to have been built by the Celts and destroyed by the Romans in their conquest of northern England.
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Castro de Achadizo - `period_start` -600 -> -1000
@@ -5271,6 +5580,16 @@ Site `2dab79e8-1ece-4f9b-beb3-a91573d545c3`, journal row 30372.
 * journal: phase3:batch-0033:chunk-0003 (P3/period_start): period_start '1000' -> '1500' - the write that left the label behind
 * pipeline/utils/text.py:categorize_period: categorize_period(1000) = '1000 - 1500 AD' - the period_start the site is left with
 
+## Gåseborg - `period_name` 500 - 1000 AD -> 1 - 500 AD
+
+Site `3b4ceaf0-0e07-4f25-bf33-83728e8aa49c`, journal row 30381.
+
+**Reason.** the period-name lane derived '500 - 1000 AD' from the period_start 500 that journal row 28746 wrote; this list restores period_start 1 (bucket '1 - 500 AD') and the label that row replaced, '1 - 500 AD'.
+
+* remediation_change_log:30381: 2026-09-22_mechanical-period-name (P6/period-name-bucket): period_name '1 - 500 AD' -> '500 - 1000 AD' - the write this row undoes
+* journal: phase3:batch-0187:chunk-0001 (P3/period_start): period_start '1' -> '500' - the write that left the label behind
+* pipeline/utils/text.py:categorize_period: categorize_period(1) = '1 - 500 AD' - the period_start the site is left with
+
 ## Aquae Calidae, Bulgaria - `period_name` < 4500 BC -> 1 - 500 AD
 
 Site `424eed88-76e7-402b-8d62-3f598eb9c9ce`, journal row 30385.
@@ -5359,6 +5678,16 @@ Site `774a99e0-e8f7-4881-aa6e-94462da0c52d`, journal row 30439.
 
 * remediation_change_log:30439: 2026-09-22_mechanical-period-name (P6/period-name-bucket): period_name '1500 - 500 BC' -> '500 BC - 1 AD' - the write this row undoes
 * journal: phase3:batch-0152:chunk-0003 (P3/period_start): period_start '-1500' -> '-500' - the write that left the label behind
+* pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC' - the period_start the site is left with
+
+## Temple of Apollo Epicurius - `period_name` 500 BC - 1 AD -> 1500 - 500 BC
+
+Site `7bffddb6-2fc1-49cf-987a-d7e78bdc98c5`, journal row 30444.
+
+**Reason.** the period-name lane derived '500 BC - 1 AD' from the period_start -450 that journal row 28842 wrote; this list restores period_start -1500 (bucket '1500 - 500 BC') and the label that row replaced, '1500 - 500 BC'.
+
+* remediation_change_log:30444: 2026-09-22_mechanical-period-name (P6/period-name-bucket): period_name '1500 - 500 BC' -> '500 BC - 1 AD' - the write this row undoes
+* journal: phase3:batch-0202:chunk-0001 (P3/period_start): period_start '-1500' -> '-450' - the write that left the label behind
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC' - the period_start the site is left with
 
 ## Gårdstånga - `period_name` 500 - 1000 AD -> 4500 - 3000 BC
@@ -5551,6 +5880,16 @@ Site `dc951bdb-a70d-4346-9e7d-fdc0d908d4c5`, journal row 30522.
 * journal: phase3:batch-0307:chunk-0001 (P3/period_start): period_start '-4500' -> '-3000' - the write that left the label behind
 * pipeline/utils/text.py:categorize_period: categorize_period(-4500) = '4500 - 3000 BC' - the period_start the site is left with
 
+## Maa Palaeokastro - `period_name` 1500 - 500 BC -> 3000 - 1500 BC
+
+Site `e1edddb2-56c8-498b-b926-78642bc312e2`, journal row 30524.
+
+**Reason.** the period-name lane derived '1500 - 500 BC' from the period_start -1300 that journal row 29191 wrote; this list restores period_start -3000 (bucket '3000 - 1500 BC') and the label that row replaced, '3000 - 1500 BC'.
+
+* remediation_change_log:30524: 2026-09-22_mechanical-period-name (P6/period-name-bucket): period_name '3000 - 1500 BC' -> '1500 - 500 BC' - the write this row undoes
+* journal: phase3:batch-0251:chunk-0001 (P3/period_start): period_start '-3000' -> '-1300' - the write that left the label behind
+* pipeline/utils/text.py:categorize_period: categorize_period(-3000) = '3000 - 1500 BC' - the period_start the site is left with
+
 ## Dankirke - `period_name` 1 - 500 AD -> 500 BC - 1 AD
 
 Site `e7ab9b35-e0bb-4fe4-a1cb-fbe5a17c63d6`, journal row 30529.
@@ -5560,6 +5899,16 @@ Site `e7ab9b35-e0bb-4fe4-a1cb-fbe5a17c63d6`, journal row 30529.
 * remediation_change_log:30529: 2026-09-22_mechanical-period-name (P6/period-name-bucket): period_name '500 BC - 1 AD' -> '1 - 500 AD' - the write this row undoes
 * journal: phase3:batch-0108:chunk-0001 (P3/period_start): period_start '-200' -> '300' - the write that left the label behind
 * pipeline/utils/text.py:categorize_period: categorize_period(-200) = '500 BC - 1 AD' - the period_start the site is left with
+
+## Legananny Dolmen - `period_name` 3000 - 1500 BC -> 4500 - 3000 BC
+
+Site `ec838509-a1e6-4f6a-b216-3f1791c16d67`, journal row 30533.
+
+**Reason.** the period-name lane derived '3000 - 1500 BC' from the period_start -3000 that journal row 28787 wrote; this list restores period_start -4500 (bucket '4500 - 3000 BC') and the label that row replaced, '4500 - 3000 BC'.
+
+* remediation_change_log:30533: 2026-09-22_mechanical-period-name (P6/period-name-bucket): period_name '4500 - 3000 BC' -> '3000 - 1500 BC' - the write this row undoes
+* journal: phase3:batch-0194:chunk-0001 (P3/period_start): period_start '-4500' -> '-3000' - the write that left the label behind
+* pipeline/utils/text.py:categorize_period: categorize_period(-4500) = '4500 - 3000 BC' - the period_start the site is left with
 
 ## Carreg Coetan Arthur - `period_name` 3000 - 1500 BC -> 4500 - 3000 BC
 
@@ -5604,6 +5953,17 @@ Site `c1c984e7-1391-4153-b140-f9bcd446d759`, journal row 30903.
 * opus:phase3:4df0788009f932ab9b764d8f7b1b19c3f07880ae919ede9fe278871721cfebbc: Según los datos hallados la secuencia estratigráfica abarca desde finales de la Edad del Bronce hasta principios de la época islámica
 * opus:phase3:4df0788009f932ab9b764d8f7b1b19c3f07880ae919ede9fe278871721cfebbc: the neighbouring site of La Alcudia/Ilici achieved the consolidation of its urban structure already by the early 5th century BCE
 * pipeline/utils/text.py:categorize_period: categorize_period(-1500) = '1500 - 500 BC', categorize_period(-500) = '500 BC - 1 AD' - another bucket
+* residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
+
+## Chongam-ri Earthen Castle - `site_type` Fortress -> Earthwork
+
+Site `565a3dc3-f8a7-4d38-a672-17c57f9401e9`, journal row 30909.
+
+**Reason.** the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert.
+
+* remediation_change_log:30909: phase3:gap-0008:chunk-0003 (P3/site_type): site_type 'Earthwork' -> 'Fortress' - the write this row undoes
+* opus:phase3:58c9671f1b8136227787e987948954e540f5a6536f84c5769004f6924e3bf951: it is similar to other earthen fortifications of the period. It was made of alternating layers of soil, rock and sand.
+* opus:phase3:58c9671f1b8136227787e987948954e540f5a6536f84c5769004f6924e3bf951: P31 instance of: Q12621161 earthen castle
 * residual: The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md).
 
 ## Elephanta Caves - `period_start` 500 -> -500

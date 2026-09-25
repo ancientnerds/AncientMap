@@ -25,9 +25,6 @@
   "threshold": 3,
   "fired": true
  },
- "count": 2,
- "keys": [
-  "phase3:5d202badbda24cb2200ac397436e317b9ef33de80a8e15206e3ae28423c058be",
-  "phase3:adb815b0e6e948dc2fe40a740ecb85caf56136a25962b7d43e07a1d73aefdcef"
- ]
+ "count": 0,
+ "keys": []
 }

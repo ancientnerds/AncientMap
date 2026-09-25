@@ -1,0 +1,6 @@
+{
+ "about": "RULES.md rule 3: the p1 and p2 verdicts of each row disagree (one keep, one not) and no counted third verdict decides the pair. A third judge sees the evidence and both judgements (judge_1 = p1, judge_2 = p2) and decides keep or revert.",
+ "pair_rule": "A tie counts only while the p1 and the p2 verdict on the row's route are, as JSON records, the very pair it was shown: a round-1 tie the row's VERDICTS_RAW.json p1 and p2, a later round's tie the p1 and p2 on the route before that round (the pair TIE_ROUND<n>.json of the round before listed); once a later round replaces either, the tie is set aside as stale, and a pair that still disagrees needs a new tie.",
+ "count": 0,
+ "rows": []
+}

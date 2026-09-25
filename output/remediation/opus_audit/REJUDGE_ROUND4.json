@@ -1,0 +1,6 @@
+{
+ "about": "The verdicts of VERDICTS_ROUND4.json that failed the quote check (RULES.md: it does not count; the row is judged again), by section. Each row still waits on the verdict it did not deliver: a second judgement in SECOND_JUDGE.json, a third judge in TIE_ROUND4.json (the pair is unchanged), a p1 or p2 in REJUDGE.json.",
+ "round": "VERDICTS_ROUND4.json",
+ "second": [],
+ "tie": []
+}

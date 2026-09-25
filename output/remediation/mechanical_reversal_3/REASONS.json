@@ -2,8 +2,8 @@
  "_about": "The third journal-reversal list, read by scripts/remediation/mechanical/reversal.py --lane journal-reversal-3 and built by reversal_opus.py --write from the Opus re-verification's REVERSAL_3_INPUT.jsonl (source): every write the audit decided to revert (a final revert, not superseded), its journal row read from production by change_key, quoting the verdicts that decided it as opus:<change_key> - checked against output/remediation/opus_audit/ DECISIONS.jsonl and the verdict files it names, each quote found by the audit's machine quote check -; and the period_name label the period-name lane derived from each period_start whose restored start falls in another bucket, quoting that label row's own journal evidence. The list must equal lane.REVERSAL_3_JOURNAL_IDS (reversal_3_list.py).",
  "source": {
   "file": "output/remediation/opus_audit/REVERSAL_3_INPUT.jsonl",
-  "sha256": "98d4cfabfd0965f0352ee7f14d3eaece02797fe201939a02156c66f16fb50a4e",
-  "rows": 419
+  "sha256": "3d4fe567a08d3fb3a52b4337d20bb152e42b3f21e253a6636f2237948ce4ddcb",
+  "rows": 445
  },
  "reversals": [
   {
@@ -618,6 +618,32 @@
     {
      "source": "opus:phase3:f5fd196402889f8ca50a08cf492464b0868366d9b34adf38896fbe1448d2a5f8",
      "text": "Qillqatani is known for its elaborate rock art panels."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 27839,
+   "site_id": "adc55f80-0185-4eae-a227-ccc3885007be",
+   "name": "Pilluchu",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15",
+     "text": "is an archaeological site in the Ayacucho Region in Peru on top of a mountain of the same name."
+    },
+    {
+     "source": "opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15",
+     "text": "los trabajos de Torres en Pillucho (1969), lugar cercano al poblado, confirman que la zona arqueológica de Vilcashuamán estuvo ocupada con anterioridad a la llegada de los incas por los chancas"
+    },
+    {
+     "source": "opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15",
+     "text": "Los poblados chancas se encuentran siempre en la cima de los cerros o en espolones rocosos de difícil acceso"
+    },
+    {
+     "source": "opus:phase3:257511523c57c5df39d282545e38fae60ce5e4cb2a7e445b2443778f89129a15",
+     "text": "Es un cerro elevado de difícil acceso."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -1475,6 +1501,32 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 27996,
+   "site_id": "02dbd963-d64f-4c40-a267-2ad5b2ea821a",
+   "name": "Oxkintok",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513",
+     "text": "The chronology of the site starts at ~600 BCE and lasts until ~1500 CE"
+    },
+    {
+     "source": "opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513",
+     "text": "The site has provided evidence of habitation from the Late Preclassic through the Late Postclassic periods of Maya prehistory."
+    },
+    {
+     "source": "opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513",
+     "text": "The first two phases are weakly defined"
+    },
+    {
+     "source": "opus:phase3:1a83ea4b488eba5fc9902a3c1da287cc3ccae241f1fde86f8f315c6e08b7d513",
+     "text": "of the Late Preclassic period (300 BC) until the close of the"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 27998,
    "site_id": "875c0673-36e1-4296-a7af-29637effcec3",
    "name": "Paquime",
@@ -1484,6 +1536,20 @@
     {
      "source": "opus:phase3:9700baf6a05bb26fb259bcbe1fe7d534893a050b93c56dc4ddaafd5004f6d756",
      "text": "Settlement began after 1130 AD, and the larger buildings developed into multi-storied dwellings after 1350 AD."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28002,
+   "site_id": "d47439dd-6349-4633-bf0b-eb97094ac743",
+   "name": "Pyramid G1-a",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:59a899923c7e1988956889b3beac57d02f32acf629cbf95975d36902b67ed244",
+     "text": "It was  built during the Fourth Dynasty of Egypt."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -1684,6 +1750,28 @@
     {
      "source": "opus:phase3:610587417aef934ea3d91291f74519527ba0d9ec80573b1f7e35f87da1150975",
      "text": "Hispanicized spelling Ango) is an archaeological site in Peru."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28054,
+   "site_id": "8e4daf07-4633-4481-865a-9243993c227c",
+   "name": "Castle Close",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:176918fc319b0d27b2d102da038f183701a1b2faf879814a3747e3e5c2b0ca05",
+     "text": "Castle Close is a circular earthwork located near Stoodleigh in Mid Devon, England at OS grid reference SS937181."
+    },
+    {
+     "source": "opus:phase3:176918fc319b0d27b2d102da038f183701a1b2faf879814a3747e3e5c2b0ca05",
+     "text": "Situated some 208 metres above sea level, overlooking the River Exe, it is most likely to be an Iron Age Hill fort or enclosure."
+    },
+    {
+     "source": "opus:phase3:176918fc319b0d27b2d102da038f183701a1b2faf879814a3747e3e5c2b0ca05",
+     "text": "it is most likely to be an Iron Age Hill fort or enclosure."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -2108,6 +2196,32 @@
     {
      "source": "opus:phase3:ca6601042381e18a2cfef62880e24384772f6fe82815def86fc1f2ba53faf716",
      "text": "que el centro urbano y otros asentamientos wari de la region consumieron"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28156,
+   "site_id": "54e2461b-5a65-4da6-9e73-10b14a813736",
+   "name": "Mullu Q'awa",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805",
+     "text": "Molloqhawa es considerado como el mayor centro urbano de origen pre - inca"
+    },
+    {
+     "source": "opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805",
+     "text": "un sector para viviendas"
+    },
+    {
+     "source": "opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805",
+     "text": "is an archaeological site in Peru on a mountain of that name."
+    },
+    {
+     "source": "opus:phase3:421d1459531704ab911a587f9743fb636871159a6926187df5da36d4a88e5805",
+     "text": "It is situated on top of the mountain at a height of about 4,000 m (13,000 ft)."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -3273,6 +3387,28 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 28352,
+   "site_id": "f4931c71-9e14-4bdc-ad9d-88bf763b6985",
+   "name": "El Salt",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:85a294009baee559dc98ab251dac2a278c52724ae23723a823a2959a74c445ea",
+     "text": "It is an open-air rock shelter at 680 (or 700) meters above sea level"
+    },
+    {
+     "source": "opus:phase3:85a294009baee559dc98ab251dac2a278c52724ae23723a823a2959a74c445ea",
+     "text": "The site has a 6.3 meters thick stratified deposit, at the bottom of a limestone wall, 38 meters high, which is covered with tufa and travertine deposits."
+    },
+    {
+     "source": "opus:phase3:85a294009baee559dc98ab251dac2a278c52724ae23723a823a2959a74c445ea",
+     "text": "Der Abri El Salt ist eine archäologische Stätte aus dem Mittelpaläolithikum"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 28354,
    "site_id": "f5ca382a-3725-4cbb-961a-6afbf5c21507",
    "name": "Dooey's Cairn",
@@ -3367,6 +3503,28 @@
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28382,
+   "site_id": "7bbee517-515c-4fe4-9271-036ea36791e1",
+   "name": "Península de Kola",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both",
+   "quotes": [
+    {
+     "source": "opus:phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208",
+     "text": "The six early Metal Age individuals were obtained from an archaeological site at Bolshoy Oleni Ostrov in the Murmansk Region on the Kola Peninsula (Bolshoy from here on)."
+    },
+    {
+     "source": "opus:phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208",
+     "text": "peninsula in the northwest of Russia"
+    },
+    {
+     "source": "opus:phase3:93b7ac2fe7765a84d73d799c0ed33ebed8db8f6ae18beda7eff86bddc413e208",
+     "text": "The six early Metal Age individuals were obtained from an archaeological site at Bolshoy Oleni Ostrov in the Murmansk Region on the Kola Peninsula"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed 'Archaeological site'; it is not written here (RULES.md rule 5)."
   },
   {
    "journal_id": 28384,
@@ -4677,6 +4835,28 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 28684,
+   "site_id": "810d09d7-37a5-443b-84de-e1101e44e855",
+   "name": "Usnu, Huánuco",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:56e71f496a2aa8733e70cd481ed7f20da42c6a7c15d6a37a1812098bb4e8ebd5",
+     "text": "Usnu (Quechua for altar / a special platform for important celebrations, also spelled Ushnu) is an archaeological site in Peru."
+    },
+    {
+     "source": "opus:phase3:56e71f496a2aa8733e70cd481ed7f20da42c6a7c15d6a37a1812098bb4e8ebd5",
+     "text": "is an archaeological site in Peru."
+    },
+    {
+     "source": "opus:phase3:56e71f496a2aa8733e70cd481ed7f20da42c6a7c15d6a37a1812098bb4e8ebd5",
+     "text": "recinto religioso y administrativo"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 28690,
    "site_id": "5583b792-3239-4362-a627-1923a30356dc",
    "name": "Alvastra Pile-Dwelling",
@@ -4762,6 +4942,40 @@
     {
      "source": "opus:phase3:e80f6eb5a3ddc7512cc0b7957b622668e271d43a712a678a418f04172e470160",
      "text": "possibly from Quechua waqra horn, marka village"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28708,
+   "site_id": "9bec7da2-8ff6-46be-a2cf-34d689358bf2",
+   "name": "South Stoa I, Athens",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both",
+   "quotes": [
+    {
+     "source": "opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae",
+     "text": "It probably served as the headquarters and dining rooms for various boards of Athenian officials."
+    },
+    {
+     "source": "opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae",
+     "text": "Since the new stoa did not cover the eastern portion of South Stoa I, the foundations of that section are better preserved."
+    },
+    {
+     "source": "opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae",
+     "text": "The remains of the stoa were uncovered during the American School of Classical Studies' excavations of the Agora."
+    },
+    {
+     "source": "opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae",
+     "text": "stoa in the Agora of Athens"
+    },
+    {
+     "source": "opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae",
+     "text": "The foundations were made of poros stone. Most of the walls were made of unbaked bricks"
+    },
+    {
+     "source": "opus:phase3:4625d58a54e5e876b5c2af0a49cd1307412baac9e1a4028c3dd1f8570b4a31ae",
+     "text": "Agora Monument: South Stoa I"
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -4923,6 +5137,54 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 28746,
+   "site_id": "3b4ceaf0-0e07-4f25-bf33-83728e8aa49c",
+   "name": "Gåseborg",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:7fbb9b13198391d32994cc034d93a19fe7f4534f5692dcc97139f16fd0d4cd68",
+     "text": "Med hjälp av dessa daterades borgen till 300–500-talet e. Kr."
+    },
+    {
+     "source": "opus:phase3:7fbb9b13198391d32994cc034d93a19fe7f4534f5692dcc97139f16fd0d4cd68",
+     "text": "Gåseborg byggdes någon gång under tidsperioderna yngre järnålder och vikingatiden, 400 e.Kr. - 1100 e.Kr."
+    },
+    {
+     "source": "opus:phase3:7fbb9b13198391d32994cc034d93a19fe7f4534f5692dcc97139f16fd0d4cd68",
+     "text": "probably sometime during the late iron age (500-1100 AD)"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28747,
+   "site_id": "4fe33206-24d7-4d57-9bde-670139eed9cb",
+   "name": "Hastings Hill",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e",
+     "text": "The estate stands close to Hasting Hill, where a burial ground used by prehistoric man in about 2,000BC was excavated in 1911."
+    },
+    {
+     "source": "opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e",
+     "text": "In 1911 Trechmann excavated the Hasting Hill barrow and found, among other things, fragments of two Neolithic pots."
+    },
+    {
+     "source": "opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e",
+     "text": "where a burial ground used by prehistoric man in about 2,000BC was excavated in 1911"
+    },
+    {
+     "source": "opus:phase3:4bb5580c881cd3d4e82a0028ad25dad0e60f83ec8e9ac2c3b03383c163c8c08e",
+     "text": "it could have been derived from an earlier occupation preserved by the construction of the barrow"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 28748,
    "site_id": "b3c4825c-79ff-48c7-bb38-015e73fc7ae2",
    "name": "Ferrybridge Henge",
@@ -4954,6 +5216,38 @@
     {
      "source": "opus:phase3:f1dcc2ca0765415d17edb755c315dfd38a7a57ffb7c21ac899e0a0f4cd86f4c4",
      "text": "This means that the residents of La Centinela exploited plant, animal and marine resources."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28762,
+   "site_id": "ab80e2e4-7195-48ad-84fc-582925fe9504",
+   "name": "Pampas Gramalote",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both",
+   "quotes": [
+    {
+     "source": "opus:phase3:1493dd38aeb7c27742fafe2760402126ba8a36f5779836d0b06ecc234224dbc2",
+     "text": "The Gramalote site is an early Initial Period (1500–1200 B.C.E.) fishing village located in the Moche valley in northern Peru."
+    },
+    {
+     "source": "opus:phase3:1493dd38aeb7c27742fafe2760402126ba8a36f5779836d0b06ecc234224dbc2",
+     "text": "Pampas Gramalote was a Prehispanic fishing village near the town of Huanchaco, Peru that existed between 2000 and 1200 B.C."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed '-1500'; it is not written here (RULES.md rule 5)."
+  },
+  {
+   "journal_id": 28764,
+   "site_id": "dd567577-49dc-45a4-99a9-7beffeb43afe",
+   "name": "Post Track",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:7d8a00a777727b756a8c4ea8dd2e9c0d336e6847d378d64e1e81a4ddaca6d704",
+     "text": "It is dated back to around 3838 BCE, making it some 30 years older than the Sweet Track in the same area."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -5007,6 +5301,32 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 28787,
+   "site_id": "ec838509-a1e6-4f6a-b216-3f1791c16d67",
+   "name": "Legananny Dolmen",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22",
+     "text": "It dates to the Neolithic period, making the monument around 5,000 years old. Such portal tombs were funerary sites for the disposal of the dead in Neolithic society."
+    },
+    {
+     "source": "opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22",
+     "text": "Most date from the Late Neolithic period"
+    },
+    {
+     "source": "opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22",
+     "text": "It dates to the Neolithic period, making the monument around 5,000 years old."
+    },
+    {
+     "source": "opus:phase3:bfdf4a46ccb97a27662912c874b7bb6dca454b552662a007c969a6231c278e22",
+     "text": "but it has not been archaeologically excavated."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 28794,
    "site_id": "3324d203-1f5a-4b13-b6d0-c23382ac8d3c",
    "name": "Edin's Hall Broch",
@@ -5020,6 +5340,20 @@
     {
      "source": "opus:phase3:ae53b4d257b46b28a8eccad2e4a61ec27aca554fc9155267b21c6b190e473da1",
      "text": "Long before the tower appeared, this hilltop was already fortified."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28796,
+   "site_id": "9803a37d-458e-445c-9fec-8d94a0f89f1c",
+   "name": "Parion",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:fcc8e27a1dfa77a59ffdeaffc6c639e5e99fc8e1c551f88101fc267ffac27233",
+     "text": "Founded in 709 B.C., the ancient city of Parion is located in the village of Kemer in the township of Biga in"
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -5212,6 +5546,32 @@
     {
      "source": "opus:phase3:0b8cfddc0a18c38c1320fb8ec085527e242c9bafe2c9fb93f7f4755adb9026d3",
      "text": "long term habitation was marked at a later phase by residential architecture."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 28842,
+   "site_id": "7bffddb6-2fc1-49cf-987a-d7e78bdc98c5",
+   "name": "Temple of Apollo Epicurius",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad",
+     "text": "Archaeology has found some architectural pieces in the area probably belonging to the Archaic temple which was in continuous use since the archaic period, and had one or two building phases around 600 and 500 BC while the present temple of Apollo is the last of four on the site and designated Apollo IV."
+    },
+    {
+     "source": "opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad",
+     "text": "The temple in its present form was built between 450 and 400 BC during the Peloponnesian War"
+    },
+    {
+     "source": "opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad",
+     "text": "In the Archaic period (7th BC) the people of Phigaleia, helped by their neighbour Oresthasium, retrieved their land from the Spartans and erected a temple in a sanctuary dedicated to Apollo worshipped as"
+    },
+    {
+     "source": "opus:phase3:e300dc636fafc0706a15adf7f85f28ff1cf3d85ebbca6ae25c5efff9028448ad",
+     "text": "while the present temple of Apollo is the last of four on the site and designated Apollo IV."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -6215,6 +6575,20 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 29096,
+   "site_id": "64a2c786-64cc-43e4-945f-52bc889ac3b1",
+   "name": "Trebeništa",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:0c2ed44856e84b7da2f53dcc94b738c1ef76436ad5e8dfa9c1afa075ceedc289",
+     "text": "is an ancient necropolis from the Iron Age (around the 7th century BC)"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 29099,
    "site_id": "b740c74a-83ce-4e01-a07c-87ab90574750",
    "name": "Tres Islas",
@@ -6655,6 +7029,32 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 29191,
+   "site_id": "e1edddb2-56c8-498b-b926-78642bc312e2",
+   "name": "Maa Palaeokastro",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 wrong-both, tie wrong-both",
+   "quotes": [
+    {
+     "source": "opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4",
+     "text": "On the site where the settlers established themselves, the excavators brought to light an earlier occupation of the Early Chalcolithic period consisting of houses formed from cavities in the rock and with light timber superstructures."
+    },
+    {
+     "source": "opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4",
+     "text": "The excavations have established three periods of occupation on Yeronisos. Early Chalcolithic (3800 BC)"
+    },
+    {
+     "source": "opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4",
+     "text": "The settlement was occupied by Ancient Greeks from the late 13th century BC to the middle of the 12th century BC."
+    },
+    {
+     "source": "opus:phase3:48b3098a6fb57c1fb6dec1dd35277d833d9a41131cd8bcd9c5a3e7e82cbb72e4",
+     "text": "Early Chalcolithic (3800 BC)"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed '-3800'; it is not written here (RULES.md rule 5)."
+  },
+  {
    "journal_id": 29196,
    "site_id": "4695356b-52be-4152-8707-b1db00ef4707",
    "name": "Palaestra at Delphi",
@@ -6706,6 +7106,20 @@
     {
      "source": "opus:phase3:382ce33335b75cfe5a27b5200edf6acbfd62484295a6a4783574e0feaf16f033",
      "text": "Pachacamac covers about 600 hectares (1480 acres) of land."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 29202,
+   "site_id": "74ef6000-7bfa-4e7c-a745-b29b55f35030",
+   "name": "Prehistoric Rock Art Sites in the Côa Valley and Siega Verde",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:d4bbf731d4823c08b1e45715dd271e7558cf8179ec348d314266db3c79db2b61",
+     "text": "They include thousands of engraved rock drawings of horses, bovines and other animals, human and abstract figures, dated from 22,000 to 10,000 years B.C."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -7031,6 +7445,20 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 29297,
+   "site_id": "2e8550b6-1358-471f-9be5-9957b2613c9d",
+   "name": "Mynydd Maendy",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:7e09f10591bbd5edfbd893b6891c7c5741212adca84e3a10a6188ee1fef4ad89",
+     "text": "A wind farm and an Iron Age Celtic hillfort are located on the summit."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 29298,
    "site_id": "37065cce-99dd-4055-bd92-4906840149e6",
    "name": "Carn Kenidjack",
@@ -7133,6 +7561,20 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 29312,
+   "site_id": "9e827a4b-0855-4414-946b-b5fc3e3efb9b",
+   "name": "Cnidian Treasury",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:c008f6d8cc33e69784fe0bd30b1a103bf956cd493e82c7f93372568fc647c912",
+     "text": "It was a marble building, erected before Cnidus was conquered by the Persians in 544 B.C. Its features remind of the mid-sixth century B.C."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 29313,
    "site_id": "9e827a4b-0855-4414-946b-b5fc3e3efb9b",
    "name": "Cnidian Treasury",
@@ -7157,6 +7599,42 @@
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md). A judge proposed 'Religious'; it is not written here (RULES.md rule 5)."
+  },
+  {
+   "journal_id": 29314,
+   "site_id": "af1d02d6-bf17-4ce3-bf83-92bb82b8401a",
+   "name": "Ħal Ġinwi Temple",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:0b7a262a30b491b0108cd45104e9f7c060aee6c8899a1926a8df12196b30b565",
+     "text": "was a prehistoric megalithic temple site located southeast of Żejtun, Malta dating back to the Ġgantija phase (3600–3200 BCE)."
+    },
+    {
+     "source": "opus:phase3:0b7a262a30b491b0108cd45104e9f7c060aee6c8899a1926a8df12196b30b565",
+     "text": "dating back to the Ġgantija phase (3600–3200 BCE)"
+    },
+    {
+     "source": "opus:phase3:0b7a262a30b491b0108cd45104e9f7c060aee6c8899a1926a8df12196b30b565",
+     "text": "was a prehistoric megalithic temple site located southeast of"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 29315,
+   "site_id": "ddd6cdfa-6891-4f6f-932a-e276f2be47bd",
+   "name": "Pantikapaion",
+   "column": "period_start",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:d59cc0a52ba0941c525d673b3ff9eaf1bd8566236ccbf185a8d529c1db697fe3",
+     "text": "was founded by Milesians in the late 7th or early 6th century BC"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
    "journal_id": 29322,
@@ -8573,6 +9051,32 @@
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
   },
   {
+   "journal_id": 29569,
+   "site_id": "3d8cb484-8b57-41fa-ab0d-203449c1c821",
+   "name": "Burrington Combe",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135",
+     "text": "Various cave entrances are exposed which have been occupied by humans for over 10,000 years, with a hillfort being built beside the combe in the Iron Age."
+    },
+    {
+     "source": "opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135",
+     "text": "The combe contains the entrances to many of the caves of the Mendip Hills, including Aveline's Hole, Sidcot Swallet and Goatchurch Cavern."
+    },
+    {
+     "source": "opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135",
+     "text": "The earliest scientifically dated cemetery in Great Britain was found at Aveline's Hole."
+    },
+    {
+     "source": "opus:phase3:0acfda32ec9eb83b1057f85b3d64dea4a37c4c496a809e1fc67086db16905135",
+     "text": "Archaeological discoveries of early cemeteries demonstrate human occupation of the combe and its caves from the Bronze Age with some evidence of occupation during the Upper Palaeolithic period."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
    "journal_id": 29579,
    "site_id": "504bf30a-c4a0-48e7-8bbc-378b585b59b5",
    "name": "Carteia",
@@ -8620,6 +9124,24 @@
     {
      "source": "opus:phase3:c53f0f33831cb86521b19de0476d29298e08aadd88520adaae40b3040be2ab36",
      "text": "The settlement, which seems to have been inhabited from the 6th century BC to the 1st century AD, was protected by a wall and two square towers."
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 29582,
+   "site_id": "ed3e4264-7d20-4bbc-ba73-2d11563f2006",
+   "name": "Carrock Fell",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:752dfbedf970e27afe0e9d111f0d10ad57152f7df0e7653e183747eb2c2e59e2",
+     "text": "Carrock Fell is also the site of an Iron Age hill fort which crowns the summit."
+    },
+    {
+     "source": "opus:phase3:752dfbedf970e27afe0e9d111f0d10ad57152f7df0e7653e183747eb2c2e59e2",
+     "text": "The fort is oval shaped and is believed to have been built by the Celts and destroyed by the Romans in their conquest of northern England."
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
@@ -9377,6 +9899,20 @@
    "residual": ""
   },
   {
+   "journal_id": 30381,
+   "site_id": "3b4ceaf0-0e07-4f25-bf33-83728e8aa49c",
+   "name": "Gåseborg",
+   "column": "period_name",
+   "reason": "the period-name lane derived '500 - 1000 AD' from the period_start 500 that journal row 28746 wrote; this list restores period_start 1 (bucket '1 - 500 AD') and the label that row replaced, '1 - 500 AD'",
+   "quotes": [
+    {
+     "source": "journal",
+     "text": "phase3:batch-0187:chunk-0001 (P3/period_start): period_start '1' -> '500' - the write that left the label behind"
+    }
+   ],
+   "residual": ""
+  },
+  {
    "journal_id": 30385,
    "site_id": "424eed88-76e7-402b-8d62-3f598eb9c9ce",
    "name": "Aquae Calidae, Bulgaria",
@@ -9498,6 +10034,20 @@
     {
      "source": "journal",
      "text": "phase3:batch-0152:chunk-0003 (P3/period_start): period_start '-1500' -> '-500' - the write that left the label behind"
+    }
+   ],
+   "residual": ""
+  },
+  {
+   "journal_id": 30444,
+   "site_id": "7bffddb6-2fc1-49cf-987a-d7e78bdc98c5",
+   "name": "Temple of Apollo Epicurius",
+   "column": "period_name",
+   "reason": "the period-name lane derived '500 BC - 1 AD' from the period_start -450 that journal row 28842 wrote; this list restores period_start -1500 (bucket '1500 - 500 BC') and the label that row replaced, '1500 - 500 BC'",
+   "quotes": [
+    {
+     "source": "journal",
+     "text": "phase3:batch-0202:chunk-0001 (P3/period_start): period_start '-1500' -> '-450' - the write that left the label behind"
     }
    ],
    "residual": ""
@@ -9769,6 +10319,20 @@
    "residual": ""
   },
   {
+   "journal_id": 30524,
+   "site_id": "e1edddb2-56c8-498b-b926-78642bc312e2",
+   "name": "Maa Palaeokastro",
+   "column": "period_name",
+   "reason": "the period-name lane derived '1500 - 500 BC' from the period_start -1300 that journal row 29191 wrote; this list restores period_start -3000 (bucket '3000 - 1500 BC') and the label that row replaced, '3000 - 1500 BC'",
+   "quotes": [
+    {
+     "source": "journal",
+     "text": "phase3:batch-0251:chunk-0001 (P3/period_start): period_start '-3000' -> '-1300' - the write that left the label behind"
+    }
+   ],
+   "residual": ""
+  },
+  {
    "journal_id": 30529,
    "site_id": "e7ab9b35-e0bb-4fe4-a1cb-fbe5a17c63d6",
    "name": "Dankirke",
@@ -9778,6 +10342,20 @@
     {
      "source": "journal",
      "text": "phase3:batch-0108:chunk-0001 (P3/period_start): period_start '-200' -> '300' - the write that left the label behind"
+    }
+   ],
+   "residual": ""
+  },
+  {
+   "journal_id": 30533,
+   "site_id": "ec838509-a1e6-4f6a-b216-3f1791c16d67",
+   "name": "Legananny Dolmen",
+   "column": "period_name",
+   "reason": "the period-name lane derived '3000 - 1500 BC' from the period_start -3000 that journal row 28787 wrote; this list restores period_start -4500 (bucket '4500 - 3000 BC') and the label that row replaced, '4500 - 3000 BC'",
+   "quotes": [
+    {
+     "source": "journal",
+     "text": "phase3:batch-0194:chunk-0001 (P3/period_start): period_start '-4500' -> '-3000' - the write that left the label behind"
     }
    ],
    "residual": ""
@@ -9850,6 +10428,24 @@
     {
      "source": "opus:phase3:4df0788009f932ab9b764d8f7b1b19c3f07880ae919ede9fe278871721cfebbc",
      "text": "the neighbouring site of La Alcudia/Ilici achieved the consolidation of its urban structure already by the early 5th century BCE"
+    }
+   ],
+   "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
+  },
+  {
+   "journal_id": 30909,
+   "site_id": "565a3dc3-f8a7-4d38-a672-17c57f9401e9",
+   "name": "Chongam-ri Earthen Castle",
+   "column": "site_type",
+   "reason": "the Opus re-verification decided to revert this write (opus_audit/RULES.md rule 3): p1 keep, p2 revert, tie revert",
+   "quotes": [
+    {
+     "source": "opus:phase3:58c9671f1b8136227787e987948954e540f5a6536f84c5769004f6924e3bf951",
+     "text": "it is similar to other earthen fortifications of the period. It was made of alternating layers of soil, rock and sand."
+    },
+    {
+     "source": "opus:phase3:58c9671f1b8136227787e987948954e540f5a6536f84c5769004f6924e3bf951",
+     "text": "P31 instance of: Q12621161 earthen castle"
     }
    ],
    "residual": "The field is open again, not corrected: the reversal withdraws a write the Opus re-verification did not confirm, and does not claim the restored value is right (opus_audit/RULES.md)."
