@@ -174,6 +174,9 @@ RULE_EVIDENCE = "journal-evidence-incomplete"
 RULE_NOT_A_CHANGE = W.RULE_NOT_A_CHANGE
 RULE_NO_CARD = "no-card"
 RULE_CARD_TOO_LONG = "card-too-long"
+#: The live P4 provenance names a card P5 does not write (a card-scope hold added after P4 wrote):
+#: neither a clear nor the March card may stand beside it - the site is reverted first.
+RULE_CARD_NAMED = "live-provenance-names-an-unwritten-card"
 RULE_NOT_WRITTEN = "description-not-written"
 RULE_WRITTEN = "written-by-p4"
 RULE_NO_CLAIM = "no-legacy-claim"
@@ -1006,6 +1009,14 @@ def plan_cards(
             decided = outside
         elif assembly is not None:
             decided = _card_row(batch, site, assembly)
+        elif written.get(site.site_id) is not None:
+            decided = W.Refusal(
+                site.site_id,
+                "card_description",
+                RULE_CARD_NAMED,
+                f"the live provenance names card sha256 {written[site.site_id]}, which P5 does not "
+                "write (a site or card hold, or another assembled card): revert the site first",
+            )
         elif M.SiteFlag.CLEARED_CARD_DEFECT in site.flags and site.card is not None:
             decided = _clear_row(batch, site, card_findings)
         else:

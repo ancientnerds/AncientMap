@@ -2478,3 +2478,29 @@ def test_a_step_larger_than_the_owners_hundred_is_refused(tmp_path, monkeypatch,
     assert "at most 100 sites per step" in capsys.readouterr().err
     assert db.sent == []
     assert G.main(_gate_args(tmp_path, "--apply", "--step", "100"), runner=db) == 0
+
+
+@pytest.mark.parametrize("flags", [[], [M.SiteFlag.CLEARED_CARD_DEFECT]], ids=["keep", "clear"])
+def test_p5_refuses_a_site_whose_live_provenance_names_a_card_it_will_not_write(
+    tmp_path: Path, flags
+) -> None:
+    """2026-09-25 audit M6: P4 wrote the site with card X in its provenance; a card hold added
+    afterwards made `card_to_write` return None, and P5 then cleared the card (or kept the March
+    card) while the live provenance still names X. The site is refused instead: revert it first."""
+    batch = _batch(
+        tmp_path,
+        sites=[FX.plan_site(flags=flags)],
+        assemblies=[FX.assembly()],
+        holds=[_hold(FX.SITE_A, M.HoldReason.CARD_TOO_SHORT_AFTER_REVIEW, M.HoldScope.CARD)],
+    )
+    finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
+    plan = W4.plan_cards(
+        batch,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={FX.SITE_A: [finding]},
+    )
+    assert plan.rows == []
+    (refusal,) = plan.refusals
+    assert refusal.rule == W4.RULE_CARD_NAMED
+    assert "revert the site first" in refusal.detail

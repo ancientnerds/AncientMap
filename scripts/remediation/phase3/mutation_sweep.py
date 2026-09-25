@@ -21267,6 +21267,14 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4_WRITE_TEST,
         "test_a_step_larger_than_the_owners_hundred_is_refused",
     ),
+    (
+        "audit-fix: M6 P5 clears or keeps a card the live provenance names",
+        P4_WRITE,
+        "        elif written.get(site.site_id) is not None:\n",
+        "        elif False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_p5_refuses_a_site_whose_live_provenance_names_a_card_it_will_not_write",
+    ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS
 
