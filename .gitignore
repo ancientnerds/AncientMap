@@ -345,6 +345,11 @@ output/remediation/mechanical_reversal_2/REHEARSAL.sql
 output/remediation/mechanical_reversal_3/REHEARSAL.sql
 !output/remediation/mechanical_wrong_both/
 output/remediation/mechanical_wrong_both/REHEARSAL.sql
+# The orphan-citations lane (2026-09-25, the acceptance's D1 class): versioned like the other lanes;
+# its production export (every curated row's description and raw_data) stays local.
+!output/remediation/mechanical_citations/
+output/remediation/mechanical_citations/REHEARSAL.sql
+output/remediation/mechanical_citations/export/
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
 # nothing and is rendered again by `qid_repair.py render`.

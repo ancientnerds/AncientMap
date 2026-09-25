@@ -1012,6 +1012,103 @@ WRONG_BOTH_READBACK = journal_readback(
 LANES[WRONG_BOTH.name] = WRONG_BOTH
 LANE_READBACKS[WRONG_BOTH.name] = WRONG_BOTH_READBACK
 
+# ------------------------------------------------------------ the orphan-citations lane (D1)
+#: A citation marker, `[n]`, as the census and the acceptance's D1 read one
+#: (`t08_citation_markers._MARKER_RE`); every match of a curated description, as rows of `m(g)`.
+#: The census expands grouped and range forms first (`normalize_grouped_markers`); no curated
+#: description carries one (measured 2026-09-25, `citations.py`), and on that data this SQL finds
+#: exactly the 78 sites the Python D1 finds.
+_MARKERS_SQL = r"regexp_matches(coalesce(description, ''), '\[(\d+)\]', 'g')"
+#: Every `raw_data.description_citations` entry of the row, as rows of `e(entry)`; none where the
+#: key is absent or not an array.
+_ENTRIES_SQL = (
+    "jsonb_array_elements(CASE WHEN jsonb_typeof(raw_data -> 'description_citations') = 'array' "
+    "THEN raw_data -> 'description_citations' ELSE '[]'::jsonb END)"
+)
+_ENTRY_CITED = (
+    "jsonb_typeof(e.entry -> 'n') = 'number' AND (e.entry ->> 'n')::numeric = m.g[1]::numeric"
+)
+#: D1's two halves on an unqualified `unified_sites` row: an entry no marker cites, a marker no
+#: entry answers.
+CITATIONS_UNCITED = (
+    f"EXISTS (SELECT 1 FROM {_ENTRIES_SQL} AS e(entry) WHERE NOT EXISTS "
+    f"(SELECT 1 FROM {_MARKERS_SQL} AS m(g) WHERE {_ENTRY_CITED}))"
+)
+CITATIONS_UNANSWERED = (
+    f"EXISTS (SELECT 1 FROM {_MARKERS_SQL} AS m(g) WHERE NOT EXISTS "
+    f"(SELECT 1 FROM {_ENTRIES_SQL} AS e(entry) WHERE {_ENTRY_CITED}))"
+)
+_D1_FAILS = Residual(
+    "curated rows D1 fails on (a marker without an entry, or an entry no marker cites)",
+    f"({CITATIONS_UNCITED} OR {CITATIONS_UNANSWERED})",
+)
+
+#: The acceptance's D1 (`acceptance/checks.py`) on the curated rows (2026-09-25): every `[N]` of the
+#: description has an entry in `raw_data.description_citations`, and every entry is cited. The lane
+#: removes the entries no marker cites - with the key where the text cites nothing - and writes
+#: nothing else: not the description, not another `raw_data` key (`citations.py`). Its value is
+#: derived from the description's markers, so each write is conditioned on the description it read,
+#: as the sha256 `_description_provenance.desc_sha256` pins it.
+ORPHAN_CITATIONS = Lane(
+    name="orphan-citations",
+    key_prefix="orphan-citations",
+    run_stamp="2026-09-25_mechanical-orphan-citations",
+    test_id="T08/orphan-citations",
+    confidence="authoritative",
+    label="orphan citation removal",
+    plan_table="_orphan_citations_plan",
+    out_dir_name="mechanical_citations",
+    post_commit_residual=_D1_FAILS,
+    rehearsal_residual=_D1_FAILS,
+    premise_sql="encode(sha256(convert_to(coalesce(u.description, ''), 'UTF8')), 'hex')",
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=(Column("raw_data", "jsonb"),),
+)
+
+_ORPHAN_STAMP = sql_literal(ORPHAN_CITATIONS.run_stamp)
+ORPHAN_CITATIONS_READBACK = journal_readback(
+    ORPHAN_CITATIONS,
+    [
+        (_D1_FAILS.metric, _CURATED_ROWS + _D1_FAILS.predicate),
+        (
+            "curated rows with a description_citations entry no marker cites",
+            _CURATED_ROWS + CITATIONS_UNCITED,
+        ),
+        (
+            "curated rows with a marker no description_citations entry answers",
+            _CURATED_ROWS + CITATIONS_UNANSWERED,
+        ),
+        (
+            "curated rows carrying description_citations",
+            _CURATED_ROWS + "raw_data ? 'description_citations'",
+        ),
+        (
+            "curated rows whose description is not the one its provenance hashes",
+            _CURATED_ROWS + "raw_data ? '_description_provenance' AND "
+            "encode(sha256(convert_to(coalesce(description, ''), 'UTF8')), 'hex') "
+            "IS DISTINCT FROM raw_data -> '_description_provenance' ->> 'desc_sha256'",
+        ),
+        (
+            "journal rows for this run that changed a raw_data key other than "
+            "description_citations",
+            f"FROM remediation_change_log WHERE run_stamp = {_ORPHAN_STAMP} AND "
+            "(old_value::jsonb - 'description_citations') IS DISTINCT FROM "
+            "(new_value::jsonb - 'description_citations')",
+        ),
+        (
+            "journal rows for this run that added a citation entry",
+            f"FROM remediation_change_log l WHERE l.run_stamp = {_ORPHAN_STAMP} AND EXISTS "
+            "(SELECT 1 FROM jsonb_array_elements(coalesce(l.new_value::jsonb -> "
+            "'description_citations', '[]'::jsonb)) AS x(entry) WHERE NOT coalesce("
+            "l.old_value::jsonb -> 'description_citations', '[]'::jsonb) @> "
+            "jsonb_build_array(x.entry))",
+        ),
+    ],
+)
+LANES[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS
+LANE_READBACKS[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS_READBACK
+
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
 #: twice" still holds, and its own directory.
