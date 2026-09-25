@@ -811,3 +811,17 @@ def test_a_site_two_runs_carry_is_refused(tmp_path: Path) -> None:
     second = written_p4(tmp_path / "b")
     with pytest.raises(SystemExit, match="is in two runs"):
         A.index_runs([first.run_dir, second.run_dir])
+
+
+def test_a_batch_without_a_written_site_is_not_read(tmp_path: Path) -> None:
+    written = written_p4(tmp_path)
+    later = written.run_dir / "p4-0099"
+    later.mkdir()
+    (later / M.INPUT_FILE).write_text(
+        json.dumps({"batch_id": "p4-0099", "ordinal": 99, "sites": [{"site_id": "later-site"}]}),
+        encoding="utf-8",
+    )
+    assert accept(written, tmp_path) == []
+    assert A.index_run(written.run_dir, {SITE_ID}) == A.index_run(written.run_dir, [SITE_ID])
+    with pytest.raises(SystemExit, match="cannot be read"):
+        A.index_run(written.run_dir, {"later-site"})

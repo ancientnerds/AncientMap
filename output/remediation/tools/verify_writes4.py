@@ -371,11 +371,22 @@ class RunSite:
     assembly: M.Assembly | None
 
 
-def index_run(run_dir: pathlib.Path) -> dict[str, RunSite]:
-    """Every site of every batch of the run, through `verify4.read_batch`. A batch that cannot be
-    read stops the acceptance: its sites would otherwise look like sites that were never run."""
+def batch_site_ids(batch_dir: pathlib.Path) -> set[str]:
+    """The site ids a batch's `input.json` plans - all the acceptance needs to know of a batch that
+    holds no written site (a mass run's later batches are not assembled yet)."""
+    batch = json.loads((batch_dir / M.INPUT_FILE).read_text(encoding="utf-8"))
+    return {site["site_id"] for site in batch["sites"]}
+
+
+def index_run(run_dir: pathlib.Path, written: Iterable[str] | None = None) -> dict[str, RunSite]:
+    """Every site of every batch of the run, through `verify4.read_batch` - with `written`, of every
+    batch that holds a written site. A batch read that fails stops the acceptance: its sites would
+    otherwise look like sites that were never run."""
+    wanted = None if written is None else set(written)
     found: dict[str, RunSite] = {}
     for batch_dir in sorted(p for p in run_dir.iterdir() if (p / M.INPUT_FILE).exists()):
+        if wanted is not None and not batch_site_ids(batch_dir) & wanted:
+            continue
         try:
             inputs = V4.read_batch(batch_dir)
         except (FileNotFoundError, ValueError) as exc:
@@ -386,13 +397,16 @@ def index_run(run_dir: pathlib.Path) -> dict[str, RunSite]:
     return found
 
 
-def index_runs(run_dirs: Iterable[pathlib.Path]) -> dict[str, RunSite]:
+def index_runs(
+    run_dirs: Iterable[pathlib.Path], written: Iterable[str] | None = None
+) -> dict[str, RunSite]:
     """`index_run` over every run a lane was written from (the pilot's and the mass run's share the
     `phase4:` stamps). A site two runs carry is refused: which run's pinned texts it was written
     from would be a guess."""
+    wanted = None if written is None else set(written)
     found: dict[str, RunSite] = {}
     for run_dir in run_dirs:
-        for site_id, entry in index_run(run_dir).items():
+        for site_id, entry in index_run(run_dir, wanted).items():
             if site_id in found:
                 raise SystemExit(
                     f"{site_id} is in two runs: {found[site_id].batch_dir.parent} and {run_dir}"
@@ -661,7 +675,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             lane=lane,
             production=production,
             evidence_rows=evidence_rows,
-            run=index_runs(pathlib.Path(path) for path in args.run),
+            run=index_runs((pathlib.Path(path) for path in args.run), written),
         )
         print(f"re-verified {len(written)} written site(s) with V1-V15")
     return deviations

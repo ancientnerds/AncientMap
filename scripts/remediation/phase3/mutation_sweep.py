@@ -7252,6 +7252,14 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_site_two_runs_carry_is_refused",
     ),
     (
+        "p4 verify_writes4: a batch without a written site is read anyway",
+        P4_ACCEPT,
+        "        if wanted is not None and not batch_site_ids(batch_dir) & wanted:\n",
+        "        if False:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_batch_without_a_written_site_is_not_read",
+    ),
+    (
         "p4 verify_writes4: another value than the plan passes",
         P4_ACCEPT,
         "                if (link.old, link.new) != want:\n",
