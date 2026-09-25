@@ -9579,3 +9579,179 @@ it; a Phase-4 write in between refuses step 5 with exit 3 and nothing lands):
   `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
   .vulture_whitelist.py --min-confidence 80` clean; gitleaks over the new commits clean after the
   triage.
+
+
+## 2026-09-25 - the gallery audit's C1 calibration sealed again for Opus, and its 939 questions handed off (no model called, nothing written)
+
+Main checkout, branch `integrate/wave1`, commits `5d3e8e8` .. this one. Owner order 2026-09-23
+(Martin): "no DeepSeek any more - everything with Opus". **No model was called** (no DeepSeek, Pi,
+opencode gateway or MiniMax, in code or in tests) and **nothing was written to production**; one
+read-only production query (the `wiki_images` journal stamps, for the G-run state below).
+
+### What C1 measures, and its pass rule (design entry 7 `pilot_and_thresholds`; `calibrate.THRESHOLDS`, unchanged)
+
+* **Sample** (939 questions): the gallery question (`gallery-v1`) on 889 images - (i) the 200 pilot
+  tiles (`vlm_pilot/SAMPLE.jsonl`, seed 20260921, 50 per tier) with the pilot's kinds, (ii) the
+  652-row labelled set (the tracked fixture; 64 foreign rows resolve), 5 images in both, (iii) all 42
+  rows of the gold galleries Agri Bavnehoj, Langdale and Xcaret, of which 12 are gold-foreign and 13
+  gold-correct - and the hero question (`hero-v1`) on the 50 tier-A tiles.
+* **Thresholds**: T0 - every question has an in-vocabulary verdict, else nothing is admitted. T-kind
+  (K1/K2 `image_kind` writes) - pilot-kind agreement >= 0.90 on (i) and non-photo precision >= 0.90
+  on (ii). T-X1 (`other_site` exclusions) - >= 60 foreign rows resolve, precision >= 0.85 and recall
+  >= 0.70 on (ii), all 12 gold-foreign flagged, at most 1 of 13 gold-correct flagged. T-X2 (people),
+  T-X3 (other) - precision as "not this site" >= 0.85 with >= 10 flags on (ii) + (iii). T-strict
+  (`HERO_PROMPT`; K2, H1) - on the 50 tier-A tiles with eye labels, precision >= 0.90 and recall
+  >= 0.60.
+* **Pass rule**: each trigger is admitted on its own numbers (Clopper-Pearson 95 % intervals);
+  a failing trigger is dropped, never re-tuned; no threshold changes after its data is seen.
+  `ADMISSION.json` is re-derived by `decide.py` before any plan and every vision-planned row cites
+  its sha256. **The B4 eye labels do not exist** (`vlm_pilot/LABELS.jsonl`; only
+  `LABELS.template.jsonl`): without them T-strict is not evaluable and K2 and H1 stay closed.
+
+### The DeepSeek attempt of 2026-09-23: no verdict (commit `5d3e8e8`)
+
+`calibration-2026-09-23/` (sealed 04:10:40Z for `deepseek-v4-flash-vision-exp`) ran four questions
+at 10:26:07Z; the opencode gateway answered each of the three attempts with HTTP 401 ("Upstream
+request failed: Invalid credential"), and the run stopped with exit 3: 4 failed lines, 0 verdicts,
+$0. The untracked ledger moved to `calibration-2026-09-23/failed-deepseek-401/VERDICTS.jsonl`
+(sha256 `23eaea0b6ebd068726eb3d9024ab396d6cca45d2f7f2b197912a59fdd673f258`, LF-pinned in
+`.gitattributes`), so the sealed directory holds no ledger; its seal, thresholds and jobs are
+untouched. A test pins the file and that every line is a 401 without a verdict.
+
+### The sample in the seal, and the round through the handoff (commits `c264950`, `82f9689`)
+
+The protocol fixes the thresholds **and the sample** before the first question; until now only the
+thresholds' sha256 went into `SEAL.jsonl`, and the round ran `vision.py export|import` on whatever
+`JOBS.jsonl` held.
+
+* `calibrate.py jobs` **fixes** the sample it writes: `{jobs_sha256, jobs, fixed_at}` is appended to
+  `SEAL.jsonl` beside the thresholds' line - after the seal, before any answer, once; the same
+  sample again changes nothing, another is refused. `sealed_jobs` reads it back only as fixed.
+* **`calibrate.py vision --run-dir C --handoff-export H | --handoff-import H`** is the calibration's
+  round in the two halves the Phase-3/4 model stages take (`run4.py select --handoff-export|import`,
+  `run.py judge`). Both halves read the fixed sample and call vision's own export and import - now
+  `vision.command_export` / `command_import`, which `vision.py`'s CLI calls too - so the frozen
+  questions, the exact JPEG (`vlm_bytes`), the answer parsing (`extract_json`, `validate`), the byte
+  check and the ledger line are unchanged.
+* `jobs`, `vision` and `evaluate` refuse a directory whose thresholds name another model than
+  `vision.MODEL` (the DeepSeek seal among them); `evaluate` measures only the fixed sample.
+* 13 new mutation cases (`GALLERY_OPUS_C1_MUTATIONS`, prefix `gallery: `); "gallery: the dry run
+  exits 0 with images missing" re-anchored (its line moved into `command_export`).
+
+### The Opus calibration directory, sealed before any question (commit `3b043a4`)
+
+`output/remediation/gallery_audit/calibration-2026-09-25-opus/`, written by `calibrate.py seal`
+(08:13:05Z) and `calibrate.py jobs` (fixed 08:13:15Z):
+
+| file | sha256 (LF bytes) | |
+|---|---|---|
+| `THRESHOLDS.json` | `e65604571e5b6717a4c13982039fa94c3d5646101f36b6d53eecde3cdddc61a2` | the DeepSeek seal's thresholds except `definitions.model` = `anthropic/claude-opus-5-5 (Claude Code agent)` |
+| `JOBS.jsonl` | `f0c4ccd6833f2de456e2d1ca110d2520ae6772cd9c3ebd4ec789a032de70e5c9` | 939 questions, **byte-identical** to the DeepSeek seal's sample |
+| `SEAL.jsonl` | `c3f23f21ba4f54e25ce43fb2c599cbab89ee5670a80f3e69d2d669ff0c9ca45c` | the two lines above, in order |
+| `README.md` | `da6c66cda1c54f27bd65b6ec5ab04f7cbf2b24386934c112e5ea3b0877d853b4` | the note: answered by Opus through the handoff (owner order 2026-09-23); the DeepSeek attempt produced no verdict |
+
+`test_the_opus_c1_directory_was_sealed_for_opus_and_fixed_its_sample_before_any_answer` pins it (red
+before the seal) and, once a ledger exists, that every line is by Opus and after the fixed sample.
+
+### The export (no model call; `output/remediation/handoff/` is gitignored)
+
+`calibrate.py vision --run-dir <C> --handoff-export output/remediation/handoff/gallery-calibration-opus`:
+`export: 939 jobs, 0 already in the ledger, 939 handed off, 0 handed off before, 0 image(s) not found
+or unreadable`. The directory holds `C1/MANIFEST.jsonl` (939 lines), `C1/vision/<id>%2F<prompt>.prompt.txt`
+(939) and `images/<id>.jpg` (889 JPEGs, 245 MB, mean 279 KB, 802 at 1280 px on the long side).
+`opus_handoff.py validate`: **939 questions, 0 answered, 939 missing, 0 stale, 0 malformed, 0
+orphans** (exit 1, as before any answer).
+
+### The G runs that follow a passing C1 (measured on the current state)
+
+The state: the snapshot + the hero moves + every gallery plan the production journal shows applied
+(read 2026-09-25: G0 105 `image_kind`, G0b 30 `image_kind` `gallery-verdicts-persist-07817ee0`, the
+liveness chunk `img-liveness-2026-09-23-001`). Live rows by tier A 3,857 / B 9,884 / C 25,925 /
+D 9,360 (49,026); 3,991 sites serve an image; 51 chunks of 100 sites.
+
+| stage | questions | how it is known |
+|---|---|---|
+| G3 served image (gallery) | 3,991 | measured (3,857 heroes, 134 lead/sort-order images) |
+| G3-strict (hero question) | <= 3,991, about 2,950 | the served images G3 calls `site_photo` (design estimate, pilot 74 %) |
+| G2 tier B (gallery) | 9,884 | measured |
+| G4 probes (gallery) | 7,840 over 3,021 sites | measured (3 per site with live C rows, seed 20260923) |
+| G4-escalation (gallery) | about 3,250-3,800 net | the not-yet-asked live rows of hit sites: 27,113 if every probed site hit, x 12-14 % |
+| H-reselect | up to about 6,000 | at most 3 candidates per failing site (design) |
+| **total** | **about 28,000 before H-reselect; about 35,500 upper** | |
+
+Images: G3, G2 and G4 ask about 21,646 distinct images (overlaps G3/G2 36, G3/G4 33; 402 of them
+are C1 images, which the G runs' own ledgers ask again), plus the escalation's; at the export's
+mean 279 KB that is about 6 GB of handoff JPEGs over the whole run, about 120 MB per chunk.
+Per chunk: G3 78 / G2 194 / G4 154 questions on average (max 90 / 304 / 200). Answering volume per
+question, estimated (not measured) from the exported sizes: one image read of about 1,400 tokens
+(w x h / 750) plus a prompt of a few hundred tokens and a JSON answer of a few dozen - about 1.3 M
+image tokens for C1, about 40-50 M for the G runs.
+
+### The orchestrator's commands (repository root, `PY=./.venv/Scripts/python.exe`, `PYTHONIOENCODING=utf-8`)
+
+```bash
+C=output/remediation/gallery_audit/calibration-2026-09-25-opus
+H=output/remediation/handoff/gallery-calibration-opus
+# 1. answer: for each line of $H/C1/MANIFEST.jsonl whose answer_path does not exist, an Opus agent
+#    reads $H/<prompt_path>, looks at $H/<image_path>, writes only the JSON the question asks for
+#    to a file, and runs
+$PY scripts/remediation/opus_handoff.py answer --dir $H --batch-id C1 --stage vision \
+    --label <label> --answered-by <agent> --text-file <answer.txt>
+# 2. validate: exit 0 only when all 939 are answered, in shape, by Opus, for their exact prompts
+$PY scripts/remediation/opus_handoff.py validate --dir $H
+# 3. import: exit 1 and nothing written while a question lacks a valid answer; exit 3 at an answer
+#    that is no in-vocabulary verdict (a failed line stays; delete that answer file, answer again,
+#    validate, import again - only ok lines count)
+$PY scripts/remediation/gallery_audit/calibrate.py vision --run-dir $C --handoff-import $H
+# 4. score against the sealed thresholds -> $C/ADMISSION.json (commit it with VERDICTS.jsonl)
+$PY scripts/remediation/gallery_audit/calibrate.py evaluate --run-dir $C --no-eye-labels
+#    or --eye-labels output/remediation/vlm_pilot/LABELS.jsonl once W8's B4 labels exist
+
+# the G runs, per chunk N = 0..50, only for the triggers ADMISSION.json admitted
+S=output/remediation/gallery_audit/liveness-2026-09-23
+F="--kinds-from output/remediation/gallery_audit/PLAN.jsonl --kinds-from output/remediation/gallery_audit/rejected_kinds/PLAN.jsonl --applied $S/PLANNED.jsonl"
+R=output/remediation/gallery_audit/run-g-chunk-NNN; HG=output/remediation/handoff/gallery-g-chunk-NNN
+for G in G3 G2 G4; do
+  $PY scripts/remediation/gallery_audit/worklist.py jobs --stage $G --chunk N --liveness-store $S $F --out $R/JOBS-$G.jsonl
+  $PY scripts/remediation/gallery_audit/vision.py export --jobs $R/JOBS-$G.jsonl --run-dir $R --handoff $HG
+done
+# answer, validate, then vision.py import with the same three arguments per JOBS file; then the
+# second round: --stage G3-strict --ledger $R/VERDICTS.jsonl, and --stage G4-escalation
+# --hit-sites HITS.json, exported, answered, validated and imported the same way; then
+$PY scripts/remediation/gallery_audit/decide.py vision --run-dir $R --calibration $C --liveness-store $S --chunk N $F
+```
+
+### Tests, sweep, gates (main checkout, branch `integrate/wave1`, main venv)
+
+* `test_gallery_calibrate.py`: +10 tests, each red first (the failed attempt, the sample fixed in the
+  seal log, never rewritten, not read once edited, fixed once and before the first answer, a
+  seal-log line of neither kind, a DeepSeek-sealed copy never fixed, asked or measured, the jobs
+  command, the whole round export -> answer -> validate -> import -> evaluate on real images, an
+  edited sample neither asked nor measured, the versioned Opus directory); the helper and the test that
+  wrote `JOBS.jsonl` directly now fix it: **39 passed**.
+* Mutation sweep through the sweep's own `main` over every case on `calibrate.py` and `vision.py` or
+  tested by `test_gallery_calibrate.py` (58 `gallery:`, 7 `opus handoff:`): **65/65 caught**, the
+  tree byte-identical to the sweep's start for 3 files, no `# mutant` left; `test_phase3_sweep.py`
+  (every anchor and test exists) green.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`): **6,256 passed,
+  3 skipped, 57 deselected, 0 failed** (231 s); the skips are the two refactored-away article tests
+  and the opt-in Shining Ones regen.
+* `ruff check` and `ruff format --check` clean on the 4 touched Python files (ruff 0.15.11);
+  `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; gitleaks over the new files clean.
+
+### Open
+
+* **Answering C1** (939 questions) is the orchestrator's; then import, evaluate, and commit
+  `VERDICTS.jsonl` and `ADMISSION.json` with the seal (`.gitignore` versions `calibration-*/`).
+* **B4 eye labels**: without `vlm_pilot/LABELS.jsonl` T-strict is not evaluable, so K2 (a
+  `site_photo` kind) and H1 (hero moves) cannot be admitted; the owner's 40-tile spot check with it.
+* **Missing links of the G runs** (none is C1's): no tool derives the G4 hit-site list
+  (`worklist.py jobs --stage G4-escalation` takes `--hit-sites` as given); `decide.reselection_jobs`
+  (H-reselect) has no CLI; `decide.py vision` writes `PLANNED-chunk-NNN.jsonl` but nothing emits it
+  as a `chunk_writer.py` chunk (the liveness and attribution lanes have their own emitters); S13
+  `accept.py` (the early gate after 300 sites, the final acceptance) is not built.
+* The applied attribution write (`img-attrib-2026-09-23-001`: 72 `author`, 53 `author_url`) cannot be
+  folded into the state (`--applied` reads only `decide.py` plans; `author` is not in
+  `APPLIED_COLUMNS`), so H1's attribution check reads the snapshot's authors - conservative (fewer
+  hero candidates), never a wrong write.
