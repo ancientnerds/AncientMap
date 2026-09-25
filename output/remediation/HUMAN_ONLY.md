@@ -155,6 +155,40 @@ bleibt, entscheidet ein Land, und das ist deine Frage, nicht die der Scope-Lane.
 6. **Lesen, kein Rechnen mehr möglich:** 46 Namen (N7), 11 Link-Kandidaten ohne 1-km-Beweis,
    2 widersprüchliche Einträge (+ Tikal aus Welle 1), 5 Dublettenkandidaten aus der Link-Recherche, 171
    offene Koordinaten (Liste mit Grund in `coords.jsonl`).
+7. **Chiapa de Corzo / Zoque Culture Archaeological Zone** (2026-09-25, nur gelesen): nach den Daten
+   **dieselbe Stätte**, aber **nicht** von der Dublettenregel gedeckt - deshalb nicht in
+   `DUPLICATES.jsonl` und nicht in der Scope-Lane. Belege: die beiden Punkte liegen **7,4 m**
+   auseinander (16.702978, -93.004036 / 16.703006, -93.004100); beide Zeilen haben dasselbe
+   Vorschaubild (`Mound_1.JPG`); beide Beschreibungen erzählen dieselbe Stätte (Zoque-Hauptort,
+   70 Hektar, das 2010 in Mound 11 gefundene Grab mit rund 4.000 Stücken aus Jade, Perlmutt und
+   Bernstein, die E-Gruppe); der zweite `source_url` von Chiapa de Corzo - vor der Aufteilung durch
+   `2026-09-23_source-url-split-wave4`, Journalzeile 32153 - war der englische Artikel
+   `Chiapa_de_Corzo_(Mesoamerican_site)`, also genau der `source_url` und `enwiki_title` der
+   Zoque-Zeile, und der gehört zu **Q4384315**, dem Wikidata-Objekt, das die Zoque-Zeile trägt.
+   Warum die Regel nicht greift: (a) Chiapa de Corzo (`24aa135d-4714-47f5-96c0-d58f0bc04b6f`) trägt
+   **kein** Wikidata-Objekt - Welle 4 hat ihr Q4384315 gerade deshalb nicht gegeben, weil die
+   Zoque-Zeile es schon trägt; beide Regeln (Scope-Lane Regel c, `bcases` DUP) verlangen, dass beide
+   Zeilen dasselbe Objekt tragen. (b) Selbst mit dem Link wäre es nach der Regel keine Dublette,
+   sondern „PART-OF“: „Chiapa de Corzo“ ist das englische Label von Q4384315, „Zoque Culture
+   Archaeological Zone“ ist **kein** Name des Objekts (Labels, Aliase, Sitelinks aller Sprachen,
+   heute abgerufen: u. a. „Zona Arqueológica de Chiapa de Corzo“, „Chiapa de Corzo (Mesoamerican
+   site)“). Nach beiden Überlebensregeln bliebe die Zoque-Zeile (`ed186ea9-9ed1-415d-828b-97d9f21401d2`:
+   3 Content-Links, 20 Bilder, Wikidata- und enwiki-Link) und Chiapa de Corzo würde ausgeblendet
+   (0 Links, 0 Bilder, kein Link) - dann trüge die bleibende Zeile den Namen, den Wikidata **nicht**
+   kennt. **Deine Frage:** eine Stätte? Wenn ja: Chiapa de Corzo mit `duplicate_of:ed186ea9…`
+   ausblenden (E4, wie die 19) und die Zoque-Zeile in „Chiapa de Corzo“ umbenennen - oder
+   umgekehrt die Zoque-Zeile ausblenden und ihre Bilder/Links/IDs an Chiapa de Corzo hängen (das
+   verschiebt Zeilen, also ein eigener Plan). Ein „ja“ mit der Richtung genügt; die Zeile kommt
+   dann als 20. Eintrag in `DUPLICATES.jsonl` mit diesem Beleg.
+8. **Lokale Kopien gelöschter Commons-Dateien** (2026-09-25, nur gelesen): Die Liveness-Lane hat
+   am 23.09. sechs Bildzeilen ausgeschlossen, deren Commons-Dateien gelöscht sind (fünf als
+   Urheberrechtsverletzung, eine aus anderem Grund; Dedan, Stadion Olympia, Stoa des Eumenes,
+   Dionysostheater, Chesterfield). Keine Seite zeigt sie mehr - aber die Dateien liegen weiter auf
+   dem VPS unter `public/data/images/wiki/<kürzel>/` und sind per URL abrufbar
+   (`/data/images/wiki/9a9a0dca/hero.webp` antwortet 200). Dedans Vorschaubild zeigt noch auf diese
+   Datei; der geplante Chunk `thumb-repoint-2026-09-25-001` (AUDIT_LOG 2026-09-25) leert es, weil
+   Dedan kein lebendes Bild mehr hat. Die Bild-Lanes löschen nie Dateien (Design Eintrag 7). **Deine
+   Frage:** sollen die sechs Dateien vom Server?
 
 ## D. Phasen 4 und 5: Beschreibungen und Kartentexte (Stand 2026-09-23, gebaut, nichts geschrieben)
 

@@ -9254,3 +9254,328 @@ reading to put before him.
 * `ruff check` and `ruff format --check` clean on the 5 touched Python files (ruff 0.15.11);
   `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
   .vulture_whitelist.py --min-confidence 80` clean.
+
+## 2026-09-25 - scope-e4, Dedan's thumbnail and card-stats-2026-09-23 re-planned against today's production; Chiapa de Corzo / Zoque decided from data (checked and rehearsed; not applied)
+
+Branch `integrate/wave1` (main checkout). Since the last plans of these lanes (2026-09-23),
+production changed: journal-reversal-3 (488 cells over 435 sites: `site_type`, `period_start`,
+`period_name`, `country`) and the wrong-both lane (17 cells over 13 sites) were applied, and the
+Phase-4 mass run keeps writing `description` and `raw_data` of defect-scope sites
+(`phase4:p4-00NN:chunk-0001`; 57 batches and 982 journal rows when this work began). **Production
+was read (SELECTs) and rehearsed (every statement ended in ROLLBACK, 0 journal rows left); nothing
+was applied, no model was called; `opus_handoff.py`, `phase3/fetch_stage.py`, `phase3/ledger.py`
+and `.claude/worktrees/` are untouched.**
+
+| commit | what |
+|---|---|
+| `0326fe1` | scope-e4 re-planned, five stale decisions out of `DECISIONS.json` |
+| `b14afdb` | card_stats: a Phase-5 card text names no basis (test-first) |
+| `272411d` | 4 mechanical sweep cases for it |
+| `aac083b` | card-stats-2026-09-23 re-planned; `e5a34d4` triages its premise digests for gitleaks |
+| `cad1e14` | `hero_repair/thumbnail.py`: T1 for a thumbnail on its site's excluded row (test-first); T1 names the NULL case |
+| `cf1f557` | Dedan's thumbnail chunk (1 row) |
+| `d9825c5` | 11 mechanical sweep cases for the thumbnail lane |
+
+The independent acceptance, read with none of the three applied (`verify_writes.py`, read-only,
+with the six stamps applied so far): mass lane 499 carried, 495 superseded (site-type-shape 3, uk-parts 5,
+reversal-1 3, reversal-2 45, reversal-3 426, wrong-both 13), 80 withheld unchanged, **0 deviations**;
+gap lane 14 carried, 3 superseded by reversal-3, 12 withheld unchanged, **0 deviations**. None of the
+three lanes below writes a column that acceptance reads.
+
+### 1. scope-e4: 109 sites, 218 cells, 0 refused
+
+Re-planned from the export of 2026-09-25 07:16:05 UTC (`scope.py --export --collect`, then
+`--write`): **78 retired** (54 rule a, 2 rule b, 19 rule c duplicates, 3 museums), **14 pending**
+(3 rule a, 11 rule b), **17 in_scope** (museums); T11 90 findings (96 on 2026-09-23). Against the
+2026-09-23 plan (115 sites, 230 cells):
+
+* **Lalibela** left rule (a): journal-reversal-3 restored `period_start` 1200 -> -500 (row 35897).
+* **Five rule-(a) `pending` decisions had no finding any more** and the planner refused them as
+  `decision-without-finding`: each answered a phase-3 `period_start` write that had moved the site
+  out of the window ("A period_start question before a scope one"), and journal-reversal-3 undid
+  that write - Damascus Gate 1537 -> 1 (35670), Foso e Interior Citadelle De Victoria 1500 -> -3000
+  (36102), Gårdstånga 900 -> -4500 (35860), Panamá Viejo 1519 -> 1000 (36014), Skopje Aqueduct
+  1600 -> 1 (36038). The question is answered, so the five entries left `DECISIONS.json` (36 remain:
+  a/pending 3, b/pending 11, b/retired 2, d/in_scope 17, d/retired 3; `_about` names the removal).
+* Premises moved on five sites, all still decided the same way: Preah Palilay and Shanqal Fort
+  (`site_type` restored by reversal-3; still retired), Dooey's Cairn (`period_start` -4000 -> -4500;
+  still a duplicate), Yenikale Ruins (the owner-case coordinate wave moved its point), Augusta
+  Bilbilis (its description rewritten by `phase4:p4-0030`; a listed duplicate, no quote).
+* **The 19 owner-case duplicates** (`bcases/DUPLICATES.jsonl`) all still hold in the export: both
+  rows curated, both carrying the item the line names, within 2 km. 3 are also found by the lane's
+  own 100 m rule (Tarxien Temples, Bishop's Basilica of Philippopolis, Dooey's Cairn: one retirement,
+  both evidences). The Banias / Caesarea Philippi pair stays held (`DUPLICATES_HELD.jsonl`, B10).
+
+**What is decided about the duplicates, and what is not.** HANDOVER section 6 and HUMAN_ONLY (B1/B2)
+list the 19 losers "for the scope lane", and the 2026-09-23 apply order put the owner's per-site go
+(HUMAN_ONLY "Was nur du entscheiden kannst" item 2, B6) before the scope apply. Neither file records
+that go. So the plan carries them as intended, and the apply below waits on it. Should the owner
+refuse some, their pairs go into `DUPLICATES_HELD.jsonl` (the lane refuses a held pair whoever
+found it, the lane's own rule included) and the lane is re-planned; nothing in the code changes.
+
+**On production** (07:21-07:22 UTC): `--check-primitive` the 0022 body (t, t, t); `--verify` before:
+curated sites 5,004, `scope_status` NULL 5,004 (in_scope/pending/retired 0), **curated rows outside
+the E3 window with no scope decision 75**, curated rows without a date and no scope decision 15,
+retired as a duplicate 0, every journal metric of the stamp, test id and rollback stamp 0;
+`--interests`: `scope_status` and `scope_reason` NULL on 5,004 rows each; **`--probe-guards` exit 0,
+6 probes each refused by its own guard, 0 journal rows left** (guard3-foreign-old-value,
+guard2-no-op, guard2-foreign-column, guard1-other-source, guard4-not-owned, guard5-premise);
+**`--rehearse`: `NOTICE: E4 scope decision: 218 of 218 planned cell(s) changed and journalled over
+109 curated site(s)`, ROLLBACK**, journal rows for the stamp 0, the temp table gone. Computed from
+the plan and the export: after the apply every one of the 75 out-of-window rows and the 15 undated
+ones carries a decision.
+
+**The Phase-4 run and this plan.** The premise holds `md5(description)`. Of the 109 sites, one has a
+Phase-4 description so far (Augusta Bilbilis); a Phase-4 write to any other planned site between the
+plan and the apply makes guard 5 refuse the whole transaction (psql exit 3, NOT COMMITTED - nothing
+lands). 36 decisions quote their site's description; a rewritten description may no longer hold the
+quote, and the re-plan then refuses it (`quote-not-in-description`) - re-read that decision against
+the new text, never apply around it.
+
+| file (`mechanical_scope/`) | sha256 (LF text) |
+|---|---|
+| `PLAN.jsonl` (218 cells) | `b066c84cc67a50929db91daa7ad6f0ca2744dbbae4f367cbaf9d2a7f0f9d4506` |
+| `SKIPPED.jsonl` (0) | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| `APPLY.sql` | `d06ac5eba3e1554f8b4d4b5b213ccaccd2dc76d9080781b93d2700875fba2dbe` |
+| `ROLLBACK.sql` | `fe86a3f59b31b10fa1c6d8ecc80c7053a80a7beaf5c37f2fe979e98ea4675bc3` |
+| `DECISIONS.json` (36) | `94d997f81cf6c4673aa84908bfac100f9fa9a1b08c31f0bdcadd6b8bc8b712b8` |
+
+### 2. Chiapa de Corzo / "Zoque Culture Archaeological Zone": the same site, not covered by the duplicate rules
+
+Read 2026-09-25 (production read-only; Wikidata `wbgetentities` for Q4384315 with the project
+User-Agent):
+
+* **The data says one site.** The two points are **7.4 m** apart (16.702978, -93.004036 /
+  16.703006, -93.004100); both rows have the thumbnail `Mound_1.JPG`; both descriptions describe the
+  same place - the Zoque capital of 70 hectares, the pyramid tomb found in Mound 11 in 2010 with
+  about 4,000 pieces of jade, pearl shell and amber, the E-Group. Chiapa de Corzo's `source_url`
+  held a second URL until `2026-09-23_source-url-split-wave4` (journal row 32153):
+  `https://en.wikipedia.org/wiki/Chiapa_de_Corzo_(Mesoamerican_site)` - the Zoque row's own
+  `source_url` and `enwiki_title`, the article of Q4384315, the item the Zoque row carries.
+* **The rules do not cover it.** Both duplicate rules - the scope lane's rule (c) and `bcases`'
+  DUP (`classify_pairs`) - require both rows to carry one Wikidata item and both names to be names
+  of it. (a) Chiapa de Corzo (`24aa135d-4714-47f5-96c0-d58f0bc04b6f`) carries **no** item: wave 4
+  left it unlinked precisely because the Zoque row already carries Q4384315 (AUDIT_LOG, "the 20
+  two-URL `source_url` values"). (b) Even linked, the pair would be PART-OF, not DUP: "Chiapa de
+  Corzo" is Q4384315's English label, but "Zoque Culture Archaeological Zone" is none of its names
+  (labels, aliases and sitelinks in every language, fetched today: "Zona Arqueológica de Chiapa de
+  Corzo", "Chiapa de Corzo (Mesoamerican site)", "Chiapa de Corzo (lloc arqueològic)", ...).
+* So it is **not added to `DUPLICATES.jsonl`**; it is recorded for the owner (HUMAN_ONLY, B1/B2,
+  "Was nur du entscheiden kannst" item 7). Both survivor rules would keep the Zoque row
+  (`ed186ea9-9ed1-415d-828b-97d9f21401d2`: 3 content links, 20 images, the Wikidata and enwiki ids)
+  over Chiapa de Corzo (0 links, 0 images, no id) - and the survivor would then carry the name
+  Wikidata does not know. Which row and which name stay is the owner's call.
+
+### 3. Dedan: the thumbnail on the excluded hero is cleared (1 row)
+
+The liveness lane (`img-liveness-2026-09-23-001`) excluded both image rows of the Lion Tombs of Dedan
+(87351, 87352) - Commons deleted `File:Dedan tomb 1.jpg` (log 406863718) and `File:Ddan tomb 2.jpg`
+(log 406863689) as copyright violations; both are still missing today - and took the hero flag off
+87352 (journal 32263-32265). `unified_sites.thumbnail_url` still named 87352's local file,
+`/data/images/wiki/9a9a0dca/hero.webp`, which the globe (`/api/sites/all` field `i`), the static
+export and the SSR fallback go on serving (the file answers HTTP 200, 110,950 bytes).
+
+No lane wrote `thumbnail_url` (T1 was W13's, never built; `hero_repair/` holds the flag repair only).
+**`scripts/remediation/hero_repair/thumbnail.py`** (the file design entry 7 names for W13) now plans
+T1 for exactly the class whose inputs are final: a curated site whose thumbnail is the local path
+(`/data/images/wiki/<site_id_short>/<filename>`, `pipeline.sites_html_renderer.site_id_short`) of one
+of its **own excluded** rows and of no live row. T1 is the served image's file
+(`gallery_audit.worklist.served_row` - where the liveness lane's hero promotion by the hero repair's
+rule already sits), or **NULL when the site serves no image**; the sealed rule table's T1 now says
+so (`decide.RULES`, pin `419c4ff5...`; the applied liveness chunk cites the table before,
+`2380f7a0...`). It reads production read-only (the candidates, all their image rows, the journal rows
+of their excluded rows), keeps the read as `READ.json` and writes its chunk through the shared image
+writer: lane `thumb-repoint`, test id `H4/thumbnail`, run stamp `thumb-repoint-2026-09-25-001`.
+
+* **Measured** (07:40 UTC): the class is **one site, Dedan**; its own gallery has **no live row**,
+  so the hero rule has no candidate and the plan clears the thumbnail: `/data/images/wiki/9a9a0dca/
+  hero.webp -> NULL`, evidence wiki_images:87352, journal rows 32264 and 32265, and `served_row`
+  over its 2 rows. (Of all curated sites, 1,013 serve no live image and 162 of those carry a
+  thumbnail - the rest of W13, not this class.)
+* `chunk_writer.py <chunk> --check`: `CHECK OK ... 1 row(s)`; **`--rehearse` on production: the
+  transaction ran its guards, journalled 1 row, planned rows 1, ROLLBACK; `REHEARSAL OK: chunk 001,
+  1 row(s), rolled back`** (0 journal rows kept).
+* **Dedan's card moves with it**: `cultural_influence` reads "has a thumbnail". Recomputed on the
+  card export: 9 -> 8, `total_power` 23 -> 22, `rarity_score` 35 -> 33, tier 3 unchanged. So the
+  thumbnail goes **before** the card_stats wave (its premise holds `md5(thumbnail_url)`: the other
+  order would refuse that wave).
+* **Not in the database, and not this lane's**: the local files of all six rows the liveness lane
+  excluded are still on the VPS and publicly served by URL (read: `hero.webp` and `Dedan_tomb_1.webp`
+  under `9a9a0dca/`, the Olympia, Stoa of Eumenes and Theatre of Dionysus files; Chesterfield's name
+  holds an apostrophe the check did not quote). The image lanes never delete files (design entry 7);
+  whether copies of files Commons deleted as copyright violations stay on our server is the owner's
+  (HUMAN_ONLY, item 8).
+
+| file (`hero_repair/thumbnail-2026-09-25/`) | sha256 (LF text) |
+|---|---|
+| `READ.json` | `43d856b72fca370d6152331a80726cf050559d50cc082e7804b4ebf1e3d62a4c` |
+| `chunk-001/PLAN.jsonl` (1 row) | `7d7118cfb6c4c010a27bfd77cee982fdf2d6c9a7bc80a50925492c5da1f1fe47` |
+| `chunk-001/APPLY.sql` (plan sha256 `aefe53b6...70ee`) | `68906fbad98d9298c427e4e52ed71110bfe62873090a67d2660b5d8a81545687` |
+| `chunk-001/ROLLBACK.sql` | `120c4423770aa4e01f0769bc907f5ea20e1722e610fd360571413c5c69d65299` |
+
+### 4. card-stats-2026-09-23: 3,982 cells over 1,055 cards (the first wave, never applied)
+
+The journal holds **0** `card_stats` rows: the wave planned on 2026-09-23 was never applied, so it
+is re-planned under its own label (`--wave 2026-09-23`, stamp `2026-09-23_mechanical-card-stats`).
+
+* **Plan** from the export of 2026-09-25 07:30:33 UTC (sha256 `09032380...62f6a`): the counterfactual
+  put back **2,390** journalled input values and reproduced **all 60,048** stored cells (0 differ;
+  the first wave's basis). **3,982 cells over 1,055 of 5,004 cards, 0 refused** (659 of the cards on
+  sites with a journalled field write): antiquity 180, fortification 257, category_group 257,
+  cultural_influence 0, mystery 894, legacy 27, total_power 961, rarity_score 916, rarity_tier 356,
+  civilization 61, empires 37, empire_count 36. rarity_tier moves 1->2 16, 1->3 18, 2->1 10, 2->3 123,
+  2->4 3, 3->1 3, 3->2 55, 3->4 71, 4->3 49, 4->5 5, 5->4 3. **Owned cards** (`card_collections`,
+  read-only): 6 rows of 4 users on 6 sites change stats, 1 row (1 user, 1 site) changes rarity.
+* **Phase 5.** P5 writes `card_stats.card_description` under `phase5:p5-NNNN:chunk-NNNN`
+  (`phase4/write4.py`). The lane never writes it (its cells are the generator's twelve columns;
+  pinned, and on production: a copy of the plan with one cell renamed to `card_description` was
+  refused by guard 2, `card_stats recompute: 1 planned row(s) are not writable changes`, psql exit 3,
+  0 journal rows), and neither its premise nor its export reads it, so a card text written between
+  this wave's plan and its apply expires neither guard 3 nor guard 5. P5's own preflight reads the
+  card row's existence and its `card_description` - neither is written here. **One conflict was
+  real and is fixed** (`b14afdb`): `basis_pointer` read every `card_stats` journal row, so the first
+  P5 card text would have made every later card_stats wave - the completion read-back included -
+  refuse with "no card_stats wave's write or undo". It now reads the rows of the twelve columns; a
+  write to one of those that no wave made still refuses, whoever made it.
+* **Phase 4.** The premise holds `md5(description)` of every planned card, and `_is_unesco` reads the
+  description text. A Phase-4 batch (15 sites) touches one of the 1,055 planned cards almost surely,
+  so a Phase-4 write between this wave's export and its apply refuses the transaction (guard 5,
+  exit 3, NOT COMMITTED): export, plan, check and apply in one pause of the Phase-4 writer. Phase 4's
+  later descriptions can move `cultural_influence` again; the completion read-back will show that as
+  cells, and a later wave recomputes them.
+* **scope-e4 does not touch a card input**: the generator counts every curated row whatever its
+  `scope_status`, and neither the export nor the premise reads a scope column. The card_stats wave
+  therefore does not wait on the scope lane's owner gate - only on Dedan's thumbnail.
+* **On production** (07:31-07:32 UTC): `--verify` before: tiers 525 / 1,796 / 2,310 / 353 / 20,
+  **curated rows whose card_stats civilization differs from the site country 61**, total_power not
+  the sum 0, curated sites without a card row 0, every journal metric 0; `--interests` 151
+  (column, value) rows; **`--probe-guards` exit 0, 7 probes each refused by its own guard, 0 journal
+  rows left** (guard3-foreign-old-value, guard2-no-op, guard2-foreign-column, guard2-too-long,
+  guard1-other-source, guard4-not-owned, guard5-premise), plus the `card_description` probe above;
+  **`--rehearse`: `NOTICE: card_stats recompute: 3982 of 3982 planned cell(s) changed and journalled
+  over 1055 curated site(s)`, ROLLBACK**, 8 s end to end, journal rows for the stamp 0, temp table
+  gone. On today's plan the apply leaves tiers 504 / 1,731 / 2,371 / 376 / 22 and civilization drift
+  0 (computed from the plan's moves).
+* gitleaks over the re-plan commit found nine guard-5 md5 premises next to "Krapina" ('api') and
+  "Keynes" ('key'); triaged in `.gitleaksignore` (`e5a34d4`) like the first plan's. **The re-plan
+  before the apply writes new ones: scan its commit.**
+
+| file (`mechanical_card_stats/2026-09-23/`) | sha256 (LF text) |
+|---|---|
+| `PLAN.jsonl` (3,982 cells, gitignored) | `551f88e6a60d0201ed9b86eb9a7774334dea0bf8887515107d49e3b2875efd7c` |
+| `APPLY.sql` (gitignored) | `3d966a36a69326eac00be47ffe368fdcc953ecb71006df7c1b1c57db5b84faf3` |
+| `ROLLBACK.sql` | `6263f031cbef7bdf839f295617fe3f7ad3c6a1446d767822a1e95a105c832c9b` |
+| `BASIS.json` | `f452491c301924130db174c58e0f9c7f6cb1b9a0d4a73aafc21c75cc4fe3b839` |
+
+### The apply (the orchestrator runs it)
+
+From the repo root, main venv, `export PYTHONIOENCODING=utf-8`,
+`A=scripts/remediation/mechanical/apply.py`, `CW=scripts/remediation/gallery_audit/chunk_writer.py`.
+Order: **A** (after the owner's go), **B**, **C last**; B and C do not wait for A.
+
+**A. scope-e4** - owner gate first: HUMAN_ONLY B1/B2 item 2 (B6), the per-site go for the 19
+duplicate retirements. A refused pair goes into `bcases/DUPLICATES_HELD.jsonl` before step A1.
+
+1. **Re-plan** (the premise ages with every Phase-4 description):
+   `./.venv/Scripts/python.exe scripts/remediation/mechanical/scope.py --export --collect`, then
+   `./.venv/Scripts/python.exe scripts/remediation/mechanical/scope.py --write` -> read its counters
+   (today `sites 109, cells 218, refused 0`); a `quote-not-in-description` refusal is a decision to
+   re-read against the new description, never to apply around. Then
+   `./.venv/Scripts/python.exe $A --lane scope-e4 --emit`,
+   `./.venv/Scripts/python.exe -m pytest tests/remediation/test_mechanical_scope.py tests/remediation/test_mechanical.py -q -m "not integration and not live_llm"`
+   green, commit `mechanical_scope/`.
+2. **Check.** `./.venv/Scripts/python.exe $A --check-primitive`;
+   `./.venv/Scripts/python.exe $A --lane scope-e4 --verify` (outside the E3 window with no decision =
+   the plan's rule-a/d count of out-of-window rows, today 75; journal rows for the stamp 0);
+   `./.venv/Scripts/python.exe $A --lane scope-e4 --interests`;
+   `./.venv/Scripts/python.exe $A --lane scope-e4 --probe-guards` -> exit 0, the same 6 probes.
+3. **Rehearse.** `./.venv/Scripts/python.exe $A --lane scope-e4 --rehearse` -> `E4 scope decision:
+   <n> of <n> planned cell(s) changed and journalled over <s> curated site(s)`, ROLLBACK, 0 rows.
+4. **Apply**, right after a Phase-4 chunk has landed:
+   `./.venv/Scripts/python.exe $A --lane scope-e4 --apply` -> `APPLY OK: the read-back matches the
+   plan, row for row` (exit 3 NOT COMMITTED: re-plan from 1; exit 5 OUTCOME UNKNOWN: read the journal
+   for the stamp first, never apply twice).
+5. **Read back.** `./.venv/Scripts/python.exe $A --lane scope-e4 --verify` -> on today's plan:
+   journal rows for this run stamp 218 and for this test id 218; `scope_status` retired 78, pending
+   14, in_scope 17, NULL 4,895; retired as a duplicate 19; **outside the E3 window with no scope
+   decision 0; without a date and no scope decision 0**; a scope_status but no scope_reason 0;
+   retired duplicates whose survivor is retired or not curated 0; 0 outside the lane's cells, on
+   non-curated rows or with another site's `site_id_ref`.
+6. **Rehearse the rollback on the landed rows.**
+   `./.venv/Scripts/python.exe $A --lane scope-e4 --rehearse-rollback` -> the NOTICE, ROLLBACK, the
+   cells still holding the decisions; commit `REHEARSAL_ROLLBACK.sql`.
+7. **Acceptance.** The two `verify_writes.py` runs of the "acceptance before" above, unchanged (0
+   deviations; the lane writes no field they read). `/api/sites/all` serves from a 30-minute Redis
+   cache: the retired sites leave the globe with it, the static data with the next export.
+
+**B. Dedan's thumbnail** (`C=output/remediation/hero_repair/thumbnail-2026-09-25/chunk-001`):
+
+1. `./.venv/Scripts/python.exe $CW $C --check` -> `CHECK OK ... 1 row(s)`; then read-only
+   `SELECT thumbnail_url FROM unified_sites WHERE id = '9a9a0dca-52c8-44c2-94f6-adb655db17dd'` ->
+   `/data/images/wiki/9a9a0dca/hero.webp` (anything else: re-plan with `thumbnail.py chunk --out`
+   into a new dated directory, never over this one).
+2. `./.venv/Scripts/python.exe $CW $C --rehearse` -> `REHEARSAL OK: chunk 001, 1 row(s), rolled back`.
+3. `./.venv/Scripts/python.exe $CW $C --apply` -> `APPLY OK: chunk 001, the read-back matches plan
+   and journal both ways` (exit 5: read the journal for `thumb-repoint-2026-09-25-001` first).
+4. `./.venv/Scripts/python.exe $CW $C --readback` -> `READBACK OK: 1 row(s), plan = journal = data`.
+5. `./.venv/Scripts/python.exe $CW $C --rehearse-rollback` -> `ROLLBACK REHEARSAL OK`.
+6. **Acceptance**: `./.venv/Scripts/python.exe scripts/remediation/hero_repair/thumbnail.py chunk --out C:/tmp/thumbnail-2026-09-25`
+   -> exit 1, `no thumbnail names an excluded row of its own site: nothing to plan` (the class is
+   empty; it writes nothing), and Dedan's `thumbnail_url` reads NULL. Commit nothing new here.
+
+**C. card-stats-2026-09-23, last** - after B, in one pause of the Phase-4 writer (steps 1-5 within
+it; a Phase-4 write in between refuses step 5 with exit 3 and nothing lands):
+
+1. **Re-plan**: `./.venv/Scripts/python.exe scripts/remediation/mechanical/card_stats.py --wave 2026-09-23 --export`,
+   then `--wave 2026-09-23 --write` -> `counterfactual_cells_differing 0` (it refuses otherwise) and
+   `skipped 0`; expect today's 3,982 cells plus Dedan's three (`cultural_influence` 9 -> 8,
+   `total_power` 23 -> 22, `rarity_score` 35 -> 33) plus whatever Phase 4 moved since. Then
+   `./.venv/Scripts/python.exe $A --lane card-stats-2026-09-23 --emit`,
+   `./.venv/Scripts/python.exe -m pytest tests/remediation/test_mechanical_card_stats.py tests/api/test_cardgame_generator_stats.py -q -rs -m "not integration and not live_llm"`
+   green with 0 skipped (the export is present), commit `PLAN.md`, `SKIPPED.jsonl`, `ROLLBACK.sql`,
+   `BASIS.json`, then `gitleaks git . --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore --log-opts="HEAD~1..HEAD"`
+   and triage its premise digests as in `e5a34d4`.
+2. **Check.** `./.venv/Scripts/python.exe $A --lane card-stats-2026-09-23 --verify` (journal rows for
+   the stamp 0; civilization drift 61 unless a country moved); `--interests`; `--probe-guards` ->
+   exit 0, the same 7 probes.
+3. **Rehearse.** `./.venv/Scripts/python.exe $A --lane card-stats-2026-09-23 --rehearse` -> `card_stats
+   recompute: <n> of <n> planned cell(s) ... over <s> curated site(s)`, ROLLBACK, 0 rows (8 s today,
+   the statement bound is 120 s).
+4. **Apply.** `./.venv/Scripts/python.exe $A --lane card-stats-2026-09-23 --apply` -> `APPLY OK`.
+5. **Read back, straight after.** `./.venv/Scripts/python.exe $A --lane card-stats-2026-09-23 --verify`
+   -> **civilization drift 0**, total_power not the sum 0, journal rows for this run whose row is
+   not a card_stats row 0, journal rows for the stamp = the plan's cells, the tier counts of the
+   plan's moves (today 504 / 1,731 / 2,371 / 376 / 22 before Dedan and Phase 4).
+6. `./.venv/Scripts/python.exe $A --lane card-stats-2026-09-23 --rehearse-rollback` -> the NOTICE,
+   ROLLBACK (it expires at the next field write, HANDOVER section 7).
+7. **Completion**: `./.venv/Scripts/python.exe scripts/remediation/mechanical/card_stats.py --wave 2026-09-23b --export`,
+   then `--wave 2026-09-23b --write` -> `"cells": 0` and no statement written (a read-back, not a
+   wave: neither applied nor committed). Cells here after a Phase-4 description landed are the
+   next wave's work, not a failure of this one.
+
+### Tests, sweeps, gates (main checkout, branch `integrate/wave1`, main venv)
+
+* card_stats (`test_mechanical_card_stats.py`, +4): a Phase-5 card text names no basis (the unit and
+  the whole next-wave plan) - both red before `b14afdb` -, a stats cell written under a Phase-5
+  stamp still refuses, and the lane neither writes nor reads `card_description`. With today's export
+  on disk the three export tests run too: **57 passed, 0 skipped** (with
+  `tests/api/test_cardgame_generator_stats.py`).
+* thumbnail (`test_hero_thumbnail.py`, new, 14 cases; red before the module existed): the path is
+  the site's short id, NULL for a site that serves no image, the served row (hero, then lead, then
+  sort_order; a NULL exclusion is live) otherwise, the candidates that are not this class listed,
+  the refusals, the stamp, the command over a faked production and the delivered chunk re-derived
+  from its `READ.json`. `test_gallery_vision.py`'s rule-table pin moves with T1.
+* scope: `test_mechanical_scope.py` and `test_mechanical.py` on the new plan: **431 passed**.
+* **`mechanical/mutation_sweep.py "card_stats:"`: cases 43, fired 43** (39 before, 4 new);
+  **`"img thumbnail:"`: cases 11, fired 11**; `phase3/mutation_sweep.py` on the 32 cases of
+  `gallery_audit/decide.py`: **32/32 caught**. Skipped, survived, invalid, unproven, errored 0; the
+  trees byte-identical afterwards, no `# mutant` left; `test_mechanical_sweep.py` green (every needle
+  matches once).
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **6,246 passed, 3 skipped, 57 deselected, 0 failed** (216 s); the skips are the two
+  refactored-away article tests and the opt-in Shining Ones regen - the three card_stats export
+  tests of earlier runs now run, the export being on disk.
+* `ruff check` and `ruff format --check` clean on the 7 touched Python files (ruff 0.15.11);
+  `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; gitleaks over the new commits clean after the
+  triage.
