@@ -1204,16 +1204,25 @@ def _value_rows(lane: Lane) -> list[tuple[str, str, int]]:
     the hub route imports (`api/routes/sites_html.py:25`) and matches rows with - `/sites/{slug}`
     404s once no row's `country` slugs to it, and only redirects a *case variant* of a slug that
     still matches. Other columns have no hub page, so their slug is `-`.
+
+    Read as JSON (`psql_json_reader`), never split on `|`: a curated value may hold the separator
+    or a newline, and after a COMMIT a reader that raises turns a committed write into a refusal
+    (audit 2026-09-25 M9). A NULL is not a value and is not listed.
     """
     from pipeline.sites_html_renderer import country_slug
 
-    rows = read_rows(
-        f"SELECT {lane.column}, count(*) FROM unified_sites "
-        f"WHERE source_id = 'ancient_nerds' GROUP BY {lane.column} ORDER BY {lane.column}"
+    rows = psql_json_reader()(
+        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "
+        f"WHERE source_id = 'ancient_nerds' AND {lane.column} IS NOT NULL "
+        f"GROUP BY {lane.column} ORDER BY {lane.column}"
     )
     return [
-        (value, country_slug(value) if lane.column == "country" else "-", int(count))
-        for value, count in rows
+        (
+            str(row["value"]),
+            country_slug(str(row["value"])) if lane.column == "country" else "-",
+            int(row["n"]),
+        )
+        for row in rows
     ]
 
 

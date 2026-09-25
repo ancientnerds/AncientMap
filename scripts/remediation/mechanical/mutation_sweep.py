@@ -4743,6 +4743,15 @@ AUDIT_FIX_CASES: list[Case] = [
         "test_a_loser_found_with_two_survivors_is_refused_in_any_pair_order",
         SCOPE_TESTS,
     ),
+    Case(
+        "audit-fix: M9 the value table splits on |",
+        APPLY,
+        "    rows = psql_json_reader()(\n"
+        '        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "',
+        '    rows = (lambda sql: [dict(zip(("value", "n"), r)) for r in read_rows(sql)])(\n'
+        '        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "',
+        "test_a_value_with_the_separator_or_a_newline_is_read_whole",
+    ),
 ]
 CASES += AUDIT_FIX_CASES
 
