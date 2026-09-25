@@ -240,9 +240,15 @@ def accept4(
                 f"{sorted(f'{t}.{c}' for t, c in columns)} only"
             )
         if write_gate4.ROUND_STAMP in row:
+            twice = (row[write_gate4.ROUND_STAMP], key) in archived
             archived[(row[write_gate4.ROUND_STAMP], key)] = row
         else:
+            twice = key in plan
             plan[key] = row
+        if twice:  # never the last one silently (audit 2026-09-25 m15)
+            result.deviations.append(
+                f"PLANNED TWICE {key[2]} {key[0]}.{key[1]}: the lane plan names the row twice"
+            )
     lane_by_key: dict[Key, list[VW.Link]] = collections.defaultdict(list)
     for link in lane_links:
         if (link.table, link.column) not in columns:

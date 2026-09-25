@@ -1217,3 +1217,11 @@ def test_an_archived_round_row_is_no_licence_for_an_open_write(tmp_path: Path) -
     result = _accept4(written)
     assert sum(d.startswith("OUTSIDE THE PLAN") for d in result.deviations) == 2
     assert result.untouched == 0 and result.carried == set()
+
+
+def test_a_row_planned_twice_is_a_deviation(tmp_path: Path) -> None:
+    """2026-09-25 audit m15: the plan index kept the last of two rows of one key, silently - the
+    lane plan is every batch's plan in one file, so a key two batches both plan was accepted."""
+    written = written_p4(tmp_path)
+    written.plan.append(dict(written.plan[0]))
+    assert any(d.startswith("PLANNED TWICE") for d in _accept4(written).deviations)

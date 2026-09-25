@@ -21339,6 +21339,14 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4_WRITE_TEST,
         "test_a_stopped_batch_keeps_the_plan_and_statements_it_stopped_on",
     ),
+    (
+        "audit-fix: m15 a row planned twice is accepted",
+        P4_ACCEPT,
+        "        if twice:  # never the last one silently",
+        "        if False:  # mutant",
+        P4_ACCEPT_TEST,
+        "test_a_row_planned_twice_is_a_deviation",
+    ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS
 
