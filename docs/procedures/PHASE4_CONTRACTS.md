@@ -1169,3 +1169,66 @@ owner decision, ranks above the design.
   `APPLY.sql` from the unscoped dry run would otherwise have stayed beside an empty `PLAN.jsonl`. A
   round's record (`APPLIED.json`, `REVERTED.json`) and a stopped batch's statements are never
   touched.
+
+## 10. The mass run's mid-run audit: the later namesake building, and one written site taken back (wip/p4-pilot, 2026-09-25)
+
+The design's mass-run gate (entry [6], "MASS RUN GATES": "10 random written sites after every 500.
+Any T1, T2 or T3 hit stops the writes and triggers re-verification of every written site of that
+lane or rule; a systematic cause is reverted through revert4.py"). The mid-run audit of run
+`mass-2026-09-25` (45 written sites, `logs/p4_mass/MIDRUN_AUDIT_VERDICTS.json`) found one T2:
+Roman Bath, York (p4-0036), sentence 1 "The Roman Bath is a Grade II* listed public house ...", the
+pub built in 1929-31 over the Roman bath house the record stands for. AUDIT_LOG, "Phase-4 mass run:
+the mid-run audit's WRONG_SITE", has the evidence and the numbers.
+
+- **The reviewer question** (`prompts4.REVIEWER_QUESTION`, sha256 `097c4589...d7d143106a8`, was
+  `89e6035d...fc71e7523`) gains, right after the modern-place line: "DROP a sentence whose subject is
+  a later building, business or institution (a pub, hotel, house, museum, shop, church, station
+  ...) that shares or contains the site's name rather than the ancient site itself, even when it
+  names the site." The review import is unchanged: what leans on a dropped sentence goes with it
+  (`follow_drops`), and S4 and S5 run again - on Roman Bath, V6 then holds the site (sentence 1 of
+  what is left names it by no V6 name). **The selector question is unchanged** (`a0b422e7...`): its
+  rule (8) has the same gap, but the mass run's selector questions are answered under its pin, and
+  a changed selector would make every exported answer stale. Review questions exported under the old
+  pin and not imported are exported again (their answers kept, never deleted, in
+  `handoff/p4-mass-review-stale-reviewer-89e6035d`).
+- **No deterministic check.** The class is a question of which referent a sentence's subject has and
+  when it was built. Measured over the census run's 88,936 lane-W/S pool sentences and the 2,046
+  published sentences of the 336 written sites, "names the site and is/was a/an ... <noun>" with the
+  businesses (pub, inn, hotel, restaurant, bar, shop, ...) fires on Roman Bath and on one false
+  "bar"; with the buildings (house, museum, church, station, theatre, school, ...) on 48 census
+  sentences, most of them ancient members (a Roman house, a Roman theatre, a road station, an
+  open-air museum on its site) beside the true ones (an 18th-century house, a secondary school).
+  It cannot be stated precisely in one sentence, so no V-rule is added.
+- **`audit4.py hold --run-dir R --site <id> --audit <verdict file>`** writes the closed list's S6b
+  reasons, which `model4.HoldReason` has carried since WB-00 and no code wrote before: a WRONG_SITE
+  sentence `audit-wrong-site`, an UNSUPPORTED one `audit-unsupported` (site scope), a NOT_CONTAINED
+  card `audit-not-contained` (card scope). The hold goes into the `holds.jsonl` of the batch that
+  carries the site - its latest (`run4.aggregate_holds`) - after that batch's review, with the
+  detail `<file name> sha256 <digest>: sentence <n> <verdict>: <note>`; `HOLDS4.jsonl` is rewritten
+  (`run4.write_holds4`). `mass4.batch_done` is unaffected (the site is assembled and held), the
+  site leaves `audit4.reviewed_sites` (so `audit4 draw --written` refuses it while it is still live:
+  revert it first, or `--exclude` it), `write4.plan_p4` refuses it (`site-held`), and lane L treats
+  it as any held site. Refused, with nothing written: a site the file judges not exactly once, a
+  verdict outside `SUPPORTED | UNSUPPORTED | WRONG_SITE` or `CONTAINED | NOT_CONTAINED`, a record whose
+  `name` is not the site's, a site outside the run, a record without a finding. Idempotent.
+- **`revert4.py --site <id>`** narrows the matched writes to the rows journalled for that site
+  (`site_id_ref`), and nothing else: the set is fixed before anything moves and every guard, the
+  loop, both invariants and the reversal read after it run over it; without `--site` the statement
+  is the pinned one byte for byte. The chunk's other sites keep their writes; a later revert of the
+  whole chunk skips the site's rows (reverted already, section 7). `reversal_read` and
+  `reversal_counts` take the same `site`.
+- **`write_gate4` and a written batch re-planned without a site** (`sites_taken_back`). A written
+  batch still keeps the plan it was written from; the one re-plan it accepts is that plan without
+  the rows of whole sites, and only on production's read-only proof that every row the round wrote
+  for each such site has its own reversal kept (`reversal_counts(stamp, site=...)`). Otherwise it
+  refuses (`WRITE_EXIT=1`) and names `revert4.py --stamp-like <stamp> --site <id>`. `PLAN.jsonl`,
+  `APPLIED.json` and so `LANE_PLAN.jsonl` stay what was written.
+- **The acceptance after a site revert** is unchanged code (`verify_writes4.accept4`, section 7): the
+  site's lane rows have their own kept reversal, and its planned rows - still in the lane plan - are
+  judged like a reverted batch's, not yet written and at their old value; the rest of its chunk is
+  carried and verified again. 0 deviations (tested). A `--complete` acceptance names the site's two
+  rows `NOT WRITTEN`, as it would a reverted batch never written again.
+- **The operator's sequence**, per site: `audit4.py hold` (the reason, in the run), `revert4.py
+  --stamp-like '<its chunk's stamp>' --site <id>` rendered, `--rehearse`d, then `--apply`ed (the
+  orchestrator), `write_gate4.py ... --batch <its batch>` dry (the proof, read-only), and
+  `verify_writes4.py --lane p4 --plan <apply root>/LANE_PLAN.jsonl --run <every run>` (0 deviations).

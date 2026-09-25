@@ -9002,3 +9002,162 @@ cleared card 687, cleared description 313, ungrounded card 850; flags `t03-sever
   the 2026-09-19 inventory would have to be found and pinned as a new scope version.
 * Which run directory the mass run uses (a new one, or pilot 4's, whose 9 batches are done): the
   plan's batch ids are after the pilot's either way.
+
+## 2026-09-25 - Phase-4 mass run: the mid-run audit's WRONG_SITE (Roman Bath, York), its fix, and one written site taken back (nothing applied)
+
+Run `runs/mass-2026-09-25` (plan `PLAN4.scope.jsonl`), P4 apply root `logs/_write_apply_p4`: 336
+sites written in 5 accepted steps - pilot 4's 26 (`p4-0001` .. `p4-0009`) and the mass run's 310
+(`p4-0010` .. `p4-0041`), 672 journal rows under `phase4:p4-%`, every step `RESULT: 0 deviation(s)`.
+The design's mass-run gate (entry [6], "MASS RUN GATES"): "10 random written sites after every 500.
+Any T1, T2 or T3 hit stops the writes and triggers re-verification of every written site of that
+lane or rule; a systematic cause is reverted through revert4.py." Contracts: `PHASE4_CONTRACTS.md`
+section 10.
+
+### The mid-run audit
+
+45 random written sites (`logs/p4_mass/midrun_sample.txt`; sheets `MIDRUN_AUDIT_SHEETS.md`
+`b58de234...`, verdicts `MIDRUN_AUDIT_VERDICTS.json`
+`15577da6f0fcc608547ed4e8ff7221e1decb6db7aabf12d7d7e54a435e383145`, gitignored): **280 sentences,
+279 SUPPORTED, 1 WRONG_SITE**; 36 cards, all CONTAINED; 0 lost hedges or negations, 0 flipped
+meanings, 0 broken sentences, 0 verifier false-passes, 0 gold errors. T1 and T3: 0. **T2: 1 - the
+writes are stopped.**
+
+The hit: **Roman Bath, York** (`70037a24-6487-4834-9b50-5242289009fe`, p4-0036, lane W, stored type
+Residence/villa/farmhouse), sentence 1, verbatim from its article's lead: "The Roman Bath is a Grade
+II* listed public house on St Sampson's Square in the city of York, England [1]." Its subject is
+the pub built in 1929-31 over the Roman bath house the record stands for: the opening sentence tells
+the reader the site is a listed pub.
+
+### Root cause
+
+* **The source.** The English article "Roman Bath, York" is about the pub; its Wikidata item is the
+  pub too - S3's `also_named` for the site was "Roman Bath; The Roman Bath Public House" (the item's
+  English label, which V6 accepts for a strong 'own' verdict). The only sentence of the pool that
+  names the site is W1, the pub.
+* **The selector** (answer `DESC: W1 W2 W3 W6 W7 W16`, `CARD: W3`). Rule (7) demands a first DESC
+  sentence that names the site, or ABSTAIN - so W1 or nothing. Rule (8), the only rule that lets
+  the selector refuse a name-carrying sentence about something else, names exactly "the modern
+  village, town or municipality (its administration, its population, its modern founding)" and
+  allows ABSTAIN only "if the only sentence that names the site is such a sentence". A pub is none
+  of these; rule (1)'s "not a namesake" reads as another thing of another name, and "The Roman Bath"
+  is the site's own name. Nothing in the question named the case, and W1 was the one way to satisfy
+  rule (7).
+* **The reviewer** (answer `R1-R6: KEEP`, `CARD: DROP` - the card's "The remains" and "the present
+  pub" had no antecedent inside the card). The question asks "is it about this site", but its DROP
+  lines - the lines it answers by - name, for "not this site", again only the modern village, town
+  or municipality. R1's subject carries the site's name word for word, so the reviewer read it as
+  the site; it was careful about antecedents (it dropped the card) but had no line for a later
+  building that shares the name.
+* **V6** passes the sentence on the name string alone (by design: V6 checks naming, not reference).
+
+### The fix (reviewer only; the selector stays frozen)
+
+`prompts4.REVIEWER_QUESTION` gains, right after the modern-place line:
+
+    DROP a sentence whose subject is a later building, business or institution (a pub, hotel, house, museum, shop, church, station ...) that shares or contains the site's name rather than the ancient site itself, even when it names the site.
+
+Re-pinned in `test_phase4_select.py` with its reason:
+**`097c45891e5fb28051d64d582fe92e4ef747927d8b569790b4f1bd7d143106a8`** (was `89e6035d...fc71e7523`).
+The selector question is unchanged (`a0b422e7...2a367ef93`): its rule (8) has the same gap, but the
+mass run's selector questions (`handoff/p4-mass-select`, p4-0050 .. p4-0057 being answered now) are
+answered under its pin. The cascade is the review import's own: `follow_drops` takes a pronoun
+sentence along with the sentence it leans on, S4 and S5 run again. **Replayed on the real case**
+(`logs/p4_mass/measure_roman_bath_cascade.py`, a scratch copy of p4-0036, the stored review answer
+with only R1 turned into a DROP; log `7b7eae2a...`): R2 "It is built above an ancient Roman bath
+house" follows R1, R3-R6 are assembled again, and **V6 holds the site** ("sentence 1 names none of
+['Roman Bath, York', 'Roman Bath', ..., 'The Roman Bath Public House']"); the card is held as
+before. Under the new line the site is not written.
+
+### No deterministic check (measured)
+
+`logs/p4_mass/measure_wrong_site_building.py` (gitignored), a sentence that names the site (S3's
+reading) and says it "is/was a/an [up to five words] <noun>":
+
+| detector | census pools (88,936 sentences, 18,364 naming the site) | written (336 sites, 2,046 sentences) | group 5 (520 sentences) |
+|---|---|---|---|
+| businesses: public house, pub, inn, hotel, restaurant, bar, cafe, shop, store, brewery | 2 - Roman Bath (true), Bent Pyramid "a small bar wall" (false) | 1 - Roman Bath | 0 |
+| buildings: house, museum, church, chapel, station, school, theatre, hall, manor, ... | 48 sentences / 44 sites | 4 - Roman Bath (true); Roman Theatre of Arles, Ariconium "a road station", Schwarzenacker Roman Museum (false) | 1 - Second Ancient Theatre, Larissa (false) |
+
+The business list catches the one pub and nothing else of the class; the building list catches the
+rest of the class in the census (Killerton "an 18th-century house", Lydney Park "a 17th-century
+country estate", St Laurence School "a coeducational secondary school", Great Tottington "a moated
+manor farm") only beside ancient members of the same surface form (House of the Tragic Poet "a
+Roman house", the Roman theatres of Cartagena, Tarraco and Zaragoza, Ariconium, Storgosia and Ad
+Quintum "road station", Newport Roman Villa "a Romano-British farmhouse"). Which it is depends on
+the subject's referent and its date, not on a word: the rule cannot be stated precisely in one
+sentence, so **no V-rule is added** (logs `measure_wrong_site_census.log` `819c59d7...`,
+`measure_wrong_site_written.log` `1395a4b5...`).
+
+### Taking back one written site (rendered and rehearsed; not applied)
+
+`revert4.py --site`, `audit4.py hold`, and `write_gate4`'s re-plan without a reverted site
+(contracts section 10). Read-only first: the site's journal rows under `phase4:p4-0036:chunk-0001`
+are 34909 (`unified_sites.description`) and 34910 (`raw_data`), both live at their written value;
+the chunk holds 18 rows of 9 sites.
+
+* **Rendered**: `logs/p4_mass/REVERT_ROMAN_BATH.sql` (`75acd4c2...`), the pinned reversal with
+  `AND l.site_id_ref = '70037a24-...'` in its set (4 places: the count, the set, the read after).
+* **Rehearsed against production** (`--rehearse`, ending in ROLLBACK; `REVERT_ROMAN_BATH.rehearse.sql`
+  `3b6d1ec5...`, no COMMIT in it): `BEGIN / DO / ROLLBACK`, `NOTICE: revert: 2 row(s) reverted`
+  (every guard and both invariants passed inside the transaction), then the read: **journalled
+  writes matched 2, reversals kept 0** (rolled back). Afterwards production was read again: 672
+  phase-4 writes, 0 phase-4 reversals, Roman Bath's description still the written one.
+* **The hold is recorded in the run**: `audit4.py hold --run-dir runs/mass-2026-09-25 --site
+  70037a24-6487-4834-9b50-5242289009fe --audit logs/p4_mass/MIDRUN_AUDIT_VERDICTS.json` ->
+  `audit-wrong-site (site)`, 1 new line in p4-0036's `holds.jsonl` (9 -> 10 lines, `d593536f...` ->
+  `04eaaaf3...`), `HOLDS4.jsonl` 436 -> 437 holds (`e082a5f3...`); the detail names the verdict file
+  and its sha256.
+* **The gate, dry and read-only, over p4-0036 now**: `WRITE_EXIT=1` - "the re-plan leaves out
+  70037a24-..., whose 2 row(s) round 1 wrote are not reverted in production - 2 journalled write(s)
+  of the site under phase4:p4-0036:chunk-0001, 0 with their own reversal kept. Revert the site
+  first (revert4.py --stamp-like 'phase4:p4-0036:chunk-0001' --site 70037a24-...)". The other 8
+  sites re-planned to exactly their written rows; `PLAN.jsonl`, `APPLIED.json` and `LANE_PLAN.jsonl`
+  unchanged. The group helper names only its own batches (`--batch`), so the next groups are not
+  blocked by it.
+
+**The apply and its acceptance (the orchestrator's; from this worktree, main venv):**
+
+    PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+    $PY scripts/remediation/phase4/revert4.py --stamp-like 'phase4:p4-0036:chunk-0001' --site 70037a24-6487-4834-9b50-5242289009fe --apply
+        # the read after it: journalled writes matched 2, reversals kept 2; WRITE_EXIT=0
+    $PY $M/tools/write_gate4.py --group P4 --run mass-2026-09-25 --open-lanes W,S --batch p4-0036
+        # dry: "p4-0036: 70037a24-... left out of the re-plan; its 2 row(s) of round 1 have their own
+        # reversal kept in production (read-only proof) ..."; WRITE_EXIT=0
+    $PY $M/tools/verify_writes4.py --lane p4 --plan $M/logs/_write_apply_p4/LANE_PLAN.jsonl --run $R4/runs/pilot4-2026-09-24 --run $R4/runs/mass-2026-09-25 > $M/logs/p4_mass/accept-after-roman-bath-revert.log
+        # expected: "lane p4 | stamps phase4:p4-% | planned rows 672 | lane journal rows 672 |
+        # carried 670 | not yet written 2", "re-verified 335 written site(s) with V1-V15",
+        # "RESULT: 0 deviation(s)", ACCEPT_EXIT=0. No step is pending, so it is recorded here and
+        # not handed to --accept.
+
+After the apply, `audit4 draw --written` must be given the live written set (Roman Bath no longer
+in it), or it refuses the held site as "written but not reviewed". Lane L later treats Roman Bath
+like any held site.
+
+### Group 5's review questions exported again
+
+Batches p4-0042 .. p4-0049 had their 78 review questions answered under the old reviewer pin and
+not imported. The answers are kept, moved whole to `handoff/p4-mass-review-stale-reviewer-89e6035d/`
+(`opus_handoff validate`: 78 answered, 0 stale, 0 malformed there); the batches' `reviews/` held
+nothing. Re-exported with the helper's own command (`mass4.py --plan PLAN4.scope.jsonl --run-dir
+runs/mass-2026-09-25 --log-dir logs/p4_mass --only p4-0042,..,p4-0049 --searches-off --live
+--stages review --handoff-export handoff/p4-mass-review`, log `group-p4-0042-review-reexport.log`,
+`STAGE_EXIT=0`): **78 questions** (9, 7, 11, 10, 11, 11, 11, 8 - the same labels as before), every
+prompt digest new, every prompt carrying the new line and differing from the old by exactly that
+line; 0 answers. `handoff/p4-mass-review` validates as 402 questions, 324 answered (groups 1-4), 0
+stale.
+
+### The re-verification of every written site for this rule
+
+The design's consequence of a T2 hit, for the rule the hit showed: the orchestrator runs an Opus
+check of every written site's sentences for this class. Its input is
+**`logs/p4_mass/REVERIFY_WRONG_SITE_INPUT.jsonl`** (gitignored; `build_reverify_input.py` beside it):
+one compact JSON line per written site of both runs - `site_id`, `run`, `batch`, the stored `name`
+and `site_type` (read back from production), and `sentences`, the published sentences in order
+(cut from the run's post-review assembly with `assemble.published_sentences`; the assembly was
+checked byte for byte against the written `PLAN.jsonl` description and against production's live
+description for every site). **336 sites (pilot 4 26, mass 310), 2,046 sentences (152 + 1,894),
+312,629 bytes, sha256 `c5e56457ea242ccdaf32300cd9a5174e06aee9ba9712cf0ec7b18cb7152ba6ba`**. Roman
+Bath is in it as the known positive. The check asks, per sentence: is its subject a later building,
+business or institution that shares or contains the site's name rather than the ancient site? Any
+further hit takes the same path: `audit4.py hold` with the check's verdict file, `revert4.py
+--site`, the gate's proof, the acceptance.
