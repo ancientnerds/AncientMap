@@ -713,21 +713,22 @@ def test_globe_funnel_splits_every_unreached_load_exactly_once():
     ]
     out = fs.globe_funnel(rows)
     assert out["not_reached"] == {
-        "gate": 1,
         "unsupported": 2,
         "error": 1,
         "abandoned": 1,
         "no_signal": 3,
     }
-    assert sum(out["not_reached"].values()) == out["gave_up"] == 8
-    # The totals the panel printed before the split are untouched.
-    assert (out["loads"], out["reached"]) == (10, 2)
+    assert sum(out["not_reached"].values()) == out["gave_up"] == 7
+    # The gate's load is no globe load: out of the totals, counted apart
+    assert (out["loads"], out["reached"], out["gate_stops"]) == (9, 2, 1)
+    assert out["sessions"] == {"all": 5, "reached": 2}
 
 
 def test_globe_funnel_caps_the_endings_at_the_unreached_loads_in_their_order():
     """Umami has no page-load id, so a session with more endings than
-    unreached loads is resolved in the order a load meets them: phone gate,
-    capability check, start, the visitor leaving."""
+    unreached loads is resolved in the order a load meets them: phone gate
+    (out of the globe loads altogether), capability check, start, the
+    visitor leaving."""
     row = _globe_row(
         "many",
         views=2,
@@ -738,8 +739,8 @@ def test_globe_funnel_caps_the_endings_at_the_unreached_loads_in_their_order():
         abandon_ms=[3000.0],
     )
     out = fs.globe_funnel([row])
+    assert out["gate_stops"] == 1 and out["loads"] == 1
     assert out["not_reached"] == {
-        "gate": 1,
         "unsupported": 1,
         "error": 0,
         "abandoned": 0,
@@ -749,9 +750,33 @@ def test_globe_funnel_caps_the_endings_at_the_unreached_loads_in_their_order():
     assert out["abandon_ms"]["samples"] == 0
 
 
-def test_globe_funnel_counts_leaving_the_phone_gate_as_the_gate():
-    out = fs.globe_funnel([_globe_row("g", views=1, gate_quit=1)])
-    assert out["not_reached"]["gate"] == 1 and out["not_reached"]["abandoned"] == 0
+def test_globe_funnel_takes_the_phone_gate_out_of_the_globe_loads():
+    """The gate sending a phone elsewhere, or the visitor leaving it, is the
+    gate doing its job while the globe has no phone layout - not a globe
+    that failed (founders, 2026-09-26). Such a session is no globe visitor
+    either, and its device row carries no load."""
+    out = fs.globe_funnel(
+        [
+            {**_globe_row("left", views=1, gate_quit=1), "device": "mobile"},
+            {**_globe_row("chose", views=1, gate_left=1), "device": "mobile"},
+            {**_globe_row("fine", views=1, ready=1, ready_ms=[2000.0]), "device": "laptop"},
+        ]
+    )
+    assert out["gate_stops"] == 2
+    assert (out["loads"], out["reached"], out["gave_up"]) == (1, 1, 0)
+    assert out["sessions"] == {"all": 1, "reached": 1}
+    assert out["by_device"] == [{"device": "desktop", "loads": 1, "reached": 1}]
+    assert "gate" not in out["not_reached"]
+
+
+def test_globe_funnel_keeps_a_phone_that_went_on_to_the_globe():
+    """One tab: the gate, then the globe (globe_gate choice 'globe' is no
+    gate stop, SQL_GLOBE's gate_left skips it); a reload that stayed at the
+    gate is the only load out."""
+    row = {**_globe_row("p", views=2, ready=1, ready_ms=[5000.0], gate_left=1), "device": "mobile"}
+    out = fs.globe_funnel([row])
+    assert (out["loads"], out["reached"], out["gate_stops"]) == (1, 1, 1)
+    assert out["by_device"] == [{"device": "mobile", "loads": 1, "reached": 1}]
 
 
 def test_globe_funnel_counts_a_context_lost_while_loading_as_an_error():

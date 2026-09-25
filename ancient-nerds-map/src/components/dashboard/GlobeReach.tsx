@@ -58,10 +58,9 @@ const CLOCKS_NOTE =
   ' times above count from the page load, reading the phone gate included, so on phones the two do not compare.'
 
 /** One label per ending. The literal's key order is the row order: the order
- *  a load meets them (gate, capability check, start, leaving), then what
- *  nothing explains. A Record, so a new ending without a label does not compile. */
+ *  a load meets them (capability check, start, leaving), then what nothing
+ *  explains. A Record, so a new ending without a label does not compile. */
 const ENDING_LABELS: Record<keyof GlobeEndings, string> = {
-  gate: 'Stopped at the phone gate',
   unsupported: 'Device cannot run the globe',
   error: 'Error while starting',
   abandoned: 'Left while loading',
@@ -97,6 +96,16 @@ export function devicesLine(devices: GlobeDevice[] | undefined): string {
   return `${parts.join(' · ')} loads reached the globe.`
 }
 
+/** The phone loads the gate kept - named, never counted: until the globe has
+ *  a phone layout the gate sends phones to the other pages on purpose, and
+ *  this panel is read for problems. Empty without any. */
+export function gateLine(g: GlobeData): string {
+  const n = g.gate_stops ?? 0
+  if (n === 0) return ''
+  const loads = n === 1 ? '1 phone load' : `${fmtInt(n)} phone loads`
+  return `Not counted: ${loads} stayed at the phone gate, which sends phones to the other pages on purpose until the globe has a phone layout.`
+}
+
 /** How many *people* got to a globe, against how many opened one. The tiles
  *  above count page loads on purpose (one person reloading counts twice), so
  *  this is the only place the visitor figure is readable — and `sessions` is
@@ -124,6 +133,7 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
             />
           </div>
           {devicesLine(g.by_device) && <p className="dash-note">{devicesLine(g.by_device)}</p>}
+          {gateLine(g) && <p className="dash-note">{gateLine(g)}</p>}
           <p className="dash-note">
             {timesLine(g)} The denominator is page loads of /globe.html, not visitors — one person
             reloading counts twice, on purpose. {visitorsLine(g)} Counted from the build of 24 Sep 2026

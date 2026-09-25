@@ -261,11 +261,10 @@ export interface GlobeTimes {
   samples: number
 }
 
-/** How the loads that never fired globe_ready ended (stats_analysis.globe_funnel).
- *  The five counts sum to `gave_up`. Per session, capped by its unreached loads,
- *  in this order: gate, unsupported, error, abandoned; the rest is `no_signal`. */
+/** How the globe loads that never fired globe_ready ended (stats_analysis.globe_funnel).
+ *  The four counts sum to `gave_up`. Per session, capped by its unreached loads,
+ *  in this order: unsupported, error, abandoned; the rest is `no_signal`. */
 export interface GlobeEndings {
-  gate: number
   unsupported: number
   error: number
   abandoned: number
@@ -286,6 +285,9 @@ export interface GlobeData {
   not_reached: GlobeEndings
   /** How long the counted `abandoned` loads had waited when they left. */
   abandon_ms: GlobeTimes
+  /** Phone loads that stayed at the phone gate - the gate doing its job, in
+   *  none of the counts above. Absent from an older API. */
+  gate_stops?: number
   /** Loads and arrivals per kind of machine (stats_analysis DEVICE_GROUPS:
    *  laptop and desktop are one). Absent from an older API. */
   by_device?: GlobeDevice[]

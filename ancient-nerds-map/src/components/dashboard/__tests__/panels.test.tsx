@@ -83,7 +83,7 @@ const EMPTY = {
     ready_ms: { min: null, median: null, max: null, samples: 0 },
     // Explicit, not left to the cast: without these keys the empty-state test
     // below would exercise the old-API branch instead of the empty one.
-    not_reached: { gate: 0, unsupported: 0, error: 0, abandoned: 0, no_signal: 0 },
+    not_reached: { unsupported: 0, error: 0, abandoned: 0, no_signal: 0 },
     abandon_ms: { min: null, median: null, max: null, samples: 0 },
   } as GlobeData,
   clusters: { min_ids: 3, flagged: 0, clusters: [] } as ClustersData,
@@ -228,7 +228,7 @@ describe('GlobeReach', () => {
     gave_up: 7,
     sessions: { all: 9, reached: 4 },
     ready_ms: { min: 3100, median: 4200, max: 9900, samples: 5 },
-    not_reached: { gate: 2, unsupported: 1, error: 1, abandoned: 1, no_signal: 2 },
+    not_reached: { unsupported: 1, error: 1, abandoned: 1, no_signal: 4 },
     abandon_ms: { min: 6100, median: null, max: 6100, samples: 1 },
   }
 
@@ -236,7 +236,7 @@ describe('GlobeReach', () => {
     const html = renderToString(<GlobeReach state={ok(some)} />)
     expect(html).toContain('Globe loads')
     expect(html).toContain('<h3>')
-    for (const label of ['Stopped at the phone gate', 'Device cannot run the globe', 'Error while starting', 'Left while loading', 'No signal']) {
+    for (const label of ['Device cannot run the globe', 'Error while starting', 'Left while loading', 'No signal']) {
       expect(html).toContain(label)
     }
     expect(html).not.toContain('Before these were recorded')

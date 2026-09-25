@@ -617,13 +617,19 @@ def hourly_sessions(
 #: six browsers and two of those contributed two loads each.
 GLOBE_MIN_SAMPLES = 5
 
-#: How a load that never fired globe_ready ended, in the order a load meets
-#: them: phone gate -> capability check -> start -> the visitor leaving. Each
-#: bucket names the SQL_GLOBE columns that count it. The frontend sends one of
-#: these per load; the order only decides who wins when a session carries more
-#: of them than it has unreached loads.
+#: A phone load that stayed at the phone gate: the gate sent the visitor to
+#: another page, or they left while it showed. That is the gate doing its job
+#: while the globe has no phone layout, not a globe that failed - the founders
+#: read this panel for problems (2026-09-26) - so such a load is no globe load
+#: at all and globe_funnel counts it apart, in `gate_stops`.
+GATE_COLUMNS = ("gate_left", "gate_quit")
+
+#: How a globe load that never fired globe_ready ended, in the order a load
+#: meets them: capability check -> start -> the visitor leaving. Each bucket
+#: names the SQL_GLOBE columns that count it. The frontend sends one of these
+#: per load; the order only decides who wins when a session carries more of
+#: them than it has unreached loads.
 GLOBE_ENDINGS = (
-    ("gate", ("gate_left", "gate_quit")),
     ("unsupported", ("unsupported",)),
     ("error", ("failed", "context_lost")),
     ("abandoned", ("abandoned",)),
@@ -653,6 +659,11 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     the people who open the globe never see one. On the new build, seven
     days on 2026-09-25: 26 loads, 21 reached. The denominator is page loads,
     not sessions, and the panel says so.
+
+    A load that stayed at the phone gate (GATE_COLUMNS, capped by the
+    session's unreached loads, first) is no globe load: it leaves `loads`,
+    `by_device` and `sessions` and is counted in `gate_stops` alone. A
+    session whose every load stayed at the gate is not in the rows' count.
 
     `min(ready, views)` per session, because a globe_ready can arrive eighty
     seconds after its page view and straddle the window edge.
@@ -695,19 +706,25 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     no_signal = 0
     left_times: list[float] = []
     by_device: dict[str, dict[str, int]] = {}
+    gate_stops = 0
+    sessions = 0
     for r in rows:
         views = int(r["views"] or 0)
-        if not views:
-            continue
         got = min(int(r["ready"] or 0), views)
-        loads += views
+        gated = min(sum(int(r[c] or 0) for c in GATE_COLUMNS), views - got)
+        gate_stops += gated
+        attempts = views - gated
+        if not attempts:
+            continue
+        sessions += 1
+        loads += attempts
         reached += got
         device = by_device.setdefault(_device_bucket(r.get("device")), {"loads": 0, "reached": 0})
-        device["loads"] += views
+        device["loads"] += attempts
         device["reached"] += got
         reached_sessions += 1 if got else 0
         times.extend(float(ms) for ms in (r["ready_ms"] or []))
-        left = views - got
+        left = attempts - got
         for name, cols in GLOBE_ENDINGS:
             take = min(sum(int(r[c] or 0) for c in cols), left)
             split[name] += take
@@ -720,12 +737,12 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "loads": loads,
         "reached": reached,
         "gave_up": loads - reached,
-        "sessions": {"all": sum(1 for r in rows if r["views"]), "reached": reached_sessions},
+        "sessions": {"all": sessions, "reached": reached_sessions},
         "ready_ms": _spread(times),
         "not_reached": {**split, "no_signal": no_signal},
         "abandon_ms": _spread(left_times),
-        # Phones and computers apart (DEVICE_GROUPS): on 2026-09-25 the week's
-        # 26 loads were 8 on phones, 4 of them past the phone gate
+        "gate_stops": gate_stops,
+        # Phones and computers apart (DEVICE_GROUPS), gate stops excluded
         "by_device": [
             {"device": name, **counts}
             for name, counts in sorted(by_device.items(), key=lambda kv: (-kv[1]["loads"], kv[0]))

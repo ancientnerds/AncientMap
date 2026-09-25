@@ -332,11 +332,11 @@ def test_globe_asks_only_for_the_globe_path(monkeypatch):
         "ready_ms",
         "not_reached",
         "abandon_ms",
+        "gate_stops",
         "by_device",
     }
     assert out["loads"] == 2 and out["reached"] == 1
     assert out["not_reached"] == {
-        "gate": 0,
         "unsupported": 0,
         "error": 0,
         "abandoned": 1,

@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import { abandonLine, devicesLine, endingItems, secs, timesLine, visitorsLine } from '../GlobeReach'
+import { abandonLine, devicesLine, endingItems, gateLine, secs, timesLine, visitorsLine } from '../GlobeReach'
 import type { GlobeData } from '../types'
 
 /** The live seven-day window on 2026-09-19, straight out of SQL_GLOBE:
- *  36 loads over 22 sessions, 10 globe_ready reports, 9450 ms at best. */
+ *  36 loads over 22 sessions, 10 globe_ready reports, 9450 ms at best - less
+ *  the 9 loads that stayed at the phone gate, which are no globe loads. */
 const live: GlobeData = {
-  loads: 36,
+  loads: 27,
   reached: 10,
-  gave_up: 26,
+  gave_up: 17,
   sessions: { all: 22, reached: 8 },
   ready_ms: { min: 9450, median: 19917, max: 80383, samples: 10 },
-  not_reached: { gate: 9, unsupported: 2, error: 3, abandoned: 7, no_signal: 5 },
+  not_reached: { unsupported: 2, error: 3, abandoned: 7, no_signal: 5 },
+  gate_stops: 9,
   abandon_ms: { min: 3100, median: 9800, max: 44000, samples: 7 },
 }
 
@@ -85,21 +87,20 @@ describe('GlobeReach endingItems', () => {
   it('lists the ways a load ends in the order a load meets them', () => {
     const items = endingItems(live)
     expect(items.map(i => i.label)).toEqual([
-      'Stopped at the phone gate',
       'Device cannot run the globe',
       'Error while starting',
       'Left while loading',
       'No signal',
     ])
-    expect(items.map(i => i.value)).toEqual([9, 2, 3, 7, 5])
+    expect(items.map(i => i.value)).toEqual([2, 3, 7, 5])
     // Rows that happen to be zero stay: the order is the reading, not the rank.
     const quiet = endingItems({ ...live, not_reached: { ...live.not_reached, unsupported: 0 } })
-    expect(quiet.map(i => i.key)).toEqual(['gate', 'unsupported', 'error', 'abandoned', 'no_signal'])
+    expect(quiet.map(i => i.key)).toEqual(['unsupported', 'error', 'abandoned', 'no_signal'])
   })
 
   it('hints the middle wait on the abandon row only when there is a middle', () => {
     const hints = endingItems(live).map(i => i.hint)
-    expect(hints).toEqual([undefined, undefined, undefined, 'median 9.8 s', undefined])
+    expect(hints).toEqual([undefined, undefined, 'median 9.8 s', undefined])
     const thin = endingItems({ ...live, abandon_ms: { min: 3100, median: null, max: 44000, samples: 4 } })
     expect(thin.every(i => i.hint === undefined)).toBe(true)
   })
@@ -139,5 +140,17 @@ describe('GlobeReach devicesLine', () => {
     ).toBe('Computers 17 of 18 · Phones 4 of 8 loads reached the globe.')
     expect(devicesLine(undefined)).toBe('')
     expect(devicesLine([])).toBe('')
+  })
+})
+
+describe('GlobeReach gateLine', () => {
+  it('names the loads the phone gate kept, as the gate doing its job', () => {
+    expect(gateLine(live)).toBe(
+      'Not counted: 9 phone loads stayed at the phone gate, which sends phones to the other pages on purpose until the globe has a phone layout.',
+    )
+    expect(gateLine({ ...live, gate_stops: 1 })).toContain('1 phone load stayed')
+    expect(gateLine({ ...live, gate_stops: 0 })).toBe('')
+    // An API older than the bundle has no count: nothing to say
+    expect(gateLine({ ...live, gate_stops: undefined })).toBe('')
   })
 })

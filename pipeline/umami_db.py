@@ -344,6 +344,8 @@ GLOBE_PATH = "/globe.html"
 #:   gate_left     - globe_gate with a choice other than the globe: the phone
 #:                   gate sent the visitor elsewhere.
 #:   gate_quit     - globe_abandon{phase:'gate'}: left while the gate showed.
+#:                   Both are the gate doing its job, not an ending of a globe
+#:                   load: globe_funnel counts them apart (GATE_COLUMNS).
 #:   unsupported   - globe_unsupported: the capability check failed.
 #:   failed        - globe_error of the start. Background failures carry
 #:                   phase 'bg:<task>' and failures after globe_ready carry

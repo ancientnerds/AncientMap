@@ -9,7 +9,7 @@ const globe = (loads: number, reached: number): GlobeData => ({
   gave_up: loads - reached,
   sessions: { all: loads, reached },
   ready_ms: { min: null, median: null, max: null, samples: 0 },
-  not_reached: { gate: 0, unsupported: 0, error: 0, abandoned: 0, no_signal: loads - reached },
+  not_reached: { unsupported: 0, error: 0, abandoned: 0, no_signal: loads - reached },
   abandon_ms: { min: null, median: null, max: null, samples: 0 },
   by_device: [{ device: 'mobile', loads, reached }],
 })
