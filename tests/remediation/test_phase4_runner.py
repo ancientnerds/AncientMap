@@ -1370,6 +1370,20 @@ def test_the_audit_hold_holds_a_wrong_site_in_its_batch_and_in_holds4(
     assert B.read_holds(run_dir / "p4-0001") == [hold]
 
 
+def test_the_audit_hold_goes_to_the_batch_where_the_site_counts(tmp_path: Path) -> None:
+    """A re-queued site is in two batches, and only its latest counts (`run4.aggregate_holds`): a
+    hold in the batch it left would never reach `HOLDS4.jsonl`."""
+    run_dir = _reviewed(tmp_path, "site-1", "p4-0001").parent
+    X.make_batch(tmp_path, [X.w_site("site-1")], batch="p4-0002")
+    audit = _audit_file(tmp_path / "A.json", _verdicts(sentences=("WRONG_SITE",)))
+    assert (
+        AU.main(["hold", "--run-dir", str(run_dir), "--site", "site-1", "--audit", str(audit)]) == 0
+    )
+    assert B.read_holds(run_dir / "p4-0001") == []
+    (hold,) = B.read_holds(run_dir / "p4-0002")
+    assert M.load_jsonl(run_dir / R4.HOLDS4_FILE, M.Hold) == [hold]
+
+
 def test_the_audit_hold_reads_each_finding_as_its_closed_list_reason(tmp_path: Path) -> None:
     """UNSUPPORTED holds the site (`audit-unsupported`), NOT_CONTAINED only the card
     (`audit-not-contained`); SUPPORTED and CONTAINED hold nothing."""

@@ -18220,6 +18220,259 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += P4_SCOPE_MUTATIONS
 
 
+# ── The mass run's mid-run audit (2026-09-25): the later namesake building, one site taken back ──
+#: T2 on Roman Bath, York (p4-0036): its lead was about the modern pub that shares the Roman bath
+#: house's name. Each case breaks one part of the fix and names the test that goes red: the
+#: reviewer's DROP line, `revert4 --site`, the gate's re-plan without a reverted site, and
+#: `audit4 hold` with `run4.write_holds4`.
+P4M_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4M_REVERT = "scripts/remediation/phase4/revert4.py"
+P4M_GATE = "output/remediation/tools/write_gate4.py"
+P4M_AUDIT = "scripts/remediation/phase4/audit4.py"
+P4M_RUN4 = "scripts/remediation/phase4/run4.py"
+P4M_SELECT_TEST = "tests/remediation/test_phase4_select.py"
+P4M_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4M_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4M_RULE = "test_the_reviewer_question_drops_a_later_building_that_shares_the_sites_name"
+P4M_SITE = "test_a_site_revert_takes_back_only_that_sites_rows_of_the_matched_writes"
+P4M_GUARDS = "test_a_site_revert_keeps_every_guard_and_invariant_of_the_pattern_revert"
+P4M_REPLAN = "test_a_written_batch_is_re_planned_without_a_held_site_once_its_rows_are_reverted"
+P4M_HOLD = "test_the_audit_hold_holds_a_wrong_site_in_its_batch_and_in_holds4"
+P4M_MAP = "test_the_audit_hold_reads_each_finding_as_its_closed_list_reason"
+P4M_REFUSE = "test_the_audit_hold_refuses_what_the_audit_does_not_say"
+
+P4_MIDRUN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── prompts4: the reviewer's DROP line for a later building that shares the site's name ─────
+    (
+        "p4 midrun: the reviewer loses the later-namesake DROP line",
+        P4M_PROMPTS,
+        '    "DROP a sentence whose subject is a later building, business or institution (a pub, '
+        'hotel, "\n'
+        "    \"house, museum, shop, church, station ...) that shares or contains the site's name "
+        'rather "\n'
+        '    "than the ancient site itself, even when it names the site.\\n"\n',
+        "    # mutant: the namesake line removed\n",
+        P4M_SELECT_TEST,
+        P4M_RULE,
+    ),
+    (
+        "p4 midrun: the namesake line keeps the building and drops business and institution",
+        P4M_PROMPTS,
+        '    "DROP a sentence whose subject is a later building, business or institution (a pub, '
+        'hotel, "\n',
+        '    "DROP a sentence whose subject is a later building (a pub, hotel, "  # mutant\n',
+        P4M_SELECT_TEST,
+        P4M_RULE,
+    ),
+    # ── revert4 --site: only the site's rows, every guard kept ─────────────────────────────────
+    (
+        "p4 revert4: --site no longer narrows the matched set",
+        P4M_REVERT,
+        '    return f"{matched} AND {alias}.site_id_ref = {W._sql_text(check_site(site))}"\n',
+        "    return matched  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: a site id in another spelling is taken",
+        P4M_REVERT,
+        "    if canonical != site:\n",
+        "    if canonical is None:  # mutant\n",
+        P4M_WRITE_TEST,
+        "test_revert_refuses_a_site_that_is_not_a_site_id",
+    ),
+    (
+        "p4 revert4: the reversal's own set ignores the site",
+        P4M_REVERT,
+        '    in_set = _set("l", pattern, site)\n',
+        '    in_set = _set("l", pattern)  # mutant\n',
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: the read after the reversal counts the whole pattern",
+        P4M_REVERT,
+        "        reversal_read(stamp_like, site=site),\n",
+        "        reversal_read(stamp_like),  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_GUARDS,
+    ),
+    (
+        "p4 revert4: the reversal read ignores the site",
+        P4M_REVERT,
+        '    in_set = _set("l", W._sql_text(check_pattern(stamp_like)), site)\n',
+        '    in_set = _set("l", W._sql_text(check_pattern(stamp_like)))  # mutant\n',
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: the gate's reversal count asks the whole stamp",
+        P4M_REVERT,
+        "    text = W._exec(runner, reversal_read(stamp_like, site=site), host=host)\n",
+        "    text = W._exec(runner, reversal_read(stamp_like), host=host)  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: the command drops --site",
+        P4M_REVERT,
+        "    sql = render_revert(args.stamp_like, site=args.site, rehearse=args.rehearse)\n",
+        "    sql = render_revert(args.stamp_like, rehearse=args.rehearse)  # mutant\n",
+        P4M_WRITE_TEST,
+        "test_the_revert_command_takes_one_site",
+    ),
+    # ── write_gate4: a written batch re-planned without a site, on production's proof only ─────
+    (
+        "p4 gate: a left-out site is accepted on no proof",
+        P4M_GATE,
+        "        if matched != rows or reverted != matched:\n",
+        "        if False:  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    (
+        "p4 gate: a left-out site whose rows are live is accepted",
+        P4M_GATE,
+        "        if matched != rows or reverted != matched:\n",
+        "        if matched != rows:  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    (
+        "p4 gate: the proof reads the whole round, not the left-out site",
+        P4M_GATE,
+        "        matched, reverted = R.reversal_counts(stamp, site=site_id, runner=runner, host=host)\n",
+        "        matched, reverted = R.reversal_counts(stamp, runner=runner, host=host)  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    (
+        "p4 gate: a re-plan to other rows passes as a left-out site",
+        P4M_GATE,
+        "    if [row.change_key for row in plan.rows] != kept:\n",
+        "    if False:  # mutant\n",
+        P4M_WRITE_TEST,
+        "test_a_written_batch_is_never_re_planned_to_other_rows",
+    ),
+    (
+        "p4 gate: the left-out site is not named",
+        P4M_GATE,
+        "                for site_id, rows in sites_taken_back(out, stored, plan, record, runner, "
+        "host):\n",
+        "                for site_id, rows in sites_taken_back(out, stored, plan, record, runner, "
+        "host)[:0]:  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    # ── audit4 hold: a finding holds its site under the closed list's S6b reason ───────────────
+    (
+        "p4 audit4: a WRONG_SITE sentence holds nothing",
+        P4M_AUDIT,
+        '    "WRONG_SITE": M.HoldReason.AUDIT_WRONG_SITE,\n',
+        "    # mutant: WRONG_SITE removed\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 audit4: an UNSUPPORTED sentence holds nothing",
+        P4M_AUDIT,
+        '    "UNSUPPORTED": M.HoldReason.AUDIT_UNSUPPORTED,\n',
+        "    # mutant: UNSUPPORTED removed\n",
+        P4M_RUNNER_TEST,
+        P4M_MAP,
+    ),
+    (
+        "p4 audit4: a sentence finding holds only the card",
+        P4M_AUDIT,
+        "                    scope=M.HoldScope.SITE,\n",
+        "                    scope=M.HoldScope.CARD,  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 audit4: a card finding holds the site",
+        P4M_AUDIT,
+        "                    scope=M.HoldScope.CARD,\n",
+        "                    scope=M.HoldScope.SITE,  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_MAP,
+    ),
+    (
+        "p4 audit4: an unknown sentence verdict is read as a pass",
+        P4M_AUDIT,
+        '        if verdict not in SENTENCE_VERDICTS.split(" | "):\n',
+        "        if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: an unknown card verdict is read as a pass",
+        P4M_AUDIT,
+        '        if verdict not in CARD_VERDICTS.split(" | "):\n',
+        "        if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: a site judged twice is taken",
+        P4M_AUDIT,
+        "    if len(records) != 1:\n",
+        "    if not records:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: a record of another name is taken",
+        P4M_AUDIT,
+        '    if record["name"] != site.name:\n',
+        "    if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: a record without a finding passes without a word",
+        P4M_AUDIT,
+        "    if not holds:\n",
+        "    if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: the hold goes to the batch the site left",
+        P4M_AUDIT,
+        "    return found[-1]\n",
+        "    return found[0]  # mutant\n",
+        P4M_RUNNER_TEST,
+        "test_the_audit_hold_goes_to_the_batch_where_the_site_counts",
+    ),
+    (
+        "p4 audit4: HOLDS4.jsonl is not rewritten",
+        P4M_AUDIT,
+        "    total = R4.write_holds4(run_dir)\n",
+        "    total = R4.aggregate_holds(run_dir)  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 audit4: the detail loses the audit file's digest",
+        P4M_AUDIT,
+        '    source = f"{audit.name} sha256 {hashlib.sha256(body).hexdigest()}"\n',
+        "    source = audit.name  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 run4: write_holds4 writes no HOLDS4.jsonl",
+        P4M_RUN4,
+        "    B.write_text_atomic(run_dir / HOLDS4_FILE, M.dump_jsonl(holds))\n",
+        "    pass  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+]
+MUTATIONS += P4_MIDRUN_MUTATIONS
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
