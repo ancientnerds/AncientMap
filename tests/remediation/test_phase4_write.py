@@ -2534,3 +2534,23 @@ def test_a_reverted_round_without_its_plan_is_refused_by_the_lane_plan(
     (out / W4.CHUNKS_DIR / "chunk-0001" / W4.PLAN_FILE).unlink()
     with pytest.raises(SystemExit, match="keeps no PLAN.jsonl"):
         G.write_lane_plan(tmp_path / "apply")
+
+
+def test_a_stopped_batch_keeps_the_plan_and_statements_it_stopped_on(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """2026-09-25 audit m14: a later run re-rendered a STOPPED batch - its PLAN.jsonl and its
+    statements were overwritten by the new plan, and the record of what was attempted was gone
+    before anyone had read it. A stopped batch is left exactly as it stopped."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    db.sites[GATE_SITE].description = "moved"
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 1
+    out = tmp_path / "apply" / "p4-0001"
+    assert (out / G.STOPPED_FILE).exists()
+    before = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+    _scope_file(monkeypatch, tmp_path, "00000009-0000-4000-8000-000000000009")
+    assert G.main(_gate_args(tmp_path), runner=db) == 0
+    after = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+    assert after == before

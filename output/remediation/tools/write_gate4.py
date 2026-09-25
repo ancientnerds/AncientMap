@@ -353,6 +353,10 @@ def render(
     """
     out = apply_root / plan.batch_id
     chunk = W4.chunk_for(plan, write_round=write_round)
+    if (out / STOPPED_FILE).exists():
+        # What was attempted stays as it stopped - plan and statements - until a person has read
+        # it; `run_batches` writes nothing while it exists (audit 2026-09-25 m14).
+        return Planned(out=out, plan=plan, chunk=chunk)
     if (out / APPLIED_FILE).exists():
         record = _read(out / APPLIED_FILE)
         if record["write_round"] == write_round:
@@ -429,10 +433,10 @@ def sites_taken_back(
 def drop_unwritten_statements(out: pathlib.Path, *, write_round: int) -> None:
     """A plan of the batch without a row: the statements an earlier plan rendered for this round
     are not this plan's, and beside an empty `PLAN.jsonl` they would still write the old rows by
-    hand. They go - never a round's record (`APPLIED.json`, `REVERTED.json`) nor a stopped batch's
-    statements, which are what was attempted."""
+    hand. They go - never a round's record (`APPLIED.json`, `REVERTED.json`). A stopped batch never
+    gets here: `render` leaves it as it stopped."""
     directory = out / W4.CHUNKS_DIR / f"chunk-{write_round:04d}"
-    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)
+    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE)
     if not directory.is_dir() or any(path.exists() for path in kept):
         return
     for name in (W4.APPLY_FILE, W4.REHEARSE_FILE, W4.ROLLBACK_FILE):

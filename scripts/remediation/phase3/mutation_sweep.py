@@ -19148,8 +19148,8 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_gate4: a stopped batch's statements are dropped",
         P4S_GATE,
-        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)\n",
-        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE)  # mutant\n",
+        "    if (out / STOPPED_FILE).exists():\n        # What was attempted",
+        "    if False:  # mutant\n        # What was attempted",
         P4S_WRITE_TEST,
         P4S_STATEMENTS,
     ),
@@ -21330,6 +21330,14 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    for number, line in enumerate(text.splitlines(), start=1):  # mutant\n",
         AF_PROD_TEST,
         "test_every_psql_json_reader_splits_at_lf_only",
+    ),
+    (
+        "audit-fix: m14 a stopped batch is re-rendered",
+        P4_WRITE_GATE,
+        "    if (out / STOPPED_FILE).exists():\n        # What was attempted",
+        "    if False:  # mutant\n        # What was attempted",
+        P4_WRITE_TEST,
+        "test_a_stopped_batch_keeps_the_plan_and_statements_it_stopped_on",
     ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS
