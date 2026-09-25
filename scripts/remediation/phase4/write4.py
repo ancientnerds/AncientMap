@@ -73,7 +73,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -177,7 +177,6 @@ RULE_CARD_TOO_LONG = "card-too-long"
 #: The live P4 provenance names a card P5 does not write (a card-scope hold added after P4 wrote):
 #: neither a clear nor the March card may stand beside it - the site is reverted first.
 RULE_CARD_NAMED = "live-provenance-names-an-unwritten-card"
-RULE_NOT_WRITTEN = "description-not-written"
 RULE_WRITTEN = "written-by-p4"
 RULE_NO_CLAIM = "no-legacy-claim"
 RULE_MARKED = "provenance-present"
@@ -493,10 +492,6 @@ class WritePlan4:
         for refusal in self.refusals:
             counts[refusal.rule] = counts.get(refusal.rule, 0) + 1
         return dict(sorted(counts.items()))
-
-    @property
-    def site_ids(self) -> tuple[str, ...]:
-        return tuple(dict.fromkeys(row.site_id for row in self.rows))
 
 
 def group_batch_id(plan_batch_id: str, group: Group) -> str:

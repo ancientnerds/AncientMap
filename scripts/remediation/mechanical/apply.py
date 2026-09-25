@@ -124,20 +124,6 @@ def lane_dir(lane: Lane) -> Path:
     return REPO / "output" / "remediation" / lane.out_dir_name
 
 
-DEFAULT_PLAN = lane_dir(T05) / "PLAN.jsonl"
-DEFAULT_OUT = lane_dir(T05)
-
-
-def change_key(site_id: str, lane: Lane = T05) -> str:
-    """The journal's identity for one row's *write* (see `Lane.change_key`)."""
-    return lane.change_key(site_id)
-
-
-def rollback_change_key(site_id: str, lane: Lane = T05) -> str:
-    """The journal's identity for one row's *reversal* (see `Lane.rollback_change_key`)."""
-    return lane.rollback_change_key(site_id)
-
-
 # --------------------------------------------------------------------------------- the records
 @dataclass(frozen=True)
 class ChangeRecord:
