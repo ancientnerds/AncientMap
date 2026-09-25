@@ -159,6 +159,17 @@ def test_the_residual_is_d1_and_the_readback_measures_d4_and_what_the_journal_ma
     assert readback.endswith("\nORDER BY 1;\n")
 
 
+def test_every_raw_data_cast_of_the_readback_skips_the_description_rows() -> None:
+    """The run journals description rows too, and their text is not JSON: a `::jsonb` on one of
+    them raises on production. Only a CASE fixes the order Postgres evaluates the cast in."""
+    readback = L.LANE_READBACKS[L.DANGLING_MARKERS.name]
+    parts = [p for p in readback.split("UNION ALL") if "journal rows for this run whose" in p]
+    casts = [p for p in parts if "::jsonb" in p]
+    assert len(casts) == 4
+    for part in casts:
+        assert "CASE WHEN l.column_name = 'raw_data' THEN" in part and "ELSE false END" in part
+
+
 def test_the_d4_predicate_is_shared_with_the_orphan_citations_readback() -> None:
     orphan = L.LANE_READBACKS[L.ORPHAN_CITATIONS.name]
     assert L.PROVENANCE_HASH_DIFFERS in orphan

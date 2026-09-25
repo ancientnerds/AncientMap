@@ -4476,6 +4476,244 @@ ORPHAN_CITATIONS_CASES: list[Case] = [
 ]
 CASES += ORPHAN_CITATIONS_CASES
 
+# ---------------------------------------------- the dangling-markers lane (D9 (b), 2026-09-25)
+#: The removal of the markers without an entry (`dangling_markers.py`) and its registration in
+#: `lane.py`. Every label starts with "dangling-markers" - `mutation_sweep.py dangling-markers`.
+DANGLING = MECHANICAL / "dangling_markers.py"
+DANGLING_TESTS = "tests/remediation/test_mechanical_dangling_markers.py"
+_DANGLING_LANE_TEST = (
+    "test_the_lane_writes_the_description_and_raw_data_of_a_site_in_one_transaction"
+)
+_RULE = "test_a_dangling_marker_goes_with_the_space_before_its_run"
+_FAULTS = "test_a_removal_that_is_not_clean_is_named"
+DANGLING_MARKERS_CASES: list[Case] = [
+    *(
+        guard(f"dangling-markers: {label}", DANGLING, needle, test, DANGLING_TESTS)
+        for label, needle, test in (
+            (
+                "a site D1 holds on is no candidate",
+                "    if failure is None:",
+                "test_a_site_d1_holds_on_is_no_candidate",
+            ),
+            (
+                "the export's premise is its provenance",
+                "    if parse_json(site.premise) != parse_json(premise_of(raw)):",
+                "test_an_export_whose_premise_is_not_its_provenance_is_refused",
+            ),
+            (
+                "a failure without a dangling marker is listed",
+                "    if not dangling:",
+                "test_the_orphan_citations_class_is_listed_not_repaired_here",
+            ),
+            (
+                "grouped markers are listed",
+                "    if [int(n) for n in _TOKEN.findall(text)] != markers:",
+                "test_grouped_markers_are_listed",
+            ),
+            (
+                "no provenance is refused",
+                "    if provenance is None:\n        return listed(NO_PROVENANCE",
+                "test_a_site_without_the_lane_l_marking_is_refused",
+            ),
+            (
+                "a Phase-4 provenance is refused",
+                '    if not isinstance(provenance, dict) or provenance.get("lane") != '
+                "TextLane.L.value:",
+                "test_a_site_with_live_phase4_provenance_is_refused",
+            ),
+            (
+                "a hash that already differs is listed",
+                "    if legacy.desc_sha256 != text_sha256(text):",
+                "test_a_provenance_that_already_disagrees_with_the_text_is_listed",
+            ),
+            (
+                "each cell's journal ends at the live value",
+                "        if broken is not None:",
+                "test_the_description_journal_must_end_at_the_live_text",
+            ),
+            (
+                "the value is printed as Postgres prints it",
+                "    if site.raw_data is None or reprint(raw) != site.raw_data:",
+                "test_a_raw_data_the_writer_would_not_print_as_postgres_does_is_listed",
+            ),
+            (
+                "an unclean removal is listed",
+                "    if faults:",
+                "test_a_removal_that_is_not_clean_is_listed",
+            ),
+            (
+                "the kept markers are the old ones",
+                "    if marker_sequence(new) != kept:",
+                _FAULTS,
+            ),
+            (
+                "nothing but the tokens changes",
+                '    if re.sub(r"\\s", "", new) != re.sub(r"\\s", "", tokens_out):',
+                _FAULTS,
+            ),
+            (
+                "no spacing fault is added",
+                "        if len(pattern.findall(new)) > len(pattern.findall(old)):",
+                _FAULTS,
+            ),
+            (
+                "--write plans",
+                "        if args.write:",
+                "test_write_writes_the_lane_s_files_from_the_export_alone",
+            ),
+            (
+                "--export reads production",
+                "        if args.export:",
+                "test_export_reads_production_into_the_lane_s_export_directory",
+            ),
+            (
+                "the reversal is written with the plan",
+                "            if plan.changes:",
+                "test_write_writes_the_lane_s_files_from_the_export_alone",
+            ),
+        )
+    ),
+    *(
+        Case(f"dangling-markers: {label}", DANGLING, old, new, test, DANGLING_TESTS)
+        for label, old, new, test in (
+            (
+                "unreadable entries are listed",
+                "    except ValueError as exc:\n        return listed(NOT_READABLE",
+                "    except KeyError as exc:\n        return listed(NOT_READABLE",
+                "test_unreadable_citations_are_listed",
+            ),
+            (
+                "an unreadable legacy provenance is listed",
+                "    except ValueError as exc:\n        return listed(PROVENANCE_NOT_READABLE",
+                "    except KeyError as exc:\n        return listed(PROVENANCE_NOT_READABLE",
+                "test_a_provenance_that_does_not_read_is_listed",
+            ),
+            (
+                "the raw_data journal is compared as JSON",
+                "                    canonical(link.new_value),",
+                "                    link.new_value,",
+                "test_the_raw_data_journal_is_compared_as_json_and_must_end_at_the_live_value",
+            ),
+            (
+                "a run keeps its space while it keeps a marker",
+                '        return match["space"] + kept if kept else ""',
+                "        return kept",
+                _RULE,
+            ),
+            (
+                "a run that loses every marker loses its space",
+                '        return match["space"] + kept if kept else ""',
+                '        return match["space"] + kept',
+                _RULE,
+            ),
+            (
+                "only the dangling markers go",
+                "            if int(token.group(1)) not in dangling",
+                "            if int(token.group(1)) in dangling",
+                _RULE,
+            ),
+            (
+                "the hash moves to the new text",
+                "        key: {**value, HASH_KEY: text_sha256(description)} if key",
+                "        key: {**value} if key",
+                "test_a_dangling_marker_is_removed_and_the_hash_moves_in_the_same_site",
+            ),
+            (
+                "an entry left uncited goes",
+                "    fixed = repaired(raw, markers)",
+                "    fixed = dict(raw)",
+                "test_an_entry_the_removal_leaves_uncited_goes_with_the_orphan_citations_rule",
+            ),
+            (
+                "the premise leaves out the hash",
+                "provenance.items() if key != HASH_KEY})",
+                "provenance.items()})",
+                "test_the_premise_is_the_legacy_provenance_without_the_hash_the_lane_moves",
+            ),
+            (
+                "the plan is read against D1",
+                '(("D1", d1(after)), ("D4", d4(after)))',
+                '(("D1", None), ("D4", d4(after)))',
+                "test_a_plan_on_which_d1_would_still_fail_is_refused",
+            ),
+            (
+                "the plan is read against D4",
+                '(("D1", d1(after)), ("D4", d4(after)))',
+                '(("D1", d1(after)), ("D4", None))',
+                "test_a_plan_on_which_d4_would_fail_is_refused",
+            ),
+            (
+                "the journal is read in id order",
+                'for r in sorted(rows["journal"], key=lambda r: int(r["id"])):',
+                'for r in rows["journal"]:',
+                "test_the_export_is_parsed_into_sites_and_each_cell_s_journal_in_id_order",
+            ),
+            (
+                "the export reads both journals",
+                "l.column_name IN ('description', 'raw_data')",
+                "l.column_name IN ('raw_data')",
+                "test_the_export_is_one_read_only_snapshot_of_the_rows_and_both_journals",
+            ),
+            (
+                "the write is conditioned on its premise",
+                '        "premise": site.premise,\n',
+                "",
+                "test_the_plan_is_one_the_framework_renders_and_reverses",
+            ),
+        )
+    ),
+    *(
+        Case(f"dangling-markers: {label}", LANE, old, new, test, DANGLING_TESTS)
+        for label, old, new, test in (
+            (
+                "the lane is registered",
+                "LANES[DANGLING_MARKERS.name] = DANGLING_MARKERS\n",
+                "",
+                _DANGLING_LANE_TEST,
+            ),
+            (
+                "the lane reads back",
+                "LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK\n",
+                "",
+                _DANGLING_LANE_TEST,
+            ),
+            (
+                "the lane writes both cells",
+                '    cells=(Column("description", "text"), Column("raw_data", "jsonb")),',
+                '    cells=(Column("raw_data", "jsonb"),),',
+                _DANGLING_LANE_TEST,
+            ),
+            (
+                "the premise is the provenance less its hash",
+                "\"coalesce((u.raw_data -> '_description_provenance') - 'desc_sha256', "
+                "'null'::jsonb)::text\"",
+                "\"coalesce(u.raw_data -> '_description_provenance', 'null'::jsonb)::text\"",
+                "test_the_premise_is_the_legacy_provenance_without_the_hash_the_lane_moves",
+            ),
+            (
+                "the raw_data casts sit behind a CASE",
+                "    return _DANGLING_ROWS + f\"CASE WHEN l.column_name = 'raw_data' THEN "
+                '{predicate} ELSE false END"',
+                '    return _DANGLING_ROWS + f"{predicate}"',
+                "test_every_raw_data_cast_of_the_readback_skips_the_description_rows",
+            ),
+            (
+                "the readback names the provenance lane",
+                '            "journal rows for this run whose provenance is not lane L",\n',
+                '            "journal rows for this run whose provenance is not lane W",\n',
+                "test_the_residual_is_d1_and_the_readback_measures_d4_and_what_the_journal_may_hold",
+            ),
+            (
+                "the D4 predicate is shared",
+                '        _D4_FAILS,\n        (\n            "journal rows for this run that changed',
+                '        (\n            "journal rows for this run that changed',
+                "test_the_d4_predicate_is_shared_with_the_orphan_citations_readback",
+            ),
+        )
+    ),
+]
+CASES += DANGLING_MARKERS_CASES
+
 
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
