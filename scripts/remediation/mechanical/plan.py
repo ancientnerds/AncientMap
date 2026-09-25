@@ -138,7 +138,7 @@ from census.tests.t05_country_values import (  # noqa: E402
     _vocabulary,
 )
 from journal_chain import first_break  # noqa: E402
-from prod_write import DIGEST_RE, SSH_HOST, pin_line, send  # noqa: E402
+from prod_write import DIGEST_RE, SSH_HOST, jsonl_lines, pin_line, send  # noqa: E402
 
 from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
@@ -1373,7 +1373,7 @@ def psql_json_reader() -> Callable[[str], list[dict[str, Any]]]:
 
     def read(sql: str) -> list[dict[str, Any]]:
         proc = apply_mod.run_psql(f"SELECT row_to_json(t) FROM ({sql}) t", rows=True)
-        return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+        return [json.loads(line) for line in jsonl_lines(proc.stdout) if line.strip()]
 
     return read
 
@@ -1424,7 +1424,7 @@ def parse_tagged_export(text: str, kinds: Iterable[str]) -> tuple[dict[str, list
     """
     rows: dict[str, list[dict]] = {kind: [] for kind in kinds}
     stamps: list[str] = []
-    for line in text.splitlines():
+    for line in jsonl_lines(text):
         if not line.strip():
             continue
         payload = json.loads(line)

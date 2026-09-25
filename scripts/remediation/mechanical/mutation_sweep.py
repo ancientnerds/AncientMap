@@ -3049,7 +3049,7 @@ IMAGE_CASES: list[Case] = [
     ),
     Case(
         "img pv: JSON lines split at newlines only",
-        PERSIST,
+        PROD_WRITE,  # moved from persist_verdicts on 2026-09-25 (audit m9); pv re-exports it
         '    return text.split("\\n")',
         "    return text.splitlines()",
         "test_a_plan_record_with_a_line_separator_is_read_whole",
@@ -4801,6 +4801,30 @@ AUDIT_FIX_CASES: list[Case] = [
         "    if site.premise != premise_of(site.description):",
         "test_an_export_whose_premise_is_not_its_description_is_refused",
         "tests/remediation/test_mechanical_citations.py",
+    ),
+    Case(
+        "audit-fix: m9 jsonl_lines splits at every line break",
+        PROD_WRITE,
+        '    return text.split("\\n")',
+        "    return text.splitlines()",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: m9 the tagged export splits at every line break",
+        PLAN,
+        "    for line in jsonl_lines(text):",
+        "    for line in text.splitlines():",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: m9 the JSON reader splits at every line break",
+        PLAN,
+        "for line in jsonl_lines(proc.stdout) if line.strip()]",
+        "for line in proc.stdout.splitlines() if line.strip()]",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
     ),
 ]
 CASES += AUDIT_FIX_CASES

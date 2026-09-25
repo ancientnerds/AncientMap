@@ -132,3 +132,35 @@ def test_one_quoting_rule_for_every_writer_and_it_refuses_nul() -> None:
     assert W.sql_literal("two\nlines") == "'two\nlines'"
     with pytest.raises(ValueError, match="NUL"):
         W.sql_literal("a\x00b")
+
+
+def test_every_psql_json_reader_splits_at_lf_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Audit 2026-09-25 m9: `str.splitlines()` also breaks at U+0085, U+2028 and U+2029, which
+    PostgreSQL's JSON output writes raw inside a string - one row would come apart into two
+    broken lines. Every psql JSON reader splits at LF only (`prod_write.jsonl_lines`)."""
+    import json
+
+    from mechanical import apply as A
+    from mechanical import plan as P
+    from phase3 import write_stage as WS
+
+    from gallery_audit import persist_verdicts as pv
+
+    name = "Jane Doe and\u0085co"
+    assert W.jsonl_lines("a b\nc") == ["a b", "c"]
+    assert pv.jsonl_lines is W.jsonl_lines
+
+    assert WS._json_rows(json.dumps({"name": name}, ensure_ascii=False) + "\n") == [{"name": name}]
+    export = (
+        json.dumps({"kind": "site", "row": {"name": name}}, ensure_ascii=False)
+        + "\n"
+        + json.dumps({"kind": "snapshot", "row": {"exported_at": "t"}})
+        + "\n"
+    )
+    assert P.parse_tagged_export(export, ["site"]) == ({"site": [{"name": name}]}, "t")
+
+    answer = json.dumps({"name": name}, ensure_ascii=False) + "\n"
+    monkeypatch.setattr(
+        A, "run_psql", lambda sql, **kw: subprocess.CompletedProcess([], 0, answer, "")
+    )
+    assert P.psql_json_reader()("SELECT 1") == [{"name": name}]

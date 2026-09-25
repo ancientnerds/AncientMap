@@ -21323,6 +21323,14 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4_ACCEPT_TEST,
         "test_an_archived_round_row_is_no_licence_for_an_open_write",
     ),
+    (
+        "audit-fix: m9 the write stage's JSON reader splits at every line break",
+        WRITE_STAGE,
+        "    for number, line in enumerate(jsonl_lines(text), start=1):\n",
+        "    for number, line in enumerate(text.splitlines(), start=1):  # mutant\n",
+        AF_PROD_TEST,
+        "test_every_psql_json_reader_splits_at_lf_only",
+    ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS
 

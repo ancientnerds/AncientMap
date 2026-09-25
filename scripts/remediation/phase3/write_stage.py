@@ -163,6 +163,7 @@ from prod_write import (  # noqa: E402, F401
     PSQL_ROWS,
     SSH_HOST,
     OutcomeUnknown,
+    jsonl_lines,
     send,
     sql_literal,
 )
@@ -366,7 +367,7 @@ def _json_rows(text: str) -> list[dict[str, Any]]:
     output escapes both, so one row is always exactly one line.
     """
     rows: list[dict[str, Any]] = []
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in enumerate(jsonl_lines(text), start=1):
         line = line.strip()
         if not line:
             continue

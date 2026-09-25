@@ -67,6 +67,19 @@ def send(
     )
 
 
+def jsonl_lines(text: str) -> list[str]:
+    """The lines of a JSON-lines text: split at '\\n' and nowhere else.
+
+    `str.splitlines()` also breaks at U+0085, U+2028 and U+2029, and `json.dumps(...,
+    ensure_ascii=False)` - like PostgreSQL's `row_to_json` and `to_jsonb(...)::text` - writes those
+    three raw inside a string, so one record would come apart into two broken ones. psql prints
+    '\\n' line ends; a file read with universal newlines carries '\\n' for every CRLF. Moved here
+    on 2026-09-25 from `gallery_audit/persist_verdicts.py` so every psql JSON reader shares it
+    (audit m9).
+    """
+    return text.split("\n")
+
+
 def sql_literal(value: str | None) -> str:
     """A SQL string literal, quotes doubled; `None` is `NULL` - never coalesced to `''`: an empty
     string and an absent value are two stored states, and `IS NOT DISTINCT FROM` tells them apart.

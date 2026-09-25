@@ -74,7 +74,7 @@ if str(ROOT / "scripts" / "remediation") not in sys.path:
 #: 2026-09-22 - moved there from this module so the mechanical lanes use the same code. The UUID
 #: pattern is the mechanical lanes' own, imported rather than copied.
 from mechanical.plan import UUID_RE  # noqa: E402
-from prod_write import DIGEST_RE, SSH_HOST, OutcomeUnknown, send  # noqa: E402
+from prod_write import DIGEST_RE, SSH_HOST, OutcomeUnknown, jsonl_lines, send  # noqa: E402
 
 OUTPUT = ROOT / "output" / "remediation" / "gallery_audit"
 SELECTION = ROOT / "video-assets" / "shorts"
@@ -126,7 +126,6 @@ BATCH_STAMP_PREFIX = "gallery-verdicts-persist"
 #: on archaeological imagery is unverified. These 105 rows are therefore a first reviewable
 #: batch, not a validated classifier. Recorded in evidence below and in the audit log.
 CONFIDENCE = "authoritative"
-
 
 
 @dataclass(frozen=True)
@@ -267,17 +266,6 @@ def record_sha256(record: Mapping[str, object]) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def jsonl_lines(text: str) -> list[str]:
-    """The lines of a JSON-lines text: split at '\\n' and nowhere else.
-
-    `str.splitlines()` also breaks at U+0085, U+2028 and U+2029, and `json.dumps(...,
-    ensure_ascii=False)` - like PostgreSQL's `row_to_json` - writes those three raw inside a
-    string, so one record would come apart into two broken ones. A file read with universal
-    newlines, and psql output read in text mode, already carry '\\n' for every CRLF.
-    """
-    return text.split("\n")
-
-
 def load_rejected_kinds(path: Path | None = None) -> tuple[list[Verdict], list[Skipped]]:
     """G0b's verdicts: the PROVEN records of REJECTED_KINDS.jsonl, and a named refusal for the rest.
 
@@ -303,7 +291,9 @@ def load_rejected_kinds(path: Path | None = None) -> tuple[list[Verdict], list[S
         where = f"{path.name}:{lineno}"
         mapping = record.get("verdict")
         if mapping not in MAPPING_VERDICTS:
-            raise PersistError(f"{where}: mapping verdict {mapping!r} is none of {sorted(MAPPING_VERDICTS)}")
+            raise PersistError(
+                f"{where}: mapping verdict {mapping!r} is none of {sorted(MAPPING_VERDICTS)}"
+            )
         slug = str(record.get("slug"))
         kind = record.get("kind_stated")
         reason = str(record.get("reason") or "")
@@ -311,7 +301,9 @@ def load_rejected_kinds(path: Path | None = None) -> tuple[list[Verdict], list[S
             raise PersistError(f"{where}: kind {kind!r} is not one of {sorted(VOCAB)}")
         named = reason.split("kind=", 1)[1].split()[0].rstrip(",;)") if "kind=" in reason else None
         if named != kind:
-            raise PersistError(f"{where}: kind_stated {kind!r} is not the kind the reason names ({reason!r})")
+            raise PersistError(
+                f"{where}: kind_stated {kind!r} is not the kind the reason names ({reason!r})"
+            )
         if mapping != "PROVEN":
             skipped.append(
                 Skipped(
@@ -1019,7 +1011,9 @@ def invariants_sql(template: str, scope: str, *, run_stamp: str) -> str:
 
 def kinds_of(records: Iterable[Mapping[str, object]]) -> tuple[str, ...]:
     """The kinds a batch writes, sorted - the set its verification reads for."""
-    return tuple(sorted({str(r.get("new_value") if "new_value" in r else r.get("kind")) for r in records}))
+    return tuple(
+        sorted({str(r.get("new_value") if "new_value" in r else r.get("kind")) for r in records})
+    )
 
 
 def kind_test(kinds: Sequence[str]) -> tuple[str, str]:
@@ -1399,9 +1393,7 @@ def _refusals_md(skipped: list[Skipped]) -> list[str]:
     return lines
 
 
-def render_rejected_plan_md(
-    write: list[Verdict], skipped: list[Skipped], *, run_stamp: str
-) -> str:
+def render_rejected_plan_md(write: list[Verdict], skipped: list[Skipped], *, run_stamp: str) -> str:
     """G0b's PLAN.md: the proven rejections, one row each, and every refusal by name."""
     script = "./.venv/Scripts/python.exe scripts/remediation/gallery_audit/persist_verdicts.py"
     lines = [
