@@ -9035,3 +9035,222 @@ from these columns, `reversal.write_plan_md`), and the static export - none of t
   `phase3/ledger.py` are untouched; `phase3/mutation_sweep.py` changed only in its Opus blocks and is
   imported by neither `opus_handoff.py` nor anything it imports (it moves `mass_run.package_digest`;
   no Phase-3 mass run was in flight).
+
+## 2026-09-25 - the wrong-both correction lane (planned, checked and rehearsed on production; not applied), and Ahin Posh Tape's coordinates (not planned)
+
+Branch `integrate/wave1` (main checkout), commits `dba4bf6` (the lane, test-first, with its list and
+plan), `5328c62` (two subsumed checks dropped, their subsumption pinned) and `423c7be` (the mechanical
+mutation cases). journal-reversal-3 was applied before this started (488 cells over 435 sites; the
+acceptance below reads it). **Production was read (SELECTs) and rehearsed (every statement ended in
+ROLLBACK, 0 journal rows left); nothing was applied, no model was called, and `opus_handoff.py`,
+`phase3/fetch_stage.py` and `phase3/ledger.py` are untouched.**
+
+### The lane (`scripts/remediation/mechanical/wrong_both.py`, lane `wrong-both`)
+
+RULES.md rule 5: "wrong-both rows carry a proposed value; it is not written by this audit. It goes
+to a later correction lane that writes only with a machine-verified verbatim quote." The input is
+the audit's final `DECISIONS.jsonl` (keep 481, revert 453; sha256
+`a1f5cb87f2f6d5622a1762be96f2b62d9eecc9f6ac37b19f5d732175b845ae04`) and the verdict files each
+`basis[].from` names. **A candidate is every decided row whose route carries a `wrong-both`
+verdict: 42.** Each is decided in this order, the first failure listing it with its reason:
+
+0. the final decision is revert (`not-reverted`);
+1. **(a)**, read-only from production: the site is curated, the cell's journal is continuous and
+   ends at the live value (`plan.journal_break`), and its last link is a journal-reversal-3 row
+   (`2026-09-25_mechanical-journal-reversal-3`) that wrote exactly the judged write's old value over
+   its written value (`not-restored-by-journal-reversal-3`). The live value is then the old one.
+2. **(b)** every counted route verdict that names a `right_value` names the same one
+   (`judges-disagree`). A keep that names one names the written value, a revert the old one: either
+   is a judge naming another value. (A stricter reading - a keep holds the written value even when it
+   names none - lists none of the 13 written rows: no keep stands on their routes.)
+3. **(c)** not the old value, not the reverted one; `site_type` on the canonical list (every
+   canonical type is a fixed point of `normalize_site_type`, pinned by a test, so this is
+   `normalize_site_type(v) == v` without the pass-through of an unknown word such as "Treasury");
+   `period_start` an integer year as the database prints it (`apply.typed_value`), its bucket the one
+   `categorize_period` and the frontend's `categorizePeriod` agree on, and the site's `period_name`
+   written with it where the bucket differs from the live label (the label must hold a value and its
+   journal end at it); `country` a T05 fixed point with an ISO code, never the United Kingdom spelled
+   whole (B9: England, Scotland, Wales, Northern Ireland).
+4. **(d)** a quote of a counted route verdict whose outcome in the audit's machine quote check is
+   `found`, that states the value and stands in text about the site. **How "states the value" is
+   decided**: `site_type` - a run of consecutive words of the quote that the pipeline's own normalizer
+   resolves to the value (`normalize_site_type(run) == value`: the name in any case, or a synonym -
+   "statue" is a Monument, "hillfort" a Fort; "fortified", "memorial", "sacred building" are not);
+   `period_start` - the year's absolute value as a whole number followed by an era marker of its sign,
+   directly or after the rest of a range (BC, BCE, B.C., B.C.E., a.C., a. C., v. Chr., av. J.-C.,
+   пр. Хр.; AD, CE, A.D., C.E., d.C., d. C., n. Chr., ap. J.-C., or AD before the year) - a number
+   without an era, a century or millennium, and "years ago" state nothing; `country` - the name
+   standing whole, not inside a longer country name of the vocabulary. **How "about the site" is
+   decided**: a quote from one of the row's own evidence files (fetched for this site; the audit's
+   check accepts no other file) is; a quote from a fetched page is only when a distinctive word of the
+   site's name, or the whole name, stands within 1,500 characters of it in the reading where the
+   audit found it (`bcases.web_witness.named_near`, the identity rule the coordinate lane's web
+   witnesses are held to). A page the audit found a quote on that cannot be read now, or no longer
+   holds it, refuses the whole plan. Where none of this can be decided mechanically for a row, the row
+   is listed (`no-verbatim-evidence`), never written.
+
+Registered as a cell lane (`lane.WRONG_BOTH`): run stamp `2026-09-25_mechanical-wrong-both`, test id
+`P6/wrong-both`, change keys `wrong-both:<site_id>:<column>`, plan table `_wrong_both_plan`, cells
+`site_type` (owns the canonical types), `period_start` (integer), `period_name` (owns the nine bucket
+labels) and `country`, the 10 s / 120 s bounds, no premise, no journal reversal: every cell is
+conditioned on its old value (guard 3). Its list (`wrong_both_list.py`, generated by `--list`) is the
+journal-reversal-3 row of each corrected cell; the residual is "curated sites still holding a restored
+value a wrong-both correction replaces", and the read-back adds the list's superseded rows, the period
+pair and the card country. `--write` refuses unless its corrections follow exactly that list.
+
+### The run (2026-09-25, 06:42-06:46 UTC)
+
+`wrong_both.py --list`, then `--write` (a new process: the lane imports the list), then
+`apply.py --lane wrong-both --emit`. **Written: 17 cells over 13 sites - 13 corrections and 4 period
+labels. Listed: 29 of the 42.** All 13 corrected cells are mass-lane rows (`phase3:batch-*`).
+
+| site | column | restored -> correction | the quote that carries it (the audit found it) |
+|---|---|---|---|
+| Labna | period_start | 500 -> -200 (label `500 - 1000 AD` -> `500 BC - 1 AD`) | lugares.inah.gob.mx node 4427: "El sitio estuvo poblado desde el año 200 a.C. ..." ('labna' near) |
+| Cissbury Ring | period_start | -1500 -> -3700 (label -> `4500 - 3000 BC`) | own enwiki: "This individual was recently radiocarbon dated to c. 3700 BC." |
+| Caerau Hillfort | period_start | -1500 -> -3600 (label -> `4500 - 3000 BC`) | own enwiki: "... Finds included flint tools and weapons dating to 3600 BC." |
+| Piddington Roman Villa | period_start | -3000 -> -50 (label `3000 - 1500 BC` -> `500 BC - 1 AD`) | own enwiki: "The site was occupied from about 50 BC, ..." |
+| Castleshaw Roman Fort | site_type | Fortress/citadel -> Fort | own enwiki: "Castleshaw Roman fort was a castellum ..." |
+| Sturminster Newton Castle | site_type | Residence/villa/farmhouse -> Fort | own enwiki: "... an Iron Age promontory fort." |
+| Bull of the Corcyreans | site_type | Megalithic structures -> Monument | own enwiki: "The statue was made by the sculptor Theopropus from Aegina." |
+| Siphnian Treasury | site_type | Megalithic structures -> Religious | own enwiki: "the first religious structure made entirely out of marble" |
+| Sagaholm | site_type | Cemetery -> Barrow | own enwiki: "had a large barrow with a circle of slabs of sandstone ..." |
+| El Jem Amphitheatre | site_type | Megalithic stones -> Amphitheatre | own Wikidata: "Roman amphitheatre of El Jem" |
+| Amphitheatre of the Three Gauls | site_type | Megalithic structures -> Amphitheatre | own Wikidata: "Roman amphitheatre in France" |
+| Arles Amphitheatre | site_type | Megalithic structures -> Amphitheatre | own enwiki: "is a Roman amphitheatre in Arles, southern France." |
+| Amphitheatre Alba Fucens | site_type | Megalithic structures -> Amphitheatre | en.wikipedia Alba_Fucens: "The well-preserved amphitheatre (96 x 79 m) ..." ('alba' near) |
+
+| listed because | rows | which |
+|---|---|---|
+| `not-reverted` | 2 | Wichqana (proposal Temple complex), Sidi Said (Fort): the final decision kept the written value |
+| `not-restored-by-journal-reversal-3` | 6 | the five Northern-Ireland country rows (Annadorn Dolmen, Dooey's Cairn, Giant's Ring, Craigs Dolmen, Moylehid: the UK lane already wrote "Northern Ireland", the proposal) and Witham Shield (the site-type-shape lane restored the old value; proposal Archaeological site) |
+| `judges-disagree` | 8 | Nine Stones (-2000 / -2500), Chanhudaro (-2500 / -3000), Altar of Athena Polias (Sanctuary / Religious), South Stoa I (Infrastructure / Ruin / Monument), Alvastra Pile-Dwelling (p1 revert names the old City/town/settlement, p2 Sacred site), Choquequirao (p1 names the old 1000, p2 1450), Península de Kola (p1 keep names Natural feature, p2 and tie Archaeological site), Pampas Gramalote (p1 keep names -2000, p2 and tie -1500) |
+| `no-verbatim-evidence`: no found quote states the value | 8 | Holyhead Mountain Hut Circles -500 ("middle years of the first millennium BC"), Aquae Calidae -500 ("5th century BC", "1st millennium BC"), Carteia -400 ("siglo IV a. C."), Lalibela 900 ("dating to 900", no era), Cave of Aurignac -33000 ("about 35,000 years ago"), Palaestra at Delphi Archaeological site, Stoa Poikile Monument ("memorial"), Cnidian Treasury Religious ("sacred building") |
+| `no-verbatim-evidence`: stated only in text not about the site | 5 | Nine Ladies Stone Circle -2500 (en.wikipedia Bronze_Age_Britain), Gårdstånga -1750 (Nordic_Bronze_Age), Maa Palaeokastro -3800 (Yeronisos), Argura -6300 (Sesklo: "at Argissa as early as c. 6300 BC"), Boeotian Treasury Religious (the Wikidata answer "sacred building housing religious offerings", which names "Boeotians", not the name word "boeotian") |
+
+Each listed row is in `SKIPPED.jsonl` with its note; the 21 of `judges-disagree` and
+`no-verbatim-evidence` are the ones for a human.
+
+| file (`mechanical_wrong_both/`) | sha256 (LF text) |
+|---|---|
+| `PLAN.jsonl` (17 cells) | `df15695702cfce859a6f84000ea977399547da4c0015cb028482483df2544eb7` |
+| `SKIPPED.jsonl` (29) | `a9af492f589768a733182a3e16fbb1572f8798b09fe5e1785dde3d61d45496f4` |
+| `APPLY.sql` | `915b782a0c32b50261b855984c472ab07c9b92964969e3cb5dfacff18caaba4a` |
+| `ROLLBACK.sql` | `1c12df0c7426ad3a04e7a03205ef6b1148a49a7682e7c96dbbfdfec35ebfbc4b` |
+| `scripts/remediation/mechanical/wrong_both_list.py` (13 ids) | `e8e5d6e925e19bf4dec45f842f4017ec58cd6aa0bf83bf58eef5fa370b15f592` |
+
+### On production (read-only, and one rehearsal), 2026-09-25 06:46 UTC
+
+* `--check-primitive`: the 0022 body (casts the value, casts the old value, re-reads the stored
+  value: t, t, t).
+* `--verify` before the apply: curated sites 5,004; **curated sites still holding a restored value a
+  wrong-both correction replaces 13**; journal rows of this list a later write superseded 0; curated
+  rows whose period_name is not the bucket of period_start 9; card_stats rows whose civilization
+  differs from the site country 61; every journal metric of the stamp, test id and rollback stamp 0.
+* `--interests`: the (column, value) rows of the 17 cells' old and new values, with their live counts.
+* **`--probe-guards` exit 0: 6 probes, each refused by its own guard, 0 journal rows left**
+  (guard3-foreign-old-value, guard2-no-op, guard2-foreign-column, guard2-too-long,
+  guard1-other-source, guard4-not-owned).
+* **Rehearsal** (`--rehearse`): `NOTICE: wrong-both correction: 17 of 17 planned cell(s) changed and
+  journalled over 13 curated site(s)`, `ROLLBACK`; journal rows for the stamp 0, the residual 13, the
+  temp table gone.
+* **Acceptance before** (`verify_writes.py`, read-only, with the five stamps applied so far): mass
+  lane 499 carried, 495 superseded (site-type-shape 3, uk-parts 5, reversal-1 3, reversal-2 45,
+  reversal-3 439), 80 withheld unchanged, **0 deviations**; gap lane 14 carried, 3 superseded by
+  reversal-3, 12 withheld unchanged, **0 deviations**.
+
+### The apply (the orchestrator runs it; the owner's go first)
+
+From the repo root, main venv, `export PYTHONIOENCODING=utf-8`,
+`A=scripts/remediation/mechanical/apply.py`:
+
+0. **The plan still stands.** `./.venv/Scripts/python.exe $A --lane wrong-both --verify` -> the
+   residual 13, journal rows for this run stamp 0, journal rows of this list a later write
+   superseded 0. If anything moved: `./.venv/Scripts/python.exe scripts/remediation/mechanical/wrong_both.py --list`,
+   then in a new run `... wrong_both.py --write`, then `$A --lane wrong-both --emit`, then
+   `./.venv/Scripts/python.exe -m pytest tests/remediation/test_mechanical_wrong_both.py tests/remediation/test_mechanical.py -q -m "not integration and not live_llm"`
+   green, and commit the list and the lane directory before going on.
+1. **Check.** `./.venv/Scripts/python.exe $A --check-primitive`;
+   `./.venv/Scripts/python.exe $A --lane wrong-both --interests`;
+   `./.venv/Scripts/python.exe $A --lane wrong-both --probe-guards` -> exit 0, the same 6 probes each
+   refused by its own guard.
+2. **Rehearse.** `./.venv/Scripts/python.exe $A --lane wrong-both --rehearse` -> `17 of 17 planned
+   cell(s) changed and journalled over 13 curated site(s)`, ROLLBACK, 0 journal rows.
+3. **Apply.** `./.venv/Scripts/python.exe $A --lane wrong-both --apply` -> `APPLY OK: the read-back
+   matches the plan, row for row` (exit 0; exit 3 NOT COMMITTED, 5 OUTCOME UNKNOWN - read the journal
+   for the stamp before anything else, never apply twice).
+4. **Read back.** `./.venv/Scripts/python.exe $A --lane wrong-both --verify` -> journal rows for this
+   run stamp 17 and for this test id 17, **the residual 0**, the list's rows a later write superseded
+   0, 0 outside the lane's cells, on non-curated rows or with another site's `site_id_ref`; the
+   period pair 9 and the card country 61 unchanged (every start is written with its bucket's label;
+   no country is written).
+5. **Rehearse the rollback on the landed rows.**
+   `./.venv/Scripts/python.exe $A --lane wrong-both --rehearse-rollback` -> `17 of 17`, ROLLBACK, the
+   cells still holding the corrections; commit `REHEARSAL_ROLLBACK.sql` as for the reversal lanes.
+6. **Acceptance.**
+   `./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py --allow-stamp 2026-09-22_mechanical-uk-parts --allow-stamp 2026-09-22_mechanical-site-type-shape --allow-stamp 2026-09-23_mechanical-journal-reversal-1 --allow-stamp 2026-09-23_mechanical-journal-reversal-2 --allow-stamp 2026-09-25_mechanical-journal-reversal-3 --allow-stamp 2026-09-25_mechanical-wrong-both`
+   -> `RESULT: 0 deviation(s)`: 499 carried, 495 superseded - reversal-3 439 - 13 = 426,
+   wrong-both 13, the others unchanged - and 80 withheld unchanged; and
+   `./.venv/Scripts/python.exe output/remediation/tools/verify_writes.py --lane gap --allow-stamp 2026-09-25_mechanical-journal-reversal-3 --allow-stamp 2026-09-25_mechanical-wrong-both`
+   -> 0 deviations, unchanged (14 carried, 3 superseded by reversal-3): no corrected cell is a gap row.
+
+Afterwards: re-plan the scope lane and the card_stats recompute (their premises and cards derive
+from these columns), and the static export - none of them is run here.
+
+### Ahin Posh Tape's coordinates: no second independent witness, not planned
+
+The stored point, 33.66801142959909, 70.95519786406209 (in Pakistan), came from Wikidata Q4695118,
+which conflates the stupa near Jalalabad with a Pakistani village (wave 1 classed the site
+`not-comparable`, container item). Its country is already Afghanistan (journal-reversal-1). A third,
+hand-read coordinate wave was to take it with at least two independent witnesses, each quoted and
+machine-checked from its fetched page. The pages were fetched once, 2026-09-25 07:00 UTC, with the
+project User-Agent, and checked with the coordinate lane's own reader (`web_witness.page_text` /
+`normalise`, `occurrences` - the quote standing whole -, `parse_coordinates`, `named_near`; the PDF
+through `opus_audit.quotes.pdftotext`), then weighed with `classify.independent` and `classify.weigh`:
+
+| witness | page (sha256 of the body) | quote | reads | name near it |
+|---|---|---|---|---|
+| enwiki "Ahin Posh", revision 1366870556 | `index.php?title=Ahin_Posh&oldid=1366870556` (`3ee399ce...d734`) | "34.412045°N 70.452130°E" | 34.412045, 70.45213 | "ahin" |
+| Errington 2017, *Charles Masson and the Buddhist Sites of Afghanistan* (British Museum Research Publication 215), citing Ball and Gardin 1982, no. 17 | zenodo.org record 3355036, the PDF (`eeb1864a...f725`) | "lat. 34º24´N; long. 70º27´E" ("Ahin Push ... a stupa courtyard and adjacent monastery ... on a hill c. 2km south of Jalalabad") | 34.4, 70.45 | "ahin" |
+| Pleiades 59662 "Ahin Posh" (Barrington Atlas 6 C3; DARMC location 21491, "5M scale point location") | `pleiades.stoa.org/places/59662/json` (`82900f53...9571`), JSON | its point | 34.288484, 70.234278 | - |
+
+* enwiki and Errington: **1,354 m apart, not independent** under the lanes' rule - Errington's value
+  is the enwiki point cut to whole arcminutes ("web is enwiki rounded to whole arcminutes"), and one
+  arcminute step is 1,855 m. Had they counted as two, they would still not agree: 1,354 m is over the
+  1,000 m tolerance.
+* Pleiades: 24.3 km from enwiki and 23.4 km from Errington - disagrees (a point read off a
+  1:5,000,000 map).
+* `weigh` over the three: **review**, "no two of the 3 witnesses are independent and agree". All three
+  put the site about 95 km from the stored point, near Jalalabad - the stored point is wrong - but no
+  pair of them passes the rule that decides a move.
+
+Not reachable as a witness from this workstation: GeoNames, the DAI gazetteer and OpenStreetMap
+(Nominatim) have no Ahin Posh; the Getty TGN endpoint and the British Museum collection answer 403 to
+the project User-Agent; the web search budget of this session was spent. **No coordinate is planned
+and no third wave is added**: a wave whose only case fails the witness rule would render nothing.
+The case is the owner's (FIELD_CONTRACT section 4.6): the enwiki point, with Errington 2017 /
+Ball and Gardin 1982 placing the stupa within that arcminute cell 2 km south of Jalalabad, is the
+reading to put before him.
+
+### Tests, sweeps, gates (main checkout, branch `integrate/wave1`, main venv)
+
+* `tests/remediation/test_mechanical_wrong_both.py`: 107 cases, red before the code (the module did
+  not exist): the candidates and their refusals, every rule and its reason, what a quote states
+  (types, years with and without their era, countries), about the site, the period label, the
+  country convention, the readers' statements, `--list` / `--write` and their refusals, the lane's
+  registration and residual, and two tests on the delivered plan (it follows exactly the lane's list;
+  every written value is named by all its counted judges and carried by a found quote of theirs).
+  The generic lane tests of `test_mechanical.py` now cover `wrong-both` too (its committed statements
+  are what `--emit` renders, its probes, its commit states).
+* **`mechanical/mutation_sweep.py wrong-both`: cases 67, fired 67** (37 guards and 23 replacements in
+  `wrong_both.py`, 7 in its `lane.py` registration; skipped, survived, invalid, unproven, errored 0).
+  Every existing case on `lane.py`: 42 of 42 fired; `reversal`: 95 of 95 (93 plus two of the new
+  labels). Every needle of all cases matches once (`test_mechanical_sweep.py` green); the files
+  restored byte for byte, no `# mutant` left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **6,225 passed, 6 skipped, 57 deselected, 0 failed** (210 s); the skips are the six of the
+  rounds before (two refactored-away article tests, the opt-in Shining Ones regen, three card_stats
+  tests whose gitignored export this checkout does not hold).
+* `ruff check` and `ruff format --check` clean on the 5 touched Python files (ruff 0.15.11);
+  `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean.
