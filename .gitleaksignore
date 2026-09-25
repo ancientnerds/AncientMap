@@ -38,3 +38,16 @@ fb33f1b8d6918d572ae228f841f01eff201e18d8:output/remediation/tools/make_holds.py:
 1984834112e64b49cfcb07887fb098dd9be8a1a7:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:5515
 1984834112e64b49cfcb07887fb098dd9be8a1a7:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:5516
 1984834112e64b49cfcb07887fb098dd9be8a1a7:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:5517
+
+# The same guard-5 premise digests in the re-plan of card-stats wave 2026-09-23 (triaged
+# 2026-09-25): 'api' in Krapina Neanderthal Site (rows 3111-3114), 'key' in Milton Keynes Hoard
+# (rows 3603-3607). The re-plan before the apply writes new ones: run gitleaks over its commit.
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3111
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3112
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3113
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3114
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3603
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3604
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3605
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3606
+aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3607
