@@ -102,7 +102,6 @@ API_CONTAINERS = ("ancient_nerds_api", "ancient_nerds_api2")
 #: An RFC 3339 instant, as `docker inspect -f '{{.State.StartedAt}}'` prints it. Checked because it
 #: travels through ssh into a remote shell.
 _INSTANT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})")
-_EXIT_LINE = re.compile(r"^[A-Z][A-Z0-9_]*_EXIT=(\d+)$")
 
 Key = tuple[str, str, str]  #: (table, column, row_pk)
 
@@ -666,7 +665,7 @@ def exit_line(output: str) -> int | None:
     """The command's own last `*_EXIT=<n>` line; `None` when it printed none."""
     codes = [
         int(m.group(1))
-        for m in (_EXIT_LINE.match(line.strip()) for line in output.splitlines())
+        for m in (write_gate4.EXIT_LINE.match(line.strip()) for line in output.splitlines())
         if m
     ]
     return codes[-1] if codes else None

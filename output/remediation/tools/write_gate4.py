@@ -127,6 +127,10 @@ LANE_PLAN_FILE = "LANE_PLAN.jsonl"
 VERIFY_TOOL = "output/remediation/tools/verify_writes4.py"
 ACCEPT_OK = "ACCEPT_EXIT=0"
 ACCEPT_CLEAN = "RESULT: 0 deviation(s)"
+ACCEPT_RESULT = "RESULT:"
+#: Any tool's own exit line, its code the group: one run prints exactly one. `verify_writes4`
+#: reads its card check's exit line with this same pattern.
+EXIT_LINE = re.compile(r"^[A-Z][A-Z0-9_]*_EXIT=(\d+)$")
 _ACCEPT_LANE = re.compile(
     r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows \d+ \| "
     r"lane journal rows (?P<journal>\d+) \|"
@@ -588,13 +592,26 @@ def acceptance_problems(
     the step wrote, have read at least every row written so far under the stamps it read - every
     round in `written`, the reverted ones too (so it was run after this step, not before it, not
     even between a revert and the round written after it) - and not be an output an earlier step was
-    accepted on."""
+    accepted on.
+
+    The output is one whole run (audit 2026-09-25 M1): its lane line first, exactly one `RESULT:`
+    line and one `*_EXIT=` line, the clean result right before `ACCEPT_EXIT=0`. A failing lane run
+    with a clean run of another mode appended to it is not an acceptance."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     problems: list[str] = []
+    results = sum(1 for line in lines if line.startswith(ACCEPT_RESULT))
+    exits = sum(1 for line in lines if EXIT_LINE.match(line))
+    if results != 1 or exits != 1:
+        problems.append(
+            f"the output holds {results} RESULT line(s) and {exits} exit line(s): "
+            "not the output of one run"
+        )
     if not lines or lines[-1] != ACCEPT_OK:
         problems.append(f"the output does not end in {ACCEPT_OK}")
-    if ACCEPT_CLEAN not in lines:
-        problems.append(f"the output does not say {ACCEPT_CLEAN!r}")
+    if len(lines) < 2 or lines[-2] != ACCEPT_CLEAN:
+        problems.append(f"the output does not say {ACCEPT_CLEAN!r} right before its exit line")
+    if not lines or not _ACCEPT_LANE.match(lines[0]):
+        problems.append("the output does not begin with its lane line")
     heads = [found for line in lines if (found := _ACCEPT_LANE.match(line))]
     if len(heads) != 1:
         problems.append(f"the output has {len(heads)} lane line(s), not one")

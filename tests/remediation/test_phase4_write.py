@@ -2396,3 +2396,53 @@ def test_a_timeout_during_a_write_stops_the_batch_as_an_unknown_outcome(
     assert record["outcome"] == "unknown" and "900s" in record["error"]
     assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 1
     assert "stopped in an earlier run" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("build", "problem"),
+    [
+        (  # a failing lane run, then an appended clean `--boot-logs` run (audit M1)
+            lambda clean, failing: failing + "RESULT: 0 deviation(s)\nACCEPT_EXIT=0\n",
+            "RESULT line(s)",
+        ),
+        (  # a clean `--boot-logs` run in front of the lane run
+            lambda clean, failing: "RESULT: 0 deviation(s)\nACCEPT_EXIT=0\n" + clean,
+            "RESULT line(s)",
+        ),
+        (  # the lane line is not the run's first line
+            lambda clean, failing: "something else\n" + clean,
+            "does not begin with its lane line",
+        ),
+        (  # the clean RESULT is not the line before the exit line
+            lambda clean, failing: clean.replace(
+                "RESULT: 0 deviation(s)\n", "RESULT: 0 deviation(s)\n  a deviation\n"
+            ),
+            "right before",
+        ),
+    ],
+)
+def test_an_acceptance_is_one_whole_clean_run(
+    tmp_path, monkeypatch, capsys, build, problem
+) -> None:
+    """2026-09-25 audit M1: `--accept` needed one lane line, `RESULT: 0 deviation(s)` anywhere and
+    a last line `ACCEPT_EXIT=0` - so a lane run with deviations and `ACCEPT_EXIT=1`, followed by
+    an appended clean run of another mode, was accepted. The output must be exactly one run: the
+    lane line first, one RESULT line right before the one exit line."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
+    clean = _acceptance(tmp_path, journal_rows=2, name="clean.log").read_text(encoding="utf-8")
+    failing = _acceptance(
+        tmp_path,
+        journal_rows=2,
+        name="failing.log",
+        result="  a deviation\nRESULT: 1 deviation(s)",
+        exit="ACCEPT_EXIT=1",
+    ).read_text(encoding="utf-8")
+    output = tmp_path / "combined.log"
+    output.write_text(build(clean, failing), encoding="utf-8")
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
+    assert problem in capsys.readouterr().out
+    assert (tmp_path / "apply" / G.STEP_FILE).exists()

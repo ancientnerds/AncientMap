@@ -6244,7 +6244,7 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_gate4: an acceptance with deviations accepts",
         P4_WRITE_GATE,
-        "    if ACCEPT_CLEAN not in lines:\n",
+        "    if len(lines) < 2 or lines[-2] != ACCEPT_CLEAN:\n",
         "    if False:  # mutant\n",
         P4_WRITE_TEST,
         P4_ACCEPTANCE,
@@ -21225,6 +21225,30 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '{"batch_id": item.out.name, "error": str(exc)},  # mutant',
         P4_WRITE_TEST,
         "test_a_timeout_during_a_write_stops_the_batch_as_an_unknown_outcome",
+    ),
+    (
+        "audit-fix: M1 an appended second run is accepted",
+        P4_WRITE_GATE,
+        "    if results != 1 or exits != 1:\n",
+        "    if False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_an_acceptance_is_one_whole_clean_run",
+    ),
+    (
+        "audit-fix: M1 the lane line need not come first",
+        P4_WRITE_GATE,
+        "    if not lines or not _ACCEPT_LANE.match(lines[0]):\n",
+        "    if False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_an_acceptance_is_one_whole_clean_run",
+    ),
+    (
+        "audit-fix: M1 the clean result may sit anywhere",
+        P4_WRITE_GATE,
+        "    if len(lines) < 2 or lines[-2] != ACCEPT_CLEAN:\n",
+        "    if ACCEPT_CLEAN not in lines:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_an_acceptance_is_one_whole_clean_run",
     ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS
