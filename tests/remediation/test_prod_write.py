@@ -116,3 +116,19 @@ def test_the_phase_stages_send_through_prod_write(monkeypatch: pytest.MonkeyPatc
     with pytest.raises(W.OutcomeUnknown):
         WS.run_sql("SELECT 1;")
     assert WS.PSQL_ROWS is W.PSQL_ROWS and WS.SSH_HOST is W.SSH_HOST
+
+
+def test_one_quoting_rule_for_every_writer_and_it_refuses_nul() -> None:
+    """Audit 2026-09-25 m3/m22: `lane.sql_literal` and `write_stage._sql_text` were two copies of
+    one rule, and both passed a NUL - psql's line reader truncates at NUL and flips the quote
+    parity of everything after it. One `sql_literal` now, refusing NUL; a newline is text."""
+    from mechanical import lane
+    from phase3 import write_stage as WS
+
+    assert lane.sql_literal is W.sql_literal and WS._sql_text is W.sql_literal
+    assert W.sql_literal(None) == "NULL"
+    assert W.sql_literal("it's") == "'it''s'"
+    assert W.sql_literal("") == "''"
+    assert W.sql_literal("two\nlines") == "'two\nlines'"
+    with pytest.raises(ValueError, match="NUL"):
+        W.sql_literal("a\x00b")

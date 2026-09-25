@@ -67,6 +67,22 @@ def send(
     )
 
 
+def sql_literal(value: str | None) -> str:
+    """A SQL string literal, quotes doubled; `None` is `NULL` - never coalesced to `''`: an empty
+    string and an absent value are two stored states, and `IS NOT DISTINCT FROM` tells them apart.
+
+    The one quoting rule of every writer (`mechanical.lane.sql_literal` and
+    `phase3.write_stage._sql_text` are this function). A NUL is refused: psql's line reader
+    truncates at it, which flips the quote parity of everything after it (audit 2026-09-25 m3).
+    A newline is text and stays, carried as LF by `send`.
+    """
+    if value is None:
+        return "NULL"
+    if "\x00" in value:
+        raise ValueError(f"a NUL byte cannot travel to psql inside a literal: {value[:60]!r}")
+    return "'" + value.replace("'", "''") + "'"
+
+
 def pin_line(digest: str) -> str:
     """The header line that pins a statement to the plan it was rendered from."""
     if not re.fullmatch(r"[0-9a-f]{64}", digest):

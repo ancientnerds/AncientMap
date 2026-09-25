@@ -4767,6 +4767,13 @@ AUDIT_FIX_CASES: list[Case] = [
         "    if commits == 0:  # mutant\n",
         "test_a_statement_with_two_commits_cannot_be_rehearsed",
     ),
+    guard(
+        "audit-fix: m3 a NUL reaches psql inside a literal",
+        PROD_WRITE,
+        '    if "\\x00" in value:',
+        "test_one_quoting_rule_for_every_writer_and_it_refuses_nul",
+        PROD_TESTS,
+    ),
 ]
 CASES += AUDIT_FIX_CASES
 

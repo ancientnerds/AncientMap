@@ -60,6 +60,8 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from prod_write import sql_literal  # noqa: F401 - the one quoting rule, re-exported for the lanes
+
 from mechanical.reversal_3_list import JOURNAL_IDS as REVERSAL_3_JOURNAL_IDS
 from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
 from pipeline.normalizers.site_type import CANONICAL_TYPES
@@ -73,13 +75,6 @@ _LABEL = re.compile(r"^[A-Za-z0-9 _/-]+$")
 _KEY_PREFIX = re.compile(r"^[a-z0-9-]+$")
 #: A Postgres duration as `SET LOCAL ... = '<value>'` takes it: digits and a unit, nothing else.
 _DURATION = re.compile(r"^[1-9][0-9]*(ms|s|min)$")
-
-
-def sql_literal(value: str | None) -> str:
-    """A SQL string literal, quotes doubled; `None` is `NULL`. The one quoting rule of the lane."""
-    if value is None:
-        return "NULL"
-    return "'" + value.replace("'", "''") + "'"
 
 
 @dataclass(frozen=True)

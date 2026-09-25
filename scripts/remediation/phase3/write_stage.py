@@ -158,7 +158,14 @@ if __package__ in (None, ""):
 # The one production transport (`scripts/remediation` is on the path: `phase3` was found there).
 # `PSQL` carries `-v ON_ERROR_STOP=1` - without it psql walks past a failed statement and commits
 # an empty transaction - and `PSQL_ROWS` adds `-t -A` for the parsed read-backs.
-from prod_write import PSQL, PSQL_ROWS, SSH_HOST, OutcomeUnknown, send  # noqa: E402, F401
+from prod_write import (  # noqa: E402, F401
+    PSQL,
+    PSQL_ROWS,
+    SSH_HOST,
+    OutcomeUnknown,
+    send,
+    sql_literal,
+)
 
 from phase3 import discover_stage as DS  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
@@ -346,15 +353,9 @@ def utf8_streams() -> None:
             reconfigure(encoding="utf-8", errors="replace")
 
 
-def _sql_text(value: str | None) -> str:
-    """A text literal, or `NULL` for a value the row does not have.
-
-    Never coalesced to `''`: an empty string and an absent value are two different stored states, and
-    `IS NOT DISTINCT FROM` - which every guard here uses - tells them apart.
-    """
-    if value is None:
-        return "NULL"
-    return "'" + value.replace("'", "''") + "'"
+#: A text literal, or `NULL` for a value the row does not have: `prod_write.sql_literal`, the one
+#: quoting rule of every writer (a NUL is refused).
+_sql_text = sql_literal
 
 
 def _json_rows(text: str) -> list[dict[str, Any]]:
