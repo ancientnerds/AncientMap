@@ -22,9 +22,15 @@ rebuilt from it offline, byte for byte:
             `p4-NNNN`. Its summary lists the stored titles MediaWiki refuses (`invalid_titles`)
             for the data repair. `build --pilot PILOT.jsonl --defect-scope` writes the mass run's
             plan instead: the plan's sites after the pilot's, only those of the owner's defect
-            scope, numbered after the pilot's batches (`write_scoped_plan`).
-* `scope` - offline: the owner's defect scope (`phase4/scope4.py`) from the rows and Phase 3's
-            refusals, written to `SCOPE4.json`; its sha256 is pinned in `scope4.SCOPE_SHA256`.
+            scope version 1, numbered after the pilot's batches (`write_scoped_plan`).
+            `build --pilot PILOT.jsonl --scope-list <list> --after <plan> ...` writes the plan of
+            one list a later scope version added: its sites after the pilot's, less every site an
+            earlier plan carries, numbered from p4-0901 (`write_list_plan`).
+* `scope` - offline: the owner's defect scope (`phase4/scope4.py`) from the rows, Phase 3's
+            refusals and, from version 2, the orphan-citations lane's D1 listing (`--markers`),
+            written to the version's file (`SCOPE4.json`, `SCOPE4.v2.json`); each version's sha256
+            is pinned in `scope4` (`SCOPE_V1_SHA256`, `SCOPE_SHA256`). `--version 1` rebuilds
+            version 1 byte for byte.
 * `legacy` - offline: lane L's own plan (owner decision 2026-09-24, "Alle kennzeichnen") from a
             fresh `read` (`--out LEGACY4_ROWS.jsonl`): every curated site in site-id order, no flag
             derived, in batches of 15 marked `pass: phase4-legacy` and numbered from p4-1001
@@ -92,6 +98,8 @@ DEFAULT_LEDGER = RUNNER / "LEDGER.jsonl"
 DEFAULT_EVIDENCE = RUNNER / "plan_evidence"
 DEFAULT_REFUSED = REPO / "output" / "remediation" / "logs" / "_write_dry" / "ALL_REFUSED.jsonl"
 DEFAULT_T03 = REPO / "output" / "remediation" / "run_t03" / "findings.jsonl"
+#: The orphan-citations lane's listing (HUMAN_ONLY D9): scope version 2's D1 list reads it.
+DEFAULT_MARKERS = REPO / "output" / "remediation" / "mechanical_citations" / "SKIPPED.jsonl"
 DEFAULT_GOLD = REPO / "output" / "remediation" / "gold_standard" / "sites.json"
 #: The design's pilot set, written by `phase4/pilot4.py` (one JSON object per site, in order).
 DEFAULT_PILOT = RUNNER / "PILOT.jsonl"
@@ -104,6 +112,11 @@ DEFAULT_LEGACY_PLAN = RUNNER / "LEGACY4.jsonl"
 SNAPSHOT_ID = "d4526691-28eb-4623-b9eb-daeabafb167e"
 BATCH_SIZE = 15
 BATCH_PREFIX = "p4"
+#: The first batch of the plan of one list a later scope version added (`write_list_plan`): a block
+#: of its own. Every run writes into the one P4 apply root and a journal stamp names its batch
+#: (`phase4:p4-NNNN:chunk-NNNN`); the mass run's plan ends at p4-0115 and its re-queue numbers on
+#: from p4-0116 (`mass4.requeue_lines`), lane L's plan starts at p4-1001 (`legacy4.FIRST_BATCH`).
+LIST_PLAN_FIRST_BATCH = 901
 #: Two sites sharing an item are a duplicate pair only this close (design S0).
 DUPLICATE_KM = 2.0
 #: wbgetentities answers every language's labels and aliases; ten items keep one answer far below
@@ -413,6 +426,50 @@ def write_scoped_plan(
     return tail
 
 
+def write_list_plan(
+    path: Path,
+    sites: Sequence[M.PlanSite],
+    *,
+    pilot: int,
+    scope: S.DefectScope,
+    scope_list: str,
+    earlier: Collection[str],
+    taken: int,
+) -> list[M.PlanSite]:
+    """The plan of one list a later scope version added (owner order 2026-09-25, HUMAN_ONLY D9):
+    the plan's sites after the pilot's, in the plan's order, whose scope lists name `scope_list`,
+    less every site an `earlier` plan carries - that run held or wrote it and never asks it again,
+    and `verify_writes4.index_runs` refuses a site two runs carry - in batches of 15 from
+    `LIST_PLAN_FIRST_BATCH`. `taken` is the highest ordinal of the earlier plans; the block must lie
+    past it. Every listed site is accounted for: the pilot's, an earlier plan's, or planned here.
+    Returns the plan's sites."""
+    if scope_list not in S.VERSION_LISTS[scope.version]:
+        raise R.InputError(f"scope version {scope.version} carries no list {scope_list!r}")
+    if not 0 < pilot <= len(sites):
+        raise R.InputError(f"a list plan follows a pilot: {pilot} of {len(sites)} sites")
+    if taken >= LIST_PLAN_FIRST_BATCH:
+        raise R.InputError(
+            f"an earlier plan numbers up to {BATCH_PREFIX}-{taken:04d}: a list plan starts at "
+            f"{BATCH_PREFIX}-{LIST_PLAN_FIRST_BATCH:04d}, past every plan it follows"
+        )
+    listed = {site_id for site_id, lists in scope.sites.items() if scope_list in lists}
+    planned = {site.site_id for site in sites}
+    unplaced = sorted(listed - planned - set(earlier))
+    if unplaced:
+        raise R.InputError(
+            f"{len(unplaced)} site(s) of {scope_list} no plan accounts for (not a row of this "
+            f"build, not an earlier plan's): {unplaced[:5]}"
+        )
+    tail = [
+        site for site in sites[pilot:] if site.site_id in listed and site.site_id not in earlier
+    ]
+    if not tail:
+        raise R.InputError(f"no site of the list {scope_list} is left to plan")
+    batches = batches_after([site.to_dict() for site in tail], LIST_PLAN_FIRST_BATCH - 1)
+    R.write_batches(path, batches)
+    return tail
+
+
 def pilot_site_ids(path: Path) -> list[str]:
     """The pilot's site ids in its order: one JSON object per line of `PILOT.jsonl`, each with a
     `site_id` (`phase4/pilot4.py` writes it). A line without one is refused, never skipped."""
@@ -564,6 +621,11 @@ def cmd_build(args: argparse.Namespace) -> int:
         raise R.InputError(
             "--defect-scope builds the mass run after its pilot: name it with --pilot"
         )
+    if args.scope_list and (args.defect_scope or not args.pilot or not args.after):
+        raise R.InputError(
+            "--scope-list builds one list's plan after the pilot and the plans before it: name "
+            "--pilot and every earlier plan with --after, and not --defect-scope"
+        )
     rows = R.read_jsonl(Path(args.rows))
     names = json.loads(Path(args.names).read_text(encoding="utf-8"))
     pilot = pilot_site_ids(Path(args.pilot)) if args.pilot else R._gold_site_ids(Path(args.gold))
@@ -575,6 +637,8 @@ def cmd_build(args: argparse.Namespace) -> int:
         item_names=names,
     )
     out = Path(args.out)
+    if args.scope_list:
+        return _list_summary(out, sites, pilot=pilot, args=args)
     if args.defect_scope:
         return _scoped_summary(out, sites, pilot=pilot, pilot_path=args.pilot)
     write_plan(out, sites, pilot=len(pilot))
@@ -598,7 +662,9 @@ def cmd_build(args: argparse.Namespace) -> int:
 def _scoped_summary(
     out: Path, sites: Sequence[M.PlanSite], *, pilot: Sequence[str], pilot_path: str
 ) -> int:
-    scope = S.load_scope()
+    # The mass run was planned and written under version 1: its plan is rebuilt from it byte for
+    # byte, and a later version's list gets a plan of its own (`--scope-list`).
+    scope = S.load_scope(1)
     tail = write_scoped_plan(out, sites, pilot=len(pilot), scope=scope)
     batches = R.read_jsonl(out)
     lists = collections.Counter(name for site in tail for name in scope.sites[site.site_id])
@@ -621,19 +687,66 @@ def _scoped_summary(
     return 0
 
 
+def _list_summary(
+    out: Path, sites: Sequence[M.PlanSite], *, pilot: Sequence[str], args: argparse.Namespace
+) -> int:
+    scope = S.load_scope()
+    earlier = [R.read_jsonl(Path(path)) for path in args.after]
+    carried = {site["site_id"] for plan in earlier for batch in plan for site in batch["sites"]}
+    taken = max((batch["ordinal"] for plan in earlier for batch in plan), default=0)
+    tail = write_list_plan(
+        out,
+        sites,
+        pilot=len(pilot),
+        scope=scope,
+        scope_list=args.scope_list,
+        earlier=carried,
+        taken=taken,
+    )
+    listed = sorted(site_id for site_id, lists in scope.sites.items() if args.scope_list in lists)
+    batches = R.read_jsonl(out)
+    summary = {
+        "after": list(args.after),
+        "batches": len(batches),
+        "carried_by_earlier_plans": [site_id for site_id in listed if site_id in carried],
+        "first_batch": batches[0]["batch_id"],
+        "flags": dict(sorted(collections.Counter(f.value for s in tail for f in s.flags).items())),
+        "in_pilot": [site_id for site_id in listed if site_id in set(pilot)],
+        "list": args.scope_list,
+        "listed": len(listed),
+        "out": str(out),
+        "pilot": args.pilot,
+        "scope": scope.label,
+        "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
+        "sites": len(tail),
+    }
+    print(json.dumps(summary, indent=1, sort_keys=True))
+    return 0
+
+
 def cmd_scope(args: argparse.Namespace) -> int:
-    """`SCOPE4.json` from the S0 rows and Phase 3's refusals (`phase4/scope4.py`)."""
+    """The scope file of `--version` (`phase4/scope4.py`): from the S0 rows and Phase 3's refusals,
+    and from version 2 on the orphan-citations lane's D1 listing (`--markers`)."""
     rows_path, refused_path = Path(args.rows), Path(args.refused)
     rows = R.read_jsonl(rows_path)
     for row in rows:
         _check_row(row)
-    inputs = {
-        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in (rows_path, refused_path)
-    }
-    payload = S.scope_payload(rows, cleared_defects(R.read_jsonl(refused_path)), inputs=inputs)
+    paths = [rows_path, refused_path]
+    markers: list[str] = []
+    if S.D1_MARKER_WITHOUT_ENTRY in S.VERSION_LISTS.get(args.version, ()):
+        markers_path = Path(args.markers)
+        markers = S.listed_markers(R.read_jsonl(markers_path))
+        paths.append(markers_path)
+    inputs = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    payload = S.scope_payload(
+        rows,
+        cleared_defects(R.read_jsonl(refused_path)),
+        inputs=inputs,
+        version=args.version,
+        markers=markers,
+    )
     data = S.render_scope(payload)
-    out = Path(args.out)
+    out = Path(args.out) if args.out else S.pinned_file(args.version)[0]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(data)
     summary = {
@@ -642,6 +755,7 @@ def cmd_scope(args: argparse.Namespace) -> int:
         "sha256": hashlib.sha256(data).hexdigest(),
         "sites": len(payload["sites"]),
         "unclaimed": payload["unclaimed"],
+        "version": payload["version"],
     }
     print(json.dumps(summary, indent=1, sort_keys=True))
     return 0
@@ -697,13 +811,26 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument(
         "--defect-scope",
         action="store_true",
-        help="the mass run's plan: the owner's defect scope after the pilot (needs --pilot)",
+        help="the mass run's plan: the owner's defect scope v1 after the pilot (needs --pilot)",
+    )
+    build.add_argument(
+        "--scope-list",
+        default=None,
+        help="the plan of one list of the current scope (needs --pilot and --after), from p4-0901",
+    )
+    build.add_argument(
+        "--after",
+        action="append",
+        default=[],
+        help="an earlier plan (repeatable): its sites are never planned again by --scope-list",
     )
     build.set_defaults(handler=cmd_build)
-    scope = sub.add_parser("scope", help="the owner's defect scope, SCOPE4.json, offline")
+    scope = sub.add_parser("scope", help="the owner's defect scope of one version, offline")
     scope.add_argument("--rows", default=str(DEFAULT_ROWS))
     scope.add_argument("--refused", default=str(DEFAULT_REFUSED))
-    scope.add_argument("--out", default=str(S.SCOPE_FILE))
+    scope.add_argument("--markers", default=str(DEFAULT_MARKERS))
+    scope.add_argument("--version", type=int, default=S.SCOPE_VERSION)
+    scope.add_argument("--out", default=None, help="default: the version's pinned file")
     scope.set_defaults(handler=cmd_scope)
     legacy = sub.add_parser("legacy", help="lane L's own plan over every curated site, offline")
     legacy.add_argument("--rows", default=str(DEFAULT_LEGACY_ROWS))

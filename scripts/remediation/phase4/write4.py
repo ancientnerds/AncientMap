@@ -635,6 +635,12 @@ def load_batch(batch_dir: Path) -> BatchInputs:
     if batch_id != batch_dir.name:
         raise PlanInputError(f"{batch_dir}: input.json names batch {batch_id!r}")
     group_batch_id(batch_id, Group.P4)
+    for name in (M.LANES_FILE, M.ASSEMBLY_FILE, M.HOLDS_FILE):
+        if not (batch_dir / name).exists():
+            raise PlanInputError(
+                f"{batch_id}: no {name}: the batch has not reached an outcome - the gate plans a "
+                "batch once its review is imported"
+            )
     sites = tuple(M.PlanSite.from_dict(site) for site in raw["sites"])
     ids = [site.site_id for site in sites]
     if len(set(ids)) != len(ids):

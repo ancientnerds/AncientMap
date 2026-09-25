@@ -11786,3 +11786,278 @@ minus its exclusions and its 60. A sample of 60 then hits at least one with prob
 * gitleaks over the staged lane directory: no leaks.
 * Not applicable: nothing under `ancient-nerds-map/`, `api/` or `pipeline/` was touched, so
   there is no frontend gate and no Lyra-image import check.
+
+## 2026-09-25 - HUMAN_ONLY D9 into Phase 4: scope version 2, the D9 plan and run up to its select export, and lane L's order (nothing written)
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`, fast-forwarded to `integrate/wave1`
+`fe48bf0`), main venv. **Nothing was written to production**: every read was a SELECT, the lane-L
+reversals were rehearsed only (ROLLBACK), and no model was called - the selector questions are
+exported, not answered. Contracts: `PHASE4_CONTRACTS.md` section 11.
+
+### The order and the recommendation taken
+
+Owner order 2026-09-25 (Martin, "keine Fragen mehr, autonom Empfehlungen umsetzen"): the recommended
+path is carried out. HUMAN_ONLY D9 lists the 9 curated sites whose description sets a `[N]` that
+`raw_data.description_citations` has no entry for (the orphan-citations lane's `SKIPPED.jsonl`, entry
+"Acceptance draw-2026-09-25 ends FAIL on A3 (D1)" above). Taken: option (c) - a marker without an
+entry is a proven text defect, so the 9 join the Phase-4 defect scope and get a sourced description
+through the same Phase-4 pipeline (pilot 4 passed T1-T7; lanes W and S open), or stay held with a
+closed-list reason where the pipeline holds them.
+
+### Scope version 2 (`phase4/scope4.py`, `phase4_runner/SCOPE4.v2.json`)
+
+* **The file**: `SCOPE4.v2.json`, sha256
+  `7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003173`, pinned in
+  `scope4.SCOPE_SHA256`; `SCOPE_VERSION = 2`. Built by `plan4.py scope` (the current version by
+  default) from version 1's inputs - `S0_ROWS.jsonl` (`2c99f96f...`) and
+  `logs/_write_dry/ALL_REFUSED.jsonl` (`7b4026d0...`) - and the lane's listing
+  `mechanical_citations/SKIPPED.jsonl` (`28dadb0b...`, commit `8bfa54f`, `--markers`), whose digest
+  joins the file's `inputs`.
+* **The lists**: `phase3-cleared-description` 322, `phase3-cleared-card` 709, `ungrounded-card` 876,
+  **`d1-marker-without-entry` 9** - **1,631 sites** (1,623 + 8). The new list's source is named in the
+  file's `methods` (the listing, reason `marker-without-entry`, D1 over every curated row of the
+  lane's export of 16:00:18 UTC) and its decision is version 1's plus the order above
+  (`scope4.ORDER_2026_09_25`).
+* **No site on the listing's word**: the build reads each listed site's own S0 row with D1's reading
+  (`scope4.markers_without_entry`: census T08's `marker_sequence` and `entries`, as
+  `acceptance/checks.d1` reads them) and refuses one whose every marker has its entry, or that is no
+  curated row. All 9 fail D1 on their S0 rows, and those rows are the live ones: their S0 and
+  `LEGACY4_ROWS.jsonl` (13:36 CEST) rows are identical, and today's production values (read-only,
+  journal max id 73734) are the S0 values plus lane L's `_description_provenance` (the card also
+  equal, except Killa Mach'ay's, cleared by P5).
+* **Version 2 refuses nothing version 1 allowed**: every version-1 site is a version-2 site whose
+  lists begin with its version-1 lists (tested on the committed files). Version 2 adds the 8 listed
+  sites version 1 did not hold, each in the new list alone; Killa Mach'ay (`867f08af`), a
+  `phase3-cleared-card` site, gains the list as its second.
+* **Version 1 stays** (`SCOPE4.json`, unchanged, now `scope4.SCOPE_V1_SHA256`): `plan4.py scope
+  --version 1` rebuilds it byte for byte; `scope4.load_scope(1)` reads it at its own pin; `plan4.py
+  build --pilot PILOT4.jsonl --defect-scope` builds the mass run's plan from it, and it rebuilt
+  `PLAN4.scope.jsonl` byte for byte (`fec90379...`, 1,578 sites). The writers, `mass4` and the new
+  list plan read version 2; a file of one version at the other's pin is refused.
+* **No flag**: the list adds no `SiteFlag`. A marker without an entry says nothing about the truth
+  of the text around it, so V9's 50 % floor stays for these sites (Acci's `t03-severe` waives it for
+  Acci alone).
+
+### Killa Mach'ay stays the mass run's
+
+Killa Mach'ay was already in version 1 and in the mass run: `runs/mass-2026-09-25/p4-0042`, held
+`abstained` ("no sentence can be the CARD: W1 names Peru, W2 and W4 open with It, and W3 is only 67
+characters"); P5 then cleared its card (`phase5:p5-0042:chunk-0001`, journal 71871). A run never asks
+its sites again, and `verify_writes4.index_runs` refuses a site two runs carry whenever both batches
+hold a written site (p4-0042 does) - a D9 batch holding it would stop every later P4 acceptance. So
+it is not planned again: it **stays held with a closed-list reason (`abstained`)** and stays a D1
+failure. The plan reports it (`carried_by_earlier_plans`).
+
+### The plan: 8 sites in p4-0901, not p4-0116
+
+`mass4.requeue_lines` numbers the mass run's re-queued sites after the last ordinal of its plan and
+of earlier re-queues - **p4-0116 on** - into `runs/mass-2026-09-25/REQUEUE4.jsonl`, and the 19
+`revision-too-fresh` sites wait for exactly that (the first from 2026-09-26T21:30:14Z). Every run
+writes into the one P4 apply root and a journal stamp names its batch (`phase4:p4-NNNN:chunk-0001`),
+so a D9 batch p4-0116 would share its directory and stamp with the mass run's first re-queued batch.
+The gate refuses a written batch re-planned from another plan and the preflight a stamp that
+journals rows, but a dry render of either would silently replace the other's unwritten plan. The
+list plan therefore has a block of its own: **p4-0901** (`plan4.LIST_PLAN_FIRST_BATCH`; lane L's
+plan starts at p4-1001), and it refuses to start where an earlier plan already numbers.
+
+    $PY scripts/remediation/phase4/plan4.py build --pilot $R4/PILOT4.jsonl \
+        --scope-list d1-marker-without-entry --after $R4/PLAN4.scope.jsonl --out $R4/PLAN4.d9.jsonl
+
+`PLAN4.d9.jsonl` (gitignored) sha256 `c38886e0...` (`logs/p4_d9/plan.out`): **1 batch, p4-0901, 8
+sites** in the design's order - Acci (`t03`, `t03-severe`), Temple of Zeus (Kyrene, `t03`), Laüs,
+Porth Hellick Down, Ağbulaq Necropolis, Afrodit Tapınağı, Absalom's Tomb, A Figa; listed 9, carried
+by an earlier plan 1 (Killa Mach'ay), in the pilot 0. A first attempt that also named
+`PLAN4.pilot4.jsonl` with `--after` was refused ("no site of the list is left to plan"): that file is
+the full 5,004-site plan, of which pilot 4 ran only its 9 batches; the pilot's sites are `--pilot`'s.
+
+### The run up to the select export (`runs/d9-2026-09-25`)
+
+    $PY scripts/remediation/phase4/mass4.py --plan $R4/PLAN4.d9.jsonl --run-dir $R4/runs/d9-2026-09-25 \
+        --log-dir $M/logs/p4_d9 --stages prepare,sources,routes,select --searches-off --live \
+        --handoff-export $M/handoff/p4-d9-select
+
+`logs/p4_d9/export.out`: `defect scope SCOPE4.v2.json v2 7256a1962ffe1b24: 0 site(s) of the open
+batches outside it`, searches off (no MiniMax client), `sources phase4 6037a01ce927eb2d`, `p4-0901:
+done (prepare,sources,routes,select: every stage printed STAGE_EXIT=0)`, `STAGE_EXIT=0`.
+
+* **Lanes at S1b** (`p4-0901/lanes.jsonl`): **W 6** - Acci (rev 1365083849), Temple of Zeus
+  ("Temple of Zeus, Cyrene", 1357486765), Laüs (1374837200), Porth Hellick Down (1364975097),
+  Ağbulaq Necropolis ("Ağbulaq necropolis", 1364725990), Absalom's Tomb ("Tomb of Absalom",
+  1369713184), each subject verdict `own`, none younger than 48 h; **none 2**, held
+  `search-stopped` before any question (searches off): Afrodit Tapınağı (no `enwiki_title`, its
+  `source_url` is UNESCO list 1519) and A Figa (no `enwiki_title`, no en article of that name, one
+  geosearch article within 2 km). `HOLDS4.jsonl` 2 lines.
+* **The ledger** (`runs/d9-2026-09-25/LEDGER.jsonl`): 13 fetch lines, every one HTTP 200, 0 model
+  lines.
+* **The handoff**: `handoff/p4-d9-select/p4-0901` - **6 selector questions** (`MANIFEST.jsonl`
+  `f2822eb0...`). `opus_handoff.py validate --dir handoff/p4-d9-select`: questions 6, **answered 0,
+  missing 6**, stale 0, malformed 0, orphans 0.
+
+### The apply roots, the gate and the acceptance with a third run
+
+* The D9 run writes into the same apply roots, `logs/_write_apply_p4` (write batch p4-0901) and
+  `_write_apply_p5` (p5-0901), so each lane keeps one `LANE_PLAN.jsonl`, and every p4 and p5
+  acceptance names all three runs (`--run` pilot 4, mass, d9). Neither root has a step awaiting its
+  acceptance (P4 14 accepted, P5 13).
+* **The gate over the run before its answers** (`write_gate4.py --group P4 --run d9-2026-09-25
+  --open-lanes W,S`): it ended in a `FileNotFoundError` for `p4-0901/assembly.jsonl` **without its
+  `WRITE_EXIT=` line**. Fixed test-first: `write4.load_batch` refuses a batch short of `lanes.jsonl`,
+  `assembly.jsonl` or `holds.jsonl` as the hole it is (`PlanInputError`), and the gate now prints
+  `REFUSED: p4-0901: no assembly.jsonl: the batch has not reached an outcome - the gate plans a batch
+  once its review is imported` and `WRITE_EXIT=1` (`logs/p4_d9/gate-p4-dry-before-answers.log`); the
+  apply root's listing is unchanged. Every finished batch of pilot 4 and the mass run carries all
+  three files (115 of 115). The gate plans the batch once its review is imported - the refusal of
+  an unfinished batch is the design's (a hole, not a set of refusals), not a refusal of the run.
+* **A third run beside two** (`test_a_third_run_is_written_into_the_apply_root_two_runs_wrote`):
+  pilot 4's and the mass run's batches written and accepted, the D9 run's p4-0901 planned, written
+  and accepted in the same apply root - their records byte for byte unchanged, the step's stamp
+  `phase4:p4-0901:chunk-0001`, the lane plan every run's rows.
+* **The P4 acceptance with the D9 run named** (read-only, `logs/p4_d9/accept-p4-three-runs-before-d9.log`
+  `b50b2e35...`): `verify_writes4.py --lane p4 --plan logs/_write_apply_p4/LANE_PLAN.jsonl` (`f3a7899e...`)
+  with the three runs and `--allow-stamp 'phase4l:%'` - planned 1,972, journal 1,972, carried 1,968,
+  not yet written 2, superseded 2, **984 re-verified, 0 deviations**, `ACCEPT_EXIT=0`, as without it:
+  the D9 batch holds no written site and is not read (`004d522`).
+
+### Lane L's order: its row is taken back before the P4 write (the design's way)
+
+Lane L marked every March-AI text P4 had not written, and so all 9 listed sites (journal, read-only:
+each has exactly one `raw_data` row since S0, its L row; no description row). The D9 plan names S0's
+values, so **P4's preflight would refuse the batch** (`<id>/raw_data: the row no longer holds the
+planned old value`): proven below.
+
+**Decision: revert the L row first, with `revert4.py --site`, for exactly the sites the P4 dry plan
+writes, after the review import - not a fresh plan read.** Contracts section 9 names this way ("the
+way back is `revert4.py --stamp-like 'phase4l:...' --site <id>`"; "its L row is reverted before its P4
+write"). The D9 plan then stands on the same S0 read as the mass run and the scope; the mass run's 19
+re-queued sites need this order anyway (their plan lines are S0's and lane L marked them); and lane
+L's gate stays consistent - a re-plan that leaves a P4-written site out is accepted only on the
+proof that the site's L row is reverted (`sites_taken_back`), where a P4 write over a live L row
+would leave L's gate refusing its written batch. A site P4 holds keeps its L row, so no March text
+is left unmarked.
+
+* **The proof, one transaction ending in ROLLBACK** (`logs/p4_d9/L_ORDER_PROOF.sql` `1afab084...`,
+  `.out` `c72cd147...`): for the 6 lane-W sites, whether each holds the P4 plan's old values - its
+  `input.json` description as text, raw_data as jsonb - before, after revert4's own reversal of its
+  L row, and after the ROLLBACK:
+
+  | read | description at the plan's old value | raw_data at the plan's old value | provenance |
+  |---|---|---|---|
+  | before the reversal | 6 of 6 | **0 of 6** | L |
+  | after the 6 reversals (`NOTICE: revert: 1 row(s) reverted`, six times) | 6 of 6 | **6 of 6** | none |
+  | after ROLLBACK | 6 of 6 | 0 of 6 | L |
+
+  Afterwards 0 journal rows under the six stamps plus `-rollback`.
+* **Rendered and rehearsed per site** (`logs/p4_d9/revert-L-<id>.sql`, `.rehearse.log`): each
+  `BEGIN`, `DO`, `ROLLBACK`, then `journalled writes matched|1`, `reversals kept|0`, `WRITE_EXIT=0`.
+  The two `search-stopped` sites need none.
+
+  | site | id | L stamp |
+  |---|---|---|
+  | Laüs | `1c899f53-4414-4954-821d-9119802aa39a` | `phase4l:p4l-1038:chunk-0001` |
+  | Porth Hellick Down | `1f66729b-c7e8-476a-b9cc-84b23a36074f` | `phase4l:p4l-1042:chunk-0001` |
+  | Acci | `89f1d2b7-2579-4c33-82b3-8b58d7857c53` | `phase4l:p4l-1177:chunk-0001` |
+  | Ağbulaq Necropolis | `a9c5d1bf-b6d0-4486-a507-8dddfdc57a02` | `phase4l:p4l-1218:chunk-0001` |
+  | Temple of Zeus (Kyrene) | `bf538bd9-912c-471a-964a-f94842e17491` | `phase4l:p4l-1247:chunk-0001` |
+  | Absalom's Tomb | `fb9e7ccb-2ffd-4bb8-a78d-1e2993881090` | `phase4l:p4l-1328:chunk-0001` |
+  | (held) Afrodit Tapınağı | `c0e10d6e-fb0e-4e9c-a910-631da9e578ea` | `phase4l:p4l-1250:chunk-0001` |
+  | (held) A Figa | `fe4edbed-be84-4b80-b5de-62ab3e4c88ef` | `phase4l:p4l-1331:chunk-0001` |
+
+* **Lane L's acceptance afterwards** (tested: `test_an_l_row_taken_back_before_a_p4_write_is_superseded_and_never_complete`):
+  between the reversal and the P4 write a taken-back row is not yet written, at its old value; after
+  the P4 write it is superseded under `--allow-stamp 'phase4:%'` and MOVED without it; `--complete`
+  names it `NOT WRITTEN`, as it names a P4 site taken back (contracts section 10). So L's acceptance
+  after D9 runs without `--complete` and reads `not yet written 0`.
+
+### The orchestrator's commands (worktree `.claude/worktrees/p4-pilot`, as `C:/tmp/p4m_group.sh`)
+
+    cd /c/PythonProjects/AncientMap/.claude/worktrees/p4-pilot; export PYTHONIOENCODING=utf-8
+    PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+    P4=scripts/remediation/phase4; OH=scripts/remediation/opus_handoff.py; H=$M/handoff/p4-d9
+    RUN=$R4/runs/d9-2026-09-25; MAIN=C:/PythonProjects/AncientMap; L=$M/logs/p4_d9
+    ROUND="--plan $R4/PLAN4.d9.jsonl --run-dir $RUN --log-dir $L --only p4-0901 --searches-off --live"
+    GATE="$M/tools/write_gate4.py --run d9-2026-09-25 --batch p4-0901"
+    RUNS="--run $R4/runs/pilot4-2026-09-24 --run $R4/runs/mass-2026-09-25 --run $RUN"
+    P3="--phase3-run $MAIN/$M/phase3_runner/runs/mass --phase3-refused $MAIN/$M/logs/_write_dry/ALL_REFUSED.jsonl"
+
+1. **Select.** One Opus agent (`opus-p4d9-select-p4-0901`) answers the 6 prompts
+   `$H-select/p4-0901/finder/*.prompt.txt`, each with `$PY $OH answer --dir $H-select --batch-id
+   p4-0901 --stage finder --label <label> --answered-by opus-p4d9-select-p4-0901 --text-file <file>`.
+   `$PY $OH validate --dir $H-select` -> answered 6, missing 0, stale 0, malformed 0. Then
+   `$PY $P4/mass4.py $ROUND --stages select --handoff-import $H-select` -> `STAGE_EXIT=0`.
+2. **Translate, assemble, verify.** `$PY $P4/mass4.py $ROUND --stages translate --handoff-export
+   $H-translate` (lane T is closed: no question, no directory - if `$H-translate` appears, stop and
+   answer it first), then `$PY $P4/mass4.py $ROUND --stages translate,assemble,verify
+   --handoff-import $H-translate`.
+3. **Review.** `$PY $P4/mass4.py $ROUND --stages review --handoff-export $H-review`; one agent
+   (`opus-p4d9-review-p4-0901`) answers `$H-review/p4-0901`; `$PY $OH validate --dir $H-review`
+   clean; `$PY $P4/mass4.py $ROUND --stages review --handoff-import $H-review` (p4-0901 done: "k
+   assembled, m held"); `$PY $P4/run4.py holds --run-dir $RUN`.
+4. **P4 dry.** `$PY $GATE --group P4 --open-lanes W,S` -> `defect scope: SCOPE4.v2.json v2
+   7256a1962ffe1b24, 1631 sites ...: 8 of the run's 8 sites`, rows planned 2k, `WRITE_EXIT=0`. The
+   k sites it writes: `$PY -c "import json; print(sorted({json.loads(l)['site_id'] for l in
+   open('$M/logs/_write_apply_p4/p4-0901/PLAN.jsonl', encoding='utf-8')}))"`. With k = 0 stop here:
+   nothing is reverted or written, and HUMAN_ONLY D9 keeps the held sites with their reasons.
+5. **The preflight's refusal (read-only proof).** `$PY $GATE --group P4 --open-lanes W,S --rehearse`
+   -> `STOP at p4-0901: <id>/raw_data: the row no longer holds the planned old value` for each of
+   the k sites, `WRITE_EXIT=1`; nothing is sent after the preflight and a rehearsal leaves no
+   `STOPPED.json`.
+6. **Lane L's rows of the k sites, and only those** (stamps in the table above): `$PY
+   $P4/revert4.py --stamp-like '<L stamp>' --site <id> --out $L/revert-L-<id>.sql`, then
+   `--rehearse` (`journalled writes matched|1`, `reversals kept|0`, `WRITE_EXIT=0`), then `--apply`
+   (`reversals kept|1`, `WRITE_EXIT=0`). A non-zero or missing exit line: read the journal for
+   `<L stamp>-rollback` before anything else, never apply twice. Then, read-only: `$PY
+   $M/tools/verify_writes4.py --lane p4l --plan $M/logs/_write_apply_p4l/LANE_PLAN.jsonl
+   --allow-stamp '2026-09-25_mechanical-orphan-citations' > $L/accept-p4l-after-L-revert.log` ->
+   carried 3,936 - k, not yet written k, superseded 67, 0 deviations.
+7. **P4 rehearse, apply, accept.** `$PY $GATE --group P4 --open-lanes W,S --rehearse` -> `every open
+   batch rehearsed`, `WRITE_EXIT=0`; `$PY $GATE --group P4 --open-lanes W,S --apply --step 100` ->
+   `STEP COMPLETE: k site(s) written in 1 batch(es)`, `WRITE_EXIT=0`; `$PY
+   $M/tools/verify_writes4.py --lane p4 --plan $M/logs/_write_apply_p4/LANE_PLAN.jsonl $RUNS
+   --allow-stamp 'phase4l:%' > $L/accept-p4-step-15.log` -> planned and journal 1,972 + 2k, carried
+   1,968 + 2k, not yet written 2, superseded 2, 984 + k re-verified, 0 deviations, `ACCEPT_EXIT=0`;
+   only then `$PY $GATE --group P4 --open-lanes W,S --accept $L/accept-p4-step-15.log` -> `ACCEPTED
+   step 15`.
+8. **Lane L after the write** (read-only): `$PY $M/tools/verify_writes4.py --lane p4l --plan
+   $M/logs/_write_apply_p4l/LANE_PLAN.jsonl --allow-stamp '2026-09-25_mechanical-orphan-citations'
+   --allow-stamp 'phase4:%' > $L/accept-p4l-after-d9.log` -> 4,003 / 4,003, carried 3,936 - k, not
+   yet written 0, superseded 67 + k, 0 deviations (`--complete` names the k rows `NOT WRITTEN`, by
+   design).
+9. **P5 dry and rehearsal.** `$PY $GATE --group P5 $P3` -> `live phase-4 provenance: k of 8 planned
+   sites (read-only)`, the written sites' cards planned (a card-held site has none); `$PY $GATE
+   --group P5 $P3 --rehearse`.
+10. **The card file, pre-rendered in the MAIN checkout** (the database first, then the file): `$PY
+    $P4/card_json.py --prerender --file $MAIN/public/data/card_descriptions.json --plan4
+    $R4/PLAN4.jsonl --p5-root $M/logs/_write_apply_p5` -> `pre-rendered ... cards`, `WRITE_EXIT=0`;
+    commit it in the main checkout, not pushed.
+11. **P5 apply and accept.** `$PY $GATE --group P5 $P3 --apply --step 100` -> `STEP COMPLETE`; `$PY
+    $M/tools/verify_writes4.py --lane p5 --plan $M/logs/_write_apply_p5/LANE_PLAN.jsonl $RUNS >
+    $L/accept-p5-step-14.log` -> 0 deviations; `$PY $GATE --group P5 $P3 --accept
+    $L/accept-p5-step-14.log` -> `ACCEPTED step 14`.
+12. **Regenerate.** `$PY $P4/card_json.py --regenerate --file $MAIN/public/data/card_descriptions.json`
+    -> `REGENERATE: byte-identical with the pre-render`, `WRITE_EXIT=0` (a difference is written
+    beside it as `.regenerated`: stop).
+13. **Push.** In the main checkout: `wip/p4-pilot` merged into `integrate/wave1` (fast-forward), the
+    card-file commit on top, the pre-push gates, `git push origin integrate/wave1:main`. After the
+    deploy: the `commit` of `http://localhost:8000/` on the VPS; `verify_writes4.py --boot-logs
+    --since <StartedAt>` (0 overwrite lines); `$PY $P4/card_json.py --check --file
+    $MAIN/public/data/card_descriptions.json` (`ACCEPT_EXIT=0`); `verify_writes4.py --lane p5 ...
+    $RUNS --complete` (0 deviations); the static export (Phase-6 runbook step 3), the Qdrant resync
+    and IndexNow for the k new descriptions; and D1 again, `$PY
+    scripts/remediation/mechanical/citations.py --export --write --out $M/logs/orphan_citations/after-d9`
+    from the main checkout -> `"d1_fails": 9 - k`.
+
+### Open
+
+* **What stays a D1 failure**: Killa Mach'ay (`abstained`, the mass run's), Afrodit Tapınağı and A
+  Figa (`search-stopped`, no Wikipedia article to anchor), and any lane-W site the selector or the
+  reviewer holds. With 3 such sites in the next draw's pool of 4,194, a sample of 60 hits one with
+  probability 4.2 % (9: 12.2 %). What remains goes back to HUMAN_ONLY D9 for options (a) or (b),
+  with the reason each was held.
+* **The mass run's 19 `revision-too-fresh` sites** carry lane-L rows too (all 19 are in L's lane
+  plan) and their re-queued plan lines are S0's: the same order - their L rows taken back after
+  their review and before their P4 write - applies when `mass4` re-queues them (p4-0116 on).
+* **card_stats**: the k new descriptions move `md5(description)`; they are the next card_stats
+  wave's work (HANDOVER 2.4).
+* **The fresh acceptance draw** comes after these writes (a P4 write on a drawn site voids it, V3).
+* The lane-L acceptance's `--complete` counts a taken-back row a later allowed lane wrote as `NOT
+  WRITTEN`; reading `not yet written 0` without `--complete` is the check (recorded, not changed).

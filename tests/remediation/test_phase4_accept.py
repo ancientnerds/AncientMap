@@ -795,6 +795,77 @@ def test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line(
     assert G.acceptance_problems(text, step=step, written=written_rounds, used=set()) == []
 
 
+#: The D9 run's P4 stamp (owner order 2026-09-25; `plan4.LIST_PLAN_FIRST_BATCH`).
+D9_STAMP = "phase4:p4-0901:chunk-0001"
+
+
+def _legacy_written(tmp_path: Path) -> Written:
+    """Lane L's row of one March text: planned, journalled under its stamp, live."""
+    legacy = _legacy_raw()
+    plan = [
+        _plan_row(SITE_ID, "unified_sites", "raw_data", dumps(OLD_RAW), dumps(legacy), "k-legacy")
+    ]
+    journal = [
+        {
+            "id": 41,
+            "table_name": "unified_sites",
+            "column_name": "raw_data",
+            "row_pk": SITE_ID,
+            "old_value": dumps(OLD_RAW),
+            "new_value": dumps(legacy),
+            "run_stamp": P4L_STAMP,
+            "change_key": "k-legacy",
+            "evidence": {},
+        }
+    ]
+    sites = {
+        SITE_ID: {
+            "description": STORED,
+            "raw_data": legacy,
+            "card_description": None,
+            "has_card_row": True,
+        }
+    }
+    production = FakeProduction(journal=journal, sites=sites)
+    return Written(make_case(), tmp_path / "runs" / "none", plan, production)
+
+
+def test_an_l_row_taken_back_before_a_p4_write_is_superseded_and_never_complete(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The D9 order (owner order 2026-09-25; contracts section 9, "its L row is reverted before its
+    P4 write"): lane L marked the March text, `revert4 --site` takes that row back (its own reversal
+    kept, S0's raw_data again), and P4 then writes the site from the raw_data its plan names. Lane
+    L's acceptance judges its row like one not yet written: at its old value in between, then
+    superseded under `--allow-stamp 'phase4:%'` and MOVED without it; `--complete` names it NOT
+    WRITTEN, as it names a P4 site taken back (section 10)."""
+    written = _legacy_written(tmp_path)
+    assert accept(written, tmp_path, "p4l") == []
+    legacy = written.production.sites[SITE_ID]["raw_data"]
+    reversal = {
+        "id": 42,
+        "old_value": dumps(legacy),
+        "new_value": dumps(OLD_RAW),
+        "run_stamp": P4L_STAMP + "-rollback",
+        "change_key": "k-legacy-rollback",
+    }
+    written.production.journal.append(dict(written.production.journal[0], **reversal))
+    written.production.sites[SITE_ID]["raw_data"] = OLD_RAW
+    capsys.readouterr()
+    assert accept(written, tmp_path, "p4l") == []
+    assert "| carried 0 | not yet written 1 | superseded 0" in capsys.readouterr().out
+
+    p4_raw = dict(OLD_RAW, **{M.PROVENANCE_KEY: {"lane": "W"}})
+    _later(written, old=OLD_RAW, new=p4_raw, stamp=D9_STAMP)
+
+    assert [d.split(":")[0] for d in accept(written, tmp_path, "p4l")] == [MOVED_RAW]
+    capsys.readouterr()
+    assert accept(written, tmp_path, "p4l", allow_stamp=["phase4:%"]) == []
+    assert "| carried 0 | not yet written 0 | superseded 1" in capsys.readouterr().out
+    complete = accept(written, tmp_path, "p4l", allow_stamp=["phase4:%"], complete=True)
+    assert [d.split(":")[0] for d in complete] == [f"NOT WRITTEN {SITE_ID} unified_sites.raw_data"]
+
+
 def test_a_planned_row_outside_the_lanes_columns_is_a_deviation(tmp_path: Path) -> None:
     written = written_p4(tmp_path)
     written.plan.append(
