@@ -2105,3 +2105,33 @@ class TestTheValueTableReadsJson:
         assert "row_to_json" in sent[0] and "IS NOT NULL" in sent[0]
         table = A.verify_interests([record(old_value="Georgia|Kakheti")], L.T05)
         assert "Georgia|Kakheti" in table and "Georgia " in table
+
+
+class TestTheValidatorsTakeNoTrailingNewline:
+    """Audit 2026-09-25 m13: `^...$` with `.match` accepts a trailing newline, so a pair id or a
+    lane constant carrying one passed the check - and then silently matched nothing."""
+
+    def test_a_uuid_with_a_trailing_newline_is_not_a_uuid(self) -> None:
+        assert P.UUID_RE.match(SITE_GEORGIA)
+        assert P.UUID_RE.match(SITE_GEORGIA + "\n") is None
+        with pytest.raises(P.PlanError, match="is not a UUID"):
+            P.sql_ids([SITE_GEORGIA + "\n"])
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("plan_table", "_country_plan\n"),
+            ("label", "T05 country\n"),
+            ("key_prefix", "country-canonical\n"),
+            ("lock_timeout", "10s\n"),
+        ],
+    )
+    def test_a_lane_constant_with_a_trailing_newline_is_refused(
+        self, field: str, value: str
+    ) -> None:
+        with pytest.raises(ValueError):
+            replace(L.T05, **{field: value})
+
+    def test_an_export_kind_with_a_trailing_newline_is_refused(self) -> None:
+        with pytest.raises(P.PlanError, match="is not a kind"):
+            P.tagged_export_script([("site\n", "SELECT 1")])

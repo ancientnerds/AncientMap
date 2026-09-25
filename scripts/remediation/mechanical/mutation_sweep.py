@@ -1262,8 +1262,8 @@ CASES: list[Case] = [
     Case(
         "cells: a wave label is a date",
         LANE,
-        r'CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)$")',
-        r'CARD_STATS_LANE = re.compile(r"^card-stats-(.+)$")',
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")',
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(.+)\Z")',
         "test_a_card_stats_wave_resolves_and_nothing_else_does",
         CELL_TESTS,
     ),
@@ -4816,6 +4816,20 @@ AUDIT_FIX_CASES: list[Case] = [
         '        if decision is None and "museum" in str(site["site_type"]).casefold():',
         "test_an_undated_museum_without_a_decision_is_refused_not_pending",
         SCOPE_TESTS,
+    ),
+    Case(
+        "audit-fix: m13 a UUID may end in a newline",
+        PLAN,
+        r'[0-9a-f]{12}\Z")',
+        r'[0-9a-f]{12}$")',
+        "test_a_uuid_with_a_trailing_newline_is_not_a_uuid",
+    ),
+    Case(
+        "audit-fix: m13 a lane constant may end in a newline",
+        LANE,
+        r'_KEY_PREFIX = re.compile(r"^[a-z0-9-]+\Z")',
+        r'_KEY_PREFIX = re.compile(r"^[a-z0-9-]+$")',
+        "test_a_lane_constant_with_a_trailing_newline_is_refused",
     ),
     Case(
         "audit-fix: m9 jsonl_lines splits at every line break",

@@ -160,7 +160,8 @@ CONFIDENCE = T05.confidence
 CURATED_SOURCE = "ancient_nerds"
 COUNTRY_COLUMN_CHARS = T05.max_chars
 HINT_WORDS = frozenset({"country", "state", "nation", "republic"})
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+#: `\Z`, never `$`: `$` also matches before a trailing newline (audit 2026-09-25 m13).
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 
 DEFAULT_CANDIDATES = REPO / "output/remediation/run_t05/findings.jsonl"
 DEFAULT_WORKLIST = REPO / "output/remediation/phase3_worklist/WORKLIST.jsonl"
@@ -1391,7 +1392,7 @@ def sql_ids(ids: Iterable[str]) -> str:
 #: The kind of the one line a tagged export ends with: the snapshot's own clock.
 SNAPSHOT_KIND = "snapshot"
 #: A kind is spliced into a SQL string literal: lowercase letters and underscores, nothing else.
-_EXPORT_KIND = re.compile(r"^[a-z_]+$")
+_EXPORT_KIND = re.compile(r"^[a-z_]+\Z")
 
 
 def tagged_export_script(parts: Sequence[tuple[str, str]]) -> str:

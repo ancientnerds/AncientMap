@@ -68,13 +68,13 @@ from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.public_sites import SCOPE_STATUSES
 from pipeline.utils.text import PERIOD_BUCKETS
 
-_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
+_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*\Z")
 #: The label is spliced into RAISE message literals: no quote (it would end the literal) and no `%`
 #: (it would be read as a placeholder and consume an argument).
-_LABEL = re.compile(r"^[A-Za-z0-9 _/-]+$")
-_KEY_PREFIX = re.compile(r"^[a-z0-9-]+$")
+_LABEL = re.compile(r"^[A-Za-z0-9 _/-]+\Z")
+_KEY_PREFIX = re.compile(r"^[a-z0-9-]+\Z")
 #: A Postgres duration as `SET LOCAL ... = '<value>'` takes it: digits and a unit, nothing else.
-_DURATION = re.compile(r"^[1-9][0-9]*(ms|s|min)$")
+_DURATION = re.compile(r"^[1-9][0-9]*(ms|s|min)\Z")
 
 
 @dataclass(frozen=True)
@@ -1224,7 +1224,7 @@ LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
 #: twice" still holds, and its own directory.
-CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)$")
+CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
 
 
 def resolve_lane(name: str) -> Lane:

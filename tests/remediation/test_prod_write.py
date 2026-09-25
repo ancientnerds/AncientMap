@@ -140,11 +140,10 @@ def test_every_psql_json_reader_splits_at_lf_only(monkeypatch: pytest.MonkeyPatc
     broken lines. Every psql JSON reader splits at LF only (`prod_write.jsonl_lines`)."""
     import json
 
+    from gallery_audit import persist_verdicts as pv
     from mechanical import apply as A
     from mechanical import plan as P
     from phase3 import write_stage as WS
-
-    from gallery_audit import persist_verdicts as pv
 
     name = "Jane Doe and\u0085co"
     assert W.jsonl_lines("a b\nc") == ["a b", "c"]
