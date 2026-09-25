@@ -135,6 +135,12 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 - **Der PWA-Service-Worker schluckt Nicht-`.html`-Pfade.** Jede Server-Route muss in
   `navigateFallbackDenylist` (`vite.config.ts`) stehen; `curl` sieht den Bug nicht.
   *(`reference-deployment-lessons:11`)*
+- **Eine Precache-URL ohne 200 legt den Service Worker still.** Workbox installiert nur, wenn
+  jede Precache-URL 200 liefert; sonst behält jeder Browser seinen alten Worker samt alter Seiten.
+  `/site.html` antwortete ab 12.09. mit 404 (die API bedient die URL, die Datei ist nur SSR-Vorlage):
+  zwei Wochen lang installierte kein Worker. Seiten, deren URL nginx an die API gibt, gehören in
+  `src/pwa/precacheExclusions.ts` (Test liest die nginx-Config). Prüfen per DevTools-Protokoll
+  (`ServiceWorker.workerErrorReported`), nicht per `curl`. *(2026-09-26, ac0ea0a)*
 - **Browser-Speicher nie im Render-Pfad** — sonst React-Hydration-Fehler 418 auf allen
   SSR-Seiten. Wächter: `render.test.tsx`. *(`reference-ssr-hydration-storage`, 2026-09-18)*
 - **SitePopup: Das Verhalten der SEO-Seite hängt an `fullPage`, nie an `isStandalone`**
