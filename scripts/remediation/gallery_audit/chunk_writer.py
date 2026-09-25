@@ -65,6 +65,8 @@ from mechanical.plan import UUID_RE  # noqa: E402
 from persist_verdicts import OutcomeUnknown  # noqa: E402
 from prod_write import pin_line  # noqa: E402
 
+from pipeline.lyra.site_key import site_key_sql  # noqa: E402  (repo root: mechanical.apply)
+
 CURATED_SOURCE = "ancient_nerds"
 SITES_PER_CHUNK = 100
 KEY_COLUMN = "id"
@@ -87,10 +89,17 @@ WRITABLE: dict[tuple[str, str], str] = {
     ("wiki_images", "height"): "integer",
     ("wiki_images", "file_size_bytes"): "integer",
     ("unified_sites", "thumbnail_url"): "text",
+    # The match keys (Phase 6 item 2, scripts/remediation/name_key/plan.py): each written value
+    # must be the key Postgres derives from its row's name at write time (guard 2c).
+    ("unified_sites", "name_normalized"): "text",
+    ("unified_site_names", "name_normalized"): "text",
 }
 #: The key type of each table, so a key is compared in its own type and the primary-key index is
 #: used (the reason migration 0022 exists).
-KEY_TYPES = {"wiki_images": "integer", "unified_sites": "uuid"}
+KEY_TYPES = {"wiki_images": "integer", "unified_sites": "uuid", "unified_site_names": "integer"}
+#: The tables whose rows carry a name the match key is derived from, and the alias guard 2c reads
+#: them under.
+NAME_KEY_TABLES = {"unified_sites": "s", "unified_site_names": "n"}
 #: 0017's confidence vocabulary.
 CONFIDENCES = frozenset({"authoritative", "two_source", "weak", "unverifiable"})
 
@@ -222,6 +231,8 @@ def validate_change(change: Change) -> None:
             raise ChunkError(f"{change.column} {what} {value!r} is not an integer")
     if change.new_value is None and kind != "text":
         raise ChunkError(f"{change.column} is never cleared to NULL by an image lane")
+    if change.column == "name_normalized" and change.new_value is None:
+        raise ChunkError(f"{change.table} {change.row_key}: a match key is never cleared to NULL")
     if change.column == "image_kind" and change.new_value not in pv.VOCAB | {None}:
         raise ChunkError(f"image_kind {change.new_value!r} is outside 0019's vocabulary")
     if not TOKEN_RE.fullmatch(change.rule.lower()):
@@ -414,6 +425,50 @@ GUARD_OLD = """
         RAISE EXCEPTION '{label}: % planned {column} row(s) no longer hold the planned old value', bad;
     END IF;"""
 
+#: Guard 2b, rendered only for a chunk that writes a unified_site_names row: the row exists and
+#: belongs to the site the plan names (the image rows' guard 2, for name rows).
+GUARD_NAME_ROW = """
+    -- guard 2b: every planned name row exists and belongs to the site the plan names
+    SELECT count(*) INTO bad FROM {plan} p
+      LEFT JOIN unified_site_names n ON n.id = {key}
+     WHERE p.table_name = 'unified_site_names' AND (n.id IS NULL OR n.site_id IS DISTINCT FROM p.site_id);
+    IF bad > 0 THEN
+        RAISE EXCEPTION '{label}: % planned name row(s) do not belong to the site the plan names', bad;
+    END IF;"""
+
+#: Guard 2c, rendered only for the write of a chunk that writes a match key: the planned key is the
+#: one Postgres derives from the row's name now (pipeline/lyra/site_key.py). A name changed since
+#: the read makes the plan stale, and the whole transaction refuses. The rollback restores the
+#: journalled old key, which is by definition not that key, so it renders no premise.
+GUARD_NAME_KEY = """
+    -- guard 2c: every planned {table} key is the key Postgres derives from the row's name now
+    SELECT count(*) INTO bad FROM {plan} p JOIN {table} {alias} ON {alias}.id = {key}
+     WHERE p.table_name = {t} AND p.column_name = 'name_normalized'
+       AND p.new_value IS DISTINCT FROM {derived};
+    IF bad > 0 THEN
+        RAISE EXCEPTION '{label}: % planned key(s) are not the key Postgres derives from the name', bad;
+    END IF;"""
+
+
+def _name_key_guards(rows: Sequence[Change], *, rollback: bool) -> str:
+    """Guards 2b and 2c for the key rows of a chunk; empty for a chunk that writes none, so every
+    image chunk renders byte for byte as it did before the key columns existed."""
+    blocks = []
+    if any(c.table == "unified_site_names" for c in rows):
+        blocks.append(GUARD_NAME_ROW.replace("{key}", _plan_key("unified_site_names")))
+    if not rollback:
+        for table, alias in sorted(NAME_KEY_TABLES.items()):
+            if any(c.table == table and c.column == "name_normalized" for c in rows):
+                blocks.append(
+                    GUARD_NAME_KEY.replace("{table}", table)
+                    .replace("{alias}", alias)
+                    .replace("{key}", _plan_key(table))
+                    .replace("{t}", L(table))
+                    .replace("{derived}", site_key_sql(f"{alias}.name"))
+                )
+    return "".join("\n" + block for block in blocks)
+
+
 INVARIANT_NEW = """
     SELECT count(*) INTO bad FROM {plan} p JOIN {table} t ON t.id = {key}
      WHERE p.table_name = {t} AND p.column_name = {c}
@@ -465,6 +520,7 @@ def render_statement(chunk: Chunk, *, rollback: bool = False) -> str:
         return template.replace("{plan}", PLAN_TABLE).replace("{label}", label)
 
     guards = "\n".join(fill(block) for block in _per_column(rows, GUARD_OLD))
+    name_guards = fill(_name_key_guards(rows, rollback=rollback))
     invariants = "\n".join(fill(block) for block in _per_column(rows, INVARIANT_NEW))
     hero = "\n".join(one_hero_invariant_sql(PLAN_TABLE, label=label, at_most=True))
     vocab = ", ".join(L(k) for k in sorted(pv.VOCAB))
@@ -523,7 +579,7 @@ BEGIN
      WHERE p.table_name = 'wiki_images' AND (w.id IS NULL OR w.site_id IS DISTINCT FROM p.site_id);
     IF bad > 0 THEN
         RAISE EXCEPTION '{label}: % planned image row(s) do not live on the site the plan names', bad;
-    END IF;
+    END IF;{name_guards}
 
     -- guard 3: every planned row still holds the planned old value (NULL-safe)
 {guards}

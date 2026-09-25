@@ -7,8 +7,9 @@
 decomposes (NFKD) and strips combining marks - it drops the Japanese (han)dakuten (ヤップ島 ->
 ヤッフ島), leaves Hangul as bare jamo, and cuts a parenthesised part ("Cerutti Mastodon (CM) site"
 -> "cerutti mastodon  site"). Read on production 2026-09-25: exactly 11 alias rows of curated
-sites carry a key other than the SQL key of their own name, all `wikidata_alias` - North Sentinel
-Island, Yap (4), Cerutti Mastodon site, Roopkund Lake, Charnwood Forest (2), Doggerland (2). No
+sites carry a key other than the SQL key of their own name, all `wikidata_alias` on six
+Lyra-promoted sites (source `lyra`) - North Sentinel Island, Yap (4), Cerutti Mastodon site,
+Roopkund Lake, Charnwood Forest (2), Doggerland (2); 0 on the 5,004 `ancient_nerds` sites. No
 exact lookup of those names reaches the site, and a second Lyra match of the same site would add
 the alias again under the SQL key next to the old one (the existence check compared Python keys).
 

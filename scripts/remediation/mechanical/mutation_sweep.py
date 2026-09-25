@@ -4060,6 +4060,166 @@ THUMBNAIL_CASES: list[Case] = [
 ]
 CASES += THUMBNAIL_CASES
 
+# ----------------------------------------------- Phase 6 follow-through (2026-09-25)
+#: The match-key lane (`name_key/plan.py`) and the chunk writer's two key columns, the static
+#: export's preflight, Lyra's semantic search without retired sites and Lyra's alias key in SQL.
+NAME_KEY = REPO / "scripts/remediation/name_key/plan.py"
+NAME_KEY_TESTS = "tests/remediation/test_name_key_lane.py"
+LYRA_TOOLS = REPO / "api/services/lyra_tools.py"
+SITE_IDENTIFIER = REPO / "pipeline/lyra/site_identifier.py"
+PREFLIGHT_TESTS = "tests/pipeline/test_static_export_preflight.py"
+VECTOR_TESTS = "tests/api/test_lyra_vector_search_scope.py"
+ALIAS_TESTS = "tests/pipeline/test_wikidata_alias_key.py"
+PHASE6_CASES: list[Case] = [
+    *(
+        guard(f"name key: {label}", path, needle, test, testfile)
+        for label, path, needle, test, testfile in (
+            (
+                "the name row guard is rendered",
+                CHUNK,
+                '    if any(c.table == "unified_site_names" for c in rows):',
+                "test_the_name_row_guard_is_rendered_in_both_directions",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "a key is never cleared",
+                CHUNK,
+                '    if change.column == "name_normalized" and change.new_value is None:',
+                "test_a_key_is_never_cleared",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "a key another row holds is listed",
+                NAME_KEY,
+                '    if row.get("collides_with") is not None:',
+                "test_a_key_another_row_of_the_site_already_holds_is_listed_not_planned",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "only the writer's source is planned",
+                NAME_KEY,
+                '    if row["source_id"] != WRITER_SOURCE:',
+                "test_a_row_of_another_source_is_listed_not_planned",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "a row already keyed is a bad read",
+                NAME_KEY,
+                "    if key == stored:",
+                "test_a_read_the_plan_cannot_trust_is_refused",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "a key comes from Postgres",
+                NAME_KEY,
+                "    if not isinstance(key, str) or not key:",
+                "test_a_read_the_plan_cannot_trust_is_refused",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "an empty plan writes nothing",
+                NAME_KEY,
+                "    if not changes:",
+                "test_nothing_divergent_plans_nothing_and_writes_nothing",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "the directory names the date",
+                NAME_KEY,
+                "    if match is None:",
+                "test_the_lane_is_stamped_with_its_directory_s_date",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "the export refuses root",
+                EXPORTER,
+                '    if hasattr(os, "geteuid") and os.geteuid() == 0:',
+                "test_the_export_refuses_to_run_as_root",
+                PREFLIGHT_TESTS,
+            ),
+            (
+                "the export names an unwritable path",
+                EXPORTER,
+                "        if not _writable(probe):",
+                "test_every_unwritable_target_is_named_before_anything_is_written",
+                PREFLIGHT_TESTS,
+            ),
+            (
+                "Lyra's site search reads the scope",
+                LYRA_TOOLS,
+                '    if collection == "sites":',
+                "test_a_retired_site_is_dropped_before_the_rerank",
+                VECTOR_TESTS,
+            ),
+        )
+    ),
+    *(
+        Case(f"name key: {label}", path, old, new, test, testfile)
+        for label, path, old, new, test, testfile in (
+            (
+                "the premise is the write's only",
+                CHUNK,
+                "    if not rollback:",
+                "    if True:",
+                "test_the_key_premise_is_postgres_s_own_key_of_the_row_name_on_the_write_only",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "the premise is Postgres's key",
+                CHUNK,
+                '                    .replace("{derived}", site_key_sql(f"{alias}.name"))',
+                '                    .replace("{derived}", "p.old_value")',
+                "test_the_key_premise_is_postgres_s_own_key_of_the_row_name_on_the_write_only",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "a name row is keyed by its integer id",
+                CHUNK,
+                'KEY_TYPES = {"wiki_images": "integer", "unified_sites": "uuid", '
+                '"unified_site_names": "integer"}',
+                'KEY_TYPES = {"wiki_images": "integer", "unified_sites": "uuid", '
+                '"unified_site_names": "uuid"}',
+                "test_a_name_row_is_keyed_by_its_integer_id",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "the export runs its preflight",
+                EXPORTER,
+                "        preflight(export_targets(self.output_dir, sites_only=sites_only, "
+                "library=library))",
+                "        pass",
+                "test_every_unwritable_target_is_named_before_anything_is_written",
+                PREFLIGHT_TESTS,
+            ),
+            (
+                "the hubs refresh runs its preflight",
+                EXPORTER,
+                "    preflight([path])",
+                "    pass",
+                "test_the_hubs_only_refresh_is_checked_too",
+                PREFLIGHT_TESTS,
+            ),
+            (
+                "Lyra's site search drops the retired",
+                LYRA_TOOLS,
+                "    return [p for p in points if str(p.id) not in retired]",
+                "    return points",
+                "test_a_retired_site_is_dropped_before_the_rerank",
+                VECTOR_TESTS,
+            ),
+            (
+                "an alias is not the site's own name",
+                SITE_IDENTIFIER,
+                "    f\"WHERE {site_key_sql(':name')} <> {site_key_sql(':canonical')} \"",
+                '    "WHERE TRUE "',
+                "test_the_key_is_computed_in_the_insert_from_the_raw_name",
+                ALIAS_TESTS,
+            ),
+        )
+    ),
+]
+CASES += PHASE6_CASES
+
 
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
