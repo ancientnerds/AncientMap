@@ -19,7 +19,7 @@ from pipeline.database import get_session
 from pipeline.lyra.site_search import escape_ilike
 from pipeline.lyra.site_search import search_sites as _search_sites
 from pipeline.lyra.text_sentences import split_sentences
-from pipeline.utils.public_sites import not_retired
+from pipeline.utils.public_sites import is_retired, not_retired
 
 logger = logging.getLogger(__name__)
 
@@ -835,6 +835,25 @@ class HybridSearchUnavailableError(RuntimeError):
     """
 
 
+#: The ids among a search's site points that are retired (E4). A retired site keeps its point in
+#: the Qdrant ``sites`` collection until the next index run deletes it (scripts/build_lyra_index.py,
+#: nightly at 03:00 UTC): on 2026-09-25 all 78 sites the scope lane retired were still points
+#: hours after the apply. The index is a cache; the database decides what is shown.
+_RETIRED_AMONG_SQL = text(
+    "SELECT id::text FROM unified_sites WHERE id = ANY(CAST(:ids AS uuid[])) AND " + is_retired()
+)
+
+
+def _drop_retired_sites(points: list) -> list:
+    """``points`` of the ``sites`` collection without the retired sites, order kept."""
+    if not points:
+        return points
+    with get_session() as session:
+        rows = session.execute(_RETIRED_AMONG_SQL, {"ids": [str(p.id) for p in points]})
+        retired = {str(row[0]) for row in rows}
+    return [p for p in points if str(p.id) not in retired]
+
+
 def _hybrid_search(
     query: str,
     collection: str = "sites",
@@ -973,6 +992,8 @@ def _hybrid_search_inner(
         )
 
     scored_points = results.points
+    if collection == "sites":
+        scored_points = _drop_retired_sites(scored_points)
     if not scored_points:
         return [], voyage_tokens
 
