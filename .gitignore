@@ -415,6 +415,12 @@ output/remediation/opus_audit/pages/
 # it is the answer key of the canary questions, and DRAW.json pins its sha256 when it is written.
 !output/remediation/acceptance/
 output/remediation/acceptance/draw-*/CANARIES.jsonl
+# The judging of a draw (scripts/remediation/acceptance/judge.py) keeps its files in judging/: the
+# questions there carry the planted canary values, and beside the committed SAMPLE.jsonl they give
+# the key away. They stay local until RESULT.json is written and are committed with it and with
+# CANARIES.jsonl (`git add -f` on judging/*.jsonl and judging/*.json); the fetched pages' raw bytes
+# (judging/pages/) stay local for good - PAGES.jsonl records each one's sha256.
+output/remediation/acceptance/draw-*/judging/
 # The name-key lane (Phase 6 item 2): its production read and chunks, versioned like the image
 # lanes' (the chunk's ROLLBACK.sql is the undo of a write).
 !output/remediation/name_key/
