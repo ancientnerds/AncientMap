@@ -529,6 +529,26 @@ def test_the_c1_jobs_ask_each_image_once_and_the_strict_question_of_tier_a() -> 
 
 
 CALIBRATION = REPO / "output" / "remediation" / "gallery_audit" / "calibration-2026-09-23"
+#: The DeepSeek run of 2026-09-23 in that directory: four questions, each refused by the opencode
+#: gateway with HTTP 401 three times, then the run stopped (exit 3). Evidence of a failed attempt,
+#: kept beside the seal - never the directory's ledger.
+FAILED_ATTEMPT = CALIBRATION / "failed-deepseek-401" / "VERDICTS.jsonl"
+FAILED_ATTEMPT_SHA = "23eaea0b6ebd068726eb3d9024ab396d6cca45d2f7f2b197912a59fdd673f258"
+
+
+def test_the_deepseek_c1_attempt_produced_no_verdict_and_is_kept_apart_from_the_seal() -> None:
+    assert not (CALIBRATION / "VERDICTS.jsonl").exists()
+    assert hashlib.sha256(FAILED_ATTEMPT.read_bytes()).hexdigest() == FAILED_ATTEMPT_SHA
+    _, _, sealed_at = calibrate.sealed(CALIBRATION)
+    lines = vision.Ledger(FAILED_ATTEMPT).lines
+    assert [e.line["image_id"] for e in lines] == [60052, 59615, 59966, 60529]
+    assert {e.line["model"] for e in lines} == {"deepseek-v4-flash-vision-exp"}
+    for entry in lines:
+        line = entry.line
+        assert not entry.ok and line["verdict"] is None and line["parsed"] is None
+        assert line["http_status"] == 401 and "Invalid credential" in line["error"]
+        assert [a["http_status"] for a in line["attempts_detail"]] == [401, 401, 401]
+        assert line["cost_usd"] == 0 and str(line["judged_at"]) >= sealed_at
 
 
 def test_the_versioned_c1_directory_is_the_deepseek_seal_and_admits_no_opus_verdict() -> None:

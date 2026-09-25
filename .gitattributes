@@ -21,6 +21,9 @@ output/remediation/gallery_audit/liveness-*/chunk-*/* text eol=lf
 # reported JOBS.jsonl digest is over LF bytes, and ADMISSION.json is re-derived from the ledger's
 # exact bytes - a CRLF checkout must not make a byte-level check (sha256sum) disagree.
 output/remediation/gallery_audit/calibration-*/* text eol=lf
+# The DeepSeek C1 attempt of 2026-09-23 (four HTTP-401 lines, no verdict), kept as evidence of the
+# failed attempt one level down: its sha256 is pinned over these LF bytes.
+output/remediation/gallery_audit/calibration-*/failed-*/* text eol=lf
 output/remediation/qid_repair/wave2/*.sql text eol=lf
 output/remediation/qid_repair/wave3/*.sql text eol=lf
 output/remediation/qid_repair/wave4/*.sql text eol=lf
