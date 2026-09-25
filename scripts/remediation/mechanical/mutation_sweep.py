@@ -4832,6 +4832,22 @@ AUDIT_FIX_CASES: list[Case] = [
         "test_a_lane_constant_with_a_trailing_newline_is_refused",
     ),
     Case(
+        "audit-fix: M10 the curated name match sends a Python key",
+        REPO / "pipeline/lyra/site_identifier.py",
+        "    site_ids = _match_site_ids(session, site_name)",
+        "    site_ids = _match_site_ids(session, normalized)",
+        "test_the_raw_name_goes_to_the_postgres_key",
+        "tests/pipeline/test_site_match_key.py",
+    ),
+    Case(
+        "audit-fix: M10 the curated name match takes any source",
+        REPO / "pipeline/lyra/site_identifier.py",
+        '.filter(UnifiedSite.id.in_(site_ids), UnifiedSite.source_id == "ancient_nerds")',
+        ".filter(UnifiedSite.id.in_(site_ids))",
+        "test_no_python_key_is_compared_with_the_column",
+        "tests/pipeline/test_site_match_key.py",
+    ),
+    Case(
         "audit-fix: m9 jsonl_lines splits at every line break",
         PROD_WRITE,
         '    return text.split("\\n")',
