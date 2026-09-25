@@ -7376,7 +7376,7 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: a failing card check passes",
         P4_ACCEPT,
-        "    if code != 0:\n",
+        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
         "    if False:  # mutant\n",
         P4_ACCEPT_TEST,
         "test_the_card_file_check_reads_the_tools_own_exit_line",
@@ -7384,8 +7384,8 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: the first exit line is read",
         P4_ACCEPT,
-        "    return codes[-1] if codes else None\n",
-        "    return codes[0] if codes else None  # mutant\n",
+        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
+        "    if status != 0 or lines[-1:] != [write_gate4.ACCEPT_OK]:  # mutant\n",
         P4_ACCEPT_TEST,
         "test_the_card_file_check_reads_the_tools_own_exit_line",
     ),
@@ -21362,6 +21362,22 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n",
         P4_WRITE_TEST,
         "test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step",
+    ),
+    (
+        "audit-fix: m17 the card check ignores its exit status",
+        P4_ACCEPT,
+        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
+        "    if lines != [write_gate4.ACCEPT_OK]:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_the_card_file_check_reads_the_tools_own_exit_line",
+    ),
+    (
+        "audit-fix: m17 the card check takes any tool's clean exit line",
+        P4_ACCEPT,
+        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
+        '    if status != 0 or [x.rpartition("=")[2] for x in lines] != ["0"]:  # mutant\n',
+        P4_ACCEPT_TEST,
+        "test_the_card_file_check_reads_the_tools_own_exit_line",
     ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS

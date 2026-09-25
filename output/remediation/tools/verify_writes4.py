@@ -37,8 +37,8 @@ production directly, read-only, after every step of 100 sites and once more at t
    `_description_provenance.desc_sha256` (`p4`, `p4l`), and of the card equals its `card.
    text_sha256` (`p5`).
 4. **T08** (`census t08_citation_markers.run`) over the written sites (`p4`): 0 findings.
-5. **The card file** (`--card-check`, `p5`): `phase4/card_json.py --check` is run and its own
-   `*_EXIT=` line must read 0.
+5. **The card file** (`--card-check`, `p5`): `phase4/card_json.py --check` is run; it must exit 0
+   and print exactly one exit line, its own `ACCEPT_EXIT=0`.
 6. **The boot logs** (`--boot-logs --since <StartedAt>`, after Push #2): 0 `[STARTUP] Card
    description overwritten` lines in `ancient_nerds_api` and `ancient_nerds_api2`.
 
@@ -677,24 +677,28 @@ def run_command(argv: Sequence[str]) -> tuple[int, str]:
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
-def exit_line(output: str) -> int | None:
-    """The command's own last `*_EXIT=<n>` line; `None` when it printed none."""
-    codes = [
-        int(m.group(1))
-        for m in (write_gate4.EXIT_LINE.match(line.strip()) for line in output.splitlines())
-        if m
+def exit_lines(output: str) -> list[str]:
+    """Every `*_EXIT=<n>` line the command printed, in order."""
+    return [
+        line.strip() for line in output.splitlines() if write_gate4.EXIT_LINE.match(line.strip())
     ]
-    return codes[-1] if codes else None
 
 
 def card_file_deviations(command: Callable[[Sequence[str]], tuple[int, str]]) -> list[str]:
-    """production_write: `card_json.py --check` - the file equals the database for every entry."""
+    """production_write: `card_json.py --check` - the file equals the database for every entry.
+
+    Clean only when the process exited 0 and printed exactly one exit line, its own
+    `ACCEPT_EXIT=0` - never another tool's tag, nor the last of two runs (audit 2026-09-25 m17).
+    """
     if not CARD_JSON.exists():
         return [f"CARD FILE: {CARD_JSON} is not on this tree (WB-D3)"]
-    _, output = command([sys.executable, str(CARD_JSON), "--check"])
-    code = exit_line(output)
-    if code != 0:
-        return [f"CARD FILE: card_json.py --check ended with its exit line {code!r}"]
+    status, output = command([sys.executable, str(CARD_JSON), "--check"])
+    lines = exit_lines(output)
+    if status != 0 or lines != [write_gate4.ACCEPT_OK]:
+        return [
+            f"CARD FILE: card_json.py --check exited {status} with the exit line(s) {lines!r}, "
+            f"not one {write_gate4.ACCEPT_OK}"
+        ]
     return []
 
 

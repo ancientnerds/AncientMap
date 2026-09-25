@@ -1082,12 +1082,17 @@ def test_the_card_file_check_reads_the_tools_own_exit_line(
 
         return run
 
-    assert A.card_file_deviations(command("4,996 entries equal\nSTAGE_EXIT=0\n")) == []
+    assert A.card_file_deviations(command("4,996 entries equal\nACCEPT_EXIT=0\n")) == []
     assert seen[-1][1:] == [str(card_json), "--check"]
-    assert A.card_file_deviations(command("1 entry differs\nSTAGE_EXIT=1\n"))
+    assert A.card_file_deviations(command("1 entry differs\nACCEPT_EXIT=1\n", status=1))
     assert A.card_file_deviations(command("no exit line at all\n"))
-    # a wrapper's status is not read: exit status 0 with a failing exit line still fails
-    assert A.card_file_deviations(command("WRITE_EXIT=0\nSTAGE_EXIT=3\n", status=0))
+    # exit status 0 with a failing exit line still fails
+    assert A.card_file_deviations(command("WRITE_EXIT=0\nACCEPT_EXIT=3\n", status=0))
+    # audit 2026-09-25 m17: `--check` prints `ACCEPT_EXIT=` - another tool's clean exit line is
+    # not its answer, two exit lines are not one run, and a failed process is not a clean check
+    assert A.card_file_deviations(command("4,996 entries equal\nSTAGE_EXIT=0\n"))
+    assert A.card_file_deviations(command("ACCEPT_EXIT=1\nACCEPT_EXIT=0\n"))
+    assert A.card_file_deviations(command("ACCEPT_EXIT=0\n", status=1))
 
 
 def test_the_boot_logs_of_both_containers_carry_no_overwrite() -> None:
