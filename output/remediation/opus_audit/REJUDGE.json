@@ -1,5 +1,5 @@
 {
- "about": "Rows whose route holds a pass-1 verdict, or the pass-2 verdict of a pass-1 verdict that is not keep, that failed the quote check with nothing counted in its place (RULES.md: it does not count; the row is judged again), by that pass. A p2 verdict never sees p1, so a counted p2 stays valid when p1 is re-run. Rows waiting on rule 4's second judgement or on a third judge are in SECOND_JUDGE.json and TIE_ROUND2.json.",
+ "about": "Rows whose route holds a pass-1 verdict, or the pass-2 verdict of a pass-1 verdict that is not keep, that failed the quote check with nothing counted in its place (RULES.md: it does not count; the row is judged again), by that pass. A p2 verdict never sees p1, so a counted p2 stays valid when p1 is re-run. Rows waiting on rule 4's second judgement or on a third judge are in SECOND_JUDGE.json and the last round's TIE_ROUND<n>.json.",
  "p1": [],
  "p2": []
 }

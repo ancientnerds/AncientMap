@@ -4,10 +4,11 @@
   "INPUT.jsonl": "099c9380f252e77ca6a086a6a0b532dbfb1175b4f62817b7c15a9dfc553a6c11",
   "VERDICTS_RAW.json": "98b88a54d5ccae5a219c88876e2338524bc90f3187333f4cc44015450fed9f57",
   "KEEP_SAMPLE.json": "96da2842e2f5423026a68898d5c2ce773a3576c72b8de20f0725493361bb1053",
-  "VERDICTS_ROUND2.json": "56471faf9cb40363f281383a39e6c9a6857ce5173a725cee3c6139b330b25ea8"
+  "VERDICTS_ROUND2.json": "56471faf9cb40363f281383a39e6c9a6857ce5173a725cee3c6139b330b25ea8",
+  "VERDICTS_ROUND3.json": "2c56ba19fbc18137bad2c4e88ea773197533823d88af7b308f23c4c93cd4b2f4"
  },
  "normalisation": "Unicode NFC, then every maximal run of characters for which Python's str.isspace() is true becomes one U+0020 space, then both ends are stripped; nothing else",
- "pair_rule": "A round-1 tie counts only while the p1 and the p2 verdict on the row's route are, as JSON records, the very VERDICTS_RAW.json p1 and p2 of the row it was shown; once a later round replaces either, the tie is set aside as stale, and a pair that still disagrees needs a new tie.",
+ "pair_rule": "A tie counts only while the p1 and the p2 verdict on the row's route are, as JSON records, the very pair it was shown: a round-1 tie the row's VERDICTS_RAW.json p1 and p2, a later round's tie the p1 and p2 on the route before that round (the pair TIE_ROUND<n>.json of the round before listed); once a later round replaces either, the tie is set aside as stale, and a pair that still disagrees needs a new tie.",
  "round_1": {
   "p1": {
    "verdicts": 934,
@@ -116,18 +117,64 @@
    }
   }
  },
+ "round_3": {
+  "second": {
+   "verdicts": 443,
+   "by_verdict": {
+    "keep": 409,
+    "revert": 29,
+    "wrong-both": 5
+   },
+   "counted": 441,
+   "failed": 2,
+   "failed_by_reason": {
+    "fetch failed": 1,
+    "not found": 1
+   },
+   "quotes_by_outcome": {
+    "fetch failed": 1,
+    "found": 759,
+    "not found": 1
+   }
+  },
+  "tie": {
+   "verdicts": 11,
+   "by_verdict": {
+    "revert": 8,
+    "wrong-both": 3
+   },
+   "counted": 11,
+   "failed": 0,
+   "failed_by_reason": {},
+   "quotes_by_outcome": {
+    "found": 34
+   }
+  }
+ },
  "overlay": {
-  "replaced": {
-   "p1": 7,
-   "p2": 10
+  "VERDICTS_ROUND2.json": {
+   "laid": {
+    "p1": 7,
+    "p2": 10,
+    "sample": 60
+   },
+   "not_counted": {
+    "p2": 1
+   },
+   "replaced": 17,
+   "ties_set_aside": 2
   },
-  "sample_as_p2": 60,
-  "not_counted": {
-   "sample": 0,
-   "p1": 0,
-   "p2": 1
-  },
-  "ties_set_aside": 2
+  "VERDICTS_ROUND3.json": {
+   "laid": {
+    "second": 441,
+    "tie": 11
+   },
+   "not_counted": {
+    "second": 2
+   },
+   "replaced": 3,
+   "ties_set_aside": 0
+  }
  },
  "rule_4": {
   "rule": "RULES.md rule 4: if more than 3 of the 60 (5 %) come back not 'keep', every pass-1 'keep' is judged a second time under rule 3",
@@ -170,54 +217,48 @@
    }
   },
   "p2": {
-   "verdicts": 492,
+   "verdicts": 932,
    "by_verdict": {
-    "keep": 115,
-    "revert": 344,
+    "keep": 522,
+    "revert": 373,
     "undecidable": 1,
-    "wrong-both": 32
+    "wrong-both": 36
    },
-   "counted": 491,
-   "failed": 1,
-   "failed_by_reason": {
-    "not found": 1
-   },
+   "counted": 932,
+   "failed": 0,
+   "failed_by_reason": {},
    "quotes_by_outcome": {
-    "found": 1007,
-    "not found": 1
+    "found": 1763
    }
   },
   "tie": {
-   "verdicts": 62,
+   "verdicts": 71,
    "by_verdict": {
-    "keep": 12,
-    "revert": 46,
-    "wrong-both": 4
+    "keep": 11,
+    "revert": 54,
+    "wrong-both": 6
    },
-   "counted": 60,
-   "failed": 2,
-   "failed_by_reason": {
-    "fetch failed": 2
-   },
+   "counted": 71,
+   "failed": 0,
+   "failed_by_reason": {},
    "quotes_by_outcome": {
-    "fetch failed": 2,
-    "found": 146
+    "found": 175
    }
   }
  },
  "decisions": {
-  "keep": 64,
-  "revert": 416,
+  "keep": 471,
+  "revert": 427,
   "rejudge": 0,
-  "pending": 454
+  "pending": 36
  },
  "revert_by_column": {
   "country": 6,
-  "period_start": 186,
-  "site_type": 224
+  "period_start": 190,
+  "site_type": 231
  },
  "revert_by_superseded": {
-  "false": 408,
+  "false": 419,
   "true": 8
  },
  "rejudge_by_pass": {
@@ -225,18 +266,26 @@
   "p2": 0
  },
  "pending_by_pass": {
-  "p2": 443,
-  "tie": 11
+  "p2": 2,
+  "tie": 34
  },
- "wrong_both_proposals": 30,
+ "wrong_both_proposals": 33,
  "wrong_both_disagreements": 3,
- "reversal_rows": 408,
+ "reversal_rows": 419,
  "reversal_by_column": {
   "country": 1,
-  "period_start": 186,
-  "site_type": 221
+  "period_start": 190,
+  "site_type": 228
  },
- "reversal_period_bucket_changes": 42,
- "second_judge": 443,
- "tie_round_2": 11
+ "reversal_period_bucket_changes": 44,
+ "second_judge": 2,
+ "tie_list": {
+  "file": "TIE_ROUND3.json",
+  "count": 34
+ },
+ "rejudge_round": {
+  "file": "REJUDGE_ROUND3.json",
+  "second": 2,
+  "tie": 0
+ }
 }
