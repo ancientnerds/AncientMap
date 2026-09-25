@@ -103,6 +103,7 @@ const EMPTY = {
       covered_days: 7,
       lines: 0,
       unverified: 0,
+      prefetched: 0,
       families: [],
       hosts: [],
       statuses: [],
@@ -297,9 +298,12 @@ describe('TopContent', () => {
     expect(html).not.toContain('ticket T2')
   })
 
-  it('names the search bug only while the search list is empty', () => {
+  it('calls an empty search list a quiet window, not a bug', () => {
+    // search fires since 2026-09-20 (useSiteSearch settles on a term); the old
+    // sentence blamed ticket T2 for a list that was simply empty
     const html = renderToString(<TopContent state={ok(EMPTY.content)} />)
-    expect(html).toContain('ticket T2')
+    expect(html).toContain('Search terms: nobody searched in this window')
+    expect(html).not.toContain('ticket T2')
   })
 })
 

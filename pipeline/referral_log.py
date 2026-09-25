@@ -7,16 +7,30 @@ another host or with a utm_source (log_format ``referral``) to
 API containers read-only at /app/logs:
 
     {"t":"2026-09-17T12:00:00+02:00","ref":"https://chatgpt.com/",
-     "req":"GET /sites/egypt","status":200,"ua":"Mozilla/5.0 ..."}
+     "req":"GET /sites/egypt","status":200,"ua":"Mozilla/5.0 ...",
+     "purpose":""}
 
 This is the only view we have of two things Umami cannot see: arrivals whose
-tracker never ran, and the status code we served. Measured 2026-09-19 over
-407 lines: nginx answered 189 Google page arrivals while Umami recorded 62
-views from 51 sessions, and 21 of those 189 were a 410 for a retracted story
-- an answer no event reports, because the 410 page raises none
+tracker never ran, and the status code we served. On 2026-09-19 nginx
+answered 189 Google page arrivals while Umami recorded 62 views from 51
+sessions, and 21 of those 189 were a 410 for a retracted story - an answer
+no event reports, because the 410 page raises none
 (pipeline/article_html_renderer.py, render_error_html).
 
-Five things the parser has to get right, each of them measured:
+Most of that gap was never a visitor. Google Search has Chrome prefetch its
+top results, through Google's Private Prefetch Proxy or directly, with the
+search page as referer and a browser UA; the page is fetched and nobody
+looks at it unless they click. Measured 2026-09-25 over four days of the
+access log (IP, and what the same browser loaded next): of 479 search
+arrivals, 279 came from the proxy's published ranges and loaded nothing
+after the HTML, 17 more were cloud scrapers, and of about 207 real views
+Umami recorded 186 (90 %). The rest loaded the tracker and sent nothing:
+Do Not Track, which the tracker honours on purpose (data-do-not-track), or a
+visitor gone before the load event. So nginx logs Sec-Purpose ("purpose"),
+and a prefetch is no arrival. A line from before nginx logged it cannot be
+told apart and is not read at all (Visit.prefetch is None).
+
+Six things the parser has to get right, each of them measured:
 
 * ``$time_iso8601`` is VPS local time (+02:00 now, +01:00 after October).
   ``datetime.fromisoformat`` handles the offset; ``strptime`` without it or
@@ -45,6 +59,8 @@ Five things the parser has to get right, each of them measured:
   referer path, and it was the entire "other" family. Hence the second rule in
   coverage_report(): a host in no known family has to be seen
   UNKNOWN_HOST_MIN times in the window before it counts as an arrival.
+* A prefetch carries a browser UA, a search referer and a 200: only the
+  Sec-Purpose header marks it (see above).
 
 Read-only. Nothing here writes into /app/logs.
 
@@ -112,7 +128,7 @@ FAMILIES: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(
             r"(^|\.)(chatgpt\.com|openai\.com|perplexity\.ai|copilot\.microsoft\.com"
             r"|gemini\.google\.com|claude\.ai|you\.com|mistral\.ai|chat\.deepseek\.com"
-            r"|phind\.com|grok\.com|meta\.ai)$"
+            r"|phind\.com|grok\.com|meta\.ai|copilot\.com|duck\.ai)$"
         ),
     ),
     (
@@ -225,6 +241,13 @@ def is_page(req: str) -> bool:
     return not _NON_PAGE_SUFFIX.search(path)
 
 
+#: What Chrome sends in Sec-Purpose for a speculative load: "prefetch",
+#: "prefetch;anonymous-client-ip" (through Google's proxy) or
+#: "prefetch;prerender". A prerender that the visitor then opens runs our
+#: tracker like any page, so Umami sees it where it is a visit.
+PREFETCH_PURPOSE = "prefetch"
+
+
 @dataclass(frozen=True, slots=True)
 class Visit:
     at: datetime
@@ -233,6 +256,9 @@ class Visit:
     status: int
     bot: bool
     page: bool
+    #: Sec-Purpose said prefetch. None on a line logged before nginx wrote the
+    #: header: such a line cannot be told apart, and coverage_report skips it.
+    prefetch: bool | None = False
 
 
 def parse_lines(lines: Iterable[str]) -> list[Visit]:
@@ -251,6 +277,7 @@ def parse_lines(lines: Iterable[str]) -> list[Visit]:
         host = referrer_host(entry.get("ref", ""), entry["req"])
         if not host or host in OWN_HOSTS:
             continue
+        purpose = entry.get("purpose")
         out.append(
             Visit(
                 at=datetime.fromisoformat(entry["t"]),
@@ -259,6 +286,7 @@ def parse_lines(lines: Iterable[str]) -> list[Visit]:
                 status=int(entry["status"]),
                 bot=bool(BOT_UA_RE.search(entry.get("ua", ""))),
                 page=is_page(entry["req"]),
+                prefetch=None if purpose is None else purpose.startswith(PREFETCH_PURPOSE),
             )
         )
     return out
@@ -308,10 +336,12 @@ def aggregate(
 
     Scanners send fake referers to paths that do not exist (/wp-admin/ from
     "binance.com"): a page view needs a page, so errors only count with --all.
+    A prefetch is nobody arriving and never counts; a line from before nginx
+    logged Sec-Purpose still does here, where the whole history is the point.
     """
     result: dict[str, dict[str, Counter]] = defaultdict(lambda: defaultdict(Counter))
     for v in visits:
-        if v.at < since:
+        if v.at < since or v.prefetch:
             continue
         if pages_only and (v.status >= 400 or not v.page):
             continue
@@ -346,8 +376,16 @@ def coverage_report(visits: Iterable[Visit], since: datetime, until: datetime) -
 
     `unverified` is reported, not swallowed: it is the same treatment the bad
     statuses get, and a founder can see the size of what the rule removed.
+
+    A fourth rule came on 2026-09-25: a prefetch is no arrival (module
+    docstring), and `prefetched` says how many pages nginx served that way.
+    Only lines that carry the Sec-Purpose field are read; the ones from before
+    cannot be told apart, so `covered_from` starts at the first line that
+    carries it and the window fills up over the following days.
     """
-    window = [v for v in visits if since <= v.at < until]
+    marked = [v for v in visits if since <= v.at < until and v.prefetch is not None]
+    prefetched = sum(1 for v in marked if v.prefetch and v.page)
+    window = [v for v in marked if not v.prefetch]
     pages = [v for v in window if v.page]
     families: Counter[str] = Counter()
     bots: Counter[str] = Counter()
@@ -368,12 +406,13 @@ def coverage_report(visits: Iterable[Visit], since: datetime, until: datetime) -
                 hosts[v.host] += 1
         if is_bad_answer(v.status):
             statuses[v.status] += 1
-    first = min((v.at for v in window), default=until)
+    first = min((v.at for v in marked), default=until)
     return {
         "covered_from": first.astimezone(UTC).isoformat(),
         "covered_days": round((until - first) / timedelta(days=1), 2),
-        "lines": len(window),
+        "lines": len(marked),
         "unverified": unverified,
+        "prefetched": prefetched,
         "families": [
             {"family": f, "visits": n, "bots": bots.get(f, 0)}
             for f, n in sorted(families.items(), key=lambda kv: (-kv[1], kv[0]))

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -254,9 +255,7 @@ LAST = {
     "last_browser": "chrome",
 }
 NOT_FOUND = [{"path": "/old-story", "referrer": "example.org", "n": 3, "sessions": 2, **LAST}]
-VITALS = [
-    {"page": "story", "name": "LCP", "p75": 4100.0, "samples": 20, "sessions": 16, **LAST}
-]
+VITALS = [{"page": "story", "name": "LCP", "p75": 4100.0, "samples": 20, "sessions": 16, **LAST}]
 ERRORS = [{"message": "x is not a function", "page": "globe", "n": 12, "sessions": 5, **LAST}]
 
 
@@ -496,6 +495,12 @@ def test_problems_are_capped():
         ("www.perplexity.ai", None, "ai"),
         ("www.reddit.com", None, "reddit.com"),
         ("discord.com", "youtube", "youtube"),
+        # Live 2026-09-25, each a row of its own before
+        ("search.yahoo.com", None, "search"),
+        ("copilot.com", None, "ai"),
+        ("duck.ai", None, "ai"),
+        ("m.facebook.com", None, "facebook.com"),
+        ("l.facebook.com", None, "facebook.com"),
     ],
 )
 def test_source_family(referrer, utm, expected):
@@ -656,6 +661,21 @@ def test_globe_funnel_counts_loads_and_reaches():
     assert capped["reached"] == 1 and capped["loads"] == 1
 
 
+def test_globe_funnel_splits_phones_from_computers():
+    """Umami's laptop and desktop are one kind of machine (DEVICE_GROUPS)."""
+    out = fs.globe_funnel(
+        [
+            {**_globe_row("p", views=2, ready=1, ready_ms=[3000.0]), "device": "mobile"},
+            {**_globe_row("l", views=3, ready=3, ready_ms=[1.0, 2.0, 3.0]), "device": "laptop"},
+            {**_globe_row("d", views=1, ready=1, ready_ms=[4.0]), "device": "desktop"},
+        ]
+    )
+    assert out["by_device"] == [
+        {"device": "desktop", "loads": 4, "reached": 4},
+        {"device": "mobile", "loads": 2, "reached": 1},
+    ]
+
+
 def test_globe_funnel_hides_the_middle_below_the_sample_floor():
     few = [_globe_row(ready_ms=[float(i) for i in range(fs.GLOBE_MIN_SAMPLES - 1)], ready=4)]
     out = fs.globe_funnel(few)
@@ -776,6 +796,67 @@ def test_globe_funnel_hides_the_abandon_middle_below_the_sample_floor():
     assert few["samples"] == fs.GLOBE_MIN_SAMPLES - 1
     enough = fs.globe_funnel(rows(fs.GLOBE_MIN_SAMPLES))["abandon_ms"]
     assert enough["median"] == 3000.0 and enough["samples"] == fs.GLOBE_MIN_SAMPLES
+
+
+# ---- search_terms ---------------------------------------------------------
+
+
+def _search(session: str, second: int, q: str, results: int | None = 3) -> dict:
+    return {
+        "session_id": session,
+        "created_at": datetime(2026, 9, 25, 12, 0, second, tzinfo=UTC),
+        "q": q,
+        "results": Decimal(results) if results is not None else None,
+    }
+
+
+def test_search_terms_drop_a_pause_mid_word():
+    """Live 2026-09-25: "athe", "0p" and "crerre" stood in the list as terms."""
+    out = fs.search_terms(
+        [
+            _search("a", 0, "athe", 100),
+            _search("a", 5, "athens", 20),
+            _search("b", 0, "crerre", 0),
+            _search("b", 9, "crete", 40),
+        ]
+    )
+    assert [t["label"] for t in out] == ["athens", "crete"]
+    assert out[1]["results"] == 40
+
+
+def test_search_terms_keep_a_second_question():
+    """A new word is a new question, and so is the same start after a minute."""
+    out = fs.search_terms(
+        [
+            _search("a", 0, "crete", 40),
+            _search("a", 10, "knossos", 2),
+            _search("b", 0, "giza", 5),
+            {**_search("b", 0, "gizeh", 0), "created_at": datetime(2026, 9, 25, 12, 5, tzinfo=UTC)},
+        ]
+    )
+    assert sorted(t["label"] for t in out) == ["crete", "giza", "gizeh", "knossos"]
+
+
+def test_search_terms_rank_by_people_and_keep_the_best_count():
+    out = fs.search_terms(
+        [
+            _search("a", 0, "Giza", 0),
+            _search("b", 0, "giza", 14),
+            _search("c", 0, "petra", 3),
+            _search("c", 30, "stonehenge", 3),
+            _search("c", 59, "stonehenge", 3),
+        ]
+    )
+    assert out[0] == {
+        "event_name": "search",
+        "label": "Giza",
+        "country": None,
+        "results": 14,
+        "n": 2,
+        "visitors": 2,
+    }
+    assert [t["label"] for t in out[1:]] == ["stonehenge", "petra"]
+    assert out[1]["n"] == 2 and out[1]["visitors"] == 1
 
 
 # ---- clusters -------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { Flag } from './Flag'
 import { fmtInt } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import type { LiveData, LiveVisitor } from './types'
 import type { Loaded } from './useStats'
 
@@ -82,15 +82,17 @@ export function LiveNow({ state }: { state: Loaded<LiveData> }) {
             </ul>
           )}
           <p className="dash-note">
-            {fmtInt(l.total)} in the last {l.window_minutes} minutes, {fmtInt(l.shown)} shown. The Now
-            tile above counts five minutes, so this list is the longer window. A visitor who fired only a
+            {fmtInt(l.total)} in the last {l.window_minutes} minutes, {fmtInt(l.shown)} shown. Do not
+            screenshot this panel into a public channel.
+          </p>
+          <HowCounted>
+            The Now tile above counts five minutes, so this list is the longer window. A visitor who fired only a
             Core Web Vital has no page to name and no row — ten of sixty-nine sessions in a day
             (2026-09-19). The headline is the page's own title and links to that page on the main
             site, so it is in the visitor's language, not ours. This is the one panel on the page that can point at a single person: at one visitor it
             names their country, device, browser and the page they have open right now. It is cookieless
-            and no id here survives the monthly salt rotation, but it is not anonymous in the moment — do
-            not screenshot it into a public channel.
-          </p>
+            and no id here survives the monthly salt rotation, but it is not anonymous in the moment.
+          </HowCounted>
         </>
       )}
     </Panel>

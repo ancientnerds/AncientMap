@@ -107,3 +107,22 @@ def test_fehlerantworten_sind_scanner_rauschen_und_zaehlen_nur_mit_all():
     assert rr.aggregate(rl.parse_lines(lines), SINCE, pages_only=False)["other"]["binance.com"] == {
         "human": 2
     }
+
+
+def test_a_prefetch_is_nobody_arriving():
+    """Chrome prefetches Google's top results with the search page as referer;
+    nginx logs Sec-Purpose since 2026-09-25."""
+    lines = [
+        json.dumps(
+            {
+                "t": "2026-09-17T12:00:00+00:00",
+                "ref": "https://www.google.com/",
+                "req": "GET /sites/",
+                "status": 200,
+                "ua": HUMAN,
+                "purpose": "prefetch;anonymous-client-ip",
+            }
+        ),
+        _line("https://www.google.com/", "GET /sites/"),
+    ]
+    assert rr.aggregate(rl.parse_lines(lines), SINCE)["search"]["google.com"] == {"human": 1}

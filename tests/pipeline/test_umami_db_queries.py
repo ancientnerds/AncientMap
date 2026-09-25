@@ -69,6 +69,10 @@ def test_problem_queries_read_the_events_the_frontend_actually_sends():
     assert "percentile_cont(0.75)" in u.SQL_VITALS
     assert "'js_error'" in u.SQL_ERRORS
     assert "'message'" in u.SQL_ERRORS and "'page'" in u.SQL_ERRORS
+    # One row per message, its pages together: the same crash stood twice
+    flat = " ".join(u.SQL_ERRORS.split())
+    assert "string_agg(DISTINCT coalesce(page, 'unknown'), ', ') AS page" in flat
+    assert "GROUP BY 1 ORDER BY sessions DESC, n DESC" in flat
     # How many visitors it reached, not only how often it fired: boot.ts sends
     # up to three per page view, so the event count alone overstates the damage.
     # The same for the other two kinds the panel scores by people: one visitor

@@ -65,7 +65,11 @@ export interface ContentRow {
   country: string | null
   /** Result count of the search — only on `search` rows; 0 means nothing found. */
   results: number | null
+  /** Opens (or searches). */
   n: number
+  /** Sessions behind `n`. Absent from an API older than this bundle (ci.yml
+   *  swaps the frontend first); the panel then ranks by `n`. */
+  visitors?: number
 }
 
 /** GET /api/stats/content?days=N */
@@ -231,6 +235,9 @@ export interface LogCoverage {
    *  window — referrer spam, and counted out of `families` and `hosts`
    *  (pipeline/referral_log.py UNKNOWN_HOST_MIN). */
   unverified: number
+  /** Pages Chrome prefetched for a Google result page (Sec-Purpose), which
+   *  nobody has looked at yet — never an arrival (pipeline/referral_log.py). */
+  prefetched: number
   families: LogFamily[]
   hosts: LogHost[]
   statuses: LogStatus[]
@@ -279,6 +286,16 @@ export interface GlobeData {
   not_reached: GlobeEndings
   /** How long the counted `abandoned` loads had waited when they left. */
   abandon_ms: GlobeTimes
+  /** Loads and arrivals per kind of machine (stats_analysis DEVICE_GROUPS:
+   *  laptop and desktop are one). Absent from an older API. */
+  by_device?: GlobeDevice[]
+}
+
+export interface GlobeDevice {
+  /** 'desktop' | 'mobile' | 'tablet' | 'unknown' */
+  device: string
+  loads: number
+  reached: number
 }
 
 export interface Cluster {

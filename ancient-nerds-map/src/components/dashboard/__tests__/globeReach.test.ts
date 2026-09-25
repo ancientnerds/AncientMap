@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { abandonLine, endingItems, secs, timesLine, visitorsLine } from '../GlobeReach'
+import { abandonLine, devicesLine, endingItems, secs, timesLine, visitorsLine } from '../GlobeReach'
 import type { GlobeData } from '../types'
 
 /** The live seven-day window on 2026-09-19, straight out of SQL_GLOBE:
@@ -126,5 +126,18 @@ describe('GlobeReach abandonLine', () => {
     expect(abandonLine(live)).toBe(
       'The 7 loads left while loading had waited 3.1 s at the shortest, 9.8 s in the middle, 44.0 s at the longest.'
     )
+  })
+})
+
+describe('GlobeReach devicesLine', () => {
+  it('puts phones and computers apart, and says nothing without the split', () => {
+    expect(
+      devicesLine([
+        { device: 'desktop', loads: 18, reached: 17 },
+        { device: 'mobile', loads: 8, reached: 4 },
+      ]),
+    ).toBe('Computers 17 of 18 · Phones 4 of 8 loads reached the globe.')
+    expect(devicesLine(undefined)).toBe('')
+    expect(devicesLine([])).toBe('')
   })
 })

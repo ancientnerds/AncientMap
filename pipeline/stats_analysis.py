@@ -79,6 +79,8 @@ SEARCH_HOSTS = (
     "ecosia.org",
     "qwant.com",
     "brave.com",
+    # search.yahoo.com stood in its own row on 2026-09-25 (9 sessions)
+    "yahoo.",
 )
 AI_HOSTS = (
     "chatgpt.com",
@@ -87,6 +89,10 @@ AI_HOSTS = (
     "copilot.microsoft.com",
     "gemini.google.com",
     "claude.ai",
+    # Live 2026-09-25 as rows of their own: Microsoft's consumer Copilot and
+    # DuckDuckGo's assistant
+    "copilot.com",
+    "duck.ai",
 )
 #: utm_source values that name an assistant without naming a host. ChatGPT
 #: tags its outbound links "utm_source=chatgpt.com", which is a host and is
@@ -143,6 +149,11 @@ def is_ai_entry(referrer: str | None, utm_source: str | None = None) -> bool:
     return False
 
 
+#: www. and the mobile and link-shim hosts of one site: m.facebook.com and
+#: facebook.com were two rows for one referrer on 2026-09-25.
+_MOBILE_PREFIX = re.compile(r"^(www|m|l|lm|mobile)\.")
+
+
 def source_family(referrer: str | None, utm_source: str | None = None) -> str:
     """Where a session came from, in founder words: "ai", else a utm_source
     verbatim, else "google" / "search" / the bare referrer host / "direct".
@@ -160,7 +171,7 @@ def source_family(referrer: str | None, utm_source: str | None = None) -> str:
     r = referrer.lower()
     if any(h in r for h in SEARCH_HOSTS):
         return "google" if "google." in r else "search"
-    return r.removeprefix("www.")
+    return _MOBILE_PREFIX.sub("", r)
 
 
 @dataclass
@@ -683,6 +694,7 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     split = {name: 0 for name, _cols in GLOBE_ENDINGS}
     no_signal = 0
     left_times: list[float] = []
+    by_device: dict[str, dict[str, int]] = {}
     for r in rows:
         views = int(r["views"] or 0)
         if not views:
@@ -690,6 +702,9 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
         got = min(int(r["ready"] or 0), views)
         loads += views
         reached += got
+        device = by_device.setdefault(_device_bucket(r.get("device")), {"loads": 0, "reached": 0})
+        device["loads"] += views
+        device["reached"] += got
         reached_sessions += 1 if got else 0
         times.extend(float(ms) for ms in (r["ready_ms"] or []))
         left = views - got
@@ -709,6 +724,12 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ready_ms": _spread(times),
         "not_reached": {**split, "no_signal": no_signal},
         "abandon_ms": _spread(left_times),
+        # Phones and computers apart (DEVICE_GROUPS): on 2026-09-25 the week's
+        # 26 loads were 8 on phones, 4 of them past the phone gate
+        "by_device": [
+            {"device": name, **counts}
+            for name, counts in sorted(by_device.items(), key=lambda kv: (-kv[1]["loads"], kv[0]))
+        ],
     }
 
 
@@ -783,6 +804,67 @@ def entry_exit_pages(sessions: list[Session]) -> dict[str, Any]:
             for page, n in sorted(exits.items(), key=lambda kv: (-kv[1], kv[0]))
         ],
     }
+
+
+#: How soon a session's next search has to follow for the earlier one to count
+#: as typing still in progress rather than a question of its own.
+SEARCH_REFINE_SECONDS = 60
+#: How many leading characters the two have to share: "athe" -> "athens",
+#: "crerre" -> "crete", "gize, egy" -> "giza, egypt".
+SEARCH_REFINE_PREFIX = 3
+
+
+def _refined_by(earlier: str, later: str) -> bool:
+    a, b = earlier.lower(), later.lower()
+    shared = min(SEARCH_REFINE_PREFIX, len(a))
+    return a != b and a[:shared] == b[:shared]
+
+
+def search_terms(rows: list[dict[str, Any]], limit: int = 30) -> list[dict[str, Any]]:
+    """What visitors searched for, one row per term, from SQL_SEARCH_EVENTS.
+
+    A search the same session refined within SEARCH_REFINE_SECONDS (the next
+    query starts like it) is the visitor still typing, not a term: live on
+    2026-09-25 "athe", "0p" and "crerre" stood in the list as searches of their
+    own. `results` is the most the term ever found (the SQL_CONTENT rule: one
+    early zero must not brand a term that works), `n` the searches, `visitors`
+    the sessions. Ranked by visitors, then searches.
+    """
+    kept: list[dict[str, Any]] = []
+    for i, r in enumerate(rows):
+        q = (r["q"] or "").strip()
+        if not q:
+            continue
+        nxt = rows[i + 1] if i + 1 < len(rows) else None
+        if (
+            nxt is not None
+            and nxt["session_id"] == r["session_id"]
+            and (nxt["created_at"] - r["created_at"]).total_seconds() <= SEARCH_REFINE_SECONDS
+            and _refined_by(q, (nxt["q"] or "").strip())
+        ):
+            continue
+        kept.append({**r, "q": q})
+    terms: dict[str, dict[str, Any]] = {}
+    for r in kept:
+        key = r["q"].lower()
+        t = terms.setdefault(key, {"label": r["q"], "n": 0, "sessions": set(), "results": None})
+        t["n"] += 1
+        t["sessions"].add(r["session_id"])
+        if r["results"] is not None:
+            found = int(r["results"])
+            t["results"] = found if t["results"] is None else max(t["results"], found)
+    ranked = sorted(terms.values(), key=lambda t: (-len(t["sessions"]), -t["n"], t["label"]))
+    return [
+        {
+            "event_name": "search",
+            "label": t["label"],
+            "country": None,
+            "results": t["results"],
+            "n": t["n"],
+            "visitors": len(t["sessions"]),
+        }
+        for t in ranked[:limit]
+    ]
 
 
 def outbound_links(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

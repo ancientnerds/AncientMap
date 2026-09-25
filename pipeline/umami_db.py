@@ -109,6 +109,9 @@ SELECT
     -- term on the site as "never finds anything".
     max(results) AS results,
     count(*) AS n,
+    -- People, not opens: on 2026-09-25 the most opened site of the week had
+    -- 24 opens from six sessions of one laptop.
+    count(DISTINCT session_id) AS visitors,
     max(created_at) AS last_at,
     (array_agg(session_id::text    ORDER BY created_at DESC))[1] AS last_session,
     (array_agg(visitor_country     ORDER BY created_at DESC))[1] AS last_country,
@@ -119,6 +122,24 @@ WHERE label IS NOT NULL AND label <> ''
 GROUP BY event_name, label
 ORDER BY n DESC
 LIMIT 300
+"""
+
+#: Every search event on its own, in the order each session sent them, for
+#: stats_analysis.search_terms: useSiteSearch reports a query once the visitor
+#: has not typed for 1.2 s, so a pause mid-word ("athe", "0p", "crerre", live
+#: 2026-09-25) is a search of its own. Only the sequence can tell a pause from
+#: a second question. results is numeric in event_data and comes back as a
+#: Decimal; the fold turns it into an int.
+SQL_SEARCH_EVENTS = """
+SELECT e.session_id::text AS session_id, e.created_at,
+       max(d.string_value) FILTER (WHERE d.data_key = 'q') AS q,
+       max(d.number_value) FILTER (WHERE d.data_key = 'results') AS results
+FROM website_event e
+JOIN event_data d ON d.website_event_id = e.event_id
+WHERE e.website_id = :website_id AND e.event_type = 2 AND e.event_name = 'search'
+  AND e.created_at >= :since AND e.created_at < :until
+GROUP BY e.event_id, e.session_id, e.created_at
+ORDER BY e.session_id, e.created_at
 """
 
 #: The rated thing travels in the same event (ThumbsFeedback's `extra`): a
@@ -145,10 +166,9 @@ SQL_SOURCES = """
 SELECT coalesce(nullif(utm_source, ''), nullif(referrer_domain, ''), 'direct') AS source,
        count(DISTINCT session_id) AS sessions,
        -- Page views as well as sessions, so the panel can put Umami's number
-       -- next to nginx's, which counts requests. Measured 2026-09-19 over the
-       -- same window: nginx answered 189 Google page arrivals (168 with a 200,
-       -- 21 with a 410) while Umami recorded 62 views from 51 sessions. The
-       -- gap is the panel's whole point.
+       -- next to nginx's, which counts requests (a returning visitor is one
+       -- session and several arrivals). pipeline/referral_log.py has what the
+       -- gap between the two turned out to be.
        count(*) AS views
 FROM website_event
 WHERE website_id = :website_id AND event_type = 1
@@ -268,14 +288,18 @@ WITH ev AS (
       AND e.created_at >= :since AND e.created_at < :until
     GROUP BY e.event_id, e.session_id, e.created_at, s.country, s.device, s.browser
 )
-SELECT message, coalesce(page, 'unknown') AS page, count(*) AS n,
+SELECT message,
+       -- One row per message, the pages it hit named together: the same
+       -- translation crash stood twice in the panel on 2026-09-25, once for
+       -- site pages and once for radar, each with three visitors.
+       string_agg(DISTINCT coalesce(page, 'unknown'), ', ') AS page, count(*) AS n,
        count(DISTINCT session_id) AS sessions,
 """
     + _LAST_VISITOR
     + """
 FROM ev
 WHERE message IS NOT NULL AND message <> ''
-GROUP BY 1, 2
+GROUP BY 1
 ORDER BY sessions DESC, n DESC
 LIMIT 30
 """
@@ -372,6 +396,8 @@ GLOBE_PATH = "/globe.html"
 #: other way round, a session's first load after the deploy that already ran
 #: the new build is left out when it reached the globe or went silent: only an
 #: ending marks its build.
+#: device is the session's (Umami's device column), for the split of phones
+#: and computers: the phone gate and the phone layout are their own question.
 #: choice and phase are strings (event_data.string_value); ms is a number and
 #: lives in number_value.
 SQL_GLOBE = """
@@ -382,16 +408,17 @@ WITH first_ending AS (
       AND e2.event_name IN ('globe_gate', 'globe_unsupported', 'globe_error', 'globe_abandon')
 ),
 ev AS (
-    SELECT e.event_id, e.session_id, e.created_at, e.event_type, e.event_name,
+    SELECT e.event_id, e.session_id, e.created_at, e.event_type, e.event_name, sn.device,
            (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms,
            max(d.string_value) FILTER (WHERE d.data_key = 'choice') AS choice,
            max(d.string_value) FILTER (WHERE d.data_key = 'phase')  AS phase,
            max(d.string_value) FILTER (WHERE d.data_key = 'ending') AS ending
     FROM website_event e
+    JOIN session sn ON sn.session_id = e.session_id
     LEFT JOIN event_data d ON d.website_event_id = e.event_id
     WHERE e.website_id = :website_id AND e.url_path = :path
       AND e.created_at >= :since AND e.created_at < :until
-    GROUP BY e.event_id, e.session_id, e.created_at, e.event_type, e.event_name
+    GROUP BY e.event_id, e.session_id, e.created_at, e.event_type, e.event_name, sn.device
 ),
 switched AS (
     SELECT v.session_id,
@@ -440,7 +467,8 @@ SELECT session_id,
                array_agg(ms ORDER BY created_at) FILTER (
                    WHERE event_name = 'globe_abandon' AND phase IS DISTINCT FROM 'gate'),
                NULL),
-           ARRAY[]::float8[]) AS abandon_ms
+           ARRAY[]::float8[]) AS abandon_ms,
+       min(device) AS device
 FROM ev JOIN measured m USING (session_id)
 WHERE ev.created_at >= m.measured_from
 GROUP BY session_id

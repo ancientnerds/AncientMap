@@ -1,6 +1,6 @@
 import { Flag } from './Flag'
 import { fmtInt, fmtStamp } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import type { ProblemKind, ProblemsData, Visitor } from './types'
 import type { Loaded } from './useStats'
 
@@ -90,7 +90,7 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
               ))}
             </ol>
           )}
-          <p className="dash-note">
+          <HowCounted>
             Everything counts people, not events. The score makes the kinds comparable: a JS error and a lost
             WebGL context count triple per visitor they reached, a dead link double, a bounce and an empty
             search once; a slow page counts its visitors times how far past its budget it is, so a page that
@@ -98,7 +98,7 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
             it, green is a hint and not a defect. The eight worst are listed. A story we withdrew on purpose
             answers 410 and raises no event, so retired links never appear here — the Sources panel counts
             those.
-          </p>
+          </HowCounted>
         </>
       )}
     </Panel>

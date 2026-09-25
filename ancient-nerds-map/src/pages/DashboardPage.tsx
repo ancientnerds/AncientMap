@@ -7,6 +7,7 @@
 import { useState } from 'react'
 
 import anLogo from '../components/dashboard/an-logo-green.svg'
+import { Attention } from '../components/dashboard/Attention'
 
 import { Devices } from '../components/dashboard/Devices'
 import { FeedbackInbox } from '../components/dashboard/FeedbackInbox'
@@ -41,6 +42,11 @@ import { VisitorMap } from '../components/dashboard/VisitorMap'
 
 /** Same target as the entry page's button (stats_access.gate_html): OAuth on the main host, handoff back here. */
 const ENTRY_HREF = 'https://ancientnerds.com/api/auth/discord?return_to=%2Fapi%2Fauth%2Fstats-handoff'
+/** The main site's pages run analytics/boot.ts, which reads ?notrack= and sets
+ *  or clears the key Umami's tracker checks before every send. The setting
+ *  lives in that site's storage, so it is per browser: once on every device. */
+const NOTRACK_OFF_HREF = 'https://ancientnerds.com/news.html?notrack=1'
+const NOTRACK_ON_HREF = 'https://ancientnerds.com/news.html?notrack=0'
 /** Umami's own UI on this host; the deploy names the website id in .env. */
 const UMAMI_HREF = `/websites/${import.meta.env.VITE_UMAMI_WEBSITE_ID ?? ''}`
 
@@ -123,6 +129,7 @@ export default function DashboardPage() {
         <Entry />
       ) : (
         <div className="dash-grid">
+          <Attention problems={problems} globe={globe} content={content} />
           <Pulse state={overview} countries={countries} />
           <LiveNow state={live} />
           <GlobeReach state={globe} />
@@ -140,7 +147,13 @@ export default function DashboardPage() {
         </div>
       )}
       <footer className="dash-footer">
-        Cookieless: a visitor is only recognised again within one calendar month. Times in UTC, as in Umami.
+        <p>Cookieless: a visitor is only recognised again within one calendar month. Times in UTC, as in Umami.</p>
+        <p>
+          Our own visits count like anyone's.{' '}
+          <a href={NOTRACK_OFF_HREF}>Stop counting this browser</a> ·{' '}
+          <a href={NOTRACK_ON_HREF}>count it again</a> — once on every browser and phone you use; it opens
+          the Stories page.
+        </p>
       </footer>
     </main>
   )

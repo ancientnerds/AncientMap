@@ -35,6 +35,7 @@ from pipeline.umami_db import (
     SQL_LIVE,
     SQL_MAP,
     SQL_NOT_FOUND,
+    SQL_SEARCH_EVENTS,
     SQL_SESSION_EVENTS,
     SQL_SOURCES,
     SQL_VITALS,
@@ -163,7 +164,7 @@ async def visitor_map(
 #: browser, into a response the page throws away. Everything else on this
 #: dashboard cuts an id to fs.SESSION_ID_CHARS; this is how that rule reaches
 #: the one route that shapes no row of its own.
-CONTENT_KEYS = ("event_name", "label", "country", "results", "n")
+CONTENT_KEYS = ("event_name", "label", "country", "results", "n", "visitors")
 
 
 @router.get("/content")
@@ -173,11 +174,18 @@ async def content(
 ) -> dict[str, Any]:
     since, until = _window(days)
     rows = [{k: r[k] for k in CONTENT_KEYS} for r in fetch(SQL_CONTENT, since, until)]
+
+    def opened(event: str) -> list[dict[str, Any]]:
+        # People first: 24 opens of one site were six sessions of one laptop
+        picked = [r for r in rows if r["event_name"] == event]
+        return sorted(picked, key=lambda r: (-r["visitors"], -r["n"]))[:15]
+
     return {
-        "sites": [r for r in rows if r["event_name"] == "site_open"][:15],
-        "stories": [r for r in rows if r["event_name"] == "story_open"][:15],
-        "papers": [r for r in rows if r["event_name"] == "paper_open"][:15],
-        "searches": [r for r in rows if r["event_name"] == "search"][:30],
+        "sites": opened("site_open"),
+        "stories": opened("story_open"),
+        "papers": opened("paper_open"),
+        # Folded from the single events: a pause mid-word is no search term
+        "searches": fs.search_terms(fetch(SQL_SEARCH_EVENTS, since, until)),
     }
 
 
@@ -236,10 +244,11 @@ async def sources(
     """Where the sessions came from, and how many arrivals the tracker missed.
 
     Two counts of one thing, deliberately side by side: Umami only sees a
-    visitor whose browser ran our script, nginx sees every request. Measured
-    2026-09-19 over the same window, with referral_log's own arrival rule:
-    189 Google page arrivals in the log (168 answered 200, 21 answered 410)
-    against 62 page views from 51 sessions in Umami.
+    visitor whose browser ran our script, nginx sees every request. The gap
+    measured on 2026-09-19 (189 Google arrivals against 62 Umami views) was
+    mostly Chrome prefetching Google's results; since 2026-09-25 nginx logs
+    Sec-Purpose and referral_log counts a prefetch out (its docstring has
+    the measurement: Umami saw 90 % of the real views).
     """
     since, until = _window(days)
     rows = fetch(SQL_SOURCES, since, until)

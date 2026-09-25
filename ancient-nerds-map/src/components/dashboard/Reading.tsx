@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtInt } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import type { JourneysData, ReadingPage } from './types'
 import type { Loaded } from './useStats'
 
@@ -43,7 +43,7 @@ export function Reading({ state }: { state: Loaded<JourneysData> }) {
       {r && (
         <>
           <BarList items={r.pages.map(readingItem)} empty="Nobody scrolled a page in this window." />
-          <p className="dash-note">
+          <HowCounted>
             One row per page type: how many sessions reached {r.steps.map(s => `${s} %`).join(' · ')} of
             the page, in that order. Counts only — {fmtInt(r.readers)} sessions scrolled at all in this
             window, and a sample that size cannot carry a share. A mark is fired by src/analytics/boot.ts
@@ -52,7 +52,7 @@ export function Reading({ state }: { state: Loaded<JourneysData> }) {
             visitor who finished a short one without scrolling is in no column. These rows are not
             filtered to confirmed humans — on 2026-09-19 eight sessions fired a mark without a single
             page view, every one of them inside the two machine fingerprints the Scrapers panel names.
-          </p>
+          </HowCounted>
         </>
       )}
     </Panel>

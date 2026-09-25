@@ -796,6 +796,88 @@ button {
   }
 }
 
+/* ── How this is counted ───────────────────────────────────────────── */
+
+.dash-how {
+  margin-top: 10px;
+}
+
+.dash-how summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-muted);
+  cursor: pointer;
+}
+
+.dash-how summary:hover,
+.dash-how summary:focus-visible {
+  color: var(--dash-green);
+  outline: none;
+}
+
+.dash-how[open] summary {
+  color: var(--dash-green);
+}
+
+/* ── What needs attention ───────────────────────────────────────────── */
+
+.dash-attention {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.dash-attention-item {
+  position: relative;
+  padding-left: 18px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dash-attention-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dash-green);
+}
+
+.dash-attention-item--warn::before {
+  background: var(--dash-amber);
+}
+
+.dash-attention-item--bad::before {
+  background: var(--dash-red-bright);
+}
+
+.dash-footer a {
+  color: var(--dash-green);
+}
+
+/* ── Header on a phone: the mark on its own row, then range and links ─ */
+
+@media (max-width: 719px) {
+  .dash-mark {
+    flex-basis: 100%;
+  }
+
+  .dash-range button,
+  .dash-nav a {
+    padding: 0 10px;
+    font-size: 0.7rem;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .dash-range button,
   .dash-nav a,

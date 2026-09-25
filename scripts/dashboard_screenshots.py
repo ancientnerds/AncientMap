@@ -188,6 +188,10 @@ FIXTURES: dict[str, dict] = {
             "no_signal": 32,
         },
         "abandon_ms": {"min": 2210.0, "median": 11480.0, "max": 63900.0, "samples": 27},
+        "by_device": [
+            {"device": "desktop", "loads": 301, "reached": 248},
+            {"device": "mobile", "loads": 111, "reached": 49},
+        ],
     },
     "clusters": {
         "min_ids": 3,
@@ -462,6 +466,7 @@ FIXTURES: dict[str, dict] = {
             # Referrer spam kept out of the two lists and named in the note
             # (referral_log.UNKNOWN_HOST_MIN); 17 of them live on 2026-09-19.
             "unverified": 204,
+            "prefetched": 1310,
             "families": [
                 {"family": "search", "visits": 2914, "bots": 411},
                 {"family": "social", "visits": 388, "bots": 44},
@@ -563,6 +568,7 @@ EMPTY_FIXTURES: dict[str, dict] = {
             "covered_days": 7.0,
             "lines": 0,
             "unverified": 0,
+            "prefetched": 0,
             "families": [],
             "hosts": [],
             "statuses": [],

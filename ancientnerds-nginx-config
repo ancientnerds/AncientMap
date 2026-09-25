@@ -14,7 +14,14 @@ upstream an_api {
 # engines send people here — the zero-click question of 2026-09-17.
 # No client IP on purpose; logrotate does not touch the path, the volume is
 # a few hundred lines a day. Reader: scripts/referral_report.py.
-log_format referral escape=json '{"t":"$time_iso8601","ref":"$http_referer","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent"}';
+# "purpose" is the Sec-Purpose header: Google Search has Chrome prefetch its
+# top results through Google's Private Prefetch Proxy ("prefetch;anonymous-
+# client-ip") or directly ("prefetch"), with the search page as referer. Such
+# a request is no visit unless the visitor clicks. Measured 2026-09-25 over
+# four days of the access log: 279 of 479 search arrivals came from the
+# proxy's published ranges and loaded nothing after the HTML; of the 296
+# arrivals that loaded nothing else, 26 were viewed from another IP later.
+log_format referral escape=json '{"t":"$time_iso8601","ref":"$http_referer","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent","purpose":"$http_sec_purpose"}';
 
 map $http_referer $external_referral {
     default 1;

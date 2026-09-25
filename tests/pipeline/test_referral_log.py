@@ -38,8 +38,12 @@ def _line(
     ua: str = HUMAN,
     t: str = "2026-09-18T12:00:00+00:00",
     status: int = 200,
+    purpose: str | None = "",
 ) -> str:
-    return json.dumps({"t": t, "ref": ref, "req": req, "status": status, "ua": ua})
+    entry = {"t": t, "ref": ref, "req": req, "status": status, "ua": ua}
+    if purpose is not None:
+        entry["purpose"] = purpose
+    return json.dumps(entry)
 
 
 def _visit(
@@ -48,6 +52,7 @@ def _visit(
     bot: bool = False,
     page: bool = True,
     at: datetime | None = None,
+    prefetch: bool | None = False,
 ) -> rl.Visit:
     return rl.Visit(
         at=at or datetime(2026, 9, 18, 12, 0, tzinfo=UTC),
@@ -56,6 +61,7 @@ def _visit(
         status=status,
         bot=bot,
         page=page,
+        prefetch=prefetch,
     )
 
 
@@ -217,6 +223,50 @@ def test_coverage_report_windows_the_visits():
     assert out["lines"] == 1
     assert out["covered_from"] == (SINCE + timedelta(days=2)).isoformat()
     assert out["covered_days"] == 5.0
+
+
+def test_parse_lines_read_the_sec_purpose_of_a_prefetch():
+    """Chrome's prefetch of a Google result, through Google's proxy or
+    directly: browser UA, search referer, 200. Only Sec-Purpose tells."""
+    proxy, direct, prerender, visit, before = rl.parse_lines(
+        [
+            _line("https://www.google.com/", "GET /sites/", purpose="prefetch;anonymous-client-ip"),
+            _line("https://www.google.com/", "GET /sites/", purpose="prefetch"),
+            _line("https://www.google.com/", "GET /sites/", purpose="prefetch;prerender"),
+            _line("https://www.google.com/", "GET /sites/"),
+            _line("https://www.google.com/", "GET /sites/", purpose=None),
+        ]
+    )
+    assert (proxy.prefetch, direct.prefetch, prerender.prefetch) == (True, True, True)
+    assert visit.prefetch is False
+    # A line from before nginx logged the field: nobody can tell
+    assert before.prefetch is None
+
+
+def test_coverage_report_counts_a_prefetch_as_no_arrival():
+    """2026-09-25, four days of the access log: 279 of 479 search arrivals were
+    Google's prefetches, loading nothing after the HTML. On the panel they
+    read as visitors the tracker missed - the "Umami sees a third" gap."""
+    out = rl.coverage_report(
+        [_visit(), _visit(prefetch=True), _visit(prefetch=True, status=410)], SINCE, UNTIL
+    )
+    assert out["families"] == [{"family": "search", "visits": 1, "bots": 0}]
+    assert out["hosts"] == [{"host": "google.com", "visits": 1}]
+    assert out["statuses"] == []
+    assert out["prefetched"] == 2
+    assert out["lines"] == 3
+
+
+def test_coverage_report_reads_only_lines_that_carry_the_purpose():
+    """A line logged before nginx wrote Sec-Purpose may be a prefetch or a
+    visitor; it is not read, and the window starts where the field does."""
+    marked = SINCE + timedelta(days=3)
+    out = rl.coverage_report(
+        [_visit(at=SINCE + timedelta(days=1), prefetch=None), _visit(at=marked)], SINCE, UNTIL
+    )
+    assert out["families"] == [{"family": "search", "visits": 1, "bots": 0}]
+    assert out["lines"] == 1
+    assert out["covered_from"] == marked.isoformat()
 
 
 # ---- the file -------------------------------------------------------------
