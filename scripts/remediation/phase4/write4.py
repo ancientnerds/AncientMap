@@ -34,6 +34,14 @@ L writes the held sites whose text the March chain changed (`legacy4`); P5 write
 whose P4 provenance is live in production and clears the old card of a held-card site whose card
 carries a Phase-3 reviewer-cleared defect (one of the 709), with that finding as the evidence.
 
+**Before every other rule, P4 and P5 refuse a site outside the owner's defect scope**
+(`outside-defect-scope`; owner decision 2026-09-23, `phase4/scope4.py`): Phases 4/5 write only the
+sites with proven text defects, and every other site's description and card stay exactly as they
+are. Both planners take the scope as a required input - there is no default and no switch. **L takes
+none** (owner decision 2026-09-24, "Alle kennzeichnen"): it writes no text, only the provenance that
+shows the existing AI footnote, and it marks every March-AI text Phase 4 did not write, inside the
+scope or not.
+
 ## The transaction (render_apply)
 
 `\\set ON_ERROR_STOP on`, `BEGIN`, the temp plan table `ON COMMIT DROP`; guards before the loop -
@@ -76,6 +84,7 @@ from phase3.run import read_jsonl  # noqa: E402 - the one JSON-lines reader
 
 from phase4 import legacy4  # noqa: E402 - lane L's decision, one spelling
 from phase4 import model4 as M  # noqa: E402
+from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 
 # ------------------------------------------------------------------------------------------------
 # Groups, targets, test ids
@@ -169,6 +178,9 @@ RULE_NOT_WRITTEN = "description-not-written"
 RULE_WRITTEN = "written-by-p4"
 RULE_NO_CLAIM = "no-legacy-claim"
 RULE_MARKED = "provenance-present"
+#: The owner's decision of 2026-09-23: a site outside the defect scope is never written (P4, P5;
+#: lane L marks every March-AI text since the decision of 2026-09-24).
+RULE_OUT_OF_SCOPE = "outside-defect-scope"
 
 _PLAN_BATCH = re.compile(r"p4-(?P<number>[0-9]{4,})")
 
@@ -277,7 +289,10 @@ def ledger_labels(
     ledger: Sequence[Mapping[str, Any]], *, batch_id: str, site_id: str
 ) -> tuple[str, ...]:
     """The labels of this site's model calls in this batch (`<site_id>/<answer_key>`, the phase-3
-    ledger's call label), in ledger order."""
+    ledger's call label), in ledger order. `ledger` is the rows of the batch's own run's ledger
+    (`<run>/LEDGER.jsonl`, `model4.LEDGER_FILE`; `write_gate4` reads no other): batch ids repeat
+    across runs - every pilot is `p4-0001` .. - so a ledger shared across runs would put one
+    pilot's calls into another's evidence (pilot 2's open item, 2026-09-24)."""
     return tuple(
         str(row["label"])
         for row in ledger
@@ -663,6 +678,42 @@ def load_batch(batch_dir: Path) -> BatchInputs:
     )
 
 
+def load_legacy_plan(path: Path) -> list[BatchInputs]:
+    """Lane L's own plan (`plan4.py legacy`, owner decision 2026-09-24): every curated site of one
+    read-only production read, one batch per line, read strictly.
+
+    Every batch carries `legacy4.PLAN_MARK` (a P4 plan's batches carry none, so one is never read as
+    the other) and a plan batch id; no batch id and no site is listed twice. An L batch has no
+    directory and no stage outcome - `root` is the plan file, and it carries no lanes, assemblies or
+    holds: lane L decides on the site's own values alone (`legacy4`).
+    """
+    batches: list[BatchInputs] = []
+    batch_ids: set[str] = set()
+    seen: set[str] = set()
+    for number, record in enumerate(read_jsonl(path), start=1):
+        batch_id = record["batch_id"]
+        if record.get("pass") != legacy4.PLAN_MARK:
+            raise PlanInputError(
+                f"{path}:{number}: batch {batch_id} is not a lane-L plan batch (pass "
+                f"{record.get('pass')!r}; plan4.py legacy writes {legacy4.PLAN_MARK!r})"
+            )
+        group_batch_id(batch_id, Group.L)
+        if batch_id in batch_ids:
+            raise PlanInputError(f"{path}:{number}: batch {batch_id} twice")
+        batch_ids.add(batch_id)
+        sites = tuple(M.PlanSite.from_dict(site) for site in record["sites"])
+        for site in sites:
+            if site.site_id in seen:
+                raise PlanInputError(f"{path}:{number}: {site.site_id} is listed twice")
+            seen.add(site.site_id)
+        batches.append(
+            BatchInputs(
+                root=path, batch_id=batch_id, sites=sites, lanes={}, assemblies={}, holds={}
+            )
+        )
+    return batches
+
+
 def source_files(
     store: F.EvidenceStore, site_id: str, source_ids: Iterable[str]
 ) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
@@ -697,6 +748,20 @@ def _holds_json(holds: Iterable[M.Hold]) -> list[dict[str, str]]:
     return [hold.to_dict() for hold in holds]
 
 
+def outside_scope(scope: S.DefectScope, site_id: str, field_name: str) -> W.Refusal | None:
+    """The owner's rule, asked before every other: a site outside the defect scope is refused
+    under `outside-defect-scope`, whatever else would hold or write it; `None` for a scope site."""
+    if site_id in scope:
+        return None
+    return W.Refusal(
+        site_id,
+        field_name,
+        RULE_OUT_OF_SCOPE,
+        f"not in the owner's defect scope ({scope.label}): its description and card stay as "
+        "they are",
+    )
+
+
 # ------------------------------------------------------------------------------------------------
 # The three planners
 # ------------------------------------------------------------------------------------------------
@@ -705,6 +770,7 @@ def _holds_json(holds: Iterable[M.Hold]) -> list[dict[str, str]]:
 def plan_p4(
     batch: BatchInputs,
     *,
+    scope: S.DefectScope,
     open_lanes: frozenset[M.Lane],
     audited: frozenset[str],
     verify: Verifier,
@@ -713,7 +779,8 @@ def plan_p4(
     """P4: the description and raw_data rows of every site of the batch that may be written."""
     plan = WritePlan4(group=Group.P4, batch_id=group_batch_id(batch.batch_id, Group.P4))
     for site in batch.sites:
-        decided = _p4_site(
+        outside = outside_scope(scope, site.site_id, "description")
+        decided = outside or _p4_site(
             batch, site, open_lanes=open_lanes, audited=audited, verify=verify, ledger=ledger
         )
         if isinstance(decided, W.Refusal):
@@ -825,9 +892,11 @@ def _p4_site(
 def plan_legacy(batch: BatchInputs, *, written: Iterable[str]) -> WritePlan4:
     """L: the legacy provenance of the batch's held sites (`legacy4`), once the held set is final.
 
-    `written` are the sites whose full provenance is live in production. A held site with no claim
-    is listed in `unclaimed` (for HUMAN_ONLY) and refused; a site whose `raw_data` already carries a
-    provenance is refused rather than overwritten.
+    `written` are the sites whose full provenance is live in production. There is no scope: lane L
+    marks every March-AI text Phase 4 did not write, inside the owner's defect scope or not (owner
+    decision 2026-09-24). A held site with no claim is listed in `unclaimed` (for HUMAN_ONLY) and
+    refused; a site whose `raw_data` already carries a provenance is refused rather than
+    overwritten.
     """
     plan = WritePlan4(group=Group.L, batch_id=group_batch_id(batch.batch_id, Group.L))
     live = set(written)
@@ -912,18 +981,24 @@ def card_to_write(
 def plan_cards(
     batch: BatchInputs,
     *,
+    scope: S.DefectScope,
     written: Mapping[str, str | None],
     card_findings: Mapping[str, Sequence[Mapping[str, Any]]],
 ) -> WritePlan4:
     """P5: the cards of written sites, and the clears of held cards with a cleared defect.
 
     `card_findings` are the Phase-3 reviewer-cleared card defects (the 709) by site: the evidence
-    of a clear (card_texts, HELD CARDS: "known-wrong narration becomes absent").
+    of a clear (card_texts, HELD CARDS: "known-wrong narration becomes absent"). A site outside the
+    defect scope is refused first: no card and no clear.
     """
     plan = WritePlan4(group=Group.P5, batch_id=group_batch_id(batch.batch_id, Group.P5))
     for site in batch.sites:
         assembly = card_to_write(batch, site, written=written)
-        if assembly is not None:
+        outside = outside_scope(scope, site.site_id, "card_description")
+        decided: Row4 | W.Refusal
+        if outside is not None:
+            decided = outside
+        elif assembly is not None:
             decided = _card_row(batch, site, assembly)
         elif M.SiteFlag.CLEARED_CARD_DEFECT in site.flags and site.card is not None:
             decided = _clear_row(batch, site, card_findings)
@@ -1005,7 +1080,8 @@ def _card_row(batch: BatchInputs, site: M.PlanSite, assembly: M.Assembly) -> Row
 def plan_writes(batch: BatchInputs, *, group: Group, **inputs: Any) -> WritePlan4:
     """The write plan of one row group for one plan batch (`docs/procedures/PHASE4_CONTRACTS.md`
     section 5): `plan_p4`, `plan_legacy` or `plan_cards`, called with that planner's own keyword
-    inputs - a missing or foreign input is a `TypeError`, never a default."""
+    inputs - a missing or foreign input is a `TypeError`, never a default. P4 and P5 take the
+    owner's defect `scope` (`phase4/scope4.py`); L takes none (owner decision 2026-09-24)."""
     planners: Mapping[Group, Callable[..., WritePlan4]] = {
         Group.P4: plan_p4,
         Group.L: plan_legacy,

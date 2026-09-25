@@ -21,15 +21,33 @@ than the count is taken whole.
     audit4.py draw  --run-dir R --seed 20260922 --count 10 --written written.txt [--lane W]
                     [--exclude used.txt]
     audit4.py sheet --run-dir R --site-ids drawn.txt --out sheet.md
+    audit4.py hold  --run-dir R --site <site id> --audit MIDRUN_AUDIT_VERDICTS.json
+
+**A finding holds its site** (the mass run's mid-run audit, 2026-09-25). `hold` reads the auditor's
+verdict file (one record per site: `site_id`, `name`, every sentence's `n`, `verdict` and `note`,
+the card's `verdict` and `note` or `null`), records the site's findings as holds of the closed
+list's S6b reasons in the batch that carries the site (its latest), and rewrites the run's
+`HOLDS4.jsonl`: a WRONG_SITE sentence is `audit-wrong-site` and an UNSUPPORTED one
+`audit-unsupported` (site scope), a NOT_CONTAINED card `audit-not-contained` (card scope); the
+detail names the file, its sha256 and the finding. A held site is planned by no one again
+(`write4.plan_p4` refuses it; `write_gate4` accepts its batch's re-plan once `revert4.py --site`
+took its written rows back) and leaves the reviewed population the samples are drawn from. It
+refuses a site the file does not judge exactly once, a verdict outside the audit's vocabulary, a
+record whose name is not the site's, a site outside the run, and a record without a finding:
+nothing is written then. The command is explicit - it names the site and the file - and appends
+only what is not there yet, so a second run adds nothing.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import random
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -45,6 +63,13 @@ from phase4 import run4 as R4  # noqa: E402
 
 SENTENCE_VERDICTS = "SUPPORTED | UNSUPPORTED | WRONG_SITE"
 CARD_VERDICTS = "CONTAINED | NOT_CONTAINED"
+#: The findings that hold, by the closed list's S6b reasons: a sentence's hold the site, a card's
+#: only the card.
+SENTENCE_HOLDS: Mapping[str, M.HoldReason] = {
+    "UNSUPPORTED": M.HoldReason.AUDIT_UNSUPPORTED,
+    "WRONG_SITE": M.HoldReason.AUDIT_WRONG_SITE,
+}
+CARD_HOLDS: Mapping[str, M.HoldReason] = {"NOT_CONTAINED": M.HoldReason.AUDIT_NOT_CONTAINED}
 
 
 def draw_sample(site_ids: Sequence[str], *, seed: int, count: int, exclude: set[str]) -> list[str]:
@@ -158,6 +183,87 @@ def cmd_sheet(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------------- the holds
+
+
+def audit_holds(record: Mapping[str, Any], *, source: str) -> list[M.Hold]:
+    """The holds one site's audit record carries (`SENTENCE_HOLDS`, `CARD_HOLDS`), in its order; a
+    verdict outside the audit's vocabulary is refused, never read as a pass."""
+    site_id = record["site_id"]
+    holds: list[M.Hold] = []
+    for sentence in record["sentences"]:
+        verdict = sentence["verdict"]
+        if verdict not in SENTENCE_VERDICTS.split(" | "):
+            raise InputError(f"{site_id}: {verdict!r} is not a sentence verdict")
+        if verdict in SENTENCE_HOLDS:
+            holds.append(
+                M.Hold(
+                    site_id=site_id,
+                    scope=M.HoldScope.SITE,
+                    reason=SENTENCE_HOLDS[verdict],
+                    detail=f"{source}: sentence {sentence['n']} {verdict}: {sentence['note']}",
+                )
+            )
+    card = record["card"]
+    if card is not None:
+        verdict = card["verdict"]
+        if verdict not in CARD_VERDICTS.split(" | "):
+            raise InputError(f"{site_id}: {verdict!r} is not a card verdict")
+        if verdict in CARD_HOLDS:
+            holds.append(
+                M.Hold(
+                    site_id=site_id,
+                    scope=M.HoldScope.CARD,
+                    reason=CARD_HOLDS[verdict],
+                    detail=f"{source}: card {verdict}: {card['note']}",
+                )
+            )
+    return holds
+
+
+def site_batch(run_dir: Path, site_id: str) -> tuple[Path, M.PlanSite]:
+    """The batch that carries the site - its latest, where a re-queued site counts
+    (`run4.aggregate_holds`) - and its plan record."""
+    found = [
+        (batch_dir, site)
+        for batch_dir in sorted(p for p in run_dir.iterdir() if (p / M.INPUT_FILE).exists())
+        for site in B.read_batch(batch_dir)[1]
+        if site.site_id == site_id
+    ]
+    if not found:
+        raise InputError(f"{site_id} is not a site of {run_dir}")
+    return found[-1]
+
+
+def cmd_hold(args: argparse.Namespace) -> int:
+    """Hold one site for what the audit file found on it (see the module docstring)."""
+    run_dir, audit = Path(args.run_dir), Path(args.audit)
+    body = audit.read_bytes()
+    records = [record for record in json.loads(body) if record["site_id"] == args.site]
+    if len(records) != 1:
+        raise InputError(f"{audit.name}: {len(records)} verdict record(s) for {args.site}, not one")
+    (record,) = records
+    batch_dir, site = site_batch(run_dir, args.site)
+    if record["name"] != site.name:
+        raise InputError(f"{audit.name} judges {record['name']!r}; {args.site} is {site.name!r}")
+    source = f"{audit.name} sha256 {hashlib.sha256(body).hexdigest()}"
+    holds = audit_holds(record, source=source)
+    if not holds:
+        raise InputError(
+            f"{audit.name} names no UNSUPPORTED, WRONG_SITE or NOT_CONTAINED finding for "
+            f"{args.site}: nothing holds it"
+        )
+    added = B.append_holds(batch_dir, holds)
+    total = R4.write_holds4(run_dir)
+    reasons = ", ".join(f"{hold.reason.value} ({hold.scope.value})" for hold in holds)
+    print(
+        f"held {args.site} ({site.name}) in {batch_dir.name}: {reasons}; {added} new line(s) in "
+        f"its {M.HOLDS_FILE}, {len(holds) - added} there already; {R4.HOLDS4_FILE}: {len(total)} "
+        "hold(s)"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="phase4-audit", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -174,6 +280,11 @@ def build_parser() -> argparse.ArgumentParser:
     sheet.add_argument("--site-ids", required=True)
     sheet.add_argument("--out", required=True)
     sheet.set_defaults(func=cmd_sheet)
+    hold = sub.add_parser("hold", help="hold one site for the findings of an audit verdict file")
+    hold.add_argument("--run-dir", required=True)
+    hold.add_argument("--site", required=True, help="the site id the audit found on")
+    hold.add_argument("--audit", required=True, help="the auditor's verdict file (JSON)")
+    hold.set_defaults(func=cmd_hold)
     return parser
 
 

@@ -244,8 +244,10 @@ def _bucket_of(year: int, buckets: list[tuple[str, int, int]]) -> str:
 
 
 def _year(token: str) -> int:
-    """Digits with the thousand separators stripped, via the project's own parser."""
-    cleaned = token.replace(",", "")
+    """Digits with the thousand separators stripped, via the project's own parser. `_NUM` admits
+    a comma or a dot before each group of three digits ("35,000", "35.000") and no other dot, so
+    both are separators here."""
+    cleaned = token.replace(",", "").replace(".", "")
     year = _parse_year(cleaned)
     if year is None:
         # The extractor only emits digit groups, so this is a bug in this module, not

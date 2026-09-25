@@ -16,10 +16,42 @@ such a sentence names it (T2, Orolik); (9) no definite reference whose anteceden
 (T5) - and the reviewer question the matching two DROP criteria. The answer lines and the parsers
 are unchanged. `docs/procedures/PHASE4_CONTRACTS.md` section 7 records the decision.
 
+**Before pilot 3's first answer (2026-09-24, two owner decisions).** Rule (4) names the demonyms V10
+holds as modern nationality adjectives ("such as Danish or Spanish") and says cultural adjectives
+such as Roman, Egyptian or Maya are fine (design entry [6] wins; `country_lookup`'s split into
+`ANCIENT_CULTURE_ADJECTIVES` and `MODERN_NATIONALITY_DEMONYMS`). Rule (10) states V6's positional
+pronoun rule, which the selector was never told: a DESC sentence may open with a word of V6's closed
+list (`model4.PRONOUN_OPENERS`, after its removals) only right after its source predecessor, so the
+first never does. Section 7 of the contracts records both.
+
+**Pilot 3's fixes (2026-09-24).** Pilot 3 failed T1 and T4 on subject pronouns past the first word
+(Stanydale Temple's "Pottery sherds show that it was ...", Dolebury Warren's card "Standing on a
+limestone ridge ..., it was ..."): rule (10) adds V6's and V10's reading past the opener - a first
+personal pronoun that is a subject form right after the first comma, or right after "that" with no
+article before it (`model4.PERSONAL_PRONOUNS`, `SUBJECT_PRONOUNS`, `ARTICLES`) - rule (4) refers
+the card to it, and the reviewer drops such a sentence, or a card whose pronoun has no antecedent
+inside the card. Pilot 3 failed T7 on Partiscum (CANARY-03), whose lead the article's own body
+contradicts: rule (11) refuses a sentence another listed sentence contradicts or reduces to a
+presumption, an assumption or a dispute, and the reviewer - shown, for the first time, the passage
+the sentences were chosen from (`pool_passage`, `page_passage`) - drops it. Its selectors abstained
+on "Argos, Peloponnese" and "Clare, Suffolk", never told when V6 accepts the stored name without
+its disambiguator (pilot 2's `name_base`): rule (7) now states V6's name match and both forms of
+the base, which counts only when `also_named` lists it (a strong 'own' verdict).
+
 Every question ends with the project's LLM01 guard line (`GUARD_LINE`), and every third-party text
 in a prompt sits inside a `<source>` element, which is what that line names. The stored description
 is never shown to the selector, so it cannot anchor on unsourced text; the site element carries only
 the Phase-3-verified fields.
+
+**The mass run's mid-run audit (2026-09-25).** Roman Bath, York was published opening "The Roman
+Bath is a Grade II* listed public house ...": the pub built in 1929-31 over the Roman bath house the
+record stands for (T2, WRONG_SITE). Rule (8) and the reviewer's matching line name only the modern
+village, town or municipality, and the sentence carries the site's name (rule 7 even made it the
+only sentence the selector could open with). The reviewer question gains "DROP a sentence whose
+subject is a later building, business or institution (a pub, hotel, house, museum, shop, church,
+station ...) that shares or contains the site's name rather than the ancient site itself, even when
+it names the site."; the review import's cascade (`review4.follow_drops`, S4 and S5 again) does the
+rest. The selector question is unchanged: the mass run's selector answers are given under its pin.
 
 A prompt travels as `model_stage.Prompt(stage, system=<question>, user=<block>)`, rendered by
 `Prompt.render()` into the Opus handoff's prompt file; this module builds the two strings and nothing
@@ -53,19 +85,35 @@ SELECTOR_QUESTION = (
     "avoid tourism, access, opening hours, modern events and statements about the article itself;\n"
     "(3) remove a span only if the rest still says the same thing about the site;\n"
     "(4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no "
-    "country, has no parentheses, does not open with a pronoun, and states something concrete; "
-    "prefer one that carries a date;\n"
+    "country and no modern nationality adjective such as Danish or Spanish, has no parentheses, "
+    "carries no pronoun that rule (10) ties to the sentence before it, and states something "
+    "concrete; cultural adjectives such as Roman, Egyptian or Maya are fine; prefer one that "
+    "carries a date;\n"
     "(5) if no listed sentence is about this site, answer ABSTAIN.\n"
     "(6) the description is your DESC sentences after their removals, joined by spaces: it must "
     "be 200-1100 characters long in total;\n"
     "(7) your first DESC sentence must name the site: its name, an alias or an also_named name of "
-    "the site element;\n"
+    "the site element, all of that name's words in their order with nothing but spaces or "
+    'punctuation between them (case and accents do not matter); a name written "X (Y)" - '
+    'ending in one bracket with no bracket inside it - or else "X, Y" - X before the first comma '
+    "- is named by X alone only when also_named lists X; if no listed sentence names the site so, "
+    "answer ABSTAIN with that reason;\n"
     "(8) never pick a sentence about the modern village, town or municipality (its "
     "administration, its population, its modern founding), even when it names the site; if the "
     "only sentence that names the site is such a sentence, answer ABSTAIN with that reason;\n"
     "(9) every picked sentence must be understandable from your picked sentences alone: never "
     'pick a sentence with a definite reference ("the valley", "the mountain", "other ...", '
     '"it") whose antecedent is not among your picks.\n'
+    "(10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, Her, "
+    "The latter, The former, Here or There (after its removals) only if the sentence numbered one "
+    "lower, in the same section, is also one of your DESC sentences; so your first DESC sentence "
+    "never opens with one of these words. The same holds for a DESC sentence whose first it, its, "
+    "they, their, them, he, his, him, she or her (after its removals) is it, they, he or she and "
+    'stands right after the sentence\'s first comma, or right after "that" with no "the", "a" or '
+    '"an" before it: "Standing on a ridge, it was made into a fort" and "Pottery sherds show that '
+    'it was occupied" need the sentence before them.\n'
+    "(11) never pick a sentence that another listed sentence contradicts, or reduces to a "
+    "presumption, an assumption or a dispute, even when it is the article's lead.\n"
     "\n"
     "Answer with these lines and nothing else. A sentence id is followed by the ids of the spans "
     "you remove from it, each written as a space, a hyphen and the span id:\n"
@@ -108,15 +156,28 @@ RESTRICTED_QUESTION = (
 REVIEWER_QUESTION = (
     "You check a short factual description of ONE archaeological site that code assembled from "
     "source passages. For every numbered sentence you see the published text, the untrimmed "
-    "source sentence, the two source sentences before it and its section heading. For each "
+    "source sentence, the two source sentences before it and its section heading; before them you "
+    "see the passage the sentences were chosen from (PASSAGE). For each "
     "sentence ask: is it about this site, is it fully supported by its passage, does it keep the "
     "same hedging and restrictions, and did the removals change what it says? Ask the same of the "
     "card, against the description.\n"
     "DROP a sentence about the modern village, town or municipality (its administration, its "
     "population, its modern founding) rather than the site, even when it names the site.\n"
+    "DROP a sentence whose subject is a later building, business or institution (a pub, hotel, "
+    "house, museum, shop, church, station ...) that shares or contains the site's name rather "
+    "than the ancient site itself, even when it names the site.\n"
     'DROP a sentence with a definite reference ("the valley", "the mountain", "other ...", "it") '
     "whose antecedent is in no published sentence before it: the source sentences before it are "
     "not published.\n"
+    "DROP a sentence that is garbled or ungrammatical, even when it copies the source word for "
+    "word.\n"
+    "DROP a sentence in which it, its, they, their, them, he, his, him, she or her - at its start, "
+    "after a fronted phrase or in a that-clause - refers to something no published sentence before "
+    "it names, and DROP the card when such a pronoun has no antecedent inside the card: the card "
+    "is read on its own.\n"
+    "DROP a sentence that another sentence of the passage contradicts, or reduces to a "
+    "presumption, an assumption or a dispute, even when it is the article's lead; ask the same "
+    "of the card.\n"
     "\n"
     "Answer with one line per sentence and nothing else:\n"
     "R<i>: KEEP\n"
@@ -226,14 +287,41 @@ def cited_url(meta: M.SourceDoc) -> str:
     return meta.permalink
 
 
+def pool_passage(meta: M.SourceDoc, pool: Sequence[M.Sentence], text: str) -> str:
+    """The reviewer's PASSAGE for lanes W, S and T: the selector's pool - every candidate sentence
+    with its sid and section, as the selector was shown it, without the spans."""
+    rows = [f'<source id="PASSAGE" title="{attr(meta.title or "")}">']
+    for sentence in pool:
+        section = sentence.section if sentence.section is not None else "lead"
+        rows.append(f"{sentence.sid} [{section}] {S.sentence_text(text, sentence)}")
+    rows.append("</source>")
+    return "\n".join(rows)
+
+
+def page_passage(pages: Sequence[tuple[M.SourceDoc, str]]) -> str:
+    """The reviewer's PASSAGE for lane R: every page the restatement model read, whole."""
+    rows: list[str] = []
+    for meta, text in pages:
+        rows.append(
+            f'<source id="PASSAGE" url="{attr(cited_url(meta))}" title="{attr(meta.title or "")}">'
+        )
+        rows.append(text)
+        rows.append("</source>")
+    return "\n".join(rows)
+
+
 def reviewer_block(
     site: M.PlanSite,
     rows: Sequence[tuple[str, str, str, str | None]],
     card: str | None,
+    *,
+    passage: str,
 ) -> str:
-    """The reviewer's user block. `rows` is, per published sentence in order: the published text,
-    the untrimmed source sentence, the two source sentences before it, and the section heading."""
-    lines = [site_element(site)]
+    """The reviewer's user block. `passage` is the passage the sentences were chosen from
+    (`pool_passage`, `page_passage`; pilot 3, T7: a sentence the rest of the article contradicts is
+    visible only there). `rows` is, per published sentence in order: the published text, the
+    untrimmed source sentence, the two source sentences before it, and the section heading."""
+    lines = [site_element(site), passage]
     for number, (published, untrimmed, before, section) in enumerate(rows, start=1):
         lines.append(f'<source id="R{number}" section="{attr(section or "lead")}">')
         lines.append(f"published: {published}")

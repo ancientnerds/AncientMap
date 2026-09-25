@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 import re
 import sys
@@ -624,6 +625,73 @@ def test_names_reads_the_shared_items_of_the_rows(tmp_path: Path) -> None:
     assert P.cmd_names(args, fetcher=web.fetcher()) == 0
 
     assert json.loads((tmp_path / "names.json").read_text()) == {"Q5": ["Cosa Q5", "Item Q5"]}
+
+
+# ======================================================================== lane L's own plan
+
+
+def test_the_legacy_plan_is_every_curated_site_in_id_order_from_batch_1001(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Owner decision 2026-09-24 ("Alle kennzeichnen"): lane L marks every March-AI text Phase 4
+    did not write, so its population is every curated site of a fresh read - not a Phase-4 run's
+    batches. Its plan is its own: batches of 15 marked `pass: phase4-legacy`, numbered from p4-1001
+    so no L write batch (`p4l-NNNN`) names a P4 plan batch, in site-id order whatever the read's
+    order, and no flag is derived (they steer Phase 4's stages; lane L asks none)."""
+    rows = [row(n) for n in range(16, 0, -1)]
+    rows[0]["period_start"] = rows[0]["period_end"] = None  # would be scope-pending in `build`
+    rows[1]["raw_data"] = {M.PROVENANCE_KEY: {"lane": "W"}}
+    rows[1]["raw_data_sha256"] = "b" * 64
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    out = tmp_path / "LEGACY4.jsonl"
+
+    code = P.main(["legacy", f"--rows={tmp_path / 'rows.jsonl'}", f"--out={out}"])
+
+    printed = capsys.readouterr().out
+    assert code == 0 and printed.rstrip().endswith("STAGE_EXIT=0")
+    batches = R.read_jsonl(out)
+    assert [(b["batch_id"], b["ordinal"], b["pass"]) for b in batches] == [
+        ("p4-1001", 1001, "phase4-legacy"),
+        ("p4-1002", 1002, "phase4-legacy"),
+    ]
+    sites = [M.PlanSite.from_dict(s) for b in batches for s in b["sites"]]
+    assert [s.site_id for s in sites] == [uuid(n) for n in range(1, 17)]
+    assert all(site.flags == frozenset() for site in sites)
+    summary = json.loads(printed.rstrip().rsplit("STAGE_EXIT=", 1)[0])
+    assert (summary["sites"], summary["batches"]) == (16, 2)
+    assert (summary["first_batch"], summary["last_batch"]) == ("p4-1001", "p4-1002")
+    assert summary["provenance_at_read"] == {"W": 1, "none": 15}
+    assert summary["sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
+
+
+def test_the_legacy_plan_carries_what_lane_l_decides_on_byte_for_byte(tmp_path: Path) -> None:
+    """The description, raw_data and the snapshot's text as the read found them - the old value
+    the L row's guard compares and the claim's two sides - and the same plan from the same read."""
+    raw = {"description_citations": [{"n": 1}]}
+    rows = [
+        row(1, raw_data=raw, raw_data_sha256="a" * 64, snapshot_description="The pre-March text."),
+        row(2, in_snapshot=False),
+    ]
+    first, second = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
+    P.write_legacy_plan(first, P.legacy_sites(rows))
+    P.write_legacy_plan(second, P.legacy_sites(list(reversed(rows))))
+    assert first.read_bytes() == second.read_bytes()
+    one, two = [M.PlanSite.from_dict(s) for b in R.read_jsonl(first) for s in b["sites"]]
+    assert (one.description, one.raw_data, one.snapshot_description) == (
+        "Site 1 is an archaeological site.",
+        raw,
+        "The pre-March text.",
+    )
+    assert (two.in_snapshot, two.snapshot_description) == (False, None)
+
+
+def test_a_legacy_plan_from_rows_of_another_shape_or_a_site_twice_is_refused() -> None:
+    with pytest.raises(R.InputError, match="twice"):
+        P.legacy_sites([row(1), row(1)])
+    bad = row(2)
+    del bad["in_snapshot"]
+    with pytest.raises(R.InputError, match="missing keys"):
+        P.legacy_sites([row(1), bad])
 
 
 # ============================================================================ the real inputs

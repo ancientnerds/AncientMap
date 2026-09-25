@@ -14,6 +14,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
@@ -137,6 +139,31 @@ def test_a_site_absent_from_the_snapshot_is_refused_and_listed_for_human_only(
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_NO_CLAIM
     assert [u.reason for u in plan.unclaimed] == [L.NoClaim.NOT_IN_SNAPSHOT]
     assert "not-in-snapshot" in plan.refusals[0].detail
+
+
+def test_l_takes_no_defect_scope_and_marks_every_march_text(tmp_path: Path) -> None:
+    """Owner decision 2026-09-24 ("Alle kennzeichnen"): lane L marks every March-AI text, not only
+    the defect scope's - it writes no text, only the provenance that shows the existing AI footnote
+    (EU AI Act Art. 50). Its planner takes no scope: one handed to it is a TypeError, never a
+    filter. What stays is the rest of the rule: a site Phase 4 wrote is not touched, and a text equal
+    to the pre-March one gets no claim and is listed for HUMAN_ONLY (D7)."""
+    sites = [
+        FX.plan_site(),
+        FX.plan_site(FX.SITE_B, description="Same.", snapshot="Same."),
+        FX.plan_site(FX.SITE_C),
+    ]
+    batch = _batch(tmp_path, sites)
+    with pytest.raises(TypeError):
+        W4.plan_legacy(batch, scope=FX.scope(), written=[])
+    plan = W4.plan_legacy(batch, written=[FX.SITE_C])
+    assert [row.site_id for row in plan.rows] == [FX.SITE_A]
+    assert [(r.site_id, r.field, r.rule) for r in plan.refusals] == [
+        (FX.SITE_C, "raw_data", W4.RULE_WRITTEN),
+        (FX.SITE_B, "raw_data", W4.RULE_NO_CLAIM),
+    ]
+    assert [(u.site_id, u.reason) for u in plan.unclaimed] == [
+        (FX.SITE_B, L.NoClaim.SAME_AS_SNAPSHOT)
+    ]
 
 
 def test_a_provenance_that_is_already_there_is_never_overwritten(tmp_path: Path) -> None:

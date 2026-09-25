@@ -70,7 +70,7 @@ import json
 import re
 import sys
 import unicodedata
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -90,7 +90,13 @@ from rapidfuzz import fuzz
 from phase4 import model4 as M
 from phase4 import subject_gate as SG
 from pipeline.lyra.text_sentences import is_complete_sentence, split_sentences
-from pipeline.utils.country_lookup import NAME_TO_ISO, country_name_variants
+from pipeline.utils.country_lookup import (
+    ANCIENT_CULTURE_ADJECTIVES,
+    MODERN_NATIONALITY_DEMONYMS,
+    NAME_TO_ISO,
+    SUBNATIONAL_NAME_TO_ISO,
+    country_name_variants,
+)
 from pipeline.utils.text import normalize_name
 from pipeline.video import shorts_audit, shorts_brand
 from pipeline.video.shorts_render import W as FRAME_WIDTH
@@ -496,21 +502,28 @@ def heading_before(text: str, position: int) -> str | None:
     return heading
 
 
+#: The country names and - pilot 3, V14 - the sub-national place names that contain one
+#: (`country_lookup.SUBNATIONAL_NAME_TO_ISO`: "New South Wales" is Australia, not Wales), longest
+#: first, so the whole place name is read before the country name inside it.
+_PLACES = {**NAME_TO_ISO, **SUBNATIONAL_NAME_TO_ISO}
 _COUNTRY = re.compile(
     r"(?<!\w)(?:"
-    + "|".join(re.escape(name) for name in sorted(NAME_TO_ISO, key=len, reverse=True))
+    + "|".join(re.escape(name) for name in sorted(_PLACES, key=len, reverse=True))
     + r")(?!\w)",
     re.IGNORECASE,
 )
 
 
 def countries_named(text: str) -> list[str]:
-    """Country names (`country_lookup.NAME_TO_ISO`) written as proper nouns, longest first."""
+    """Country names (`country_lookup.NAME_TO_ISO`) written as proper nouns, longest first; a
+    sub-national name that carries one (`SUBNATIONAL_NAME_TO_ISO`) comes back whole. V10 holds
+    either in a card (a card still names no 'Wales', even inside 'New South Wales'); V14 reads each
+    with its own country's code (`_iso`)."""
     return [m.group(0) for m in _COUNTRY.finditer(text) if m.group(0)[0].isupper()]
 
 
 def _iso(name: str | None) -> str | None:
-    return NAME_TO_ISO.get(name.strip().lower()) if name else None
+    return _PLACES.get(name.strip().lower()) if name else None
 
 
 def stored_isos(country: str | None) -> frozenset[str]:
@@ -887,6 +900,36 @@ def balanced(text: str) -> bool:
 
 _STARTS = re.compile(r"[\"'“‘«]|[^\W\d_]|\d")
 
+#: V5 (pilot 2, T5): a full stop followed by whitespace and a word character, inside a sentence.
+_INNER_STOP = re.compile(r"\.\s+(?=\w)")
+#: ... the run of non-space characters right before it (the word the stop ends).
+_WORD_BEFORE = re.compile(r"\S*\Z")
+#: V5 (pilot 2, T5): a word of `model4.PREPOSITIONS_NO_COMMA`, in lower case, directly before a
+#: comma and not the end of a longer word (`VIa,`, `Xi'an,`).
+_PREPOSITION_COMMA = re.compile(
+    r"(?<![\w'’-])(?:" + "|".join(map(re.escape, M.PREPOSITIONS_NO_COMMA)) + r"),"
+)
+
+
+def ill_formed(text: str) -> list[str]:
+    """V5's two rules pilot 2 added (T5), as labels: a full stop inside the sentence before a
+    lowercase word (Bassae: "... Cotylion Mountain. near the village"; the shared splitter never
+    splits there, so the source's typo travels whole) - not after an initialism or a single letter
+    (`B.C. and`, `i.e. the`: that stop ends no sentence) - and a preposition directly before a comma
+    (Vindobala: "in the hamlet of, Rudchester"). This module's own code; S2 refuses the same
+    sentences for the pool (`sentences.garbled`), and a parity test holds the two together."""
+    labels: list[str] = []
+    for match in _INNER_STOP.finditer(text):
+        before = _WORD_BEFORE.search(text, 0, match.start())
+        word = (before.group(0) if before else "").lstrip("([\"'“‘«")
+        initialism = "." in word or (len(word) == 1 and word.isalpha())
+        if text[match.end()].islower() and not initialism:
+            labels.append("a full stop inside the sentence before a lowercase word")
+            break
+    if _PREPOSITION_COMMA.search(text):
+        labels.append("a preposition directly before a comma")
+    return labels
+
 
 def _v5(c: _Case) -> list[Problem]:
     if c.published is None:
@@ -909,6 +952,7 @@ def _v5(c: _Case) -> list[Problem]:
         for label, pattern in ARTEFACTS:
             if pattern.search(text):
                 problems.append(f"{where}: artefact {label}")
+        problems.extend(f"{where}: {label}" for label in ill_formed(text))
     return [(SITE, problem) for problem in problems]
 
 
@@ -922,6 +966,44 @@ _PRONOUN = re.compile(
 def opens_with_pronoun(text: str) -> bool:
     """V6/V10: the text opens with a word of the closed pronoun list, as written there."""
     return bool(_PRONOUN.match(text))
+
+
+def _whole_words(words: Iterable[str]) -> re.Pattern[str]:
+    """A whole word of `words`, in any case: no word character, apostrophe or hyphen on either side
+    (`it` is not in `item`, nor in the contraction `it's`)."""
+    return re.compile(
+        r"(?<![\w'’-])(?:" + "|".join(map(re.escape, words)) + r")(?![\w'’-])", re.IGNORECASE
+    )
+
+
+_PERSONAL = _whole_words(M.PERSONAL_PRONOUNS)
+_ARTICLE = _whole_words(M.ARTICLES)
+#: ... the word `that` and one space, ending the text before the pronoun.
+_THAT_BEFORE = re.compile(r"(?<![\w'’-])that \Z", re.IGNORECASE)
+
+
+def leaning_pronoun(text: str) -> str | None:
+    """V6/V10: how `text` leans on the sentence before it in its source, or `None`.
+
+    It opens with a word of the closed list (`opens_with_pronoun`); or - pilot 3, T1 and T4 - its
+    first word of `model4.PERSONAL_PRONOUNS` is one of `model4.SUBJECT_PRONOUNS` and stands right
+    after the sentence's first comma ("Standing on a limestone ridge ..., it was made into a hill
+    fort"), or right after the word `that` with no word of `model4.ARTICLES` before it ("Pottery
+    sherds show that it was also occupied"). An article before the pronoun names something it may
+    refer to inside the sentence; a pronoun elsewhere usually refers inside it too. The selector is
+    told the rule as its rule (10); `sentences.leans_on_predecessor` reads it in its own code for
+    the review's drops, and a parity test holds the two together."""
+    if opens_with_pronoun(text):
+        return "opens with a pronoun"
+    first = _PERSONAL.search(text)
+    if first is None or first.group(0).lower() not in M.SUBJECT_PRONOUNS:
+        return None
+    before = text[: first.start()]
+    if before.endswith(", ") and ", " not in before[:-2]:
+        return f"carries {first.group(0)!r} right after its first comma"
+    if _THAT_BEFORE.search(before) and not _ARTICLE.search(before):
+        return f"carries {first.group(0)!r} right after 'that'"
+    return None
 
 
 def witness_label(site: M.PlanSite, witness: tuple[Any, bytes | None]) -> tuple[str | None, str]:
@@ -947,16 +1029,38 @@ def witness_label(site: M.PlanSite, witness: tuple[Any, bytes | None]) -> tuple[
     return label, ""
 
 
+#: V6 (pilot 2, T8): a stored name that ends in one flat parenthetical group, `X (Y)`.
+_DISAMBIGUATED = re.compile(r"(?P<base>.*?\S)\s*\([^()]*\)")
+
+
+def name_base(name: str) -> str | None:
+    """V6: the stored name without its disambiguator - `X (Y)` -> X (one flat group at the end),
+    else `X, Y` -> X (before the first comma) - or `None` when it carries none ('Partiscum
+    (Castra)' -> 'Partiscum', 'Beacon Hill, Burghclere, Hampshire' -> 'Beacon Hill')."""
+    stripped = name.strip()
+    match = _DISAMBIGUATED.fullmatch(stripped)
+    if match is not None:
+        return match["base"]
+    if "," in stripped:
+        return stripped.split(",", 1)[0].strip() or None
+    return None
+
+
 def v6_names(site: M.PlanSite, meta: Any, witness: tuple[Any, bytes | None]) -> list[str]:
     """V6: the names sentence 1 may name the site by, when its source has the raw meta `meta`:
     the stored name and the `unified_site_names` aliases; for a strong 'own' verdict also the
-    pinned article title and the English label of the pinned item (`witness_label`). The subject
-    gate already tied that article and that item to the site (QID, coordinates, no place item), so
-    these are the site's names, not a loosening of its identity. S3 reads the same rule in its own
-    code (`select_stage.v6_names`); a parity test holds the two together."""
+    stored name's base (`name_base`, pilot 2: 'Partiscum (Castra)' -> 'Partiscum'), the pinned
+    article title and the English label of the pinned item (`witness_label`). The subject gate
+    already tied that article and that item to the site (QID, coordinates, no place item), so these
+    are the site's names, not a loosening of its identity; under any other verdict a bare base
+    could name the town ('Clare, Suffolk'). S3 reads the same rule in its own code
+    (`select_stage.v6_names`); a parity test holds the two together."""
     names = [site.name, *site.aliases]
     gate = meta.get("subject_gate") if isinstance(meta, Mapping) else None
     if _strong_own(gate if isinstance(gate, Mapping) else None):
+        base = name_base(site.name)
+        if base is not None:
+            names.append(base)
         title = meta.get("title")
         if isinstance(title, str) and title.strip():
             names.append(title)
@@ -971,7 +1075,8 @@ def _v6(c: _Case) -> list[Problem]:
         return []
     problems: list[str] = []
     for index, segment in enumerate(c.published):
-        if not opens_with_pronoun(segment.body):
+        lean = leaning_pronoun(segment.body)
+        if lean is None:
             continue
         sentence = c.sentences[index]
         previous = c.sentences[index - 1] if index else None
@@ -985,8 +1090,8 @@ def _v6(c: _Case) -> list[Problem]:
         )
         if not adjacent:
             problems.append(
-                f"sentence {index + 1} opens with a pronoun and its source predecessor is not "
-                "the sentence published before it"
+                f"sentence {index + 1} {lean} and its source predecessor is not the sentence "
+                "published before it"
             )
     first = c.published[0].text
     source_id = c.sentences[0].src
@@ -1136,6 +1241,39 @@ def card_countries(card: str, stored: str | None) -> list[str]:
     return named
 
 
+def _word_forms(words: Iterable[str]) -> re.Pattern[str]:
+    """V10: a whole word of `words` (the longest first), alone or as its plural or its `-man`/
+    `-woman` noun ('Danes', 'Englishman', 'Norsemen'), in any case."""
+    return re.compile(
+        r"(?<!\w)(?:"
+        + "|".join(re.escape(word) for word in sorted(words, key=lambda w: (-len(w), w)))
+        + r")(?:s|m[ae]n|wom[ae]n)?(?!\w)",
+        re.IGNORECASE,
+    )
+
+
+_DEMONYM = _word_forms(MODERN_NATIONALITY_DEMONYMS)
+_CULTURE = _word_forms(ANCIENT_CULTURE_ADJECTIVES)
+
+
+def card_demonyms(card: str) -> list[str]:
+    """V10: the modern nationalities a card names - a demonym of
+    `country_lookup.MODERN_NATIONALITY_DEMONYMS` ('Danish', 'Spaniard'), alone or as its plural or
+    its `-man`/`-woman` noun, as a whole word written as a proper noun, and not inside a word of an
+    ancient culture ('British' in 'Romano-British'). An ancient culture's adjective
+    (`ANCIENT_CULTURE_ADJECTIVES`: 'Roman', 'Greek', 'Egyptian', 'Maya', ...) is never held, even
+    where the same word is a modern demonym: design entry [6] - 'Cultural adjectives such as Roman,
+    Egyptian or Maya are allowed' - wins (owner decision 2026-09-24; pilot 2 had held them under
+    the safe reading of entry [0])."""
+    cultures = [m.span() for m in _CULTURE.finditer(card)]
+    return [
+        m.group(0)
+        for m in _DEMONYM.finditer(card)
+        if m.group(0)[0].isupper()
+        and not any(start <= m.start() and m.end() <= end for start, end in cultures)
+    ]
+
+
 def _v10(c: _Case) -> list[Problem]:
     card = c.assembly.card
     if card is None:
@@ -1159,13 +1297,17 @@ def _v10(c: _Case) -> list[Problem]:
         problems.append("the card carries parentheses")
     for index, (item, sentence) in enumerate(c.card_sentence_items(), 1):
         text = c.text_of(sentence.src)
-        if text is not None and opens_with_pronoun(
-            spoken(edited(text, sentence.start, sentence.end, item.drop))
-        ):
-            problems.append(f"card item {index} opens with a pronoun")
+        if text is None:
+            continue
+        lean = leaning_pronoun(spoken(edited(text, sentence.start, sentence.end, item.drop)))
+        if lean is not None:
+            problems.append(f"card item {index} {lean}")
     named = card_countries(card, c.site.country)
     if named:
         problems.append(f"the card names a country: {named}")
+    nationality = card_demonyms(card)
+    if nationality:
+        problems.append(f"the card names a nationality: {nationality}")
     lowered = card.lower()
     found = [phrase for phrase in SUPERLATIVES if phrase in lowered]
     if found:

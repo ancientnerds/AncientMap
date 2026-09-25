@@ -184,16 +184,33 @@ def _witness_label(site: M.PlanSite, witness: Witness) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
 
 
+def name_base(name: str) -> str | None:
+    """The stored name without its disambiguator (pilot 2, T8): the text before a final flat
+    parenthetical group (`Partiscum (Castra)` -> `Partiscum`), else the text before the first comma
+    (`Clare, Suffolk` -> `Clare`); `None` when there is neither, or nothing before it."""
+    head, bracket, group = name.strip().rpartition("(")
+    if bracket and group.endswith(")") and ")" not in group[:-1] and head.strip():
+        return head.strip()
+    first, comma, _ = name.strip().partition(",")
+    if not comma:
+        return None
+    return first.strip() or None
+
+
 def v6_names(site: M.PlanSite, meta: M.SourceDoc, witness: Witness) -> tuple[str, ...]:
     """The names V6 accepts in the first published sentence of a text from this source: the stored
     name and the `unified_site_names` aliases, and - only for a strong 'own' verdict of the source,
-    where the subject gate already tied the article and the item to the site - the article's pinned
-    title and the English label of the site's pinned Wikidata item.
+    where the subject gate already tied the article and the item to the site - the stored name's
+    base (`name_base`, pilot 2), the article's pinned title and the English label of the site's
+    pinned Wikidata item.
 
     S3's own reading of V6's rule (PHASE4_CONTRACTS.md section 7, 2026-09-24): `verify4` has its
     own, and a parity test holds the two together; neither imports the other's."""
     names = [site.name, *site.aliases]
     if _strong_own(meta.subject_gate):
+        base = name_base(site.name)
+        if base is not None:
+            names.append(base)
         if meta.title is not None and meta.title.strip():
             names.append(meta.title)
         label = _witness_label(site, witness)

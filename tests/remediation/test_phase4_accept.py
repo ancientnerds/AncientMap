@@ -283,7 +283,7 @@ def _args(written: Written, tmp_path: Path, lane: str = "p4", **over: Any) -> An
     values = {
         "lane": lane,
         "plan": str(plan),
-        "run": str(written.run_dir),
+        "run": [str(written.run_dir)],
         "stamp_like": {"p4": "phase4:%", "p4l": "phase4l:%", "p5": "phase5:%"}[lane],
         "complete": False,
     }
@@ -338,11 +338,11 @@ def test_main_prints_its_own_exit_line_and_reads_the_lane_from_lanes(
         return type("Lane", (), {"stamp_like": "phase4:%"})()
 
     monkeypatch.setattr(lanes, "lane", lane)
-    code = A.main(["--lane", "p4", "--plan", args.plan, "--run", args.run])
+    code = A.main(["--lane", "p4", "--plan", args.plan, "--run", *args.run])
     out = capsys.readouterr().out.strip().splitlines()
     assert (code, out[-1], seen) == (0, "ACCEPT_EXIT=0", ["p4"])
     written.production.sites[SITE_ID]["description"] = "Changed by hand."
-    assert A.main(["--lane", "p4", "--plan", args.plan, "--run", args.run]) == 1
+    assert A.main(["--lane", "p4", "--plan", args.plan, "--run", *args.run]) == 1
     assert capsys.readouterr().out.strip().splitlines()[-1] == "ACCEPT_EXIT=1"
 
 
@@ -484,6 +484,91 @@ def test_a_reverted_step_counts_as_not_yet_written(tmp_path: Path) -> None:
     )
     assert accept(written, tmp_path) == []
     written.production.sites[SITE_ID]["description"] = "Edited after the revert."
+    assert any(d.startswith("NOT NEW") for d in _accept4(written).deviations)
+
+
+#: A second site of the same chunk (the mass run's mid-run audit, 2026-09-25: one WRONG_SITE site
+#: of a written 9-site chunk is taken back alone with `revert4 --site`).
+SITE_B = "318414bc-2222-4222-8222-222222222222"
+B_STORED = "An LLM wrote this in March about another site."
+B_WRITTEN = "The second site's written description [1]."
+
+
+def _second_site(written: Written) -> None:
+    """Site B written by the same chunk as the case's site: its two planned rows, their journal rows
+    under the same stamp, and production holding their new values."""
+    new_raw_b = {"description_citations": [], "k": "written"}
+    written.plan += [
+        _plan_row(SITE_B, "unified_sites", "description", B_STORED, B_WRITTEN, "k-desc-b"),
+        _plan_row(SITE_B, "unified_sites", "raw_data", dumps(OLD_RAW), dumps(new_raw_b), "k-raw-b"),
+    ]
+    for offset, (column, old, new, key) in enumerate(
+        (
+            ("description", B_STORED, B_WRITTEN, "k-desc-b"),
+            ("raw_data", dumps(OLD_RAW), dumps(new_raw_b), "k-raw-b"),
+        )
+    ):
+        written.production.journal.append(
+            {
+                "id": 31 + offset,
+                "table_name": "unified_sites",
+                "column_name": column,
+                "row_pk": SITE_B,
+                "old_value": old,
+                "new_value": new,
+                "run_stamp": P4_STAMP,
+                "change_key": key,
+                "evidence": {},
+            }
+        )
+    written.production.sites[SITE_B] = {
+        "description": B_WRITTEN,
+        "raw_data": new_raw_b,
+        "card_description": None,
+        "has_card_row": False,
+    }
+
+
+def _revert_site(written: Written, site_id: str) -> None:
+    """revert4 `--site`: the site's rows of the chunk written back, journalled under the write's key
+    and its stamp plus `-rollback`; the chunk's other site untouched."""
+    rows = [
+        row
+        for row in written.production.journal
+        if row["run_stamp"] == P4_STAMP and row["row_pk"] == site_id
+    ]
+    first = max(row["id"] for row in written.production.journal) + 1
+    for offset, row in enumerate(rows):
+        written.production.journal.append(
+            dict(
+                row,
+                id=first + offset,
+                old_value=row["new_value"],
+                new_value=row["old_value"],
+                run_stamp=P4_STAMP + "-rollback",
+                change_key=row["change_key"] + "-rollback",
+                evidence={},
+            )
+        )
+    written.production.sites[site_id].update(description=B_STORED, raw_data=OLD_RAW)
+
+
+def test_a_site_reverted_alone_is_not_yet_written_and_its_chunk_is_still_accepted(
+    tmp_path: Path,
+) -> None:
+    """After `revert4 --site` the site's rows are reversals of their own and its planned rows -
+    still in the lane plan, which keeps what was written - are judged like a reverted batch's: not
+    yet written, at their old value. The chunk's other site is carried and verified again: 0
+    deviations. A later edit of the reverted site is still seen."""
+    written = written_p4(tmp_path)
+    _second_site(written)
+    assert _accept4(written).deviations == []
+    _revert_site(written, SITE_B)
+    result = _accept4(written)
+    assert result.deviations == [] and result.untouched == 2
+    assert {key[2] for key in result.carried} == {SITE_ID}
+    assert accept(written, tmp_path) == []
+    written.production.sites[SITE_B]["description"] = "Edited after the revert."
     assert any(d.startswith("NOT NEW") for d in _accept4(written).deviations)
 
 
@@ -796,3 +881,32 @@ def test_the_run_index_carries_the_plan_record_and_the_assembly(tmp_path: Path) 
     entry = index[SITE_ID]
     assert entry.site == written.case.site and entry.assembly == written.case.assembly
     assert dataclasses.replace(entry, assembly=None).assembly is None
+
+
+def test_a_lane_written_from_two_runs_is_read_from_both(tmp_path: Path) -> None:
+    written = written_p4(tmp_path / "pilot")
+    empty = tmp_path / "mass"
+    empty.mkdir()
+    assert accept(written, tmp_path, run=[str(empty), str(written.run_dir)]) == []
+    assert A.index_runs([empty, written.run_dir]) == A.index_run(written.run_dir)
+
+
+def test_a_site_two_runs_carry_is_refused(tmp_path: Path) -> None:
+    first = written_p4(tmp_path / "a")
+    second = written_p4(tmp_path / "b")
+    with pytest.raises(SystemExit, match="is in two runs"):
+        A.index_runs([first.run_dir, second.run_dir])
+
+
+def test_a_batch_without_a_written_site_is_not_read(tmp_path: Path) -> None:
+    written = written_p4(tmp_path)
+    later = written.run_dir / "p4-0099"
+    later.mkdir()
+    (later / M.INPUT_FILE).write_text(
+        json.dumps({"batch_id": "p4-0099", "ordinal": 99, "sites": [{"site_id": "later-site"}]}),
+        encoding="utf-8",
+    )
+    assert accept(written, tmp_path) == []
+    assert A.index_run(written.run_dir, {SITE_ID}) == A.index_run(written.run_dir, [SITE_ID])
+    with pytest.raises(SystemExit, match="cannot be read"):
+        A.index_run(written.run_dir, {"later-site"})

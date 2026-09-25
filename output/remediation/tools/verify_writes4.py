@@ -35,7 +35,7 @@ Every deviation is printed by name; the last line is `ACCEPT_EXIT=0` (none) or `
 and that line - not the process status of a wrapper - is what is read. The five sampled SSR pages
 of the design are a Playwright check against production and not part of this tool.
 
-    verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>>
+    verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> [--run <runs/<run2>>]
     verify_writes4.py --lane p4l --plan <PLAN.jsonl>
     verify_writes4.py --lane p5 --plan <PLAN.jsonl> --run <runs/<run>> --card-check
     verify_writes4.py --boot-logs --since 2026-09-24T10:00:00Z
@@ -371,11 +371,22 @@ class RunSite:
     assembly: M.Assembly | None
 
 
-def index_run(run_dir: pathlib.Path) -> dict[str, RunSite]:
-    """Every site of every batch of the run, through `verify4.read_batch`. A batch that cannot be
-    read stops the acceptance: its sites would otherwise look like sites that were never run."""
+def batch_site_ids(batch_dir: pathlib.Path) -> set[str]:
+    """The site ids a batch's `input.json` plans - all the acceptance needs to know of a batch that
+    holds no written site (a mass run's later batches are not assembled yet)."""
+    batch = json.loads((batch_dir / M.INPUT_FILE).read_text(encoding="utf-8"))
+    return {site["site_id"] for site in batch["sites"]}
+
+
+def index_run(run_dir: pathlib.Path, written: Iterable[str] | None = None) -> dict[str, RunSite]:
+    """Every site of every batch of the run, through `verify4.read_batch` - with `written`, of every
+    batch that holds a written site. A batch read that fails stops the acceptance: its sites would
+    otherwise look like sites that were never run."""
+    wanted = None if written is None else set(written)
     found: dict[str, RunSite] = {}
     for batch_dir in sorted(p for p in run_dir.iterdir() if (p / M.INPUT_FILE).exists()):
+        if wanted is not None and not batch_site_ids(batch_dir) & wanted:
+            continue
         try:
             inputs = V4.read_batch(batch_dir)
         except (FileNotFoundError, ValueError) as exc:
@@ -383,6 +394,24 @@ def index_run(run_dir: pathlib.Path) -> dict[str, RunSite]:
         assemblies = {assembly.site_id: assembly for assembly in inputs.assemblies}
         for site_id, site in inputs.sites.items():
             found[site_id] = RunSite(batch_dir, site, assemblies.get(site_id))
+    return found
+
+
+def index_runs(
+    run_dirs: Iterable[pathlib.Path], written: Iterable[str] | None = None
+) -> dict[str, RunSite]:
+    """`index_run` over every run a lane was written from (the pilot's and the mass run's share the
+    `phase4:` stamps). A site two runs carry is refused: which run's pinned texts it was written
+    from would be a guess."""
+    wanted = None if written is None else set(written)
+    found: dict[str, RunSite] = {}
+    for run_dir in run_dirs:
+        for site_id, entry in index_run(run_dir, wanted).items():
+            if site_id in found:
+                raise SystemExit(
+                    f"{site_id} is in two runs: {found[site_id].batch_dir.parent} and {run_dir}"
+                )
+            found[site_id] = entry
     return found
 
 
@@ -635,7 +664,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             if production.live.get(("card_stats", "card_description", site)) is not None
         }
     if lane in ("p4", "p5"):
-        if args.run is None:
+        if not args.run:
             raise SystemExit(f"lane {lane} re-runs V1-V15 on the written sites: --run is required")
         evidence_rows: list[dict[str, Any]] = []
         ordered = sorted(written)
@@ -646,7 +675,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             lane=lane,
             production=production,
             evidence_rows=evidence_rows,
-            run=index_run(pathlib.Path(args.run)),
+            run=index_runs((pathlib.Path(path) for path in args.run), written),
         )
         print(f"re-verified {len(written)} written site(s) with V1-V15")
     return deviations
@@ -658,7 +687,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="verify-writes4")
     parser.add_argument("--lane", choices=sorted(LANE_COLUMNS))
     parser.add_argument("--plan", help="the lane's PLAN.jsonl (write4)")
-    parser.add_argument("--run", help="the Phase-4 run directory (runs/<run>)")
+    parser.add_argument(
+        "--run",
+        action="append",
+        help="a Phase-4 run directory (runs/<run>); once per run the lane was written from",
+    )
     parser.add_argument("--stamp-like", default=None, help="override the lane's stamp pattern")
     parser.add_argument("--complete", action="store_true", help="every planned row is written")
     parser.add_argument("--card-check", action="store_true", help="run card_json.py --check")

@@ -5,7 +5,10 @@ item WB-D3. A site Phase 4 does not write keeps its stored description. Where th
 differs from the one in the pre-March snapshot `d4526691`, the March enrichment chain (an LLM, model
 per site not recorded) wrote it, and it must not stay live unmarked: its `raw_data` gains
 `_description_provenance` `{v:1, lane:'L', ai:'generated', ...}` (`model4.LegacyProvenance`),
-which the API and the pages render as the existing AI footnote.
+which the API and the pages render as the existing AI footnote. The held sites are every curated
+site whose description Phase 4 did not write - inside the owner's defect scope or not (owner
+decision 2026-09-24, "Alle kennzeichnen": Phases 4/5 write only the defect scope, and every March
+text outside it stays live, so it is marked like any other).
 
 Where the held description is byte for byte the snapshot's, nothing proves where it came from, so
 nothing is claimed: the site gets no row and is listed for `HUMAN_ONLY.md` (the closing report counts
@@ -36,6 +39,15 @@ from phase4 import model4 as M  # noqa: E402
 #: The snapshot the comparison is made against (plan section 15.3): the last commit before the
 #: March enrichment chain rewrote the descriptions.
 SNAPSHOT = "d4526691"
+
+#: Lane L's own plan (`plan4.py legacy`, owner decision 2026-09-24): every curated site of one
+#: read-only production read, not a Phase-4 run's batches. Each of its batches carries this in its
+#: `pass` field - a P4 plan's batches carry none, so one is never read as the other - and they are
+#: numbered from `FIRST_BATCH`: past every P4 plan batch (the unscoped plan ends at p4-0334, the
+#: scoped mass run at p4-0115), so no L write batch (`p4l-NNNN`) or journal stamp names a P4 plan
+#: batch or a per-run L plan rendered before the decision.
+PLAN_MARK = "phase4-legacy"
+FIRST_BATCH = 1001
 
 
 class NoClaim(StrEnum):

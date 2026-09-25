@@ -65,6 +65,24 @@ for byte: the thresholds were sealed before the first model question and are nev
     pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \\
         --after PILOT.jsonl --seed 20260924 --out PILOT2.jsonl                   PILOT2.jsonl
     plan4.py build --pilot PILOT2.jsonl --out PLAN4.pilot2.jsonl                   S0
+
+**Pilot 3 (2026-09-24, seed 20260925, `PILOT3.jsonl`).** Pilot 2 failed T3, T4, T6 and T8
+(`PILOT_RESULT_2.md`). `--after` is given once per earlier pilot: every one's fixed members must be
+this pilot's, site for site and in order, and the seeded draws of all of them are excluded (pilots
+1 and 2: 124 sites). The thresholds and the prose errors stay pilot 1's, byte for byte.
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \\
+        --after PILOT.jsonl --after PILOT2.jsonl --seed 20260925 --out PILOT3.jsonl
+    plan4.py build --pilot PILOT3.jsonl --out PLAN4.pilot3.jsonl                   S0
+
+**Pilot 4 (2026-09-24, seed 20260926, `PILOT4.jsonl`).** Pilot 3 failed T1, T4, T7 and T8
+(`PILOT_RESULT_3.md`). The same fixed members again, every seeded stratum drawn anew excluding the
+seeded draws of pilots 1, 2 and 3 (186 sites); the thresholds and the prose errors stay pilot 1's.
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \\
+        --after PILOT.jsonl --after PILOT2.jsonl --after PILOT3.jsonl --seed 20260926 \\
+        --out PILOT4.jsonl
+    plan4.py build --pilot PILOT4.jsonl --out PLAN4.pilot4.jsonl                   S0
 """
 
 from __future__ import annotations
@@ -112,6 +130,10 @@ DESIGN_ENTRY = 6
 SEED = 20260922
 #: Pilot 2's seed (module docstring): its seeded strata are drawn anew, pilot 1's draws excluded.
 SEED_PILOT2 = 20260924
+#: Pilot 3's seed (module docstring): drawn anew again, pilots 1's and 2's draws excluded.
+SEED_PILOT3 = 20260925
+#: Pilot 4's seed (module docstring): drawn anew again, the draws of pilots 1-3 excluded.
+SEED_PILOT4 = 20260926
 EXTRACT_OVER = 40_000
 #: The design names 7 sites on Q309 'history' (entries [5] and [6]).
 Q309_SITES = 7
@@ -398,12 +420,13 @@ def build_pilot(
     q309: Sequence[str],
     routeless: set[str],
     seed: int,
-    earlier: Sequence[Mapping[str, Any]] = (),
+    earlier: Sequence[Sequence[Mapping[str, Any]]] = (),
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """The pilot's lines, in order, and the draw's summary (module docstring).
 
-    `earlier` is an earlier pilot's `PILOT.jsonl` lines (pilot 2): its fixed members must be exactly
-    this pilot's, and its seeded draws are excluded from every stratum of this one."""
+    `earlier` holds the lines of every earlier pilot (pilot 2: pilot 1's `PILOT.jsonl`; pilot 3:
+    `PILOT.jsonl` and `PILOT2.jsonl`): each one's fixed members must be exactly this pilot's, and
+    the seeded draws of all of them are excluded from every stratum of this one."""
     strata: dict[str, list[str]] = {}
 
     def place(site_id: str, stratum: str) -> None:
@@ -423,11 +446,15 @@ def build_pilot(
     for named in SPECIAL:
         place(resolve(named, sites), named.stratum)
     fixed = len(strata)
-    earlier_fixed, earlier_drawn = earlier_pilot(earlier)
-    if earlier and list(strata.items()) != earlier_fixed:
-        raise R.InputError(
-            "the fixed members are not the earlier pilot's, site for site and in order"
-        )
+    earlier_drawn: set[str] = set()
+    for number, lines_before in enumerate(earlier, start=1):
+        earlier_fixed, drawn_before = earlier_pilot(lines_before)
+        if list(strata.items()) != earlier_fixed:
+            raise R.InputError(
+                f"the fixed members are not the earlier pilot's (--after number {number}), site "
+                "for site and in order"
+            )
+        earlier_drawn |= drawn_before
     pools = populations(sites, census, routeless)
     draws: dict[str, dict[str, int]] = {}
     for stratum, count in DRAWS:
@@ -858,7 +885,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     plan, run_dir = Path(args.plan), Path(args.run_dir)
     sites, census = read_census(plan, run_dir)
     routeless_payload = json.loads(Path(args.routeless).read_text(encoding="utf-8"))
-    earlier = R.read_jsonl(Path(args.after)) if args.after else []
+    earlier = [R.read_jsonl(Path(path)) for path in args.after]
     lines, summary = build_pilot(
         sites,
         census,
@@ -882,7 +909,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             "routeless": _sha256(Path(args.routeless)),
             "gold": _sha256(Path(args.gold)),
             "qid_repair": _sha256(Path(args.qid_repair)),
-            **({"after": _sha256(Path(args.after))} if args.after else {}),
+            **({"after": [_sha256(Path(path)) for path in args.after]} if args.after else {}),
         },
     )
     print(json.dumps(summary, indent=1, sort_keys=True))
@@ -932,7 +959,10 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--seed", type=int, default=SEED)
     build.add_argument(
         "--after",
-        help="an earlier pilot (PILOT.jsonl): keep its fixed members, exclude its seeded draws",
+        action="append",
+        default=[],
+        help="an earlier pilot (PILOT.jsonl), once per pilot: keep its fixed members, exclude its "
+        "seeded draws",
     )
     build.add_argument("--out", default=str(P4.DEFAULT_PILOT))
     build.set_defaults(handler=cmd_build)

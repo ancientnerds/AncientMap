@@ -534,6 +534,36 @@ NAME_TO_ISO: dict[str, str] = {
     "macau": "MO",
 }
 
+# Sub-national place names that contain a country's name as a whole word, each mapped to the ISO code
+# of the country it really lies in (never the contained name's). Phase 4's V14 (scripts/remediation/
+# phase4/verify4.py) reads them beside NAME_TO_ISO, longest first, so "New South Wales" is Australia
+# and not Wales: pilot 3 (2026-09-24) held Lake Mungo, "a dry lake located in New South Wales,
+# Australia", as a site placed in Wales. Derived from data - the census run's 88,936 pool sentences
+# scanned for a NAME_TO_ISO name directly preceded by a capitalised word or inside a longer proper
+# name - and each entry verified (output/remediation/AUDIT_LOG.md, pilot 4). Left out: names without
+# one country ("New Guinea": PG and ID; "Belize River": GT and BZ; "Caucasian Albania", "British
+# India", "Middle Niger"), the bare "West Azerbaijan" (the census also uses it for western
+# Azerbaijan), and names that are no sub-national place ("British Honduras", the colony that is all
+# of Belize). "South Wales" is Wales and is not listed. Not in NAME_TO_ISO, so country_name_variants
+# and normalize_country never return one of these names.
+SUBNATIONAL_NAME_TO_ISO: dict[str, str] = {
+    "new south wales": "AU",
+    "new mexico": "US",
+    "new england": "US",
+    "central macedonia": "GR",
+    "western macedonia": "GR",
+    "eastern macedonia and thrace": "GR",
+    "greek macedonia": "GR",
+    "west azerbaijan province": "IR",
+    "upper jordan valley": "IL",
+    "jordan hill": "GB",  # Dorset
+    "kraku lu jordan": "RS",
+    "el peru": "GT",  # El Perú-Waka', Petén
+    "inner niger delta": "ML",
+    "lapis niger": "IT",  # the Roman Forum
+    "denmark fjord": "GL",
+}
+
 # Reverse mapping: ISO code → list of known name variants (for context text checking)
 _ISO_TO_NAMES: dict[str, list[str]] = {}
 for _name, _iso in NAME_TO_ISO.items():
@@ -591,6 +621,279 @@ def country_name_variants(name: str) -> list[str]:
     if iso:
         return _ISO_TO_NAMES.get(iso, [])
     return [name.strip().lower()] if name else []
+
+
+# Country (ISO code of NAME_TO_ISO) -> its demonyms: the English nationality adjective(s) and the
+# people noun where it differs (Danish/Dane, Spanish/Spaniard), written as proper nouns. The Phase-4
+# card rule (scripts/remediation/phase4/verify4.py, V10) holds a card that names a modern
+# nationality (pilot 2 published "a Danish hill"); what it holds is this table without the
+# ancient-culture adjectives below (MODERN_NATIONALITY_DEMONYMS). Data only, like NAME_TO_ISO; each
+# reader implements its own match. Written 2026-09-24 from the card style rule the design calls "the
+# existing style rule" (scripts/verify_descriptions.py DEMONYM_MAP, whose modern adjectives it
+# keeps) and completed with the standard English demonym of every other country NAME_TO_ISO knows.
+# Ethnonyms and historic names (Khmer, Magyar, Persian, Mongol) are not demonyms of a modern country
+# and are not listed. A country name that is also its adjective ("New Zealand") is NAME_TO_ISO's
+# already.
+ISO_TO_DEMONYMS: dict[str, tuple[str, ...]] = {
+    # Middle East & Near East
+    "EG": ("Egyptian",),
+    "IQ": ("Iraqi",),
+    "IR": ("Iranian",),
+    "SY": ("Syrian",),
+    "JO": ("Jordanian",),
+    "IL": ("Israeli",),
+    "LB": ("Lebanese",),
+    "TR": ("Turkish", "Turk"),
+    "SA": ("Saudi", "Saudi Arabian"),
+    "YE": ("Yemeni",),
+    "OM": ("Omani",),
+    "AE": ("Emirati",),
+    "KW": ("Kuwaiti",),
+    "BH": ("Bahraini",),
+    "QA": ("Qatari",),
+    "PS": ("Palestinian",),
+    "CY": ("Cypriot", "Cyprian"),
+    # Europe
+    "GR": ("Greek", "Hellenic", "Hellene"),
+    "IT": ("Italian",),
+    "ES": ("Spanish", "Spaniard"),
+    "FR": ("French",),
+    "PT": ("Portuguese",),
+    "GB": ("British", "Briton", "English", "Scottish", "Scots", "Scot", "Welsh", "Northern Irish"),
+    "IE": ("Irish",),
+    "DE": ("German",),
+    "AT": ("Austrian",),
+    "CH": ("Swiss",),
+    "NL": ("Dutch", "Netherlander"),
+    "BE": ("Belgian",),
+    "LU": ("Luxembourgish", "Luxembourger"),
+    "DK": ("Danish", "Dane"),
+    "SE": ("Swedish", "Swede"),
+    "NO": ("Norwegian",),
+    "FI": ("Finnish", "Finn"),
+    "IS": ("Icelandic", "Icelander"),
+    "PL": ("Polish", "Pole"),
+    "CZ": ("Czech",),
+    "SK": ("Slovak", "Slovakian"),
+    "HU": ("Hungarian",),
+    "RO": ("Romanian",),
+    "BG": ("Bulgarian",),
+    "RS": ("Serbian", "Serb"),
+    "HR": ("Croatian", "Croat"),
+    "SI": ("Slovenian", "Slovene"),
+    "BA": ("Bosnian", "Herzegovinian"),
+    "ME": ("Montenegrin",),
+    "MK": ("Macedonian",),
+    "AL": ("Albanian",),
+    "XK": ("Kosovar", "Kosovan"),
+    "MD": ("Moldovan",),
+    "UA": ("Ukrainian",),
+    "BY": ("Belarusian",),
+    "LT": ("Lithuanian",),
+    "LV": ("Latvian",),
+    "EE": ("Estonian",),
+    "MT": ("Maltese",),
+    "MC": ("Monégasque", "Monegasque", "Monacan"),
+    "AD": ("Andorran",),
+    "SM": ("Sammarinese",),
+    "VA": ("Vatican",),
+    "LI": ("Liechtensteiner",),
+    # Asia
+    "CN": ("Chinese",),
+    "JP": ("Japanese",),
+    "KR": ("South Korean", "Korean"),
+    "KP": ("North Korean",),
+    "TW": ("Taiwanese",),
+    "MN": ("Mongolian",),
+    "VN": ("Vietnamese",),
+    "TH": ("Thai",),
+    "MM": ("Burmese",),
+    "KH": ("Cambodian",),
+    "LA": ("Lao", "Laotian"),
+    "MY": ("Malaysian",),
+    "SG": ("Singaporean",),
+    "ID": ("Indonesian",),
+    "PH": ("Filipino", "Filipina", "Philippine"),
+    "BN": ("Bruneian",),
+    "TL": ("Timorese",),
+    # South Asia
+    "IN": ("Indian",),
+    "PK": ("Pakistani",),
+    "BD": ("Bangladeshi",),
+    "LK": ("Sri Lankan",),
+    "NP": ("Nepali", "Nepalese"),
+    "BT": ("Bhutanese",),
+    "MV": ("Maldivian",),
+    "AF": ("Afghan",),
+    # Central Asia
+    "KZ": ("Kazakh", "Kazakhstani"),
+    "UZ": ("Uzbek", "Uzbekistani"),
+    "TM": ("Turkmen",),
+    "TJ": ("Tajik", "Tajikistani"),
+    "KG": ("Kyrgyz", "Kyrgyzstani"),
+    # Russia & Caucasus
+    "RU": ("Russian",),
+    "GE": ("Georgian",),
+    "AM": ("Armenian",),
+    "AZ": ("Azerbaijani", "Azeri"),
+    # Africa
+    "MA": ("Moroccan",),
+    "DZ": ("Algerian",),
+    "TN": ("Tunisian",),
+    "LY": ("Libyan",),
+    "SD": ("Sudanese",),
+    "SS": ("South Sudanese",),
+    "ET": ("Ethiopian",),
+    "ER": ("Eritrean",),
+    "DJ": ("Djiboutian",),
+    "SO": ("Somali",),
+    "KE": ("Kenyan",),
+    "TZ": ("Tanzanian",),
+    "UG": ("Ugandan",),
+    "RW": ("Rwandan",),
+    "BI": ("Burundian",),
+    "CD": ("Congolese",),
+    "CG": ("Congolese",),
+    "GA": ("Gabonese",),
+    "GQ": ("Equatorial Guinean", "Equatoguinean"),
+    "CM": ("Cameroonian",),
+    "CF": ("Central African",),
+    "TD": ("Chadian",),
+    "NE": ("Nigerien",),
+    "NG": ("Nigerian",),
+    "BJ": ("Beninese",),
+    "TG": ("Togolese",),
+    "GH": ("Ghanaian",),
+    "CI": ("Ivorian",),
+    "LR": ("Liberian",),
+    "SL": ("Sierra Leonean",),
+    "GN": ("Guinean",),
+    "GW": ("Bissau-Guinean",),
+    "SN": ("Senegalese",),
+    "GM": ("Gambian",),
+    "MR": ("Mauritanian",),
+    "ML": ("Malian",),
+    "BF": ("Burkinabé", "Burkinabe"),
+    "CV": ("Cape Verdean", "Cabo Verdean"),
+    "AO": ("Angolan",),
+    "ZM": ("Zambian",),
+    "ZW": ("Zimbabwean",),
+    "MW": ("Malawian",),
+    "MZ": ("Mozambican",),
+    "BW": ("Motswana", "Batswana", "Botswanan"),
+    "NA": ("Namibian",),
+    "ZA": ("South African",),
+    "LS": ("Basotho", "Mosotho"),
+    "SZ": ("Swazi",),
+    "MG": ("Malagasy",),
+    "MU": ("Mauritian",),
+    "SC": ("Seychellois",),
+    "KM": ("Comorian", "Comoran"),
+    # Americas
+    "US": ("American",),
+    "CA": ("Canadian",),
+    "MX": ("Mexican",),
+    "GT": ("Guatemalan",),
+    "BZ": ("Belizean",),
+    "HN": ("Honduran",),
+    "SV": ("Salvadoran", "Salvadorian"),
+    "NI": ("Nicaraguan",),
+    "CR": ("Costa Rican",),
+    "PA": ("Panamanian",),
+    "CU": ("Cuban",),
+    "JM": ("Jamaican",),
+    "HT": ("Haitian",),
+    "DO": ("Dominican",),
+    "PR": ("Puerto Rican",),
+    "BS": ("Bahamian",),
+    "TT": ("Trinidadian", "Tobagonian"),
+    "BB": ("Barbadian", "Bajan"),
+    "CO": ("Colombian",),
+    "VE": ("Venezuelan",),
+    "EC": ("Ecuadorian",),
+    "PE": ("Peruvian",),
+    "BO": ("Bolivian",),
+    "BR": ("Brazilian",),
+    "PY": ("Paraguayan",),
+    "UY": ("Uruguayan",),
+    "AR": ("Argentine", "Argentinian"),
+    "CL": ("Chilean",),
+    "GY": ("Guyanese",),
+    "SR": ("Surinamese",),
+    "GF": ("French Guianese", "Guianese"),
+    # Oceania
+    "AU": ("Australian",),
+    "NZ": ("New Zealander",),
+    "PG": ("Papua New Guinean", "Papuan"),
+    "FJ": ("Fijian",),
+    "SB": ("Solomon Islander",),
+    "VU": ("Ni-Vanuatu",),
+    "WS": ("Samoan",),
+    "TO": ("Tongan",),
+    "FM": ("Micronesian",),
+    "PW": ("Palauan",),
+    "MH": ("Marshallese",),
+    "KI": ("I-Kiribati",),
+    "NR": ("Nauruan",),
+    "TV": ("Tuvaluan",),
+    # Territories & Dependencies
+    "GL": ("Greenlandic", "Greenlander"),
+    "FO": ("Faroese",),
+    "GI": ("Gibraltarian",),
+    "BM": ("Bermudian",),
+    "KY": ("Caymanian",),
+    "HK": ("Hongkonger", "Hong Konger"),
+    "MO": ("Macanese",),
+}
+
+# The Phase-4 card rule splits the demonyms in two (owner decision 2026-09-24: the final design,
+# entry [6] of output/remediation/logs/design_texts_images_2026-09-22.json, wins - card_texts, RULES:
+# "No country name. ... Cultural adjectives such as Roman, Egyptian or Maya are allowed";
+# docs/procedures/PHASE4_CONTRACTS.md section 6).
+#
+# (a) The adjectives of an ancient culture (and a people noun the table carries, "Hellene"): a card
+# may carry one even where the same word is a modern country's demonym ("Greek", "Egyptian",
+# "Macedonian"), and V10 never holds one - its plural, its -man noun or a demonym inside it
+# ("Romano-British") neither. Each entry is an ancient culture, following the design's line: the
+# design's three examples, the owner's list of 2026-09-24, and - chosen here - the ancient cultures
+# whose word the table carries (Hellenic, Hellene, Macedonian: ancient Greece and Macedon), the
+# culture of Roman Britain and of Roman Gaul, two spellings (Incan, Nasca, Nabatean) and the ancient
+# cultures of the catalogue's regions the owner's list does not name. The rule cannot tell a culture
+# from a nationality in the same word ("the first Greek site to be inscribed" means Greece): what
+# the card says is the reviewer's CARD line and the audit's to judge.
+ANCIENT_CULTURE_ADJECTIVES: frozenset[str] = frozenset({
+    # the design's examples and the owner's list
+    "Roman", "Greek", "Egyptian", "Maya", "Mayan", "Inca", "Aztec", "Olmec", "Toltec", "Zapotec",
+    "Mixtec", "Moche", "Nazca", "Etruscan", "Celtic", "Gallic", "Iberian", "Phoenician", "Punic",
+    "Carthaginian", "Persian", "Assyrian", "Babylonian", "Sumerian", "Akkadian", "Hittite",
+    "Minoan", "Mycenaean", "Nabataean", "Thracian", "Dacian", "Scythian", "Norse", "Viking",
+    "Anglo-Saxon", "Pictish", "Khmer", "Nubian", "Kushite", "Byzantine", "Hellenistic",
+    "Mesopotamian",
+    # ancient Greece and Macedon, whose words the table carries under GR and MK
+    "Hellenic", "Hellene", "Macedonian",
+    # Roman Britain and Roman Gaul ("Romano-British" carries the modern "British")
+    "Romano-British", "Gallo-Roman",
+    # other spellings of the owner's
+    "Incan", "Nasca", "Nabatean",
+    # Europe and the Mediterranean
+    "Italic", "Samnite", "Cycladic", "Nuragic", "Illyrian", "Celtiberian", "Sarmatian",
+    # Anatolia, the Near East and Iran
+    "Phrygian", "Lydian", "Lycian", "Urartian", "Achaemenid", "Parthian", "Sasanian", "Elamite",
+    "Canaanite",
+    # Africa and South Asia
+    "Meroitic", "Aksumite", "Harappan",
+    # the Americas before 1500
+    "Chavín", "Tiwanaku", "Wari", "Chimú", "Puebloan",
+})  # fmt: skip
+
+# (b) The modern-nationality demonyms V10 holds: every demonym of ISO_TO_DEMONYMS that is no word of
+# (a) - derived, never written twice, so a word of (a) is never held whatever the table carries.
+MODERN_NATIONALITY_DEMONYMS: frozenset[str] = frozenset(
+    demonym
+    for demonyms in ISO_TO_DEMONYMS.values()
+    for demonym in demonyms
+    if demonym not in ANCIENT_CULTURE_ADJECTIVES
+)
 
 
 def download_country_boundaries():

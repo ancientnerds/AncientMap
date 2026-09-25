@@ -37,12 +37,16 @@ from phase3 import fetch_stage as F  # noqa: E402
 from phase3.run import Batch  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402 - only for the V6 names parity test
 from phase4 import model4 as M  # noqa: E402
+from phase4 import prompts4 as P  # noqa: E402 - only for rule (7)'s wording test
 from phase4 import select_stage as SEL  # noqa: E402 - only for the V6 names parity test
 from phase4 import sentences as S  # noqa: E402 - only for the D3 parity test
 from phase4 import verify4 as V  # noqa: E402
 
+from pipeline.utils.country_lookup import ANCIENT_CULTURE_ADJECTIVES  # noqa: E402
 from pipeline.video import shorts_audit, shorts_brand  # noqa: E402
 from tests.remediation import p4_fixtures as X  # noqa: E402
+from tests.remediation.p4_garble_cases import GARBLE_CASES  # noqa: E402
+from tests.remediation.p4_pronoun_cases import PRONOUN_CASES  # noqa: E402
 from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 from tests.remediation.phase4_cases import (  # noqa: E402
     A1,
@@ -190,6 +194,27 @@ def test_a_span_with_a_protected_token_is_never_offered() -> None:
     assert V.protected_in("the etc. list") == ()
 
 
+def test_a_correction_or_contrast_marker_is_protected() -> None:
+    """Pilot 2, T3: House of the Faun published its statue as 'a dancing faun' after a `p` drop
+    removed '(actually a satyr, since the lower body is that of a man)', the passage's own
+    correction. V4 now refuses that drop like a hedge's."""
+    faun = (
+        "The bronze statue of a dancing faun (actually a satyr, since the lower body is that of a "
+        "man) is what the House of the Faun is named after."
+    )
+    correction = " (actually a satyr, since the lower body is that of a man)"
+    assert (faun.index(correction), faun.index(correction) + len(correction)) in (
+        V.candidate_spans("W", faun, 0, len(faun))
+    )
+    assert _offered(faun) == []
+    assert V.protected_in(correction) == ("actually",)
+    assert V.protected_in("In fact, ") == ("in fact",)
+    assert V.protected_in(", rather than in the town") == ("rather",)
+    assert V.protected_in(", instead of a temple,") == ("instead",)
+    assert V.protected_in(" (wrongly so named)") == ("wrongly",)
+    assert V.protected_in(" (sometimes erroneously written Bara)") == ("erroneous*",)
+
+
 def test_a_number_comma_and_a_bracketed_comma_are_no_delimiters() -> None:
     sentence = "The hoard of 2,500 coins (found in 1920, near the gate) lies in the museum store."
     assert _offered(sentence) == [" (found in 1920, near the gate)"]
@@ -288,6 +313,21 @@ NAME_PARITY_CASES = [
     ("no-english-label", {}, X.witness_answer(label=None), {}, True, False),
     ("not-d", {}, X.witness_answer(), {"id": "W"}, True, False),
 ]
+#: The stored name without its disambiguator (pilot 2, T8): `X (Y)` -> X, `X, Y` -> X, else none.
+NAME_BASE_CASES = [
+    ("Partiscum (Castra)", "Partiscum"),
+    ("Clare, Suffolk", "Clare"),
+    ("Beacon Hill, Burghclere, Hampshire", "Beacon Hill"),
+    ("Quirigua (Parque Arqueológico y Ruinas de Quiriguá)", "Quirigua"),
+    ("Justinianopolis (Epirus)", "Justinianopolis"),
+    ("Tarxien Temples, Paola (Malta)", "Tarxien Temples, Paola"),
+    ("Stonehenge", None),
+    ("Altar Stone - Stonehenge", None),
+    ("House (of the Faun) Pompeii", None),
+    ("Temple (of Bel (Palmyra))", None),
+    ("(Castra)", None),
+    (", Suffolk", None),
+]
 
 
 @pytest.mark.parametrize(
@@ -323,6 +363,105 @@ def test_s3_and_v6_accept_the_same_names(
     expected += ["Stone Temple of Gozo"] if title_counts else []
     expected += ["Stone Temple"] if label_counts else []
     assert list(s3) == v6 == expected
+
+
+@pytest.mark.parametrize(
+    ("gate_over", "raw", "d_over", "title_counts", "label_counts"),
+    [case[1:] for case in NAME_PARITY_CASES],
+    ids=[case[0] for case in NAME_PARITY_CASES],
+)
+@pytest.mark.parametrize(("name", "base"), NAME_BASE_CASES)
+def test_s3_and_v6_accept_the_same_base_name(
+    tmp_path: Path,
+    gate_over: dict,
+    raw: bytes | None,
+    d_over: dict,
+    title_counts: bool,
+    label_counts: bool,
+    name: str,
+    base: str | None,
+) -> None:
+    """Pilot 2's T8 fix on both sides: the stored name's base (`X (Y)` -> X, `X, Y` -> X) counts
+    exactly where the title does - a strong 'own' verdict of the source - in S3's code and in
+    V6's, over the same store and names."""
+    gate_dict = {**X.STRONG_OWN.to_dict(), **gate_over}
+    article = X.wiki_doc("W", X.ARTICLE, title="Stone Temple of Gozo").to_dict()
+    doc = M.SourceDoc.from_dict({**article, "subject_gate": gate_dict})
+    site = X.plan_site("site-1", name=name, aliases=())
+    setup = X.SiteSetup(site=site, lane=M.Lane.W, sources={"W": (doc, X.ARTICLE)})
+    batch_dir = X.make_batch(tmp_path, [setup])
+    if raw is not None:
+        X.pin_witness(batch_dir, "site-1", raw, **d_over)
+    store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    meta, _ = B.read_source(batch_dir, "site-1", "W")
+    s3 = SEL.v6_names(site, meta, SEL.site_witness(batch_dir, "site-1"))
+    v6 = V.v6_names(site, B.read_meta(batch_dir, "site-1", "W"), V.read_witness(store, "site-1"))
+    assert list(s3) == v6
+    assert (base in v6) is (base is not None and title_counts), (name, v6)
+
+
+def _stated_base(name: str) -> str | None:
+    """Rule (7)'s words, read literally: "X (Y)" - ending in one bracket with no bracket inside it -
+    or else "X, Y" - X before the first comma; no X, no base."""
+    stripped = name.strip()
+    bracket = re.fullmatch(r"(?P<x>.*\S)\s*\([^()]*\)", stripped)
+    if bracket is not None:
+        return bracket["x"]
+    x, comma, _ = stripped.partition(",")
+    return (x.strip() or None) if comma else None
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        *(case[0] for case in NAME_BASE_CASES),
+        "Argos, Peloponnese",
+        "Marion, Cyprus",
+        "Beacon Hill (Burghclere, Hampshire)",
+        "Temple of Bel (Palmyra) ",
+        "Nuraghe (Is Paras)  ",
+    ],
+)
+def test_rule_7_states_exactly_the_name_base_v6_accepts(name: str) -> None:
+    """Pilot 3 (T8): the selectors abstained on 'Argos, Peloponnese' and 'Clare, Suffolk', never
+    told when the name without its disambiguator counts. Rule (7) now states it; its two forms,
+    read literally, give `name_base`'s base in V6's code and in S3's, name for name."""
+    assert '"X (Y)" - ending in one bracket with no bracket inside it - or else "X, Y" - X ' in (
+        P.SELECTOR_QUESTION
+    )
+    assert V.name_base(name) == SEL.name_base(name) == _stated_base(name), name
+
+
+@pytest.mark.parametrize(
+    ("gate_over", "counts"),
+    [({}, True), ({"place_item": True}, False), ({"km": None}, False)],
+    ids=["strong", "place-item", "no-distance"],
+)
+def test_rule_7s_base_counts_exactly_when_also_named_lists_it(
+    tmp_path: Path, gate_over: dict, counts: bool
+) -> None:
+    """ "... is named by X alone only when also_named lists X": S3 lists the base in `also_named`
+    exactly where V6 accepts it, a strong 'own' verdict; 'Argos' then names 'Argos, Peloponnese'.
+    The rest of the rule is `name_in`: all the name's words in order, only spaces or punctuation
+    between them, case and accents aside."""
+    gate_dict = {**X.STRONG_OWN.to_dict(), **gate_over}
+    article = X.wiki_doc("W", X.ARTICLE).to_dict()
+    doc = M.SourceDoc.from_dict({**article, "subject_gate": gate_dict})
+    site = X.plan_site("site-1", name="Argos, Peloponnese", aliases=())
+    batch_dir = X.make_batch(
+        tmp_path, [X.SiteSetup(site=site, lane=M.Lane.W, sources={"W": (doc, X.ARTICLE)})]
+    )
+    store = F.EvidenceStore(batch_dir / M.EVIDENCE_DIR)
+    meta, _ = B.read_source(batch_dir, "site-1", "W")
+    also = SEL.also_named(site, SEL.v6_names(site, meta, SEL.site_witness(batch_dir, "site-1")))
+    v6 = V.v6_names(site, B.read_meta(batch_dir, "site-1", "W"), V.read_witness(store, "site-1"))
+    first = "Argos is one of the oldest continuously inhabited cities of the Peloponnese."
+    assert ("Argos" in also) is ("Argos" in v6) is counts
+    assert any(V.name_in(name, first) for name in v6) is counts
+    assert V.name_in("Argos, Peloponnese", "The city of Argos, Peloponnese, is old.")
+    assert V.name_in("Argos, Peloponnese", "The city of ARGOS PELOPONNESE is old.")
+    assert not V.name_in("Argos, Peloponnese", "Argos lies in the Peloponnese.")
+    assert V.name_in("Chichén-Itzá", "The ruins of Chichen Itza lie in Yucatan.")
 
 
 def test_the_edit_list_removes_repairs_restores_and_marks() -> None:
@@ -738,12 +877,99 @@ def test_v5_every_extract_artefact_is_held(label: str, bad: str) -> None:
     assert f"artefact {label}" in case.detail("V5")
 
 
+@pytest.mark.parametrize(
+    ("label", "bad"),
+    [
+        (
+            "a full stop inside the sentence before a lowercase word",
+            "The temple lies on the slopes of Cotylion Mountain. near the village of Skliros.",
+        ),
+        (
+            "a preposition directly before a comma",
+            "The temple was a Roman shrine, and in the hamlet of, Rudchester, Northumberland.",
+        ),
+    ],
+)
+def test_v5_a_garbled_sentence_is_held(label: str, bad: str) -> None:
+    """Pilot 2 (T5): Bassae and Vindobala published their sources' garbles word for word; V5 now
+    holds either shape of a published sentence."""
+    text = f"{S1} {bad}"
+    case = make_case(text=text, picks=(W_PICKS[0], Pick(bad, (), bad)))
+    assert f"sentence 2: {label}" in case.detail("V5")
+
+
+@pytest.mark.parametrize(("text", "garbled"), GARBLE_CASES)
+def test_the_garble_cases_v5_judges_exactly(text: str, garbled: bool) -> None:
+    assert bool(V.ill_formed(text)) is garbled
+
+
+@pytest.mark.parametrize(("text", "garbled"), GARBLE_CASES)
+def test_s2_and_v5_judge_the_same_sentences_garbled(text: str, garbled: bool) -> None:
+    """D3 parity for T5: S2's pool (`sentences.garbled`) and V5 (`verify4.ill_formed`) judge the
+    shared fixture alike; neither module imports the other."""
+    assert S.garbled(text) is bool(V.ill_formed(text)) is garbled
+
+
 def test_v6_a_pronoun_without_its_source_predecessor_is_held() -> None:
     case = make_case(picks=(W_PICKS[0], W_PICKS[2]))
     assert "opens with a pronoun" in case.detail("V6")
     assert V.opens_with_pronoun("The latter was built later.")
     assert not V.opens_with_pronoun("Items were found.")
     assert not V.opens_with_pronoun("Thereafter it was used.")
+
+
+@pytest.mark.parametrize(("text", "leans"), PRONOUN_CASES)
+def test_the_pronoun_cases_v6_judges_exactly(text: str, leans: bool) -> None:
+    assert (V.leaning_pronoun(text) is not None) is leans
+
+
+@pytest.mark.parametrize(("text", "leans"), PRONOUN_CASES)
+def test_the_review_and_v6_read_the_same_pronoun_rule(text: str, leans: bool) -> None:
+    """D3 parity for T8: the review's drops (`sentences.leans_on_predecessor`) and V6
+    (`verify4.leaning_pronoun`) judge the shared fixture alike; neither imports the other."""
+    assert S.leans_on_predecessor(text) is (V.leaning_pronoun(text) is not None) is leans
+
+
+#: Pilot 3 (T1): Stanydale Temple's "it" stands in a that-clause, not at the start; its source
+#: predecessor, "The settlement ...", was dropped by the review.
+SETTLEMENT = "The settlement may well have been established in 2500 BC by farmers."
+SHERDS = "Pottery sherds show that it was also occupied in the late Bronze Age."
+RIDGE = "Standing on a low ridge above the sea, it was made into a hill fort in the Iron Age."
+
+
+@pytest.mark.parametrize(
+    ("leaning", "label"),
+    [
+        (SHERDS, "carries 'it' right after 'that'"),
+        (RIDGE, "carries 'it' right after its first comma"),
+    ],
+)
+def test_v6_a_pronoun_past_the_first_word_without_its_source_predecessor_is_held(
+    leaning: str, label: str
+) -> None:
+    """Pilot 3 (T1, T4): V6 read only the first word, so a subject pronoun after a fronted phrase
+    or in a that-clause was published without the source sentence it refers to."""
+    text = f"{S1} {SETTLEMENT} {leaning} {S4}"
+    alone = make_case(text=text, picks=(W_PICKS[0], Pick(leaning, (), leaning)), card=None)
+    assert (
+        f"sentence 2 {label} and its source predecessor is not the sentence published before it"
+    ) in alone.detail("V6")
+    after = (W_PICKS[0], Pick(SETTLEMENT, (), SETTLEMENT), Pick(leaning, (), leaning))
+    assert "V6" not in make_case(text=text, picks=after, card=None).reasons()
+
+
+def test_v10_a_card_with_a_pronoun_past_its_first_word_is_held() -> None:
+    """Pilot 3 (T4): Dolebury Warren's card, "Standing on a limestone ridge ..., it was made into a
+    hill fort ...", names nothing *it* could be; V10 read only the card's first word."""
+    text = f"{S1} {RIDGE} {S4}"
+    case = make_case(
+        text=text,
+        picks=(W_PICKS[0], Pick(RIDGE, (), RIDGE)),
+        card=RIDGE,
+        card_items=((1, ()),),
+    )
+    assert "card item 1 carries 'it' right after its first comma" in case.detail("V10")
+    assert [h.scope for h in case.run() if h.reason is M.HoldReason.V10] == [M.HoldScope.CARD]
 
 
 def test_v6_the_first_sentence_must_name_the_site() -> None:
@@ -846,6 +1072,35 @@ def test_v6_a_witness_that_is_not_the_pinned_stored_item_adds_no_label(
     case = dataclasses.replace(_label_only(), witness=witness(raw, **over))
     assert "sentence 1 names none" in case.detail("V6")
     assert f"the Wikidata witness adds no name: {why}" in case.detail("V6")
+
+
+@pytest.mark.parametrize(("name", "base"), NAME_BASE_CASES)
+def test_v6_the_base_of_a_stored_name(name: str, base: str | None) -> None:
+    assert V.name_base(name) == base
+
+
+def _base_only(name: str, subject_gate: M.SubjectGate | None = None) -> Case:
+    """Pilot 2's T8 case (Partiscum (Castra), Clare, Suffolk): neither the stored name, nor the
+    article title, nor an item label stands in sentence 1 - only the stored name's base."""
+    site = plan_site(name=name, aliases=())
+    return retitle(make_case(site=site, subject_gate=subject_gate), "Ħal Tarxien (Paola)")
+
+
+@pytest.mark.parametrize("name", ["Tarxien Temples (Paola)", "Tarxien Temples, Paola, Malta"])
+def test_v6_the_stored_names_base_counts_for_a_strong_own_verdict(name: str) -> None:
+    """The subject gate tied the article to the site (QID, coordinates, no place item), so the
+    stored name without its disambiguator names the verified site."""
+    assert _base_only(name).run() == ()
+
+
+@pytest.mark.parametrize(
+    "over", [{"qid_match": False}, {"place_item": True}, {"km": None}], ids=str
+)
+def test_v6_the_base_counts_only_for_a_strong_own_verdict(over: dict) -> None:
+    """The Orolik/Clare trap: a town's article ('Clare' for 'Clare, Suffolk') is a place-level item,
+    and its bare name then names the town, not the site."""
+    case = _base_only("Tarxien Temples (Paola)", subject_gate=gate(**over))
+    assert "sentence 1 names none of ['Tarxien Temples (Paola)']" in case.detail("V6")
 
 
 def test_v6_reads_the_witness_the_store_pins(tmp_path: Path, write4: None) -> None:
@@ -1075,6 +1330,79 @@ def test_v10_a_card_that_names_a_country_is_held() -> None:
     assert V.card_countries("The Egyptian and Roman builders.", "Egypt") == []
 
 
+def test_v10_a_card_that_names_a_nationality_is_held() -> None:
+    """Pilot 2 (T4/T6): 'a Danish hill' (Agri Bavnehøj) passed V10, which knew country names only.
+    The card rule holds a modern nationality's demonym (`country_lookup.MODERN_NATIONALITY_DEMONYMS`:
+    `ISO_TO_DEMONYMS` without the ancient cultures, the owner's decision of 2026-09-24)."""
+    sentence = "The Tarxien Temples are a complex of four Maltese megalithic structures near Paola."
+    text = f"{sentence} {S2} {S3}"
+    case = make_case(
+        text=text,
+        picks=(Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2]),
+        card=sentence,
+        card_items=((0, ()),),
+    )
+    assert "names a nationality: ['Maltese']" in case.detail("V10")
+    assert [h.scope for h in case.run() if h.reason is M.HoldReason.V10] == [M.HoldScope.CARD]
+    bavnehoj = (
+        "Agri Bavnehøj is a Danish hill, located in the Mols Bjerge National Park on Djursland."
+    )
+    assert V.card_demonyms(bavnehoj) == ["Danish"]
+    assert V.card_demonyms("A Spanish fort built by the Danes and an Englishman's map.") == [
+        "Spanish",
+        "Danes",
+        "Englishman",
+    ]
+    # a demonym is a proper noun, whole word: no hit inside a word or in lower case
+    assert V.card_demonyms("The danish pastry and the Danishness of the old town.") == []
+    assert V.card_demonyms("THE MESOAMERICAN BALL COURT OF THE SPANIARDS") == ["SPANIARDS"]
+    assert V.card_demonyms("The British Museum holds the Irish hoard.") == ["British", "Irish"]
+
+
+#: The design's examples ("Cultural adjectives such as Roman, Egyptian or Maya are allowed", entry
+#: [6], card_texts) and the ancient cultures whose word is also a modern country's demonym.
+CULTURE_CARDS = (
+    "The Egyptian and Roman builders of the Etruscan wall left a Maya stela behind.",
+    "A Greek temple built by the Greeks, with a Hellenistic stoa and Hellenic inscriptions.",
+    "Al-Mnaykhrat is a late sixth-century BC Greek rock-tomb near Marj.",
+    "A Macedonian tomb of the 4th century BC, built for the Macedonians of the royal court.",
+    "Finds included pottery of the Bronze Age and Romano-British period.",
+    "The Egyptians, the Hellenes and the Norsemen all came to trade here.",
+)
+
+
+@pytest.mark.parametrize("card", CULTURE_CARDS)
+def test_v10_a_cultural_adjective_is_not_held(card: str) -> None:
+    """The owner's decision (2026-09-24): design entry [6] wins, and a cultural adjective passes V10
+    even where the same word is a modern demonym ('Greek', 'Egyptian', 'Macedonian'), its plural
+    and `-man` noun too, and inside a culture's compound ('Romano-British'). Pilot 1's Al-Mnaykhrat
+    and Romano-British cards were held under the safe reading; they pass now."""
+    assert V.card_demonyms(card) == []
+
+
+def test_v10_no_word_of_an_ancient_culture_is_ever_held() -> None:
+    """(a) is never held: each word, its plural and its `-man` noun, alone and in a sentence."""
+    for word in sorted(ANCIENT_CULTURE_ADJECTIVES):
+        for form in (word, f"{word}s", f"{word}men"):
+            assert V.card_demonyms(f"The {form} site of the old kingdom.") == [], form
+    # the modern word beside the culture's is still held
+    assert V.card_demonyms("A Romano-British villa in the British countryside.") == ["British"]
+
+
+def test_v10_passes_a_card_with_a_cultural_adjective_and_holds_one_with_a_nationality() -> None:
+    held = "The Tarxien Temples are a complex of four Danish megalithic structures near Paola."
+    passed = "The Tarxien Temples are a complex of four Egyptian megalithic structures near Paola."
+    for sentence, wanted in ((held, ["the card names a nationality: ['Danish']"]), (passed, [])):
+        case = make_case(
+            text=f"{sentence} {S2} {S3}",
+            picks=(Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2]),
+            card=sentence,
+            card_items=((0, ()),),
+        )
+        found = [h.detail for h in case.run() if h.reason is M.HoldReason.V10]
+        assert found == wanted, sentence
+
+
 def test_v10_a_card_with_an_evaluative_superlative_is_held() -> None:
     sentence = "The Tarxien Temples are one of the most elaborate megalithic complexes near Paola."
     text = f"{sentence} {S2} {S3}"
@@ -1288,6 +1616,32 @@ def test_v14_a_location_sentence_naming_another_country_is_held() -> None:
     assert "places the site in Italy" in case.detail("V14")
     england = plan_site(country="England")
     assert V._iso("United Kingdom") == V._iso(england.country)
+
+
+def _located(place: str, country: str) -> Case:
+    sentence = f"The Tarxien Temples are a group of megalithic temples located in {place}."
+    text = f"{sentence} {S2} {S3}"
+    picks = (Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2])
+    return make_case(text=text, picks=picks, card=None, site=plan_site(country=country))
+
+
+def test_v14_a_sub_national_name_is_read_as_its_own_countrys() -> None:
+    """Pilot 3 (T8): Lake Mungo, "a dry lake located in New South Wales, Australia", was held as
+    placing the site in Wales. The country regex reads `country_lookup.SUBNATIONAL_NAME_TO_ISO`
+    beside `NAME_TO_ISO`, longest first: the whole name, with its own country's code."""
+    assert V.countries_named("A dry lake located in New South Wales, Australia.") == [
+        "New South Wales",
+        "Australia",
+    ]
+    assert "V14" not in _located("New South Wales, Australia", "Australia").reasons()
+    assert "V14" not in _located("Central Macedonia, Greece", "Greece").reasons()
+    held = _located("New South Wales", "England")
+    assert "places the site in New South Wales, the stored country is 'England'" in (
+        held.detail("V14")
+    )
+    # "South Wales" is Wales
+    assert "V14" not in _located("South Wales", "England").reasons()
+    assert "places the site in Wales" in _located("South Wales", "Australia").detail("V14")
 
 
 def test_v14_a_stored_country_of_comma_parts_is_read_part_by_part() -> None:

@@ -26,6 +26,7 @@ from phase4 import sentences as S  # noqa: E402
 from phase4 import subject_gate as SG  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
+from tests.remediation.p4_garble_cases import GARBLE_CASES  # noqa: E402
 from tests.remediation.p4_span_cases import SPAN_CASES  # noqa: E402
 
 
@@ -331,6 +332,24 @@ def test_a_span_carrying_a_protected_token_is_never_offered(text: str, word: str
         ("They don't have any drilled holes, which shows the talons were worn loose.", "don't"),
         ("They don’t have any drilled holes, which shows the talons were worn loose.", "don’t"),
         ("The bishopric was moved, and the see wasn't restored after the war.", "wasn't"),
+        # pilot 2 (T3): a correction or contrast marker - House of the Faun's "(actually a satyr,
+        # since the lower body is that of a man)" was offered and dropped
+        ("The statue of a faun (actually a satyr) is what the house is named after.", "actually"),
+        ("In fact, the ditch was cut after the bank had been raised.", "In fact"),
+        ("In reality, the stones were set up by the farmers of the valley.", "In reality"),
+        ("The shrine, instead of a temple, stood on the hill above the ford.", "instead"),
+        ("The fort lay on the hill, rather than in the town.", "rather"),
+        ("Whilst visiting the monument in 1666, the antiquary drew the stones.", "Whilst"),
+        ("Nevertheless, the fort was held until the end of the war.", "Nevertheless"),
+        ("Nonetheless, the fort was held until the end of the war.", "Nonetheless"),
+        ("Contrary to a popular myth, the nose was not shot off by soldiers.", "Contrary"),
+        ("Unlike the cemetery on the hill, the tomb held no pottery at all.", "Unlike"),
+        ("The temple of Neptune (wrongly so named) stands on the plain.", "wrongly"),
+        ("The ship (sometimes mistaken for a galley) lies in the harbour.", "mistaken"),
+        ("The arch (sometimes erroneously written Bara) stands by the road.", "erroneously"),
+        ("The mound, one incorrectly dated, lies beside the second ditch.", "incorrectly"),
+        ("The ruin (which he misidentified as Ramah) lies on the hill.", "misidentified"),
+        ("The statue (misattributed to Pheidias) stood in the temple.", "misattributed"),
         # every contracted negation, not a list of them
         ("The finds, which oughtn't be moved, lie in the museum of the town.", "oughtn't"),
         ("The shepherds, who daren't enter the cave, graze the slope below.", "daren't"),
@@ -400,8 +419,11 @@ def test_reference_sections_are_never_in_the_pool() -> None:
 
 def test_only_publishable_sentences_are_offered() -> None:
     long_one = "The temple " + "was very large and " * 30 + "old."
-    text = f"Short one. The temple stands on the ridge above the sea. {long_one} and a fragment."
+    # the fragment on its own line: after "old." on the same line the splitter would keep it inside
+    # the long sentence, whose "old. and" the garble rule (pilot 2, T5) refuses before its length
+    text = f"Short one. The temple stands on the ridge above the sea. {long_one}\nand a fragment.\n"
     sentences = S.split_source("W", text)
+    assert long_one in [S.sentence_text(text, s) for s in sentences] and not S.garbled(long_one)
     pool = S.candidate_pool(sentences, lane=M.Lane.W, names=["X"], text=text)
     assert [S.sentence_text(text, s) for s in pool] == [
         "The temple stands on the ridge above the sea."
@@ -418,6 +440,32 @@ def test_a_sentence_cut_at_an_initial_is_never_in_the_pool() -> None:
     assert [S.sentence_text(text, s) for s in pool] == [
         "The temple stands on the ridge above the sea."
     ]
+
+
+@pytest.mark.parametrize(("text", "garbled"), GARBLE_CASES)
+def test_the_garble_cases_s2_judges_exactly(text: str, garbled: bool) -> None:
+    """Pilot 2 (T5): the fixture V5's own check is held to as well (`p4_garble_cases`)."""
+    assert S.garbled(text) is garbled
+
+
+def test_a_garbled_source_sentence_is_never_in_the_pool() -> None:
+    """Bassae and Vindobala, pilot 2: complete, terminated and long enough, but each carries its
+    source's garble - a full stop before a lowercase word, a preposition before a comma. The
+    selector is never offered either, so V5 never has to hold the site for it."""
+    bassae = (
+        "Bassae lies at an elevation of 1,131 m above sea level on the slopes of Cotylion "
+        "Mountain. near the village of Skliros, northeast of Figaleia."
+    )
+    vindobala = (
+        "Vindobala was a Roman fort with the modern name, and in the hamlet of, Rudchester, "
+        "Northumberland."
+    )
+    good = "The temple stands on the ridge above the sea."
+    text = f"{good}\n{bassae}\n{vindobala}\n"
+    sentences = S.split_source("W", text)
+    assert {bassae, vindobala} <= {S.sentence_text(text, s) for s in sentences}
+    pool = S.candidate_pool(sentences, lane=M.Lane.W, names=["X"], text=text)
+    assert [S.sentence_text(text, s) for s in pool] == [good]
 
 
 def test_the_pool_stops_at_120_sentences() -> None:

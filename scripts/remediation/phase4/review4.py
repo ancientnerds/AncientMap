@@ -12,10 +12,21 @@ name, aliases, type, country and coordinates. The answer is one line per sentenc
 (2026-09-24, T2 and T5) the question (`prompts4.REVIEWER_QUESTION`) also names two DROP cases: a
 sentence about the modern village, town or municipality, and a definite reference whose antecedent
 is in no published sentence before it (the source sentences shown before it are not published).
+Since pilot 3 (2026-09-24, T7: Partiscum's lead, which the article's own body contradicts) the
+reviewer is also shown the passage the sentences were chosen from (`passage`: the selector's pool,
+or lane R's pages) and drops a sentence another sentence of it contradicts or reduces to a
+presumption, an assumption or a dispute. Since the mass run's mid-run audit (2026-09-25, T2: Roman
+Bath, York, whose lead is about the modern pub that shares the Roman bath house's name) it also
+drops a sentence whose subject is a later building, business or institution that shares or contains
+the site's name; what leans on such a sentence goes with it below, and V6 holds a site left without
+a sentence that names it.
 
 The verdict can only remove, and it fails closed:
 
-* `DROP`, a missing line, or a second line for the same sentence removes that sentence;
+* `DROP`, a missing line, or a second line for the same sentence removes that sentence; and -
+  pilot 3, T8 - a kept sentence that leans on the published sentence before it (a pronoun, V6's
+  rule) goes with that sentence when it is removed, transitively, recorded under its own reason
+  (`follow_drops`, `FOLLOWS_A_DROP`: `followed` in `review4.json`);
 * a line in no contract shape (`KEEP` takes nothing after it), an `R<i>` that names no shown
   sentence, or a `CARD` line where no card was shown makes the whole answer unparseable:
   `review-unparseable` holds the site;
@@ -109,6 +120,35 @@ def parse_review(answer: str, *, sentences: int, card: bool) -> Verdict:
     )
 
 
+#: Pilot 3 (T8): the reason a sentence is dropped with the published sentence before it.
+FOLLOWS_A_DROP = "leans-on-a-dropped-sentence"
+
+
+def follow_drops(
+    verdict: Verdict, published: Sequence[str]
+) -> tuple[Verdict, tuple[dict[str, Any], ...]]:
+    """The verdict with every kept sentence that leans on a dropped one dropped too.
+
+    Pilot 3 (T8, Mersinaki and Diana Fort): the reviewer dropped a sentence whose published
+    successor opens with a pronoun, and V6 then held the whole site. A kept sentence that leans on
+    the sentence before it (`sentences.leans_on_predecessor`, V6's rule in the review's own code)
+    whose published predecessor is dropped goes with it - in order, so a chain goes whole - and is
+    recorded as `{"sentence", "follows", "reason": FOLLOWS_A_DROP}`; the site is then judged on
+    what remains (the two-sentence minimum, V1-V15 again). Before the review V6 passed, so such a
+    sentence was published right after its source predecessor."""
+    kept = set(verdict.kept)
+    followed: list[dict[str, Any]] = []
+    for number in range(2, len(published) + 1):
+        if (
+            number in kept
+            and number - 1 not in kept
+            and S.leans_on_predecessor(published[number - 1])
+        ):
+            kept.discard(number)
+            followed.append({"sentence": number, "follows": number - 1, "reason": FOLLOWS_A_DROP})
+    return dataclasses.replace(verdict, kept=tuple(sorted(kept))), tuple(followed)
+
+
 # -------------------------------------------------------------------------------- the prompt
 
 
@@ -144,12 +184,23 @@ def passages(
     return rows
 
 
+def passage(inputs: A.SiteInputs) -> str:
+    """The passage the site's sentences were chosen from, as the reviewer is shown it (pilot 3,
+    T7): the selector's pool for lanes W, S and T, and for lane R the pages the restatement model
+    read, whole. Without it the reviewer saw each sentence's two source predecessors only - for a
+    lead, nothing - and could not see another sentence of the article contradict a published one."""
+    if inputs.lane is M.Lane.R:
+        return P.page_passage([(inputs.sources[sid], inputs.texts[sid]) for sid in inputs.sources])
+    (source_id,) = inputs.sources
+    return P.pool_passage(inputs.sources[source_id], inputs.pool, inputs.texts[source_id])
+
+
 def reviewer_prompt(inputs: A.SiteInputs, built: A.Built) -> MS.Prompt:
     rows = passages(built.assembly, built.sentences, inputs.texts)
     return MS.Prompt(
         stage=Stage.REVIEWER,
         system=P.REVIEWER_QUESTION,
-        user=P.reviewer_block(inputs.site, rows, built.assembly.card),
+        user=P.reviewer_block(inputs.site, rows, built.assembly.card, passage=passage(inputs)),
     )
 
 
@@ -332,9 +383,15 @@ def review_batch(
             holds.append(_site_hold(site_id, M.HoldReason.REVIEW_UNPARSEABLE, str(exc)))
             row["outcome"] = "held"
             continue
+        verdict, followed = follow_drops(verdict, built.sentences)
         outcome = settle(site_inputs, built, verdict, reverify, run=run)
         holds.extend(outcome.holds)
-        row.update(lines=list(verdict.lines), kept=list(verdict.kept), card=outcome.card)
+        row.update(
+            lines=list(verdict.lines),
+            kept=list(verdict.kept),
+            followed=list(followed),
+            card=outcome.card,
+        )
         if outcome.assembly is None:
             row["outcome"] = "held"
             continue

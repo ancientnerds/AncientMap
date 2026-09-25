@@ -37,6 +37,12 @@ stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4
   ready yet is re-queued by a later invocation. Its latest batch is then the one that counts
   (`run4.aggregate_holds` drops the holds of the batches it left).
 
+**No model question for a site outside the owner's defect scope** (decision 2026-09-23,
+`phase4/scope4.py`): Phases 4/5 write only the scope's sites, so a live round that holds a model
+stage is refused while one of its open batches (not done) carries another site. The mass run's plan
+is built from the scope (`plan4.py build --pilot ... --defect-scope`); a pilot's batches are done
+and ask nothing again. Every run prints how many sites of its open batches lie outside the scope.
+
 **A live run is one round of the Opus handoff** (owner order 2026-09-23, `opus_handoff.py`): the
 model stages `select` (S3, S3R), `translate` (S3T) and `review` (S6) are answered by Opus agents of
 the orchestrating session between two runs of this driver. `--stages` names the stages of the round,
@@ -81,6 +87,7 @@ from phase4 import batch4 as B  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import plan4 as P4  # noqa: E402
 from phase4 import run4 as R4  # noqa: E402
+from phase4 import scope4 as S  # noqa: E402
 from phase4 import sources_stage as S1  # noqa: E402
 
 PHASE4_DIR = Path(__file__).resolve().parent
@@ -276,6 +283,18 @@ def batch_done(run_dir: Path, batch_id: str) -> tuple[bool, str]:
     return True, f"{len(written)} assembled, {len(held - written)} held"
 
 
+def outside_scope(lines: Sequence[PlanLine], scope: S.DefectScope, *, run_dir: Path) -> list[str]:
+    """The site ids of the lines' open batches - not done (`batch_done`) - that lie outside the
+    owner's defect scope, in plan order. A done batch asks no question again."""
+    return [
+        site.site_id
+        for line in lines
+        if not batch_done(run_dir, line.batch_id)[0]
+        for site in line.sites
+        if site.site_id not in scope
+    ]
+
+
 def read_stages(text: str) -> tuple[str, ...]:
     """`--stages`: a contiguous part of `STAGES4`, in its order."""
     names = tuple(name.strip() for name in text.split(",") if name.strip())
@@ -388,7 +407,6 @@ class Phase4StageRunner(MR.StageRunner):
         if stage == "prepare":
             plan = self.run_dir / REQUEUE_FILE if batch_id in self.requeued else self.plan
             return [*argv, "--plan", str(plan)]
-        argv += ["--ledger", str(self.ledger)]
         if stage in MODEL_STAGES:
             # A model stage buys nothing itself: it is one half of a handoff round (`opus_handoff`).
             return argv if self.handoff is None else [*argv, *self.handoff.flag]
@@ -435,7 +453,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="phase4-mass", description=__doc__.splitlines()[0])
     parser.add_argument("--plan", default=str(R4.DEFAULT_PLAN))
     parser.add_argument("--run-dir", required=True)
-    parser.add_argument("--ledger", default=str(R4.DEFAULT_LEDGER))
     parser.add_argument("--log-dir", default=str(DEFAULT_LOG_DIR))
     parser.add_argument("--progress", default=None, help="default: <log-dir>/progress.json")
     parser.add_argument("--jobs", type=int, default=MR.DEFAULT_JOBS)
@@ -472,7 +489,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def drive(args: argparse.Namespace) -> int:
-    plan, run_dir, ledger = Path(args.plan), Path(args.run_dir), Path(args.ledger)
+    plan, run_dir = Path(args.plan), Path(args.run_dir)
+    # The run's own ledger (`model4.LEDGER_FILE`); no other is ever passed to its stages.
+    ledger = run_dir / M.LEDGER_FILE
     log_dir = Path(args.log_dir)
     stages = read_stages(args.stages)
     handoff = None
@@ -502,6 +521,18 @@ def drive(args: argparse.Namespace) -> int:
         batches = batches[: args.limit]
     if args.jobs < 1 or args.failures_before_stop < 1:
         raise MR.PlanError("--jobs and --failures-before-stop are at least 1")
+    chosen = {b.batch_id for b in batches}
+    scope = S.load_scope()
+    outside = outside_scope(
+        [line for line in [*planned, *requeued] if line.batch_id in chosen], scope, run_dir=run_dir
+    )
+    if args.live and MODEL_STAGES & set(stages) and outside:
+        raise MR.PlanError(
+            f"{len(outside)} site(s) of this round's open batches lie outside the owner's defect "
+            f"scope ({scope.label}; first {outside[0]}): Phases 4/5 write only its sites, so no "
+            "model question is asked for another. Build the plan with plan4.py build --pilot "
+            "<the pilot> --defect-scope."
+        )
     budget = MR.Budget(
         max_calls=None,
         max_usd=args.max_usd,
@@ -526,6 +557,7 @@ def drive(args: argparse.Namespace) -> int:
         + (f" (the first until {S1.iso_utc(waiting[0])})" if waiting else "")
     )
     print(f"budget        {budget.as_text()}")
+    print(f"defect scope  {scope.label}: {len(outside)} site(s) of the open batches outside it")
     if args.searches_off:
         print("searches      off: every routes stage is told 0 and builds no MiniMax client")
     print(f"already spent {spend.calls} calls, ${spend.cost_usd:.6f}, {spend.searches} searches")

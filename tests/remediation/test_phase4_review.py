@@ -153,6 +153,47 @@ def test_the_reviewer_sees_each_sentence_beside_its_untrimmed_source(tmp_path: P
     assert "A stored description." not in prompt
 
 
+def test_the_reviewer_sees_the_whole_passage_the_selector_chose_from(tmp_path: Path) -> None:
+    """Pilot 3 (T7): Partiscum's lead was published although the article's own body contradicts
+    it; the reviewer was shown each sentence's two source predecessors only - for a lead, nothing -
+    so no DROP could see the contradiction. It now sees the selector's pool, every candidate with
+    its sid and section, before the numbered sentences; the apparatus stays out, as in the pool."""
+    batch_dir = _assembled(tmp_path)
+    _, runner, _ = _review(batch_dir, ALL_KEEP)
+    prompt = runner.calls[0].prompt
+    block = prompt[prompt.index('<source id="PASSAGE" title="Stone Temple">') :]
+    block = block[: block.index("</source>")]
+    _, sites = B.read_batch(batch_dir)
+    lane = B.read_lanes(batch_dir, sites)["site-1"]
+    _, _, text, pool = SEL.site_pool(batch_dir, sites[0], lane)
+    for sentence in pool:
+        section = sentence.section or "lead"
+        assert f"\n{sentence.sid} [{section}] {text[sentence.start : sentence.end]}\n" in block
+    assert "W7 [History] Excavations in 1911 found pottery, figurines and animal bones." in block
+    assert "Smith, J." not in block  # the references section is no passage
+    assert prompt.index('<source id="PASSAGE"') < prompt.index('<source id="R1"')
+
+
+def test_a_lane_r_reviewer_sees_every_page_it_restated() -> None:
+    """Lane R selects no pool: its passage is the pages the restatement model read, whole."""
+    page = "The mound was raised in the Bronze Age. It was dug in 1901 and found empty."
+    doc = X.page_doc("R1", page, url="https://example.org/mound", title="The Mound")
+    inputs = A.SiteInputs(
+        site=X.plan_site(),
+        lane=M.Lane.R,
+        sources={"R1": doc},
+        texts={"R1": page},
+        pool=(),
+        selection=None,
+        translations=None,
+        restatements=(),
+    )
+    assert RV.passage(inputs) == (
+        '<source id="PASSAGE" url="https://example.org/mound" title="The Mound">\n'
+        f"{page}\n</source>"
+    )
+
+
 def test_all_kept_writes_the_same_assembly_and_marks_it_reviewed(tmp_path: Path) -> None:
     batch_dir = _assembled(tmp_path)
     before = _written(batch_dir)
@@ -174,6 +215,121 @@ def test_a_dropped_sentence_is_assembled_away(tmp_path: Path) -> None:
     assert "A second shrine" not in assembly.description
     assert len(assembly.provenance.sentences) == 3
     assert assembly.provenance.desc_sha256 == M.text_sha256(assembly.description)
+
+
+#: Pilot 3 (T8, Mersinaki and Diana Fort): the reviewer dropped a sentence whose published successor
+#: leans on it, and V6 then held the whole site. W3 opens with a pronoun and leans on W2; W4 carries
+#: one after its first comma and leans on W3; W5 stands alone; W7's "that it" leans on W6.
+CHAIN = (
+    "The Stone Temple is a megalithic temple on the island of Gozo. "
+    "The temple was built c. 2500 BC by a farming community on a low ridge. "
+    "It was enlarged in the Bronze Age with a second court and an altar. "
+    "Standing on the ridge above the sea, it was later made into a small fort. "
+    "Excavations in 1911 found pottery, figurines and animal bones in the courts. "
+    "The settlement around it may have been founded when farmers came to the island. "
+    "Pottery sherds show that it was also occupied in the Iron Age.\n"
+)
+CHAIN_SELECT = "".join(f"DESC: W{n}\n" for n in range(1, 8)) + "CARD: W5\n"
+
+
+def _chain(tmp_path: Path, answer: str) -> tuple[Path, dict]:
+    setup = X.SiteSetup(
+        site=X.plan_site("site-1"), lane=M.Lane.W, sources={"W": (X.wiki_doc("W", CHAIN), CHAIN)}
+    )
+    batch_dir = X.make_batch(tmp_path, [setup])
+    runner = X.ScriptedRunner({("site-1", "select"): CHAIN_SELECT})
+    assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir) == 0
+    assert _review(batch_dir, answer)[0] == 0
+    report = json.loads((batch_dir / B.REVIEW_REPORT).read_text(encoding="utf-8"))
+    return batch_dir, report["sites"][0]
+
+
+def _answer(*dropped: int) -> str:
+    lines = [f"R{n}: DROP x" if n in dropped else f"R{n}: KEEP" for n in range(1, 8)]
+    return "\n".join([*lines, "CARD: KEEP"])
+
+
+def test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along(tmp_path: Path) -> None:
+    """The import drops a kept sentence that leans on the sentence before it (`sentences.
+    leans_on_predecessor`, V6's rule) when that sentence is dropped - transitively, and recorded
+    under its own reason - so the site is judged on what remains instead of held by V6."""
+    batch_dir, row = _chain(tmp_path, _answer(2, 6))
+    assert row["lines"][1] == "R2: DROP x"  # the reviewer's own lines stay as it wrote them
+    assert row["kept"] == [1, 5]
+    assert row["followed"] == [
+        {"sentence": 3, "follows": 2, "reason": RV.FOLLOWS_A_DROP},
+        {"sentence": 4, "follows": 3, "reason": RV.FOLLOWS_A_DROP},
+        {"sentence": 7, "follows": 6, "reason": RV.FOLLOWS_A_DROP},
+    ]
+    (assembly,) = _written(batch_dir)
+    assert len(assembly.provenance.sentences) == 2
+    assert "It was enlarged" not in assembly.description
+    assert "Pottery sherds" not in assembly.description
+
+
+def test_a_pronoun_whose_predecessor_is_kept_stays(tmp_path: Path) -> None:
+    _, row = _chain(tmp_path, _answer(5))
+    assert row["kept"] == [1, 2, 3, 4, 6, 7] and row["followed"] == []
+
+
+def test_the_followed_drops_can_leave_too_few_sentences(tmp_path: Path) -> None:
+    """V9's floor and the two-sentence minimum still apply to what remains."""
+    batch_dir, row = _chain(tmp_path, _answer(2, 5, 6))
+    assert row["kept"] == [1] and row["outcome"] == "held"
+    (hold,) = X.holds_of(batch_dir)
+    assert hold.reason is M.HoldReason.REVIEW_TOO_FEW_SENTENCES
+
+
+#: The mass run's mid-run audit (2026-09-25, T2: Roman Bath, York): the article's lead is about a
+#: later pub that carries the Roman bath house's name, and the next sentence leans on it ("It is
+#: built above ..."). W1 names the site; nothing after it does.
+NAMESAKE = (
+    "The Old Bath is a listed public house on the market square of Eburacum. "
+    "It is built above the remains of a Roman bath house. "
+    "The bath house served the soldiers of the legionary fortress in the second century. "
+    "Roof tiles stamped with the names of two legions were found at the bath house site. "
+    "The caldarium and part of the hypocaust can still be seen by visitors today.\n"
+)
+
+
+def test_a_later_namesake_building_is_dropped_with_the_sentence_that_leans_on_it(
+    tmp_path: Path,
+) -> None:
+    """The reviewer's DROP of a sentence about a later building that shares the site's name goes
+    through the import's own cascade (`follow_drops`): the pronoun sentence after it goes too, and
+    the site is verified again on what is left - whose first sentence no longer names the site, so
+    V6 holds it (measured on the real case: `logs/p4_mass/measure_roman_bath_cascade.log`)."""
+    setup = X.SiteSetup(
+        site=X.plan_site("site-1", name="Old Bath"),
+        lane=M.Lane.W,
+        sources={"W": (X.wiki_doc("W", NAMESAKE), NAMESAKE)},
+    )
+    batch_dir = X.make_batch(tmp_path, [setup])
+    select = "".join(f"DESC: W{n}\n" for n in range(1, 6)) + "CARD: W4\n"
+    runner = X.ScriptedRunner({("site-1", "select"): select})
+    assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir) == 0
+    answer = (
+        "R1: DROP its subject is the pub, a later building that shares the site's name\n"
+        "R2: KEEP\nR3: KEEP\nR4: KEEP\nR5: KEEP\nCARD: KEEP"
+    )
+    v6 = M.Hold(site_id="site-1", scope=M.HoldScope.SITE, reason=M.HoldReason.V6, detail="d")
+    code, _, verifier = _review(batch_dir, answer, Verifier([(v6,)]))
+    assert code == 0
+    report = json.loads((batch_dir / B.REVIEW_REPORT).read_text(encoding="utf-8"))
+    row = report["sites"][0]
+    assert row["kept"] == [3, 4, 5]
+    assert row["followed"] == [{"sentence": 2, "follows": 1, "reason": RV.FOLLOWS_A_DROP}]
+    (shown,) = verifier.seen
+    assert shown.description.startswith("The bath house served the soldiers")
+    assert "public house" not in shown.description and "It is built" not in shown.description
+    assert row["outcome"] == "held" and _written(batch_dir) == []
+    assert [hold.reason for hold in X.holds_of(batch_dir)] == [M.HoldReason.V6]
 
 
 def test_a_dropped_card_sentence_rebuilds_the_card_from_the_rest(tmp_path: Path) -> None:

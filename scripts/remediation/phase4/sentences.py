@@ -50,8 +50,10 @@ The pool
 --------
 `candidate_pool` offers the lead and the first 6 sentences of each section that is not excluded
 (the English apparatus, and the same in the languages lane T reads), counting only sentences that
-can be published: a complete sentence (`is_complete_sentence`) that ends in `.`, `!` or `?` and is
-25-400 characters long. Lane S first keeps only sentences that carry a stored name or alias, or sit
+can be published: a complete sentence (`is_complete_sentence`) that ends in `.`, `!` or `?`, is
+25-400 characters long and is not `garbled` - a full stop before a lowercase word, or a
+preposition directly before a comma, the two garbles V5 holds (pilot 2, T5: Bassae, Vindobala).
+Lane S first keeps only sentences that carry a stored name or alias, or sit
 under a heading that carries one, both folded by `subject_gate.fold`. The pool stops before the
 121st sentence or the 24,001st character, and stays in source order.
 """
@@ -387,13 +389,76 @@ def names_in(value: str, names: Sequence[str]) -> bool:
     return False
 
 
+#: A full stop, whitespace and the next word character, with the run of non-space characters the
+#: stop ends (`garbled`).
+_STOP_THEN_WORD = re.compile(r"(\S*)\.\s+(\w)")
+#: A word of `model4.PREPOSITIONS_NO_COMMA`, lower case and whole, directly before a comma.
+_PREPOSITION_THEN_COMMA = re.compile(
+    r"(?<![\w'’-])(?:" + "|".join(re.escape(word) for word in M.PREPOSITIONS_NO_COMMA) + r"),"
+)
+#: What may open the word a full stop ends, before the word itself: a bracket or a quote.
+_OPENERS = "([\"'“‘«"
+
+
+def garbled(s: str) -> bool:
+    """Pilot 2 (T5): a sentence the selector is never offered because V5 would hold it.
+
+    Either a full stop inside the sentence, then whitespace, then a lowercase word (Bassae: "...
+    Cotylion Mountain. near the village") - unless the word the stop ends is a single letter or has
+    a full stop of its own (an initialism: `B.C. and`, `i.e. the`, `a.m. and`) - or a preposition
+    of `model4.PREPOSITIONS_NO_COMMA` directly before a comma (Vindobala: "the hamlet of,
+    Rudchester"). S2's reading of V5's two rules, in its own code; `verify4.ill_formed` is V5's."""
+    for match in _STOP_THEN_WORD.finditer(s):
+        word = match.group(1).lstrip(_OPENERS)
+        abbreviation = "." in word or (len(word) == 1 and word.isalpha())
+        if match.group(2).islower() and not abbreviation:
+            return True
+    return _PREPOSITION_THEN_COMMA.search(s) is not None
+
+
+#: A word as the pronoun rule reads it: a run of word characters, apostrophes and hyphens (`it's`
+#: and `self-it` are one word each, and neither is `it`).
+_WORD = re.compile(r"[\w'’-]+")
+
+
+def leans_on_predecessor(s: str) -> bool:
+    """Pilot 3 (T1, T4, T8): does the published sentence `s` lean on the sentence before it in its
+    source? It opens with a word of `model4.PRONOUN_OPENERS` that no letter follows; or its first
+    word of `model4.PERSONAL_PRONOUNS` (any case) is one of `model4.SUBJECT_PRONOUNS` and stands
+    right after the sentence's first comma, or right after the word `that` with no word of
+    `model4.ARTICLES` before it. The review's reading of V6's rule, in its own code (the review
+    drops such a sentence with a dropped predecessor, `review4.follow_drops`); `verify4.
+    leaning_pronoun` is V6's, and a parity test holds the two together."""
+    for opener in M.PRONOUN_OPENERS:
+        if s.startswith(opener) and not s[len(opener) : len(opener) + 1].isalpha():
+            return True
+    words = list(_WORD.finditer(s))
+    for index, word in enumerate(words):
+        if word.group().lower() not in M.PERSONAL_PRONOUNS:
+            continue
+        if word.group().lower() not in M.SUBJECT_PRONOUNS:
+            return False
+        head = s[: word.start()]
+        if head.endswith(", ") and head.find(", ") == len(head) - 2:
+            return True
+        before = words[index - 1].group() if index else ""
+        return (
+            before.lower() == "that"
+            and head.endswith(f"{before} ")
+            and not any(w.group().lower() in M.ARTICLES for w in words[:index])
+        )
+    return False
+
+
 def publishable(text: str, sentence: M.Sentence) -> bool:
-    """Can this sentence be offered at all: complete, terminated, 25-400 characters."""
+    """Can this sentence be offered at all: complete, terminated, 25-400 characters, and not
+    `garbled` (V5 holds a published sentence that is)."""
     s = sentence_text(text, sentence)
     return (
         MIN_SENTENCE_CHARS <= len(s) <= MAX_SENTENCE_CHARS
         and s[-1] in TERMINAL
         and is_complete_sentence(s)
+        and not garbled(s)
     )
 
 

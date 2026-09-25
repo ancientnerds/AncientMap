@@ -339,6 +339,12 @@ DESIGN_PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
 #: with the design's list alone and 0 carry one with it (2026-09-23). `*n't` is every contracted
 #: negation (`don't`, `won't`, `oughtn't`), in both apostrophes the extracts carry: `\bnot\b` never
 #: matches inside one (nor inside `cannot`).
+#:
+#: Pilot 2 (2026-09-24, T3; accepted by the orchestrator under D1) added the correction and contrast
+#: markers: a `p` drop published House of the Faun's statue as "a dancing faun" after removing
+#: "(actually a satyr, since the lower body is that of a man)", the passage's own correction. Over
+#: the 4,259 lane-W/S pools of the census run (89,072 pool sentences, 86,343 offered spans), 472
+#: offered spans carried one of these entries and are offered no more (2026-09-24).
 PROTECTED_TOKEN_ADDITIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         "hedges": (
@@ -346,7 +352,14 @@ PROTECTED_TOKEN_ADDITIONS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "purported*", "evidently", "assum*", "possible", "probable", "maybe",
         ),
         "negations": ("cannot", "*n't", "*n’t"),
-        "refutation": ("unknown",),
+        "contrast": (
+            "actually", "in fact", "in reality", "instead", "rather", "whilst", "nevertheless",
+            "nonetheless", "contrary", "unlike",
+        ),
+        "refutation": (
+            "unknown", "wrongly", "mistaken*", "erroneous*", "incorrect*", "misidentif*",
+            "misattribut*",
+        ),
     }
 )  # fmt: skip
 
@@ -363,6 +376,17 @@ PROTECTED_TOKENS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     }
 )
 
+#: V5 and S2's pool (pilot 2, 2026-09-24, T5; accepted by the orchestrator under D1): a word of this
+#: closed list is never directly followed by a comma in a published sentence. Vindobala published
+#: its source's "... and in the hamlet of, Rudchester, Northumberland." The list is the prepositions
+#: that take an object and stand as no adverb or particle (`later on,`, `inside,`, `built over,` are
+#: fine English and are not in it); matched in lower case as whole words. Data only: `sentences`
+#: and `verify4` each implement the match.
+PREPOSITIONS_NO_COMMA: tuple[str, ...] = (
+    "of", "at", "by", "for", "from", "into", "onto", "to", "upon", "with", "than", "until",
+    "during", "towards", "toward", "among", "amongst", "amid", "via",
+)  # fmt: skip
+
 #: V6's closed pronoun list. A sentence opening with one (as its first word or words, exactly as
 #: written here, followed by a non-letter) needs its source predecessor published right before
 #: it; a card never opens with one.
@@ -370,6 +394,23 @@ PRONOUN_OPENERS: tuple[str, ...] = (
     "It", "Its", "This", "These", "They", "Their", "He", "She", "His", "Her", "The latter",
     "The former", "Here", "There",
 )  # fmt: skip
+
+#: V6 and V10 past the first word (pilot 3, 2026-09-24, T1 and T4; accepted by the orchestrator
+#: under D1). A sentence also leans on the sentence before it in its source when its first word of
+#: `PERSONAL_PRONOUNS` (whole, any case) is a word of `SUBJECT_PRONOUNS` and stands right after the
+#: sentence's first comma (`, `), or right after the word `that` with no word of `ARTICLES` before
+#: it. Pilot 3 published Stanydale Temple's "Pottery sherds show that it was also occupied ..."
+#: without the sentence *it* refers to, and Dolebury Warren's card "Standing on a limestone ridge
+#: ..., it was made into a hill fort ...". The most precise of the measured candidates that holds
+#: both (AUDIT_LOG, pilot 4): over the census run's 88,936 pool sentences it binds 1,738 beyond the
+#: opener rule (46 of a sample of 60 refer outside their sentence), and in pilots 1-3's published
+#: texts it would have held 7 sentences and 1 card. Data only: `verify4` (V6, V10) and `sentences`
+#: (the review's drops) each implement the match.
+PERSONAL_PRONOUNS: tuple[str, ...] = (
+    "it", "its", "they", "their", "them", "he", "his", "him", "she", "her",
+)  # fmt: skip
+SUBJECT_PRONOUNS: tuple[str, ...] = ("it", "they", "he", "she")
+ARTICLES: tuple[str, ...] = ("the", "a", "an")
 
 #: The card's one spoken edit (card_texts: "the closed spoken-form rule 'c.'/'ca.' -> 'circa', so
 #: the narrator never reads a bare 'c'"), the one definition S4 (`assemble.spoken`) and V10 import
@@ -392,6 +433,12 @@ FETCH_FAILURES_FILE = "fetch.json"  #: model_stage.read_fetch_failures shape (A)
 LANES_FILE = "lanes.jsonl"  #: LaneAssignment, one per site of the batch (A3 -> B)
 ASSEMBLY_FILE = "assembly.jsonl"  #: Assembly after review (B3 -> C, D)
 HOLDS_FILE = "holds.jsonl"  #: Hold, every stage's (all -> D)
+#: The run's ledger, in the run directory (not a batch's): every ledger line the run's stages write -
+#: fetches, searches, model calls - and the only ledger a run's reader reads (the writer's journal
+#: evidence, the routes stage's search count). Pilots reuse the batch ids `p4-0001` .., so a ledger
+#: shared across runs mixed one pilot's calls into another's evidence (pilot 2's open item,
+#: 2026-09-24).
+LEDGER_FILE = "LEDGER.jsonl"
 
 #: The feature of each model call: its answer file (`answers/`, the reviewer's under `reviews/`),
 #: its prompt (`prompts/`, stored before the call) and its ledger label (`<site_id>/<feature>`).

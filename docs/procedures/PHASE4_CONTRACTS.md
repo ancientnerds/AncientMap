@@ -97,7 +97,8 @@ the world (a text, a marker, a hash), not a shape `model4` would refuse first.
   exact spans) and asserts identical span sets. Before the pilot the orchestrator also runs both
   finders over the same pools: any difference is a contract bug, fixed in the design reading, not
   by making one import the other. What both import is data, never a matcher of the other's:
-  `model4.PROTECTED_TOKENS` and `model4.CIRCA_PATTERN`. Measured on wip/p4-verify-sup
+  `model4.PROTECTED_TOKENS`, `model4.CIRCA_PATTERN` and (pilot 2's T5, section 7)
+  `model4.PREPOSITIONS_NO_COMMA`. Measured on wip/p4-verify-sup
   (2026-09-23, section 7 with the shared-comma refusal), read-only over the 3,661 local enwiki
   extracts: 170,528 sentences (81,979 of them in a lane-W pool, 144,272 spans offered by S2),
   **0** sentences on which the two finders differ, and every S2 sentence range is one sentence
@@ -123,6 +124,16 @@ Batch directory: `output/remediation/phase4_runner/runs/<run>/<batch>/` with `in
 `LANES_FILE`, `ASSEMBLY_FILE`, `HOLDS_FILE`). Cross-track JSONL is written with
 `model4.dump_jsonl` and read with `model4.load_jsonl`. Model answers stay write-once under the
 stage's own folder (`answers/`, `reviews/`), as in Phase 3.
+
+**The run's ledger is `<run>/LEDGER.jsonl`** (`model4.LEDGER_FILE`, 2026-09-24): every ledger line
+of the run's stages - fetches, searches, model calls - goes there, and it is the only ledger a reader
+of the run's per-batch lines reads (the writer's journal evidence, `write4.ledger_labels`; the
+routes stage's search count, `route_stage.queries_on_record`). `run4` derives it from `--run-dir`,
+`mass4` from its run directory (budget and search allowance included), `write_gate4` from `--run`;
+none of the three takes a `--ledger`. Why: batch ids repeat across runs - every pilot is `p4-0001`
+.. `p4-0009` - and pilots 1 and 2 shared `phase4_runner/LEDGER.jsonl`, so pilot 2's evidence would
+have listed pilot 1's calls for the 70 fixed members. That shared file (and `LEDGER.census.jsonl`)
+stays as the record of the runs that wrote it; no Phase-4 tool reads it any more.
 
 ## 5. What each track owns and must provide
 
@@ -179,7 +190,8 @@ Provides:
   datetime, probe, wait, sleep=time.sleep) -> int`: writes `src.T.*`, `src.R*` (and `src.W`, `src.D`
   for the sites S1b anchors), then `lanes.jsonl` (one `LaneAssignment` per site, lane 0 included),
   `routes.fetch.json`, `search.json`, `routes.json` (its report and completion mark; `queries` and
-  `search_requests` count the batch's route searches over every run of the stage, from the ledger)
+  `search_requests` count the batch's route searches over every run of the stage, from the run's
+  own ledger, section 4)
   and holds `no-source`, `search-stopped` (the budget), `fetch-failed` (a route that could not be
   asked, whenever no own English article was found), `moved-during-fetch` and `revision-too-fresh`
   (an article S1b found). `max_searches` bounds the queries this run may still send. `probe` is
@@ -349,6 +361,66 @@ D1; rule 1 of section 1 otherwise holds):
   survive by construction (card_texts; pilot T3 stops the run on one lost), and with the design
   list alone 990 offered spans of the 3,681 local enwiki pools carried one of these words
   (`Presumably, `, `, arguably,`, `, it seems,`, `don't`, `cannot`); with the additions 0.
+- **Pilot 2's additions to the protected tokens** (wip/p4-pilot, 2026-09-24, T3; accepted by the
+  orchestrator under D1). Pilot 2's audit found House of the Faun published as "a dancing faun": a
+  `p` drop removed "(actually a satyr, since the lower body is that of a man)", the passage's own
+  correction of its head noun, and no entry named a correction. `PROTECTED_TOKEN_ADDITIONS` gains
+  `contrast`: `actually`, `in fact`, `in reality`, `instead`, `rather` (so `rather than`),
+  `whilst`, `nevertheless`, `nonetheless`, `contrary`, `unlike` (`however` and `although` are the
+  design's already), and `refutation`: `wrongly`, `mistaken*`, `erroneous*`, `incorrect*`,
+  `misidentif*`, `misattribut*` (the pools offered "(sometimes erroneously written Barà)" - Arc de
+  Berà, a gold fixture - and "(which he misidentified as biblical Ramah)"). Measured over the census
+  run's 4,259 lane-W/S pools (`runs/census-2026-09-24`: 89,072 pool sentences, 86,343 offered
+  spans): **472** offered spans carried one of these entries and are offered no more (t 249, l 139,
+  a 56, p 28; per entry: rather 117, instead 76, unlike 71, in fact 43, actually 37, nevertheless
+  37, whilst 36, nonetheless 11, contrary 10, erroneous* 8, incorrect* 8, mistaken* 7, wrongly 6,
+  in reality 3, misidentif* 2, misattribut* 0). `indeed`, `really` and `so-called` were measured
+  (24, 4, 63) and left out: emphasis and labelling, not corrections. Both finders read the data, so
+  S2 and V4 refuse the same spans (five new `SPAN_CASES`).
+- **`PREPOSITIONS_NO_COMMA`** (wip/p4-pilot, 2026-09-24, T5; accepted under D1): the closed list of
+  prepositions V5 holds and S2's pool refuses directly before a comma - section 7, "Pilot 2's fixes".
+- **`LEDGER_FILE`** (wip/p4-pilot, 2026-09-24): the run's own ledger, section 4.
+- **`PERSONAL_PRONOUNS`, `SUBJECT_PRONOUNS`, `ARTICLES`** (wip/p4-pilot, 2026-09-24, pilot 3's T1/T4;
+  accepted under D1): the words of the pronoun rule past the first word, which V6, V10 and the
+  review's drops read - section 7, "Pilot 3's fixes".
+- **`country_lookup.SUBNATIONAL_NAME_TO_ISO`** (not `model4`'s; beside `NAME_TO_ISO`, pilot 3's V14
+  false hold): sub-national place names that carry a country's name, each with the ISO code of the
+  country it lies in - section 7, "Pilot 3's fixes".
+- **The demonym table is not `model4`'s** but `pipeline/utils/country_lookup.ISO_TO_DEMONYMS`, beside
+  `NAME_TO_ISO` - the country vocabulary it completes (T4/T6, 2026-09-24, on the orchestrator's
+  order). **Decision taken 2026-09-24 (the owner): design entry [6] wins** - its card_texts, RULES:
+  "No country name. That is the existing style rule ... Cultural adjectives such as Roman, Egyptian
+  or Maya are allowed." `country_lookup` splits the words in two, and V10 and the selector's rule (4)
+  read the split (section 7, "Pilot 3's decisions"):
+  (a) `ANCIENT_CULTURE_ADJECTIVES`, 74 words, each an ancient culture - the design's three examples,
+  the owner's list (Roman, Greek, Egyptian, Maya, Mayan, Inca, Aztec, Olmec, Toltec, Zapotec, Mixtec,
+  Moche, Nazca, Etruscan, Celtic, Gallic, Iberian, Phoenician, Punic, Carthaginian, Persian,
+  Assyrian, Babylonian, Sumerian, Akkadian, Hittite, Minoan, Mycenaean, Nabataean, Thracian, Dacian,
+  Scythian, Norse, Viking, Anglo-Saxon, Pictish, Khmer, Nubian, Kushite, Byzantine, Hellenistic,
+  Mesopotamian) and, chosen on the branch, the ancient cultures whose word the table carries
+  (Hellenic, Hellene, Macedonian: ancient Greece and Macedon), Roman Britain and Roman Gaul
+  (Romano-British, Gallo-Roman), three spellings (Incan, Nasca, Nabatean) and the ancient cultures of
+  the catalogue's regions the list does not name (Italic, Samnite, Cycladic, Nuragic, Illyrian,
+  Celtiberian, Sarmatian, Phrygian, Lydian, Lycian, Urartian, Achaemenid, Parthian, Sasanian,
+  Elamite, Canaanite, Meroitic, Aksumite, Harappan, Chavín, Tiwanaku, Wari, Chimú, Puebloan). A word
+  of (a) is never held, even where the same word is a modern demonym, nor its plural or `-man` noun,
+  nor a demonym inside it ("British" in "Romano-British"). (b) `MODERN_NATIONALITY_DEMONYMS`:
+  derived, every demonym of the table that is no word of (a) - 246 of its 251 distinct demonyms
+  (Egyptian, Greek, Hellene, Hellenic and Macedonian go to (a)) - what V10 holds (Danish, Spanish,
+  French, Italian, Turkish, Mexican, Peruvian, British, English, Irish, Maltese, ...). This retires
+  pilot 2's **safe reading** (any use held, an ancient culture's too: the orchestrator's order after
+  pilot 2's T6, from design entry **[0]**'s "no country value, alias or demonym", recorded here as a
+  departure from entry [6]). **What it costs:** a table cannot tell a culture from a nationality in
+  the same word - Bassae's "the first Greek site to be inscribed on the World Heritage List" means
+  Greece and passes V10 again; what such a card says is the reviewer's CARD line's and the audit's
+  (T6) to judge. A held card still keeps the site's old card (card scope), never the description.
+  Measured with `verify4.card_demonyms`, safe reading -> split: pilot 1's cards held 3 -> 1
+  (Al-Mnaykhrat "Greek rock-tomb" and "the Bronze Age and Romano-British period" pass, "Bulgarian"
+  stays held), pilot 2's 2 -> 1 (Bassae passes, "a Danish hill" stays held); over the census run's
+  4,259 lane-W/S pools, card-length (80-200 characters) sentences with a held demonym 4,912 -> 3,553
+  of 58,570 (Greek 1,104, Egyptian 153 and Greeks 100 no more, British 428 -> 322: the 106
+  Romano-British), and sites with a clean whole-sentence card candidate (no country, no held demonym,
+  no parentheses, no pronoun opener) 3,645 -> 3,656.
 - **`CIRCA_PATTERN`** (wip/p4-select-sup, decision D2): the one definition of the card's spoken
   edit; `assemble.spoken` (S4) and V10 import it, and no other phase-4 module compiles a circa
   pattern of its own (the splitter's abbreviation rule in `text_sentences` is not the edit).
@@ -570,8 +642,9 @@ apply the same rule, or read `HOLDS4.jsonl`.
 `prompts/`, `answers/`, `reviews/` (write-once, `EvidenceStore`); each LLM stage writes its file
 even when empty, and an absent one means the stage never ran. Reports: `select.json`,
 `translate.json`, `restricted.json` (per site: `label`, `prompt_sha256`, `answer_sha256`,
-`cost_usd`, `outcome`) and `review4.json` (per site: the reviewer's `lines`, `kept`, `card`, and at
-the top `assembly_sha256`). `assembly.jsonl` is written by `assemble` and rewritten by `review`
+`cost_usd`, `outcome`) and `review4.json` (per site: the reviewer's `lines`, `kept`, `followed` -
+the sentences dropped with a dropped predecessor they lean on, since pilot 3 - `card`, and at the
+top `assembly_sha256`). `assembly.jsonl` is written by `assemble` and rewritten by `review`
 with exactly the sites that passed; it counts as reviewed only when `review4.json` has
 `error: null` and its `assembly_sha256` is the file's (the design's "the reviewer answered").
 
@@ -668,6 +741,192 @@ now asks the selector for that first name.
   under another id) and asserts the same names. The lane-S pool filter (`candidate_pool`'s `names`)
   stays the stored names only: it mirrors V7, not V6, and lane S's verdict is `shared`, never a
   strong 'own'.
+
+### Pilot 2's fixes (2026-09-24): a correction, the demonyms, two garbles, the name's base
+
+Pilot 2 (`output/remediation/phase4_runner/PILOT_RESULT_2.md`, run `pilot2-2026-09-24`) passed T1, T2,
+T5 and T7 and failed T3 (House of the Faun: a `p` drop removed the passage's own correction "actually
+a satyr"), T4 and T6 (V10 let "a Danish hill" and "the first Greek site" through: no demonym table)
+and T8 (52 of 78 lane-W sites write-eligible); its T5 pass still named three rule gaps (Bassae,
+Vindobala, Bejsebakke). Under the thresholds' failure rule the causes were fixed before pilot 3; no
+threshold changed. Each fix keeps D3: the selection side and verify4 implement the rule each in its
+own code, and a parity test runs both over shared fixtures.
+
+- **T3, the protected tokens** - section 6 (`contrast` and `refutation` additions, 472 offered spans
+  fewer over the census pools); both finders read the data, five new `SPAN_CASES` hold them together.
+- **T4/T6, V10's demonyms** (narrowed before pilot 3's first answer: "Pilot 3's decisions" below) -
+  `verify4.card_demonyms` matches `country_lookup.ISO_TO_DEMONYMS`
+  (section 6; 199 country codes, 251 distinct demonyms) as whole words written as proper nouns, alone or
+  with a plural `s` or a `-man`/`-men`/`-woman`/`-women` noun ("Greeks", "Englishman"), and V10 holds
+  the card ("the card names a nationality: [...]", card scope). The selection side is the selector
+  question: rule (4) now reads
+
+      (4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no country and no nationality adjective such as Greek or Danish, has no parentheses, does not open with a pronoun, and states something concrete; prefer one that carries a date;
+
+  (`SELECTOR_QUESTION` sha256 `ce36085f...afb79c`, was `8969add9...baad046`; a test ties "Greek" and
+  "Danish" to the table). Measured: 3 of pilot 1's 47 cards and 2 of pilot 2's 49 carry a demonym;
+  over the census pools 4,924 of 58,622 sentences of card length (80-200 characters) do, and the
+  sites with at least one whole-sentence card candidate without a country, a demonym, parentheses or
+  a pronoun opener fall from 3,680 to 3,646 of 4,259.
+- **T5, two garbles V5 holds and S2 never offers.** `verify4.ill_formed` (V5) and
+  `sentences.garbled` (S2's `publishable`, so the pool) each implement: (a) a full stop, then
+  whitespace, then a lowercase word inside the sentence - unless the word the stop ends is a single
+  letter or carries a full stop of its own (an initialism: `B.C. and`, `i.e. the`, `a.m. and`,
+  `F. da Silva`), since that stop ends no sentence; the shared splitter never splits before a
+  lowercase word, so Bassae's source typo "Cotylion Mountain. near the village" reached the pool
+  whole; (b) a word of `model4.PREPOSITIONS_NO_COMMA` (`of at by for from into onto to upon with than
+  until during towards toward among amongst amid via`: the prepositions that stand as no adverb or
+  particle) in lower case, as a whole word, directly before a comma (Vindobala: "the hamlet of,
+  Rudchester"). A preposition stranded in a coordination ("1 km west of, and within sight of, the
+  town") is fine English and is refused too (D7). Measured over the census pools: (a) 186 and (b) 66
+  of the 89,072 pool sentences (156 and 65 sites; 251 sentences together) are offered no more; (a)
+  without the initialism exemption would have been 431, mostly `B.C.`, `i.e.`, `A.D.`.
+  `tests/remediation/p4_garble_cases.py` (27 cases) is the shared fixture. Bejsebakke's garble
+  ("This excavation was found among other traces more than 350 pit houses") has no deterministic
+  shape; **the reviewer question** gains, after the dangling-reference criterion:
+
+      DROP a sentence that is garbled or ungrammatical, even when it copies the source word for word.
+
+  (`REVIEWER_QUESTION` sha256 `59a1714e...a7d999`, was `529c9678...461d0cb3`.) The answer lines and
+  both parsers are unchanged; the pins in `test_phase4_select.py` were re-pinned with the reasons.
+- **T8, the stored name's base.** For a strong 'own' verdict of sentence 1's source (the same
+  condition as the title and the item label), V6 also accepts the stored name without its
+  disambiguator: `X (Y)` -> X when the name ends in one flat parenthetical group, else `X, Y` -> X
+  (the text before the first comma). Fold and token rules are unchanged (`name_in`); under any other
+  verdict nothing is added - "Clare, Suffolk", "Argos, Peloponnese" and "Marion, Cyprus" (place-level
+  or unverified articles) stay held, the Orolik/Clare trap. `verify4.name_base` and
+  `select_stage.name_base` each implement it; S3 shows the base as `also_named` (rule (7) already
+  names those); the parity test `test_s3_and_v6_accept_the_same_base_name` runs both over 12 names x
+  the 10 gate and witness cases of `NAME_PARITY_CASES`. **Measured on a scratch copy of pilot 2's run**
+  (its stored selections re-assembled and re-verified with this code): V6 holds fall from **16 to 14**
+  - Partiscum (Castra) and Al Thumamah, Riyadh pass; 9 of the 14 left are pronoun-adjacency holds, 5
+  name holds (Odeon Theatre and Ancient City of Perrin carry no disambiguator; the three traps above).
+  The same re-verification now holds every pilot-2 audit finding but Bejsebakke's deterministically:
+  House of the Faun (V4, `actually`), Arc de Berà (V4, `erroneous*`), Bassae and Vindobala (V5), and
+  the Danish, Greek, Australian and British cards (V10).
+
+### Pilot 3's decisions (2026-09-24, before its first answer): cultural adjectives, V6's pronoun rule
+
+Two owner decisions, taken after pilot 3's select export (87 questions, `ce36085f...`) and before any
+of them was answered; the questions were re-exported with the new selector question (section 8,
+AUDIT_LOG). No threshold changed, no model was asked.
+
+- **Decision 1 - design entry [6] wins** (section 6: `country_lookup`'s split into
+  `ANCIENT_CULTURE_ADJECTIVES` and `MODERN_NATIONALITY_DEMONYMS`). `verify4.card_demonyms` (V10)
+  matches (b) only - a whole word written as a proper noun, alone or with a plural `s` or a
+  `-man`/`-men`/`-woman`/`-women` noun - and drops a match that lies inside a match of (a), so
+  "Romano-British" passes and "a Romano-British villa in the British countryside" is held for the
+  second "British". The selection side is the selector question: rule (4) now reads
+
+      (4) CARD: pick 1-2 of your DESC sentences whose remaining text is 80-200 characters, names no country and no modern nationality adjective such as Danish or Spanish, has no parentheses, does not open with a pronoun, and states something concrete; cultural adjectives such as Roman, Egyptian or Maya are fine; prefer one that carries a date;
+
+  A test ties its examples to the data V10 reads: Danish and Spanish are in (b); Roman, Egyptian and
+  Maya are in (a) and not in (b).
+- **Decision 2 - V6's positional pronoun rule is stated to the selector as rule (10).** V6 holds a
+  published sentence that opens with a word of its closed list (`model4.PRONOUN_OPENERS`: It, Its,
+  This, These, They, Their, He, She, His, Her, The latter, The former, Here, There), read after the
+  edits - so a removed leading phrase can expose one - unless the sentence published right before it
+  is its source predecessor (the same source, nothing but whitespace between the two); sentence 1
+  therefore never opens with one, and no card item does (V10). Rule (9) only asks for an antecedent
+  among the picks, and 9 of pilot 2's 14 re-verified V6 holds broke this rule. The selector question
+  adds, after (9) and before the answer lines:
+
+      (10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, Her, The latter, The former, Here or There (after its removals) only if the sentence numbered one lower, in the same section, is also one of your DESC sentences; so your first DESC sentence never opens with one of these words.
+
+  "Numbered one lower, in the same section" is V6's adjacency as the selector sees its pool: the
+  published order is the source order (S4), sids number every sentence of the pinned text
+  consecutively (`split_source`), and a heading lies between two sections. Measured over every
+  consecutive sentence pair of the pinned texts: pilot 3's 96 texts, 6,575 pairs, all agree (same
+  section <=> only whitespace between); the census run's 4,259 texts, 207,655 of 207,656 - the one
+  exception is an article whose "See also" heading comes twice, where the rule is looser than V6 and
+  V6 holds. A test ties the rule's words to `model4.PRONOUN_OPENERS`, in its order.
+
+`SELECTOR_QUESTION` sha256 `85e6e47b...9066b701`, was `ce36085f...afb79c` (re-pinned in
+`test_phase4_select.py` with the reasons). The reviewer question, the answer lines and both parsers
+are unchanged; rule (9) stays verbatim. Mutation cases: 12 new in `P4_PILOT3_MUTATIONS` ("pilot 3,
+decision 1" and "decision 2"), four re-anchored on the lines this rewrote.
+
+### Pilot 3's fixes (2026-09-24, after its audit): the pronoun past the first word, the contradicted lead, sub-national names, the review's drops, the name V6 accepts
+
+Pilot 3 (`output/remediation/phase4_runner/PILOT_RESULT_3.md`, run `pilot3-2026-09-24`) failed T1
+(Stanydale Temple: "Pottery sherds show that it was also occupied ..." published without the sentence
+*it* refers to), T4 (Dolebury Warren's card "Standing on a limestone ridge ..., it was made into a
+hill fort ...", which V10 let through), T7 (Partiscum, CANARY-03: the lead the article's own body
+contradicts) and T8 (57 of 78 lane-W sites write-eligible, three of the holds pipeline defects).
+Under the thresholds' failure rule the causes were fixed before pilot 4; no threshold changed. The
+measurements are in AUDIT_LOG, "Phase-4 pilot 4, sealed before its first model question".
+
+- **T1 + T4, one gap: the pronoun past the first word.** The rule, in one sentence: *a sentence also
+  leans on the sentence before it in its source when its first word of `model4.PERSONAL_PRONOUNS`
+  (it, its, they, their, them, he, his, him, she, her; whole, any case) is one of `SUBJECT_PRONOUNS`
+  (it, they, he, she) and stands right after the sentence's first comma (`, `), or right after the
+  word "that" with no word of `ARTICLES` (the, a, an) before it.* A word is whole when no word
+  character, apostrophe or hyphen stands beside it (`item`, `it's` are no *it*). V6 holds such a
+  sentence unless its source predecessor is published right before it - exactly as it holds an
+  opener of `PRONOUN_OPENERS`, which still counts (`verify4.leaning_pronoun`, read after the edits);
+  V10 holds a card item that leans (card scope). **Measured cost**, over the census run's 88,936
+  lane-W/S pool sentences of 4,100 sites: the rule binds 1,738 beyond the opener rule (158 of them
+  have no adjacent predecessor in their pool, so they can never be published), 1 site loses its
+  last possible sentence 1 (3,806 -> 3,805), 915 of the 42,401 card-length plain sentences are held
+  as cards and 11 sites lose their last whole-sentence card candidate (3,656 -> 3,645); over pilots
+  1-3's published texts it holds 7 sentences and 1 card, every one a pronoun whose antecedent lies
+  outside its sentence (Stanydale's, the one the audit found broken; The Gop, the Altar Stone, Teman,
+  Dolebury Warren; Dolebury's card). Of fifteen candidates measured beside the opener rule it is the
+  most precise that holds both pilot-3 cases; a seeded sample of 60 of the 1,738, read by hand: 46
+  refer outside their sentence, 9 are an expletive *it*, 5 refer inside it. The selector's rule (10) adds: "The same
+  holds for a DESC sentence whose first it, its, they, their, them, he, his, him, she or her (after
+  its removals) is it, they, he or she and stands right after the sentence's first comma, or right
+  after "that" with no "the", "a" or "an" before it: "Standing on a ridge, it was made into a fort"
+  and "Pottery sherds show that it was occupied" need the sentence before them."; rule (4) says the
+  card "carries no pronoun that rule (10) ties to the sentence before it"; the reviewer gains "DROP a
+  sentence in which it, its, they, their, them, he, his, him, she or her - at its start, after a
+  fronted phrase or in a that-clause - refers to something no published sentence before it names, and
+  DROP the card when such a pronoun has no antecedent inside the card: the card is read on its own."
+  Tests tie the rule's words to the three lists, in their order.
+- **T7: a sentence another sentence of the article contradicts.** The selector's rule (11): "never
+  pick a sentence that another listed sentence contradicts, or reduces to a presumption, an
+  assumption or a dispute, even when it is the article's lead." **The gap:** the reviewer was shown,
+  per published sentence, the untrimmed source sentence, the two source sentences before it and its
+  heading - for a lead, nothing - so the sentences that contradict a published one were never in
+  front of it. `review4.passage` closes it: the reviewer's block (`prompts4.reviewer_block(site, rows,
+  card, *, passage)`) opens with `<source id="PASSAGE">`, the passage the sentences were chosen from -
+  the selector's pool for lanes W, S and T (`prompts4.pool_passage`: sid, section and text of every
+  candidate, bounded by the pool's 24,000 characters), every cited page whole for lane R
+  (`page_passage`). The question says "before them you see the passage the sentences were chosen
+  from (PASSAGE)" and gains "DROP a sentence that another sentence of the passage contradicts, or
+  reduces to a presumption, an assumption or a dispute, even when it is the article's lead; ask the
+  same of the card." No gold or canary anchor is matched in code or named in a prompt.
+- **V14: sub-national names that carry a country's name.** `country_lookup.SUBNATIONAL_NAME_TO_ISO`
+  (15 verified entries from a scan of the census pools for a `NAME_TO_ISO` name directly preceded by
+  a capitalised word or inside a longer proper name: New South Wales AU, New Mexico US, New England
+  US, Central, Western and Greek Macedonia and Eastern Macedonia and Thrace GR, West Azerbaijan
+  province IR, Upper Jordan Valley IL, Jordan Hill GB, Kraku Lu Jordan RS, El Peru GT, Inner Niger
+  Delta ML, Lapis Niger IT, Denmark Fjord GL). `verify4`'s country regex reads both tables, longest
+  first, so the whole name is read before the country inside it, and V14 compares the whole name's
+  code; "South Wales" stays Wales. V10 still holds a card that carries such a name. Measured: V14's
+  location holds over the census pools 74 -> 67 sentences (69 -> 62 sites).
+- **T8: a review drop takes along the sentence that leans on it.** `review4.follow_drops` runs after
+  the reviewer's verdict is parsed: a kept sentence that leans on the sentence before it
+  (`sentences.leans_on_predecessor`, the pronoun rule above in the review's own code) whose published
+  predecessor is dropped is dropped too, in order, so a chain goes whole; each is recorded in
+  `review4.json` under `followed` (`sentence`, `follows`, `reason`: `review4.FOLLOWS_A_DROP`,
+  `leans-on-a-dropped-sentence`), the reviewer's `lines` stay as written, and the site is judged on
+  what remains (two sentences at least; S4 and S5 again, V9 included). A parity test runs both
+  readings over `tests/remediation/p4_pronoun_cases.py`. Measured on pilot 3's answered reviews
+  (rebuilt read-only): 3 of 63 reviewed sites - Stanydale R6, Mersinaki R4, Diana Fort R4.
+- **Rule (7): the name V6 accepts, stated.** It now reads "(7) your first DESC sentence must name the
+  site: its name, an alias or an also_named name of the site element, all of that name's words in
+  their order with nothing but spaces or punctuation between them (case and accents do not matter); a
+  name written "X (Y)" - ending in one bracket with no bracket inside it - or else "X, Y" - X before
+  the first comma - is named by X alone only when also_named lists X; if no listed sentence names the
+  site so, answer ABSTAIN with that reason;" - `verify4.name_in` and pilot 2's `name_base`, which S3
+  lists in `also_named` exactly for a strong 'own' verdict. A test reads the two forms literally and
+  gets `name_base`'s base in verify4's and select_stage's code for 17 names.
+
+`SELECTOR_QUESTION` sha256 `a0b422e7...2a367ef93` (was `85e6e47b...9066b701`), `REVIEWER_QUESTION`
+`89e6035d...fc71e7523` (was `59a1714e...a7d999`), each re-pinned per fix in `test_phase4_select.py`
+with its reason. The answer lines and both parsers are unchanged. Mutation cases:
+`P4_PILOT4_MUTATIONS`, and five older ones re-anchored on the lines this rewrote.
 
 ## 7. What Track D decided, and the one thing it needs from Track B (2026-09-23)
 
@@ -769,8 +1028,11 @@ fields section 6 lists. What the design left open, and how the writer settled it
   held), so no row is planned from a verification of other bytes. `write_gate4` imports
   `phase4.verify4` when it plans P4.
 - **Entry points.** `write4.plan_writes(batch, *, group, **inputs)` dispatches to `plan_p4(batch,
-  *, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, written)` and `plan_cards(batch,
-  *, written, card_findings)`; `write4.load_batch(batch_dir)` reads the section-4 files strictly (a
+  *, scope, open_lanes, audited, verify, ledger)`, `plan_legacy(batch, *, written)` and
+  `plan_cards(batch, *, scope, written, card_findings)` (`scope` for P4 and P5 since 2026-09-24,
+  section 9; L takes none since the owner's decision of the same day, "Lane L marks every March-AI
+  text" there); `write4.load_legacy_plan(path)` reads lane L's own plan (section 9);
+  `write4.load_batch(batch_dir)` reads the section-4 files strictly (a
   site with neither an assembly nor a site hold is a hole and raises); `write4.render_apply(chunk,
   *, rehearse=False)`, `render_rollback(chunk)`, `apply_chunk(chunk, *, out, rehearse, runner,
   host)`; `write4.journal_evidence(assembly, *, texts, subject_gate, lane_detail, files, reviews,
@@ -817,3 +1079,209 @@ section (AUDIT_LOG, "the Phase-4 pilot, sealed before its first model question")
   draw of every seeded stratum excluding pilot 1's 62 draws (`PILOT2.jsonl`); `PILOT_THRESHOLDS.md`
   and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is `PLAN4.pilot2.jsonl` and
   its run `runs/pilot2-2026-09-24`. The fixes it runs with are section 7, "Pilot 1's fixes".
+- **Pilot 3** (2026-09-24, after pilot 2 failed T3, T4, T6 and T8): `pilot4 build --after PILOT.jsonl
+  --after PILOT2.jsonl --seed 20260925` - `--after` once per earlier pilot, each one's fixed members
+  refused unless site for site and in order, and a fresh draw of every seeded stratum excluding the
+  124 draws of pilots 1 and 2 (`PILOT3.jsonl`, sha256 `a4fa2f5f...f04152fc`); `PILOT_THRESHOLDS.md`
+  and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is `PLAN4.pilot3.jsonl` and
+  its run `runs/pilot3-2026-09-24`, whose ledger is its own (`runs/pilot3-2026-09-24/LEDGER.jsonl`,
+  section 4). The fixes it runs with are section 7, "Pilot 1's fixes" and "Pilot 2's fixes". Before
+  its first answer, section 7's "Pilot 3's decisions" changed the selector question, and its select
+  questions were exported again (`handoff/p4-pilot3-select`, 87 questions, the S0/S1/S1b results of
+  its run directory unchanged).
+- **Pilot 4** (2026-09-24, after pilot 3 failed T1, T4, T7 and T8): `pilot4 build --after PILOT.jsonl
+  --after PILOT2.jsonl --after PILOT3.jsonl --seed 20260926` (`pilot4.SEED_PILOT4`) - the same 70
+  fixed members, a fresh draw of every seeded stratum excluding the 186 draws of pilots 1-3
+  (`PILOT4.jsonl`, sha256 `30ab5e9d...57b2a26`; the B3 stratum's last 5 routeless sites);
+  `PILOT_THRESHOLDS.md` and `gold_prose_errors.json` stay pilot 1's, byte for byte. Its plan is
+  `PLAN4.pilot4.jsonl` and its run `runs/pilot4-2026-09-24` (its own ledger inside), its logs
+  `output/remediation/logs/p4_pilot4`. The fixes it runs with are section 7, "Pilot 1's fixes",
+  "Pilot 2's fixes", "Pilot 3's decisions" and "Pilot 3's fixes"; its select questions are in
+  `handoff/p4-pilot4-select` (90 questions, none answered).
+
+## 9. The owner's defect scope (wip/p4-pilot, 2026-09-24)
+
+Owner decision 2026-09-23 (Martin, "Nur Defekt-Sites (Recommended)"): after a passing Phase-4 pilot,
+Phases 4/5 write **only the sites with proven text defects** - the Phase-3 cleared defects plus the
+ungrounded card texts, in the design's order; every other site's description and card stay exactly
+as they are. Pilot 4 passed T1-T7 (`PILOT_RESULT_4.md`). The decision narrows the populations the
+design gives P4, L and P5 (production_write, VOLUME: "about 4,300-4,500 P4 sites") and, like every
+owner decision, ranks above the design.
+
+- **The scope is data, pinned.** `phase4/scope4.py` derives it; `phase4_runner/SCOPE4.json` (v1,
+  sha256 `19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a`, pinned in
+  `scope4.SCOPE_SHA256`) holds every site id with the lists it came from, the inputs' sha256 and the
+  site list's own digest; `plan4.py scope` rebuilds it byte for byte from `S0_ROWS.jsonl`
+  (`2c99f96f...`) and `logs/_write_dry/ALL_REFUSED.jsonl` (`7b4026d0...`). Three lists:
+  `phase3-cleared-description` 322, `phase3-cleared-card` 709, `ungrounded-card` 876 - 1,623 sites.
+  Its readers take that file or none: a file whose bytes are not the pin is refused (the gate ends
+  `WRITE_EXIT=1`). A new scope is a new version and a new pin, never an edit of the file.
+- **Which flags are a proven text defect.** `cleared-description-defect` and `cleared-card-defect`
+  (a defect Phase 3's reviewer cleared) and an ungrounded card (no `SiteFlag`; `scope4` derives it).
+  Not `t03` - its own comment says "order only" - and not `t03-severe` on its own: T03 names a
+  contradiction between the text's years and the period bucket, not which side is wrong. Its
+  findings are proposals for human review (the census counts 0 of them applicable), plan section 4.3
+  names two severe T03 patterns as false alarms (7, 8), V14 holds a severe finding "for reading" for
+  that reason, and of the 185 sites flagged severe on the description Phase 3's reviewer cleared the
+  description defect of 18 (in the scope already) and refuted it on 16. V9's waiver is a lower bar -
+  it lets a shorter text replace one that may be wrong - than the owner's "proven"; `t03-severe`
+  keeps that job, and the order, inside the scope. Counted, it would add 101 sites.
+- **The ungrounded cards, recomputed.** Plan section 5.1 counted 904 on 2026-09-19 (a card number
+  that never appeared in the generator's input, `LEFT(description, 500)` of snapshot d4526691) and
+  kept no list; `output/remediation` holds none. `scope4.ungrounded_card` applies the documented
+  method to `S0_ROWS.jsonl`, whose cards and descriptions are byte-identical to the census snapshot of
+  2026-09-20 for all 5,004 sites: a number is a numeral as written (ASCII digits, comma thousands
+  separators, a decimal part) read as its value, and it appeared when the same value is a numeral of
+  the input's first 500 characters - not a digit run inside a longer numeral. 876 cards; the plan's
+  three named examples (House of Taga, Hatunmarka, Maray Qalla) among them. One card that writes
+  numbers belongs to a site the snapshot does not have (Temple of Baalshamin, created after
+  d4526691): its input is unknown, so it is not claimed and the file lists it under `unclaimed`. The
+  2026-09-19 matcher was not kept, so 904 cannot be reproduced exactly; 40 readings of it measured on
+  the same data give 788-897 with Baalshamin counted (this one 877), and a digit-run substring match
+  does not even catch House of Taga (AUDIT_LOG, "The owner's defect scope").
+- **The refusal is the writer's, not a `HoldReason`.** `write4.RULE_OUT_OF_SCOPE =
+  "outside-defect-scope"` joins the writer's refusal rules (section 7): `plan_p4` and `plan_cards`
+  take `scope` as a required keyword (no default: a plan without it is a `TypeError`) and ask it
+  **before every other rule**, so a site outside the scope is counted under it whatever else would
+  hold it, and nothing of it is verified or read. `write_gate4` loads the pinned scope for P4 and
+  P5, prints it, counts the refusals on its "refused by rule" line, and has no flag to switch it
+  off.
+  (Until 2026-09-24 L was scoped too; see "Lane L marks every March-AI text" below.)
+  `model4` is unchanged (section 1, rule 1): no stage holds a site for the scope, because the mass
+  run's plan never carries one (below).
+- **L.** Not scoped since the owner's decision of 2026-09-24 ("Lane L marks every March-AI text",
+  below). From c9cf66e to that decision L marked only a scope site Phase 4 held, and the March texts
+  outside the scope stayed unmarked - the owner's question this section recorded as open.
+- **P5.** No card and no card clear outside the scope. A held card that is only ungrounded (not one
+  of the 709) keeps its text: the design clears the 709 alone.
+- **V9 inside the scope.** Its floor stays waived only for `cleared-description-defect` and
+  `t03-severe`. A site in the scope for its card alone keeps V9's 50 % floor on its description, so
+  `PILOT_RESULT_4.md`'s "this hold cannot occur for the defect sites of the mass run" holds for the
+  description defects only: Brewer's Castle, held V9 in pilot 4, is an ungrounded-card site.
+- **The mass run's plan** is `plan4.py build --pilot PILOT4.jsonl --defect-scope --out
+  PLAN4.scope.jsonl` (`plan4.write_scoped_plan`): the full plan's sites after the pilot's, in the
+  design's order (cleared defects, T03, the rest), only the scope's, in batches of 15 numbered after
+  the pilot's own (`p4-0010` on) - a journal stamp names its batch, so no mass batch reuses a pilot
+  id. Pilot 4's sites stay its run's (written or held there, never asked again); the draws of the
+  failed pilots 1-3 were never written and go in like any site. `mass4` prints, on every run, how
+  many sites of its open batches lie outside the scope, and refuses a live round that holds a model
+  stage while one does (a done batch asks nothing again, so re-driving a pilot's run is not refused).
+- **A re-plan without rows drops the statements an earlier plan rendered** for that round
+  (`write_gate4.drop_unwritten_statements`): the scope emptied pilot 4's `p4-0004`, whose
+  `APPLY.sql` from the unscoped dry run would otherwise have stayed beside an empty `PLAN.jsonl`. A
+  round's record (`APPLIED.json`, `REVERTED.json`) and a stopped batch's statements are never
+  touched.
+
+### Lane L marks every March-AI text (owner decision 2026-09-24; wip/p4-L, 2026-09-25)
+
+Owner decision 2026-09-24 (Martin, "Alle kennzeichnen (Recommended)"): lane L - which writes no
+text, only the provenance that makes a site show the existing "AI-generated text" footnote (EU AI
+Act Art. 50) - marks **every** March-AI text, not only the 1,623 sites of the defect scope. P4 and
+P5 stay scoped ("Nur Defekt-Sites"). What stays: a text equal to its pre-March state (d4526691) gets
+no marking (HUMAN_ONLY D7: its origin is not provable; `UNCLAIMED.jsonl`), and so does a site the
+snapshot lacks; a site whose description P4 wrote (live phase-4 provenance) is never touched by L; a
+provenance already present is never overwritten; L never changes a description. This restores the
+design's own reach: its P4 population was every curated site, so its "held sites" were every site P4
+did not write (licensing_and_ai_act: "so no LLM-processed text stays unmarked").
+
+- **The population.** Every curated site whose live description differs from d4526691's and that
+  carries no live phase-4 provenance - inside the scope or not. `write4.plan_legacy(batch, *,
+  written)` takes no scope (one handed to it is a `TypeError`); `write_gate4` neither reads nor asks
+  the scope for L and prints `LEGACY_UNSCOPED` instead of the scope line.
+- **L's own plan, not a run's batches.** Until this decision `write_gate4 --group L --run <run>`
+  planned the held sites of one run's plan batches (`p4l-NNNN` for `p4-NNNN`); a run's batches hold
+  only its own sites, so no plan over runs could reach the curated sites outside the scope. Now:
+  `plan4.py read --out LEGACY4_ROWS.jsonl` (the one read-only SELECT, a fresh read - never S0's
+  rows) and `plan4.py legacy` (offline) write `phase4_runner/LEGACY4.jsonl`: every curated site in
+  site-id order as a `PlanSite` without flags (they steer Phase 4's stages; L asks none), in batches
+  of 15 marked `pass: phase4-legacy` (`legacy4.PLAN_MARK`; a P4 plan's batches carry no `pass`) and
+  numbered from **p4-1001** (`legacy4.FIRST_BATCH`): past every P4 plan batch (unscoped p4-0334,
+  scoped mass run p4-0115), so no write batch `p4l-1001` .. or journal stamp
+  `phase4l:p4l-1NNN:chunk-NNNN` names a P4 plan batch or one of the per-run L plans rendered before.
+  `write4.load_legacy_plan` reads it strictly (the mark, a plan batch id, no batch id or site
+  twice); an L batch carries no stage outcome (no lanes, assemblies or holds - `holds` in an L row's
+  evidence is therefore empty; a scope site's P4 holds stay in its run's `HOLDS4.jsonl`).
+- **The gate.** `write_gate4.py --group L --legacy-plan <LEGACY4.jsonl>`, dry, `--rehearse` or
+  `--apply --step 100`, and `--accept` / `--close-reverted` like every group. L never takes `--run`;
+  P4 and P5 never take `--legacy-plan` (`plan_source_problem`): one L population, because a per-run
+  L plan beside it would put a site into two write batches of one lane. Production is asked,
+  read-only, which of the plan's sites carry a live phase-4 provenance (`written_sites`, windows of
+  200); they are refused `written-by-p4`. An apply root holding write batches of another L plan is
+  refused by name (`legacy_batches`): the acceptance's lane plan is every `PLAN.jsonl` in it. The
+  step's acceptance command names no run: `verify_writes4.py --lane p4l --plan <apply
+  root>/LANE_PLAN.jsonl` (lane p4l re-runs no verifier).
+- **When L is written: once the held set is final** (design, production_write, ORDER: "then the L
+  rows once the held set is final"). An L row changes `raw_data`; a scope site P4 writes after its L
+  row no longer holds the `raw_data` its P4 plan names, and P4's preflight refuses the whole P4
+  batch (fail-closed, never a silent overwrite; the way back is `revert4.py --stamp-like
+  'phase4l:...' --site <id>`). So `plan4.py read` and `plan4.py legacy` run **after the last P4 step
+  of the mass run is accepted**, and L's steps follow. Measured on 2026-09-25 (AUDIT_LOG): 1,115 of
+  L's 4,499 rows are sites of the mass run's plan, 29 of them in L's first step. A site P4 holds
+  under a lane whose pilot has not passed (T, R) is marked like any held site; should that lane open
+  later, its L row is reverted before its P4 write.
+- **The per-run L dry plans** rendered before (pilot 4: `logs/_write_apply_p4l/p4l-0001` ..
+  `p4l-0009`, dry, never rehearsed or written; `phase4l:%` journals 0 rows) are moved aside before
+  the first L plan is rendered into that apply root - the gate refuses otherwise.
+
+## 10. The mass run's mid-run audit: the later namesake building, and one written site taken back (wip/p4-pilot, 2026-09-25)
+
+The design's mass-run gate (entry [6], "MASS RUN GATES": "10 random written sites after every 500.
+Any T1, T2 or T3 hit stops the writes and triggers re-verification of every written site of that
+lane or rule; a systematic cause is reverted through revert4.py"). The mid-run audit of run
+`mass-2026-09-25` (45 written sites, `logs/p4_mass/MIDRUN_AUDIT_VERDICTS.json`) found one T2:
+Roman Bath, York (p4-0036), sentence 1 "The Roman Bath is a Grade II* listed public house ...", the
+pub built in 1929-31 over the Roman bath house the record stands for. AUDIT_LOG, "Phase-4 mass run:
+the mid-run audit's WRONG_SITE", has the evidence and the numbers.
+
+- **The reviewer question** (`prompts4.REVIEWER_QUESTION`, sha256 `097c4589...d7d143106a8`, was
+  `89e6035d...fc71e7523`) gains, right after the modern-place line: "DROP a sentence whose subject is
+  a later building, business or institution (a pub, hotel, house, museum, shop, church, station
+  ...) that shares or contains the site's name rather than the ancient site itself, even when it
+  names the site." The review import is unchanged: what leans on a dropped sentence goes with it
+  (`follow_drops`), and S4 and S5 run again - on Roman Bath, V6 then holds the site (sentence 1 of
+  what is left names it by no V6 name). **The selector question is unchanged** (`a0b422e7...`): its
+  rule (8) has the same gap, but the mass run's selector questions are answered under its pin, and
+  a changed selector would make every exported answer stale. Review questions exported under the old
+  pin and not imported are exported again (their answers kept, never deleted, in
+  `handoff/p4-mass-review-stale-reviewer-89e6035d`).
+- **No deterministic check.** The class is a question of which referent a sentence's subject has and
+  when it was built. Measured over the census run's 88,936 lane-W/S pool sentences and the 2,046
+  published sentences of the 336 written sites, "names the site and is/was a/an ... <noun>" with the
+  businesses (pub, inn, hotel, restaurant, bar, shop, ...) fires on Roman Bath and on one false
+  "bar"; with the buildings (house, museum, church, station, theatre, school, ...) on 48 census
+  sentences, most of them ancient members (a Roman house, a Roman theatre, a road station, an
+  open-air museum on its site) beside the true ones (an 18th-century house, a secondary school).
+  It cannot be stated precisely in one sentence, so no V-rule is added.
+- **`audit4.py hold --run-dir R --site <id> --audit <verdict file>`** writes the closed list's S6b
+  reasons, which `model4.HoldReason` has carried since WB-00 and no code wrote before: a WRONG_SITE
+  sentence `audit-wrong-site`, an UNSUPPORTED one `audit-unsupported` (site scope), a NOT_CONTAINED
+  card `audit-not-contained` (card scope). The hold goes into the `holds.jsonl` of the batch that
+  carries the site - its latest (`run4.aggregate_holds`) - after that batch's review, with the
+  detail `<file name> sha256 <digest>: sentence <n> <verdict>: <note>`; `HOLDS4.jsonl` is rewritten
+  (`run4.write_holds4`). `mass4.batch_done` is unaffected (the site is assembled and held), the
+  site leaves `audit4.reviewed_sites` (so `audit4 draw --written` refuses it while it is still live:
+  revert it first, or `--exclude` it), `write4.plan_p4` refuses it (`site-held`), and lane L treats
+  it as any held site. Refused, with nothing written: a site the file judges not exactly once, a
+  verdict outside `SUPPORTED | UNSUPPORTED | WRONG_SITE` or `CONTAINED | NOT_CONTAINED`, a record whose
+  `name` is not the site's, a site outside the run, a record without a finding. Idempotent.
+- **`revert4.py --site <id>`** narrows the matched writes to the rows journalled for that site
+  (`site_id_ref`), and nothing else: the set is fixed before anything moves and every guard, the
+  loop, both invariants and the reversal read after it run over it; without `--site` the statement
+  is the pinned one byte for byte. The chunk's other sites keep their writes; a later revert of the
+  whole chunk skips the site's rows (reverted already, section 7). `reversal_read` and
+  `reversal_counts` take the same `site`.
+- **`write_gate4` and a written batch re-planned without a site** (`sites_taken_back`). A written
+  batch still keeps the plan it was written from; the one re-plan it accepts is that plan without
+  the rows of whole sites, and only on production's read-only proof that every row the round wrote
+  for each such site has its own reversal kept (`reversal_counts(stamp, site=...)`). Otherwise it
+  refuses (`WRITE_EXIT=1`) and names `revert4.py --stamp-like <stamp> --site <id>`. `PLAN.jsonl`,
+  `APPLIED.json` and so `LANE_PLAN.jsonl` stay what was written.
+- **The acceptance after a site revert** is unchanged code (`verify_writes4.accept4`, section 7): the
+  site's lane rows have their own kept reversal, and its planned rows - still in the lane plan - are
+  judged like a reverted batch's, not yet written and at their old value; the rest of its chunk is
+  carried and verified again. 0 deviations (tested). A `--complete` acceptance names the site's two
+  rows `NOT WRITTEN`, as it would a reverted batch never written again.
+- **The operator's sequence**, per site: `audit4.py hold` (the reason, in the run), `revert4.py
+  --stamp-like '<its chunk's stamp>' --site <id>` rendered, `--rehearse`d, then `--apply`ed (the
+  orchestrator), `write_gate4.py ... --batch <its batch>` dry (the proof, read-only), and
+  `verify_writes4.py --lane p4 --plan <apply root>/LANE_PLAN.jsonl --run <every run>` (0 deviations).

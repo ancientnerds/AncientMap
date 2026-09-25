@@ -8165,6 +8165,672 @@ the run (or give pilot 2's model rounds their own `--ledger`) before step 6's co
 * `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
   this branch: merge it while no Phase-3 mass run is in flight.
 
+## 2026-09-24 - Phase-4 pilot 3, sealed before its first model question (no model called, nothing written)
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`). Pilot 2 failed T3, T4, T6 and T8
+(`output/remediation/phase4_runner/PILOT_RESULT_2.md`, commit `5773608`; the audit's verdicts are
+`pilot2_evidence/AUDIT_VERDICTS.json`). Under the failure rule of `PILOT_THRESHOLDS.md` the causes were
+fixed first, each with red-first tests and mutation cases, before this draw:
+
+* `c4614a0` (T3) - the protected tokens gain correction and contrast markers (`actually`, `in fact`,
+  `in reality`, `instead`, `rather`, `whilst`, `nevertheless`, `nonetheless`, `contrary`, `unlike`) and
+  error words (`wrongly`, `mistaken*`, `erroneous*`, `incorrect*`, `misidentif*`, `misattribut*`):
+  House of the Faun's `p` drop removed "(actually a satyr, since the lower body is that of a man)".
+  Over the census run's 4,259 lane-W/S pools (89,072 pool sentences, 86,343 offered spans) **472**
+  offered spans carried one and are offered no more.
+* `fff21ba` (T4/T6) - `pipeline/utils/country_lookup.ISO_TO_DEMONYMS`, the demonym table the design's
+  V10 promises: every one of `NAME_TO_ISO`'s 199 country codes with its nationality adjective and
+  people noun (the retired style rule's `DEMONYM_MAP` kept, completed). V10 holds a card with any
+  country's demonym (plural and `-man` nouns too; an ancient culture's use as well - the safe
+  reading); the selector's card rule (4) says "names no country and no nationality adjective such as
+  Greek or Danish". 3 of pilot 1's 47 and 2 of pilot 2's 49 cards carry one ("a Danish hill", "the
+  first Greek site"); over the census pools 4,924 of 58,622 card-length sentences do, and the sites
+  with a clean whole-sentence card candidate fall from 3,680 to 3,646.
+* `bc17222` (T5) - V5 holds, and S2's pool never offers, a sentence with a full stop before a
+  lowercase word (not after an initialism or a single letter; Bassae "Cotylion Mountain. near") or a
+  preposition of `model4.PREPOSITIONS_NO_COMMA` right before a comma (Vindobala "the hamlet of,
+  Rudchester"): 186 + 66 of the 89,072 pool sentences (251 together); the reviewer question gains
+  "DROP a sentence that is garbled or ungrammatical, even when it copies the source word for word."
+  (Bejsebakke). Selector question `ce36085f...`, reviewer question `59a1714e...`.
+* `1d5049b` (T8) - for a strong 'own' verdict V6 (and S3, in its own code) accepts the stored name's
+  base, `X (Y)` -> X and `X, Y` -> X; never for another verdict (Clare, Suffolk; Argos, Peloponnese;
+  Marion, Cyprus stay held). Re-verified on a scratch copy of pilot 2's run: V6 holds **16 -> 14**
+  (Partiscum (Castra); Al Thumamah, Riyadh). The same re-verification now holds House of the Faun (V4,
+  `actually`), Arc de Berà (V4, `erroneous*`), Bassae and Vindobala (V5) and the Danish, Greek,
+  Australian and British cards (V10).
+* `f7886af` (pilot 2's open item) - every run has its own ledger, `<run>/LEDGER.jsonl`
+  (`model4.LEDGER_FILE`); run4, mass4 and write_gate4 take no other, so pilot 1's calls in the shared
+  batch ids can never enter pilot 2's (or 3's) journal evidence.
+* `a1a5181` - `pilot4.py build --after` once per earlier pilot.
+
+**Nothing was written to production; no model and no MiniMax endpoint was called; production was not
+read for this draw** (the census, the export and the routeless read are pilot 1's, digests below).
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \
+        --after PILOT.jsonl --after PILOT2.jsonl --seed 20260925 --out PILOT3.jsonl
+
+(2026-09-24 06:59:32 UTC.) With this code, `build` without `--after` still writes pilot 1's
+`PILOT.jsonl` and `--after PILOT.jsonl --seed 20260924` pilot 2's `PILOT2.jsonl`, each byte for byte.
+
+### The pilot set (`PILOT3.jsonl`, 132 sites)
+
+Fixed, 70 sites: **exactly pilots 1's and 2's fixed members** - `build` refuses any list that is not
+each earlier pilot's fixed lines, site for site and in order; the 70 lines are byte-identical to the
+first 70 of `PILOT.jsonl` and of `PILOT2.jsonl`. The seeded strata are drawn anew with seed
+**20260925**, each excluding everything placed before it **and all 124 seeded draws of pilots 1 and
+2**: 0 sites of either earlier draw are in pilot 3.
+
+| stratum | asked | population | eligible | taken |
+|---|---|---|---|---|
+| draw-W (census lane W) | 30 | 3,887 | 3,776 | 30 |
+| draw-S (census lane S) | 8 | 372 | 344 | 8 |
+| draw-T-candidate | 6 | 38 | 26 | 6 |
+| draw-R-candidate | 8 | 252 | 235 | 8 |
+| draw-B3-routeless | 5 | 20 | 10 | 5 |
+| draw-extract-over-40000 | 5 | 65 | 53 | 5 (4 W, 1 S) |
+
+No stratum was smaller than asked. The census lanes of the 132: **W 78, S 18, 0 36**, as in pilot 2.
+The T and R strata are again candidates held `search-stopped` (searches off, owner order
+2026-09-23), reported and never guessed into a lane. The B3 stratum had 10 routeless sites left of
+20; a fourth pilot could draw only 5 more.
+
+### The sealed artefacts
+
+| file | sha256 |
+|---|---|
+| `output/remediation/phase4_runner/PILOT3.jsonl` (new) | `a4fa2f5ff26676374a48ced6fa249fc530d2003d340647e84581ef87f04152fc` |
+| `output/remediation/phase4_runner/PILOT_THRESHOLDS.md` (pilot 1's, unchanged) | `64ac53341068234c905cff00095a9d7244cd4703353f63bbd0997add63fe0c13` |
+| `output/remediation/phase4_runner/gold_prose_errors.json` (pilot 1's, unchanged) | `e4e63d56cbc9cca0f9cea018967fac40e897faddb9c43ad064e6203a74ebb7df` |
+
+The thresholds are the ones sealed before pilot 1's first question, byte for byte: nothing in them
+was changed or loosened after pilot 1's or pilot 2's data was seen (`test_phase4_pilot.py` pins all
+three digests to this section). The draw's inputs: `PILOT.jsonl` `7f66f987...e063fc`, `PILOT2.jsonl`
+`9caaaa03...cc9f81c`, `PLAN4.census.jsonl` `644b9032...d4676b591`, `S0_ROUTELESS.json`
+`81c3b426...37997746`, `gold_standard/sites.json` `18653fc1...b2756`, `qid_repair/PLAN.jsonl`
+`9d57b431...a6ce4f`.
+
+## 2026-09-24 - Phase-4 pilot 3's non-model stages and its select export (no model called, nothing written)
+
+After the seal above (commit `30dccce`, 09:01:34 +02:00; the first question was exported at 09:02:16),
+`plan4.py build --pilot PILOT3.jsonl --out PLAN4.pilot3.jsonl` wrote pilot 3's plan from the same
+export as the census and pilots 1 and 2 (`S0_ROWS.jsonl` `2c99f96f...72a8`; sha256
+`5854486313ab874c155bcb04761e173cdfc942fa4781fa7245db83602cc52468`, gitignored): **pilot 3 is its first
+9 batches, `p4-0001` .. `p4-0009`** (8 x 15 + 12, in PILOT3.jsonl's order), 334 batches in all, the
+same flags as pilot 2's plan. Pilot 1's and pilot 2's plans and run directories are untouched.
+
+    mass4.py --plan PLAN4.pilot3.jsonl --run-dir runs/pilot3-2026-09-24 --log-dir logs/p4_pilot3 \
+        --only p4-0001,..,p4-0009 --live --stages prepare,sources,routes,select --searches-off \
+        --handoff-export output/remediation/handoff/p4-pilot3-select --jobs 3
+
+2026-09-24 07:01:59-07:03:41 UTC, `STAGE_EXIT=0`, every batch "done" for its round. **The run's own
+ledger** (`runs/pilot3-2026-09-24/LEDGER.jsonl`, `model4.LEDGER_FILE`; the shared
+`phase4_runner/LEDGER.jsonl` was not written): 231 fetch lines (en.wikipedia.org 160, www.wikidata.org
+54, it/ca/tr/fr/de.wikipedia.org 17), all 200, none given up; 0 searches; 0 model calls. Every lane
+equals the census's.
+
+| stage | result |
+|---|---|
+| S0 plan | 132 sites in 9 batches |
+| S1 sources | pinned 96, scope-pending 3, no-title 20, rejected 13 |
+| S1b routes | **lane W 78, S 18, 0 36**; 0 searches |
+| S3 select, export | **87 questions** (lane W 78, lane S 9); prompts 2,466-29,810 characters, median 5,467; 23 carry a non-empty `also_named` (the pinned title, the item label or - new - the stored name's base V6 accepts for a strong 'own' verdict) |
+| S3R restricted | no lane-R site: nothing asked |
+
+Every exported prompt carries the selector question `ce36085f...` (rules (6)-(9) and the card rule
+(4) with the nationality adjectives), and every pool is built with this branch's spans (the
+correction and contrast markers protected) and without the two garbles V5 holds. The 96 selecting
+sites minus 87 questions are 9 lane-S sites whose article offers no sentence that names them; the
+import holds them `no-source` with no call bought: Amyntas Rock Tombs, Priene Ruins, Hebbariyeh
+Roman Temple (gold), Templos de Tarxien (identity trap) - the four pilot 2 held the same way - and
+five of the eight new lane-S draws: Aspendos Theatre, Dungur Palace (Queen of Sheba Palace), Dacian
+Fortress Costesti, Ciudad Romana de Cáparra, The Temple of Artemis-Selçuk.
+
+**The 36 holds** (`HOLDS4.jsonl`): the 17 of the fixed members are pilot 2's, reason for reason
+(`scope-pending` 3: Midford Castle, Ksar el Barka, Museo Campano; `search-stopped` 14: Font dels
+Coms, Temple of Dedun, El Tintal, Ahin Posh Tape, Tlalpan, Estipeon, Crantit Chambered Cairn, the 3
+'Theatre' and 4 'Mortuary temple' traps); the 19 new are the T, R and B3 candidates, all
+`search-stopped` (6 T: Tomba dei Giganti e Nuraghe Imbertighe, Necropoli di Realmese, Poblat
+Talaiòtic de Talatí de Dalt, Ayanis Kalesi, Table des Marchand, Karasis Kalesi; 8 R: Gavur Kalesi,
+Archaeological Site of Eleusis, Medusa Mozaiği, Ancient City of Sillyon, Cueva del Maguey, Upuigma
+Rock Shelter, Kinichná, Ancient Theatre of Thassos; 5 B3: Cras - Ring Cairn to North of, Tapınak,
+GOLOGOÇ VİRANŞEHİR ŞANLIURFA TARİHİ KEMER, Foel Dduarth Enclosure, "Cras  Round Cairn" - two spaces in the stored name).
+
+**Handoff directory** `output/remediation/handoff/p4-pilot3-select` (gitignored, 933 KB, stage
+`finder`, labels `<site_id>/select`). `opus_handoff.py validate`: 87 questions, 87 missing, 0
+answered, 0 stale, 0 malformed, 0 orphans (exit 1 until they are answered). The run directory
+`runs/pilot3-2026-09-24` (7.7 MB, gitignored, its ledger inside) travels with it.
+
+**T7 for pilot 3** is pilot 2's (the same fixed members): El Tintal, Ahin Posh Tape (canaries), FC-2
+(Font dels Coms) and TD-1 (Temple of Dedun) sit on sites held `search-stopped`, AM-1 (Amyntas Rock
+Tombs) on a lane-S site the import holds `no-source` - closed-list reasons; the other 20 are asked.
+
+### The select questions re-exported before any answer (two owner decisions, 2026-09-24)
+
+None of the 87 questions above had been answered (`opus_handoff.py validate`: 87 questions, 0
+answered, 87 missing) when the owner took two decisions; both are recorded in PHASE4_CONTRACTS.md
+(section 6, and section 7 "Pilot 3's decisions"):
+
+1. **Design entry [6] wins** - "Cultural adjectives such as Roman, Egyptian or Maya are allowed".
+   `pipeline/utils/country_lookup.py` splits the demonyms into `ANCIENT_CULTURE_ADJECTIVES` (74
+   words, each an ancient culture: the design's three examples, the owner's list of 42, Hellenic,
+   Hellene and Macedonian - ancient Greece and Macedon, which the table carries as modern demonyms -,
+   Romano-British and Gallo-Roman, three spellings and 24 more ancient cultures of the catalogue's
+   regions; never held, nor their plurals, `-man` nouns or a demonym inside them) and
+   `MODERN_NATIONALITY_DEMONYMS` (the table without them: what V10 holds). Pilot 2's safe reading
+   is retired. Measured (`verify4.card_demonyms`, safe reading -> split): pilot 1's held cards 3 -> 1
+   and pilot 2's 2 -> 1 - "Bulgarian" and "a Danish hill" stay held; Al-Mnaykhrat's "Greek
+   rock-tomb", "the Bronze Age and Romano-British period" and Bassae's "the first Greek site to be
+   inscribed on the World Heritage List" pass (the last means Greece: the reviewer's CARD line and
+   the audit, T6, judge it now); over the census run's lane-W/S pools the card-length sentences with
+   a held demonym fall from 4,912 to 3,553 of 58,570, and the sites with a clean whole-sentence card
+   candidate rise from 3,645 to 3,656 of 4,259.
+2. **V6's positional pronoun rule is the selector's rule (10)**, after (9): "(10) a DESC sentence
+   may open with It, Its, This, These, They, Their, He, She, His, Her, The latter, The former, Here
+   or There (after its removals) only if the sentence numbered one lower, in the same section, is
+   also one of your DESC sentences; so your first DESC sentence never opens with one of these
+   words." Rule (4) now reads "... names no country and no modern nationality adjective such as
+   Danish or Spanish, has no parentheses, does not open with a pronoun, and states something
+   concrete; cultural adjectives such as Roman, Egyptian or Maya are fine; prefer one that carries a
+   date;". The wording "numbered one lower, in the same section" agrees with V6's adjacency (same
+   source, only whitespace between) on all 6,575 consecutive sentence pairs of pilot 3's 96 pinned
+   texts, and on 207,655 of 207,656 over the census run's 4,259 (one article repeats its "See also"
+   heading; there V6 is the stricter and holds).
+
+Selector question sha256 `85e6e47b17aa30abdf415e797e8c95def4a83aef489f7d617e658bb39066b701` (was
+`ce36085f...afb79c`); the reviewer question `59a1714e...a7d999`, the answer lines and the parsers are
+unchanged.
+
+**The re-export.** The first export was moved out of the tree, compared with the new one below and
+deleted; then only S3's export ran again, over the S0/S1/S1b results already in the run directory:
+
+    mass4.py --plan PLAN4.pilot3.jsonl --run-dir runs/pilot3-2026-09-24 --log-dir logs/p4_pilot3 \
+        --only p4-0001,..,p4-0009 --live --stages select --searches-off \
+        --handoff-export output/remediation/handoff/p4-pilot3-select --jobs 3
+
+2026-09-24 08:21:13-08:21:20 UTC, `STAGE_EXIT=0`, every batch "done" for its round. **No per-batch
+state had to be reset**: the first export ran the stage over a scratch copy of each batch directory
+(`run4.handed_off`), so none of its selections, answers, reports, holds or ledger lines was ever in
+the run directory, and `mass4` keeps no other round state than `batch_done` (the review's
+`review4.json`, absent) and its progress file, which every run rewrites
+(`logs/p4_pilot3/progress.json`). **Nothing was fetched**: the run directory's 764 files - ledger,
+`HOLDS4.jsonl` (rewritten to the same bytes, 36 holds), lanes, evidence, the stage reports - are
+byte-identical before and after (sha256 of every file), and the ledger still has its 231 fetch lines,
+0 searches and 0 model calls. **87 questions** again (p4-0001 .. p4-0009: 12, 12, 12, 10, 8, 15, 12, 1,
+5), the same 87 labels; every prompt's site block is byte-identical to the first export's and only
+its question differs (`ce36085f...` -> `85e6e47b...`, 382 characters longer: prompts 2,848-30,192
+characters, median 5,849). `opus_handoff.py validate`: 87 questions, 0 answered, 87 missing, 0 stale,
+0 malformed, 0 orphans (969 KB). `PILOT3.jsonl` (`a4fa2f5f...`), `PILOT_THRESHOLDS.md` (`64ac5334...`)
+and `PLAN4.pilot3.jsonl` (`58544863...`) are byte-identical. No model and no MiniMax endpoint was
+called; production was neither read nor written. The read-only measurements are
+`logs/p4_pilot3/measure_v10_split.py`, `check_rule10_adjacency.py` and `compare_reexport.py`
+(gitignored).
+
+### The orchestrator's next commands (from this worktree, main venv)
+
+```bash
+cd /c/PythonProjects/AncientMap/.claude/worktrees/p4-pilot && export PYTHONIOENCODING=utf-8
+PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+P4=scripts/remediation/phase4; OH=scripts/remediation/opus_handoff.py; H=$M/handoff/p4-pilot3
+RUN=$R4/runs/pilot3-2026-09-24; ONLY=p4-0001,p4-0002,p4-0003,p4-0004,p4-0005,p4-0006,p4-0007,p4-0008,p4-0009
+ROUND="--plan $R4/PLAN4.pilot3.jsonl --run-dir $RUN --log-dir $M/logs/p4_pilot3 --only $ONLY --searches-off --live"
+# every stage writes the run's own ledger, $RUN/LEDGER.jsonl; no command takes --ledger any more
+# 1. answer the 87 selector questions: for each line of $H-select/*/MANIFEST.jsonl, an Opus agent reads
+#    $H-select/<prompt_path>, follows the question's rules (1)-(10), writes only DESC:/CARD: lines (or
+#    ABSTAIN:) to a file, and runs
+$PY $OH answer --dir $H-select --batch-id <batch_id> --stage finder --label <site_id>/select \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-select                                   # exit 0: 87 answered
+$PY $P4/mass4.py $ROUND --stages select --handoff-import $H-select  # S3 (+S3R: nothing to ask)
+# 2. the translate round: lane T is empty, so the export writes no question and no directory -
+#    skip `validate` when every batch reports 0 calls; the import still runs assemble and verify
+$PY $P4/mass4.py $ROUND --stages translate --handoff-export $H-translate
+$PY $P4/mass4.py $ROUND --stages translate,assemble,verify --handoff-import $H-translate
+# 3. the review round (stage `reviewer`, labels <site_id>/review)
+$PY $P4/mass4.py $ROUND --stages review --handoff-export $H-review
+$PY $OH answer --dir $H-review --batch-id <batch_id> --stage reviewer --label <site_id>/review \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-review
+$PY $P4/mass4.py $ROUND --stages review --handoff-import $H-review  # the batches are then done
+$PY $P4/run4.py holds --run-dir $RUN                               # HOLDS4.jsonl
+# 4. the Claude Code audit of every sentence and card of pilot 3 (design S6b; T1-T7, T5 "broken"
+#    included), against the pinned passages and gold_prose_errors.json - never the reviewer's verdicts
+$PY -c "import sys; sys.path.insert(0, 'scripts/remediation'); from pathlib import Path; \
+from phase4 import audit4; print('\n'.join(sorted(audit4.reviewed_sites(Path('$RUN')))))" > $M/logs/p4_pilot3/reviewed.txt
+$PY $P4/audit4.py sheet --run-dir $RUN --site-ids $M/logs/p4_pilot3/reviewed.txt --out $M/logs/p4_pilot3/AUDIT_SHEETS.md
+# 5. score T1-T13 against PILOT_THRESHOLDS.md (unchanged since pilot 1); keep $RUN/LEDGER.jsonl and
+#    HOLDS4.jsonl with the audit verdicts (pilot3_evidence/), as pilots 1 and 2 did; only passing lanes open
+# 6. P4 and P5 rehearsed against production (APPLY ending in ROLLBACK; nothing is written); the P4
+#    plan reads $RUN/LEDGER.jsonl and no other
+$PY $M/tools/write_gate4.py --group P4 --run pilot3-2026-09-24 --open-lanes W,S            # dry: plan + render
+$PY $M/tools/write_gate4.py --group P4 --run pilot3-2026-09-24 --open-lanes W,S --rehearse
+$PY $M/tools/write_gate4.py --group P5 --run pilot3-2026-09-24 --rehearse
+```
+
+### Tests, sweep, gates for pilot 2's fixes and pilot 3 (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 22 new test functions, each red before its code: `test_phase4_verify.py` +9 (the correction
+  markers V4 refuses; a card naming a nationality; the two garbles V5 holds, over the shared
+  `p4_garble_cases.py` and against S2's; the stored name's base, for a strong 'own' verdict only,
+  and its S3/V6 parity over 12 names x 10 gate and witness cases), `test_phase4_pilot.py` +4 (pilot
+  3's draw, its refusal of an earlier pilot whose fixed members moved, the seal, the sealed file),
+  `tests/pipeline/test_country_demonyms.py` +4 (new: the table covers `NAME_TO_ISO` exactly, proper
+  nouns, the modern adjectives, the retired style rule's demonyms kept), `test_phase4_select.py` +2
+  (card rule (4), the reviewer's garble DROP), `test_phase4_sentences.py` +2 (the garble fixture, the
+  pool), `test_phase4_write.py` +1 (the gate reads the ledger of its own run only: pilot 1's labels
+  never reach pilot 2's evidence). Extended: 5 `SPAN_CASES`, 16 S2 protected-token cases, the
+  `model4` additions pin, S1, S1b and the select round handed the run's ledger, mass4's ledger, and
+  the 47 write-gate call sites moved to the run's ledger. Red first, measured: T3 28 failures, T4/T6
+  two collection errors (no table), T5 77 failures, T8 50, the ledger `AttributeError` (no
+  `LEDGER_FILE`), pilot 3 5 failures.
+* `mutation_sweep.P4_PILOT3_MUTATIONS`: 42 cases (`p4 verify4` 16, `p4 sentences` 6, `p4 pilot` 5,
+  `p4 model` 3, `p4 country_lookup` 3, `p4 select` 3, `p4 prompts` 2, `p4 run4` 2, `p4 write_gate4`
+  1, `p4 mass4` 1), registered once; three older cases re-anchored on lines this branch rewrote (`p4
+  model: unknown is not protected`, `p4 pilot: pilot 2 takes fixed members other than pilot 1's`,
+  `p4 pilot: build ignores the earlier pilot it is told`); 2,015 labels, all unique, every anchor and
+  test present. The sweep's own `main` over **every case whose target is a file this branch changed
+  since `5773608`** (verify4 189, write4 97, model4 80, sentences 61, route_stage 56, mass4 45,
+  write_gate4 35, pilot4 33, run4 28, select_stage 20, prompts4 12, mutation_sweep 3, lanes 3,
+  PILOT_THRESHOLDS.md 3, AUDIT_LOG.md 3, country_lookup 3): **671 cases, 670 caught on the first run**
+  - `p4 sentences: an overlong sentence is offered` survived because the new garble rule refused its
+  test's long sentence ("old. and a fragment.") before the length bound was read; the test was
+  re-isolated (`e338225`) and the case is caught - **671/671**; the tree byte-identical to the
+  sweep's start for its 16 files; no `# mutant` left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **6,060 passed, 111 skipped, 57 deselected, 0 failed** (318.7 s). The first run had 1 failure,
+  `test_every_mutation_names_an_anchor_and_a_test_that_exist` (the two pilot-2 cases above; fixed in
+  `c88d72a`). The skips are the same 111 as before: gitignored data (Natural Earth, the snapshot, the
+  worklist, the bcases cache, the Phase-3 enwiki extracts, ...), two tests of refactored-out legacy
+  functions and one opt-in live test. After `e338225` (one test's data) the Phase-4 files and the
+  sweep test were run again: 1,580 passed.
+* `ruff check` and `ruff format --check` clean on the 24 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check (country_lookup is under
+  `pipeline/`, which both images ship) passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
+### Tests, sweep, gates for the two decisions (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 9 new test functions, each red before its code (33 new test items with the parametrizations):
+  `tests/pipeline/test_country_demonyms.py` +5 (the owner's cultures are in (a); (a) is written as
+  proper nouns and names no country; (b) is the table without (a) and disjoint from it; 16 modern
+  nationalities held; Greek, Hellenic, Hellene, Egyptian, Macedonian in the table and not held),
+  `test_phase4_verify.py` +3 (six culture cards pass V10 - Egyptian, Roman, Maya, Greek, Greeks,
+  Hellenistic, Hellenic, Macedonian(s), Romano-British, Egyptians, Hellenes, Norsemen; no word of (a)
+  is ever held, alone, as a plural or a `-men` noun; a full V10 case holds "Danish" and passes
+  "Egyptian"), `test_phase4_select.py` +1 (rule (10) verbatim after (9), its words
+  `model4.PRONOUN_OPENERS` in order). Rewritten: the card-rule test (the new rule (4); Danish and
+  Spanish in (b), Roman, Egyptian and Maya in (a) and not in (b)) and the V10 nationality test (its
+  Greek examples moved to the culture test); pilot 1's rules test no longer ends at the answer lines.
+  Red first, measured: all three files a collection error (no `ANCIENT_CULTURE_ADJECTIVES`); with the
+  data alone, 10 failures (8 V10, 2 selector question).
+* `mutation_sweep.P4_PILOT3_MUTATIONS`: 12 new cases ("pilot 3, decision 1": `p4 country_lookup` 5,
+  `p4 verify4` 3, `p4 prompts` 1; "decision 2": `p4 prompts` 2, `p4 model` 1) and 4 re-anchored on
+  the lines this rewrote (`p4 verify4`: plural or -man noun, lower-case word, inside a longer word;
+  `p4 prompts`: the card's nationality adjective); 2,027 labels, all unique, every anchor and test
+  present. The sweep's own `main` over **every case whose target this change touched** (verify4 192,
+  prompts4 15, country_lookup 8, mutation_sweep 3, AUDIT_LOG.md 3) plus the new `p4 model` case:
+  **222/222 caught**; the tree byte-identical to the sweep's start for its 6 files; no `# mutant` left
+  (driver `logs/p4_pilot3/sweep_decisions.py`, log `sweep_decisions.log`).
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **6,093 passed, 111 skipped, 57 deselected, 0 failed** (310.8 s); the skips are the same 111.
+* `ruff check` and `ruff format --check` clean on the 7 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check (`country_lookup` is under
+  `pipeline/`) passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
+### Open
+
+* ~~The demonym table's safe reading departs from one sentence of the final design~~ - **decided
+  2026-09-24 by the owner: design entry [6] wins** (cultural adjectives pass V10; "The select
+  questions re-exported before any answer" above). Open with it: a word that is both a culture and a
+  nationality passes whatever it means ("the first Greek site to be inscribed" means Greece) - the
+  reviewer's CARD line and the audit judge such a card.
+* **T8 may fail again.** Pilot 2's own selections, re-verified with this branch: 51 of 78 lane-W
+  sites pass before review (V6 14 - 9 of them the pronoun rule, a sentence opening with It, This,
+  These, ... whose immediate source predecessor is not published right before it - abstained 7, V14
+  6, V4 2, V8 1, V5 1; a site may carry several). The selector question does not state V6's
+  positional pronoun rule; rule (9) asks only for an antecedent among the picks. Pilot 3's selector
+  picks anew, so the number is not its result. **Done 2026-09-24:** the rule is the selector's rule
+  (10), and the 87 questions were re-exported before any answer (above).
+* 5 of pilot 3's 8 new lane-S draws offer no name-bearing sentence and are held `no-source` without a
+  question (lane S is not in T8).
+* Pilot 3's ledger lives in its gitignored run directory; keep it with `HOLDS4.jsonl` and the audit
+  verdicts in `pilot3_evidence/` when the result is recorded.
+
+## 2026-09-24 - Phase-4 pilot 4, sealed before its first model question (no model called, nothing written)
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`). Pilot 3 failed T1, T4, T7 and T8
+(`output/remediation/phase4_runner/PILOT_RESULT_3.md`, commit `67b4185`; the audit's verdicts are
+`pilot3_evidence/AUDIT_VERDICTS.json`). Under the failure rule of `PILOT_THRESHOLDS.md` the causes were
+fixed first, each with red-first tests and mutation cases, before this draw. The read-only
+measurements are `logs/p4_pilot4/extract_pronoun_corpus.py` (the census pools' 88,936 lane-W/S pool
+sentences of 4,100 sites with a pool, and pilots 1-3's 1,185 published sentences and cards with their
+audit verdicts), `measure_pronoun_rules.py`, `measure_v14_subnational.py` and
+`measure_follow_drops.py` (gitignored); the census run directory and pilot 3's run and handoff
+directories were only read (sha256 of every file, 31,727, identical before and after).
+
+* `a522227` (T1 + T4, one gap) - **the pronoun past the first word.** V6 held a sentence, and V10 a
+  card item, only when the *first* word was one of `model4.PRONOUN_OPENERS`. Stanydale Temple's "Pottery
+  sherds show that it was also occupied ..." and Dolebury Warren's card "Standing on a limestone ridge
+  ..., it was made into a hill fort ..." leaned on an unpublished source sentence past it. **The rule,
+  in one sentence:** a sentence also leans on the sentence before it in its source when its first word
+  of `model4.PERSONAL_PRONOUNS` (it, its, they, their, them, he, his, him, she, her; whole, any case) is
+  one of `SUBJECT_PRONOUNS` (it, they, he, she) and stands right after the sentence's first comma
+  (`, `), or right after the word `that` with no word of `ARTICLES` (the, a, an) before it. V6 holds
+  such a sentence unless its source predecessor is published right before it, as it holds an opener
+  (`verify4.leaning_pronoun`); V10 holds a card item that leans (card scope). Rule (10) states it, rule
+  (4) refers the card to it, and the reviewer gains "DROP a sentence in which it, its, ... - at its
+  start, after a fronted phrase or in a that-clause - refers to something no published sentence
+  before it names, and DROP the card when such a pronoun has no antecedent inside the card: the card
+  is read on its own." **Measured, every candidate** (census: pool sentences it binds beyond the
+  opener rule, those of them whose source predecessor is not in the pool - never publishable -, the
+  sites that keep a possible sentence 1 (names the site, does not lean; 3,806 of the 4,100 today),
+  card-length (80-200) plain sentences it holds beyond the opener rule of 42,401, the sites that keep
+  a whole-sentence card candidate (3,656 today); pilots 1-3: published sentences it would hold - it
+  fires and the source predecessor is not published right before - and cards):
+
+  | candidate | binds | never | sentence 1 | cards held | card sites | pilot sentences (1/2/3) | pilot cards | both cases |
+  |---|---|---|---|---|---|---|---|---|
+  | the opener list only (V6 until now) | 0 | 0 | 3,806 | 0 | 3,656 | 0 | 0 | neither |
+  | any personal pronoun | 15,632 | 2,975 | 3,750 | 8,265 | 3,562 | 68 (20/21/27) | 9 | yes |
+  | any subject pronoun | 8,605 | 1,445 | 3,781 | 4,438 | 3,604 | 40 (12/10/18) | 5 | yes |
+  | the first personal pronoun is a subject form | 7,826 | 1,295 | 3,784 | 4,080 | 3,609 | 36 (11/9/16) | 5 | yes |
+  | a subject pronoun right after the first `,`, or after any "that" | 2,523 | 268 | 3,805 | 1,316 | 3,640 | 13 (2/4/7) | 1 | yes |
+  | the first personal pronoun a subject form, no capitalised word but the first before it | 3,765 | 353 | 3,805 | 2,192 | 3,632 | 14 (6/4/4) | 2 | no: Dolebury's card |
+  | the first personal pronoun a subject form, no article before it | 2,784 | 292 | 3,802 | 1,463 | 3,642 | 7 (2/2/3) | 1 | no: Dolebury's card |
+  | the last, or a subject pronoun right after the first `,` | 3,690 | 386 | 3,802 | 1,960 | 3,634 | 11 (2/3/6) | 2 | yes |
+  | a subject pronoun right after the first `,`, alone | 1,710 | 146 | 3,805 | 922 | 3,643 | 7 (1/2/4) | 1 | no: Stanydale |
+  | the first personal pronoun a subject form right after "that", alone | 652 | 97 | 3,806 | 327 | 3,653 | 2 (0/1/1) | 0 | no: Dolebury |
+  | a subject pronoun right after the first `,`, or the first personal pronoun a subject form right after "that" | 2,361 | 243 | 3,805 | 1,249 | 3,640 | 9 (1/3/5) | 1 | yes |
+  | the first personal pronoun a subject form right after the first `,` or "that" | 2,193 | 234 | 3,805 | 1,151 | 3,642 | 7 (1/2/4) | 1 | yes |
+  | a subject pronoun right after the first `,`, or any after "that" with no article before it | 1,895 | 162 | 3,805 | 1,017 | 3,643 | 9 (1/3/5) | 1 | yes |
+  | the first personal pronoun a subject form right after the first `,`, or any after "that" with no article before it | 1,731 | 153 | 3,805 | 922 | 3,645 | 7 (1/2/4) | 1 | yes |
+  | the first personal pronoun a subject form right after the first `,`, or right after "that" with no article before it | 1,703 | 152 | 3,805 | 905 | 3,645 | 7 (1/2/4) | 1 | yes |
+  | **the chosen rule** (`verify4.leaning_pronoun`): the same, the first comma being the first `, ` | **1,738** | **158** | **3,805** | **915** | **3,645** | **7 (1/2/4)** | **1** | **yes** |
+
+  The chosen rule is the most precise that holds both pilot-3 cases: in pilots 1-3's published texts
+  it holds 7 sentences and 1 card - Stanydale's (UNSUPPORTED, the only one the audit found broken),
+  The Gop's "Oval in form, it is the second-largest Neolithic mound in Britain ..." (a fixed member,
+  in all three pilots), the Altar Stone's "Some believe that it always was recumbent.", Teman's
+  "Outside of the Bible, it was mentioned by Ptolemy ..." and Dolebury Warren's sentence 2, and
+  Dolebury's card - each a pronoun whose antecedent lies outside its sentence, as an opener's does.
+  The literal reading of "the first comma" (a `,` anywhere, so a digit group's) binds 35 fewer, and
+  those 35 are fronted phrases with a thousands comma ("With a population of 824,340, it is the third
+  most-populous city in Spain.", "Estimated to be 300,000 years old, they represent ..."): the comma
+  that ends a fronted phrase is followed by a space. Over a seeded sample of 60 of the 1,738 (seed
+  20260926, read by hand), 46 refer outside their sentence; of the 14 others, 9 are an expletive
+  *it* ("According to the material collected, it is possible that ...") and 5 refer inside it.
+  Selector question `0f64868f...`, reviewer question `3ec5024c...` after this commit.
+* `a59e535` (T7) - **a sentence the article contradicts.** Partiscum (Castra), CANARY-03: the selector
+  picked the lead ("a fort in the Roman province of Dacia", "the most Western fort of Dacia") that the
+  article's own body contradicts and reduces to a presumption; the pool showed W5 "the area was the
+  territory of the Iazyges", W16 "... only testifies to a Roman settlement", W17 "the presumed castle",
+  W40 "the assumed fort" and W49 "the direct road connection from Pannonia via Partiscum to Dacia". The
+  selector gains rule (11), "never pick a sentence that another listed sentence contradicts, or
+  reduces to a presumption, an assumption or a dispute, even when it is the article's lead". **The
+  gap in the reviewer's prompt:** it showed each published sentence, its untrimmed source sentence,
+  the two source sentences before it and its heading - for a lead, nothing before it - so none of
+  those sentences was ever in front of the reviewer and no DROP could see the contradiction. Closed in
+  the prompt builder: `review4.passage` puts the passage the sentences were chosen from before the
+  numbered sentences, as `<source id="PASSAGE">` - the selector's pool for lanes W, S and T (bounded
+  by `sentences.MAX_POOL_CHARS`, 24,000 characters), lane R's pages whole - and the reviewer question
+  says so and gains "DROP a sentence that another sentence of the passage contradicts, or reduces to a
+  presumption, an assumption or a dispute, even when it is the article's lead; ask the same of the
+  card." A general rule: no canary's words are in any code or prompt. Selector `751816c1...`,
+  reviewer `89e6035d...`.
+* `7d05cda` (V14) - **sub-national names.** Lake Mungo, "a dry lake located in New South Wales,
+  Australia", was held as placing the site in Wales. The scan of the census pools for a `NAME_TO_ISO`
+  name directly preceded by a capitalised word or inside a longer proper name found 263 distinct
+  runs; almost all are the country itself ("Upper Egypt", "Historic England", "South Wales", "Western
+  Australia"), a person ("Anatole France", "John Ireland", "Quaritch Wales", "Pescennius Niger") or an
+  organisation. Those whose real country differs from the name inside, each verified, are
+  `country_lookup.SUBNATIONAL_NAME_TO_ISO` (15): New South Wales AU, New Mexico US, New England US
+  (both census sentences are the US region), Central Macedonia, Western Macedonia, Eastern Macedonia
+  and Thrace, Greek Macedonia GR, West Azerbaijan province IR, Upper Jordan Valley IL, Jordan Hill GB
+  (Dorset), Kraku Lu Jordan RS, El Peru GT (El Perú-Waka'), Inner Niger Delta ML, Lapis Niger IT (the
+  Roman Forum), Denmark Fjord GL. Found and left out: New Guinea (PG and ID; the census's six sentences are
+  about a cave in Victoria), Belize River (GT and BZ), Caucasian and Caucasus Albania, British India, Middle
+  Niger (no one country), the bare "West Azerbaijan" (the census also uses it for western
+  Azerbaijan), British Honduras (the colony that is all of Belize, no sub-national place), Little
+  Canada (not verified). "South Wales" stays Wales. `verify4`'s country regex reads both tables,
+  longest first; V14 compares the whole name's code. Over the census pools V14's location holds fall
+  from **74 to 67 sentences (69 to 62 sites)**: Lake Mungo, Jordan Hill Roman Temple, Independence
+  Fjord, Kraku Lu Jordan, El Perú, Paradeisos, Azargoshnasp; Horvat Omrit stays held for "Syria" (the
+  demilitarised zone). V10 still holds a card that carries such a name (no card-length sentence's
+  country verdict changes).
+* `98f276b` (T8) - **the review's drop takes the sentence that leans on it along.**
+  `review4.follow_drops`, after the reviewer's verdict is parsed: a kept sentence that leans on the
+  sentence before it (`sentences.leans_on_predecessor`, the same rule in the review's own code, a
+  parity test over `tests/remediation/p4_pronoun_cases.py`) whose published predecessor is dropped is
+  dropped too, in order, so a chain goes whole; each is recorded in `review4.json` under `followed`
+  (`sentence`, `follows`, reason `leans-on-a-dropped-sentence`), the reviewer's lines stay as written,
+  and the site is judged on what remains (two sentences at least, V1-V15 again, V9 included).
+  Rebuilt read-only from pilot 3's stored selections and answered reviews: **3 of its 63 reviewed
+  sites** have such a drop - Stanydale Temple R6 (the T1 sentence), Mersinaki R4 ("Here the Swedish
+  Expedition found a lot of sculptures"), Diana Fort R4 ("It was built in the Tiberian-Claudian age
+  ...") - and nothing else changes.
+* `5f85ba3` (rule 7) - **the name V6 accepts, stated.** Pilot 3's selectors abstained on "Argos,
+  Peloponnese" and "Clare, Suffolk", never told when the stored name without its disambiguator counts
+  (pilot 2's `name_base`). Rule (7) now reads "... its name, an alias or an also_named name of the site
+  element, all of that name's words in their order with nothing but spaces or punctuation between
+  them (case and accents do not matter); a name written "X (Y)" - ending in one bracket with no
+  bracket inside it - or else "X, Y" - X before the first comma - is named by X alone only when
+  also_named lists X; if no listed sentence names the site so, answer ABSTAIN with that reason;". A
+  test reads the two forms literally and gets `name_base`'s base in verify4's and select_stage's code
+  for 17 names, and shows S3 lists "Argos" in `also_named` exactly where V6 accepts it (a strong 'own'
+  verdict). Selector `a0b422e7...`.
+* `76a5757` - `pilot4.SEED_PILOT4` 20260926.
+
+**The questions this pilot asks:** selector `a0b422e73474f6ba8cd59c7477d49f51c8aabd131f6e3d56742597c2a367ef93`
+(was `85e6e47b...` in pilot 3), reviewer
+`89e6035d1e295764b5a77e904bc24e080ff57d63b8d05ef786cc7f5fc71e7523` (was `59a1714e...`); the answer
+lines and both parsers are unchanged.
+
+**Nothing was written to production; no model and no MiniMax endpoint was called; production was not
+read for this draw** (the census, the export and the routeless read are pilot 1's, digests below).
+
+    pilot4.py build --plan PLAN4.census.jsonl --run-dir runs/census-2026-09-24 \
+        --after PILOT.jsonl --after PILOT2.jsonl --after PILOT3.jsonl --seed 20260926 \
+        --out PILOT4.jsonl
+
+(2026-09-24 11:48:17 UTC.) With this code `build --after PILOT.jsonl --after PILOT2.jsonl --seed
+20260925` still writes pilot 3's `PILOT3.jsonl`, byte for byte (`a4fa2f5f...`, rebuilt to a scratch
+path and compared).
+
+### The pilot set (`PILOT4.jsonl`, 132 sites)
+
+Fixed, 70 sites: **exactly the fixed members of pilots 1, 2 and 3** - `build` refuses any list that is
+not each earlier pilot's fixed lines, site for site and in order; the 70 lines are byte-identical to
+the first 70 of `PILOT.jsonl`. The seeded strata are drawn anew with seed **20260926**, each
+excluding everything placed before it **and all 186 seeded draws of pilots 1, 2 and 3**: 0 sites of
+any earlier draw are in pilot 4.
+
+| stratum | asked | population | eligible | taken |
+|---|---|---|---|---|
+| draw-W (census lane W) | 30 | 3,887 | 3,742 | 30 |
+| draw-S (census lane S) | 8 | 372 | 335 | 8 |
+| draw-T-candidate | 6 | 38 | 20 | 6 |
+| draw-R-candidate | 8 | 252 | 227 | 8 |
+| draw-B3-routeless | 5 | 20 | 5 | 5 |
+| draw-extract-over-40000 | 5 | 65 | 47 | 5 (all lane W) |
+
+No stratum was smaller than asked; **the B3 stratum is now used up** (20 routeless sites, 15 drawn by
+pilots 1-3, the last 5 here): a fifth pilot would find none. The census lanes of the 132: **W 79, S
+17, 0 36**. The T and R strata are again candidates held `search-stopped` (searches off, owner order
+2026-09-23), reported and never guessed into a lane.
+
+### The sealed artefacts
+
+| file | sha256 |
+|---|---|
+| `output/remediation/phase4_runner/PILOT4.jsonl` (new) | `30ab5e9d28b71388f79319b93e945dfd223d5d3edeb9a62e42064844757b2a26` |
+| `output/remediation/phase4_runner/PILOT_THRESHOLDS.md` (pilot 1's, unchanged) | `64ac53341068234c905cff00095a9d7244cd4703353f63bbd0997add63fe0c13` |
+| `output/remediation/phase4_runner/gold_prose_errors.json` (pilot 1's, unchanged) | `e4e63d56cbc9cca0f9cea018967fac40e897faddb9c43ad064e6203a74ebb7df` |
+
+The thresholds are the ones sealed before pilot 1's first question, byte for byte: nothing in them
+was changed or loosened after the data of pilots 1, 2 or 3 was seen (`test_phase4_pilot.py` pins all
+three digests to this section). `PILOT.jsonl` (`7f66f987...`), `PILOT2.jsonl` (`9caaaa03...`) and
+`PILOT3.jsonl` (`a4fa2f5f...`) are byte-identical. The draw's inputs: `PLAN4.census.jsonl`
+`644b9032...d4676b591`, `S0_ROUTELESS.json` `81c3b426...37997746`, `gold_standard/sites.json`
+`18653fc1...b2756`, `qid_repair/PLAN.jsonl` `9d57b431...a6ce4f`.
+
+## 2026-09-24 - Phase-4 pilot 4's non-model stages and its select export (no model called, nothing written)
+
+After the seal above (commit `f571be3`, 13:51:32 +02:00; the first question was exported at
+11:51:54 UTC), `plan4.py build --pilot PILOT4.jsonl --out PLAN4.pilot4.jsonl` wrote pilot 4's plan
+from the same export as the census and pilots 1-3 (`S0_ROWS.jsonl` `2c99f96f...72a8`; sha256
+`e99f3f7f45e5006d0201d93a3c32e470ae380b123b0ebfb07d1e47c25aee0330`, gitignored): **pilot 4 is its first
+9 batches, `p4-0001` .. `p4-0009`** (8 x 15 + 12, in PILOT4.jsonl's order), 334 batches in all, the
+same flags as pilot 3's plan. The plans and run directories of pilots 1-3 are untouched.
+
+    mass4.py --plan PLAN4.pilot4.jsonl --run-dir runs/pilot4-2026-09-24 --log-dir logs/p4_pilot4 \
+        --only p4-0001,..,p4-0009 --live --stages prepare,sources,routes,select --searches-off \
+        --handoff-export output/remediation/handoff/p4-pilot4-select --jobs 3
+
+2026-09-24 11:51:54-11:53:37 UTC, `STAGE_EXIT=0`, every batch "done" for its round. **The run's own
+ledger** (`runs/pilot4-2026-09-24/LEDGER.jsonl`): 229 fetch lines (en.wikipedia.org 160,
+www.wikidata.org 52, it.wikipedia.org 5, de/es/pt/fr.wikipedia.org 3 each), all HTTP 200, none given
+up; 0 searches; 0 model calls. Every lane equals the census's.
+
+| stage | result |
+|---|---|
+| S0 plan | 132 sites in 9 batches |
+| S1 sources | pinned 96, scope-pending 3, no-title 20, rejected 13 |
+| S1b routes | **lane W 79, S 17, 0 36**; 0 searches |
+| S3 select, export | **90 questions** (lane W 79, lane S 11); per batch p4-0001 .. p4-0009: 12, 12, 12, 10, 8, 15, 14, 2, 5; prompts 3,795-30,692 characters, median 6,017; 23 carry a non-empty `also_named` |
+| S3R restricted | no lane-R site: nothing asked |
+
+Every exported prompt carries the selector question `a0b422e7...` (rules (7), (10) and (11) and the
+card rule (4) as pilot 3's fixes wrote them). The 96 selecting sites minus 90 questions are 6 lane-S
+sites whose article offers no sentence that names them; the import holds them `no-source` with no
+call bought: Amyntas Rock Tombs, Priene Ruins, Hebbariyeh Roman Temple (gold), Templos de Tarxien
+(identity trap) - the four of pilots 2 and 3 - and two of the eight new lane-S draws, Historic Site
+Tipasa and Archaeological Park Carnuntum.
+
+**The 36 holds** (`HOLDS4.jsonl`): the 17 of the fixed members are pilot 3's, reason for reason
+(`scope-pending` 3, `search-stopped` 14); the 19 new are the T, R and B3 candidates, all
+`search-stopped` (6 T: Necròpolis de Son Morell Nou, Conchalito, Villaggio Bizantino, Capela de São
+Dinis, La strada Romana delle Gallie ed il suo arco, Remains of Roknia; 8 R: Tepeapulco Pyramid,
+Öküzlü Ören Yeri, Pisarissos Antik Kenti, Jannusan Burial Mound Field, Granite Thrones of Judges of
+Axum, Trebenna Antike Stadt, Baltalı Kapı, Ancient Theatre of Makyneia; 5 B3: Roma Dönemi Agora
+Harabeleri, Selinunte Archaeological Park, "Cras -  Round Cairn to North of" (two spaces in the
+stored name), Rocha da Mina, Tempio di Poseidone).
+
+**Handoff directory** `output/remediation/handoff/p4-pilot4-select` (gitignored, 803 KB, stage
+`finder`, labels `<site_id>/select`). `opus_handoff.py validate`: **90 questions, 0 answered, 90
+missing, 0 stale, 0 malformed, 0 orphans** (exit 1 until they are answered). The run directory
+`runs/pilot4-2026-09-24` (762 files, 5.5 MB, gitignored, its ledger inside) travels with it.
+`PILOT_THRESHOLDS.md`, `PILOT.jsonl`, `PILOT2.jsonl` and `PILOT3.jsonl` are byte-identical; pilot 3's
+run directory and its answered handoff directories (`p4-pilot3-select`, `-review`) and the census run
+were only read (sha256 of every file, identical before and after).
+
+**T7 for pilot 4** is pilot 3's (the same fixed members): El Tintal, Ahin Posh Tape (canaries), FC-2
+(Font dels Coms) and TD-1 (Temple of Dedun) sit on sites held `search-stopped`, AM-1 (Amyntas Rock
+Tombs) on a lane-S site the import holds `no-source` - closed-list reasons; the other 20 are asked,
+Partiscum (CANARY-03) under the new rule (11) and the reviewer's PASSAGE.
+
+### The orchestrator's next commands (from this worktree, main venv)
+
+```bash
+cd /c/PythonProjects/AncientMap/.claude/worktrees/p4-pilot && export PYTHONIOENCODING=utf-8
+PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+P4=scripts/remediation/phase4; OH=scripts/remediation/opus_handoff.py; H=$M/handoff/p4-pilot4
+RUN=$R4/runs/pilot4-2026-09-24; ONLY=p4-0001,p4-0002,p4-0003,p4-0004,p4-0005,p4-0006,p4-0007,p4-0008,p4-0009
+ROUND="--plan $R4/PLAN4.pilot4.jsonl --run-dir $RUN --log-dir $M/logs/p4_pilot4 --only $ONLY --searches-off --live"
+# every stage writes the run's own ledger, $RUN/LEDGER.jsonl; no command takes --ledger
+# 1. answer the 90 selector questions: for each line of $H-select/*/MANIFEST.jsonl, an Opus agent reads
+#    $H-select/<prompt_path>, follows the question's rules (1)-(11), writes only DESC:/CARD: lines (or
+#    ABSTAIN:) to a file, and runs
+$PY $OH answer --dir $H-select --batch-id <batch_id> --stage finder --label <site_id>/select \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-select                                   # exit 0: 90 answered
+$PY $P4/mass4.py $ROUND --stages select --handoff-import $H-select  # S3 (+S3R: nothing to ask)
+# 2. the translate round: lane T is empty, so the export writes no question and no directory -
+#    skip `validate` when every batch reports 0 calls; the import still runs assemble and verify
+$PY $P4/mass4.py $ROUND --stages translate --handoff-export $H-translate
+$PY $P4/mass4.py $ROUND --stages translate,assemble,verify --handoff-import $H-translate
+# 3. the review round (stage `reviewer`, labels <site_id>/review); every prompt now opens with the
+#    PASSAGE, and the import drops a sentence that leans on a dropped one (review4.json `followed`)
+$PY $P4/mass4.py $ROUND --stages review --handoff-export $H-review
+$PY $OH answer --dir $H-review --batch-id <batch_id> --stage reviewer --label <site_id>/review \
+    --answered-by <agent> --text-file <answer.txt>
+$PY $OH validate --dir $H-review
+$PY $P4/mass4.py $ROUND --stages review --handoff-import $H-review  # the batches are then done
+$PY $P4/run4.py holds --run-dir $RUN                               # HOLDS4.jsonl
+# 4. the Claude Code audit of every sentence and card of pilot 4 (design S6b; T1-T7, T5 "broken"
+#    included), against the pinned passages and gold_prose_errors.json - never the reviewer's verdicts
+$PY -c "import sys; sys.path.insert(0, 'scripts/remediation'); from pathlib import Path; \
+from phase4 import audit4; print('\n'.join(sorted(audit4.reviewed_sites(Path('$RUN')))))" > $M/logs/p4_pilot4/reviewed.txt
+$PY $P4/audit4.py sheet --run-dir $RUN --site-ids $M/logs/p4_pilot4/reviewed.txt --out $M/logs/p4_pilot4/AUDIT_SHEETS.md
+# 5. score T1-T13 against PILOT_THRESHOLDS.md (unchanged since pilot 1); keep $RUN/LEDGER.jsonl and
+#    HOLDS4.jsonl with the audit verdicts (pilot4_evidence/), as pilots 1-3 did; only passing lanes open
+# 6. P4 and P5 rehearsed against production (APPLY ending in ROLLBACK; nothing is written); the P4
+#    plan reads $RUN/LEDGER.jsonl and no other
+$PY $M/tools/write_gate4.py --group P4 --run pilot4-2026-09-24 --open-lanes W,S            # dry: plan + render
+$PY $M/tools/write_gate4.py --group P4 --run pilot4-2026-09-24 --open-lanes W,S --rehearse
+$PY $M/tools/write_gate4.py --group P5 --run pilot4-2026-09-24 --rehearse
+```
+
+### Tests, sweep, gates for pilot 3's fixes and pilot 4 (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 22 new test functions (101 new test items with the parametrizations), 20 of them red before their
+  code; the other two check a claim about existing code or data (rule (7)'s "only when also_named
+  lists X", the sealed draw's members): `test_phase4_verify.py` +7 (the 31 `PRONOUN_CASES` V6 judges
+  exactly, and the review's reading alike; V6 past the first word, after a comma and after "that";
+  V10's card; V14's sub-national names; rule (7)'s two forms read literally against `name_base` in
+  both modules for 17 names, and its also_named clause), `test_phase4_review.py` +5 (the PASSAGE for
+  lanes W and R; the followed drops, a kept predecessor, too few left), `test_phase4_select.py` +3
+  (the reviewer's pronoun and contradiction lines, rule (11)),
+  `tests/pipeline/test_country_subnational_names.py` +3 (new: the table pinned, each entry carries a
+  country name and maps elsewhere, South Wales stays Wales), `test_phase4_model.py` +1 (the three
+  word lists), `test_phase4_pilot.py` +3 (pilot 4's draw after three pilots, its seal, the sealed
+  file). Rewritten: the pronoun rule (10), card rule (4), rule (7) and the reviewer's DROP-order pins
+  in `test_phase4_select.py`, with the four re-pins and their reasons. New shared fixture
+  `tests/remediation/p4_pronoun_cases.py`. Red first, measured: T1/T4 38 failures, T7 5, V14 a
+  collection error and 1, T8 34, rule (7) 18, pilot 4's seed 1, its seal 1.
+* `mutation_sweep.P4_PILOT4_MUTATIONS`: 37 cases (`p4 verify4` 8, `p4 prompts` 11, `p4 review` 5,
+  `p4 sentences` 4, `p4 country_lookup` 3, `p4 model` 2, `p4 select` 1, `p4 pilot` 3), registered once;
+  five older cases re-anchored on lines this rewrote (`p4 verify4: V10 a card may open with a
+  pronoun`, `p4 prompts: the selector's card rule forbids a cultural adjective`, `... the selector is
+  not told V6's pronoun rule`, `... rule (10) lets the first DESC sentence open with a pronoun`,
+  `... the selector's first sentence need not name the site`); 2,064 labels, all unique, every anchor
+  and test present. The sweep's own `main` (drivers `logs/p4_pilot4/sweep_targets.py` and
+  `sweep_labels.py`): over **every case whose target is a file the five fixes changed** (verify4
+  200, model4 83, sentences 65, prompts4 26, review4 18, country_lookup 11, mutation_sweep 3, and the
+  new `p4 select` case) **407/407 caught**, the tree byte-identical for its 8 files (`sweep_fixes.log`);
+  after the draw, over every case targeting `pilot4.py`, `AUDIT_LOG.md`, `mutation_sweep.py` or the
+  contracts plus all 37 new cases **76/76 caught**, byte-identical for its 11 files
+  (`sweep_final.log`); no `# mutant` left.
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`,
+  `-rs`): **6,194 passed, 111 skipped, 57 deselected, 0 failed** (325.6 s) on the final tree, the same
+  111 skips (gitignored data) as before; after the five fixes alone, 6,191 passed.
+* `ruff check` and `ruff format --check` clean on the 15 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check (`country_lookup` is under
+  `pipeline/`) passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
+### Open
+
+* **T8 may fail again**, and not for a defect: pilot 3's 18 correct holds alone kept its coverage
+  under 80 % (at most 60 of 78 with its three defects removed). Pilot 4 draws other sites; the
+  thresholds are never loosened after the data is seen, so a shortfall goes to the owner as pilot 3's
+  did.
+* The pronoun rule's cost stays: 158 census pool sentences can never be published (their source
+  predecessor is not in the pool), and an expletive *it* after a fronted phrase is held like a
+  pronoun (9 of the 60 sampled); the reviewer and the audit see what it holds.
+* V10 still holds a card that carries a sub-national name ("New South Wales"): conservative, not
+  measured as a loss (no census card-length sentence's verdict changed).
+* The B3 stratum is used up (20 routeless sites, all drawn by pilots 1-4): a fifth pilot would draw
+  none.
+* Pilot 4's 90 selector questions wait for their answers (runbook above); its ledger lives in its
+  gitignored run directory - keep it with `HOLDS4.jsonl` and the audit verdicts in
+  `pilot4_evidence/` when the result is recorded.
+
 ## 2026-09-24 - the Opus re-verification applied: quote check, decision rule, keep sample (no model called, nothing written)
 
 Branch `integrate/wave1` (main checkout). The owner's order of 2026-09-23 - no DeepSeek any more,
@@ -8828,6 +9494,180 @@ KEEP_SAMPLE.json `96da2842...`, VERDICTS_ROUND2.json `56471faf...`, VERDICTS_ROU
 The tests, sweeps and gates of this round are recorded with journal-reversal-3's, at the end of the
 next section.
 
+## 2026-09-24 - The owner's defect scope: Phases 4/5 write only proven text defects (nothing written)
+
+**Decision** (Martin, 2026-09-23, answer "Nur Defekt-Sites (Recommended)"): after a passing Phase-4
+pilot, Phases 4/5 write only the sites with proven text defects - the Phase-3 cleared defects plus
+the 904 ungrounded card texts, in the design's order; every other site's description and card stay
+exactly as they are. Pilot 4 passed T1-T7 (`PILOT_RESULT_4.md`); its P4 plan then planned 128 rows for
+all 64 write-eligible pilot sites, 44 of them without any defect flag, and nothing in the code knew
+the decision. Contracts: `docs/procedures/PHASE4_CONTRACTS.md` section 9.
+
+### The 904: no list existed, so it was recomputed
+
+Searched for a list of the 904 site ids: `output/remediation` of the main checkout and of this
+worktree (every `.md`, `.json`, `.jsonl`, `.py`, `.txt`, `.log` outside the HTTP cache), the census
+runs (`run_t01` .. `run_t11`, `CENSUS.md`: no test measures card grounding), `AUDIT_LOG.md`,
+`HANDOVER.md`, `HUMAN_ONLY.md`. Only the plan (section 5.1, O3) and the design log name the number;
+no file lists the sites. **Recomputed with the documented method** (plan section 5.1: every number in
+the card checked against the generator's input, `LEFT(description, 500)` of snapshot d4526691,
+`scripts/export_card_sites.py:36`) from the S0 export `S0_ROWS.jsonl`
+(`2c99f96f...72a8`, the census's and every pilot's), whose `card` and `description` are
+byte-identical to the census snapshot of 2026-09-20 for all 5,004 sites (checked) and whose
+`snapshot_description` is d4526691's text (`snapshot_rows`). `phase4/scope4.py` states the reading:
+a number is a numeral as written - ASCII digits, comma thousands separators, a decimal part - read
+as its value (`10,000` = `10000`, `7.10` = `7.1`); it appeared when the same value is a numeral of the
+input's first 500 characters, never a digit run inside a longer numeral (`50` is not in `500`).
+
+**876 ungrounded cards** (the documented cohort: 904). The plan's three named examples are among
+them (House of Taga `10,000 BC`, Hatunmarka, Maray Qalla). One more card writes numbers but its site
+is not in d4526691 (Temple of Baalshamin 95b33efa, created after it): its generator input is unknown,
+so it is **not claimed** and the file lists it under `unclaimed`. The 2026-09-19 matcher was not
+kept, so 904 is not reproducible to the site: 40 readings measured on the same data give 788-897
+(counting Baalshamin, as the plan's table did - it places every carded site; this reading gives 877
+so). Digit runs matched as substrings give 788-793 and miss House of Taga, because `10` hides in
+`10th` and `000` in `1,200`. None reproduces the plan's other cohorts (1,225 / 1,925 / 943; cards
+without a digit are 942 here): the 2026-09-19 measurement read something this export does not
+reproduce - another number reading, or a card state before the census snapshot.
+
+### The scope (`output/remediation/phase4_runner/SCOPE4.json`, v1)
+
+sha256 `19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a`, pinned in
+`scope4.SCOPE_SHA256`; built by `plan4.py scope` from `S0_ROWS.jsonl` (`2c99f96f...`) and
+`logs/_write_dry/ALL_REFUSED.jsonl` (`7b4026d0...`), byte for byte again on every build (a test
+rebuilds it). Every site id with the lists it came from, the inputs' digests, each list's method and
+the site list's own digest (`sites_sha256`).
+
+| list | source | sites |
+|---|---|---|
+| `phase3-cleared-description` | `ALL_REFUSED.jsonl`, rule `report-only-field`, field `description` | 322 |
+| `phase3-cleared-card` | the same, field `card_description` | 709 |
+| `ungrounded-card` | plan section 5.1, recomputed (above) | 876 |
+| **the scope** | the union | **1,623** |
+
+Overlaps: description and card 85, description and ungrounded 69, card and ungrounded 157, all three
+27; the cleared defects are 946 sites (the design's number), 677 sites are in the scope for an
+ungrounded card alone. By combination: ungrounded only 677, card only 494, description only 195,
+card and ungrounded 130, description and card 58, description and ungrounded 42, all three 27. 37
+scope sites are `scope-pending` (S1 holds them before any model question).
+
+**Which flags count.** `cleared-description-defect`, `cleared-card-defect` and the ungrounded cards.
+Not `t03` (its own comment: order only; counted, it would add 555 sites) and not `t03-severe` on its
+own (it would add 101 of its 185 sites; 84 are in the scope already): T03 says the text's years and
+the period bucket disagree, not which is wrong - the census counts 0 of its findings applicable
+(proposals for human review), plan section 4.3 lists severe T03 patterns 7 and 8 as false alarms, V14
+holds a severe finding "for reading" for that reason, and on the 185 sites Phase 3's reviewer cleared
+the description defect of 18 (in the scope), refuted it on 16, left 2 unresolved and was not asked on
+149 (no usable finding). V9's floor waiver needs less than the owner's "proven" - it lets a shorter
+text replace one that may be wrong - so `t03-severe` keeps that job, and the order, inside the scope.
+
+### The rule
+
+`write4.RULE_OUT_OF_SCOPE = "outside-defect-scope"`, the writer's new refusal (contracts section 9;
+not a `model4.HoldReason`: no stage holds a site for the scope, the mass run's plan never carries
+one). `plan_p4`, `plan_legacy` and `plan_cards` take `scope` as a required keyword and ask it before
+every other rule - an out-of-scope site is counted under it whatever else holds it, and nothing of it
+is verified or read. `write_gate4` loads the pinned file for P4, L and P5 alike (a file that is not
+the pin: `WRITE_EXIT=1`), prints it, and counts the refusals on its "refused by rule" line; it has no
+flag to switch the rule off.
+
+* **L is scoped too.** L marks only a scope site Phase 4 held; an out-of-scope site gets no legacy
+  provenance and no HUMAN_ONLY line. The owner said the other sites stay as they are, and the design
+  sized L for the few hundred sites Phase 4 would hold ("about 300-600 L rows"), not for every site
+  outside the scope. What that leaves open is recorded, not decided: an out-of-scope site whose text
+  the March chain changed keeps it **without** the legacy AI marking the design meant for every held
+  site ("so no LLM-processed text stays unmarked"); whether those sites get it is the owner's
+  question (HUMAN_ONLY), not a write this gate makes.
+* **P5**: no card and no clear outside the scope; a held card that is only ungrounded keeps its text
+  (the design clears the 709 alone).
+* **V9 inside the scope**: its floor stays waived only for description defects and `t03-severe`. A
+  site in the scope for its card alone keeps the 50 % floor on its description, so
+  `PILOT_RESULT_4.md`'s "this hold cannot occur for the defect sites of the mass run" is true for the
+  description defects only - Brewer's Castle, held V9 in pilot 4, is an ungrounded-card site.
+* **Stale statements**: the scope emptied pilot 4's `p4-0004`, and its `APPLY.sql` from the unscoped
+  dry run (22:25, never rehearsed or applied) stayed beside the new, empty `PLAN.jsonl`. The gate now
+  drops the statements of a round whose new plan has no row (`drop_unwritten_statements`), never a
+  round's record (`APPLIED.json`, `REVERTED.json`) nor a stopped batch's; re-running the dry plan
+  removed them.
+
+### Pilot 4 under the scope (`runs/pilot4-2026-09-24`; 45 of its 132 sites are in the scope)
+
+| group | before the scope | with the scope |
+|---|---|---|
+| P4 (dry, sends nothing) | 128 rows (64 sites), `site-held` 68 | **52 rows (26 sites)**; `outside-defect-scope` 87, `site-held` 19; 7 open batches (`p4-0004`, `p4-0008` plan no row) |
+| P5 (dry; one read-only SELECT: live phase-4 provenance 0 of 132) | - | **22 rows, all `P5/card-clear`**; `no-card` 23, `outside-defect-scope` 87; 9 open batches |
+| L (dry; the same read) | - | 45 rows; `outside-defect-scope` 87 |
+
+The 26 P4 sites: 4 carry a description defect, 12 a card defect, 16 an ungrounded card (with
+overlaps); 38 of the 64 eligible sites are outside the scope (the 44 without a defect flag less 9
+ungrounded cards; 3 flagged `t03` only). P5's clears are what P5 plans while no P4 provenance is
+live: after the P4 pilot write a written site's card is written (`P5/card`), not cleared - the P5
+sitting follows P4 (design, production_write), so this plan is a rehearsal object, not the P5 write.
+L likewise waits for the final held set.
+
+**Rehearsed against production** (`--rehearse`: each batch's APPLY ending in ROLLBACK, then the
+read-back): **P4 7 batches, 52 rows; P5 9 batches, 22 rows** - every row still at its old value, 0
+journal rows under every stamp, no batch blocked, `every open batch rehearsed`, `WRITE_EXIT=0` both
+(`logs/p4_pilot4/scope_rehearse_p4.log` `89b676a5...`, `scope_rehearse_p5.log` `c146f562...`,
+gitignored). Plan digests, P4 `d6f0b44b` `c14e0e57` `fcc85d8f` `e395bb18` `8e192554` `151f94e4`
+`e7ff6470`; P5 `6e733f80` `44febdb2` `c6303a56` `2b43a5ac` `2756d8be` `f9f60024` `421c480d`
+`6beea591` `8e7a8e91`. Nothing was applied.
+
+### The mass run's plan
+
+`plan4.py build --pilot PILOT4.jsonl --defect-scope --out PLAN4.scope.jsonl` (sha256
+`fec903797a36f9616598fca9e7e228d0e38a15fa51f07fef2706f41de7077d22`, gitignored; offline, no model
+call): **1,578 sites in 106 batches, `p4-0010` .. `p4-0115`** (the last 3 sites), numbered after
+pilot 4's 9 so no journal stamp reuses a pilot batch id. Its sites are exactly pilot 4's plan
+(`PLAN4.pilot4.jsonl` `e99f3f7f...`, unchanged) after the pilot, filtered to the scope, same records,
+same order: 918 cleared-defect sites, then 143 T03-flagged, then 517 others. Lists over it:
+cleared card 687, cleared description 313, ungrounded card 850; flags `t03-severe` 83,
+`scope-pending` 35 (held at S1, no question), `shared-title` 51, `shared-qid` 43, `duplicate-pair` 3.
+
+* **Excluded: pilot 4's 132 sites** (45 of them in the scope: 26 write-eligible, 19 held with their
+  closed-list reasons). They are the pilot run's - the design runs the pilot first and the mass run
+  on the plan's later batches - and "hold, never retry" keeps a held pilot site held.
+* **Included: the draws of pilots 1-3** that are in the scope (59 sites). Those pilots failed their
+  thresholds and were re-drawn (the design's failure rule); nothing of theirs was written, and their
+  answers were given to prompts since changed.
+* Without the scope the mass part of pilot 4's plan is 4,872 sites in 325 batches; the scope removes
+  3,294 of them. `mass4.py` dry over `PLAN4.scope.jsonl`: `0 site(s) of the open batches outside it`;
+  over `PLAN4.pilot4.jsonl` in pilot 4's run directory: 3,294 (its 9 pilot batches are done and ask
+  nothing) - a live round with a model stage over it is refused.
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 37 new test functions (48 items): `test_phase4_scope.py` 29 (40 items), `test_phase4_write.py` 7,
+  `test_phase4_legacy.py` 1; every existing planner call passes the scope (a scope of every site where
+  a test asks another rule, `phase4_write_fixtures.EVERY_SITE`). Red first: the scope's tests before
+  `scope4` existed, the writer's and the gate's before `scope` and `_defect_scope` did, the
+  stale-statement test before its fix. Two were written after their code - a reverted round's record
+  survives a re-plan, and `--only` narrows the mass run's guard - and go red under their mutants.
+* 42 new sweep cases (`P4_SCOPE_MUTATIONS`); 2,106 labels, all unique, every anchor and test present.
+  The sweep's own `main` (driver `logs/p4_pilot4/sweep_scope.py`) over **every case whose target the
+  change touched** (write4 103, mass4 50, write_gate4 40, plan4 32, scope4 19, AUDIT_LOG 5,
+  mutation_sweep 3): **252/252 caught**, the tree byte-identical for its 7 files
+  (`logs/p4_pilot4/sweep_scope.log`; the eight touched files' sha256 checked again by hand); no
+  `# mutant` left.
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`): **6,242 passed, 111
+  skipped, 57 deselected, 0 failed** (216 s), the same 111 skips (gitignored data) as before.
+* `ruff check` and `ruff format --check` clean on the 10 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch: merge it while no Phase-3 mass run is in flight.
+
+### Open
+
+* **The legacy AI marking of the out-of-scope March texts** (L above): the owner's question.
+  Decided 2026-09-24, "Alle kennzeichnen": every March-AI text is marked (entry of 2026-09-25,
+  "Lane L marks every March-AI text").
+* **876, not 904**: the owner decided on "the 904"; the scope is the documented method's 876 on the
+  pinned export, the 2026-09-19 list being lost. If the owner holds the old count to be the scope,
+  the 2026-09-19 inventory would have to be found and pinned as a new scope version.
+* Which run directory the mass run uses (a new one, or pilot 4's, whose 9 batches are done): the
+  plan's batch ids are after the pilot's either way.
+
 ## 2026-09-25 - journal-reversal-3: the Opus re-verification's reverts as a reversal list (planned, checked and rehearsed on production; not applied)
 
 Branch `integrate/wave1` (main checkout), commits `0492fd8` (the source kind, the list's builder,
@@ -9035,6 +9875,370 @@ from these columns, `reversal.write_plan_md`), and the static export - none of t
   `phase3/ledger.py` are untouched; `phase3/mutation_sweep.py` changed only in its Opus blocks and is
   imported by neither `opus_handoff.py` nor anything it imports (it moves `mass_run.package_digest`;
   no Phase-3 mass run was in flight).
+
+## 2026-09-25 - Phase-4 mass run: the mid-run audit's WRONG_SITE (Roman Bath, York), its fix, and one written site taken back (nothing applied)
+
+Run `runs/mass-2026-09-25` (plan `PLAN4.scope.jsonl`), P4 apply root `logs/_write_apply_p4`: 336
+sites written in 5 accepted steps - pilot 4's 26 (`p4-0001` .. `p4-0009`) and the mass run's 310
+(`p4-0010` .. `p4-0041`), 672 journal rows under `phase4:p4-%`, every step `RESULT: 0 deviation(s)`.
+The design's mass-run gate (entry [6], "MASS RUN GATES"): "10 random written sites after every 500.
+Any T1, T2 or T3 hit stops the writes and triggers re-verification of every written site of that
+lane or rule; a systematic cause is reverted through revert4.py." Contracts: `PHASE4_CONTRACTS.md`
+section 10.
+
+### The mid-run audit
+
+45 random written sites (`logs/p4_mass/midrun_sample.txt`; sheets `MIDRUN_AUDIT_SHEETS.md`
+`b58de234...`, verdicts `MIDRUN_AUDIT_VERDICTS.json`
+`15577da6f0fcc608547ed4e8ff7221e1decb6db7aabf12d7d7e54a435e383145`, gitignored): **280 sentences,
+279 SUPPORTED, 1 WRONG_SITE**; 36 cards, all CONTAINED; 0 lost hedges or negations, 0 flipped
+meanings, 0 broken sentences, 0 verifier false-passes, 0 gold errors. T1 and T3: 0. **T2: 1 - the
+writes are stopped.**
+
+The hit: **Roman Bath, York** (`70037a24-6487-4834-9b50-5242289009fe`, p4-0036, lane W, stored type
+Residence/villa/farmhouse), sentence 1, verbatim from its article's lead: "The Roman Bath is a Grade
+II* listed public house on St Sampson's Square in the city of York, England [1]." Its subject is
+the pub built in 1929-31 over the Roman bath house the record stands for: the opening sentence tells
+the reader the site is a listed pub.
+
+### Root cause
+
+* **The source.** The English article "Roman Bath, York" is about the pub; its Wikidata item is the
+  pub too - S3's `also_named` for the site was "Roman Bath; The Roman Bath Public House" (the item's
+  English label, which V6 accepts for a strong 'own' verdict). The only sentence of the pool that
+  names the site is W1, the pub.
+* **The selector** (answer `DESC: W1 W2 W3 W6 W7 W16`, `CARD: W3`). Rule (7) demands a first DESC
+  sentence that names the site, or ABSTAIN - so W1 or nothing. Rule (8), the only rule that lets
+  the selector refuse a name-carrying sentence about something else, names exactly "the modern
+  village, town or municipality (its administration, its population, its modern founding)" and
+  allows ABSTAIN only "if the only sentence that names the site is such a sentence". A pub is none
+  of these; rule (1)'s "not a namesake" reads as another thing of another name, and "The Roman Bath"
+  is the site's own name. Nothing in the question named the case, and W1 was the one way to satisfy
+  rule (7).
+* **The reviewer** (answer `R1-R6: KEEP`, `CARD: DROP` - the card's "The remains" and "the present
+  pub" had no antecedent inside the card). The question asks "is it about this site", but its DROP
+  lines - the lines it answers by - name, for "not this site", again only the modern village, town
+  or municipality. R1's subject carries the site's name word for word, so the reviewer read it as
+  the site; it was careful about antecedents (it dropped the card) but had no line for a later
+  building that shares the name.
+* **V6** passes the sentence on the name string alone (by design: V6 checks naming, not reference).
+
+### The fix (reviewer only; the selector stays frozen)
+
+`prompts4.REVIEWER_QUESTION` gains, right after the modern-place line:
+
+    DROP a sentence whose subject is a later building, business or institution (a pub, hotel, house, museum, shop, church, station ...) that shares or contains the site's name rather than the ancient site itself, even when it names the site.
+
+Re-pinned in `test_phase4_select.py` with its reason:
+**`097c45891e5fb28051d64d582fe92e4ef747927d8b569790b4f1bd7d143106a8`** (was `89e6035d...fc71e7523`).
+The selector question is unchanged (`a0b422e7...2a367ef93`): its rule (8) has the same gap, but the
+mass run's selector questions (`handoff/p4-mass-select`, p4-0050 .. p4-0057 being answered now) are
+answered under its pin. The cascade is the review import's own: `follow_drops` takes a pronoun
+sentence along with the sentence it leans on, S4 and S5 run again. **Replayed on the real case**
+(`logs/p4_mass/measure_roman_bath_cascade.py`, a scratch copy of p4-0036, the stored review answer
+with only R1 turned into a DROP; log `7b7eae2a...`): R2 "It is built above an ancient Roman bath
+house" follows R1, R3-R6 are assembled again, and **V6 holds the site** ("sentence 1 names none of
+['Roman Bath, York', 'Roman Bath', ..., 'The Roman Bath Public House']"); the card is held as
+before. Under the new line the site is not written.
+
+### No deterministic check (measured)
+
+`logs/p4_mass/measure_wrong_site_building.py` (gitignored), a sentence that names the site (S3's
+reading) and says it "is/was a/an [up to five words] <noun>":
+
+| detector | census pools (88,936 sentences, 18,364 naming the site) | written (336 sites, 2,046 sentences) | group 5 (520 sentences) |
+|---|---|---|---|
+| businesses: public house, pub, inn, hotel, restaurant, bar, cafe, shop, store, brewery | 2 - Roman Bath (true), Bent Pyramid "a small bar wall" (false) | 1 - Roman Bath | 0 |
+| buildings: house, museum, church, chapel, station, school, theatre, hall, manor, ... | 48 sentences / 44 sites | 4 - Roman Bath (true); Roman Theatre of Arles, Ariconium "a road station", Schwarzenacker Roman Museum (false) | 1 - Second Ancient Theatre, Larissa (false) |
+
+The business list catches the one pub and nothing else of the class; the building list catches the
+rest of the class in the census (Killerton "an 18th-century house", Lydney Park "a 17th-century
+country estate", St Laurence School "a coeducational secondary school", Great Tottington "a moated
+manor farm") only beside ancient members of the same surface form (House of the Tragic Poet "a
+Roman house", the Roman theatres of Cartagena, Tarraco and Zaragoza, Ariconium, Storgosia and Ad
+Quintum "road station", Newport Roman Villa "a Romano-British farmhouse"). Which it is depends on
+the subject's referent and its date, not on a word: the rule cannot be stated precisely in one
+sentence, so **no V-rule is added** (logs `measure_wrong_site_census.log` `819c59d7...`,
+`measure_wrong_site_written.log` `1395a4b5...`).
+
+### Taking back one written site (rendered and rehearsed; not applied)
+
+`revert4.py --site`, `audit4.py hold`, and `write_gate4`'s re-plan without a reverted site
+(contracts section 10). Read-only first: the site's journal rows under `phase4:p4-0036:chunk-0001`
+are 34909 (`unified_sites.description`) and 34910 (`raw_data`), both live at their written value;
+the chunk holds 18 rows of 9 sites.
+
+* **Rendered**: `logs/p4_mass/REVERT_ROMAN_BATH.sql` (`75acd4c2...`), the pinned reversal with
+  `AND l.site_id_ref = '70037a24-...'` in its set (4 places: the count, the set, the read after).
+* **Rehearsed against production** (`--rehearse`, ending in ROLLBACK; `REVERT_ROMAN_BATH.rehearse.sql`
+  `3b6d1ec5...`, no COMMIT in it): `BEGIN / DO / ROLLBACK`, `NOTICE: revert: 2 row(s) reverted`
+  (every guard and both invariants passed inside the transaction), then the read: **journalled
+  writes matched 2, reversals kept 0** (rolled back). Afterwards production was read again: 672
+  phase-4 writes, 0 phase-4 reversals, Roman Bath's description still the written one.
+* **The hold is recorded in the run**: `audit4.py hold --run-dir runs/mass-2026-09-25 --site
+  70037a24-6487-4834-9b50-5242289009fe --audit logs/p4_mass/MIDRUN_AUDIT_VERDICTS.json` ->
+  `audit-wrong-site (site)`, 1 new line in p4-0036's `holds.jsonl` (9 -> 10 lines, `d593536f...` ->
+  `04eaaaf3...`), `HOLDS4.jsonl` 436 -> 437 holds (`e082a5f3...`); the detail names the verdict file
+  and its sha256.
+* **The gate, dry and read-only, over p4-0036 now**: `WRITE_EXIT=1` - "the re-plan leaves out
+  70037a24-..., whose 2 row(s) round 1 wrote are not reverted in production - 2 journalled write(s)
+  of the site under phase4:p4-0036:chunk-0001, 0 with their own reversal kept. Revert the site
+  first (revert4.py --stamp-like 'phase4:p4-0036:chunk-0001' --site 70037a24-...)". The other 8
+  sites re-planned to exactly their written rows; `PLAN.jsonl`, `APPLIED.json` and `LANE_PLAN.jsonl`
+  unchanged. The group helper names only its own batches (`--batch`), so the next groups are not
+  blocked by it.
+
+**The apply and its acceptance (the orchestrator's; from this worktree, main venv):**
+
+    PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+    $PY scripts/remediation/phase4/revert4.py --stamp-like 'phase4:p4-0036:chunk-0001' --site 70037a24-6487-4834-9b50-5242289009fe --apply
+        # the read after it: journalled writes matched 2, reversals kept 2; WRITE_EXIT=0
+    $PY $M/tools/write_gate4.py --group P4 --run mass-2026-09-25 --open-lanes W,S --batch p4-0036
+        # dry: "p4-0036: 70037a24-... left out of the re-plan; its 2 row(s) of round 1 have their own
+        # reversal kept in production (read-only proof) ..."; WRITE_EXIT=0
+    $PY $M/tools/verify_writes4.py --lane p4 --plan $M/logs/_write_apply_p4/LANE_PLAN.jsonl --run $R4/runs/pilot4-2026-09-24 --run $R4/runs/mass-2026-09-25 > $M/logs/p4_mass/accept-after-roman-bath-revert.log
+        # expected: "lane p4 | stamps phase4:p4-% | planned rows 672 | lane journal rows 672 |
+        # carried 670 | not yet written 2", "re-verified 335 written site(s) with V1-V15",
+        # "RESULT: 0 deviation(s)", ACCEPT_EXIT=0. No step is pending, so it is recorded here and
+        # not handed to --accept.
+
+After the apply, `audit4 draw --written` must be given the live written set (Roman Bath no longer
+in it), or it refuses the held site as "written but not reviewed". Lane L later treats Roman Bath
+like any held site.
+
+### Group 5's review questions exported again
+
+Batches p4-0042 .. p4-0049 had their 78 review questions answered under the old reviewer pin and
+not imported. The answers are kept, moved whole to `handoff/p4-mass-review-stale-reviewer-89e6035d/`
+(`opus_handoff validate`: 78 answered, 0 stale, 0 malformed there); the batches' `reviews/` held
+nothing. Re-exported with the helper's own command (`mass4.py --plan PLAN4.scope.jsonl --run-dir
+runs/mass-2026-09-25 --log-dir logs/p4_mass --only p4-0042,..,p4-0049 --searches-off --live
+--stages review --handoff-export handoff/p4-mass-review`, log `group-p4-0042-review-reexport.log`,
+`STAGE_EXIT=0`): **78 questions** (9, 7, 11, 10, 11, 11, 11, 8 - the same labels as before), every
+prompt digest new, every prompt carrying the new line and differing from the old by exactly that
+line; 0 answers. `handoff/p4-mass-review` validates as 402 questions, 324 answered (groups 1-4), 0
+stale.
+
+### The re-verification of every written site for this rule
+
+The design's consequence of a T2 hit, for the rule the hit showed: the orchestrator runs an Opus
+check of every written site's sentences for this class. Its input is
+**`logs/p4_mass/REVERIFY_WRONG_SITE_INPUT.jsonl`** (gitignored; `build_reverify_input.py` beside it):
+one compact JSON line per written site of both runs - `site_id`, `run`, `batch`, the stored `name`
+and `site_type` (read back from production), and `sentences`, the published sentences in order
+(cut from the run's post-review assembly with `assemble.published_sentences`; the assembly was
+checked byte for byte against the written `PLAN.jsonl` description and against production's live
+description for every site). **336 sites (pilot 4 26, mass 310), 2,046 sentences (152 + 1,894),
+312,629 bytes, sha256 `c5e56457ea242ccdaf32300cd9a5174e06aee9ba9712cf0ec7b18cb7152ba6ba`**. Roman
+Bath is in it as the known positive. The check asks, per sentence: is its subject a later building,
+business or institution that shares or contains the site's name rather than the ancient site? Any
+further hit takes the same path: `audit4.py hold` with the check's verdict file, `revert4.py
+--site`, the gate's proof, the acceptance.
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 13 new test functions (23 items): `test_phase4_select.py` 1 (the line, its place; the full-order
+  test takes it in), `test_phase4_review.py` 1 (the cascade on a namesake lead), `test_phase4_write.py`
+  6 (10 items: `revert4 --site` - only the site's rows, every guard kept, the site id's form, the
+  command; the gate's re-plan without a reverted site, and a re-plan to other rows still refused,
+  which no test covered before), `test_phase4_accept.py` 1 (a site reverted alone: 0 deviations),
+  `test_phase4_runner.py` 4 (10 items: `audit4 hold`). Red first: the reviewer line's two tests, the
+  `--site` tests, the gate's re-plan test and the hold tests failed before their code; the review
+  cascade, the acceptance after a site revert, the other-rows refusal and the latest-batch test pass
+  on code that already did it and go red under their mutants.
+* 27 new sweep cases (`P4_MIDRUN_MUTATIONS`); 2,135 labels, all unique, every anchor and test
+  present. The sweep's own `main` (driver `logs/p4_mass/sweep_midrun.py`) over every case whose target
+  the change touched (write_gate4 45, run4 29, prompts4 28, revert4 26, audit4 22, review4 18,
+  AUDIT_LOG 5, mutation_sweep 3): **176/176 caught**, the tree byte-identical for its 8 files
+  (`logs/p4_mass/sweep_midrun.log` `a1668a63...`), `git status` clean afterwards, no `# mutant` line
+  left.
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`): **6,268 passed, 111
+  skipped, 57 deselected, 0 failed** (377 s; `logs/p4_mass/gates_pytest_midrun.log`), the same 111
+  skips (gitignored data) as before.
+* `ruff check` and `ruff format --check` clean on the 12 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch; `phase4/` changed too (`mass4`'s digest `bcd11edf...` from the re-export on): a
+  `mass4` invocation started before these commits stops between batches on its digest guard.
+
+### Open
+
+* **The apply of the Roman Bath revert and its acceptance** (the commands above), then the
+  re-verification of the 336 written sites for this class; writes stay stopped until both are done.
+* **Group 5's 78 review questions** (`handoff/p4-mass-review`, p4-0042 .. p4-0049) are to be
+  answered under the new reviewer pin; the old answers stay in the stale directory.
+* **The selector's rule (8)** carries the same gap. It stays frozen while the mass run's selector
+  answers are given; whether to widen it for a later run is a decision for then.
+
+## 2026-09-25 - Lane L marks every March-AI text: the owner's decision, L's own plan over the curated population, its dry plan and first step rehearsed (nothing applied)
+
+**Decision** (Martin, 2026-09-24, answer "Alle kennzeichnen (Recommended)"): lane L - which writes
+no text, only the provenance that makes a site show the existing "AI-generated text" footnote (EU AI
+Act Art. 50) - marks **every** March-AI text, not only the 1,623 sites of the defect scope. The open
+question of the defect-scope entry above ("The legacy AI marking of the out-of-scope March texts")
+is answered. c9cf66e's scope refusal is undone for L only; P4 and P5 stay scoped ("Nur
+Defekt-Sites"). What stays: a text equal to d4526691's gets no marking (HUMAN_ONLY D7, listed in
+`UNCLAIMED.jsonl`), so does a site the snapshot lacks; a site with live phase-4 provenance is never
+touched by L; L never changes a description. Branch `wip/p4-L` (from `wip/p4-pilot` 0a2a9a4);
+contracts: `PHASE4_CONTRACTS.md` section 9, "Lane L marks every March-AI text".
+
+### How L selected its sites, before and after
+
+* **Before** (c9cf66e): `write_gate4.py --group L --run <run>` read one Phase-4 run's plan batches
+  (`p4-NNNN` directories, `input.json` values from the S0 read) and planned one L write batch per
+  plan batch (`p4l-NNNN`). `plan_legacy` refused every site outside the pinned scope first
+  (`outside-defect-scope`, not listed for HUMAN_ONLY), then the sites production shows with a
+  full (W/S/T/R) provenance (`written-by-p4`); the rest were "held" and marked where their text
+  differs from d4526691. Its population was therefore the scope sites of that run's batches that P4
+  did not write - and since the mass run's plan holds only scope sites, no invocation could reach a
+  curated site outside the scope.
+* **After**: the population is every curated site whose live description differs from d4526691's
+  and that carries no live phase-4 provenance - the design's own reach (entry [6], "L (legacy
+  disclosure; held sites only; no LLM)", with P4's population then every curated site, and
+  licensing_and_ai_act, "so no LLM-processed text stays unmarked"); `legacy4`'s docstring already
+  said "A site Phase 4 does not write keeps its stored description ... it must not stay live
+  unmarked". `plan_legacy(batch, *, written)` takes no scope. L plans from **its own plan**:
+  `plan4.py read --out LEGACY4_ROWS.jsonl` (the one read-only SELECT, a fresh read) and `plan4.py
+  legacy` write `LEGACY4.jsonl` - every curated site in site-id order, batches of 15 marked
+  `pass: phase4-legacy`, numbered from p4-1001 - and `write_gate4.py --group L --legacy-plan
+  <file>` plans it; L never takes `--run`, P4 and P5 never take the L plan (one L population per
+  lane). An apply root holding another L plan's write batches is refused by name.
+
+### The plan (read-only read, offline build; worktree `.claude/worktrees/p4-L`, gitignored files)
+
+* `plan4.py read --out phase4_runner/LEGACY4_ROWS.jsonl` (2026-09-25 07:54, one SELECT): **5,004
+  rows**, sha256 `756455392d99503f825c3294802d6d0945a5225fe086f4fdbd2e5812b604fbba`.
+* `plan4.py legacy`: `phase4_runner/LEGACY4.jsonl` sha256
+  `b8c4f2e20c19e0a33ead4255b243a7f30597ca338c86914181618a93a6a9f6f1`, **334 batches p4-1001 ..
+  p4-1334**, 5,004 sites; provenance at the read: W 477, S 10, none 4,517.
+* A census the same morning, read-only and independent of the tool (one SELECT over
+  `unified_sites` and `snapshot_rows`): 5,004 curated sites, 487 with W/S/T/R provenance, 0 with any
+  other; without it 4,499 differ from d4526691, 10 equal it, 8 are not in it, 0 have no
+  description - the dry run's numbers below, site for site in count.
+
+### The dry run (`write_gate4.py --group L --legacy-plan phase4_runner/LEGACY4.jsonl`, read-only)
+
+`logs/p4l/dry.log` sha256 `2732344aa1e6efcd31cc2a9d02965771cca22c2962b0c6ac69d8a8e1c46f85cc`,
+`WRITE_EXIT=0`, 24 s (26 read-only SELECTs of the live provenance):
+
+| | sites |
+|---|---|
+| curated sites in the plan | 5,004 |
+| excluded as P4-written (live phase-4 provenance, `written-by-p4`) | 487 |
+| UNCLAIMED, HUMAN_ONLY D7 (`no-legacy-claim`): same as d4526691 | 10 |
+| UNCLAIMED, HUMAN_ONLY D7: not in d4526691 | 8 |
+| provenance already present (`provenance-present`) | 0 |
+| **rows planned = March-AI texts to mark** (`P4/legacy-provenance`) | **4,499** |
+
+By the pinned scope (`SCOPE4.json` `19a57e9f...`, read from `wip/p4-pilot`'s runner): 3,365 of the
+4,499 rows are outside the scope (the sites this decision adds), 1,134 inside it - **1,115 of them
+sites of the mass run's plan** (`PLAN4.scope.jsonl`) that P4 may still write, 19 pilot 4's held
+scope sites. Of the 18 unclaimed, 2 are scope sites. All 487 P4-written sites are scope sites. The
+design sized L at "about 300-600 L rows" because its P4 would have written about 4,400 sites; with
+P4 scoped, L carries the rest. At 100 sites per step the plan is **49 steps** (the first 94 sites in
+p4l-1001 .. p4l-1007, the last 54, the largest 100).
+
+`verify_writes4.py --lane p4l --plan logs/_write_apply_p4l/LANE_PLAN.jsonl` over the dry plan
+(read-only; the lane plan written by `write_gate4.write_lane_plan`): "lane p4l | stamps
+phase4l:p4l-% | planned rows 4499 | lane journal rows 0 | carried 0 | not yet written 4499",
+`RESULT: 0 deviation(s)`, `ACCEPT_EXIT=0` (`logs/p4l/accept-before-any-write.log` `fbba7e3b...`):
+the acceptance reads this plan and finds every row at its old value.
+
+### The first step rehearsed against production (ROLLBACK)
+
+`write_gate4.py --group L --legacy-plan phase4_runner/LEGACY4.jsonl --batch p4-1001 .. --batch
+p4-1007 --rehearse` (each REHEARSE.sql checked first: `ROLLBACK;`, no `COMMIT;`): **7 batches, 94
+rows over 94 sites** (14, 11, 14, 15, 14, 12, 14; 11 sites of the 105 refused `written-by-p4`),
+every guard and invariant 3 held inside each transaction, every row read back at its old value, 0
+journal rows under each stamp, no batch blocked, `every open batch rehearsed`, `WRITE_EXIT=0`
+(`logs/p4l/rehearse_step1.log` `c4c99aa9133432927656ab7b98c517174d87ca9d5a2bc38a98c9eeb5ee86fef3`).
+Plan digests `d2c05f2b` `cf25b72c` `73c07bc6` `d4516ca8` `dd5d58e1` `9b741c57` `1d421ca4`. Read
+afterwards: 0 journal rows under `phase4l:%`, 0 curated sites with a lane-L provenance, 487 with
+W/S/T/R. Nothing was applied.
+
+### When L is written
+
+The design's order (production_write, ORDER: "then the L rows once the held set is final") binds
+the apply: an L row changes `raw_data`, and a scope site P4 writes after its L row no longer holds
+the `raw_data` its P4 plan names - P4's preflight then refuses the whole P4 batch (fail-closed; the
+way back is `revert4.py --stamp-like 'phase4l:...' --site <id>`). The first step alone holds 29
+sites of the mass run's plan. So the plan is **read and built again after the last P4 step of the
+mass run is accepted** (and after the Roman Bath revert and the re-verification), and L's 49-odd
+steps follow; the plan of this entry is the rehearsal object, not the one to apply. A site held
+because its lane (T, R) has not passed its pilot is marked like any held site; should such a lane
+open later, its L row is reverted before its P4 write. The per-run L dry plans of pilot 4 in
+`wip/p4-pilot`'s `logs/_write_apply_p4l` (`p4l-0001` .. `p4l-0009`, never rehearsed or written)
+are moved aside first - the gate refuses the apply root otherwise.
+
+**The apply and its acceptance (the orchestrator's; from the merged worktree, main venv):**
+
+    PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe; M=output/remediation; R4=$M/phase4_runner
+    mv $M/logs/_write_apply_p4l $M/logs/_write_apply_p4l.per-run-dry-2026-09-24
+    $PY scripts/remediation/phase4/plan4.py read --out $R4/LEGACY4_ROWS.jsonl     # one read-only SELECT
+    $PY scripts/remediation/phase4/plan4.py legacy                                 # offline: $R4/LEGACY4.jsonl
+    $PY $M/tools/write_gate4.py --group L --legacy-plan $R4/LEGACY4.jsonl             # dry, read-only
+    $PY $M/tools/write_gate4.py --group L --legacy-plan $R4/LEGACY4.jsonl --rehearse  # every batch, ROLLBACK
+    # per step, until the gate says "done: no open batch left to write":
+    $PY $M/tools/write_gate4.py --group L --legacy-plan $R4/LEGACY4.jsonl --apply --step 100
+    $PY $M/tools/verify_writes4.py --lane p4l --plan $M/logs/_write_apply_p4l/LANE_PLAN.jsonl > $M/logs/p4l/accept-step-NN.log
+    $PY $M/tools/write_gate4.py --group L --accept $M/logs/p4l/accept-step-NN.log
+    # at the end: every planned row written
+    $PY $M/tools/verify_writes4.py --lane p4l --plan $M/logs/_write_apply_p4l/LANE_PLAN.jsonl --complete
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-L`, main venv)
+
+* 10 new test functions (13 items), 2 rewritten: `test_phase4_legacy.py` - L takes no scope and
+  marks every March text (replaces the out-of-scope test); `test_phase4_write.py` - one site
+  outside a real pinned scope through the gate (P4 and P5 refuse it, L plans it), L's population
+  and its counts, L written in steps and accepted on lane p4l (the command names no run), the source
+  checks for L, P4 and P5 (4 items), the foreign-batch refusal, `--batch` and a missing plan, the
+  strict read of the plan; P4 and P5 need the scope and L takes none (rewritten);
+  `test_phase4_plan.py` 3 - the L plan's order, numbering, mark and summary, its values byte for
+  byte, bad rows. The fake psql answers the gate's live-provenance read. Red first: the scope
+  removal's tests (10 failed) and the own plan's (12 failed) before their code; the `--batch` test
+  was written after its code and goes red under its three mutants.
+* `plan4.plan_site` is split out of `_site` unchanged: `plan4.py build` over wip/p4-pilot's inputs
+  rebuilds `PLAN4.pilot4.jsonl` (`e99f3f7f...`) and `--defect-scope` `PLAN4.scope.jsonl`
+  (`fec90379...`) byte for byte.
+* 31 new sweep cases (`P4_LEGACY_MUTATIONS`, a block of its own after `P4_SCOPE_MUTATIONS`); the 3
+  L cases of `P4_SCOPE_MUTATIONS` are retired with the code they guarded and the gate's options
+  case follows its line; 2,163 labels, all unique, every anchor and test present. The sweep's own
+  `main` (driver `logs/p4l/sweep_legacy.py`) over every case whose target the change touched (write4
+  106, write_gate4 60, plan4 40, legacy4 6, AUDIT_LOG 5, mutation_sweep 3): **220/220 caught**, the
+  tree byte-identical for its 6 files (`logs/p4l/sweep_legacy.log` `e319418e...`; the 8 touched
+  files' sha256 checked again against the record taken before it), `git status` clean afterwards,
+  no `# mutant` line left.
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`): **6,274 passed,
+  118 skipped, 57 deselected, 0 failed** (205 s; `logs/p4l/gates_pytest.log` `4893ef31...`); 6,379
+  before plus the 13 new items. The 118 skips are all gitignored data this fresh worktree does not
+  hold (Natural Earth, the snapshot, the S0 export, the design file ...); wip/p4-pilot's worktree,
+  which holds it, skips 111.
+* `ruff check` and `ruff format --check` clean on the 9 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check passes.
+
+### Merging into wip/p4-pilot
+
+* `phase4/` changes (`write4`, `plan4`, `legacy4`), so `mass4`'s digest over `phase4/*.py` changes:
+  a `mass4` invocation started before the merge stops between batches on its digest guard. Merge
+  between invocations, or after the mass run (L's apply follows it anyway).
+* `phase3/mutation_sweep.py` changes, so `mass_run.package_digest` over `phase3/` changes: merge
+  while no Phase-3 mass run is in flight. Its hunks: the three retired L cases, the moved options
+  anchor and the `P4S_L` constant inside `P4_SCOPE_MUTATIONS`, and the new block after
+  `MUTATIONS += P4_SCOPE_MUTATIONS` - away from the file's end, where wip/p4-pilot appends.
+* `write_gate4`: `--run` is no longer an argparse requirement (P4 and P5 still refuse to run without
+  it, now with `WRITE_EXIT=1` and a message); `_run` branches on the L plan before the scope, and
+  `run_batches` takes `run_dir: Path | None`. A wip/p4-pilot change to `_run` or `run_batches`
+  meets these hunks.
+* This entry is appended after the 2026-09-25 mid-run audit entry; a later wip/p4-pilot entry
+  conflicts only as two appends, kept in date order.
+
+### Open
+
+* **L's apply**, after the mass run's last P4 step is accepted: the commands above.
+* **HUMAN_ONLY D7**: 18 unclaimed today (10 same as d4526691, 8 not in it), listed per batch in
+  `logs/_write_apply_p4l/*/UNCLAIMED.jsonl` of the apply's plan.
 
 ## 2026-09-25 - the wrong-both correction lane (planned, checked and rehearsed on production; not applied), and Ahin Posh Tape's coordinates (not planned)
 
@@ -9995,3 +11199,225 @@ Push #2.
   the three touched production modules, mypy reports nothing in `api/services/lyra_tools.py`, the
   Lyra-image import check (`markdown`/`nh3` absent) imports `pipeline.lyra.orchestrator`. The
   independent acceptance (`verify_writes.py`, both lanes, 13:35 UTC): **0 deviations** each.
+
+## 2026-09-25 - Phase-4 mass run: 1,578 sites planned, 960 written in 13 accepted steps, 2 taken back, 984 live, 0 deviations
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`), run `runs/mass-2026-09-25`, plan
+`PLAN4.scope.jsonl` (`fec90379...`, unchanged since the defect-scope entry), apply root
+`logs/_write_apply_p4` - all gitignored. **Production was written by the P4 group only**
+(`description` and its `raw_data` provenance of defect-scope sites, stamps
+`phase4:p4-NNNN:chunk-0001`), every step rehearsed, applied, read back with its inverse proof and
+accepted by `verify_writes4.py`; two written sites were taken back with `revert4.py --site`. Every
+model question was answered by Opus through the handoff; **no DeepSeek, Pi, opencode gateway or
+MiniMax was called, and no search was made**. The short result is `phase4_runner/MASS_RESULT.md`.
+The mid-run audit's hit, the reviewer fix and the single-site revert path are the entry "Phase-4 mass
+run: the mid-run audit's WRONG_SITE (Roman Bath, York)" above; this entry records the whole run.
+
+### The scope and the stages before any question
+
+* **1,578 sites in 106 batches, `p4-0010` .. `p4-0115`**: 12 groups of 8 batches (120 sites each) and
+  a last group of 10 batches (138 sites). Every `mass4.py` round printed `defect scope SCOPE4.json v1
+  19a57e9fd17f5360: 0 site(s) of the open batches outside it`, every `write_gate4.py` call `120 of the
+  run's 120 sites` (the last group 138 of 138): the scope refusal `outside-defect-scope` had no
+  mass-run site to refuse.
+* S0-S3 export for all 106 batches in one round, 2026-09-24 23:29-23:40 CEST
+  (`logs/p4_mass/export.out`, `--stages prepare,sources,routes,select --searches-off --handoff-export
+  handoff/p4-mass-select`, `STAGE_EXIT=0`; "searches off: every routes stage is told 0 and builds no
+  MiniMax client"). Lanes at S1b (`lanes.jsonl` of every batch): **W 1,321, S 100, none 157**. The 157
+  were held before any question: `search-stopped` 103 (the T, R and B3 candidates; searches off),
+  `scope-pending` 35, `revision-too-fresh` 19.
+* The run's ledger (`runs/mass-2026-09-25/LEDGER.jsonl`, `55b48e29...`): 4,485 lines - 2,090 fetch lines
+  (2,086 ok, 4 HTTP errors), 2,395 model lines (select 1,392, review 1,003), every one
+  `anthropic/claude-opus-5-5 (Claude Code agent)`, unmetered; `progress.json`: `calls 2395, cost_usd
+  0.0, searches 0`.
+
+### The Opus handoff, group by group
+
+Each group went through the same sequence, run by the orchestrator's helper `C:/tmp/p4m_group.sh`
+(its header: "orchestrator helper, not versioned"; modes `select` and `review`); every command's
+header and exit line are in `logs/p4_mass/group-p4-NNNN-select.log` and `-review.log`, group 1's in
+the per-batch logs:
+
+1. the group's selector questions answered in `handoff/p4-mass-select` (`opus_handoff.py answer`),
+   `opus_handoff.py validate` (answered, stale, malformed), then `mass4.py --plan PLAN4.scope.jsonl
+   --run-dir runs/mass-2026-09-25 --log-dir logs/p4_mass --only <group> --searches-off --live
+   --stages select --handoff-import handoff/p4-mass-select`;
+2. `--stages translate --handoff-export handoff/p4-mass-translate` (lane T is closed: no question, no
+   directory; the helper stops with exit 2 should one appear), then `--stages
+   translate,assemble,verify --handoff-import` from it, then `--stages review --handoff-export
+   handoff/p4-mass-review`;
+3. the review questions answered, `validate`, `--stages review --handoff-import
+   handoff/p4-mass-review`, `run4.py holds --run-dir runs/mass-2026-09-25`;
+4. `write_gate4.py --group P4 --run mass-2026-09-25 --open-lanes W,S --batch <each of the group's>`:
+   dry, `--rehearse` (every APPLY ending in ROLLBACK; `every open batch rehearsed`), `--apply --step
+   100` - `STEP COMPLETE: <n> site(s) written in <b> batch(es)`, `WRITE_EXIT=0`;
+5. `verify_writes4.py --lane p4 --plan logs/_write_apply_p4/LANE_PLAN.jsonl --run
+   runs/pilot4-2026-09-24 --run runs/mass-2026-09-25 > logs/p4_mass/accept-step-NN.log`, and only on
+   `ACCEPT_EXIT=0` the same gate call with `--accept` on that log (`ACCEPTED/step-00NN.json`).
+
+**Who answered** (the `answered_by`, `answered_at` and `model` of every answer file): one Opus agent
+per batch and stage. 106 selector agents (`opus-p4m-select-p4-NNNN`) wrote the 1,392 selector
+answers, 2026-09-24T21:51:23Z .. 2026-09-25T11:14:32Z; 106 review agents (`opus-p4m-review-p4-NNNN`)
+the 1,003 review answers, 22:36:39Z .. 11:33:23Z. Sorted by start, no agent's answering interval
+overlaps the next one's: **they ran one at a time**. Group 5's 78 review answers, given under the old
+reviewer pin, stay aside unimported (`handoff/p4-mass-review-stale-reviewer-89e6035d/`); its questions
+were answered again under the new pin.
+
+| group | batches | selector questions | review questions | sites written | site-held | step |
+|---|---|---|---|---|---|---|
+| 1 | p4-0010 .. p4-0017 | 112 | 74 | 71 | 49 | 2 |
+| 2 | p4-0018 .. p4-0025 | 111 | 88 | 84 | 36 | 3 |
+| 3 | p4-0026 .. p4-0033 | 108 | 80 | 76 | 44 | 4 |
+| 4 | p4-0034 .. p4-0041 | 109 | 82 | 79 | 41 | 5 |
+| 5 | p4-0042 .. p4-0049 | 111 | 78 | 75 | 45 | 6 |
+| 6 | p4-0050 .. p4-0057 | 109 | 82 | 78 | 42 | 7 |
+| 7 | p4-0058 .. p4-0065 | 110 | 78 | 72 | 48 | 8 |
+| 8 | p4-0066 .. p4-0073 | 108 | 68 | 64 | 56 | 9 |
+| 9 | p4-0074 .. p4-0081 | 104 | 64 | 64 | 56 | 10 |
+| 10 | p4-0082 .. p4-0089 | 99 | 77 | 74 | 46 | 11 |
+| 11 | p4-0090 .. p4-0097 | 98 | 67 | 63 | 57 | 12 |
+| 12 | p4-0098 .. p4-0105 | 98 | 77 | 75 | 45 | 13 |
+| 13 | p4-0106 .. p4-0115 | 115 | 88 | 85 | 53 | 14 |
+| **all** | **106** | **1,392** | **1,003** | **960** | **618** | |
+
+Questions from the ledger's model lines; written and site-held from each batch's `PLAN.jsonl` and
+`REFUSED.jsonl` in the apply root (the gate's `refused by rule: {'site-held': n}`). 1,392 selector
+questions = 1,578 less the 157 held before S3 and the 29 lane-S sites whose article offers no sentence
+naming them (held `no-source`, no call bought).
+
+### The steps and their acceptance (`logs/_write_apply_p4/ACCEPTED/`)
+
+| step | sites | rows | planned / journal / carried / not yet written | re-verified (V1-V15) | RESULT | output sha256 |
+|---|---|---|---|---|---|---|
+| 1 (pilot 4, p4-0001 .. p4-0009) | 26 | 52 | 52 / 52 / 52 / 0 | 26 | 0 deviations | `6b81cfda` |
+| 2 | 71 | 142 | 194 / 194 / 194 / 0 | 97 | 0 | `e206aa90` |
+| 3 | 84 | 168 | 362 / 362 / 362 / 0 | 181 | 0 | `384bbfd1` |
+| 4 | 76 | 152 | 514 / 514 / 514 / 0 | 257 | 0 | `3cd28706` |
+| 5 | 79 | 158 | 672 / 672 / 672 / 0 | 336 | 0 | `71df707e` |
+| after the Roman Bath revert (`accept-after-roman-bath.log`) | | | 672 / 672 / 670 / 2 | 335 | 0 | |
+| after the Altar revert (`accept-after-reverify.log`) | | | 672 / 672 / 668 / 4 | 334 | 0 | |
+| 6 | 75 | 150 | 822 / 822 / 818 / 4 | 409 | 0 | `de915ce3` |
+| 7 | 78 | 156 | 978 / 978 / 974 / 4 | 487 | 0 | `4bbedbf1` |
+| 8 | 72 | 144 | 1,122 / 1,122 / 1,118 / 4 | 559 | 0 | `6f04bd3a` |
+| 9 | 64 | 128 | 1,250 / 1,250 / 1,246 / 4 | 623 | 0 | `e3bbec0d` |
+| 10 | 64 | 128 | 1,412 / 1,378 / 1,374 / 38 | 687 | 0 | `9599bc5a` |
+| 11 | 74 | 148 | 1,526 / 1,526 / 1,522 / 4 | 761 | 0 | `7283edeb` |
+| 12 | 63 | 126 | 1,652 / 1,652 / 1,648 / 4 | 824 | 0 | `edc73e54` |
+| 13 | 75 | 150 | 1,802 / 1,802 / 1,798 / 4 | 899 | 0 | `b06cec0e` |
+| 14 | 85 | 170 | 1,972 / 1,972 / 1,968 / 4 | 984 | 0 | `2c5eaf52` |
+
+Step 10's 38 not yet written are the 4 rows of the two reverted sites and 34 rows of p4-0082 and
+p4-0083 (10 + 7 sites), still at their old value: group 10's dry gate run rendered those two batches'
+`PLAN.jsonl` before it stopped on p4-0084 (their `chunks/` directories date from 11:49:22 CEST), and
+the lane plan is every rendered batch's `PLAN.jsonl` (`write_gate4.write_lane_plan`), rebuilt by
+group 9's apply. Step 11 wrote and carried them. **The end state, step 14 (13:35:47 CEST): 1,972 planned rows, 1,972
+journal rows, 1,968 carried, 4 not yet written (the two reverted sites), 984 sites re-verified, 0
+deviations** - 958 mass sites and pilot 4's 26. `LANE_PLAN.jsonl` holds the 1,972 rows
+(`f3a7899e...`).
+
+### The holds (`runs/mass-2026-09-25/HOLDS4.jsonl`, 909 lines, `3b16b3a9...`)
+
+Site scope: 625 lines over **620 sites** - the 618 the gate refused `site-held` and the two taken back
+(`audit-wrong-site`). By each site's first reason and its S1b lane:
+
+| reason | W | S | none | sites |
+|---|---|---|---|---|
+| `abstained` (the selector's ABSTAIN) | 232 | 35 | | 267 |
+| `search-stopped` | | | 103 | 103 |
+| `V14` (T03 severe, country) | 76 | 2 | | 78 |
+| `scope-pending` | | | 35 | 35 |
+| `no-source` | | 29 | | 29 |
+| `V9` (shorter than the stored text) | 24 | 3 | | 27 |
+| `V6` (sentence 1 names no name) | 24 | | | 24 |
+| `revision-too-fresh` (pinned revision younger than 48 h) | | | 19 | 19 |
+| `V5` | 14 | | | 14 |
+| `review-too-few-sentences` | 13 | 2 | | 15 |
+| `selection-refused` | 4 | | | 4 |
+| `audit-wrong-site` | 2 | | | 2 |
+| `V7` | | 2 | | 2 |
+| `V15` | 1 | | | 1 |
+| **held** | **390** | **73** | **157** | **620** |
+
+Five sites carry a second site hold (V5+V14 three, V5+V8, V6+V14), hence 625 lines. Card scope: 284
+lines over 265 sites - `V10` 162, `card-too-short-after-review` 122, 19 sites both; 223 of the 265
+carry a written description, 42 are site-held (Roman Bath and Altar of Athena Polias among them).
+What those cards get is the Phase-5 sitting's.
+
+**Coverage, T8-style - reported, not gating** (owner decision 2026-09-24, `PILOT_RESULT_3.md`):
+**933 of 1,321 lane-W sites written = 70.6 %** (931 = 70.5 % after the two reverts); lane S 27 of 100.
+
+### The audits and the re-verification
+
+* **Mid-run audit** (after step 5): 45 of the 336 written sites (`midrun_sample.txt` `446663d5...`),
+  `MIDRUN_AUDIT_VERDICTS.json` `15577da6...`: 280 sentences, 279 SUPPORTED, **1 WRONG_SITE** (Roman
+  Bath, York, sentence 1: the pub); 36 cards contained, 9 sites without a card; 0 lost hedges or
+  negations, flipped meanings, broken sentences, verifier false-passes or gold errors. The writes
+  stopped; the reviewer's DROP line, its re-pin and the revert path are the entry above.
+* **The WRONG_SITE check of every written site** (the design's consequence of a T2 hit): input
+  `REVERIFY_WRONG_SITE_INPUT.jsonl` (`c5e56457...`, 336 sites, 2,046 sentences), answered by Opus
+  (8 agents, per `C:/tmp/applied_today.md`), verdicts `REVERIFY_WRONG_SITE_VERDICTS.json`
+  (`be5e964f...`, 336 entries): 333 without a hit, 3 flagged -
+  * **Roman Bath, York** (p4-0036), sentences 1 and 2 - already taken back
+    (`revert4.py --stamp-like 'phase4:p4-0036:chunk-0001' --site 70037a24-...`, 2 rows, reversals
+    kept 2; `accept-after-roman-bath.log`);
+  * **Altar of Athena Polias** (p4-0038, `78c18ef3-5f91-4629-bfef-37b0f13b2bef`), sentence 4: the
+    Gigantomachy pediment belongs to the Archaic Temple of Athena Polias, not to the open-air altar
+    (the verdict adds that sentences 2 and 3 carry the same conflation as a factual error). Held with
+    `audit4.py hold` from `REVERIFY_WRONG_SITE_HOLDS.json` (`6af6a8b0...`; the `HOLDS4.jsonl` line
+    cites file and digest), taken back with `revert4.py --stamp-like 'phase4:p4-0038:chunk-0001'
+    --site 78c18ef3-...` (2 rows, reversals kept 2), accepted: 672 / 672 / 668 / 4, 334 re-verified,
+    0 deviations (`accept-after-reverify.log`);
+  * **Kit Hill** (pilot 4, p4-0003), sentence 6, subject "East Kit Hill Mine" (worked 1855-1909):
+    **kept** - the mine is a later use of the hill itself, not another thing sharing its name. That
+    judgement is the orchestrator's and is recorded only in `C:/tmp/applied_today.md`.
+  Writes resumed with step 6.
+* **The 500-site audit** (design entry [6]: "10 random written sites after every 500"): when the mass
+  sites written passed 500 (step 8), 10 sites written since the first audit (`audit500_sample.txt`
+  `3d050f2c...`; sheets `AUDIT500_SHEETS.md` `df5f3aba...`), verdicts `AUDIT500_VERDICTS.json`
+  (`48fd22cd...`): **66 sentences, all SUPPORTED; 8 cards contained, 2 sites without a card; 0
+  flags** of any kind. Group 8's write waited for it (verdicts 09:54, step 9 accepted 09:56 CEST).
+  The next mark, 1,000 mass sites written, is not reached: 960.
+
+### Fixed during the run (test-first, each with its sweep)
+
+* `ccfb426` - `verify_writes4.py --run` repeats. The pilot's and the mass run's writes share the
+  `phase4:` stamps, so a mass step's acceptance re-verifies the pilot's sites; with one `--run` it
+  found them in no run and counted each as a deviation. A site two runs carry is refused. Sweep
+  34/34.
+* `004d522` - the acceptance reads a batch in full only when its `input.json` plans a written site
+  (reading every batch stopped the first mass step's acceptance on the unassembled p4-0026); such a
+  batch that cannot be read still stops it. Sweep 35/35.
+* The reviewer's DROP line for a later building, business or institution sharing the site's name
+  (pin `097c4589...`), `revert4.py --site`, `audit4.py hold` and the gate's re-plan without a reverted
+  site: the entry above.
+* `9c8f5ef`, `9f01785` - T03 reads a dot thousands separator. The review import stopped on p4-0076
+  (`parse_year('35.000 BC') returned None for a digit token`, a Berbati sentence "around
+  100.000-35.000 BCE") and p4-0084 (`'5.200 BC'`), and the gate's dry run stopped on the same assert
+  three times (`group-p4-0074-review.log`, `group-p4-0082-review.log`): fail-closed, nothing written.
+  After the fix both batches imported (p4-0076 9 assembled, 6 held; p4-0084 11 assembled, 4 held)
+  and groups 9 and 10 were written. Sweep 1/1.
+
+### Open
+
+* **Lane L**, re-planned after step 14 as its entry requires: `LEGACY4.jsonl` `62772cac...`, 334
+  batches; the gate reads live phase-4 provenance on 984 of 5,004 sites and plans **4,003 rows**
+  (refused `written-by-p4` 984, `no-legacy-claim` 17 - HUMAN_ONLY D7: `same-as-snapshot` 9,
+  `not-in-snapshot` 8), every batch rehearsed (`logs/p4l/rehearse-all.log`). It is being written
+  now, step by step, by a background loop from this worktree: at 14:02 CEST steps 1 and 2 were
+  accepted (99 and 94 sites; `lane journal rows 193 | carried 193 | not yet written 3810`, 0
+  deviations) and step 3 (90 sites) was written. Its end: `verify_writes4.py --lane p4l --plan
+  logs/_write_apply_p4l/LANE_PLAN.jsonl --complete`.
+* **The Phase-5 sitting and Push #2** (HUMAN_ONLY D5): card texts through the journal, the card file
+  regenerated byte for byte, the push. P5's plan reads this run's card holds above.
+* **card_stats** (`card-stats-2026-09-23`, the main checkout's runbook step 1): its premise holds
+  `md5(description)`, so it is re-planned now that the P4 writes have ended.
+* **The 19 `revision-too-fresh` sites**: `mass4.py` re-queues them itself 48 h after their hold -
+  "19 waiting (the first until 2026-09-26T21:30:14+00:00)" in every round's header.
+* **The final acceptance of 60 sites** (`acceptance/PROTOCOL.md`, sealed on `integrate/wave1`): its
+  draw takes this run's audit samples as exclusions (`logs/p4_mass/midrun_sample.txt`,
+  `audit500_sample.txt`).
+* **The merge into `integrate/wave1`**: `wip/merge-p4` (worktree `.claude/worktrees/merge-p4`) holds
+  `wip/p4-pilot` up to `9f01785`; this entry and `MASS_RESULT.md` come after it, and it lacks
+  `integrate/wave1`'s five Phase-6 commits `ff9a570` .. `a2ac917`.
+* The selector's rule (8) keeps the gap the reviewer line closes (entry above): a decision for a
+  later run.

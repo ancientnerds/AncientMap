@@ -7062,8 +7062,8 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify4: V10 a card may open with a pronoun",
         P4_VERIFY,
-        "        if text is not None and opens_with_pronoun(\n",
-        "        if False and opens_with_pronoun(  # mutant\n",
+        "        if lean is not None:\n",
+        "        if False:  # mutant\n",
         P4_VERIFY_TEST,
         "test_v10_a_card_opening_with_a_pronoun_is_held",
     ),
@@ -7242,6 +7242,22 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        elif False:  # mutant\n",
         P4_ACCEPT_TEST,
         "test_a_planned_row_the_lane_has_not_written_yet_must_hold_its_old_value",
+    ),
+    (
+        "p4 verify_writes4: a site two runs carry is taken from the last",
+        P4_ACCEPT,
+        "            if site_id in found:\n",
+        "            if False:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_site_two_runs_carry_is_refused",
+    ),
+    (
+        "p4 verify_writes4: a batch without a written site is read anyway",
+        P4_ACCEPT,
+        "        if wanted is not None and not batch_site_ids(batch_dir) & wanted:\n",
+        "        if False:  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_a_batch_without_a_written_site_is_not_read",
     ),
     (
         "p4 verify_writes4: another value than the plan passes",
@@ -13327,8 +13343,9 @@ PHASE4_SELECT_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 model: unknown is not protected",
         P4_MODEL,
-        '        "refutation": ("unknown",),\n',
-        "",
+        # re-anchored 2026-09-24: pilot 2 (T3) made the refutation additions a multi-line tuple
+        '            "unknown", "wrongly", "mistaken*",',
+        '            "wrongly", "mistaken*",',
         P4B_SENT_TEST,
         "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
     ),
@@ -16816,8 +16833,8 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "p4 prompts: the selector's first sentence need not name the site",
         P4P2_PROMPTS,
         '    "(7) your first DESC sentence must name the site: its name, an alias or an also_named '
-        'name of "\n    "the site element;\\n"\n',
-        "    # mutant: rule (7) gone\n",
+        'name of "\n',
+        "    # mutant: rule (7)'s head gone\n",
         P4P2_SELECT_TEST,
         "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
     ),
@@ -17052,8 +17069,9 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 pilot: pilot 2 takes fixed members other than pilot 1's",
         P4P_PILOT4,
-        "    if earlier and list(strata.items()) != earlier_fixed:\n",
-        "    if False:  # mutant\n",
+        # re-anchored 2026-09-24: pilot 3's build checks every earlier pilot in a loop
+        "        if list(strata.items()) != earlier_fixed:\n",
+        "        if False:  # mutant\n",
         P4P_PILOT_TEST,
         "test_pilot_2_refuses_fixed_members_that_are_not_pilot_1s",
     ),
@@ -17068,7 +17086,8 @@ P4_PILOT2_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 pilot: build ignores the earlier pilot it is told",
         P4P_PILOT4,
-        "    earlier = R.read_jsonl(Path(args.after)) if args.after else []\n",
+        # re-anchored 2026-09-24: pilot 3's --after is given once per earlier pilot
+        "    earlier = [R.read_jsonl(Path(path)) for path in args.after]\n",
         "    earlier = []  # mutant\n",
         P4P_PILOT_TEST,
         "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
@@ -18044,6 +18063,1760 @@ OPUS_ROUND3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += OPUS_ROUND3_MUTATIONS
+
+
+# ── pilot 2's root causes fixed (2026-09-24), and pilot 3's draw ─────────────────────────────────
+#: Pilot 2 failed T3 (a `p` drop took House of the Faun's correction "actually a satyr"), T4/T6 (V10
+#: had no demonym table: "a Danish hill", "the first Greek site"), T5's rule gaps (a mid-sentence
+#: ". " before a lowercase word, a preposition before a comma, a garbled source sentence) and T8 (V6
+#: refused a stored name with a disambiguator under a strong 'own' verdict):
+#: `output/remediation/phase4_runner/PILOT_RESULT_2.md`.
+P4P3_MODEL = "scripts/remediation/phase4/model4.py"
+P4P3_VERIFY = "scripts/remediation/phase4/verify4.py"
+P4P3_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
+P4P3_SENT_TEST = "tests/remediation/test_phase4_sentences.py"
+P4P3_SENT = "scripts/remediation/phase4/sentences.py"
+P4P3_SELECT = "scripts/remediation/phase4/select_stage.py"
+P4P3_WRITE_GATE = "output/remediation/tools/write_gate4.py"
+P4P3_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4P3_RUN4 = "scripts/remediation/phase4/run4.py"
+P4P3_MASS4 = "scripts/remediation/phase4/mass4.py"
+P4P3_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4P3_PILOT4 = "scripts/remediation/phase4/pilot4.py"
+P4P3_PILOT_TEST = "tests/remediation/test_phase4_pilot.py"
+P4P3_COUNTRY = "pipeline/utils/country_lookup.py"
+P4P3_DEMONYM_TEST = "tests/pipeline/test_country_demonyms.py"
+P4P3_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4P3_SELECT_TEST = "tests/remediation/test_phase4_select.py"
+
+P4_PILOT3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── T3: correction and contrast markers are protected ────────────────────────────────────
+    (
+        "p4 model: a correction or contrast marker is not protected",
+        P4P3_MODEL,
+        '        "contrast": (\n            "actually", "in fact", "in reality", "instead", '
+        '"rather", "whilst", "nevertheless",\n            "nonetheless", "contrary", "unlike",\n'
+        "        ),\n",
+        "",
+        P4P3_VERIFY_TEST,
+        "test_a_correction_or_contrast_marker_is_protected",
+    ),
+    (
+        "p4 model: a misidentification or an error word is not protected",
+        P4P3_MODEL,
+        '            "unknown", "wrongly", "mistaken*", "erroneous*", "incorrect*", "misidentif*",\n'
+        '            "misattribut*",\n',
+        '            "unknown",\n',
+        P4P3_SENT_TEST,
+        "test_a_span_carrying_an_unlisted_hedge_or_a_contracted_negation_is_never_offered",
+    ),
+    # ── T4/T6: the demonym table and V10 ─────────────────────────────────────────────────────
+    (
+        "p4 verify4: a card that names a nationality passes V10",
+        P4P3_VERIFY,
+        "    if nationality:\n"
+        '        problems.append(f"the card names a nationality: {nationality}")\n',
+        "",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a demonym's plural or -man noun is no demonym",
+        P4P3_VERIFY,
+        '        + r")(?:s|m[ae]n|wom[ae]n)?(?!\\w)",\n',
+        '        + r")(?!\\w)",  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a lower-case word counts as a demonym",
+        P4P3_VERIFY,
+        "        if m.group(0)[0].isupper()\n"
+        "        and not any(start <= m.start() and m.end() <= end for start, end in cultures)\n",
+        "        if not any(start <= m.start() and m.end() <= end for start, end in cultures)  # m\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a demonym inside a longer word counts",
+        P4P3_VERIFY,
+        '    return re.compile(\n        r"(?<!\\w)(?:"\n',
+        '    return re.compile(\n        r"(?:"  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 country_lookup: Denmark's adjective is no demonym",
+        P4P3_COUNTRY,
+        '    "DK": ("Danish", "Dane"),\n',
+        '    "DK": ("Dane",),  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 country_lookup: a country of the vocabulary has no demonym",
+        P4P3_COUNTRY,
+        '    "PE": ("Peruvian",),\n',
+        "",
+        P4P3_DEMONYM_TEST,
+        "test_every_country_of_the_vocabulary_has_its_demonyms_and_nothing_else",
+    ),
+    (
+        "p4 country_lookup: the table drops a demonym of the retired style rule",
+        P4P3_COUNTRY,
+        '    "SY": ("Syrian",),\n',
+        '    "SY": ("Syrians",),  # mutant\n',
+        P4P3_DEMONYM_TEST,
+        "test_the_table_keeps_every_demonym_of_the_retired_card_style_rule",
+    ),
+    (
+        "p4 prompts: the selector's card may carry a nationality adjective",
+        P4P3_PROMPTS,
+        '    "country and no modern nationality adjective such as Danish or Spanish, has no '
+        'parentheses, "\n',
+        '    "country, has no parentheses, "  # mutant\n',
+        P4P3_SELECT_TEST,
+        "test_the_selector_card_rule_names_no_nationality_adjective",
+    ),
+    # ── pilot 3, decision 1: design entry [6] wins - cultural adjectives pass V10 ───────────────
+    (
+        "p4 country_lookup: an ancient culture's word is held as a modern demonym",
+        P4P3_COUNTRY,
+        "    if demonym not in ANCIENT_CULTURE_ADJECTIVES\n",
+        "",
+        P4P3_DEMONYM_TEST,
+        "test_the_held_demonyms_are_the_table_without_the_ancient_cultures",
+    ),
+    (
+        "p4 country_lookup: Egyptian is no ancient culture",
+        P4P3_COUNTRY,
+        '"Roman", "Greek", "Egyptian", "Maya",',
+        '"Roman", "Greek", "Maya",',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 country_lookup: Greek is no ancient culture",
+        P4P3_COUNTRY,
+        '"Roman", "Greek", "Egyptian", "Maya",',
+        '"Roman", "Egyptian", "Maya",',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 country_lookup: Macedonian is no ancient culture",
+        P4P3_COUNTRY,
+        '    "Hellenic", "Hellene", "Macedonian",\n',
+        '    "Hellenic", "Hellene",\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 country_lookup: Romano-British is no ancient culture",
+        P4P3_COUNTRY,
+        '    "Romano-British", "Gallo-Roman",\n',
+        '    "Gallo-Roman",\n',
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 verify4: V10 holds the ancient cultures, not the modern nationalities",
+        P4P3_VERIFY,
+        "_DEMONYM = _word_forms(MODERN_NATIONALITY_DEMONYMS)\n",
+        "_DEMONYM = _word_forms(ANCIENT_CULTURE_ADJECTIVES)  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_card_that_names_a_nationality_is_held",
+    ),
+    (
+        "p4 verify4: a demonym inside a culture's word is held",
+        P4P3_VERIFY,
+        "        if m.group(0)[0].isupper()\n"
+        "        and not any(start <= m.start() and m.end() <= end for start, end in cultures)\n",
+        "        if m.group(0)[0].isupper()  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_a_cultural_adjective_is_not_held",
+    ),
+    (
+        "p4 verify4: a demonym after a culture's word is not held",
+        P4P3_VERIFY,
+        "        and not any(start <= m.start() and m.end() <= end for start, end in cultures)\n",
+        "        and not any(start <= m.start() for start, end in cultures)  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v10_no_word_of_an_ancient_culture_is_ever_held",
+    ),
+    (
+        "p4 prompts: the selector's card rule forbids a cultural adjective",
+        P4P3_PROMPTS,
+        "cultural adjectives such as Roman, Egyptian or Maya are fine; ",
+        "",
+        P4P3_SELECT_TEST,
+        "test_the_selector_card_rule_names_no_nationality_adjective",
+    ),
+    # ── pilot 3, decision 2: the selector is told V6's positional pronoun rule ─────────────────
+    (
+        "p4 prompts: the selector is not told V6's pronoun rule",
+        P4P3_PROMPTS,
+        '    "(10) a DESC sentence may open with It, Its, This, These, They, Their, He, She, His, '
+        'Her, "\n'
+        '    "The latter, The former, Here or There (after its removals) only if the sentence '
+        'numbered one "\n'
+        '    "lower, in the same section, is also one of your DESC sentences; so your first DESC '
+        'sentence "\n'
+        '    "never opens with one of these words. The same holds for a DESC sentence whose first '
+        'it, its, "\n'
+        '    "they, their, them, he, his, him, she or her (after its removals) is it, they, he or '
+        'she and "\n'
+        "    'stands right after the sentence\\'s first comma, or right after \"that\" with no "
+        '"the", "a" or \'\n'
+        '    \'"an" before it: "Standing on a ridge, it was made into a fort" and "Pottery '
+        "sherds show that '\n"
+        "    'it was occupied\" need the sentence before them.\\n'\n",
+        "",
+        P4P3_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 prompts: rule (10) lets the first DESC sentence open with a pronoun",
+        P4P3_PROMPTS,
+        '"lower, in the same section, is also one of your DESC sentences; so your first DESC '
+        'sentence "\n    "never opens with one of these words. The same holds for a DESC sentence '
+        'whose first it, its, "\n',
+        '"lower, in the same section, is also one of your DESC sentences. The same holds for a "'
+        '  # mutant\n    "DESC sentence whose first it, its, "\n',
+        P4P3_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 model: V6's pronoun list gains a word the selector is not told",
+        P4P3_MODEL,
+        '    "The former", "Here", "There",\n)  # fmt: skip\n',
+        '    "The former", "Here", "There", "Those",\n)  # fmt: skip\n',
+        P4P3_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    # ── T5: the two garbles V5 holds and S2's pool refuses, and the reviewer's DROP ────────────
+    (
+        "p4 verify4: a full stop before a lowercase word passes V5",
+        P4P3_VERIFY,
+        "        if text[match.end()].islower() and not initialism:\n",
+        "        if False:  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v5_a_garbled_sentence_is_held",
+    ),
+    (
+        "p4 verify4: the stop of an initialism is held",
+        P4P3_VERIFY,
+        "        if text[match.end()].islower() and not initialism:\n",
+        "        if text[match.end()].islower():  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: the stop of a single letter is held",
+        P4P3_VERIFY,
+        '        initialism = "." in word or (len(word) == 1 and word.isalpha())\n',
+        '        initialism = "." in word  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: a stop after a bracket's initialism is held",
+        P4P3_VERIFY,
+        '        word = (before.group(0) if before else "").lstrip("([\\"\'“‘«")\n',
+        '        word = before.group(0) if before else ""  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: a preposition before a comma passes V5",
+        P4P3_VERIFY,
+        "    if _PREPOSITION_COMMA.search(text):\n",
+        "    if False:  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v5_a_garbled_sentence_is_held",
+    ),
+    (
+        "p4 verify4: the end of a longer word counts as a preposition",
+        P4P3_VERIFY,
+        '    r"(?<![\\w\'’-])(?:" + "|".join(map(re.escape, M.PREPOSITIONS_NO_COMMA)) + r"),"\n',
+        '    r"(?:" + "|".join(map(re.escape, M.PREPOSITIONS_NO_COMMA)) + r"),"  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_the_garble_cases_v5_judges_exactly",
+    ),
+    (
+        "p4 verify4: V5 does not read the garble rules",
+        P4P3_VERIFY,
+        '        problems.extend(f"{where}: {label}" for label in ill_formed(text))\n',
+        "",
+        P4P3_VERIFY_TEST,
+        "test_v5_a_garbled_sentence_is_held",
+    ),
+    (
+        "p4 sentences: a garbled sentence is offered in the pool",
+        P4P3_SENT,
+        "        and not garbled(s)\n",
+        "",
+        P4P3_SENT_TEST,
+        "test_a_garbled_source_sentence_is_never_in_the_pool",
+    ),
+    (
+        "p4 sentences: a full stop before a lowercase word is no garble",
+        P4P3_SENT,
+        "        if match.group(2).islower() and not abbreviation:\n",
+        "        if False:  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: the stop of an initialism is a garble",
+        P4P3_SENT,
+        '        abbreviation = "." in word or (len(word) == 1 and word.isalpha())\n',
+        "        abbreviation = False  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: a stop after a bracket's initial is a garble",
+        P4P3_SENT,
+        "        word = match.group(1).lstrip(_OPENERS)\n",
+        "        word = match.group(1)  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: a preposition before a comma is no garble",
+        P4P3_SENT,
+        "    return _PREPOSITION_THEN_COMMA.search(s) is not None\n",
+        "    return False  # mutant\n",
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 sentences: the end of a longer word counts as a preposition",
+        P4P3_SENT,
+        '    r"(?<![\\w\'’-])(?:" + "|".join(re.escape(word) for word in M.PREPOSITIONS_NO_COMMA) '
+        '+ r"),"\n',
+        '    r"(?:" + "|".join(re.escape(word) for word in M.PREPOSITIONS_NO_COMMA) + r"),"  # m\n',
+        P4P3_SENT_TEST,
+        "test_the_garble_cases_s2_judges_exactly",
+    ),
+    (
+        "p4 model: of may stand before a comma",
+        P4P3_MODEL,
+        '    "of", "at", "by", "for", "from", "into", "onto", "to", "upon", "with", "than", "until",\n',
+        '    "at", "by", "for", "from", "into", "onto", "to", "upon", "with", "than", "until",\n',
+        P4P3_VERIFY_TEST,
+        "test_s2_and_v5_judge_the_same_sentences_garbled",
+    ),
+    (
+        "p4 prompts: the reviewer keeps a garbled sentence",
+        P4P3_PROMPTS,
+        '    "DROP a sentence that is garbled or ungrammatical, even when it copies the source word '
+        'for "\n    "word.\\n"\n',
+        "",
+        P4P3_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_garbled_sentence",
+    ),
+    # ── T8: the stored name's base under a strong 'own' verdict, on both sides ────────────────
+    (
+        "p4 verify4: the stored name's base is no name",
+        P4P3_VERIFY,
+        "        base = name_base(site.name)\n        if base is not None:\n"
+        '            names.append(base)\n        title = meta.get("title")\n',
+        '        title = meta.get("title")\n',
+        P4P3_VERIFY_TEST,
+        "test_v6_the_stored_names_base_counts_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: the stored name's base counts for any verdict",
+        P4P3_VERIFY,
+        "    if _strong_own(gate if isinstance(gate, Mapping) else None):\n"
+        "        base = name_base(site.name)\n        if base is not None:\n"
+        "            names.append(base)\n",
+        "    base = name_base(site.name)  # mutant\n    if base is not None:\n"
+        "        names.append(base)\n"
+        "    if _strong_own(gate if isinstance(gate, Mapping) else None):\n",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_counts_only_for_a_strong_own_verdict",
+    ),
+    (
+        "p4 verify4: a name's final parenthesis is no disambiguator",
+        P4P3_VERIFY,
+        "    match = _DISAMBIGUATED.fullmatch(stripped)\n",
+        "    match = None  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_of_a_stored_name",
+    ),
+    (
+        "p4 verify4: a parenthesis inside the name is a disambiguator",
+        P4P3_VERIFY,
+        "    match = _DISAMBIGUATED.fullmatch(stripped)\n",
+        "    match = _DISAMBIGUATED.match(stripped)  # mutant\n",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_of_a_stored_name",
+    ),
+    (
+        "p4 verify4: a name's comma is no disambiguator",
+        P4P3_VERIFY,
+        '    if "," in stripped:\n        return stripped.split(",", 1)[0].strip() or None\n',
+        "",
+        P4P3_VERIFY_TEST,
+        "test_v6_the_base_of_a_stored_name",
+    ),
+    (
+        "p4 select: the stored name's base is no name",
+        P4P3_SELECT,
+        "        base = name_base(site.name)\n        if base is not None:\n"
+        "            names.append(base)\n",
+        "",
+        P4P3_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_base_name",
+    ),
+    (
+        "p4 select: the stored name's base counts for any verdict",
+        P4P3_SELECT,
+        "    if _strong_own(meta.subject_gate):\n        base = name_base(site.name)\n"
+        "        if base is not None:\n            names.append(base)\n",
+        "    base = name_base(site.name)  # mutant\n    if base is not None:\n"
+        "        names.append(base)\n    if _strong_own(meta.subject_gate):\n",
+        P4P3_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_base_name",
+    ),
+    (
+        "p4 select: a nested parenthesis is a disambiguator",
+        P4P3_SELECT,
+        '    if bracket and group.endswith(")") and ")" not in group[:-1] and head.strip():\n',
+        '    if bracket and group.endswith(")") and head.strip():  # mutant\n',
+        P4P3_VERIFY_TEST,
+        "test_s3_and_v6_accept_the_same_base_name",
+    ),
+    # ── pilot 2's open item: a run reads and writes its own ledger only ───────────────────────
+    (
+        "p4 write_gate4: the P4 plan reads the ledger shared across runs",
+        P4P3_WRITE_GATE,
+        '        options["ledger"] = read_jsonl(run_dir / M.LEDGER_FILE)\n',
+        '        options["ledger"] = read_jsonl(run_dir.parent / M.LEDGER_FILE)  # mutant\n',
+        P4P3_WRITE_TEST,
+        "test_the_gate_reads_only_the_ledger_of_its_own_run",
+    ),
+    (
+        "p4 run4: a stage writes the ledger shared across runs",
+        P4P3_RUN4,
+        "    return Path(args.run_dir) / M.LEDGER_FILE\n",
+        "    return Path(args.run_dir).parent / M.LEDGER_FILE  # mutant\n",
+        P4P3_RUNNER_TEST,
+        "test_select_and_translate_are_two_handoff_rounds_and_only_the_import_writes",
+    ),
+    (
+        "p4 run4: S1 and S1b are handed a ledger outside the run",
+        P4P3_RUN4,
+        "    return Path(args.run_dir) / M.LEDGER_FILE\n",
+        '    return Path(args.run_dir).parent / "LEDGER.jsonl"  # mutant\n',
+        P4P3_RUNNER_TEST,
+        "test_sources_hands_track_a_its_own_live_fetcher_and_the_phase3_run",
+    ),
+    (
+        "p4 mass4: the run's budget and search count read a ledger outside the run",
+        P4P3_MASS4,
+        "    ledger = run_dir / M.LEDGER_FILE\n",
+        "    ledger = run_dir.parent / M.LEDGER_FILE  # mutant\n",
+        P4P3_RUNNER_TEST,
+        "test_a_run_with_searches_off_is_not_stopped_by_the_search_ceiling",
+    ),
+    # ── pilot 3's draw: every earlier pilot's fixed members, none of any earlier pilot's draws ──
+    (
+        "p4 pilot: pilot 3 may draw a site an earlier pilot but the last drew",
+        P4P3_PILOT4,
+        "        earlier_drawn |= drawn_before\n",
+        "        earlier_drawn = set(drawn_before)  # mutant\n",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_keeps_the_fixed_members_and_excludes_both_earlier_pilots_draws",
+    ),
+    (
+        "p4 pilot: only the first earlier pilot's fixed members are checked",
+        P4P3_PILOT4,
+        "        if list(strata.items()) != earlier_fixed:\n",
+        "        if number == 1 and list(strata.items()) != earlier_fixed:  # mutant\n",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_refuses_an_earlier_pilot_whose_fixed_members_differ",
+    ),
+    (
+        "p4 pilot: build reads only the last --after pilot",
+        P4P3_PILOT4,
+        "    earlier = [R.read_jsonl(Path(path)) for path in args.after]\n",
+        "    earlier = [R.read_jsonl(Path(path)) for path in args.after[-1:]]  # mutant\n",
+        P4P3_PILOT_TEST,
+        "test_build_writes_pilot_jsonl_byte_identically_and_prints_its_exit_line",
+    ),
+    # ── pilot 3's seal ─────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: the audit log loses pilot 3's sealed digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`a4fa2f5ff26676374a48ced6fa249fc530d2003d340647e84581ef87f04152fc`",
+        "`mutant`",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+    (
+        "p4 pilot: pilot 3's thresholds are loosened after pilot 2's data",
+        "output/remediation/phase4_runner/PILOT_THRESHOLDS.md",
+        "- T3: 0 lost hedges, negations or restrictions, and 0 flipped meanings from span drops.\n",
+        "- T3: at most 1 lost hedge (mutant).\n",
+        P4P3_PILOT_TEST,
+        "test_pilot_3_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+]
+MUTATIONS += P4_PILOT3_MUTATIONS
+
+# ================================================================================================
+# Phase-4 pilot 3's fixes and pilot 4 (wip/p4-pilot, 2026-09-24): the pronoun past the first word
+# (T1/T4), the contradicted lead (T7), the sub-national place names (V14), the review's pronoun
+# drops (T8) and the name base the selector is told (rule 7). Each case breaks one rule and names the
+# red-first test that must go red.
+# ================================================================================================
+P4P4_MODEL = "scripts/remediation/phase4/model4.py"
+P4P4_VERIFY = "scripts/remediation/phase4/verify4.py"
+P4P4_VERIFY_TEST = "tests/remediation/test_phase4_verify.py"
+P4P4_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4P4_SELECT_TEST = "tests/remediation/test_phase4_select.py"
+P4P4_MODEL_TEST = "tests/remediation/test_phase4_model.py"
+P4P4_REVIEW = "scripts/remediation/phase4/review4.py"
+P4P4_REVIEW_TEST = "tests/remediation/test_phase4_review.py"
+P4P4_COUNTRY = "pipeline/utils/country_lookup.py"
+P4P4_SENT = "scripts/remediation/phase4/sentences.py"
+P4P4_SELECT = "scripts/remediation/phase4/select_stage.py"
+P4P4_SUBNATIONAL_TEST = "tests/pipeline/test_country_subnational_names.py"
+
+P4_PILOT4_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── T1/T4: a subject pronoun past the first word leans on the sentence before ──────────────
+    (
+        "p4 verify4: V6 reads only a sentence's opener again",
+        P4P4_VERIFY,
+        "        lean = leaning_pronoun(segment.body)\n",
+        '        lean = "opens with a pronoun" if opens_with_pronoun(segment.body) else None  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_v6_a_pronoun_past_the_first_word_without_its_source_predecessor_is_held",
+    ),
+    (
+        "p4 verify4: V10 reads only a card item's opener again",
+        P4P4_VERIFY,
+        "        lean = leaning_pronoun(spoken(edited(text, sentence.start, sentence.end, item.drop)))\n",
+        "        lean = (  # mutant\n"
+        '            "opens with a pronoun"\n'
+        "            if opens_with_pronoun(spoken(edited(text, sentence.start, sentence.end, item.drop)))\n"
+        "            else None\n"
+        "        )\n",
+        P4P4_VERIFY_TEST,
+        "test_v10_a_card_with_a_pronoun_past_its_first_word_is_held",
+    ),
+    (
+        "p4 verify4: a pronoun after any comma leans, not only after the first",
+        P4P4_VERIFY,
+        '    if before.endswith(", ") and ", " not in before[:-2]:\n',
+        '    if before.endswith(", "):  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 verify4: an article before 'that' no longer spares the pronoun",
+        P4P4_VERIFY,
+        "    if _THAT_BEFORE.search(before) and not _ARTICLE.search(before):\n",
+        "    if _THAT_BEFORE.search(before):  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 verify4: a possessive first pronoun counts like a subject one",
+        P4P4_VERIFY,
+        "    if first is None or first.group(0).lower() not in M.SUBJECT_PRONOUNS:\n",
+        "    if first is None:  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 verify4: a pronoun inside a longer word counts",
+        P4P4_VERIFY,
+        '        r"(?<![\\w\'’-])(?:" + "|".join(map(re.escape, words)) + r")(?![\\w\'’-])", re.IGNORECASE\n',
+        '        r"(?:" + "|".join(map(re.escape, words)) + r")", re.IGNORECASE  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_the_pronoun_cases_v6_judges_exactly",
+    ),
+    (
+        "p4 model: a subject pronoun is dropped from the rule",
+        P4P4_MODEL,
+        'SUBJECT_PRONOUNS: tuple[str, ...] = ("it", "they", "he", "she")\n',
+        'SUBJECT_PRONOUNS: tuple[str, ...] = ("it", "they", "he")  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 model: the articles lose 'an'",
+        P4P4_MODEL,
+        'ARTICLES: tuple[str, ...] = ("the", "a", "an")\n',
+        'ARTICLES: tuple[str, ...] = ("the", "a")  # mutant\n',
+        P4P4_MODEL_TEST,
+        "test_the_leaning_pronouns_are_the_subject_forms_of_the_personal_pronouns",
+    ),
+    (
+        "p4 prompts: rule (10) no longer states the pronoun past the first word",
+        P4P4_PROMPTS,
+        "    'it was occupied\" need the sentence before them.\\n'\n",
+        "    'it was occupied\" need it.\\n'  # mutant\n",
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_states_v6s_pronoun_rule_after_pilot_1s_rules",
+    ),
+    (
+        "p4 prompts: the card rule (4) reads only the card's opener",
+        P4P4_PROMPTS,
+        '    "carries no pronoun that rule (10) ties to the sentence before it, and states something "\n',
+        '    "does not open with a pronoun, and states something "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_selector_card_rule_names_no_nationality_adjective",
+    ),
+    (
+        "p4 prompts: the reviewer keeps a card whose pronoun dangles",
+        P4P4_PROMPTS,
+        '    "it names, and DROP the card when such a pronoun has no antecedent inside the card: the card "\n',
+        '    "it names, and keep the card: the card "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_dangling_pronoun_wherever_it_stands",
+    ),
+    # ── T7: a sentence the article contradicts, and the passage the reviewer needs to see it ───
+    (
+        "p4 prompts: the selector may pick a sentence the article contradicts",
+        P4P4_PROMPTS,
+        '    "(11) never pick a sentence that another listed sentence contradicts, or reduces to a "\n'
+        '    "presumption, an assumption or a dispute, even when it is the article\'s lead.\\n"\n',
+        "",
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_refuses_a_sentence_the_article_contradicts",
+    ),
+    (
+        "p4 prompts: the reviewer is not asked about a contradicted sentence",
+        P4P4_PROMPTS,
+        '    "DROP a sentence that another sentence of the passage contradicts, or reduces to a "\n',
+        '    "Keep a sentence that another sentence of the passage contradicts, or reduces to a "\n',
+        P4P4_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_sentence_the_passage_contradicts",
+    ),
+    (
+        "p4 prompts: the reviewer is not told it sees the passage",
+        P4P4_PROMPTS,
+        '    "see the passage the sentences were chosen from (PASSAGE). For each "\n',
+        '    "see nothing else. For each "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_reviewer_question_drops_a_sentence_the_passage_contradicts",
+    ),
+    (
+        "p4 prompts: the reviewer block leaves the passage out",
+        P4P4_PROMPTS,
+        "    lines = [site_element(site), passage]\n",
+        "    lines = [site_element(site)]  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_the_reviewer_sees_the_whole_passage_the_selector_chose_from",
+    ),
+    (
+        "p4 prompts: the passage shows only the first pool sentence",
+        P4P4_PROMPTS,
+        "    for sentence in pool:\n        section = sentence.section if sentence.section is not "
+        'None else "lead"\n        rows.append(f"{sentence.sid} [{section}] '
+        '{S.sentence_text(text, sentence)}")\n    rows.append("</source>")\n',
+        "    for sentence in pool[:1]:  # mutant\n        section = sentence.section if "
+        'sentence.section is not None else "lead"\n        rows.append(f"{sentence.sid} '
+        '[{section}] {S.sentence_text(text, sentence)}")\n    rows.append("</source>")\n',
+        P4P4_REVIEW_TEST,
+        "test_the_reviewer_sees_the_whole_passage_the_selector_chose_from",
+    ),
+    (
+        "p4 prompts: a page passage leaves the page's text out",
+        P4P4_PROMPTS,
+        '        rows.append(text)\n        rows.append("</source>")\n    return "\\n".join(rows)\n'
+        "\n\ndef reviewer_block(",
+        '        rows.append("</source>")  # mutant\n    return "\\n".join(rows)\n'
+        "\n\ndef reviewer_block(",
+        P4P4_REVIEW_TEST,
+        "test_a_lane_r_reviewer_sees_every_page_it_restated",
+    ),
+    (
+        "p4 review: lane R's reviewer is shown an empty pool",
+        P4P4_REVIEW,
+        "    if inputs.lane is M.Lane.R:\n        return P.page_passage(",
+        "    if False:  # mutant\n        return P.page_passage(",
+        P4P4_REVIEW_TEST,
+        "test_a_lane_r_reviewer_sees_every_page_it_restated",
+    ),
+    # ── V14: a sub-national name that carries a country's name is read with its own country ───
+    (
+        "p4 country_lookup: New South Wales is read as Wales again",
+        P4P4_COUNTRY,
+        '    "new south wales": "AU",\n',
+        "",
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    (
+        "p4 country_lookup: South Wales is taken for New South Wales",
+        P4P4_COUNTRY,
+        '    "new south wales": "AU",\n',
+        '    "new south wales": "AU",\n    "south wales": "AU",  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    (
+        "p4 country_lookup: a sub-national name maps to the country inside it",
+        P4P4_COUNTRY,
+        '    "central macedonia": "GR",\n',
+        '    "central macedonia": "MK",  # mutant\n',
+        P4P4_SUBNATIONAL_TEST,
+        "test_every_name_carries_a_country_name_and_maps_to_another_country",
+    ),
+    (
+        "p4 verify4: the country regex reads country names only",
+        P4P4_VERIFY,
+        "_PLACES = {**NAME_TO_ISO, **SUBNATIONAL_NAME_TO_ISO}\n",
+        "_PLACES = {**NAME_TO_ISO}  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    (
+        "p4 verify4: V14 reads a sub-national name without its country",
+        P4P4_VERIFY,
+        "    return _PLACES.get(name.strip().lower()) if name else None\n",
+        "    return NAME_TO_ISO.get(name.strip().lower()) if name else None  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_v14_a_sub_national_name_is_read_as_its_own_countrys",
+    ),
+    # ── T8: a review drop takes the sentences that lean on it along ───────────────────────────
+    (
+        "p4 review: a drop takes no leaning sentence along",
+        P4P4_REVIEW,
+        "        verdict, followed = follow_drops(verdict, built.sentences)\n",
+        "        followed: tuple = ()  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along",
+    ),
+    (
+        "p4 review: a chain of leaning sentences stops after the first",
+        P4P4_REVIEW,
+        "            and number - 1 not in kept\n",
+        "            and number - 1 not in verdict.kept  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along",
+    ),
+    (
+        "p4 review: a leaning sentence goes although its predecessor stays",
+        P4P4_REVIEW,
+        "            and number - 1 not in kept\n",
+        "            and True  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_pronoun_whose_predecessor_is_kept_stays",
+    ),
+    (
+        "p4 review: a followed drop is not recorded",
+        P4P4_REVIEW,
+        '            followed.append({"sentence": number, "follows": number - 1, "reason": '
+        "FOLLOWS_A_DROP})\n",
+        "            pass  # mutant\n",
+        P4P4_REVIEW_TEST,
+        "test_a_dropped_sentence_takes_the_pronouns_that_lean_on_it_along",
+    ),
+    (
+        "p4 sentences: the review reads only a sentence's opener",
+        P4P4_SENT,
+        "    words = list(_WORD.finditer(s))\n",
+        "    words: list = []  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    (
+        "p4 sentences: a pronoun after any comma leans for the review",
+        P4P4_SENT,
+        '        if head.endswith(", ") and head.find(", ") == len(head) - 2:\n',
+        '        if head.endswith(", "):  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    (
+        "p4 sentences: any word before the pronoun is taken for 'that'",
+        P4P4_SENT,
+        '            before.lower() == "that"\n',
+        "            True  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    (
+        "p4 sentences: an article no longer spares a that-clause pronoun for the review",
+        P4P4_SENT,
+        "            and not any(w.group().lower() in M.ARTICLES for w in words[:index])\n",
+        "            and True  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_the_review_and_v6_read_the_same_pronoun_rule",
+    ),
+    # ── rule (7) states the name V6 accepts, and its base ─────────────────────────────────────
+    (
+        "p4 prompts: rule (7) misstates the base's two forms",
+        P4P4_PROMPTS,
+        '    \'ending in one bracket with no bracket inside it - or else "X, Y" - X before the '
+        "first comma '\n",
+        "    'ending in a bracket - or else \"X, Y\" - X before the last comma '  # mutant\n",
+        P4P4_VERIFY_TEST,
+        "test_rule_7_states_exactly_the_name_base_v6_accepts",
+    ),
+    (
+        "p4 prompts: rule (7) lets the base alone always name the site",
+        P4P4_PROMPTS,
+        '    "- is named by X alone only when also_named lists X; if no listed sentence names the '
+        'site so, "\n',
+        '    "- is named by X alone; if no listed sentence names the site so, "  # mutant\n',
+        P4P4_SELECT_TEST,
+        "test_the_selector_question_carries_pilot_1s_rules_after_the_designs",
+    ),
+    (
+        "p4 select: S3's base is the text before the last comma",
+        P4P4_SELECT,
+        '    first, comma, _ = name.strip().partition(",")\n',
+        '    first, comma, _ = name.strip().rpartition(",")  # mutant\n',
+        P4P4_VERIFY_TEST,
+        "test_rule_7_states_exactly_the_name_base_v6_accepts",
+    ),
+    # ── pilot 4's draw ────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: pilot 4 draws with pilot 3's seed",
+        "scripts/remediation/phase4/pilot4.py",
+        "SEED_PILOT4 = 20260926\n",
+        "SEED_PILOT4 = 20260925  # mutant\n",
+        "tests/remediation/test_phase4_pilot.py",
+        "test_pilot_4_keeps_the_fixed_members_and_excludes_all_three_earlier_pilots_draws",
+    ),
+    # ── pilot 4's seal ────────────────────────────────────────────────────────────────────────
+    (
+        "p4 pilot: the audit log loses pilot 4's sealed digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`30ab5e9d28b71388f79319b93e945dfd223d5d3edeb9a62e42064844757b2a26`",
+        "`mutant`",
+        "tests/remediation/test_phase4_pilot.py",
+        "test_pilot_4_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+    (
+        "p4 pilot: pilot 4's thresholds are loosened after pilot 3's data",
+        "output/remediation/phase4_runner/PILOT_THRESHOLDS.md",
+        "- T7: 0 of the 25 gold or canary errors recur.",
+        "- T7: at most 1 of the 25 gold or canary errors recurs (mutant).",
+        "tests/remediation/test_phase4_pilot.py",
+        "test_pilot_4_is_sealed_with_pilot_1s_thresholds_byte_for_byte",
+    ),
+]
+MUTATIONS += P4_PILOT4_MUTATIONS
+
+
+# ── The owner's defect scope (2026-09-24): `phase4/scope4.py`, the writer's refusal, the scoped
+#    plan and the mass run's guard ──────────────────────────────────────────────────────────────────
+#: Owner decision 2026-09-23 ("Nur Defekt-Sites"): Phases 4/5 write only the sites with proven text
+#: defects. Each case breaks one guard of the scope and names the test that goes red: the numeral
+#: reading of plan section 5.1, the generator's input, the scope file's pin and form, the writer's
+#: refusal in P4, L and P5, the gate's pinned loader and its statement clean-up, the scoped plan,
+#: and the mass run's refusal of a model round over a site outside the scope.
+P4S_SCOPE = "scripts/remediation/phase4/scope4.py"
+P4S_PLAN = "scripts/remediation/phase4/plan4.py"
+P4S_WRITE = "scripts/remediation/phase4/write4.py"
+P4S_GATE = "output/remediation/tools/write_gate4.py"
+P4S_MASS = "scripts/remediation/phase4/mass4.py"
+P4S_SCOPE_TEST = "tests/remediation/test_phase4_scope.py"
+P4S_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4S_LEGACY_TEST = "tests/remediation/test_phase4_legacy.py"
+P4S_MALFORMED = "test_a_malformed_scope_is_refused"
+P4S_GROUNDED = "test_a_number_the_input_writes_otherwise_is_grounded"
+P4S_P4 = "test_p4_refuses_a_site_outside_the_defect_scope_before_any_other_rule"
+P4S_STATEMENTS = "test_a_re_plan_without_rows_drops_the_statements_an_earlier_dry_run_rendered"
+P4S_SCOPED_PLAN = "test_the_scoped_plan_is_the_scopes_sites_after_the_pilot_in_the_plans_order"
+
+P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── scope4: plan section 5.1's reading of an ungrounded card ─────────────────────────────
+    (
+        "p4 scope4: a numeral loses its thousands separator reading",
+        P4S_SCOPE,
+        '_NUMERAL = re.compile(r"[0-9]{1,3}(?:,[0-9]{3})+(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?")\n',
+        '_NUMERAL = re.compile(r"[0-9]+(?:\\.[0-9]+)?")  # mutant\n',
+        P4S_SCOPE_TEST,
+        P4S_GROUNDED,
+    ),
+    (
+        "p4 scope4: a number is compared as written, not as its value",
+        P4S_SCOPE,
+        '    return [Decimal(found.replace(",", "")) for found in _NUMERAL.findall(text)]\n',
+        '    return [found.replace(",", "") for found in _NUMERAL.findall(text)]  # mutant\n',
+        P4S_SCOPE_TEST,
+        P4S_GROUNDED,
+    ),
+    (
+        "p4 scope4: a number inside a longer numeral counts as appeared",
+        P4S_SCOPE,
+        "    return any(number not in given for number in numerals(card))\n",
+        "    return any(  # mutant\n"
+        "        str(number) not in generator_input(snapshot_description) for number in numerals(card)\n"
+        "    )\n",
+        P4S_SCOPE_TEST,
+        "test_a_number_inside_a_longer_numeral_never_appeared",
+    ),
+    (
+        "p4 scope4: a card without a number counts as ungrounded",
+        P4S_SCOPE,
+        "    return any(number not in given for number in numerals(card))\n",
+        "    return not numerals(card) or any(number not in given for number in numerals(card))"
+        "  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_card_without_a_number_or_without_a_card_is_not_ungrounded",
+    ),
+    (
+        "p4 scope4: the generator's input is the whole snapshot text",
+        P4S_SCOPE,
+        '    return (snapshot_description or "")[:GENERATOR_INPUT_CHARS]\n',
+        '    return snapshot_description or ""  # mutant\n',
+        P4S_SCOPE_TEST,
+        "test_only_the_first_500_characters_were_the_generators_input",
+    ),
+    (
+        "p4 scope4: the generator's input is today's description",
+        P4S_SCOPE,
+        '        if ungrounded_card(row["card"], row["snapshot_description"]):\n',
+        '        if ungrounded_card(row["card"], row["description"]):  # mutant\n',
+        P4S_SCOPE_TEST,
+        "test_the_input_is_the_pre_march_snapshots_text_not_todays",
+    ),
+    (
+        "p4 scope4: a site the snapshot does not have is claimed",
+        P4S_SCOPE,
+        '            (claimed if row["in_snapshot"] else unknown).append(str(row["id"]))\n',
+        '            claimed.append(str(row["id"]))  # mutant\n',
+        P4S_SCOPE_TEST,
+        "test_a_site_the_snapshot_does_not_have_is_not_claimed",
+    ),
+    # ── scope4: the scope from its lists ─────────────────────────────────────────────────────
+    (
+        "p4 scope4: an ungrounded card is left out of the scope",
+        P4S_SCOPE,
+        "    members[UNGROUNDED_CARD].update(claimed)\n",
+        "    pass  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scope_is_the_three_lists_and_each_site_names_its_lists",
+    ),
+    (
+        "p4 scope4: a cleared defect of a site that is no curated row is taken",
+        P4S_SCOPE,
+        '    if unknown:\n        raise ScopeError(f"cleared defects name sites',
+        '    if False:  # mutant\n        raise ScopeError(f"cleared defects name sites',
+        P4S_SCOPE_TEST,
+        "test_a_cleared_defect_of_a_site_that_is_no_curated_row_stops_the_scope",
+    ),
+    (
+        "p4 scope4: a cleared defect of another field is taken",
+        P4S_SCOPE,
+        "            if field_name not in CLEARED_LISTS:\n",
+        "            if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_cleared_defect_of_another_field_stops_the_scope",
+    ),
+    # ── scope4: the file is read strictly, and only when it is the pinned one ────────────────
+    (
+        "p4 scope4: a scope file other than the pinned one is read",
+        P4S_SCOPE,
+        "    if found != SCOPE_SHA256:\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scope_is_read_only_from_the_pinned_file",
+    ),
+    (
+        "p4 scope4: the pin is not the committed scope's digest",
+        P4S_SCOPE,
+        'SCOPE_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a"\n',
+        'SCOPE_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6b"'
+        "  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_committed_scope_is_the_pinned_one_with_the_recorded_counts",
+    ),
+    (
+        "p4 scope4: a site list that is not its digest is read",
+        P4S_SCOPE,
+        '    if payload["sites_sha256"] != sites_digest(payload["sites"]):\n',
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_site_list_that_is_not_its_digest_is_refused",
+    ),
+    (
+        "p4 scope4: an unsorted or repeated site is read",
+        P4S_SCOPE,
+        "    if order != sorted(set(order)):\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: the list counts are not checked",
+        P4S_SCOPE,
+        '    if payload["lists"] != counts:\n',
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a scope site id need not be a UUID",
+        P4S_SCOPE,
+        "            uuid.UUID(site_id)\n",
+        "            pass  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a list outside the three is read",
+        P4S_SCOPE,
+        "            if name not in LISTS:\n",
+        "            if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a site's lists may come in any order",
+        P4S_SCOPE,
+        "        if list(lists) != sorted(set(lists), key=LISTS.index):\n",
+        "        if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    (
+        "p4 scope4: a scope of another version is read",
+        P4S_SCOPE,
+        '    if payload["version"] != SCOPE_VERSION:\n',
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_MALFORMED,
+    ),
+    # ── write4: P4, L and P5 refuse a site outside the scope, before every other rule ────────
+    (
+        "p4 write4: P4 writes a site outside the defect scope",
+        P4S_WRITE,
+        '        outside = outside_scope(scope, site.site_id, "description")\n',
+        "        outside = None  # mutant\n",
+        P4S_WRITE_TEST,
+        P4S_P4,
+    ),
+    (
+        "p4 write4: a site in the defect scope is refused as outside it",
+        P4S_WRITE,
+        "    if site_id in scope:\n        return None\n",
+        "    if False:  # mutant\n        return None\n",
+        P4S_WRITE_TEST,
+        P4S_P4,
+    ),
+    (
+        "p4 write4: P5 writes or clears a card outside the defect scope",
+        P4S_WRITE,
+        '        outside = outside_scope(scope, site.site_id, "card_description")\n',
+        "        outside = None  # mutant\n",
+        P4S_WRITE_TEST,
+        "test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear",
+    ),
+    # ── write_gate4: the pinned scope for every group, and no stale statements ───────────────
+    (
+        "p4 write_gate4: the gate reads a scope file that is not the pin",
+        P4S_GATE,
+        "        return S.load_scope()\n",
+        "        return S.parse_scope(S.SCOPE_FILE.read_bytes())  # mutant\n",
+        P4S_WRITE_TEST,
+        "test_the_gate_refuses_a_scope_file_that_is_not_the_pinned_one",
+    ),
+    (
+        "p4 write_gate4: the gate plans under a scope of its own run's sites",
+        P4S_GATE,
+        '        options = {"scope": scope}\n',
+        "        options = {  # mutant\n"
+        '            "scope": S.DefectScope(scope.version, scope.sha256, dict.fromkeys(site_ids, ("x",)))\n'
+        "        }\n",
+        P4S_WRITE_TEST,
+        "test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it",
+    ),
+    (
+        "p4 write_gate4: a re-plan without rows keeps the old plan's statements",
+        P4S_GATE,
+        "    if chunk is None:\n        drop_unwritten_statements(out, write_round=write_round)\n",
+        "    if False:  # mutant\n        drop_unwritten_statements(out, write_round=write_round)\n",
+        P4S_WRITE_TEST,
+        P4S_STATEMENTS,
+    ),
+    (
+        "p4 write_gate4: a stopped batch's statements are dropped",
+        P4S_GATE,
+        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)\n",
+        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE)  # mutant\n",
+        P4S_WRITE_TEST,
+        P4S_STATEMENTS,
+    ),
+    (
+        "p4 write_gate4: a reverted round's statements are dropped",
+        P4S_GATE,
+        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)\n",
+        "    kept = (out / STOPPED_FILE,)  # mutant\n",
+        P4S_WRITE_TEST,
+        "test_a_reverted_rounds_record_survives_a_re_plan_without_rows",
+    ),
+    # ── plan4: the mass run's plan is the scope after the pilot ──────────────────────────────
+    (
+        "p4 plan4: the scoped plan keeps a site outside the scope",
+        P4S_PLAN,
+        "    tail = [site for site in sites[pilot:] if site.site_id in scope]\n",
+        "    tail = list(sites[pilot:])  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_SCOPED_PLAN,
+    ),
+    (
+        "p4 plan4: the scoped plan asks the pilot's sites again",
+        P4S_PLAN,
+        "    tail = [site for site in sites[pilot:] if site.site_id in scope]\n",
+        "    tail = [site for site in sites if site.site_id in scope]  # mutant\n",
+        P4S_SCOPE_TEST,
+        P4S_SCOPED_PLAN,
+    ),
+    (
+        "p4 plan4: the scoped plan reuses the pilot's batch ids",
+        P4S_PLAN,
+        "    first = -(-pilot // BATCH_SIZE)\n",
+        "    first = 0  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scoped_plan_continues_the_numbering_after_the_pilots_batches",
+    ),
+    (
+        "p4 plan4: a scoped plan is written without a pilot",
+        P4S_PLAN,
+        "    if not 0 < pilot <= len(sites):\n",
+        "    if not 0 <= pilot <= len(sites):  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_the_scoped_plan_is_built_only_after_a_pilot",
+    ),
+    (
+        "p4 plan4: --defect-scope is taken without --pilot",
+        P4S_PLAN,
+        "    if args.defect_scope and not args.pilot:\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_build_with_the_defect_scope_needs_the_pilot",
+    ),
+    (
+        "p4 plan4: build --defect-scope writes the whole plan",
+        P4S_PLAN,
+        "    if args.defect_scope:\n        return _scoped_summary(",
+        "    if False:  # mutant\n        return _scoped_summary(",
+        P4S_SCOPE_TEST,
+        "test_build_with_the_defect_scope_writes_the_mass_runs_plan",
+    ),
+    # ── mass4: no model question for a site outside the scope ────────────────────────────────
+    (
+        "p4 mass4: a model round asks about a site outside the scope",
+        P4S_MASS,
+        "    if args.live and MODEL_STAGES & set(stages) and outside:\n",
+        "    if False:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_model_round_over_a_site_outside_the_scope_is_refused",
+    ),
+    (
+        "p4 mass4: a round without a model stage is refused over the scope",
+        P4S_MASS,
+        "    if args.live and MODEL_STAGES & set(stages) and outside:\n",
+        "    if args.live and outside:  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_round_without_a_model_stage_is_not_refused",
+    ),
+    (
+        "p4 mass4: a done batch counts against the scope",
+        P4S_MASS,
+        "        if not batch_done(run_dir, line.batch_id)[0]\n",
+        "        if True  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_done_batch_asks_nothing_and_refuses_no_round",
+    ),
+    (
+        "p4 mass4: the guard reads batches the round does not run",
+        P4S_MASS,
+        "        [line for line in [*planned, *requeued] if line.batch_id in chosen], scope, "
+        "run_dir=run_dir\n",
+        "        [*planned, *requeued], scope, run_dir=run_dir  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_only_the_rounds_own_batches_are_asked_about",
+    ),
+    (
+        "p4 mass4: the run does not say how many sites lie outside the scope",
+        P4S_MASS,
+        '    print(f"defect scope  {scope.label}: {len(outside)} site(s) of the open batches '
+        'outside it")\n',
+        "    pass  # mutant\n",
+        P4S_SCOPE_TEST,
+        "test_a_model_round_over_the_scopes_sites_runs",
+    ),
+    # ── the audit log records the pinned scope ───────────────────────────────────────────────
+    (
+        "p4 scope: the audit log loses the pinned scope's digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a`",
+        "`mutant`",
+        P4S_SCOPE_TEST,
+        "test_the_audit_log_records_the_pinned_scope",
+    ),
+]
+MUTATIONS += P4_SCOPE_MUTATIONS
+
+#: 2026-09-25, mass run: T03's year reader strips the dot separator its extractor admits.
+T03_DOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "t03: a dot thousands separator is left in the year",
+        "scripts/remediation/census/tests/t03_years_in_text.py",
+        '    cleaned = token.replace(",", "").replace(".", "")\n',
+        '    cleaned = token.replace(",", "")  # mutant\n',
+        "tests/remediation/test_t03.py",
+        "test_a_dot_thousands_separator_is_read_like_a_comma",
+    ),
+]
+MUTATIONS += T03_DOT_MUTATIONS
+
+
+# ── Lane L marks every March-AI text, from its own plan (owner decision 2026-09-24) ─────────────
+#: "Alle kennzeichnen (Recommended)": lane L - no text, only the provenance that shows the AI
+#: footnote - marks every March-AI text Phase 4 did not write, not only the defect scope's; P4 and
+#: P5 stay scoped. Its population is its own plan over every curated site (`plan4.py legacy`,
+#: `write4.load_legacy_plan`, `write_gate4 --group L --legacy-plan`). Each case breaks one part and
+#: names the test that goes red. A block of its own, so wip/p4-pilot's blocks merge beside it.
+P4L_WRITE = "scripts/remediation/phase4/write4.py"
+P4L_LEGACY = "scripts/remediation/phase4/legacy4.py"
+P4L_PLAN = "scripts/remediation/phase4/plan4.py"
+P4L_GATE = "output/remediation/tools/write_gate4.py"
+P4L_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4L_LEGACY_TEST = "tests/remediation/test_phase4_legacy.py"
+P4L_PLAN_TEST = "tests/remediation/test_phase4_plan.py"
+P4L_UNSCOPED = "test_l_takes_no_defect_scope_and_marks_every_march_text"
+P4L_BOTH = "test_a_site_outside_the_pinned_scope_is_marked_by_l_and_refused_by_p4_and_p5"
+P4L_POPULATION = "test_l_plans_the_curated_population_from_its_own_plan_and_counts_every_exclusion"
+P4L_STEPS = "test_l_is_written_in_steps_of_its_own_plan_and_accepted_on_its_own_lane"
+P4L_SOURCE = "test_lane_l_plans_from_its_own_plan_and_p4_and_p5_from_a_run"
+P4L_FOREIGN = "test_l_refuses_an_apply_root_holding_write_batches_of_another_l_plan"
+P4L_BATCHES = "test_l_plans_the_named_batches_of_its_plan_and_names_what_is_missing"
+P4L_STRICT = "test_the_l_plan_is_read_strictly"
+P4L_ORDER = "test_the_legacy_plan_is_every_curated_site_in_id_order_from_batch_1001"
+P4L_ROWS = "test_a_legacy_plan_from_rows_of_another_shape_or_a_site_twice_is_refused"
+
+P4_LEGACY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── write4: plan_legacy without a scope; the L plan read strictly ────────────────────────
+    (
+        "p4l write4: L marks a site whose description Phase 4 wrote",
+        P4L_WRITE,
+        "    held = legacy4.held_sites(batch.sites, written=live)\n",
+        "    held = legacy4.held_sites(batch.sites, written=())  # mutant\n",
+        P4L_LEGACY_TEST,
+        P4L_UNSCOPED,
+    ),
+    (
+        "p4l write4: a site Phase 4 wrote is not counted as refused",
+        P4L_WRITE,
+        "        if site.site_id in live:\n            plan.refusals.append(\n",
+        "        if False:  # mutant\n            plan.refusals.append(\n",
+        P4L_LEGACY_TEST,
+        P4L_UNSCOPED,
+    ),
+    (
+        "p4l write4: a P4 plan is read as lane L's plan",
+        P4L_WRITE,
+        '        if record.get("pass") != legacy4.PLAN_MARK:\n',
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    (
+        "p4l write4: an L plan batch id is not a plan batch id",
+        P4L_WRITE,
+        "        group_batch_id(batch_id, Group.L)\n",
+        "        pass  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    (
+        "p4l write4: an L plan batch listed twice is read",
+        P4L_WRITE,
+        "        if batch_id in batch_ids:\n",
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    (
+        "p4l write4: a site listed twice in the L plan is read",
+        P4L_WRITE,
+        "            if site.site_id in seen:\n",
+        "            if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    # ── legacy4 and plan4: the L plan's mark, numbering, order and rows ──────────────────────
+    (
+        "p4l legacy4: the L plan's batches are numbered from 1",
+        P4L_LEGACY,
+        "FIRST_BATCH = 1001\n",
+        "FIRST_BATCH = 1  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l legacy4: the L plan carries no mark",
+        P4L_LEGACY,
+        'PLAN_MARK = "phase4-legacy"\n',
+        "PLAN_MARK = None  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the L plan keeps the read's order",
+        P4L_PLAN,
+        '    return [plan_site(row, flags=frozenset()) for row in sorted(rows, key=lambda row: row["id"])]\n',
+        "    return [plan_site(row, flags=frozenset()) for row in rows]  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the L plan derives Phase 4's flags",
+        P4L_PLAN,
+        '    return [plan_site(row, flags=frozenset()) for row in sorted(rows, key=lambda row: row["id"])]\n',
+        "    return [  # mutant\n"
+        "        _site(row, cleared=set(), t03={}, shared_qids=frozenset(),\n"
+        "              shared_titles=frozenset(), paired=False)\n"
+        '        for row in sorted(rows, key=lambda row: row["id"])\n'
+        "    ]\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: a site twice goes into the L plan",
+        P4L_PLAN,
+        '    if len(set(ids)) != len(ids):\n        raise R.InputError("a site id occurs twice in the rows")\n',
+        '    if False:  # mutant\n        raise R.InputError("a site id occurs twice in the rows")\n',
+        P4L_PLAN_TEST,
+        P4L_ROWS,
+    ),
+    (
+        "p4l plan4: a row of another shape goes into the L plan",
+        P4L_PLAN,
+        "        _check_row(row)\n"
+        '    ids = [row["id"] for row in rows]\n'
+        "    if len(set(ids)) != len(ids):\n"
+        '        raise R.InputError("a site id occurs twice in the rows")\n',
+        "        pass  # mutant\n"
+        '    ids = [row["id"] for row in rows]\n'
+        "    if len(set(ids)) != len(ids):\n"
+        '        raise R.InputError("a site id occurs twice in the rows")\n',
+        P4L_PLAN_TEST,
+        P4L_ROWS,
+    ),
+    (
+        "p4l plan4: the L plan's batches are not marked",
+        P4L_PLAN,
+        "    R.write_batches(path, [dataclasses.replace(batch, pass_name=L4.PLAN_MARK) for batch in batches])\n",
+        "    R.write_batches(path, batches)  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the L plan is numbered from p4-0001",
+        P4L_PLAN,
+        "    batches = batches_after([site.to_dict() for site in sites], L4.FIRST_BATCH - 1)\n",
+        "    batches = batches_after([site.to_dict() for site in sites], 0)  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the summary does not count the read's provenance",
+        P4L_PLAN,
+        '        str((site.raw_data or {}).get(M.PROVENANCE_KEY, {}).get("lane", "none")) for site in sites\n',
+        '        "none" for site in sites  # mutant\n',
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: plan_site drops the flags build derived",
+        P4L_PLAN,
+        "        flags=flags,\n",
+        "        flags=frozenset(),  # mutant\n",
+        P4L_PLAN_TEST,
+        "test_the_cleared_defects_flag_their_own_text",
+    ),
+    # ── write_gate4: one L population, from its own plan ─────────────────────────────────────
+    (
+        "p4l write_gate4: L plans under the defect scope",
+        P4L_GATE,
+        "        print(LEGACY_UNSCOPED)\n        options = {}\n",
+        '        print(LEGACY_UNSCOPED)\n        options = {"scope": _defect_scope()}  # mutant\n',
+        P4L_WRITE_TEST,
+        P4L_BOTH,
+    ),
+    (
+        "p4l write_gate4: L does not say the scope is not asked",
+        P4L_GATE,
+        "        print(LEGACY_UNSCOPED)\n",
+        "        pass  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_POPULATION,
+    ),
+    (
+        "p4l write_gate4: L plans a run's batches",
+        P4L_GATE,
+        "    if group is W4.Group.L:\n        plan_path = pathlib.Path(args.legacy_plan)\n",
+        "    if False:  # mutant\n        plan_path = pathlib.Path(args.legacy_plan)\n",
+        P4L_WRITE_TEST,
+        P4L_POPULATION,
+    ),
+    (
+        "p4l write_gate4: the L plan's digest is not printed",
+        P4L_GATE,
+        '            f"legacy plan {plan_path} (sha256 {hashlib.sha256(plan_path.read_bytes()).hexdigest()})"\n',
+        '            f"legacy plan {plan_path}"  # mutant\n',
+        P4L_WRITE_TEST,
+        P4L_POPULATION,
+    ),
+    (
+        "p4l write_gate4: L takes a run",
+        P4L_GATE,
+        "        if args.run is not None:\n",
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: L plans without its plan",
+        P4L_GATE,
+        "        if args.legacy_plan is None and not (args.accept or args.close_reverted):\n",
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: P4 takes the L plan",
+        P4L_GATE,
+        "    if args.legacy_plan is not None:\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: P5 plans without a run",
+        P4L_GATE,
+        '    if args.run is None:\n        return "--run: P4 and P5',
+        '    if False:  # mutant\n        return "--run: P4 and P5',
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: another L plan's batches are planned beside this one",
+        P4L_GATE,
+        "    if foreign:\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_FOREIGN,
+    ),
+    (
+        "p4l write_gate4: this plan's own batches count as another plan's",
+        P4L_GATE,
+        "        if found.is_dir() and found.name not in ours\n",
+        "        if found.is_dir()  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STEPS,
+    ),
+    (
+        "p4l write_gate4: --batch is ignored for L",
+        P4L_GATE,
+        "    if not wanted:\n        return whole\n",
+        "    if True:  # mutant\n        return whole\n",
+        P4L_WRITE_TEST,
+        P4L_BATCHES,
+    ),
+    (
+        "p4l write_gate4: a batch the L plan lacks is skipped",
+        P4L_GATE,
+        '    if missing:\n        raise SystemExit(f"{path}: no batch {missing}")\n',
+        '    if False:  # mutant\n        raise SystemExit(f"{path}: no batch {missing}")\n',
+        P4L_WRITE_TEST,
+        P4L_BATCHES,
+    ),
+    (
+        "p4l write_gate4: a missing L plan is not named",
+        P4L_GATE,
+        "    if not path.is_file():\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_BATCHES,
+    ),
+    (
+        "p4l write_gate4: the L acceptance command names a run",
+        P4L_GATE,
+        "    if written and run_dir is None:\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STEPS,
+    ),
+    (
+        "p4l write_gate4: the L acceptance command names another lane",
+        P4L_GATE,
+        '            f"it before the next step: {VERIFY_TOOL} --lane {lane} --plan "\n',
+        '            f"it before the next step: {VERIFY_TOOL} --lane p4 --plan "  # mutant\n',
+        P4L_WRITE_TEST,
+        P4L_STEPS,
+    ),
+]
+MUTATIONS += P4_LEGACY_MUTATIONS
+
+
+# ── The mass run's mid-run audit (2026-09-25): the later namesake building, one site taken back ──
+#: T2 on Roman Bath, York (p4-0036): its lead was about the modern pub that shares the Roman bath
+#: house's name. Each case breaks one part of the fix and names the test that goes red: the
+#: reviewer's DROP line, `revert4 --site`, the gate's re-plan without a reverted site, and
+#: `audit4 hold` with `run4.write_holds4`.
+P4M_PROMPTS = "scripts/remediation/phase4/prompts4.py"
+P4M_REVERT = "scripts/remediation/phase4/revert4.py"
+P4M_GATE = "output/remediation/tools/write_gate4.py"
+P4M_AUDIT = "scripts/remediation/phase4/audit4.py"
+P4M_RUN4 = "scripts/remediation/phase4/run4.py"
+P4M_SELECT_TEST = "tests/remediation/test_phase4_select.py"
+P4M_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4M_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4M_RULE = "test_the_reviewer_question_drops_a_later_building_that_shares_the_sites_name"
+P4M_SITE = "test_a_site_revert_takes_back_only_that_sites_rows_of_the_matched_writes"
+P4M_GUARDS = "test_a_site_revert_keeps_every_guard_and_invariant_of_the_pattern_revert"
+P4M_REPLAN = "test_a_written_batch_is_re_planned_without_a_held_site_once_its_rows_are_reverted"
+P4M_HOLD = "test_the_audit_hold_holds_a_wrong_site_in_its_batch_and_in_holds4"
+P4M_MAP = "test_the_audit_hold_reads_each_finding_as_its_closed_list_reason"
+P4M_REFUSE = "test_the_audit_hold_refuses_what_the_audit_does_not_say"
+
+P4_MIDRUN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── prompts4: the reviewer's DROP line for a later building that shares the site's name ─────
+    (
+        "p4 midrun: the reviewer loses the later-namesake DROP line",
+        P4M_PROMPTS,
+        '    "DROP a sentence whose subject is a later building, business or institution (a pub, '
+        'hotel, "\n'
+        "    \"house, museum, shop, church, station ...) that shares or contains the site's name "
+        'rather "\n'
+        '    "than the ancient site itself, even when it names the site.\\n"\n',
+        "    # mutant: the namesake line removed\n",
+        P4M_SELECT_TEST,
+        P4M_RULE,
+    ),
+    (
+        "p4 midrun: the namesake line keeps the building and drops business and institution",
+        P4M_PROMPTS,
+        '    "DROP a sentence whose subject is a later building, business or institution (a pub, '
+        'hotel, "\n',
+        '    "DROP a sentence whose subject is a later building (a pub, hotel, "  # mutant\n',
+        P4M_SELECT_TEST,
+        P4M_RULE,
+    ),
+    # ── revert4 --site: only the site's rows, every guard kept ─────────────────────────────────
+    (
+        "p4 revert4: --site no longer narrows the matched set",
+        P4M_REVERT,
+        '    return f"{matched} AND {alias}.site_id_ref = {W._sql_text(check_site(site))}"\n',
+        "    return matched  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: a site id in another spelling is taken",
+        P4M_REVERT,
+        "    if canonical != site:\n",
+        "    if canonical is None:  # mutant\n",
+        P4M_WRITE_TEST,
+        "test_revert_refuses_a_site_that_is_not_a_site_id",
+    ),
+    (
+        "p4 revert4: the reversal's own set ignores the site",
+        P4M_REVERT,
+        '    in_set = _set("l", pattern, site)\n',
+        '    in_set = _set("l", pattern)  # mutant\n',
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: the read after the reversal counts the whole pattern",
+        P4M_REVERT,
+        "        reversal_read(stamp_like, site=site),\n",
+        "        reversal_read(stamp_like),  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_GUARDS,
+    ),
+    (
+        "p4 revert4: the reversal read ignores the site",
+        P4M_REVERT,
+        '    in_set = _set("l", W._sql_text(check_pattern(stamp_like)), site)\n',
+        '    in_set = _set("l", W._sql_text(check_pattern(stamp_like)))  # mutant\n',
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: the gate's reversal count asks the whole stamp",
+        P4M_REVERT,
+        "    text = W._exec(runner, reversal_read(stamp_like, site=site), host=host)\n",
+        "    text = W._exec(runner, reversal_read(stamp_like), host=host)  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_SITE,
+    ),
+    (
+        "p4 revert4: the command drops --site",
+        P4M_REVERT,
+        "    sql = render_revert(args.stamp_like, site=args.site, rehearse=args.rehearse)\n",
+        "    sql = render_revert(args.stamp_like, rehearse=args.rehearse)  # mutant\n",
+        P4M_WRITE_TEST,
+        "test_the_revert_command_takes_one_site",
+    ),
+    # ── write_gate4: a written batch re-planned without a site, on production's proof only ─────
+    (
+        "p4 gate: a left-out site is accepted on no proof",
+        P4M_GATE,
+        "        if matched != rows or reverted != matched:\n",
+        "        if False:  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    (
+        "p4 gate: a left-out site whose rows are live is accepted",
+        P4M_GATE,
+        "        if matched != rows or reverted != matched:\n",
+        "        if matched != rows:  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    (
+        "p4 gate: the proof reads the whole round, not the left-out site",
+        P4M_GATE,
+        "        matched, reverted = R.reversal_counts(stamp, site=site_id, runner=runner, host=host)\n",
+        "        matched, reverted = R.reversal_counts(stamp, runner=runner, host=host)  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    (
+        "p4 gate: a re-plan to other rows passes as a left-out site",
+        P4M_GATE,
+        "    if [row.change_key for row in plan.rows] != kept:\n",
+        "    if False:  # mutant\n",
+        P4M_WRITE_TEST,
+        "test_a_written_batch_is_never_re_planned_to_other_rows",
+    ),
+    (
+        "p4 gate: the left-out site is not named",
+        P4M_GATE,
+        "                for site_id, rows in sites_taken_back(out, stored, plan, record, runner, "
+        "host):\n",
+        "                for site_id, rows in sites_taken_back(out, stored, plan, record, runner, "
+        "host)[:0]:  # mutant\n",
+        P4M_WRITE_TEST,
+        P4M_REPLAN,
+    ),
+    # ── audit4 hold: a finding holds its site under the closed list's S6b reason ───────────────
+    (
+        "p4 audit4: a WRONG_SITE sentence holds nothing",
+        P4M_AUDIT,
+        '    "WRONG_SITE": M.HoldReason.AUDIT_WRONG_SITE,\n',
+        "    # mutant: WRONG_SITE removed\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 audit4: an UNSUPPORTED sentence holds nothing",
+        P4M_AUDIT,
+        '    "UNSUPPORTED": M.HoldReason.AUDIT_UNSUPPORTED,\n',
+        "    # mutant: UNSUPPORTED removed\n",
+        P4M_RUNNER_TEST,
+        P4M_MAP,
+    ),
+    (
+        "p4 audit4: a sentence finding holds only the card",
+        P4M_AUDIT,
+        "                    scope=M.HoldScope.SITE,\n",
+        "                    scope=M.HoldScope.CARD,  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 audit4: a card finding holds the site",
+        P4M_AUDIT,
+        "                    scope=M.HoldScope.CARD,\n",
+        "                    scope=M.HoldScope.SITE,  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_MAP,
+    ),
+    (
+        "p4 audit4: an unknown sentence verdict is read as a pass",
+        P4M_AUDIT,
+        '        if verdict not in SENTENCE_VERDICTS.split(" | "):\n',
+        "        if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: an unknown card verdict is read as a pass",
+        P4M_AUDIT,
+        '        if verdict not in CARD_VERDICTS.split(" | "):\n',
+        "        if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: a site judged twice is taken",
+        P4M_AUDIT,
+        "    if len(records) != 1:\n",
+        "    if not records:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: a record of another name is taken",
+        P4M_AUDIT,
+        '    if record["name"] != site.name:\n',
+        "    if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: a record without a finding passes without a word",
+        P4M_AUDIT,
+        "    if not holds:\n",
+        "    if False:  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_REFUSE,
+    ),
+    (
+        "p4 audit4: the hold goes to the batch the site left",
+        P4M_AUDIT,
+        "    return found[-1]\n",
+        "    return found[0]  # mutant\n",
+        P4M_RUNNER_TEST,
+        "test_the_audit_hold_goes_to_the_batch_where_the_site_counts",
+    ),
+    (
+        "p4 audit4: HOLDS4.jsonl is not rewritten",
+        P4M_AUDIT,
+        "    total = R4.write_holds4(run_dir)\n",
+        "    total = R4.aggregate_holds(run_dir)  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 audit4: the detail loses the audit file's digest",
+        P4M_AUDIT,
+        '    source = f"{audit.name} sha256 {hashlib.sha256(body).hexdigest()}"\n',
+        "    source = audit.name  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+    (
+        "p4 run4: write_holds4 writes no HOLDS4.jsonl",
+        P4M_RUN4,
+        "    B.write_text_atomic(run_dir / HOLDS4_FILE, M.dump_jsonl(holds))\n",
+        "    pass  # mutant\n",
+        P4M_RUNNER_TEST,
+        P4M_HOLD,
+    ),
+]
+MUTATIONS += P4_MIDRUN_MUTATIONS
 
 
 def digest(path: Path) -> str:
