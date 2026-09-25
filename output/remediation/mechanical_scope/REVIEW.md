@@ -1,12 +1,12 @@
 # E4 scope decisions - per-site review
 
-Built 2026-09-23T10:39:54+00:00 from the production export of 2026-09-23 07:41:01.276622+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
+Built 2026-09-25T07:20:53+00:00 from the production export of 2026-09-25 07:16:05.821323+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
 
 What this lane does not do: it moves nothing. A retired duplicate keeps its images and content links; where the survivor has fewer (the counts are on each line below), moving them is a follow-up before the survivor's page is relied on. A `pending` row stays shown until its date or scope is settled - the evidence says what to settle.
 
-## (a) outside the E3 window by the current period_start - 63 site(s)
+## (a) outside the E3 window by the current period_start - 57 site(s)
 
-### retired (55)
+### retired (54)
 
 * **Ali Masjid Fort** (`8c159d7f-d954-44fc-aab9-6b7841d68a35`) - Pakistan, Fortress/citadel, period_start 1837, 4 link(s), 8 image(s)
   * reason: E3: period_start 1837 is 1337 years past the rest of world cutoff of 500 AD
@@ -130,12 +130,6 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = -12.216613060034955, date = 1690]
   * snapshot:unified_sites.period_start: period_start = 1690, period_end = None, period_name = '1500+ AD', lat = 18.400254490856646, lon = -12.216613060034955
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Mauritania; CONTINENT = Africa; region agrees with the longitude window (rest of world)
-* **Lalibela** (`97bdea94-4c2b-4508-83c3-777aaa16de29`) - Ethiopia, City/town/settlement, period_start 1200, 5 link(s), 20 image(s)
-  * reason: E3: period_start 1200 is 700 years past the rest of world cutoff of 500 AD
-  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 39.04694275650742, date = 1200]
-  * snapshot:unified_sites.period_start: period_start = 1200, period_end = None, period_name = '1000 - 1500 AD', lat = 12.03358274841012, lon = 39.04694275650742
-  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Ethiopia; CONTINENT = Africa; region agrees with the longitude window (rest of world)
-  * remediation_change_log:29639: phase3:batch-0318:chunk-0001: period_start -500 -> 1200
 * **Landguard Fort** (`39f7cab4-e0d9-4c15-a4a0-8fccd461ba3b`) - England, Fortress/citadel, period_start 1540, 5 link(s), 18 image(s)
   * reason: E3: period_start 1540 is 1040 years past the rest of world cutoff of 500 AD
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 1.321099997246992, date = 1540]
@@ -212,7 +206,7 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * snapshot:unified_sites.period_start: period_start = 850, period_end = None, period_name = '1 - 500 AD', lat = -7.751765461045863, lon = 110.49200920619666
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Indonesia; CONTINENT = Asia; region agrees with the longitude window (rest of world)
   * remediation_change_log:30897: phase3:gap-0006:chunk-0001: period_start 1 -> 850
-* **Preah Palilay** (`41705e94-8ffd-45f3-943e-df6fac317144`) - Cambodia, Temple, period_start 1100, 5 link(s), 15 image(s)
+* **Preah Palilay** (`41705e94-8ffd-45f3-943e-df6fac317144`) - Cambodia, Temple complex, period_start 1100, 5 link(s), 15 image(s)
   * reason: E3: period_start 1100 is 600 years past the rest of world cutoff of 500 AD
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 103.85504291268045, date = 1100]
   * snapshot:unified_sites.period_start: period_start = 1100, period_end = None, period_name = '1000 - 1500 AD', lat = 13.44909758300017, lon = 103.85504291268045
@@ -233,7 +227,7 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 135.82393001784092, date = 655]
   * snapshot:unified_sites.period_start: period_start = 655, period_end = None, period_name = '500 - 1000 AD', lat = 34.47550241309402, lon = 135.82393001784092
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Japan; CONTINENT = Asia; region agrees with the longitude window (rest of world)
-* **Shanqal Fort** (`9f823459-f4ce-43cc-a433-b1cdaf9f89ad`) - Saudi Arabia, Fortification, period_start 1737, 5 link(s), 14 image(s)
+* **Shanqal Fort** (`9f823459-f4ce-43cc-a433-b1cdaf9f89ad`) - Saudi Arabia, Fortress/citadel, period_start 1737, 5 link(s), 14 image(s)
   * reason: E3: period_start 1737 is 1237 years past the rest of world cutoff of 500 AD
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 41.65700876887369, date = 1737]
   * snapshot:unified_sites.period_start: period_start = 1737, period_end = None, period_name = '1500+ AD', lat = 21.20023004354095, lon = 41.65700876887369
@@ -280,16 +274,16 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Albania; CONTINENT = Europe; region agrees with the longitude window (rest of world)
 * **Yenikale Ruins** (`d6d44645-a99b-4826-85b3-eb0123faadd2`) - Ukraine, Fortress/citadel, period_start 1699, 3 link(s), 20 image(s)
   * reason: E3: period_start 1699 is 1199 years past the rest of world cutoff of 500 AD
-  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 38.65351990804571, date = 1699]
-  * snapshot:unified_sites.period_start: period_start = 1699, period_end = None, period_name = '1500+ AD', lat = 37.950277681367716, lon = 38.65351990804571
-  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Turkey; CONTINENT = Asia; region agrees with the longitude window (rest of world)
+  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 36.60455, date = 1699]
+  * snapshot:unified_sites.period_start: period_start = 1699, period_end = None, period_name = '1500+ AD', lat = 45.349449, lon = 36.60455
+  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Russia; CONTINENT = Europe; region agrees with the longitude window (rest of world)
 * **Çem Kalesi** (`0943934a-6b61-416c-a382-8493a2d9db7f`) - Türkiye, Fortress/citadel, period_start 900, 0 link(s), 0 image(s)
   * reason: E3: period_start 900 is 400 years past the rest of world cutoff of 500 AD
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 36.05023391599186, date = 900]
   * snapshot:unified_sites.period_start: period_start = 900, period_end = None, period_name = '500 - 1000 AD', lat = 37.46346335485921, lon = 36.05023391599186
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Turkey; CONTINENT = Asia; region agrees with the longitude window (rest of world)
 
-### pending (8)
+### pending (3)
 
 * **Chacamarca Historic Sanctuary** (`160da9ec-9bc4-4893-8066-dd3afb41c5b2`) - Peru, Archaeological site, period_start 1974, 0 link(s), 8 image(s)
   * reason: E3: period_start 1974 is past the cutoff, but the site's own description dates part of it inside the window: period_start 1974 is the protected area's creation; the description names pre-Columbian remains. Plan section 8.2 lists it among the rows that are not museums.
@@ -304,47 +298,12 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * snapshot:unified_sites.period_start: period_start = 820, period_end = None, period_name = '500 - 1000 AD', lat = 43.16132237189707, lon = 20.526922939078798
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Republic of Serbia; CONTINENT = Europe; region agrees with the longitude window (rest of world)
   * remediation_change_log:28096: phase3:batch-0071:chunk-0001: period_start 1 -> 820
-* **Damascus Gate** (`17cf019a-913c-4967-b17c-ceabe8d1ba3b`) - Israel, Gate/archway/bridge, period_start 1537, 0 link(s), 20 image(s)
-  * reason: E3: period_start 1537 is past the cutoff, but the site's own description dates part of it inside the window: Phase 3 wrote period_start 1 -> 1537 (the Ottoman gate); the site's own description dates the Roman gate beneath it to c. 135 AD, inside the window. A period_start question before a scope one.
-  * unified_sites.description: Beneath it lies a Roman-era triumphal gate with three arched openings, dating to c. 135 AD
-  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 35.229377931784526, date = 1537]
-  * snapshot:unified_sites.period_start: period_start = 1537, period_end = None, period_name = '1500+ AD', lat = 31.781625499999983, lon = 35.229377931784526
-  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Israel; CONTINENT = Asia; region agrees with the longitude window (rest of world)
-  * remediation_change_log:27768: phase3:batch-0006:chunk-0001: period_start 1 -> 1537
-* **Foso e Interior Citadelle De Victoria** (`fad5c73f-8725-47d0-b13c-372fefba62ea`) - Malta, Fortress/citadel, period_start 1500, 5 link(s), 20 image(s)
-  * reason: E3: period_start 1500 is past the cutoff, but the site's own description dates part of it inside the window: Phase 3 wrote period_start -3000 -> 1500 (the medieval castle); the description attests Bronze Age and Punic-Roman use. The remaining-map note that this write may be wrong stands.
-  * unified_sites.description: Archaeological evidence shows habitation since the Bronze Age, with the site believed to have served as the acropolis of the Punic-Roman city of Gaulos
-  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 14.24025832675296, date = 1500]
-  * snapshot:unified_sites.period_start: period_start = 1500, period_end = None, period_name = '1500+ AD', lat = 36.04633494646682, lon = 14.24025832675296
-  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Malta; CONTINENT = Europe; region agrees with the longitude window (rest of world)
-  * remediation_change_log:27910: phase3:batch-0029:chunk-0001: period_start -3000 -> 1500
-* **Gårdstånga** (`83abc4c8-1cdf-4429-a0f7-c9cc76f5c373`) - Sweden, Mound/tumulus, period_start 900, 4 link(s), 15 image(s)
-  * reason: E3: period_start 900 is past the cutoff, but the site's own description dates part of it inside the window: Phase 3 wrote period_start -4500 -> 900 (the settlement); the row's site_type is Mound/tumulus and its own description dates the mound to the Bronze Age.
-  * unified_sites.description: The site features a Bronze Age burial mound (gravhog)
-  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 13.350032183991623, date = 900]
-  * snapshot:unified_sites.period_start: period_start = 900, period_end = None, period_name = '500 - 1000 AD', lat = 55.766793421779674, lon = 13.350032183991623
-  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Sweden; CONTINENT = Europe; region agrees with the longitude window (rest of world)
-  * remediation_change_log:28806: phase3:batch-0196:chunk-0001: period_start -4500 -> 900
 * **Keno Daas Rock Carvings** (`e6f95365-5042-4815-9275-e0e5f295c8e6`) - Pakistan, Rock relief/carving, period_start 600, 5 link(s), 1 image(s)
   * reason: E3: period_start 600 is past the cutoff, but the site's own description dates part of it inside the window: period_start 600 (pre-remediation); the description's range starts in the 5th century, inside the window.
   * unified_sites.description: The region's Buddhist rock art, which peaked between the 5th and 8th centuries AD
   * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 74.30849225643937, date = 600]
   * snapshot:unified_sites.period_start: period_start = 600, period_end = None, period_name = '500 - 1000 AD', lat = 35.921251921597616, lon = 74.30849225643937
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Pakistan; CONTINENT = Asia; region agrees with the longitude window (rest of world)
-* **Panamá Viejo** (`ca1f8a94-27e1-4318-b3d5-3db181795ffd`) - Panama, City/town/settlement, period_start 1519, 0 link(s), 20 image(s)
-  * reason: E3: period_start 1519 is past the cutoff, but the site's own description dates part of it inside the window: Phase 3 wrote period_start 1000 -> 1519 (the Spanish foundation); the description attests pre-Columbian occupation, inside the Americas window.
-  * unified_sites.description: Archaeological excavations have uncovered evidence of pre-Columbian Cuevan peoples, demonstrating over 700 years of pre-Hispanic occupation before European contact
-  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 1500 (Americas); return date <= cutoff   [lon = -79.48581184671308, date = 1519]
-  * snapshot:unified_sites.period_start: period_start = 1519, period_end = None, period_name = '1500+ AD', lat = 9.00573573292588, lon = -79.48581184671308
-  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: Panama; CONTINENT = North America; region agrees with the longitude window (Americas)
-  * remediation_change_log:27832: phase3:batch-0015:chunk-0001: period_start 1000 -> 1519
-* **Skopje Aqueduct** (`d570a6d4-f4a9-4a82-856f-e66c4b55d056`) - North Macedonia, Reservoir/aqueduct/canal, period_start 1600, 5 link(s), 20 image(s)
-  * reason: E3: period_start 1600 is past the cutoff, but the site's own description dates part of it inside the window: Phase 3 wrote period_start 1 -> 1600; the description calls the construction date debated between Roman, Byzantine and Ottoman.
-  * unified_sites.description: theories attribute it to Roman times (1st century AD, supplying the settlement of Scupi)
-  * pipeline/normalizers/dates.py:85-88 (passes_date_cutoff): is_americas = -170 <= lon <= -30; cutoff = 500 (rest of world); return date <= cutoff   [lon = 21.41874402552734, date = 1600]
-  * snapshot:unified_sites.period_start: period_start = 1600, period_end = None, period_name = '1500+ AD', lat = 42.02368404376956, lon = 21.41874402552734
-  * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: North Macedonia; CONTINENT = Europe; region agrees with the longitude window (rest of world)
-  * remediation_change_log:28472: phase3:batch-0140:chunk-0002: period_start 1 -> 1600
 
 ## (b) no date - 13 site(s)
 
@@ -504,7 +463,7 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * production:site_external_ids: both rows carry Q1143218; 'Dolmen of Menga' and 'Dolmen de Menga' are both names of it (labels, aliases or sitelinks); 178.9 m apart
   * survivor rule: 'Dolmen de Menga' survives by more content links: content links 5 vs 0, sources 2+url vs 2+url, created 2026-03-04 21:07:57.660461 vs 2026-03-04 21:07:57.660461
   * follow-up: the loser carries 20 wiki_images and 0 content links that are not moved by retiring it; country 'Spain' vs survivor 'Spain'
-* **Dooey's Cairn** (`f5ca382a-3725-4cbb-961a-6afbf5c21507`) - Northern Ireland, Cairn, period_start -4000, 0 link(s), 3 image(s)
+* **Dooey's Cairn** (`f5ca382a-3725-4cbb-961a-6afbf5c21507`) - Northern Ireland, Cairn, period_start -4500, 0 link(s), 3 image(s)
   * reason: duplicate_of:f6b6e039-36f1-4107-b730-dc2aa34b7a92
   * wikidata:Q1242421: both 'Ballymacaldrack Court Tomb' and "Dooey's Cairn" are names of Q1242421, and the two rows are 7.1 m apart
   * survivor rule: older row, then more content links, description citations, images: survivor Ballymacaldrack Court Tomb (5 links, 3 citations, 3 images) over Dooey's Cairn (0 links, 2 citations, 3 images)
@@ -722,12 +681,11 @@ What this lane does not do: it moves nothing. A retired duplicate keeps its imag
   * snapshot:unified_sites.period_start: period_start = 1860, period_end = None, period_name = '1500+ AD', lat = 51.06468876090109, lon = -1.8001214604772753
   * naturalearth:ne_10m_admin_0_countries (CONTINENT): contains the point: United Kingdom; CONTINENT = Europe; region from the longitude window: rest of world (Natural Earth: Europe)
 
-## Pairs within 100 m that share a Wikidata item but are not duplicates (98)
+## Pairs within 100 m that share a Wikidata item but are not duplicates (94)
 
 At least one of the two names is not a name of the shared item: a sub-site, a part-of pair or a wrong anchor - never retired here.
 
 * Q10751359: Temple of Apollo, Delphi / Apollo Temple, Delphi (90.1 m; names known: False/False)
-* Q11584736: Oushiko Shrine / Ishi no Hōden Megalith (23.8 m; names known: False/False)
 * Q12065255: Early Roman House / House of Aion (88.6 m; names known: False/False)
 * Q12065255: Hellenistic House / Villa of Theseus (51.3 m; names known: False/False)
 * Q12065255: Hellenistic House / House of Orpheus (76.0 m; names known: False/False)
@@ -742,7 +700,6 @@ At least one of the two names is not a name of the shared item: a sub-site, a pa
 * Q134140: Abu Simbel Temples / Temple of Ramesses II- Abu Simbel (74.6 m; names known: True/False)
 * Q134140: Abu Simbel Temples / Temple of Nefertari- Abu Simbel (55.5 m; names known: True/False)
 * Q1568283: Milecastles - Hadrian's Wall / Milefortlet - Hadrians Wall (0.0 m; names known: False/False)
-* Q1570082: Pyramid of Neferhetepes / Pyramid of Userkaf (4.1 m; names known: False/True)
 * Q17064815: The Aqueduct of Jerwan / Jerwan (5.5 m; names known: False/True)
 * Q17074808: Killarumiyoq / Killarumiyuq (91.5 m; names known: False/True)
 * Q173527: Knossos / Minoan Palace of Knossos (78.6 m; names known: True/False)
@@ -754,10 +711,8 @@ At least one of the two names is not a name of the shared item: a sub-site, a pa
 * Q27987850: Biniai Nou Hypogea / Hipogeo de Biniai nou (16.5 m; names known: True/False)
 * Q3157009: Roman Temple of Hercules / Amman Citadel (50.1 m; names known: False/True)
 * Q4636108: Bridge Street Number 39, Chester / Thirty-nine (39) Bridge Street, Chester (14.1 m; names known: False/False)
-* Q464923: Temple of Apollo Epicurius / Bassae (4.7 m; names known: False/True)
 * Q475497: Sanctuary of Artemis, Brauron / Brauron (6.6 m; names known: False/True)
 * Q502897: Mycenaean Acropolis of Midea / Midea, Argolid (11.7 m; names known: False/False)
-* Q508651: Locmariaquer Megaliths / Er-Grah Tumulus (12.1 m; names known: True/False)
 * Q508815: Carnuntum / Archaeological Park Carnuntum (9.1 m; names known: True/False)
 * Q5276996: Dilmun Burial Mounds - Dar Kulaib Burial Mound Field / Dilmun Burial Mounds - A'ali West Burial Mound Field (99.9 m; names known: False/False)
 * Q5289390: Dolmen del prado de Lácara / Dolmen de Lácara (38.1 m; names known: True/False)
