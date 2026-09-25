@@ -9755,3 +9755,26 @@ $PY scripts/remediation/gallery_audit/decide.py vision --run-dir $R --calibratio
   folded into the state (`--applied` reads only `decide.py` plans; `author` is not in
   `APPLIED_COLUMNS`), so H1's attribution check reads the snapshot's authors - conservative (fewer
   hero candidates), never a wrong write.
+
+## 2026-09-25 - gallery calibration C1 with Opus: answered, scored, no trigger admitted
+
+`calibration-2026-09-25-opus/` (sealed 08:13:05Z, thresholds `e6560457...`, jobs `f0c4ccd6...`,
+identical to the DeepSeek seal except the model) was answered through the handoff by 24 Opus agents
+(939 of 939, validate ok), imported through the lane's unchanged parser (`calibrate.py vision
+--handoff-import`, 939 judged) and scored with `calibrate.py evaluate --no-eye-labels`
+(`ADMISSION.json`, ledger `1989aba4...`):
+
+| trigger | measured | threshold | admitted |
+|---|---|---|---|
+| T0 | 939 of 939 with a verdict | all | pass |
+| T-kind | pilot agreement 186/200 = 0.93; non-photo precision 51/61 = 0.836 | >= 0.90 and >= 0.90 | **no** |
+| T-X1 other site | precision 52/101 = 0.515, recall 52/64 = 0.81; gold foreign 12/12, gold correct flagged 2/13 | >= 0.85, >= 0.70, 12/12, <= 1/13 | **no** |
+| T-X2 people | precision 1/8 = 0.125 | >= 0.85 | **no** |
+| T-X3 other | precision 8/17 = 0.47 | >= 0.85 | **no** |
+| T-strict | not evaluable: `vlm_pilot/LABELS.jsonl` (eye labels) does not exist | - | **no** |
+
+Under the sealed rule a failed trigger is dropped, never re-tuned, and no threshold changes after its
+data is seen: **no G run may write**. The gallery's vision stage ends here; the image fixes already
+applied (rejected kinds, liveness, attribution, Dedan's thumbnail) stand. A future route needs the
+eye labels (T-strict) and a model/prompt that passes the precision bars; it is recorded in
+HUMAN_ONLY.md as open.

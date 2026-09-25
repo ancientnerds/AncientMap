@@ -1,0 +1,99 @@
+{
+ "admitted": {
+  "kind": false,
+  "strict": false,
+  "x1": false,
+  "x2": false,
+  "x3": false
+ },
+ "eye_labels": null,
+ "eye_labels_sha256": null,
+ "jobs_sha256": "f0c4ccd6833f2de456e2d1ca110d2520ae6772cd9c3ebd4ec789a032de70e5c9",
+ "ledger_lines": 939,
+ "ledger_sha256": "1989aba49f33fc8dde32a2143c931e6b917a5a701f6135d16049b2792046d708",
+ "metrics": {
+  "T-X1": {
+   "foreign_rows_resolved": 64,
+   "gold_correct_flagged": {
+    "k": 2,
+    "n": 13
+   },
+   "gold_foreign_flagged": {
+    "k": 12,
+    "n": 12
+   },
+   "precision": {
+    "ci95": [
+     0.4133,
+     0.6155
+    ],
+    "k": 52,
+    "n": 101,
+    "rate": 0.5149
+   },
+   "recall": {
+    "ci95": [
+     0.6954,
+     0.8992
+    ],
+    "k": 52,
+    "n": 64,
+    "rate": 0.8125
+   }
+  },
+  "T-X2": {
+   "precision": {
+    "ci95": [
+     0.0032,
+     0.5265
+    ],
+    "k": 1,
+    "n": 8,
+    "rate": 0.125
+   }
+  },
+  "T-X3": {
+   "precision": {
+    "ci95": [
+     0.2298,
+     0.7219
+    ],
+    "k": 8,
+    "n": 17,
+    "rate": 0.4706
+   }
+  },
+  "T-kind": {
+   "non_photo_precision": {
+    "ci95": [
+     0.7191,
+     0.9185
+    ],
+    "k": 51,
+    "n": 61,
+    "rate": 0.8361
+   },
+   "pilot_agreement": {
+    "ci95": [
+     0.8853,
+     0.9612
+    ],
+    "k": 186,
+    "n": 200,
+    "rate": 0.93
+   }
+  },
+  "T-strict": {
+   "evaluable": false,
+   "why": "0 of 50 tier-A tiles carry an eye label for shows_archaeology"
+  },
+  "T0": {
+   "first_missing": [],
+   "jobs": 939,
+   "pass": true,
+   "without_verdict": 0
+  }
+ },
+ "sealed_at": "2026-09-25T08:13:05Z",
+ "thresholds_sha256": "e65604571e5b6717a4c13982039fa94c3d5646101f36b6d53eecde3cdddc61a2"
+}
