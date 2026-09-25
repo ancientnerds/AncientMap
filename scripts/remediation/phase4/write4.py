@@ -34,10 +34,13 @@ L writes the held sites whose text the March chain changed (`legacy4`); P5 write
 whose P4 provenance is live in production and clears the old card of a held-card site whose card
 carries a Phase-3 reviewer-cleared defect (one of the 709), with that finding as the evidence.
 
-**Before every other rule, all three groups refuse a site outside the owner's defect scope**
+**Before every other rule, P4 and P5 refuse a site outside the owner's defect scope**
 (`outside-defect-scope`; owner decision 2026-09-23, `phase4/scope4.py`): Phases 4/5 write only the
 sites with proven text defects, and every other site's description and card stay exactly as they
-are. Each planner takes the scope as a required input - there is no default and no switch.
+are. Both planners take the scope as a required input - there is no default and no switch. **L takes
+none** (owner decision 2026-09-24, "Alle kennzeichnen"): it writes no text, only the provenance that
+shows the existing AI footnote, and it marks every March-AI text Phase 4 did not write, inside the
+scope or not.
 
 ## The transaction (render_apply)
 
@@ -175,7 +178,8 @@ RULE_NOT_WRITTEN = "description-not-written"
 RULE_WRITTEN = "written-by-p4"
 RULE_NO_CLAIM = "no-legacy-claim"
 RULE_MARKED = "provenance-present"
-#: The owner's decision of 2026-09-23: a site outside the defect scope is never written (P4, L, P5).
+#: The owner's decision of 2026-09-23: a site outside the defect scope is never written (P4, P5;
+#: lane L marks every March-AI text since the decision of 2026-09-24).
 RULE_OUT_OF_SCOPE = "outside-defect-scope"
 
 _PLAN_BATCH = re.compile(r"p4-(?P<number>[0-9]{4,})")
@@ -849,29 +853,23 @@ def _p4_site(
     ]
 
 
-def plan_legacy(batch: BatchInputs, *, scope: S.DefectScope, written: Iterable[str]) -> WritePlan4:
+def plan_legacy(batch: BatchInputs, *, written: Iterable[str]) -> WritePlan4:
     """L: the legacy provenance of the batch's held sites (`legacy4`), once the held set is final.
 
-    `written` are the sites whose full provenance is live in production. A site outside the defect
-    scope is refused first and neither marked nor listed: it was never Phase 4's to write. A held
-    site with no claim is listed in `unclaimed` (for HUMAN_ONLY) and refused; a site whose
-    `raw_data` already carries a provenance is refused rather than overwritten.
+    `written` are the sites whose full provenance is live in production. There is no scope: lane L
+    marks every March-AI text Phase 4 did not write, inside the owner's defect scope or not (owner
+    decision 2026-09-24). A held site with no claim is listed in `unclaimed` (for HUMAN_ONLY) and
+    refused; a site whose `raw_data` already carries a provenance is refused rather than
+    overwritten.
     """
     plan = WritePlan4(group=Group.L, batch_id=group_batch_id(batch.batch_id, Group.L))
-    inside: list[M.PlanSite] = []
-    for site in batch.sites:
-        outside = outside_scope(scope, site.site_id, "raw_data")
-        if outside is None:
-            inside.append(site)
-        else:
-            plan.refusals.append(outside)
     live = set(written)
-    for site in inside:
+    for site in batch.sites:
         if site.site_id in live:
             plan.refusals.append(
                 W.Refusal(site.site_id, "raw_data", RULE_WRITTEN, "Phase 4 wrote this description")
             )
-    held = legacy4.held_sites(inside, written=live)
+    held = legacy4.held_sites(batch.sites, written=live)
     plan.unclaimed.extend(legacy4.unclaimed(held))
     for site in held:
         legacy = legacy4.legacy_provenance(site)
@@ -1046,8 +1044,8 @@ def _card_row(batch: BatchInputs, site: M.PlanSite, assembly: M.Assembly) -> Row
 def plan_writes(batch: BatchInputs, *, group: Group, **inputs: Any) -> WritePlan4:
     """The write plan of one row group for one plan batch (`docs/procedures/PHASE4_CONTRACTS.md`
     section 5): `plan_p4`, `plan_legacy` or `plan_cards`, called with that planner's own keyword
-    inputs - a missing or foreign input is a `TypeError`, never a default. Every planner takes the
-    owner's defect `scope` (`phase4/scope4.py`)."""
+    inputs - a missing or foreign input is a `TypeError`, never a default. P4 and P5 take the
+    owner's defect `scope` (`phase4/scope4.py`); L takes none (owner decision 2026-09-24)."""
     planners: Mapping[Group, Callable[..., WritePlan4]] = {
         Group.P4: plan_p4,
         Group.L: plan_legacy,

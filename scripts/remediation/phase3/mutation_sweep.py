@@ -17859,7 +17859,6 @@ P4S_LEGACY_TEST = "tests/remediation/test_phase4_legacy.py"
 P4S_MALFORMED = "test_a_malformed_scope_is_refused"
 P4S_GROUNDED = "test_a_number_the_input_writes_otherwise_is_grounded"
 P4S_P4 = "test_p4_refuses_a_site_outside_the_defect_scope_before_any_other_rule"
-P4S_L = "test_a_held_site_outside_the_defect_scope_gets_no_row_and_no_listing"
 P4S_STATEMENTS = "test_a_re_plan_without_rows_drops_the_statements_an_earlier_dry_run_rendered"
 P4S_SCOPED_PLAN = "test_the_scoped_plan_is_the_scopes_sites_after_the_pilot_in_the_plans_order"
 
@@ -18041,30 +18040,6 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4S_P4,
     ),
     (
-        "p4 write4: L marks a site outside the defect scope",
-        P4S_WRITE,
-        '        outside = outside_scope(scope, site.site_id, "raw_data")\n',
-        "        outside = None  # mutant\n",
-        P4S_LEGACY_TEST,
-        P4S_L,
-    ),
-    (
-        "p4 write4: L lists a site outside the defect scope for HUMAN_ONLY",
-        P4S_WRITE,
-        "    held = legacy4.held_sites(inside, written=live)\n",
-        "    held = legacy4.held_sites(batch.sites, written=live)  # mutant\n",
-        P4S_LEGACY_TEST,
-        P4S_L,
-    ),
-    (
-        "p4 write4: L's written rule reads the sites outside the scope too",
-        P4S_WRITE,
-        "    for site in inside:\n        if site.site_id in live:\n",
-        "    for site in batch.sites:  # mutant\n        if site.site_id in live:\n",
-        P4S_LEGACY_TEST,
-        P4S_L,
-    ),
-    (
         "p4 write4: P5 writes or clears a card outside the defect scope",
         P4S_WRITE,
         '        outside = outside_scope(scope, site.site_id, "card_description")\n',
@@ -18084,10 +18059,10 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_gate4: the gate plans under a scope of its own run's sites",
         P4S_GATE,
-        '    options: dict[str, Any] = {"scope": scope}\n',
-        "    options: dict[str, Any] = {  # mutant\n"
-        '        "scope": S.DefectScope(scope.version, scope.sha256, dict.fromkeys(site_ids, ("x",)))\n'
-        "    }\n",
+        '        options = {"scope": scope}\n',
+        "        options = {  # mutant\n"
+        '            "scope": S.DefectScope(scope.version, scope.sha256, dict.fromkeys(site_ids, ("x",)))\n'
+        "        }\n",
         P4S_WRITE_TEST,
         "test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it",
     ),

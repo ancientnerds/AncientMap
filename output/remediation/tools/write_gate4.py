@@ -63,11 +63,13 @@ Which lanes may write (`--open-lanes`) is the pilot's verdict, and lanes T and R
 audit's cleared list (`--audited`, one site id per line). The verifier is `phase4.verify4`
 (`verify_site`, V1-V15), imported when group P4 is planned.
 
-**Every group plans under the owner's defect scope** (decision 2026-09-23, `phase4/scope4.py`):
+**P4 and P5 plan under the owner's defect scope** (decision 2026-09-23, `phase4/scope4.py`):
 `SCOPE4.json`, read only when its bytes hash to the pin in `scope4.SCOPE_SHA256`. A site outside it
-is refused (`outside-defect-scope`, counted on the "refused by rule" line) in P4, L and P5 alike.
-There is no flag to switch it off: it is the owner's standing decision, and a new scope is a new
-pinned version, never an option of this tool.
+is refused (`outside-defect-scope`, counted on the "refused by rule" line) in both. There is no flag
+to switch it off: it is the owner's standing decision, and a new scope is a new pinned version,
+never an option of this tool. **Lane L is not scoped** (decision 2026-09-24, "Alle kennzeichnen"):
+it writes no text, only the provenance that shows the existing AI footnote, so it marks every
+March-AI text Phase 4 did not write, and the gate neither reads nor asks the scope for it.
 
 Every run prints its own `WRITE_EXIT=` line; that line is what is read.
 """
@@ -119,6 +121,11 @@ _ACCEPT_LANE = re.compile(
 )
 #: The Phase-3 refusal rule under which the reviewer-cleared text defects were set aside.
 PHASE3_REPORT_ONLY = "report-only-field"
+#: What the gate prints for lane L instead of the scope line (owner decision 2026-09-24).
+LEGACY_UNSCOPED = (
+    "defect scope: not asked for lane L - it marks every March-AI text Phase 4 did not write "
+    "(owner decision 2026-09-24)"
+)
 
 
 # ------------------------------------------------------------------------------------ reading
@@ -716,14 +723,18 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         return close_reverted_step(apply_root, runner=runner, host=args.host)
     batches = [W4.load_batch(path) for path in batch_dirs(run_dir, args.batch)]
     site_ids = [site.site_id for batch in batches for site in batch.sites]
-    scope = _defect_scope()
     print(f"group {group.value} | run {run_dir} | apply root {apply_root} | {len(batches)} batches")
-    print(
-        f"defect scope: {scope.label}, {len(scope.sites)} sites (owner decision 2026-09-23): "
-        f"{sum(site_id in scope for site_id in site_ids)} of the run's {len(site_ids)} sites"
-    )
-
-    options: dict[str, Any] = {"scope": scope}
+    options: dict[str, Any]
+    if group is W4.Group.L:
+        print(LEGACY_UNSCOPED)
+        options = {}
+    else:
+        scope = _defect_scope()
+        print(
+            f"defect scope: {scope.label}, {len(scope.sites)} sites (owner decision 2026-09-23): "
+            f"{sum(site_id in scope for site_id in site_ids)} of the run's {len(site_ids)} sites"
+        )
+        options = {"scope": scope}
     if group is W4.Group.P4:
         options["open_lanes"] = open_lanes(args.open_lanes)
         if not options["open_lanes"]:

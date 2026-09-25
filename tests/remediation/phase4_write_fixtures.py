@@ -467,6 +467,23 @@ class FakeDb:
             )
         if sql.startswith(R.REVERSAL_READ):
             return "".join(f"{m}|{n}\n" for m, n in reversal_reads(sql, self.journal).items())
+        if "->> 'lane' AS lane" in sql:  # write_gate4.written_sql: the live provenance's lane
+            out = []
+            for site_id in re.findall(r"'([0-9a-f-]{36})'::uuid", sql):
+                if site_id not in self.sites:
+                    continue
+                provenance = (self.sites[site_id].raw_data or {}).get(M.PROVENANCE_KEY) or {}
+                card = provenance.get("card") or {}
+                out.append(
+                    json.dumps(
+                        {
+                            "id": site_id,
+                            "lane": provenance.get("lane"),
+                            "card": card.get("text_sha256"),
+                        }
+                    )
+                )
+            return "".join(line + "\n" for line in out)
         if "INSERT INTO _phase4_plan" in sql:
             return self._transaction(sql)
         raise AssertionError(f"the fake psql does not know this statement: {sql[:80]!r}")

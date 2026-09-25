@@ -578,13 +578,12 @@ def test_model_files_are_only_the_sites_own(tmp_path: Path) -> None:
 
 def test_plan_writes_is_each_groups_own_planner_with_its_own_inputs(tmp_path: Path) -> None:
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
-    every = FX.EVERY_SITE
-    legacy = W4.plan_writes(batch, group=W4.Group.L, scope=every, written=[FX.SITE_A])
+    legacy = W4.plan_writes(batch, group=W4.Group.L, written=[FX.SITE_A])
     assert legacy.batch_id == "p4l-0003" and legacy.refusals[0].rule == W4.RULE_WRITTEN
     with pytest.raises(TypeError):
-        W4.plan_writes(batch, group=W4.Group.L, scope=every, written=[], open_lanes=OPEN_WS)
+        W4.plan_writes(batch, group=W4.Group.L, written=[], open_lanes=OPEN_WS)
     with pytest.raises(TypeError):
-        W4.plan_writes(batch, group=W4.Group.P5, scope=every, written={})  # card_findings
+        W4.plan_writes(batch, group=W4.Group.P5, scope=FX.EVERY_SITE, written={})  # card_findings
 
 
 # ── chunks and stamps ────────────────────────────────────────────────────────────────────────────
@@ -978,11 +977,13 @@ def test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear(tmp_path: 
     assert [r.test_id for r in inside.rows] == ["P5/card", "P5/card-clear"]
 
 
-def test_every_planner_needs_the_defect_scope(tmp_path: Path) -> None:
-    """No default: a plan without the owner's scope is a TypeError, never a plan of every site."""
+def test_p4_and_p5_need_the_defect_scope_and_l_takes_none(tmp_path: Path) -> None:
+    """No default: a P4 or P5 plan without the owner's scope is a TypeError, never a plan of every
+    site. Lane L takes none (owner decision 2026-09-24): a scope handed to it is a TypeError too,
+    never a filter of the March texts it marks."""
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
     with pytest.raises(TypeError):
-        W4.plan_writes(batch, group=W4.Group.L, written=[])
+        W4.plan_writes(batch, group=W4.Group.L, scope=FX.EVERY_SITE, written=[])
     with pytest.raises(TypeError):
         W4.plan_writes(batch, group=W4.Group.P5, written={}, card_findings={})
     with pytest.raises(TypeError):
@@ -1030,6 +1031,38 @@ def test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it(
     assert "defect scope: SCOPE4.json v1 " in out
     refused = (tmp_path / "apply" / "p4-0002" / W4.REFUSED_FILE).read_text(encoding="utf-8")
     assert json.loads(refused)["rule"] == "outside-defect-scope"
+
+
+def test_a_site_outside_the_pinned_scope_is_marked_by_l_and_refused_by_p4_and_p5(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """Both owner decisions on one site outside the pinned scope, through the gate: P4 and P5 write
+    only the defect scope (2026-09-23, "Nur Defekt-Sites") and refuse it; lane L marks every
+    March-AI text (2026-09-24, "Alle kennzeichnen") and plans its legacy provenance - it writes no
+    text, only the marking."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    site = "00000001-0000-4000-8000-000000000001"
+    _scope_file(monkeypatch, tmp_path, FX.SITE_A)
+    refused = tmp_path / "ALL_REFUSED.jsonl"
+    refused.write_text("", encoding="utf-8")
+    planned = {}
+    for group, extra in (
+        ("P4", ["--open-lanes", "W,S"]),
+        ("P5", ["--phase3-refused", str(refused)]),
+        ("L", []),
+    ):
+        args = ["--group", group, "--run", "pilot", "--run-root", str(tmp_path / "runs"),
+                "--apply-root", str(tmp_path / f"apply-{group}"), *extra]  # fmt: skip
+        assert G.main(args, runner=_db(site)) == 0
+        planned[group] = capsys.readouterr().out
+    for group in ("P4", "P5"):
+        assert "rows planned: 0 | refused by rule: {'outside-defect-scope': 1}" in planned[group]
+    assert "rows planned: 1 | refused by rule: {}" in planned["L"]
+    assert "outside-defect-scope" not in planned["L"]
+    (row,) = W4.read_plan(tmp_path / "apply-L" / "p4l-0001", group=W4.Group.L)
+    assert (row.site_id, row.test_id) == (site, W4.TEST_LEGACY)
+    assert json.loads(row.new_value)[M.PROVENANCE_KEY]["ai"] == "generated"
 
 
 def test_a_re_plan_without_rows_drops_the_statements_an_earlier_dry_run_rendered(

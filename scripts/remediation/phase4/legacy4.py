@@ -5,7 +5,10 @@ item WB-D3. A site Phase 4 does not write keeps its stored description. Where th
 differs from the one in the pre-March snapshot `d4526691`, the March enrichment chain (an LLM, model
 per site not recorded) wrote it, and it must not stay live unmarked: its `raw_data` gains
 `_description_provenance` `{v:1, lane:'L', ai:'generated', ...}` (`model4.LegacyProvenance`),
-which the API and the pages render as the existing AI footnote.
+which the API and the pages render as the existing AI footnote. The held sites are every curated
+site whose description Phase 4 did not write - inside the owner's defect scope or not (owner
+decision 2026-09-24, "Alle kennzeichnen": Phases 4/5 write only the defect scope, and every March
+text outside it stays live, so it is marked like any other).
 
 Where the held description is byte for byte the snapshot's, nothing proves where it came from, so
 nothing is claimed: the site gets no row and is listed for `HUMAN_ONLY.md` (the closing report counts

@@ -14,6 +14,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
@@ -104,7 +106,7 @@ def _batch(tmp_path: Path, sites, holds=()):
 
 def test_the_l_rows_add_the_provenance_and_leave_every_other_key(tmp_path: Path) -> None:
     site = FX.plan_site(raw_data={"description_citations": [{"n": 1}], "title_es": "x"})
-    plan = W4.plan_legacy(_batch(tmp_path, [site]), scope=FX.EVERY_SITE, written=[])
+    plan = W4.plan_legacy(_batch(tmp_path, [site]), written=[])
     (row,) = plan.rows
     assert (row.column, row.test_id, row.group) == ("raw_data", "P4/legacy-provenance", W4.Group.L)
     assert row.change_key.startswith("phase4l:")
@@ -118,15 +120,13 @@ def test_the_l_rows_add_the_provenance_and_leave_every_other_key(tmp_path: Path)
 
 
 def test_a_site_phase4_wrote_is_not_touched(tmp_path: Path) -> None:
-    plan = W4.plan_legacy(
-        _batch(tmp_path, [FX.plan_site()]), scope=FX.EVERY_SITE, written=[FX.SITE_A]
-    )
+    plan = W4.plan_legacy(_batch(tmp_path, [FX.plan_site()]), written=[FX.SITE_A])
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_WRITTEN
 
 
 def test_an_unprovable_text_is_refused_and_listed_for_human_only(tmp_path: Path) -> None:
     site = FX.plan_site(description="Same.", snapshot="Same.")
-    plan = W4.plan_legacy(_batch(tmp_path, [site]), scope=FX.EVERY_SITE, written=[])
+    plan = W4.plan_legacy(_batch(tmp_path, [site]), written=[])
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_NO_CLAIM
     assert [u.reason for u in plan.unclaimed] == [L.NoClaim.SAME_AS_SNAPSHOT]
 
@@ -135,39 +135,45 @@ def test_a_site_absent_from_the_snapshot_is_refused_and_listed_for_human_only(
     tmp_path: Path,
 ) -> None:
     site = FX.plan_site(description="Added in April.", snapshot=None, in_snapshot=False)
-    plan = W4.plan_legacy(_batch(tmp_path, [site]), scope=FX.EVERY_SITE, written=[])
+    plan = W4.plan_legacy(_batch(tmp_path, [site]), written=[])
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_NO_CLAIM
     assert [u.reason for u in plan.unclaimed] == [L.NoClaim.NOT_IN_SNAPSHOT]
     assert "not-in-snapshot" in plan.refusals[0].detail
 
 
-def test_a_held_site_outside_the_defect_scope_gets_no_row_and_no_listing(tmp_path: Path) -> None:
-    """Owner decision 2026-09-23: Phases 4/5 write only the defect scope's sites, so lane L marks
-    only a scope site that Phase 4 held. A site outside it is refused under the scope's own rule -
-    before the written, claim and marked rules - and is not listed for HUMAN_ONLY either: it was
-    never Phase 4's to write."""
+def test_l_takes_no_defect_scope_and_marks_every_march_text(tmp_path: Path) -> None:
+    """Owner decision 2026-09-24 ("Alle kennzeichnen"): lane L marks every March-AI text, not only
+    the defect scope's - it writes no text, only the provenance that shows the existing AI footnote
+    (EU AI Act Art. 50). Its planner takes no scope: one handed to it is a TypeError, never a
+    filter. What stays is the rest of the rule: a site Phase 4 wrote is not touched, and a text equal
+    to the pre-March one gets no claim and is listed for HUMAN_ONLY (D7)."""
     sites = [
         FX.plan_site(),
         FX.plan_site(FX.SITE_B, description="Same.", snapshot="Same."),
         FX.plan_site(FX.SITE_C),
     ]
-    plan = W4.plan_legacy(_batch(tmp_path, sites), scope=FX.scope(FX.SITE_A), written=[FX.SITE_C])
+    batch = _batch(tmp_path, sites)
+    with pytest.raises(TypeError):
+        W4.plan_legacy(batch, scope=FX.scope(), written=[])
+    plan = W4.plan_legacy(batch, written=[FX.SITE_C])
     assert [row.site_id for row in plan.rows] == [FX.SITE_A]
     assert [(r.site_id, r.field, r.rule) for r in plan.refusals] == [
-        (FX.SITE_B, "raw_data", W4.RULE_OUT_OF_SCOPE),
-        (FX.SITE_C, "raw_data", W4.RULE_OUT_OF_SCOPE),
+        (FX.SITE_C, "raw_data", W4.RULE_WRITTEN),
+        (FX.SITE_B, "raw_data", W4.RULE_NO_CLAIM),
     ]
-    assert plan.unclaimed == []
+    assert [(u.site_id, u.reason) for u in plan.unclaimed] == [
+        (FX.SITE_B, L.NoClaim.SAME_AS_SNAPSHOT)
+    ]
 
 
 def test_a_provenance_that_is_already_there_is_never_overwritten(tmp_path: Path) -> None:
     marked = FX.plan_site(raw_data={M.PROVENANCE_KEY: {"lane": "L"}})
-    plan = W4.plan_legacy(_batch(tmp_path, [marked]), scope=FX.EVERY_SITE, written=[])
+    plan = W4.plan_legacy(_batch(tmp_path, [marked]), written=[])
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_MARKED
 
 
 def test_an_l_row_is_written_and_holds_the_description_invariant(tmp_path: Path) -> None:
-    plan = W4.plan_legacy(_batch(tmp_path, [FX.plan_site()]), scope=FX.EVERY_SITE, written=[])
+    plan = W4.plan_legacy(_batch(tmp_path, [FX.plan_site()]), written=[])
     chunk = W4.chunk_for(plan)
     out = tmp_path / "apply" / plan.batch_id
     W4.write_plan_files(out, plan, chunk)
