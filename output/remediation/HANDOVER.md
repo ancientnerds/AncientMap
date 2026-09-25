@@ -7,6 +7,56 @@ below (about 10,000 lines; the Phase-4 entries - pilots 3-4, the defect scope, t
 are on branch `wip/p4-pilot` until it is merged, see 2.4), and the plan is
 `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`.
 
+## 0. Resume point - paused 2026-09-25 evening at the owner's request (usage limit)
+
+Everything below section 0 was written before these last steps; where they differ, this section wins.
+
+**Done and live since the Phase-4 mass run** (every write journalled, rehearsed, read back, its
+rollback rehearsed, accepted with 0 deviations; the day's production log is in the session notes and
+in the AUDIT_LOG sections of 2026-09-25):
+- `wip/p4-pilot` merged into `integrate/wave1`, `origin/main` merged in; **Push #2 = 417386f**
+  (P5 sitting: backup drill passed, 1,107 cards in 13 accepted steps, card file byte-identical,
+  0 boot overwrites), then **2aa68cf** (the D9 run). `integrate/wave1` is ahead of `main` again by
+  the commits after 2aa68cf (docs, dangling-markers, acceptance draw, audit) - no code a deploy needs.
+- Lane L: 4,003 March-AI texts marked. card_stats: 4,106 cells over 1,082 cards (wave 2026-09-25
+  plans 0). Static export on the VPS (root-owned files fixed), Qdrant resync, IndexNow (5,085 + 4,919).
+- Acceptance run `draw-2026-09-25` recorded **FAIL on A3** (D1, Kuntur Amaya; no judge ran). Class
+  repaired: `orphan-citations` (69 sites), the D9 run (scope v2, 6 sourced descriptions),
+  `dangling-markers` (3 held sites). **D1 and D4 now hold on all 5,004 curated sites.**
+- `verify_writes4` gained `--allow-stamp` (use `'phase4l:%'` for P4; for L use the orphan-citations,
+  `phase4:%` and dangling-markers stamps) and multi-run `--run` (pilot4, mass, d9).
+
+**In flight, stopped cleanly:**
+1. **Fresh acceptance `draw-2026-09-25b`** (seed 20260926, canaries 20260927; sealed in AUDIT_LOG;
+   D1-D6 hold). Stage 1: 652 questions in 54 batches under
+   `output/remediation/handoff/acceptance-2026-09-25b-s1`; **14 answered** (card_description-01
+   complete, -02 partly). Resume the judges with the workflow script `C:/tmp/acceptance_s1.js`
+   (resumeFromRunId `wf_57394bdd-e52`, same args; each agent runs `judge.py brief ... --batch-id B`
+   and follows it; an already-recorded answer is refused as write-once - the re-run judge of
+   card_description-02 skips those labels). Then: `opus_handoff.py validate`, `judge.py import-stage1`,
+   re-asks (`export-reask`, at most twice), stage 2 / stage 3, `judge.py result`; commands in the
+   AUDIT_LOG section of the acceptance tooling. **No remediation write may touch a drawn site
+   before the result (V3)** - that includes the 19 re-queued `revision-too-fresh` sites below.
+2. **Code audit** (docs/procedures/CODE_AUDIT.md, backend mode on the remediation's api/pipeline
+   changes + the production-writing tooling): steps 0.5-5 done, **no fix made yet**; report
+   `output/remediation/CODE_AUDIT_2026-09-25.md` (6e5d028). The 14 changed api/pipeline files check
+   out; the quality gate's hard conditions pass. **Fix before the next production write**: the 11
+   Major tooling findings in its fix order - above all `write_gate4 --accept` taking a log with a
+   failing and a passing run appended, `
+` -> `
+` on Windows in `prod_write.send` /
+   `write_stage.run_sql` (read-only checks found no damage), a psql timeout leaving no
+   `STOPPED.json`, `--batch` skipping the stopped-batch check, no 100-site cap on `--step`. Run its
+   mutation sweeps in a scratch worktree (the acceptance code imports `prod_write` and
+   `mechanical/lane`). A stray `%TEMP%/gettext.py` (an agent's page fetcher of 2026-09-23 that
+   shadowed the stdlib module) was renamed to `fetch_page_text_2026-09-23.py`.
+
+**Still open after that:** the 19 `revision-too-fresh` sites (re-queued by mass4 from
+2026-09-26T21:30Z; lane-L-first order as in the D9 run; only after the acceptance result);
+the owner items in `HUMAN_ONLY.md` (Ahin Posh coordinates, 21 wrong-both rows, Chiapa/Zoque,
+gallery eye labels, 11 lyra alias keys, 16 old shorts, deleted Commons files on the VPS, 876 vs 904);
+a final docs pass (this file's sections 2-7, CLAUDE.md's top paragraph) and a push of the docs.
+
 ## 1. The task
 
 Every one of the 5,004 `ancient_nerds` sites in the production database must be **correct** - and
