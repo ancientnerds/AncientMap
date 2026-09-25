@@ -4803,6 +4803,14 @@ AUDIT_FIX_CASES: list[Case] = [
         "tests/remediation/test_mechanical_citations.py",
     ),
     Case(
+        "audit-fix: m10 any other column is taken for the country",
+        MECHANICAL / "wrong_both.py",
+        "    elif c.column == COUNTRY:\n",
+        "    elif True:  # mutant\n",
+        "test_a_country_row_outside_the_convention_is_listed",
+        "tests/remediation/test_mechanical_wrong_both.py",
+    ),
+    Case(
         "audit-fix: m9 jsonl_lines splits at every line break",
         PROD_WRITE,
         '    return text.split("\\n")',

@@ -566,6 +566,14 @@ class TestTheCountryConvention:
         )
         v = refused(c, st, Pages({CISS_PAGE: text}))
         assert v.reason == "not-the-country-convention"
+        # audit 2026-09-25 m10: the last branch took any other column for the country
+        named = replace(c, column="name")
+        st = state(
+            sites={ANNA: site(ANNA, "Ireland")},
+            chains={(ANNA, "name"): chain},
+        )
+        with pytest.raises(P.PlanError, match="not a column"):
+            decide(named, st, Pages({CISS_PAGE: text}))
 
 
 # ------------------------------------------------------------------------------ the statements

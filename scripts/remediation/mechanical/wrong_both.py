@@ -550,10 +550,12 @@ def classify(
             if label_broken is not None:
                 return refuse(f"period-name-{label_broken[0]}", label_broken[1])
             label = (live_label, str(bucket))
-    else:
+    elif c.column == COUNTRY:
         problem = country_problem(value, vocabulary)
         if problem is not None:
             return refuse("not-the-country-convention", problem)
+    else:
+        raise PlanError(f"{c.column!r} is not a column a wrong-both correction writes")
     evidence, why = find_evidence(c, value, library)
     if evidence is None:
         return refuse("no-verbatim-evidence", why)
