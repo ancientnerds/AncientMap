@@ -339,6 +339,8 @@ output/remediation/mechanical_scope/REHEARSAL.sql
 output/remediation/mechanical_reversal_1/REHEARSAL.sql
 !output/remediation/mechanical_reversal_2/
 output/remediation/mechanical_reversal_2/REHEARSAL.sql
+!output/remediation/mechanical_reversal_3/
+output/remediation/mechanical_reversal_3/REHEARSAL.sql
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
 # nothing and is rendered again by `qid_repair.py render`.

@@ -790,3 +790,375 @@ def test_the_reversal_residual_says_it_counts_sites() -> None:
         assert lane.post_commit_residual.metric == (
             "curated sites still holding a value this reversal list undoes"
         )
+
+
+# ------------------------------------------------------------ the third list (2026-09-25): the Opus audit
+MARAY = "0d8b0d61-6c1e-4b8a-9d59-0b8e1a2f3c4d"
+OPUS_KEY = "phase3:" + "3" * 64
+OPUS_EVIDENCE = "output/remediation/phase3_runner/runs/mass/batch-0010/evidence/maray%2Fenwiki.txt"
+P1_QUOTE = "Marayniyoq is an archaeological site in Peru."
+TIE_QUOTES = ("the old value is not refuted", "an Inca settlement on a hill")
+KEEP_QUOTE = "archaeological site in the Cusco Region"
+
+
+def opus_verdict(name: str, *quotes: str) -> dict[str, Any]:
+    return {
+        "change_key": OPUS_KEY,
+        "verdict": name,
+        "right_value": None,
+        "reason": f"{name} because",
+        "quotes": [{"source": OPUS_EVIDENCE, "quote": q} for q in quotes],
+    }
+
+
+def opus_line(**over: Any) -> dict[str, Any]:
+    """One DECISIONS.jsonl line of the Opus re-verification: p1 revert, p2 keep, tie revert."""
+
+    def check(*outcomes: str) -> dict[str, Any]:
+        return {
+            "counted": all(o == "found" for o in outcomes),
+            "reason": "",
+            "quotes": [{"source": OPUS_EVIDENCE, "outcome": o, "detail": ""} for o in outcomes],
+        }
+
+    base: dict[str, Any] = {
+        "change_key": OPUS_KEY,
+        "site_id": MARAY,
+        "site_name": "Marayniyoq",
+        "column": "site_type",
+        "old_value": "City/town/settlement",
+        "written_value": "Archaeological site",
+        "decision": "revert",
+        "reversal": True,
+        "basis": [
+            {"pass": "p1", "verdict": "revert", "counted": True, "from": "VERDICTS_RAW.json p1"},
+            {
+                "pass": "p2",
+                "verdict": "keep",
+                "counted": True,
+                "from": "VERDICTS_ROUND2.json sample",
+            },
+            {
+                "pass": "tie",
+                "verdict": "revert",
+                "counted": True,
+                "from": "VERDICTS_ROUND3.json tie",
+            },
+        ],
+        "quote_check": {"p1": check("found"), "p2": check("found"), "tie": check("found", "found")},
+    }
+    base.update(over)
+    return base
+
+
+def write_opus(tmp_path: Path, *lines: dict[str, Any]) -> Path:
+    """An opus_audit directory: DECISIONS.jsonl and the verdict files its lines name."""
+    audit = tmp_path / "opus_audit"
+    audit.mkdir(exist_ok=True)
+    (audit / "DECISIONS.jsonl").write_text(
+        "".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8"
+    )
+    files = {
+        "VERDICTS_RAW.json": {"p1": {OPUS_KEY: opus_verdict("revert", P1_QUOTE)}},
+        "VERDICTS_ROUND2.json": {"sample": {OPUS_KEY: opus_verdict("keep", KEEP_QUOTE)}},
+        "VERDICTS_ROUND3.json": {"tie": {OPUS_KEY: opus_verdict("revert", *TIE_QUOTES)}},
+    }
+    for name, content in files.items():
+        (audit / name).write_text(json.dumps(content), encoding="utf-8")
+    return audit
+
+
+def maray_reason(**over: Any) -> R.Reason:
+    base: dict[str, Any] = {
+        "journal_id": 28200,
+        "site_id": MARAY,
+        "name": "Marayniyoq",
+        "column": "site_type",
+        "reason": "the Opus re-verification decided to revert this write",
+        "quotes": (R.Quote(f"opus:{OPUS_KEY}", TIE_QUOTES[1]),),
+        "residual": "The field is open again, not corrected.",
+    }
+    base.update(over)
+    return R.Reason(**base)
+
+
+def maray_cell(**over: Any) -> R.Cell:
+    """The phase-3 write 28200 (site_type City/town/settlement -> Archaeological site), live."""
+    base: dict[str, Any] = {
+        "entry": entry(
+            id=28200,
+            row_pk=MARAY,
+            column_name="site_type",
+            old_value="City/town/settlement",
+            new_value="Archaeological site",
+            run_stamp="phase3:batch-0010:chunk-0001",
+            test_id="P3/site_type",
+            change_key=OPUS_KEY,
+        ),
+        "site": {
+            "id": MARAY,
+            "name": "Marayniyoq",
+            "source_id": "ancient_nerds",
+            "description": "An Inca site.",
+            "site_type": "Archaeological site",
+            "period_start": "1400",
+            "period_name": "1000 - 1500 AD",
+            "country": "Peru",
+        },
+        "chain": (
+            P.JournalLink(
+                28200,
+                "phase3:batch-0010",
+                "P3/site_type",
+                "City/town/settlement",
+                "Archaeological site",
+            ),
+        ),
+        "live": "Archaeological site",
+    }
+    base.update(over)
+    return R.Cell(**base)
+
+
+def decide3(r: R.Reason, c: R.Cell, opus: dict[str, Any]) -> P.Verdict:
+    return R.classify_reversal(r, c, lane=L.REVERSAL_3, pages={}, gold={}, rereview={}, opus=opus)
+
+
+class TestTheOpusQuote:
+    """An `opus:<change_key>` quote stands only on the Opus re-verification's decision to revert
+    exactly the write the journal row made, and only in the quotes of the verdicts that decided it,
+    each found by the audit's own machine quote check."""
+
+    def test_the_audits_decision_to_revert_is_the_evidence(self, tmp_path: Path) -> None:
+        opus = R.load_opus(write_opus(tmp_path, opus_line()))
+        v = decide3(maray_reason(), maray_cell(), opus)
+        assert v.ok and (v.old_value, v.new_value, v.journal_id) == (
+            "Archaeological site",
+            "City/town/settlement",
+            28200,
+        )
+        quoted = next(e for e in v.evidence if e["source"] == f"opus:{OPUS_KEY}")
+        assert quoted == {
+            "source": f"opus:{OPUS_KEY}",
+            "url": R.OPUS_URL,
+            "quote": TIE_QUOTES[1],
+        }
+
+    def test_the_text_is_the_found_quotes_of_the_verdicts_that_decided_to_revert(
+        self, tmp_path: Path
+    ) -> None:
+        opus = R.load_opus(write_opus(tmp_path, opus_line()))
+        assert opus[OPUS_KEY].quotes == (P1_QUOTE, *TIE_QUOTES)
+        for text in (P1_QUOTE, *TIE_QUOTES):
+            assert decide3(
+                maray_reason(quotes=(R.Quote(f"opus:{OPUS_KEY}", text),)), maray_cell(), opus
+            ).ok
+
+    @pytest.mark.parametrize(
+        "text",
+        [KEEP_QUOTE, "Marayniyoq was a town", "archaeological site in Serbia"],
+        ids=["the keep's quote", "a paraphrase", "another row's line"],
+    )
+    def test_a_quote_the_deciding_verdicts_do_not_carry_refuses(
+        self, tmp_path: Path, text: str
+    ) -> None:
+        opus = R.load_opus(write_opus(tmp_path, opus_line()))
+        v = decide3(maray_reason(quotes=(R.Quote(f"opus:{OPUS_KEY}", text),)), maray_cell(), opus)
+        assert (v.ok, v.reason, v.note) == (
+            False,
+            "evidence-not-found",
+            f"{text!r} is not in opus:{OPUS_KEY}",
+        )
+
+    @pytest.mark.parametrize(
+        ("line", "problem"),
+        [
+            (None, "is not a row of the Opus re-verification"),
+            (opus_line(decision="keep", reversal=False), "decided 'keep'"),
+            (opus_line(decision="pending", reversal=False), "decided 'pending'"),
+            (opus_line(reversal=False), "decided 'revert'"),
+            (opus_line(site_id=AHIN), "journal row 28200 wrote"),
+            (opus_line(column="period_start"), "journal row 28200 wrote"),
+            (opus_line(old_value="Settlement"), "journal row 28200 wrote"),
+            (opus_line(written_value="Temple"), "journal row 28200 wrote"),
+        ],
+        ids=[
+            "no line",
+            "keep",
+            "pending",
+            "superseded",
+            "another site",
+            "another column",
+            "another old value",
+            "another written value",
+        ],
+    )
+    def test_a_decision_that_did_not_revert_this_write_refuses(
+        self, tmp_path: Path, line: dict[str, Any] | None, problem: str
+    ) -> None:
+        opus = {} if line is None else R.load_opus(write_opus(tmp_path, line))
+        v = decide3(maray_reason(), maray_cell(), opus)
+        assert (v.ok, v.reason) == (False, "evidence-not-found") and problem in v.note
+
+    def test_a_decision_on_another_write_of_the_same_cell_refuses(self) -> None:
+        """The quote names the audit's row by change_key: another key's decision is no decision on
+        this journal row's write, whatever cell and values it names."""
+        other = "phase3:" + "4" * 64
+        opus = {
+            other: R.OpusDecision(
+                change_key=other,
+                site_id=MARAY,
+                column="site_type",
+                old_value="City/town/settlement",
+                written_value="Archaeological site",
+                decision="revert",
+                reversal=True,
+                quotes=(TIE_QUOTES[1],),
+            )
+        }
+        quotes = (R.Quote(f"opus:{other}", TIE_QUOTES[1]),)
+        v = decide3(maray_reason(quotes=quotes), maray_cell(), opus)
+        assert (v.ok, v.reason) == (False, "evidence-not-found")
+        assert "journal row 28200 wrote" in v.note
+
+    def test_a_verdict_that_does_not_count_carries_no_quote(self, tmp_path: Path) -> None:
+        line = opus_line()
+        line["basis"][2]["counted"] = False
+        assert R.load_opus(write_opus(tmp_path, line))[OPUS_KEY].quotes == (P1_QUOTE,)
+
+    def test_a_quote_the_audits_check_did_not_find_is_none(self, tmp_path: Path) -> None:
+        line = opus_line()
+        line["quote_check"]["tie"]["quotes"][0]["outcome"] = "not found"
+        assert R.load_opus(write_opus(tmp_path, line))[OPUS_KEY].quotes == (
+            P1_QUOTE,
+            TIE_QUOTES[1],
+        )
+
+    def test_a_basis_the_verdict_file_does_not_hold_is_refused(self, tmp_path: Path) -> None:
+        line = opus_line()
+        line["basis"][0]["verdict"] = "wrong-both"
+        with pytest.raises(P.PlanError, match="VERDICTS_RAW.json p1 holds 'revert'"):
+            R.load_opus(write_opus(tmp_path, line))
+        line = opus_line()
+        line["basis"][2]["from"] = "VERDICTS_ROUND3.json second"
+        with pytest.raises(P.PlanError, match="no verdict"):
+            R.load_opus(write_opus(tmp_path, line))
+
+    @pytest.mark.parametrize("origin", ["../INPUT.jsonl p1", "VERDICTS_RAWS.json p1", "p1"])
+    def test_a_basis_names_a_verdict_file_of_the_audit_only(
+        self, tmp_path: Path, origin: str
+    ) -> None:
+        line = opus_line()
+        line["basis"][0]["from"] = origin
+        with pytest.raises(P.PlanError, match="not a verdict file"):
+            R.load_opus(write_opus(tmp_path, line))
+
+    def test_the_quote_check_must_be_the_verdicts_own(self, tmp_path: Path) -> None:
+        line = opus_line()
+        line["quote_check"]["tie"]["quotes"] = line["quote_check"]["tie"]["quotes"][:1]
+        with pytest.raises(P.PlanError, match="quote check"):
+            R.load_opus(write_opus(tmp_path, line))
+
+    def test_the_decisions_file_is_read_by_change_key_once_each(self, tmp_path: Path) -> None:
+        with pytest.raises(P.PlanError, match="decides .* twice"):
+            R.load_opus(write_opus(tmp_path, opus_line(), opus_line()))
+        with pytest.raises(P.PlanError, match="the Opus re-verification a quote cites"):
+            R.load_opus(tmp_path / "missing")
+
+    def test_only_a_list_that_cites_the_opus_audit_needs_it(self) -> None:
+        assert R.cites_the_opus_audit([maray_reason()])
+        assert not R.cites_the_opus_audit([reason(), banwol_reason(), banwol_label_reason()])
+
+
+class TestTheThirdLane:
+    def test_the_lane_writes_every_column_the_audit_reverts_and_the_labels(self) -> None:
+        assert set(L.REVERSAL_3.columns) == {"site_type", "period_start", "period_name", "country"}
+        assert (
+            L.REVERSAL_3.reverses_journal
+            and L.REVERSAL_3.cell("period_start").sql_type == "integer"
+        )
+        assert L.LANES[L.REVERSAL_3.name] is L.REVERSAL_3
+        assert L.REVERSAL_LISTS[L.REVERSAL_3.name] == L.REVERSAL_3_JOURNAL_IDS
+        assert A.lane_dir(L.REVERSAL_3).name == "mechanical_reversal_3"
+        stamps = {lane.run_stamp for lane in L.LANES.values()}
+        assert len(stamps) == len(L.LANES), "every lane journals under its own stamp"
+
+    def test_the_lane_reads_back_its_residual_the_period_pair_and_the_card_country(self) -> None:
+        readback = L.LANE_READBACKS[L.REVERSAL_3.name]
+        assert L.REVERSAL_3.post_commit_residual.metric in readback
+        assert "journal rows of this list that a later write superseded" in readback
+        assert "curated rows whose period_name is not the bucket of period_start" in readback
+        assert "card_stats rows whose civilization differs from the site country" in readback
+        assert L.REVERSAL_3.post_commit_residual.metric == (
+            "curated sites still holding a value this reversal list undoes"
+        )
+
+    def test_a_start_the_audit_reverts_and_its_label_go_back_together(self, tmp_path: Path) -> None:
+        """Banwolseong's start 1 -> -57, reverted by the audit, with the period-name lane's label."""
+        line = opus_line(
+            change_key=CHANGE_KEY,
+            site_id=BANWOL,
+            column="period_start",
+            old_value="1",
+            written_value="-57",
+        )
+        audit = write_opus(tmp_path, line)
+        for name in ("VERDICTS_RAW.json", "VERDICTS_ROUND2.json", "VERDICTS_ROUND3.json"):
+            path = audit / name
+            path.write_text(path.read_text(encoding="utf-8").replace(OPUS_KEY, CHANGE_KEY), "utf-8")
+        start = banwol_reason(quotes=(R.Quote(f"opus:{CHANGE_KEY}", P1_QUOTE),))
+        plan = R.build_reversal_plan(
+            [start, banwol_label_reason()],
+            {27924: banwol_start(), 30451: banwol_label()},
+            lane=L.REVERSAL_3,
+            pages={},
+            gold={},
+            rereview={},
+            opus=R.load_opus(audit),
+            built_at="t",
+        )
+        assert {(c.column, c.new_value) for c in plan.changes} == {
+            ("period_start", "1"),
+            ("period_name", "1 - 500 AD"),
+        }
+        assert plan.skipped == ()
+
+    def test_write_plans_an_opus_quoted_list_from_the_audit_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        audit = write_opus(tmp_path, opus_line())
+        out = tmp_path / "lane"
+        (out / "export").mkdir(parents=True)
+        (out / "export" / "pages.json").write_text('{"pages": {}}', encoding="utf-8")
+        entries = [
+            {
+                "journal_id": 28200,
+                "site_id": MARAY,
+                "name": "Marayniyoq",
+                "column": "site_type",
+                "reason": "the Opus re-verification decided to revert this write",
+                "quotes": [{"source": f"opus:{OPUS_KEY}", "text": TIE_QUOTES[0]}],
+            }
+        ]
+        (out / "REASONS.json").write_text(json.dumps({"reversals": entries}), encoding="utf-8")
+        c = maray_cell()
+
+        def reader(sql: str) -> list[dict[str, Any]]:
+            if sql.startswith("SELECT id, row_pk, table_name"):
+                return [dict(c.entry or {})]
+            if sql.startswith("SELECT id::text AS id"):
+                return [dict(c.site or {})]
+            return [{"row_pk": MARAY, "column_name": "site_type", **vars(link)} for link in c.chain]
+
+        monkeypatch.setattr(R, "REVERSAL_LISTS", {L.REVERSAL_3.name: (28200,)})
+        monkeypatch.setattr(R, "psql_json_reader", lambda: reader)
+        monkeypatch.setattr(R, "OPUS_AUDIT", audit)
+        assert R.main(["--lane", L.REVERSAL_3.name, "--out", str(out), "--write"]) == 0
+        (record,) = A.load_records(out / "PLAN.jsonl")
+        assert (record.column, record.old_value, record.new_value, record.journal_id) == (
+            "site_type",
+            "Archaeological site",
+            "City/town/settlement",
+            28200,
+        )
+        assert any(e["source"] == f"opus:{OPUS_KEY}" for e in record.evidence)

@@ -47,7 +47,8 @@ delivered plan), so it carries no fourth or fifth guard and no server bounds: `a
 
 A leaf module: it imports nothing from `plan.py` or `apply.py`, so both can import it. It does
 import the pipeline's own vocabularies a lane owns (the period buckets, the canonical site types,
-the scope vocabulary), so they are never copied. The card_stats lanes
+the scope vocabulary), so they are never copied, and the generated journal-row list of
+journal-reversal-3 (`reversal_3_list.py`). The card_stats lanes
 live in `card_stats.py`, which imports the card generator: `resolve_lane` reaches them lazily, so
 this module - and every lane that does not write card_stats - never imports the API package.
 """
@@ -58,6 +59,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from mechanical.reversal_3_list import JOURNAL_IDS as REVERSAL_3_JOURNAL_IDS
 from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.public_sites import SCOPE_STATUSES
 from pipeline.utils.text import PERIOD_BUCKETS
@@ -893,6 +895,58 @@ LANE_READBACKS: dict[str, str] = {
     REVERSAL_1.name: REVERSAL_1_READBACK,
     REVERSAL_2.name: REVERSAL_2_READBACK,
 }
+
+#: The third reversal list (2026-09-25): every write the Opus re-verification decided to revert (a
+#: final revert, not superseded; `output/remediation/opus_audit/REVERSAL_3_INPUT.jsonl`), and the
+#: `period_name` labels the period-name lane derived from those of its `period_start` values whose
+#: restored start falls in another bucket. The journal ids are read from production by change_key
+#: and generated into `reversal_3_list.py` by `reversal_opus.py --write`, together with
+#: `mechanical_reversal_3/REASONS.json`; each audit row quotes the verdicts that decided it
+#: (`opus:<change_key>`, `reversal.py`). Registered below the lists of the first two, which stay
+#: as they were written.
+_REVERSAL_3_CELLS = (
+    Column("site_type", "character varying", max_chars=100),
+    Column("period_start", "integer"),
+    Column("period_name", "character varying", max_chars=100),
+    Column("country", "character varying", max_chars=100),
+)
+_REVERSAL_3_RESIDUAL = reversal_residual(REVERSAL_3_JOURNAL_IDS, _REVERSAL_3_CELLS)
+
+REVERSAL_3 = Lane(
+    name="journal-reversal-3",
+    key_prefix="journal-reversal-3",
+    run_stamp="2026-09-25_mechanical-journal-reversal-3",
+    test_id="P6/journal-reversal-3",
+    confidence="authoritative",
+    label="journal reversal",
+    plan_table="_journal_reversal_3_plan",
+    out_dir_name="mechanical_reversal_3",
+    post_commit_residual=_REVERSAL_3_RESIDUAL,
+    rehearsal_residual=_REVERSAL_3_RESIDUAL,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=_REVERSAL_3_CELLS,
+    reverses_journal=True,
+)
+
+REVERSAL_3_READBACK = journal_readback(
+    REVERSAL_3,
+    [
+        *reversal_metrics(REVERSAL_3, REVERSAL_3_JOURNAL_IDS, _REVERSAL_3_RESIDUAL),
+        (
+            _PERIOD_MISMATCH.metric,
+            f"FROM unified_sites WHERE source_id = 'ancient_nerds' AND {_PERIOD_MISMATCH.predicate}",
+        ),
+        (
+            "card_stats rows whose civilization differs from the site country",
+            "FROM card_stats cs JOIN unified_sites u ON u.id = cs.site_id "
+            "WHERE u.source_id = 'ancient_nerds' AND cs.civilization IS DISTINCT FROM u.country",
+        ),
+    ],
+)
+REVERSAL_LISTS[REVERSAL_3.name] = REVERSAL_3_JOURNAL_IDS
+LANES[REVERSAL_3.name] = REVERSAL_3
+LANE_READBACKS[REVERSAL_3.name] = REVERSAL_3_READBACK
 
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
