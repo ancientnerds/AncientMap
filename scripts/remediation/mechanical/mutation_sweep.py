@@ -4257,6 +4257,85 @@ ACCEPTANCE_CASES: list[Case] = [
 ]
 CASES += ACCEPTANCE_CASES
 
+#: The fresh draw of PROTOCOL.md section 10 (`acceptance/redraw.py`): draw.py stays sealed, and the
+#: next seed and the previous draws' exclusion are this module's. Labels start "acceptance-redraw".
+REDRAW = REPO / "scripts/remediation/acceptance/redraw.py"
+REDRAW_TESTS = "tests/remediation/test_acceptance_redraw.py"
+REDRAW_CASES: list[Case] = [
+    *(
+        guard(f"acceptance-redraw: {label}", REDRAW, needle, test, REDRAW_TESTS)
+        for label, needle, test in (
+            (
+                "a previous draw has its result",
+                '    if not (run / "RESULT.md").is_file():',
+                "test_a_previous_draw_without_its_result_refuses",
+            ),
+            (
+                "the previous sample is the pinned one",
+                '    if digest != draw["sha256"]["SAMPLE.jsonl"]:',
+                "test_a_sample_that_is_not_the_one_its_draw_pins_refuses",
+            ),
+            (
+                "the previous sample holds its draw's sites",
+                '    if len(set(ids)) != len(ids) or len(ids) != int(draw["sample_size"]):',
+                "test_a_sample_that_is_not_its_draw_s_size_refuses",
+            ),
+            (
+                "a previous draw is named",
+                "    if not previous:",
+                "test_there_is_no_fresh_draw_without_a_previous_one",
+            ),
+            (
+                "a pool below 60 refuses",
+                "    if len(pool) < D.SAMPLE_SIZE:",
+                "test_a_pool_smaller_than_the_sample_refuses",
+            ),
+            ("a draw is taken once", "    if out.exists():", "test_a_fresh_draw_is_taken_once"),
+            (
+                "the Phase-4 audit samples are required",
+                "    if not args.phase4_audit_samples:",
+                "test_the_phase4_audit_samples_are_still_required",
+            ),
+        )
+    ),
+    *(
+        Case(f"acceptance-redraw: {label}", REDRAW, old, new, test, REDRAW_TESTS)
+        for label, old, new, test in (
+            (
+                "the seed is one past the last",
+                "    return max(p.seed for p in previous) + 1",
+                "    return max(p.seed for p in previous)",
+                "test_the_next_seed_is_one_past_the_highest_previous_seed",
+            ),
+            (
+                "the previous draws' sites are excluded",
+                "        excluded.update(removed)",
+                "        pass",
+                "test_only_the_previous_draws_own_sites_are_excluded_and_recorded",
+            ),
+            (
+                "the draw takes the next seed",
+                "    drawn = draw_sample(sorted(frame_ids), seed=seed,",
+                "    drawn = draw_sample(sorted(frame_ids), seed=D.SEED,",
+                "test_the_draw_is_the_project_s_seeded_draw_with_the_next_seed",
+            ),
+            (
+                "the canaries take the seed after the draw's",
+                "    canary_rows = D.canaries(values, frame, seed=seed)",
+                "    canary_rows = D.canaries(values, frame)",
+                "test_the_canaries_are_picked_with_the_seed_after_the_draw_s",
+            ),
+            (
+                "DRAW.json names the fresh draw's script",
+                '        "redraw_py_sha256": D.sha256_of(_HERE),\n',
+                "",
+                "test_a_fresh_draw_writes_the_files_the_judging_reads_and_pins_them",
+            ),
+        )
+    ),
+]
+CASES += REDRAW_CASES
+
 # -------------------------------------------------- the orphan-citations lane (D1, 2026-09-25)
 #: The repair of the acceptance's D1 class (`citations.py`) and its registration in `lane.py`.
 #: Every label starts with "orphan-citations" - `mutation_sweep.py orphan-citations` runs these.
