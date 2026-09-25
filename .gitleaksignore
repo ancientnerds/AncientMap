@@ -51,3 +51,8 @@ aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stat
 aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3605
 aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3606
 aac083bd24d1e6f395b5475721c4eef4f53e066a:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3607
+
+# A site UUID, not a credential (triaged 2026-09-25): the image writer's PLAN.jsonl names each row
+# as "row_key": "<id>", and on a unified_sites row the key is the site's UUID - generic-api-key
+# reads 'key' next to 36 characters of hex. Dedan's thumbnail chunk, the one row.
+cf1f5575026d8d166cae68a07caaad98fdeeb08a:output/remediation/hero_repair/thumbnail-2026-09-25/chunk-001/PLAN.jsonl:generic-api-key:1
