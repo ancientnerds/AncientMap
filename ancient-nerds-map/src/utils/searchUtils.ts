@@ -6,6 +6,31 @@
 export const normalizeForSearch = (str: string): string =>
   str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
+/** Words a visitor adds that no site name needs to contain: "the valley of
+ *  kings" is the Valley of the Kings. The API's search drops the same ones
+ *  (api/routes/sites.py SEARCH_STOPWORDS). */
+const SEARCH_STOPWORDS = new Set(['the', 'of', 'and', 'an', 'in', 'at', 'on', 'to', 'near'])
+
+/** The words of a normalized query that the word match requires: three
+ *  characters or more, no filler, each once. Umami, 2026-09-17..25: "the
+ *  valley of kings, egypt" and "giza, egypt" found nothing while the query was
+ *  only ever matched as one string. */
+export function searchWords(queryNorm: string): string[] {
+  const words = queryNorm.split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 3 && !SEARCH_STOPWORDS.has(w))
+  return [...new Set(words)]
+}
+
+const WORD_CHAR = /[\p{L}\p{N}]/u
+
+/** True when `word` starts a word of `textNorm` ("kings" in "valley of the
+ *  kings", not in "workings"). Both sides normalized. */
+export function startsAWord(textNorm: string, word: string): boolean {
+  for (let i = textNorm.indexOf(word); i !== -1; i = textNorm.indexOf(word, i + 1)) {
+    if (i === 0 || !WORD_CHAR.test(textNorm[i - 1])) return true
+  }
+  return false
+}
+
 /** Get approximate year from period string for filtering */
 export function periodToYear(period: string): number {
   switch (period) {

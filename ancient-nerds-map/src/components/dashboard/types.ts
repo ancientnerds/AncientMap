@@ -65,7 +65,11 @@ export interface ContentRow {
   country: string | null
   /** Result count of the search — only on `search` rows; 0 means nothing found. */
   results: number | null
+  /** Opens (or searches). */
   n: number
+  /** Sessions behind `n`. Absent from an API older than this bundle (ci.yml
+   *  swaps the frontend first); the panel then ranks by `n`. */
+  visitors?: number
 }
 
 /** GET /api/stats/content?days=N */
@@ -231,6 +235,9 @@ export interface LogCoverage {
    *  window — referrer spam, and counted out of `families` and `hosts`
    *  (pipeline/referral_log.py UNKNOWN_HOST_MIN). */
   unverified: number
+  /** Pages Chrome prefetched for a Google result page (Sec-Purpose), which
+   *  nobody has looked at yet — never an arrival (pipeline/referral_log.py). */
+  prefetched: number
   families: LogFamily[]
   hosts: LogHost[]
   statuses: LogStatus[]
@@ -254,24 +261,19 @@ export interface GlobeTimes {
   samples: number
 }
 
-/** How the loads that never fired globe_ready ended (stats_analysis.globe_funnel).
- *  The six counts sum to `gave_up`. Per session, capped by its unreached loads,
- *  in this order: gate, unsupported, error, abandoned; the rest is `no_signal`,
- *  or `unmeasured` for the unreached loads that ran a build without the
- *  endings: those from before the first ending event was recorded, and a
- *  returning visitor's first load after it, which the service worker served
- *  from the previous build (counted per load: a session spans a calendar
- *  month; SQL_GLOBE names the stale loads it cannot tell apart). */
+/** How the globe loads that never fired globe_ready ended (stats_analysis.globe_funnel).
+ *  The four counts sum to `gave_up`. Per session, capped by its unreached loads,
+ *  in this order: unsupported, error, abandoned; the rest is `no_signal`. */
 export interface GlobeEndings {
-  gate: number
   unsupported: number
   error: number
   abandoned: number
   no_signal: number
-  unmeasured: number
 }
 
-/** GET /api/stats/globe?days=N — the denominator is page loads, not sessions. */
+/** GET /api/stats/globe?days=N — the denominator is page loads, not sessions,
+ *  and only loads of the build that reports its endings (the globe-load deploy
+ *  of 2026-09-24) count: SQL_GLOBE leaves the earlier ones out. */
 export interface GlobeData {
   loads: number
   reached: number
@@ -283,6 +285,19 @@ export interface GlobeData {
   not_reached: GlobeEndings
   /** How long the counted `abandoned` loads had waited when they left. */
   abandon_ms: GlobeTimes
+  /** Phone loads that stayed at the phone gate - the gate doing its job, in
+   *  none of the counts above. Absent from an older API. */
+  gate_stops?: number
+  /** Loads and arrivals per kind of machine (stats_analysis DEVICE_GROUPS:
+   *  laptop and desktop are one). Absent from an older API. */
+  by_device?: GlobeDevice[]
+}
+
+export interface GlobeDevice {
+  /** 'desktop' | 'mobile' | 'tablet' | 'unknown' */
+  device: string
+  loads: number
+  reached: number
 }
 
 export interface Cluster {

@@ -79,6 +79,8 @@ SEARCH_HOSTS = (
     "ecosia.org",
     "qwant.com",
     "brave.com",
+    # search.yahoo.com stood in its own row on 2026-09-25 (9 sessions)
+    "yahoo.",
 )
 AI_HOSTS = (
     "chatgpt.com",
@@ -87,6 +89,10 @@ AI_HOSTS = (
     "copilot.microsoft.com",
     "gemini.google.com",
     "claude.ai",
+    # Live 2026-09-25 as rows of their own: Microsoft's consumer Copilot and
+    # DuckDuckGo's assistant
+    "copilot.com",
+    "duck.ai",
 )
 #: utm_source values that name an assistant without naming a host. ChatGPT
 #: tags its outbound links "utm_source=chatgpt.com", which is a host and is
@@ -143,6 +149,11 @@ def is_ai_entry(referrer: str | None, utm_source: str | None = None) -> bool:
     return False
 
 
+#: www. and the mobile and link-shim hosts of one site: m.facebook.com and
+#: facebook.com were two rows for one referrer on 2026-09-25.
+_MOBILE_PREFIX = re.compile(r"^(www|m|l|lm|mobile)\.")
+
+
 def source_family(referrer: str | None, utm_source: str | None = None) -> str:
     """Where a session came from, in founder words: "ai", else a utm_source
     verbatim, else "google" / "search" / the bare referrer host / "direct".
@@ -160,7 +171,7 @@ def source_family(referrer: str | None, utm_source: str | None = None) -> str:
     r = referrer.lower()
     if any(h in r for h in SEARCH_HOSTS):
         return "google" if "google." in r else "search"
-    return r.removeprefix("www.")
+    return _MOBILE_PREFIX.sub("", r)
 
 
 @dataclass
@@ -606,13 +617,19 @@ def hourly_sessions(
 #: six browsers and two of those contributed two loads each.
 GLOBE_MIN_SAMPLES = 5
 
-#: How a load that never fired globe_ready ended, in the order a load meets
-#: them: phone gate -> capability check -> start -> the visitor leaving. Each
-#: bucket names the SQL_GLOBE columns that count it. The frontend sends one of
-#: these per load; the order only decides who wins when a session carries more
-#: of them than it has unreached loads.
+#: A phone load that stayed at the phone gate: the gate sent the visitor to
+#: another page, or they left while it showed. That is the gate doing its job
+#: while the globe has no phone layout, not a globe that failed - the founders
+#: read this panel for problems (2026-09-26) - so such a load is no globe load
+#: at all and globe_funnel counts it apart, in `gate_stops`.
+GATE_COLUMNS = ("gate_left", "gate_quit")
+
+#: How a globe load that never fired globe_ready ended, in the order a load
+#: meets them: capability check -> start -> the visitor leaving. Each bucket
+#: names the SQL_GLOBE columns that count it. The frontend sends one of these
+#: per load; the order only decides who wins when a session carries more of
+#: them than it has unreached loads.
 GLOBE_ENDINGS = (
-    ("gate", ("gate_left", "gate_quit")),
     ("unsupported", ("unsupported",)),
     ("error", ("failed", "context_lost")),
     ("abandoned", ("abandoned",)),
@@ -635,11 +652,18 @@ def _spread(times: list[float]) -> dict[str, Any]:
 def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """How many globe loads reached an interactive globe, how long the ones
     that did took, and how the others ended. Rows are SQL_GLOBE's, one per
-    session.
+    session, and hold only the loads that ran the build with the endings
+    (the globe-load deploy of 2026-09-24; SQL_GLOBE's measured_from).
 
     Measured 2026-09-19: 33 loads, 8 of them reached - about three quarters of
-    the people who open the globe never see one. The denominator is page
-    loads, not sessions, and the panel says so.
+    the people who open the globe never see one. On the new build, seven
+    days on 2026-09-25: 26 loads, 21 reached. The denominator is page loads,
+    not sessions, and the panel says so.
+
+    A load that stayed at the phone gate (GATE_COLUMNS, capped by the
+    session's unreached loads, first) is no globe load: it leaves `loads`,
+    `by_device` and `sessions` and is counted in `gate_stops` alone. A
+    session whose every load stayed at the gate is not in the rows' count.
 
     `min(ready, views)` per session, because a globe_ready can arrive eighty
     seconds after its page view and straddle the window edge.
@@ -660,19 +684,10 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     they belong to loads that reached the globe. `webgl_lost` while loading
     is an error: it is a start failure, and uncounted it would read as a
     crash. What no ending claims is `no_signal` - the page loaded and nothing
-    else arrived (a crashed tab, or a visitor gone before the tracker loaded) -
-    except the loads that ran a build without the endings and did not reach
-    the globe (SQL_GLOBE's `views_before` minus `ready_before`, capped like
-    `ready`): the loads before the first ending event was ever recorded, and
-    a returning visitor's first load after it, which the service worker
-    still served from the previous build. Such a load could not have sent
-    one, so it is `unmeasured`: otherwise every load from before the
-    instrumentation would read as a crash for as long as the window reaches
-    back. This is counted per load, not per session: an Umami session is one
-    browser for a calendar month, and its silent loads on the new build are
-    `no_signal`. SQL_GLOBE's comment names the stale loads it cannot tell
-    apart. Endings still claim loads first, and the unmeasured part is
-    capped by what they leave.
+    else arrived (a crashed tab, or a visitor gone before the tracker loaded).
+    Loads of the build without the endings are not in the rows at all, so
+    none of them can land there; SQL_GLOBE's comment names the stale loads
+    it cannot tell apart.
 
     `abandon_ms` is capped where `ready_ms` is not: only the abandons that the
     split actually counted feed it, the latest ones of the session. A
@@ -689,18 +704,27 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     times: list[float] = []
     split = {name: 0 for name, _cols in GLOBE_ENDINGS}
     no_signal = 0
-    unmeasured = 0
     left_times: list[float] = []
+    by_device: dict[str, dict[str, int]] = {}
+    gate_stops = 0
+    sessions = 0
     for r in rows:
         views = int(r["views"] or 0)
-        if not views:
-            continue
         got = min(int(r["ready"] or 0), views)
-        loads += views
+        gated = min(sum(int(r[c] or 0) for c in GATE_COLUMNS), views - got)
+        gate_stops += gated
+        attempts = views - gated
+        if not attempts:
+            continue
+        sessions += 1
+        loads += attempts
         reached += got
+        device = by_device.setdefault(_device_bucket(r.get("device")), {"loads": 0, "reached": 0})
+        device["loads"] += attempts
+        device["reached"] += got
         reached_sessions += 1 if got else 0
         times.extend(float(ms) for ms in (r["ready_ms"] or []))
-        left = views - got
+        left = attempts - got
         for name, cols in GLOBE_ENDINGS:
             take = min(sum(int(r[c] or 0) for c in cols), left)
             split[name] += take
@@ -708,18 +732,21 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
             # `and take` is load-bearing: xs[-0:] is the whole list.
             if name == "abandoned" and take:
                 left_times.extend(float(ms) for ms in (r["abandon_ms"] or [])[-take:])
-        views_before = int(r["views_before"] or 0)
-        silent_before = min(views_before - min(int(r["ready_before"] or 0), views_before), left)
-        unmeasured += silent_before
-        no_signal += left - silent_before
+        no_signal += left
     return {
         "loads": loads,
         "reached": reached,
         "gave_up": loads - reached,
-        "sessions": {"all": sum(1 for r in rows if r["views"]), "reached": reached_sessions},
+        "sessions": {"all": sessions, "reached": reached_sessions},
         "ready_ms": _spread(times),
-        "not_reached": {**split, "no_signal": no_signal, "unmeasured": unmeasured},
+        "not_reached": {**split, "no_signal": no_signal},
         "abandon_ms": _spread(left_times),
+        "gate_stops": gate_stops,
+        # Phones and computers apart (DEVICE_GROUPS), gate stops excluded
+        "by_device": [
+            {"device": name, **counts}
+            for name, counts in sorted(by_device.items(), key=lambda kv: (-kv[1]["loads"], kv[0]))
+        ],
     }
 
 
@@ -794,6 +821,67 @@ def entry_exit_pages(sessions: list[Session]) -> dict[str, Any]:
             for page, n in sorted(exits.items(), key=lambda kv: (-kv[1], kv[0]))
         ],
     }
+
+
+#: How soon a session's next search has to follow for the earlier one to count
+#: as typing still in progress rather than a question of its own.
+SEARCH_REFINE_SECONDS = 60
+#: How many leading characters the two have to share: "athe" -> "athens",
+#: "crerre" -> "crete", "gize, egy" -> "giza, egypt".
+SEARCH_REFINE_PREFIX = 3
+
+
+def _refined_by(earlier: str, later: str) -> bool:
+    a, b = earlier.lower(), later.lower()
+    shared = min(SEARCH_REFINE_PREFIX, len(a))
+    return a != b and a[:shared] == b[:shared]
+
+
+def search_terms(rows: list[dict[str, Any]], limit: int = 30) -> list[dict[str, Any]]:
+    """What visitors searched for, one row per term, from SQL_SEARCH_EVENTS.
+
+    A search the same session refined within SEARCH_REFINE_SECONDS (the next
+    query starts like it) is the visitor still typing, not a term: live on
+    2026-09-25 "athe", "0p" and "crerre" stood in the list as searches of their
+    own. `results` is the most the term ever found (the SQL_CONTENT rule: one
+    early zero must not brand a term that works), `n` the searches, `visitors`
+    the sessions. Ranked by visitors, then searches.
+    """
+    kept: list[dict[str, Any]] = []
+    for i, r in enumerate(rows):
+        q = (r["q"] or "").strip()
+        if not q:
+            continue
+        nxt = rows[i + 1] if i + 1 < len(rows) else None
+        if (
+            nxt is not None
+            and nxt["session_id"] == r["session_id"]
+            and (nxt["created_at"] - r["created_at"]).total_seconds() <= SEARCH_REFINE_SECONDS
+            and _refined_by(q, (nxt["q"] or "").strip())
+        ):
+            continue
+        kept.append({**r, "q": q})
+    terms: dict[str, dict[str, Any]] = {}
+    for r in kept:
+        key = r["q"].lower()
+        t = terms.setdefault(key, {"label": r["q"], "n": 0, "sessions": set(), "results": None})
+        t["n"] += 1
+        t["sessions"].add(r["session_id"])
+        if r["results"] is not None:
+            found = int(r["results"])
+            t["results"] = found if t["results"] is None else max(t["results"], found)
+    ranked = sorted(terms.values(), key=lambda t: (-len(t["sessions"]), -t["n"], t["label"]))
+    return [
+        {
+            "event_name": "search",
+            "label": t["label"],
+            "country": None,
+            "results": t["results"],
+            "n": t["n"],
+            "visitors": len(t["sessions"]),
+        }
+        for t in ranked[:limit]
+    ]
 
 
 def outbound_links(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

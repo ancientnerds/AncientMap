@@ -7,9 +7,10 @@
     <title>Founders · Ancient Nerds</title>
     <meta name="robots" content="noindex, nofollow" />
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- The AN mark in the dashboard's green. Not /favicon.svg: on the stats host
+         every path outside the dashboard's own goes to Umami, which answers the
+         site's icons with HTML. Vite emits it under /assets/, which the stats host serves. -->
+    <link rel="icon" type="image/svg+xml" href="/src/components/dashboard/an-logo-green.svg" />
     <meta name="theme-color" content="#060604" />
     <!-- Self-hosted fonts, served by the stats host from the same dist. -->
     <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/jetbrains-mono-400-latin.woff2" />

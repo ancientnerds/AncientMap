@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import { track } from './analytics'
 import { errorProps } from './analytics/boot'
+import { trackBackgroundFailure } from './analytics/globeBackground'
 import {
   createGlobeEndingLatch,
   createLoadClock,
@@ -44,7 +45,7 @@ import { BRAND_ASSETS } from './constants/brand'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { offlineFetch } from './services/OfflineFetch'
-import { ensureServiceWorkerActive, serviceWorkerTask } from './pwa/registerServiceWorker'
+import { ensureServiceWorkerActive, serviceWorkerTask, updateInstalledServiceWorker } from './pwa/registerServiceWorker'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
 import { haversineDistance } from './utils/geoMath'
@@ -1694,6 +1695,14 @@ function AppContent() {
     idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
   }, [])
   useGlobeReady(loadingComplete && !globeFailure && !webglLost, endingLatch, globeReadyRef, armGlobeIdle)
+
+  // The phone gate is the page for a visitor who never starts the globe: the
+  // installed worker checks for a new build here, since the queue's `sw` task
+  // only runs once the globe is up (pwa/registerServiceWorker.ts)
+  useEffect(() => {
+    if (!gateShowing) return
+    updateInstalledServiceWorker().catch(err => trackBackgroundFailure('sw', err))
+  }, [gateShowing])
 
   const handleGateChoice = useCallback((choice: GateChoice) => {
     reportGateChoice(choice, endingLatch)

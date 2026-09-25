@@ -1,8 +1,8 @@
 import { type BarItem, BarList } from './BarList'
 import { fmtInt } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
-import type { GlobeData, GlobeEndings, GlobeTimes } from './types'
+import type { GlobeData, GlobeDevice, GlobeEndings, GlobeTimes } from './types'
 import type { Loaded } from './useStats'
 
 /** "9.4 s" / "80.4 s" — the globe's times are seconds, never milliseconds.
@@ -58,33 +58,52 @@ const CLOCKS_NOTE =
   ' times above count from the page load, reading the phone gate included, so on phones the two do not compare.'
 
 /** One label per ending. The literal's key order is the row order: the order
- *  a load meets them (gate, capability check, start, leaving), then what
- *  nothing explains. A Record, so a new ending without a label does not compile. */
+ *  a load meets them (capability check, start, leaving), then what nothing
+ *  explains. A Record, so a new ending without a label does not compile. */
 const ENDING_LABELS: Record<keyof GlobeEndings, string> = {
-  gate: 'Stopped at the phone gate',
   unsupported: 'Device cannot run the globe',
   error: 'Error while starting',
   abandoned: 'Left while loading',
   no_signal: 'No signal',
-  unmeasured: 'Before these were recorded',
 }
 
 /** The rows of the split, in fixed order — zeros stay, the order is the
- *  reading. `unmeasured` only when the window holds loads that ran a build
- *  without the endings: loads from before the first ending event, or a
- *  returning visitor's first load after it (SQL_GLOBE measured_from), which
- *  can fall in any later window, so never hide the row by date. */
+ *  reading. */
 export function endingItems(g: GlobeData): BarItem[] {
   const n = g.not_reached
   const median = g.abandon_ms.median
   return (Object.keys(ENDING_LABELS) as Array<keyof GlobeEndings>)
-    .filter(key => key !== 'unmeasured' || n.unmeasured > 0)
     .map(key => ({
       key,
       label: ENDING_LABELS[key],
       value: n[key],
       ...(key === 'abandoned' && median !== null ? { hint: `median ${secs(median)}` } : {}),
     }))
+}
+
+const DEVICE_WORDS: Record<string, string> = {
+  mobile: 'Phones',
+  desktop: 'Computers',
+  tablet: 'Tablets',
+  unknown: 'Unknown devices',
+}
+
+/** "Phones 4 of 8 · Computers 17 of 18 loads reached the globe." Phones are
+ *  their own question - the gate, the layout - and one total hides them. */
+export function devicesLine(devices: GlobeDevice[] | undefined): string {
+  if (!devices || devices.length === 0) return ''
+  const parts = devices.map(d => `${DEVICE_WORDS[d.device] ?? d.device} ${fmtInt(d.reached)} of ${fmtInt(d.loads)}`)
+  return `${parts.join(' · ')} loads reached the globe.`
+}
+
+/** The phone loads the gate kept - named, never counted: until the globe has
+ *  a phone layout the gate sends phones to the other pages on purpose, and
+ *  this panel is read for problems. Empty without any. */
+export function gateLine(g: GlobeData): string {
+  const n = g.gate_stops ?? 0
+  if (n === 0) return ''
+  const loads = n === 1 ? '1 phone load' : `${fmtInt(n)} phone loads`
+  return `Not counted: ${loads} stayed at the phone gate, which sends phones to the other pages on purpose until the globe has a phone layout.`
 }
 
 /** How many *people* got to a globe, against how many opened one. The tiles
@@ -113,9 +132,12 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
               sub={`${fmtInt(g.gave_up)} loads never got there`}
             />
           </div>
+          {devicesLine(g.by_device) && <p className="dash-note">{devicesLine(g.by_device)}</p>}
+          {gateLine(g) && <p className="dash-note">{gateLine(g)}</p>}
           <p className="dash-note">
             {timesLine(g)} The denominator is page loads of /globe.html, not visitors — one person
-            reloading counts twice, on purpose. {visitorsLine(g)}
+            reloading counts twice, on purpose. {visitorsLine(g)} Counted from the build of 24 Sep 2026
+            on, the first that reports how a load ends; loads of the earlier build are left out.
           </p>
           {/* An answer without the split is an API older than this bundle — every
               deploy has that window, because ci.yml builds the frontend before it
@@ -125,18 +147,13 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
             <>
               <h3>How the other loads ended</h3>
               <BarList items={endingItems(g)} empty="No load ended without the globe in this window." />
-              <p className="dash-note">
-                {abandonLine(g)}
+              {g.abandon_ms.samples > 0 && <p className="dash-note">{abandonLine(g)}</p>}
+              <HowCounted>
                 {g.abandon_ms.samples > 0 && CLOCKS_NOTE} Counts per load, but Umami ties an event to a visitor and never to one
                 page load, so a visitor's endings are matched to their loads in this order. No signal:
                 the page loaded and nothing else arrived — a crashed tab, or a visitor gone before the
                 tracker loaded.
-                {g.not_reached.unmeasured > 0 &&
-                  ' Before these were recorded: loads from before the globe started reporting how a load ends,' +
-                    ' and the first load after that by a returning visitor, which their browser still ran from' +
-                    ' the previous build. Some of those still land in No signal: to Umami a visit in an earlier' +
-                    ' month is another visitor.'}
-              </p>
+              </HowCounted>
             </>
           )}
           {g.not_reached && g.gave_up === 0 && g.loads > 0 && (

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
@@ -167,10 +168,11 @@ def test_content_splits_the_rows_by_event_and_caps_the_lists(monkeypatch):
             "country": "Peru",
             "results": None,
             "n": 20 - i,
+            "visitors": 20 - i,
         }
         for i in range(20)
     ]
-    rows += [{"event_name": "story_open", "label": "st", "country": None, "results": None, "n": 3}]
+    rows += [{"event_name": "story_open", "label": "st", "country": None, "results": None, "n": 3, "visitors": 2}]  # fmt: skip
     rows += [
         {
             "event_name": "paper_open",
@@ -178,10 +180,18 @@ def test_content_splits_the_rows_by_event_and_caps_the_lists(monkeypatch):
             "country": None,
             "results": None,
             "n": 2,
+            "visitors": 2,
         }
     ]
-    rows += [{"event_name": "search", "label": f"q{i}", "country": None, "results": 0, "n": 1} for i in range(40)]  # fmt: skip
-    monkeypatch.setattr(fr, "fetch", Fetch(**{"'site_open', 'story_open'": rows}))
+    searches = [
+        {"session_id": f"s{i}", "created_at": datetime(2026, 9, 19, tzinfo=UTC), "q": f"q{i}", "results": 0}
+        for i in range(40)
+    ]  # fmt: skip
+    monkeypatch.setattr(
+        fr,
+        "fetch",
+        Fetch(**{"'site_open', 'story_open'": rows, "e.event_name = 'search'": searches}),
+    )
     out = asyncio.run(fr.content(days=7, _session=SESSION))
     assert [r["label"] for r in out["sites"]][:2] == ["S0", "S1"] and len(out["sites"]) == 15
     # A site keeps its country and a search its result count — the panel shows both.
@@ -192,6 +202,18 @@ def test_content_splits_the_rows_by_event_and_caps_the_lists(monkeypatch):
     assert len(out["searches"]) == 30
 
 
+def test_content_ranks_opened_things_by_visitors(monkeypatch):
+    """2026-09-25: the week's most opened site had 24 opens from six sessions of
+    one laptop; a site four people opened once each is the bigger number."""
+    rows = [
+        {"event_name": "site_open", "label": "Petroglyph Beach", "country": "USA", "results": None, "n": 24, "visitors": 6},
+        {"event_name": "site_open", "label": "Els Munts", "country": "Spain", "results": None, "n": 8, "visitors": 8},
+    ]  # fmt: skip
+    monkeypatch.setattr(fr, "fetch", Fetch(**{"'site_open', 'story_open'": rows}))
+    out = asyncio.run(fr.content(days=7, _session=SESSION))
+    assert [r["label"] for r in out["sites"]] == ["Els Munts", "Petroglyph Beach"]
+
+
 def test_content_hands_out_no_session_id(monkeypatch):
     """SQL_CONTENT selects the visitor behind the last hit, because /problems
     names them on its empty-search rows. Nothing on the content panel renders
@@ -200,22 +222,37 @@ def test_content_hands_out_no_session_id(monkeypatch):
     country, a device and a browser, into a response the page throws away.
     Every other route cuts an id to eight characters."""
     row = {
-        "event_name": "search",
-        "label": "giza",
-        "country": None,
-        "results": 14,
+        "event_name": "site_open",
+        "label": "Giza",
+        "country": "Egypt",
+        "results": None,
         "n": 23,
+        "visitors": 9,
         "last_at": datetime(2026, 9, 19, tzinfo=UTC),
         "last_session": "cf01aa30-ef2f-5e7e-b509-cb95b1c1a095",
         "last_country": "DE",
         "last_device": "mobile",
         "last_browser": "chrome",
     }
-    monkeypatch.setattr(fr, "fetch", Fetch(**{"'site_open', 'story_open'": [row]}))
+    search = {
+        "session_id": "cf01aa30-ef2f-5e7e-b509-cb95b1c1a095",
+        "created_at": datetime(2026, 9, 19, tzinfo=UTC),
+        "q": "giza",
+        "results": Decimal("14.0000"),
+    }
+    monkeypatch.setattr(
+        fr,
+        "fetch",
+        Fetch(**{"'site_open', 'story_open'": [row], "e.event_name = 'search'": [search]}),
+    )
     out = asyncio.run(fr.content(days=7, _session=SESSION))
+    assert out["sites"] == [
+        {"event_name": "site_open", "label": "Giza", "country": "Egypt", "results": None, "n": 23, "visitors": 9}
+    ]  # fmt: skip
+    # results is numeric in event_data: a Decimal the panel compared with 0 and never matched
     assert out["searches"] == [
-        {"event_name": "search", "label": "giza", "country": None, "results": 14, "n": 23}
-    ]
+        {"event_name": "search", "label": "giza", "country": None, "results": 14, "n": 1, "visitors": 1}
+    ]  # fmt: skip
     assert "cf01aa30" not in repr(out)
 
 
@@ -282,8 +319,6 @@ def test_globe_asks_only_for_the_globe_path(monkeypatch):
             "context_lost": 0,
             "abandoned": 1,
             "abandon_ms": [6100.0],
-            "views_before": 0,
-            "ready_before": 0,
         }
     ]
     fetch = Fetch(**{"'globe_ready'": rows})
@@ -297,15 +332,15 @@ def test_globe_asks_only_for_the_globe_path(monkeypatch):
         "ready_ms",
         "not_reached",
         "abandon_ms",
+        "gate_stops",
+        "by_device",
     }
     assert out["loads"] == 2 and out["reached"] == 1
     assert out["not_reached"] == {
-        "gate": 0,
         "unsupported": 0,
         "error": 0,
         "abandoned": 1,
         "no_signal": 0,
-        "unmeasured": 0,
     }
     assert out["abandon_ms"]["samples"] == 1
     assert len(fetch.calls) == 1 and fetch.calls[0][3] == {"path": fr.GLOBE_PATH}

@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtInt, fmtStamp } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { MemberAct, MembersData } from './types'
 import type { Loaded } from './useStats'
@@ -47,13 +47,13 @@ export function Members({ state }: { state: Loaded<MembersData> }) {
             />
           </div>
           <BarList items={m.acts.map(actItem)} empty="Nobody has done anything yet." />
-          <p className="dash-note">
+          <HowCounted>
             Everything since the first signup, not the window above — {fmtInt(m.members)} members cannot
             fill a seven-day bucket. The login date is a founder's own; member recency is the date on each
             act row. The account counts are per table and do not add up across rows: three of the four
             key on a member id, research requests on a Discord id. The card game is not counted here: its
             table lives on the API side, which this query may not reach.
-          </p>
+          </HowCounted>
         </>
       )}
     </Panel>

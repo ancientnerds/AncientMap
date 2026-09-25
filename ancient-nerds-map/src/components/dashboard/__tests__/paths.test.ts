@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { chainChips, entryItem, exitItem, outboundItem } from '../Paths'
+import { chainChips, entryItem, exitItem, outboundItem, outboundRest } from '../Paths'
 
 describe('Paths rows', () => {
   it('warns only when a landing page held every session it got', () => {
@@ -57,5 +57,16 @@ describe('journey chips', () => {
       'action',
       'action',
     ])
+  })
+})
+
+describe('outboundRest', () => {
+  it('counts the long tail past the listed hosts', () => {
+    const links = Array.from({ length: 14 }, (_, i) => ({ host: `h${i}.org`, clicks: 1, visitors: 1 }))
+    expect(outboundRest(links)).toBe('…and 4 more hosts, one visitor each.')
+    expect(outboundRest(links.slice(0, 11))).toBe('…and 1 more host, one visitor.')
+    expect(outboundRest(links.slice(0, 10))).toBe('')
+    const mixed = [...links.slice(0, 10), { host: 'x.org', clicks: 3, visitors: 2 }]
+    expect(outboundRest(mixed)).toBe('…and 1 more host.')
   })
 })

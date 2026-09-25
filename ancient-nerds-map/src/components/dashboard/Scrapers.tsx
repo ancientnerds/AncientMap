@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtInt, fmtShare } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import type { Cluster, ClustersData, Overview } from './types'
 import type { Loaded } from './useStats'
 
@@ -38,13 +38,15 @@ export function Scrapers({ state, overview }: { state: Loaded<ClustersData>; ove
           <p className="dash-note">
             {fmtInt(c.flagged)}
             {all === null ? '' : ` of ${fmtInt(all)} sessions (${fmtShare(c.flagged, all)})`} sat inside a
-            group that {c.min_ids} or more session ids reached on the same path in the same minute. The
-            two numbers cover the same window but are up to five minutes apart — this panel refreshes
-            every five minutes, the session count every minute. Read every other number on this page with
-            that subtracted. Declared crawlers never get this far: Umami drops GPTBot, ClaudeBot and
-            PerplexityBot before the insert, so they are invisible here — "and the rest are people" does
-            not follow.
+            group that {c.min_ids} or more session ids reached on the same path in the same minute. Read
+            every other number on this page with that subtracted.
           </p>
+          <HowCounted>
+            The two numbers cover the same window but are up to five minutes apart — this panel refreshes
+            every five minutes, the session count every minute. Declared crawlers never get this far: Umami
+            drops GPTBot, ClaudeBot and PerplexityBot before the insert, so they are invisible here — "and
+            the rest are people" does not follow.
+          </HowCounted>
         </>
       )}
     </Panel>

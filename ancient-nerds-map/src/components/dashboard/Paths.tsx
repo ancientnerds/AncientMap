@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 
 import { BarList, type BarItem } from './BarList'
 import { fmtInt } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import type { EntryPage, ExitPage, JourneysData, OutboundLink } from './types'
 import type { Loaded } from './useStats'
 
@@ -51,6 +51,19 @@ export function exitItem(x: ExitPage): BarItem {
     value: x.sessions,
     hint: `of ${fmtInt(x.views)} views`,
   }
+}
+
+/** How many outbound hosts are listed. On 2026-09-25 the list ran to 45 rows,
+ *  all but four of them one visitor each. */
+export const OUTBOUND_ROWS = 10
+
+/** "…and 35 more hosts, one visitor each." for the rows past OUTBOUND_ROWS. */
+export function outboundRest(links: OutboundLink[]): string {
+  const rest = links.slice(OUTBOUND_ROWS)
+  if (rest.length === 0) return ''
+  const single = rest.every(o => o.visitors === 1)
+  const hosts = rest.length === 1 ? '1 more host' : `${fmtInt(rest.length)} more hosts`
+  return `…and ${hosts}${single ? `, ${rest.length === 1 ? 'one visitor' : 'one visitor each'}` : ''}.`
 }
 
 /** A link out of the site. There is no Discord row: see the panel's note. */
@@ -106,15 +119,19 @@ export function Paths({ state }: { state: Loaded<JourneysData> }) {
             </ol>
           )}
           <h3>Links out of the site</h3>
-          <BarList items={j.outbound.map(outboundItem)} empty="No outbound click in this window." />
+          <BarList items={j.outbound.slice(0, OUTBOUND_ROWS).map(outboundItem)} empty="No outbound click in this window." />
+          {outboundRest(j.outbound) && <p className="dash-note">{outboundRest(j.outbound)}</p>}
           <p className="dash-note">
-            Confirmed human sessions only, at most six steps per chain; the first chip is the source. Of{' '}
-            {fmtInt(j.pages.sessions)} human sessions, {fmtInt(j.pages.one_page)} loaded exactly one page
-            and {fmtInt(j.pages.moving)} moved. A session with no page view at all is not counted as
-            human and is not in here — the Scrapers panel above is where those go. Discord clicks are
-            missing from the outbound list: the CTA on the landing page, which the server log says gets
-            most of them, runs no analytics module — read those with scripts/funnel_report.py.
+            Of {fmtInt(j.pages.sessions)} human sessions, {fmtInt(j.pages.one_page)} loaded exactly one page
+            and {fmtInt(j.pages.moving)} moved.
           </p>
+          <HowCounted>
+            Confirmed human sessions only, at most six steps per chain; the first chip is the source. A
+            session with no page view at all is not counted as human and is not in here — the Scrapers
+            panel above is where those go. Discord clicks are missing from the outbound list: the CTA on
+            the landing page, which the server log says gets most of them, runs no analytics module — read
+            those with scripts/funnel_report.py.
+          </HowCounted>
         </>
       )}
     </Panel>

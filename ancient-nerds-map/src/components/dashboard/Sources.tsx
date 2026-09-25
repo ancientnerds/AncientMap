@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtInt } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import type { LogCoverage, LogFamily, LogHost, LogStatus, SourceRow, SourcesData } from './types'
 import type { Loaded } from './useStats'
 
@@ -77,6 +77,15 @@ export function statusItem(s: LogStatus): BarItem {
   }
 }
 
+/** How many pages Google had Chrome fetch ahead of a click. On 2026-09-25
+ *  they were 279 of 479 search arrivals in the access log: counted as
+ *  arrivals, they made Umami look as if it saw a third of the visitors. */
+export function prefetchLine(n: number): string {
+  if (n === 0) return ''
+  const what = n === 1 ? '1 page' : `${fmtInt(n)} pages`
+  return ` Not counted either: ${what} that Chrome prefetched for a Google result page (Sec-Purpose: prefetch) — fetched in case the searcher clicks, looked at by nobody unless they do, and a click on one shows up in Umami.`
+}
+
 /** Why "other" reads zero on a log that has lines in it. The status code does
  *  not separate a scanner from a visitor on its own: 17 lines of the live log
  *  are an SEO referrer-spam campaign that asks for the front page and is
@@ -101,19 +110,22 @@ function Coverage({ log }: { log: LogCoverage }) {
       </div>
       <h3>Hosts nginx saw</h3>
       <BarList items={log.hosts.map(hostItem)} empty="No referred arrival in this window." />
-      <p className="dash-note">
+      <HowCounted>
         The upper half of this panel is Umami: sessions whose browser ran our script. This half is nginx:
         every request that arrived with a foreign referer, over {log.covered_days} days of the log (
-        {fmtInt(log.lines)} lines). Put one host against itself and the gap is the point — on 2026-09-19
-        nginx answered 189 Google page arrivals and Umami recorded 62 views from 51 sessions. A visitor
-        whose browser blocked the tracker, or who left before it loaded, exists only here. An arrival is
-        a page request we answered 200 or 410: redirects are not counted, because each is followed by its
-        own 200, and 4xx is not counted, because every 404 and 403 in this log is a forged referer
-        probing /wp-admin/ — a real 404 raises an event the Problems panel already ranks.{' '}
+        {fmtInt(log.lines)} lines, counted from 25 Sep 2026, when nginx began logging which requests
+        are prefetches). Put one host against the other and compare views, not sessions: a visitor who
+        comes back from Google three times is one Umami session and three arrivals. Measured over four
+        days of the access log on 2026-09-25, Umami recorded 186 of about 207 real views from search
+        (90 %); the rest loaded the tracker and sent nothing — Do Not Track, which the tracker honours on
+        purpose, or a visitor gone before the page finished loading. An arrival is a page request we
+        answered 200 or 410: redirects are not counted, because each is followed by its own 200, and 4xx
+        is not counted, because every 404 and 403 in this log is a forged referer probing /wp-admin/ — a
+        real 404 raises an event the Problems panel already ranks.{prefetchLine(log.prefetched)}{' '}
         {spamLine(log.unverified)} Our own development server is out of every list too. A 410 is a story
         we withdrew on purpose and Google still links to; it raises no event at all, which is why it is
         here and nowhere else.
-      </p>
+      </HowCounted>
     </>
   )
 }

@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtInt, fmtShare } from './format'
-import { Panel, Status } from './Panel'
+import { HowCounted, Panel, Status } from './Panel'
 import type { DeviceCount, DevicesData, LanguageCount } from './types'
 import type { Loaded } from './useStats'
 
@@ -88,12 +88,15 @@ export function Devices({ state }: { state: Loaded<DevicesData> }) {
             empty="No browser sent a language tag in this window."
           />
           <p className="dash-note">
-            {mobileLine(d)} {groupLine(d.language_groups, d.sessions)} At most {LANGUAGE_ROWS} tags are
-            listed; the subtag line covers every session in the window. A client that sent no tag has a
-            device row and no language row, which is why the language counts can add up to less than the
-            sessions. Every session with an event is in here, confirmed human or not — the fingerprints
-            the Scrapers panel flags are inside these numbers, and they are one machine each.
+            {mobileLine(d)} {groupLine(d.language_groups, d.sessions)}
           </p>
+          <HowCounted>
+            At most {LANGUAGE_ROWS} tags are listed; the subtag line covers every session in the window. A
+            client that sent no tag has a device row and no language row, which is why the language counts
+            can add up to less than the sessions. Every session with an event is in here, confirmed human
+            or not — the fingerprints the Scrapers panel flags are inside these numbers, and they are one
+            machine each.
+          </HowCounted>
         </>
       )}
     </Panel>

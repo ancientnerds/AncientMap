@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { errorProps, newDepthSteps, outboundHost } from '../boot'
+import { applyTrackingChoice, errorProps, isForeignError, newDepthSteps, outboundHost, TRACKING_OFF_KEY } from '../boot'
 import { _queuedForTests, _resetForTests, cleanProps, MAX_VALUE_CHARS, pageType, searchTerm, track } from '../index'
 
 // vitest runs in node: no DOM, so the tests install a minimal fake `window`.
@@ -135,3 +135,50 @@ describe('searchTerm', () => {
   })
 })
 
+
+describe('isForeignError', () => {
+  it('drops what an extension injected, by its file or by its stack', () => {
+    expect(isForeignError('x is undefined', 'chrome-extension://abc/inpage.js')).toBe(true)
+    expect(isForeignError('Failed to connect to MetaMask', undefined, 'Error: Failed\n    at chrome-extension://nkbi/inpage.js:1:1')).toBe(true)
+    expect(isForeignError('boom', 'moz-extension://id/content.js')).toBe(true)
+  })
+
+  it('drops the ResizeObserver loop notice in both spellings', () => {
+    expect(isForeignError('ResizeObserver loop completed with undelivered notifications.')).toBe(true)
+    expect(isForeignError('Uncaught ResizeObserver loop limit exceeded')).toBe(true)
+  })
+
+  it('keeps our own errors', () => {
+    expect(isForeignError("NotFoundError: Failed to execute 'removeChild' on 'Node'", 'https://ancientnerds.com/assets/index-x.js')).toBe(false)
+    expect(isForeignError('Load failed', undefined, 'TypeError: Load failed\n    at https://ancientnerds.com/assets/a.js:1:1')).toBe(false)
+  })
+})
+
+describe('applyTrackingChoice', () => {
+  const storage = () => {
+    const items = new Map<string, string>()
+    return { items, setItem: (k: string, v: string) => void items.set(k, v), removeItem: (k: string) => void items.delete(k) }
+  }
+
+  it('keeps this browser out of Umami with ?notrack=1 and drops the parameter', () => {
+    const s = storage()
+    const out = applyTrackingChoice(new URL('https://ancientnerds.com/news.html?notrack=1&x=2'), s)
+    expect(out.choice).toBe('off')
+    expect(s.items.get(TRACKING_OFF_KEY)).toBe('1')
+    expect(out.url.toString()).toBe('https://ancientnerds.com/news.html?x=2')
+  })
+
+  it('counts it again with ?notrack=0', () => {
+    const s = storage()
+    s.setItem(TRACKING_OFF_KEY, '1')
+    expect(applyTrackingChoice(new URL('https://ancientnerds.com/news.html?notrack=0'), s).choice).toBe('on')
+    expect(s.items.has(TRACKING_OFF_KEY)).toBe(false)
+  })
+
+  it('does nothing without the parameter or with another value', () => {
+    const s = storage()
+    expect(applyTrackingChoice(new URL('https://ancientnerds.com/news.html'), s).choice).toBeNull()
+    expect(applyTrackingChoice(new URL('https://ancientnerds.com/news.html?notrack=yes'), s).choice).toBeNull()
+    expect(s.items.size).toBe(0)
+  })
+})

@@ -8,6 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 import { countryLinksHtml, pickSnapshotPath, type CountryHub } from './src/landing/hubsHtml'
 import { GLOBE_START_PRECACHE } from './src/pwa/globeStartPrecache'
+import { PRECACHE_GLOB_IGNORES } from './src/pwa/precacheExclusions'
 import { RUNTIME_CACHING } from './src/pwa/runtimeCaching'
 import { serviceWorkerSnippetFor } from './src/pwa/serviceWorkerSnippet'
 
@@ -291,8 +292,9 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
         navigateFallback: null,
         // Pre-cache app shell assets
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
-        // Don't pre-cache large data files, nor the founders dashboard (other host)
-        globIgnores: ['**/data/**', 'dashboard.html'],
+        // Not the data files, the dashboard, nor the SSR templates whose own URL
+        // the API answers - one non-200 fails the whole install (src/pwa/precacheExclusions.ts)
+        globIgnores: PRECACHE_GLOB_IGNORES,
         // ...except the globe's coastline and border start tiers of this build
         // (content-hashed, ~2.1 MB raw): an offline start of this globe.html needs
         // exactly these, and the first visit after a deploy runs the old JS

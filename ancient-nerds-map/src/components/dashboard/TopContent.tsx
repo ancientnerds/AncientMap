@@ -1,40 +1,53 @@
 import { BarList, type BarItem } from './BarList'
+import { fmtInt } from './format'
 import { Panel, Status } from './Panel'
 import type { ContentData, ContentRow } from './types'
 import type { Loaded } from './useStats'
 
 const MAIN_ORIGIN = 'https://ancientnerds.com'
 
-/** A content row as a list item; paths become links, a site keeps its country,
- *  and a search that found nothing says so. */
+/** A story or paper path as a title: the slug is the title with dashes, and
+ *  a story's ends in its id. "/news-archive/howard-vyses-1837-excavation-8395"
+ *  reads "Howard vyses 1837 excavation". */
+export function readablePath(path: string): string {
+  const slug = path.replace(/\/+$/, '').split('/').pop() ?? ''
+  const words = slug.replace(/-\d+$/, '').replace(/-/g, ' ').trim()
+  return words ? words[0].toUpperCase() + words.slice(1) : path
+}
+
+/** A content row as a list item, ranked by people: the bar is the visitors,
+ *  the hint the opens behind them when there were more, or what a search
+ *  found. Paths read as titles and link to the page, a site keeps its
+ *  country, and a search that found nothing says so. */
 export function item(row: ContentRow): BarItem {
   const label = row.label || '—'
-  const empty = row.results === 0
+  const isPath = label.startsWith('/')
+  const shown = isPath ? readablePath(label) : label
+  const people = row.visitors ?? row.n
+  let hint: string | undefined
+  if (row.event_name === 'search') {
+    if (row.results === 0) hint = 'no results'
+    else if (row.results !== null) hint = `${fmtInt(row.results)} ${row.results === 1 ? 'result' : 'results'}`
+  } else if (row.n > people) {
+    hint = `${fmtInt(row.n)} opens`
+  }
   return {
     key: `${row.event_name}:${label}`,
-    label: row.country ? `${label} · ${row.country}` : label,
-    value: row.n,
-    hint: empty ? 'no results' : undefined,
-    tone: empty ? 'warn' : undefined,
-    href: label.startsWith('/') ? `${MAIN_ORIGIN}${label}` : undefined,
+    label: row.country ? `${shown} · ${row.country}` : shown,
+    value: people,
+    hint,
+    tone: row.event_name === 'search' && row.results === 0 ? 'warn' : undefined,
+    href: isPath ? `${MAIN_ORIGIN}${label}` : undefined,
   }
 }
 
-/** Why a list is empty, named per list and never in the abstract. Verified
- *  2026-09-19 against the whole events table, not a window: story_open,
- *  paper_open and search had never been recorded, not once. The search line
- *  names a bug on purpose — ticket T2 in the build plan. Describing a known
- *  defect as a design choice ("reports only once a visitor settles on a term")
- *  would be the worst sentence on the page.
- *
- *  The sentence is built from the response and not hard-coded, because the day
- *  one of those events starts firing — which is what T2 is for — a fixed
- *  "never fired, not once" would sit directly under the ranked list of it. */
+/** Why a list is empty, named per list and never in the abstract. All four
+ *  events fire since 2026-09-20 (story_open and paper_open from the lists,
+ *  search once a visitor stops typing), so an empty list is a quiet window. */
 const WHY_EMPTY: Record<string, string> = {
-  Stories: 'the story list raises no open event yet (story_open has never fired)',
-  Papers: 'the paper list raises no open event yet (paper_open has never fired)',
-  'Search terms':
-    'search is swallowed by a bug in useSiteSearch (ticket T2), so an empty search list here is our fault, not a finding',
+  Stories: 'nobody opened a story from a list in this window',
+  Papers: 'nobody opened a paper from a list in this window',
+  'Search terms': 'nobody searched in this window',
   Sites: 'nobody opened a site in this window',
 }
 

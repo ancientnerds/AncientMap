@@ -14,20 +14,35 @@
  *
  * Only a node that is attached nowhere (parentNode === null) is taken: removing
  * it is already done, and inserting before it appends, since the place it
- * held belongs to the translator's <font> now. A node under a different parent
+ * held belongs to the translator's <font> now.
+ *
+ * The other shape keeps the node and moves it: a translator or an extension
+ * wraps it in an element of its own, so it is still inside the parent React
+ * knows, one level deeper. Umami, 2026-09-25 12:45 UTC, after the guard above
+ * had shipped: the same NotFoundError on /globe.html from a ja session in
+ * Edge (Microsoft Translator) the moment a site popup opened. Such a node is
+ * removed from the element that holds it now, and inserting before it inserts
+ * before that element's branch. A node that is not inside the parent at all
  * is still a bug in our own code and still throws. What stays wrong: text
  * React updates in place keeps the translator's stale copy until the page is
- * translated again.
+ * translated again, and a wrapper the translator made can stay behind empty.
  */
 export function tolerateDetachedNodes(proto: Node): () => void {
   const { removeChild, insertBefore } = proto
 
   proto.removeChild = function <T extends Node>(this: Node, child: T): T {
-    if (child.parentNode === null) return child
+    const holder = child.parentNode
+    if (holder === null) return child
+    if (holder !== this && this.contains(child)) return removeChild.call(holder, child) as T
     return removeChild.call(this, child) as T
   }
   proto.insertBefore = function <T extends Node>(this: Node, node: T, child: Node | null): T {
     if (child !== null && child.parentNode === null) return this.appendChild(node)
+    if (child !== null && child.parentNode !== this && this.contains(child)) {
+      let branch: Node = child
+      while (branch.parentNode !== this) branch = branch.parentNode as Node
+      return insertBefore.call(this, node, branch) as T
+    }
     return insertBefore.call(this, node, child) as T
   }
 

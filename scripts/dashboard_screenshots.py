@@ -174,22 +174,24 @@ FIXTURES: dict[str, dict] = {
         "last": None,
     },
     "globe": {
-        "loads": 412,
+        "loads": 371,
         "reached": 297,
-        "gave_up": 115,
-        "sessions": {"all": 288, "reached": 214},
+        "gave_up": 74,
+        "sessions": {"all": 262, "reached": 214},
         "ready_ms": {"min": 3120.0, "median": 8940.0, "max": 41220.0, "samples": 297},
-        # Sums to gave_up (115), as stats_analysis.globe_funnel guarantees; the
-        # unmeasured row is on so the layout pass sees the longest list.
+        # Sums to gave_up (74), as stats_analysis.globe_funnel guarantees.
+        "gate_stops": 41,
         "not_reached": {
-            "gate": 41,
             "unsupported": 6,
             "error": 9,
             "abandoned": 27,
-            "no_signal": 20,
-            "unmeasured": 12,
+            "no_signal": 32,
         },
         "abandon_ms": {"min": 2210.0, "median": 11480.0, "max": 63900.0, "samples": 27},
+        "by_device": [
+            {"device": "desktop", "loads": 301, "reached": 248},
+            {"device": "mobile", "loads": 70, "reached": 49},
+        ],
     },
     "clusters": {
         "min_ids": 3,
@@ -464,6 +466,7 @@ FIXTURES: dict[str, dict] = {
             # Referrer spam kept out of the two lists and named in the note
             # (referral_log.UNKNOWN_HOST_MIN); 17 of them live on 2026-09-19.
             "unverified": 204,
+            "prefetched": 1310,
             "families": [
                 {"family": "search", "visits": 2914, "bots": 411},
                 {"family": "social", "visits": 388, "bots": 44},
@@ -565,6 +568,7 @@ EMPTY_FIXTURES: dict[str, dict] = {
             "covered_days": 7.0,
             "lines": 0,
             "unverified": 0,
+            "prefetched": 0,
             "families": [],
             "hosts": [],
             "statuses": [],
@@ -597,12 +601,10 @@ EMPTY_FIXTURES: dict[str, dict] = {
         "sessions": {"all": 0, "reached": 0},
         "ready_ms": {"min": None, "median": None, "max": None, "samples": 0},
         "not_reached": {
-            "gate": 0,
             "unsupported": 0,
             "error": 0,
             "abandoned": 0,
             "no_signal": 0,
-            "unmeasured": 0,
         },
         "abandon_ms": {"min": None, "median": None, "max": None, "samples": 0},
     },

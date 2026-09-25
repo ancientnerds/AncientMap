@@ -66,6 +66,25 @@ export async function ensureServiceWorkerActive(): Promise<void> {
 }
 
 /**
+ * An installed worker looks for a new build now, not after the globe has
+ * started. globe.html and its JS come cache-first from the precache, and the
+ * one check for a new worker on this page used to be the queue's last task
+ * (serviceWorkerTask). Behind the phone gate the globe never starts, so a phone
+ * that always leaves the gate for another page kept the build of its first
+ * visit: on 2026-09-25 a founder's phone still showed the six-button gate the
+ * 24 Sep deploy had replaced. Only an existing registration: a first visit
+ * still installs from the queue, after the globe, so its ~8.8 MB precache never
+ * competes with the start. Resolves false where there is nothing to update.
+ */
+export async function updateInstalledServiceWorker(): Promise<boolean> {
+  if (!('serviceWorker' in navigator)) return false
+  const registration = await navigator.serviceWorker.getRegistration()
+  if (!registration) return false
+  await registration.update()
+  return true
+}
+
+/**
  * The globe's background task `sw`: the worker, then the caches earlier
  * workers left behind (orphanedCaches.ts). Rejects on a refusal or a storage
  * failure; the queue reports it as `bg:sw`.

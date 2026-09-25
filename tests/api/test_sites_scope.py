@@ -128,11 +128,11 @@ def test_random_filters_retired_sites_in_the_counts_and_in_every_slice():
 
 def test_search_filters_retired_sites_outside_the_name_alternatives():
     """The name matches are ORs; the scope predicate must bind to all of them."""
-    db = RecordingSession()
+    db = RecordingSession({" AS kl": [SimpleNamespace(k="damascus", kl="damascus")]})
     sr.search_sites(req=None, q="damascus", limit=20, db=db)
     sql = db.statement_with("FROM unified_sites us")
     where = _where(sql)
-    assert where.lstrip().startswith("(unaccent(us.name_normalized) = :norm")
+    assert where.lstrip().startswith("(us.name_normalized LIKE :p_name")
     assert f") AND {US}" in " ".join(where.split())
 
 

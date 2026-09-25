@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { bucketTotals, familyItem, hostItem, sourceBucket, spamLine, statusItem } from '../Sources'
+import { bucketTotals, familyItem, hostItem, prefetchLine, sourceBucket, spamLine, statusItem } from '../Sources'
 
 describe('source buckets', () => {
   it('folds the API families into the six founder buckets', () => {
@@ -85,5 +85,14 @@ describe('nginx log rows', () => {
     expect(spamLine(17)).toContain('17 arrivals in this window')
     expect(spamLine(1)).toContain('1 arrival in this window')
     expect(spamLine(0)).toContain('0 arrivals in this window')
+  })
+})
+
+describe('prefetchLine', () => {
+  it('names the pages Chrome fetched for a Google result page, and nothing when there are none', () => {
+    // 279 of 479 search arrivals on 2026-09-25 were such prefetches
+    expect(prefetchLine(279)).toContain('279 pages that Chrome prefetched for a Google result page')
+    expect(prefetchLine(1)).toContain('1 page that Chrome prefetched')
+    expect(prefetchLine(0)).toBe('')
   })
 })
