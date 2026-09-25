@@ -1,0 +1,46 @@
+{
+ "D1": {
+  "failures": [
+   {
+    "detail": "markers without an entry [], entries never cited [1]",
+    "name": "Kuntur Amaya",
+    "site_id": "fc514046-4f2c-42b1-a3f6-ca88404d2e18"
+   }
+  ],
+  "holds": false
+ },
+ "D2": {
+  "failures": [],
+  "holds": true
+ },
+ "D3": {
+  "failures": [],
+  "holds": true
+ },
+ "D4": {
+  "failures": [],
+  "holds": true
+ },
+ "D5": {
+  "failures": [],
+  "holds": true
+ },
+ "D6": {
+  "failures": [],
+  "holds": true,
+  "outside_e3_without_decision": 0,
+  "retired": 78
+ },
+ "all_hold": false,
+ "api": {
+  "fields": "globe",
+  "sites_served": {
+   "ancient_nerds": 4926
+  },
+  "url": "https://ancientnerds.com/api/sites/all"
+ },
+ "checked_at": "2026-09-25T15:34:43+00:00",
+ "export_sha256": "4565c85103b8ee64291a3cc380df6f9b3d9306de434c2f8d6c300fdf10cb7bfe",
+ "exported_at": "2026-09-25 15:34:40.860755+00",
+ "sample_sha256": "9511373575fc7cd603da8e149d04afedd63c8755cba81e7907a0fb03748e2097"
+}
