@@ -3977,6 +3977,89 @@ CARD_STATS_P5_CASES: list[Case] = [
 ]
 CASES += CARD_STATS_P5_CASES
 
+# ------------------------------------------- T1 for a thumbnail on an excluded row (2026-09-25)
+#: `hero_repair/thumbnail.py`: the thumbnail that names the local file of its own site's excluded
+#: row gets the served image's file, or none (Dedan). Labels start with "img" like every image case.
+THUMB = REPO / "scripts/remediation/hero_repair/thumbnail.py"
+DECIDE = REPO / "scripts/remediation/gallery_audit/decide.py"
+THUMB_TESTS = "tests/remediation/test_hero_thumbnail.py"
+THUMBNAIL_CASES: list[Case] = [
+    *(
+        guard(f"img thumbnail: {label}", THUMB, needle, test, THUMB_TESTS)
+        for label, needle, test in (
+            (
+                "an image row of no site of the read",
+                '        if str(row["site_id"]) not in by_site:',
+                "test_an_image_row_of_a_site_the_read_did_not_return_is_refused",
+            ),
+            (
+                "only curated sites",
+                '        if site["source_id"] != CURATED_SOURCE:',
+                "test_a_site_outside_the_curated_source_is_refused",
+            ),
+            (
+                "a thumbnail on no excluded row is listed",
+                "        if not excluded:",
+                "test_a_thumbnail_that_names_a_live_row_is_not_this_lane_s",
+            ),
+            (
+                "another shard's file is not the site's",
+                "        if not excluded:",
+                "test_a_file_of_another_shard_is_not_the_site_s",
+            ),
+            (
+                "a file a live row shares is still served",
+                "        if len(excluded) != len(named):",
+                "test_a_file_an_excluded_and_a_live_row_share_is_still_served",
+            ),
+            (
+                "the directory names the date",
+                "    if match is None:",
+                "test_the_stamp_is_the_output_directory_s_date",
+            ),
+            (
+                "an empty plan writes nothing",
+                "    if not changes:",
+                "test_a_read_that_plans_nothing_writes_nothing",
+            ),
+        )
+    ),
+    *(
+        Case(f"img thumbnail: {label}", path, old, new, test, THUMB_TESTS)
+        for label, path, old, new, test in (
+            (
+                "the shard is the site's short id",
+                THUMB,
+                '    return f"/data/images/wiki/{site_id_short(site_id)}/{filename}"',
+                '    return f"/data/images/wiki/{site_id[:8]}/{filename}"',
+                "test_the_shard_is_the_site_s_short_id",
+            ),
+            (
+                "the served image's file, or none",
+                THUMB,
+                '        new = None if served is None else local_path(site_id, str(served["filename"]))',
+                "        new = None",
+                "test_a_site_that_serves_a_live_image_gets_that_image_s_file",
+            ),
+            (
+                "the exclusion's journal rows are evidence",
+                THUMB,
+                '                for entry in history.get(str(row["id"]), ())',
+                "                for entry in ()",
+                "test_a_site_that_serves_no_image_has_no_thumbnail",
+            ),
+            (
+                "T1 names what a site without an image gets",
+                DECIDE,
+                "<served filename>', or NULL when the site serves no image (hero_repair",
+                "<served filename>' (hero_repair",
+                "test_the_rule_table_says_what_a_site_without_an_image_gets",
+            ),
+        )
+    ),
+]
+CASES += THUMBNAIL_CASES
+
 
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
