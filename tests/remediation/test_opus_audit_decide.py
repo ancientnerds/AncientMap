@@ -492,10 +492,19 @@ def anew(key: str, name: str) -> dict[str, Any]:
     return verdict(key, name, "Settlement" if name == "wrong-both" else None, quote="round 2")
 
 
+def lay(raw: dict, raw_checks: dict, *rounds: tuple[dict, dict]) -> D.Overlay:
+    """`D.overlay` over the rounds given as (verdicts, checks), numbered 2, 3, ... in order."""
+    return D.overlay(
+        raw,
+        raw_checks,
+        [D.Round(f"VERDICTS_ROUND{n}.json", v, c) for n, (v, c) in enumerate(rounds, start=2)],
+    )
+
+
 def test_a_counted_round_2_verdict_replaces_the_failed_round_1_verdict_of_its_pass() -> None:
     raw = merged({"phase3:a": ("revert", "revert")})
     r2 = round_2(p1={"phase3:a": anew("phase3:a", "keep")})
-    ov = D.overlay(raw, checked(raw, p1={"phase3:a"}), r2, checked(r2))
+    ov = lay(raw, checked(raw, p1={"phase3:a"}), (r2, checked(r2)))
     assert ov.verdicts["p1"]["phase3:a"] == anew("phase3:a", "keep")
     assert ov.checks["p1"]["phase3:a"].counted is True
     assert ov.origin["p1"]["phase3:a"] == "VERDICTS_ROUND2.json p1"
@@ -514,7 +523,7 @@ def test_a_counted_round_2_verdict_replaces_the_failed_round_1_verdict_of_its_pa
 def test_a_round_2_verdict_that_fails_its_quote_check_replaces_nothing() -> None:
     raw = merged({"phase3:a": ("revert", "revert")})
     r2 = round_2(p2={"phase3:a": anew("phase3:a", "keep")})
-    ov = D.overlay(raw, checked(raw, p2={"phase3:a"}), r2, checked(r2, p2={"phase3:a"}))
+    ov = lay(raw, checked(raw, p2={"phase3:a"}), (r2, checked(r2, p2={"phase3:a"})))
     assert ov.verdicts["p2"]["phase3:a"] == raw["p2"]["phase3:a"]
     assert ov.checks["p2"]["phase3:a"].counted is False
     assert [(x["from"], x["why"]) for x in ov.set_aside["phase3:a"]] == [
@@ -529,7 +538,7 @@ def test_a_round_2_verdict_over_a_counted_round_1_verdict_is_refused() -> None:
     raw = merged({"phase3:a": ("revert", "revert")})
     r2 = round_2(p1={"phase3:a": anew("phase3:a", "keep")})
     with pytest.raises(D.AuditError, match="counted"):
-        D.overlay(raw, checked(raw), r2, checked(r2))
+        lay(raw, checked(raw), (r2, checked(r2)))
 
 
 def test_a_counted_sample_verdict_is_its_keep_rows_second_judgement() -> None:
@@ -537,7 +546,7 @@ def test_a_counted_sample_verdict_is_its_keep_rows_second_judgement() -> None:
     r2 = round_2(
         sample={"phase3:a": anew("phase3:a", "revert"), "phase3:b": anew("phase3:b", "keep")}
     )
-    ov = D.overlay(raw, checked(raw), r2, checked(r2, sample={"phase3:b"}))
+    ov = lay(raw, checked(raw), (r2, checked(r2, sample={"phase3:b"})))
     assert ov.verdicts["p2"]["phase3:a"] == anew("phase3:a", "revert")
     assert ov.origin["p2"]["phase3:a"] == "VERDICTS_ROUND2.json sample"
     # a sample verdict that does not count is no second judgement
@@ -556,7 +565,7 @@ def test_a_round_1_tie_stands_only_while_the_pair_it_was_shown_is_unchanged() ->
     # a: pass 2 failed and a counted round-2 pass 2 replaces it; b: only the tie failed
     raw_checks = checked(raw, p2={"phase3:a"}, tie={"phase3:a", "phase3:b"})
     r2 = round_2(p2={"phase3:a": anew("phase3:a", "keep")})
-    ov = D.overlay(raw, raw_checks, r2, checked(r2))
+    ov = lay(raw, raw_checks, (r2, checked(r2)))
     assert "phase3:a" not in ov.verdicts["tie"] and "phase3:a" not in ov.checks["tie"]
     assert ov.set_aside["phase3:a"][-1] == {
         "from": "VERDICTS_RAW.json tie",
@@ -566,6 +575,7 @@ def test_a_round_1_tie_stands_only_while_the_pair_it_was_shown_is_unchanged() ->
         "why": D.STALE_TIE,
     }
     assert ov.verdicts["tie"]["phase3:b"] == raw["tie"]["phase3:b"]
+    assert ov.rounds["VERDICTS_ROUND2.json"]["ties_set_aside"] == 1
     decisions = D.decide(
         [row("phase3:a"), row("phase3:b")], ov.verdicts, ov.checks, second_judgement=True
     )
@@ -578,7 +588,7 @@ def test_a_round_1_tie_stands_only_while_the_pair_it_was_shown_is_unchanged() ->
 def test_a_counted_round_1_tie_goes_stale_when_a_new_pass_1_changes_its_pair() -> None:
     raw = merged({"phase3:a": ("revert", "keep", "revert")})
     r2 = round_2(p1={"phase3:a": anew("phase3:a", "undecidable")})
-    ov = D.overlay(raw, checked(raw, p1={"phase3:a"}), r2, checked(r2))
+    ov = lay(raw, checked(raw, p1={"phase3:a"}), (r2, checked(r2)))
     assert "phase3:a" not in ov.verdicts["tie"]
     (got,) = D.decide([row("phase3:a")], ov.verdicts, ov.checks, second_judgement=True)
     assert got["decision"] == "pending" and got["pending"] == ["tie"]
@@ -587,7 +597,7 @@ def test_a_counted_round_1_tie_goes_stale_when_a_new_pass_1_changes_its_pair() -
 def test_a_new_pass_2_that_agrees_with_pass_1_ends_the_route_without_a_tie() -> None:
     raw = merged({"phase3:a": ("revert", "keep", "keep")})
     r2 = round_2(p2={"phase3:a": anew("phase3:a", "revert")})
-    ov = D.overlay(raw, checked(raw, p2={"phase3:a"}, tie={"phase3:a"}), r2, checked(r2))
+    ov = lay(raw, checked(raw, p2={"phase3:a"}, tie={"phase3:a"}), (r2, checked(r2)))
     (got,) = D.decide([row("phase3:a")], ov.verdicts, ov.checks, second_judgement=True)
     assert got["decision"] == "revert"
     assert [b["pass"] for b in got["basis"]] == ["p1", "p2"]
@@ -598,7 +608,7 @@ def test_the_trace_names_where_each_verdict_came_from_and_what_was_set_aside() -
     r2 = round_2(
         p1={"phase3:a": anew("phase3:a", "revert")}, sample={"phase3:b": anew("phase3:b", "keep")}
     )
-    ov = D.overlay(raw, checked(raw, p1={"phase3:a"}), r2, checked(r2))
+    ov = lay(raw, checked(raw, p1={"phase3:a"}), (r2, checked(r2)))
     decisions = D.trace(D.decide([row("phase3:a"), row("phase3:b")], ov.verdicts, ov.checks), ov)
     assert [b["from"] for b in decisions[0]["basis"]] == [
         "VERDICTS_ROUND2.json p1",
@@ -609,28 +619,289 @@ def test_the_trace_names_where_each_verdict_came_from_and_what_was_set_aside() -
 
 
 def test_the_round_2_file_must_judge_exactly_the_stated_sample(tmp_path: Path) -> None:
-    raw = merged({"phase3:a": ("keep",), "phase3:b": ("keep",)})
     path = tmp_path / "VERDICTS_ROUND2.json"
     path.write_text(json.dumps(round_2(sample={"phase3:a": anew("phase3:a", "keep")})), "utf-8")
-    assert D.read_round_2(path, raw, ["phase3:a"])["sample"]["phase3:a"]["verdict"] == "keep"
+    assert D.read_round(path, ["phase3:a"])["sample"]["phase3:a"]["verdict"] == "keep"
     with pytest.raises(D.AuditError, match="sample"):
-        D.read_round_2(path, raw, ["phase3:a", "phase3:b"])
+        D.read_round(path, ["phase3:a", "phase3:b"])
 
 
-def test_a_round_2_verdict_for_a_pass_round_1_never_gave_is_refused(tmp_path: Path) -> None:
+def test_a_round_2_verdict_for_a_pass_round_1_never_gave_is_refused() -> None:
     raw = merged({"phase3:a": ("keep",)})
-    path = tmp_path / "VERDICTS_ROUND2.json"
-    path.write_text(json.dumps(round_2(p2={"phase3:a": anew("phase3:a", "revert")})), "utf-8")
+    r2 = round_2(p2={"phase3:a": anew("phase3:a", "revert")})
     with pytest.raises(D.AuditError, match="p2"):
-        D.read_round_2(path, raw, [])
+        lay(raw, checked(raw), (r2, checked(r2)))
 
 
 def test_a_round_2_verdict_is_held_to_the_shape_of_round_1(tmp_path: Path) -> None:
-    raw = merged({"phase3:a": ("revert", "revert")})
     path = tmp_path / "VERDICTS_ROUND2.json"
     path.write_text(json.dumps(round_2(p1={"phase3:a": verdict("phase3:a", "maybe")})), "utf-8")
     with pytest.raises(D.AuditError, match="maybe"):
-        D.read_round_2(path, raw, [])
+        D.read_round(path, [])
+
+
+# ------------------------------------------------------------------------------ rounds 3 and later
+#: Four pass-1 keeps a round-2 sample judges not keep: more than 3, so rule 4 fires in that round.
+SPLIT = [f"phase3:s{i}" for i in range(4)]
+
+
+def fired_raw(routes: dict[str, tuple[str, ...]]) -> dict[str, dict[str, Any]]:
+    """Round-1 verdicts of `routes` plus the four pass-1 keeps of the sample that fires rule 4."""
+    return merged({**dict.fromkeys(SPLIT, ("keep",)), **routes})
+
+
+def firing_sample(**sections: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """A round-2 file whose sample fires rule 4 (4 of 4 not keep), with any other sections."""
+    return round_2(sample={k: anew(k, "revert") for k in SPLIT}, **sections)
+
+
+def test_the_round_files_are_read_in_number_order(tmp_path: Path) -> None:
+    for n in (10, 2, 9, 3, 4, 5, 6, 7, 8):
+        (tmp_path / f"VERDICTS_ROUND{n}.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "VERDICTS_RAW.json").write_text("{}", encoding="utf-8")
+    assert [p.name for p in D.round_files(tmp_path)] == [
+        f"VERDICTS_ROUND{n}.json" for n in range(2, 11)
+    ]
+
+
+def test_a_gap_in_the_round_files_is_refused(tmp_path: Path) -> None:
+    for n in (2, 4):
+        (tmp_path / f"VERDICTS_ROUND{n}.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(D.AuditError, match="gap"):
+        D.round_files(tmp_path)
+
+
+@pytest.mark.parametrize("name", ["VERDICTS_ROUND1.json", "VERDICTS_ROUND3b.json"])
+def test_a_file_that_is_not_a_round_after_round_1_is_refused(tmp_path: Path, name: str) -> None:
+    for file in ("VERDICTS_ROUND2.json", name):
+        (tmp_path / file).write_text("{}", encoding="utf-8")
+    with pytest.raises(D.AuditError, match="round"):
+        D.round_files(tmp_path)
+
+
+def test_a_round_file_holds_only_sections_a_round_can_hold(tmp_path: Path) -> None:
+    path = tmp_path / "VERDICTS_ROUND3.json"
+    path.write_text(json.dumps({"second": {}, "p3": {}}), encoding="utf-8")
+    with pytest.raises(D.AuditError, match="p3"):
+        D.read_round(path, [])
+    path.write_text(json.dumps({"second": {}, "tie": {}}), encoding="utf-8")
+    assert D.read_round(path, []) == {"second": {}, "tie": {}}
+
+
+def test_a_counted_second_judgement_stands_as_its_keeps_p2_under_rule_3() -> None:
+    raw = fired_raw({"phase3:a": ("keep",), "phase3:b": ("keep",), "phase3:c": ("keep",)})
+    r2 = firing_sample()
+    r3 = {
+        "second": {
+            "phase3:a": anew("phase3:a", "keep"),
+            "phase3:b": anew("phase3:b", "revert"),
+            "phase3:c": anew("phase3:c", "wrong-both"),
+        }
+    }
+    ov = lay(raw, checked(raw), (r2, checked(r2)), (r3, checked(r3, second={"phase3:c"})))
+    assert ov.rule_4 is not None and ov.rule_4["fired"] is True
+    assert ov.verdicts["p2"]["phase3:a"] == anew("phase3:a", "keep")
+    assert ov.origin["p2"]["phase3:b"] == "VERDICTS_ROUND3.json second"
+    # a second judgement that does not count is none
+    assert "phase3:c" not in ov.verdicts["p2"]
+    assert [(x["from"], x["why"]) for x in ov.set_aside["phase3:c"]] == [
+        ("VERDICTS_ROUND3.json second", D.NOT_COUNTED)
+    ]
+    decisions = D.decide(
+        [row(k) for k in ("phase3:a", "phase3:b", "phase3:c")],
+        ov.verdicts,
+        ov.checks,
+        second_judgement=ov.rule_4["fired"],
+    )
+    assert [(d["decision"], d["pending"]) for d in decisions] == [
+        ("keep", []),
+        ("pending", ["tie"]),
+        ("pending", ["p2"]),
+    ]
+
+
+def test_a_second_judgement_replaces_the_failed_p2_of_a_keep() -> None:
+    """Peninsula de Kola: a failed round-1 p2, a new pass-1 keep and a failed round-2 p2."""
+    raw = fired_raw({"phase3:a": ("wrong-both", "wrong-both")})
+    r2 = firing_sample(
+        p1={"phase3:a": anew("phase3:a", "keep")}, p2={"phase3:a": anew("phase3:a", "wrong-both")}
+    )
+    r3 = {"second": {"phase3:a": anew("phase3:a", "keep")}}
+    ov = lay(
+        raw,
+        checked(raw, p1={"phase3:a"}, p2={"phase3:a"}),
+        (r2, checked(r2, p2={"phase3:a"})),
+        (r3, checked(r3)),
+    )
+    assert ov.origin["p2"]["phase3:a"] == "VERDICTS_ROUND3.json second"
+    assert [(x["from"], x["why"]) for x in ov.set_aside["phase3:a"]] == [
+        ("VERDICTS_RAW.json p1", D.REPLACED),
+        ("VERDICTS_ROUND2.json p2", D.NOT_COUNTED),
+        ("VERDICTS_RAW.json p2", D.REPLACED),
+    ]
+    (got,) = D.decide([row("phase3:a")], ov.verdicts, ov.checks, second_judgement=True)
+    assert got["decision"] == "keep"
+
+
+def test_a_second_judgement_before_rule_4_fired_in_an_earlier_round_is_refused() -> None:
+    raw = fired_raw({"phase3:a": ("keep",)})
+    second = {"second": {"phase3:a": anew("phase3:a", "revert")}}
+    with pytest.raises(D.AuditError, match="rule 4"):
+        lay(raw, checked(raw), (second, checked(second)))
+    # the sample decides rule 4 at the end of its round, not within it
+    same = firing_sample(**second)
+    with pytest.raises(D.AuditError, match="rule 4"):
+        lay(raw, checked(raw), (same, checked(same)))
+
+
+@pytest.mark.parametrize(
+    ("route", "key", "match"),
+    [
+        (("revert", "revert"), "phase3:a", "not a pass-1 keep"),
+        (("keep", "keep"), "phase3:a", "counted"),
+        (("keep",), "phase3:zz", "not a row"),
+    ],
+)
+def test_a_second_judgement_of_a_row_that_waits_on_none_is_refused(
+    route: tuple[str, ...], key: str, match: str
+) -> None:
+    raw = fired_raw({"phase3:a": route})
+    r2 = firing_sample()
+    r3 = {"second": {key: anew(key, "revert")}}
+    with pytest.raises(D.AuditError, match=match):
+        lay(raw, checked(raw), (r2, checked(r2)), (r3, checked(r3)))
+
+
+def test_an_empty_sample_section_is_no_judgement_of_the_sample() -> None:
+    raw = fired_raw({})
+    r2, r3 = round_2(), firing_sample()
+    ov = lay(raw, checked(raw), (r2, checked(r2)), (r3, checked(r3)))
+    assert ov.rule_4 is not None and ov.rule_4["sample"] == 4 and ov.rule_4["fired"] is True
+
+
+def test_rule_4s_sample_is_judged_in_one_round_only() -> None:
+    raw = fired_raw({})
+    r2, r3 = firing_sample(), firing_sample()
+    with pytest.raises(D.AuditError, match="sample"):
+        lay(raw, checked(raw), (r2, checked(r2)), (r3, checked(r3)))
+
+
+def test_a_counted_tie_decides_the_pair_the_round_before_left_split() -> None:
+    raw = fired_raw({})
+    r2 = firing_sample()
+    r3 = {
+        "tie": {
+            "phase3:s0": anew("phase3:s0", "revert"),
+            "phase3:s1": anew("phase3:s1", "keep"),
+            "phase3:s2": anew("phase3:s2", "wrong-both"),
+        }
+    }
+    ov = lay(raw, checked(raw), (r2, checked(r2)), (r3, checked(r3, tie={"phase3:s2"})))
+    assert ov.origin["tie"]["phase3:s0"] == "VERDICTS_ROUND3.json tie"
+    assert "phase3:s2" not in ov.verdicts["tie"]
+    assert [(x["from"], x["why"]) for x in ov.set_aside["phase3:s2"]] == [
+        ("VERDICTS_ROUND3.json tie", D.NOT_COUNTED)
+    ]
+    decisions = D.trace(
+        D.decide([row(k) for k in SPLIT], ov.verdicts, ov.checks, second_judgement=True), ov
+    )
+    assert [(d["decision"], d["pending"]) for d in decisions] == [
+        ("revert", []),
+        ("keep", []),
+        ("pending", ["tie"]),
+        ("pending", ["tie"]),
+    ]
+    assert [b["from"] for b in decisions[0]["basis"]] == [
+        "VERDICTS_RAW.json p1",
+        "VERDICTS_ROUND2.json sample",
+        "VERDICTS_ROUND3.json tie",
+    ]
+
+
+def test_a_counted_later_tie_replaces_a_failed_tie_whose_pair_stands() -> None:
+    """Stoa Poikile: only the round-1 tie failed, so the pair it saw is the route's pair still."""
+    raw = merged({"phase3:a": ("wrong-both", "keep", "wrong-both")})
+    r2 = round_2(tie={"phase3:a": anew("phase3:a", "revert")})
+    ov = lay(raw, checked(raw, tie={"phase3:a"}), (r2, checked(r2)))
+    assert ov.verdicts["tie"]["phase3:a"] == anew("phase3:a", "revert")
+    assert ov.set_aside["phase3:a"] == [
+        {
+            "from": "VERDICTS_RAW.json tie",
+            "verdict": "wrong-both",
+            "counted": False,
+            "reason": Q.NOT_FOUND,
+            "why": D.REPLACED,
+        }
+    ]
+    (got,) = D.decide([row("phase3:a")], ov.verdicts, ov.checks, second_judgement=True)
+    assert got["decision"] == "revert"
+
+
+@pytest.mark.parametrize(
+    ("routes", "failed", "sample", "key", "match"),
+    [
+        # the pair agrees: the route ends at p2 and has no tie to decide
+        ({"phase3:a": ("revert", "revert")}, {}, True, "phase3:a", "does not wait on a third"),
+        ({"phase3:a": ("keep", "keep")}, {}, True, "phase3:a", "does not wait on a third"),
+        # a counted tie stands: a counted verdict is never judged again
+        ({"phase3:a": ("revert", "keep", "keep")}, {}, True, "phase3:a", "counted"),
+        # the pair does not count: its failed verdict is judged again first
+        ({"phase3:a": ("revert", "keep")}, {"p2": {"phase3:a"}}, True, "phase3:a", "count"),
+        ({"phase3:a": ("keep", "revert")}, {"p1": {"phase3:a"}}, True, "phase3:a", "count"),
+        # a pass-1 keep beside a second verdict before rule 4 fired: the keep stands alone
+        ({"phase3:a": ("keep", "revert")}, {}, False, "phase3:a", "rule 4"),
+        ({}, {}, True, "phase3:zz", "not a row"),
+    ],
+)
+def test_a_tie_for_a_row_that_does_not_wait_on_one_is_refused(
+    routes: dict[str, tuple[str, ...]],
+    failed: dict[str, set[str]],
+    sample: bool,
+    key: str,
+    match: str,
+) -> None:
+    raw = fired_raw(routes)
+    r2 = firing_sample() if sample else round_2()
+    r3 = {"tie": {key: anew(key, "revert")}}
+    with pytest.raises(D.AuditError, match=match):
+        lay(raw, checked(raw, **failed), (r2, checked(r2)), (r3, checked(r3)))
+
+
+def test_a_round_is_laid_on_the_routes_as_they_stood_before_it() -> None:
+    """A tie judged beside a new p2 of the same round was shown the old, failed p2: refused."""
+    raw = merged({"phase3:a": ("revert", "keep")})
+    r2 = round_2(
+        p2={"phase3:a": anew("phase3:a", "keep")}, tie={"phase3:a": anew("phase3:a", "keep")}
+    )
+    with pytest.raises(D.AuditError, match="count"):
+        lay(raw, checked(raw, p2={"phase3:a"}), (r2, checked(r2)))
+
+
+def test_the_rejudge_list_of_a_round_names_its_failed_verdicts_by_section() -> None:
+    raw = fired_raw({"phase3:a": ("keep",), "phase3:b": ("keep",)})
+    r2 = firing_sample()
+    r3 = {
+        "second": {"phase3:a": anew("phase3:a", "keep"), "phase3:b": anew("phase3:b", "keep")},
+        "tie": {"phase3:s0": anew("phase3:s0", "keep"), "phase3:s1": anew("phase3:s1", "keep")},
+    }
+    rounds = [
+        D.Round("VERDICTS_ROUND2.json", r2, checked(r2)),
+        D.Round("VERDICTS_ROUND3.json", r3, checked(r3, second={"phase3:b"}, tie={"phase3:s1"})),
+    ]
+    ov = D.overlay(raw, checked(raw), rounds)
+    got = D.rejudge_round(rounds[-1], "TIE_ROUND3.json")
+    assert {k: v for k, v in got.items() if k != "about"} == {
+        "round": "VERDICTS_ROUND3.json",
+        "second": ["phase3:b"],
+        "tie": ["phase3:s1"],
+    }
+    assert "TIE_ROUND3.json" in got["about"] and "SECOND_JUDGE.json" in got["about"]
+    assert ov.rounds["VERDICTS_ROUND3.json"] == {
+        "laid": {"second": 1, "tie": 1},
+        "not_counted": {"second": 1, "tie": 1},
+        "replaced": 0,
+        "ties_set_aside": 0,
+    }
 
 
 # ------------------------------------------------------------------------------ the lists
@@ -664,7 +935,7 @@ def test_tie_round_2_embeds_both_judgements_of_every_split_pair_without_a_counte
     )
     rows = [row(k) for k in ("phase3:a", "phase3:b", "phase3:c", "phase3:d", "phase3:e")]
     decisions = D.decide(rows, v, checked(v, tie={"phase3:b"}), second_judgement=True)
-    got = D.tie_round_2(decisions, v)
+    got = D.tie_list(decisions, v)
     assert got["count"] == 2
     assert [r["change_key"] for r in got["rows"]] == ["phase3:a", "phase3:b"]
     first = got["rows"][0]
@@ -746,10 +1017,10 @@ def round_2_audit(tmp_path: Path) -> tuple[Path, dict, list[str]]:
 def test_the_run_applies_round_2_and_writes_every_output_the_same_twice(tmp_path: Path) -> None:
     audit, seal, sample = round_2_audit(tmp_path)
     first = D.run(audit, repo=tmp_path, **seal)
-    before = {name: (audit / name).read_bytes() for name in D.OUTPUTS}
+    before = {name: (audit / name).read_bytes() for name in D.outputs(2)}
     second = D.run(audit, repo=tmp_path, **seal)
     assert first == second
-    assert {name: (audit / name).read_bytes() for name in D.OUTPUTS} == before
+    assert {name: (audit / name).read_bytes() for name in D.outputs(2)} == before
     assert b"\r\n" not in b"".join(before.values())
     assert first["rule_4"]["fired"] is True and first["rule_4"]["not_keep"] == 4
     # 56 sample keeps kept; the 4 split sample rows, r2 (a new pass-1 keep beside a revert) and t1
@@ -770,7 +1041,128 @@ def test_the_run_applies_round_2_and_writes_every_output_the_same_twice(tmp_path
     assert first["inputs"]["VERDICTS_ROUND2.json"] == D.sha256_file(audit / "VERDICTS_ROUND2.json")
     assert first["inputs"]["KEEP_SAMPLE.json"] == D.sha256_file(audit / "KEEP_SAMPLE.json")
     assert first["round_2"]["p1"]["failed"] == 1
-    assert first["overlay"]["replaced"] == {"p1": 1, "p2": 0}
+    assert first["overlay"]["VERDICTS_ROUND2.json"]["laid"] == {"p1": 1, "sample": 60}
+    assert first["overlay"]["VERDICTS_ROUND2.json"]["not_counted"] == {"p1": 1}
+    assert first["tie_list"] == {"file": "TIE_ROUND2.json", "count": 6}
+
+
+def round_3_audit(tmp_path: Path) -> tuple[Path, dict, list[str]]:
+    """`round_2_audit`, then round 3: both unsampled keeps judged a second time, and a third judge
+    for the six rows TIE_ROUND2.json lists - one of those ties quoting a paraphrase."""
+    audit, seal, sample = round_2_audit(tmp_path)
+    unsampled = sorted(set(KEEPS) - set(sample))
+    r3 = {
+        "second": {
+            unsampled[0]: verdict(unsampled[0], "keep", quote="llacta"),
+            unsampled[1]: verdict(unsampled[1], "revert", quote="antigua llacta"),
+        },
+        "tie": {
+            sample[0]: verdict(sample[0], "revert", quote="inca"),
+            sample[1]: verdict(sample[1], "keep", quote="inca"),
+            sample[2]: verdict(sample[2], "wrong-both", "Settlement", quote="a paraphrase"),
+            sample[3]: verdict(sample[3], "revert", quote="inca"),
+            "phase3:r2": verdict("phase3:r2", "keep", quote="inca"),
+            "phase3:t1": verdict("phase3:t1", "revert", quote="inca"),
+        },
+    }
+    (audit / "VERDICTS_ROUND3.json").write_text(json.dumps(r3), encoding="utf-8")
+    return audit, seal, sample
+
+
+def test_the_run_lays_every_round_in_order_and_names_the_next_lists_by_the_last(
+    tmp_path: Path,
+) -> None:
+    audit, seal, sample = round_3_audit(tmp_path)
+    unsampled = sorted(set(KEEPS) - set(sample))
+    first = D.run(audit, repo=tmp_path, **seal)
+    before = {name: (audit / name).read_bytes() for name in D.outputs(3)}
+    assert D.run(audit, repo=tmp_path, **seal) == first
+    assert {name: (audit / name).read_bytes() for name in D.outputs(3)} == before
+    assert b"\r\n" not in b"".join(before.values())
+    # the list round 3 was judged from is its input, not an output of this run
+    assert not (audit / "TIE_ROUND2.json").exists()
+    assert not (audit / "REJUDGE_ROUND2.json").exists()
+    # kept: the 56 sample keeps, sample[1] and r2 by their third judge, unsampled[0] by its second
+    # judgement; reverted: r1, sample[0], sample[3] and t1; waiting on a tie: sample[2] (its tie
+    # failed) and unsampled[1] (a second judgement that is not keep); f1 is judged again
+    assert first["decisions"] == {"keep": 59, "revert": 4, "rejudge": 1, "pending": 2}
+    lines = [json.loads(x) for x in before["DECISIONS.jsonl"].decode().splitlines()]
+    decided = {d["change_key"]: d for d in lines}
+    assert decided["phase3:t1"]["basis"][2]["from"] == "VERDICTS_ROUND3.json tie"
+    assert [x["why"] for x in decided["phase3:t1"]["set_aside"]] == [D.REPLACED]
+    assert decided[unsampled[0]]["basis"][1]["from"] == "VERDICTS_ROUND3.json second"
+    ties = json.loads(before["TIE_ROUND3.json"])
+    assert [t["change_key"] for t in ties["rows"]] == sorted([sample[2], unsampled[1]])
+    assert ties["rows"][[t["change_key"] for t in ties["rows"]].index(unsampled[1])]["judge_2"] == {
+        "verdict": "revert",
+        "right_value": None,
+        "reason": "revert because",
+        "quotes": [{"source": EVIDENCE, "quote": "antigua llacta"}],
+    }
+    assert json.loads(before["REJUDGE_ROUND3.json"])["tie"] == [sample[2]]
+    assert json.loads(before["REJUDGE_ROUND3.json"])["second"] == []
+    assert json.loads(before["SECOND_JUDGE.json"])["keys"] == []
+    reversal = [json.loads(x)["change_key"] for x in before["REVERSAL_3_INPUT.jsonl"].splitlines()]
+    assert reversal == [k for k in [*KEEPS, "phase3:r1", "phase3:t1"] if k in reversal]
+    assert sorted(reversal) == sorted(["phase3:r1", sample[0], sample[3], "phase3:t1"])
+    assert first["inputs"]["VERDICTS_ROUND3.json"] == D.sha256_file(audit / "VERDICTS_ROUND3.json")
+    assert first["round_3"]["tie"]["failed"] == 1
+    assert first["overlay"]["VERDICTS_ROUND3.json"] == {
+        "laid": {"second": 2, "tie": 5},
+        "not_counted": {"tie": 1},
+        "replaced": 1,
+        "ties_set_aside": 0,
+    }
+    assert first["tie_list"] == {"file": "TIE_ROUND3.json", "count": 2}
+    assert first["rejudge_round"] == {"file": "REJUDGE_ROUND3.json", "second": 0, "tie": 1}
+
+
+def test_the_run_refuses_rounds_that_never_judged_the_sample(tmp_path: Path) -> None:
+    audit, seal, _sample = round_2_audit(tmp_path)
+    r2 = json.loads((audit / "VERDICTS_ROUND2.json").read_text(encoding="utf-8"))
+    del r2["sample"]
+    (audit / "VERDICTS_ROUND2.json").write_text(json.dumps(r2), encoding="utf-8")
+    with pytest.raises(D.AuditError, match="rule 4 is not decided"):
+        D.run(audit, repo=tmp_path, **seal)
+
+
+def test_the_run_refuses_a_round_that_judges_a_row_input_does_not_hold(tmp_path: Path) -> None:
+    audit, seal, _sample = round_3_audit(tmp_path)
+    r3 = json.loads((audit / "VERDICTS_ROUND3.json").read_text(encoding="utf-8"))
+    r3["tie"]["phase3:zz"] = verdict("phase3:zz", "keep", quote="inca")
+    (audit / "VERDICTS_ROUND3.json").write_text(json.dumps(r3), encoding="utf-8")
+    with pytest.raises(D.AuditError, match="phase3:zz"):
+        D.run(audit, repo=tmp_path, **seal)
+
+
+def test_the_fetch_collects_the_urls_of_every_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    audit, seal, _sample = round_3_audit(tmp_path)
+    r3 = json.loads((audit / "VERDICTS_ROUND3.json").read_text(encoding="utf-8"))
+    tie = next(iter(r3["tie"].values()))
+    tie["quotes"].append({"source": "https://round3.example/page", "quote": "x"})
+    (audit / "VERDICTS_ROUND3.json").write_text(json.dumps(r3), encoding="utf-8")
+    monkeypatch.setattr(D, "RULES_SHA256", seal["rules_sha256"])
+    monkeypatch.setattr(D, "INPUT_SHA256", seal["input_sha256"])
+    asked: list[list[str]] = []
+
+    class Client:
+        def __enter__(self) -> Client:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    def collect(urls: list[str], *_args: Any, **_kw: Any) -> dict[str, int]:
+        asked.append(list(urls))
+        return {}
+
+    monkeypatch.setattr(Q, "http_client", Client)
+    monkeypatch.setattr(Q, "collect", collect)
+    monkeypatch.setattr(Q, "page_index", lambda urls, pages: [])
+    R.fetch(audit)
+    assert asked == [["https://round3.example/page"]]
 
 
 def test_the_run_refuses_a_keep_sample_that_is_not_the_draw_from_these_verdicts(

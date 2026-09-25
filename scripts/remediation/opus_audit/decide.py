@@ -15,16 +15,26 @@ calls the third judge, the same as two passes that disagree the other way round.
 reversal, while its route lacks a counted verdict: `rejudge` when pass 1 failed the quote check, or
 the pass 2 of a pass-1 verdict that is not `keep` did (REJUDGE.json, by pass); `pending` when it
 waits for rule 4's second judgement of a pass-1 `keep` (SECOND_JUDGE.json) or for a third judge
-(TIE_ROUND2.json) - not given yet, or given and failed. `route_decision` records what the verdicts
+(TIE_ROUND<n>.json) - not given yet, or given and failed. `route_decision` records what the verdicts
 on a complete route would have decided, for the reader and nothing else.
 
-**Round 2** (`VERDICTS_ROUND2.json`, `read_round_2` and `overlay`): the 60 keys of rule 4's sample
-judged again independently, and the failed p1 and p2 verdicts of round 1 judged anew. Each is
-quote-checked exactly like round 1; one that fails does not count and replaces nothing. A counted
-round-2 p1 or p2 verdict replaces the failed round-1 verdict of its pass (a counted verdict is never
-judged again). A counted sample verdict never saw pass 1, so it is its pass-1 keep's second judgement
-and stands as the row's p2. A round-1 tie counts only while the p1 and p2 on the row's route are
-the very verdicts it was shown (`PAIR_RULE`); otherwise it is set aside as stale.
+**The rounds after round 1** (`VERDICTS_ROUND2.json`, `VERDICTS_ROUND3.json`, ...: `round_files`,
+`read_round`, `overlay`) are laid over round 1 one after the other, in number order and through one
+code path. Every verdict of every round is quote-checked exactly like round 1; one that fails does
+not count and replaces nothing. A round was judged from the lists the run before it wrote, so each
+of its verdicts is laid on the routes as they stood before the round, and refused unless its row
+waited on exactly that verdict (a counted verdict is never judged again). What a counted verdict of
+each section does (`SECTIONS`):
+
+* `p1`, `p2` - the failed verdict of that pass judged anew (REJUDGE.json): it replaces that verdict;
+* `sample` - rule 4's stated sample judged again, in one round only; it never saw pass 1, so it is
+  its pass-1 keep's second judgement and stands as the row's p2; rule 4 is decided on these
+  verdicts at the end of their round (`rule_4`);
+* `second` - rule 4's second judgement of a pass-1 keep that lacks a counted one (SECOND_JUDGE.json),
+  only once rule 4 fired in an earlier round: it stands as the row's p2 under rule 3;
+* `tie` - the third judge of a pair that disagrees (TIE_ROUND<n>.json of the round before): it
+  decides the row only while the p1 and p2 on its route are the very pair it was shown
+  (`PAIR_RULE`); a tie whose pair a later round replaced is set aside as stale.
 
 **Rule 5**: the `right_value` of the route's `wrong-both` verdicts is carried as `proposals`, and as
 `proposed_value` when the row is reverted and every such verdict names one value. It is never
@@ -44,6 +54,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -97,26 +108,35 @@ RESIDUAL = (
 )
 
 RAW = "VERDICTS_RAW.json"
-ROUND_2 = "VERDICTS_ROUND2.json"
-ROUND_2_SECTIONS = ("sample", "p1", "p2")
+#: A round after round 1: VERDICTS_ROUND2.json, VERDICTS_ROUND3.json, ... (`round_files`).
+ROUND_FILE = re.compile(r"VERDICTS_ROUND([1-9][0-9]*)\.json")
+#: The sections a round file may hold, in the order a round is laid, and the pass each one fills.
+SECTIONS = ("p1", "p2", "sample", "second", "tie")
+STAGE_OF = {"p1": "p1", "p2": "p2", "sample": "p2", "second": "p2", "tie": "tie"}
 #: Why a verdict is no longer on its row's route (`Overlay.set_aside`).
-REPLACED = "failed the quote check; a counted round-2 verdict of the same pass replaces it"
+REPLACED = "failed the quote check; a counted verdict of a later round replaces it"
 NOT_COUNTED = "failed the quote check: it does not count and replaces nothing"
 STALE_TIE = "a later round replaced the p1 or p2 verdict it was shown: its pair is not the route's"
 PAIR_RULE = (
-    "A round-1 tie counts only while the p1 and the p2 verdict on the row's route are, as JSON "
-    "records, the very VERDICTS_RAW.json p1 and p2 of the row it was shown; once a later round "
-    "replaces either, the tie is set aside as stale, and a pair that still disagrees needs a new tie."
+    "A tie counts only while the p1 and the p2 verdict on the row's route are, as JSON records, the "
+    "very pair it was shown: a round-1 tie the row's VERDICTS_RAW.json p1 and p2, a later round's "
+    "tie the p1 and p2 on the route before that round (the pair TIE_ROUND<n>.json of the round "
+    "before listed); once a later round replaces either, the tie is set aside as stale, and a pair "
+    "that still disagrees needs a new tie."
 )
 
-OUTPUTS = (
-    "DECISIONS.jsonl",
-    "COUNTS.json",
-    "REJUDGE.json",
-    "REVERSAL_3_INPUT.jsonl",
-    "SECOND_JUDGE.json",
-    "TIE_ROUND2.json",
-)
+
+def outputs(last: int) -> tuple[str, ...]:
+    """What `run` writes once round `last` is laid; the lists it names are the next round's."""
+    return (
+        "DECISIONS.jsonl",
+        "COUNTS.json",
+        "REJUDGE.json",
+        "REVERSAL_3_INPUT.jsonl",
+        "SECOND_JUDGE.json",
+        f"TIE_ROUND{last}.json",
+        f"REJUDGE_ROUND{last}.json",
+    )
 
 
 # ------------------------------------------------------------------------------ the inputs
@@ -183,29 +203,39 @@ def validate(rows: Sequence[Mapping[str, Any]], verdicts: Mapping[str, Mapping[s
     _differ("tie against the pass-2 verdicts that are keep", third, set(verdicts["tie"]))
 
 
-def read_round_2(
-    path: Path, raw: Mapping[str, Mapping[str, Any]], sample_keys: Sequence[str]
-) -> dict[str, dict[str, dict[str, Any]]]:
-    """VERDICTS_ROUND2.json: the stated sample judged again, and failed round-1 verdicts anew.
+def round_files(audit: Path) -> list[Path]:
+    """Every round after round 1 in `audit`, in number order: rounds 2, 3, ... without a gap."""
+    found: dict[int, Path] = {}
+    for path in audit.glob("VERDICTS_ROUND*.json"):
+        match = ROUND_FILE.fullmatch(path.name)
+        if match is None:
+            raise AuditError(f"{path.name} is not a round file VERDICTS_ROUND<n>.json")
+        found[int(match.group(1))] = path
+    numbers = sorted(found)
+    if numbers != list(range(2, 2 + len(numbers))):
+        raise AuditError(f"the round files are rounds {numbers}: a gap, or no round 2")
+    return [found[n] for n in numbers]
 
-    Refused unless every verdict has round 1's shape, the sample is exactly KEEP_SAMPLE.json's
-    keys, and every p1 or p2 verdict has a round-1 verdict of its pass to replace (whether that one
-    failed is the quote check's to say: `overlay`).
-    """
+
+def round_number(name: str) -> int:
+    match = ROUND_FILE.fullmatch(name)
+    if match is None:
+        raise AuditError(f"{name} is not a round file")
+    return int(match.group(1))
+
+
+def read_round(path: Path, sample_keys: Sequence[str]) -> dict[str, dict[str, dict[str, Any]]]:
+    """A round file: sections of `SECTIONS`, every verdict of round 1's shape, and a sample of
+    exactly KEEP_SAMPLE.json's keys. Whether a row waited on a verdict is `overlay`'s to say."""
     got = json.loads(path.read_text(encoding="utf-8"))
-    if set(got) != set(ROUND_2_SECTIONS):
-        raise AuditError(f"{path.name} holds {sorted(got)}, not {list(ROUND_2_SECTIONS)}")
-    for section in ROUND_2_SECTIONS:
-        for key, v in got[section].items():
+    unknown = sorted(set(got) - set(SECTIONS))
+    if unknown:
+        raise AuditError(f"{path.name} holds {unknown}: a round holds the sections {SECTIONS}")
+    for section, given in got.items():
+        for key, v in given.items():
             _verdict_shape(section, key, v)
-    if set(got["sample"]) != set(sample_keys):
+    if got.get("sample") and set(got["sample"]) != set(sample_keys):
         raise AuditError(f"{path.name}'s sample is not the keys KEEP_SAMPLE.json states")
-    for stage in ("p1", "p2"):
-        orphans = sorted(set(got[stage]) - set(raw[stage]))
-        if orphans:
-            raise AuditError(
-                f"round 2 {stage}: no round-1 {stage} verdict to replace: {orphans[:5]}"
-            )
     return got
 
 
@@ -296,7 +326,7 @@ def decide(
     return [decide_row(r, verdicts, checks, second_judgement=second_judgement) for r in rows]
 
 
-# ------------------------------------------------------------------------------ round 2
+# ------------------------------------------------------------------------------ the rounds
 def rule_4(
     sample: Mapping[str, Mapping[str, Any]], sample_checks: Mapping[str, Q.VerdictCheck]
 ) -> dict[str, Any]:
@@ -328,14 +358,26 @@ def rule_4(
 
 
 @dataclass(frozen=True)
+class Round:
+    """A round after round 1: its file name, its verdicts by section, the quote check of each."""
+
+    name: str
+    verdicts: Mapping[str, Mapping[str, Any]]
+    checks: Mapping[str, Mapping[str, Q.VerdictCheck]]
+
+
+@dataclass(frozen=True)
 class Overlay:
-    """The verdicts on the routes after round 2 (p1, p2, tie), the quote check of each, the file and
-    section each came from, and per change key the verdicts no longer on its route and why."""
+    """The verdicts on the routes after every round (p1, p2, tie), the quote check of each, the file
+    and section each came from, per change key the verdicts no longer on its route and why, rule 4
+    as its sample decided it (None before any round judged the sample), and what each round laid."""
 
     verdicts: dict[str, dict[str, dict[str, Any]]]
     checks: dict[str, dict[str, Q.VerdictCheck]]
     origin: dict[str, dict[str, str]]
     set_aside: dict[str, list[dict[str, Any]]]
+    rule_4: dict[str, Any] | None
+    rounds: dict[str, dict[str, Any]]
 
 
 def _aside(where: str, v: Mapping[str, Any], check: Q.VerdictCheck, why: str) -> dict[str, Any]:
@@ -348,48 +390,104 @@ def _aside(where: str, v: Mapping[str, Any], check: Q.VerdictCheck, why: str) ->
     }
 
 
+def _waits_on(
+    where: str,
+    section: str,
+    key: str,
+    verdicts: Mapping[str, Mapping[str, Any]],
+    checks: Mapping[str, Mapping[str, Q.VerdictCheck]],
+    fired: bool,
+) -> None:
+    """Refuse a round's verdict unless its row, as the routes stood before the round, waited on
+    exactly that verdict: the section's rule in the module docstring."""
+    if key not in verdicts["p1"]:
+        raise AuditError(f"{where} {key}: not a row of INPUT.jsonl")
+    stage = STAGE_OF[section]
+    standing = key in verdicts[stage] and checks[stage][key].counted
+    if section in ("p1", "p2"):
+        if key not in verdicts[stage]:
+            raise AuditError(f"{where} {key}: no {stage} verdict before this round to replace")
+    elif section in ("sample", "second"):
+        if verdicts["p1"][key]["verdict"] != KEEP:
+            raise AuditError(f"{where} {key}: not a pass-1 keep, so no second judgement is due")
+        if section == "second" and not fired:
+            raise AuditError(f"{where} {key}: rule 4 had not fired before this round")
+    else:
+        p1, p2 = verdicts["p1"][key], verdicts["p2"].get(key)
+        if p2 is None or (p1["verdict"] == KEEP) == (p2["verdict"] == KEEP):
+            raise AuditError(f"{where} {key}: the row does not wait on a third judge")
+        if p1["verdict"] == KEEP and not fired:
+            raise AuditError(f"{where} {key}: rule 4 had not fired, so its pass-1 keep stands")
+        if not (checks["p1"][key].counted and checks["p2"][key].counted):
+            raise AuditError(f"{where} {key}: the pair a tie would decide does not count")
+    if standing:
+        raise AuditError(
+            f"{where} {key}: the {stage} verdict before this round counted, and a counted verdict "
+            "is never judged again"
+        )
+
+
 def overlay(
     raw: Mapping[str, Mapping[str, Any]],
     raw_checks: Mapping[str, Mapping[str, Q.VerdictCheck]],
-    round2: Mapping[str, Mapping[str, Any]],
-    round2_checks: Mapping[str, Mapping[str, Q.VerdictCheck]],
+    rounds: Sequence[Round],
 ) -> Overlay:
-    """Round 2 laid over round 1 (module docstring); refused where it re-judges a counted verdict."""
+    """Every round laid over round 1 in order (module docstring), through one code path."""
     verdicts = {p: dict(raw[p]) for p in PASSES}
     checks = {p: dict(raw_checks[p]) for p in PASSES}
     origin = {p: dict.fromkeys(raw[p], f"{RAW} {p}") for p in PASSES}
+    # the pair each tie on a route was shown
+    shown = {key: (raw["p1"][key], raw["p2"][key]) for key in raw["tie"]}
     aside: dict[str, list[dict[str, Any]]] = {}
-    for stage in ("p1", "p2"):
-        for key, v in sorted(round2[stage].items()):
-            if raw_checks[stage][key].counted:
-                raise AuditError(
-                    f"round 2 {stage} {key}: the round-1 verdict counted, and a counted verdict is "
-                    "never judged again"
-                )
-            new = round2_checks[stage][key]
-            if not new.counted:
-                aside.setdefault(key, []).append(_aside(f"{ROUND_2} {stage}", v, new, NOT_COUNTED))
+    rule4: dict[str, Any] | None = None
+    laid: dict[str, dict[str, Any]] = {}
+    for rnd in rounds:
+        was = {p: dict(verdicts[p]) for p in PASSES}
+        was_checks = {p: dict(checks[p]) for p in PASSES}
+        fired = rule4 is not None and rule4["fired"]
+        counts: dict[str, Counter[str]] = {"laid": Counter(), "not_counted": Counter()}
+        replaced = 0
+        for section in SECTIONS:
+            for key, v in sorted(rnd.verdicts.get(section, {}).items()):
+                where = f"{rnd.name} {section}"
+                _waits_on(where, section, key, was, was_checks, fired)
+                new = rnd.checks[section][key]
+                if not new.counted:
+                    aside.setdefault(key, []).append(_aside(where, v, new, NOT_COUNTED))
+                    counts["not_counted"][section] += 1
+                    continue
+                stage = STAGE_OF[section]
+                if key in verdicts[stage]:
+                    old = _aside(
+                        origin[stage][key], verdicts[stage][key], checks[stage][key], REPLACED
+                    )
+                    aside.setdefault(key, []).append(old)
+                    replaced += 1
+                verdicts[stage][key], checks[stage][key] = v, new
+                origin[stage][key] = where
+                counts["laid"][section] += 1
+                if stage == "tie":
+                    shown[key] = (was["p1"][key], was["p2"][key])
+        if rnd.verdicts.get("sample"):
+            if rule4 is not None:
+                raise AuditError(f"{rnd.name}: rule 4's sample is judged in one round only")
+            rule4 = rule_4(rnd.verdicts["sample"], rnd.checks["sample"])
+        stale = 0
+        for key in sorted(verdicts["tie"]):
+            if (verdicts["p1"][key], verdicts["p2"][key]) == shown[key]:
                 continue
-            old = _aside(f"{RAW} {stage}", raw[stage][key], raw_checks[stage][key], REPLACED)
-            aside.setdefault(key, []).append(old)
-            verdicts[stage][key], checks[stage][key] = v, new
-            origin[stage][key] = f"{ROUND_2} {stage}"
-    for key, v in sorted(round2["sample"].items()):
-        new = round2_checks["sample"][key]
-        if not new.counted:
-            aside.setdefault(key, []).append(_aside(f"{ROUND_2} sample", v, new, NOT_COUNTED))
-            continue
-        # it never saw pass 1: the keep's second, independent judgement under rule 3
-        verdicts["p2"][key], checks["p2"][key] = v, new
-        origin["p2"][key] = f"{ROUND_2} sample"
-    for key in sorted(raw["tie"]):
-        if verdicts["p1"][key] == raw["p1"][key] and verdicts["p2"][key] == raw["p2"][key]:
-            continue
-        aside.setdefault(key, []).append(
-            _aside(f"{RAW} tie", raw["tie"][key], raw_checks["tie"][key], STALE_TIE)
-        )
-        del verdicts["tie"][key], checks["tie"][key], origin["tie"][key]
-    return Overlay(verdicts, checks, origin, aside)
+            aside.setdefault(key, []).append(
+                _aside(origin["tie"][key], verdicts["tie"][key], checks["tie"][key], STALE_TIE)
+            )
+            del verdicts["tie"][key], checks["tie"][key], origin["tie"][key], shown[key]
+            stale += 1
+        laid[rnd.name] = {
+            "laid": _sorted(counts["laid"]),
+            "not_counted": _sorted(counts["not_counted"]),
+            "replaced": replaced,
+            "ties_set_aside": stale,
+        }
+    return Overlay(verdicts, checks, origin, aside, rule4, laid)
 
 
 def trace(decisions: Iterable[Mapping[str, Any]], ov: Overlay) -> list[dict[str, Any]]:
@@ -417,7 +515,8 @@ def rejudge(decisions: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             "that is not keep, that failed the quote check with nothing counted in its place "
             "(RULES.md: it does not count; the row is judged again), by that pass. A p2 verdict "
             "never sees p1, so a counted p2 stays valid when p1 is re-run. Rows waiting on rule "
-            "4's second judgement or on a third judge are in SECOND_JUDGE.json and TIE_ROUND2.json."
+            "4's second judgement or on a third judge are in SECOND_JUDGE.json and the last "
+            "round's TIE_ROUND<n>.json."
         ),
         **{p: sorted(keys) for p, keys in by_pass.items()},
     }
@@ -445,10 +544,11 @@ def _judgement(v: Mapping[str, Any]) -> dict[str, Any]:
     return {field: v[field] for field in ("verdict", "right_value", "reason", "quotes")}
 
 
-def tie_round_2(
+def tie_list(
     decisions: Iterable[Mapping[str, Any]], verdicts: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, Any]:
-    """The rows whose counted p1 and p2 disagree and lack a counted tie (TIE_ROUND2.json)."""
+    """The rows whose counted p1 and p2 disagree and lack a counted tie (TIE_ROUND<n>.json, n the
+    last round laid): the next round's third judge sees each pair as listed here."""
     keys = sorted(d["change_key"] for d in decisions if d["pending"] == ["tie"])
     return {
         "about": (
@@ -466,6 +566,29 @@ def tie_round_2(
             }
             for key in keys
         ],
+    }
+
+
+def rejudge_round(rnd: Round, tie_file: str) -> dict[str, Any]:
+    """The verdicts of round `rnd` that failed the quote check, by section (REJUDGE_ROUND<n>.json).
+
+    Each is judged again: a failed verdict replaces nothing, so its row still waits on the verdict
+    it did not deliver - a failed `second` in SECOND_JUDGE.json, a failed `tie` in `tie_file` (its
+    pair unchanged), a failed `p1` or `p2` in REJUDGE.json.
+    """
+    failed = {
+        section: [key for key, check in checks.items() if not check.counted]
+        for section, checks in rnd.checks.items()
+    }
+    return {
+        "about": (
+            f"The verdicts of {rnd.name} that failed the quote check (RULES.md: it does not count; "
+            "the row is judged again), by section. Each row still waits on the verdict it did not "
+            f"deliver: a second judgement in SECOND_JUDGE.json, a third judge in {tie_file} (the "
+            "pair is unchanged), a p1 or p2 in REJUDGE.json."
+        ),
+        "round": rnd.name,
+        **{section: sorted(keys) for section, keys in failed.items()},
     }
 
 
@@ -571,18 +694,6 @@ def verdict_counts(
     }
 
 
-def overlay_counts(ov: Overlay, round2_checks: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    origins = Counter(o for p in PASSES for o in ov.origin[p].values())
-    return {
-        "replaced": {p: origins[f"{ROUND_2} {p}"] for p in ("p1", "p2")},
-        "sample_as_p2": origins[f"{ROUND_2} sample"],
-        "not_counted": {
-            s: sum(not c.counted for c in round2_checks[s].values()) for s in ROUND_2_SECTIONS
-        },
-        "ties_set_aside": sum(x["why"] == STALE_TIE for xs in ov.set_aside.values() for x in xs),
-    }
-
-
 def decision_counts(decisions: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     reverts = [d for d in decisions if d["decision"] == REVERT]
     reversal = [d for d in decisions if d["reversal"]]
@@ -638,16 +749,25 @@ def load(audit: Path, rules_sha256: str, input_sha256: str) -> tuple[list, dict,
 
 def load_rounds(
     audit: Path, rules_sha256: str, input_sha256: str
-) -> tuple[list, dict, dict, dict[str, str]]:
-    """`load`, then the stated keep sample and round 2 - each refused unless it fits round 1."""
+) -> tuple[list, dict, list[tuple[str, dict]], dict[str, str]]:
+    """`load`, then the stated keep sample and every round after round 1 in order (`round_files`),
+    each as (file name, verdicts by section) - refused unless it has round 1's shape and names only
+    rows of INPUT.jsonl."""
     rows, raw, inputs = load(audit, rules_sha256, input_sha256)
     stated = json.loads((audit / "KEEP_SAMPLE.json").read_text(encoding="utf-8"))
     if stated != keep_sample(raw):
         raise AuditError(f"KEEP_SAMPLE.json is not rule 4's draw from {RAW}")
-    round2 = read_round_2(audit / ROUND_2, raw, stated["keys"])
     inputs["KEEP_SAMPLE.json"] = sha256_file(audit / "KEEP_SAMPLE.json")
-    inputs[ROUND_2] = sha256_file(audit / ROUND_2)
-    return rows, raw, round2, inputs
+    keys = {r["change_key"] for r in rows}
+    rounds: list[tuple[str, dict]] = []
+    for path in round_files(audit):
+        got = read_round(path, stated["keys"])
+        strangers = sorted({k for given in got.values() for k in given} - keys)
+        if strangers:
+            raise AuditError(f"{path.name} judges rows INPUT.jsonl does not hold: {strangers[:5]}")
+        rounds.append((path.name, got))
+        inputs[path.name] = sha256_file(path)
+    return rows, raw, rounds, inputs
 
 
 def write_keep_sample(
@@ -682,35 +802,45 @@ def run(
     input_sha256: str = INPUT_SHA256,
     pdf_text: Callable[[bytes], str] = Q.pdftotext,
 ) -> dict[str, Any]:
-    """Check every quote of both rounds, lay round 2 over round 1, decide every row and write the
-    outputs (`OUTPUTS`); returns COUNTS.json."""
-    rows, raw, round2, inputs = load_rounds(audit, rules_sha256, input_sha256)
+    """Check every quote of every round, lay the rounds over round 1 in order, decide every row and
+    write the outputs (`outputs` of the last round); returns COUNTS.json."""
+    rows, raw, given, inputs = load_rounds(audit, rules_sha256, input_sha256)
     library = Q.Library(repo, audit / "pages", pdf_text)
     by_key = {r["change_key"]: r for r in rows}
     raw_checks = _check_all(raw, by_key, library)
-    round2_checks = _check_all(round2, by_key, library)
-    ov = overlay(raw, raw_checks, round2, round2_checks)
-    rule4 = rule_4(round2["sample"], round2_checks["sample"])
-    decisions = trace(decide(rows, ov.verdicts, ov.checks, second_judgement=rule4["fired"]), ov)
-    second = second_judge(decisions, rule4)
-    ties = tie_round_2(decisions, ov.verdicts)
+    rounds = [Round(name, v, _check_all(v, by_key, library)) for name, v in given]
+    ov = overlay(raw, raw_checks, rounds)
+    if ov.rule_4 is None:
+        raise AuditError("rule 4 is not decided: no round judged KEEP_SAMPLE.json's sample")
+    decisions = trace(decide(rows, ov.verdicts, ov.checks, second_judgement=ov.rule_4["fired"]), ov)
+    last = round_number(rounds[-1].name)
+    names = outputs(last)
+    tie_file, rejudge_file = names[-2], names[-1]
+    second = second_judge(decisions, ov.rule_4)
+    ties = tie_list(decisions, ov.verdicts)
+    failed = rejudge_round(rounds[-1], tie_file)
     summary = {
         "inputs": inputs,
         "normalisation": NORMALISATION,
         "pair_rule": PAIR_RULE,
         "round_1": verdict_counts(raw, raw_checks),
-        "round_2": verdict_counts(round2, round2_checks),
-        "overlay": overlay_counts(ov, round2_checks),
-        "rule_4": rule4,
+        **{f"round_{round_number(r.name)}": verdict_counts(r.verdicts, r.checks) for r in rounds},
+        "overlay": ov.rounds,
+        "rule_4": ov.rule_4,
         "on_the_routes": verdict_counts(ov.verdicts, ov.checks),
         **decision_counts(decisions),
         "second_judge": second["count"],
-        "tie_round_2": ties["count"],
+        "tie_list": {"file": tie_file, "count": ties["count"]},
+        "rejudge_round": {
+            "file": rejudge_file,
+            **{section: len(failed[section]) for section in rounds[-1].verdicts},
+        },
     }
     _write_jsonl(audit / "DECISIONS.jsonl", decisions)
     _write_json(audit / "COUNTS.json", summary)
     _write_json(audit / "REJUDGE.json", rejudge(decisions))
     _write_jsonl(audit / "REVERSAL_3_INPUT.jsonl", reversal_input(decisions, ov.verdicts))
     _write_json(audit / "SECOND_JUDGE.json", second)
-    _write_json(audit / "TIE_ROUND2.json", ties)
+    _write_json(audit / tie_file, ties)
+    _write_json(audit / rejudge_file, failed)
     return summary

@@ -2,8 +2,10 @@
 
     run.py sample   KEEP_SAMPLE.json: RULES.md rule 4's sample, stated before anyone judges it
     run.py fetch    every URL a verdict cites, fetched once into pages/ (read-only GETs)
-    run.py decide   the quote check and the decision rule, offline: DECISIONS.jsonl, COUNTS.json,
-                    REJUDGE.json and REVERSAL_3_INPUT.jsonl (a URL fetch has not kept is refused)
+    run.py decide   the quote check and the decision rule over round 1 and every round file after
+                    it, offline: DECISIONS.jsonl, COUNTS.json, REJUDGE.json, REVERSAL_3_INPUT.jsonl,
+                    SECOND_JUDGE.json and the last round's TIE_ROUND<n>.json and
+                    REJUDGE_ROUND<n>.json (a URL fetch has not kept is refused)
 
 Every command refuses a RULES.md or INPUT.jsonl that is not the sealed one. Nothing here calls a
 model or writes to production.
@@ -49,8 +51,8 @@ def _now() -> str:
 
 
 def fetch(audit: Path) -> dict[str, object]:
-    _rows, raw, round2, _inputs = D.load_rounds(audit, D.RULES_SHA256, D.INPUT_SHA256)
-    urls = cited_urls(raw, round2)
+    _rows, raw, rounds, _inputs = D.load_rounds(audit, D.RULES_SHA256, D.INPUT_SHA256)
+    urls = cited_urls(raw, *(verdicts for _name, verdicts in rounds))
     pages = audit / "pages"
     with Q.http_client() as client:
         counts = Q.collect(urls, pages, client, now=_now)
@@ -81,7 +83,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             summary = D.run(args.dir)
             out = {
-                "round_2": {s: summary["round_2"][s]["failed"] for s in D.ROUND_2_SECTIONS},
+                "failed": {
+                    name: {s: counts["failed"] for s, counts in summary[name].items()}
+                    for name in summary
+                    if name.startswith("round_")
+                },
                 "overlay": summary["overlay"],
                 "rule_4": {
                     k: summary["rule_4"][k]
@@ -94,7 +100,8 @@ def main(argv: list[str] | None = None) -> int:
                         "rejudge_by_pass",
                         "pending_by_pass",
                         "second_judge",
-                        "tie_round_2",
+                        "tie_list",
+                        "rejudge_round",
                         "reversal_rows",
                     )
                 },
