@@ -68,7 +68,7 @@ import json
 import re
 import sys
 import uuid
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -174,6 +174,9 @@ RULE_EVIDENCE = "journal-evidence-incomplete"
 RULE_NOT_A_CHANGE = W.RULE_NOT_A_CHANGE
 RULE_NO_CARD = "no-card"
 RULE_CARD_TOO_LONG = "card-too-long"
+#: A site without a card_stats row (read-only, production): neither a card nor a clear can be
+#: written, and planning one would let the chunk's preflight block the whole batch for it.
+RULE_NO_CARD_ROW = "no-card-stats-row"
 #: The live P4 provenance names a card P5 does not write (a card-scope hold added after P4 wrote):
 #: neither a clear nor the March card may stand beside it - the site is reverted first.
 RULE_CARD_NAMED = "live-provenance-names-an-unwritten-card"
@@ -988,12 +991,15 @@ def plan_cards(
     scope: S.DefectScope,
     written: Mapping[str, str | None],
     card_findings: Mapping[str, Sequence[Mapping[str, Any]]],
+    card_rows: Container[str],
 ) -> WritePlan4:
     """P5: the cards of written sites, and the clears of held cards with a cleared defect.
 
     `card_findings` are the Phase-3 reviewer-cleared card defects (the 709) by site: the evidence
     of a clear (card_texts, HELD CARDS: "known-wrong narration becomes absent"). A site outside the
-    defect scope is refused first: no card and no clear.
+    defect scope is refused first: no card and no clear. `card_rows` are the sites production holds
+    a card_stats row for; any other site is refused next (audit 2026-09-25 m21), so it no longer
+    blocks its whole batch at the chunk's preflight.
     """
     plan = WritePlan4(group=Group.P5, batch_id=group_batch_id(batch.batch_id, Group.P5))
     for site in batch.sites:
@@ -1002,6 +1008,13 @@ def plan_cards(
         decided: Row4 | W.Refusal
         if outside is not None:
             decided = outside
+        elif site.site_id not in card_rows:
+            decided = W.Refusal(
+                site.site_id,
+                "card_description",
+                RULE_NO_CARD_ROW,
+                "production holds no card_stats row for the site: no card and no clear",
+            )
         elif assembly is not None:
             decided = _card_row(batch, site, assembly)
         elif written.get(site.site_id) is not None:

@@ -21396,6 +21396,22 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_raw_data_holds_a_value_only_as_jsonb_compares_it",
     ),
     (
+        "audit-fix: m21 P5 plans a card for a site without a card_stats row",
+        P4_WRITE,
+        "        elif site.site_id not in card_rows:\n",
+        "        elif False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_p5_refuses_a_site_without_a_card_stats_row_on_its_own",
+    ),
+    (
+        "audit-fix: m21 the gate reads no card_stats rows",
+        P4_WRITE_GATE,
+        '            found.add(str(row["site_id"]))\n',
+        "            pass  # mutant\n",
+        P4_WRITE_TEST,
+        "test_the_gate_reads_which_sites_have_a_card_stats_row",
+    ),
+    (
         "audit-fix: m18 the acceptance keeps its own stream rule",
         P4_ACCEPT,
         "    W.utf8_streams()\n    parser = argparse",

@@ -672,7 +672,11 @@ def test_the_allow_list_is_rendered_from_the_groups_rows(tmp_path: Path, p4_chun
     ) in sql
     batch = _batch(tmp_path / "p5", sites=[FX.plan_site()], assemblies=[FX.assembly()])
     cards = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     assert (
         "NOT IN (VALUES ('card_stats', 'card_description', 'site_id', 'P5/card'), "
@@ -909,7 +913,11 @@ def test_a_site_outside_the_curated_source_is_blocked_before_anything_is_sent(
 def test_a_card_without_its_card_stats_row_is_blocked_before_anything_is_sent(tmp_path) -> None:
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
     cards = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     chunk = W4.chunk_for(cards)
     out = _rendered(tmp_path, chunk)
@@ -984,6 +992,7 @@ def test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear(tmp_path: 
     finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
     plan = W4.plan_cards(
         batch,
+        card_rows=FX.EVERY_CARD_ROW,
         scope=FX.scope(),
         written={FX.SITE_A: M.text_sha256(FX.CARD)},
         card_findings={FX.SITE_B: [finding]},
@@ -995,6 +1004,7 @@ def test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear(tmp_path: 
     ]
     inside = W4.plan_cards(
         batch,
+        card_rows=FX.EVERY_CARD_ROW,
         scope=FX.scope(FX.SITE_A, FX.SITE_B),
         written={FX.SITE_A: M.text_sha256(FX.CARD)},
         card_findings={FX.SITE_B: [finding]},
@@ -1323,7 +1333,9 @@ def test_p5_writes_a_card_only_where_live_provenance_names_it(tmp_path: Path) ->
         assemblies=[FX.assembly(), FX.assembly(FX.SITE_B), FX.assembly(FX.SITE_C)],
     )
     written = {FX.SITE_A: M.text_sha256(FX.CARD), FX.SITE_B: None}
-    plan = W4.plan_cards(batch, scope=FX.EVERY_SITE, written=written, card_findings={})
+    plan = W4.plan_cards(
+        batch, card_rows=FX.EVERY_CARD_ROW, scope=FX.EVERY_SITE, written=written, card_findings={}
+    )
     assert [(r.site_id, r.test_id, r.new_value) for r in plan.rows] == [
         (FX.SITE_A, "P5/card", FX.CARD)
     ]
@@ -1344,7 +1356,11 @@ def test_a_held_card_with_a_cleared_phase3_defect_is_cleared_with_its_finding(
     )
     finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: None}, card_findings={FX.SITE_A: [finding]}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: None},
+        card_findings={FX.SITE_A: [finding]},
     )
     (row,) = plan.rows
     assert (row.test_id, row.old_value, row.new_value) == ("P5/card-clear", FX.OLD_CARD, None)
@@ -1356,14 +1372,24 @@ def test_a_clear_without_its_phase3_finding_is_refused_loudly(tmp_path: Path, fi
     flagged = FX.plan_site(flags=[M.SiteFlag.CLEARED_CARD_DEFECT])
     batch = _batch(tmp_path, sites=[flagged], holds=[_hold(FX.SITE_A, M.HoldReason.NO_SOURCE)])
     with pytest.raises(W4.PlanInputError, match="without its evidence"):
-        W4.plan_cards(batch, scope=FX.EVERY_SITE, written={}, card_findings=findings)
+        W4.plan_cards(
+            batch,
+            card_rows=FX.EVERY_CARD_ROW,
+            scope=FX.EVERY_SITE,
+            written={},
+            card_findings=findings,
+        )
 
 
 def test_a_card_longer_than_the_column_is_refused(tmp_path: Path) -> None:
     long_card = "A" * 201
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly(card=long_card)])
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(long_card)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(long_card)},
+        card_findings={},
     )
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_CARD_TOO_LONG
 
@@ -1374,7 +1400,11 @@ def test_a_p5_card_is_written_and_its_hash_matches_the_live_provenance(tmp_path:
     db = _db(FX.SITE_A)
     db(W4.render_apply(W4.chunk_for(p4)), host="fake")
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     chunk, out = _written(tmp_path, plan)
     outcome = W4.apply_chunk(chunk, out=out, rehearse=False, runner=db)
@@ -1387,7 +1417,11 @@ def test_the_card_invariant_refuses_a_card_the_provenance_does_not_name(tmp_path
     db(W4.render_apply(W4.chunk_for(_p4(batch))), host="fake")
     db.sites[FX.SITE_A].raw_data[M.PROVENANCE_KEY]["card"]["text_sha256"] = "0" * 64
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     with pytest.raises(W.WriteRefused, match="invariant 4"):
         db(W4.render_apply(W4.chunk_for(plan)), host="fake")
@@ -2500,6 +2534,7 @@ def test_p5_refuses_a_site_whose_live_provenance_names_a_card_it_will_not_write(
     finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
     plan = W4.plan_cards(
         batch,
+        card_rows=FX.EVERY_CARD_ROW,
         scope=FX.EVERY_SITE,
         written={FX.SITE_A: M.text_sha256(FX.CARD)},
         card_findings={FX.SITE_A: [finding]},
@@ -2629,3 +2664,35 @@ def test_raw_data_holds_a_value_only_as_jsonb_compares_it() -> None:
     stored = W4._stored(chunk, lambda sql, host: answer, "h")[GATE_SITE]
     assert W4.holds_value(stored, row, '{"lat": 0.10, "n": 1.0}')
     assert not W4.holds_value(stored, row, '{"lat": 0.1000000000000000055511151231257827, "n": 1}')
+
+
+def test_p5_refuses_a_site_without_a_card_stats_row_on_its_own(tmp_path: Path) -> None:
+    """2026-09-25 audit m21: `plan_cards` planned a card for a site without a card_stats row, and
+    the chunk's preflight then blocked the whole P5 batch for that one site. The site is refused
+    in the plan (`no-card-stats-row`, read-only from production) and its batch goes on."""
+    batch = _batch(
+        tmp_path,
+        sites=[FX.plan_site(), FX.plan_site(FX.SITE_B)],
+        assemblies=[FX.assembly(), FX.assembly(FX.SITE_B)],
+    )
+    card = M.text_sha256(FX.CARD)
+    plan = W4.plan_cards(
+        batch,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: card, FX.SITE_B: card},
+        card_findings={},
+        card_rows=frozenset({FX.SITE_A}),
+    )
+    assert [r.site_id for r in plan.rows] == [FX.SITE_A]
+    assert [(r.site_id, r.rule) for r in plan.refusals] == [(FX.SITE_B, W4.RULE_NO_CARD_ROW)]
+
+
+def test_the_gate_reads_which_sites_have_a_card_stats_row() -> None:
+    db = _db(GATE_SITE, "00000002-0000-4000-8000-000000000002")
+    db.sites["00000002-0000-4000-8000-000000000002"].card_row = False
+    ids = [
+        GATE_SITE,
+        "00000002-0000-4000-8000-000000000002",
+        "00000003-0000-4000-8000-000000000003",
+    ]
+    assert G.card_row_sites(ids, run=lambda sql: db(sql, host="h")) == frozenset({GATE_SITE})

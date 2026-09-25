@@ -14,7 +14,8 @@ batch's statements, and runs them.
     write_gate4.py --group L --legacy-plan LEGACY4.jsonl --apply --step 100  # lane L's own plan
 
 **Dry run by default**: nothing is sent to production except the read-only questions a group needs
-(L and P5: which sites carry a live Phase-4 provenance; `--round 2` and up: whether the round
+(L and P5: which sites carry a live Phase-4 provenance; P5: which have a card_stats row;
+`--round 2` and up: whether the round
 before is reverted; a written batch whose re-plan leaves a site out: whether that site's rows are
 reverted), and the report says so.
 
@@ -40,8 +41,8 @@ it is the output of one run - its lane line first, one `RESULT:` and one exit li
 covering the step's, that read at least the rows written so far under those stamps (every round,
 the reverted ones too: their rows stay in the journal), that read the lane plan's current row
 count, that allows no later stamp pattern covering the step's own stamps, and that accepted no
-earlier step (`acceptance_problems`). A step is 1-100 sites (`STEP_MAX`); a stopped batch anywhere in the apply
-root stops every run, whatever `--batch` selects.
+earlier step (`acceptance_problems`). A step is 1-100 sites (`STEP_MAX`); a stopped batch anywhere
+in the apply root stops every run, whatever `--batch` selects.
 
 **Write rounds** (the chunk number of the stamp). A batch taken back by `revert4` is written again
 as its next round: `--apply --round 2` re-opens a batch applied in round 1 only when production
@@ -224,6 +225,28 @@ def written_sites(site_ids: Sequence[str], *, run: Any, window: int = 200) -> di
             if row["lane"] in full:
                 found[str(row["id"])] = row["card"]
     return found
+
+
+#: The first line of `card_rows_sql`: how the tests' fake psql recognises the read.
+CARD_ROWS_READ = "-- the named sites that have a card_stats row (read-only)"
+
+
+def card_rows_sql(site_ids: Sequence[str]) -> str:
+    return (
+        f"{CARD_ROWS_READ}\n"
+        "SELECT to_jsonb(t)::text FROM (SELECT site_id::text AS site_id FROM card_stats "
+        f"WHERE site_id IN ({', '.join(f'{lanes.sql_text(s)}::uuid' for s in site_ids)})) t;\n"
+    )
+
+
+def card_row_sites(site_ids: Sequence[str], *, run: Any, window: int = 200) -> frozenset[str]:
+    """The named sites production holds a card_stats row for: P5 plans no card and no clear for
+    any other (`write4.RULE_NO_CARD_ROW`)."""
+    found: set[str] = set()
+    for start in range(0, len(site_ids), window):
+        for row in lanes.json_rows(run(card_rows_sql(site_ids[start : start + window]))):
+            found.add(str(row["site_id"]))
+    return frozenset(found)
 
 
 def phase3_card_findings(
@@ -927,6 +950,9 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         options["written"] = live
         print(f"live phase-4 provenance: {len(live)} of {len(site_ids)} planned sites (read-only)")
         if group is W4.Group.P5:
+            options["card_rows"] = card_row_sites(
+                site_ids, run=lambda sql: W._exec(runner, sql, host=args.host)
+            )
             options["card_findings"] = phase3_card_findings(
                 pathlib.Path(args.phase3_refused), pathlib.Path(args.phase3_run)
             )
