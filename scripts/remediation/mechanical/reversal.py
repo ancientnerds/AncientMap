@@ -145,7 +145,8 @@ def load_reasons(path: Path, lane: Lane, expected: Sequence[int]) -> list[Reason
             f"{sorted(expected)} - the reviewed list and the code must agree"
         )
     for r in reasons:
-        if not r.reason or not r.quotes:
+        # A quote without text is `in` every source, so it would pass every evidence check.
+        if not r.reason or not r.quotes or any(not q.text.strip() for q in r.quotes):
             raise PlanError(f"journal row {r.journal_id}: a reversal needs a reason and evidence")
     return reasons
 

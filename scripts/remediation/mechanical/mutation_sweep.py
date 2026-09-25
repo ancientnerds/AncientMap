@@ -2124,7 +2124,7 @@ CASES: list[Case] = [
             ),
             (
                 "a reversal needs a reason and quotes",
-                "        if not r.reason or not r.quotes:",
+                "        if not r.reason or not r.quotes or any(not q.text.strip() for q in r.quotes):",
                 "test_a_reversal_without_a_reason_or_evidence_is_refused",
             ),
             (
@@ -4779,6 +4779,14 @@ AUDIT_FIX_CASES: list[Case] = [
         APPLY,
         '    if "$$" in block:',
         "test_a_value_that_would_end_the_do_block_is_refused",
+    ),
+    Case(
+        "audit-fix: m6 an empty quote is evidence",
+        REVERSAL,
+        " or any(not q.text.strip() for q in r.quotes):",
+        ":",
+        "test_a_quote_without_text_is_no_evidence",
+        REVERSAL_TESTS,
     ),
 ]
 CASES += AUDIT_FIX_CASES

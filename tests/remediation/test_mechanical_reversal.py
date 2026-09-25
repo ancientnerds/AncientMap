@@ -345,6 +345,17 @@ class TestTheList:
         with pytest.raises(P.PlanError, match="a reversal needs a reason and evidence"):
             R.load_reasons(path, L.REVERSAL_1, [1])
 
+    @pytest.mark.parametrize("text", ["", "   "], ids=["empty", "blank"])
+    def test_a_quote_without_text_is_no_evidence(self, tmp_path: Path, text: str) -> None:
+        """Audit 2026-09-25 m6: an empty quote is `in` every source text, so it passed every
+        evidence check."""
+        path = self.write(tmp_path, [1])
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw["reversals"][0]["quotes"][0]["text"] = text
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(P.PlanError, match="a reversal needs a reason and evidence"):
+            R.load_reasons(path, L.REVERSAL_1, [1])
+
     def test_the_delivered_list_is_the_lane_s(self) -> None:
         reasons = R.load_reasons(
             A.lane_dir(L.REVERSAL_1) / "REASONS.json", L.REVERSAL_1, L.REVERSAL_1_JOURNAL_IDS
