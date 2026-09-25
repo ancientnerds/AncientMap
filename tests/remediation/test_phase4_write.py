@@ -37,6 +37,7 @@ for _path in (REPO / "scripts" / "remediation", REPO / "output" / "remediation" 
 
 import write_gate4 as G  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
+from phase4 import plan4 as P4PLAN  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402
 
 from tests.remediation import phase4_write_fixtures as FX  # noqa: E402
@@ -1047,22 +1048,172 @@ def test_a_site_outside_the_pinned_scope_is_marked_by_l_and_refused_by_p4_and_p5
     refused = tmp_path / "ALL_REFUSED.jsonl"
     refused.write_text("", encoding="utf-8")
     planned = {}
+    run = ["--run", "pilot", "--run-root", str(tmp_path / "runs")]
     for group, extra in (
-        ("P4", ["--open-lanes", "W,S"]),
-        ("P5", ["--phase3-refused", str(refused)]),
-        ("L", []),
+        ("P4", [*run, "--open-lanes", "W,S"]),
+        ("P5", [*run, "--phase3-refused", str(refused)]),
+        ("L", ["--legacy-plan", str(_legacy_plan(tmp_path, FX.plan_site(site)))]),
     ):
-        args = ["--group", group, "--run", "pilot", "--run-root", str(tmp_path / "runs"),
-                "--apply-root", str(tmp_path / f"apply-{group}"), *extra]  # fmt: skip
+        args = ["--group", group, "--apply-root", str(tmp_path / f"apply-{group}"), *extra]
         assert G.main(args, runner=_db(site)) == 0
         planned[group] = capsys.readouterr().out
     for group in ("P4", "P5"):
         assert "rows planned: 0 | refused by rule: {'outside-defect-scope': 1}" in planned[group]
     assert "rows planned: 1 | refused by rule: {}" in planned["L"]
     assert "outside-defect-scope" not in planned["L"]
-    (row,) = W4.read_plan(tmp_path / "apply-L" / "p4l-0001", group=W4.Group.L)
+    (row,) = W4.read_plan(tmp_path / "apply-L" / "p4l-1001", group=W4.Group.L)
     assert (row.site_id, row.test_id) == (site, W4.TEST_LEGACY)
     assert json.loads(row.new_value)[M.PROVENANCE_KEY]["ai"] == "generated"
+
+
+# ── lane L: its own plan over the curated population (owner decision 2026-09-24) ───────────────
+
+
+def _legacy_plan(tmp_path: Path, *sites: M.PlanSite) -> Path:
+    """Lane L's own plan (`plan4.py legacy`) of exactly these sites, in their order."""
+    path = tmp_path / "LEGACY4.jsonl"
+    P4PLAN.write_legacy_plan(path, list(sites))
+    return path
+
+
+def _legacy_args(tmp_path: Path, plan: Path, *extra: str) -> list[str]:
+    return ["--group", "L", "--legacy-plan", str(plan), "--apply-root", str(tmp_path / "apply"),
+            *extra]  # fmt: skip
+
+
+def _legacy_ids(count: int) -> list[str]:
+    return [f"{n:08x}-0000-4000-8000-{n:012x}" for n in range(1, count + 1)]
+
+
+def test_l_plans_the_curated_population_from_its_own_plan_and_counts_every_exclusion(
+    tmp_path, capsys
+) -> None:
+    """Lane L's population is every curated site (`plan4.py legacy`), not a Phase-4 run's batches:
+    a March text is marked, a site with live phase-4 provenance is excluded on production's word
+    (read-only), and a text equal to d4526691 or a site the snapshot lacks is listed for HUMAN_ONLY
+    D7 - each counted on its own."""
+    marked, same, written, absent = _legacy_ids(4)
+    plan = _legacy_plan(
+        tmp_path,
+        FX.plan_site(marked),
+        FX.plan_site(same, description="Same.", snapshot="Same."),
+        FX.plan_site(written),
+        FX.plan_site(absent, description="Added in April.", snapshot=None, in_snapshot=False),
+    )
+    db = _db(marked, same, absent)
+    db.sites[written] = FX.Site(raw_data={M.PROVENANCE_KEY: {"lane": "W", "card": None}})
+    assert G.main(_legacy_args(tmp_path, plan), runner=db) == 0
+    out = capsys.readouterr().out
+    digest = hashlib.sha256(plan.read_bytes()).hexdigest()
+    assert f"group L | legacy plan {plan} (sha256 {digest}) | " in out
+    assert G.LEGACY_UNSCOPED in out
+    assert "live phase-4 provenance: 1 of 4 planned sites (read-only)" in out
+    assert (
+        "rows planned: 1 | refused by rule: {'no-legacy-claim': 2, 'written-by-p4': 1} | "
+        "unclaimed by reason (HUMAN_ONLY D7): {'not-in-snapshot': 1, 'same-as-snapshot': 1}"
+    ) in out
+    (row,) = W4.read_plan(tmp_path / "apply" / "p4l-1001", group=W4.Group.L)
+    assert row.site_id == marked and row.old_value == W4.raw_json(FX.OLD_RAW)
+    unclaimed = (tmp_path / "apply" / "p4l-1001" / W4.UNCLAIMED_FILE).read_text(encoding="utf-8")
+    assert [json.loads(line)["site_id"] for line in unclaimed.splitlines()] == [same, absent]
+
+
+def _legacy_acceptance(tmp_path: Path, *, journal_rows: int, planned: int) -> Path:
+    """What `verify_writes4.py --lane p4l` prints for a clean step (its own lines, WB-C3)."""
+    path = tmp_path / f"accept-l-{journal_rows}.log"
+    path.write_text(
+        f"lane p4l | stamps phase4l:p4l-% | planned rows {planned} | lane journal rows "
+        f"{journal_rows} | carried {journal_rows} | not yet written {planned - journal_rows}\n"
+        "RESULT: 0 deviation(s)\nACCEPT_EXIT=0\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_l_is_written_in_steps_of_its_own_plan_and_accepted_on_its_own_lane(
+    tmp_path, capsys
+) -> None:
+    """The L plan's batches are written like every group's: one step of at most `--step` sites,
+    then the acceptance - `verify_writes4.py --lane p4l`, which re-runs no verifier and reads no
+    run, so the printed command names none - and only then the next step."""
+    ids = _legacy_ids(16)
+    plan = _legacy_plan(tmp_path, *[FX.plan_site(site_id) for site_id in ids])
+    db = _db(*ids)
+    assert G.main(_legacy_args(tmp_path, plan, "--apply", "--step", "15"), runner=db) == 0
+    out = capsys.readouterr().out
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    done = out.split("STEP COMPLETE: ", 1)[1]
+    assert done.startswith("15 site(s) written in 1 batch(es)")
+    assert f"{G.VERIFY_TOOL} --lane p4l --plan {lane_plan} (0 deviations" in done
+    assert "--run" not in done
+    step = json.loads((tmp_path / "apply" / G.STEP_FILE).read_text(encoding="utf-8"))
+    assert (step["lane"], step["stamps"]) == ("p4l", ["phase4l:p4l-1001:chunk-0001"])
+    assert db.sites[ids[0]].raw_data[M.PROVENANCE_KEY]["lane"] == "L"
+    assert M.PROVENANCE_KEY not in db.sites[ids[15]].raw_data
+    assert G.main(_legacy_args(tmp_path, plan, "--apply", "--step", "15"), runner=db) == 1
+    assert "has no acceptance" in capsys.readouterr().out
+    accept = _legacy_acceptance(tmp_path, journal_rows=15, planned=16)
+    back = ["--group", "L", "--apply-root", str(tmp_path / "apply"), "--accept", str(accept)]
+    assert G.main(back, runner=db) == 0
+    assert "ACCEPTED step 1" in capsys.readouterr().out
+    assert G.main(_legacy_args(tmp_path, plan, "--apply", "--step", "15"), runner=db) == 0
+    assert (tmp_path / "apply" / "p4l-1002" / "APPLIED.json").exists()
+    assert db.sites[ids[15]].raw_data[M.PROVENANCE_KEY]["lane"] == "L"
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--group", "L", "--run", "pilot"], "lane L plans the curated population"),
+        (["--group", "L"], "--legacy-plan: lane L plans from"),
+        (["--group", "P4", "--run", "pilot", "--legacy-plan", "x"], "only lane L plans from"),
+        (["--group", "P5"], "--run: P4 and P5 plan a phase-4 run"),
+    ],
+)
+def test_lane_l_plans_from_its_own_plan_and_p4_and_p5_from_a_run(
+    tmp_path, capsys, args, message
+) -> None:
+    """One L population: a per-run L plan beside the curated one would put a site into two write
+    batches of one lane. So L never takes a run, and P4 and P5 never take L's plan."""
+    assert G.main([*args, "--apply-root", str(tmp_path / "apply")], runner=_db()) == 1
+    assert message in capsys.readouterr().err
+    assert not (tmp_path / "apply").exists()
+
+
+def test_l_refuses_an_apply_root_holding_write_batches_of_another_l_plan(tmp_path, capsys) -> None:
+    """The per-run L plans of before 2026-09-24 rendered `p4l-0001` .. for pilot 4's batches (dry,
+    never written). The acceptance's lane plan is every `PLAN.jsonl` of the apply root, so such a
+    batch would be judged as this plan's: the gate names it and plans nothing."""
+    (site,) = _legacy_ids(1)
+    plan = _legacy_plan(tmp_path, FX.plan_site(site))
+    (tmp_path / "apply" / "p4l-0001").mkdir(parents=True)
+    assert G.main(_legacy_args(tmp_path, plan), runner=_db(site)) == 1
+    err = capsys.readouterr().err
+    assert "['p4l-0001']" in err and "another L plan" in err
+    assert not (tmp_path / "apply" / "p4l-1001").exists()
+
+
+def _rewritten(plan: Path, records: list[dict]) -> Path:
+    plan.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+    return plan
+
+
+def test_the_l_plan_is_read_strictly(tmp_path: Path) -> None:
+    """A P4 plan (no `pass`) is not an L plan, and no site or batch id is listed twice."""
+    first, second = _legacy_ids(2)
+    plan = _legacy_plan(tmp_path, FX.plan_site(first))
+    (record,) = [json.loads(line) for line in plan.read_text(encoding="utf-8").splitlines()]
+    assert [b.batch_id for b in W4.load_legacy_plan(plan)] == ["p4-1001"]
+    other = {**record, "sites": [FX.plan_site(second).to_dict()]}
+    cases = [
+        ([{k: v for k, v in record.items() if k != "pass"}], "not a lane-L plan batch"),
+        ([record, {**record, "batch_id": "p4-1002", "ordinal": 1002}], "listed twice"),
+        ([record, other], "batch p4-1001 twice"),
+        ([{**record, "batch_id": "p4l-1001"}], "is not a plan batch id"),
+    ]
+    for records, message in cases:
+        with pytest.raises(W4.PlanInputError, match=message):
+            W4.load_legacy_plan(_rewritten(plan, records))
 
 
 def test_a_re_plan_without_rows_drops_the_statements_an_earlier_dry_run_rendered(

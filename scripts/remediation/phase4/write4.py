@@ -678,6 +678,42 @@ def load_batch(batch_dir: Path) -> BatchInputs:
     )
 
 
+def load_legacy_plan(path: Path) -> list[BatchInputs]:
+    """Lane L's own plan (`plan4.py legacy`, owner decision 2026-09-24): every curated site of one
+    read-only production read, one batch per line, read strictly.
+
+    Every batch carries `legacy4.PLAN_MARK` (a P4 plan's batches carry none, so one is never read as
+    the other) and a plan batch id; no batch id and no site is listed twice. An L batch has no
+    directory and no stage outcome - `root` is the plan file, and it carries no lanes, assemblies or
+    holds: lane L decides on the site's own values alone (`legacy4`).
+    """
+    batches: list[BatchInputs] = []
+    batch_ids: set[str] = set()
+    seen: set[str] = set()
+    for number, record in enumerate(read_jsonl(path), start=1):
+        batch_id = record["batch_id"]
+        if record.get("pass") != legacy4.PLAN_MARK:
+            raise PlanInputError(
+                f"{path}:{number}: batch {batch_id} is not a lane-L plan batch (pass "
+                f"{record.get('pass')!r}; plan4.py legacy writes {legacy4.PLAN_MARK!r})"
+            )
+        group_batch_id(batch_id, Group.L)
+        if batch_id in batch_ids:
+            raise PlanInputError(f"{path}:{number}: batch {batch_id} twice")
+        batch_ids.add(batch_id)
+        sites = tuple(M.PlanSite.from_dict(site) for site in record["sites"])
+        for site in sites:
+            if site.site_id in seen:
+                raise PlanInputError(f"{path}:{number}: {site.site_id} is listed twice")
+            seen.add(site.site_id)
+        batches.append(
+            BatchInputs(
+                root=path, batch_id=batch_id, sites=sites, lanes={}, assemblies={}, holds={}
+            )
+        )
+    return batches
+
+
 def source_files(
     store: F.EvidenceStore, site_id: str, source_ids: Iterable[str]
 ) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:

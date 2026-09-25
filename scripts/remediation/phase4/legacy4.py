@@ -40,6 +40,15 @@ from phase4 import model4 as M  # noqa: E402
 #: March enrichment chain rewrote the descriptions.
 SNAPSHOT = "d4526691"
 
+#: Lane L's own plan (`plan4.py legacy`, owner decision 2026-09-24): every curated site of one
+#: read-only production read, not a Phase-4 run's batches. Each of its batches carries this in its
+#: `pass` field - a P4 plan's batches carry none, so one is never read as the other - and they are
+#: numbered from `FIRST_BATCH`: past every P4 plan batch (the unscoped plan ends at p4-0334, the
+#: scoped mass run at p4-0115), so no L write batch (`p4l-NNNN`) or journal stamp names a P4 plan
+#: batch or a per-run L plan rendered before the decision.
+PLAN_MARK = "phase4-legacy"
+FIRST_BATCH = 1001
+
 
 class NoClaim(StrEnum):
     """Why a held site gets no legacy provenance. Each is listed for HUMAN_ONLY, never written."""

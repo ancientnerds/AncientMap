@@ -11,6 +11,7 @@ batch's statements, and runs them.
     write_gate4.py --group P4 --run pilot --accept accept-step-1.log         # after verify_writes4
     write_gate4.py --group P5 --run mass --close-reverted                   # after revert4 of it
     write_gate4.py --group P5 --run mass --apply --round 2                  # write it again
+    write_gate4.py --group L --legacy-plan LEGACY4.jsonl --apply --step 100  # lane L's own plan
 
 **Dry run by default**: nothing is sent to production except the read-only questions a group needs
 (L and P5: which sites carry a live Phase-4 provenance; `--round 2` and up: whether the round
@@ -70,6 +71,17 @@ to switch it off: it is the owner's standing decision, and a new scope is a new 
 never an option of this tool. **Lane L is not scoped** (decision 2026-09-24, "Alle kennzeichnen"):
 it writes no text, only the provenance that shows the existing AI footnote, so it marks every
 March-AI text Phase 4 did not write, and the gate neither reads nor asks the scope for it.
+
+**Lane L plans from its own plan, never from a run** (`--legacy-plan`, written by `plan4.py legacy`
+from a fresh read-only `plan4.py read`): every curated site, in batches of 15 numbered from p4-1001,
+walked in steps like every group. Production is asked, read-only, which of them carry a live
+phase-4 provenance; those are refused (`written-by-p4`). P4 and P5 take `--run` and never the L
+plan; L never takes `--run`. The lane's apply root holds this plan's write batches or none: a
+batch of another L plan there (the per-run L plans rendered before 2026-09-24) would enter the lane
+plan the acceptance reads, so the gate names it and plans nothing. The L plan is read once the held
+set is final - after the last P4 step is accepted (design, production_write, ORDER): an L row on a
+site P4 writes later moves that site's `raw_data`, and P4's preflight then refuses the whole P4
+batch.
 
 Every run prints its own `WRITE_EXIT=` line; that line is what is read.
 """
@@ -231,6 +243,60 @@ def _defect_scope() -> S.DefectScope:
         return S.load_scope()
     except S.ScopeError as exc:
         raise SystemExit(str(exc)) from None
+
+
+def plan_source_problem(group: W4.Group, args: argparse.Namespace) -> str | None:
+    """Why this invocation names the wrong source for its group, or `None`. One L population (owner
+    decision 2026-09-24): lane L plans from its own plan and never from a run, whose batches would
+    put a site into a second write batch of the lane; P4 and P5 plan a run and never the L plan."""
+    if group is W4.Group.L:
+        if args.run is not None:
+            return (
+                "--run: lane L plans the curated population from its own plan (--legacy-plan, "
+                "plan4.py legacy), never a run's batches (owner decision 2026-09-24)"
+            )
+        if args.legacy_plan is None and not (args.accept or args.close_reverted):
+            return "--legacy-plan: lane L plans from the plan plan4.py legacy wrote; name it"
+        return None
+    if args.legacy_plan is not None:
+        return "--legacy-plan: only lane L plans from it; P4 and P5 plan a phase-4 run (--run)"
+    if args.run is None:
+        return "--run: P4 and P5 plan a phase-4 run's batches; name the run"
+    return None
+
+
+def legacy_batches(
+    path: pathlib.Path, wanted: Sequence[str], *, apply_root: pathlib.Path
+) -> list[W4.BatchInputs]:
+    """Lane L's plan batches (`write4.load_legacy_plan`) in plan order, or exactly the named ones.
+
+    The apply root holds this plan's write batches or none: the acceptance's lane plan is every
+    `PLAN.jsonl` in it (`write_lane_plan`), so a batch of another L plan - the per-run L plans
+    rendered before 2026-09-24 - would be judged as this one's. Such a batch is named and nothing
+    is planned; move it aside (it was never written: `phase4l:%` journals nothing of it)."""
+    if not path.is_file():
+        raise SystemExit(f"{path}: no such L plan (plan4.py legacy writes it)")
+    whole = W4.load_legacy_plan(path)
+    ours = {W4.group_batch_id(batch.batch_id, W4.Group.L) for batch in whole}
+    prefix = W4.GROUP_PREFIX[W4.Group.L]
+    foreign = sorted(
+        found.name
+        for found in apply_root.glob(f"{prefix}-*")
+        if found.is_dir() and found.name not in ours
+    )
+    if foreign:
+        raise SystemExit(
+            f"{apply_root}: holds write batches of another L plan, {foreign[:10]} "
+            f"({len(foreign)}): one lane, one population. Move them aside before this plan is "
+            "planned here."
+        )
+    if not wanted:
+        return whole
+    by_name = {batch.batch_id: batch for batch in whole}
+    missing = [name for name in wanted if name not in by_name]
+    if missing:
+        raise SystemExit(f"{path}: no batch {missing}")
+    return [by_name[name] for name in wanted]
 
 
 def _verifier() -> W4.Verifier:
@@ -598,7 +664,7 @@ def run_batches(
     host: str,
     apply_root: pathlib.Path,
     lane: str,
-    run_dir: pathlib.Path,
+    run_dir: pathlib.Path | None,
 ) -> int:
     """Rehearse every open batch, or write open batches while the next one still fits into `step`
     sites. 0 = done (or the step is complete), 1 = stopped; a stop leaves `STOPPED.json` and
@@ -660,6 +726,14 @@ def run_batches(
     if rehearse:
         print("every open batch rehearsed")
         return 0
+    if written and run_dir is None:
+        print(
+            f"STEP COMPLETE: {written_sites} site(s) written in {len(written)} batch(es). Accept "
+            f"it before the next step: {VERIFY_TOOL} --lane {lane} --plan "
+            f"{apply_root / LANE_PLAN_FILE} (0 deviations; lane L re-runs no verifier and reads "
+            "no run), then --accept <its output>."
+        )
+        return 0
     print(
         f"STEP COMPLETE: {written_sites} site(s) written in {len(written)} batch(es). Accept it "
         f"before the next step: {VERIFY_TOOL} --lane {lane} --plan {apply_root / LANE_PLAN_FILE} "
@@ -673,7 +747,10 @@ def run_batches(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="write-gate4")
     parser.add_argument("--group", required=True, choices=[group.value for group in W4.Group])
-    parser.add_argument("--run", required=True, help="the phase-4 run directory's name")
+    parser.add_argument("--run", default=None, help="P4, P5: the phase-4 run directory's name")
+    parser.add_argument(
+        "--legacy-plan", default=None, help="L: lane L's own plan, LEGACY4.jsonl (plan4.py legacy)"
+    )
     parser.add_argument("--run-root", default=None, help="override phase4_runner/runs")
     parser.add_argument("--batch", action="append", default=[], help="only these plan batches")
     parser.add_argument(
@@ -713,17 +790,30 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     args = build_parser().parse_args(argv)
     group = W4.Group(args.group)
     lane = lanes.lane(W4.GROUP_PREFIX[group])
-    run_dir = pathlib.Path(args.run_root or lane.run_dir) / args.run
     apply_root = pathlib.Path(args.apply_root) if args.apply_root else lane.apply_root
+    problem = plan_source_problem(group, args)
+    if problem is not None:
+        raise SystemExit(problem)
     if args.step < 1:
         raise SystemExit("--step: at least one site per step")
     if args.accept:
         return accept_step(apply_root, pathlib.Path(args.accept))
     if args.close_reverted:
         return close_reverted_step(apply_root, runner=runner, host=args.host)
-    batches = [W4.load_batch(path) for path in batch_dirs(run_dir, args.batch)]
+    run_dir: pathlib.Path | None
+    if group is W4.Group.L:
+        plan_path = pathlib.Path(args.legacy_plan)
+        batches = legacy_batches(plan_path, args.batch, apply_root=apply_root)
+        run_dir = None
+        source = (
+            f"legacy plan {plan_path} (sha256 {hashlib.sha256(plan_path.read_bytes()).hexdigest()})"
+        )
+    else:
+        run_dir = pathlib.Path(args.run_root or lane.run_dir) / args.run
+        batches = [W4.load_batch(path) for path in batch_dirs(run_dir, args.batch)]
+        source = f"run {run_dir}"
     site_ids = [site.site_id for batch in batches for site in batch.sites]
-    print(f"group {group.value} | run {run_dir} | apply root {apply_root} | {len(batches)} batches")
+    print(f"group {group.value} | {source} | apply root {apply_root} | {len(batches)} batches")
     options: dict[str, Any]
     if group is W4.Group.L:
         print(LEGACY_UNSCOPED)

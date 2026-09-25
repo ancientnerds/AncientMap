@@ -25,6 +25,11 @@ rebuilt from it offline, byte for byte:
             scope, numbered after the pilot's batches (`write_scoped_plan`).
 * `scope` - offline: the owner's defect scope (`phase4/scope4.py`) from the rows and Phase 3's
             refusals, written to `SCOPE4.json`; its sha256 is pinned in `scope4.SCOPE_SHA256`.
+* `legacy` - offline: lane L's own plan (owner decision 2026-09-24, "Alle kennzeichnen") from a
+            fresh `read` (`--out LEGACY4_ROWS.jsonl`): every curated site in site-id order, no flag
+            derived, in batches of 15 marked `pass: phase4-legacy` and numbered from p4-1001
+            (`legacy4.PLAN_MARK`, `legacy4.FIRST_BATCH`), written to `LEGACY4.jsonl`. The write
+            gate plans lane L from it (`write_gate4.py --group L --legacy-plan`).
 
 Derived here, from data and not from the B block's temp files (`SiteFlag`):
 
@@ -51,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import dataclasses
 import hashlib
 import json
 import sys
@@ -69,6 +75,7 @@ from phase3 import ledger as L  # noqa: E402
 from phase3 import run as R  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
 
+from phase4 import legacy4 as L4  # noqa: E402 - lane L's own plan: its pass and numbering
 from phase4 import model4 as M  # noqa: E402
 from phase4 import scope4 as S  # noqa: E402
 from phase4 import sources_stage as S1  # noqa: E402
@@ -88,6 +95,10 @@ DEFAULT_T03 = REPO / "output" / "remediation" / "run_t03" / "findings.jsonl"
 DEFAULT_GOLD = REPO / "output" / "remediation" / "gold_standard" / "sites.json"
 #: The design's pilot set, written by `phase4/pilot4.py` (one JSON object per site, in order).
 DEFAULT_PILOT = RUNNER / "PILOT.jsonl"
+#: Lane L's own read and plan (`read --out LEGACY4_ROWS.jsonl`, then `legacy`): a fresh read,
+#: never S0's rows, whose descriptions and raw_data are the census snapshot's.
+DEFAULT_LEGACY_ROWS = RUNNER / "LEGACY4_ROWS.jsonl"
+DEFAULT_LEGACY_PLAN = RUNNER / "LEGACY4.jsonl"
 
 #: The pre-March snapshot lane L compares against (plan section 15.3; `db_snapshots`, 5,005 rows).
 SNAPSHOT_ID = "d4526691-28eb-4623-b9eb-daeabafb167e"
@@ -328,6 +339,12 @@ def _site(
         flags.add(M.SiteFlag.T03)
     if t03.get("description") == "severe":
         flags.add(M.SiteFlag.T03_SEVERE)
+    return plan_site(row, flags=frozenset(flags))
+
+
+def plan_site(row: Mapping[str, Any], *, flags: frozenset[M.SiteFlag]) -> M.PlanSite:
+    """One row of the read (`PLAN_SQL`) as a `PlanSite` with these flags: its old values as the
+    read found them, and its other stored names as aliases."""
     aliases = sorted({name for name in row["names"] if name != row["name"]})
     return M.PlanSite(
         site_id=row["id"],
@@ -350,7 +367,7 @@ def _site(
         enwiki_title=row["enwiki_title"],
         in_snapshot=row["in_snapshot"],
         snapshot_description=row["snapshot_description"],
-        flags=frozenset(flags),
+        flags=flags,
     )
 
 
@@ -406,6 +423,25 @@ def pilot_site_ids(path: Path) -> list[str]:
             raise R.InputError(f"{path}:{number}: a pilot line without a site id: {line!r}")
         ids.append(site_id)
     return ids
+
+
+def legacy_sites(rows: Sequence[Mapping[str, Any]]) -> list[M.PlanSite]:
+    """Lane L's population (owner decision 2026-09-24): every curated site of one production read
+    (`PLAN_SQL`), as a `PlanSite` in site-id order. No flag is derived: flags order and steer Phase
+    4's model stages, and lane L asks none of them."""
+    for row in rows:
+        _check_row(row)
+    ids = [row["id"] for row in rows]
+    if len(set(ids)) != len(ids):
+        raise R.InputError("a site id occurs twice in the rows")
+    return [plan_site(row, flags=frozenset()) for row in sorted(rows, key=lambda row: row["id"])]
+
+
+def write_legacy_plan(path: Path, sites: Sequence[M.PlanSite]) -> None:
+    """`LEGACY4.jsonl`: lane L's own plan - the sites in batches of 15, each marked with
+    `legacy4.PLAN_MARK` and numbered from `legacy4.FIRST_BATCH` (p4-1001 ...)."""
+    batches = batches_after([site.to_dict() for site in sites], L4.FIRST_BATCH - 1)
+    R.write_batches(path, [dataclasses.replace(batch, pass_name=L4.PLAN_MARK) for batch in batches])
 
 
 # ----------------------------------------------------------------------------- the item names
@@ -611,6 +647,30 @@ def cmd_scope(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_legacy(args: argparse.Namespace) -> int:
+    """`LEGACY4.jsonl`, lane L's own plan, from a fresh read (`read --out LEGACY4_ROWS.jsonl`)."""
+    rows_path, out = Path(args.rows), Path(args.out)
+    sites = legacy_sites(R.read_jsonl(rows_path))
+    write_legacy_plan(out, sites)
+    batches = R.read_jsonl(out)
+    lanes_at_read = collections.Counter(
+        str((site.raw_data or {}).get(M.PROVENANCE_KEY, {}).get("lane", "none")) for site in sites
+    )
+    summary = {
+        "batches": len(batches),
+        "first_batch": batches[0]["batch_id"] if batches else None,
+        "last_batch": batches[-1]["batch_id"] if batches else None,
+        "out": str(out),
+        "provenance_at_read": dict(sorted(lanes_at_read.items())),
+        "rows": str(rows_path),
+        "rows_sha256": hashlib.sha256(rows_path.read_bytes()).hexdigest(),
+        "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
+        "sites": len(sites),
+    }
+    print(json.dumps(summary, indent=1, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="plan4", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -645,6 +705,10 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--refused", default=str(DEFAULT_REFUSED))
     scope.add_argument("--out", default=str(S.SCOPE_FILE))
     scope.set_defaults(handler=cmd_scope)
+    legacy = sub.add_parser("legacy", help="lane L's own plan over every curated site, offline")
+    legacy.add_argument("--rows", default=str(DEFAULT_LEGACY_ROWS))
+    legacy.add_argument("--out", default=str(DEFAULT_LEGACY_PLAN))
+    legacy.set_defaults(handler=cmd_legacy)
     return parser
 
 
