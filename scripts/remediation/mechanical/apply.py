@@ -1052,6 +1052,19 @@ SELECT pg_get_functiondef(p.oid) LIKE '%$1::%s WHERE%' AS casts_value_to_column_
 """
 
 
+def _before_the_one_commit(sql: str, what: str) -> str:
+    """The statement up to its one `COMMIT` line. None is refused - the rehearsal would be the
+    statement itself, and whatever it does would be kept - and so are two: a rehearsal swaps one
+    COMMIT, and a second transaction behind it would never be rehearsed (audit 2026-09-25 m2)."""
+    commits = sql.count("\nCOMMIT;\n")
+    if commits != 1:
+        raise PlanError(
+            f"{what} has {'no' if commits == 0 else commits} COMMIT line(s), not one - refusing "
+            "to rehearse it"
+        )
+    return sql.partition("\nCOMMIT;\n")[0]
+
+
 def rehearse(
     sql: str,
     *,
@@ -1064,9 +1077,7 @@ def rehearse(
     The point is to run the identical text - the same guards, the same calls - against
     production without keeping any of it, so a broken guard is found before it is committing.
     """
-    head, sep, _ = sql.partition("\nCOMMIT;\n")
-    if not sep:
-        raise PlanError("the emitted statement has no COMMIT - refusing to rehearse it")
+    head = _before_the_one_commit(sql, "the emitted statement")
     stamp = lane.run_stamp if run_stamp is None else run_stamp
     return head + "\nROLLBACK;\n" + rehearsal_reads(lane, run_stamp=stamp, source=source)
 
@@ -1316,9 +1327,6 @@ def cmd_rehearse(
         out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)
     )
     script = rehearse(sql, lane=lane)
-    head = sql.partition("\nCOMMIT;\n")[0]
-    if not script.startswith(head):
-        raise PlanError("the rehearsal is not the byte-identical statement up to COMMIT")
     path = out / "REHEARSAL.sql"
     path.write_text(script, encoding="utf-8", newline="\n")
     log.info("wrote %s (COMMIT -> ROLLBACK)", path)
@@ -1342,9 +1350,7 @@ def cmd_rehearse_rollback(
     if not path.exists():
         raise PlanError(f"{path} does not exist - there is no reversal to rehearse")
     sql = path.read_text(encoding="utf-8")
-    head, sep, _ = sql.partition("\nCOMMIT;\n")
-    if not sep:
-        raise PlanError("ROLLBACK.sql has no COMMIT - refusing to rehearse it")
+    head = _before_the_one_commit(sql, "ROLLBACK.sql")
     verify_pinned(path, plan_path=plan_path, expected=rollback_statement(records, lane))
     script = head + "\nROLLBACK;\n" + rollback_rehearsal_reads(records, lane)
     target = out / "REHEARSAL_ROLLBACK.sql"
@@ -1369,6 +1375,11 @@ def cmd_apply(
     """
     sql = verify_pinned(
         out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)
+    )
+    # The undo on disk is re-verified too: a write goes out only beside this plan's own, unedited
+    # reversal (audit 2026-09-25 m1 - the emit checked it, the apply did not).
+    verify_pinned(
+        out / "ROLLBACK.sql", plan_path=plan_path, expected=rollback_statement(records, lane)
     )
     already = journal_count(lane.run_stamp)
     if already:

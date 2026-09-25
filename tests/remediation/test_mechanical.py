@@ -699,6 +699,28 @@ class TestRenderTransaction:
         with pytest.raises(P.PlanError, match="no COMMIT"):
             A.rehearse("BEGIN;\nSELECT 1;\n")
 
+    def test_a_statement_with_two_commits_cannot_be_rehearsed(self) -> None:
+        """Audit 2026-09-25 m2: the rehearsal swapped the first COMMIT and dropped the rest, and
+        the check behind it (`script.startswith(head)`) held by construction. A second COMMIT is
+        a second transaction the rehearsal would not run: refused."""
+        with pytest.raises(P.PlanError, match="2 COMMIT"):
+            A.rehearse("BEGIN;\nSELECT 1;\nCOMMIT;\nBEGIN;\nSELECT 2;\nCOMMIT;\n")
+
+    def test_the_apply_refuses_an_edited_rollback_before_anything_is_sent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Audit 2026-09-25 m1: `--apply` re-verified APPLY.sql but not its undo: a ROLLBACK.sql
+        edited after the emit sat beside a write that went out."""
+        records, plan_path = delivered(tmp_path)
+        A.emit(records, tmp_path, plan_path=plan_path)
+        rollback = tmp_path / "ROLLBACK.sql"
+        rollback.write_text(
+            rollback.read_text(encoding="utf-8") + "-- edited\n", encoding="utf-8", newline="\n"
+        )
+        monkeypatch.setattr(A, "run_psql", lambda *a, **k: pytest.fail("sent to production"))
+        with pytest.raises(P.PlanError, match="ROLLBACK.sql is pinned to this plan but"):
+            A.cmd_apply(records, tmp_path, plan_path=plan_path)
+
     def test_the_rollback_swaps_the_values_and_its_run_stamp(self) -> None:
         rollback = [replace(record(), old_value="Georgia", new_value="Georgia (country)")]
         sql = A.render_transaction(
@@ -757,6 +779,11 @@ class TestReadBackStatements:
         be the file itself, and whatever it does would be kept. Raised before any psql call."""
         (tmp_path / "ROLLBACK.sql").write_text("BEGIN;\nSELECT 1;\n", encoding="utf-8")
         with pytest.raises(P.PlanError, match="no COMMIT"):
+            A.cmd_rehearse_rollback([record()], tmp_path, plan_path=tmp_path / "PLAN.jsonl")
+        (tmp_path / "ROLLBACK.sql").write_text(
+            "BEGIN;\nSELECT 1;\nCOMMIT;\nSELECT 2;\nCOMMIT;\n", encoding="utf-8"
+        )
+        with pytest.raises(P.PlanError, match="2 COMMIT"):
             A.cmd_rehearse_rollback([record()], tmp_path, plan_path=tmp_path / "PLAN.jsonl")
 
     def test_the_rollback_rehearsal_reads_name_the_planned_rows(self) -> None:

@@ -259,13 +259,14 @@ CASES: list[Case] = [
     guard(
         "statement must commit",
         APPLY,
-        '    if not sep:\n        raise PlanError("the emitted statement has no COMMIT',
+        "    if commits != 1:\n        raise PlanError(",
         "test_a_statement_without_a_commit_cannot_be_rehearsed",
     ),
-    guard(
+    Case(
         "rollback rehearsal must commit",
         APPLY,
-        '    if not sep:\n        raise PlanError("ROLLBACK.sql has no COMMIT',
+        '    head = _before_the_one_commit(sql, "ROLLBACK.sql")',
+        '    head = sql.partition("\\nCOMMIT;\\n")[0]',
         "test_a_rollback_without_a_commit_cannot_be_rehearsed",
     ),
     Case(
@@ -983,8 +984,8 @@ CASES: list[Case] = [
             (
                 "the apply sends only the verified statement",
                 APPLY,
-                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    already',
-                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    already',
+                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    # The undo',
+                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    # The undo',
                 "test_a_hand_edited_apply_is_refused",
                 TESTFILE,
             ),
@@ -4751,6 +4752,20 @@ AUDIT_FIX_CASES: list[Case] = [
         '    rows = (lambda sql: [dict(zip(("value", "n"), r)) for r in read_rows(sql)])(\n'
         '        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "',
         "test_a_value_with_the_separator_or_a_newline_is_read_whole",
+    ),
+    Case(
+        "audit-fix: m1 the apply sends beside an unverified undo",
+        APPLY,
+        '    verify_pinned(\n        out / "ROLLBACK.sql", plan_path=plan_path, expected=rollback_statement(records, lane)\n    )\n    already',
+        "    already",
+        "test_the_apply_refuses_an_edited_rollback_before_anything_is_sent",
+    ),
+    Case(
+        "audit-fix: m2 a second COMMIT is rehearsed away",
+        APPLY,
+        "    if commits != 1:\n",
+        "    if commits == 0:  # mutant\n",
+        "test_a_statement_with_two_commits_cannot_be_rehearsed",
     ),
 ]
 CASES += AUDIT_FIX_CASES
