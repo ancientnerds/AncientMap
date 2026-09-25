@@ -1,0 +1,11 @@
+{
+ "note": "sha256 over LF bytes; written before any acceptance draw or question. A change is a new seal.",
+ "sealed_at": "2026-09-25",
+ "sha256": {
+  "output/remediation/acceptance/EXCLUDE_ASSESSMENT_PILOT.txt": "e5802a3b77728a1390f36f9dc48a3060796a43ad805581b7e591a4ea49d86e98",
+  "output/remediation/acceptance/EXCLUDE_OPUS_KEEP_SAMPLE.txt": "09068e2942d5a536252147b73a0dbdbb5ef04d616762575ad22e25db17fc0f72",
+  "output/remediation/acceptance/EXCLUSIONS.sha256.json": "dff9dd9a48a3199ebc6e7bb08bcafa31707f993f8f0a4a73c45bedbb0cf5dfb3",
+  "output/remediation/acceptance/PROTOCOL.md": "f40fac87230a26e7b1a4818e9d50d16dedfcb6936fc795b532e2cb35789f8bff",
+  "scripts/remediation/acceptance/draw.py": "0a12beb461eb6aca6c921a4677b08472b4c8ff5068afd06af88a1baaf452515e"
+ }
+}

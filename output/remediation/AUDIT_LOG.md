@@ -9778,3 +9778,220 @@ data is seen: **no G run may write**. The gallery's vision stage ends here; the 
 applied (rejected kinds, liveness, attribution, Dedan's thumbnail) stand. A future route needs the
 eye labels (T-strict) and a model/prompt that passes the precision bars; it is recorded in
 HUMAN_ONLY.md as open.
+
+
+## 2026-09-25 - Phase 6 follow-through prepared: name keys, rebuild-static, the scope consumers, the shorts ledger, the sealed acceptance, and the runbook (nothing applied)
+
+Main checkout, branch `integrate/wave1`, commits `ff9a570` .. this one. **Production was read
+(SELECTs, one Qdrant `retrieve`, public GETs) and rehearsed (every statement ended in ROLLBACK, 0
+journal rows left); nothing was applied, nothing deployed, no VPS file changed (two probe files
+copied to `/tmp` and into the API container were deleted again), no model was called;
+`opus_handoff.py`, `phase3/fetch_stage.py`, `phase3/ledger.py` and `.claude/worktrees/` are
+untouched.** The Phase-4 mass run was writing throughout (journal high-water mark at 12:57 UTC:
+id 45002, 9,715 rows; `phase4:` rows 1,530 at 09:55 UTC).
+
+| commit | what |
+|---|---|
+| `ff9a570` | Lyra's semantic search drops retired sites, whatever the Qdrant index still holds (test-first) |
+| `d8e4912` | the static export refuses root and writes nothing it cannot write in full (test-first) |
+| `370babf` | Lyra's Wikidata aliases keyed by Postgres from the raw name (test-first) |
+| `34606f3` | the name-key lane (`scripts/remediation/name_key/plan.py`) and the chunk writer's two key columns; 18 sweep cases |
+| this one | the sealed acceptance protocol and its draw; 4 sweep cases; this record |
+
+### Item 1 - card_stats: the sequence stands
+
+`apply.py --lane card-stats-2026-09-23 --verify` (read-only, 13:00 UTC): journal rows for the stamp
+0, tiers 525 / 1,796 / 2,310 / 353 / 20, civilization drift 61, total_power not the sum 0 - the
+state the re-plan of this morning left. Dedan's thumbnail (step B) **is applied**
+(`thumb-repoint-2026-09-25-001`, journal row at 07:50:51 UTC: `/data/images/wiki/9a9a0dca/hero.webp
+-> NULL`), so C waits on nothing but the end of the Phase-4 writes (its premise holds
+`md5(description)` of every planned card). Neither scope-e4 (applied, `be5d6c5`) nor the Phase-5
+card texts touch a card_stats input or premise (`b14afdb`). The commands are section C of "The apply"
+in the 2026-09-25 re-plan record above, unchanged; the re-plan (C1) is mandatory, because the
+Phase-4 descriptions move `cultural_influence` and expire today's plan.
+
+### Item 2 - name_normalized: 0 curated keys differ; the lane exists and is rehearsed
+
+Read-only, 12:50 UTC, the key `left(lower(unaccent(name)), 500)` computed by Postgres:
+
+* `unified_sites`: **0** rows of `ancient_nerds` (5,004) or `lyra` (24) whose key differs; 0 NULL.
+  The journal holds **no** `name` or `name_normalized` row - no remediation lane ever wrote a name
+  (the UK lane wrote `country`). Lyra's boot reconciles the curated site keys on every start.
+* `unified_site_names`: **0** rows of `ancient_nerds` sites; **11** rows of six `lyra` sites (Yap 4,
+  Charnwood Forest 2, Doggerland 2, North Sentinel Island, Roopkund Lake, Cerutti Mastodon site),
+  all `wikidata_alias`, none colliding with another row of its site. Root cause: Lyra's
+  `_store_wikidata_aliases` keyed them with Python's `normalize_name` (NFKD drops the Japanese
+  dakuten, leaves Hangul jamo, cuts parentheses); the boot's alias UPDATE compares a key with itself
+  and never repairs them. **Fixed at the source** (`370babf`): the key is computed in the INSERT,
+  `ON CONFLICT ON CONSTRAINT uq_usn DO NOTHING RETURNING id` (rehearsed on production with ROLLBACK:
+  new alias 1 row, the site's own name 0, repeat 0).
+* **The lane** (`34606f3`): `name_key/plan.py chunk --out output/remediation/name_key/name-key-<date>`
+  reads both columns, plans K1 through `gallery_audit/chunk_writer.py` (which gained guard 2b - a
+  name row belongs to the planned site - and guard 2c - the planned key is the one Postgres derives
+  from the row's name at write time, write only; an image chunk renders byte for byte as before).
+  Run today: **exit 1, "nothing to plan", the 11 `lyra` rows listed** (the writer writes
+  `ancient_nerds` rows only, guard 1). Rehearsed on production against a divergence made inside the
+  transaction, then ROLLBACK (`C:/tmp/p6/name_key_probe.py`): the success path journalled 2 rows
+  (one alias row, one site row) through `apply_remediation_change`, guard 2c and guard 2b each
+  refused with psql exit 3, 0 journal rows and both stored keys unchanged afterwards.
+* Other writers that still key in Python (not changed here; none has produced a divergent curated
+  row): `site_identifier` promotion (`lyra` label/alias rows), `api/routes/radar.py` alias merge,
+  `api/routes/sites.py` batch upload (curated site keys are reconciled by Lyra's boot), and the
+  matching comparisons of `site_identifier._check_name_an_match` / `_check_spatial_an_match`.
+
+### Item 3 - rebuild-static, the static export, Qdrant, IndexNow
+
+**What is broken (plan 9.4), measured 2026-09-25 inside `ancient_nerds_api` (euid 1000, cwd `/app`):**
+`sources.json(.gz)`, `sites/`, `sites/details/*`, `links.json(.gz)` and `images/index.json(.gz)` are
+**root-owned, NOT-WRITABLE**, all from the export run with `docker exec -u root` on 2026-08-18;
+`hubs.snapshot.json` (deploy, 2026-09-05), `content/`, `snapshots/` and `library/` are writable (10
+old snapshot files are root-owned; pruning unlinks them through the writable directory).
+`pipeline_heartbeats` holds no `job:rebuild-static` row: the background job (`29ad01f`) has never
+run in production; it would fail at its first write. PROJECT_LESSONS' "Statik-Export braucht
+`-u root`" was the cause, not the cure. **Fixed** (`d8e4912`, test-first): the export refuses to run
+as root and, before any read or write, names every target it cannot write with the chown remedy;
+the lesson is corrected, `docs/static-exporter.md` says so.
+
+**Where the export runs:** on the VPS, in the API container, as its user. The export files are
+**gitignored** (`.gitignore` "PUBLIC DATA - generated on VPS, never push from dev", `81ac797`): the
+deploy's `git pull` does not deliver them and `git clean -fd` (no `-x`) leaves them - there is
+nothing to commit and no LFS step. The globe does not read them (`/api/sites/all`); the live readers
+are the frontend build (`hubs.snapshot.json`, baked into `index.html` at every deploy whose commit
+differs from `dist/.built-commit`), the audit page (`snapshots/`), the library page and the public
+URLs `/data/sites/...` (robots `Allow: /data/sites/`) - which still serve the 2026-08-18 state,
+retired sites included (checked: a retired id is in `/data/sites/index.json`, not in
+`/api/sites/all`).
+
+**Qdrant (plan 10.7):** the duplicate nightly sync is **fixed and holds in production** - on
+2026-09-25 03:00 UTC `ancient_nerds_api2` ran "Starting nightly auto-reindex", `ancient_nerds_api`
+logged "skipped - running on another instance". But **all 78 retired sites were still points** of
+`sites` at 12:59 UTC (read-only `retrieve`), and Lyra's `vector_search` / auto-retrieve returned
+them; fixed at query time (`ff9a570`), resynced by the next index run. **IndexNow:** Lyra's hourly
+step announces journal-changed and retired pages itself (2 h window; 06:29-10:29 UTC today:
+156/23/229/216/139 URLs accepted, HTTP 200).
+
+### Item 4 - the consumers of section 8.4, verified
+
+Live probes 2026-09-25 13:00 UTC with retired `Ali Masjid Fort` (E3), `Ancient Kourion`
+(duplicate), `Attock Fort` and pending `Bosnian Pyramid of Love`; `tests/api/test_scope_read_paths.py`
+parses every `unified_sites` read in `api/` and `pipeline/`.
+
+| consumer | state |
+|---|---|
+| globe / points, filter panel (`/api/sites/all`) | retired absent, pending present |
+| SSR detail page, legacy `/site.html?id=` | 410 / 410; pending 200 |
+| country hub (`/sites/pakistan`) | none of the retired Pakistani forts listed |
+| `sitemap-sites.xml` | 0 of 3 retired URLs |
+| site API `/api/sites/{id}`, public API `/api/v1/sites/{id}` | 410 |
+| search `/api/sites/search` | retired curated row absent |
+| static export | code filters (tests), **files stale since 2026-08-18: retired sites served under `/data/sites/`** - cured by the export (runbook step 3) |
+| Qdrant / Lyra semantic search | **leaked: 78 of 78 retired points present and returned** - fixed at query time (`ff9a570`, ships with Push #2), resync in step 5 |
+| shorts batch, single-site export, ledger | `not_retired` in the batch, a retired site refused, ledger status `withdrawn` (tests) |
+| card game draws / expedition | `card_site_in_scope()` (tests, read-path scanner) |
+| IndexNow | retirements announced as removed URLs (hourly step) |
+
+### Item 5 - the `site_shorts` ledger exists
+
+Migration `0021_site_shorts_ledger.sql` was applied on 2026-09-23 03:20 UTC (`applied_migrations`);
+the table holds **0 rows**. The render step writes it (`pipeline/video/shorts_ledger.py`), and the
+16 renders made before it (`video-assets/shorts/*/site.json` + mp4, workstation only) are entered by
+`scripts/backfill_site_shorts_ledger.py` (plan, then `--apply`), which needs `DATABASE_URL` from
+`video-assets/prod-db.env` - HUMAN_ONLY A6. No migration is needed now. The backfill belongs to the
+shorts project: nothing is published, and after the Phase-5 card texts those 16 renders narrate the
+old cards (the S13 gate refuses them).
+
+### Item 6 - the acceptance protocol, sealed before any draw
+
+`output/remediation/acceptance/PROTOCOL.md` fixes: the frame (shown `ancient_nerds` sites with a
+forward journal write on a judged column; 3,342 today, before the card texts), the exclusions (9
+fixed sources - the assessment's 60, the gold standard, the Phase-3 pilot, both Phase-4 pilots, the
+Opus keep sample, the VLM pilot, the gallery C1 sample, the sitelink pilot: 374 of today's frame -
+plus the Phase-4 audit's mid-run and final samples, required at the draw), seed **20260925**, 60
+sites by `phase4.audit4.draw_sample`, 10 canaries (seed 20260926: 5 far-away countries, 5 points
+moved 5 degrees), 11 judged fields with severities, stage 1 (one independent Opus judge per field,
+never shown remediation evidence; verbatim quote check) and stage 2 (a second independent judge on
+every WRONG, a third on UNDECIDED), deterministic checks D1-D6, and the thresholds: **VOID** unless
+every question is answered, at least 9 of 10 canaries end CONFIRMED and no write touches a drawn
+site after the draw; **PASS** only with 0 confirmed severe errors, at most 3 of 60 sites with any
+confirmed error, and 0 D1-D6 failures. `scripts/remediation/acceptance/draw.py` is the draw
+(tests: `tests/remediation/test_acceptance_draw.py`, 20; the frame read and the value read were
+run read-only today to prove the SQL - not a draw).
+
+| file | sha256 (LF bytes) |
+|---|---|
+| `output/remediation/acceptance/PROTOCOL.md` | `f40fac87230a26e7b1a4818e9d50d16dedfcb6936fc795b532e2cb35789f8bff` |
+| `scripts/remediation/acceptance/draw.py` | `0a12beb461eb6aca6c921a4677b08472b4c8ff5068afd06af88a1baaf452515e` |
+| `output/remediation/acceptance/EXCLUSIONS.sha256.json` | `dff9dd9a48a3199ebc6e7bb08bcafa31707f993f8f0a4a73c45bedbb0cf5dfb3` |
+| `output/remediation/acceptance/EXCLUDE_ASSESSMENT_PILOT.txt` | `e5802a3b77728a1390f36f9dc48a3060796a43ad805581b7e591a4ea49d86e98` |
+| `output/remediation/acceptance/EXCLUDE_OPUS_KEEP_SAMPLE.txt` | `09068e2942d5a536252147b73a0dbdbb5ef04d616762575ad22e25db17fc0f72` |
+
+`SEAL.json` holds the same five digests; `test_the_seal_holds` fails on any edit.
+
+### The runbook (the orchestrator runs it, after the last write)
+
+Repository root, main venv, `export PYTHONIOENCODING=utf-8`, `PY=./.venv/Scripts/python.exe`,
+`A=scripts/remediation/mechanical/apply.py`. "The last write" is the Phase-4 mass run's last chunk
+(its own acceptance: `verify_writes4.py`, 0 deviations). Step 4 is the Phase-5 sitting, whose push is
+Push #2.
+
+1. **card_stats** - section C of the 2026-09-25 re-plan record, C1-C7, unchanged (re-plan, gitleaks
+   over the plan commit, check, rehearse, apply, read back, rollback rehearsal, completion
+   read-back `"cells": 0`).
+2. **Name keys** - `$PY scripts/remediation/name_key/plan.py chunk --out output/remediation/name_key/name-key-<date>`
+   -> expected **exit 1, "nothing to plan"**, the 11 `lyra` rows listed. Only if an
+   `ancient_nerds` row is planned: `CW=scripts/remediation/gallery_audit/chunk_writer.py`,
+   `$PY $CW <out>/chunk-001 --check`, `--rehearse`, `--apply`, `--readback`, `--rehearse-rollback`,
+   then commit `<out>/`.
+3. **Static export (VPS, before Push #2, so the next frontend build bakes the new hub list)** -
+   * hand the root-owned files back (no sudo on the host):
+     `ssh ancientnerds "docker exec -u root ancient_nerds_api chown -R 1000:1000 /app/public/data/sites /app/public/data/sources.json /app/public/data/sources.json.gz /app/public/data/links.json /app/public/data/links.json.gz /app/public/data/images/index.json /app/public/data/images/index.json.gz /app/public/data/snapshots"`
+   * export as the container user (about 4 minutes; the deployed code already leaves retired
+     sites out): `ssh ancientnerds "docker exec ancient_nerds_api python -m pipeline.static_exporter --no-library"`
+     -> ends with "EXPORT SUMMARY" (after Push #2 the same command first runs the preflight, which
+     names any path still unwritable)
+   * check: `ssh ancientnerds "cd /var/www/ancientnerds && stat -c '%U %y %n' public/data/sources.json public/data/sites/index.json public/data/hubs.snapshot.json && grep -c 8c159d7f-d954-44fc-aab9-6b7841d68a35 public/data/sites/index.json"`
+     -> owner `deploy`, today's time, **0** (Ali Masjid Fort, retired). Nothing to commit.
+4. **Phase 5 and Push #2** - the P5 sitting of `docs/procedures/CARD_DESCRIPTIONS.md` (write through
+   the journal, regenerate `public/data/card_descriptions.json` byte for byte, commit), then the
+   push of `integrate/wave1` to `main` (the pre-push gates; CI). It deploys this record's code
+   (`api/` and `pipeline/`: api, api2, lyra and ssr rebuilt) and rebuilds the frontend with the new
+   `hubs.snapshot.json`. Checks: `ssh ancientnerds "curl -s localhost:8000/"` -> `commit` = HEAD;
+   0 `[STARTUP] Card description overwritten` lines on `ancient_nerds_api` and `ancient_nerds_api2`.
+5. **Qdrant resync** (after Push #2, outside 02:55-03:10 UTC - the CLI does not take the nightly's
+   advisory lock): `ssh ancientnerds "docker exec ancient_nerds_api python scripts/build_lyra_index.py --collection sites"`
+   -> logs "Deleted 78 retired sites from 'sites'" (or more, if more were retired) and "Sites to
+   index (new + changed): N". Waiting for the 03:00 UTC nightly does the same. Check: the read-only
+   `retrieve` of every retired id from `sites` returns **0** points.
+6. **IndexNow catch-up** (the hourly Lyra step already announced each journal write within 2 h;
+   this re-announces the whole write period once, which the protocol allows):
+   `$PY scripts/indexnow_submit.py --all --lastmod-since 2026-09-20 --dry-run`, then without
+   `--dry-run` -> "URLs accepted (HTTP 200)". Retired pages are not in the sitemap; the hourly step
+   announced them as removed.
+7. **Checks** - the independent acceptance, both lanes (run read-only today at 13:35 UTC: **0
+   deviations** each; add `--allow-stamp` for any later lane that rewrites a phase-3 cell):
+   `$PY output/remediation/tools/verify_writes.py --allow-stamp 2026-09-22_mechanical-uk-parts --allow-stamp 2026-09-22_mechanical-site-type-shape --allow-stamp 2026-09-23_mechanical-journal-reversal-1 --allow-stamp 2026-09-23_mechanical-journal-reversal-2 --allow-stamp 2026-09-25_mechanical-journal-reversal-3 --allow-stamp 2026-09-25_mechanical-wrong-both`
+   and `$PY output/remediation/tools/verify_writes.py --lane gap --allow-stamp 2026-09-25_mechanical-journal-reversal-3 --allow-stamp 2026-09-25_mechanical-wrong-both`;
+   `$PY $A --lane scope-e4 --verify`
+   -> outside the E3 window with no decision 0; a retired site answers 410 on `/sites/...`,
+   `/api/sites/{id}`, `/api/v1/sites/{id}` and is absent from `/api/sites/all`,
+   `sitemap-sites.xml` and `/data/sites/index.json`; the landing page's hub list carries the new
+   counts.
+8. **Acceptance** - `$PY scripts/remediation/acceptance/draw.py --out output/remediation/acceptance/draw-<date> --phase4-audit-samples <the Phase-4 audit's sample id files>`,
+   commit `FRAME.jsonl`, `EXCLUDED.json`, `SAMPLE.jsonl`, `DRAW.json`, then PROTOCOL.md sections 6-10.
+
+### Tests, sweeps, gates (main checkout, branch `integrate/wave1`, main venv)
+
+* New tests: `test_lyra_vector_search_scope.py` (5), `test_static_export_preflight.py` (8),
+  `test_wikidata_alias_key.py` (5), `test_name_key_lane.py` (19), `test_acceptance_draw.py` (20);
+  each fix's tests were red before its code (the planner and the draw are new modules).
+* `mechanical/mutation_sweep.py "name key:"`: **cases 18, fired 18**; `"acceptance:"`: **cases 4,
+  fired 4**; skipped, survived, invalid, unproven, errored 0; the swept files restored
+  byte-identical; `test_mechanical_sweep.py` green (every needle matches once).
+* Full gate suite (`-m "not integration and not live_llm"`, `--timeout 300`, `-p no:cacheprovider`):
+  **6,313 passed, 3 skipped, 57 deselected, 0 failed** (221 s; 6,256 before this work, +57 new);
+  the skips are the known three. `ruff check api/ pipeline/` clean, `ruff format --check` clean on
+  the 14 touched Python files (ruff 0.15.11), `lint-imports` 2 kept / 0 broken, `vulture api/
+  pipeline/ .vulture_whitelist.py --min-confidence 80` clean, `semgrep --config .semgrep` clean on
+  the three touched production modules, mypy reports nothing in `api/services/lyra_tools.py`, the
+  Lyra-image import check (`markdown`/`nh3` absent) imports `pipeline.lyra.orchestrator`. The
+  independent acceptance (`verify_writes.py`, both lanes, 13:35 UTC): **0 deviations** each.

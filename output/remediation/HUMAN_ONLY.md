@@ -190,6 +190,29 @@ bleibt, entscheidet ein Land, und das ist deine Frage, nicht die der Scope-Lane.
    Dedan kein lebendes Bild mehr hat. Die Bild-Lanes löschen nie Dateien (Design Eintrag 7). **Deine
    Frage:** sollen die sechs Dateien vom Server?
 
+9. **Elf Namensschlüssel auf sechs Lyra-Sites** (Phase 6 Punkt 2, 2026-09-25, nur gelesen): Auf
+   den 5.004 `ancient_nerds`-Sites weicht **kein** `name_normalized` vom Postgres-Schlüssel
+   `left(lower(unaccent(name)), 500)` ab. Abweichend sind 11 Alias-Zeilen von sechs Radar-Sites
+   (Quelle `lyra`: Yap 4, Charnwood Forest 2, Doggerland 2, North Sentinel Island, Roopkund Lake,
+   Cerutti Mastodon site) - von Lyras Wikidata-Alias-Schreiber mit Pythons `normalize_name`
+   gebildet (der Schreiber ist repariert, `370babf`). Eine exakte Suche nach diesen Namen findet die
+   Site nicht; die unscharfe Suche schon. Die Journal-Lanes schreiben nur `ancient_nerds`-Zeilen.
+   **Deine Frage:** dürfen sie diese 11 `lyra`-Zeilen schreiben (dann erweitert der Orchestrator die
+   Name-Key-Lane um die Quelle `lyra`), oder bleiben sie?
+10. **Die Abnahme ist versiegelt** (Phase 6 Punkt 6): `output/remediation/acceptance/PROTOCOL.md` -
+    60 frisch gezogene geschriebene Sites (Seed 20260925, ohne Pilot- und Zwischenstichproben), je
+    Feld ein unabhängiger Opus-Richter, auf jeden Fehlerbefund ein zweiter, 10 eingeschleuste
+    Kanarienvögel. **Bestanden** nur mit 0 bestätigten schweren Fehlern, höchstens 3 von 60 Sites
+    mit irgendeinem bestätigten Fehler und 0 Fehlern der sechs Maschinenprüfungen; ungültig, wenn
+    weniger als 9 der 10 Kanarienvögel gefunden werden. Gezogen wird erst nach dem letzten Schreiben.
+    **Wenn du eine Schwelle anders willst: jetzt, vor dem Ziehen** - danach ist sie fest.
+11. **Shorts-Ledger** (Phase 6 Punkt 5): Die Tabelle `site_shorts` existiert (Migration 0021, seit
+    23.09. angewendet) und ist leer. Die 16 Shorts, die vor ihr gerendert wurden, trägt
+    `scripts/backfill_site_shorts_ledger.py` nach - dafür braucht es die Zugangsdatei
+    `video-assets/prod-db.env` (A6). Nach den neuen Kartentexten (Phase 5) sprechen diese 16 den
+    alten Text; das Gate S13 lässt sie nicht durch. **Deine Frage** (Shorts-Projekt, nicht Phase 6):
+    neu rendern oder zurückziehen?
+
 ## D. Phasen 4 und 5: Beschreibungen und Kartentexte (Stand 2026-09-23, gebaut, nichts geschrieben)
 
 Entwurf: Eintrag [6] in `logs/design_texts_images_2026-09-22.json`. Die Texte werden von Code aus

@@ -4220,6 +4220,43 @@ PHASE6_CASES: list[Case] = [
 ]
 CASES += PHASE6_CASES
 
+#: The acceptance draw (`acceptance/draw.py`), sealed with PROTOCOL.md.
+DRAW = REPO / "scripts/remediation/acceptance/draw.py"
+DRAW_TESTS = "tests/remediation/test_acceptance_draw.py"
+ACCEPTANCE_CASES: list[Case] = [
+    guard(
+        "acceptance: a pool below 60 refuses",
+        DRAW,
+        "    if len(pool) < SAMPLE_SIZE:",
+        "test_a_pool_smaller_than_the_sample_refuses",
+        DRAW_TESTS,
+    ),
+    guard(
+        "acceptance: a draw is taken once",
+        DRAW,
+        "    if out.exists():",
+        "test_a_draw_is_taken_once",
+        DRAW_TESTS,
+    ),
+    Case(
+        "acceptance: the exclusions are applied",
+        DRAW,
+        "        excluded.update(removed)",
+        "        pass",
+        "test_the_draw_is_the_project_s_seeded_draw_over_the_pool",
+        DRAW_TESTS,
+    ),
+    Case(
+        "acceptance: a country donor is far away",
+        DRAW,
+        "        if distance >= COUNTRY_CANARY_MIN_KM:",
+        "        if True:",
+        "test_a_country_canary_is_another_country_far_away",
+        DRAW_TESTS,
+    ),
+]
+CASES += ACCEPTANCE_CASES
+
 
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):

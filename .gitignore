@@ -408,3 +408,11 @@ output/remediation/vlm_pilot/*.partial.jsonl
 # The third-party pages the quote check fetched (raw bytes, PDFs among them) stay local; PAGES.jsonl
 # records each one's status and the sha256 of its bytes.
 output/remediation/opus_audit/pages/
+# The Phase-6 acceptance (2026-09-25): its sealed protocol, the draw script's exclusion id lists
+# and - once taken, after the last write - the draw. CANARIES.jsonl stays local until the scoring:
+# it is the answer key of the canary questions, and DRAW.json pins its sha256 when it is written.
+!output/remediation/acceptance/
+output/remediation/acceptance/draw-*/CANARIES.jsonl
+# The name-key lane (Phase 6 item 2): its production read and chunks, versioned like the image
+# lanes' (the chunk's ROLLBACK.sql is the undo of a write).
+!output/remediation/name_key/
