@@ -11,6 +11,7 @@ import * as THREE from 'three'
 import { offlineFetch } from '../../../services/OfflineFetch'
 import { createFrontLineMaterial as createFrontMaterial } from '../../../shaders/globe'
 import type { FadeManager } from '../../../utils/FadeManager'
+import { latLngTo3DArray } from './segmentBuilder'
 
 // ============================================================================
 // Types
@@ -29,23 +30,6 @@ export interface PaleoshorelineContext {
   latLngTo3D: (lat: number, lng: number, r: number) => THREE.Vector3
   setIsLoadingPaleoshoreline: (loading: boolean) => void
   replaceCoastlines: boolean
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Convert lat/lng to 3D coordinates on a sphere
- */
-function latLngTo3DArray(lat: number, lng: number, r: number): [number, number, number] {
-  const phi = (90 - lat) * Math.PI / 180
-  const theta = (lng + 180) * Math.PI / 180
-  return [
-    -r * Math.sin(phi) * Math.cos(theta),
-    r * Math.cos(phi),
-    r * Math.sin(phi) * Math.sin(theta)
-  ]
 }
 
 // ============================================================================

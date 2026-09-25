@@ -8,6 +8,7 @@ import { useOffline } from '../contexts/OfflineContext'
 import { getCountryFlatFlagUrl, getCountryContinent, CONTINENT_ORDER, Continent } from '../utils/countryFlags'
 import { parseAnyCoordinate, formatCoordinate, applyCoordMask } from '../utils/coordinateParser'
 import { haversineDistance } from '../utils/geoMath'
+import { lookupIpLocation } from '../utils/ipLocation'
 import SiteResultItem from './SiteResultItem'
 
 const DEFAULT_AGE_RANGE: [number, number] = [-5000, 500]
@@ -52,6 +53,10 @@ interface FilterPanelProps {
   searchWithinProximity: boolean
   onSearchWithinProximityChange: (enabled: boolean) => void
   searchResults: SearchResult[]
+  /** The search cannot answer yet (site details loading, or the API search in flight). */
+  isSearching: boolean
+  /** Why the search cannot answer at all; shown in the results header. */
+  searchError: string | null
   filterMode: FilterMode
   ageRange: [number, number]
   onCategoryChange: (categories: string[]) => void
@@ -126,6 +131,8 @@ function FilterPanel({
   searchWithinProximity,
   onSearchWithinProximityChange,
   searchResults,
+  isSearching,
+  searchError,
   filterMode,
   ageRange,
   onCategoryChange,
@@ -325,40 +332,28 @@ function FilterPanel({
   // Proximity handlers
   const [locationError, setLocationError] = useState<string | null>(null)
 
-  // IP-based geolocation using ipwho.is with geojs.io fallback
+  // IP-based geolocation, the same lookup that aims the globe's intro (utils/ipLocation.ts)
+  const locationLookupRef = useRef<AbortController | null>(null)
+  useEffect(() => () => locationLookupRef.current?.abort(new Error('filter panel unmounted')), [])
   const getLocationByIP = async () => {
-    // Try ipwho.is first
+    locationLookupRef.current?.abort(new Error('location lookup superseded'))
+    const lookup = new AbortController()
+    locationLookupRef.current = lookup
+    let coords: [number, number] | null
     try {
-      const response = await fetch('https://ipwho.is/')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-          setCoordInput(formatCoordinate(data.longitude, data.latitude))
-          onProximityCenterChange([data.longitude, data.latitude])
-          setLocationError(null)
-          setIsGettingLocation(false)
-          return
-        }
-      }
-    } catch { /* fall through to fallback */ }
-
-    // Fallback: geojs.io
-    try {
-      const response = await fetch('https://get.geojs.io/v1/ip/geo.json')
-      if (!response.ok) throw new Error()
-      const data = await response.json()
-      const lat = parseFloat(data.latitude)
-      const lng = parseFloat(data.longitude)
-      if (!isNaN(lat) && !isNaN(lng)) {
-        setCoordInput(formatCoordinate(lng, lat))
-        onProximityCenterChange([lng, lat])
-        setLocationError(null)
-        setIsGettingLocation(false)
-        return
-      }
-    } catch { /* fall through to error */ }
-
-    setLocationError('Location lookup failed')
+      coords = await lookupIpLocation(lookup.signal)
+    } catch (reason) {
+      // lookupIpLocation rejects only when aborted: superseded or unmounted
+      if (lookup.signal.aborted) return
+      throw reason
+    }
+    if (coords) {
+      setCoordInput(formatCoordinate(coords[0], coords[1]))
+      onProximityCenterChange(coords)
+      setLocationError(null)
+    } else {
+      setLocationError('Location lookup failed')
+    }
     setIsGettingLocation(false)
   }
 
@@ -807,7 +802,7 @@ function FilterPanel({
       {activeTab === 'search' && searchQuery.trim() && (
         <div className={`glass-panel search-results-panel ${searchResultsMinimized ? 'minimized' : ''} ${searchResults.length <= 3 ? 'few-results' : 'many-results'}`}>
           <div className="search-results-header">
-            <span>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found</span>
+            <span>{searchError ?? (isSearching ? 'Searching...' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} found`)}</span>
             <button
               className="panel-minimize-btn"
               onClick={() => setSearchResultsMinimized(prev => !prev)}
@@ -857,7 +852,7 @@ function FilterPanel({
                     />
                   ))}
                 </div>
-              ) : (
+              ) : !isSearching && !searchError && (
                 <div className="search-results-empty">No sites found</div>
               )}
             </>

@@ -20,15 +20,6 @@ export function getMapboxToken(): string {
 }
 
 /**
- * Token rotation removed - use single token from environment
- * @deprecated No longer needed with single token approach
- */
-export function rotateMapboxToken(): boolean {
-  console.warn('[Mapbox] Token rotation deprecated - configure VITE_MAPBOX_ACCESS_TOKEN in .env')
-  return false
-}
-
-/**
  * Mapbox API configuration
  */
 export const MAPBOX = {

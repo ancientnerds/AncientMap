@@ -44,3 +44,5 @@ output/remediation/phase4_runner/*.md text eol=lf
 # inputs over their LF bytes, so a CRLF checkout must not make that check disagree.
 output/remediation/acceptance/* text eol=lf
 output/remediation/acceptance/draw-*/* text eol=lf
+# The globe layer tiers are content-addressed (file name = sha256 of the bytes): no EOL conversion.
+public/data/layers/globe/*.json -text

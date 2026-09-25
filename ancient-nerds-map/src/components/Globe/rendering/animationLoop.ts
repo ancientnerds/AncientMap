@@ -5,37 +5,17 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SiteData } from '../../../data/sites'
-import { MapboxGlobeService } from '../../../services/MapboxGlobeService'
+import type { MapboxGlobeService } from '../../../services/MapboxGlobeService'
 import { FadeManager } from '../../../utils/FadeManager'
 import {
-  fadeLabelIn,
-  fadeLabelOut,
   updateGlobeLabelScale,
   animateCuddleOffset,
   type GlobeLabelMesh,
 } from '../../../utils/LabelRenderer'
-import { GEO } from '../../../config/globeConstants'
+import { GEO, THREEJS_CAMERA_MAX } from '../../../config/globeConstants'
+import { applyGeoLabelFades, type GlobeLabel } from './geoLabelSystem'
 
 const EARTH_RADIUS_KM = GEO.EARTH_RADIUS_KM
-
-interface GeoLabel {
-  name: string
-  lat: number
-  lng: number
-  type: 'continent' | 'country' | 'capital' | 'ocean' | 'sea' | 'region' | 'mountain' | 'desert' | 'lake' | 'river' | 'metropol' | 'city' | 'plate' | 'glacier' | 'coralReef'
-  rank: number
-  hidden?: boolean
-  layerBased?: boolean
-  country?: string
-  national?: boolean
-  detailLevel?: number
-}
-
-interface GlobeLabel {
-  label: GeoLabel
-  mesh: GlobeLabelMesh
-  position: THREE.Vector3
-}
 
 /** All external state/refs the animation loop reads or writes. */
 export interface AnimationLoopContext {
@@ -92,6 +72,9 @@ export interface AnimationLoopContext {
   layersReadyCalledRef: { current: boolean }
   dotsAnimationCompleteRef: { current: boolean }
   logoAnimationStartedRef: { current: boolean }
+  /** Called once per warp, in the frame it completes (before that frame renders).
+   *  Runs inside the rAF callback: it may only schedule work, never do it, and must not throw. */
+  onWarpComplete: () => void
 
   // Logo
   logoSpriteRef: { current: THREE.Sprite | null }
@@ -259,9 +242,11 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
 
     // Warp-in effect - scale globe from small to full size
     // Also rotates from opposite side to create a "spin in" reveal
-    // Starts when ALL assets are loaded (layersReadyCalledRef) - this avoids delay from React prop propagation
-    // The loading overlay hides the globe during this, so warp can start immediately
-    if (ctx.warpProgressRef.current < 1 && ctx.layersReadyCalledRef.current) {
+    // Starts when the loading overlay starts to fade (splashDone: sites, the critical
+    // layers and a focus site's position are all in), and never before this globe's
+    // own layers are ready (a remount after the phone gate finds splashDone already true).
+    // Until the first warp frame Globe may still move the warp target (a late geolocation).
+    if (ctx.warpProgressRef.current < 1 && ctx.layersReadyCalledRef.current && ctx.splashDoneRef.current) {
       if (ctx.warpStartTimeRef.current === null) {
         ctx.warpStartTimeRef.current = now
       }
@@ -376,9 +361,10 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
       }
     }
 
-    // Warp complete
+    // Warp complete: the one frame where the intro ends
     if (ctx.warpProgressRef.current >= 1 && !ctx.warpCompleteForLabelsRef.current) {
       ctx.warpCompleteForLabelsRef.current = true
+      ctx.onWarpComplete()
     }
 
     // Dots fade-in animation - starts at 1 second into warp (33% progress)
@@ -459,7 +445,7 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
     // So: scaledZoom = ((maxDist - cameraDist) / range) * 100, then zoom = (scaledZoom / 80) * 66
     if (!ctx.isManualZoom.current && !ctx.showMapboxRef.current) {
       const scaledZoom = ((maxDist - cameraDist) / (maxDist - minDist)) * 100
-      const zoomPct = Math.max(0, Math.min(66, (scaledZoom / 80) * 66))
+      const zoomPct = Math.max(0, Math.min(66, (scaledZoom / THREEJS_CAMERA_MAX) * 66))
       ctx.setZoom(Math.round(zoomPct))
     }
 
@@ -1061,34 +1047,10 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
     }
 
     if (ctx.geoLabelsVisibleRef.current) {
-      // Geo and layer labels - only apply fade visibility transitions
-      // Backside hiding is handled by the shader's vViewFade uniform
+      // Geo and layer labels - only apply fade visibility transitions (and draw a
+      // label's texture the first time it shows)
       // Bubble/stacking positions are calculated in updateGeoLabels (on zoom change only)
-      const geoAndLayerLabels = [
-        ...ctx.geoLabelsRef.current,
-        ...Object.values(ctx.layerLabelsRef.current).flat()
-      ]
-
-      const fm = ctx.fadeManagerRef.current
-      const visibilityState = ctx.labelVisibilityStateRef.current
-
-      for (const item of geoAndLayerLabels) {
-        const labelName = item.label.name
-
-        // Target visibility based on collision detection
-        const shouldBeVisible = ctx.visibleAfterCollisionRef.current.has(labelName)
-        const isCurrentlyVisible = visibilityState.get(labelName) ?? false
-
-        // Only trigger fade when visibility state changes
-        if (shouldBeVisible !== isCurrentlyVisible) {
-          visibilityState.set(labelName, shouldBeVisible)
-          if (shouldBeVisible) {
-            fadeLabelIn(item.mesh, fm, `geo-${labelName}`)
-          } else {
-            fadeLabelOut(item.mesh, fm, `geo-${labelName}`)
-          }
-        }
-      }
+      applyGeoLabelFades(ctx, camera.position)
 
       // === Apply cuddle offsets for country labels (pushed away from their capitals) ===
       const cuddleOffsets = ctx.cuddleOffsetsRef.current

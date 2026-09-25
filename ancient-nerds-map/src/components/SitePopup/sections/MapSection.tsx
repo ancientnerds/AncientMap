@@ -1,8 +1,12 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { lazy, Suspense, useMemo, useState, useEffect, useRef } from 'react'
 import { getStreetViewEmbedUrl } from '../../../services/streetViewService'
-import EmpireMinimap from '../../EmpireMinimap'
 import { getAvailablePeriodsForEmpire } from '../../../config/seshatMapping'
+import LazyErrorBoundary from '../../LazyErrorBoundary'
 import type { MapSectionProps } from '../types'
+
+// mapbox-gl is only needed in empire mode: keep it out of the globe and site
+// entries (guard: services/__tests__/mapboxImportGraph.test.ts).
+const EmpireMinimap = lazy(() => import('../../EmpireMinimap'))
 
 // Format year for display (handles BC/AD)
 function formatYearDisplay(year: number): string {
@@ -142,11 +146,15 @@ export function MapSection({
     // Empire mode: Interactive minimap with empire boundaries and period timeline
     return (
       <div className="empire-minimap-section">
-        <EmpireMinimap
-          empireId={empire.id}
-          year={displayYear ?? empireYear ?? empire.peakYear ?? 0}
-          empireColor={empire.color}
-        />
+        {/* Same outer box as EmpireMinimap's root, so nothing shifts while the chunk loads.
+            The boundary keeps a failed chunk from unmounting the whole app. */}
+        <LazyErrorBoundary resetKey={empire.id}><Suspense fallback={<div className="empire-minimap-container" />}>
+          <EmpireMinimap
+            empireId={empire.id}
+            year={displayYear ?? empireYear ?? empire.peakYear ?? 0}
+            empireColor={empire.color}
+          />
+        </Suspense></LazyErrorBoundary>
 
         {/* Period Timeline with Slider */}
         {onEmpireYearChange ? (

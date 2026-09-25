@@ -54,10 +54,26 @@ class TestFiltersActuallyFilter:
 
 
 class TestEvidenceJoin:
+    def _keys_cte(self) -> str:
+        return LIST_SQL.split("contrib_keys AS (")[1].split("video_agg AS (")[0]
+
     def test_join_matches_both_the_raw_and_the_corrected_name(self):
+        keys = self._keys_cte()
+        assert "lower(trim(name))" in keys
+        assert "lower(trim(COALESCE(corrected_name, name)))" in keys
+
+    def test_a_name_equal_to_its_correction_is_one_key(self):
+        """UNION, not UNION ALL: otherwise that card's news items count twice."""
+        keys = _strip_comments(self._keys_cte()).upper()
+        assert "UNION" in keys
+        assert "UNION ALL" not in keys
+
+    def test_evidence_join_is_an_equi_join_on_the_key(self):
+        """2026-09-24: `... IN (<raw>, <corrected>)` planned as a nested loop over
+        every card x every news item (1.57 M comparisons, 2.0 s of a cold 2.3 s
+        /radar/list). An equality on one key is a hash join."""
         join = LIST_SQL.split("JOIN news_items ni ON")[1].split("JOIN news_videos")[0]
-        assert "c.name" in join
-        assert "c.corrected_name" in join
+        assert join.strip() == "lower(trim(ni.site_name_extracted)) = ck.name_key"
 
     def test_evidence_is_left_joined_so_a_card_without_videos_survives(self):
         assert "LEFT JOIN video_agg va" in LIST_SQL

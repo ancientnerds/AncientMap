@@ -9,8 +9,10 @@ nicht knallen) und dass fetch() die Fensterparameter wirklich bindet.
 from __future__ import annotations
 
 import importlib
+import re
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -97,6 +99,179 @@ def test_problem_queries_read_the_events_the_frontend_actually_sends():
     assert "page_title" in u.SQL_LIVE
     # Devices and languages are two plain session columns, one scan.
     assert "s.device" in u.SQL_DEVICES and "s.language" in u.SQL_DEVICES
+
+
+def test_the_globe_query_reads_how_the_unreached_loads_ended():
+    """The split of the loads that never reached globe_ready rides on the one
+    /globe.html scan (the dashboard contract forbids a second one): the four
+    ending events, the two string keys they carry, the start failure the globe
+    already reports as webgl_lost, and the moment the endings began."""
+    sql = u.SQL_GLOBE
+    for name in ("'globe_gate'", "'globe_unsupported'", "'globe_error'", "'globe_abandon'"):
+        assert name in sql, name
+    assert "'choice'" in sql and "'phase'" in sql
+    # A gate choice of the globe itself is not an ending; the gate phase of an
+    # abandon is the gate bucket, not "left while loading".
+    assert "choice <> 'globe'" in sql
+    assert "phase = 'gate'" in sql and "phase IS DISTINCT FROM 'gate'" in sql
+    # Background failures belong to loads that reached the globe. left(), not
+    # LIKE: a LIKE pattern needs the percent sign the guard above forbids.
+    assert "left(phase, 3) <> 'bg:'" in sql
+    # A globe_error after globe_ready (phase 'live': the error boundary caught
+    # a render error of a globe that was up, or a loader failed later) is no
+    # start failure either.
+    assert "phase <> 'live'" in sql
+    assert "'webgl_lost'" in sql and "phase = 'loading'" in sql
+    # globe_bg fires after the globe is up: nothing here may count it.
+    assert "'globe_bg'" not in sql
+    # endings_since is the first ending ever recorded on the path, not the
+    # first inside the window: a window that starts after the instrumentation
+    # went live must not call its own early loads "before these were recorded".
+    sub = sql[sql.index("WITH first_ending AS (") : sql.index("ev AS (")]
+    assert "SELECT min(e2.created_at) AS endings_since" in sub
+    assert ":since" not in sub and ":until" not in sub
+    assert "e2.website_id = :website_id" in sub and "e2.url_path = :path" in sub
+    # Before it, per load and not per session: an Umami session is one browser
+    # for a calendar month, so it holds loads from both sides.
+    flat = " ".join(sql.split())
+    before = "(m.measured_from IS NULL OR created_at < m.measured_from)"
+    assert f"WHERE event_type = 1 AND {before}) AS views_before" in flat
+    assert f"WHERE event_name = 'globe_ready' AND {before}) AS ready_before" in flat
+    assert "FROM ev LEFT JOIN measured m USING (session_id)" in flat
+    assert "AS first_view" not in sql
+    # Except the session's first load at or after endings_since, when the session
+    # had opened the globe before it: the globe page installed the service
+    # worker, which serves globe.html and its JS cache-first, so that load still
+    # ran the previous build, which sends no ending
+    # (ancient-nerds-map/src/pwa/globeStartPrecache.ts). The next one is measured.
+    sub = " ".join(sql[sql.index("measured AS (") : sql.index("SELECT session_id,")].split())
+    assert (
+        "CASE WHEN bool_or(v.created_at < f.endings_since) "
+        "THEN (array_agg(v.created_at ORDER BY v.created_at) "
+        "FILTER (WHERE v.created_at >= f.endings_since))[2] "
+        "ELSE f.endings_since END AS measured_from"
+    ) in sub
+    # The session's whole history on the path, not the window: the view before the
+    # endings began can lie before :since while the stale load lies inside it
+    assert ":since" not in sub and ":until" not in sub
+    assert "v.website_id = :website_id AND v.url_path = :path AND v.event_type = 1" in sub
+    assert "v.session_id IN (SELECT session_id FROM ev)" in sub
+    assert "FROM website_event v CROSS JOIN first_ending f" in sub
+    assert "GROUP BY v.session_id, f.endings_since" in sub
+
+
+def test_the_ending_events_the_globe_query_reads_are_in_the_frontend_taxonomy():
+    """The event names are written twice, in two languages: SQL_GLOBE reads
+    them and src/analytics/index.ts's EventName is the only vocabulary track()
+    accepts. A rename on one side would turn a bucket into a silent zero."""
+    index_ts = (
+        Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "src" / "analytics" / "index.ts"
+    ).read_text(encoding="utf-8")
+    union = index_ts[
+        index_ts.index("export type EventName") : index_ts.index("export type EventProps")
+    ]
+    for name in (
+        "globe_gate",
+        "globe_unsupported",
+        "globe_error",
+        "globe_abandon",
+        "globe_ready",
+        "webgl_lost",
+    ):
+        assert f"| '{name}'" in union, name
+        assert f"'{name}'" in u.SQL_GLOBE, name
+
+
+def test_the_globe_event_docs_name_the_senders_the_frontend_uses():
+    """The founders dashboard is read through these comments. globe_ready is
+    sent by App when the loading overlay fades (sites, critical layers, focus
+    lookup), not by Globe at onLayersReady, and App sends webgl_lost through
+    analytics/globeAbandon.ts. Docs naming the old sender invite reading
+    ready_ms as the layers moment."""
+    root = Path(__file__).resolve().parents[2]
+    src = root / "ancient-nerds-map" / "src"
+    umami_doc = Path(u.__file__).read_text(encoding="utf-8")
+    stats_doc = (root / "pipeline" / "stats_analysis.py").read_text(encoding="utf-8")
+    for doc in (umami_doc, stats_doc):
+        assert "onLayersReady" not in doc
+        assert "src/components/Globe.tsx sends" not in doc
+    assert "hooks/useGlobeReady.ts" in umami_doc
+    assert "track('globe_ready'" in (src / "hooks" / "useGlobeReady.ts").read_text(encoding="utf-8")
+    assert "analytics/globeAbandon.ts reportWebglLost" in umami_doc
+    assert "analytics/globeAbandon.ts reportWebglLost" in stats_doc
+    assert "export function reportWebglLost(" in (src / "analytics" / "globeAbandon.ts").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_the_literals_the_globe_query_depends_on_are_the_ones_the_frontend_sends():
+    """SQL_GLOBE buckets the unreached loads by string literals that the
+    frontend writes in another language: the gate choice 'globe' (not an
+    ending), the abandon phase 'gate', the error phases 'live' and 'bg:<task>'
+    (not start failures) and webgl_lost's 'loading'. A rename on either side
+    would silently move loads between buckets, so both sides are pinned here."""
+    src = Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "src"
+
+    def read(*parts: str) -> str:
+        return src.joinpath(*parts).read_text(encoding="utf-8")
+
+    sql = u.SQL_GLOBE
+    abandon = read("analytics", "globeAbandon.ts")
+    # The globe button is the one gate choice that is no ending
+    assert "if (choice === 'globe') track('globe_gate', { choice })" in abandon
+    assert "choice <> 'globe'" in sql
+    # globe_abandon's phase while the gate shows
+    assert "if (gateShowing) return 'gate'" in abandon
+    assert "installGlobeAbandon" in read("App.tsx")
+    assert "phase = 'gate'" in sql
+    # The prop keys the phase and the wait travel under: renamed keys would read as NULL, so
+    # every gate quit would count as 'Left while loading' and the abandon median would vanish
+    assert (
+        "opts.latch.end('globe_abandon', { ms: Math.round(opts.now()), phase: opts.getPhase() })"
+        in abandon
+    )
+    assert "max(d.string_value) FILTER (WHERE d.data_key = 'phase')" in sql
+    assert "(max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms" in sql
+    # The abandon wait counts from the start of the load, not from navigation: on a phone the
+    # Globe mounts only once the gate goes away, and reading the gate is no loading wait
+    assert "now: () => loadClock.elapsed()," in read("App.tsx")
+    assert "if (gate && !showing) start = now()" in abandon
+    # A start failure's globe_error, sent when its screen shows, carries its phase the same way
+    assert (
+        "return { name: 'globe_error', props: { phase: globeFailure.phase, message: globeFailure.message } }"
+        in read("App.tsx")
+    )
+    # Errors after globe_ready carry 'live', from App (boundary) and the Globe's loaders
+    assert "export const LIVE_PHASE = 'live'" in read("utils", "globeStartError.ts")
+    assert "if (phase === LIVE_PHASE) track('globe_error', { phase, message })" in read("App.tsx")
+    assert "track('globe_error', { phase: LIVE_PHASE," in read(
+        "components", "GlobeErrorBoundary.tsx"
+    )
+    assert "phase <> 'live'" in sql
+    # A start failure after the load already ended (a tab switch sent globe_abandon) keeps its
+    # diagnostics but is no second ending: the frontend marks it, `failed` skips the mark
+    assert "track('globe_error', { ...ending.props, ending: 'no' })" in read(
+        "hooks", "useGlobeScreenEnding.ts"
+    )
+    assert "max(d.string_value) FILTER (WHERE d.data_key = 'ending') AS ending" in sql
+    assert "ending IS DISTINCT FROM 'no'" in sql
+    # Background failures carry 'bg:<task>', built in one place: every sender goes through
+    # trackBackgroundFailure (the hi-res coastline too), none writes a bg: phase of its own
+    assert "phase: `bg:${task}`" in read("analytics", "globeBackground.ts")
+    assert "trackBackgroundFailure('hires', err)" in read("components", "Globe.tsx")
+    own_bg_phase = [
+        str(f.relative_to(src))
+        for f in src.rglob("*.ts*")
+        if "__tests__" not in f.parts
+        and f.name != "globeBackground.ts"
+        and re.search(r"phase: ['`]bg:", f.read_text(encoding="utf-8"))
+    ]
+    assert own_bg_phase == []
+    assert "left(phase, 3) <> 'bg:'" in sql
+    # webgl_lost before globe_ready is a start failure (test_stats_analysis pins the ternary too)
+    assert "const phase = globeReady ? 'live' : 'loading'" in abandon
+    assert "reportWebglLost(endingLatch, reason, globeReadyRef.current)" in read("App.tsx")
+    assert "phase = 'loading'" in sql
 
 
 def test_the_scroll_depth_funnel_needs_no_query_of_its_own():

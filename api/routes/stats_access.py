@@ -54,7 +54,9 @@ STATS_HOST = "stats.ancientnerds.com"
 MAIN_ORIGIN = "https://ancientnerds.com"
 COOKIE_NAME = "an_stats"
 COOKIE_DOMAIN = ".ancientnerds.com"
-SESSION_HOURS = 12
+#: How long one Discord login keeps a founder in: 30 days (owner decision 2026-09-24).
+#: The Umami SSO token behind it has no expiry of its own, so this is the only limit.
+SESSION_DAYS = 30
 HANDOFF_PATH = "/api/auth/stats-handoff"
 LOGIN_PATH = "/api/auth/stats-login"
 #: Umami inside the compose network; the handoff logs in there for the founder.
@@ -74,7 +76,7 @@ def mint_stats_token(discord_id: str, username: str, now: datetime | None = None
         "name": username,
         "scope": "stats",
         "iat": now,
-        "exp": now + timedelta(hours=SESSION_HOURS),
+        "exp": now + timedelta(days=SESSION_DAYS),
     }
     return jwt.encode(payload, jwt_auth.SECRET_KEY, algorithm=jwt_auth.ALGORITHM)
 
@@ -173,7 +175,7 @@ async def stats_handoff(request: Request) -> Response:
     response.set_cookie(
         key=COOKIE_NAME,
         value=mint_stats_token(discord_id, username),
-        max_age=SESSION_HOURS * 3600,
+        max_age=SESSION_DAYS * 24 * 3600,
         domain=COOKIE_DOMAIN,
         httponly=True,
         secure=True,

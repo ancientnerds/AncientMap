@@ -245,14 +245,44 @@ export interface SourcesData {
   log_reason: string | null
 }
 
+/** A spread of globe times in ms. `median` is null below five samples;
+ *  `min`/`max` are null with none. */
+export interface GlobeTimes {
+  min: number | null
+  median: number | null
+  max: number | null
+  samples: number
+}
+
+/** How the loads that never fired globe_ready ended (stats_analysis.globe_funnel).
+ *  The six counts sum to `gave_up`. Per session, capped by its unreached loads,
+ *  in this order: gate, unsupported, error, abandoned; the rest is `no_signal`,
+ *  or `unmeasured` for the unreached loads that ran a build without the
+ *  endings: those from before the first ending event was recorded, and a
+ *  returning visitor's first load after it, which the service worker served
+ *  from the previous build (counted per load: a session spans a calendar
+ *  month; SQL_GLOBE names the stale loads it cannot tell apart). */
+export interface GlobeEndings {
+  gate: number
+  unsupported: number
+  error: number
+  abandoned: number
+  no_signal: number
+  unmeasured: number
+}
+
 /** GET /api/stats/globe?days=N — the denominator is page loads, not sessions. */
 export interface GlobeData {
   loads: number
   reached: number
   gave_up: number
   sessions: { all: number; reached: number }
-  /** `median` is null below five samples; `min`/`max` are null with none. */
-  ready_ms: { min: number | null; median: number | null; max: number | null; samples: number }
+  ready_ms: GlobeTimes
+  /** Absent from an API older than this bundle (ci.yml swaps the frontend
+   *  first); GlobeReach says so instead of drawing the split. */
+  not_reached: GlobeEndings
+  /** How long the counted `abandoned` loads had waited when they left. */
+  abandon_ms: GlobeTimes
 }
 
 export interface Cluster {

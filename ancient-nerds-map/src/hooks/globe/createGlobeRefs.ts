@@ -10,7 +10,7 @@ import { useRef } from 'react'
 import * as THREE from 'three'
 import type { GlobeRefs, SceneObjectRefs, GlobeLabel, MeasurementLabelData, MeasurementLineData, MeasurementMarkerData } from './types'
 import type { SiteData } from '../../data/sites'
-import type { VectorLayerKey } from '../../config/vectorLayers'
+import { createGlobeLayerTiers, type GlobeLayerKey, type GlobeLayerTierState, type VectorLayerKey } from '../../config/vectorLayers'
 import type { GlobeLabelMesh } from '../../utils/LabelRenderer'
 import { FadeManager } from '../../utils/FadeManager'
 import type { MapboxGlobeService } from '../../services/MapboxGlobeService'
@@ -37,10 +37,7 @@ export function useGlobeRefs(): GlobeRefs {
   // ========== Basemap Refs ==========
   const basemapMesh = useRef<THREE.Mesh | null>(null)
   const basemapBackMesh = useRef<THREE.Mesh | null>(null)
-  const basemapTexture = useRef<THREE.Texture | null>(null)
-  const currentBasemap = useRef<string>('')
   const basemapSectionMeshes = useRef<THREE.Mesh[]>([])
-  const landMaskMesh = useRef<THREE.Mesh | null>(null)
 
   // ========== Stars and Visual Effects ==========
   const stars = useRef<THREE.Group | null>(null)
@@ -97,8 +94,9 @@ export function useGlobeRefs(): GlobeRefs {
     coralReefs: [],
     plateBoundaries: []
   })
-  const backLayersLoaded = useRef<Record<string, boolean>>({})
-  const loading = useRef<Record<string, boolean>>({})
+  const layerLoadIds = useRef<Record<string, number>>({})
+  const globeLayerTiers = useRef<Record<GlobeLayerKey, GlobeLayerTierState>>(createGlobeLayerTiers())
+  const failedLayers = useRef<Partial<Record<VectorLayerKey, boolean>>>({})
 
   // ========== Paleoshoreline Refs ==========
   const paleoshorelineLines = useRef<THREE.Line[]>([])
@@ -214,8 +212,6 @@ export function useGlobeRefs(): GlobeRefs {
 
   // ========== Satellite Mode Refs ==========
   const satelliteMode = useRef<boolean>(false)
-  const highResGrayLoaded = useRef<boolean>(false)
-  const highResSatelliteLoaded = useRef<boolean>(false)
 
   // ========== Loading State Refs ==========
   const texturesReady = useRef<boolean>(false)
@@ -280,22 +276,9 @@ export function useGlobeRefs(): GlobeRefs {
 
   // ========== Previous State Tracking Refs ==========
   const prevDetailLevel = useRef<DetailLevel | null>(null)
-  const prevBackDetailLevel = useRef<DetailLevel | null>(null)
   const prevSeaLevel = useRef<number>(-120)
   const prevReplaceCoastlines = useRef<boolean>(false)
   const prevPaleoshorelineVisible = useRef<boolean>(false)
-
-  // ========== Texture Cache Refs ==========
-  const textureCache = useRef<{
-    grayBasemap: THREE.Texture | null
-    satellite: THREE.Texture | null
-  }>({
-    grayBasemap: null,
-    satellite: null
-  })
-
-  // ========== Preloading Refs ==========
-  const vectorPreloaded = useRef<boolean>(false)
 
   // ========== Additional Callback Refs ==========
   const onEmpireYearsChange = useRef<((years: Record<string, number>) => void) | undefined>(undefined)
@@ -316,10 +299,7 @@ export function useGlobeRefs(): GlobeRefs {
     // Basemap Refs
     basemapMesh,
     basemapBackMesh,
-    basemapTexture,
-    currentBasemap,
     basemapSectionMeshes,
-    landMaskMesh,
 
     // Stars and Visual Effects
     stars,
@@ -354,8 +334,9 @@ export function useGlobeRefs(): GlobeRefs {
     // Vector Layer Refs
     frontLineLayers,
     backLineLayers,
-    backLayersLoaded,
-    loading,
+    layerLoadIds,
+    globeLayerTiers,
+    failedLayers,
 
     // Paleoshoreline Refs
     paleoshorelineLines,
@@ -471,8 +452,6 @@ export function useGlobeRefs(): GlobeRefs {
 
     // Satellite Mode Refs
     satelliteMode,
-    highResGrayLoaded,
-    highResSatelliteLoaded,
 
     // Loading State Refs
     texturesReady,
@@ -529,16 +508,9 @@ export function useGlobeRefs(): GlobeRefs {
 
     // Previous State Tracking Refs
     prevDetailLevel,
-    prevBackDetailLevel,
     prevSeaLevel,
     prevReplaceCoastlines,
     prevPaleoshorelineVisible,
-
-    // Texture Cache Refs
-    textureCache,
-
-    // Preloading Refs
-    vectorPreloaded,
 
     // Additional Callback Refs
     onEmpireYearsChange,

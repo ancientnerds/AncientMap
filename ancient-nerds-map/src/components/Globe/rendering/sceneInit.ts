@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { CAMERA, GLOBE, RENDER_ORDER } from '../../../config/globeConstants'
+import { CAMERA, GLOBE, MAPBOX_SWITCH_DISTANCE, RENDER_ORDER, RENDERER_ATTRIBUTES } from '../../../config/globeConstants'
 import { BRAND_ASSETS } from '../../../constants/brand'
+import { GlobeStartError } from '../../../utils/globeStartError'
 
 /** Options passed to initializeScene for configuring the scene. */
 export interface SceneInitOptions {
@@ -34,6 +35,31 @@ export interface SceneInitOptions {
   onContextLost: (reason: string) => void
   /** …and got it back. */
   onContextRestored: () => void
+  /** Contract C0: a shader program that fails to link is reported here (phase 'shader'). */
+  onStartError: (phase: string, err: unknown) => void
+}
+
+/**
+ * Camera start and warp target of the intro: both at CAMERA.MAX_DISTANCE, the
+ * target above `position` ([lng, lat], default 10 E / 51 N), the start on the
+ * opposite side at the same latitude, so the warp spins the globe in. Fresh
+ * vectors on every call: the animation loop mutates the camera, never these.
+ */
+export function computeWarpCameraPositions(position: [number, number] | null | undefined): { start: THREE.Vector3; target: THREE.Vector3 } {
+  const lng = position?.[0] ?? 10
+  const lat = position?.[1] ?? 51
+  const d = CAMERA.MAX_DISTANCE // maxDist = 0% zoom
+  const phi = (90 - lat) * Math.PI / 180
+  const theta = (lng + 180) * Math.PI / 180
+  const x = -d * Math.sin(phi) * Math.cos(theta)
+  const y = d * Math.cos(phi)
+  const z = d * Math.sin(phi) * Math.sin(theta)
+  return { start: new THREE.Vector3(-x, y, -z), target: new THREE.Vector3(x, y, z) }
+}
+
+/** First line of a shader info log, for the error screen and the event (the whole log goes to the console). */
+function firstLine(log: string): string {
+  return log.split(/\r?\n/, 1)[0]
 }
 
 /**
@@ -81,6 +107,7 @@ export function initializeScene(
     setSceneReady,
     onContextLost,
     onContextRestored,
+    onStartError,
   } = options
 
   // Cleanup flag to prevent stale async callbacks (logo loading, texture loading, etc.)
@@ -91,16 +118,24 @@ export function initializeScene(
   const minDist = CAMERA.MIN_DISTANCE
   const maxDist = CAMERA.MAX_DISTANCE
 
-  // WebGL Renderer
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    powerPreference: 'high-performance',
-    stencil: true,  // Enable stencil buffer for even-odd polygon fill
-    depth: true,
-    preserveDrawingBuffer: true,  // Required for screenshot capture
-    alpha: true,  // Transparent background so Mapbox GL shows through
-    premultipliedAlpha: false  // Required for proper alpha compositing with Mapbox behind
-  })
+  // WebGL Renderer. App's capability check (utils/globeSupport.ts) asked for the
+  // same attributes, so this throws only where that check could not see it coming.
+  let renderer: THREE.WebGLRenderer
+  try {
+    renderer = new THREE.WebGLRenderer(RENDERER_ATTRIBUTES)
+  } catch (err) {
+    throw new GlobeStartError('renderer', err)
+  }
+  // three never throws on a shader that fails to link: it skips the program and
+  // the mesh silently does not draw. Setting this handler turns off three's own
+  // log, so the info logs are written here.
+  renderer.debug.onShaderError = (gl, program, vertexShader, fragmentShader) => {
+    const programLog = gl.getProgramInfoLog(program)?.trim() ?? ''
+    const vertexLog = gl.getShaderInfoLog(vertexShader)?.trim() ?? ''
+    const fragmentLog = gl.getShaderInfoLog(fragmentShader)?.trim() ?? ''
+    console.error('[globe] shader program failed to link', { program: programLog, vertex: vertexLog, fragment: fragmentLog })
+    onStartError('shader', new Error(firstLine(fragmentLog || vertexLog || programLog || 'shader program failed to link')))
+  }
   renderer.setSize(window.innerWidth, window.innerHeight)
   // Cap DPR at 2: high-DPR tablets (DPR 2.5-3) otherwise inflate the framebuffer
   // and exhaust GPU memory. Desktop/retina is already <=2, so no visible change.
@@ -153,7 +188,8 @@ export function initializeScene(
       }
     }
   }
-  document.addEventListener('visibilitychange', handleVisibilityChange)
+  // Registered last (just before the return): a throw anywhere above must not
+  // leave a listener behind that renders a half-built scene on the next tab return.
 
   // Detect GPU and software rendering (hardware acceleration disabled)
   const gl = renderer.getContext()
@@ -174,22 +210,12 @@ export function initializeScene(
     }
   }
 
-  // Use initialPosition if provided, otherwise fallback to Germany
-  const startLng = initialPosition?.[0] ?? 10
-  const startLat = initialPosition?.[1] ?? 51
-  const startDist = CAMERA.MAX_DISTANCE // maxDist = 0% zoom
-  const phi = (90 - startLat) * Math.PI / 180
-  const theta = (startLng + 180) * Math.PI / 180
-  // Calculate user's target position
-  const targetX = -startDist * Math.sin(phi) * Math.cos(theta)
-  const targetY = startDist * Math.cos(phi)
-  const targetZ = startDist * Math.sin(phi) * Math.sin(theta)
-  // Start camera at OPPOSITE side (180 rotated) for warp-in effect
-  // This prevents the visible jump when warp starts
-  camera.position.set(-targetX, targetY, -targetZ)
-  // Store target position for warp animation to use
-  refs.warpTargetCameraPosRef.current = new THREE.Vector3(targetX, targetY, targetZ)
-  refs.warpInitialCameraPosRef.current = new THREE.Vector3(-targetX, targetY, -targetZ)
+  // Start the camera on the opposite side of the warp target (initialPosition, or
+  // central Germany); Globe moves both while the warp has not started yet.
+  const { start: warpStart, target: warpTarget } = computeWarpCameraPositions(initialPosition)
+  camera.position.copy(warpStart)
+  refs.warpTargetCameraPosRef.current = warpTarget
+  refs.warpInitialCameraPosRef.current = warpStart.clone()
 
   // Globe base (deep blue ocean - coastlines define land boundaries)
   const globe = new THREE.Mesh(
@@ -232,7 +258,9 @@ export function initializeScene(
       const z = basemapRadius * Math.sin(phi) * Math.sin(theta)
 
       positions.push(x, y, z)
-      uvs.push(u, 1 - v) // Flip v for correct texture orientation
+      // v = 0 at the north pole: basemap textures are ImageBitmaps, whose row 0 is the
+      // image top (UNPACK_FLIP_Y does not apply to them; services/basemapUpgrade.ts)
+      uvs.push(u, v)
     }
   }
 
@@ -497,7 +525,7 @@ export function initializeScene(
         const z = basemapRadius * Math.sin(phi) * Math.sin(theta)
 
         sectionPositions.push(x, y, z)
-        sectionUvs.push(u, 1 - v)
+        sectionUvs.push(u, v) // same orientation as the main basemap
       }
     }
 
@@ -730,7 +758,9 @@ export function initializeScene(
   controls.dampingFactor = CAMERA.DAMPING_FACTOR
   controls.autoRotate = false // We'll handle rotation manually for frame-rate independence
   controls.enableRotate = false // Custom arcball rotation
-  controls.minDistance = CAMERA.MIN_DISTANCE
+  // Mapbox is always `idle` when the scene is created; Globe widens this
+  // with orbitMinDistance() once Mapbox is ready or has failed.
+  controls.minDistance = MAPBOX_SWITCH_DISTANCE
   controls.maxDistance = CAMERA.MAX_DISTANCE
 
   // Manual rotation state (frame-rate independent)
@@ -741,6 +771,8 @@ export function initializeScene(
   const labelGroup = new THREE.Group()
   scene.add(labelGroup)
   refs.labelGroupRef.current = labelGroup
+
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   return {
     renderer,

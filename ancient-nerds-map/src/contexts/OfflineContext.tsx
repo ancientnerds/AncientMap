@@ -9,6 +9,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { OfflineFetch } from '../services/OfflineFetch'
 import { OfflineStorage } from '../services/OfflineStorage'
+import { VectorLayerCache } from '../services/VectorLayerCache'
+import { BasemapCache } from '../services/BasemapCache'
 
 interface OfflineContextValue {
   isOffline: boolean
@@ -19,7 +21,7 @@ interface OfflineContextValue {
   cachedEmpireIds: Set<string>
   cachedLayerIds: Set<string>
   cachedBasemapQualities: Set<string>
-  cachedBasemapItems: Set<string>  // New: 'satellite' | 'labels'
+  cachedBasemapItems: Set<string>  // BasemapType: 'satellite'
   hasMapboxTilesCached: boolean    // Derived: whether satellite basemap is downloaded
   refreshCacheState: () => Promise<void>
 }
@@ -51,10 +53,17 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
   // Derived: whether Mapbox tiles (satellite basemap) are cached for offline use
   const hasMapboxTilesCached = cachedBasemapItems.has('satellite')
 
-  // Function to refresh cache state from OfflineStorage
+  // Function to refresh cache state from OfflineStorage. Every 5 s for the whole
+  // session, and App and Globe consume it: one read of the download state, and
+  // every setter after the last await, so React commits once per tick.
   const refreshCacheState = useCallback(async () => {
     try {
       const state = await OfflineStorage.getDownloadState()
+      // Basemap items (satellite) and layers: only downloads whose every file is in the cache
+      const [basemapItems, layerIds] = await Promise.all([
+        BasemapCache.getCachedItems(state),
+        VectorLayerCache.getCachedLayers(state),
+      ])
 
       // Extract cached source IDs
       const sourceIds = new Set<string>(
@@ -67,14 +76,11 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       // Extract cached empire IDs
       setCachedEmpireIds(new Set(state.empires || []))
 
-      // Extract cached layer IDs
-      setCachedLayerIds(new Set(state.layers || []))
-
       // Extract cached basemap qualities
       setCachedBasemapQualities(new Set(state.basemapQualities || []))
 
-      // Extract cached basemap items (satellite, labels)
-      setCachedBasemapItems(new Set(state.basemapItems || []))
+      setCachedBasemapItems(new Set(basemapItems))
+      setCachedLayerIds(new Set(layerIds))
     } catch (e) {
       // OfflineStorage not available - leave empty sets
     }

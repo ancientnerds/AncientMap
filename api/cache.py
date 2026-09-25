@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 _REDIS_RETRY_COOLDOWN = 30.0  # seconds between reconnect attempts
 
 _redis_client = None
+# Second client on the same server for raw bytes (e.g. pre-compressed response bodies):
+# the text client decodes every reply as UTF-8, which a gzip body is not.
+_redis_bytes_client = None
 _redis_failed_at: float | None = None  # monotonic time of last failure
 _redis_state = "init"  # "init" | "connected" | "lost" — for state-change logging
 _redis_lock = threading.Lock()
@@ -45,47 +48,69 @@ def _cleanup_memory_cache():
         _memory_cache = dict(sorted_items[-_MEMORY_CACHE_MAX_ENTRIES:])
 
 
+def _connect(decode_responses: bool) -> Any | None:
+    """Connect a Redis client, honouring the shared failure cooldown. Caller holds _redis_lock."""
+    global _redis_failed_at, _redis_state
+
+    now = time.monotonic()
+    if _redis_failed_at is not None and now - _redis_failed_at < _REDIS_RETRY_COOLDOWN:
+        return None
+    try:
+        import redis
+
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        client = redis.from_url(redis_url, decode_responses=decode_responses)
+        client.ping()
+    except Exception as e:
+        _redis_failed_at = now
+        if _redis_state != "lost":
+            _redis_state = "lost"
+            logger.warning(
+                f"Redis unavailable for caching, using in-memory "
+                f"(retrying every {_REDIS_RETRY_COOLDOWN:.0f}s): {e}"
+            )
+        return None
+    _redis_failed_at = None
+    if _redis_state != "connected":
+        _redis_state = "connected"
+        logger.warning("Redis connected for caching")
+    return client
+
+
 def get_redis_client():
     """Get or create the Redis client singleton (lazy, with 30s failure cooldown)."""
-    global _redis_client, _redis_failed_at, _redis_state
+    global _redis_client
 
     client = _redis_client
     if client is not None:
         return client
 
     with _redis_lock:
-        if _redis_client is not None:
-            return _redis_client
-        now = time.monotonic()
-        if _redis_failed_at is not None and now - _redis_failed_at < _REDIS_RETRY_COOLDOWN:
-            return None
-        try:
-            import redis
+        if _redis_client is None:
+            _redis_client = _connect(decode_responses=True)
+        return _redis_client
 
-            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-            client = redis.from_url(redis_url, decode_responses=True)
-            client.ping()
-        except Exception as e:
-            _redis_failed_at = now
-            if _redis_state != "lost":
-                _redis_state = "lost"
-                logger.warning(
-                    f"Redis unavailable for caching, using in-memory "
-                    f"(retrying every {_REDIS_RETRY_COOLDOWN:.0f}s): {e}"
-                )
-            return None
-        _redis_client = client
-        _redis_failed_at = None
-        _redis_state = "connected"
-        logger.warning("Redis connected for caching")
+
+def get_redis_bytes_client():
+    """Like get_redis_client, but replies stay bytes (no decode_responses)."""
+    global _redis_bytes_client
+
+    client = _redis_bytes_client
+    if client is not None:
         return client
+
+    with _redis_lock:
+        if _redis_bytes_client is None:
+            _redis_bytes_client = _connect(decode_responses=False)
+        return _redis_bytes_client
 
 
 def mark_redis_lost(context: str, exc: Exception) -> None:
-    """Drop the client after a runtime error and start the retry cooldown."""
-    global _redis_client, _redis_failed_at, _redis_state
+    """Drop both clients after a runtime error and start the retry cooldown."""
+    global _redis_client, _redis_bytes_client, _redis_failed_at, _redis_state
     with _redis_lock:
         _redis_client = None
+        _redis_bytes_client = None
         _redis_failed_at = time.monotonic()
         if _redis_state != "lost":
             _redis_state = "lost"
@@ -93,6 +118,26 @@ def mark_redis_lost(context: str, exc: Exception) -> None:
                 f"Redis lost for caching on {context}, using in-memory "
                 f"(retrying every {_REDIS_RETRY_COOLDOWN:.0f}s): {exc}"
             )
+
+
+def _memory_get(key: str) -> Any | None:
+    """The in-memory cache used while Redis is unavailable."""
+    with _memory_lock:
+        if key in _memory_cache:
+            value, expiry = _memory_cache[key]
+            if time.time() < expiry:
+                logger.debug(f"Memory cache hit: {key}")
+                return value
+            else:
+                del _memory_cache[key]
+    return None
+
+
+def _memory_set(key: str, value: Any, ttl: int) -> None:
+    with _memory_lock:
+        _cleanup_memory_cache()
+        _memory_cache[key] = (value, time.time() + ttl)
+    logger.debug(f"Memory cache set: {key} (TTL: {ttl}s)")
 
 
 def cache_get(key: str) -> Any | None:
@@ -111,16 +156,7 @@ def cache_get(key: str) -> Any | None:
             mark_redis_lost(f"get {key}", e)
 
     # Fallback to in-memory cache
-    with _memory_lock:
-        if key in _memory_cache:
-            value, expiry = _memory_cache[key]
-            if time.time() < expiry:
-                logger.debug(f"Memory cache hit: {key}")
-                return value
-            else:
-                del _memory_cache[key]
-
-    return None
+    return _memory_get(key)
 
 
 def cache_set(key: str, value: Any, ttl: int = 3600) -> bool:
@@ -138,11 +174,41 @@ def cache_set(key: str, value: Any, ttl: int = 3600) -> bool:
             mark_redis_lost(f"set {key}", e)
 
     # Fallback to in-memory cache
-    with _memory_lock:
-        _cleanup_memory_cache()
-        _memory_cache[key] = (value, time.time() + ttl)
-    logger.debug(f"Memory cache set: {key} (TTL: {ttl}s)")
+    _memory_set(key, value, ttl)
     return True
+
+
+def cache_get_bytes(key: str) -> bytes | None:
+    """Get raw bytes from cache (Redis with the same in-memory fallback as cache_get).
+
+    For values that are not JSON text, e.g. a pre-compressed response body: cache_get
+    cannot carry them (its client decodes replies as UTF-8 and it json-decodes the value).
+    The value lives in Redis so both API instances share it and cache_delete_pattern
+    clears it everywhere.
+    """
+    client = get_redis_bytes_client()
+    if client:
+        try:
+            value = client.get(key)
+            if value is not None:
+                return value
+        except Exception as e:
+            mark_redis_lost(f"get {key}", e)
+
+    return _memory_get(key)
+
+
+def cache_set_bytes(key: str, value: bytes, ttl: int) -> None:
+    """Store raw bytes with TTL (Redis with the same in-memory fallback as cache_set)."""
+    client = get_redis_bytes_client()
+    if client:
+        try:
+            client.setex(key, ttl, value)
+            return
+        except Exception as e:
+            mark_redis_lost(f"set {key}", e)
+
+    _memory_set(key, value, ttl)
 
 
 def cache_delete(key: str) -> bool:

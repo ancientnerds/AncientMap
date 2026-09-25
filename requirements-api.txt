@@ -3,7 +3,7 @@
 
 # --- Database ---
 psycopg2-binary>=2.9.9
-sqlalchemy>=2.0.0
+sqlalchemy>=2.0.0,<2.1  # 2.1 makes postgresql:// load psycopg 3; we ship psycopg2
 geoalchemy2>=0.14.0
 shapely>=2.0.0
 

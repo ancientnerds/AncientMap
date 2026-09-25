@@ -12,18 +12,26 @@ pipeline.utils.public_sites.not_retired(); a retired id answers 410 Gone. Nothin
 falls back to static JSON - the database is the only source of /all.
 """
 
+import gzip
 import hashlib
 import json
 import logging
 import random
 from pathlib import Path
+from typing import Annotated, Literal, NamedTuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.cache import cache_delete_pattern, cache_get, cache_set
+from api.cache import (
+    cache_delete_pattern,
+    cache_get,
+    cache_get_bytes,
+    cache_set,
+    cache_set_bytes,
+)
 from api.services.background_jobs import JobAlreadyRunning, read_status, run_module, start_job
 from api.services.description_provenance import card_ai, description_disclosure, provenance_of
 from api.services.jwt_auth import require_founder
@@ -31,6 +39,7 @@ from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.utils.globe_payload import globe_projection
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
 
 _heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
@@ -196,6 +205,42 @@ def _load_pinned_sites(
     return sites
 
 
+_ALL_CACHE_TTL_S = 1800
+_DEFAULT_ALL_SOURCES = frozenset({"ancient_nerds", "lyra", "ancient_nerds_community"})
+
+
+class _SourcePlan(NamedTuple):
+    """Which requested sources come from a pinned snapshot file and which from the database."""
+
+    requested: set[str]
+    pinned: dict[str, str]  # source_id -> snapshot date
+    live: list[str]
+
+
+def _plan_sources(db: Session, source: list[str] | None) -> _SourcePlan:
+    """Split the requested sources by the active version pins (read once per request)."""
+    from api.routes.snapshots import get_active_pins
+
+    pins = get_active_pins(db)
+    requested = set(source) if source else set(_DEFAULT_ALL_SOURCES)
+    pinned: dict[str, str] = {
+        sid: pins[sid]  # type: ignore[misc]
+        for sid in requested
+        if sid in pins and pins[sid] is not None
+    }
+    live = [sid for sid in requested if sid not in pinned]
+    return _SourcePlan(requested, pinned, live)
+
+
+def _gzip_json(payload: dict) -> bytes:
+    """The body JSONResponse renders today (same json.dumps arguments), gzip-compressed.
+
+    mtime=0 keeps the bytes a pure function of the payload.
+    """
+    body = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    return gzip.compress(body.encode("utf-8"), compresslevel=6, mtime=0)
+
+
 @router.get("/all")
 def get_all_sites(
     req: Request,
@@ -205,12 +250,24 @@ def get_all_sites(
     period_max: int | None = Query(None, description="Max period year"),
     skip: int = Query(0, ge=0, description="Number of records to skip (pagination)"),
     limit: int = Query(100000, ge=1, le=100000, description="Max results"),
-):
+    fields: Annotated[
+        Literal["all", "globe"],
+        Query(description="all: every field (default); globe: id,n,la,lo,s,t,p,pn,c only"),
+    ] = "all",
+) -> Response:
     """
-    Get all sites as compact JSON for globe rendering.
+    Get all sites as compact JSON.
 
-    Returns minimal data for fast transfer:
-    - id, name, lat, lon, source_id, site_type, period_start
+    ``fields=all`` (the default) returns every compact field: position, name, source, type,
+    period, country plus the details - description, image, source URL, card text, confidence,
+    editor/audit timestamps, hero image, description citations and up to five reference links.
+    ``fields=globe`` keeps only ``id,n,la,lo,s,t,p,pn,c``, what the globe draws at start; it
+    fetches the details after its intro.
+
+    A cache miss builds the payload once and stores both variants in Redis as gzip bytes
+    (30 min), so a hit neither reads the database nor serialises or compresses anything.
+    The body goes out gzip-encoded when the client accepts gzip, else decompressed; both carry
+    ``Vary: Accept-Encoding`` (GZipMiddleware passes an encoded response through without it).
 
     Respects version pins: if a source is pinned to a snapshot, data for that
     source comes from the snapshot file instead of the live database.
@@ -222,36 +279,44 @@ def get_all_sites(
     """
     if not _heavy_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests")
-    # Check active pins
-    from api.routes.snapshots import get_active_pins
 
-    pins = get_active_pins(db)
-
-    # Determine which requested sources are pinned vs live
-    requested_sources = (
-        set(source) if source else {"ancient_nerds", "lyra", "ancient_nerds_community"}
-    )
-    pinned_sources: dict[str, str] = {
-        sid: pins[sid]  # type: ignore[misc]
-        for sid in requested_sources
-        if sid in pins and pins[sid] is not None
-    }
-    live_sources = [sid for sid in requested_sources if sid not in pinned_sources]
-
+    plan = _plan_sources(db, source)
     # Include pin fingerprint in cache key so pinned vs unpinned don't collide
-    pin_fp = (
-        ",".join(f"{k}={v}" for k, v in sorted(pinned_sources.items()))
-        if pinned_sources
-        else "none"
+    pin_fp = ",".join(f"{k}={v}" for k, v in sorted(plan.pinned.items())) if plan.pinned else "none"
+    source_key = ",".join(sorted(plan.requested))
+    key_base = f"sites:all:{source_key}:{site_type or 'all'}:{period_max or 'all'}:{skip}:{limit}:pin={pin_fp}"
+
+    body = cache_get_bytes(f"{key_base}:f={fields}")
+    if body is None:
+        payload = _build_sites_payload(db, plan, site_type, period_max, skip, limit)
+        # Both variants from the same read: the globe's later fields=all request then matches
+        # the dots it already drew, unless an invalidation came in between.
+        variants = {"all": _gzip_json(payload), "globe": _gzip_json(globe_projection(payload))}
+        for variant, data in variants.items():
+            cache_set_bytes(f"{key_base}:f={variant}", data, ttl=_ALL_CACHE_TTL_S)
+        body = variants[fields]
+
+    if "gzip" in req.headers.get("accept-encoding", ""):
+        return Response(
+            body,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(
+        gzip.decompress(body), media_type="application/json", headers={"Vary": "Accept-Encoding"}
     )
-    source_key = ",".join(sorted(requested_sources))
-    cache_key = f"sites:all:{source_key}:{site_type or 'all'}:{period_max or 'all'}:{skip}:{limit}:pin={pin_fp}"
 
-    # Try cache first (30 min TTL)
-    cached = cache_get(cache_key)
-    if cached:
-        return cached
 
+def _build_sites_payload(
+    db: Session,
+    plan: _SourcePlan,
+    site_type: str | None,
+    period_max: int | None,
+    skip: int,
+    limit: int,
+) -> dict:
+    """The /all payload (every field) for a source plan; no caching, no serialisation."""
+    pinned_sources, live_sources = plan.pinned, plan.live
     all_sites: list[dict] = []
 
     # Load pinned sources from snapshot files
@@ -404,13 +469,11 @@ def get_all_sites(
                 status_code=500, detail="Database query failed for live sites"
             ) from e
 
-    response = {
+    return {
         "count": len(all_sites),
         "sites": all_sites,
         "dataSource": "postgres" if live_sources else "snapshot",
     }
-    cache_set(cache_key, response, ttl=1800)
-    return response
 
 
 @router.get("/viewport")

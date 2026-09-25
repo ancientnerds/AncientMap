@@ -293,9 +293,14 @@ GLOBE_PATH = "/globe.html"
 #:              pushState (only AccountPage and ArticlesPage do), so Umami
 #:              cannot manufacture a virtual view here and views and
 #:              globe_ready are the same granularity.
-#:   ready    - globe_ready, fired once per load from onLayersReady.
+#:   ready    - globe_ready, sent once per load by App (hooks/useGlobeReady.ts)
+#:              when the loading overlay fades: the sites, the critical layers
+#:              and the focus lookup are in, no error screen, a live context.
 #:   ready_ms - the milliseconds each globe_ready carried, so the funnel and
-#:              the times come from ONE scan.
+#:              the times come from ONE scan. Samples from before the
+#:              globe-load deploy (2026-09) measured the layers moment only
+#:              (Globe's layers callback); later ones include the sites payload
+#:              and the focus lookup, so the two are not comparable.
 #: The LEFT JOIN is load-bearing: a page view has no event_data row.
 #: There is deliberately no "did the bundle boot" column. web-vitals' onTTFB
 #: waits for document.readyState === 'complete', so a visitor who leaves
@@ -306,15 +311,97 @@ GLOBE_PATH = "/globe.html"
 #: places only, so a camera drag leaves the timer armed. Both live globe_idle
 #: events carry the literal ms=30000 and both belong to a visitor who was
 #: toggling a country filter at that moment. Precision 0/2.
+#:
+#: The same scan also says how the loads that never reached globe_ready
+#: ended (stats_analysis.globe_funnel folds them; one query, because the
+#: dashboard contract forbids a second /globe.html scan). The frontend sends
+#: at most one ending per load; Umami has no page-load id, so the fold is per
+#: session and capped by the unreached loads.
+#:   gate_left     - globe_gate with a choice other than the globe: the phone
+#:                   gate sent the visitor elsewhere.
+#:   gate_quit     - globe_abandon{phase:'gate'}: left while the gate showed.
+#:   unsupported   - globe_unsupported: the capability check failed.
+#:   failed        - globe_error of the start. Background failures carry
+#:                   phase 'bg:<task>' and failures after globe_ready carry
+#:                   'live' (the error boundary caught a globe that was up,
+#:                   or a loader failed later); both belong to loads that
+#:                   reached the globe, so they are excluded. left(), because
+#:                   a LIKE pattern needs the percent sign the guard test forbids.
+#:                   So is a start failure marked ending='no': the load had
+#:                   already ended (a tab switch while loading sent
+#:                   globe_abandon, the visitor came back to the error
+#:                   screen); it is sent for its phase and message only
+#:                   (src/hooks/useGlobeScreenEnding.ts).
+#:   context_lost  - webgl_lost{phase:'loading'}: the start failure the globe
+#:                   reported before globe_error existed. Uncounted, it would
+#:                   land in "no signal", which reads as a crash.
+#:   abandoned     - globe_abandon in any phase after the gate.
+#:   abandon_ms    - their ms, oldest first, so the fold keeps the latest. The
+#:                   wait since the load started: navigation, or the moment
+#:                   the phone gate went away (analytics/globeAbandon.ts
+#:                   createLoadClock) - reading the gate is no loading wait.
+#:                   ready_ms counts from navigation, the gate included.
+#:   views_before  - the session's page views that ran a build without the
+#:                   endings, so if they did not reach the globe they are
+#:                   "unmeasured", not "no signal". The cut is measured_from:
+#:                   - endings_since, the first ending event ever recorded on
+#:                     the path (not the first in the window): the moment the
+#:                     instrumentation went live. Every view while no ending
+#:                     exists yet.
+#:                   - For a session that opened the globe before it, the
+#:                     second view at or after it: the globe page installed
+#:                     the service worker, which serves globe.html and its JS
+#:                     cache-first, so the first load after the deploy still
+#:                     ran the previous build and the next one runs the new
+#:                     (src/pwa/globeStartPrecache.ts). No such view yet: all
+#:                     of the session's views.
+#:                   Counted per load, not decided per session: an Umami
+#:                   session is one browser for a calendar month, so it holds
+#:                   loads from both sides. The `measured` CTE reads the
+#:                   session's whole history on the path, not the window: the
+#:                   view before the endings began can lie before :since.
+#:                   What this cannot see, so a stale first load still reads
+#:                   as "no signal": a browser whose earlier globe visit fell
+#:                   in an earlier month (another Umami session), or whose
+#:                   worker came from another page. The other way round, one
+#:                   view too many counts as before when the session's first
+#:                   load after the deploy came before the first ending, or
+#:                   when another page had already switched it to the new
+#:                   worker.
+#:   ready_before  - the session's globe_ready events before measured_from:
+#:                   the loads before it that reached the globe, the stale
+#:                   first load after the deploy included.
+#: choice and phase are strings (event_data.string_value); ms is a number and
+#: lives in number_value.
 SQL_GLOBE = """
-WITH ev AS (
+WITH first_ending AS (
+    SELECT min(e2.created_at) AS endings_since
+    FROM website_event e2
+    WHERE e2.website_id = :website_id AND e2.url_path = :path
+      AND e2.event_name IN ('globe_gate', 'globe_unsupported', 'globe_error', 'globe_abandon')
+),
+ev AS (
     SELECT e.event_id, e.session_id, e.created_at, e.event_type, e.event_name,
-           (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms
+           (max(d.number_value) FILTER (WHERE d.data_key = 'ms'))::float8 AS ms,
+           max(d.string_value) FILTER (WHERE d.data_key = 'choice') AS choice,
+           max(d.string_value) FILTER (WHERE d.data_key = 'phase')  AS phase,
+           max(d.string_value) FILTER (WHERE d.data_key = 'ending') AS ending
     FROM website_event e
     LEFT JOIN event_data d ON d.website_event_id = e.event_id
     WHERE e.website_id = :website_id AND e.url_path = :path
       AND e.created_at >= :since AND e.created_at < :until
     GROUP BY e.event_id, e.session_id, e.created_at, e.event_type, e.event_name
+),
+measured AS (
+    SELECT v.session_id,
+           CASE WHEN bool_or(v.created_at < f.endings_since)
+                THEN (array_agg(v.created_at ORDER BY v.created_at)
+                          FILTER (WHERE v.created_at >= f.endings_since))[2]
+                ELSE f.endings_since END AS measured_from
+    FROM website_event v CROSS JOIN first_ending f
+    WHERE v.website_id = :website_id AND v.url_path = :path AND v.event_type = 1
+      AND v.session_id IN (SELECT session_id FROM ev)
+    GROUP BY v.session_id, f.endings_since
 )
 SELECT session_id,
        count(*) FILTER (WHERE event_type = 1)             AS views,
@@ -323,8 +410,28 @@ SELECT session_id,
            array_remove(
                array_agg(ms ORDER BY created_at) FILTER (WHERE event_name = 'globe_ready'),
                NULL),
-           ARRAY[]::float8[]) AS ready_ms
-FROM ev
+           ARRAY[]::float8[]) AS ready_ms,
+       count(*) FILTER (WHERE event_name = 'globe_gate' AND choice <> 'globe')  AS gate_left,
+       count(*) FILTER (WHERE event_name = 'globe_abandon' AND phase = 'gate')  AS gate_quit,
+       count(*) FILTER (WHERE event_name = 'globe_unsupported')                 AS unsupported,
+       count(*) FILTER (WHERE event_name = 'globe_error'
+                          AND (phase IS NULL
+                               OR (left(phase, 3) <> 'bg:' AND phase <> 'live'))
+                          AND ending IS DISTINCT FROM 'no')                     AS failed,
+       count(*) FILTER (WHERE event_name = 'webgl_lost' AND phase = 'loading')  AS context_lost,
+       count(*) FILTER (WHERE event_name = 'globe_abandon'
+                          AND phase IS DISTINCT FROM 'gate')                    AS abandoned,
+       coalesce(
+           array_remove(
+               array_agg(ms ORDER BY created_at) FILTER (
+                   WHERE event_name = 'globe_abandon' AND phase IS DISTINCT FROM 'gate'),
+               NULL),
+           ARRAY[]::float8[]) AS abandon_ms,
+       count(*) FILTER (WHERE event_type = 1
+                          AND (m.measured_from IS NULL OR created_at < m.measured_from)) AS views_before,
+       count(*) FILTER (WHERE event_name = 'globe_ready'
+                          AND (m.measured_from IS NULL OR created_at < m.measured_from)) AS ready_before
+FROM ev LEFT JOIN measured m USING (session_id)
 GROUP BY session_id
 """
 
@@ -408,10 +515,13 @@ GROUP BY 1, 2
 ORDER BY sessions DESC
 """
 
-#: A globe that lost its WebGL context. src/components/Globe.tsx sends this
-#: once per page view with `reason` (why the loop stopped) and `phase`
-#: ("loading" before onLayersReady, "live" after), so the panel can say
-#: whether the visitor ever saw a globe at all.
+#: A globe that lost its WebGL context. App sends this through
+#: analytics/globeAbandon.ts reportWebglLost with `reason` (why the loop
+#: stopped) and `phase`, so the panel can say whether the visitor ever saw a
+#: globe at all. "loading" means before globe_ready; it is the load's one
+#: ending, so it is sent at most once per load and not after another ending
+#: (a globe_abandon of the same load suppresses it). "live" means after
+#: globe_ready and is sent on every loss.
 SQL_WEBGL_LOST = (
     """
 WITH ev AS (

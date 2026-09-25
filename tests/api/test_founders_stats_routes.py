@@ -269,12 +269,45 @@ def test_sources_bucket_a_bare_perplexity_as_ai(monkeypatch):
 
 
 def test_globe_asks_only_for_the_globe_path(monkeypatch):
-    rows = [{"session_id": "a", "views": 2, "ready": 1, "ready_ms": [9450.0]}]
+    rows = [
+        {
+            "session_id": "a",
+            "views": 2,
+            "ready": 1,
+            "ready_ms": [9450.0],
+            "gate_left": 0,
+            "gate_quit": 0,
+            "unsupported": 0,
+            "failed": 0,
+            "context_lost": 0,
+            "abandoned": 1,
+            "abandon_ms": [6100.0],
+            "views_before": 0,
+            "ready_before": 0,
+        }
+    ]
     fetch = Fetch(**{"'globe_ready'": rows})
     monkeypatch.setattr(fr, "fetch", fetch)
     out = asyncio.run(fr.globe(days=7, _session=SESSION))
-    assert set(out) == {"loads", "reached", "gave_up", "sessions", "ready_ms"}
+    assert set(out) == {
+        "loads",
+        "reached",
+        "gave_up",
+        "sessions",
+        "ready_ms",
+        "not_reached",
+        "abandon_ms",
+    }
     assert out["loads"] == 2 and out["reached"] == 1
+    assert out["not_reached"] == {
+        "gate": 0,
+        "unsupported": 0,
+        "error": 0,
+        "abandoned": 1,
+        "no_signal": 0,
+        "unmeasured": 0,
+    }
+    assert out["abandon_ms"]["samples"] == 1
     assert len(fetch.calls) == 1 and fetch.calls[0][3] == {"path": fr.GLOBE_PATH}
 
 

@@ -329,7 +329,8 @@ SHALLOW_DEPTH = 25
 #: name, so a step carrying one is always the page view, never an action.
 SHALLOW_PAGES = {"story", "site"}
 #: What a lost WebGL context means for the visitor, by the phase the globe was
-#: in when it happened. src/components/Globe.tsx sends exactly these two.
+#: in when it happened. App sends exactly these two, computed in
+#: analytics/globeAbandon.ts reportWebglLost from whether globe_ready fired.
 WEBGL_PHASES = {
     "loading": "globe never started",
     "live": "globe froze after it had started",
@@ -605,10 +606,36 @@ def hourly_sessions(
 #: six browsers and two of those contributed two loads each.
 GLOBE_MIN_SAMPLES = 5
 
+#: How a load that never fired globe_ready ended, in the order a load meets
+#: them: phone gate -> capability check -> start -> the visitor leaving. Each
+#: bucket names the SQL_GLOBE columns that count it. The frontend sends one of
+#: these per load; the order only decides who wins when a session carries more
+#: of them than it has unreached loads.
+GLOBE_ENDINGS = (
+    ("gate", ("gate_left", "gate_quit")),
+    ("unsupported", ("unsupported",)),
+    ("error", ("failed", "context_lost")),
+    ("abandoned", ("abandoned",)),
+)
+
+
+def _spread(times: list[float]) -> dict[str, Any]:
+    """min / median / max / samples - the median (the upper-middle element)
+    only from GLOBE_MIN_SAMPLES on."""
+    times = sorted(times)
+    enough = len(times) >= GLOBE_MIN_SAMPLES
+    return {
+        "min": times[0] if times else None,
+        "median": times[len(times) // 2] if enough else None,
+        "max": times[-1] if times else None,
+        "samples": len(times),
+    }
+
 
 def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """How many globe loads reached an interactive globe, and how long the
-    ones that did took. Rows are SQL_GLOBE's, one per session.
+    """How many globe loads reached an interactive globe, how long the ones
+    that did took, and how the others ended. Rows are SQL_GLOBE's, one per
+    session.
 
     Measured 2026-09-19: 33 loads, 8 of them reached - about three quarters of
     the people who open the globe never see one. The denominator is page
@@ -622,11 +649,48 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     the funnel from reading more successes than loads, and applying it to the
     timings would throw away real measurements. The two can differ, so
     GlobeReach's sentence names the events, not the visitors.
+
+    `not_reached` splits `gave_up`; the invariant is
+    ``sum(not_reached.values()) == gave_up``, always. Umami ties an event to a
+    session, never to a page load, so the split is per session: the session's
+    unreached loads (`views - min(ready, views)`) are handed to the endings in
+    GLOBE_ENDINGS order, each capped by what is left. Background failures
+    (`globe_error{phase:'bg:…'}`) and failures after globe_ready
+    (`globe_error{phase:'live'}`) are not endings - SQL_GLOBE excludes them,
+    they belong to loads that reached the globe. `webgl_lost` while loading
+    is an error: it is a start failure, and uncounted it would read as a
+    crash. What no ending claims is `no_signal` - the page loaded and nothing
+    else arrived (a crashed tab, or a visitor gone before the tracker loaded) -
+    except the loads that ran a build without the endings and did not reach
+    the globe (SQL_GLOBE's `views_before` minus `ready_before`, capped like
+    `ready`): the loads before the first ending event was ever recorded, and
+    a returning visitor's first load after it, which the service worker
+    still served from the previous build. Such a load could not have sent
+    one, so it is `unmeasured`: otherwise every load from before the
+    instrumentation would read as a crash for as long as the window reaches
+    back. This is counted per load, not per session: an Umami session is one
+    browser for a calendar month, and its silent loads on the new build are
+    `no_signal`. SQL_GLOBE's comment names the stale loads it cannot tell
+    apart. Endings still claim loads first, and the unmeasured part is
+    capped by what they leave.
+
+    `abandon_ms` is capped where `ready_ms` is not: only the abandons that the
+    split actually counted feed it, the latest ones of the session. A
+    globe_abandon sent on visibilitychange->hidden can be followed by the same
+    load's globe_ready (a tab switched away and back); that one is no "left
+    while loading" measurement. It can also be followed by the same load's
+    start failure: that globe_error arrives marked ``ending='no'`` (diagnosis
+    only), SQL_GLOBE's `failed` skips it, and the load stays "left while
+    loading" - one ending per load, as the frontend promises.
     """
     loads = 0
     reached = 0
     reached_sessions = 0
     times: list[float] = []
+    split = {name: 0 for name, _cols in GLOBE_ENDINGS}
+    no_signal = 0
+    unmeasured = 0
+    left_times: list[float] = []
     for r in rows:
         views = int(r["views"] or 0)
         if not views:
@@ -636,19 +700,26 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
         reached += got
         reached_sessions += 1 if got else 0
         times.extend(float(ms) for ms in (r["ready_ms"] or []))
-    times.sort()
-    enough = len(times) >= GLOBE_MIN_SAMPLES
+        left = views - got
+        for name, cols in GLOBE_ENDINGS:
+            take = min(sum(int(r[c] or 0) for c in cols), left)
+            split[name] += take
+            left -= take
+            # `and take` is load-bearing: xs[-0:] is the whole list.
+            if name == "abandoned" and take:
+                left_times.extend(float(ms) for ms in (r["abandon_ms"] or [])[-take:])
+        views_before = int(r["views_before"] or 0)
+        silent_before = min(views_before - min(int(r["ready_before"] or 0), views_before), left)
+        unmeasured += silent_before
+        no_signal += left - silent_before
     return {
         "loads": loads,
         "reached": reached,
         "gave_up": loads - reached,
         "sessions": {"all": sum(1 for r in rows if r["views"]), "reached": reached_sessions},
-        "ready_ms": {
-            "min": times[0] if times else None,
-            "median": times[len(times) // 2] if enough else None,
-            "max": times[-1] if times else None,
-            "samples": len(times),
-        },
+        "ready_ms": _spread(times),
+        "not_reached": {**split, "no_signal": no_signal, "unmeasured": unmeasured},
+        "abandon_ms": _spread(left_times),
     }
 
 

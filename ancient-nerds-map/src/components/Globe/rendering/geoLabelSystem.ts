@@ -10,6 +10,7 @@ import {
   LABEL_STYLES,
   LABEL_BASE_SCALE,
   CUDDLE,
+  EFFECTS,
   GEO,
 } from '../../../config/globeConstants'
 import {
@@ -17,6 +18,7 @@ import {
   createGlobeTangentLabel,
   fadeLabelIn,
   fadeLabelOut,
+  measureLabel,
   type GlobeLabelMesh,
 } from '../../../utils/LabelRenderer'
 import { FadeManager } from '../../../utils/FadeManager'
@@ -115,8 +117,7 @@ export interface GeoLabelContext {
   ancientCitiesDataRef: React.MutableRefObject<Record<string, Array<{ name: string; type: string }>>>
   showAncientCitiesRef: React.MutableRefObject<boolean>
 
-  // Update ref & state setters
-  updateGeoLabelsRef: React.MutableRefObject<(() => void) | null>
+  // State setter
   setLabelsLoaded: (loaded: boolean) => void
 
   // WebGL context recovery
@@ -125,14 +126,67 @@ export interface GeoLabelContext {
 }
 
 // =============================================================================
-// LABEL PRELOADING
+// LABEL LOADING - meshes at load, textures on first show
 // =============================================================================
+
+/**
+ * The labels.json entries that become meshes: every label the fade pass can
+ * show or that takes part in its collision, in file order.
+ *
+ * Cities and metropols are not globe labels. The pass never makes a state
+ * capital (a capital that is not national) eligible, so such a capital can
+ * only appear through its name: visibility is keyed by name, and a state
+ * capital that shares its name with a label the pass does make eligible takes
+ * part in the collision and its capital-to-country check and, when it comes
+ * first, is the one shown (labels.json 2026-09: 12 of them, e.g. Mali in
+ * Guinea beside the country Mali, Kaliningrad before the Kaliningrad sea
+ * label, Victoria in Canada before the Seychelles' capital). Those stay; the
+ * other 2,356 are never shown.
+ */
+export function selectGeoLabels(labels: GeoLabel[]): GeoLabel[] {
+  const globeLabels = labels.filter(l => l.type !== 'metropol' && l.type !== 'city')
+  const isStateCapital = (l: GeoLabel) => l.type === 'capital' && l.national !== true
+  const eligibleNames = new Set(globeLabels.filter(l => !isStateCapital(l)).map(l => l.name))
+  return globeLabels.filter(l => !isStateCapital(l) || eligibleNames.has(l.name))
+}
+
+/**
+ * The labels the fade pass can show. It keys visibility by name and walks the
+ * geo labels first, so of labels sharing a name only the first is ever faded
+ * in; the others take part in the collision only and never need a texture.
+ */
+export function shownGeoLabels(labels: GlobeLabel[]): GlobeLabel[] {
+  const seen = new Set<string>()
+  return labels.filter(item => {
+    if (seen.has(item.label.name)) return false
+    seen.add(item.label.name)
+    return true
+  })
+}
+
+const hasTexture = (item: GlobeLabel) => (item.mesh.material as THREE.ShaderMaterial).uniforms.map.value !== null
+
+/**
+ * Draws a label's texture if it has none yet (the texture cache serves labels
+ * with the same text and style). The mesh takes the aspect of the texture it
+ * got: a web font that finished loading after the load's measurement changes
+ * the width, and the label must not be stretched to the old one.
+ */
+export function ensureLabelTexture(item: GlobeLabel): void {
+  if (hasTexture(item)) return
+  const { texture, width, height } = createLabelTexture(item.label.name, item.label.type, item.label.national)
+  ;(item.mesh.material as THREE.ShaderMaterial).uniforms.map.value = texture
+  item.mesh.userData.aspect = width / height
+}
 
 /**
  * Loads labels from /data/labels.json and creates globe-tangent label meshes.
  * This is the async core of the useEffect that runs on sceneReady.
  *
- * Extracted from Globe.tsx lines ~2915-2974.
+ * Each mesh is created at its texture's size but without the texture and stays
+ * invisible; the texture is drawn when the label is first shown (the fade pass,
+ * `applyGeoLabelFades`). The labels visible right now are textured here, before
+ * labelsLoaded, so globe_ready still means that every label on screen is drawn.
  */
 export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
   if (!ctx.sceneRef.current) return
@@ -140,15 +194,16 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
   const { scene } = ctx.sceneRef.current
 
   const res = await offlineFetch('/data/labels.json')
+  // Part of the start: an error answer fails it (Globe reports phase 'labels')
+  if (!res.ok) throw new Error(`/data/labels.json: HTTP ${res.status}`)
   const data: { labels: GeoLabel[] } = await res.json()
   if (!ctx.sceneRef.current) return
 
-  const labelsToLoad = data.labels.filter(l => l.type !== 'metropol' && l.type !== 'city')
+  const labelsToLoad = selectGeoLabels(data.labels)
   ctx.totalLabelsCountRef.current = labelsToLoad.length
 
-  // Create all label textures directly
   for (const label of labelsToLoad) {
-    const { texture, width, height } = createLabelTexture(label.name, label.type, label.national)
+    const { width, height } = measureLabel(label.name, label.type, label.national)
     const phi = (90 - label.lat) * Math.PI / 180
     const theta = (label.lng + 180) * Math.PI / 180
     const styleKey = (label.type === 'capital' && label.national) ? 'capitalNat' : label.type
@@ -168,16 +223,24 @@ export async function loadGeoLabels(ctx: GeoLabelContext): Promise<void> {
       sea: 1065, mountain: 1060, desert: 1055, capital: 1075,
     }
 
-    const mesh = createGlobeTangentLabel(texture, position, baseScale, width / height, LABEL_RENDER_ORDER[styleKey] ?? 1000)
+    const mesh = createGlobeTangentLabel(null, position, baseScale, width / height, LABEL_RENDER_ORDER[styleKey] ?? 1000)
     mesh.visible = false
     scene.add(mesh)
     ctx.geoLabelsRef.current.push({ label, mesh, position })
     ctx.allLabelMeshesRef.current.push(mesh)
   }
 
+  // The visibility pass for the current camera, and the textures of what it shows
+  if (ctx.geoLabelsVisibleRef.current) {
+    updateGeoLabels(ctx)
+    const visible = ctx.visibleAfterCollisionRef.current
+    for (const item of shownGeoLabels(ctx.geoLabelsRef.current)) {
+      if (visible.has(item.label.name)) ensureLabelTexture(item)
+    }
+  }
+
   ctx.labelsLoadedRef.current = true
   ctx.setLabelsLoaded(true)
-  if (ctx.geoLabelsVisibleRef.current) ctx.updateGeoLabelsRef.current?.()
 }
 
 // =============================================================================
@@ -663,6 +726,96 @@ export function updateGeoLabels(ctx: GeoLabelContext): void {
   ctx.visibleAfterCollisionRef.current = visibleAfterCollision
 
   ctx.lastCalculatedZoomRef.current = currentZoom
+}
+
+// =============================================================================
+// FADE PASS - the show path, run by the animation loop every frame
+// =============================================================================
+
+/**
+ * Texture drawing the fade pass may do in one frame. A zoom to the closest
+ * Three.js view with labels on makes ~970 labels eligible at once (the
+ * collision is global): drawn in one frame that was a 206 ms task on the
+ * desktop probe and 1.37 s on the emulated phone (CPU x4). With the budget
+ * they appear over the next frames instead, those facing the camera first.
+ */
+export const LABEL_TEXTURE_BUDGET_MS = 8
+
+const _cameraDir = new THREE.Vector3()
+const _labelDir = new THREE.Vector3()
+
+/**
+ * Fades geo and layer labels in or out when their collision result changed.
+ * Backside hiding is the shader's vViewFade. Visibility is keyed by name: of
+ * labels sharing a name only the first (geo labels come first) changes state.
+ *
+ * A label's texture is drawn here the first time it is shown, the labels
+ * facing the camera most first, at most `budgetMs` of drawing per call (the
+ * first texture of a call always). A label on the far side, where vViewFade
+ * leaves nothing of it (below HORIZON_FADE_START), gets its texture once it
+ * turns toward the camera. A label still without its texture keeps its old
+ * state until a later frame, and so does every later label of its name, so a
+ * same-named label never shows in its place.
+ */
+export function applyGeoLabelFades(
+  ctx: {
+    geoLabelsRef: { current: GlobeLabel[] }
+    layerLabelsRef: { current: Record<string, GlobeLabel[]> }
+    fadeManagerRef: { current: FadeManager }
+    labelVisibilityStateRef: { current: Map<string, boolean> }
+    visibleAfterCollisionRef: { current: Set<string> }
+  },
+  cameraPosition: THREE.Vector3,
+  now: () => number = () => performance.now(),
+  budgetMs: number = LABEL_TEXTURE_BUDGET_MS,
+): void {
+  const geoAndLayerLabels = [
+    ...ctx.geoLabelsRef.current,
+    ...Object.values(ctx.layerLabelsRef.current).flat()
+  ]
+
+  const fm = ctx.fadeManagerRef.current
+  const visibilityState = ctx.labelVisibilityStateRef.current
+  _cameraDir.copy(cameraPosition).normalize()
+  /** Names whose first label waits for its texture: none of that name changes state this frame. */
+  let waiting: Set<string> | null = null
+  let toDraw: Array<{ item: GlobeLabel; facing: number }> | null = null
+
+  for (const item of geoAndLayerLabels) {
+    const labelName = item.label.name
+    if (waiting?.has(labelName)) continue
+
+    // Target visibility based on collision detection
+    const shouldBeVisible = ctx.visibleAfterCollisionRef.current.has(labelName)
+    const isCurrentlyVisible = visibilityState.get(labelName) ?? false
+
+    // Only trigger fade when visibility state changes
+    if (shouldBeVisible === isCurrentlyVisible) continue
+
+    if (shouldBeVisible && !hasTexture(item)) {
+      (waiting ??= new Set()).add(labelName)
+      const facing = _labelDir.copy(item.mesh.position).normalize().dot(_cameraDir)
+      if (facing > EFFECTS.HORIZON_FADE_START) (toDraw ??= []).push({ item, facing })
+      continue
+    }
+
+    visibilityState.set(labelName, shouldBeVisible)
+    if (shouldBeVisible) {
+      fadeLabelIn(item.mesh, fm, `geo-${labelName}`)
+    } else {
+      fadeLabelOut(item.mesh, fm, `geo-${labelName}`)
+    }
+  }
+
+  if (!toDraw) return
+  toDraw.sort((a, b) => b.facing - a.facing)
+  const drawingSince = now()
+  for (const { item } of toDraw) {
+    ensureLabelTexture(item)
+    visibilityState.set(item.label.name, true)
+    fadeLabelIn(item.mesh, fm, `geo-${item.label.name}`)
+    if (now() - drawingSince >= budgetMs) break
+  }
 }
 
 // =============================================================================

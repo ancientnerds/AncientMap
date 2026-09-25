@@ -4,7 +4,7 @@
 
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { MAPBOX, rotateMapboxToken, getMapboxToken } from '../config/mapboxConstants'
+import { MAPBOX } from '../config/mapboxConstants'
 import { applyDarkTealTheme as applyTealTheme, setupDarkFog, hexToRgba } from '../utils/mapboxTheme'
 import { isDemoMode } from '../utils/demoApi'
 
@@ -120,7 +120,9 @@ export class MapboxGlobeService {
       preserveDrawingBuffer: isDemoMode(),
     })
 
-    await new Promise<void>((resolve, _reject) => {
+    await new Promise<void>((resolve, reject) => {
+      let styleLoaded = false
+      this.map!.once('style.load', () => { styleLoaded = true })
       this.map!.on('load', () => {
         this.setupFog()
         this.applyDarkTealTheme()
@@ -129,20 +131,16 @@ export class MapboxGlobeService {
         resolve()
       })
 
-      this.map!.on('error', (e: mapboxgl.ErrorEvent & { error?: { status?: number } }) => {
-        // Check for 401 unauthorized - token expired
-        if (e.error?.status === 401) {
-          console.warn('[MapboxGlobe] Token expired (401), rotating to next token...')
-          if (rotateMapboxToken()) {
-            // Update the token and reload style
-            mapboxgl.accessToken = getMapboxToken()
-            this.map?.setStyle(MapboxGlobeService.STYLES[this.currentStyle])
-          } else {
-            console.error('[MapboxGlobe] All tokens exhausted, cannot recover')
-          }
-        } else {
-          console.error('[MapboxGlobe] Map error:', e)
-        }
+      // Before 'style.load', an error of the style itself (style fetch
+      // failed, 401/403, offline) means the map will never load.
+      // Tile and TileJSON errors are forwarded from their source and carry
+      // `sourceId`; they are not fatal. After 'style.load' a sourceless error
+      // (sprite or iconset request failed) is not fatal either: the style
+      // still finishes and 'load' follows. Anything that hangs from there on
+      // is caught by the loader's visible-time deadline.
+      this.map!.on('error', (e: mapboxgl.ErrorEvent) => {
+        console.error('[MapboxGlobe] Map error:', e)
+        if (!styleLoaded && !('sourceId' in e)) reject(e.error)
       })
     })
   }

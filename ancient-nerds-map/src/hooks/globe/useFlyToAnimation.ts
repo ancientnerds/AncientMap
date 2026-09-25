@@ -5,97 +5,135 @@
  * - Fly-to effect (rotate to coordinates from search results)
  * - Camera animation with spherical interpolation (slerp)
  * - Mapbox mode fly-to support
+ * - A fly-to that arrives before the intro warp waits for the warp's end
  */
 
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import type { GlobeRefs } from './types'
+import { latLngToCartesian } from '../../utils/geoMath'
 
 interface UseFlyToAnimationOptions {
   refs: GlobeRefs
   flyTo?: [number, number] | null  // [lng, lat] coordinates to fly to
 }
 
+interface UseFlyToAnimationReturn {
+  /**
+   * The intro warp has ended (Globe's onWarpComplete): fly to the latest fly-to
+   * that arrived before the warp started, unless it aims where the warp landed.
+   */
+  replayPendingFlyTo: () => void
+}
+
+/** Below this angle (radians, ≈6 m on the ground) a fly-to target is the warp's own target. */
+const SAME_TARGET_RAD = 1e-6
+
 export function useFlyToAnimation({
   refs,
   flyTo,
-}: UseFlyToAnimationOptions): void {
+}: UseFlyToAnimationOptions): UseFlyToAnimationReturn {
+  /** The latest fly-to that arrived before the warp started; flown when it ends. */
+  const pendingRef = useRef<[number, number] | null>(null)
+
   // Rotate to coordinates when flyTo prop changes (search result) - no zoom
   useEffect(() => {
     if (!flyTo) return
-
-    const [lng, lat] = flyTo
-
-    // Handle Mapbox mode
-    if (refs.showMapbox.current && refs.mapboxService.current?.getIsInitialized()) {
-      refs.mapboxService.current.flyTo(lat, lng, 600)
+    // Before the intro starts the warp owns the camera: flown now, the camera
+    // would flip ~180° at the warp's first frame. The fly-to waits for the
+    // warp's end instead (a focus-site or fly-to-coords message from another
+    // tab while this one loads); a later one replaces it.
+    if (refs.warpStartTime.current === null) {
+      pendingRef.current = flyTo
       return
     }
+    pendingRef.current = null
+    flyCamera(refs, flyTo)
+    // The members, not `refs`: useGlobeRefs() builds a fresh object around the
+    // same refs on every Globe render, and flyTo stays set after a flight, so
+    // `refs` here would fly back to the last target on every re-render (and
+    // start a waiting fly-to mid-warp). Only a new target flies.
+  }, [flyTo, refs.warpStartTime, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
 
-    // Handle Three.js globe mode
-    if (!refs.scene.current) return
+  const replayPendingFlyTo = useCallback(() => {
+    const pending = pendingRef.current
+    pendingRef.current = null
+    if (!pending) return
+    // Every start-up target (?lat&lon, proximity=1) is the warp target already
+    // (initialPosition): the camera is there, nothing to fly.
+    const warpTarget = refs.warpTargetCameraPos.current
+    if (warpTarget && latLngToCartesian(pending[1], pending[0]).angleTo(warpTarget) < SAME_TARGET_RAD) return
+    flyCamera(refs, pending)
+  }, [refs.warpTargetCameraPos, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
 
-    const { camera, controls } = refs.scene.current
+  return { replayPendingFlyTo }
+}
 
-    // Keep current distance (no zoom change)
-    const currentDist = camera.position.length()
+/** Rotates the camera to [lng, lat] at its current distance (Mapbox: its own flyTo). */
+function flyCamera(refs: GlobeRefs, [lng, lat]: [number, number]): void {
+  // Handle Mapbox mode
+  if (refs.showMapbox.current && refs.mapboxService.current?.getIsInitialized()) {
+    refs.mapboxService.current.flyTo(lat, lng, 600)
+    return
+  }
 
-    // Convert lat/lng to unit vector direction (target direction)
-    const phi = (90 - lat) * Math.PI / 180
-    const theta = (lng + 180) * Math.PI / 180
-    const targetDir = new THREE.Vector3(
-      -Math.sin(phi) * Math.cos(theta),
-      Math.cos(phi),
-      Math.sin(phi) * Math.sin(theta)
-    ).normalize()
+  // Handle Three.js globe mode
+  if (!refs.scene.current) return
 
-    // Get start direction (normalized current position)
-    const startDir = camera.position.clone().normalize()
+  const { camera, controls } = refs.scene.current
 
-    // Cancel any existing camera animation
-    if (refs.cameraAnimation.current) {
-      cancelAnimationFrame(refs.cameraAnimation.current)
+  // Keep current distance (no zoom change)
+  const currentDist = camera.position.length()
+
+  // Convert lat/lng to unit vector direction (target direction)
+  const targetDir = latLngToCartesian(lat, lng).normalize()
+
+  // Get start direction (normalized current position)
+  const startDir = camera.position.clone().normalize()
+
+  // Cancel any existing camera animation
+  if (refs.cameraAnimation.current) {
+    cancelAnimationFrame(refs.cameraAnimation.current)
+    refs.cameraAnimation.current = null
+  }
+
+  // Pause auto-rotation during animation
+  const wasRotating = refs.isAutoRotating.current
+  refs.isAutoRotating.current = false
+
+  // Animate using spherical interpolation (slerp) to avoid diving through globe
+  const duration = refs.flyToDuration.current // ms (default 600, configurable via demo API)
+  const startTime = performance.now()
+
+  // Use quaternions for proper spherical interpolation
+  const startQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), startDir)
+  const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), targetDir)
+  const currentQuat = new THREE.Quaternion()
+
+  const animateRotate = () => {
+    const elapsed = performance.now() - startTime
+    const progress = Math.min(1, elapsed / duration)
+    const eased = 1 - Math.pow(1 - progress, 3) // Ease out cubic
+
+    // Spherical interpolation of direction
+    currentQuat.slerpQuaternions(startQuat, targetQuat, eased)
+    const currentDir = new THREE.Vector3(0, 0, 1).applyQuaternion(currentQuat)
+
+    // Apply fixed distance to get camera position (maintains zoom level)
+    camera.position.copy(currentDir.multiplyScalar(currentDist))
+    camera.lookAt(0, 0, 0)
+    controls.update()
+
+    if (progress < 1) {
+      refs.cameraAnimation.current = requestAnimationFrame(animateRotate)
+    } else {
       refs.cameraAnimation.current = null
-    }
-
-    // Pause auto-rotation during animation
-    const wasRotating = refs.isAutoRotating.current
-    refs.isAutoRotating.current = false
-
-    // Animate using spherical interpolation (slerp) to avoid diving through globe
-    const duration = refs.flyToDuration.current // ms (default 600, configurable via demo API)
-    const startTime = performance.now()
-
-    // Use quaternions for proper spherical interpolation
-    const startQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), startDir)
-    const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), targetDir)
-    const currentQuat = new THREE.Quaternion()
-
-    const animateRotate = () => {
-      const elapsed = performance.now() - startTime
-      const progress = Math.min(1, elapsed / duration)
-      const eased = 1 - Math.pow(1 - progress, 3) // Ease out cubic
-
-      // Spherical interpolation of direction
-      currentQuat.slerpQuaternions(startQuat, targetQuat, eased)
-      const currentDir = new THREE.Vector3(0, 0, 1).applyQuaternion(currentQuat)
-
-      // Apply fixed distance to get camera position (maintains zoom level)
-      camera.position.copy(currentDir.multiplyScalar(currentDist))
-      camera.lookAt(0, 0, 0)
-      controls.update()
-
-      if (progress < 1) {
-        refs.cameraAnimation.current = requestAnimationFrame(animateRotate)
-      } else {
-        refs.cameraAnimation.current = null
-        // Resume rotation after animation if it was rotating before
-        if (wasRotating) {
-          refs.isAutoRotating.current = true
-        }
+      // Resume rotation after animation if it was rotating before
+      if (wasRotating) {
+        refs.isAutoRotating.current = true
       }
     }
+  }
 
-    refs.cameraAnimation.current = requestAnimationFrame(animateRotate)
-  }, [flyTo, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
+  refs.cameraAnimation.current = requestAnimationFrame(animateRotate)
 }

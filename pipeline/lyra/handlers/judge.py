@@ -10,7 +10,11 @@ import logging
 import re
 
 from pipeline.lyra.handlers import BaseHandler
-from pipeline.lyra.quality_gate import quality_gate_passed
+from pipeline.lyra.quality_gate import (
+    citation_coverage_score,
+    quality_gate_passed,
+    reference_integrity_score,
+)
 from pipeline.lyra.research_events import ImageGenComplete, QualityPassed
 from pipeline.lyra.research_state import ResearchPhase
 
@@ -67,16 +71,11 @@ class JudgeHandler(BaseHandler):
         # --- Compute metrics ---
         scores = {}
 
-        # M1: Citation coverage (0-15)
-        # Each uncited paragraph costs 3 points
+        # M1/M2: citation coverage (0-15) and reference integrity (0-10) —
+        # shared with auto-publish's recomputation, so the rubric cannot drift.
         uncited = audit_result.get("uncited_paragraphs", 0)
-        scores["citation_coverage"] = max(0, 15 - uncited * 3)
-
-        # M2: Reference integrity (0-10)
-        # Invalid markers and orphaned refs cost 2 points each
-        invalid = len(audit_result.get("invalid_markers", []))
-        orphaned = len(audit_result.get("orphaned_refs", []))
-        scores["reference_integrity"] = max(0, 10 - (invalid + orphaned) * 2)
+        scores["citation_coverage"] = citation_coverage_score(audit_result)
+        scores["reference_integrity"] = reference_integrity_score(audit_result)
 
         # M3: Section completeness (0-20)
         # Check for required Why Files sections

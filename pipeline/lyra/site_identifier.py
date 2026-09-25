@@ -1217,6 +1217,12 @@ def _pick_wikidata_entity(
     return None
 
 
+#: Width of the P18 thumbnail a radar card shows. It has to be one of Wikimedia's fixed buckets
+#: (wiki_image_downloader.COMMONS_BUCKETS): any other width answers HTTP 400. It was 300, and on
+#: 2026-09-24 all 30 radar thumbnails built that way were dead.
+RADAR_THUMB_WIDTH = 330
+
+
 def _enrich_from_wikidata(qid: str) -> dict:
     """Fetch detailed entity data from Wikidata for enrichment.
 
@@ -1334,7 +1340,7 @@ def _enrich_from_wikidata(qid: str) -> dict:
             )
             result["thumbnail_url"] = (
                 f"https://upload.wikimedia.org/wikipedia/commons/thumb/"
-                f"{md5[0]}/{md5[0:2]}/{encoded_name}/300px-{thumb_suffix}"
+                f"{md5[0]}/{md5[0:2]}/{encoded_name}/{RADAR_THUMB_WIDTH}px-{thumb_suffix}"
             )
 
     # P373: Commons category

@@ -609,8 +609,40 @@ def test_hourly_sessions_ignores_rows_outside_the_strip():
 # ---- globe ----------------------------------------------------------------
 
 
-def _globe_row(session="a", views=1, ready=0, ready_ms=()):
-    return {"session_id": session, "views": views, "ready": ready, "ready_ms": list(ready_ms)}
+def _globe_row(
+    session="a",
+    views=1,
+    ready=0,
+    ready_ms=(),
+    *,
+    gate_left=0,
+    gate_quit=0,
+    unsupported=0,
+    failed=0,
+    context_lost=0,
+    abandoned=0,
+    abandon_ms=(),
+    views_before=0,
+    ready_before=0,
+):
+    """views_before / ready_before: the session's page views and globe_readys
+    before the first ending event was ever recorded (SQL_GLOBE). 0 by default:
+    every default row is a measured one."""
+    return {
+        "session_id": session,
+        "views": views,
+        "ready": ready,
+        "ready_ms": list(ready_ms),
+        "gate_left": gate_left,
+        "gate_quit": gate_quit,
+        "unsupported": unsupported,
+        "failed": failed,
+        "context_lost": context_lost,
+        "abandoned": abandoned,
+        "abandon_ms": list(abandon_ms),
+        "views_before": views_before,
+        "ready_before": ready_before,
+    }
 
 
 def test_globe_funnel_counts_loads_and_reaches():
@@ -637,6 +669,194 @@ def test_globe_funnel_hides_the_middle_below_the_sample_floor():
     assert out["ready_ms"]["samples"] == fs.GLOBE_MIN_SAMPLES - 1
     enough = [_globe_row(ready_ms=[float(i) for i in range(fs.GLOBE_MIN_SAMPLES)], ready=5)]
     assert fs.globe_funnel(enough)["ready_ms"]["median"] == 2.0
+
+
+def test_globe_funnel_keeps_its_ready_times_exactly():
+    """The spread helper the abandon times share must not move a single value
+    of the times the panel prints today: upper-middle median, uncapped
+    samples, floats."""
+    rows = [
+        _globe_row("a", views=2, ready=3, ready_ms=[19917.0, 9450.0, 80383.0]),
+        _globe_row("b", views=4, ready=2, ready_ms=[12000.0, 30000.0]),
+    ]
+    assert fs.globe_funnel(rows)["ready_ms"] == {
+        "min": 9450.0,
+        "median": 19917.0,
+        "max": 80383.0,
+        "samples": 5,
+    }
+
+
+def test_globe_funnel_splits_every_unreached_load_exactly_once():
+    rows = [
+        _globe_row("gate", views=1, gate_left=1),
+        _globe_row("nogl", views=2, unsupported=2),
+        _globe_row("err", views=1, failed=1),
+        _globe_row("gone", views=3, ready=1, ready_ms=[9000.0], abandoned=1, abandon_ms=[4200.0]),
+        _globe_row("quiet", views=2),
+        _globe_row("fine", views=1, ready=1, ready_ms=[8000.0]),
+    ]
+    out = fs.globe_funnel(rows)
+    assert out["not_reached"] == {
+        "gate": 1,
+        "unsupported": 2,
+        "error": 1,
+        "abandoned": 1,
+        "no_signal": 3,
+        "unmeasured": 0,
+    }
+    assert sum(out["not_reached"].values()) == out["gave_up"] == 8
+    # The totals the panel printed before the split are untouched.
+    assert (out["loads"], out["reached"]) == (10, 2)
+
+
+def test_globe_funnel_caps_the_endings_at_the_unreached_loads_in_their_order():
+    """Umami has no page-load id, so a session with more endings than
+    unreached loads is resolved in the order a load meets them: phone gate,
+    capability check, start, the visitor leaving."""
+    row = _globe_row(
+        "many",
+        views=2,
+        gate_left=1,
+        unsupported=1,
+        failed=1,
+        abandoned=1,
+        abandon_ms=[3000.0],
+    )
+    out = fs.globe_funnel([row])
+    assert out["not_reached"] == {
+        "gate": 1,
+        "unsupported": 1,
+        "error": 0,
+        "abandoned": 0,
+        "no_signal": 0,
+        "unmeasured": 0,
+    }
+    # The abandon that no load was left for is no measurement either.
+    assert out["abandon_ms"]["samples"] == 0
+
+
+def test_globe_funnel_counts_leaving_the_phone_gate_as_the_gate():
+    out = fs.globe_funnel([_globe_row("g", views=1, gate_quit=1)])
+    assert out["not_reached"]["gate"] == 1 and out["not_reached"]["abandoned"] == 0
+
+
+def test_globe_funnel_counts_a_context_lost_while_loading_as_an_error():
+    """webgl_lost{phase:'loading'} is a start failure the globe reported long
+    before globe_error existed; as "no signal" it would read as a crash."""
+    out = fs.globe_funnel([_globe_row("ctx", views=2, context_lost=1, failed=1)])
+    assert out["not_reached"]["error"] == 2 and out["not_reached"]["no_signal"] == 0
+
+
+def test_globe_funnel_drops_the_abandon_time_of_a_load_that_arrived():
+    """visibilitychange->hidden is not always leaving: a tab switched away and
+    back can send globe_abandon and then globe_ready. The ready wins through
+    the cap, and `xs[-0:]` would otherwise hand back the whole list."""
+    out = fs.globe_funnel(
+        [_globe_row("back", views=1, ready=1, ready_ms=[20000.0], abandoned=1, abandon_ms=[5000.0])]
+    )
+    assert out["not_reached"]["abandoned"] == 0
+    assert out["abandon_ms"] == {"min": None, "median": None, "max": None, "samples": 0}
+
+
+def test_globe_funnel_keeps_the_latest_abandon_times_it_counts():
+    out = fs.globe_funnel(
+        [
+            _globe_row(
+                "two", views=2, ready=1, ready_ms=[9000.0], abandoned=2, abandon_ms=[1000.0, 7000.0]
+            )
+        ]
+    )
+    assert out["not_reached"]["abandoned"] == 1
+    assert out["abandon_ms"]["min"] == 7000.0 and out["abandon_ms"]["samples"] == 1
+
+
+def test_globe_funnel_hides_the_abandon_middle_below_the_sample_floor():
+    def rows(n):
+        return [
+            _globe_row(f"s{i}", views=1, abandoned=1, abandon_ms=[1000.0 * (i + 1)])
+            for i in range(n)
+        ]
+
+    few = fs.globe_funnel(rows(fs.GLOBE_MIN_SAMPLES - 1))["abandon_ms"]
+    assert few["median"] is None and few["min"] == 1000.0 and few["max"] == 4000.0
+    assert few["samples"] == fs.GLOBE_MIN_SAMPLES - 1
+    enough = fs.globe_funnel(rows(fs.GLOBE_MIN_SAMPLES))["abandon_ms"]
+    assert enough["median"] == 3000.0 and enough["samples"] == fs.GLOBE_MIN_SAMPLES
+
+
+def test_globe_funnel_does_not_call_loads_before_the_endings_existed_no_signal():
+    """A load before the instrumentation went live carries none of the ending
+    events. As "no signal" it would read as the crash signature for as long as
+    the window reaches back, exactly in the weeks the change is judged."""
+    rows = [
+        _globe_row("old", views=3, ready=1, ready_ms=[9000.0], views_before=3, ready_before=1),
+        _globe_row("new", views=1),
+    ]
+    out = fs.globe_funnel(rows)
+    assert out["not_reached"]["unmeasured"] == 2
+    assert out["not_reached"]["no_signal"] == 1
+    assert sum(out["not_reached"].values()) == out["gave_up"]
+
+
+def test_globe_funnel_still_counts_the_endings_of_the_session_that_sent_the_first():
+    """The very first ending ever recorded belongs to a session whose page
+    view came a few seconds earlier - that session is instrumented, and its
+    ending counts. Only what would otherwise be "no signal" is unmeasured."""
+    row = _globe_row("first", views=2, gate_left=1, views_before=2)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["gate"] == 1
+    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 0
+
+
+def test_globe_funnel_calls_everything_unmeasured_before_any_ending_was_sent():
+    # SQL_GLOBE counts every view as "before" while no ending exists
+    out = fs.globe_funnel([_globe_row("a", views=2, views_before=2)])
+    assert out["not_reached"]["unmeasured"] == 2 and out["not_reached"]["no_signal"] == 0
+
+
+def test_globe_funnel_calls_a_silent_load_after_the_endings_began_no_signal_in_a_session_from_before():
+    """An Umami session is one browser for a calendar month, so one session
+    holds loads from before and after the instrumentation went live. A silent
+    load that ran the new build could have sent an ending: it is the crash
+    signature, not "before these were recorded". The load of 2026-09-20
+    reached the globe; the first one after the deploy (09-26) ran the previous
+    build from the service-worker cache and reached it too, so SQL_GLOBE counts
+    both "before"; the one of 09-27 crashed."""
+    row = _globe_row(
+        "month", views=3, ready=2, ready_ms=[8000.0, 7000.0], views_before=2, ready_before=2
+    )
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["no_signal"] == 1 and out["not_reached"]["unmeasured"] == 0
+
+
+def test_globe_funnel_calls_the_stale_first_load_after_the_deploy_unmeasured():
+    """The first load after the deploy of a browser that had opened the globe
+    before ran the previous build, served cache-first by the service worker,
+    which sends no ending (SQL_GLOBE counts it "before"). One view before the
+    endings began, the stale load after it, both unreached, then a silent
+    crash on the new build: two unmeasured, one no signal."""
+    row = _globe_row("month", views=3, views_before=2)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["unmeasured"] == 2 and out["not_reached"]["no_signal"] == 1
+    assert sum(out["not_reached"].values()) == out["gave_up"]
+
+
+def test_globe_funnel_calls_the_stale_load_unmeasured_when_the_earlier_one_reached_the_globe():
+    """The review's row: 09-20 reached the globe, the deploy followed, and on
+    09-26 the old service worker served the old bundle and the visitor left
+    while it loaded. That load could not have sent globe_abandon."""
+    row = _globe_row("month", views=2, ready=1, ready_ms=[8000.0], views_before=2, ready_before=1)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 0
+
+
+def test_globe_funnel_calls_unmeasured_only_as_many_loads_as_went_unreached_before():
+    """One unreached load before the endings began, two silent ones after."""
+    row = _globe_row("month", views=3, views_before=1)
+    out = fs.globe_funnel([row])
+    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 2
+    assert sum(out["not_reached"].values()) == out["gave_up"]
 
 
 # ---- clusters -------------------------------------------------------------
@@ -885,22 +1105,23 @@ def test_problems_rank_a_lost_webgl_context_by_the_visitors_it_reached():
 
 def test_the_webgl_phases_are_the_ones_the_globe_sends():
     """WEBGL_PHASES has no default (the test above pins the KeyError), and the
-    vocabulary is written in another language in another repo tree: Globe.tsx
-    computes `layersReadyCalledRef.current ? 'live' : 'loading'` and sends that
-    string. A third phase there would turn every /api/stats/problems call into
+    vocabulary is written in another language in another repo tree:
+    analytics/globeAbandon.ts reportWebglLost computes
+    `globeReady ? 'live' : 'loading'` and sends that string. A third phase there would turn every /api/stats/problems call into
     a 500 and every founder's Problems panel into "Data unavailable." Same
     guard as tests/api/test_goto_discord.py::TestAllowlistSync."""
-    globe_tsx = (
+    abandon_ts = (
         Path(__file__).resolve().parents[2]
         / "ancient-nerds-map"
         / "src"
-        / "components"
-        / "Globe.tsx"
+        / "analytics"
+        / "globeAbandon.ts"
     ).read_text(encoding="utf-8")
-    m = re.search(r"const phase = \w+\.current \? '(\w+)' : '(\w+)'", globe_tsx)
-    assert m, "the webgl_lost phase ternary is not in Globe.tsx any more"
+    m = re.search(r"const phase = globeReady \? '(\w+)' : '(\w+)'", abandon_ts)
+    assert m, "the webgl_lost phase ternary is not in globeAbandon.ts any more"
     assert set(m.groups()) == set(fs.WEBGL_PHASES)
-    assert "track('webgl_lost', { reason, phase })" in globe_tsx
+    assert "if (phase === 'live') track('webgl_lost', { reason, phase })" in abandon_ts
+    assert "else latch.end('webgl_lost', { reason, phase })" in abandon_ts
 
 
 def test_problems_list_eight_rows_by_default():

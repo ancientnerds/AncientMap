@@ -6,11 +6,13 @@
  * All fetch() calls in the app should use this service.
  */
 
+import { BASEMAP_CACHE, VECTOR_LAYER_CACHE, precacheCacheName } from '../pwa/cacheNames'
+
 // Cache names used by the app
 const CACHE_NAMES = [
-  'vector-layers',      // Coastlines, rivers, lakes, borders, paleoshorelines
+  VECTOR_LAYER_CACHE,   // Coastlines, rivers, lakes, borders, paleoshorelines
   'historical-data',    // Empire boundaries, metadata
-  'basemaps',          // Satellite imagery
+  BASEMAP_CACHE,       // Basemap imagery, labels.json
 ]
 
 /**
@@ -31,6 +33,8 @@ type OfflineModeListener = (isOffline: boolean) => void
 class OfflineFetchService {
   private _isOffline = false
   private listeners = new Set<OfflineModeListener>()
+  /** CACHE_NAMES, and in the browser the service worker's precache: the start tiers of this build (pwa/globeStartPrecache.ts) */
+  private cacheNames: readonly string[] = CACHE_NAMES
 
   constructor() {
     // The singleton is constructed at import time — which also happens under
@@ -38,6 +42,8 @@ class OfflineFetchService {
     // On the server there is no navigator/window: the service stays "online"
     // and inert; only effects ever call it, and effects don't run there.
     if (typeof window === 'undefined') return
+
+    this.cacheNames = [...CACHE_NAMES, precacheCacheName(location.origin)]
 
     // Initialize from browser's online status
     this._isOffline = !navigator.onLine
@@ -92,7 +98,7 @@ class OfflineFetchService {
    * Checks all app caches
    */
   async getCached(url: string): Promise<Response | null> {
-    for (const cacheName of CACHE_NAMES) {
+    for (const cacheName of this.cacheNames) {
       try {
         const cache = await caches.open(cacheName)
         const cached = await cache.match(url)

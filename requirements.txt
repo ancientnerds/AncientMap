@@ -5,7 +5,7 @@
 # DATABASE
 # =============================================================================
 psycopg2-binary>=2.9.9      # PostgreSQL adapter
-sqlalchemy>=2.0.0           # ORM
+sqlalchemy>=2.0.0,<2.1      # ORM; 2.1 makes postgresql:// load psycopg 3, we ship psycopg2
 geoalchemy2>=0.14.0         # PostGIS support for SQLAlchemy
 alembic>=1.13.0             # Database migrations
 

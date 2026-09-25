@@ -139,6 +139,7 @@ export default function SearchPage() {
     sites, sourceNameMap, selectedSources, selectedCategories,
     allCategories: categoriesFromActiveSources, selectedCountries,
     allCountries: countries, ageRange, searchAllSources, applyFiltersToSearch: true,
+    detailsReady: true, // fetchSites() loads the full payload
   })
 
   // Card click — show popup overlay
@@ -307,7 +308,7 @@ export default function SearchPage() {
 
         {search.searchQuery.trim().length >= 3 && (
           <div className="search-results-count">
-            {search.isSearching ? <span>Searching...</span> : <span>{search.searchResults.length} site{search.searchResults.length !== 1 ? 's' : ''} found</span>}
+            {search.searchError ? <span>{search.searchError}</span> : search.isSearching ? <span>Searching...</span> : <span>{search.searchResults.length} site{search.searchResults.length !== 1 ? 's' : ''} found</span>}
           </div>
         )}
 
@@ -383,7 +384,7 @@ export default function SearchPage() {
           </>
         )}
 
-        {search.searchQuery.trim().length >= 3 && !search.isSearching && search.searchResults.length === 0 && (
+        {search.searchQuery.trim().length >= 3 && !search.isSearching && !search.searchError && search.searchResults.length === 0 && (
           <div className="search-prompt">
             <p>No sites found matching "{search.searchQuery}"{!searchAllSources && ' — try enabling "All sources"'}</p>
             <FeedbackPrompt

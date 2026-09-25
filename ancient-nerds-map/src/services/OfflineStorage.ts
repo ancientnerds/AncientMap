@@ -51,8 +51,9 @@ export interface DownloadState {
   }>
   basemapQualities: ('low' | 'normal' | 'high')[]  // Legacy - kept for backward compat
   basemapQuality: 'none' | 'low' | 'normal' | 'high'  // Legacy - kept for backward compat
-  basemapItems: string[]  // New: 'satellite' | 'labels'
-  layers: string[]  // Vector layers (coastlines, rivers, etc.)
+  // Absent in states from before these items and in the one clearAllSites writes
+  basemapItems?: string[]  // 'satellite'; an old 'labels' mark names no item any more (BasemapCache)
+  layers?: string[]  // Vector layers (coastlines, rivers, etc.)
   empires: string[]
   lastUpdated: string
 }
@@ -361,7 +362,7 @@ class OfflineStorageClass {
   }
 
   /**
-   * Add a basemap item to download state (satellite, labels)
+   * Add a basemap item to download state (BasemapType: satellite)
    */
   async addBasemapItem(itemId: string): Promise<void> {
     const state = await this.getDownloadState()

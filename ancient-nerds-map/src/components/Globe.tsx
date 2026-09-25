@@ -2,12 +2,16 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SiteData, getDataSource } from '../data/sites'
 import { FilterMode } from '../App'
-import { offlineFetch, OfflineFetch } from '../services/OfflineFetch'
+import { OfflineFetch, offlineFetch } from '../services/OfflineFetch'
+import { runMapboxLoadTask } from '../services/mapboxLoader'
+import { browserQueueScheduling } from '../services/globeBackgroundQueue'
+import { useGlobeBackgroundQueue, type GlobeBackgroundRuns } from '../hooks/globe/useGlobeBackgroundQueue'
 import { useOffline } from '../contexts/OfflineContext'
-import { track } from '../analytics'
+import { trackBackgroundFailure } from '../analytics/globeBackground'
 import { EMPIRES } from '../config/empireData'
 import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
+import { MAPBOX_SWITCH_DISTANCE, orbitMinDistance } from '../config/globeConstants'
 import { fadeLabelIn, fadeLabelOut } from '../utils/LabelRenderer'
 import { createProximityCircle, createCenterMarker, disposeGroup, disposeSprite } from '../utils/proximityHelpers'
 import { CoordinateDisplay, ScaleBar, ContributePickerHint, HardwareWarning, TooltipOverlay, MapboxOfflineWarning } from './Globe/overlays'
@@ -32,7 +36,6 @@ import {
   type GlobeRenderContext,
 } from './Globe/rendering/empireRenderer'
 import {
-  createMapboxInitEffect,
   createAutoSwitchEffect,
   createModeSwitchEffect,
   createSitesSyncEffect,
@@ -40,7 +43,6 @@ import {
   createProximityCircleSyncEffect,
   createSelectedSitesSyncEffect,
   createEmpireBordersSyncEffect,
-  type MapboxInitEffectDeps,
   type AutoSwitchEffectDeps,
   type ModeSwitchEffectDeps,
   type SitesSyncEffectDeps,
@@ -57,11 +59,22 @@ import {
   type GeoLabelContext,
 } from './Globe/rendering/geoLabelSystem'
 import {
-  loadFrontLayer as loadFrontLayerImpl,
-  loadBackLayer as loadBackLayerImpl,
+  createLayerParser,
+  ensureHiresCoastline,
+  isAbortError,
+  loadVectorLayer as loadVectorLayerImpl,
+  pickLayersToLoad,
+  preloadRiversLakes,
+  resumeDeferredGlobeLayers,
+  upgradeGlobeLayers,
+  type HiresCoastlineGate,
+  type ParseLayer,
   type VectorRendererContext,
 } from './Globe/rendering/vectorRenderer'
-import { initializeScene, type SceneInitOptions } from './Globe/rendering/sceneInit'
+import { computeWarpCameraPositions, initializeScene, type SceneInitOptions, type SceneResult } from './Globe/rendering/sceneInit'
+import { useStartErrorBridge } from './GlobeErrorBoundary'
+import { GlobeStartError } from '../utils/globeStartError'
+import type { StartItem } from '../analytics/globeAbandon'
 import { runAnimationLoop, type AnimationLoopContext } from './Globe/rendering/animationLoop'
 import {
   setupEventHandlers,
@@ -97,6 +110,9 @@ interface ProximityState {
   isSettingOnGlobe: boolean
 }
 
+/** App's tasks in the globe's background queue; `sw` is null where no worker is registered (dev). */
+export type AppBackgroundTasks = Pick<GlobeBackgroundRuns, 'details' | 'sw'>
+
 interface GlobeProps {
   sites: (SiteData & { isInsideProximity?: boolean })[]
   filterMode: FilterMode
@@ -112,13 +128,17 @@ interface GlobeProps {
   onEmpireClick?: (empireId: string, defaultYear?: number, yearOptions?: number[]) => void  // Opens empire popup when clicking on empire borders
   flyTo?: [number, number] | null  // [lng, lat] coordinates to fly to
   isLoading?: boolean  // Show loading state (disables clicks)
-  splashDone?: boolean  // True when splash screen has closed (triggers warp animation)
+  splashDone?: boolean  // True once the loading overlay starts to fade: the warp starts then (with this globe's layers ready)
   proximity?: ProximityState  // Proximity filter state
   onProximitySet?: (coords: [number, number]) => void  // Callback when position is set on globe
   onProximityHover?: (coords: [number, number] | null) => void  // Callback when hovering in proximity mode
   initialPosition?: [number, number] | null  // [lng, lat] initial camera position (user location)
   onLayersReady?: () => void  // Callback when essential layers (coastlines, borders) are loaded
-  onWebglLost?: (reason: string, phase: string) => void  // WebGL context died - the globe is frozen until the page reloads
+  isGlobeReady: () => boolean  // App's globe_ready has fired (the overlay faded): loader failures are 'live' from then on
+  onStartProgress?: (item: StartItem) => void  // A critical item of the start is in (scene, basemap, labels, coastlines, countryBorders), once each
+  onWarpComplete?: () => void  // The intro warp has ended (once per warp); the background queue starts here
+  appBackgroundTasks: AppBackgroundTasks  // App's work in the background queue (site details, service worker)
+  onWebglLost: (reason: string) => void  // WebGL context died - the globe is frozen until it comes back; App reports it (webgl_lost)
   onWebglRestored?: () => void  // Context came back and the animation loop was restarted
   // Contribute feature
   onContributeClick?: () => void  // Callback when contribute button is clicked
@@ -167,7 +187,7 @@ interface GlobeProps {
   isOffline?: boolean  // Whether currently offline (no network)
 }
 
-export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onWebglLost, onWebglRestored, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
+export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, isGlobeReady, onStartProgress, onWarpComplete, appBackgroundTasks, onWebglLost, onWebglRestored, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
   const refs = useGlobeRefs()
 
   // Batch destructure refs
@@ -206,6 +226,13 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     warpLinearProgress: warpLinearProgressRef, warpCompleteForLabels: warpCompleteForLabelsRef,
     logoAnimationStarted: logoAnimationStartedRef,
   } = refs
+
+  // Contract C0: every critical loader reports its failure here. Until App's globe_ready
+  // (the overlay fades: sites, layers and focus are in) and this instance's own layers are
+  // up, it reaches GlobeErrorBoundary and App shows the error screen - also between the
+  // layers and the sites, and in a Globe remounted after the phone gate. Afterwards the
+  // globe is on screen and stays up, and the failure is tracked as live.
+  const reportStartError = useStartErrorBridge(isGlobeReady, refs.layersReadyCalled)
 
   // Custom Hooks
   const ui = useUIState({ initialShowCoordinates: true })
@@ -265,7 +292,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     glaciers: false,
     plateBoundaries: false
   })
-  const [tileLayers, setTileLayers] = useState<{ satellite: boolean; streets: boolean }>({
+  // What the visitor switched on. The satellite view shows only once its texture
+  // is on the GPU, so every renderer reads the derived `tileLayers` further down.
+  const [requestedTileLayers, setTileLayers] = useState<{ satellite: boolean; streets: boolean }>({
     satellite: false,
     streets: false
   })
@@ -287,6 +316,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   })
   // Destructure for convenient access (avoiding conflicts with local declarations)
   const {
+    mapboxState, setMapboxState, mapboxStateRef,
     showMapbox, setShowMapbox, showMapboxRef,
     mapboxTransitioningRef, prevShowMapboxRef,
     enterMapboxMode, exitMapboxMode,
@@ -335,11 +365,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     listHighlightedPositions, setListHighlightedPositions,
   } = highlightedSitesHook
 
-  // Fly-to animation: camera movement to coordinates from search results
-  useFlyToAnimation({ refs, flyTo })
-
-  // Satellite mode: toggle between gray basemap and satellite imagery
-  useSatelliteMode({ refs, satellite: tileLayers.satellite, vectorLayers, showMapbox, mapboxServiceRef })
+  // Fly-to animation: camera movement to coordinates from search results. A fly-to
+  // that arrives before the intro warp is flown when the warp ends (onWarpComplete).
+  const { replayPendingFlyTo } = useFlyToAnimation({ refs, flyTo })
 
   // Contribute picker: map picker mode for adding new sites
   useContributePicker({
@@ -373,10 +401,33 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   })
 
   // Texture loading and application
-  const { texturesReady, backgroundLoadingComplete, lowFpsReady } = useTextureLoading({
+  const {
+    texturesReady, backgroundLoadingComplete, lowFpsReady,
+    satelliteReady, satelliteOnGpu, basemapPlan, loadSatellite, upgradeGray, requestSatellite,
+  } = useTextureLoading({
     refs,
     sceneReady,
+    satelliteRequested: requestedTileLayers.satellite,
+    onStartError: reportStartError,
+    onSatelliteFailed: () => setTileLayers(prev => ({ ...prev, satellite: false })),
   })
+  // Active tile layers: the satellite counts once a texture of it has reached the
+  // GPU (satelliteReady; it stays active through a context loss, only a failed load
+  // ends it). Until then the toggle shows satellitePending and the view stays gray.
+  const satelliteActive = requestedTileLayers.satellite && satelliteReady
+  const tileLayers = useMemo(
+    () => ({ ...requestedTileLayers, satellite: satelliteActive }),
+    [requestedTileLayers, satelliteActive],
+  )
+  // A requested satellite that never reached the GPU (or whose last load failed):
+  // useGlobeBackgroundQueue (below) moves its task to the front or loads it directly.
+  // A context loss does not make it pending: the restore reloads it (useTextureLoading).
+  const satellitePending = requestedTileLayers.satellite && !satelliteReady
+
+  // Satellite mode: toggle between gray basemap and satellite imagery. The shader
+  // samples the satellite only while its texture is on the GPU (a context restore
+  // reloads it); Mapbox and the dots follow the active satellite throughout.
+  useSatelliteMode({ refs, satellite: tileLayers.satellite, satelliteShown: tileLayers.satellite && satelliteOnGpu, vectorLayers, showMapbox, mapboxServiceRef })
 
   // Layers ready coordination hook called below (after labelsLoaded and layersLoaded are declared)
 
@@ -459,7 +510,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const {
     stars: starsRef, isManualZoom, isWheelZoom, wheelCursorLatLng, justEnteredMapbox,
     mapboxBaseZoom: mapboxBaseZoomRef, isAutoRotating: isAutoRotatingRef, manualRotation: manualRotationRef,
-    loading: loadingRef, shaderMaterials: shaderMaterialsRef, ledDotMaterial: ledDotMaterialRef,
+    shaderMaterials: shaderMaterialsRef, ledDotMaterial: ledDotMaterialRef,
     layersReadyCalled: layersReadyCalledRef, cameraAnimation: cameraAnimationRef, animationId: animationIdRef,
     zoom: zoomRef, highlightGlows: highlightGlowsRef, listHighlightedSites: listHighlightedSitesRef,
     listHighlightedPositions: listHighlightedPositionsRef, proximityRaycaster: proximityRaycasterRef,
@@ -487,7 +538,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     basemapMesh: basemapMeshRef, basemapSectionMeshes, basemapBackMesh: basemapBackMeshRef,
     proximityCircle: proximityCircleRef, proximityCenter: proximityCenterRef, proximityPreview: proximityPreviewRef,
     proximityPreviewCenter: proximityPreviewCenterRef, proximityCircleCenterPos: proximityCircleCenterPosRef,
-    backLayersLoaded: backLayersLoadedRef,
+    layerLoadIds: layerLoadIdsRef, globeLayerTiers: globeLayerTiersRef, failedLayers: failedLayersRef,
   } = refs
 
   // Sync refs with current values
@@ -535,6 +586,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       enterMapboxMode,
       exitMapboxMode,
       mapboxServiceRef,
+      mapboxStateRef,
+      requestMapbox: () => { background.promote('mapbox') },
     })
   }, [])
 
@@ -620,12 +673,14 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const handleContextLost = useCallback((reason: string) => {
     if (webglLostReportedRef.current) return
     webglLostReportedRef.current = true
-    // 'loading' means the visitor never saw a globe at all - the dashboard
-    // ranks that harder than a globe that froze after it had started.
-    const phase = layersReadyCalledRef.current ? 'live' : 'loading'
-    track('webgl_lost', { reason, phase })
-    onWebglLostRef.current?.(reason, phase)
+    // App knows whether the visitor saw the globe yet (webgl_lost's phase) and
+    // whether the load already ended (analytics/globeAbandon.ts reportWebglLost)
+    onWebglLostRef.current(reason)
   }, [])
+
+  // The intro's end, for the [] scene effect's loop context (same ref pattern as above)
+  const onWarpCompleteRef = useRef(onWarpComplete)
+  onWarpCompleteRef.current = onWarpComplete
 
   const handleContextRestored = useCallback(() => {
     webglLostReportedRef.current = false
@@ -675,9 +730,16 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setSceneReady,
       onContextLost: handleContextLost,
       onContextRestored: handleContextRestored,
+      onStartError: reportStartError,
     }
 
-    const sceneResult = initializeScene(containerRef.current, sceneOptions)
+    // A throw here reaches GlobeErrorBoundary (effect errors do); the phase says which step
+    let sceneResult: SceneResult
+    try {
+      sceneResult = initializeScene(containerRef.current, sceneOptions)
+    } catch (err) {
+      throw err instanceof GlobeStartError ? err : new GlobeStartError('scene', err)
+    }
     const {
       renderer,
       scene,
@@ -722,6 +784,13 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       warpProgressRef, warpLinearProgressRef, warpStartTimeRef,
       warpCompleteForLabelsRef, warpInitialCameraPosRef, warpTargetCameraPosRef,
       layersReadyCalledRef, dotsAnimationCompleteRef, logoAnimationStartedRef,
+      // Runs inside the frame that ends the warp: start() only books an idle callback,
+      // the fly-to only books its first frame
+      onWarpComplete: () => {
+        background.start()
+        replayPendingFlyTo()
+        onWarpCompleteRef.current?.()
+      },
       logoSpriteRef, logoMaterialRef, basemapMeshRef, basemapBackMeshRef,
       basemapSectionMeshes, shaderMaterialsRef, selectedDotMaterialRef,
       dotSizeRef, isAutoRotatingRef, isHoveringListRef, manualRotationRef,
@@ -814,14 +883,24 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [])
 
-  // Mapbox initialization
+  // The warp target follows initialPosition (a geolocation that arrives after mount)
+  // until the first warp frame; from then on the warp owns the camera.
   useEffect(() => {
-    const deps: MapboxInitEffectDeps = {
-      mapboxContainerRef,
-      mapboxServiceRef,
-    }
-    return createMapboxInitEffect(deps)
-  }, [])
+    const sceneData = sceneRef.current
+    if (!sceneData || warpStartTimeRef.current !== null) return
+    const { start, target } = computeWarpCameraPositions(initialPosition)
+    sceneData.camera.position.copy(start)
+    warpInitialCameraPosRef.current = start.clone()
+    warpTargetCameraPosRef.current = target
+  }, [initialPosition])
+
+  // No orbit closer than the Mapbox switch distance until Mapbox is ready
+  // (or has failed): the Three.js globe was never shown closer than that.
+  useEffect(() => {
+    const sceneData = sceneRef.current
+    if (!sceneData) return
+    sceneData.controls.minDistance = orbitMinDistance(mapboxState)
+  }, [mapboxState])
 
   const labelsLoadedRef = refs.labelsLoaded
   const [labelsLoaded, setLabelsLoaded] = useState(false)
@@ -834,6 +913,25 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     layersLoaded,
     onLayersReady,
   })
+
+  // Start progress for App's loading watchdog and globe_abandon's phase: each item once.
+  const onStartProgressRef = useRef(onStartProgress)
+  onStartProgressRef.current = onStartProgress
+  const reportedStartItemsRef = useRef(new Set<StartItem>())
+  useEffect(() => {
+    const items: Array<[StartItem, boolean]> = [
+      ['scene', sceneReady],
+      ['basemap', texturesReady],
+      ['labels', labelsLoaded],
+      ['coastlines', layersLoaded.coastlines === true],
+      ['countryBorders', layersLoaded.countryBorders === true],
+    ]
+    for (const [item, done] of items) {
+      if (!done || reportedStartItemsRef.current.has(item)) continue
+      reportedStartItemsRef.current.add(item)
+      onStartProgressRef.current?.(item)
+    }
+  }, [sceneReady, texturesReady, labelsLoaded, layersLoaded])
   const [labelReloadTrigger, setLabelReloadTrigger] = useState(0)
   const totalLabelsCountRef = refs.totalLabelsCount
 
@@ -866,7 +964,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     ancientCitiesRef,
     ancientCitiesDataRef,
     showAncientCitiesRef,
-    updateGeoLabelsRef,
     setLabelsLoaded,
     needsLabelReloadRef,
     setLabelReloadTrigger,
@@ -882,11 +979,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       await loadGeoLabelsImpl(buildGeoLabelContext())
     }
 
-    loadLabels().catch((err) => {
-      console.error('[Loading] Labels error:', err)
+    loadLabels().catch((err: unknown) => {
       labelsLoadingRef.current = false
+      reportStartError('labels', err)
     })
-  }, [sceneReady, labelReloadTrigger, buildGeoLabelContext])
+  }, [sceneReady, labelReloadTrigger, buildGeoLabelContext, reportStartError])
 
   // Handle WebGL context restoration - reload labels when textures are lost
   useEffect(() => {
@@ -898,7 +995,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     return () => window.removeEventListener('webgl-labels-need-reload', handleLabelReload)
   }, [buildGeoLabelContext])
 
-  // When user enables labels, just show them (already preloaded)
+  // When the user enables labels, run the visibility pass (the fade pass draws their textures)
   useEffect(() => {
     if (geoLabelsVisible && labelsLoadedRef.current) updateGeoLabelsRef.current?.()
   }, [geoLabelsVisible])
@@ -1380,85 +1477,115 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     )
   }, [])
 
-  // Build context for vector renderer functions
-  const buildVectorRendererContext = useCallback((): VectorRendererContext => ({
-    sceneRef,
-    loadingRef,
-    shaderMaterialsRef,
-    frontLineLayersRef,
-    backLineLayersRef,
-    backLayersLoadedRef,
-    fadeManagerRef,
-    detailLevelRef,
-    layerLabelsRef,
-    allLabelMeshesRef,
-    updateGeoLabelsRef,
-    vectorLayers,
-    tileLayers,
-    setIsLoadingLayers,
-    setLayersLoaded,
-    latLngTo3DRef,
-  }), [vectorLayers, tileLayers, latLngTo3DRef])
+  // Vector layers: one layer worker per Globe parses every layer file off the main thread. The
+  // lifetime signal cancels the loads still in flight when the Globe unmounts (StrictMode's
+  // simulated unmount included), so they are dropped instead of reported.
+  const layerRuntimeRef = useRef<{ parseLayer: ParseLayer; signal: AbortSignal } | null>(null)
+  useEffect(() => {
+    const lifetime = new AbortController()
+    const parser = createLayerParser()
+    layerRuntimeRef.current = { parseLayer: parser.parse, signal: lifetime.signal }
+    return () => {
+      lifetime.abort()
+      parser.dispose()
+      layerRuntimeRef.current = null
+    }
+  }, [])
 
-  // Load FRONT layer (always high detail, visible on front of globe)
-  const loadFrontLayer = useCallback(async (layerKey: VectorLayerKey) => {
-    return loadFrontLayerImpl(layerKey, buildVectorRendererContext())
-  }, [vectorLayers, latLngTo3DRef, tileLayers.satellite])
+  // Build context for vector renderer functions. Refs only, so a context built before an await
+  // (or by a background task) never works on a stale visibility or satellite snapshot.
+  const buildVectorRendererContext = useCallback((): VectorRendererContext => {
+    const runtime = layerRuntimeRef.current
+    if (!runtime) throw new Error('Vector layers: the layer worker is not running')
+    return {
+      sceneRef,
+      shaderMaterialsRef,
+      frontLineLayersRef,
+      backLineLayersRef,
+      fadeManagerRef,
+      detailLevelRef,
+      layerLabelsRef,
+      allLabelMeshesRef,
+      updateGeoLabelsRef,
+      vectorLayersRef,
+      satelliteModeRef: refs.satelliteMode,
+      layerLoadIdsRef,
+      globeLayerTiersRef,
+      failedLayersRef,
+      setIsLoadingLayers,
+      setLayersLoaded,
+      parseLayer: runtime.parseLayer,
+      signal: runtime.signal,
+      onStartError: reportStartError,
+    }
+  }, [reportStartError])
+
+  // Load a layer: front and back from one fetch and one parse
+  const loadVectorLayer = useCallback((layerKey: VectorLayerKey) => {
+    return loadVectorLayerImpl(layerKey, buildVectorRendererContext())
+  }, [buildVectorRendererContext])
+
+  // The background queue of this mount (hooks/globe/useGlobeBackgroundQueue.ts): the
+  // tasks this device needs, started from the loop's onWarpComplete, disposed on
+  // unmount. Every task builds its context when it runs, from refs.
+  const background = useGlobeBackgroundQueue({
+    plan: basemapPlan,
+    runs: {
+      details: appBackgroundTasks.details,
+      layers: signal => upgradeGlobeLayers(buildVectorRendererContext(), signal),
+      mapbox: signal => runMapboxLoadTask({
+        containerRef: mapboxContainerRef,
+        serviceRef: mapboxServiceRef,
+        satelliteRef: refs.satelliteMode,
+        dotSizeRef,
+        setState: setMapboxState,
+        isCancelled: () => signal.aborted,
+        signal,
+      }),
+      satellite: loadSatellite,
+      basemap: upgradeGray,
+      riversLakes: signal => preloadRiversLakes(buildVectorRendererContext(), signal),
+      sw: appBackgroundTasks.sw,
+    },
+    satellitePending,
+    requestSatellite,
+    scheduling: browserQueueScheduling,
+  })
+
+  // Mapbox is created by its background task (mapbox-gl is imported on demand,
+  // services/mapboxLoader.ts) and goes with the globe. Declared after the queue
+  // (useGlobeBackgroundQueue), so its unmount cleanup runs after the queue has
+  // aborted a Mapbox load still on its way.
+  useEffect(() => {
+    return () => {
+      mapboxServiceRef.current?.dispose()
+      mapboxServiceRef.current = null
+    }
+  }, [])
 
   // Reload rivers/lakes when detail level changes (track previous to avoid initial load)
   const prevDetailLevelRef = refs.prevDetailLevel
   useEffect(() => {
     if (!sceneRef.current) return
 
-    // Skip initial mount - the visibility effect handles first load
+    // Skip initial mount - the load effect handles first load
     if (prevDetailLevelRef.current === null) {
       prevDetailLevelRef.current = detailLevel
       return
     }
 
     // Only reload if detail level actually changed
-    if (prevDetailLevelRef.current !== detailLevel) {
-      prevDetailLevelRef.current = detailLevel
+    const prevDetail = prevDetailLevelRef.current
+    if (prevDetail === detailLevel) return
+    prevDetailLevelRef.current = detailLevel
 
-      // Reload LOD-enabled layers that are currently visible
-      if (vectorLayers.rivers) {
-        loadFrontLayer('rivers')
-      }
-      if (vectorLayers.lakes) {
-        loadFrontLayer('lakes')
-      }
-    }
-  }, [detailLevel, loadFrontLayer, vectorLayers.rivers, vectorLayers.lakes])
-
-  // Load BACK layer (same LOD as front, visible on back of globe)
-  const loadBackLayer = useCallback(async (layerKey: VectorLayerKey, forceReload = false) => {
-    return loadBackLayerImpl(layerKey, buildVectorRendererContext(), forceReload)
-  }, [vectorLayers, latLngTo3DRef, tileLayers.satellite])
-
-  // Reload BACK layers when detail level changes (mirrors front layer LOD effect)
-  const prevBackDetailLevelRef = refs.prevBackDetailLevel
-  useEffect(() => {
-    if (!sceneRef.current) return
-
-    // Skip initial mount
-    if (prevBackDetailLevelRef.current === null) {
-      prevBackDetailLevelRef.current = detailLevel
-      return
-    }
-
-    // Only reload if detail level actually changed
-    if (prevBackDetailLevelRef.current !== detailLevel) {
-      prevBackDetailLevelRef.current = detailLevel
-
-      // Reload LOD-enabled back layers that are currently loaded
-      if (backLayersLoadedRef.current['rivers'] && vectorLayers.rivers) {
-        loadBackLayer('rivers', true) // forceReload = true
-      }
-      if (backLayersLoadedRef.current['lakes'] && vectorLayers.lakes) {
-        loadBackLayer('lakes', true)
+    // Reload LOD-enabled layers that are currently visible, unless both levels use one file
+    for (const layerKey of ['rivers', 'lakes'] as const) {
+      if (vectorLayers[layerKey] && getLayerUrl(layerKey, prevDetail) !== getLayerUrl(layerKey, detailLevel)) {
+        loadVectorLayer(layerKey)
       }
     }
-  }, [detailLevel, loadBackLayer, vectorLayers.rivers, vectorLayers.lakes])
+  }, [detailLevel, loadVectorLayer, vectorLayers.rivers, vectorLayers.lakes])
 
   // Load paleoshoreline contour for current sea level (delegated to extracted module)
   const loadPaleoshoreline = useCallback(async (level: number) => {
@@ -1835,7 +1962,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         material.uniforms.uCameraPos.value.copy(sceneRef.current.camera.position)
       }
 
-      // Build merged geometry (same pattern as loadFrontLayer in vectorRenderer.ts)
+      // Build merged geometry (same pattern as loadVectorLayer in vectorRenderer.ts)
       const allPositions: number[] = []
       for (const feature of features) {
         const geometryType = feature.geometry.type
@@ -2163,25 +2290,53 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [geologicalLayers, currentTimeStep, buildGeologicalCtx])
 
-  // Load layers when visibility changes (always high detail)
+  // Load layers when they are switched on
   // NOTE: This runs in parallel with texture and label loading
   useEffect(() => {
-    Object.keys(vectorLayers).forEach(key => {
-      const layerKey = key as VectorLayerKey
-      const isEnabled = vectorLayers[layerKey]
-      const isLoaded = layersLoaded[layerKey]
-      const isLoading = isLoadingLayers[layerKey]
+    const failed = failedLayersRef.current
+    for (const layerKey of Object.keys(vectorLayers) as VectorLayerKey[]) {
+      // A failed layer is not loaded again while it stays on (no retry loop); switching it
+      // off and on again is a new attempt
+      if (!vectorLayers[layerKey]) delete failed[layerKey]
+    }
+    for (const layerKey of pickLayersToLoad(vectorLayers, layersLoaded, isLoadingLayers, failed)) {
+      loadVectorLayer(layerKey)
+    }
+  }, [vectorLayers, layersLoaded, isLoadingLayers, loadVectorLayer])
 
-      if (isEnabled && !isLoaded && !isLoading) {
-        // Load back layer (low detail for performance) if not already loaded
-        if (!backLayersLoadedRef.current[layerKey]) {
-          loadBackLayer(layerKey)
-        }
-        // Load front layer (high detail)
-        loadFrontLayer(layerKey)
-      }
+  // Hi-res coastline where the Three.js globe is the only view closer than the Mapbox switch
+  // (Mapbox failed). The controls fire 'change' on every camera move: wheel, drag and slider.
+  // The gate (Mapbox failed, camera below the switch) is checked before any context is built.
+  useEffect(() => {
+    const sceneData = sceneRef.current
+    if (!sceneData) return
+    const { controls, camera } = sceneData
+    const gate: HiresCoastlineGate = {
+      getMapboxState: () => mapboxStateRef.current,
+      getCameraDistance: () => camera.position.length(),
+      switchDistance: MAPBOX_SWITCH_DISTANCE,
+    }
+    const onChange = () => {
+      ensureHiresCoastline(gate, buildVectorRendererContext)?.catch((err: unknown) => {
+        // Unmounted while it loaded: cancelled, not failed
+        if (isAbortError(err)) return
+        trackBackgroundFailure('hires', err)
+      })
+    }
+    controls.addEventListener('change', onChange)
+    return () => controls.removeEventListener('change', onChange)
+  }, [buildVectorRendererContext])
+
+  // The `layers` task defers a detail tier app offline mode cannot fetch (nothing cached);
+  // switching offline mode off loads it, so coastlines and borders do not stay coarse
+  useEffect(() => OfflineFetch.onOfflineModeChange(offline => {
+    if (offline) return
+    resumeDeferredGlobeLayers(buildVectorRendererContext())?.catch((err: unknown) => {
+      // Unmounted while it loaded: cancelled, not failed
+      if (isAbortError(err)) return
+      trackBackgroundFailure('layers', err)
     })
-  }, [vectorLayers, layersLoaded, isLoadingLayers, loadFrontLayer, loadBackLayer])
+  }), [buildVectorRendererContext])
 
   // Handle layer visibility changes with fade animation (unified)
   useEffect(() => {
@@ -2230,15 +2385,15 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     const deps: AutoSwitchEffectDeps = {
       zoom,
       showMapbox,
+      mapboxState,
       setShowMapbox,
-      mapboxServiceRef,
       justEnteredMapbox,
       contextIsOffline,
       hasMapboxTilesCached,
       setShowMapboxOfflineWarning,
     }
     createAutoSwitchEffect(deps)
-  }, [zoom, showMapbox, contextIsOffline, hasMapboxTilesCached])
+  }, [zoom, showMapbox, contextIsOffline, hasMapboxTilesCached, mapboxState])
 
   // Sync showMapbox state to ref for animation loop and handle mode switching
   // When showMapbox is true: Mapbox becomes the PRIMARY interactive view
@@ -2386,32 +2541,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     return () => fadeManagerRef.current.dispose()
   }, [])
 
-  // Background preload vector layers (rivers, lakes) for instant toggle
-  const vectorPreloadedRef = refs.vectorPreloaded
-
-  useEffect(() => {
-    // Skip preloading in offline mode - we only use cached data
-    if (vectorPreloadedRef.current || !sceneRef.current || OfflineFetch.isOffline) return
-    vectorPreloadedRef.current = true
-
-    const preloadVectorLayers = async () => {
-      // Preload vector layers (rivers, lakes) - coastlines and borders load by default
-      const vectorLayersToPreload: VectorLayerKey[] = ['rivers', 'lakes']
-      for (const layerKey of vectorLayersToPreload) {
-        try {
-          const url = getLayerUrl(layerKey, 'high')
-          await offlineFetch(url).then(r => r.json())
-        } catch (e) {
-          // Silently ignore preload failures
-        }
-      }
-    }
-
-    // Start preloading after a short delay to not compete with initial render
-    const timeoutId = setTimeout(preloadVectorLayers, 2000)
-    return () => clearTimeout(timeoutId)
-  }, [])
-
   return (
     <div className={`globe-wrapper ${!hudVisible ? 'hud-hidden' : ''}`} style={{ '--hud-scale': hudScale } as React.CSSProperties}>
       {/* Hardware acceleration warning banner */}
@@ -2524,7 +2653,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       <MapLayersPanel
         minimized={mapLayersMinimized}
         onToggleMinimize={() => setMapLayersMinimized(prev => !prev)}
-        tileLayers={tileLayers}
+        tileLayers={requestedTileLayers}
+        satellitePending={satellitePending}
         onTileLayerToggle={(layer) => setTileLayers(prev => ({
           satellite: layer === 'satellite' ? !prev.satellite : false,
           streets: layer === 'streets' ? !prev.streets : false
@@ -2532,6 +2662,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         vectorLayers={vectorLayers}
         onVectorLayerToggle={(key) => setVectorLayers(prev => ({ ...prev, [key]: !prev[key] }))}
         isLoadingLayers={isLoadingLayers}
+        layersLoaded={layersLoaded}
         geoLabelsVisible={geoLabelsVisible}
         onGeoLabelsToggle={labels.toggleGeoLabels}
         labelTypesExpanded={labelTypesExpanded}

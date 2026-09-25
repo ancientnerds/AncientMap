@@ -14,6 +14,18 @@ One function, two callers, so the rule cannot drift between them.
 from __future__ import annotations
 
 
+def citation_coverage_score(audit_result: dict) -> int:
+    """M1 (0-15): each uncited paragraph costs 3 points."""
+    return max(0, 15 - audit_result.get("uncited_paragraphs", 0) * 3)
+
+
+def reference_integrity_score(audit_result: dict) -> int:
+    """M2 (0-10): each invalid marker or orphaned reference costs 2 points."""
+    invalid = len(audit_result.get("invalid_markers", []))
+    orphaned = len(audit_result.get("orphaned_refs", []))
+    return max(0, 10 - (invalid + orphaned) * 2)
+
+
 def quality_gate_passed(
     *,
     audit_passed: bool,
@@ -45,18 +57,23 @@ def quality_gate_passed(
 def recompute_quality_passed(quality_score: dict, audit_result: dict) -> bool:
     """Re-run the gate for a stored paper against a freshly computed audit.
 
-    `quality_score` is the stored dict (metrics + audit_gate_failures);
-    `audit_result` is what `validate_or_repair` just returned. Everything the
-    audit can speak to is taken from the fresh result; the rest — hallucination
-    and contradiction counts, which are LLM measurements that cannot be redone
-    without re-running the pipeline — comes from the stored summary.
+    `quality_score` is the stored dict (audit_gate_failures); `audit_result`
+    is what `validate_or_repair` just returned. Everything the audit can speak
+    to is taken from the fresh result — including citation coverage and
+    reference integrity, which are pure functions of the audit: until
+    2026-09-24 they were read from the stored metrics, so a paper whose
+    marker was repaired stayed held on the write-time score. The rest —
+    hallucination and contradiction counts, which are LLM measurements that
+    cannot be redone without re-running the pipeline — comes from the stored
+    summary. No stored summary means no judge verdict to vouch for them.
     """
-    metrics = quality_score.get("metrics") or {}
-    stored = quality_score.get("audit_gate_failures") or {}
+    stored = quality_score.get("audit_gate_failures")
+    if not stored:
+        return False
     return quality_gate_passed(
         audit_passed=bool(audit_result.get("passed")),
-        citation_coverage=int(metrics.get("citation_coverage", 0)),
-        reference_integrity=int(metrics.get("reference_integrity", 0)),
+        citation_coverage=citation_coverage_score(audit_result),
+        reference_integrity=reference_integrity_score(audit_result),
         placeholder_markers=len(audit_result.get("placeholder_markers") or []),
         language_bleed=len(audit_result.get("language_bleed") or []),
         hallucination_final=int(stored.get("hallucination_final", 0)),

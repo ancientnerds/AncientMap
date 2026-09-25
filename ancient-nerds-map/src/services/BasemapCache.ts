@@ -1,11 +1,15 @@
 /**
- * BasemapCache - Handles caching of satellite basemap imagery and labels
- * Uses Service Worker cache for large image files
+ * BasemapCache - Handles caching of satellite basemap imagery
+ * Uses Service Worker cache for large image files. The gray basemap and
+ * labels.json, which the globe's start cannot do without, come with every
+ * offline download (GlobeStartCache); there is no separate 'Labels' item.
  */
 
-import { OfflineStorage } from './OfflineStorage'
+import { OfflineStorage, type DownloadState } from './OfflineStorage'
+import { BASEMAP_CACHE } from '../pwa/cacheNames'
+import { BASEMAP_TIERS, getBasemapAssets, getBasemapTier, tierRank, type BasemapTier } from '../utils/deviceTier'
 
-export type BasemapType = 'satellite' | 'labels'
+export type BasemapType = 'satellite'
 
 interface BasemapItemInfo {
   id: BasemapType
@@ -14,46 +18,59 @@ interface BasemapItemInfo {
   totalSize: number
 }
 
-// Satellite imagery - single high quality file
-const SATELLITE_FILES = [
-  { url: '/data/basemaps/satellite_high.webp', size: 17 * 1024 * 1024 }, // ~17 MB (WebP)
-]
+// Byte sizes of the basemap files (public/data/basemaps, content-stable).
+const BASEMAP_BYTES: Record<BasemapTier, { gray: number; satellite: number }> = {
+  low: { gray: 109_724, satellite: 714_326 },
+  med: { gray: 482_678, satellite: 2_657_496 },
+  high: { gray: 3_301_588, satellite: 17_001_226 },
+}
 
-// Labels data file
-const LABELS_FILES = [
-  { url: '/data/labels.json', size: 1.1 * 1024 * 1024 },
-]
+/**
+ * A basemap kind at every tier up to the device's maximum: what the globe's
+ * loader can request on this device. The start tier follows the window height
+ * at load time, so all of them. The GPU limit is unknown here (0 = the largest
+ * the device class allows); the service worker's basemap rule serves these
+ * entries from the same 'basemaps' cache under the same URLs.
+ */
+function tierFiles(kind: 'gray' | 'satellite'): { url: string; size: number }[] {
+  const max = getBasemapTier(0)
+  return BASEMAP_TIERS.filter(tier => tierRank(tier) <= tierRank(max))
+    .map(tier => ({ url: getBasemapAssets(tier)[kind], size: BASEMAP_BYTES[tier][kind] }))
+}
 
-const BASEMAP_ITEMS: Record<BasemapType, BasemapItemInfo> = {
-  satellite: {
-    id: 'satellite',
-    name: 'Satellite',
-    files: SATELLITE_FILES,
-    totalSize: SATELLITE_FILES.reduce((sum, f) => sum + f.size, 0)
-  },
-  labels: {
-    id: 'labels',
-    name: 'Labels',
-    files: LABELS_FILES,
-    totalSize: LABELS_FILES.reduce((sum, f) => sum + f.size, 0)
+/** The gray: critical at the start tier, so every offline download stores it (GlobeStartCache). */
+export function grayBasemapFiles(): { url: string; size: number }[] {
+  return tierFiles('gray')
+}
+
+/** Labels data file (critical for the start too: GlobeStartCache stores it with every download). */
+export const LABELS_FILE = { url: '/data/labels.json', size: 1_087_841 }
+
+function item(id: BasemapType, name: string, files: { url: string; size: number }[]): BasemapItemInfo {
+  return { id, name, files, totalSize: files.reduce((sum, f) => sum + f.size, 0) }
+}
+
+/** Built on use: the satellite item depends on the device (window/navigator, never at module scope). */
+function basemapItems(): Record<BasemapType, BasemapItemInfo> {
+  return {
+    satellite: item('satellite', 'Satellite', tierFiles('satellite')),
   }
 }
 
-const CACHE_NAME = 'basemaps'
 
 class BasemapCacheClass {
   /**
-   * Get list of available basemap items (Satellite, Labels)
+   * Get list of available basemap items (Satellite)
    */
   getBasemapItems(): BasemapItemInfo[] {
-    return Object.values(BASEMAP_ITEMS)
+    return Object.values(basemapItems())
   }
 
   /**
    * Get info for a specific basemap item
    */
   getBasemapItemInfo(id: BasemapType): BasemapItemInfo {
-    return BASEMAP_ITEMS[id]
+    return basemapItems()[id]
   }
 
   /**
@@ -63,8 +80,8 @@ class BasemapCacheClass {
     id: BasemapType,
     onProgress?: (loaded: number, total: number) => void
   ): Promise<void> {
-    const item = BASEMAP_ITEMS[id]
-    const cache = await caches.open(CACHE_NAME)
+    const item = basemapItems()[id]
+    const cache = await caches.open(BASEMAP_CACHE)
     let totalLoaded = 0
     const totalSize = item.totalSize
 
@@ -89,14 +106,11 @@ class BasemapCacheClass {
         onProgress?.(totalLoaded, totalSize)
       }
 
-      // Combine chunks and cache
-      const contentType = file.url.endsWith('.json') ? 'application/json' :
-                          file.url.endsWith('.webp') ? 'image/webp' :
-                          file.url.endsWith('.png') ? 'image/png' : 'image/jpeg'
-      const blob = new Blob(chunks as BlobPart[], { type: contentType })
+      // Combine chunks and cache. Every file of the item is a .webp tier (getBasemapAssets)
+      const blob = new Blob(chunks as BlobPart[], { type: 'image/webp' })
       await cache.put(file.url, new Response(blob, {
         headers: {
-          'Content-Type': contentType,
+          'Content-Type': 'image/webp',
           'Content-Length': String(blob.size)
         }
       }))
@@ -107,27 +121,40 @@ class BasemapCacheClass {
   }
 
   /**
-   * Check if a basemap item is cached
+   * Check if a basemap item is cached (see getCachedItems)
    */
   async isBasemapItemCached(id: BasemapType): Promise<boolean> {
-    const state = await OfflineStorage.getDownloadState()
-    return state.basemapItems?.includes(id) ?? false
+    return (await this.getCachedItems(await OfflineStorage.getDownloadState())).includes(id)
   }
 
   /**
-   * Get list of cached basemap item IDs
+   * The basemap items whose offline download is complete: marked downloaded,
+   * and every file in the 'basemaps' cache. A 'Satellite' download from before
+   * the basemap tiers holds satellite_high.webp only, so it is not complete and
+   * the Download Manager offers it again (VectorLayerCache.getCachedLayers does
+   * the same for the layers). The mark of a 'Labels' download from before the
+   * start files names no item any more: labels.json is a start file now.
+   * `state` is the caller's read of the download state (OfflineContext polls
+   * this every 5 s: no second read, and no Cache Storage without a mark).
    */
-  async getCachedItems(): Promise<BasemapType[]> {
-    const state = await OfflineStorage.getDownloadState()
-    return (state.basemapItems || []) as BasemapType[]
+  async getCachedItems(state: DownloadState): Promise<BasemapType[]> {
+    const items = basemapItems()
+    const marked = (state.basemapItems || []).filter((id): id is BasemapType => id in items)
+    if (marked.length === 0) return []
+    const cache = await caches.open(BASEMAP_CACHE)
+    const complete = await Promise.all(marked.map(async id => {
+      const hits = await Promise.all(items[id].files.map(file => cache.match(file.url)))
+      return hits.every(Boolean)
+    }))
+    return marked.filter((_, i) => complete[i])
   }
 
   /**
    * Remove a specific basemap item from cache
    */
   async clearBasemapItem(id: BasemapType): Promise<void> {
-    const item = BASEMAP_ITEMS[id]
-    const cache = await caches.open(CACHE_NAME)
+    const item = basemapItems()[id]
+    const cache = await caches.open(BASEMAP_CACHE)
 
     for (const file of item.files) {
       await cache.delete(file.url)
@@ -140,7 +167,7 @@ class BasemapCacheClass {
    * Remove all cached basemaps
    */
   async clearAll(): Promise<void> {
-    await caches.delete(CACHE_NAME)
+    await caches.delete(BASEMAP_CACHE)
     const state = await OfflineStorage.getDownloadState()
     state.basemapItems = []
     state.basemapQualities = [] // Legacy cleanup
@@ -152,16 +179,13 @@ class BasemapCacheClass {
    * Estimate total size for selected items
    */
   estimateSize(ids: BasemapType[]): number {
-    return ids.reduce((total, id) => total + BASEMAP_ITEMS[id].totalSize, 0)
+    const items = basemapItems()
+    return ids.reduce((total, id) => total + items[id].totalSize, 0)
   }
 
   // Legacy compatibility methods
   getBasemapOptions() {
     return this.getBasemapItems()
-  }
-
-  async getCachedQualities(): Promise<string[]> {
-    return this.getCachedItems()
   }
 }
 

@@ -8,6 +8,8 @@ import { OfflineStorage, DownloadState, CompactSite } from '../services/OfflineS
 import { BasemapCache, BasemapType } from '../services/BasemapCache'
 import { VectorLayerCache } from '../services/VectorLayerCache'
 import { EmpireCache } from '../services/EmpireCache'
+import { downloadGlobeStart, missingGlobeStartFiles, startFilesSize, type StartFile } from '../services/GlobeStartCache'
+import { DEFAULT_SOURCE } from '../data/DataStore'
 import { reportAchievementEvent } from '../utils/cardApi'
 import { ImageCache } from '../services/ImageCache'
 import { config } from '../config'
@@ -24,6 +26,12 @@ interface DownloadManagerProps {
   }>
   isOffline: boolean
   onToggleOffline: () => void
+  /**
+   * Resolves once the service worker that serves the page offline is active
+   * (pwa/registerServiceWorker.ts ensureServiceWorkerActive); rejects with why
+   * it cannot be. null where no worker exists (dev builds have no /sw.js).
+   */
+  ensureOfflineWorker: (() => Promise<void>) | null
 }
 
 interface DownloadProgress {
@@ -57,12 +65,48 @@ function formatBytes(bytes: number): string {
   }
 }
 
-export default function DownloadManager({ isOpen, onClose, sources, isOffline, onToggleOffline }: DownloadManagerProps) {
+// The default source's full payload (downloadSource: /sites/all without `fields`), measured
+// on production 2026-09-23: 5,004 sites, 10,067,793 B raw (what IndexedDB stores), 3,137,180 B
+// gzip on the wire. Every download stores it, so its estimate uses this and not the guess.
+const DEFAULT_SOURCE_BYTES_PER_SITE = 2_012
+
+/** Size of a source's offline records: measured for the default source, a rough 50 bytes per site for the others. */
+function sourceSize(sourceId: string, count: number): number {
+  return count * (sourceId === DEFAULT_SOURCE ? DEFAULT_SOURCE_BYTES_PER_SITE : 50)
+}
+
+/** Fetches one source's records and stores them in IndexedDB; rejects when there is nothing to store. Resolves with the site count. */
+async function downloadSource(sourceId: string): Promise<number> {
+  const response = await fetch(`${config.api.baseUrl}/sites/all?source=${sourceId}&limit=100000`)
+  if (!response.ok) throw new Error(`Failed to download source ${sourceId}: HTTP ${response.status}`)
+  const data: { sites?: CompactSite[] } = await response.json()
+  if (!Array.isArray(data.sites)) throw new Error(`Failed to download source ${sourceId}: the answer has no sites`)
+  await OfflineStorage.saveSites(sourceId, data.sites)
+  return data.sites.length
+}
+
+/** Some offline download was made (the legacy basemap quality included). */
+function hasOfflineDownload(state: DownloadState): boolean {
+  return Object.keys(state.sources).length > 0 || state.empires.length > 0
+    || (state.layers ?? []).length > 0 || (state.basemapItems ?? []).length > 0
+    || state.basemapQuality !== 'none'
+}
+
+export default function DownloadManager({ isOpen, onClose, sources, isOffline, onToggleOffline, ensureOfflineWorker }: DownloadManagerProps) {
   // State
   const [downloadState, setDownloadState] = useState<DownloadState | null>(null)
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set())
   const [selectedBasemaps, setSelectedBasemaps] = useState<Set<BasemapType>>(new Set())
+  // Basemap items whose download is complete (every file cached), not just marked downloaded
+  const [downloadedBasemaps, setDownloadedBasemaps] = useState<Set<BasemapType>>(new Set())
+  // The files the globe's start cannot do without offline that it would not find;
+  // every download stores them, and the default source with them (its sites: the
+  // offline start reads IndexedDB only when a source is stored). null until checked:
+  // nothing is offered for them before the check has answered.
+  const [globeStartMissing, setGlobeStartMissing] = useState<StartFile[] | null>(null)
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set())
+  // Layers whose download is complete (every file cached), not just marked downloaded
+  const [downloadedLayers, setDownloadedLayers] = useState<Set<string>>(new Set())
   const [selectedEmpires, setSelectedEmpires] = useState<Set<string>>(new Set())
   const [progress, setProgress] = useState<DownloadProgress | null>(null)
   const [downloadSpeed, setDownloadSpeed] = useState(0) // bytes per second
@@ -71,6 +115,8 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   const [storageUsed, setStorageUsed] = useState(0)
   const [activeTab, setActiveTab] = useState<'sources' | 'layers' | 'basemap' | 'empires'>('layers')
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  // Why offline use cannot work in this browser (no service worker); the download did not start
+  const [workerError, setWorkerError] = useState<string | null>(null)
 
   // Image pre-download state
   const [downloadingImagesSourceId, setDownloadingImagesSourceId] = useState<string | null>(null)
@@ -92,8 +138,13 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
       // Pre-select already cached items
       setSelectedSources(new Set(Object.keys(state.sources)))
-      setSelectedBasemaps(new Set((state.basemapItems || []) as BasemapType[]))
-      setSelectedLayers(new Set(state.layers || []))
+      const basemaps = await BasemapCache.getCachedItems(state)
+      setDownloadedBasemaps(new Set(basemaps))
+      setSelectedBasemaps(new Set(basemaps))
+      setGlobeStartMissing(await missingGlobeStartFiles())
+      const layers = await VectorLayerCache.getCachedLayers(state)
+      setDownloadedLayers(new Set(layers))
+      setSelectedLayers(new Set(layers))
       setSelectedEmpires(new Set(state.empires))
 
       // Get storage estimate
@@ -117,23 +168,23 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   const toggleBasemap = useCallback((id: BasemapType) => {
     // Don't allow unchecking cached items
-    if (downloadState?.basemapItems?.includes(id)) return
+    if (downloadedBasemaps.has(id)) return
     setSelectedBasemaps(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
-  }, [downloadState])
+  }, [downloadedBasemaps])
 
   const toggleLayer = useCallback((id: string) => {
     // Don't allow unchecking cached items
-    if (downloadState?.layers?.includes(id)) return
+    if (downloadedLayers.has(id)) return
     setSelectedLayers(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
-  }, [downloadState])
+  }, [downloadedLayers])
 
   const toggleEmpire = useCallback((id: string) => {
     // Don't allow unchecking cached items
@@ -154,11 +205,11 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   }, [sources])
 
   const selectAllBasemaps = useCallback(() => {
-    const allIds: BasemapType[] = ['satellite', 'labels']
+    const allIds = basemapItems.map(item => item.id)
     setSelectedBasemaps(prev =>
       allIds.every(id => prev.has(id)) ? new Set() : new Set(allIds)
     )
-  }, [])
+  }, [basemapItems])
 
   const selectAllLayers = useCallback(() => {
     const allIds = vectorLayers.map(l => l.id)
@@ -174,26 +225,28 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
     )
   }, [allEmpires])
 
-  // Calculate estimated download size
-  const estimatedSize = useMemo(() => {
+  // Calculate estimated download size; startOnlyLabel: nothing ticked is new, but an
+  // earlier download lacks the globe's start files or the default source (made
+  // before every download stored them), and the footer names what it lacks
+  const { estimatedSize, startOnlyLabel } = useMemo(() => {
     let size = 0
 
-    // Sources (rough estimate: 50 bytes per site)
+    // Sources; the default source comes with the start files (below)
     for (const sourceId of selectedSources) {
-      if (downloadState?.sources[sourceId]?.cached) continue
+      if (sourceId === DEFAULT_SOURCE || downloadState?.sources[sourceId]?.cached) continue
       const source = sources.find(s => s.id === sourceId)
-      if (source) size += source.count * 50
+      if (source) size += sourceSize(source.id, source.count)
     }
 
     // Basemaps
     const newBasemaps = [...selectedBasemaps].filter(
-      id => !downloadState?.basemapItems?.includes(id)
+      id => !downloadedBasemaps.has(id)
     )
     size += BasemapCache.estimateSize(newBasemaps)
 
     // Vector layers
     const newLayers = [...selectedLayers].filter(
-      id => !downloadState?.layers?.includes(id)
+      id => !downloadedLayers.has(id)
     )
     size += VectorLayerCache.estimateSize(newLayers)
 
@@ -203,8 +256,23 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       size += EmpireCache.estimateEmpireSize(empireId)
     }
 
-    return size
-  }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, sources])
+    // Any download brings the globe's start files and the default source along
+    // (handleDownload), and an earlier download without them is offered them on their own
+    const startSourceMissing = downloadState !== null && !downloadState.sources[DEFAULT_SOURCE]?.cached
+    const ticked = size > 0 || (startSourceMissing && selectedSources.has(DEFAULT_SOURCE))
+    const hasDownload = downloadState !== null && hasOfflineDownload(downloadState)
+    const startNeeded = globeStartMissing !== null && (globeStartMissing.length > 0 || startSourceMissing) && (ticked || hasDownload)
+    const startSource = sources.find(s => s.id === DEFAULT_SOURCE)
+    const startSize = !startNeeded ? 0
+      : startFilesSize(globeStartMissing) + (startSourceMissing && startSource ? sourceSize(startSource.id, startSource.count) : 0)
+    const startFilesMissing = globeStartMissing !== null && globeStartMissing.length > 0
+    const missingParts = startFilesMissing && startSourceMissing ? 'Globe start files and default sites'
+      : startFilesMissing ? 'Globe start files' : 'Default sites'
+    return {
+      estimatedSize: size + startSize,
+      startOnlyLabel: startNeeded && !ticked ? `${missingParts} missing: ` : '',
+    }
+  }, [selectedSources, selectedBasemaps, selectedLayers, selectedEmpires, downloadState, downloadedLayers, downloadedBasemaps, globeStartMissing, sources])
 
   // Update progress with speed calculation
   const updateProgressWithSpeed = useCallback((loaded: number, total: number) => {
@@ -232,7 +300,8 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
   // Download handlers using services
   const downloadSources = async () => {
     const toDownload = [...selectedSources].filter(
-      id => !downloadState?.sources[id]?.cached
+      // The default source came with the start files (downloadGlobeStartFiles)
+      id => id !== DEFAULT_SOURCE && !downloadState?.sources[id]?.cached
     )
 
     for (const sourceId of toDownload) {
@@ -248,25 +317,37 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       })
 
       try {
-        const response = await fetch(
-          `${config.api.baseUrl}/sites/all?source=${sourceId}&limit=100000`
-        )
-        if (!response.ok) throw new Error('Failed to fetch')
-
-        const data = await response.json()
-        const sites: CompactSite[] = data.sites || []
-
-        await OfflineStorage.saveSites(sourceId, sites)
-        setProgress(prev => prev ? { ...prev, loaded: sites.length } : null)
+        const count = await downloadSource(sourceId)
+        setProgress(prev => prev ? { ...prev, loaded: count } : null)
       } catch (error) {
         console.error(`Failed to download source ${sourceId}:`, error)
       }
     }
   }
 
+  /**
+   * What the globe's start cannot do without offline: the start files and the
+   * default source's sites (DataStore starts offline from IndexedDB only when a
+   * source is stored). A failure stops the whole download.
+   */
+  const downloadGlobeStartFiles = async () => {
+    const missing = await missingGlobeStartFiles()
+    if (missing.length > 0) {
+      setProgress({ type: 'basemap', id: 'globe-start', loaded: 0, total: startFilesSize(missing), label: 'Globe start files' })
+      resetSpeedTracking()
+      await downloadGlobeStart(missing, (loaded, total) => updateProgressWithSpeed(loaded, total))
+    }
+    const state = await OfflineStorage.getDownloadState()
+    if (state.sources[DEFAULT_SOURCE]?.cached) return
+    const source = sources.find(s => s.id === DEFAULT_SOURCE)
+    setProgress({ type: 'source', id: DEFAULT_SOURCE, loaded: 0, total: source?.count ?? 0, label: source?.name ?? DEFAULT_SOURCE })
+    const count = await downloadSource(DEFAULT_SOURCE)
+    setProgress(prev => prev ? { ...prev, loaded: count, total: count } : null)
+  }
+
   const downloadBasemaps = async () => {
     const toDownload = [...selectedBasemaps].filter(
-      id => !downloadState?.basemapItems?.includes(id)
+      id => !downloadedBasemaps.has(id)
     )
 
     for (const itemId of toDownload) {
@@ -292,7 +373,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   const downloadLayers = async () => {
     const toDownload = [...selectedLayers].filter(
-      id => !downloadState?.layers?.includes(id)
+      id => !downloadedLayers.has(id)
     )
 
     for (const layerId of toDownload) {
@@ -348,8 +429,20 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
   const handleDownload = async () => {
     setIsDownloading(true)
+    setWorkerError(null)
 
     try {
+      // Without the worker's precache the next offline visit does not load at all
+      if (ensureOfflineWorker) {
+        try {
+          await ensureOfflineWorker()
+        } catch (error) {
+          console.error('[DownloadManager] service worker:', error)
+          setWorkerError(`Offline use is not possible in this browser: ${error instanceof Error ? error.message : String(error)}`)
+          return
+        }
+      }
+      await downloadGlobeStartFiles()
       await downloadSources()
       await downloadLayers()
       await downloadBasemaps()
@@ -358,6 +451,9 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
       // Refresh state
       const state = await OfflineStorage.getDownloadState()
       setDownloadState(state)
+      setDownloadedLayers(new Set(await VectorLayerCache.getCachedLayers(state)))
+      setDownloadedBasemaps(new Set(await BasemapCache.getCachedItems(state)))
+      setGlobeStartMissing(await missingGlobeStartFiles())
 
       const estimate = await OfflineStorage.getStorageEstimate()
       setStorageUsed(estimate.used)
@@ -386,6 +482,9 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
     const state = await OfflineStorage.getDownloadState()
     setDownloadState(state)
+    setDownloadedLayers(new Set())
+    setDownloadedBasemaps(new Set())
+    setGlobeStartMissing(await missingGlobeStartFiles())
 
     const estimate = await OfflineStorage.getStorageEstimate()
     setStorageUsed(estimate.used)
@@ -555,7 +654,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                       </button>
                     )}
                     <span className="item-meta">
-                      {source.count.toLocaleString()} sites (~{formatBytes(source.count * 50)})
+                      {source.count.toLocaleString()} sites (~{formatBytes(sourceSize(source.id, source.count))})
                     </span>
                   </div>
                 ))}
@@ -583,7 +682,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                     {renderCheckbox(selectedLayers.has(layer.id))}
                     <span className="item-color" style={{ backgroundColor: layer.color }} />
                     <span className="item-name">{layer.name}</span>
-                    {downloadState?.layers?.includes(layer.id) && <span className="cached-badge">Cached</span>}
+                    {downloadedLayers.has(layer.id) && <span className="cached-badge">Cached</span>}
                     <span className="item-meta">
                       {layer.fileCount} files ({formatBytes(layer.estimatedSize)})
                     </span>
@@ -599,10 +698,10 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
               <div className="dm-section-header">
                 <span className="dm-section-title">Basemap Data</span>
                 <button className="dm-select-all-btn" onClick={selectAllBasemaps} disabled={isDownloading}>
-                  {(['satellite', 'labels'] as BasemapType[]).every(id => selectedBasemaps.has(id)) ? 'Deselect All' : 'Select All'}
+                  {basemapItems.every(item => selectedBasemaps.has(item.id)) ? 'Deselect All' : 'Select All'}
                 </button>
               </div>
-              <p className="dm-section-note">Download satellite imagery and geographic labels for offline use.</p>
+              <p className="dm-section-note">Download satellite imagery for offline use. Geographic labels come with every download.</p>
               <div className="dm-list">
                 {basemapItems.map(item => (
                   <div
@@ -612,7 +711,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                   >
                     {renderCheckbox(selectedBasemaps.has(item.id))}
                     <span className="item-name">{item.name}</span>
-                    {downloadState?.basemapItems?.includes(item.id) && <span className="cached-badge">Cached</span>}
+                    {downloadedBasemaps.has(item.id) && <span className="cached-badge">Cached</span>}
                     <span className="item-meta">
                       {item.files.length} file{item.files.length > 1 ? 's' : ''} ({formatBytes(item.totalSize)})
                     </span>
@@ -676,14 +775,16 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
         {/* Footer */}
         <div className="dm-footer">
           <div className="dm-status">
-            {isDownloading && progress ? (
+            {workerError ? (
+              <span className="empty-status" role="alert">{workerError}</span>
+            ) : isDownloading && progress ? (
               <span className="download-status">
                 {progress.type === 'source'
                   ? `${progress.loaded.toLocaleString()} / ${progress.total.toLocaleString()} sites`
                   : `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}${downloadSpeed > 0 ? ` - ${formatBytes(downloadSpeed)}/s` : ''}`}
               </span>
             ) : estimatedSize > 0 ? (
-              <span className="ready-status">{formatBytes(estimatedSize)} ready to download</span>
+              <span className="ready-status">{startOnlyLabel}{formatBytes(estimatedSize)} ready to download</span>
             ) : (
               <span className="empty-status">Select items to download</span>
             )}
