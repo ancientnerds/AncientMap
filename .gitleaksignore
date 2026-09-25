@@ -506,3 +506,28 @@ b92f8ba97ce44c9b6b7e01412423fc0c337b0935:output/remediation/opus_audit/PAGES.jso
 b92f8ba97ce44c9b6b7e01412423fc0c337b0935:output/remediation/opus_audit/PAGES.jsonl:generic-api-key:397
 0f5584910decfd9d3a86d9b830f4994ea04eba6f:output/remediation/opus_audit/PAGES.jsonl:generic-api-key:52
 0f5584910decfd9d3a86d9b830f4994ea04eba6f:output/remediation/opus_audit/PAGES.jsonl:generic-api-key:296
+
+# The same guard-5 premise digests in the card-stats re-plan after the Phase-4 writes (dd9cfab,
+# ROLLBACK.sql) and in the rehearsal's undo committed with the apply (0d7a544,
+# REHEARSAL_ROLLBACK.sql), triaged 2026-09-25: 'api' in Krapina Neanderthal Site (rows 3199-3202,
+# premise 8a74ee2c...), 'key' in Milton Keynes Hoard (rows 3700-3704, premise d9c0ad2e...). Each
+# flagged value sits in the `premise` column of `_card_stats_plan` and equals the `premise` field
+# that PLAN.jsonl carries for every cell of that site (4 and 5 cells, checked value by value).
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3199
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3200
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3201
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3202
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3700
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3701
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3702
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3703
+dd9cfabfe8809b7703f5f17e0f2c6e9ca59e4c5d:output/remediation/mechanical_card_stats/2026-09-23/ROLLBACK.sql:generic-api-key:3704
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3199
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3200
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3201
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3202
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3700
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3701
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3702
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3703
+0d7a5446b2f86dbe32b1343c62f5ebf3944cfc6d:output/remediation/mechanical_card_stats/2026-09-23/REHEARSAL_ROLLBACK.sql:generic-api-key:3704
