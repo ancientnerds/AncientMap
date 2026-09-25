@@ -34,6 +34,7 @@ from pipeline.lyra.config import (
     _get_settings,
     call_api,
 )
+from pipeline.lyra.site_key import site_key_sql
 from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
 from pipeline.normalizers.dates import passes_date_cutoff
@@ -1710,6 +1711,15 @@ def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None
     return None
 
 
+#: One alias row, keyed by Postgres from the raw name (pipeline/lyra/site_key.py).
+_STORE_ALIAS_SQL = text(
+    "INSERT INTO unified_site_names (site_id, name, name_normalized, name_type) "
+    f"SELECT :site_id, :name, {site_key_sql(':name')}, :name_type "
+    f"WHERE {site_key_sql(':name')} <> {site_key_sql(':canonical')} "
+    "ON CONFLICT ON CONSTRAINT uq_usn DO NOTHING RETURNING id"
+)
+
+
 def _store_wikidata_aliases(
     session: Session,
     site_id: uuid.UUID,
@@ -1722,35 +1732,28 @@ def _store_wikidata_aliases(
     AI-generated names — these are human-curated and reliable.
 
     Returns the number of new aliases stored.
+
+    The match key is Postgres's (``site_key_sql``), computed in the INSERT from the raw name:
+    ``normalize_name`` strips what the key keeps (the Japanese dakuten, parenthesised parts) and
+    left 11 curated aliases unreachable by an exact lookup (read 2026-09-25). An alias whose key
+    is the site's own name's, or that the (site_id, key) constraint already holds, is skipped.
     """
     if not wikidata_names:
         return 0
-    canonical_norm = normalize_name(canonical_name)
     stored = 0
     for alt in wikidata_names:
         if not alt or len(alt) < 3:
             continue
-        alt_norm = normalize_name(alt)
-        if not alt_norm or alt_norm == canonical_norm:
-            continue
-        existing = (
-            session.query(UnifiedSiteName)
-            .filter(
-                UnifiedSiteName.site_id == site_id,
-                UnifiedSiteName.name_normalized == alt_norm,
-            )
-            .first()
+        inserted = session.execute(
+            _STORE_ALIAS_SQL,
+            {
+                "site_id": site_id,
+                "name": alt,
+                "canonical": canonical_name,
+                "name_type": "wikidata_alias",
+            },
         )
-        if not existing:
-            session.add(
-                UnifiedSiteName(
-                    site_id=site_id,
-                    name=alt,
-                    name_normalized=alt_norm,
-                    name_type="wikidata_alias",
-                )
-            )
-            stored += 1
+        stored += len(inserted.fetchall())
     if stored:
         logger.info(f"  Stored {stored} Wikidata aliases for site {site_id}")
     return stored
