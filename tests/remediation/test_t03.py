@@ -55,6 +55,14 @@ def _flagged(site: dict, **kw: Any) -> list[M.Finding]:
     return t03.run(_ctx([site], **kw))
 
 
+def test_a_dot_thousands_separator_is_read_like_a_comma() -> None:
+    """ "100.000-35.000 BCE" (Berbati, mass run 2026-09-25): the extractor admits a dot group, so
+    the year reader must read it; it crashed the verifier with an AssertionError."""
+    got = t03.claims("the Middle Palaeolithic (around 100.000\u201335.000 BCE) period")
+    assert [(m.lo, m.hi) for m in got] == [(-100000, -35000)]
+    assert [(m.lo, m.hi) for m in t03.claims("around 35.000 BC")] == [(-35000, -35000)]
+
+
 # ------------------------------------------------------------------ what is a claim
 class TestExtraction:
     """A claim is a year that carries its own era - and a span is read as one claim."""
@@ -73,13 +81,6 @@ class TestExtraction:
     def test_single_era_markers(self, text, intervals):
         got = [(m.lo, m.hi) for m in t03.claims(text)]
         assert got == intervals
-
-    def test_a_dot_thousands_separator_is_read_like_a_comma(self):
-        """ "100.000-35.000 BCE" (Berbati, mass run 2026-09-25): the extractor admits a dot group,
-        so the year parser must read it; it crashed the verifier with an AssertionError."""
-        got = t03.claims("the Middle Palaeolithic (around 100.000\u201335.000 BCE) period")
-        assert [(m.lo, m.hi) for m in got] == [(-100000, -35000)]
-        assert [(m.lo, m.hi) for m in t03.claims("around 35.000 BC")] == [(-35000, -35000)]
 
     def test_range_across_the_era_boundary_is_one_span(self):
         """ "500 BC - 550 AD" (El Tintal) is one site phase, not two contradictions."""

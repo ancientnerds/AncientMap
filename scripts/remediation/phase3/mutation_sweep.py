@@ -18202,7 +18202,7 @@ T03_DOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    cleaned = token.replace(",", "").replace(".", "")\n',
         '    cleaned = token.replace(",", "")  # mutant\n',
         "tests/remediation/test_t03.py",
-        "TestExtraction::test_a_dot_thousands_separator_is_read_like_a_comma",
+        "test_a_dot_thousands_separator_is_read_like_a_comma",
     ),
 ]
 MUTATIONS += T03_DOT_MUTATIONS
