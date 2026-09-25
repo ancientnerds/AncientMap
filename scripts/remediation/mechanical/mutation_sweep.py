@@ -3253,6 +3253,293 @@ IMAGE_CASES: list[Case] = [
 CASES += IMAGE_CASES
 
 
+# ------------------------------------------------------------ journal-reversal-3 (2026-09-25)
+#: The third reversal list: the `opus:<change_key>` source kind (`reversal.load_opus`,
+#: `_opus_text`), the lane's registration in `lane.py` and the list's builder (`reversal_opus.py`).
+#: A block of its own after the image lanes; every label starts with "reversal 3" -
+#: `mutation_sweep.py "reversal 3"` runs exactly these.
+REVERSAL_OPUS = MECHANICAL / "reversal_opus.py"
+REVERSAL_OPUS_TESTS = "tests/remediation/test_mechanical_reversal_opus.py"
+REVERSAL_3_CASES: list[Case] = [
+    *(
+        guard(f"reversal 3: {label}", REVERSAL, needle, test, REVERSAL_TESTS)
+        for label, needle, test in (
+            (
+                "an opus quote names a row of the audit",
+                "    if judged is None:",
+                "test_a_decision_that_did_not_revert_this_write_refuses",
+            ),
+            (
+                "the audit decided a reversal",
+                "    if not judged.reversal:",
+                "test_a_decision_that_did_not_revert_this_write_refuses",
+            ),
+            (
+                "the audit judged the journal row's write",
+                "    if audited != wrote:",
+                "test_a_decision_that_did_not_revert_this_write_refuses",
+            ),
+            (
+                "an audit problem refuses the quote",
+                "        if unjudged is not None:\n            return unjudged",
+                "test_a_decision_that_did_not_revert_this_write_refuses",
+            ),
+            (
+                "an opus quote's page is the audit's decisions",
+                "    if kind == OPUS_KIND:\n        return OPUS_URL",
+                "test_the_audits_decision_to_revert_is_the_evidence",
+            ),
+            (
+                "the audit's decisions exist",
+                '    if not path.exists():\n        raise PlanError(\n            f"{path} is missing - the Opus',
+                "test_the_decisions_file_is_read_by_change_key_once_each",
+            ),
+            (
+                "the audit decides a write once",
+                "        if key in out:",
+                "test_the_decisions_file_is_read_by_change_key_once_each",
+            ),
+            (
+                "a basis names a verdict file of the audit",
+                "    if not OPUS_VERDICT_FILE.fullmatch(name):",
+                "test_a_basis_names_a_verdict_file_of_the_audit_only",
+            ),
+            (
+                "a basis the verdict file holds",
+                "    if verdict is None:",
+                "test_a_basis_the_verdict_file_does_not_hold_is_refused",
+            ),
+            (
+                "the verdict file holds the basis's verdict",
+                '            if verdict["verdict"] != basis["verdict"]:',
+                "test_a_basis_the_verdict_file_does_not_hold_is_refused",
+            ),
+            (
+                "the quote check is the verdict's own",
+                '            if [c["source"] for c in checked] != [q["source"] for q in verdict["quotes"]]:',
+                "test_the_quote_check_must_be_the_verdicts_own",
+            ),
+        )
+    ),
+    *(
+        Case(f"reversal 3: {label}", REVERSAL, old, new, test, REVERSAL_TESTS)
+        for label, old, new, test in (
+            (
+                "an opus quote is a source the lane checks",
+                "    elif kind == OPUS_KIND:",
+                "    elif False:",
+                "test_the_audits_decision_to_revert_is_the_evidence",
+            ),
+            (
+                "the change key is part of the write",
+                "    audited = (judged.change_key, judged.site_id, judged.column)",
+                '    audited = (entry["change_key"], judged.site_id, judged.column)',
+                "test_a_decision_on_another_write_of_the_same_cell_refuses",
+            ),
+            (
+                "a keep verdict decides a revert",
+                '            if basis["verdict"] == OPUS_KEEP or not basis["counted"]:',
+                '            if not basis["counted"]:',
+                "test_a_quote_the_deciding_verdicts_do_not_carry_refuses",
+            ),
+            (
+                "a verdict that does not count carries quotes",
+                '            if basis["verdict"] == OPUS_KEEP or not basis["counted"]:',
+                '            if basis["verdict"] == OPUS_KEEP:',
+                "test_a_verdict_that_does_not_count_carries_no_quote",
+            ),
+            (
+                "a quote the audit's check did not find",
+                '                if c["outcome"] == OPUS_FOUND',
+                "                if True",
+                "test_a_quote_the_audits_check_did_not_find_is_none",
+            ),
+            (
+                "a list that quotes the audit is found",
+                '    return any(q.source.partition(":")[0] == OPUS_KIND for r in reasons for q in r.quotes)',
+                "    return False",
+                "test_only_a_list_that_cites_the_opus_audit_needs_it",
+            ),
+            (
+                "a quote is checked against the audit",
+                "        problem = quote_problem(quote, reason, cell, pages, gold, rereview, opus)",
+                "        problem = quote_problem(quote, reason, cell, pages, gold, rereview)",
+                "test_the_audits_decision_to_revert_is_the_evidence",
+            ),
+            (
+                "the plan passes the audit on",
+                "            rereview=rereview,\n            opus=opus,\n        )",
+                "            rereview=rereview,\n        )",
+                "test_a_start_the_audit_reverts_and_its_label_go_back_together",
+            ),
+            (
+                "--write reads the audit",
+                "            opus = load_opus(OPUS_AUDIT) if cites_the_opus_audit(reasons) else NO_OPUS",
+                "            opus = NO_OPUS",
+                "test_write_plans_an_opus_quoted_list_from_the_audit_files",
+            ),
+            (
+                "--write plans on the audit",
+                "                built_at=_now(),\n                opus=opus,",
+                "                built_at=_now(),",
+                "test_write_plans_an_opus_quoted_list_from_the_audit_files",
+            ),
+        )
+    ),
+    # ------------------------------------------------------------------- the lane (lane.py)
+    *(
+        Case(f"reversal 3: {label}", LANE, old, new, test, REVERSAL_TESTS)
+        for label, old, new, test in (
+            (
+                "the lane writes country",
+                '    Column("period_name", "character varying", max_chars=100),\n'
+                '    Column("country", "character varying", max_chars=100),\n)',
+                '    Column("period_name", "character varying", max_chars=100),\n)',
+                "test_the_lane_writes_every_column_the_audit_reverts_and_the_labels",
+            ),
+            (
+                "the lane is a reversal list",
+                "REVERSAL_LISTS[REVERSAL_3.name] = REVERSAL_3_JOURNAL_IDS",
+                "pass",
+                "test_the_lane_writes_every_column_the_audit_reverts_and_the_labels",
+            ),
+            (
+                "the lane is registered",
+                "LANES[REVERSAL_3.name] = REVERSAL_3",
+                "pass",
+                "test_the_lane_writes_every_column_the_audit_reverts_and_the_labels",
+            ),
+            (
+                "the lane has its read-back",
+                "LANE_READBACKS[REVERSAL_3.name] = REVERSAL_3_READBACK",
+                "pass",
+                "test_the_lane_reads_back_its_residual_the_period_pair_and_the_card_country",
+            ),
+            (
+                "the lane reads back the period pair",
+                "        (\n            _PERIOD_MISMATCH.metric,\n"
+                "            f\"FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
+                '{_PERIOD_MISMATCH.predicate}",\n        ),\n        (\n'
+                '            "card_stats rows whose civilization differs from the site country",',
+                '        (\n            "card_stats rows whose civilization differs from the site country",',
+                "test_the_lane_reads_back_its_residual_the_period_pair_and_the_card_country",
+            ),
+            (
+                "the lane reads back the card country",
+                '        (\n            "card_stats rows whose civilization differs from the site country",\n'
+                '            "FROM card_stats cs JOIN unified_sites u ON u.id = cs.site_id "\n'
+                "            \"WHERE u.source_id = 'ancient_nerds' AND cs.civilization IS DISTINCT FROM "
+                'u.country",\n        ),\n    ],\n)\nREVERSAL_LISTS[REVERSAL_3.name]',
+                "    ],\n)\nREVERSAL_LISTS[REVERSAL_3.name]",
+                "test_the_lane_reads_back_its_residual_the_period_pair_and_the_card_country",
+            ),
+        )
+    ),
+    # ------------------------------------------------------ the list's builder (reversal_opus.py)
+    *(
+        guard(f"reversal 3 list: {label}", REVERSAL_OPUS, needle, test, REVERSAL_OPUS_TESTS)
+        for label, needle, test in (
+            (
+                "only a phase-3 change key is sent",
+                "        if not CHANGE_KEY.fullmatch(key):",
+                "test_a_change_key_that_is_not_a_phase_3_key_is_never_sent",
+            ),
+            (
+                "no start reads no label",
+                "    if not sites:\n        return []",
+                "test_no_start_that_changes_bucket_reads_no_label",
+            ),
+            (
+                "a change key is one journal row",
+                "    if len(found) != 1:",
+                "test_a_change_key_that_is_not_exactly_one_journal_row_is_refused",
+            ),
+            (
+                "the journal row is the write the input names",
+                "    if wrote != named:",
+                "test_a_journal_row_that_is_not_the_write_the_audit_judged_is_refused",
+            ),
+            (
+                "two label rows citing one start",
+                "    if len(found) > 1:",
+                "test_two_label_rows_citing_one_start_are_refused",
+            ),
+            (
+                "a start within its bucket takes no label",
+                "        if not changes_bucket(r):\n            continue",
+                "test_a_start_within_its_bucket_takes_no_label",
+            ),
+            (
+                "a journal row named twice",
+                "    if len(set(ids)) != len(ids):",
+                "test_a_journal_row_named_twice_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"reversal 3 list: {label}", REVERSAL_OPUS, old, new, test, REVERSAL_OPUS_TESTS)
+        for label, old, new, test in (
+            (
+                "the write is not unified_sites",
+                '    named = ("unified_sites", r["column"], r["site_id"], r["old_value"], r["new_value"])',
+                '    named = (row["table_name"], r["column"], r["site_id"], r["old_value"], r["new_value"])',
+                "test_a_journal_row_that_is_not_the_write_the_audit_judged_is_refused",
+            ),
+            (
+                "a start that keeps its bucket changes it",
+                '    return r["column"] == "period_start" and _bucket(r["old_value"]) != _bucket(r["new_value"])',
+                '    return r["column"] == "period_start" and _bucket(r["old_value"]) == _bucket(r["new_value"])',
+                "test_a_start_that_changes_bucket_takes_the_label_the_period_name_lane_derived",
+            ),
+            (
+                "the label cites any start",
+                '        if e.get("source") == cites',
+                '        if str(e.get("source")).startswith("remediation_change_log:")',
+                "test_only_the_label_row_that_cites_the_start_s_own_write_is_taken",
+            ),
+            (
+                "the label is any site's",
+                '        if row["row_pk"] == r["site_id"]',
+                "        if True",
+                "test_a_label_row_of_another_site_is_never_taken",
+            ),
+            (
+                "an unlabelled start is not reported",
+                '            unlabelled.append(r["name"])',
+                "            pass",
+                "test_only_the_label_row_that_cites_the_start_s_own_write_is_taken",
+            ),
+            (
+                "the reasons are not sorted by journal row",
+                '            "reversals": sorted(entries, key=lambda e: e["journal_id"]),',
+                '            "reversals": entries,',
+                "test_every_audit_row_is_undone_by_its_journal_row_on_its_deciding_quotes",
+            ),
+            (
+                "labels are read for every row",
+                '        labels = read_labels(reader, [r["site_id"] for r in bucket_changes(rows)])',
+                '        labels = read_labels(reader, [r["site_id"] for r in rows])',
+                "test_write_builds_the_reasons_and_the_list_from_the_input",
+            ),
+            (
+                "the input's digest is not recorded",
+                "        sha = hashlib.sha256(data).hexdigest()",
+                '        sha = "0" * 64',
+                "test_write_builds_the_reasons_and_the_list_from_the_input",
+            ),
+            (
+                "the list module is not written",
+                "    args.module.write_text(render_list_module(built.ids, sha), "
+                'encoding="utf-8", newline="\\n")',
+                "    pass",
+                "test_write_builds_the_reasons_and_the_list_from_the_input",
+            ),
+        )
+    ),
+]
+CASES += REVERSAL_3_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""
