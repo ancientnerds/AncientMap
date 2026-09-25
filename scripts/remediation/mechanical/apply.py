@@ -745,6 +745,11 @@ def render_transaction(
         add(f"    RAISE NOTICE '{label}: % row(s) changed and journalled over % curated site(s)',")
     add("        moved, expected;")
     add("END $$;")
+    # The run stamp, test id, confidence, source, owned values and premise are spliced inside the
+    # dollar-quoted block: a `$$` in any of them would end it early (audit 2026-09-25 m4).
+    block = "\n".join(out).partition("\nDO $$\n")[2].rpartition("\nEND $$;")[0]
+    if "$$" in block:
+        raise PlanError(f"{lane.name}: a value spliced into the statement would end the DO block")
     add("")
     add("COMMIT;")
     add("")

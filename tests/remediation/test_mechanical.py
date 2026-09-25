@@ -699,6 +699,17 @@ class TestRenderTransaction:
         with pytest.raises(P.PlanError, match="no COMMIT"):
             A.rehearse("BEGIN;\nSELECT 1;\n")
 
+    @pytest.mark.parametrize(
+        "over",
+        [{"run_stamp": "stamp$$"}, {"lane": replace(L.T05, confidence="two$$source")}],
+        ids=["run-stamp", "confidence"],
+    )
+    def test_a_value_that_would_end_the_do_block_is_refused(self, over: dict[str, Any]) -> None:
+        """Audit 2026-09-25 m4: the run stamp, test id, confidence, owned values and premise are
+        spliced inside `DO $$ ... END $$;`; a `$$` in any of them would end the block early."""
+        with pytest.raises(P.PlanError, match="would end the DO block"):
+            A.render_transaction([record()], site_ids={SITE_GEORGIA}, **over)
+
     def test_a_statement_with_two_commits_cannot_be_rehearsed(self) -> None:
         """Audit 2026-09-25 m2: the rehearsal swapped the first COMMIT and dropped the rest, and
         the check behind it (`script.startswith(head)`) held by construction. A second COMMIT is

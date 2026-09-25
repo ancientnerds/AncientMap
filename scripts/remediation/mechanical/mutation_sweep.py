@@ -4774,6 +4774,12 @@ AUDIT_FIX_CASES: list[Case] = [
         "test_one_quoting_rule_for_every_writer_and_it_refuses_nul",
         PROD_TESTS,
     ),
+    guard(
+        "audit-fix: m4 a spliced $$ ends the DO block",
+        APPLY,
+        '    if "$$" in block:',
+        "test_a_value_that_would_end_the_do_block_is_refused",
+    ),
 ]
 CASES += AUDIT_FIX_CASES
 
