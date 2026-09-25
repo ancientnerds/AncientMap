@@ -3809,8 +3809,8 @@ WRONG_BOTH_CASES: list[Case] = [
             ),
             (
                 "AD stands whole before the year",
-                r'_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
-                r'_PREFIX = re.compile(r"(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
+                r'_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER + r"(?![^\W_]|[.,]\d)")',
+                r'_PREFIX = re.compile(r"(?:A\.\s?D\.|AD)\s?" + _NUMBER + r"(?![^\W_]|[.,]\d)")',
                 _YEAR_OUT,
             ),
             (
@@ -4726,6 +4726,14 @@ AUDIT_FIX_CASES: list[Case] = [
         '            input=sql.replace("\\n", "\\r\\n").encode("utf-8"),',
         "test_send_delivers_a_newline_as_lf_on_every_platform",
         PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: M7 AD-then-year has no right boundary",
+        MECHANICAL / "wrong_both.py",
+        r'_NUMBER + r"(?![^\W_]|[.,]\d)")',
+        "_NUMBER)",
+        "test_a_year_without_its_era_or_in_another_does_not",
+        "tests/remediation/test_mechanical_wrong_both.py",
     ),
 ]
 CASES += AUDIT_FIX_CASES

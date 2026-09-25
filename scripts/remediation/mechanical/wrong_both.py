@@ -293,7 +293,9 @@ _AD = r"A\.\s?D\.|C\.\s?E\.|AD|CE|d\.\s?C\.|n\.\s?Chr\.|ap\.\s?J\.-C\."
 _SUFFIX = re.compile(
     _NUMBER + _RANGE + r"\s?(?:(?P<bc>" + _BC + r")|(?P<ad>" + _AD + r"))(?![^\W\d_])"
 )
-_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER)
+#: The era-then-year form. Its right boundary is the point: without it "AD 5th century", "AD 90s",
+#: "AD 1.500" and "AD 900.5" each read as a year (audit 2026-09-25 M7).
+_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER + r"(?![^\W_]|[.,]\d)")
 #: Where a whole number starts: no digit, point or comma before it ("13700", "1.700", "1,700").
 _DIGIT = re.compile(r"(?<![\d.,])\d")
 
