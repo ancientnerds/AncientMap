@@ -14,7 +14,8 @@ batch's statements, and runs them.
 
 **Dry run by default**: nothing is sent to production except the read-only questions a group needs
 (L and P5: which sites carry a live Phase-4 provenance; `--round 2` and up: whether the round
-before is reverted), and the report says so.
+before is reverted; a written batch whose re-plan leaves a site out: whether that site's rows are
+reverted), and the report says so.
 
 `--rehearse` runs each open batch's `REHEARSE.sql` (the exact write, ending in `ROLLBACK`) against
 the live rows and proves afterwards that every row is still at its old value and the stamp journals
@@ -49,7 +50,15 @@ reverted before its acceptance can never be accepted (every link it wrote has a 
 `--close-reverted` records it in `CLOSED/step-NNNN.json` on the same proof, and its batches are
 frozen until then.
 
-A written batch keeps the plan it was written from: re-planning it to different rows is refused.
+A written batch keeps the plan it was written from: re-planning it to different rows is refused -
+with one exception, a site taken back alone (the mass run's mid-run audit, 2026-09-25). A site the
+audit holds after its batch was written (`audit4.py hold`) is left out of the batch's re-plan; the
+gate accepts that re-plan only when it is the written plan without that site's rows and production
+proves, read-only, that each of those rows has its own reversal kept (`revert4.py --site`,
+`sites_taken_back`). The batch's `PLAN.jsonl` and `APPLIED.json` stay what was written, so the lane
+plan keeps the site's rows and the acceptance judges them like a reverted batch's: not yet written,
+at their old value.
+
 Which lanes may write (`--open-lanes`) is the pilot's verdict, and lanes T and R need the independent
 audit's cleared list (`--audited`, one site id per line). The verifier is `phase4.verify4`
 (`verify_site`, V1-V15), imported when group P4 is planned.
@@ -255,7 +264,8 @@ def render(
     """Render one write batch into `<apply root>/<batch>/` for its write round `write_round`.
 
     A batch applied in this round keeps its plan: a re-plan to other rows is refused, never written
-    over the record of what was written. A batch applied in the round before is re-opened only on
+    over the record of what was written - unless it only leaves out sites production proves
+    reverted (`sites_taken_back`). A batch applied in the round before is re-opened only on
     production's word that that round is reverted (`prove_reverted`), and never while it belongs to
     the step that awaits its acceptance (`frozen`); its record is kept beside its statements. Any
     other round is refused: the rounds of a batch follow its reverted rounds one by one.
@@ -267,11 +277,12 @@ def render(
         if record["write_round"] == write_round:
             stored = W4.read_plan(out, group=plan.group)
             if [row.change_key for row in stored] != [row.change_key for row in plan.rows]:
-                raise SystemExit(
-                    f"{out}: this batch was written from another plan; a written batch keeps the "
-                    "plan it was written from (read its APPLIED.json and the journal before "
-                    "anything else)"
-                )
+                for site_id, rows in sites_taken_back(out, stored, plan, record, runner, host):
+                    print(
+                        f"{out.name}: {site_id} left out of the re-plan; its {rows} row(s) of "
+                        f"round {record['write_round']} have their own reversal kept in "
+                        "production (read-only proof); the batch keeps the plan it was written from"
+                    )
             return Planned(out=out, plan=plan, chunk=chunk)
         if record["write_round"] != write_round - 1:
             raise SystemExit(
@@ -293,6 +304,45 @@ def render(
     if chunk is None:
         drop_unwritten_statements(out, write_round=write_round)
     return Planned(out=out, plan=plan, chunk=chunk)
+
+
+def sites_taken_back(
+    out: pathlib.Path,
+    stored: Sequence[W4.Row4],
+    plan: W4.WritePlan4,
+    record: Mapping[str, Any],
+    runner: W.SqlRunner | None,
+    host: str,
+) -> list[tuple[str, int]]:
+    """A written batch re-planned to other rows: accepted only when the re-plan is the plan it was
+    written from without the rows of whole sites, and production proves, read-only, that every row
+    the round wrote for each such site has its own reversal kept (`revert4 --site`, by revert4's own
+    read). What is live of the batch is then exactly the re-plan. The sites and their row counts,
+    or a refusal: any other re-plan, or a left-out site whose rows are live."""
+    planned = {row.change_key for row in plan.rows}
+    left = [row for row in stored if row.change_key not in planned]
+    sites = list(dict.fromkeys(row.site_id for row in left))
+    kept = [row.change_key for row in stored if row.site_id not in sites]
+    if [row.change_key for row in plan.rows] != kept:
+        raise SystemExit(
+            f"{out}: this batch was written from another plan; a written batch keeps the plan it "
+            "was written from (read its APPLIED.json and the journal before anything else)"
+        )
+    stamp = record["run_stamp"]
+    taken: list[tuple[str, int]] = []
+    for site_id in sites:
+        rows = sum(row.site_id == site_id for row in stored)
+        matched, reverted = R.reversal_counts(stamp, site=site_id, runner=runner, host=host)
+        if matched != rows or reverted != matched:
+            raise SystemExit(
+                f"{out}: the re-plan leaves out {site_id}, whose {rows} row(s) round "
+                f"{record['write_round']} wrote are not reverted in production - {matched} "
+                f"journalled write(s) of the site under {stamp}, {reverted} with their own "
+                f"reversal kept. Revert the site first (revert4.py --stamp-like '{stamp}' --site "
+                f"{site_id}), or keep it planned."
+            )
+        taken.append((site_id, rows))
+    return taken
 
 
 def drop_unwritten_statements(out: pathlib.Path, *, write_round: int) -> None:

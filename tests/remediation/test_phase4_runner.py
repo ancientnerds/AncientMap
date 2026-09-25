@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import inspect
 import io
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -1301,3 +1303,108 @@ def test_a_site_assembled_in_two_batches_and_an_unknown_sheet_id_are_refused(
             (run_dir / "p4-0002" / path.name).write_bytes(path.read_bytes())
     with pytest.raises(ValueError, match="site-1 is assembled in two batches"):
         AU.reviewed_sites(run_dir)
+
+
+# ----------------------------------------------------------- audit4 hold: a finding holds its site
+
+
+def _verdicts(
+    site_id: str = "site-1",
+    *,
+    name: str = "Stone Temple",
+    sentences: tuple[str, ...] = ("SUPPORTED",) * 4,
+    card: str | None = "CONTAINED",
+) -> dict[str, Any]:
+    """One site's record in the audit's verdict file (`MIDRUN_AUDIT_VERDICTS.json`'s shape)."""
+    return {
+        "site_id": site_id,
+        "name": name,
+        "sentences": [
+            {"n": n, "verdict": verdict, "note": f"note {n}"}
+            for n, verdict in enumerate(sentences, start=1)
+        ],
+        "card": None if card is None else {"verdict": card, "note": "the card note"},
+        "verifier_false_pass": [],
+    }
+
+
+def _audit_file(path: Path, *records: dict[str, Any]) -> Path:
+    path.write_text(json.dumps(list(records), ensure_ascii=False, indent=1), encoding="utf-8")
+    return path
+
+
+def test_the_audit_hold_holds_a_wrong_site_in_its_batch_and_in_holds4(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The mass run's mid-run audit (2026-09-25): a WRONG_SITE sentence of a written site holds the
+    site under the closed list's `audit-wrong-site`, in the batch that carries it, with the audit
+    file's name, digest and finding as the detail; `HOLDS4.jsonl` is rewritten; the site leaves the
+    reviewed population; the batch stays done; a second run adds nothing."""
+    run_dir = _reviewed(tmp_path, "site-1", "p4-0001").parent
+    _reviewed(tmp_path, "site-2", "p4-0002")
+    wrong = ("WRONG_SITE", "SUPPORTED", "SUPPORTED", "SUPPORTED")
+    audit = _audit_file(
+        tmp_path / "MIDRUN_AUDIT_VERDICTS.json",
+        _verdicts("site-2"),
+        _verdicts("site-1", sentences=wrong),
+    )
+    digest = hashlib.sha256(audit.read_bytes()).hexdigest()
+    argv = ["hold", "--run-dir", str(run_dir), "--site", "site-1", "--audit", str(audit)]
+    assert AU.main(argv) == 0
+    assert capsys.readouterr().out.rstrip().endswith("STAGE_EXIT=0")
+    (hold,) = B.read_holds(run_dir / "p4-0001")
+    assert (hold.site_id, hold.scope, hold.reason) == (
+        "site-1",
+        M.HoldScope.SITE,
+        M.HoldReason.AUDIT_WRONG_SITE,
+    )
+    assert hold.detail == (
+        f"MIDRUN_AUDIT_VERDICTS.json sha256 {digest}: sentence 1 WRONG_SITE: note 1"
+    )
+    assert M.load_jsonl(run_dir / R4.HOLDS4_FILE, M.Hold) == [hold]
+    assert B.read_holds(run_dir / "p4-0002") == []
+    assert set(AU.reviewed_sites(run_dir)) == {"site-2"}
+    assert M4.batch_done(run_dir, "p4-0001")[0]
+    assert AU.main(argv) == 0
+    assert "0 new" in capsys.readouterr().out
+    assert B.read_holds(run_dir / "p4-0001") == [hold]
+
+
+def test_the_audit_hold_reads_each_finding_as_its_closed_list_reason(tmp_path: Path) -> None:
+    """UNSUPPORTED holds the site (`audit-unsupported`), NOT_CONTAINED only the card
+    (`audit-not-contained`); SUPPORTED and CONTAINED hold nothing."""
+    run_dir = _reviewed(tmp_path).parent
+    record = _verdicts(sentences=("SUPPORTED", "UNSUPPORTED", "SUPPORTED"), card="NOT_CONTAINED")
+    audit = _audit_file(tmp_path / "FINAL.json", record)
+    assert (
+        AU.main(["hold", "--run-dir", str(run_dir), "--site", "site-1", "--audit", str(audit)]) == 0
+    )
+    assert [(h.reason, h.scope) for h in B.read_holds(run_dir / "p4-0001")] == [
+        (M.HoldReason.AUDIT_UNSUPPORTED, M.HoldScope.SITE),
+        (M.HoldReason.AUDIT_NOT_CONTAINED, M.HoldScope.CARD),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("records", "site", "problem"),
+    [
+        ((_verdicts("site-2"),), "site-1", "0 verdict record(s) for site-1"),
+        ((_verdicts(sentences=("WRONG_SITE",)),) * 2, "site-1", "2 verdict record(s) for site-1"),
+        ((_verdicts(),), "site-1", "names no UNSUPPORTED, WRONG_SITE or NOT_CONTAINED finding"),
+        ((_verdicts(sentences=("MAYBE",)),), "site-1", "'MAYBE' is not a sentence verdict"),
+        ((_verdicts(card="PARTLY", sentences=("WRONG_SITE",)),), "site-1", "is not a card verdict"),
+        ((_verdicts(name="Roman Bath", sentences=("WRONG_SITE",)),), "site-1", "judges 'Roman Bath'"),
+        ((_verdicts("site-9", sentences=("WRONG_SITE",)),), "site-9", "not a site of"),
+    ],
+    ids=["not-judged", "judged-twice", "no-finding", "unknown-verdict", "unknown-card-verdict",
+         "another-name", "not-in-the-run"],
+)  # fmt: skip
+def test_the_audit_hold_refuses_what_the_audit_does_not_say(
+    tmp_path: Path, records: tuple[dict[str, Any], ...], site: str, problem: str
+) -> None:
+    run_dir = _reviewed(tmp_path).parent
+    audit = _audit_file(tmp_path / "AUDIT.json", *records)
+    with pytest.raises(ValueError, match=re.escape(problem)):
+        AU.main(["hold", "--run-dir", str(run_dir), "--site", site, "--audit", str(audit)])
+    assert B.read_holds(run_dir / "p4-0001") == []
+    assert not (run_dir / R4.HOLDS4_FILE).exists()

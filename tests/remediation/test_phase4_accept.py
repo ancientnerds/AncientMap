@@ -487,6 +487,91 @@ def test_a_reverted_step_counts_as_not_yet_written(tmp_path: Path) -> None:
     assert any(d.startswith("NOT NEW") for d in _accept4(written).deviations)
 
 
+#: A second site of the same chunk (the mass run's mid-run audit, 2026-09-25: one WRONG_SITE site
+#: of a written 9-site chunk is taken back alone with `revert4 --site`).
+SITE_B = "318414bc-2222-4222-8222-222222222222"
+B_STORED = "An LLM wrote this in March about another site."
+B_WRITTEN = "The second site's written description [1]."
+
+
+def _second_site(written: Written) -> None:
+    """Site B written by the same chunk as the case's site: its two planned rows, their journal rows
+    under the same stamp, and production holding their new values."""
+    new_raw_b = {"description_citations": [], "k": "written"}
+    written.plan += [
+        _plan_row(SITE_B, "unified_sites", "description", B_STORED, B_WRITTEN, "k-desc-b"),
+        _plan_row(SITE_B, "unified_sites", "raw_data", dumps(OLD_RAW), dumps(new_raw_b), "k-raw-b"),
+    ]
+    for offset, (column, old, new, key) in enumerate(
+        (
+            ("description", B_STORED, B_WRITTEN, "k-desc-b"),
+            ("raw_data", dumps(OLD_RAW), dumps(new_raw_b), "k-raw-b"),
+        )
+    ):
+        written.production.journal.append(
+            {
+                "id": 31 + offset,
+                "table_name": "unified_sites",
+                "column_name": column,
+                "row_pk": SITE_B,
+                "old_value": old,
+                "new_value": new,
+                "run_stamp": P4_STAMP,
+                "change_key": key,
+                "evidence": {},
+            }
+        )
+    written.production.sites[SITE_B] = {
+        "description": B_WRITTEN,
+        "raw_data": new_raw_b,
+        "card_description": None,
+        "has_card_row": False,
+    }
+
+
+def _revert_site(written: Written, site_id: str) -> None:
+    """revert4 `--site`: the site's rows of the chunk written back, journalled under the write's key
+    and its stamp plus `-rollback`; the chunk's other site untouched."""
+    rows = [
+        row
+        for row in written.production.journal
+        if row["run_stamp"] == P4_STAMP and row["row_pk"] == site_id
+    ]
+    first = max(row["id"] for row in written.production.journal) + 1
+    for offset, row in enumerate(rows):
+        written.production.journal.append(
+            dict(
+                row,
+                id=first + offset,
+                old_value=row["new_value"],
+                new_value=row["old_value"],
+                run_stamp=P4_STAMP + "-rollback",
+                change_key=row["change_key"] + "-rollback",
+                evidence={},
+            )
+        )
+    written.production.sites[site_id].update(description=B_STORED, raw_data=OLD_RAW)
+
+
+def test_a_site_reverted_alone_is_not_yet_written_and_its_chunk_is_still_accepted(
+    tmp_path: Path,
+) -> None:
+    """After `revert4 --site` the site's rows are reversals of their own and its planned rows -
+    still in the lane plan, which keeps what was written - are judged like a reverted batch's: not
+    yet written, at their old value. The chunk's other site is carried and verified again: 0
+    deviations. A later edit of the reverted site is still seen."""
+    written = written_p4(tmp_path)
+    _second_site(written)
+    assert _accept4(written).deviations == []
+    _revert_site(written, SITE_B)
+    result = _accept4(written)
+    assert result.deviations == [] and result.untouched == 2
+    assert {key[2] for key in result.carried} == {SITE_ID}
+    assert accept(written, tmp_path) == []
+    written.production.sites[SITE_B]["description"] = "Edited after the revert."
+    assert any(d.startswith("NOT NEW") for d in _accept4(written).deviations)
+
+
 def test_only_a_rows_own_reversal_closes_it(tmp_path: Path) -> None:
     """The key **and** the stamp plus `-rollback` (revert4 `_reversed`): a reversal journalled
     under another key, or under round 2's stamp, does not close a round-1 row."""

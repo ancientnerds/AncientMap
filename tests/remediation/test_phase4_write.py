@@ -1978,3 +1978,96 @@ def test_a_card_clear_is_evidenced_only_by_a_cleared_card_finding(tmp_path: Path
             }
         ]
     }
+
+
+# ── one written site taken back: the batch's re-plan leaves it out (mid-run audit, 2026-09-25) ──
+
+GATE_B = "00000002-0000-4000-8000-000000000002"
+
+
+def _gate_two_sites_written(tmp_path: Path, monkeypatch) -> tuple[FX.FakeDb, Path, Path]:
+    """One batch of two sites written through the gate as round 1, its step accepted."""
+    run = tmp_path / "runs" / "pilot"
+    batch_dir = FX.write_batch(
+        run,
+        sites=[FX.plan_site(GATE_SITE), FX.plan_site(GATE_B)],
+        assemblies=[FX.assembly(GATE_SITE), FX.assembly(GATE_B)],
+        batch_id="p4-0001",
+    )
+    (run / M.LEDGER_FILE).write_text(
+        "".join(json.dumps(r) + "\n" for r in FX.ledger_rows(GATE_SITE, GATE_B, batch="p4-0001")),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE, GATE_B)
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
+    output = _acceptance(tmp_path, journal_rows=4, name="round-1.log")
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 0
+    return db, batch_dir, tmp_path / "apply" / "p4-0001"
+
+
+def _revert_site(db: FX.FakeDb, out: Path, site_id: str) -> None:
+    """What `revert4 --stamp-like <round 1> --site <site>` journals: the site's rows of round 1
+    written back under the round's stamp and each key plus `-rollback`, committed."""
+    rows = [row for row in W4.read_plan(out, group=W4.Group.P4) if row.site_id == site_id]
+    chunk = W4.chunk_for(W4.WritePlan4(W4.Group.P4, "p4-0001", rows))
+    db(W4.render_rollback(chunk).replace("\nROLLBACK;\n", "\nCOMMIT;\n"), host="fake")
+
+
+def _audit_hold(batch_dir: Path, site_id: str) -> None:
+    hold = M.Hold(
+        site_id=site_id,
+        scope=M.HoldScope.SITE,
+        reason=M.HoldReason.AUDIT_WRONG_SITE,
+        detail="MIDRUN_AUDIT_VERDICTS.json: sentence 1 WRONG_SITE",
+    )
+    with (batch_dir / M.HOLDS_FILE).open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(hold.to_json() + "\n")
+
+
+def test_a_written_batch_is_re_planned_without_a_held_site_once_its_rows_are_reverted(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """A site the audit held after its batch was written is planned by no one again; the batch's
+    re-plan leaves it out. The gate accepts that re-plan only on production's word, read-only, that
+    every row round 1 wrote for the site has its own reversal kept (`revert4 --site`): what is live
+    of the batch is then exactly the re-plan. The batch keeps the plan it was written from - its
+    `PLAN.jsonl` and `APPLIED.json` - and nothing is written."""
+    db, batch_dir, out = _gate_two_sites_written(tmp_path, monkeypatch)
+    plan_bytes = (out / W4.PLAN_FILE).read_bytes()
+    applied_bytes = (out / G.APPLIED_FILE).read_bytes()
+    _audit_hold(batch_dir, GATE_B)
+    capsys.readouterr()
+
+    assert G.main(_gate_args(tmp_path), runner=db) == 1  # held, but its rows are still live
+    captured = capsys.readouterr()
+    assert f"revert4.py --stamp-like '{ROUND_1}' --site {GATE_B}" in captured.err
+    assert captured.out.rstrip().endswith("WRITE_EXIT=1")
+
+    _revert_site(db, out, GATE_B)
+    journal = list(db.journal)
+    assert G.main(_gate_args(tmp_path), runner=db) == 0
+    printed = capsys.readouterr().out
+    assert f"p4-0001: {GATE_B} left out of the re-plan" in printed
+    assert "its 2 row(s) of round 1 have their own reversal kept" in printed
+    assert "rows planned: 2 |" in printed and "open batches: 0" in printed
+    assert (out / W4.PLAN_FILE).read_bytes() == plan_bytes
+    assert (out / G.APPLIED_FILE).read_bytes() == applied_bytes
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
+    assert "done: no open batch left to write" in capsys.readouterr().out
+    assert db.journal == journal
+
+
+def test_a_written_batch_is_never_re_planned_to_other_rows(tmp_path, monkeypatch, capsys) -> None:
+    """Only a left-out site whose rows are reverted is accepted: a re-plan that changes a written
+    row - here site A's text - is refused, reverted rows of another site or not."""
+    db, batch_dir, out = _gate_two_sites_written(tmp_path, monkeypatch)
+    _audit_hold(batch_dir, GATE_B)
+    _revert_site(db, out, GATE_B)
+    assemblies = [FX.assembly(GATE_SITE, description=FX.DESCRIPTION.replace("1915", "1916"))]
+    (batch_dir / M.ASSEMBLY_FILE).write_text(
+        M.dump_jsonl([*assemblies, FX.assembly(GATE_B)]), encoding="utf-8"
+    )
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path), runner=db) == 1
+    assert "this batch was written from another plan" in capsys.readouterr().err

@@ -424,10 +424,16 @@ def aggregate_holds(run_dir: Path) -> list[M.Hold]:
     return out
 
 
-def cmd_holds(args: argparse.Namespace) -> tuple[int, Report]:
-    run_dir = Path(args.run_dir)
+def write_holds4(run_dir: Path) -> list[M.Hold]:
+    """`HOLDS4.jsonl` rewritten from every batch's holds (`aggregate_holds`); what it now holds."""
     holds = aggregate_holds(run_dir)
     B.write_text_atomic(run_dir / HOLDS4_FILE, M.dump_jsonl(holds))
+    return holds
+
+
+def cmd_holds(args: argparse.Namespace) -> tuple[int, Report]:
+    run_dir = Path(args.run_dir)
+    holds = write_holds4(run_dir)
     by_reason: dict[str, int] = {}
     for hold in holds:
         by_reason[hold.reason.value] = by_reason.get(hold.reason.value, 0) + 1
