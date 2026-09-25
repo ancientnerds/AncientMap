@@ -77,6 +77,7 @@ import write_gate4  # noqa: E402 - like_matches: SQL LIKE over one stamp, as the
 from census.tests import t08_citation_markers as T08  # noqa: E402 - on sys.path via lanes
 from journal_chain import ROLLBACK_SUFFIX  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import write_stage as W  # noqa: E402 - utf8_streams, the writers' stream rule
 from phase4 import model4 as M  # noqa: E402
 from phase4 import verify4 as V4  # noqa: E402
 
@@ -390,12 +391,13 @@ def chain_sql(pks: Sequence[str], columns: Iterable[tuple[str, str]]) -> str:
 
 def live_sql(pks: Sequence[str]) -> str:
     """The written values and Postgres' own hash invariants, one object per site."""
+    provenance = f"u.raw_data->{lanes.sql_text(M.PROVENANCE_KEY)}"
     return (
         "SELECT to_jsonb(t)::text FROM (SELECT u.id::text AS id, u.description, u.raw_data, "
         "c.site_id IS NOT NULL AS has_card_row, c.card_description, "
-        "(u.raw_data->'_description_provenance'->>'desc_sha256') = "
+        f"({provenance}->>'desc_sha256') = "
         "encode(sha256(convert_to(u.description, 'UTF8')), 'hex') AS desc_invariant, "
-        "(u.raw_data->'_description_provenance'->'card'->>'text_sha256') = "
+        f"({provenance}->'card'->>'text_sha256') = "
         "encode(sha256(convert_to(c.card_description, 'UTF8')), 'hex') AS card_invariant "
         "FROM unified_sites u LEFT JOIN card_stats c ON c.site_id = u.id "
         f"WHERE u.id IN ({_uuids(pks)})) t;\n"
@@ -798,8 +800,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
 
 
 def main(argv: list[str] | None = None) -> int:
-    for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    W.utf8_streams()
     parser = argparse.ArgumentParser(prog="verify-writes4")
     parser.add_argument("--lane", choices=sorted(LANE_COLUMNS))
     parser.add_argument("--plan", help="the lane's PLAN.jsonl (write4)")

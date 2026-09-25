@@ -21364,6 +21364,22 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step",
     ),
     (
+        "audit-fix: m18 the acceptance keeps its own stream rule",
+        P4_ACCEPT,
+        "    W.utf8_streams()\n    parser = argparse",
+        "    pass  # mutant\n    parser = argparse",
+        P4_ACCEPT_TEST,
+        "test_the_acceptance_shares_the_writers_stream_rule_and_provenance_key",
+    ),
+    (
+        "audit-fix: m18 the live read spells the provenance key out",
+        P4_ACCEPT,
+        '    provenance = f"u.raw_data->{lanes.sql_text(M.PROVENANCE_KEY)}"\n',
+        "    provenance = \"u.raw_data->'_description_provenance'\"  # mutant\n",
+        P4_ACCEPT_TEST,
+        "test_the_acceptance_shares_the_writers_stream_rule_and_provenance_key",
+    ),
+    (
         "audit-fix: m17 the card check ignores its exit status",
         P4_ACCEPT,
         "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",

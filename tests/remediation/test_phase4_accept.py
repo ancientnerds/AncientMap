@@ -1235,3 +1235,16 @@ def test_a_row_planned_twice_is_a_deviation(tmp_path: Path) -> None:
     written = written_p4(tmp_path)
     written.plan.append(dict(written.plan[0]))
     assert any(d.startswith("PLANNED TWICE") for d in _accept4(written).deviations)
+
+
+def test_the_acceptance_shares_the_writers_stream_rule_and_provenance_key(monkeypatch) -> None:
+    """2026-09-25 audit m18: `main` re-implemented `write_stage.utf8_streams`, and `live_sql`
+    spelled the provenance key out instead of reading `model4.PROVENANCE_KEY`."""
+    seen: list[str] = []
+    monkeypatch.setattr(A.W, "utf8_streams", lambda: seen.append("utf-8"))
+    with pytest.raises(SystemExit):
+        A.main([])
+    assert seen == ["utf-8"]
+    monkeypatch.setattr(M, "PROVENANCE_KEY", "_another_key")
+    sql = A.live_sql([SITE_ID])
+    assert sql.count("'_another_key'") == 2 and "_description_provenance" not in sql
