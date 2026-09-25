@@ -9315,6 +9315,54 @@ are moved aside first - the gate refuses the apply root otherwise.
     # at the end: every planned row written
     $PY $M/tools/verify_writes4.py --lane p4l --plan $M/logs/_write_apply_p4l/LANE_PLAN.jsonl --complete
 
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-L`, main venv)
+
+* 10 new test functions (13 items), 2 rewritten: `test_phase4_legacy.py` - L takes no scope and
+  marks every March text (replaces the out-of-scope test); `test_phase4_write.py` - one site
+  outside a real pinned scope through the gate (P4 and P5 refuse it, L plans it), L's population
+  and its counts, L written in steps and accepted on lane p4l (the command names no run), the source
+  checks for L, P4 and P5 (4 items), the foreign-batch refusal, `--batch` and a missing plan, the
+  strict read of the plan; P4 and P5 need the scope and L takes none (rewritten);
+  `test_phase4_plan.py` 3 - the L plan's order, numbering, mark and summary, its values byte for
+  byte, bad rows. The fake psql answers the gate's live-provenance read. Red first: the scope
+  removal's tests (10 failed) and the own plan's (12 failed) before their code; the `--batch` test
+  was written after its code and goes red under its three mutants.
+* `plan4.plan_site` is split out of `_site` unchanged: `plan4.py build` over wip/p4-pilot's inputs
+  rebuilds `PLAN4.pilot4.jsonl` (`e99f3f7f...`) and `--defect-scope` `PLAN4.scope.jsonl`
+  (`fec90379...`) byte for byte.
+* 31 new sweep cases (`P4_LEGACY_MUTATIONS`, a block of its own after `P4_SCOPE_MUTATIONS`); the 3
+  L cases of `P4_SCOPE_MUTATIONS` are retired with the code they guarded and the gate's options
+  case follows its line; 2,163 labels, all unique, every anchor and test present. The sweep's own
+  `main` (driver `logs/p4l/sweep_legacy.py`) over every case whose target the change touched (write4
+  106, write_gate4 60, plan4 40, legacy4 6, AUDIT_LOG 5, mutation_sweep 3): **220/220 caught**, the
+  tree byte-identical for its 6 files (`logs/p4l/sweep_legacy.log` `e319418e...`; the 8 touched
+  files' sha256 checked again against the record taken before it), `git status` clean afterwards,
+  no `# mutant` line left.
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`): **6,274 passed,
+  118 skipped, 57 deselected, 0 failed** (205 s; `logs/p4l/gates_pytest.log` `4893ef31...`); 6,379
+  before plus the 13 new items. The 118 skips are all gitignored data this fresh worktree does not
+  hold (Natural Earth, the snapshot, the S0 export, the design file ...); wip/p4-pilot's worktree,
+  which holds it, skips 111.
+* `ruff check` and `ruff format --check` clean on the 9 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check passes.
+
+### Merging into wip/p4-pilot
+
+* `phase4/` changes (`write4`, `plan4`, `legacy4`), so `mass4`'s digest over `phase4/*.py` changes:
+  a `mass4` invocation started before the merge stops between batches on its digest guard. Merge
+  between invocations, or after the mass run (L's apply follows it anyway).
+* `phase3/mutation_sweep.py` changes, so `mass_run.package_digest` over `phase3/` changes: merge
+  while no Phase-3 mass run is in flight. Its hunks: the three retired L cases, the moved options
+  anchor and the `P4S_L` constant inside `P4_SCOPE_MUTATIONS`, and the new block after
+  `MUTATIONS += P4_SCOPE_MUTATIONS` - away from the file's end, where wip/p4-pilot appends.
+* `write_gate4`: `--run` is no longer an argparse requirement (P4 and P5 still refuse to run without
+  it, now with `WRITE_EXIT=1` and a message); `_run` branches on the L plan before the scope, and
+  `run_batches` takes `run_dir: Path | None`. A wip/p4-pilot change to `_run` or `run_batches`
+  meets these hunks.
+* This entry is appended after the 2026-09-25 mid-run audit entry; a later wip/p4-pilot entry
+  conflicts only as two appends, kept in date order.
+
 ### Open
 
 * **L's apply**, after the mass run's last P4 step is accepted: the commands above.
