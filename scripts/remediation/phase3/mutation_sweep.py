@@ -18194,6 +18194,19 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 ]
 MUTATIONS += P4_SCOPE_MUTATIONS
 
+#: 2026-09-25, mass run: T03's year reader strips the dot separator its extractor admits.
+T03_DOT_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "t03: a dot thousands separator is left in the year",
+        "scripts/remediation/census/tests/t03_years_in_text.py",
+        '    cleaned = token.replace(",", "").replace(".", "")\n',
+        '    cleaned = token.replace(",", "")  # mutant\n',
+        "tests/remediation/test_t03.py",
+        "TestExtraction::test_a_dot_thousands_separator_is_read_like_a_comma",
+    ),
+]
+MUTATIONS += T03_DOT_MUTATIONS
+
 
 # ── Lane L marks every March-AI text, from its own plan (owner decision 2026-09-24) ─────────────
 #: "Alle kennzeichnen (Recommended)": lane L - no text, only the provenance that shows the AI
