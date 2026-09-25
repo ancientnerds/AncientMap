@@ -12387,3 +12387,37 @@ re-draw before running it: `PROTOCOL.md` `f40fac87230a26e7b1a4818e9d50d16dedfcb6
 recorded with its commit 1f08d20). Seed 20260926, canaries 20260927, excluding draw-2026-09-25's
 60 and the Phase-4 audit samples (mid-run 45, 500-site 10, pilots 3 and 4), into
 `draw-2026-09-25b/`.
+
+## 2026-09-26 - draw-2026-09-25b ends as a measurement; the owner's finishing mandate
+
+Stage 1 of `draw-2026-09-25b` ran to the end: 652 questions in 54 batches, one fresh Opus agent per
+batch (six at a time), every answer recorded write-once through the handoff; `opus_handoff.py
+validate`: 652 answered, 0 missing, 0 stale, 0 malformed. `judge.py import-stage1` fetched 577 cited
+URLs and counted 494 verdicts (370 CORRECT, 37 UNVERIFIABLE, 87 WRONG); 158 were not counted in this
+round (fetch failed 114 - Historic England, Heritage Gateway and other registers refuse plain
+requests -, quote not found 41, unreadable 3). All 10 canaries were caught at stage 1.
+
+Per field, from the recorded answers (canary questions set aside): card_description 32 CORRECT /
+19 WRONG (all severe) / 4 UNVERIFIABLE; description 40 / 15 (15) / 5; period_name 30 / 22 / 8;
+period_start 32 / 16 (2 severe) / 12; served_image 35 / 11 (2) / 1; site_type 50 / 8 / 2;
+coordinates 52 / 7 (5) / 1; source_url 55 / 4 / 1; scope 58 / 2 (2) / 0; name 56 / 1 (cosmetic) /
+3; country 60 / 0 / 0. 46 of the 60 sites carry at least one WRONG verdict, 30 a severe one. By
+origin: old March cards 18 of 43 WRONG against 1 of 12 Phase-5 cards; old March descriptions 9 of 29
+against 1 of 10 Phase-4 descriptions (tally before the last description batches).
+
+**Root cause.** Phases 4/5 wrote only the owner's defect scope (2026-09-23), which rested on the
+Phase-3 finder; the finder missed most defects of the March enrichment, and the structured fields
+(period, type, image, point) outside Phase 3's findings were never re-derived from sources.
+
+**The owner's decisions of 2026-09-26** (asked once, then autonomous; verbatim in
+`FINISH_PLAN_2026-09-26.md` section 1): no acceptance any more - the repairs are finished and the
+error rates reported (O1), so the run stops here without re-asks or stage 2, and its write freeze
+on the 60 drawn sites (V3) is lifted; all cards rewritten as fact-checked teasers of 160-190
+characters (O2-O4); the March descriptions Phase 4 cannot replace are checked and trimmed sentence by
+sentence (O5); refuted or unverifiable single fields replaced with a sourced value or emptied (O6);
+Oceania's time limit is 1500 AD like the Americas' (O7); every step ships autonomously (O8); the
+HUMAN_ONLY items are decided by their recommendations (O9); AI disclosure as before (O10); up to 16
+agents in parallel (O11). The plan and its progress log: `FINISH_PLAN_2026-09-26.md`.
+
+Files: `CANARIES.jsonl`, `judging/QUESTIONS.jsonl`, `judging/ROUNDS.jsonl`, `judging/STAGE1.jsonl`,
+`judging/REASK_S1.json` (committed with this entry; the fetched pages stay local).
