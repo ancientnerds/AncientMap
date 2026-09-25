@@ -14,7 +14,8 @@ batch's statements, and runs them.
     write_gate4.py --group L --legacy-plan LEGACY4.jsonl --apply --step 100  # lane L's own plan
 
 **Dry run by default**: nothing is sent to production except the read-only questions a group needs
-(L and P5: which sites carry a live Phase-4 provenance; `--round 2` and up: whether the round
+(L and P5: which sites carry a live Phase-4 provenance; P5: which have a card_stats row;
+`--round 2` and up: whether the round
 before is reverted; a written batch whose re-plan leaves a site out: whether that site's rows are
 reverted), and the report says so.
 
@@ -35,16 +36,21 @@ command to run (`verify_writes4.py --lane --plan --run`, 0 deviations).
 continue" as a precondition, not a promise. Every written batch is recorded in `STEP.json` (and the
 lane's plan in `LANE_PLAN.jsonl`); while `STEP.json` exists, `--apply` writes nothing. `--accept
 <file>` reads the saved output of `verify_writes4.py` and records `ACCEPTED/step-NNNN.json` only when
-it ends in `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has one lane line of the step's lane
-whose stamps cover the step's, read at least the rows written so far under those stamps (every
-round, the reverted ones too: their rows stay in the journal), and accepted no earlier step
-(`acceptance_problems`).
+it is the output of one run - its lane line first, one `RESULT:` and one exit line - that ends in
+`RESULT: 0 deviation(s)` and `ACCEPT_EXIT=0`, whose lane line is the step's lane with stamps
+covering the step's, that read at least the rows written so far under those stamps (every round,
+the reverted ones too: their rows stay in the journal), that read the lane plan's current row
+count, that allows no later stamp pattern covering the step's own stamps, and that accepted no
+earlier step (`acceptance_problems`). A step is 1-100 sites (`STEP_MAX`); a stopped batch anywhere
+in the apply root stops every run, whatever `--batch` selects.
 
 **Write rounds** (the chunk number of the stamp). A batch taken back by `revert4` is written again
 as its next round: `--apply --round 2` re-opens a batch applied in round 1 only when production
 proves, read-only, that every row round 1 wrote has its own reversal kept (`revert4.reversal_read`,
-`prove_reverted`); round 1's `APPLIED.json` is then kept beside its statements in
-`chunks/chunk-0001/` with that proof (`REVERTED.json`), and chunk-0002 is rendered and written. A
+`prove_reverted`); round 1's `APPLIED.json` and `PLAN.jsonl` are then kept beside its statements
+in `chunks/chunk-0001/` with that proof (`REVERTED.json`), and chunk-0002 is rendered and written.
+Round 2 may be planned differently: the lane plan carries round 1's kept rows tagged with its stamp
+(`round_stamp`), and the acceptance judges round 1's reverted rows against them. A
 round the batch cannot take - round 3 over a live round 1, round 2 for a batch never written, round
 1 again for a re-opened one - is refused with `WRITE_EXIT=1`, never skipped. A step that was
 reverted before its acceptance can never be accepted (every link it wrote has a later one);
@@ -112,6 +118,8 @@ from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 from phase4 import write4 as W4  # noqa: E402
 
 APPLIED_FILE = "APPLIED.json"
+#: The owner's step (2026-09-21): after every hundred sites, a check - the most one step may write.
+STEP_MAX = W.DEFAULT_CHUNK_SIZE
 STOPPED_FILE = "STOPPED.json"
 #: A reverted round's proof, kept with its `APPLIED.json` beside its statements (`chunks/<label>/`).
 REVERTED_FILE = "REVERTED.json"
@@ -123,12 +131,20 @@ STEP_FILE = "STEP.json"
 ACCEPTED_DIR = "ACCEPTED"
 #: Every rendered write batch's plan rows, in batch order: the `--plan` the acceptance reads.
 LANE_PLAN_FILE = "LANE_PLAN.jsonl"
+#: The key a reverted round's archived plan row carries in `LANE_PLAN.jsonl`: that round's stamp.
+ROUND_STAMP = "round_stamp"
 #: The acceptance CLI (Track C, WB-C3) and the lines of its output `--accept` reads.
 VERIFY_TOOL = "output/remediation/tools/verify_writes4.py"
 ACCEPT_OK = "ACCEPT_EXIT=0"
 ACCEPT_CLEAN = "RESULT: 0 deviation(s)"
+ACCEPT_RESULT = "RESULT:"
+#: The line `verify_writes4` prints for its `--allow-stamp` patterns, space-separated after it.
+ACCEPT_ALLOWED = "allowed later: "
+#: Any tool's own exit line, its code the group: one run prints exactly one. `verify_writes4`
+#: reads its card check's exit line with this same pattern.
+EXIT_LINE = re.compile(r"^[A-Z][A-Z0-9_]*_EXIT=(\d+)$")
 _ACCEPT_LANE = re.compile(
-    r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows \d+ \| "
+    r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows (?P<planned>\d+) \| "
     r"lane journal rows (?P<journal>\d+) \|"
 )
 #: The Phase-3 refusal rule under which the reviewer-cleared text defects were set aside.
@@ -209,6 +225,28 @@ def written_sites(site_ids: Sequence[str], *, run: Any, window: int = 200) -> di
             if row["lane"] in full:
                 found[str(row["id"])] = row["card"]
     return found
+
+
+#: The first line of `card_rows_sql`: how the tests' fake psql recognises the read.
+CARD_ROWS_READ = "-- the named sites that have a card_stats row (read-only)"
+
+
+def card_rows_sql(site_ids: Sequence[str]) -> str:
+    return (
+        f"{CARD_ROWS_READ}\n"
+        "SELECT to_jsonb(t)::text FROM (SELECT site_id::text AS site_id FROM card_stats "
+        f"WHERE site_id IN ({', '.join(f'{lanes.sql_text(s)}::uuid' for s in site_ids)})) t;\n"
+    )
+
+
+def card_row_sites(site_ids: Sequence[str], *, run: Any, window: int = 200) -> frozenset[str]:
+    """The named sites production holds a card_stats row for: P5 plans no card and no clear for
+    any other (`write4.RULE_NO_CARD_ROW`)."""
+    found: set[str] = set()
+    for start in range(0, len(site_ids), window):
+        for row in lanes.json_rows(run(card_rows_sql(site_ids[start : start + window]))):
+            found.add(str(row["site_id"]))
+    return frozenset(found)
 
 
 def phase3_card_findings(
@@ -320,10 +358,6 @@ class Planned:
     def applied(self) -> bool:
         return (self.out / APPLIED_FILE).exists()
 
-    @property
-    def stopped(self) -> bool:
-        return (self.out / STOPPED_FILE).exists()
-
 
 def render(
     apply_root: pathlib.Path,
@@ -345,6 +379,10 @@ def render(
     """
     out = apply_root / plan.batch_id
     chunk = W4.chunk_for(plan, write_round=write_round)
+    if (out / STOPPED_FILE).exists():
+        # What was attempted stays as it stopped - plan and statements - until a person has read
+        # it; `run_batches` writes nothing while it exists (audit 2026-09-25 m14).
+        return Planned(out=out, plan=plan, chunk=chunk)
     if (out / APPLIED_FILE).exists():
         record = _read(out / APPLIED_FILE)
         if record["write_round"] == write_round:
@@ -421,10 +459,10 @@ def sites_taken_back(
 def drop_unwritten_statements(out: pathlib.Path, *, write_round: int) -> None:
     """A plan of the batch without a row: the statements an earlier plan rendered for this round
     are not this plan's, and beside an empty `PLAN.jsonl` they would still write the old rows by
-    hand. They go - never a round's record (`APPLIED.json`, `REVERTED.json`) nor a stopped batch's
-    statements, which are what was attempted."""
+    hand. They go - never a round's record (`APPLIED.json`, `REVERTED.json`). A stopped batch never
+    gets here: `render` leaves it as it stopped."""
     directory = out / W4.CHUNKS_DIR / f"chunk-{write_round:04d}"
-    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)
+    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE)
     if not directory.is_dir() or any(path.exists() for path in kept):
         return
     for name in (W4.APPLY_FILE, W4.REHEARSE_FILE, W4.ROLLBACK_FILE):
@@ -477,9 +515,12 @@ def prove_reverted(
 
 
 def archive_round(out: pathlib.Path, record: Mapping[str, Any], proof: Mapping[str, Any]) -> None:
-    """Keep a reverted round's record beside its statements (`chunks/<label>/`): the proof first,
-    then its `APPLIED.json` moved there. The batch is open for its next round."""
+    """Keep a reverted round's record beside its statements (`chunks/<label>/`): the plan it was
+    written from, the proof, then its `APPLIED.json` moved there. The batch is open for its next
+    round, whose plan may differ: the acceptance judges this round's reverted rows against the plan
+    kept here (audit 2026-09-25 E5)."""
     directory = out / W4.CHUNKS_DIR / record["chunk"]
+    (directory / W4.PLAN_FILE).write_bytes((out / W4.PLAN_FILE).read_bytes())
     _mark(directory, REVERTED_FILE, proof)
     (out / APPLIED_FILE).replace(directory / APPLIED_FILE)
 
@@ -538,10 +579,23 @@ def pending_step(apply_root: pathlib.Path) -> dict[str, Any] | None:
 def write_lane_plan(apply_root: pathlib.Path) -> pathlib.Path:
     """Every rendered write batch's `PLAN.jsonl`, in batch order, as one file: the plan the
     acceptance compares the lane's whole journal against (a journal row outside it is a deviation,
-    a planned row not written yet is a later step)."""
+    a planned row not written yet is a later step). After them, every reverted round's own plan,
+    each row tagged `round_stamp` with that round's stamp: the acceptance judges the round's
+    reverted journal rows against it, never against a later round's re-plan (audit E5). A
+    reverted round that keeps no plan is refused - its rows could not be judged."""
     lines: list[str] = []
     for plan in sorted(apply_root.glob(f"*/{W4.PLAN_FILE}")):
         lines.extend(line for line in plan.read_text(encoding="utf-8").splitlines() if line)
+    for proof in sorted(apply_root.glob(f"*/{W4.CHUNKS_DIR}/*/{REVERTED_FILE}")):
+        kept = proof.parent / W4.PLAN_FILE
+        if not kept.exists():
+            raise SystemExit(f"{proof.parent}: a reverted round that keeps no PLAN.jsonl")
+        stamp = _read(proof.parent / APPLIED_FILE)["run_stamp"]
+        lines.extend(
+            json.dumps({**json.loads(line), ROUND_STAMP: stamp}, ensure_ascii=False, sort_keys=True)
+            for line in kept.read_text(encoding="utf-8").splitlines()
+            if line
+        )
     path = apply_root / LANE_PLAN_FILE
     path.write_text("".join(line + "\n" for line in lines), encoding="utf-8", newline="\n")
     return path
@@ -581,20 +635,38 @@ def like_matches(pattern: str, stamp: str) -> bool:
 
 
 def acceptance_problems(
-    text: str, *, step: Mapping[str, Any], written: Sequence[Mapping[str, Any]], used: set[str]
+    text: str,
+    *,
+    step: Mapping[str, Any],
+    written: Sequence[Mapping[str, Any]],
+    used: set[str],
+    planned: int,
 ) -> list[str]:
     """Why `text` (the output of one `verify_writes4.py` run) does not accept `step`; empty = it
     does. It must end in `ACCEPT_EXIT=0` with 0 deviations, be the step's own lane, match every stamp
     the step wrote, have read at least every row written so far under the stamps it read - every
     round in `written`, the reverted ones too (so it was run after this step, not before it, not
     even between a revert and the round written after it) - and not be an output an earlier step was
-    accepted on."""
+    accepted on.
+
+    The output is one whole run (audit 2026-09-25 M1): its lane line first, exactly one `RESULT:`
+    line and one `*_EXIT=` line, the clean result right before `ACCEPT_EXIT=0`. A failing lane run
+    with a clean run of another mode appended to it is not an acceptance."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     problems: list[str] = []
+    results = sum(1 for line in lines if line.startswith(ACCEPT_RESULT))
+    exits = sum(1 for line in lines if EXIT_LINE.match(line))
+    if results != 1 or exits != 1:
+        problems.append(
+            f"the output holds {results} RESULT line(s) and {exits} exit line(s): "
+            "not the output of one run"
+        )
     if not lines or lines[-1] != ACCEPT_OK:
         problems.append(f"the output does not end in {ACCEPT_OK}")
-    if ACCEPT_CLEAN not in lines:
-        problems.append(f"the output does not say {ACCEPT_CLEAN!r}")
+    if len(lines) < 2 or lines[-2] != ACCEPT_CLEAN:
+        problems.append(f"the output does not say {ACCEPT_CLEAN!r} right before its exit line")
+    if not lines or not _ACCEPT_LANE.match(lines[0]):
+        problems.append("the output does not begin with its lane line")
     heads = [found for line in lines if (found := _ACCEPT_LANE.match(line))]
     if len(heads) != 1:
         problems.append(f"the output has {len(heads)} lane line(s), not one")
@@ -610,6 +682,24 @@ def acceptance_problems(
         for record in written
         if like_matches(head["stamps"], record["run_stamp"])
     )
+    # Tied to this lane plan and to this step (audit 2026-09-25 m16): the output read the lane
+    # plan's current rows, and no `--allow-stamp` pattern covers a stamp the step wrote - under
+    # such a pattern every later write of any lane would count as superseded.
+    if int(head["planned"]) != planned:
+        problems.append(
+            f"the output read planned rows {head['planned']}, the lane plan holds {planned}"
+        )
+    allowed = next(
+        (
+            line.removeprefix(ACCEPT_ALLOWED).split()
+            for line in lines
+            if line.startswith(ACCEPT_ALLOWED)
+        ),
+        [],
+    )
+    covering = [p for p in allowed if any(like_matches(p, stamp) for stamp in step["stamps"])]
+    if covering:
+        problems.append(f"the output allows later stamps {covering[0]!r} that cover the step's own")
     if int(head["journal"]) < written_rows:
         problems.append(
             f"the output read {head['journal']} lane journal row(s), {written_rows} are written: "
@@ -632,6 +722,9 @@ def accept_step(apply_root: pathlib.Path, output: pathlib.Path) -> int:
         step=step,
         written=written_rounds(apply_root),
         used={record["output_sha256"] for record in accepted},
+        planned=sum(
+            ROUND_STAMP not in row for row in lanes.read_jsonl(apply_root / LANE_PLAN_FILE)
+        ),
     )
     if problems:
         for problem in problems:
@@ -674,7 +767,9 @@ def run_batches(
     acceptance (`--accept`), `--apply` writes nothing. Every batch written here is recorded in a
     fresh `STEP.json` before the next one starts.
     """
-    stopped = [item.out.name for item in planned if item.stopped]
+    # Every batch of the apply root, not only the ones this run selected (`--batch`): a stopped
+    # batch anywhere is unread evidence, and no other batch is written past it (audit M4).
+    stopped = sorted(path.parent.name for path in apply_root.glob(f"*/{STOPPED_FILE}"))
     if stopped:
         print(
             f"STOP: {len(stopped)} batch(es) stopped in an earlier run and were never marked "
@@ -710,6 +805,17 @@ def run_batches(
                 _mark(item.out, STOPPED_FILE, {"batch_id": item.out.name, "error": str(exc)})
             print(f"STOP at {item.out.name}: {exc}")
             return 1
+        except W.OutcomeUnknown as exc:
+            # psql did not answer: the COMMIT may have landed. The batch is stopped as unknown, so
+            # the next run refuses it until the journal was read; the exit line says 5.
+            if not rehearse:
+                _mark(
+                    item.out,
+                    STOPPED_FILE,
+                    {"batch_id": item.out.name, "outcome": "unknown", "error": str(exc)},
+                )
+            print(f"STOP at {item.out.name}: the outcome is UNKNOWN")
+            raise
         report = outcome.to_dict()
         print(json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
         if not outcome.ok:
@@ -764,7 +870,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--audited", default=None, help="P4: the audit's cleared ids (T and R)")
     parser.add_argument("--phase3-refused", default=str(lanes.lane().refused))
     parser.add_argument("--phase3-run", default=str(lanes.lane().run_dir))
-    parser.add_argument("--step", type=int, default=100, help="sites per step (--apply)")
+    parser.add_argument(
+        "--step", type=int, default=STEP_MAX, help=f"sites per step (--apply), 1-{STEP_MAX}"
+    )
     parser.add_argument("--host", default=lanes.HOST)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--rehearse", action="store_true")
@@ -794,8 +902,11 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     problem = plan_source_problem(group, args)
     if problem is not None:
         raise SystemExit(problem)
-    if args.step < 1:
-        raise SystemExit("--step: at least one site per step")
+    if not 1 <= args.step <= STEP_MAX:
+        raise SystemExit(
+            f"--step: at least one site per step, at most {STEP_MAX} sites per step (owner, "
+            "2026-09-21: after every hundred, a check)"
+        )
     if args.accept:
         return accept_step(apply_root, pathlib.Path(args.accept))
     if args.close_reverted:
@@ -839,6 +950,9 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         options["written"] = live
         print(f"live phase-4 provenance: {len(live)} of {len(site_ids)} planned sites (read-only)")
         if group is W4.Group.P5:
+            options["card_rows"] = card_row_sites(
+                site_ids, run=lambda sql: W._exec(runner, sql, host=args.host)
+            )
             options["card_findings"] = phase3_card_findings(
                 pathlib.Path(args.phase3_refused), pathlib.Path(args.phase3_run)
             )

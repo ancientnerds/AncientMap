@@ -792,7 +792,12 @@ def test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line(
     assert lines[-2:] == ["RESULT: 0 deviation(s)", "ACCEPT_EXIT=0"]
     step = {"lane": "p4", "stamps": [P4_STAMP]}
     written_rounds = [{"run_stamp": P4_STAMP, "rows_written": 2}]
-    assert G.acceptance_problems(text, step=step, written=written_rounds, used=set()) == []
+    assert (
+        G.acceptance_problems(
+            text, step=step, written=written_rounds, used=set(), planned=len(written.plan)
+        )
+        == []
+    )
 
 
 #: The D9 run's P4 stamp (owner order 2026-09-25; `plan4.LIST_PLAN_FIRST_BATCH`).
@@ -1077,12 +1082,17 @@ def test_the_card_file_check_reads_the_tools_own_exit_line(
 
         return run
 
-    assert A.card_file_deviations(command("4,996 entries equal\nSTAGE_EXIT=0\n")) == []
+    assert A.card_file_deviations(command("4,996 entries equal\nACCEPT_EXIT=0\n")) == []
     assert seen[-1][1:] == [str(card_json), "--check"]
-    assert A.card_file_deviations(command("1 entry differs\nSTAGE_EXIT=1\n"))
+    assert A.card_file_deviations(command("1 entry differs\nACCEPT_EXIT=1\n", status=1))
     assert A.card_file_deviations(command("no exit line at all\n"))
-    # a wrapper's status is not read: exit status 0 with a failing exit line still fails
-    assert A.card_file_deviations(command("WRITE_EXIT=0\nSTAGE_EXIT=3\n", status=0))
+    # exit status 0 with a failing exit line still fails
+    assert A.card_file_deviations(command("WRITE_EXIT=0\nACCEPT_EXIT=3\n", status=0))
+    # audit 2026-09-25 m17: `--check` prints `ACCEPT_EXIT=` - another tool's clean exit line is
+    # not its answer, two exit lines are not one run, and a failed process is not a clean check
+    assert A.card_file_deviations(command("4,996 entries equal\nSTAGE_EXIT=0\n"))
+    assert A.card_file_deviations(command("ACCEPT_EXIT=1\nACCEPT_EXIT=0\n"))
+    assert A.card_file_deviations(command("ACCEPT_EXIT=0\n", status=1))
 
 
 def test_the_boot_logs_of_both_containers_carry_no_overwrite() -> None:
@@ -1177,3 +1187,64 @@ def test_a_batch_without_a_written_site_is_not_read(tmp_path: Path) -> None:
     assert A.index_run(written.run_dir, {SITE_ID}) == A.index_run(written.run_dir, [SITE_ID])
     with pytest.raises(SystemExit, match="cannot be read"):
         A.index_run(written.run_dir, {"later-site"})
+
+
+def test_a_round_2_whose_plan_changed_is_accepted_against_each_rounds_own_plan(
+    tmp_path: Path,
+) -> None:
+    """2026-09-25 audit E5: round 1 wrote D1, was reverted, and round 2 re-planned the description
+    to D2. Round 1's reverted rows are judged against round 1's archived plan (the lane plan's rows
+    tagged `round_stamp`), not against round 2's - otherwise the step can never be accepted."""
+    written = written_p4(tmp_path)
+    _revert(written)
+    round_1_plan = [dict(row, round_stamp=P4_STAMP) for row in written.plan]
+    d2 = "Round two's description [1]."
+    desc = next(r for r in written.production.journal if r["id"] == 11)
+    raw = next(r for r in written.production.journal if r["id"] == 12)
+    first = max(row["id"] for row in written.production.journal) + 1
+    written.production.journal += [
+        dict(desc, id=first, run_stamp=P4_ROUND_2, new_value=d2, change_key="k-desc-2"),
+        dict(raw, id=first + 1, run_stamp=P4_ROUND_2),
+    ]
+    written.production.sites[SITE_ID].update(
+        description=d2, raw_data=new_raw(written.case.site, written.case.assembly)
+    )
+    written.plan[0] = dict(written.plan[0], new_value=d2, change_key="k-desc-2")
+    without = _accept4(written)
+    assert any(d.startswith("OTHER VALUE") for d in without.deviations)
+    written.plan += round_1_plan
+    result = _accept4(written)
+    assert result.deviations == [] and len(result.carried) == 2
+    assert result.untouched == 0
+
+
+def test_an_archived_round_row_is_no_licence_for_an_open_write(tmp_path: Path) -> None:
+    """A round's archived plan only judges that round's reverted rows: a live write outside the
+    current plan stays OUTSIDE THE PLAN, and an archived row is never a planned row still to
+    write."""
+    written = written_p4(tmp_path)
+    written.plan = [dict(row, round_stamp=P4_STAMP) for row in written.plan]
+    result = _accept4(written)
+    assert sum(d.startswith("OUTSIDE THE PLAN") for d in result.deviations) == 2
+    assert result.untouched == 0 and result.carried == set()
+
+
+def test_a_row_planned_twice_is_a_deviation(tmp_path: Path) -> None:
+    """2026-09-25 audit m15: the plan index kept the last of two rows of one key, silently - the
+    lane plan is every batch's plan in one file, so a key two batches both plan was accepted."""
+    written = written_p4(tmp_path)
+    written.plan.append(dict(written.plan[0]))
+    assert any(d.startswith("PLANNED TWICE") for d in _accept4(written).deviations)
+
+
+def test_the_acceptance_shares_the_writers_stream_rule_and_provenance_key(monkeypatch) -> None:
+    """2026-09-25 audit m18: `main` re-implemented `write_stage.utf8_streams`, and `live_sql`
+    spelled the provenance key out instead of reading `model4.PROVENANCE_KEY`."""
+    seen: list[str] = []
+    monkeypatch.setattr(A.W, "utf8_streams", lambda: seen.append("utf-8"))
+    with pytest.raises(SystemExit):
+        A.main([])
+    assert seen == ["utf-8"]
+    monkeypatch.setattr(M, "PROVENANCE_KEY", "_another_key")
+    sql = A.live_sql([SITE_ID])
+    assert sql.count("'_another_key'") == 2 and "_description_provenance" not in sql

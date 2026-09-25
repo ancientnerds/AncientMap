@@ -672,7 +672,11 @@ def test_the_allow_list_is_rendered_from_the_groups_rows(tmp_path: Path, p4_chun
     ) in sql
     batch = _batch(tmp_path / "p5", sites=[FX.plan_site()], assemblies=[FX.assembly()])
     cards = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     assert (
         "NOT IN (VALUES ('card_stats', 'card_description', 'site_id', 'P5/card'), "
@@ -909,7 +913,11 @@ def test_a_site_outside_the_curated_source_is_blocked_before_anything_is_sent(
 def test_a_card_without_its_card_stats_row_is_blocked_before_anything_is_sent(tmp_path) -> None:
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
     cards = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     chunk = W4.chunk_for(cards)
     out = _rendered(tmp_path, chunk)
@@ -984,6 +992,7 @@ def test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear(tmp_path: 
     finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
     plan = W4.plan_cards(
         batch,
+        card_rows=FX.EVERY_CARD_ROW,
         scope=FX.scope(),
         written={FX.SITE_A: M.text_sha256(FX.CARD)},
         card_findings={FX.SITE_B: [finding]},
@@ -995,6 +1004,7 @@ def test_p5_refuses_a_site_outside_the_defect_scope_even_a_card_clear(tmp_path: 
     ]
     inside = W4.plan_cards(
         batch,
+        card_rows=FX.EVERY_CARD_ROW,
         scope=FX.scope(FX.SITE_A, FX.SITE_B),
         written={FX.SITE_A: M.text_sha256(FX.CARD)},
         card_findings={FX.SITE_B: [finding]},
@@ -1323,7 +1333,9 @@ def test_p5_writes_a_card_only_where_live_provenance_names_it(tmp_path: Path) ->
         assemblies=[FX.assembly(), FX.assembly(FX.SITE_B), FX.assembly(FX.SITE_C)],
     )
     written = {FX.SITE_A: M.text_sha256(FX.CARD), FX.SITE_B: None}
-    plan = W4.plan_cards(batch, scope=FX.EVERY_SITE, written=written, card_findings={})
+    plan = W4.plan_cards(
+        batch, card_rows=FX.EVERY_CARD_ROW, scope=FX.EVERY_SITE, written=written, card_findings={}
+    )
     assert [(r.site_id, r.test_id, r.new_value) for r in plan.rows] == [
         (FX.SITE_A, "P5/card", FX.CARD)
     ]
@@ -1344,7 +1356,11 @@ def test_a_held_card_with_a_cleared_phase3_defect_is_cleared_with_its_finding(
     )
     finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: None}, card_findings={FX.SITE_A: [finding]}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: None},
+        card_findings={FX.SITE_A: [finding]},
     )
     (row,) = plan.rows
     assert (row.test_id, row.old_value, row.new_value) == ("P5/card-clear", FX.OLD_CARD, None)
@@ -1356,14 +1372,24 @@ def test_a_clear_without_its_phase3_finding_is_refused_loudly(tmp_path: Path, fi
     flagged = FX.plan_site(flags=[M.SiteFlag.CLEARED_CARD_DEFECT])
     batch = _batch(tmp_path, sites=[flagged], holds=[_hold(FX.SITE_A, M.HoldReason.NO_SOURCE)])
     with pytest.raises(W4.PlanInputError, match="without its evidence"):
-        W4.plan_cards(batch, scope=FX.EVERY_SITE, written={}, card_findings=findings)
+        W4.plan_cards(
+            batch,
+            card_rows=FX.EVERY_CARD_ROW,
+            scope=FX.EVERY_SITE,
+            written={},
+            card_findings=findings,
+        )
 
 
 def test_a_card_longer_than_the_column_is_refused(tmp_path: Path) -> None:
     long_card = "A" * 201
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly(card=long_card)])
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(long_card)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(long_card)},
+        card_findings={},
     )
     assert not plan.rows and plan.refusals[0].rule == W4.RULE_CARD_TOO_LONG
 
@@ -1374,7 +1400,11 @@ def test_a_p5_card_is_written_and_its_hash_matches_the_live_provenance(tmp_path:
     db = _db(FX.SITE_A)
     db(W4.render_apply(W4.chunk_for(p4)), host="fake")
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     chunk, out = _written(tmp_path, plan)
     outcome = W4.apply_chunk(chunk, out=out, rehearse=False, runner=db)
@@ -1387,7 +1417,11 @@ def test_the_card_invariant_refuses_a_card_the_provenance_does_not_name(tmp_path
     db(W4.render_apply(W4.chunk_for(_p4(batch))), host="fake")
     db.sites[FX.SITE_A].raw_data[M.PROVENANCE_KEY]["card"]["text_sha256"] = "0" * 64
     plan = W4.plan_cards(
-        batch, scope=FX.EVERY_SITE, written={FX.SITE_A: M.text_sha256(FX.CARD)}, card_findings={}
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={},
     )
     with pytest.raises(W.WriteRefused, match="invariant 4"):
         db(W4.render_apply(W4.chunk_for(plan)), host="fake")
@@ -1666,9 +1700,13 @@ def _gate_args(tmp_path: Path, *extra: str) -> list[str]:
 def _acceptance(
     tmp_path: Path, *, journal_rows: int, name: str = "accept.log", **overrides
 ) -> Path:
-    """What `verify_writes4.py --lane p4` prints for a clean step (its own lines, WB-C3)."""
+    """What `verify_writes4.py --lane p4` prints for a clean step (its own lines, WB-C3), with the
+    lane plan's current row count on its lane line."""
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    planned = sum(G.ROUND_STAMP not in row for row in G.lanes.read_jsonl(lane_plan))
     lines = {
-        "head": f"lane p4 | stamps phase4:% | planned rows 6 | lane journal rows {journal_rows} | "
+        "head": f"lane p4 | stamps phase4:% | planned rows {planned} | lane journal rows "
+        f"{journal_rows} | "
         f"carried {journal_rows} | not yet written 0 | superseded 0",
         "verified": "re-verified 2 written site(s) with V1-V15",
         "result": "RESULT: 0 deviation(s)",
@@ -1918,8 +1956,8 @@ def test_one_acceptance_output_never_accepts_two_steps(tmp_path, monkeypatch, ca
     _gate_run(tmp_path, 2)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db(*[f"{n:08x}-0000-4000-8000-00000000000{n}" for n in range(1, 3)])
-    output = _acceptance(tmp_path, journal_rows=4)
     assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
+    output = _acceptance(tmp_path, journal_rows=4)
     assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 0
     assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
     capsys.readouterr()
@@ -2353,3 +2391,308 @@ def test_a_written_batch_is_never_re_planned_to_other_rows(tmp_path, monkeypatch
     capsys.readouterr()
     assert G.main(_gate_args(tmp_path), runner=db) == 1
     assert "this batch was written from another plan" in capsys.readouterr().err
+
+
+# ── a psql timeout is an unknown outcome: STOPPED.json says so and the exit line is 5 (M3) ──────
+
+
+def test_an_unknown_outcome_prints_its_own_exit_line(capsys) -> None:
+    """2026-09-25 audit M3: a timeout escaped `exit_line` as a traceback, so no `WRITE_EXIT=` line
+    was printed at all. It is exit 5, the code `mechanical.apply.EXIT_UNKNOWN` uses."""
+    import prod_write
+
+    def timeout() -> int:
+        raise prod_write.OutcomeUnknown("psql did not answer within 900s")
+
+    assert W4.exit_line("WRITE", timeout) == W4.EXIT_UNKNOWN == 5
+    captured = capsys.readouterr()
+    assert captured.out == "WRITE_EXIT=5\n"
+    assert "OUTCOME UNKNOWN: psql did not answer" in captured.err
+
+
+def test_a_timeout_during_a_write_stops_the_batch_as_an_unknown_outcome(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """The batch whose COMMIT went unanswered is marked STOPPED with `outcome: unknown`, so the
+    next run refuses it until the journal was read - and the run ends with `WRITE_EXIT=5`."""
+    import prod_write
+
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+
+    def runner(sql: str, *, host: str) -> str:
+        if "\nCOMMIT;" in sql:
+            raise prod_write.OutcomeUnknown("psql did not answer within 900s")
+        return db(sql, host=host)
+
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=runner) == 5
+    captured = capsys.readouterr()
+    assert captured.out.rstrip().endswith("WRITE_EXIT=5")
+    stopped = tmp_path / "apply" / "p4-0001" / G.STOPPED_FILE
+    record = json.loads(stopped.read_text(encoding="utf-8"))
+    assert record["outcome"] == "unknown" and "900s" in record["error"]
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 1
+    assert "stopped in an earlier run" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("build", "problem"),
+    [
+        (  # a failing lane run, then an appended clean `--boot-logs` run (audit M1)
+            lambda clean, failing: failing + "RESULT: 0 deviation(s)\nACCEPT_EXIT=0\n",
+            "RESULT line(s)",
+        ),
+        (  # a clean `--boot-logs` run in front of the lane run
+            lambda clean, failing: "RESULT: 0 deviation(s)\nACCEPT_EXIT=0\n" + clean,
+            "RESULT line(s)",
+        ),
+        (  # the lane line is not the run's first line
+            lambda clean, failing: "something else\n" + clean,
+            "does not begin with its lane line",
+        ),
+        (  # the clean RESULT is not the line before the exit line
+            lambda clean, failing: clean.replace(
+                "RESULT: 0 deviation(s)\n", "RESULT: 0 deviation(s)\n  a deviation\n"
+            ),
+            "right before",
+        ),
+    ],
+)
+def test_an_acceptance_is_one_whole_clean_run(
+    tmp_path, monkeypatch, capsys, build, problem
+) -> None:
+    """2026-09-25 audit M1: `--accept` needed one lane line, `RESULT: 0 deviation(s)` anywhere and
+    a last line `ACCEPT_EXIT=0` - so a lane run with deviations and `ACCEPT_EXIT=1`, followed by
+    an appended clean run of another mode, was accepted. The output must be exactly one run: the
+    lane line first, one RESULT line right before the one exit line."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
+    clean = _acceptance(tmp_path, journal_rows=2, name="clean.log").read_text(encoding="utf-8")
+    failing = _acceptance(
+        tmp_path,
+        journal_rows=2,
+        name="failing.log",
+        result="  a deviation\nRESULT: 1 deviation(s)",
+        exit="ACCEPT_EXIT=1",
+    ).read_text(encoding="utf-8")
+    output = tmp_path / "combined.log"
+    output.write_text(build(clean, failing), encoding="utf-8")
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
+    assert problem in capsys.readouterr().out
+    assert (tmp_path / "apply" / G.STEP_FILE).exists()
+
+
+def test_a_stopped_batch_outside_the_selected_batches_still_stops_the_run(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """2026-09-25 audit M4: `--batch` narrowed the stopped-batch check to the selected batches, so
+    a run could write on while another batch of the same apply root sat STOPPED unread."""
+    _gate_run(tmp_path, 2)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    first = "00000001-0000-4000-8000-000000000001"
+    db = _db(first, "00000002-0000-4000-8000-000000000002")
+    db.sites[first].description = "moved"
+    assert G.main(_gate_args(tmp_path, "--apply", "--batch", "p4-0001"), runner=db) == 1
+    assert (tmp_path / "apply" / "p4-0001" / G.STOPPED_FILE).exists()
+    sent = len(db.sent)
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, "--apply", "--batch", "p4-0002"), runner=db) == 1
+    assert "stopped in an earlier run" in capsys.readouterr().out
+    assert len(db.sent) == sent
+    assert not (tmp_path / "apply" / "p4-0002" / G.APPLIED_FILE).exists()
+
+
+def test_a_step_larger_than_the_owners_hundred_is_refused(tmp_path, monkeypatch, capsys) -> None:
+    """2026-09-25 audit M5: the owner's "after every hundred, a check" could be bypassed with
+    `--step 5000`. A step is at most 100 sites."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "101"), runner=db) == 1
+    assert "at most 100 sites per step" in capsys.readouterr().err
+    assert db.sent == []
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "100"), runner=db) == 0
+
+
+@pytest.mark.parametrize("flags", [[], [M.SiteFlag.CLEARED_CARD_DEFECT]], ids=["keep", "clear"])
+def test_p5_refuses_a_site_whose_live_provenance_names_a_card_it_will_not_write(
+    tmp_path: Path, flags
+) -> None:
+    """2026-09-25 audit M6: P4 wrote the site with card X in its provenance; a card hold added
+    afterwards made `card_to_write` return None, and P5 then cleared the card (or kept the March
+    card) while the live provenance still names X. The site is refused instead: revert it first."""
+    batch = _batch(
+        tmp_path,
+        sites=[FX.plan_site(flags=flags)],
+        assemblies=[FX.assembly()],
+        holds=[_hold(FX.SITE_A, M.HoldReason.CARD_TOO_SHORT_AFTER_REVIEW, M.HoldScope.CARD)],
+    )
+    finding = {"refusal": {"rule": "report-only-field"}, "finder_answer": "WRONG"}
+    plan = W4.plan_cards(
+        batch,
+        card_rows=FX.EVERY_CARD_ROW,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: M.text_sha256(FX.CARD)},
+        card_findings={FX.SITE_A: [finding]},
+    )
+    assert plan.rows == []
+    (refusal,) = plan.refusals
+    assert refusal.rule == W4.RULE_CARD_NAMED
+    assert "revert the site first" in refusal.detail
+
+
+def test_a_reverted_round_keeps_its_plan_and_the_lane_plan_carries_it(
+    tmp_path, monkeypatch
+) -> None:
+    """2026-09-25 audit E5: once round 2 re-plans a batch, the acceptance compared round 1's
+    reverted journal rows with round 2's plan - a round whose plan changed could never be
+    accepted. The archived round keeps its own `PLAN.jsonl`, and the lane plan carries its rows
+    tagged with the round's stamp, so each reverted row is judged against the plan it was
+    written from."""
+    db, out = _reopened(tmp_path, monkeypatch)
+    kept = out / W4.CHUNKS_DIR / "chunk-0001" / W4.PLAN_FILE
+    round_1 = [json.loads(line) for line in kept.read_text(encoding="utf-8").splitlines()]
+    assert len(round_1) == 2
+    assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 0
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    rows = [json.loads(line) for line in lane_plan.read_text(encoding="utf-8").splitlines()]
+    archived = [row for row in rows if "round_stamp" in row]
+    assert [{k: v for k, v in row.items() if k != "round_stamp"} for row in archived] == round_1
+    assert {row["round_stamp"] for row in archived} == {ROUND_1}
+    assert len(rows) - len(archived) == 2  # round 2's own rows
+
+
+def test_a_reverted_round_without_its_plan_is_refused_by_the_lane_plan(
+    tmp_path, monkeypatch
+) -> None:
+    db, out = _reopened(tmp_path, monkeypatch)
+    (out / W4.CHUNKS_DIR / "chunk-0001" / W4.PLAN_FILE).unlink()
+    with pytest.raises(SystemExit, match="keeps no PLAN.jsonl"):
+        G.write_lane_plan(tmp_path / "apply")
+
+
+def test_a_stopped_batch_keeps_the_plan_and_statements_it_stopped_on(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """2026-09-25 audit m14: a later run re-rendered a STOPPED batch - its PLAN.jsonl and its
+    statements were overwritten by the new plan, and the record of what was attempted was gone
+    before anyone had read it. A stopped batch is left exactly as it stopped."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    db.sites[GATE_SITE].description = "moved"
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 1
+    out = tmp_path / "apply" / "p4-0001"
+    assert (out / G.STOPPED_FILE).exists()
+    before = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+    _scope_file(monkeypatch, tmp_path, "00000009-0000-4000-8000-000000000009")
+    assert G.main(_gate_args(tmp_path), runner=db) == 0
+    after = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+    assert after == before
+
+
+@pytest.mark.parametrize(
+    ("overrides", "problem"),
+    [
+        (  # the lane plan holds 2 rows; the output read another plan
+            {
+                "head": "lane p4 | stamps phase4:% | planned rows 7 | lane journal rows 2 | "
+                "carried 2 | not yet written 0 | superseded 0"
+            },
+            "planned rows 7, the lane plan holds 2",
+        ),
+        (  # an allowed pattern that covers the step's own stamps accepts any later write
+            {"verified": "allowed later: %\nre-verified 1 written site(s) with V1-V15"},
+            "allows later stamps '%' that cover the step's own",
+        ),
+    ],
+)
+def test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step(
+    tmp_path, monkeypatch, capsys, overrides, problem
+) -> None:
+    """2026-09-25 audit m16: the lane line's planned-row count was never compared with the lane
+    plan, and an `--allow-stamp` pattern that matches the step's own stamps (`%`) was accepted -
+    under it every later write of any lane counts as superseded, not as a deviation."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
+    capsys.readouterr()
+    output = _acceptance(tmp_path, journal_rows=2, **overrides)
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
+    assert problem in capsys.readouterr().out
+    assert (tmp_path / "apply" / G.STEP_FILE).exists()
+
+
+def test_a_p4_revert_is_refused_while_the_sites_p5_card_is_live() -> None:
+    """2026-09-25 audit m19: reverting a site's `phase4:` rows took its provenance - and with it
+    the pin of the card - while a `phase5:` card written on that provenance stayed live. The guard
+    counts such rows; it is evaluated here as rendered, over a real SQL journal."""
+    site = "00000001-0000-4000-8000-000000000001"
+    entries = [
+        {"id": 1, "run_stamp": "phase4:p4-0001:chunk-0001", "change_key": "k-desc",
+         "table_name": "unified_sites", "column_name": "description", "row_pk": site,
+         "old_value": "old", "new_value": "new", "test_id": "P4/description", "site_id_ref": site},
+        {"id": 2, "run_stamp": "phase5:p5-0001:chunk-0001", "change_key": "k-card",
+         "table_name": "card_stats", "column_name": "card_description", "row_pk": site,
+         "old_value": "old card", "new_value": "card", "test_id": "P5/card", "site_id_ref": site},
+    ]  # fmt: skip
+    query = "SELECT count(*) FROM remediation_change_log l WHERE " + R.card_left_live("l")
+    assert FX.journal_sqlite(entries).execute(query).fetchone()[0] == 1
+    reversal = dict(
+        entries[1], id=3, run_stamp=entries[1]["run_stamp"] + "-rollback",
+        change_key="k-card-rollback", old_value="card", new_value="old card",
+    )  # fmt: skip
+    assert FX.journal_sqlite([*entries, reversal]).execute(query).fetchone()[0] == 0
+    sql = R.render_revert("phase4:%")
+    assert R.card_left_live("l") in sql and "revert the phase-5 card first" in sql
+
+
+def test_raw_data_holds_a_value_only_as_jsonb_compares_it() -> None:
+    """2026-09-25 audit m20: the preflight compared raw_data parsed as Python floats, guard 4 as
+    jsonb numerics. A number beyond float precision then passed the preflight and failed guard 4 -
+    closed, but taking the whole chunk down with it. Both sides are read as exact decimals now."""
+    import types
+
+    row = types.SimpleNamespace(column="raw_data")
+    chunk = types.SimpleNamespace(site_ids=[GATE_SITE])
+    answer = '{"id": "' + GATE_SITE + '", "raw_data": {"lat": 0.1, "n": 1}}\n'
+    stored = W4._stored(chunk, lambda sql, host: answer, "h")[GATE_SITE]
+    assert W4.holds_value(stored, row, '{"lat": 0.10, "n": 1.0}')
+    assert not W4.holds_value(stored, row, '{"lat": 0.1000000000000000055511151231257827, "n": 1}')
+
+
+def test_p5_refuses_a_site_without_a_card_stats_row_on_its_own(tmp_path: Path) -> None:
+    """2026-09-25 audit m21: `plan_cards` planned a card for a site without a card_stats row, and
+    the chunk's preflight then blocked the whole P5 batch for that one site. The site is refused
+    in the plan (`no-card-stats-row`, read-only from production) and its batch goes on."""
+    batch = _batch(
+        tmp_path,
+        sites=[FX.plan_site(), FX.plan_site(FX.SITE_B)],
+        assemblies=[FX.assembly(), FX.assembly(FX.SITE_B)],
+    )
+    card = M.text_sha256(FX.CARD)
+    plan = W4.plan_cards(
+        batch,
+        scope=FX.EVERY_SITE,
+        written={FX.SITE_A: card, FX.SITE_B: card},
+        card_findings={},
+        card_rows=frozenset({FX.SITE_A}),
+    )
+    assert [r.site_id for r in plan.rows] == [FX.SITE_A]
+    assert [(r.site_id, r.rule) for r in plan.refusals] == [(FX.SITE_B, W4.RULE_NO_CARD_ROW)]
+
+
+def test_the_gate_reads_which_sites_have_a_card_stats_row() -> None:
+    db = _db(GATE_SITE, "00000002-0000-4000-8000-000000000002")
+    db.sites["00000002-0000-4000-8000-000000000002"].card_row = False
+    ids = [
+        GATE_SITE,
+        "00000002-0000-4000-8000-000000000002",
+        "00000003-0000-4000-8000-000000000003",
+    ]
+    assert G.card_row_sites(ids, run=lambda sql: db(sql, host="h")) == frozenset({GATE_SITE})

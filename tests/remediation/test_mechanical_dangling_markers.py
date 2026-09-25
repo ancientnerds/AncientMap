@@ -543,3 +543,18 @@ def test_the_committed_plan_removes_only_dangling_markers_and_moves_only_the_has
 
 def _no_database(*_: Any, **__: Any) -> Any:
     raise AssertionError("--write plans from the export on disk and reads no database")
+
+
+def test_a_provenance_that_is_no_object_is_listed_not_a_crash() -> None:
+    """Audit 2026-09-25 m7: `premise_of` called `.items()` on any provenance, so a list crashed
+    with AttributeError before `classify` could reach its own non-dict branch. It mirrors
+    Postgres' `jsonb - text` now: an array loses the elements equal to the key; a scalar cannot
+    be exported at all (Postgres refuses `-` on it) and is refused."""
+    raw = raw_of(APHRODITE, [cite(1)])
+    raw["_description_provenance"] = ["W", "desc_sha256"]
+    assert M.premise_of(raw) == pg(["W"])
+    listed = M.Site(AFRODIT, "x", APHRODITE, pg(raw), premise=pg(["W"]))
+    (verdict,) = M.classify(listed, {})
+    assert not verdict.ok and verdict.reason == M.PHASE4
+    with pytest.raises(P.PlanError, match="scalar"):
+        M.premise_of({"_description_provenance": "W"})

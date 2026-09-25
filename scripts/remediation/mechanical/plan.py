@@ -138,7 +138,7 @@ from census.tests.t05_country_values import (  # noqa: E402
     _vocabulary,
 )
 from journal_chain import first_break  # noqa: E402
-from prod_write import DIGEST_RE, SSH_HOST, pin_line, send  # noqa: E402
+from prod_write import DIGEST_RE, SSH_HOST, jsonl_lines, pin_line, send  # noqa: E402
 
 from mechanical.lane import T05, Lane, sql_literal  # noqa: E402
 from pipeline.utils.country_lookup import canonicalize_country_display_name  # noqa: E402
@@ -160,7 +160,8 @@ CONFIDENCE = T05.confidence
 CURATED_SOURCE = "ancient_nerds"
 COUNTRY_COLUMN_CHARS = T05.max_chars
 HINT_WORDS = frozenset({"country", "state", "nation", "republic"})
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+#: `\Z`, never `$`: `$` also matches before a trailing newline (audit 2026-09-25 m13).
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 
 DEFAULT_CANDIDATES = REPO / "output/remediation/run_t05/findings.jsonl"
 DEFAULT_WORKLIST = REPO / "output/remediation/phase3_worklist/WORKLIST.jsonl"
@@ -1373,7 +1374,7 @@ def psql_json_reader() -> Callable[[str], list[dict[str, Any]]]:
 
     def read(sql: str) -> list[dict[str, Any]]:
         proc = apply_mod.run_psql(f"SELECT row_to_json(t) FROM ({sql}) t", rows=True)
-        return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+        return [json.loads(line) for line in jsonl_lines(proc.stdout) if line.strip()]
 
     return read
 
@@ -1391,7 +1392,7 @@ def sql_ids(ids: Iterable[str]) -> str:
 #: The kind of the one line a tagged export ends with: the snapshot's own clock.
 SNAPSHOT_KIND = "snapshot"
 #: A kind is spliced into a SQL string literal: lowercase letters and underscores, nothing else.
-_EXPORT_KIND = re.compile(r"^[a-z_]+$")
+_EXPORT_KIND = re.compile(r"^[a-z_]+\Z")
 
 
 def tagged_export_script(parts: Sequence[tuple[str, str]]) -> str:
@@ -1424,7 +1425,7 @@ def parse_tagged_export(text: str, kinds: Iterable[str]) -> tuple[dict[str, list
     """
     rows: dict[str, list[dict]] = {kind: [] for kind in kinds}
     stamps: list[str] = []
-    for line in text.splitlines():
+    for line in jsonl_lines(text):
         if not line.strip():
             continue
         payload = json.loads(line)

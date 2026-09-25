@@ -155,7 +155,9 @@ class FakePsql:
             columns, stamp = [c.strip() for c in m.group(1).split(",")], m.group(2)
             assert set(columns) <= set(JOURNAL_COLUMNS), f"unknown journal column in {columns}"
             lines = [
-                json.dumps({k: j[k] for k in columns}) for j in self.journal if j["run_stamp"] == stamp
+                json.dumps({k: j[k] for k in columns})
+                for j in self.journal
+                if j["run_stamp"] == stamp
             ]
             proc = self._ok("\n".join(lines))
         elif "::text AS value FROM" in sql:
@@ -1000,7 +1002,7 @@ def test_the_hero_transport_is_prod_writes_with_its_channel_timeouts(monkeypatch
 
     def fake_run(args, **kwargs):
         argv.append(args)
-        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=b"", stderr=b"")
 
     monkeypatch.setattr("prod_write.subprocess.run", fake_run)
     HA.run_psql("SELECT 1;")

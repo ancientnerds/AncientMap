@@ -68,12 +68,12 @@ import json
 import re
 import sys
 import uuid
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -174,7 +174,12 @@ RULE_EVIDENCE = "journal-evidence-incomplete"
 RULE_NOT_A_CHANGE = W.RULE_NOT_A_CHANGE
 RULE_NO_CARD = "no-card"
 RULE_CARD_TOO_LONG = "card-too-long"
-RULE_NOT_WRITTEN = "description-not-written"
+#: A site without a card_stats row (read-only, production): neither a card nor a clear can be
+#: written, and planning one would let the chunk's preflight block the whole batch for it.
+RULE_NO_CARD_ROW = "no-card-stats-row"
+#: The live P4 provenance names a card P5 does not write (a card-scope hold added after P4 wrote):
+#: neither a clear nor the March card may stand beside it - the site is reverted first.
+RULE_CARD_NAMED = "live-provenance-names-an-unwritten-card"
 RULE_WRITTEN = "written-by-p4"
 RULE_NO_CLAIM = "no-legacy-claim"
 RULE_MARKED = "provenance-present"
@@ -490,10 +495,6 @@ class WritePlan4:
         for refusal in self.refusals:
             counts[refusal.rule] = counts.get(refusal.rule, 0) + 1
         return dict(sorted(counts.items()))
-
-    @property
-    def site_ids(self) -> tuple[str, ...]:
-        return tuple(dict.fromkeys(row.site_id for row in self.rows))
 
 
 def group_batch_id(plan_batch_id: str, group: Group) -> str:
@@ -990,12 +991,15 @@ def plan_cards(
     scope: S.DefectScope,
     written: Mapping[str, str | None],
     card_findings: Mapping[str, Sequence[Mapping[str, Any]]],
+    card_rows: Container[str],
 ) -> WritePlan4:
     """P5: the cards of written sites, and the clears of held cards with a cleared defect.
 
     `card_findings` are the Phase-3 reviewer-cleared card defects (the 709) by site: the evidence
     of a clear (card_texts, HELD CARDS: "known-wrong narration becomes absent"). A site outside the
-    defect scope is refused first: no card and no clear.
+    defect scope is refused first: no card and no clear. `card_rows` are the sites production holds
+    a card_stats row for; any other site is refused next (audit 2026-09-25 m21), so it no longer
+    blocks its whole batch at the chunk's preflight.
     """
     plan = WritePlan4(group=Group.P5, batch_id=group_batch_id(batch.batch_id, Group.P5))
     for site in batch.sites:
@@ -1004,8 +1008,23 @@ def plan_cards(
         decided: Row4 | W.Refusal
         if outside is not None:
             decided = outside
+        elif site.site_id not in card_rows:
+            decided = W.Refusal(
+                site.site_id,
+                "card_description",
+                RULE_NO_CARD_ROW,
+                "production holds no card_stats row for the site: no card and no clear",
+            )
         elif assembly is not None:
             decided = _card_row(batch, site, assembly)
+        elif written.get(site.site_id) is not None:
+            decided = W.Refusal(
+                site.site_id,
+                "card_description",
+                RULE_CARD_NAMED,
+                f"the live provenance names card sha256 {written[site.site_id]}, which P5 does not "
+                "write (a site or card hold, or another assembled card): revert the site first",
+            )
         elif M.SiteFlag.CLEARED_CARD_DEFECT in site.flags and site.card is not None:
             decided = _clear_row(batch, site, card_findings)
         else:
@@ -1567,11 +1586,18 @@ def read_plan(out: Path, *, group: Group) -> list[Row4]:
     return rows
 
 
+#: psql did not answer: whether a COMMIT landed is unknown until the journal is read. The same code
+#: as `mechanical.apply.EXIT_UNKNOWN`, so every writer's exit line says it the same way.
+EXIT_UNKNOWN = 5
+
+
 def exit_line(tag: str, run: Callable[[], int]) -> int:
     """Run one tool body and print its own `<TAG>_EXIT=` line - the line that is read, never a
     wrapper's status (design, DRIVER). The streams are UTF-8 first: a console that cannot encode a
     site name once killed a write wave before its first row (`write_stage.utf8_streams`). A
-    refusal is printed, not swallowed: the code is the refusal's."""
+    refusal is printed, not swallowed: the code is the refusal's. A psql timeout is neither a
+    success nor a refusal: it is `EXIT_UNKNOWN` (audit 2026-09-25 M3 - it used to escape as a
+    traceback with no exit line at all)."""
     W.utf8_streams()
     try:
         code = run()
@@ -1584,6 +1610,9 @@ def exit_line(tag: str, run: Callable[[], int]) -> int:
     except W.WriteRefused as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         code = 1
+    except W.OutcomeUnknown as exc:
+        print(f"OUTCOME UNKNOWN: {exc}", file=sys.stderr)
+        code = EXIT_UNKNOWN
     print(f"{tag}_EXIT={code}", flush=True)
     return code
 
@@ -1612,10 +1641,11 @@ def stored_values_sql(site_ids: Sequence[str]) -> str:
 
 def holds_value(stored: Mapping[str, Any], row: Row4, planned: str | None) -> bool:
     """Does the stored row hold `planned` in the column's own sense? raw_data compares as JSON
-    values (jsonb equality), text columns byte for byte; `None` is a value of its own."""
+    values (jsonb equality: numbers as exact decimals, like guard 4 - audit 2026-09-25 m20), text
+    columns byte for byte; `None` is a value of its own."""
     observed = stored.get(row.column)
     if row.column == "raw_data":
-        return observed == (None if planned is None else M.parse_json(planned))
+        return observed == (None if planned is None else M.parse_json(planned, exact=True))
     return observed == planned
 
 
@@ -1646,8 +1676,10 @@ def invariant_problems(stored: Mapping[str, Any], rows: Sequence[Row4]) -> list[
 
 
 def _stored(chunk: Chunk4, runner: W.SqlRunner | None, host: str) -> dict[str, dict[str, Any]]:
+    """The stored rows by site id, numbers read exactly (`holds_value` compares as jsonb does)."""
     text = W._exec(runner, stored_values_sql(chunk.site_ids), host=host)
-    return {str(entry["id"]): entry for entry in W._json_rows(text)}
+    rows = [M.parse_json(line, exact=True) for line in W.jsonl_lines(text) if line.strip()]
+    return {str(entry["id"]): entry for entry in rows}
 
 
 def preflight(

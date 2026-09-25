@@ -566,6 +566,14 @@ class TestTheCountryConvention:
         )
         v = refused(c, st, Pages({CISS_PAGE: text}))
         assert v.reason == "not-the-country-convention"
+        # audit 2026-09-25 m10: the last branch took any other column for the country
+        named = replace(c, column="name")
+        st = state(
+            sites={ANNA: site(ANNA, "Ireland")},
+            chains={(ANNA, "name"): chain},
+        )
+        with pytest.raises(P.PlanError, match="not a column"):
+            decide(named, st, Pages({CISS_PAGE: text}))
 
 
 # ------------------------------------------------------------------------------ the statements
@@ -621,6 +629,8 @@ class TestWhatAQuoteStates:
             (-50, "occupied from about 50 BC, with", "50 BC"),
             (200, "The city existed from 200 to 1000 AD.", "200 to 1000 AD"),
             (900, "rebuilt in AD 900 by", "AD 900"),
+            (900, "rebuilt in AD 900.", "AD 900"),
+            (1500, "rebuilt in AD 1,500, then", "AD 1,500"),
             (900, "rebuilt in 900 CE by", "900 CE"),
             (-6000, "zwischen dem 6000 v. Chr. und", "6000 v. Chr."),
             (-400, "fondée vers 400 av. J.-C.", "400 av. J.-C."),
@@ -648,6 +658,12 @@ class TestWhatAQuoteStates:
             (900, "BAD 900"),
             (900, "rebuilt in AD 800"),
             (-35, "35,000 BC"),
+            # audit 2026-09-25 M7: the prefix form needs a right boundary too
+            (5, "founded in the AD 5th century"),
+            (90, "abandoned in the AD 90s"),
+            (1, "an estimated AD 1.500 inhabitants"),
+            (900, "dated AD 900.5"),
+            (900, "AD 9001"),
         ],
     )
     def test_a_year_without_its_era_or_in_another_does_not(self, value: int, text: str) -> None:

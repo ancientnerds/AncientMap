@@ -39,8 +39,9 @@ never re-typed (`census/tests/t11_scope_window.py`) - plus the duplicate pairs.
   for the three section 8.2 names.
 
 Every quote must appear verbatim in the live description, or the decision is refused. A row whose
-`scope_status` is already set is left alone (the lane fills an unassessed column), and a site with
-two decisions is refused. Every write carries its premise - the date, point, type, name and
+`scope_status` is already set is left alone (the lane fills an unassessed column); a site decided
+twice in `DECISIONS.json` stops the plan, and a duplicate loser that another rule decides too is
+refused (`two-decisions`). Every write carries its premise - the date, point, type, name and
 description (as an md5) the decision rests on - so the transaction refuses a site that changed
 after the export (guard 5): a reviewed decision quotes the description, and a quote the row no
 longer holds is no evidence. What the premise does not hold is a duplicate's ranking (`created_at`
@@ -463,14 +464,31 @@ def resolve_duplicates(
     """The lane's own duplicates and the listed ones as one set, one retirement per loser.
 
     A loser both name with the same survivor is one duplicate carrying both evidences; with two
-    different survivors it is refused - which row stays is then a question, not a rule. A pair
-    touching a site held for the owner is refused whoever found it.
+    different survivors it is refused - which row stays is then a question, not a rule. The same
+    holds for a loser this lane's own rule finds with two survivors (a triangle of pairs): refused,
+    never decided by whichever pair came last (audit 2026-09-25 M8). A pair touching a site held
+    for the owner is refused whoever found it.
     """
     by_id = {s["id"]: s for s in export.sites}
-    by_loser: dict[str, Duplicate] = {d.loser: d for d in found}
+    by_loser: dict[str, Duplicate] = {}
     refused: list[Refusal] = []
     disputed: set[str] = set()
+    for dup in found:
+        own = by_loser.get(dup.loser)
+        if own is None:
+            by_loser[dup.loser] = dup
+        elif dup.loser not in disputed:
+            disputed.add(dup.loser)
+            refused.append(
+                (
+                    by_id[dup.loser],
+                    "survivors-disagree",
+                    f"this lane's rule finds it beside {own.survivor} and {dup.survivor}",
+                )
+            )
     for dup in listed:
+        if dup.loser in disputed:
+            continue
         own = by_loser.get(dup.loser)
         if own is None:
             by_loser[dup.loser] = dup
@@ -637,7 +655,16 @@ def classify_scope(
             )
             continue
         # UNDATED
-        if decision is None:
+        if decision is None and "museum" in str(site["site_type"]).casefold():
+            # rule (d): every Museum row is decided by hand, the undated ones too (audit m11)
+            refused.append(
+                (
+                    site,
+                    "museum-needs-a-decision",
+                    "plan section 8.2: an undated Museum row is decided by hand",
+                )
+            )
+        elif decision is None:
             out.append(
                 SiteDecision(
                     site,

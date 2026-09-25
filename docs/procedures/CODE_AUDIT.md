@@ -128,6 +128,13 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `pipeline/lyra/site_identifier.py` | deep |
 | `pipeline/lyra/transcript_fetcher.py` | grep |
 | `pipeline/lyra/site_matcher.py` | grep |
+| `api/routes/founders_stats.py` | deep |
+| `api/routes/stats_access.py` | deep |
+| `pipeline/lyra/quality_gate.py` | deep |
+| `pipeline/stats_analysis.py` | deep |
+| `pipeline/umami_db.py` | deep |
+| `pipeline/utils/country_lookup.py` | deep |
+| `pipeline/utils/globe_payload.py` | deep |
 | `pipeline/lyra/summarizer.py` | deep |
 | `pipeline/lyra/article_generator.py` | deep |
 | `pipeline/lyra/tweet_generator.py` | deep |

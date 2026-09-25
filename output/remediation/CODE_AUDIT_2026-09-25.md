@@ -1,9 +1,15 @@
 # Audit Report - backend (narrowed to the remediation) - 2026-09-25
 
-**PAUSED - incomplete.** Stopped on the orchestrator's pause request (owner usage limit). Steps 0.5-5
-are done; Step 6 (fixes), Step 7 (confirming audit) and Step 8 (loop) have **not started**. **No code
-was changed**: the working tree was clean at `4c8831a` when this report was written, and this file is
-the only change.
+**COMPLETE (2026-09-26).** Steps 0.5-5 were done at `4c8831a` (report `6e5d028`, then PAUSED). Steps
+6-8 ran on branch `wip/audit-fix` (worktree `.claude/worktrees/audit-fix`, from `integrate/wave1` at
+`0e821fc`), never in the main checkout: the acceptance judges import `prod_write` and
+`mechanical.lane` there. **Final state: every Major and Minor finding is fixed except the three
+MANUAL items; the quality gate passes (only Info and MANUAL remain) after one fix iteration and a
+confirming audit.** The branch reaches the main checkout only by the orchestrator's merge, after the
+running acceptance: it changes `prod_write.send`, `lane.sql_literal`, `plan.parse_tagged_export` and
+`persist_verdicts.jsonl_lines`, which the judges import (their behaviour on today's data is the
+same: LF-only SQL, no NUL, no U+2028 on production). The original findings below are kept as found;
+the result is in "Result (Steps 6-8)" at the end.
 
 ## Scope and method
 
@@ -76,8 +82,7 @@ the only change.
 | JWT signing key enforced | PASS (`mint_stats_token` refuses an empty secret) |
 | LLM prompt guards, Docker pins, credit/OAuth/webhook/tier | not in scope (no such file changed) |
 
-**The audit is not complete.** The gate table passes, but fixable Major and Minor findings are still
-open (Step 8 ends only when just Info/MANUAL remain).
+This was the provisional gate of Step 4; the final gate is at the end ("Quality gate (final)").
 
 ## Findings
 
@@ -235,14 +240,137 @@ Every change reads as correct. The checks behind that:
   Python's standard `gettext` for any interpreter started with `%TEMP%` as its working directory.
   A reviewer's vulture run from `/tmp` executed it. Delete or rename it.
 
-## To resume (Steps 6-8)
+## Result (Steps 6-8)
 
-1. Fix in this order: M2+M3 (transport), M1, M4, M5, M6, M7, M8, M9, then the Minors. Each fix gets
-   a failing test first.
-2. Register a mutation case per fixed guard: `scripts/remediation/mechanical/mutation_sweep.py`
-   (mechanical + `prod_write`) and `scripts/remediation/phase3/mutation_sweep.py` (phase 4 +
-   tools).
-3. **Run the sweeps in a temporary `git worktree` at HEAD, never in the main checkout.** The
-   acceptance code imports `prod_write.send` and `mechanical.lane`, so a mutant written into the
-   main tree could be imported by a judge mid-run.
-4. Re-run the gates above, then the confirming audit (Step 7).
+Done in the planned order (M2+M3, M1, M4, M5, M6, M7, M8, M9, E5, then the Minors), each fix with a
+failing test first and a mutation case (labels `audit-fix:` in both sweeps), swept in the worktree.
+
+### Fixed (one line each)
+
+* **M1** `write_gate4 --accept` takes only one whole clean run: lane line first, exactly one
+  `RESULT:` and one exit line, the clean result right before `ACCEPT_EXIT=0` (`254ac43`).
+* **M2** `prod_write.send` sends UTF-8 bytes, no text-mode pipe (the Windows LF -> CR LF is gone);
+  `write_stage.run_sql` delegates to it: channel timeouts, one `PSQL`/`SSH_HOST` (`f420f71`).
+* **M3** a psql timeout is `OutcomeUnknown` everywhere: `run_batches` marks `STOPPED.json`
+  `{"outcome": "unknown"}`, `write4.exit_line` prints `WRITE_EXIT=5` (`f420f71`).
+* **M4** every `STOPPED.json` of the apply root stops a run, whatever `--batch` selects (`2f631ae`).
+* **M5** `--step` is 1-100 (`STEP_MAX`) (`2f631ae`).
+* **M6** P5 refuses a site whose live provenance names a card P5 will not write
+  (`live-provenance-names-an-unwritten-card`: revert it first) (`795ef56`).
+* **M7** wrong_both's `AD <year>` has a right boundary: `AD 5th century`, `AD 90s`, `AD 1.500`,
+  `AD 900.5` read as no year (`3a36594`; the applied plan holds no prefix-form quote).
+* **M8** a scope loser found with two survivors is refused `survivors-disagree`, in any pair order
+  (`8dc7832`).
+* **M9** `apply._value_rows` reads JSON, so a `|` or a newline in a value no longer turns a
+  committed write into exit 1 (`b0d0d64`; the read-only `interests` digest re-pinned, no write,
+  undo, rehearsal or probe digest moved).
+* **M10 (read part)** `site_identifier._check_name_an_match` keys in Postgres through
+  `site_matcher._match_site_ids` (`89653b1`).
+* **E5** a reverted round keeps its `PLAN.jsonl`, the lane plan carries its rows tagged
+  `round_stamp`, and `verify_writes4` judges each reverted link against its own round (`18a5562`).
+* **m1** `--apply` re-verifies the pinned `ROLLBACK.sql`; **m2** a rehearsal needs exactly one
+  `COMMIT` line, the tautological `startswith` check is gone (`2301167`).
+* **m3 + m22** one `prod_write.sql_literal`, refusing NUL; `lane` re-exports it and
+  `write_stage._sql_text` is it (`86c666e`).
+* **m4** a spliced `$$` that would end the `DO` block is refused, checked on the rendered block
+  (`13e3715`).
+* **m5** the dead code is gone: `apply.DEFAULT_PLAN`, `DEFAULT_OUT`, `change_key`,
+  `rollback_change_key`; `CardStatsPlan.changed_sites`; write4's `quote` import,
+  `RULE_NOT_WRITTEN`, `WritePlan4.site_ids` (`7590ded`).
+* **m6** a reversal quote without text is no evidence (`3523e6c`).
+* **m7** `dangling_markers.premise_of` mirrors `jsonb - text` for a non-object provenance
+  (`64792e8`).
+* **m8** `citations.classify` checks the export's premise against its description (`8cda900`).
+* **m9** every psql JSON reader splits at LF only (`prod_write.jsonl_lines`, moved from
+  `persist_verdicts`, which re-exports it) (`7401c67`).
+* **m10** wrong_both refuses a column that is not the country instead of treating it as one
+  (`2f4e0dc`).
+* **m11** an undated Museum without a decision is refused, not planned `pending`; **m12** the two
+  docstrings say what the code does (`43d4de8`; the applied scope plan holds no such row).
+* **m13** the mechanical validators anchor with `\Z`, not `$` (`1a045ee`).
+* **m14** a STOPPED batch is left exactly as it stopped (`eeba7e5`).
+* **m15** a row the lane plan names twice is a `PLANNED TWICE` deviation (`96a9d8a`).
+* **m16** `--accept` compares the lane line's planned rows with the lane plan and refuses an
+  `--allow-stamp` pattern that covers the step's own stamps (`8c9b63d`).
+* **m17** the card-file check needs exit status 0 and exactly one `ACCEPT_EXIT=0` (`088bb04`).
+* **m18** `verify_writes4` uses `write_stage.utf8_streams` and `model4.PROVENANCE_KEY`; the live
+  read renders byte-identical (`fa4c2c3`).
+* **m19** `revert4` refuses a site's `phase4:` rows while its `phase5:` card is live (`aa8c3b2`;
+  the reviewed `P5_REVERT` pin carries the new guard).
+* **m20** the P4 preflight compares raw_data numbers as jsonb does, as exact decimals (`8cbabff`).
+* **m21** P5 refuses a site without a card_stats row in the plan (read-only `card_row_sites`), so
+  it no longer blocks its whole batch (`1a5c1a4`).
+* **Step 0.5 (Info, D7-DOC)** the seven files are in the Key Files table (`9f639c3`).
+
+### Remaining findings
+
+* **[MAJOR] M10 D1, write part - ACTION: MANUAL.** `_promote_to_unified_sites`, the `radar.py`
+  alias merge, the `sites.py` batch upload and the boot's alias UPDATE still write or compare a
+  Python-keyed `name_normalized`. A write path needs a production rehearsal ending in ROLLBACK
+  against the live keys, which this audit may not run.
+* **[MAJOR] C3 D1 - ACTION: MANUAL.** The scope premise lacks `site_external_ids.wikidata_qid`;
+  changing `SCOPE.premise_sql` re-renders the applied `scope-e4` statements and breaks their pinned
+  rollback. With the next scope wave and a re-export.
+* **Outside the repository - ACTION: MANUAL (owner).** `%TEMP%\gettext.py` (above).
+* The Info items above stand (Step 6 skips Info).
+* No finding fell in `scripts/remediation/acceptance/**` or `opus_handoff.py`, so nothing waits
+  "after the acceptance" there.
+
+### Confirming audit (Step 7) and the loop (Step 8)
+
+* **Scope**: the same 14 backend files and the production-writing tooling, plus every file the
+  branch changed (`git diff --name-only 0e821fc HEAD`).
+* **Step 1** on the diff: no eval/exec, `utcnow()`, bare `except:`, `shell=True`, `.format()` SQL
+  or secrets. The new SQL splices only constants and quoted values (`write_gate4.card_rows_sql`,
+  `revert4.card_left_live`, `verify_writes4.live_sql`, byte-identical to before).
+* **Step 2**: every changed function re-read; no new finding. The first confirming pass's suite
+  found two phase-3 sweep anchors the fixes had moved (`p4 model: NaN is read as JSON`,
+  `p4 write_gate4: a reverted round's statements are dropped`); re-anchored and swept, both caught
+  (`7321676`). The second pass is clean: 2 iterations of the 3 allowed.
+* **Steps 3-4**: no Critical, no open Major or Minor outside MANUAL.
+
+### Quality gate (final)
+
+| Condition | Result |
+|---|---|
+| Critical findings = 0 | PASS |
+| Major security findings (D2) = 0 | PASS |
+| Hardcoded secrets = 0 | PASS (gitleaks over the branch's commits: no leaks) |
+| New anti-patterns (P1-P14) = 0 | PASS (M10's write part is pre-existing and MANUAL) |
+| Deprecated API usage (P6) = 0 | PASS |
+| No eval/exec on external data | PASS |
+| API contract preserved (P9) | PASS (no endpoint changed) |
+| DB schema compatible (P10) | PASS (no schema change) |
+| JWT signing key enforced | PASS |
+| Only Info or MANUAL findings remain | PASS |
+
+### Gates (2026-09-26, in the worktree at the branch head)
+
+| Gate | Result |
+|---|---|
+| `pytest -q -rs --timeout 300 -m "not integration and not live_llm"` | 7148 passed, 75 skipped, 57 deselected (261 s). Every skip is gitignored data a worktree lacks (Natural Earth map units, the production snapshot, the phase-3 worklist, bcases cache); the main checkout's baseline was 7164 passed, 4 skipped |
+| `ruff check api/ pipeline/` (0.15.11) | clean |
+| `ruff format --check` on the 34 touched `.py` files | clean |
+| `lint-imports` | 2 kept, 0 broken |
+| `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80` | clean |
+| `mypy api/ --no-error-summary`, CI-equivalent (`C:/tmp/mypyci`) | clean (exit 0) |
+| `semgrep scan --config .semgrep api/ pipeline/` | 0 findings, 0 errors |
+| Lyra import check (`markdown`/`nh3` absent) | OK |
+| gitleaks on `0e821fc..HEAD` | no leaks |
+| Mutation, phase-3 sweep, every case on a changed file | 407/407 caught, tree byte-identical |
+| Mutation, mechanical sweep, every case on a changed file | 476/476 fired (14 needed the Natural Earth cache, copied into the ignored worktree cache and re-run: all fired); no `# mutant` left |
+
+### The `\r` check (M2; read-only, `BEGIN READ ONLY ... ROLLBACK`, 2026-09-25 ~23:00 UTC)
+
+* `remediation_change_log`: **0 of 19,200** rows carry a CR in `old_value`, `new_value`,
+  `run_stamp`, `test_id`, `change_key` or `confidence`; **0** in `evidence` (raw or JSON-escaped).
+  The journal covers 34 (table, column) pairs.
+* Live values: **0** curated `unified_sites` rows with a CR in `name`, `description`,
+  `period_name`, `site_type`, `country` or `raw_data`; **0** journalled `unified_sites` rows (any
+  source) with one in `name`, `description`, `raw_data`, `scope_reason`, `source_url`,
+  `thumbnail_url`; **0** in any `card_stats` text column; **0** in `site_external_ids.value`; **0**
+  in `wiki_images` `author`, `author_url`, `commons_page_url`, `original_url`, `image_kind`.
+* The one CR in the checked tables is a `unified_site_names` row of a `canmore_scotland` site
+  (`ALLT A' BHROCHAIN` + CR, site `56dd5efd-a6b6-4dc0-8801-a36ecf9045d5`) that **no journal row
+  names**: connector data, not the transport. The Windows CRLF translation never reached
+  production.

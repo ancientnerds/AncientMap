@@ -191,6 +191,17 @@ class TestRuleBAndD:
         refused = build(export(not_a_museum), findings, keep)
         assert refused.refused[0][1] == "decision-not-allowed"
 
+    def test_an_undated_museum_without_a_decision_is_refused_not_pending(self) -> None:
+        """Audit 2026-09-25 m11: the module docstring's rule (d) needs a reviewed decision for
+        every Museum row, the undated ones included; one without was planned `pending`."""
+        museum = site(UNDATED, site_type="Museum", period_start=None, description="Roman finds.")
+        findings = {UNDATED: finding(UNDATED, S.UNDATED, "no date")}
+        result = build(export(museum), findings)
+        assert not result.decisions
+        assert [(r[0]["id"], r[1]) for r in result.refused] == [
+            (UNDATED, "museum-needs-a-decision")
+        ]
+
     def test_a_museum_past_the_cutoff_needs_a_reviewed_decision(self) -> None:
         museum = site(MUSEUM, site_type="Museum", period_start=1903, description="Mycenaean finds.")
         findings = {MUSEUM: finding(MUSEUM, S.MUSEUM, "founding year")}
@@ -532,6 +543,31 @@ class TestTheRefusals:
             (new, f"duplicate_of:{mid}")
         ]
         assert (mid, "two-decisions") in {(r[0]["id"], r[1]) for r in result.refused}
+
+    @pytest.mark.parametrize("reverse", [False, True], ids=["in-order", "reversed"])
+    def test_a_loser_found_with_two_survivors_is_refused_in_any_pair_order(
+        self, reverse: bool
+    ) -> None:
+        """Audit 2026-09-25 M8: a loser the lane's own rule finds with two survivors kept whichever
+        pair came last, so the outcome depended on pair order. Which row stays is then a question:
+        refused as `survivors-disagree`, like a found-vs-listed conflict."""
+        first, second, loser = DUP_A, DUP_B, UNDATED
+        rows = (
+            site(first, name="Tomb", created_at="2026-01-01 00:00:00"),
+            site(second, name="Cairn", created_at="2026-01-02 00:00:00"),
+            site(loser, name="Court tomb", created_at="2026-03-01 00:00:00"),
+        )
+        pairs = (
+            {"a": first, "b": loser, "qid": "Q1", "metres": 5.0},
+            {"a": second, "b": loser, "qid": "Q1", "metres": 5.0},
+        )
+        result = build(
+            export(*rows, pairs=pairs[::-1] if reverse else pairs),
+            {},
+            entities={"Q1": entity("Tomb", "Cairn", "Court tomb")},
+        )
+        assert not result.decisions
+        assert [(r[0]["id"], r[1]) for r in result.refused] == [(loser, "survivors-disagree")]
 
     def test_t11_reporting_a_site_twice_is_refused(self) -> None:
         once = S.index_findings([finding(FORT, S.OUT_OF_WINDOW, "x")])

@@ -259,13 +259,14 @@ CASES: list[Case] = [
     guard(
         "statement must commit",
         APPLY,
-        '    if not sep:\n        raise PlanError("the emitted statement has no COMMIT',
+        "    if commits != 1:\n        raise PlanError(",
         "test_a_statement_without_a_commit_cannot_be_rehearsed",
     ),
-    guard(
+    Case(
         "rollback rehearsal must commit",
         APPLY,
-        '    if not sep:\n        raise PlanError("ROLLBACK.sql has no COMMIT',
+        '    head = _before_the_one_commit(sql, "ROLLBACK.sql")',
+        '    head = sql.partition("\\nCOMMIT;\\n")[0]',
         "test_a_rollback_without_a_commit_cannot_be_rehearsed",
     ),
     Case(
@@ -983,8 +984,8 @@ CASES: list[Case] = [
             (
                 "the apply sends only the verified statement",
                 APPLY,
-                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    already',
-                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    already',
+                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    # The undo',
+                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    # The undo',
                 "test_a_hand_edited_apply_is_refused",
                 TESTFILE,
             ),
@@ -1261,8 +1262,8 @@ CASES: list[Case] = [
     Case(
         "cells: a wave label is a date",
         LANE,
-        r'CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)$")',
-        r'CARD_STATS_LANE = re.compile(r"^card-stats-(.+)$")',
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")',
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(.+)\Z")',
         "test_a_card_stats_wave_resolves_and_nothing_else_does",
         CELL_TESTS,
     ),
@@ -2123,7 +2124,7 @@ CASES: list[Case] = [
             ),
             (
                 "a reversal needs a reason and quotes",
-                "        if not r.reason or not r.quotes:",
+                "        if not r.reason or not r.quotes or any(not q.text.strip() for q in r.quotes):",
                 "test_a_reversal_without_a_reason_or_evidence_is_refused",
             ),
             (
@@ -3048,7 +3049,7 @@ IMAGE_CASES: list[Case] = [
     ),
     Case(
         "img pv: JSON lines split at newlines only",
-        PERSIST,
+        PROD_WRITE,  # moved from persist_verdicts on 2026-09-25 (audit m9); pv re-exports it
         '    return text.split("\\n")',
         "    return text.splitlines()",
         "test_a_plan_record_with_a_line_separator_is_read_whole",
@@ -3809,8 +3810,8 @@ WRONG_BOTH_CASES: list[Case] = [
             ),
             (
                 "AD stands whole before the year",
-                r'_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
-                r'_PREFIX = re.compile(r"(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
+                r'_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER + r"(?![^\W_]|[.,]\d)")',
+                r'_PREFIX = re.compile(r"(?:A\.\s?D\.|AD)\s?" + _NUMBER + r"(?![^\W_]|[.,]\d)")',
                 _YEAR_OUT,
             ),
             (
@@ -4713,6 +4714,165 @@ DANGLING_MARKERS_CASES: list[Case] = [
     ),
 ]
 CASES += DANGLING_MARKERS_CASES
+
+
+#: The fixes of the 2026-09-25 code audit (`output/remediation/CODE_AUDIT_2026-09-25.md`) in the
+#: mechanical lanes and the shared transport. Every label starts with "audit-fix:", so the list runs
+#: on its own: `mutation_sweep.py audit-fix:`.
+AUDIT_FIX_CASES: list[Case] = [
+    Case(
+        "audit-fix: M2 send delivers LF as LF",
+        PROD_WRITE,
+        '            input=sql.encode("utf-8"),',
+        '            input=sql.replace("\\n", "\\r\\n").encode("utf-8"),',
+        "test_send_delivers_a_newline_as_lf_on_every_platform",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: M7 AD-then-year has no right boundary",
+        MECHANICAL / "wrong_both.py",
+        r'_NUMBER + r"(?![^\W_]|[.,]\d)")',
+        "_NUMBER)",
+        "test_a_year_without_its_era_or_in_another_does_not",
+        "tests/remediation/test_mechanical_wrong_both.py",
+    ),
+    Case(
+        "audit-fix: M8 a found loser keeps its last pair",
+        SCOPE,
+        "    for dup in found:\n        own = by_loser.get(dup.loser)\n",
+        "    for dup in found:\n        own = None  # mutant\n",
+        "test_a_loser_found_with_two_survivors_is_refused_in_any_pair_order",
+        SCOPE_TESTS,
+    ),
+    Case(
+        "audit-fix: M9 the value table splits on |",
+        APPLY,
+        "    rows = psql_json_reader()(\n"
+        '        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "',
+        '    rows = (lambda sql: [dict(zip(("value", "n"), r)) for r in read_rows(sql)])(\n'
+        '        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "',
+        "test_a_value_with_the_separator_or_a_newline_is_read_whole",
+    ),
+    Case(
+        "audit-fix: m1 the apply sends beside an unverified undo",
+        APPLY,
+        '    verify_pinned(\n        out / "ROLLBACK.sql", plan_path=plan_path, expected=rollback_statement(records, lane)\n    )\n    already',
+        "    already",
+        "test_the_apply_refuses_an_edited_rollback_before_anything_is_sent",
+    ),
+    Case(
+        "audit-fix: m2 a second COMMIT is rehearsed away",
+        APPLY,
+        "    if commits != 1:\n",
+        "    if commits == 0:  # mutant\n",
+        "test_a_statement_with_two_commits_cannot_be_rehearsed",
+    ),
+    guard(
+        "audit-fix: m3 a NUL reaches psql inside a literal",
+        PROD_WRITE,
+        '    if "\\x00" in value:',
+        "test_one_quoting_rule_for_every_writer_and_it_refuses_nul",
+        PROD_TESTS,
+    ),
+    guard(
+        "audit-fix: m4 a spliced $$ ends the DO block",
+        APPLY,
+        '    if "$$" in block:',
+        "test_a_value_that_would_end_the_do_block_is_refused",
+    ),
+    Case(
+        "audit-fix: m6 an empty quote is evidence",
+        REVERSAL,
+        " or any(not q.text.strip() for q in r.quotes):",
+        ":",
+        "test_a_quote_without_text_is_no_evidence",
+        REVERSAL_TESTS,
+    ),
+    guard(
+        "audit-fix: m7 a list provenance crashes the premise",
+        MECHANICAL / "dangling_markers.py",
+        "    if isinstance(provenance, list):",
+        "test_a_provenance_that_is_no_object_is_listed_not_a_crash",
+        "tests/remediation/test_mechanical_dangling_markers.py",
+    ),
+    guard(
+        "audit-fix: m8 the citations export's premise is not checked",
+        MECHANICAL / "citations.py",
+        "    if site.premise != premise_of(site.description):",
+        "test_an_export_whose_premise_is_not_its_description_is_refused",
+        "tests/remediation/test_mechanical_citations.py",
+    ),
+    Case(
+        "audit-fix: m10 any other column is taken for the country",
+        MECHANICAL / "wrong_both.py",
+        "    elif c.column == COUNTRY:\n",
+        "    elif True:  # mutant\n",
+        "test_a_country_row_outside_the_convention_is_listed",
+        "tests/remediation/test_mechanical_wrong_both.py",
+    ),
+    guard(
+        "audit-fix: m11 an undated Museum without a decision is pending",
+        SCOPE,
+        '        if decision is None and "museum" in str(site["site_type"]).casefold():',
+        "test_an_undated_museum_without_a_decision_is_refused_not_pending",
+        SCOPE_TESTS,
+    ),
+    Case(
+        "audit-fix: m13 a UUID may end in a newline",
+        PLAN,
+        r'[0-9a-f]{12}\Z")',
+        r'[0-9a-f]{12}$")',
+        "test_a_uuid_with_a_trailing_newline_is_not_a_uuid",
+    ),
+    Case(
+        "audit-fix: m13 a lane constant may end in a newline",
+        LANE,
+        r'_KEY_PREFIX = re.compile(r"^[a-z0-9-]+\Z")',
+        r'_KEY_PREFIX = re.compile(r"^[a-z0-9-]+$")',
+        "test_a_lane_constant_with_a_trailing_newline_is_refused",
+    ),
+    Case(
+        "audit-fix: M10 the curated name match sends a Python key",
+        REPO / "pipeline/lyra/site_identifier.py",
+        "    site_ids = _match_site_ids(session, site_name)",
+        "    site_ids = _match_site_ids(session, normalized)",
+        "test_the_raw_name_goes_to_the_postgres_key",
+        "tests/pipeline/test_site_match_key.py",
+    ),
+    Case(
+        "audit-fix: M10 the curated name match takes any source",
+        REPO / "pipeline/lyra/site_identifier.py",
+        '.filter(UnifiedSite.id.in_(site_ids), UnifiedSite.source_id == "ancient_nerds")',
+        ".filter(UnifiedSite.id.in_(site_ids))",
+        "test_no_python_key_is_compared_with_the_column",
+        "tests/pipeline/test_site_match_key.py",
+    ),
+    Case(
+        "audit-fix: m9 jsonl_lines splits at every line break",
+        PROD_WRITE,
+        '    return text.split("\\n")',
+        "    return text.splitlines()",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: m9 the tagged export splits at every line break",
+        PLAN,
+        "    for line in jsonl_lines(text):",
+        "    for line in text.splitlines():",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: m9 the JSON reader splits at every line break",
+        PLAN,
+        "for line in jsonl_lines(proc.stdout) if line.strip()]",
+        "for line in proc.stdout.splitlines() if line.strip()]",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+]
+CASES += AUDIT_FIX_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

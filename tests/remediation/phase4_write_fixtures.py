@@ -53,6 +53,16 @@ class EverySite(S.DefectScope):
 
 
 EVERY_SITE = EverySite(version=S.SCOPE_VERSION, sha256="e" * 64, sites={})
+
+
+class _EveryCardRow:
+    """`card_rows` for a P5 plan whose sites all have a card_stats row."""
+
+    def __contains__(self, site_id: object) -> bool:
+        return True
+
+
+EVERY_CARD_ROW = _EveryCardRow()
 BATCH = "p4-0003"
 REVID = 1234567
 TITLE = "Tarxien Temples"
@@ -464,6 +474,12 @@ class FakeDb:
                 entries.reverse()
             return "".join(
                 json.dumps({k: entry[k] for k in entry if k != "id"}) + "\n" for entry in entries
+            )
+        if sql.startswith("-- the named sites that have a card_stats row"):
+            return "".join(
+                json.dumps({"site_id": site_id}) + "\n"
+                for site_id in re.findall(r"'([0-9a-f-]{36})'::uuid", sql)
+                if site_id in self.sites and self.sites[site_id].card_row
             )
         if sql.startswith(R.REVERSAL_READ):
             return "".join(f"{m}|{n}\n" for m, n in reversal_reads(sql, self.journal).items())

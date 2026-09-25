@@ -141,8 +141,6 @@ import dataclasses
 import functools
 import hashlib
 import json
-import shlex
-import subprocess
 import sys
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -156,6 +154,19 @@ REPO = Path(__file__).resolve().parents[3]
 # Same shim as `run.py`: the package is not installed.
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# The one production transport (`scripts/remediation` is on the path: `phase3` was found there).
+# `PSQL` carries `-v ON_ERROR_STOP=1` - without it psql walks past a failed statement and commits
+# an empty transaction - and `PSQL_ROWS` adds `-t -A` for the parsed read-backs.
+from prod_write import (  # noqa: E402, F401
+    PSQL,
+    PSQL_ROWS,
+    SSH_HOST,
+    OutcomeUnknown,
+    jsonl_lines,
+    send,
+    sql_literal,
+)
 
 from phase3 import discover_stage as DS  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
@@ -176,12 +187,6 @@ from pipeline.utils.text import categorize_period  # noqa: E402  - the card's ow
 #: mechanical lane is not imported here because it drags its own data readers (Natural Earth, census
 #: fetch) into every phase-3 process.
 CURATED_SOURCE = "ancient_nerds"
-SSH_HOST = "ancientnerds"
-#: `-v ON_ERROR_STOP=1` on every call: without it psql walks past a failed statement and commits an
-#: empty transaction, which is indistinguishable from success.
-PSQL = "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1"
-#: `-t -A`: the read-backs are parsed, so psql prints one value per line with no decoration.
-PSQL_ROWS = PSQL + " -t -A"
 
 #: The owner's step (2026-09-21): 100 rows per chunk, a check after every one.
 DEFAULT_CHUNK_SIZE = 100
@@ -323,16 +328,10 @@ def run_sql(sql: str, *, host: str = SSH_HOST, timeout: int = 900) -> str:
     Every statement in this module goes through here, and every caller takes the runner as a
     parameter, so a test can record the exact text instead of opening a socket. A non-zero exit is
     refused rather than read: with `ON_ERROR_STOP` on, the exit code is what says the transaction was
-    not committed.
+    not committed. The channel is `prod_write.send`'s (LF-preserving, with its channel timeouts), so a
+    timeout arrives as `prod_write.OutcomeUnknown` - whether the COMMIT landed is the journal's to say.
     """
-    proc = subprocess.run(
-        shlex.split(f"ssh {host} {PSQL_ROWS}"),
-        input=sql,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=timeout,
-    )
+    proc = send(sql, host=host, timeout=timeout, rows=True)
     if proc.returncode != 0:
         raise WriteRefused(f"psql exited {proc.returncode}:\n{proc.stdout}\n{proc.stderr}".strip())
     return proc.stdout
@@ -355,15 +354,9 @@ def utf8_streams() -> None:
             reconfigure(encoding="utf-8", errors="replace")
 
 
-def _sql_text(value: str | None) -> str:
-    """A text literal, or `NULL` for a value the row does not have.
-
-    Never coalesced to `''`: an empty string and an absent value are two different stored states, and
-    `IS NOT DISTINCT FROM` - which every guard here uses - tells them apart.
-    """
-    if value is None:
-        return "NULL"
-    return "'" + value.replace("'", "''") + "'"
+#: A text literal, or `NULL` for a value the row does not have: `prod_write.sql_literal`, the one
+#: quoting rule of every writer (a NUL is refused).
+_sql_text = sql_literal
 
 
 def _json_rows(text: str) -> list[dict[str, Any]]:
@@ -374,7 +367,7 @@ def _json_rows(text: str) -> list[dict[str, Any]]:
     output escapes both, so one row is always exactly one line.
     """
     rows: list[dict[str, Any]] = []
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in enumerate(jsonl_lines(text), start=1):
         line = line.strip()
         if not line:
             continue

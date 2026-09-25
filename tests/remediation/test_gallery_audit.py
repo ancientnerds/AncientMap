@@ -893,7 +893,7 @@ def test_run_psql_cannot_hang_on_a_dead_ssh_channel(monkeypatch):
 
     def fake_run(args, **kwargs):
         argv.append(args)
-        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=b"", stderr=b"")
 
     monkeypatch.setattr(pv.subprocess, "run", fake_run)
     pv.run_psql("SELECT 1;")

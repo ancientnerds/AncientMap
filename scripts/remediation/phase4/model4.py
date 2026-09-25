@@ -40,6 +40,7 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
@@ -582,9 +583,15 @@ def _refuse_constant(name: str) -> Any:
     raise ValueError(f"{name} is not JSON")
 
 
-def parse_json(text: str) -> Any:
-    """`json.loads` that refuses `NaN`, `Infinity` and `-Infinity` (Python accepts them)."""
-    return json.loads(text, parse_constant=_refuse_constant)
+def parse_json(text: str, *, exact: bool = False) -> Any:
+    """`json.loads` that refuses `NaN`, `Infinity` and `-Infinity` (Python accepts them).
+
+    `exact=True` reads every non-integer number as a `Decimal`, the way jsonb compares numerics:
+    as floats, two numbers jsonb tells apart can compare equal.
+    """
+    return json.loads(
+        text, parse_constant=_refuse_constant, parse_float=Decimal if exact else float
+    )
 
 
 def _obj(data: Any, what: str, keys: frozenset[str]) -> Mapping[str, Any]:

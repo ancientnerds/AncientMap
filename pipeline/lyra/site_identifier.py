@@ -35,7 +35,7 @@ from pipeline.lyra.config import (
     call_api,
 )
 from pipeline.lyra.site_key import site_key_sql
-from pipeline.lyra.site_matcher import fill_contrib_from_site
+from pipeline.lyra.site_matcher import _match_site_ids, fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
 from pipeline.normalizers.dates import passes_date_cutoff
 from pipeline.normalizers.site_type import normalize_site_type
@@ -1664,57 +1664,25 @@ def _check_spatial_an_match(
 
 
 def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None:
-    """Find AN Originals site by normalized name (exact or spaceless)."""
+    """Find the AN Originals site whose name or alias keys to `site_name` (exact, then spaceless).
+
+    The key is Postgres's, computed from the raw name (`site_matcher._match_site_ids`, the one
+    lookup of pipeline/lyra/site_key.py): a `normalize_name()` key compared with `name_normalized`
+    loses the names it folds differently (audit 2026-09-25 M10). `normalize_name` only gates the
+    length, as `_find_site_by_name` does.
+    """
     normalized = normalize_name(site_name)
     if not normalized or len(normalized) < 3:
         return None
-
-    # Exact normalized match
-    match = (
+    site_ids = _match_site_ids(session, site_name)
+    if not site_ids:
+        return None
+    return (
         session.query(UnifiedSite)
-        .filter(
-            UnifiedSite.source_id == "ancient_nerds",
-            UnifiedSite.name_normalized == normalized,
-        )
+        .filter(UnifiedSite.id.in_(site_ids), UnifiedSite.source_id == "ancient_nerds")
+        .order_by(UnifiedSite.id)
         .first()
     )
-    if match:
-        return match
-
-    # Spaceless match (e.g. "table des marchand" vs "tabledesmarchand")
-    spaceless = normalized.replace(" ", "")
-    match = (
-        session.query(UnifiedSite)
-        .filter(
-            UnifiedSite.source_id == "ancient_nerds",
-            func.replace(UnifiedSite.name_normalized, " ", "") == spaceless,
-        )
-        .first()
-    )
-    if match:
-        return match
-
-    # Also check alternate names table
-    alt = (
-        session.query(UnifiedSiteName)
-        .filter(
-            UnifiedSiteName.name_normalized == normalized,
-        )
-        .first()
-    )
-    if alt:
-        site = (
-            session.query(UnifiedSite)
-            .filter(
-                UnifiedSite.id == alt.site_id,
-                UnifiedSite.source_id == "ancient_nerds",
-            )
-            .first()
-        )
-        if site:
-            return site
-
-    return None
 
 
 #: One alias row, keyed by Postgres from the raw name (pipeline/lyra/site_key.py).

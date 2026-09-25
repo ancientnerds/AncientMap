@@ -237,11 +237,23 @@ def parse_export(text: str) -> Export:
 
 
 def premise_of(raw: Mapping[str, Any]) -> str:
-    """`LANE.premise_sql` in Python: the provenance without its hash, as Postgres prints it."""
+    """`LANE.premise_sql` in Python: the provenance without its hash, as Postgres prints it.
+
+    Postgres' `jsonb - text` drops the key of an object and the equal string elements of an array,
+    and refuses a scalar - so an export never holds a scalar provenance's premise, and this refuses
+    it too (audit 2026-09-25 m7: a non-object used to crash here, before `classify` could list it).
+    """
     provenance = raw.get(PROVENANCE_KEY)
     if provenance is None:
         return "null"
-    return reprint({key: value for key, value in provenance.items() if key != HASH_KEY})
+    if isinstance(provenance, dict):
+        return reprint({key: value for key, value in provenance.items() if key != HASH_KEY})
+    if isinstance(provenance, list):
+        return reprint([item for item in provenance if item != HASH_KEY])
+    raise PlanError(
+        f"a scalar provenance {provenance!r}: Postgres refuses `- '{HASH_KEY}'` on a scalar, so no "
+        "export carries its premise"
+    )
 
 
 # ---------------------------------------------------------------------------- the removal

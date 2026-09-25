@@ -699,6 +699,39 @@ class TestRenderTransaction:
         with pytest.raises(P.PlanError, match="no COMMIT"):
             A.rehearse("BEGIN;\nSELECT 1;\n")
 
+    @pytest.mark.parametrize(
+        "over",
+        [{"run_stamp": "stamp$$"}, {"lane": replace(L.T05, confidence="two$$source")}],
+        ids=["run-stamp", "confidence"],
+    )
+    def test_a_value_that_would_end_the_do_block_is_refused(self, over: dict[str, Any]) -> None:
+        """Audit 2026-09-25 m4: the run stamp, test id, confidence, owned values and premise are
+        spliced inside `DO $$ ... END $$;`; a `$$` in any of them would end the block early."""
+        with pytest.raises(P.PlanError, match="would end the DO block"):
+            A.render_transaction([record()], site_ids={SITE_GEORGIA}, **over)
+
+    def test_a_statement_with_two_commits_cannot_be_rehearsed(self) -> None:
+        """Audit 2026-09-25 m2: the rehearsal swapped the first COMMIT and dropped the rest, and
+        the check behind it (`script.startswith(head)`) held by construction. A second COMMIT is
+        a second transaction the rehearsal would not run: refused."""
+        with pytest.raises(P.PlanError, match="2 COMMIT"):
+            A.rehearse("BEGIN;\nSELECT 1;\nCOMMIT;\nBEGIN;\nSELECT 2;\nCOMMIT;\n")
+
+    def test_the_apply_refuses_an_edited_rollback_before_anything_is_sent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Audit 2026-09-25 m1: `--apply` re-verified APPLY.sql but not its undo: a ROLLBACK.sql
+        edited after the emit sat beside a write that went out."""
+        records, plan_path = delivered(tmp_path)
+        A.emit(records, tmp_path, plan_path=plan_path)
+        rollback = tmp_path / "ROLLBACK.sql"
+        rollback.write_text(
+            rollback.read_text(encoding="utf-8") + "-- edited\n", encoding="utf-8", newline="\n"
+        )
+        monkeypatch.setattr(A, "run_psql", lambda *a, **k: pytest.fail("sent to production"))
+        with pytest.raises(P.PlanError, match="ROLLBACK.sql is pinned to this plan but"):
+            A.cmd_apply(records, tmp_path, plan_path=plan_path)
+
     def test_the_rollback_swaps_the_values_and_its_run_stamp(self) -> None:
         rollback = [replace(record(), old_value="Georgia", new_value="Georgia (country)")]
         sql = A.render_transaction(
@@ -757,6 +790,11 @@ class TestReadBackStatements:
         be the file itself, and whatever it does would be kept. Raised before any psql call."""
         (tmp_path / "ROLLBACK.sql").write_text("BEGIN;\nSELECT 1;\n", encoding="utf-8")
         with pytest.raises(P.PlanError, match="no COMMIT"):
+            A.cmd_rehearse_rollback([record()], tmp_path, plan_path=tmp_path / "PLAN.jsonl")
+        (tmp_path / "ROLLBACK.sql").write_text(
+            "BEGIN;\nSELECT 1;\nCOMMIT;\nSELECT 2;\nCOMMIT;\n", encoding="utf-8"
+        )
+        with pytest.raises(P.PlanError, match="2 COMMIT"):
             A.cmd_rehearse_rollback([record()], tmp_path, plan_path=tmp_path / "PLAN.jsonl")
 
     def test_the_rollback_rehearsal_reads_name_the_planned_rows(self) -> None:
@@ -1889,10 +1927,13 @@ class TestTheLandedCheck:
 #: code as it was BEFORE the lanes were generalised to (table, key column, value column, curated-
 #: scope predicate) on 2026-09-23 - measured at commit c186008, the branch point. T05's apply,
 #: rollback and read-back digests are the ones pinned above since 2026-09-22 (the same numbers).
+#: One deliberate change since: the read-only `interests` query is read as JSON and skips NULL
+#: (audit 2026-09-25 M9: a value holding `|` broke the split reader) - re-pinned 2026-09-25. No
+#: write, undo, rehearsal or probe digest moved.
 COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     "period-name": {
         "apply": "fe122a2edb983d35c30c3049987f02f0e4cf0d67769cf0fe8c1f4bdb95b4e716",
-        "interests": "cb5fe87a9b1e434efa03e9b19872bdbe85cd5897617764d0cd0fb00232e1949c",
+        "interests": "3b5e8257f890ceb98c0ad713db8b78dcf34e881257db462aceb17288f38822df",
         "landed": "ae19a74296d7ceba1debca126f9840a1007c2789eb8e1685e8e6a44697c5c175",
         "probe:guard1-other-source": "fcc1296af5f1e067479ab8a833e7c0fae0e7bc001b41b508d8a935541875cfc7",
         "probe:guard2-no-op": "0f27046e232845c73a157941a7e59e7a1868ea48f5df101b2d3bfd348b6be9e2",
@@ -1908,7 +1949,7 @@ COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     },
     "site-type-shape": {
         "apply": "d12f14e2ced6dd5700910700f0b06472ecb27f462c0ef381778b6ba1b0bd624c",
-        "interests": "904da5f4df72e6e90b384e1c6c5b2c41fc8585678233134a089f3cd8f60f95d6",
+        "interests": "a17ef8fe4dc246b7b99135686e42706b601597a22bfa4cb2eae96102753a446e",
         "landed": "cf4e4cdc273cedbe8b45cfb3445fb35fdc304f67f18ffd9aef24eed67bd50c60",
         "probe:guard1-other-source": "193173a78caaab5fce13ec100fa0c1d305c579a9fbf06e0a96dfc11ee6d99a59",
         "probe:guard2-no-op": "735c47353d117de3c9c04928062865c01c2a77dd9613478e8ad638ae9c51b37c",
@@ -1923,7 +1964,7 @@ COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     },
     "t05": {
         "apply": "f27845273ff0b34a458036e9ee4fcbe3e97ea4a53d08340c205ea66c3667f2ff",
-        "interests": "df54151807f6310cf8d91243be984a21d698ebdcd4bbbcb262bdce6d89315166",
+        "interests": "2838184adb059f6bc7b0f35b0fcb55146859e5c179d64f5804b32c34b1edc969",
         "landed": "c2bb4bd0fff25aecdc92dcf1cc5a42f10ee2812205ba7d6dccadf5dda06b246a",
         "probe:guard1-other-source": "9a0dac224c8afac00297e1f74435f6d1a80c6487ff2854f245bb87c9fcc04720",
         "probe:guard2-no-op": "d36f6f9e1adff29c418cee4cd31982b2db4e95f78aac0ba8cdd2756e74211d74",
@@ -1937,7 +1978,7 @@ COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     },
     "uk-parts": {
         "apply": "a2a404b171c921ffa6f8b1ee3faf9084a579ffeb3f9f8b5f870b2b429c5ccf41",
-        "interests": "df54151807f6310cf8d91243be984a21d698ebdcd4bbbcb262bdce6d89315166",
+        "interests": "2838184adb059f6bc7b0f35b0fcb55146859e5c179d64f5804b32c34b1edc969",
         "landed": "81db88dd47f58880d9ecde5889698c1afb0494ad1e82a1fdadded1540f932f77",
         "probe:guard1-other-source": "907c7796721216efdde09504f4935530ce8ba8c6ce412639075eb455829345e6",
         "probe:guard2-no-op": "7a88236d44697add7e7aede1c239cddee7c2eb2e91d2ca2f241e2e56eb5b20e6",
@@ -2027,3 +2068,70 @@ class TestTheColumnLanesAreByteNeutral:
             key: _sha(text) for key, text in _column_lane_renderings(lane, monkeypatch).items()
         }
         assert rendered == COLUMN_LANE_PINS[name]
+
+
+class TestTheValueTableReadsJson:
+    """Audit 2026-09-25 M9: `_value_rows` split unaligned psql output on `|`, so a curated value
+    holding a `|` (or a newline) raised an uncaught ValueError - after a COMMIT, that turned a
+    committed write into exit 1, a refusal. The table is read as JSON, like `_cell_value_rows`."""
+
+    def test_a_value_with_the_separator_or_a_newline_is_read_whole(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import subprocess
+
+        from pipeline.sites_html_renderer import country_slug
+
+        sent: list[str] = []
+        answer = (
+            json.dumps({"value": "Georgia|Kakheti", "n": 3})
+            + "\n"
+            + json.dumps({"value": "Georgia\nKakheti", "n": 1})
+            + "\n"
+            + json.dumps({"value": "Georgia", "n": 7})
+            + "\n"
+        )
+
+        def run_psql(sql: str, **kw: Any) -> Any:
+            sent.append(sql)
+            return subprocess.CompletedProcess([], 0, answer, "")
+
+        monkeypatch.setattr(A, "run_psql", run_psql)
+        assert A._value_rows(L.T05) == [
+            ("Georgia|Kakheti", country_slug("Georgia|Kakheti"), 3),
+            ("Georgia\nKakheti", country_slug("Georgia\nKakheti"), 1),
+            ("Georgia", country_slug("Georgia"), 7),
+        ]
+        assert "row_to_json" in sent[0] and "IS NOT NULL" in sent[0]
+        table = A.verify_interests([record(old_value="Georgia|Kakheti")], L.T05)
+        assert "Georgia|Kakheti" in table and "Georgia " in table
+
+
+class TestTheValidatorsTakeNoTrailingNewline:
+    """Audit 2026-09-25 m13: `^...$` with `.match` accepts a trailing newline, so a pair id or a
+    lane constant carrying one passed the check - and then silently matched nothing."""
+
+    def test_a_uuid_with_a_trailing_newline_is_not_a_uuid(self) -> None:
+        assert P.UUID_RE.match(SITE_GEORGIA)
+        assert P.UUID_RE.match(SITE_GEORGIA + "\n") is None
+        with pytest.raises(P.PlanError, match="is not a UUID"):
+            P.sql_ids([SITE_GEORGIA + "\n"])
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("plan_table", "_country_plan\n"),
+            ("label", "T05 country\n"),
+            ("key_prefix", "country-canonical\n"),
+            ("lock_timeout", "10s\n"),
+        ],
+    )
+    def test_a_lane_constant_with_a_trailing_newline_is_refused(
+        self, field: str, value: str
+    ) -> None:
+        with pytest.raises(ValueError):
+            replace(L.T05, **{field: value})
+
+    def test_an_export_kind_with_a_trailing_newline_is_refused(self) -> None:
+        with pytest.raises(P.PlanError, match="is not a kind"):
+            P.tagged_export_script([("site\n", "SELECT 1")])
