@@ -38,8 +38,9 @@ lane's plan in `LANE_PLAN.jsonl`); while `STEP.json` exists, `--apply` writes no
 it is the output of one run - its lane line first, one `RESULT:` and one exit line - that ends in
 `RESULT: 0 deviation(s)` and `ACCEPT_EXIT=0`, whose lane line is the step's lane with stamps
 covering the step's, that read at least the rows written so far under those stamps (every round,
-the reverted ones too: their rows stay in the journal), and that accepted no earlier step
-(`acceptance_problems`). A step is 1-100 sites (`STEP_MAX`); a stopped batch anywhere in the apply
+the reverted ones too: their rows stay in the journal), that read the lane plan's current row
+count, that allows no later stamp pattern covering the step's own stamps, and that accepted no
+earlier step (`acceptance_problems`). A step is 1-100 sites (`STEP_MAX`); a stopped batch anywhere in the apply
 root stops every run, whatever `--batch` selects.
 
 **Write rounds** (the chunk number of the stamp). A batch taken back by `revert4` is written again
@@ -136,11 +137,13 @@ VERIFY_TOOL = "output/remediation/tools/verify_writes4.py"
 ACCEPT_OK = "ACCEPT_EXIT=0"
 ACCEPT_CLEAN = "RESULT: 0 deviation(s)"
 ACCEPT_RESULT = "RESULT:"
+#: The line `verify_writes4` prints for its `--allow-stamp` patterns, space-separated after it.
+ACCEPT_ALLOWED = "allowed later: "
 #: Any tool's own exit line, its code the group: one run prints exactly one. `verify_writes4`
 #: reads its card check's exit line with this same pattern.
 EXIT_LINE = re.compile(r"^[A-Z][A-Z0-9_]*_EXIT=(\d+)$")
 _ACCEPT_LANE = re.compile(
-    r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows \d+ \| "
+    r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows (?P<planned>\d+) \| "
     r"lane journal rows (?P<journal>\d+) \|"
 )
 #: The Phase-3 refusal rule under which the reviewer-cleared text defects were set aside.
@@ -609,7 +612,12 @@ def like_matches(pattern: str, stamp: str) -> bool:
 
 
 def acceptance_problems(
-    text: str, *, step: Mapping[str, Any], written: Sequence[Mapping[str, Any]], used: set[str]
+    text: str,
+    *,
+    step: Mapping[str, Any],
+    written: Sequence[Mapping[str, Any]],
+    used: set[str],
+    planned: int,
 ) -> list[str]:
     """Why `text` (the output of one `verify_writes4.py` run) does not accept `step`; empty = it
     does. It must end in `ACCEPT_EXIT=0` with 0 deviations, be the step's own lane, match every stamp
@@ -651,6 +659,24 @@ def acceptance_problems(
         for record in written
         if like_matches(head["stamps"], record["run_stamp"])
     )
+    # Tied to this lane plan and to this step (audit 2026-09-25 m16): the output read the lane
+    # plan's current rows, and no `--allow-stamp` pattern covers a stamp the step wrote - under
+    # such a pattern every later write of any lane would count as superseded.
+    if int(head["planned"]) != planned:
+        problems.append(
+            f"the output read planned rows {head['planned']}, the lane plan holds {planned}"
+        )
+    allowed = next(
+        (
+            line.removeprefix(ACCEPT_ALLOWED).split()
+            for line in lines
+            if line.startswith(ACCEPT_ALLOWED)
+        ),
+        [],
+    )
+    covering = [p for p in allowed if any(like_matches(p, stamp) for stamp in step["stamps"])]
+    if covering:
+        problems.append(f"the output allows later stamps {covering[0]!r} that cover the step's own")
     if int(head["journal"]) < written_rows:
         problems.append(
             f"the output read {head['journal']} lane journal row(s), {written_rows} are written: "
@@ -673,6 +699,9 @@ def accept_step(apply_root: pathlib.Path, output: pathlib.Path) -> int:
         step=step,
         written=written_rounds(apply_root),
         used={record["output_sha256"] for record in accepted},
+        planned=sum(
+            ROUND_STAMP not in row for row in lanes.read_jsonl(apply_root / LANE_PLAN_FILE)
+        ),
     )
     if problems:
         for problem in problems:

@@ -21347,6 +21347,22 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4_ACCEPT_TEST,
         "test_a_row_planned_twice_is_a_deviation",
     ),
+    (
+        "audit-fix: m16 the planned-row count is not compared",
+        P4_WRITE_GATE,
+        '    if int(head["planned"]) != planned:\n',
+        "    if False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step",
+    ),
+    (
+        "audit-fix: m16 an allowed pattern may cover the step",
+        P4_WRITE_GATE,
+        "    if covering:\n",
+        "    if False:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step",
+    ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS
 

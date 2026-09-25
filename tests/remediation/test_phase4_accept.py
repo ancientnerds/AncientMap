@@ -792,7 +792,12 @@ def test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line(
     assert lines[-2:] == ["RESULT: 0 deviation(s)", "ACCEPT_EXIT=0"]
     step = {"lane": "p4", "stamps": [P4_STAMP]}
     written_rounds = [{"run_stamp": P4_STAMP, "rows_written": 2}]
-    assert G.acceptance_problems(text, step=step, written=written_rounds, used=set()) == []
+    assert (
+        G.acceptance_problems(
+            text, step=step, written=written_rounds, used=set(), planned=len(written.plan)
+        )
+        == []
+    )
 
 
 #: The D9 run's P4 stamp (owner order 2026-09-25; `plan4.LIST_PLAN_FIRST_BATCH`).

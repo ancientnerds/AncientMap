@@ -1666,9 +1666,13 @@ def _gate_args(tmp_path: Path, *extra: str) -> list[str]:
 def _acceptance(
     tmp_path: Path, *, journal_rows: int, name: str = "accept.log", **overrides
 ) -> Path:
-    """What `verify_writes4.py --lane p4` prints for a clean step (its own lines, WB-C3)."""
+    """What `verify_writes4.py --lane p4` prints for a clean step (its own lines, WB-C3), with the
+    lane plan's current row count on its lane line."""
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    planned = sum(G.ROUND_STAMP not in row for row in G.lanes.read_jsonl(lane_plan))
     lines = {
-        "head": f"lane p4 | stamps phase4:% | planned rows 6 | lane journal rows {journal_rows} | "
+        "head": f"lane p4 | stamps phase4:% | planned rows {planned} | lane journal rows "
+        f"{journal_rows} | "
         f"carried {journal_rows} | not yet written 0 | superseded 0",
         "verified": "re-verified 2 written site(s) with V1-V15",
         "result": "RESULT: 0 deviation(s)",
@@ -1918,8 +1922,8 @@ def test_one_acceptance_output_never_accepts_two_steps(tmp_path, monkeypatch, ca
     _gate_run(tmp_path, 2)
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
     db = _db(*[f"{n:08x}-0000-4000-8000-00000000000{n}" for n in range(1, 3)])
-    output = _acceptance(tmp_path, journal_rows=4)
     assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
+    output = _acceptance(tmp_path, journal_rows=4)
     assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 0
     assert G.main(_gate_args(tmp_path, "--apply", "--step", "1"), runner=db) == 0
     capsys.readouterr()
@@ -2554,3 +2558,36 @@ def test_a_stopped_batch_keeps_the_plan_and_statements_it_stopped_on(
     assert G.main(_gate_args(tmp_path), runner=db) == 0
     after = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
     assert after == before
+
+
+@pytest.mark.parametrize(
+    ("overrides", "problem"),
+    [
+        (  # the lane plan holds 2 rows; the output read another plan
+            {
+                "head": "lane p4 | stamps phase4:% | planned rows 7 | lane journal rows 2 | "
+                "carried 2 | not yet written 0 | superseded 0"
+            },
+            "planned rows 7, the lane plan holds 2",
+        ),
+        (  # an allowed pattern that covers the step's own stamps accepts any later write
+            {"verified": "allowed later: %\nre-verified 1 written site(s) with V1-V15"},
+            "allows later stamps '%' that cover the step's own",
+        ),
+    ],
+)
+def test_an_acceptance_is_tied_to_the_lane_plan_and_to_the_step(
+    tmp_path, monkeypatch, capsys, overrides, problem
+) -> None:
+    """2026-09-25 audit m16: the lane line's planned-row count was never compared with the lane
+    plan, and an `--allow-stamp` pattern that matches the step's own stamps (`%`) was accepted -
+    under it every later write of any lane counts as superseded, not as a deviation."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    assert G.main(_gate_args(tmp_path, "--apply"), runner=db) == 0
+    capsys.readouterr()
+    output = _acceptance(tmp_path, journal_rows=2, **overrides)
+    assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
+    assert problem in capsys.readouterr().out
+    assert (tmp_path / "apply" / G.STEP_FILE).exists()
