@@ -119,6 +119,14 @@ class TestTheLane:
         assert set(LANE.cell("category_group").allowed_new_values) == set(GROUP_FORTIFICATION)
         assert set(LANE.cell("rarity_tier").allowed_new_values) == {str(t) for t in RARITY_NAMES}
 
+    def test_the_card_text_is_neither_a_cell_nor_a_premise_of_the_lane(self) -> None:
+        """Phase 5 writes `card_stats.card_description` (`phase4/write4.py`); this lane never
+        does, and nothing it guards on reads it: a card text written between a wave's plan and
+        its apply expires neither the wave's premise (guard 5) nor its old values (guard 3)."""
+        assert "card_description" not in LANE.columns
+        assert "card_description" not in C.PREMISE_SQL
+        assert "card_description" not in C.EXPORT_SITES_SQL
+
     def test_the_export_reads_the_premise_the_transaction_checks(self) -> None:
         assert f"{C.PREMISE_SQL} AS premise" in C.EXPORT_SITES_SQL
         assert LANE.premise_sql == C.PREMISE_SQL
@@ -519,6 +527,45 @@ class TestTheBasis:
             entry = {**jrow(9, SITE_A, "mystery", "5", "6", table="card_stats"), "run_stamp": stamp}
             assert C.basis_pointer((jrow(1, SITE_A, "country", "a", "b"), entry)) == (WAVE, side)
         assert C.basis_pointer((jrow(1, SITE_A, "country", "a", "b"),)) is None
+
+    def test_a_phase_5_card_text_is_no_basis_of_the_stats(self) -> None:
+        """Phase 5 journals `card_stats.card_description` under `phase5:p5-NNNN:chunk-NNNN`
+        (`phase4/write4.py`), after a wave or before any. The text is neither an input nor a cell
+        of the recompute, so it names no basis: the last row of the twelve columns does. Before
+        this, the first card text written made every later wave refuse to plan."""
+        card = {
+            **jrow(10, SITE_A, "card_description", "old", "new", table="card_stats"),
+            "run_stamp": "phase5:p5-0001:chunk-0001",
+        }
+        field = jrow(1, SITE_A, "country", "a", "b")
+        for stamp, side in ((LANE.run_stamp, "after"), (LANE.rollback_run_stamp, "before")):
+            entry = {**jrow(9, SITE_A, "mystery", "5", "6", table="card_stats"), "run_stamp": stamp}
+            assert C.basis_pointer((field, entry, card)) == (WAVE, side)
+        assert C.basis_pointer((field, card)) is None
+
+    def test_a_stats_cell_written_by_phase_5_still_refuses(self) -> None:
+        """Only the card text is set aside: a write to one of the twelve columns that no wave
+        made is still unexplained, whoever made it."""
+        rogue = {
+            **jrow(10, SITE_A, "rarity_tier", "2", "3", table="card_stats"),
+            "run_stamp": "phase5:p5-0001:chunk-0001",
+        }
+        with pytest.raises(P.PlanError, match="no card_stats wave's write or undo"):
+            C.basis_pointer((jrow(1, SITE_A, "country", "a", "b"), rogue))
+
+    def test_the_next_wave_plans_after_phase_5_wrote_card_texts(self, tmp_path: Path) -> None:
+        """Wave W applied, then Phase 5 wrote the card text of W's card: the completion read-back
+        (the next wave) still stands on W's export and plans nothing."""
+        rows, entries, _ = self.scenario(tmp_path)
+        card = {
+            **jrow(1000, SITE_A, "card_description", None, "A card.", table="card_stats"),
+            "run_stamp": "phase5:p5-0001:chunk-0001",
+        }
+        result = C.build_card_stats_plan(
+            export(rows, (*entries, card)), NEXT, built_at="t", bases=bases_in(tmp_path)
+        )
+        assert result.proof.pointer == (WAVE, "after")
+        assert not result.plan.changes
 
     def test_a_basis_of_another_wave_refuses(self, tmp_path: Path) -> None:
         rows, entries, _ = self.scenario(tmp_path)

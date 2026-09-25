@@ -40,14 +40,17 @@ a journal horizon (`since`: every journalled input value written after it is put
 unjournalled inputs of every curated site as they were at that horizon. Every `--write` records
 its own in `BASIS.json` (versioned): the export's journal horizon, its unjournalled inputs, the
 cells it planned (as a digest) and refused, and the basis its own proof stood on. The last
-card_stats row of the journal names the basis the stored cards have now:
+card_stats row of the journal in one of the twelve columns names the basis the stored cards have
+now (Phase 5's `card_description` rows are neither an input nor a cell of the recompute, and are
+not read):
 
-* no card_stats row at all - the first wave: every journalled input put back, and the unjournalled
+* no such row at all - the first wave: every journalled input put back, and the unjournalled
   inputs as exported (they were never written by the remediation);
 * the last row is wave W's write - W's own export: after W, every card W recomputed is what the
   generator computes from it, except the cells W refused;
 * the last row is W's undo - the basis W's proof stood on, since the undo restored what W found;
-* anything else - a card_stats write this lane did not make - refuses: no basis explains it.
+* anything else - a write to the twelve columns this lane did not make - refuses: no basis
+  explains it.
 
 The basis wave's journal rows must be exactly the cells its `BASIS.json` names (and an undo's
 rows their exact inverse), so a `BASIS.json` of a plan that was not the one applied refuses too.
@@ -572,9 +575,14 @@ def first_wave_basis(sites: Sequence[Mapping[str, Any]]) -> Basis:
 
 def basis_pointer(journal: Sequence[Mapping[str, Any]]) -> tuple[str, str] | None:
     """`(wave, side)` of the basis the stored cards have now, read off the last card_stats journal
-    row: `after` a wave's write, `before` it once its undo ran. `None` when no card_stats row was
-    ever journalled."""
-    cards = [j for j in journal if j["table_name"] == "card_stats"]
+    row of the twelve columns: `after` a wave's write, `before` it once its undo ran. `None` when
+    no such row was ever journalled.
+
+    A row of another card_stats column is not read: Phase 5 journals `card_description`
+    (`phase4/write4.py`, `phase5:p5-NNNN:chunk-NNNN`), which is neither an input nor a cell of
+    the recompute, so it cannot change what the proof compares.
+    """
+    cards = [j for j in journal if j["table_name"] == "card_stats" and j["column_name"] in COLUMNS]
     if not cards:
         return None
     last = max(cards, key=lambda j: int(j["id"]))
