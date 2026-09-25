@@ -4631,8 +4631,8 @@ PHASE4_MODEL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 model: NaN is read as JSON",
         P4_MODEL,
-        "    return json.loads(text, parse_constant=_refuse_constant)\n",
-        "    return json.loads(text)  # mutant\n",
+        "        text, parse_constant=_refuse_constant, parse_float=Decimal if exact else float\n",
+        "        text, parse_float=Decimal if exact else float  # mutant\n",
         P4_MODEL_TEST,
         "test_nan_and_infinity_are_not_json",
     ),
@@ -19156,8 +19156,8 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_gate4: a reverted round's statements are dropped",
         P4S_GATE,
-        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)\n",
-        "    kept = (out / STOPPED_FILE,)  # mutant\n",
+        "    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE)\n",
+        "    kept = ()  # mutant\n",
         P4S_WRITE_TEST,
         "test_a_reverted_rounds_record_survives_a_re_plan_without_rows",
     ),
