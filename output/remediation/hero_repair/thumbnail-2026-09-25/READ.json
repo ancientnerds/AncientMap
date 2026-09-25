@@ -1,0 +1,57 @@
+{
+ "read_at": "2026-09-25T07:40:56Z",
+ "sites": [
+  {
+   "id": "9a9a0dca-52c8-44c2-94f6-adb655db17dd",
+   "name": "Lion Tombs of Dedan",
+   "source_id": "ancient_nerds",
+   "thumbnail_url": "/data/images/wiki/9a9a0dca/hero.webp"
+  }
+ ],
+ "images": [
+  {
+   "id": 87351,
+   "site_id": "9a9a0dca-52c8-44c2-94f6-adb655db17dd",
+   "filename": "Dedan_tomb_1.webp",
+   "is_hero": false,
+   "is_lead": false,
+   "sort_order": 1,
+   "is_excluded": true
+  },
+  {
+   "id": 87352,
+   "site_id": "9a9a0dca-52c8-44c2-94f6-adb655db17dd",
+   "filename": "hero.webp",
+   "is_hero": false,
+   "is_lead": true,
+   "sort_order": 0,
+   "is_excluded": true
+  }
+ ],
+ "journal": [
+  {
+   "id": 32263,
+   "run_stamp": "img-liveness-2026-09-23-001",
+   "row_pk": "87351",
+   "column_name": "is_excluded",
+   "old_value": "false",
+   "new_value": "true"
+  },
+  {
+   "id": 32264,
+   "run_stamp": "img-liveness-2026-09-23-001",
+   "row_pk": "87352",
+   "column_name": "is_excluded",
+   "old_value": "false",
+   "new_value": "true"
+  },
+  {
+   "id": 32265,
+   "run_stamp": "img-liveness-2026-09-23-001",
+   "row_pk": "87352",
+   "column_name": "is_hero",
+   "old_value": "true",
+   "new_value": "false"
+  }
+ ]
+}
