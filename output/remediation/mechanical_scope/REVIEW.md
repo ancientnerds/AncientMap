@@ -1,6 +1,6 @@
 # E4 scope decisions - per-site review
 
-Built 2026-09-25T07:20:53+00:00 from the production export of 2026-09-25 07:16:05.821323+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
+Built 2026-09-25T07:51:12+00:00 from the production export of 2026-09-25 07:51:09.199378+00. Read this before `apply.py --lane scope-e4 --apply`: every row below becomes two journalled cells (`scope_status`, `scope_reason`). `retired` hides the site everywhere a visitor, a crawler or a card draw reaches it; `pending` keeps it shown and flags it; `in_scope` records the decision to keep it. T11 ran over the live export, not the 2026-09-20 snapshot its evidence lines are labelled with (`snapshot:unified_sites...` is T11's wording for the rows it was given).
 
 What this lane does not do: it moves nothing. A retired duplicate keeps its images and content links; where the survivor has fewer (the counts are on each line below), moving them is a follow-up before the survivor's page is relied on. A `pending` row stays shown until its date or scope is settled - the evidence says what to settle.
 
