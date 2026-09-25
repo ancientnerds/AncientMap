@@ -77,7 +77,7 @@ RULES: dict[str, str] = {
     "A4": "author := the File page's {{Information|author=}} span (W7)",
     "L1": "is_excluded := true for a Commons file deleted as a copyright violation or for another stated reason; a hero among them loses the flag to the hero repair's own mechanical choice",
     "L2": "commons_page_url/original_url := the live target of a file moved without a redirect (evidence: the move logid)",
-    "T1": "unified_sites.thumbnail_url := '/data/images/wiki/<shard>/<served filename>' (hero_repair/thumbnail.py, W13)",
+    "T1": "unified_sites.thumbnail_url := '/data/images/wiki/<shard>/<served filename>', or NULL when the site serves no image (hero_repair/thumbnail.py, W13)",
 }
 
 

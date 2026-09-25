@@ -56,7 +56,9 @@ needs_label_source = pytest.mark.skipif(
 
 GALLERY_SHA = "b9a91ed10d1cba6dff89e394b85a9a03139f1056818b8b56f9a044aa2873c9f8"
 HERO_SHA = "56adb6fbe0f82541423a722740636995a2b9744ce9d4b7063d8d24062a30849b"
-RULES_SHA = "2380f7a0c286dbd5eef72231eab4eb37c6b31c0c296194495b31feca8a4ed523"
+#: 2026-09-25: T1 names what a site that serves no image gets (NULL; hero_repair/thumbnail.py).
+#: The liveness chunk applied on 2026-09-23 cites the table before that change, 2380f7a0...
+RULES_SHA = "419c4ff5b42bb64951db76436ba96aea9735f250dea7c0caf719796ac0ac3459"
 
 SITE = "0a1b2c3d-4e5f-6789-abcd-ef0123456789"
 SHARD = "0a1b2c3d"
