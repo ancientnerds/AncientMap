@@ -9161,3 +9161,39 @@ Bath is in it as the known positive. The check asks, per sentence: is its subjec
 business or institution that shares or contains the site's name rather than the ancient site? Any
 further hit takes the same path: `audit4.py hold` with the check's verdict file, `revert4.py
 --site`, the gate's proof, the acceptance.
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-pilot`, main venv)
+
+* 13 new test functions (23 items): `test_phase4_select.py` 1 (the line, its place; the full-order
+  test takes it in), `test_phase4_review.py` 1 (the cascade on a namesake lead), `test_phase4_write.py`
+  6 (10 items: `revert4 --site` - only the site's rows, every guard kept, the site id's form, the
+  command; the gate's re-plan without a reverted site, and a re-plan to other rows still refused,
+  which no test covered before), `test_phase4_accept.py` 1 (a site reverted alone: 0 deviations),
+  `test_phase4_runner.py` 4 (10 items: `audit4 hold`). Red first: the reviewer line's two tests, the
+  `--site` tests, the gate's re-plan test and the hold tests failed before their code; the review
+  cascade, the acceptance after a site revert, the other-rows refusal and the latest-batch test pass
+  on code that already did it and go red under their mutants.
+* 27 new sweep cases (`P4_MIDRUN_MUTATIONS`); 2,135 labels, all unique, every anchor and test
+  present. The sweep's own `main` (driver `logs/p4_mass/sweep_midrun.py`) over every case whose target
+  the change touched (write_gate4 45, run4 29, prompts4 28, revert4 26, audit4 22, review4 18,
+  AUDIT_LOG 5, mutation_sweep 3): **176/176 caught**, the tree byte-identical for its 8 files
+  (`logs/p4_mass/sweep_midrun.log` `a1668a63...`), `git status` clean afterwards, no `# mutant` line
+  left.
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`): **6,268 passed, 111
+  skipped, 57 deselected, 0 failed** (377 s; `logs/p4_mass/gates_pytest_midrun.log`), the same 111
+  skips (gitignored data) as before.
+* `ruff check` and `ruff format --check` clean on the 12 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check passes.
+* `phase3/mutation_sweep.py` changed again, so `mass_run.package_digest` over `phase3/` changes with
+  this branch; `phase4/` changed too (`mass4`'s digest `bcd11edf...` from the re-export on): a
+  `mass4` invocation started before these commits stops between batches on its digest guard.
+
+### Open
+
+* **The apply of the Roman Bath revert and its acceptance** (the commands above), then the
+  re-verification of the 336 written sites for this class; writes stay stopped until both are done.
+* **Group 5's 78 review questions** (`handoff/p4-mass-review`, p4-0042 .. p4-0049) are to be
+  answered under the new reviewer pin; the old answers stay in the stale directory.
+* **The selector's rule (8)** carries the same gap. It stays frozen while the mass run's selector
+  answers are given; whether to widen it for a later run is a decision for then.
