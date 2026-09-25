@@ -229,11 +229,16 @@ def read_jobs(path: Path) -> list[Job]:
     return jobs
 
 
-def write_jobs(path: Path, jobs: Iterable[Job]) -> str:
-    """JOBS.jsonl, one canonical line per job. Returns its sha256."""
-    text = "".join(
+def jobs_text(jobs: Iterable[Job]) -> str:
+    """The text of JOBS.jsonl: one canonical line per job."""
+    return "".join(
         json.dumps(job.as_json(), ensure_ascii=False, sort_keys=True) + "\n" for job in jobs
     )
+
+
+def write_jobs(path: Path, jobs: Iterable[Job]) -> str:
+    """JOBS.jsonl, one canonical line per job. Returns its sha256."""
+    text = jobs_text(jobs)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8", newline="\n")
@@ -646,6 +651,43 @@ def unanswered(jobs: Sequence[Job], ledger: Ledger, handoff: Path) -> list[str]:
     return problems
 
 
+def command_export(jobs: Sequence[Job], run_dir: Path, handoff: Path, *, dry_run: bool) -> int:
+    """`export`: the questions of every job the run's ledger holds no verdict for, to `handoff`."""
+    ledger = Ledger(run_dir / "VERDICTS.jsonl")
+    counts, missing = export_jobs(jobs, ledger, Images(), handoff, dry_run=dry_run)
+    print(
+        f"{'dry run' if dry_run else 'export'}: {len(jobs)} jobs, {counts['done']} already "
+        f"in the ledger, {counts['exported']} handed off, {counts['already']} handed off "
+        f"before, {len(missing)} image(s) not found or unreadable -> {handoff}"
+    )
+    for problem in missing[:20]:
+        print(f"  {problem}")
+    return EXIT_NO_VERDICT if missing else EXIT_OK
+
+
+def command_import(jobs: Sequence[Job], run_dir: Path, handoff: Path, *, budget_usd: float) -> int:
+    """`import`: nothing until every job has a valid Opus answer, then one ledger line per job."""
+    ledger = Ledger(run_dir / "VERDICTS.jsonl")
+    problems = unanswered(jobs, ledger, handoff)
+    if problems:
+        print(f"{len(problems)} job(s) have no valid Opus answer in {handoff}; nothing was written")
+        for problem in problems[:20]:
+            print(f"  {problem}")
+        return EXIT_INPUT
+    print(f"model={MODEL} handoff={handoff} jobs={len(jobs)}")
+    judge = Judge(handoff=handoff, images=Images())
+    result = run_jobs(jobs, ledger, judge, workers=1, budget_usd=budget_usd)
+    print(
+        f"judged {result.judged}, already in the ledger {result.skipped_done}, "
+        f"ledger spend ${ledger.spent_usd:.4f}"
+    )
+    for failure in result.failed:
+        print(f"NO VERDICT: {failure}")
+    if result.budget_stop:
+        print(f"BUDGET STOP: the ledger's spend reached ${budget_usd:.2f}")
+    return result.exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -662,38 +704,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     jobs = read_jobs(Path(args.jobs))
-    ledger = Ledger(Path(args.run_dir) / "VERDICTS.jsonl")
-    handoff = Path(args.handoff)
-    images = Images()
+    run_dir, handoff = Path(args.run_dir), Path(args.handoff)
     if args.command == "export":
-        counts, missing = export_jobs(jobs, ledger, images, handoff, dry_run=args.dry_run)
-        print(
-            f"{'dry run' if args.dry_run else 'export'}: {len(jobs)} jobs, {counts['done']} already "
-            f"in the ledger, {counts['exported']} handed off, {counts['already']} handed off "
-            f"before, {len(missing)} image(s) not found or unreadable -> {handoff}"
-        )
-        for problem in missing[:20]:
-            print(f"  {problem}")
-        return EXIT_NO_VERDICT if missing else EXIT_OK
-
-    problems = unanswered(jobs, ledger, handoff)
-    if problems:
-        print(f"{len(problems)} job(s) have no valid Opus answer in {handoff}; nothing was written")
-        for problem in problems[:20]:
-            print(f"  {problem}")
-        return EXIT_INPUT
-    print(f"model={MODEL} handoff={handoff} jobs={len(jobs)}")
-    judge = Judge(handoff=handoff, images=images)
-    result = run_jobs(jobs, ledger, judge, workers=1, budget_usd=args.budget_usd)
-    print(
-        f"judged {result.judged}, already in the ledger {result.skipped_done}, "
-        f"ledger spend ${ledger.spent_usd:.4f}"
-    )
-    for failure in result.failed:
-        print(f"NO VERDICT: {failure}")
-    if result.budget_stop:
-        print(f"BUDGET STOP: the ledger's spend reached ${args.budget_usd:.2f}")
-    return result.exit_code
+        return command_export(jobs, run_dir, handoff, dry_run=args.dry_run)
+    return command_import(jobs, run_dir, handoff, budget_usd=args.budget_usd)
 
 
 if __name__ == "__main__":

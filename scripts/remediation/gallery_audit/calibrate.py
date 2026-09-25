@@ -5,18 +5,27 @@ Order, enforced rather than promised
 1. ``seal``     writes ``THRESHOLDS.json`` from the constant below and appends its sha256 to
                 ``SEAL.jsonl``. It refuses when the run directory already holds a verdict ledger:
                 a threshold written after data exists is not a threshold.
-2. ``jobs``     writes the C1 ``JOBS.jsonl`` - and refuses unless the seal is in place and the
-                file on disk still hashes to it.
-3. the vision round through the Opus handoff (owner order 2026-09-23): `vision.py export --jobs
-   .../JOBS.jsonl --run-dir <this dir> --handoff H`, the orchestrator's Opus agents answer,
-   `opus_handoff.py validate --dir H`, then `vision.py import` with the same arguments - a
-   production operation of 939 questions. The thresholds name the model (`vision.MODEL`), so a
-   directory sealed for another model (`calibration-2026-09-23/`, the pilot's DeepSeek transport)
-   admits nothing of an Opus ledger, and the Opus calibration is sealed in a directory of its own.
-4. ``evaluate`` refuses a thresholds file whose sha256 is not the sealed one, and a ledger line
-   judged before the seal; then measures, and writes ``ADMISSION.json``, which `decide.py` reads.
-   The eye labels are named explicitly (``--eye-labels`` a file of this repository, or
-   ``--no-eye-labels``): a mistyped path is an error, never "no eye labels".
+2. ``jobs``     writes the C1 ``JOBS.jsonl`` - the sample, drawn from the three label sets - and
+                fixes it: its sha256 goes into ``SEAL.jsonl`` beside the thresholds'. It refuses
+                unless the seal is in place, the file still hashes to it, and no answer exists yet;
+                a fixed sample is never rewritten (the same sample again changes nothing).
+3. ``vision``   the vision round through the Opus handoff (owner order 2026-09-23: "no DeepSeek
+                any more - everything with Opus"), in two halves like the Phase-3/4 model stages:
+                ``--handoff-export H`` hands the fixed sample's questions and images to H
+                (`vision.command_export`); the orchestrator's Opus agents answer and
+                `opus_handoff.py validate --dir H` must be clean; ``--handoff-import H`` writes one
+                ledger line per question through vision's own parsing (`vision.command_import`).
+                Both halves read the sample only as it was fixed (`sealed_jobs`).
+4. ``evaluate`` refuses a thresholds file whose sha256 is not the sealed one, a sample that is not
+                the fixed one, and a ledger line judged before the seal; then measures, and writes
+                ``ADMISSION.json``, which `decide.py` reads. The eye labels are named explicitly
+                (``--eye-labels`` a file of this repository, or ``--no-eye-labels``): a mistyped
+                path is an error, never "no eye labels".
+
+The thresholds name the model the verdicts must be by (`vision.MODEL`). ``jobs``, ``vision`` and
+``evaluate`` refuse a directory sealed for another model: `calibration-2026-09-23/` was sealed for the
+pilot's DeepSeek transport and its run got no verdict (HTTP 401, kept in `failed-deepseek-401/`), so
+the Opus calibration is sealed in a directory of its own.
 
 No threshold changes after its data is seen; a trigger that fails is dropped, not re-tuned.
 
@@ -40,6 +49,7 @@ Counts are reported with Clopper-Pearson intervals (the project's own implementa
 Usage:
     calibrate.py seal --run-dir DIR
     calibrate.py jobs --run-dir DIR --hero-moves PLAN.jsonl [--snapshot DIR] [--cache DIR] [--t10 F]
+    calibrate.py vision --run-dir DIR (--handoff-export H | --handoff-import H) [--budget-usd 75]
     calibrate.py evaluate --run-dir DIR (--eye-labels LABELS.jsonl | --no-eye-labels)
 """
 
@@ -178,6 +188,26 @@ def seal(run_dir: Path, *, now: Callable[[], str] = _now) -> str:
     return digest
 
 
+#: The two kinds of line `SEAL.jsonl` holds: the thresholds' seal (`seal`) and the fixed C1 sample
+#: (`jobs`). A line is exactly one of them.
+SEALED_KEY = "thresholds_sha256"
+FIXED_KEY = "jobs_sha256"
+
+
+def _seal_log(run_dir: Path) -> list[dict[str, Any]]:
+    log = run_dir / SEAL_LOG
+    entries = [
+        json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+    for entry in entries:
+        if (SEALED_KEY in entry) == (FIXED_KEY in entry):
+            raise CalibrationError(
+                f"{log}: a line that is neither the thresholds' seal nor the fixed sample "
+                f"({sorted(entry)})"
+            )
+    return entries
+
+
 def sealed(run_dir: Path) -> tuple[dict[str, Any], str, str]:
     """(thresholds, sha256, sealed_at) - refusing a file that is not the one the log sealed."""
     log = run_dir / SEAL_LOG
@@ -186,9 +216,7 @@ def sealed(run_dir: Path) -> tuple[dict[str, Any], str, str]:
         raise CalibrationError(
             f"{run_dir} is not sealed - run `calibrate.py seal` before anything else"
         )
-    entries = [
-        json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()
-    ]
+    entries = [entry for entry in _seal_log(run_dir) if SEALED_KEY in entry]
     if len({e["thresholds_sha256"] for e in entries}) != 1:
         raise CalibrationError(f"{log} records more than one thresholds hash")
     text = path.read_text(encoding="utf-8")
@@ -201,7 +229,75 @@ def sealed(run_dir: Path) -> tuple[dict[str, Any], str, str]:
     return json.loads(text), digest, str(entries[0]["sealed_at"])
 
 
+def sealed_for_model(run_dir: Path) -> tuple[dict[str, Any], str, str]:
+    """`sealed`, refusing a directory sealed for another model than the one the verdicts are by.
+
+    `vision.verdicts_by_image` counts only verdicts by `vision.MODEL`, so a directory whose
+    thresholds name another model can admit nothing: its sample is not fixed, its questions are not
+    handed off, and it is not measured.
+    """
+    thresholds, digest, sealed_at = sealed(run_dir)
+    model = thresholds["definitions"]["model"]
+    if model != vision.MODEL:
+        raise CalibrationError(
+            f"{run_dir} was sealed for {model!r}; the verdicts are by {vision.MODEL!r} - seal a "
+            "directory of its own for them"
+        )
+    return thresholds, digest, sealed_at
+
+
 # ------------------------------------------------------------------------------ the jobs
+def _fixable(run_dir: Path) -> None:
+    """The sample may be fixed here: sealed for today's model, and no answer written yet."""
+    sealed_for_model(run_dir)
+    if (run_dir / LEDGER_FILE).exists():
+        raise CalibrationError(
+            f"{run_dir / LEDGER_FILE} exists - the C1 job list is fixed before the first call"
+        )
+
+
+def fix_jobs(run_dir: Path, jobs: Sequence[vision.Job], *, now: Callable[[], str] = _now) -> str:
+    """Write the C1 sample (JOBS.jsonl) and log its sha256 in SEAL.jsonl. Returns the sha256.
+
+    After the seal and before the first answer; once. The same sample again rewrites the same
+    bytes and logs nothing; another sample is refused - a fixed sample is never rewritten.
+    """
+    _fixable(run_dir)
+    digest = _sha(vision.jobs_text(jobs))
+    fixed = {entry[FIXED_KEY] for entry in _seal_log(run_dir) if FIXED_KEY in entry}
+    if fixed - {digest}:
+        raise CalibrationError(
+            f"{run_dir} fixed its C1 sample as {sorted(fixed)[0][:16]}, this one hashes to "
+            f"{digest[:16]} - a fixed sample is never rewritten: seal a new directory"
+        )
+    vision.write_jobs(run_dir / JOBS_FILE, jobs)
+    if not fixed:
+        with open(run_dir / SEAL_LOG, "a", encoding="utf-8", newline="\n") as handle:
+            line = {FIXED_KEY: digest, "jobs": len(jobs), "fixed_at": now()}
+            handle.write(json.dumps(line, sort_keys=True) + "\n")
+    return digest
+
+
+def sealed_jobs(run_dir: Path) -> tuple[list[vision.Job], str]:
+    """(the C1 jobs, their sha256) exactly as they were fixed - refusing a sample never fixed,
+    fixed twice, or changed since."""
+    sealed_for_model(run_dir)
+    fixed = sorted({entry[FIXED_KEY] for entry in _seal_log(run_dir) if FIXED_KEY in entry})
+    if len(fixed) != 1:
+        raise CalibrationError(
+            f"{run_dir / SEAL_LOG} fixes {len(fixed)} C1 samples - run `calibrate.py jobs` once, "
+            "after the seal and before the first question"
+        )
+    path = run_dir / JOBS_FILE
+    digest = _sha(path.read_text(encoding="utf-8")) if path.is_file() else None
+    if digest != fixed[0]:
+        raise CalibrationError(
+            f"{path} is not the sample the seal log fixed ({fixed[0][:16]}): it changed after it "
+            "was fixed"
+        )
+    return vision.read_jobs(path), fixed[0]
+
+
 def c1_jobs(
     state: worklist.State, tiles: Sequence[labels.PilotTile], labelled: Sequence[labels.LabelledRow]
 ) -> list[vision.Job]:
@@ -222,6 +318,16 @@ def c1_jobs(
         if t.tier == "A"
     ]
     return jobs
+
+
+def c1_round(run_dir: Path, handoff: Path, *, export: bool, budget_usd: float) -> int:
+    """One half of the C1 vision round, on the fixed sample only: the export hands its questions
+    and images to the Opus handoff, the import writes the validated answers into this directory's
+    ledger through vision's own parsing."""
+    jobs, _ = sealed_jobs(run_dir)
+    if export:
+        return vision.command_export(jobs, run_dir, handoff, dry_run=False)
+    return vision.command_import(jobs, run_dir, handoff, budget_usd=budget_usd)
 
 
 # ------------------------------------------------------------------------------ measuring
@@ -388,11 +494,11 @@ def admission_record(run_dir: Path, eye_labels: str | None) -> dict[str, Any]:
     eye labels. Nothing in the record depends on when it was made, so the same inputs give the
     same bytes.
     """
-    thresholds, digest, sealed_at = sealed(run_dir)
+    thresholds, digest, sealed_at = sealed_for_model(run_dir)
+    jobs, jobs_digest = sealed_jobs(run_dir)
     ledger_path = run_dir / LEDGER_FILE
     if not ledger_path.is_file():
         raise CalibrationError(f"{ledger_path} does not exist - run the C1 vision run first")
-    jobs = vision.read_jobs(run_dir / JOBS_FILE)
     ledger = vision.Ledger(ledger_path).lines
     early = [e for e in ledger if str(e.line["judged_at"]) < sealed_at]
     if early:
@@ -415,7 +521,7 @@ def admission_record(run_dir: Path, eye_labels: str | None) -> dict[str, Any]:
     return {
         "thresholds_sha256": digest,
         "sealed_at": sealed_at,
-        "jobs_sha256": _sha((run_dir / JOBS_FILE).read_text(encoding="utf-8")),
+        "jobs_sha256": jobs_digest,
         "ledger_sha256": _sha(ledger_path.read_text(encoding="utf-8")),
         "ledger_lines": len(ledger),
         "eye_labels": eye_labels,
@@ -464,7 +570,7 @@ def verify_admission(run_dir: Path) -> tuple[dict[str, Any], str]:
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("seal", "jobs", "evaluate"):
+    for name in ("seal", "jobs", "vision", "evaluate"):
         cmd = sub.add_parser(name)
         cmd.add_argument("--run-dir", required=True)
         if name == "jobs":
@@ -472,6 +578,12 @@ def main(argv: Iterable[str] | None = None) -> int:
             cmd.add_argument("--cache", default=str(worklist.DEFAULT_CACHE))
             cmd.add_argument("--t10", default=str(worklist.DEFAULT_T10))
             cmd.add_argument("--hero-moves", default=str(worklist.DEFAULT_HERO_MOVES))
+        if name == "vision":
+            # one half of the round, named - as the Phase-3/4 model stages take it
+            half = cmd.add_mutually_exclusive_group(required=True)
+            half.add_argument("--handoff-export", metavar="DIR", default=None)
+            half.add_argument("--handoff-import", metavar="DIR", default=None)
+            cmd.add_argument("--budget-usd", type=float, default=vision.DEFAULT_BUDGET_USD)
         if name == "evaluate":
             eye = cmd.add_mutually_exclusive_group(required=True)
             eye.add_argument(
@@ -488,19 +600,20 @@ def main(argv: Iterable[str] | None = None) -> int:
         print(f"sealed {run_dir / THRESHOLDS_FILE}: sha256 {seal(run_dir)}")
         return 0
     if args.command == "jobs":
-        sealed(run_dir)
-        if (run_dir / LEDGER_FILE).exists():
-            raise CalibrationError(
-                f"{run_dir / LEDGER_FILE} exists - the C1 job list is fixed before the first call"
-            )
+        _fixable(run_dir)  # before the state is built: that takes a while, the refusal does not
         state = worklist.build_state(
             Path(args.snapshot), Path(args.cache), Path(args.hero_moves), Path(args.t10)
         )
         jobs = c1_jobs(state, labels.pilot_tiles(), labels.load_labelled())
+        digest = fix_jobs(run_dir, jobs)
         print(
-            f"{len(jobs)} C1 jobs -> {run_dir / JOBS_FILE} (sha256 {vision.write_jobs(run_dir / JOBS_FILE, jobs)})"
+            f"{len(jobs)} C1 jobs -> {run_dir / JOBS_FILE}, fixed in {SEAL_LOG} (sha256 {digest})"
         )
         return 0
+    if args.command == "vision":
+        export = args.handoff_export is not None
+        handoff = Path(args.handoff_export if export else args.handoff_import)
+        return c1_round(run_dir, handoff, export=export, budget_usd=args.budget_usd)
     admission = command_evaluate(run_dir, None if args.no_eye_labels else Path(args.eye_labels))
     print(json.dumps({k: admission[k] for k in ("admitted", "metrics")}, indent=1, sort_keys=True))
     return 0

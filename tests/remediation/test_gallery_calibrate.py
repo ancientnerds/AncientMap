@@ -7,16 +7,20 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+from PIL import Image
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+import opus_handoff as OH  # noqa: E402
 from gallery_audit import calibrate, decide, labels, vision, worklist  # noqa: E402
 
 #: Today's sealed thresholds. They name the model the verdicts must be by (`vision.MODEL`), so the
@@ -333,7 +337,7 @@ def test_the_strict_pass_is_not_admitted_without_eye_labels() -> None:
 
 def test_a_verdict_judged_before_the_seal_is_refused(tmp_path: Path) -> None:
     calibrate.seal(tmp_path, now=lambda: "2026-09-23T10:00:00Z")
-    vision.write_jobs(tmp_path / "JOBS.jsonl", [_job(1)])
+    calibrate.fix_jobs(tmp_path, [_job(1)], now=lambda: "2026-09-23T10:01:00Z")
     early = _line(1, judged_at="2026-09-23T09:59:59Z")
     (tmp_path / "VERDICTS.jsonl").write_text(
         json.dumps(early.line, sort_keys=True) + "\n", encoding="utf-8"
@@ -342,13 +346,24 @@ def test_a_verdict_judged_before_the_seal_is_refused(tmp_path: Path) -> None:
         calibrate.command_evaluate(tmp_path, None)
 
 
+def _c1_ids() -> list[int]:
+    definitions = calibrate.THRESHOLDS["definitions"]
+    return [1, 2, 11, 12, *definitions["gold_foreign"], *definitions["gold_correct"]]
+
+
 def _c1_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, drop: int | None = None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    drop: int | None = None,
+    ledger: bool = True,
 ) -> tuple[Path, Path]:
     """A sealed C1 run directory over small label sets, with its ledger and W8-style eye labels.
 
     The repository root is `tmp_path` (the eye labels must be a repository file), the thresholds
-    are the real sealed ones. `drop` leaves one gallery verdict out of the ledger (T0 fails).
+    are the real sealed ones and the sample is fixed through `fix_jobs`, as `calibrate.py jobs`
+    fixes it. `drop` leaves one gallery verdict out of the ledger (T0 fails); `ledger=False` writes
+    none, for a round that has yet to be answered.
     """
     monkeypatch.setattr(calibrate, "ROOT", tmp_path)
     tiles = [
@@ -363,13 +378,17 @@ def _c1_dir(
     monkeypatch.setattr(labels, "load_labelled", lambda: labelled)
     run = tmp_path / "calibration"
     calibrate.seal(run, now=lambda: "2026-09-23T10:00:00Z")
-    definitions = calibrate.THRESHOLDS["definitions"]
-    ids = [1, 2, 11, 12, *definitions["gold_foreign"], *definitions["gold_correct"]]
-    vision.write_jobs(run / "JOBS.jsonl", [_job(i) for i in ids] + [_job(1, vision.HERO)])
-    lines = [_line(i).line for i in ids if i != drop] + [_line(1, vision.HERO).line]
-    (run / "VERDICTS.jsonl").write_text(
-        "".join(vision.line_text(line) + "\n" for line in lines), encoding="utf-8", newline="\n"
+    ids = _c1_ids()
+    calibrate.fix_jobs(
+        run, [_job(i) for i in ids] + [_job(1, vision.HERO)], now=lambda: "2026-09-23T10:01:00Z"
     )
+    if ledger:
+        lines = [_line(i).line for i in ids if i != drop] + [_line(1, vision.HERO).line]
+        (run / "VERDICTS.jsonl").write_text(
+            "".join(vision.line_text(line) + "\n" for line in lines),
+            encoding="utf-8",
+            newline="\n",
+        )
     eye = tmp_path / "LABELS.jsonl"
     eye.write_text(
         json.dumps(
@@ -576,10 +595,201 @@ def test_the_versioned_c1_directory_is_the_deepseek_seal_and_admits_no_opus_verd
     jobs = vision.read_jobs(CALIBRATION / "JOBS.jsonl")
     assert len(jobs) == 939 and sum(job.pass_ == vision.HERO for job in jobs) == 50
     assert {job.stage for job in jobs} == {calibrate.C1}
-    ledger = CALIBRATION / "VERDICTS.jsonl"
-    if ledger.exists():  # the pilot transport's run, after the seal: no verdict of it counts today
-        lines = vision.Ledger(ledger).lines
-        assert all(str(e.line["judged_at"]) >= sealed_at for e in lines)
-        if any(e.ok for e in lines):
-            with pytest.raises(vision.VisionError, match="answered by"):
-                vision.verdicts_by_image(lines, vision.GALLERY_PROMPT_ID)
+    assert str(sealed_at) == "2026-09-23T04:10:40Z"
+
+
+# ======================================================================= the fixed C1 sample
+def _sealed(tmp_path: Path) -> Path:
+    run = tmp_path / "calibration"
+    calibrate.seal(run, now=lambda: "2026-09-25T10:00:00Z")
+    return run
+
+
+def _log(run: Path) -> list[dict[str, Any]]:
+    text = (run / "SEAL.jsonl").read_text(encoding="utf-8")
+    return [json.loads(line) for line in text.splitlines()]
+
+
+def test_the_c1_sample_is_fixed_in_the_seal_log_after_the_thresholds(tmp_path: Path) -> None:
+    run = tmp_path / "calibration"
+    with pytest.raises(calibrate.CalibrationError, match="is not sealed"):
+        calibrate.fix_jobs(run, [_job(1)])
+    run = _sealed(tmp_path)
+    digest = calibrate.fix_jobs(run, [_job(1), _job(2)], now=lambda: "2026-09-25T10:05:00Z")
+    assert digest == hashlib.sha256((run / "JOBS.jsonl").read_bytes()).hexdigest()
+    assert _log(run) == [
+        {"thresholds_sha256": THRESHOLDS_SHA, "sealed_at": "2026-09-25T10:00:00Z"},
+        {"jobs_sha256": digest, "jobs": 2, "fixed_at": "2026-09-25T10:05:00Z"},
+    ]
+    # the seal is still the thresholds', and the sample reads back as it was fixed
+    assert calibrate.sealed(run)[1:] == (THRESHOLDS_SHA, "2026-09-25T10:00:00Z")
+    jobs, fixed = calibrate.sealed_jobs(run)
+    assert fixed == digest and [job.image_id for job in jobs] == [1, 2]
+    # the same sample again changes nothing, not even the log
+    assert calibrate.fix_jobs(run, [_job(1), _job(2)]) == digest
+    assert len(_log(run)) == 2
+
+
+def test_a_fixed_sample_is_never_rewritten_and_not_read_once_edited(tmp_path: Path) -> None:
+    run = _sealed(tmp_path)
+    calibrate.fix_jobs(run, [_job(1), _job(2)])
+    with pytest.raises(calibrate.CalibrationError, match="never rewritten"):
+        calibrate.fix_jobs(run, [_job(1)])
+    assert len(_log(run)) == 2
+    (run / "JOBS.jsonl").write_text(vision.jobs_text([_job(1)]), encoding="utf-8", newline="\n")
+    with pytest.raises(calibrate.CalibrationError, match="changed after it was fixed"):
+        calibrate.sealed_jobs(run)
+
+
+def test_the_sample_is_fixed_once_and_before_the_first_answer(tmp_path: Path) -> None:
+    run = _sealed(tmp_path)
+    with pytest.raises(calibrate.CalibrationError, match="run `calibrate.py jobs`"):
+        calibrate.sealed_jobs(run)  # sealed, but no sample fixed yet
+    calibrate.fix_jobs(run, [_job(1)])
+    with open(run / "SEAL.jsonl", "a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"jobs_sha256": "0" * 64, "jobs": 1, "fixed_at": "x"}) + "\n")
+    with pytest.raises(calibrate.CalibrationError, match="fixes 2 C1 samples"):
+        calibrate.sealed_jobs(run)
+    late = _sealed(tmp_path / "late")
+    (late / "VERDICTS.jsonl").write_text("", encoding="utf-8")
+    with pytest.raises(calibrate.CalibrationError, match="fixed before the first call"):
+        calibrate.fix_jobs(late, [_job(1)])
+    assert not (late / "JOBS.jsonl").exists()
+
+
+def test_a_seal_log_line_that_is_neither_seal_nor_sample_is_refused(tmp_path: Path) -> None:
+    run = _sealed(tmp_path)
+    with open(run / "SEAL.jsonl", "a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"note": "answered by Opus"}) + "\n")
+    with pytest.raises(calibrate.CalibrationError, match="neither"):
+        calibrate.sealed(run)
+
+
+def _deepseek_copy(tmp_path: Path) -> Path:
+    run = tmp_path / "deepseek"
+    run.mkdir()
+    for name in ("THRESHOLDS.json", "SEAL.jsonl", "JOBS.jsonl"):
+        shutil.copyfile(CALIBRATION / name, run / name)
+    return run
+
+
+def test_a_directory_sealed_for_another_model_is_never_fixed_asked_or_measured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`calibration-2026-09-23/` names the pilot's DeepSeek model: no Opus question comes from it."""
+    run = _deepseek_copy(tmp_path)
+    before = {p.name: p.read_bytes() for p in run.iterdir()}
+    refused = "sealed for 'deepseek-v4-flash-vision-exp'"
+    with pytest.raises(calibrate.CalibrationError, match=refused):
+        calibrate.fix_jobs(run, [_job(1)])
+    handoff = tmp_path / "handoff"
+    for half in ("--handoff-export", "--handoff-import"):
+        with pytest.raises(calibrate.CalibrationError, match=refused):
+            calibrate.main(["vision", "--run-dir", str(run), half, str(handoff)])
+    (run / "VERDICTS.jsonl").write_text("", encoding="utf-8")
+    with pytest.raises(calibrate.CalibrationError, match=refused):
+        calibrate.command_evaluate(run, None)
+    (run / "VERDICTS.jsonl").unlink()
+
+    def no_state(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("the state is built only for a directory its sample may be fixed in")
+
+    monkeypatch.setattr(worklist, "build_state", no_state)
+    with pytest.raises(calibrate.CalibrationError, match=refused):
+        calibrate.main(["jobs", "--run-dir", str(run)])
+    assert not handoff.exists()
+    assert {p.name: p.read_bytes() for p in run.iterdir()} == before
+
+
+def test_the_jobs_command_fixes_the_sample_it_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _sealed(tmp_path)
+    monkeypatch.setattr(worklist, "build_state", lambda *args: "state")
+    monkeypatch.setattr(labels, "pilot_tiles", lambda: [])
+    monkeypatch.setattr(labels, "load_labelled", lambda: [])
+    monkeypatch.setattr(calibrate, "c1_jobs", lambda state, tiles, labelled: [_job(7), _job(8)])
+    assert calibrate.main(["jobs", "--run-dir", str(run)]) == 0
+    jobs, digest = calibrate.sealed_jobs(run)
+    assert [job.image_id for job in jobs] == [7, 8]
+    assert _log(run)[1]["jobs_sha256"] == digest
+
+
+# ======================================================================= the C1 handoff round
+SHARD = SITE[:8]
+GALLERY_ANSWER = json.dumps(
+    {"kind": "site_photo", "other_site": False, "other_place": "", "subject": "stone row"}
+)
+HERO_ANSWER = '{"shows_archaeology": true, "structure": "stone row", "generic_landscape": false}'
+
+
+def _offsite(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ids: list[int]) -> None:
+    """One real image per job (`_job` names `<id>.webp` on SITE), as the offsite copy lays it out."""
+    root = tmp_path / "offsite"
+    (root / SHARD).mkdir(parents=True)
+    for n, image_id in enumerate(ids):
+        buf = io.BytesIO()
+        Image.new("RGB", (40 + n, 30), (100, 80 + n, 60)).save(buf, format="WEBP")
+        (root / SHARD / f"{image_id}.webp").write_bytes(buf.getvalue())
+    real = vision.Images
+    monkeypatch.setattr(vision, "Images", lambda: real((root,)))
+
+
+def test_the_c1_questions_go_through_the_handoff_and_are_measured_by_the_sealed_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """export -> an Opus agent answers each question -> validate -> import -> evaluate."""
+    run, eye = _c1_dir(tmp_path, monkeypatch, ledger=False)
+    _offsite(tmp_path, monkeypatch, _c1_ids())
+    jobs, digest = calibrate.sealed_jobs(run)
+    handoff = tmp_path / "handoff"
+    ask = ["vision", "--run-dir", str(run)]
+    with pytest.raises(SystemExit):
+        calibrate.main(ask)  # one half of the round, named: never a silent default
+    assert calibrate.main([*ask, "--handoff-import", str(handoff)]) == vision.EXIT_INPUT
+    assert not (run / "VERDICTS.jsonl").exists()  # nothing was answered: nothing is written
+
+    assert calibrate.main([*ask, "--handoff-export", str(handoff)]) == vision.EXIT_OK
+    lines = OH.manifest(handoff)
+    assert [line["label"] for line in lines] == [vision.job_label(job) for job in jobs]
+    assert {line["batch_id"] for line in lines} == {calibrate.C1}
+    assert len(list((handoff / OH.IMAGES_DIR).iterdir())) == len(_c1_ids())
+    report = OH.validate(handoff)
+    assert (len(report.answered), len(report.missing)) == (0, len(jobs))
+    for line in lines:
+        OH.write_answer(
+            handoff,
+            batch_id=line["batch_id"],
+            stage=line["stage"],
+            label=line["label"],
+            text=GALLERY_ANSWER if line["field"] == vision.GALLERY else HERO_ANSWER,
+            answered_by="test-agent",
+        )
+    assert OH.validate(handoff).ok
+
+    assert calibrate.main([*ask, "--handoff-import", str(handoff)]) == vision.EXIT_OK
+    ledger = vision.Ledger(run / "VERDICTS.jsonl").lines
+    assert len(ledger) == len(jobs)
+    assert all(e.ok and e.line["model"] == vision.MODEL for e in ledger)
+    assert {e.line["answered_by"] for e in ledger} == {"test-agent"}
+    record = calibrate.command_evaluate(run, eye)
+    assert record["metrics"]["T0"] == {**record["metrics"]["T0"], "pass": True, "jobs": len(jobs)}
+    assert record["jobs_sha256"] == digest
+
+
+def test_a_sample_edited_after_it_was_fixed_is_neither_asked_nor_measured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, eye = _c1_dir(tmp_path, monkeypatch)
+    calibrate.command_evaluate(run, eye)
+    jobs, _ = calibrate.sealed_jobs(run)
+    (run / "JOBS.jsonl").write_text(vision.jobs_text(jobs[:-1]), encoding="utf-8", newline="\n")
+    handoff = tmp_path / "handoff"
+    for half in ("--handoff-export", "--handoff-import"):
+        with pytest.raises(calibrate.CalibrationError, match="changed after it was fixed"):
+            calibrate.main(["vision", "--run-dir", str(run), half, str(handoff)])
+    assert not handoff.exists()
+    with pytest.raises(calibrate.CalibrationError, match="changed after it was fixed"):
+        calibrate.command_evaluate(run, eye)
+    with pytest.raises(calibrate.CalibrationError, match="changed after it was fixed"):
+        calibrate.verify_admission(run)
