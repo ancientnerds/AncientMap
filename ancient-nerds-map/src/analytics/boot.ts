@@ -12,7 +12,7 @@
  * (utils/translatedDom.ts) - the cause of every removeChild js_error so far.
  */
 
-import { onCLS, onINP, onLCP, onTTFB, type Metric } from 'web-vitals'
+import { onCLS, onINP, onLCP, onTTFB, type MetricWithAttribution } from 'web-vitals/attribution'
 
 import { tolerateDetachedNodes } from '../utils/translatedDom'
 import { MAX_VALUE_CHARS, pageType, track } from './index'
@@ -66,9 +66,42 @@ export function outboundHost(href: string, ownHost: string): string | null {
   return host === own || host.endsWith(`.${own}`) ? null : host
 }
 
-function reportVital(metric: Metric): void {
+/** The part of a time span that took longest, by name. */
+function longest(parts: Record<string, number>): string {
+  return Object.entries(parts).reduce((a, b) => (b[1] > a[1] ? b : a))[0]
+}
+
+/** A vital as event props. An INP or LCP that is not good also says where it
+ *  went: the element (`target`, a CSS selector) and the phase that took
+ *  longest, so the dashboard can tell a slow handler from a slow frame. On
+ *  2026-09-26 the globe's INP p75 on computers was 1.9 s and nothing could
+ *  say which interaction; 5 of 19 samples, all of them with the background
+ *  queue at work, could only be matched by time. */
+export function vitalProps(metric: MetricWithAttribution, page: string): Record<string, string | number> {
   const value = metric.name === 'CLS' ? Math.round(metric.value * 1000) / 1000 : Math.round(metric.value)
-  track('vital', { name: metric.name, value, rating: metric.rating, page: pageType(location.pathname) })
+  const props: Record<string, string | number> = { name: metric.name, value, rating: metric.rating, page }
+  if (metric.rating === 'good') return props
+  if (metric.name === 'INP') {
+    const a = metric.attribution
+    props.phase = longest({ input: a.inputDelay, processing: a.processingDuration, presentation: a.presentationDelay })
+    if (a.interactionTarget) props.target = a.interactionTarget
+    if (a.interactionType) props.input = a.interactionType
+    props.load = a.loadState
+  } else if (metric.name === 'LCP') {
+    const a = metric.attribution
+    props.phase = longest({
+      ttfb: a.timeToFirstByte,
+      load_delay: a.resourceLoadDelay,
+      load: a.resourceLoadDuration,
+      render: a.elementRenderDelay,
+    })
+    if (a.target) props.target = a.target
+  }
+  return props
+}
+
+function reportVital(metric: MetricWithAttribution): void {
+  track('vital', vitalProps(metric, pageType(location.pathname)))
 }
 
 const EXTENSION_URL = /(chrome|moz|safari|safari-web|ms-browser)-extension:\/\//

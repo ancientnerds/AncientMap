@@ -232,6 +232,10 @@ LIMIT 50
 #: a percentile is only a percentile over enough *measurements*
 #: (stats_analysis.VITAL_MIN_SAMPLES), while the panel's score weighs the
 #: *visitors* it reached, like every other kind on that panel.
+#: `phase` and `target` travel on an INP or LCP that was not good (since
+#: 2026-09-26, src/analytics/boot.ts vitalProps): the longest part of it and
+#: the element. The row names the most frequent of each among its slow
+#: samples - where the page usually loses the time.
 SQL_VITALS = (
     """
 WITH ev AS (
@@ -240,7 +244,9 @@ WITH ev AS (
         e.session_id, e.created_at, s.country, s.device, s.browser,
         max(d.string_value) FILTER (WHERE d.data_key = 'page')  AS page,
         max(d.string_value) FILTER (WHERE d.data_key = 'name')  AS name,
-        max(d.number_value) FILTER (WHERE d.data_key = 'value') AS metric_value
+        max(d.number_value) FILTER (WHERE d.data_key = 'value') AS metric_value,
+        max(d.string_value) FILTER (WHERE d.data_key = 'phase')  AS phase,
+        max(d.string_value) FILTER (WHERE d.data_key = 'target') AS target
     FROM website_event e
     JOIN event_data d ON d.website_event_id = e.event_id
     JOIN session s ON s.session_id = e.session_id
@@ -254,6 +260,8 @@ SELECT
     percentile_cont(0.75) WITHIN GROUP (ORDER BY metric_value::float8) AS p75,
     count(*) AS samples,
     count(DISTINCT session_id) AS sessions,
+    mode() WITHIN GROUP (ORDER BY phase) FILTER (WHERE phase IS NOT NULL) AS top_phase,
+    mode() WITHIN GROUP (ORDER BY target) FILTER (WHERE target IS NOT NULL) AS top_target,
 """
     + _LAST_VISITOR
     + """
