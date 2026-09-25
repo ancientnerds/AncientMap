@@ -9368,3 +9368,225 @@ are moved aside first - the gate refuses the apply root otherwise.
 * **L's apply**, after the mass run's last P4 step is accepted: the commands above.
 * **HUMAN_ONLY D7**: 18 unclaimed today (10 same as d4526691, 8 not in it), listed per batch in
   `logs/_write_apply_p4l/*/UNCLAIMED.jsonl` of the apply's plan.
+
+## 2026-09-25 - Phase-4 mass run: 1,578 sites planned, 960 written in 13 accepted steps, 2 taken back, 984 live, 0 deviations
+
+Branch `wip/p4-pilot` (worktree `.claude/worktrees/p4-pilot`), run `runs/mass-2026-09-25`, plan
+`PLAN4.scope.jsonl` (`fec90379...`, unchanged since the defect-scope entry), apply root
+`logs/_write_apply_p4` - all gitignored. **Production was written by the P4 group only**
+(`description` and its `raw_data` provenance of defect-scope sites, stamps
+`phase4:p4-NNNN:chunk-0001`), every step rehearsed, applied, read back with its inverse proof and
+accepted by `verify_writes4.py`; two written sites were taken back with `revert4.py --site`. Every
+model question was answered by Opus through the handoff; **no DeepSeek, Pi, opencode gateway or
+MiniMax was called, and no search was made**. The short result is `phase4_runner/MASS_RESULT.md`.
+The mid-run audit's hit, the reviewer fix and the single-site revert path are the entry "Phase-4 mass
+run: the mid-run audit's WRONG_SITE (Roman Bath, York)" above; this entry records the whole run.
+
+### The scope and the stages before any question
+
+* **1,578 sites in 106 batches, `p4-0010` .. `p4-0115`**: 12 groups of 8 batches (120 sites each) and
+  a last group of 10 batches (138 sites). Every `mass4.py` round printed `defect scope SCOPE4.json v1
+  19a57e9fd17f5360: 0 site(s) of the open batches outside it`, every `write_gate4.py` call `120 of the
+  run's 120 sites` (the last group 138 of 138): the scope refusal `outside-defect-scope` had no
+  mass-run site to refuse.
+* S0-S3 export for all 106 batches in one round, 2026-09-24 23:29-23:40 CEST
+  (`logs/p4_mass/export.out`, `--stages prepare,sources,routes,select --searches-off --handoff-export
+  handoff/p4-mass-select`, `STAGE_EXIT=0`; "searches off: every routes stage is told 0 and builds no
+  MiniMax client"). Lanes at S1b (`lanes.jsonl` of every batch): **W 1,321, S 100, none 157**. The 157
+  were held before any question: `search-stopped` 103 (the T, R and B3 candidates; searches off),
+  `scope-pending` 35, `revision-too-fresh` 19.
+* The run's ledger (`runs/mass-2026-09-25/LEDGER.jsonl`, `55b48e29...`): 4,485 lines - 2,090 fetch lines
+  (2,086 ok, 4 HTTP errors), 2,395 model lines (select 1,392, review 1,003), every one
+  `anthropic/claude-opus-5-5 (Claude Code agent)`, unmetered; `progress.json`: `calls 2395, cost_usd
+  0.0, searches 0`.
+
+### The Opus handoff, group by group
+
+Each group went through the same sequence, run by the orchestrator's helper `C:/tmp/p4m_group.sh`
+(its header: "orchestrator helper, not versioned"; modes `select` and `review`); every command's
+header and exit line are in `logs/p4_mass/group-p4-NNNN-select.log` and `-review.log`, group 1's in
+the per-batch logs:
+
+1. the group's selector questions answered in `handoff/p4-mass-select` (`opus_handoff.py answer`),
+   `opus_handoff.py validate` (answered, stale, malformed), then `mass4.py --plan PLAN4.scope.jsonl
+   --run-dir runs/mass-2026-09-25 --log-dir logs/p4_mass --only <group> --searches-off --live
+   --stages select --handoff-import handoff/p4-mass-select`;
+2. `--stages translate --handoff-export handoff/p4-mass-translate` (lane T is closed: no question, no
+   directory; the helper stops with exit 2 should one appear), then `--stages
+   translate,assemble,verify --handoff-import` from it, then `--stages review --handoff-export
+   handoff/p4-mass-review`;
+3. the review questions answered, `validate`, `--stages review --handoff-import
+   handoff/p4-mass-review`, `run4.py holds --run-dir runs/mass-2026-09-25`;
+4. `write_gate4.py --group P4 --run mass-2026-09-25 --open-lanes W,S --batch <each of the group's>`:
+   dry, `--rehearse` (every APPLY ending in ROLLBACK; `every open batch rehearsed`), `--apply --step
+   100` - `STEP COMPLETE: <n> site(s) written in <b> batch(es)`, `WRITE_EXIT=0`;
+5. `verify_writes4.py --lane p4 --plan logs/_write_apply_p4/LANE_PLAN.jsonl --run
+   runs/pilot4-2026-09-24 --run runs/mass-2026-09-25 > logs/p4_mass/accept-step-NN.log`, and only on
+   `ACCEPT_EXIT=0` the same gate call with `--accept` on that log (`ACCEPTED/step-00NN.json`).
+
+**Who answered** (the `answered_by`, `answered_at` and `model` of every answer file): one Opus agent
+per batch and stage. 106 selector agents (`opus-p4m-select-p4-NNNN`) wrote the 1,392 selector
+answers, 2026-09-24T21:51:23Z .. 2026-09-25T11:14:32Z; 106 review agents (`opus-p4m-review-p4-NNNN`)
+the 1,003 review answers, 22:36:39Z .. 11:33:23Z. Sorted by start, no agent's answering interval
+overlaps the next one's: **they ran one at a time**. Group 5's 78 review answers, given under the old
+reviewer pin, stay aside unimported (`handoff/p4-mass-review-stale-reviewer-89e6035d/`); its questions
+were answered again under the new pin.
+
+| group | batches | selector questions | review questions | sites written | site-held | step |
+|---|---|---|---|---|---|---|
+| 1 | p4-0010 .. p4-0017 | 112 | 74 | 71 | 49 | 2 |
+| 2 | p4-0018 .. p4-0025 | 111 | 88 | 84 | 36 | 3 |
+| 3 | p4-0026 .. p4-0033 | 108 | 80 | 76 | 44 | 4 |
+| 4 | p4-0034 .. p4-0041 | 109 | 82 | 79 | 41 | 5 |
+| 5 | p4-0042 .. p4-0049 | 111 | 78 | 75 | 45 | 6 |
+| 6 | p4-0050 .. p4-0057 | 109 | 82 | 78 | 42 | 7 |
+| 7 | p4-0058 .. p4-0065 | 110 | 78 | 72 | 48 | 8 |
+| 8 | p4-0066 .. p4-0073 | 108 | 68 | 64 | 56 | 9 |
+| 9 | p4-0074 .. p4-0081 | 104 | 64 | 64 | 56 | 10 |
+| 10 | p4-0082 .. p4-0089 | 99 | 77 | 74 | 46 | 11 |
+| 11 | p4-0090 .. p4-0097 | 98 | 67 | 63 | 57 | 12 |
+| 12 | p4-0098 .. p4-0105 | 98 | 77 | 75 | 45 | 13 |
+| 13 | p4-0106 .. p4-0115 | 115 | 88 | 85 | 53 | 14 |
+| **all** | **106** | **1,392** | **1,003** | **960** | **618** | |
+
+Questions from the ledger's model lines; written and site-held from each batch's `PLAN.jsonl` and
+`REFUSED.jsonl` in the apply root (the gate's `refused by rule: {'site-held': n}`). 1,392 selector
+questions = 1,578 less the 157 held before S3 and the 29 lane-S sites whose article offers no sentence
+naming them (held `no-source`, no call bought).
+
+### The steps and their acceptance (`logs/_write_apply_p4/ACCEPTED/`)
+
+| step | sites | rows | planned / journal / carried / not yet written | re-verified (V1-V15) | RESULT | output sha256 |
+|---|---|---|---|---|---|---|
+| 1 (pilot 4, p4-0001 .. p4-0009) | 26 | 52 | 52 / 52 / 52 / 0 | 26 | 0 deviations | `6b81cfda` |
+| 2 | 71 | 142 | 194 / 194 / 194 / 0 | 97 | 0 | `e206aa90` |
+| 3 | 84 | 168 | 362 / 362 / 362 / 0 | 181 | 0 | `384bbfd1` |
+| 4 | 76 | 152 | 514 / 514 / 514 / 0 | 257 | 0 | `3cd28706` |
+| 5 | 79 | 158 | 672 / 672 / 672 / 0 | 336 | 0 | `71df707e` |
+| after the Roman Bath revert (`accept-after-roman-bath.log`) | | | 672 / 672 / 670 / 2 | 335 | 0 | |
+| after the Altar revert (`accept-after-reverify.log`) | | | 672 / 672 / 668 / 4 | 334 | 0 | |
+| 6 | 75 | 150 | 822 / 822 / 818 / 4 | 409 | 0 | `de915ce3` |
+| 7 | 78 | 156 | 978 / 978 / 974 / 4 | 487 | 0 | `4bbedbf1` |
+| 8 | 72 | 144 | 1,122 / 1,122 / 1,118 / 4 | 559 | 0 | `6f04bd3a` |
+| 9 | 64 | 128 | 1,250 / 1,250 / 1,246 / 4 | 623 | 0 | `e3bbec0d` |
+| 10 | 64 | 128 | 1,412 / 1,378 / 1,374 / 38 | 687 | 0 | `9599bc5a` |
+| 11 | 74 | 148 | 1,526 / 1,526 / 1,522 / 4 | 761 | 0 | `7283edeb` |
+| 12 | 63 | 126 | 1,652 / 1,652 / 1,648 / 4 | 824 | 0 | `edc73e54` |
+| 13 | 75 | 150 | 1,802 / 1,802 / 1,798 / 4 | 899 | 0 | `b06cec0e` |
+| 14 | 85 | 170 | 1,972 / 1,972 / 1,968 / 4 | 984 | 0 | `2c5eaf52` |
+
+Step 10's 38 not yet written are the 4 rows of the two reverted sites and 34 rows of p4-0082 and
+p4-0083 (10 + 7 sites), still at their old value: group 10's dry gate run rendered those two batches'
+`PLAN.jsonl` before it stopped on p4-0084 (their `chunks/` directories date from 11:49:22 CEST), and
+the lane plan is every rendered batch's `PLAN.jsonl` (`write_gate4.write_lane_plan`), rebuilt by
+group 9's apply. Step 11 wrote and carried them. **The end state, step 14 (13:35:47 CEST): 1,972 planned rows, 1,972
+journal rows, 1,968 carried, 4 not yet written (the two reverted sites), 984 sites re-verified, 0
+deviations** - 958 mass sites and pilot 4's 26. `LANE_PLAN.jsonl` holds the 1,972 rows
+(`f3a7899e...`).
+
+### The holds (`runs/mass-2026-09-25/HOLDS4.jsonl`, 909 lines, `3b16b3a9...`)
+
+Site scope: 625 lines over **620 sites** - the 618 the gate refused `site-held` and the two taken back
+(`audit-wrong-site`). By each site's first reason and its S1b lane:
+
+| reason | W | S | none | sites |
+|---|---|---|---|---|
+| `abstained` (the selector's ABSTAIN) | 232 | 35 | | 267 |
+| `search-stopped` | | | 103 | 103 |
+| `V14` (T03 severe, country) | 76 | 2 | | 78 |
+| `scope-pending` | | | 35 | 35 |
+| `no-source` | | 29 | | 29 |
+| `V9` (shorter than the stored text) | 24 | 3 | | 27 |
+| `V6` (sentence 1 names no name) | 24 | | | 24 |
+| `revision-too-fresh` (pinned revision younger than 48 h) | | | 19 | 19 |
+| `V5` | 14 | | | 14 |
+| `review-too-few-sentences` | 13 | 2 | | 15 |
+| `selection-refused` | 4 | | | 4 |
+| `audit-wrong-site` | 2 | | | 2 |
+| `V7` | | 2 | | 2 |
+| `V15` | 1 | | | 1 |
+| **held** | **390** | **73** | **157** | **620** |
+
+Five sites carry a second site hold (V5+V14 three, V5+V8, V6+V14), hence 625 lines. Card scope: 284
+lines over 265 sites - `V10` 162, `card-too-short-after-review` 122, 19 sites both; 223 of the 265
+carry a written description, 42 are site-held (Roman Bath and Altar of Athena Polias among them).
+What those cards get is the Phase-5 sitting's.
+
+**Coverage, T8-style - reported, not gating** (owner decision 2026-09-24, `PILOT_RESULT_3.md`):
+**933 of 1,321 lane-W sites written = 70.6 %** (931 = 70.5 % after the two reverts); lane S 27 of 100.
+
+### The audits and the re-verification
+
+* **Mid-run audit** (after step 5): 45 of the 336 written sites (`midrun_sample.txt` `446663d5...`),
+  `MIDRUN_AUDIT_VERDICTS.json` `15577da6...`: 280 sentences, 279 SUPPORTED, **1 WRONG_SITE** (Roman
+  Bath, York, sentence 1: the pub); 36 cards contained, 9 sites without a card; 0 lost hedges or
+  negations, flipped meanings, broken sentences, verifier false-passes or gold errors. The writes
+  stopped; the reviewer's DROP line, its re-pin and the revert path are the entry above.
+* **The WRONG_SITE check of every written site** (the design's consequence of a T2 hit): input
+  `REVERIFY_WRONG_SITE_INPUT.jsonl` (`c5e56457...`, 336 sites, 2,046 sentences), answered by Opus
+  (8 agents, per `C:/tmp/applied_today.md`), verdicts `REVERIFY_WRONG_SITE_VERDICTS.json`
+  (`be5e964f...`, 336 entries): 333 without a hit, 3 flagged -
+  * **Roman Bath, York** (p4-0036), sentences 1 and 2 - already taken back
+    (`revert4.py --stamp-like 'phase4:p4-0036:chunk-0001' --site 70037a24-...`, 2 rows, reversals
+    kept 2; `accept-after-roman-bath.log`);
+  * **Altar of Athena Polias** (p4-0038, `78c18ef3-5f91-4629-bfef-37b0f13b2bef`), sentence 4: the
+    Gigantomachy pediment belongs to the Archaic Temple of Athena Polias, not to the open-air altar
+    (the verdict adds that sentences 2 and 3 carry the same conflation as a factual error). Held with
+    `audit4.py hold` from `REVERIFY_WRONG_SITE_HOLDS.json` (`6af6a8b0...`; the `HOLDS4.jsonl` line
+    cites file and digest), taken back with `revert4.py --stamp-like 'phase4:p4-0038:chunk-0001'
+    --site 78c18ef3-...` (2 rows, reversals kept 2), accepted: 672 / 672 / 668 / 4, 334 re-verified,
+    0 deviations (`accept-after-reverify.log`);
+  * **Kit Hill** (pilot 4, p4-0003), sentence 6, subject "East Kit Hill Mine" (worked 1855-1909):
+    **kept** - the mine is a later use of the hill itself, not another thing sharing its name. That
+    judgement is the orchestrator's and is recorded only in `C:/tmp/applied_today.md`.
+  Writes resumed with step 6.
+* **The 500-site audit** (design entry [6]: "10 random written sites after every 500"): when the mass
+  sites written passed 500 (step 8), 10 sites written since the first audit (`audit500_sample.txt`
+  `3d050f2c...`; sheets `AUDIT500_SHEETS.md` `df5f3aba...`), verdicts `AUDIT500_VERDICTS.json`
+  (`48fd22cd...`): **66 sentences, all SUPPORTED; 8 cards contained, 2 sites without a card; 0
+  flags** of any kind. Group 8's write waited for it (verdicts 09:54, step 9 accepted 09:56 CEST).
+  The next mark, 1,000 mass sites written, is not reached: 960.
+
+### Fixed during the run (test-first, each with its sweep)
+
+* `ccfb426` - `verify_writes4.py --run` repeats. The pilot's and the mass run's writes share the
+  `phase4:` stamps, so a mass step's acceptance re-verifies the pilot's sites; with one `--run` it
+  found them in no run and counted each as a deviation. A site two runs carry is refused. Sweep
+  34/34.
+* `004d522` - the acceptance reads a batch in full only when its `input.json` plans a written site
+  (reading every batch stopped the first mass step's acceptance on the unassembled p4-0026); such a
+  batch that cannot be read still stops it. Sweep 35/35.
+* The reviewer's DROP line for a later building, business or institution sharing the site's name
+  (pin `097c4589...`), `revert4.py --site`, `audit4.py hold` and the gate's re-plan without a reverted
+  site: the entry above.
+* `9c8f5ef`, `9f01785` - T03 reads a dot thousands separator. The review import stopped on p4-0076
+  (`parse_year('35.000 BC') returned None for a digit token`, a Berbati sentence "around
+  100.000-35.000 BCE") and p4-0084 (`'5.200 BC'`), and the gate's dry run stopped on the same assert
+  three times (`group-p4-0074-review.log`, `group-p4-0082-review.log`): fail-closed, nothing written.
+  After the fix both batches imported (p4-0076 9 assembled, 6 held; p4-0084 11 assembled, 4 held)
+  and groups 9 and 10 were written. Sweep 1/1.
+
+### Open
+
+* **Lane L**, re-planned after step 14 as its entry requires: `LEGACY4.jsonl` `62772cac...`, 334
+  batches; the gate reads live phase-4 provenance on 984 of 5,004 sites and plans **4,003 rows**
+  (refused `written-by-p4` 984, `no-legacy-claim` 17 - HUMAN_ONLY D7: `same-as-snapshot` 9,
+  `not-in-snapshot` 8), every batch rehearsed (`logs/p4l/rehearse-all.log`). It is being written
+  now, step by step, by a background loop from this worktree: at 14:02 CEST steps 1 and 2 were
+  accepted (99 and 94 sites; `lane journal rows 193 | carried 193 | not yet written 3810`, 0
+  deviations) and step 3 (90 sites) was written. Its end: `verify_writes4.py --lane p4l --plan
+  logs/_write_apply_p4l/LANE_PLAN.jsonl --complete`.
+* **The Phase-5 sitting and Push #2** (HUMAN_ONLY D5): card texts through the journal, the card file
+  regenerated byte for byte, the push. P5's plan reads this run's card holds above.
+* **card_stats** (`card-stats-2026-09-23`, the main checkout's runbook step 1): its premise holds
+  `md5(description)`, so it is re-planned now that the P4 writes have ended.
+* **The 19 `revision-too-fresh` sites**: `mass4.py` re-queues them itself 48 h after their hold -
+  "19 waiting (the first until 2026-09-26T21:30:14+00:00)" in every round's header.
+* **The final acceptance of 60 sites** (`acceptance/PROTOCOL.md`, sealed on `integrate/wave1`): its
+  draw takes this run's audit samples as exclusions (`logs/p4_mass/midrun_sample.txt`,
+  `audit500_sample.txt`).
+* **The merge into `integrate/wave1`**: `wip/merge-p4` (worktree `.claude/worktrees/merge-p4`) holds
+  `wip/p4-pilot` up to `9f01785`; this entry and `MASS_RESULT.md` come after it, and it lacks
+  `integrate/wave1`'s five Phase-6 commits `ff9a570` .. `a2ac917`.
+* The selector's rule (8) keeps the gap the reviewer line closes (entry above): a decision for a
+  later run.
