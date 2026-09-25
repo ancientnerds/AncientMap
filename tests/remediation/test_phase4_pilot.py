@@ -15,6 +15,7 @@ members, the draws of pilots 1 and 2 excluded, the thresholds still pilot 1's. T
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import random
 import sys
@@ -810,7 +811,14 @@ def test_the_sealed_prose_errors_are_the_gold_standards_fifteen_and_the_ten_cana
     assert [e["id"] for e in errors if e["kind"] == "canary"] == [
         f"CANARY-{n:02d}" for n in range(1, 11)
     ]
-    assert payload["inputs"]["gold_standard"]["sha256"] == PL._sha256(GOLD_FILE)
+    # The seal (fab4f57) hashed the gold standard as the workstation's CRLF checkout wrote it
+    # (core.autocrlf=true, no eol attribute on gold_standard/): 18653fc1...b2756, the value
+    # AUDIT_LOG.md records too. The committed blob is LF (1e71022d...242e5), so an LF checkout -
+    # CI - holds other bytes for the same content. The sealed digest is compared against the
+    # content in the sealing checkout's CRLF form, whatever EOL this checkout has.
+    lf = GOLD_FILE.read_bytes().replace(b"\r\n", b"\n")
+    sealed_bytes = lf.replace(b"\n", b"\r\n")
+    assert payload["inputs"]["gold_standard"]["sha256"] == hashlib.sha256(sealed_bytes).hexdigest()
 
 
 @pytest.mark.skipif(not DESIGN.exists(), reason="needs the gitignored design file")
