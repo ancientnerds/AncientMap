@@ -203,25 +203,21 @@ def validate(rows: Sequence[Mapping[str, Any]], verdicts: Mapping[str, Mapping[s
     _differ("tie against the pass-2 verdicts that are keep", third, set(verdicts["tie"]))
 
 
+def round_number(name: str) -> int:
+    """The number of the round file `name` (VERDICTS_ROUND<n>.json)."""
+    match = ROUND_FILE.fullmatch(name)
+    if match is None:
+        raise AuditError(f"{name} is not a round file VERDICTS_ROUND<n>.json")
+    return int(match.group(1))
+
+
 def round_files(audit: Path) -> list[Path]:
     """Every round after round 1 in `audit`, in number order: rounds 2, 3, ... without a gap."""
-    found: dict[int, Path] = {}
-    for path in audit.glob("VERDICTS_ROUND*.json"):
-        match = ROUND_FILE.fullmatch(path.name)
-        if match is None:
-            raise AuditError(f"{path.name} is not a round file VERDICTS_ROUND<n>.json")
-        found[int(match.group(1))] = path
+    found = {round_number(path.name): path for path in audit.glob("VERDICTS_ROUND*.json")}
     numbers = sorted(found)
     if numbers != list(range(2, 2 + len(numbers))):
         raise AuditError(f"the round files are rounds {numbers}: a gap, or no round 2")
     return [found[n] for n in numbers]
-
-
-def round_number(name: str) -> int:
-    match = ROUND_FILE.fullmatch(name)
-    if match is None:
-        raise AuditError(f"{name} is not a round file")
-    return int(match.group(1))
 
 
 def read_round(path: Path, sample_keys: Sequence[str]) -> dict[str, dict[str, dict[str, Any]]]:

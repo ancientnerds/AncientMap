@@ -780,10 +780,14 @@ def test_an_empty_sample_section_is_no_judgement_of_the_sample() -> None:
 
 
 def test_rule_4s_sample_is_judged_in_one_round_only() -> None:
-    raw = fired_raw({})
-    r2, r3 = firing_sample(), firing_sample()
-    with pytest.raises(D.AuditError, match="sample"):
-        lay(raw, checked(raw), (r2, checked(r2)), (r3, checked(r3)))
+    """Even a sample verdict that failed its quote check is not judged again as the sample: rule
+    4 was decided on the round that judged it."""
+    raw = fired_raw({"phase3:s4": ("keep",)})
+    r2 = firing_sample()
+    r2["sample"]["phase3:s4"] = anew("phase3:s4", "keep")
+    r3 = round_2(sample={"phase3:s4": anew("phase3:s4", "keep")})
+    with pytest.raises(D.AuditError, match="one round only"):
+        lay(raw, checked(raw), (r2, checked(r2, sample={"phase3:s4"})), (r3, checked(r3)))
 
 
 def test_a_counted_tie_decides_the_pair_the_round_before_left_split() -> None:
