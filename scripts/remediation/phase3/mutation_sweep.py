@@ -6308,8 +6308,8 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_gate4: a step of no site is accepted",
         P4_WRITE_GATE,
-        "    if args.step < 1:\n",
-        "    if False:  # mutant\n",
+        "    if not 1 <= args.step <= STEP_MAX:\n",
+        "    if not args.step <= STEP_MAX:  # mutant\n",
         P4_WRITE_TEST,
         "test_a_step_of_no_site_is_refused",
     ),
@@ -21249,6 +21249,23 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if ACCEPT_CLEAN not in lines:  # mutant\n",
         P4_WRITE_TEST,
         "test_an_acceptance_is_one_whole_clean_run",
+    ),
+    (
+        "audit-fix: M4 --batch narrows the stopped-batch check",
+        P4_WRITE_GATE,
+        '    stopped = sorted(path.parent.name for path in apply_root.glob(f"*/{STOPPED_FILE}"))\n',
+        "    stopped = [item.out.name for item in planned if (item.out / STOPPED_FILE).exists()]"
+        "  # mutant\n",
+        P4_WRITE_TEST,
+        "test_a_stopped_batch_outside_the_selected_batches_still_stops_the_run",
+    ),
+    (
+        "audit-fix: M5 --step has no upper bound",
+        P4_WRITE_GATE,
+        "    if not 1 <= args.step <= STEP_MAX:\n",
+        "    if not 1 <= args.step:  # mutant\n",
+        P4_WRITE_TEST,
+        "test_a_step_larger_than_the_owners_hundred_is_refused",
     ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS

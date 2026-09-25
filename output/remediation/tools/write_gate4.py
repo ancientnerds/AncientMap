@@ -112,6 +112,8 @@ from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 from phase4 import write4 as W4  # noqa: E402
 
 APPLIED_FILE = "APPLIED.json"
+#: The owner's step (2026-09-21): after every hundred sites, a check - the most one step may write.
+STEP_MAX = W.DEFAULT_CHUNK_SIZE
 STOPPED_FILE = "STOPPED.json"
 #: A reverted round's proof, kept with its `APPLIED.json` beside its statements (`chunks/<label>/`).
 REVERTED_FILE = "REVERTED.json"
@@ -323,10 +325,6 @@ class Planned:
     @property
     def applied(self) -> bool:
         return (self.out / APPLIED_FILE).exists()
-
-    @property
-    def stopped(self) -> bool:
-        return (self.out / STOPPED_FILE).exists()
 
 
 def render(
@@ -691,7 +689,9 @@ def run_batches(
     acceptance (`--accept`), `--apply` writes nothing. Every batch written here is recorded in a
     fresh `STEP.json` before the next one starts.
     """
-    stopped = [item.out.name for item in planned if item.stopped]
+    # Every batch of the apply root, not only the ones this run selected (`--batch`): a stopped
+    # batch anywhere is unread evidence, and no other batch is written past it (audit M4).
+    stopped = sorted(path.parent.name for path in apply_root.glob(f"*/{STOPPED_FILE}"))
     if stopped:
         print(
             f"STOP: {len(stopped)} batch(es) stopped in an earlier run and were never marked "
@@ -792,7 +792,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--audited", default=None, help="P4: the audit's cleared ids (T and R)")
     parser.add_argument("--phase3-refused", default=str(lanes.lane().refused))
     parser.add_argument("--phase3-run", default=str(lanes.lane().run_dir))
-    parser.add_argument("--step", type=int, default=100, help="sites per step (--apply)")
+    parser.add_argument(
+        "--step", type=int, default=STEP_MAX, help=f"sites per step (--apply), 1-{STEP_MAX}"
+    )
     parser.add_argument("--host", default=lanes.HOST)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--rehearse", action="store_true")
@@ -822,8 +824,11 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     problem = plan_source_problem(group, args)
     if problem is not None:
         raise SystemExit(problem)
-    if args.step < 1:
-        raise SystemExit("--step: at least one site per step")
+    if not 1 <= args.step <= STEP_MAX:
+        raise SystemExit(
+            f"--step: at least one site per step, at most {STEP_MAX} sites per step (owner, "
+            "2026-09-21: after every hundred, a check)"
+        )
     if args.accept:
         return accept_step(apply_root, pathlib.Path(args.accept))
     if args.close_reverted:

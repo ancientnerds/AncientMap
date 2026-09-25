@@ -2446,3 +2446,35 @@ def test_an_acceptance_is_one_whole_clean_run(
     assert G.main(_gate_args(tmp_path, "--accept", str(output)), runner=db) == 1
     assert problem in capsys.readouterr().out
     assert (tmp_path / "apply" / G.STEP_FILE).exists()
+
+
+def test_a_stopped_batch_outside_the_selected_batches_still_stops_the_run(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """2026-09-25 audit M4: `--batch` narrowed the stopped-batch check to the selected batches, so
+    a run could write on while another batch of the same apply root sat STOPPED unread."""
+    _gate_run(tmp_path, 2)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    first = "00000001-0000-4000-8000-000000000001"
+    db = _db(first, "00000002-0000-4000-8000-000000000002")
+    db.sites[first].description = "moved"
+    assert G.main(_gate_args(tmp_path, "--apply", "--batch", "p4-0001"), runner=db) == 1
+    assert (tmp_path / "apply" / "p4-0001" / G.STOPPED_FILE).exists()
+    sent = len(db.sent)
+    capsys.readouterr()
+    assert G.main(_gate_args(tmp_path, "--apply", "--batch", "p4-0002"), runner=db) == 1
+    assert "stopped in an earlier run" in capsys.readouterr().out
+    assert len(db.sent) == sent
+    assert not (tmp_path / "apply" / "p4-0002" / G.APPLIED_FILE).exists()
+
+
+def test_a_step_larger_than_the_owners_hundred_is_refused(tmp_path, monkeypatch, capsys) -> None:
+    """2026-09-25 audit M5: the owner's "after every hundred, a check" could be bypassed with
+    `--step 5000`. A step is at most 100 sites."""
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    db = _db(GATE_SITE)
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "101"), runner=db) == 1
+    assert "at most 100 sites per step" in capsys.readouterr().err
+    assert db.sent == []
+    assert G.main(_gate_args(tmp_path, "--apply", "--step", "100"), runner=db) == 0
