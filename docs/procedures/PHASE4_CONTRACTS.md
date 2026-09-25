@@ -1115,7 +1115,9 @@ owner decision, ranks above the design.
   (`2c99f96f...`) and `logs/_write_dry/ALL_REFUSED.jsonl` (`7b4026d0...`). Three lists:
   `phase3-cleared-description` 322, `phase3-cleared-card` 709, `ungrounded-card` 876 - 1,623 sites.
   Its readers take that file or none: a file whose bytes are not the pin is refused (the gate ends
-  `WRITE_EXIT=1`). A new scope is a new version and a new pin, never an edit of the file.
+  `WRITE_EXIT=1`). A new scope is a new version and a new pin, never an edit of the file. Since
+  2026-09-25 the writers read version 2 (`SCOPE4.v2.json`, section 11); version 1 stays byte for
+  byte at its own pin and rebuilds the mass run's plan.
 - **Which flags are a proven text defect.** `cleared-description-defect` and `cleared-card-defect`
   (a defect Phase 3's reviewer cleared) and an ungrounded card (no `SiteFlag`; `scope4` derives it).
   Not `t03` - its own comment says "order only" - and not `t03-severe` on its own: T03 names a
@@ -1285,3 +1287,59 @@ the mid-run audit's WRONG_SITE", has the evidence and the numbers.
   --stamp-like '<its chunk's stamp>' --site <id>` rendered, `--rehearse`d, then `--apply`ed (the
   orchestrator), `write_gate4.py ... --batch <its batch>` dry (the proof, read-only), and
   `verify_writes4.py --lane p4 --plan <apply root>/LANE_PLAN.jsonl --run <every run>` (0 deviations).
+
+## 11. Scope version 2 and the D9 run: the marker without an entry (wip/p4-pilot, 2026-09-25)
+
+Owner order 2026-09-25 (Martin, "keine Fragen mehr, autonom Empfehlungen umsetzen"), recommendation
+(c) of HUMAN_ONLY D9: a description that sets a `[N]` marker `raw_data.description_citations` has no
+entry for is a proven text defect - the reader sees a bare number and the source is not in the data
+(acceptance D1; the orphan-citations lane listed 9 such sites and wrote none of them). So those sites
+join the defect scope and get a sourced description through the same Phase-4 pipeline, or stay held
+with a closed-list reason. AUDIT_LOG, "HUMAN_ONLY D9 into Phase 4", has the evidence and numbers.
+
+- **Scope version 2** (`phase4_runner/SCOPE4.v2.json`, pinned in `scope4.SCOPE_SHA256`, 1,631
+  sites) is version 1 and the list `d1-marker-without-entry` (9 sites), derived by `plan4.py scope`
+  (the current version by default) from version 1's two inputs and the lane's listing
+  (`mechanical_citations/SKIPPED.jsonl`, `--markers`, reason `marker-without-entry`): each listed
+  site must be a curated S0 row whose own text fails D1 that way (`scope4.markers_without_entry`,
+  census T08's `marker_sequence` and `entries`), never taken on the listing's word. Every version-1
+  site keeps its lists and the new list is appended (`scope4.VERSION_LISTS`), so version 2 refuses
+  nothing version 1 allowed; the list adds no `SiteFlag` (V9's floor stays for its sites). The
+  writers (`write_gate4` for P4 and P5), `mass4` and `build --scope-list` read version 2.
+- **Version 1 stays** (`SCOPE4.json`, `scope4.SCOPE_V1_SHA256`, unchanged): `plan4.py scope
+  --version 1` rebuilds it byte for byte, `scope4.load_scope(1)` reads it at its own pin, and `plan4.py
+  build --pilot PILOT4.jsonl --defect-scope` builds the mass run's plan from it, so `PLAN4.scope.jsonl`
+  rebuilds byte for byte. A file of one version at the other's pin is refused.
+- **The plan of one list**: `plan4.py build --pilot PILOT4.jsonl --scope-list d1-marker-without-entry
+  --after PLAN4.scope.jsonl --out PLAN4.d9.jsonl` (`plan4.write_list_plan`): the plan's sites after the
+  pilot's, in the design's order, whose scope lists name the list, less every site an `--after` plan
+  carries. Such a site's run held or wrote it and never asks it again, and `verify_writes4.index_runs`
+  refuses a site two runs carry - Killa Mach'ay, in version 1 as a cleared card, was held `abstained`
+  by the mass run's p4-0042 and stays so. `--after` names the plans that were run as a whole: not
+  `PLAN4.pilot4.jsonl`, whose batches past the pilot's never ran (the pilot's sites are `--pilot`'s).
+  Every listed site must be the pilot's, an earlier plan's or planned here; an empty plan is refused.
+- **Its own batch block, from p4-0901** (`plan4.LIST_PLAN_FIRST_BATCH`): every run writes into the
+  one P4 apply root and a journal stamp names its batch, the mass run's plan ends at p4-0115 and
+  `mass4.requeue_lines` numbers the mass run's re-queued sites on from p4-0116 (19
+  `revision-too-fresh` sites wait), and lane L's plan starts at p4-1001. A list plan refuses to start
+  where an earlier plan already numbers.
+- **A batch short of its outcome files** (`lanes.jsonl`, `assembly.jsonl`, `holds.jsonl`) is refused
+  by `write4.load_batch` as a hole (`PlanInputError`), so the gate prints `REFUSED` and its
+  `WRITE_EXIT=1` line; before, a dry run over the D9 run after its select export ended in a
+  `FileNotFoundError` without the exit line. The gate plans a batch once its review is imported.
+- **Lane L before a later P4 write (section 9, "its L row is reverted before its P4 write").** Lane L
+  marked every March-AI text P4 had not written, the listed sites among them; their D9 plan names
+  S0's values, which production still holds except for L's `_description_provenance`, so P4's
+  preflight would refuse the batch (`raw_data: the row no longer holds the planned old value`). The
+  design's way back is taken, for the sites the P4 dry plan writes and only after the review
+  import: `revert4.py --stamp-like 'phase4l:<its batch>:chunk-0001' --site <id>` rendered,
+  `--rehearse`d, `--apply`ed, then P4's rehearsal and write. A site P4 holds keeps its L row. Lane L's
+  acceptance afterwards names `--allow-stamp 'phase4:%'` beside the orphan-citations stamp and runs
+  without `--complete`: a taken-back L row that P4 then wrote is superseded, while `--complete` names
+  it `NOT WRITTEN`, as it names a P4 site taken back (section 10; tested). The same holds for the
+  mass run's 19 `revision-too-fresh` sites, whose re-queued plan lines are S0's and which lane L
+  marked as well.
+- **The D9 run** is `runs/d9-2026-09-25` (plan `PLAN4.d9.jsonl`, batch p4-0901), its handoff
+  `handoff/p4-d9-select` and `-review`, its logs `logs/p4_d9`; it writes into the same apply roots
+  (`logs/_write_apply_p4`, `_write_apply_p5`), and every acceptance of lanes p4 and p5 names all
+  three runs: `--run runs/pilot4-2026-09-24 --run runs/mass-2026-09-25 --run runs/d9-2026-09-25`.

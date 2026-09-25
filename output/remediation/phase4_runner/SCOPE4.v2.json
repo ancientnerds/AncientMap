@@ -1,0 +1,10102 @@
+{
+ "decision": "Owner decision 2026-09-23 (Martin, 'Nur Defekt-Sites (Recommended)'): after a passing Phase-4 pilot, Phases 4/5 write only the sites with proven text defects - the Phase-3 cleared defects plus the ungrounded card texts, in the design's order; every other site's description and card stay exactly as they are. Owner order 2026-09-25 (Martin, 'keine Fragen mehr, autonom Empfehlungen umsetzen'), HUMAN_ONLY D9 (c): a [N] marker without an entry in raw_data.description_citations is a proven text defect, so its sites join the scope and get a sourced description through the same Phase-4 pipeline, or stay held with a closed-list reason.",
+ "inputs": {
+  "ALL_REFUSED.jsonl": "7b4026d0e39d6c0c1355442a65cea9a5bae9b8762897b1685a8f44b1d6cd75f9",
+  "S0_ROWS.jsonl": "2c99f96f899447000659ad3ff6b24bc2dc9eddd2f96cdfe73afeabb1829272a8",
+  "SKIPPED.jsonl": "28dadb0b09a9c0e4173cc07590b328e9ad3bbb113977d529dd021b07c640f192"
+ },
+ "lists": {
+  "d1-marker-without-entry": 9,
+  "phase3-cleared-card": 709,
+  "phase3-cleared-description": 322,
+  "ungrounded-card": 876
+ },
+ "methods": {
+  "d1-marker-without-entry": "output/remediation/mechanical_citations/SKIPPED.jsonl, reason marker-without-entry: the orphan-citations lane's listing of the curated sites whose description sets an [N] that raw_data.description_citations has no entry for - acceptance D1 (scripts/remediation/acceptance/checks.py) over every curated row of its export of 2026-09-25 16:00:18 UTC (HUMAN_ONLY D9); each listed site's S0 row fails D1 the same way (census T08 marker_sequence and entries), checked when the scope is built",
+  "phase3-cleared-card": "ALL_REFUSED.jsonl, rule report-only-field, field card_description: a card defect Phase 3's reviewer cleared",
+  "phase3-cleared-description": "ALL_REFUSED.jsonl, rule report-only-field, field description: a description defect Phase 3's reviewer cleared",
+  "ungrounded-card": "plan section 5.1: the stored card writes a number that is no numeral of the first 500 characters of the site's description in pre-March snapshot d4526691 (the generator's input, scripts/export_card_sites.py:36); a number is a numeral as written (ASCII digits, comma thousands separators, a decimal part) read as its value; recomputed from S0_ROWS.jsonl because the measurement of 2026-09-19 (904) kept no list; a site the snapshot does not have is not claimed"
+ },
+ "sites": [
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "000da27c-0797-4e58-a979-ae97b3d5016f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "0011452e-b306-49d7-92a2-4044cf1ca5ec"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0017f6df-44e0-4b24-ac21-0565406e1210"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0020c4e1-21fd-4174-94ae-912703cb7ec6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "003428cd-6046-41c9-a687-a8a2b392e19d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "003762e6-af66-43d5-acc1-cadd18291086"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0060e6c0-8388-4762-bf51-9a3f88807899"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "006294ae-548b-40ac-9271-03a017df7217"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "0088c7e5-4a78-4b89-945d-3d5c787818e5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "00980091-cbe8-4838-acff-78d936585d4c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "00a511c2-7790-4b06-aa1b-0b3e1e55cbf4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "00cb2c16-2b30-42ce-aeb0-b258761ea754"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "00d711e5-2c6b-40c5-9c5c-a0f673cac312"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "00daa905-2060-4b9c-8369-eb5e6878f6a6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "010c0b09-760b-44f6-ba68-1f0353c7b3e6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "01296632-a2a1-4610-a4a9-d0c3be77b788"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0151be4b-c7d5-487f-8844-27e110594270"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "018c0c9d-c85f-4ed9-86eb-8cf350ec83e7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "01914c11-fb33-4778-a0ef-fd616ff33b88"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "019ea3e7-663b-4a60-863a-980007df6878"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "01b50bc7-3e36-494e-9a91-fc4d60323ada"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "01cdc8e2-56b7-4c9d-b6d0-68c290a65e55"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "01d20059-dc53-4f51-8669-33dac18f46bb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "01e7b609-0bfd-4cf2-b9a6-91553a137fcc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "01f3d961-e2cf-4a3d-bc36-7e9976efe93e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "027622e9-b85c-454a-a5ac-4703b26575bd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0286a741-77f2-4148-8e62-487041920281"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "02941d88-16e9-42c6-8abf-e7d5b5b38821"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0294d74b-0e97-4509-913a-475e3c21e1a7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0371ed0a-82f5-4578-b7bf-10dc40faf580"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0386a5a3-8842-4da8-ba7c-13e5fbcb46a0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "03b9c5be-ec62-4fe7-8231-c098a4d2b921"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "03be9fbc-965c-4c56-8d33-11b954d78353"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "03d28afb-c252-423e-9b4f-2815cfaed6c5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "03d63367-fb7a-4014-b1db-a704e99a10f3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "03ebb1eb-834c-46f9-a038-9231d40f8072"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "041049ae-edd9-49a3-8233-1ea9b3382913"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0415d29e-5239-40c6-ab1d-5b19e443336b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0458351c-5185-4eca-9929-c5357a98557a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "045f1593-1dac-4504-9c53-ee8644a3134c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0490ef6d-5381-449d-aa8c-385ab7dbd8e7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "04982451-5603-41cb-957d-758925170c8e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "04cdaa66-9cc6-4135-b4b6-ae0f3dbcef2d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "04f2ddf1-3539-41e4-bea2-e0f1f9fa0476"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "05133e1e-6d12-461c-a682-d8ac77d2550f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "051aa298-6b64-49ef-af78-efb53fa1d3a1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0546f6ab-8ef7-44db-8577-6627e15fd6a4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0569a73d-875d-4d49-bc8a-74c9a7fa4704"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "0576c316-4e26-4342-bc7e-42ae84bdc36e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "05afa876-bd9b-4285-8aa3-cb1f71fb3707"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "05d4e028-3cd3-46e8-ad35-aaaf70a3077c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "05d60350-c231-4179-851b-380505d30a87"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "05ee235c-2ded-4af5-9e94-980c7750bc52"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "05f23376-78dc-4cb6-941d-faaea3abe6aa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0675d36c-5ce2-40a3-867c-4d2e14069fc6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "06a73089-340c-40ac-9979-4a5c08f93da5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "06f6cb37-39f4-4785-b6ec-7ec6272ac7d4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "07483ba4-e923-4b37-9fb6-e8f88ec9c3e5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "07892a09-1ce0-440e-8300-9f097e3be591"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "07ea80ce-863f-43b9-8f7e-d155a0182f4f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "07fb4e2f-26e5-4720-a949-9c28d4712e11"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "08122cd2-522f-4ebc-b363-aabc7bd60de3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0849cdd5-5b9a-40c2-9aa9-f58c1ac32b22"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "08508ff0-053d-4b8e-b2a3-6382818c6735"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0865287a-1a0b-497a-aabb-de0131b3da61"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "08d4b7da-794b-4cb7-9ed8-714758ae4487"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "08f54fa9-0ca0-490c-82af-47fdd0a40e6b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "09100b6c-e7a9-4332-afca-8d5c44e31015"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "093a4419-157b-4562-8da5-6be601aabc2d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "09809b93-9c66-424c-ab0e-12cb3052ad31"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "09b07712-628c-4c14-bf87-62c586f1ced3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "09bae631-d8d8-4d29-bd20-3258f031cd59"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "09fcbc60-19c1-4742-a69d-3cb7afe19443"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0a5920b9-0a15-48f6-bd19-cc8bdd75f26c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0a6e70ea-022a-4035-a866-0e54efff533d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0a82ea91-7f4e-4f1c-89c8-2e1115c1176c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0aa03558-b60a-46d3-8a77-7dcce6f7e015"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "0abf05cb-0fda-4567-9d9d-0829911a8c66"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0b15deb1-cfb6-4f85-ab6c-ef09ceef175f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0b34fdec-f221-40f9-8238-2d78d7ce6638"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0b54890b-b30b-4836-9c8c-805cf88a4a21"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0b681115-78b6-409f-b780-4330392e5b40"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0b8a8edd-8a60-4758-985c-bf354de4a985"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0b9d33a6-c4b2-4b7a-8209-63feefd129f1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0bf5e631-0ee8-4b75-9c06-fd6d713cc42d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0c4851de-cccd-41fc-8cb1-223a83b2e67f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0ccb45b7-c632-4f9f-b3d2-698d397ac9b3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0cd58c95-e8da-453a-9ac4-ecaeeda843cc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0ceda98c-680a-45eb-8b06-9d6074f7bc60"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0cf46f86-7eea-46ec-bf6c-b803d3145000"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0d1797ca-6a3a-41fc-acbd-73c94d84a285"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0d801018-7183-44a3-97e4-136aa8a374ce"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0d938cf2-c77d-4741-83cb-c3413761d2c1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0da526f9-499d-4d15-a0ea-a45093fc4970"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0db059e7-fd17-408c-9953-db7391aabf75"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0dd83b62-fce8-4143-9d25-ed7de89933d8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0dfe2efe-0699-4300-8f2e-04852c23ab55"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0e01dd33-edd6-4259-91af-cd6501cd86ef"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0e4e4bfd-6702-4adc-b6be-c2e47764cfef"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0e5f74c4-f35a-4f3b-8875-98c3c91da9fe"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0eaedf34-031e-4b8f-8fff-2db84a3e6da6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0eec5ffa-1383-4b6b-92d1-cdc1f1dc0cfb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0efed5d0-3ba7-4512-bc3f-0f166c290e76"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0f015b68-0253-4c1f-a1a5-0c8401a51c2b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0f32e3d9-176a-4860-afcf-3994d049b1b1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0f42edd7-0a93-46bd-a65c-9382e076fac9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0f785541-1f36-4dc8-9daa-3ebc5c540bd0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "0f7c84f4-7364-434d-b003-706c8d7a3275"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0f7ccb2e-da01-425e-9a4b-c50f4a785065"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "0f91c646-480e-43af-a2c1-cb417fd10e89"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "0fa4a18f-2bf1-4461-8538-0d6a071fab43"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0fc7924f-75ff-4965-98b5-ba35856b57ea"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "0fd636ac-1a80-4a77-b9d0-a065ae811656"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "100ab5ea-fdf9-4d78-9f65-961ee8190b7b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1065be39-af74-4a22-8f95-ffc846068367"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "109fcdea-c114-4143-87ac-77c4c9c20f16"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "10fc71fe-5305-497e-8642-4219e822223a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "111a0de2-2005-43a9-947f-c5d1bddda27d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1196cd92-ce30-4a47-97f4-51f7a3694ebc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "11d5d105-4613-4bd5-9e52-b17ce6a5c87d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1203a68d-5c19-4f8e-828f-053129f79a63"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "126756cf-1651-49dd-8075-11e19248b37f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "1284cb97-6d86-411c-9643-1dc93c1dd47d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "12e0a51b-54c4-4d30-abcb-7ef995ccd49f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "132d4298-f6ef-4099-b360-a80ea4202afa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1374c196-3e09-44d3-b2a8-ac326f6bd14c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "138608de-dc36-4805-b2eb-23e47359b1b9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "138ded4c-2d3e-49eb-abe8-e318ba7a37c3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "13ef0bad-6c23-44d4-a5b6-d47ff146c84d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "142c0275-1a5c-47dd-a562-c6874cafa728"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "14570acc-bcd9-43b4-abca-f7a2a8d9035b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "14bd22eb-e75c-436b-bd18-85d9b31d28fc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "14c0c237-0ece-4124-ada8-8ec56b431b08"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "14c408ee-cfa0-43cc-8294-a2f8cc0d76bb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "14dd917b-b58e-45d6-9578-bc1cefd34728"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "14fab6bd-8c5b-4233-816b-a90169bcefea"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1516a14a-9185-4adb-a7f9-c3b5cb14fa13"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "152323b2-51d4-4c65-b66c-8d9bd34e5ba8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "15511706-1e3e-4b7f-974d-7464988b0462"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "159db30a-1599-4425-8134-e0d08d164a95"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "15cf53da-ecf4-4681-a2a7-63984886562f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "15d5774e-1934-42db-85d8-5f990e7afe50"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "15f94167-4c6b-4d02-b46f-6b6dcb147c19"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "160da9ec-9bc4-4893-8066-dd3afb41c5b2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "163dc5dd-513c-4dd2-9fd2-87a74fe1078a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "16419886-7d47-4007-86ae-2fef6dd1fa38"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "16818a72-af8e-4397-a814-36c1502b27d3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "168431d1-ad6c-4a18-9798-2d43d361c5b1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "169edf74-fc91-4850-aa2a-7d5328c13c02"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "16f08708-e9ab-4a7e-94b0-2620239d3e34"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "17191c2e-9ebc-41e5-865f-1bb6be790eb5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "173c03f1-90d6-41d4-93d3-2bded70d2489"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "1758f6e8-4518-43fb-a14a-1ce52caca683"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "1803a375-2b6b-4335-b158-98a371ce8889"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "18253743-256d-497f-be7b-6a7400d33593"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "184adda6-1c21-4798-aa04-7c35670a2588"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "184dfea2-b710-4c3a-a3e8-d8cea0738290"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "186ef9b5-7a74-43d6-b8d3-f49357ea1304"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1876d7d8-2561-4f0b-8278-f89293aecbb7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1877a303-0731-4ad3-9814-2b852ff93242"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "18911cb2-dff1-4d14-9110-de55c40706c0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "190fdea4-2036-47fa-a6ca-81b3b0ab2e93"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "191945f6-3a8e-47bd-9a72-5ec74c14bef7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "191e7642-eef6-476a-bdf1-4672f400a083"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "192467da-7219-4481-9b2d-34fc4cd5c6fd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1941620d-0f59-46a3-9e13-d10e9c05cdfa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "19aa5815-9965-43b3-a2d9-e35190fd50ec"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "19bf50b2-2ed2-4f63-a9b5-c5932439c190"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "19dcdb91-8d2c-43a7-acae-e7d709c576fe"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "19e287b4-3f69-4145-8f8e-4e214d8bb954"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "19ecf84c-4c48-46ec-9685-c87ddfdf65ef"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "19f1118c-190f-47f7-a161-8d6cd52277e7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "1a83dbfb-7656-4450-a0d5-ec38d2cac7b1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1a85971c-56a9-411e-bfa9-eda3004219a5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1aabb9f3-327b-48d5-9fee-045f7ebd4f1f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1ac10af9-1ace-4be6-8e02-88dacc77b6c6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1ac14890-b87e-43e5-a108-57fc4c51c6b2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1ac1779a-749a-4726-a671-d49a3d1b16e2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1ac6809e-58ee-4d7e-ad3b-d3c53f3b59b4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1ae9f44c-ebe7-454c-8c55-58efe28c0376"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1b51e95a-6d3b-4cd1-b3ed-da5f4ab8a501"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1b68e8c4-22fd-4e5a-8708-92fb516034f0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1b82a32d-cf01-4735-94c2-7df578796ce5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1bc1ab56-9d6f-478e-a4aa-76bdd91f61ee"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1bc3b429-ca8e-4bae-93a2-daeefab5e297"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1bda8d7d-01e8-4063-b1c1-c2f46c6b9a64"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1c0b4493-7302-4c4b-a126-a91e9b27305e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1c573084-c7d7-4072-84c3-30adc4b6c521"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "1c899f53-4414-4954-821d-9119802aa39a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1c8a4914-f71e-4108-a087-dcd65fa177ca"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1c93058e-d647-4f04-8aba-297c20ad41f2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1cf08f5b-a8a8-4e06-a586-17ae6d0cf153"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1d25e910-a12c-41a1-a7c9-caf4aa769fde"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1d3438fb-1fb7-47e7-bb93-486169e4f3f4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1d4dd1f5-e841-4c8c-9761-2d4ad3eec155"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1d7c880b-80be-41b1-8be5-58d07a0e5dcd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1d873464-bd56-415a-984e-67026294d00c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1db1cb71-0431-46ec-ab93-39338844dbab"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1dd3934e-3083-4c17-b1b6-219e4ae18f15"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1dd3a790-bf81-49e2-b516-dcc04a14328f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1de7069f-5fdd-48f3-b48c-45b926248224"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1e46077d-d963-46f5-aa22-dbff17bb7b9b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1e6efd70-020c-43b7-a63c-495eefa5a972"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "1e7621c6-9b8c-4137-add7-4813f52a1e83"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1e7ec452-34c4-4630-ac4e-e53d0dcbd184"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1e8b10e4-1124-4f35-9557-27a57d7dc4a1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1e9f3df5-ebe4-465a-8b98-28772e417358"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1eaf26d7-d381-4796-ad1c-605833ec077a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1ed8dbd5-c97e-4f93-8eab-af98444a64de"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "1ef25b31-5c42-4ee6-aae1-1bd9c2640bff"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1f3c04f4-4025-4779-9968-6aa298127478"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1f4e10f2-e03a-4066-aaa0-f3cb3a284ca8"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "1f66729b-c7e8-476a-b9cc-84b23a36074f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "1f9d65ff-7a7d-4885-85d4-2d581dbc3081"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "1fa55186-ecc7-4af0-99bb-87436b1e77b0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "20278c61-19b0-4712-a808-418cab607b25"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "2094fe27-b71c-4059-82d0-3891880600a5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "20f12dcd-f2a7-4014-9dce-160c90b27749"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "20f27e8d-091e-41c2-9640-936e5833178c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "210925a1-b043-4a19-80c5-7ec9ade6d940"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "211bbc3a-1c61-4c8c-b5c2-0e49e027c18a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2133d54c-f352-4325-ae0c-dd532f9a65d3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "214ae628-b465-4a07-850b-2a491f421081"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "21660e33-c3b7-462f-aaec-cbaded7b4a8d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "217706bc-155b-44ca-bd4b-9df96e3bc014"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "217b6292-d8ee-403b-a8ad-236304ac481d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "218a4df9-1bc1-43ce-a054-1d964d7232a4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "21ac323f-7214-4891-9499-74e55c3d7d56"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "21ba0be2-3da7-40f7-8f99-aece38b3ea17"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "21c82bf9-ef46-4b65-86c7-d4f10001159e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "21cb78e1-9265-49c9-a9e3-1daf14962c19"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "21d63980-32dc-43cc-baa1-06c9e2f15335"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "21d9af3d-9d4e-4df0-beb1-268486146a61"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "21e1b481-d738-49de-a4ae-227bc73c55da"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2217d95d-950a-4073-8c3b-82d80d890111"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "22221e3a-aa5d-4dc4-83e8-fc1b12f67b1e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "22362770-e393-48d3-812d-34c7e772cf4c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "22415177-5658-4973-ab15-ddad22663cde"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "22a7c5e7-a5dd-46b3-a168-ab73f7cf77d4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "22dba69d-525f-4b01-9fb7-a8db7036bb0e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "22f53fa2-6170-4d7b-ac52-5904861bb47c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "230087f0-20a3-4efb-a2d1-ebff696208d8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "230e6523-3000-4234-a12e-1336ed82b012"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "234bd55f-9444-44e9-8fde-7e66c049561d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "235def6a-3971-4308-9248-172c2cb39025"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "23cb48d4-7ca0-4105-a97e-f60f67537bc9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "23cd75bc-22da-4f28-aa83-f527fdf84e2e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "23ddb957-c31f-4ec9-9fcc-e02bc5316c5c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "23ee2849-5bee-4742-91b1-29a35361fcf7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "24009e21-6345-4cee-81d6-4b6c8ae39fc4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "24695f34-5605-4cdd-965f-fd646c1ed044"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "24b5da43-0a0d-45b4-b23e-7ca3fa4cd41a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "24de1fb5-935c-4fc0-89d0-00539a0ce610"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "250714e7-df78-444d-bfc0-303dfd6a3a03"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "251ac618-a557-4c31-9129-65afc47b649d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "253204e7-0000-4ca2-aa8b-80d9b51c0685"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "257fe33f-735b-46d0-9cb6-83ca0e03937f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2655cac3-4a76-4ea5-bc1e-9922ce8c08c7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "26de5254-9e5e-4611-9439-35f3086d9ab5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "270a7cb6-a601-4414-9f4a-6105c74ba674"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "270c2134-0bdc-4874-a038-d1b7c0bd80a4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "271aef65-62aa-4e64-9107-140f96633ea3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2726f1bb-9af6-4f23-af79-fc0f789a5ddc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "27330a46-8900-4b3b-9094-1910364284bf"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "27452e11-1d7b-44cd-85fe-d6893f11baa8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "274ff0f7-d0f7-4f66-8c73-43cf53c895e9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2753c6bb-1b90-4d49-8e59-b037bf1df930"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "277970ce-65f8-403a-8e20-dbcadac0f214"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "277be4f6-02bc-4dd4-b1a2-1898e529faf9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "27defc87-bd64-47ea-ae01-9d5bc0129f87"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "280f2b7d-4978-4352-896d-bcbb03837d3e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "282f941d-c91e-4fc9-8cdb-6c1d53e61bb7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "28402a1d-9e31-4818-9790-783de876cecd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "28579aa8-dab5-444d-9ee0-61c95cd1c073"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "287a5d74-480a-4c9e-a1d8-7c9ad96e31ec"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "28d08d27-d959-42d0-922c-8e91c795d432"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "28fbf63d-5ca4-45fd-a54e-7a660232b148"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "290410a4-c7ed-4fe7-842d-bfe7ab97e899"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "29440d54-9b26-4f92-9f0c-b7573373d12c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "2968fd35-9b61-4dfb-bb1b-cc4489827fd6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "29924a49-a6ce-430e-a5f7-a048a20d7dca"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "29bbdfce-7b18-4530-b668-8a2fb289694b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "29e8f8a9-119e-4cb7-8c24-c1ebd943cfe3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "29efc463-cdf8-4dd6-849b-ff378c87a2de"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "2a37333e-17ba-4a27-8084-3759d0b8501f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2a9a96d5-f85c-4ff5-b2ef-1e92c5c9b6ca"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "2acd40c5-e1dd-4ea1-9378-8c4e28acd415"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2ad2ae09-19fb-4994-8f1d-33d84694c5fb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2ad48d55-42d5-4f11-a884-e87084048ead"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "2adae6b7-2156-4080-aaa0-921dd7f8a9c9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2b0f2420-5602-471f-b4be-eb03e7d33151"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "2b2d0e62-5cbc-4427-be06-542064fb5076"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2b7bb7a9-4759-41bf-a703-8f4da42a1b5c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2b8e45c1-ca98-4c5f-8790-1b64f32e965f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2bc26dce-7797-40a5-8a39-589e5dee1453"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "2bdc9938-668f-4a33-a86f-8497b7f73e21"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "2c05946f-80d4-4caf-8294-f1e2948d69b9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2c1d6960-56c3-425c-8bf5-199f40562a50"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2c2eaf7a-0c07-460c-8893-9a0443f8f9d4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2c437fa8-96cf-4451-b949-7e5c09889802"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "2c4d2e4b-57b5-4788-8ba6-22955dac6448"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2cabb7a1-0596-457c-b37f-c041440b4fe2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2cbc1c11-5750-4b96-973b-7f1f8c847003"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2cd65076-e10c-401f-a997-296f99badf9c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "2d48d802-42b6-4d45-95ac-54edd7eece15"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2d76f228-e78d-4e1a-934e-cf8eef944e37"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "2d786593-6e3f-40a9-8113-8012f6c2d35e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2d89e6d4-8fa0-4258-a70a-bc42ad3c47bf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2da0bfc3-cc20-444a-bfa7-bf23642ecb0b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2da62cd0-6900-4668-b490-220fdc6b1b49"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2dab79e8-1ece-4f9b-beb3-a91573d545c3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "2e0236e5-ca62-49f1-8532-303463aba86b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2e23ad32-b50b-4439-8260-fe854b891c5d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2e46252e-2205-4aed-92ee-38eeb5758399"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2e4b8483-8599-458c-abcc-29e4e92e2ee3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2e8550b6-1358-471f-9be5-9957b2613c9d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2eae8fd6-d3d4-4764-a8bd-2d3a8f88ebbe"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "2f0e58ba-3b2f-4f39-828f-b5d4935121b3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "2f50d5d0-bcb3-4400-9cfc-bc0126ca2624"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2fb4a171-fe52-40c9-8bcb-195cd068b55d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "2fb9ef2d-55be-497a-9759-735df4f80db8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "2fe636b2-9d02-434e-8c26-889601e30190"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "2feb8c8c-9dcb-4efb-abe3-9f402839dc57"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "300d302c-f6fd-4688-b21a-a8189bf53995"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "301aec5d-a2ce-42e2-9a76-41c781cd9ace"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "305ccaba-91b3-4679-b1bc-bd894c81dfee"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "310cc15d-fd30-4fe7-b7a6-3f138f44a1e9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "317436c1-4827-4db2-acf6-1238452a5e86"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "3191f287-4b47-4d83-903f-9815001086ed"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3195c970-3603-4a2c-9810-7031b5120420"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "31b8b0fa-4110-4e2a-b53e-fe2667876579"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "31c2fc86-3acf-4684-99dc-9f1b35e0f3b4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "31ee7df0-cf14-4c97-8d88-697625e5b913"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "31efd673-3b29-4dbc-acb2-2d9179d7a972"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "31fabe04-8275-48fc-bdbc-85073302026a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "322cd09d-45f7-4cea-aaac-d1d973910935"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "32a2b3eb-c4c3-4574-bbf5-30a4d7a68dfc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "331d86ab-697d-411b-b61b-6af1875c7e1c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3324d203-1f5a-4b13-b6d0-c23382ac8d3c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "332d3d4c-4dfd-4a7a-8f79-0db277b1f4c6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "334be182-1b41-46d3-9fa1-d9ee8204db80"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "337335d1-0648-4be3-8c44-97958477f6a9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "33f2b3eb-5fe2-444d-8168-807b81e17f2b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "348770cd-a3a2-4b6e-83f7-bd5f5d699022"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "349e080c-0b4f-4708-8744-d1b1c6a0b83e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "34bbe345-3a0c-4b09-a81b-23ada293da19"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "34c9266e-b55c-4f29-9e6e-eeb547ecfd50"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "34f1acbd-b1d2-4349-9946-75a36f323d6b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "34f757be-a065-458c-9200-05b3beeeca2c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "355474df-244c-4bdc-a1f0-d25ec50def4d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3569c20c-c279-4f19-ae36-9f52ddf16c6c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "356a2f8e-8174-48e6-ae7f-8c53b9ae6124"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "359860c8-9f39-49d7-8834-1651987c8c1e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "362a06f8-98cf-4cf4-be47-8ea8dd6bbc65"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "3635030a-59d7-4fcf-84b2-e22a000e6b7d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "36408f22-774c-4626-a92f-e0c231f69206"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "364ea265-5078-4181-a4de-46b51309996e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "365696cd-688a-412c-bb9f-66ff88fc7f35"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3696e872-ce24-42c2-b632-fe7b034171df"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "36bcb120-d684-4d2b-82d2-e41311e02bb4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "37065cce-99dd-4055-bd92-4906840149e6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "37321e41-a629-4d79-820d-3104c7713860"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "37808e2a-8837-485c-9b69-f103a2be79b4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "37999fa3-d22d-4c51-a2f5-fa0dd9d82942"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "37c35150-d91b-44bb-a039-48783357de8e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "37cf1fab-1b40-486a-88ab-c480d323c995"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "37eecbe3-b8a7-45aa-bde5-7d063a68630e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "383214cc-1b63-4ea9-b5aa-3bf851e0826f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "383a0107-b7f7-4431-a752-590f3c0a42b2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "384133aa-dc2d-4f86-9f20-e53c98e5c5be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3853519f-9215-4935-8f41-faae64286c3e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3858c6d1-29e2-4bfa-99b5-cf015969646e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3867504c-c199-4a59-9609-9b2340905467"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "386cadca-23fc-463a-ba46-c016494086ba"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "388a75e4-cdec-4123-b545-2eb6d9b0fa14"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "38a17d5e-fd25-457f-9286-dce01bc61696"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "392bcf2d-257f-4be6-bde4-36a26a1dbc9c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3962491a-58ec-4e7c-a1be-3c456f9818a6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "39a50b0a-cc96-4e76-967c-fd1a1946aa2c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "39dd0b66-f565-4698-934f-37da9ff624dd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "39e49c72-4037-487c-8402-409d00f7026e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "39f7cab4-e0d9-4c15-a4a0-8fccd461ba3b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3a5a2af9-ac8c-4e1c-82ed-bfa765c0796d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3a75476c-410d-4a37-9858-b0733fc6965d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3aa70cf2-d56b-4401-8a60-2cd12131827c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3b04e370-3686-477d-a5c1-f1a6f7123c5f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3b348ad3-00f1-4d9a-9782-9006f4443cda"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3b7c9b7b-5792-4162-84ed-5663b1760d60"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "3bb2d9e1-7e77-4582-8b28-92ab27133a9a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3bcf804a-ff18-4066-89bd-cfaa8a3b5a46"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3bcff938-2352-4ea8-872f-3655fb444c87"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3bdedec1-6321-4560-b986-2ce86b3b5c0d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3bee62b6-a82c-4191-86a1-24aad78dab71"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3c1e886f-d77b-4d46-899b-2aaf26861a4d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3c590c1e-d1d8-4768-b3f1-3146d9f04b8d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3c601353-b55a-4dc8-80c1-9b8c5ca24d31"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "3cb65471-1fc1-4055-9cfa-63d7514aeaee"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3ccc24a7-a41a-4c7b-91e2-246b6b81ef05"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3cf8d34b-fa9a-421f-8e8a-f21d910affe2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3cfc623b-724a-4b48-9c86-2889278efe57"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3d20c37f-30ac-405f-8dc4-16c40e7cbeae"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3d296ec1-adcb-43da-ae08-ffcdb378d4be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "3d4fbf16-e80f-42c3-853c-4a22206dee24"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3d576cfb-2228-45a3-a05e-8433b80d88bc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3d68442a-8cd7-4679-8845-189db9470f27"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3d8cb484-8b57-41fa-ab0d-203449c1c821"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3db7a812-6b3a-4574-b804-840a2390cdad"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "3dd0bac8-4618-4f61-a2b2-4dd229a76e45"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3dd6b568-007f-4a95-877b-12324e031893"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3debd642-ff96-4840-bff2-9d8faced25cd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3df5f75c-51c1-45a7-bf4c-fdb80f9f585d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "3df64c15-9caf-430f-b6d0-82bd2b15ddd1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3e012d60-1be3-49b9-83a2-7e1edeab0d77"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3e25aa3a-9fb4-4e40-9989-07039d798515"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "3e483113-87b4-4219-86ef-cd56a034f8c8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3e72d2be-c025-439b-88f6-6b8a90260a77"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3e7d6ad9-37c8-4899-9956-99088ff63c78"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3ea6db8c-1b6a-4880-a954-b929302e8260"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3ebb514f-ac4a-4913-b54b-409bcc29eff4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3ec1f730-53d8-4e3e-a932-c0cd91bb27a3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "3efdc2f9-61ef-40b9-8d93-0f61668d8418"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3f06d44f-7bcc-4a9e-882f-c19f436b0612"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "3f512971-679b-4f40-8f5e-1467424ce605"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3f793103-342f-40ca-a0fa-96b1065ad986"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "3f9bdb7e-9739-47db-b323-1935cf6ea8d6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "3fe3b8d1-a2a0-4d11-8bed-68f33110fb57"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "40229d13-d7b7-4b8f-acb3-7ae19fb085ba"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "402f38a8-f484-49eb-99bb-d508093abbd3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "403e3c53-6a70-49cc-81b8-2014542e53d3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4054acf6-3542-4023-846b-bc13d419d79b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "40a33fe3-d4c6-4eda-ab0e-45bac8de7bdb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "40ce67f7-1961-49cd-beff-33c03f702a17"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "40d5953a-8816-462d-8ea6-4e9bc78a6af5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "40de3b34-3c4e-4bbe-9074-d61fafac3154"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "40fc1723-7365-4fcc-aab8-46f47e4eff17"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4115430c-0702-4c66-81ba-a6f1b580633a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "411cacb0-6312-4465-81f2-76417d209c17"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "412fddc2-44a1-4fb6-b272-4d38cc7cd56c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "416634af-9655-4973-a39a-9e1a9e3f0f2c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "41701276-d1e1-4068-b767-5b6173f6512c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "417445b4-e0db-49ac-99db-fe236794e9ff"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "41bb2c5e-4eb3-4bdf-8d1e-6ea497c44b26"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "41eb7a6d-7eb0-4842-b25a-52cca7b3355e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "41ff8c60-d10d-44cf-905c-e2d1a39e5d3f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4200b0d7-2aae-4e07-acf3-a342b0c468ac"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4248c931-9e5f-470d-94d5-545746b84336"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "424a8ef0-74a3-48ab-bdaf-8df3d957e36c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "424eed88-76e7-402b-8d62-3f598eb9c9ce"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "42f11dde-ad7e-46e0-ab7b-37a7add49986"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "431f09a6-ea26-4a63-9c27-139a9acf4486"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "432ee39e-5971-4c7e-a0a0-71684a7d3e0e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "434c9060-4b58-46a0-94f4-63a85b7133b9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "43bb69c7-5c0e-4b99-baed-f23b921b0ca4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "43c12659-d785-44da-ab9b-e0e5fedee349"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "43e8118f-ea04-4525-88a6-ed50a41bd240"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "43fc125a-8617-45d6-a2ad-24f4a1a7f9b8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "446c8f5c-fbaa-4344-ae81-4b59d21f5c1a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "44cc38c9-b726-4bff-8f59-c547b69d6dab"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "44def22f-dca7-4075-a555-d64821a0d882"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "450b08c8-702f-496a-8ce0-3946c646e80a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "454b824c-cc1a-4846-97d8-7c036712895b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "45762448-5303-4e98-a999-e6aa22f63595"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "45958d56-72b2-44e3-ada0-c7030f469445"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4599daa4-93cc-4c55-872c-41e9c7875a59"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "45ac8925-95ec-476a-9a36-9bbb650add84"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "45e80c0e-3eaf-4f57-8461-a821ef3ea096"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "45ed713b-bab5-429b-aa62-2f26a08e2a69"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "45fcb351-64fb-488a-ab19-35741221bf81"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "463b8850-768f-423c-8927-94718dc1893b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4656cc72-cea3-407e-a61c-314450ff6c62"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "465c2630-67b7-42fe-95ac-e2a66a733531"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "46838746-5160-40bb-a0e7-5bb88bd33db9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "46bceb53-3c23-41a6-9659-b7a67035197a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "46f747db-300f-49fb-bf4a-d2857eee3dee"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "470169f0-deb7-4c7c-b912-90a98acede1d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4739673e-66ac-454f-b7de-76e270f1e110"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "474c3e7d-ee4a-4c29-a62e-9ef87ca12ea0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "47c37ef9-98ee-41d8-879b-e78db06295da"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "47eb07cd-5c1c-4c0e-88c0-484d3b3411a1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "480b7897-a76a-406c-9991-7c1c8228f905"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "480e074e-f607-44d7-8bad-753453941c0c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "480f44f7-ad94-4ea5-bad8-fde912fa692b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "485c3c0c-31f0-45a7-a06b-797c4c021466"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4896b11f-df95-41f0-859b-7dc2bdd54b52"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "489ca9da-126d-463b-b792-a1b39a555e3e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "48a6d6b8-7224-4edf-b20c-a6fba056d8fa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "49037cfb-5c88-4863-aa23-c317502fc6d8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "493a3926-21be-445c-95c6-f6f91527ab58"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "49b5ec85-112e-4ba8-a8c7-62cf48f745ae"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "49cd7035-b70c-4991-b776-e5ae204ad8c5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "4a1c0e1a-7ef6-4e1f-bbdb-6334304bcf52"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "4a4dcea2-c940-416e-a217-b397396179e1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4a4e2c30-8a8f-4b7d-8e7c-c0e837b94760"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4a5a324f-832f-4dca-b688-d4a006d297c7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4a87bc78-0813-4110-aa1e-3818326bee00"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4ab1bd6e-a7fd-41c3-b341-9959d77d5a6e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4b24c412-e5fc-418b-a48b-c8b54ac28315"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "4b3024e4-d801-49ab-b0c4-d496090cee40"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4b4a9785-3993-4bc1-91f2-6df76949b100"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4b635088-8799-4dc1-99de-b2b224a71d28"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4bc8c850-b194-4d4a-b0a4-40f8c4ef762a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4c0798e4-c439-490e-a8b7-60a0bad11cfd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4c40a3eb-e009-4b8b-b507-18053a6538a1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4c4c07a0-d94d-42fa-b1f2-a4f4ab3b8094"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4c5103a2-0ae8-443d-9203-f3a4bf4bbd6f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4c52711a-1bf8-4dc2-a293-865bbddff257"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4c650823-6f85-4e10-9976-61cf1369a9b9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4c6645cc-de9a-4a21-b932-809f7600337c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4c6ce4c1-8c8c-4982-a0fc-8df781a35ef6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4c6f2c0a-abdb-4a1d-a12c-a71403776fe4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4cab063f-a1a1-4e24-a46a-d609f2f87f53"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4cb532e1-c831-463e-b9bf-a43bcbebeb02"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4d5e5614-2bef-4d1c-85be-8fbe423bac32"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "4dc60f9f-66cf-4a4a-9c47-bf24cc0d618d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4dc7086c-f261-4f38-85f2-10a20eeda1bc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4e0540cd-333a-4808-8c4e-fa136957c934"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4e240612-152f-48a1-aee8-59dd9027a990"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4e78a6c5-1811-46d3-8e62-8c613ec3afbe"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4f366f34-983c-42e1-a89d-7e8f5f77cdce"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "4f522637-ca21-4ac0-b2f3-3edf8e258e1c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4f616866-4a3f-4754-9855-193df8e63fdc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4f739f05-0a2b-4e7a-93e8-36ad775f4b20"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "4f89dada-27a0-4c49-bc79-5fc5ef812766"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "4fbef8ee-1d95-429f-ae1d-bf525dab7ab1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "4ff99d9d-a0a1-4056-87a7-a9e9f517440e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5007aaf4-5baa-4f8a-b0ed-95e6352d511b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "505bd44a-9fec-4324-a414-4ee080bf37fa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5067da0a-d681-4fe3-91e5-e2dc7c0656d7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "5075fcfd-fd0b-4b63-ae8d-7d43e1964554"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5077f16f-1d87-4be3-a870-35f3e1cf55fe"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "50b5d70c-f280-4c8c-a3e5-90e7deeca86e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "50d4292b-caee-4819-8aaa-64b94187fce8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "50e2e3a4-4f3e-4b1e-bd7a-8b97404f59c8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "50f9ccc8-06b1-4283-af88-a6769d0b9083"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5137c62f-7a51-4144-9ee1-9bd565b10bc8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5144ec8c-3071-4484-83d5-aded69094bb0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5169991f-862a-451b-b76f-9a49a8bc5f8b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "519a09b3-c3dc-4760-a0b6-30cb2267cd4e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "519f6ff4-934d-46c5-8d84-b73ca0e4d594"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "51aa1b30-451a-4cab-a0fb-50710f87e13a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "51c8708e-d263-400a-ae34-57d52ca69638"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "51db73ea-a48b-40dc-9d9e-f0f9b3a27cf6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "51e00207-24c0-4f44-b581-4d8584df5296"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "5200dee4-0688-4447-b671-1b6fbf39fa7f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "521ade1a-0eaf-442b-973d-ccae9e9fbb35"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "52258395-f830-4181-bccb-8d5e37d2e440"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5235f9f1-cfe9-4631-bb35-0cba709f093d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "5281654c-51d5-443c-9a00-9824f323f61b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5290a257-c16d-444a-8620-aa60ec6130da"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "52fe4aef-2fab-4d5b-9a5c-19b7f491a7fb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "53300097-052c-41d7-b5a8-52110f7c8130"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "53681595-1e58-4cec-99f3-0b3458769e26"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "53837f96-d32c-4abb-b461-bcf45d914e0f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "53e3bad0-669e-4cbf-8aef-031dd53e84df"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "544c05a7-3614-43b8-bf63-a158622e5fdb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "54a9488b-698d-4c49-94a4-c50dd43847fe"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "54bbb6a0-65d3-42c2-a995-0469957a1313"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "54e2461b-5a65-4da6-9e73-10b14a813736"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "55727fad-d494-42c3-9463-dc8c1b54d331"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "557a6dcf-0a4a-4b76-8fed-e8f89cd2b19e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "559a729a-01e4-4161-bdc6-730494fb785b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "55ce644f-cbfa-4aab-9f3f-e7cca251f3ad"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "55d6f958-6ee7-4a0a-9e3c-23bbdb63d571"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5614b867-438c-4c38-9a43-e2d04abe6dc0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5639ccb8-8d69-4268-b4f1-5d52245214da"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "56f32f70-ee56-4778-a3b3-d490a482f6c8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "56f3ec0c-0610-4701-8a4e-727b7d3a2512"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5741eec1-d6ca-4a63-b0cb-f9a106a4acca"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "574b24e0-9357-4d1a-a66b-556a0dfe6303"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "576eeca0-250a-4d38-8524-aaf67bde36d6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "577b13cd-242b-4951-a8c4-ab3ecde0e5b1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "57828dbd-9f7f-49e7-92bc-0f4eebae4829"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "57ded976-9874-4832-8716-2b54c1fee102"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "57e9b3c3-1d32-49dd-ad8c-49577ed78d06"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "57fa22f7-4aec-42ad-a776-19566dba8adc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "57fdae55-1910-4354-b9d3-76d7525c6bc7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "5801a79b-8780-405a-9e1b-6a6016c5438b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "582777a5-6a82-4883-8092-ef8c9b4dc78d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "58486903-37c4-4aa4-866f-f7f8d66205ac"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "58b9666f-7ff2-4be0-9843-7f1c2b43592c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "58d46ab0-7fc9-4dfa-bf40-a5042d4a91be"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "58e730c7-6ec4-44a4-97e8-d2f75d9a1c9e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5908e9f0-9f7f-43ee-8fd8-7ac446fd46c7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "590d3dff-ec5a-4328-a0d9-5baf03686be0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5945ab7d-4240-4c77-8eba-3761949713f1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "594fb89c-b8fc-4990-9818-35a82c9ffbfa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "59af6742-7a6d-45ba-9cb7-9fd0de0c51c9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "59b08d5d-d319-43da-9607-2b0138c4dc1b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5a04d6f3-c82d-4c82-b1e9-3d70bff135ae"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5a2b16a7-5636-40c9-8875-124de3041d9b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5a301f69-7dc6-44e0-94a2-2e6e533ec6ec"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5a3da9b9-6d74-4991-bfa3-3e41f600bcdf"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5ac14fcb-67f0-48a9-8ef6-8b36bfe645bf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "5ae4b331-f6a3-4307-9b5a-6c4c65f111b3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5af64ae1-13fb-4693-a070-fa3628f8f78e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "5b182764-5cd3-4a91-92ae-5cdcc2d6f245"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "5b24d3c4-1382-434d-a177-e09fb0b8778d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5b36f014-cb4a-4c2f-84b3-80996c503702"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5b541553-60c7-469e-93f2-a0759ea72435"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5b9393ea-f867-4553-b497-7079cebbff61"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "5baef468-20dd-4e38-90ea-e209fc29e508"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5bdfb4fe-496d-4c3a-9032-d5677201fca8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "5c3a138c-7052-4cb4-a482-10df27239b2e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5c3b4fba-f4f8-48bf-8871-c492c9bd7722"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5c3c077a-2366-4f70-a1bd-37e81b0a1f88"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5c46562f-ee30-4894-a9ce-b069e22aa698"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5c4b2afd-f915-4625-a841-790460fddef5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5c5660ba-b720-4674-9df6-dbbd6d7c80e3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "5ca2f8d6-0077-4fe6-9034-18308bb4a4d1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "5cb68be0-593f-4b27-97f7-417a9314ef27"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5cc613ff-ad80-4906-9103-6d1035eaea3e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5d0819e0-a352-4ea1-9d64-067da2e428f9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5d3fc50c-0709-4d5a-bd6c-900bc7c542b1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5d5f1cc8-18af-42b2-860a-65862b328498"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5d64e4f8-8a98-4cf7-a97b-c353d6029e84"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5d8a7c0e-3d54-497b-a9dc-5c9cbee82670"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5d8ab96d-45d0-47dd-8e05-8202baf131c1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5d975f0c-bbe4-4bd4-9436-5bf4f2bd59b6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "5db5e2c0-081a-4c69-a8c6-6105ac870e5f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5e53212a-df01-4e4e-b9d0-fde511c2ec55"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5e55b918-e5c7-4224-aa90-f244416f696f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "5e710f8a-fc74-40b6-ab42-424a3ded4713"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5e73f7ad-ee05-4eaa-bea0-bb66eb0abe9d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "5e77ac5e-8cf2-4c79-b074-e1c61f33c8a7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5ea99baa-5ab5-4f9f-adb9-48bc53e97363"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "5ef32845-6e06-422d-bb99-e1e7c898749a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "5f0df994-58d2-4bd5-91be-252d6ae06f76"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5f8ce412-3bb0-4aa3-aff3-cd1d825273a6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "5f9bc540-443e-41d6-93af-9c65dd28673b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "5fe6dbf7-9f00-49aa-b9ed-7aa643ac1305"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6098d612-4f78-437a-87cb-739b74f254a4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "60ef45e0-fd0e-414c-a000-22ddccdd332b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "611a3218-4df9-4018-8d46-c1e731f04b2a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "617627d7-010d-4aa2-a9da-0d3160855f8a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "61ae1b37-1703-4754-880a-f7277504a829"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "61c16e64-b3b7-4bf5-9617-b23ea650f89d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "61e8d3cd-1e93-4c78-a558-f2955a9fe221"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "61f1e287-c3bc-40ad-b3fe-af956af4cb1b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6228ca17-0d5a-4142-85df-4474a8eb6943"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "622db6b3-64ba-4922-a501-a2f5745603dd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "62baaf4c-8ad4-4bf4-b0e0-e5587c5a64a1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "62c6ca1d-d37b-45b2-a773-15ce8bf69ea1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "62ea668a-68e5-41fe-93ed-3429127d6b4c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "62f21f04-c668-474e-8548-69bbdbc35620"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6313cd62-456d-4a85-8782-57613c7fc0e1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "631de534-1de5-4dbc-ac03-ac5ee63eb84f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "63ae296b-eca5-4df7-b7f3-64d6cd4d6eef"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "63b855c8-c281-42d8-87ea-58aeeec070ef"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "64137ead-762b-4621-a59c-5c7395ef4826"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6421a997-1446-4e19-8f3c-6e62eaf20aa2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "648d388d-8532-4605-9345-1b656640455e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "648faca1-d0ae-4830-83f6-54efdf0231fe"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "64c9b400-5cab-45f2-8662-03c24c4367ce"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "64cf6ee2-708e-47c4-a2a6-0ec195d4917e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "64d602b0-c9e8-4313-aa2b-a96ed1d7cf5f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "65050d8b-7a91-4121-8384-84e4b7cea557"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "65881dcd-e524-404a-a931-3d69e7348c71"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "658a18d9-ae09-4a8b-b16e-abeb92fa91bc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "65936955-be6f-43cc-a306-fc879106f442"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "660f8d4f-9fbd-43ea-8431-18c9327e81ea"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "661343e6-b314-4d63-9926-dd7de564aad5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "66b6fcb0-605a-4988-9c26-50d92bdb45dd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "66cebfd5-9c0d-4116-bb94-c6f8dcda9b84"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "66e834a6-a9e5-49a2-93e1-c29a181e50a0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "67661f87-a03e-4e21-b8d1-c62fbf91361d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "676dbe65-abbf-4e30-8e56-70cae048f1e0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "6799d014-2963-4be7-954d-6a50ebbdcbc4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "67b3a2f7-5f1b-46cc-893a-6cc48b2908c4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "68181f11-04ab-4bfb-aedb-0c7bc0ebb2f8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "681b6f74-7b5c-4c1a-99b4-0f58822e5e39"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "6848b0cc-552a-4e7d-b767-281d3658a5ac"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "68677772-b461-49a3-bf2b-376e2b0e970b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6880170a-df11-4dbf-8c6c-02aa4e39ec7b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "68859b06-2135-4711-a160-da003d18ccca"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "68c4944b-9e3a-4561-955c-33fa9978fc86"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6933ea78-a024-455d-981e-fe4c09dfad75"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "696fa141-d76e-4882-ab59-75f8a0d46d47"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6972abd9-37c7-4fc4-8588-3af3510975b6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6991377d-fbb5-4c0b-9e24-6dc294033fda"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "69b83929-86e2-4a3e-8e0d-2418db5192ed"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "69c71448-4ec8-4fa9-a535-e657a69e98b7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "69e127d4-7ea5-44b8-8b0b-b1b7fb000531"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "69fb2e9b-8dda-4cfa-b5de-63ce3015c978"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6a199307-b761-4214-82da-2dbd4c89832c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6a4cdd7d-42a8-4952-a1b9-7d6bb44f090a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6a55e68c-c08a-4c76-8685-fc501bbc0857"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "6a7ed782-d72d-4eeb-8df6-634a27140019"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6a8bc59c-77c3-4359-8f65-19f67ee0ac04"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6b2cc1ad-eb68-4f1d-9181-42cc5f84cda0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6b3ad5d3-b81b-41d1-ad99-b0cf89f78b86"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "6b6a62fc-a743-47a2-9caf-9d41ee6a36e7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6bb8492b-2731-4f5a-8b48-4eb6b3b851f8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "6bedf225-fc80-4324-9f91-eaa70bdcc002"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6c09f12a-a657-4395-8bc6-d3903f4eaa27"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6c2319ca-2998-4408-a7d8-2939397c300e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "6c6bb00c-45f8-4d2e-8532-79e612ae267a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6c736688-98d7-4c57-bf53-1f4367950131"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6cb8a98b-4816-4879-9de7-84095b4c0989"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "6cc29702-81c5-4a0a-bc3e-a62de9545b3a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "6cc9e902-c82f-4b21-9f36-41c2b783cebc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6cf72484-5b8f-44b0-acfe-fd70ebfa5f26"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6d04a9ad-3da8-415b-a69a-2f3343244e67"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6d1ada8b-dd0e-4f0b-a586-1e5ac33ba9dc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6d2b0b49-565b-41ed-8763-aa0f35d7c627"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6d3bc9c6-2672-49a9-9934-9f56e37c8fde"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6d615647-22ef-4614-abca-fad00fc83994"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6da6eaa8-4d63-48cb-8c9e-c9eac12f1d04"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6dc58d5f-9c58-42da-831d-af82d9c07c94"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6de2b431-29c0-41e2-822e-91d99f46f7cb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6e01b8ff-f4c3-4eaf-88d5-418482b1c90d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6e836171-0fc6-44e3-a2af-672a7b740d5d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6ecce501-caff-4b88-bc2a-9e6d91656bbc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6ee96ec3-9a2f-41be-ad77-f8187a54e493"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6eeb1c75-4fef-4247-9872-3fd2f2b63c10"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "6fc1cbb2-3926-4ef2-b59f-0e3e4337fd45"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "6ff3e4f1-8f21-410a-9c93-d4468c91a762"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "70037a24-6487-4834-9b50-5242289009fe"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7008f483-697f-4f0b-b2c4-5b234d28d4c7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "704e228b-e4e7-4097-bd71-819f72fb8a0a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7054234a-ec07-477d-afe0-df191dbca303"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "70762563-db82-43f3-ad30-bce5fde9c9bd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "70aedb08-34af-45ae-9414-887ef9467e7e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "70b080a5-f192-4e17-b035-cf745251433b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "70ba6d0f-f026-4b29-9379-a9152ee1e271"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "71187888-1c5d-4629-9eba-7ca241f2e650"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7155aa5a-4eff-4b1d-a105-b15d17b786c6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "71765908-34a8-4811-8e82-2e238a2bddfe"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "71b5fca6-6ce4-43f0-bddd-6b3c15ca3f0e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "71d8e2bc-7406-4c4a-b68d-2ff1b71800e8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "71f6f6f1-0cc8-4e43-9f9f-89ae7a635ffa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "723dad90-4cd2-42ca-a8d1-9cf8fe11f1f0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "723fc127-d8cb-4d46-b075-ce46593b5409"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "725d79b1-6918-484c-97eb-ff6ae947f840"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7260c83f-718a-4d70-9126-516ecd7db7a7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7279cb69-c5d2-4b9b-b307-96ef43164e7f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "727fbd40-0d27-4a24-a2e7-0f0b43544b62"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "72b1b9e1-8e84-402b-b1bd-a7161527bca5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "72cd16e3-8fc7-49a6-8f6d-efc56c40508d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "72d00882-cac4-420f-8105-e1a0f7999340"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "73228e20-288b-42a1-9bbf-bcad94fecbbc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "733f1f39-ab36-45cd-ba98-e37af64ad816"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7345ac3a-0fbd-4507-807b-a2f8a592c39d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7356fc90-8d0c-4554-b51d-f6b65c926244"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "74a81d2a-f0a4-482b-ae66-15b51bbdb7ee"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "74e0a41e-6437-4691-b430-35a076358628"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "74ea7fff-37dd-46f5-a3ca-2df0fdd65068"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "74ef6000-7bfa-4e7c-a745-b29b55f35030"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "74fe5dc2-1e2c-4dd6-b4ed-3cb376c9cd50"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "753c8b27-50ac-4659-9d58-dd441ced2936"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "754f8aff-b1ac-4650-a0db-89bf64dbbba5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "758dd394-0b33-4f82-821d-5b6de5058afe"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "75c57d9d-cc2d-41dc-9937-ab8939869594"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "75dac040-12f2-4c78-b989-33cd3f5f07a9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "75f2454d-5538-42ea-87b2-ba091dec3df6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7630e743-d719-486b-9be7-aa06d9bcab71"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7661e2ac-0a20-46be-9069-961b36db4ac7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "767b931c-d5d6-4da3-80fd-bdd8b72f8663"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "76bd4687-787b-48d8-bbb5-e0d063bbf4c6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "76c51ba8-fb3f-4a54-9cc2-8f6feafa9594"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "76cfc1e7-19cc-48fc-a64b-b47f1767640a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "774a99e0-e8f7-4881-aa6e-94462da0c52d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "775deb7e-4de9-46c9-936c-9de468d21192"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "776629fa-7b09-4af3-ad4c-3de6dff22753"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "77809c8e-181c-4e4e-b879-dfb7fb63c220"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "77935222-436a-4bf7-9337-e7a3d86f74ba"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7797f819-742d-44a1-9df8-f412d513e54a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "77a54c05-fd61-4fd7-ae4b-4a0fc89fec53"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "77b9b433-376a-468e-8af3-13197a31ed28"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "77c8e01e-c8c8-4667-99f2-e36c81d6c0f8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "782afd80-c3e6-4678-99b0-adc7c3074b7f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "786c39f1-9944-4733-93c5-4d465f5f7767"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7895564a-2414-4bd5-a9c7-61e611f9159a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "789a9fa1-5e23-4631-912d-75ce1726bf89"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "78c18ef3-5f91-4629-bfef-37b0f13b2bef"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "78c9f0a2-2247-4159-87ce-9a0e69e88e28"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "78dcb136-e26a-4653-b586-6b75dd96ccb4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7959bac1-48f2-4648-b9fa-7b23847cd894"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "79898fb7-ea09-4366-93ee-d87e379e1aca"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "7a0fa7b4-88fb-49d0-bfd7-9ebe9c5109d8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7a1fc276-f5b2-42d1-b57f-95f2dc6eb115"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7a339d92-507c-43e2-8eef-ff924f8c4231"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "7b01e094-e250-46f9-97f3-a03a2a4b4dfa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7b0e4de1-3212-46bc-b5fd-40ac1793faa1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7b3f1698-60de-4e2f-98cc-f405bfa01478"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "7b8f41e0-5e48-4247-8fc4-33863cb2af59"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7bab6020-97a0-46a2-9d2b-a8f7d00332f7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7bd8951e-8693-423f-ae6f-f56713813262"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7be75434-ab13-4f9b-883d-3897bb86cb47"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7bf8ea0c-3669-41e5-9108-82a696f36664"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7bfb0158-bf33-40c2-aff0-3af9efcd5193"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7bffddb6-2fc1-49cf-987a-d7e78bdc98c5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7c20f481-787e-44b6-b7f3-973e8d87c6d4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7c40fd0e-0b13-4b8a-979c-96f11452525f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7c562ff4-eefb-4a42-b58a-a013cf1cb970"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "7c762fd9-2ec5-4d25-a67b-f391837257af"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7c94cfe0-8dc8-4286-acf4-dc994bd79853"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "7c97de3a-0401-4cd9-892a-79450990b3ce"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7ca988d4-73af-4ed2-b4ab-d93d080aa486"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7ccaad38-8cfb-401e-a938-e2c792914b75"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7cf17ac2-f8e5-43a4-a31d-3c89370c7cea"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7cfc73a7-180b-4378-a14a-785e9cab28a4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7cff9dcb-732c-45c9-82be-8ee3096abcaa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "7d1856ba-e68a-4b0a-b3d9-1da34299a6d0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7d24037c-4afc-49e7-a13e-713769bf8208"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "7d356160-ee86-4110-974a-2c77e02eb710"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "7d45e357-77ff-40f6-a4b4-7e16e015996a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7d7e62e6-943f-4a2d-b5fa-8afd589ccf80"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7d8df981-b89f-4d88-809d-205d2d11c160"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7df3ac64-8a51-4a51-aeb0-7b99c1e9c196"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7e40873d-033a-4bef-ba20-f4109219a1b3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7e503bd7-1d82-4054-b481-6be171a77611"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7ee712a7-ac2d-448e-953e-1292d104facc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7ef5997f-b5ec-4559-9611-8016a7191f0a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "7f3c0b8d-671f-4daa-9f4c-e1c447bf241b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "7f7fe84f-3bf8-415b-af7b-c6c95333807a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "7f9f3957-7fc4-4775-8c45-93c279feb753"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "80260626-f0b7-4a1a-95e4-5f26bcfe1ecd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "804f7b48-464b-40a2-b08d-0cd9c435096b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "805a50cd-f05e-4f4d-b7af-395948a00fff"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "806f831d-3aa7-40be-a792-8e9ad6287b20"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "80e5c917-0d44-4443-b183-3d03daa36bab"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "80fa4dec-a12f-4604-b92e-bfa32b2e0ef6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8107d407-8094-4f0b-b459-54b2a43e1864"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "811c92cf-dd96-4a75-89b0-e808cb12d882"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "81666db8-d2a8-4557-8986-376a02bf40b2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "81724be4-6588-41b1-8efc-364637456cdf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "817ff7b7-a814-405a-a5af-0ef173f07045"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "81ee931d-9549-4cdb-a508-d06ae8971ba4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "820bbc57-f448-4e1a-8912-d097977fd739"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "820ff35d-d611-4865-b4e3-27e09843aa9a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8230ee02-ce60-4b34-b0cd-3beca70274fb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "82b9ba8e-bc9a-405a-afe2-fcb210a5d278"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "82c9fb95-c776-4450-bb5c-93a70fdcb056"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "82f23c96-d8b2-41f0-a3e5-59ae9b89880c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "82f2d8e5-e3fa-4782-b580-a7eca3ecad45"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "831371bc-5719-4399-ac7b-d0defb2022b0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "83659142-eb78-4e7a-bc65-94a54387ef42"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "83893760-fcb6-4824-8ee9-7e1c6fc74852"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "838d58ef-f389-42b1-8740-198904bf1cc1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "83af1077-fe87-4b2e-ad58-e84628b9a4d6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "84270114-d8f9-4f10-9ed3-bd0f86c35038"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8466f428-5e7d-4d8b-bf67-68cc758c6f01"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "84c1ff70-a242-423d-96f8-694b1b7fcc67"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "84e58c4d-9c61-4454-b165-041371c9b2c1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "852f3856-ecaa-4bab-82c8-a0ab2d11f94f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "855c0303-e1dd-4756-9636-893586fa61ea"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "85a15fe0-fbb8-4072-b73a-7345fbe6f9dc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "85a6ae2e-6f62-44f2-9dfd-fd81b229d56d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "86066b6b-c86e-48ad-90b7-9099ca1e5e58"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "861015a5-d704-4231-a835-069e4ee5b4a4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "861136bb-c3b6-4cf6-8e0c-ff756d744c12"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "86207cd7-b3f0-45e0-b589-97f8a04cc300"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8636931f-2d42-494a-8c3c-305b9f72de1e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "86383b38-f1a1-4f04-9b7e-8a49c3495829"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "863e756a-6e77-4d6d-82d1-d22640bec0f4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "86400297-e0cd-42ec-b79d-aae00be16bfd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8646c0ed-3749-41e2-ad61-986adb0b7d76"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "866a90af-95d6-48e9-ae11-9ce1eb958a71"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "d1-marker-without-entry"
+   ],
+   "site_id": "867f08af-8934-4ec0-bbcc-2c730bb2a93a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "86a32957-57c8-424d-bc27-78c2d3ebaedc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "86c101ad-fcdb-413a-8aec-6aad2d1574e7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "86e1dff8-20ac-4d49-85d8-480ee0b9f3ed"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8729144c-61a4-49e3-9883-c04538725739"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "872b05b1-618b-4618-b3ae-6c69f3177911"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "872b2d83-1e91-46b7-82b6-299b706487a1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "8736ff70-92b8-4378-89c5-0620a9cac1c2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "87abc0f0-0a56-420f-94ce-ada2998bbd0d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "87b7df7d-023f-43ce-b644-4c12394a8f9f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "87cc7367-7c4d-4b5b-ae73-9cf41c550e9c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "87dcefc2-025d-458b-9418-16e4bac7d17f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "87ea9721-2bb2-456a-b1e6-8a44dbde62d3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "87fec19f-7aa6-42e9-9aba-bfdf3c3938d6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "8838f1fa-2c3c-44b6-a554-75e34ae61ee9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "884eefd5-fec7-49da-972f-dfd3a8c099ab"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "885f5a1c-3453-4017-98a5-7e0d2b0151e7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8862f0da-6584-4963-911f-a88c454dc321"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "88897642-cf8a-48c2-a9a4-ebb0408a8804"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "88c417e9-5131-401f-8187-1da8cc344b0f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "88deb44a-3ffd-401d-b9e0-54b0ec05fd89"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "88e2a4bc-8d85-4457-a1a3-22cbf01db5a2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "891ad351-7985-4c16-b6a6-830c26bc268f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "89489dc6-0f27-48bc-9365-5c74725b46dc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8958a97d-425b-4f9c-a503-897815a44756"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "89bb7456-d47b-4771-8d89-a14827233844"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "89be3bc4-f58c-4641-b56d-fb76041392f8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "89dd3a0c-d36c-439d-8ccc-f005666e7ec9"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "89f1d2b7-2579-4c33-82b3-8b58d7857c53"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8a082425-b949-4e34-a37a-02238d6a2817"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "8a091738-3689-48f4-8e8b-565a3197c5d5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8a30c67b-4f3e-4e14-b249-bf7de6d7ff31"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "8a3a0f0e-6656-4b50-92ff-7f02f9f1548e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "8a42154e-7081-481f-ad77-49e7a02b2c98"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "8a4ea255-abed-47fe-9c37-636756e90450"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8a66f7db-94df-45d9-919f-760b966192be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8a93ea1c-7dc4-4b11-b68e-39524fa0b8bc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8ad7daf1-1126-4f0a-997f-84dd82d4c396"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8b1bec65-9c91-4ba1-a8c9-ccde8579e04c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8b78f040-2e72-4754-b3e1-0b78a4e970c0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8b9f8fb9-7f39-455b-bf0e-bec8e76fb45d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8ba6876d-8e26-43b8-82fc-2489646c82f0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8bcea3e7-dfdc-4af5-8b75-70fb9e34d7ee"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8c159d7f-d954-44fc-aab9-6b7841d68a35"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8c44a3a9-c945-44e8-8dc2-1baab82890ea"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8c4d854b-55f3-4004-bc87-cffe5a431a2e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8c624c02-31b5-4058-8551-f7cec08e6359"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8c80949d-85d0-47c5-9cee-e6719ebc7c9d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8ca3f6a9-2b4a-461e-8f64-84b43eb87201"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "8d416cb3-e799-4990-96a9-50a70fde39c2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "8d8753ae-9935-4ffb-b578-de5907999f68"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8dd50bbd-b629-4c5f-8214-647324df6fce"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8de309a1-1291-4878-8f63-694b2276b934"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8dedf95c-00b3-490e-94fa-3d558e4bc6be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8df1e714-b5bb-4d4b-846b-71cdf7cb3d21"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "8e625e19-eeb1-4813-8244-14ec448d7440"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "8ed8a300-acf7-4287-8b86-6a6185e3a8a2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8ee9e59b-a2fd-4a46-b3a6-a9ae4efc0500"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8f34775c-ca69-41e8-9517-35005cdc21b8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8f53beb3-710b-4ace-9ebd-85757f1542e2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8f8d1ce5-3527-4c35-925f-579e6dc51784"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "8fbbcbd3-8f18-471d-8515-0960e2e093b7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8fc0c418-49b4-459a-abc9-9c54c09ef5ba"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "8fed20ca-19ed-4876-b286-0fb23e0fbc90"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "8ff7ee7b-8df0-4b7f-81b0-9bf088fbfd02"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "904babe6-e678-4a59-be5f-89228d5cbb59"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9072416f-69c6-4c4a-a5d3-6981eb899114"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "9085faef-619a-4d87-bd91-1f33780fe58f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "908d7e5e-4c01-400d-b5d6-fe46c46afe6e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "90ec5b47-7488-4bb4-8c4d-1259d30ac328"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9116c105-f7ac-4f02-8ea4-b724c68c9464"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9190f012-5a73-4f94-9f39-9c870a7bdf4c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "91ad730f-4a6d-48c3-aa2d-e79d940878ca"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9212f10a-d866-4d70-bb38-0cbffc49a2c5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "925b8dc7-7932-426d-af72-bcb406bb6f12"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "92b64f9c-50e1-4769-b239-424949a2546d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "92cad00e-4027-4e01-bb7d-2da01760d197"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "92d26614-c2fb-4b94-9342-99a5bd2407ab"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "931ddb0f-7236-4315-ac59-8cc677dd5aa7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "93370dfd-9467-4c8b-9dc7-dca5faa812ac"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "933a2371-d810-463c-8799-33ba1731e463"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "936b5a30-e1dd-4524-95c2-e7214ecf3090"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "93dd77da-64ad-4947-96b3-8ead4d6c98c1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "94141d8e-4482-4c1c-a5f0-79fc8fc2ca76"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "941b3241-8cc0-408b-a1be-2ee5cd8ad6f7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "941ec7f7-645f-4c87-9cc5-f156e7504054"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "943f68a1-7483-4fe7-beb9-d114c2092d5a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "944099e9-5dfb-435f-a1a2-0c87eb4660be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "945482c9-9445-4622-add2-2a6334ccbd5b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "945eea72-1e1d-4156-bd45-d68c250b959b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "94a3c919-e3f9-4d26-9e15-46ed22ac2f93"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "94c02471-3aaa-4736-84e6-a1b52bc7e23b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "94f496b6-5e15-4a5a-9bd2-0cb1885864bf"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "952e9faf-49f9-4fe9-8cee-f0934167b9df"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "953e0154-1d30-4502-953d-4de1ff7bda62"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "95817f28-f648-440a-b29f-f5ac3f794a69"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "95c0ba9a-11f1-4d7d-9cbc-c099c0a944cf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "95e422e4-a53f-4038-b260-1c5ef0d7e76f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "95ef632b-03af-4f8d-8881-0b59d0668d45"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "96235e5c-656a-41c4-8017-902d9353d2b6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9624278c-1080-4a2a-ae2e-11829bda299a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "964d2a78-6209-4f94-be74-761d59bfd0cc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "96938167-cc5f-44fa-b3fd-2ab39fad89a7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9705b676-7ba1-465f-aebd-a21f346de5a1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "970633a9-5402-4221-af0e-1fefc6c8a427"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9737ca03-ad30-46d2-8740-3dec20bed1ea"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9755c087-8b24-46e2-9785-b5ac6c91f3ea"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9760e579-1005-4b8f-bf08-b9be81a716da"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9789eadf-a133-43dc-9f8e-2d7f7818ecc2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "98377ef7-6274-433a-98f5-72bd3baf7397"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9845a5a2-4ecc-412f-8455-7e156e0cbb16"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "98c794a6-57b5-4783-b38d-3693bb60b91b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "99115b5a-460c-41e5-98f0-be47a7235402"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "991bd627-65d9-40d3-a97d-dfa879756da0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "995d7504-5526-4e4e-96d5-a03ba4470425"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9983bdce-9f35-47a3-a570-4021cfa41b97"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9989d873-9183-41e1-aeda-d543deb038ce"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "99add2bd-b314-4bb9-885b-95f407b3b44e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "99c67365-3376-46ae-9e60-0d2ec03bfff4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9a57f2b6-71ce-449d-8c83-d1e6c8f36f3a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9a941093-043f-4287-b188-aebddd81df62"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9a95f005-3bee-4270-a718-5aad8b971a5b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9ab9a6fa-2a4d-47db-8db4-237820a577d2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9ac08a10-faeb-40fa-b8c8-ba0867bd9446"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "9adf8063-9af0-4610-b021-0e9f0cef4c02"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9adffc6f-a7ef-4809-96db-60b43fe3bf33"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9ae31b41-d78d-44da-824d-43487ec611f0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9aedc6a3-1681-4ee3-8d6c-4386de4bba1d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9b10cebe-56ec-42cd-9f05-fa9c679c2bce"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "9b3a51e8-25ee-4936-932a-af5e2fd48e01"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9b3eed6b-54e2-4321-8e84-9b204819879a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9b42d08a-5048-42bb-8527-8e26a4f6bbe2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "9b546e2f-9bd2-4c84-a6e4-9acfa6c6480a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9b5751dd-d54e-4e8a-b4c0-7b4dc2a863c7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9b639757-cc79-496b-9748-69594f98c109"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9ba07ea3-0efb-41eb-a65d-e7c5d4c2fe2d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9ba7c034-6aec-492e-b66e-4541ce3c987c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9bec7da2-8ff6-46be-a2cf-34d689358bf2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9bf7ac31-4f48-4bbc-ad4b-cbef11d994b9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "9c128b05-d7c1-45f8-873d-bc5f96d04751"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "9c35081a-a345-4545-962d-d3aeeb2f2b0c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9c3e1746-6da1-412c-aeb3-eb61cb3cafbb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "9c7230d0-e962-4c5f-95c0-3b3ea8cf1b4c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9ca828d9-f880-4675-b304-0718ddce9010"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9cb2bfc1-76b9-4904-941d-0d3cc7f86d6a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9cd5b89c-3734-4dc0-9181-a23eaaffac23"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9ceb5947-c91f-4a1f-8c8f-6a67dbb88de2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9d1f90a0-7c45-4903-a83c-7503daf3db1b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9d58f665-8cc3-4438-9dc5-99885deb90d0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "9d6541e1-162d-475e-a01a-efa1da58c9ee"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9d65d8dd-ef7f-4479-ad2b-1fde36484e23"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "9d6d7ffa-cd80-481b-8b57-9ad7d0042776"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9da5ad49-9327-44f5-bcbf-80deb823aabd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "9dbff73b-6505-430a-9b75-8630df8b451c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9e2b99df-4b4c-41cb-80d3-879a5812e7ed"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "9e4cc13d-57c5-484f-9a55-8770ac95019a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9e855760-fb85-46b1-8d8b-3395a3d7bce3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "9e90cd99-0d35-478e-9763-3b168e92a60d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "9ec68853-e08d-4b35-af4a-177e756eed3e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "9ed175c7-a706-4a71-b10a-f93a68734afc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9effdfa3-4808-45e7-be9a-578a870e1899"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9f230ad4-cb35-4ba9-8552-ba1e4b4fae40"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9f823459-f4ce-43cc-a433-b1cdaf9f89ad"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9f99919a-d5d6-4384-994b-704ece327ab6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9fadbce6-f8cc-4db8-ba65-c15f6f82dbdf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9fe64aa7-1b1a-4074-b6c2-f2d236938ab4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "9fe8d7e0-6fa4-4ab3-86b5-b33f0a95fd86"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "9ffa8a42-7b0a-4cd3-8b4f-5cb16c916a97"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a023ea22-2689-4ec1-9b56-6b6f7ed023b0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a06a95d0-35b4-44bb-a0c1-716cbf972b19"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a06ad29e-06f0-450b-bf8e-cd3b7231f096"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a0ad1eea-28f5-474e-bc9d-24e2d83cd4ca"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a0aec173-1e85-4832-8be6-99ebcdfeb247"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a0b08567-cd34-467a-bd6d-428196261423"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a0d8cc79-b3fd-448f-b983-8155c26de853"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a0f4690e-06d0-457b-92da-40207bfeec25"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a12d37a7-29a7-40d8-947d-68b69ae30eb1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "a1428be8-db83-4d05-be49-9ee85ed77689"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a1435e3d-4c9d-410e-992e-842f24dfba16"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a2151986-ba6c-4676-ae54-220d2d21e0e0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a248f085-788e-4bda-9e22-77af77edd258"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a25065ea-a21b-47b6-8218-916a24943461"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a25bcd91-5122-452f-9a4c-87377012c26c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a2720609-acca-47c5-b778-15568e68a67e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a29a678a-721c-48ae-9d1d-02fdda6c4aa5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a2b988c2-368a-44ac-a95b-32d73d74a116"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a2ddd76f-1c37-4ac9-971b-d9682384141d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "a3542353-6daa-4b24-bb8e-4bf0fb8bb3af"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a3825cb5-de53-43d4-9561-429dfeb1ffc2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a3fdb1d8-083b-4e8f-a170-5b98638d5b53"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a42d9ff4-6d8d-4cb2-bb1d-64b1c66cb290"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a451f6be-a506-41f6-9bf7-85d8c7c7ac8e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a457cbdf-37c9-4b06-b59c-fdfecc8ba582"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a45b9287-fe45-43b0-a8d6-8c434e16e65b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a4856c44-4e78-4a45-b618-d558b763942d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a4990269-42fc-45f8-9849-905dbf3f68fb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a4ac2a6f-0159-447e-a6d2-7300fbc986ef"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a4bfb021-8b30-4a2c-8d13-ed70b474ab0f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a4d1130a-68fb-4acd-8b77-5088ace9a377"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a4f216bd-ef7d-4764-aa03-c88b3d5a588e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a55ddaef-8835-4749-ab18-978c295cf1b5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a57d3d87-6660-4136-a523-434165373169"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a5d9e9a7-9fd2-4a0f-a3ae-7dd78fba429b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a5e50c3b-02dc-4f60-b94f-9f7cbd2a016e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a62177c7-346f-4323-a896-087f608ea5be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a6492846-5963-4307-8ffc-ea06bb554b1e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a68e0f4e-3d6a-4e33-a768-b7fad0b07a8e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a694497b-30ab-4283-be76-d1570d7c90ad"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a71d8ba8-3ca0-4845-a519-609b286b4eb3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a733c26d-3c3d-492a-b644-231da1aecf02"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a744c90a-9a6a-4c23-ae16-ce84becaaa9a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a7e1060c-e0e3-4fe0-a4ff-4737611a2203"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a7e18bef-7c15-49cd-9262-41e42bc27690"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "a7e88abd-9d65-4a68-bec6-d9d527f3c172"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "a7ea17b2-3760-4724-9672-38bc0687da0c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a808b0ee-786e-4677-92d6-1eb5a15e297a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "a81c53d3-e5ad-4aba-a7d1-ee84dc383e03"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a85f5309-ddd4-445e-b447-75f1cb48c76b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "a88980f8-c949-4f48-94c6-0185f01a6862"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a8c2a8e8-d03c-4037-ab82-8c246b2d6e29"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a938f9bc-4f40-497d-8f2f-2ab44a0a2d1c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "a965d140-d212-45f5-a269-1945fc8432b3"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "a9c5d1bf-b6d0-4486-a507-8dddfdc57a02"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "aa24106a-9784-4f51-81a8-1f6b0c6dbab9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "aa300813-d688-4f52-b5b8-f4eaacf12cac"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "aa6925fe-a0a4-48ba-b4f0-9c8d4acff015"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "aa75397c-7bdf-4b31-bbfc-1aa544fe91b5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "aaa12d23-d666-4a40-9f3c-17d861f4e143"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "aad935a4-efbd-4133-94ac-ce7d12789e9c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "aae112c2-9dcc-4901-a9fe-4f511fe80905"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ab03fa75-bbdc-46a2-ba55-25e2f5edd5c4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ab077874-2a7f-4add-adec-8cb42e9e9561"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ab0a09e4-2350-42b5-b864-6a9330e4670f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ab699722-9c7e-464a-b507-74a21078411c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "ab76ee0e-ba9c-4cfc-b68d-c3b47c35497c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "abddd18e-797b-42ca-88b6-a588daf5f8f3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ac2ef60c-347b-491c-a31b-39204e932a94"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ac46cdfd-877f-47d4-8403-90d21983364f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "ac5771c5-ceb8-4605-bbce-3c613919d2c8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ac65ea3f-e12e-4388-a41b-dca84b6abe8f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ace74343-3a13-4391-bc13-46a9907f197f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "acfdb5fb-0c3b-436e-811e-cd2385a0d203"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ad11d27d-d6ad-4384-bf32-ef4e74e0fee2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ad16f637-fa0c-4920-bfae-7a53dee2593a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ad1ee295-b7b8-47bf-a8d6-8a14ce362d32"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ad2b103b-1296-40b2-895d-98f7dc8558be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ad30767a-8eb8-4ec1-a174-45f1e7399c05"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ad346943-799d-4c32-8ee0-22593797f59f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ad4967fa-1303-4b2c-822e-de70130f841b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ad5aeac3-c555-41d9-b0c6-3665aaefa949"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ad73de2d-5176-4436-a2fb-4b75c81fb234"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "adc55f80-0185-4eae-a227-ccc3885007be"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ae519f45-f80c-4464-8f76-e9d986803c34"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "ae64dd4f-971f-4fd7-8540-08af5649e67a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ae70d78a-1aa9-43b6-b311-369e1c314343"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "aee27c1c-f426-4334-8e86-95dd2bf5c270"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "af010237-a119-4b7b-8a37-802f22d82708"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "af65dcac-14b8-4dcc-802f-183c9fbf5db8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "af860ca9-85af-4444-8f71-8e56282d7cb4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "aff614fc-77c7-476a-8079-d88e28451fb6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "b04ee52d-6549-4877-8131-2475c9989299"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "b0526108-102b-4092-9666-ae9947e68cf7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b065a36f-0e01-4de3-9100-409a15eeb532"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b0676488-4c32-4b8c-857c-eba8d6db4f59"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b06e5cec-35e1-409c-aff9-ed4bfcd30556"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b074592e-44fe-4a6d-9bca-f8b7bd13ee69"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b0a89bee-ba85-4f69-a396-2d30707ff1e7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b0b461de-f74e-47b9-8b91-32c35b7c89c6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b0b49640-6fb4-4cb1-b875-01dc81298e34"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b0db0a0f-c2c3-4119-bf6f-43f2e040119c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b10227e6-8a83-4290-8503-ec037e4bc3c3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "b1135e25-0b17-4daf-ab6f-57b3cfb9a1fa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b18df6d2-0093-4398-9f14-01360c5dad48"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b1e7b190-e66c-49da-8df8-2b1345fa68fd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b1eabcf0-cc21-4053-92a1-285b30da510b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b2341e58-d5c1-4c9e-8e7a-05a2bc1857f3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "b269e1ad-573d-4cd1-8bb2-581a74b5f565"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b27d56e3-58e8-4ee7-b32f-2f7d58d737ed"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b2a97f1e-1f85-4f7f-97d0-38da53be836a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "b2a9c061-0761-4f66-9406-130bf68f6770"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b347415b-f65c-4377-bbf2-3c4f553f8804"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "b3a11168-712b-445a-b453-c945be7900f3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b3b17110-a61a-43c1-8962-7c8f71947f52"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "b3b5da82-1302-4f67-841c-28b51e578976"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b3bf097d-fd5d-4473-ab81-ac180e197fd4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b3d487a0-2f8b-4eb0-b6b8-7560377ebe9f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b3f7a897-e4b1-4c2f-b7fd-c91efd9523ae"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b40d492a-193f-422b-bd42-559624dd2079"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b43e7f32-5f59-4370-9cf0-43c3f159e4e3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b4666064-903d-4db2-a282-38897ac4c1a1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b4990b79-a0d1-45e7-9d03-635362c0b2cf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b54580b3-4201-4cc6-9588-785d365974d6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "b5541bbe-346c-4b3a-831c-21d6aa994adc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b577f36e-74a7-4433-a24f-de51defcfca5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "b5899722-5118-41e0-8324-5da705ace4a2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "b5958bf8-444c-4966-8d9b-2a6ad8197350"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b596bc7e-15ff-4dfd-b052-710626210123"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "b5974adf-ab54-406e-99a4-e7c29c6ca5ba"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b622ebae-c26d-4aef-a028-15edc1596f02"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "b6af84c5-21f1-4c8a-94d1-2d925bd04725"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b6ecca26-a3f9-437e-bda5-aa52368598d7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b719c2bb-3424-4eab-8648-9e72bf83bdac"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b78239e5-3b96-4537-9cab-b700c3d7335c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b797259e-3000-4217-b0cb-b5ace91112ea"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b7ce5331-6c35-46bb-ac93-fdccf2b208e0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b7d6118e-ed7c-45ea-b2fc-b05ea869a3aa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b8244ad8-45ad-411c-a3f3-053aa0a3d4aa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "b8abad34-a66f-4e08-85e9-9b069301128b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "b8aedc17-2215-44c3-b89c-8125050efbd5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b8b9361e-c77d-4e15-b383-04b7aae6927f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b96aa592-779d-4d93-a16f-7b09496b1139"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b97f1e4c-09df-4190-aed5-22bfeb4a45cc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b987ab73-469a-4c3a-9c38-bfe90d05db82"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "b99fab00-abbf-4c9d-b03b-42b66bb04814"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b9a13520-b2dc-4bb8-80d7-10626ad9ef7a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "b9f26550-7988-4a34-a3ff-7ef9cb69c838"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ba020c96-afeb-452a-8dbc-faf14155c96c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ba0866bd-4186-4722-8e4d-ea67e228062b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ba0ce1ee-9848-4de1-9884-0e0bb37e2abd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ba3cbac4-815f-4e9c-85d7-4118d4e23499"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ba7e3421-2f30-4f00-91e4-52d989e50000"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "ba877057-f093-46ef-80b9-762e1859b320"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "bacd75a6-2248-40b9-bc26-c04b3ecaebe4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bae811ad-fc0c-4a2b-9f46-57d7d62d2cf8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "baece784-4e12-4344-b9e4-bb4ed232ac3e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "baf13030-1578-4edc-a351-ca627828a326"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bb0df218-2b05-41e7-b496-73c458bae35f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "bb9dc8f4-100f-4159-99e6-e44c79bc8e57"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "bbb154a9-15fc-4c3a-b0ca-8b46a26a3af7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "bbb89876-9bbf-47fa-853a-8ca7465f176e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bc55dd6f-a972-4caa-af6a-e4e96f65d0f5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "bc89e53c-a9e6-465e-9cc9-4a6f844b9589"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bcefdb51-0003-46f4-806a-9bfca2b630e1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bd1de8bd-0eba-46c3-9657-acfb494f9ca3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "bd4a0096-d99c-4a9d-92e1-a2592c69fe99"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bd536ec2-bdb9-4da0-8489-e6c58fec5921"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "bda584af-0bbd-4ade-af5d-7b5a349e9f85"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bdbf1e68-32c8-4571-90c0-ef154d458704"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "bdc47035-70e0-4126-b9f0-698d294c7cc9"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bdf88679-e9b7-4344-a3ed-212184e26102"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "be150a09-409e-4594-b576-c3999e31227b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "be2bb871-ba24-49cf-9172-d20d673a2c3d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "be35e129-235b-498b-969d-580eac095ae0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "be53cb70-c063-415a-a127-4997d12c405e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "be5e8af5-aaee-4119-9572-a66ee691f455"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "be81c1a6-cd42-4fea-8bb9-323bf0a1c586"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "be92ce6c-0c0e-43da-b5b8-be9137f0e151"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "bebeb092-4bf8-41da-accd-cf2a8b640343"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "becd7970-8a7a-4a21-9832-889d66c4e5fc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "bee72fdb-a761-4a79-90ee-9e98d1d5ad75"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "bf00a8de-4b2d-4cbd-9078-0923ed709dc0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "bf02c027-74aa-4d98-909b-c58644583a2a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "bf24be84-f6ea-4f68-9b22-2274d0a4c6e5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bf35f488-6864-4eaf-853b-3c654085af85"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bf395f91-b77b-460f-802b-20cf52a73bfb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "bf43132d-1cbc-4dd2-9cf9-914a917e78d9"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "bf538bd9-912c-471a-964a-f94842e17491"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "bfe0f23d-1880-4931-b22a-ee60aa5cd018"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c015ceea-eeb0-4296-9913-390eb795727b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c050afab-2a46-4cbc-b795-b180b1d8172d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c08d8ce8-6103-4f32-bb80-9e59c0a97a17"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c097eec0-60d9-4c1c-84f7-16e869dd5ccd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c0d78581-207b-4223-bcdf-680bd82bce83"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c0dce315-a1ed-4be6-8dd2-df515e754875"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "c0e10d6e-fb0e-4e9c-a910-631da9e578ea"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c1448f84-e07a-436a-8110-087f293a6564"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c17927cb-4b63-4fa0-9c64-b72a65decaaa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c18ed010-6938-4961-83ff-0e9e6ec640c7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "c1eb720c-5523-4f48-8fed-ca7aa0199e54"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c1f010f5-9a19-4070-8a1d-a3ddb408eac8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "c1fe860b-f047-431e-8384-489fa1686f50"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c221d864-3e29-4789-a581-f52f3c3cf096"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c22b9862-b2f3-40b3-96f6-71d0c3f60b83"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c22fa6c5-6691-4f76-a6fe-83ee0b7e0dbf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "c2b44932-6d84-476e-899c-02c744fcadd8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c2d8b523-cc72-4987-bc2c-99fd5e5af3c2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "c30712db-a675-4203-a442-cb3f9b1c5848"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c345810f-7f8d-4845-88c7-64c652fa34d1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c3bf5c7e-26d4-4441-95ea-990a5c82c4ae"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c3c19561-b4fc-48a8-9fd4-187fdc27f42b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c3fda873-10be-4040-878f-350d6da7d70d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c40df04b-563c-45b1-80db-82e646445531"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "c42910ee-2da6-4aff-8346-b4b2fe875e4f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c43c2b3c-2f07-4fbb-ac04-bd5ecb86d6c3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c4446aa8-4d88-4d40-be5b-129bca6a68aa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c48038a4-458a-4de7-acd1-2259721fef62"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "c4bfc499-08d9-4cd2-ac3f-91ddaa743710"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c4ec860c-ddf4-40a3-95f6-1313b9c0dee2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c548194d-9265-44f0-bba7-13fa0f9835a8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "c54e678e-8662-42cd-8875-fc387cc19fad"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c59b8485-583b-4c64-8d5b-61e046ed3437"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c5a5ae3a-46fd-45e6-8d02-45abfdee24aa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c5bc8249-97a6-4f75-bf35-6c04565d052f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "c5d05e95-f6a3-454f-85ba-6ebb4736b7bb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c5f853ae-ee16-4da1-9f17-f3ff66205f61"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c5f8bd3a-c334-453c-b99b-9509aac6ea90"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "c639cf64-349d-4c56-899d-b5606ee1afac"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "c64c62c4-89e3-4479-b27b-3853e9a81ad3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c66b25a2-35e6-4d6f-a8bb-683a473f86ca"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c68b5a7f-8fb5-426e-b73e-7743264afc87"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "c6d155e2-7202-4ee6-b29f-b3d9a440efae"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "c6d9487d-d138-4d73-beb1-5735e50da048"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c720b595-63d5-4f41-ba14-47ebf79c6098"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "c72fb36a-0726-4975-9d7a-edc5bd59a66f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c74cd952-80cb-41e0-831b-475a738d890d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "c75b6409-59b2-4675-a402-796d4b2ba6fb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c76343df-e566-42b8-a0a8-5ce3060a46bd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c778c6b2-749f-40eb-a1c6-1903c98b9660"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c7a242e3-1638-4260-82da-ec130f9cc023"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c80bf1e4-215a-440d-9e2e-848c40348037"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c81634b0-969c-484b-aa1f-5b5926e05fd3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "c8370b05-1d32-491a-a735-344f6534b4d8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "c8855169-8cd1-40ae-9f2a-cfc8be715d8b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c89e037a-1244-4d82-9dc4-4e97e18e6ad3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c8a346a9-bed2-4420-83db-3a6fcca051e4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c8bc4dc3-af79-4cbd-b8cf-dd69df5b4ad6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c8d3dff0-b501-4ffa-8ef7-4f0605d8d091"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c8ec86a6-5e59-47c9-a1be-51db69a2f0d7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "c9066b1a-0da8-436f-ad87-cdec31e99366"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c928294a-3522-4b13-b6ab-1721bebbeb2a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c930964b-b6de-4f06-a421-af0c183431fc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c9358837-e3ee-4daa-aedc-34e45afa1692"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "c947e9b6-41c7-4c94-81c3-d79fc9e601b2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c9645011-82ed-4818-b2fd-0b3632713d1c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c9901c19-39a0-4b8f-baa5-448f3891ab39"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c99e3f1e-85ab-47d3-ac5c-2f50e896417d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c9a49774-6211-499c-b80c-9dbeec95b47c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c9ab63ba-44f8-4e52-aec1-2e305191abf6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c9b1c7b8-07f9-4d8f-849a-2b8538505160"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "c9cca1f6-9117-40f3-b830-605b144baf90"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "c9ea41a4-53e0-481a-9e3c-d314cfa36c9e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "c9f17c4a-753a-44aa-b3c2-b98c9dc6050e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ca28f10c-b6b6-41bb-bf64-980908425ab7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "ca92ce8c-e9ce-4fe8-9120-98aaae243224"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cae9d762-cdd4-4833-adc3-c426b7a79948"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cb039044-f134-4131-9d34-148eaf14840e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "cb0a55c2-48c5-4340-afb2-a5c0d5eec70b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "cb1b00bc-0495-43d9-8a69-c54aa3fb93b4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cb282d61-5c81-44f2-92dc-576a4ad1895e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "cb2aa656-31dd-41f5-915c-f946d5bbfefd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cb2f9081-0b6b-469c-ba0d-16d21149fa3a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cb659fbe-0f1c-43dc-9c40-4517c0974a79"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cb672d70-399c-4bf5-8032-3259832f53eb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cb95c838-ea7e-485c-8c7f-4f00427c04e1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cbc9996e-862d-44dd-b6be-c2967bc3f58c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cbea941d-7c4d-44b4-9b0a-ea20827e7cbb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cc003c29-1af3-4d7c-a025-cd9c457524d1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cc240cba-a746-40f1-9045-b84efedf3e0d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "cc38f616-81ad-4cfc-9732-c57b0302cb20"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cc413994-12b4-4d0c-b143-739d21992542"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cc5d75b4-88ed-4293-934c-c599bb13b7c1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ccb3de8b-5c50-4204-ae6f-46cdda2e081d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ccb5fcce-35d3-463a-bb98-0cfc09918465"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ccf1b82b-6822-40ba-adf3-07913b155b7b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cd10aef4-26b6-477b-bc12-de3786c10594"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cd307f24-5170-4cb1-acb0-0e7ba7e276d7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cd7ea2bb-47eb-4ef4-9af0-4ba7f961d861"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "cd8a601a-db65-43d3-82a5-afd0d7cf3e8f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ce033c02-864e-45aa-8b32-f233dda3e043"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ce101d86-8313-4fe1-bb90-9c74fba2a76e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "cecf3b1e-4685-4c8b-acbd-f4e1be336f0b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "cecfe56c-84f1-4958-b40e-ebaf52ace4a9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cf46928b-ed62-4b81-acbd-8822349ca58a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cf49332c-0a05-4ba7-bf4f-48a703ee7a1e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cf7d3acb-1b74-484d-8084-6c7297b23ec0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cf82ed54-d7e1-4a86-9b24-2abfdb6ff881"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "cfcd2e8b-5e36-4a05-9bda-6893f5021ac6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "cfe7373f-ccbd-42a0-88db-bc19fe33d950"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "d025918d-e26d-4ba9-a4e5-ab60509b55e0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "d030a021-0623-49bb-983a-e8f0ce66ea25"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d06989b5-7687-4624-aa68-92b4a7eab35d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d0901b94-6ede-4c1a-9498-7e8bf16a2bb3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d09330b1-d704-4e42-8ad1-39d6a1178704"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d0b8b206-14b2-4b9d-856a-ee978836c7a8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "d0b9e72f-73a8-4671-a01f-5cafa6e53bf8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "d0e007ba-24cd-4929-b135-0b907397e531"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d1162cc7-6e4f-4fb6-85df-599e9c7f82ae"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d120ca9a-703b-49e2-b333-ad6dfe508953"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "d13aa6ef-bc9c-4815-968e-35bbf1543e9a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d1a6a883-779d-47eb-8496-78fbb360ddd6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d1bbea1c-28b0-4441-a944-be72f9a40da1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d1f6a674-9ff2-4a7f-ac92-8818ba6a7ec7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d1fd88e8-1e77-4bc2-859e-d72632d37500"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d217ef2a-7e8f-4ec6-8635-8c1970713899"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "d224cdb4-5363-40c7-862e-dd7e589447b2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d26b2b27-e58b-438d-bdb1-8203b0c73549"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d2a7aeae-1757-486a-9e75-442d649282a0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "d2bfe5ff-6e7a-46ad-b9ae-69723cb08563"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d309e04c-4beb-4d0f-ac6a-126b36ec8ff1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d37895cc-6801-418e-a4b2-29b7001566ef"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d3b11ebc-593d-4f1f-bf1d-6a55902d93a6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d3d33b4f-7d75-4ce6-962d-386834c72cab"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "d40299c9-9bec-4a9c-b737-819cfbe769f7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d41368ba-6aa2-4b75-adf4-8f2cd3cc7e4d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d43a692d-7387-4bd2-8dd8-dcd70a85398d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d47439dd-6349-4633-bf0b-eb97094ac743"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d49017eb-8e45-45af-a6d4-f90f3d35f3e3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d4fbbaf4-742a-448f-a424-6f3ddf573c31"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "d54c4f7c-3a1c-4797-a850-c3ca8e716541"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "d5552eb9-0155-4139-9070-449ffa88e628"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d570a6d4-f4a9-4a82-856f-e66c4b55d056"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d5a5f6ff-a9cd-424e-9af9-572b0844f980"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d5a977c8-ba4b-42b7-904b-40c867ece178"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d621bf90-9c67-405d-b7fc-d8efb7057f0b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d67b3b53-ac6c-4ed9-9e37-ab42585c1247"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "d6a95fc5-ad9c-4181-b04b-e57b8b0088da"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d6d67a37-3efa-44d4-9340-004a07a52ea8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d70dd131-fac7-4c7e-b367-95c2ac945339"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d70e4239-42cb-4c8d-8def-f4bffb35d38f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "d73a1955-ec4f-42cd-b6f3-f0b203ff8eee"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d747c493-89ff-4471-ac39-17dbd5a5614c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d760f193-0c0a-46fe-9af2-517846bf9171"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d78800a3-e78d-4c72-90b0-069140ad9b02"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d799bb0f-8ffd-4a29-a516-ffd445f6b699"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d7a08c8b-4f1a-4067-a197-11922b0e34c6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d7cecc1a-ed47-4dd6-a335-69e1233d47aa"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d8af7833-8171-40a3-a24c-cd3fff898c07"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d8f00889-db62-46af-a113-5365b4cdadba"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d91a6d50-451d-42b1-9276-35b97c52bf5d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "d9413d19-05a0-4bac-bed2-da8462ca46b6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "d9436555-2b92-49fd-b4d7-605aeda17684"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d953e9b3-de33-4c7d-9357-bbc5d94d2a16"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "d9543648-1f50-4614-b33e-398edff7d7d6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "d996c0de-78d1-4966-9ace-3f40a9c6ed2d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "d9d2906b-4528-42af-9796-678ddf7ed30e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "da2f5fea-80b2-4c88-a5d1-738c054512b5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "da35c9fa-fd61-4188-96c6-342d9b0789e9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "da99f5e5-6c0b-4700-a1d1-5f452f06538f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "da9a2764-3ac6-4e5a-9e4c-9d15b3b7aef8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "daa1ea4b-c002-4552-a4ef-45d996c6cea6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "daa573cd-8f9f-4ce7-b141-1652889a2661"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "dac7cdd2-495d-4410-b711-9d633c27c090"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "dae9bc10-f90d-45d4-9ab6-1408912b461e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "db227639-34b4-45db-817c-95092b4a916a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "db3840fb-0dfd-444c-be07-ed15ee4874cc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "db4bbdf7-ca01-419d-ba8c-038520196c2c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "db4f2a2b-b4e3-49e2-ab4b-1167a1a83a20"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "db61f285-8d98-417e-9f7e-52b6745a2eb6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "dbbef6f8-f2bb-4ea3-9691-90c09205f678"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "dc277dc8-5631-484f-b07a-d1462403dd92"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "dc2dad07-a240-4111-9a03-4093ef65301a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "dc38ed07-f75e-4d92-b932-cd8275b35a09"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "dc51894b-cc2c-4d5d-81ae-955eb846326f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "dc789e55-ef9b-4d3e-8a82-075427def6ea"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "dc951bdb-a70d-4346-9e7d-fdc0d908d4c5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "dca491e4-5192-4fba-8ac2-d501cd6b138f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "dcb2c5f2-682f-483b-8904-88d3b6fe6119"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "dd0f3348-710e-4e66-b50e-45bd71b61e12"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "dd425ddf-0128-45e2-84dd-c442978149e3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "dda2cc28-1dc6-4ba9-80c2-1f933e4a8447"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ddbaa0c7-7d30-45fa-ab80-71b0d49d8dec"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "de42523e-9322-4dba-9448-016174872c48"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "de912183-ceb0-4f02-835c-191dcbaeaec7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "df0e220d-573f-4cfd-92a7-c65f4c690186"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "df304236-53ea-44a0-8c2c-ef6a4b459728"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "df850648-a8ae-40c9-9b63-e1545d6746f2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "df891fda-0a06-48a3-a265-97c9b3138d23"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "df9d4d4a-20d8-4384-ab5b-1e28e625cee4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "dfd872f8-26e9-446d-936e-bdbcd978257a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "dfe76079-9794-4c48-beef-d80ad9728849"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "e046b573-d1cc-454c-94f9-01f5fd51e233"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "e0d56737-6459-4329-9ef5-1a46e8d75f10"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e0ffa4e7-7b44-473d-af17-99abdfbef90e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e10052fd-e1f4-4452-a811-c601472efbd5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "e1037d75-2eb6-4076-b28c-86f8159320ab"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e14380ae-7474-4960-8aa2-0c4b85569cae"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e14d6a17-ef86-403b-af85-be0a2fb8d8a2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e1581c93-ce65-45e9-8d83-3392e9fc8a31"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "e1b8b97e-0344-4248-8a0f-86d3b956c759"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e1c3365d-f89e-468e-a928-8e5db1210844"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e1e4e79c-a9c4-4169-8fde-371c0df79061"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "e1edddb2-56c8-498b-b926-78642bc312e2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e2030e0e-b33e-410c-b8df-8ccd76b8af03"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e2542533-42d1-450b-b96a-e3b9fe79086c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e27fc6a0-7922-4807-81dd-61438b3e7e7c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e282f2a0-5fbd-445b-81dc-63432936feff"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e284429d-db64-478d-becd-20faf2a1b847"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e2bb7b81-bdd5-4713-893f-3c2c516a3d7a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e2dbb087-8f25-4726-967a-e1054d4be16c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "e35c15c4-4ae7-4e7a-9f7c-e46e9561d0a0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e364d6eb-f92a-44d7-80b2-025092a81561"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "e3a400b7-f8cd-4c4d-a2b0-b79ac18d2258"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e3ac6021-f7ef-464d-a6d0-e0df9e91f553"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e3f62da6-9fdb-4011-9135-47f41c546ac7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e3fc8870-e13e-40bd-8d81-455b5e30b97b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e41063b2-f544-4093-a5a2-65a5757c9d57"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e4d98868-169b-40c4-bac5-569a5a5c69bb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e4f22a09-abfb-43d9-a7af-e87c033ae455"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e5051a8b-714a-4878-869d-6190e20380cd"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e5079e17-27bc-4c6a-897d-68134cf661c7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e507b1a6-966b-4dec-88fc-e167e3915821"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e50a076d-5550-4c47-a49b-aced289dd4e0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e50caf34-c829-4f2c-b87c-3311958ef369"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "e50d493f-6f6c-4c30-8cab-5e86077ef361"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e514dc13-8bd1-443b-8137-94ff173d32b8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e5558c53-90b5-42ca-aa79-ba2d05d56eac"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e55a8540-286d-4182-8370-3ffc69280f6d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "e5e6bcbc-23d3-482f-9126-becfcc26ab80"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "e66552b1-7b57-4b1a-a3dd-dded213cfc82"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e6b90e74-f7c5-40fa-846f-6ffab5ac8beb"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e6de5091-b046-45e8-bb6a-a81c99b2fbe2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e6e02f02-3df6-44e3-ada1-7f41b60617a5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e6eab365-fb0c-4851-94f9-8fcc35f1238d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e78d7b42-77f0-4191-91a4-1415fb7bd961"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e790a37d-2265-48ad-8e62-67fb72ec73c7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e7a05b23-e2a6-4970-8ba1-b350168b9a00"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e7ab9b35-e0bb-4fe4-a1cb-fbe5a17c63d6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e7ad39e0-062c-4fe6-a534-3126b72c9e9c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e7c2dc58-a477-41c6-ad83-02fea34c8d56"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e7ee7c00-1b94-4ff8-832e-7af0323bd3aa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e810df47-1da8-4751-8fbc-5ff9bf0295d9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e8235f8c-e30c-4c97-8297-639b2681d46b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e8a07988-7219-449d-8cd1-612761502bfd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e8acbde6-7c73-409f-a4cb-6bb47736f4c7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "e8bb0905-e8ca-441d-a35b-041af4645ffb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e8e2c400-6319-4e26-b647-3d1499bbe5f4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "e911a780-13d9-401b-ae9d-4d1f5d4cc22b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e9217b6f-c6c8-4798-a514-1e2751cf936b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "e93e16aa-f555-4ad7-8ede-d8120fdf29a1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "e9e6da5f-9c61-444a-aa39-6a2a690813b7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ea02d8ad-f52d-4b24-9d4e-9dfe5bf4f44e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ea227070-22c1-49ba-9680-2bd2cb745fd2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ea25fd7b-6bae-4a45-8a75-60ef783a9230"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ea2fba59-c9e4-4471-bb38-b07cd2d3845a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "eab8cd53-0fe7-4b42-a9cc-8b9ec68ae133"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "eae0879c-2e4a-422d-8626-2fbf21adb227"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "eaf2f471-84d2-4661-8781-6a81241b11fb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "eb13e438-eba3-44d7-8189-9365e245f0b8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "eb482c92-0104-4243-8ae6-0316f0bdec37"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "eb80c959-82f5-4288-9a3d-02c2695e583a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ebbad3eb-877c-4c7f-b6bf-66723f7b49e6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ebca3392-05fb-4ec1-b489-bd48337d6208"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ec4f5013-86b2-45a2-af61-d69b8f863d74"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "ec64fd4c-0fa2-4932-9a75-6756b90aed5b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "ec838509-a1e6-4f6a-b216-3f1791c16d67"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ec987c81-f12a-429d-b312-7bd15d98412c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ece8c6c5-0934-4817-b30d-cc3c0e27899e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ecea9050-b22b-475c-ad05-7f7f53d34194"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "ed05c23a-973b-4d69-923c-b2e7b1b97305"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ed1d1f31-ac7d-4a73-8591-8219c2417c79"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ed3e4264-7d20-4bbc-ba73-2d11563f2006"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ed559418-30ca-4d1b-b0d0-9e13982d5949"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ed78d548-5409-4909-abc0-793390dfed1c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "edcaeefb-884f-4f74-b33c-1b3c44ed7c2d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "edfe7ad8-3180-442e-890f-e68f0981394e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ee3d64b9-9207-4bff-8b91-3007ee811ecb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ee6608f3-f192-4c43-ab41-1f7ad3c9507d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ee67e46b-e0ee-4bbe-b7bb-49000bdc5e94"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ee94fe5e-d975-4ed9-940d-16056532293e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "eebdcbf3-42aa-4590-b07e-b3bbe40c309f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "eecda91b-c255-4362-a7ed-1beac2c13869"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "eef7317f-a250-434f-b34d-7933fd546da7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "ef396d45-3f62-4b03-a15b-ae3666c2af7f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ef479a70-837a-468b-b107-86751269b431"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "efa6ff4f-1d6a-4121-b1c0-f3d21a6c4ce6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "efaa3f7a-4a10-4d40-84b7-e4a1a49e47c6"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "efe2bc83-83cc-4393-b725-a18543dc9d5f"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "eff62515-9b70-43cc-afe6-c803dd4b5bc3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "f0054526-9c55-402b-904f-9f4fa40ebd79"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "f0365431-b2a9-42a7-9cff-877433b51551"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f03f19b4-c5aa-41b9-a874-fa37fff2ead7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f0531983-dafb-4e80-8465-89bdc6860d27"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "f057c595-7ea4-42ce-bf5d-734fad5a1e47"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f064bba9-1ebd-46b7-a9e4-28e45972e44f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "f0b20fa9-aab2-400d-bfa8-24af297bb993"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f0b786ae-17e0-4ce1-bfdc-c9184e5473a3"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f0e4bbe8-a16f-46af-a1fe-0ba46a127c89"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f1322de6-8682-4d01-b0ae-7fbab9cc5864"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f151db5d-5515-495e-ba5e-bde2a46c553a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f166fc6f-310e-4ca1-8b61-edb98e2c7ec2"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f1d0560a-b652-41f8-bc17-649dca0a5b48"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f1e8a463-b2c4-42c2-a0b8-94e7bf420f6a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f2041141-c82a-4e04-a6e6-d7d2e29f4ea5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f2046843-60ed-4081-8bbe-95cde34ec6a7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f23a32f2-4b00-4b17-9cfd-2f30f753276e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f2753198-6435-4d5a-a137-7603ed289edc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f294fd21-7428-4c73-9810-dae8ff8ee546"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f30145f9-4f34-4a4f-9553-5d42001da5a5"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f3470fb3-320f-4660-b9e0-ed338741f464"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f398289a-e8d6-4c38-aafb-262882827935"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f3c604c5-20b7-4ae6-bb53-728404203d7a"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f3da4b6e-c4a3-4416-9c28-93bf761119ad"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f4931c71-9e14-4bdc-ad9d-88bf763b6985"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f4955fe7-d4e9-4de7-9812-0fc7e94c0620"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "f4e3fdef-07f1-4327-b0db-c01c671bfafc"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f4f0c9af-1941-4d22-9513-4ec574590a9d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f509d927-063b-4a03-b40a-624aadd6a2a4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f50ba7d8-09e1-4c03-8661-84d6b6d4eadd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f523b5df-b6a1-4dd9-ab12-59e22b0c7ea0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f524b8bf-c69d-4dd3-8fb6-549de566d297"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f54065ac-566a-476e-9261-76c541fdc0b6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f56ab010-efda-4068-a979-f935d9ab521f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f56eb08e-29e1-42dc-b238-4867b12ba88b"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f59ecbfb-c882-4ae2-8f30-8e979f49b266"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f5ca382a-3725-4cbb-961a-6afbf5c21507"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f5e7956b-9aa4-47b0-b88a-3ed159f451d1"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f5f8472d-d102-48b6-98b3-2d9fcfa53752"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f634e2ff-366e-49f1-be74-ac930ba5bc02"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f666ad09-20d2-4078-ba70-77d96662acbd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f69c8107-a8fe-45ae-a8d8-d5ab8e618e33"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f6b5aa36-d662-4490-a83b-1e5d857afdd5"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "f6b8fa8a-775c-4ee3-babd-1723dc03ba86"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f6daed37-710f-4512-a494-bb4ecddd4d2c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f6f190b6-7c0b-4cf5-8ceb-cf9ec567997d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f7625adc-de9a-4628-90d2-4200314e7f80"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "f7847cdc-5030-4ccf-bcdc-df1a6e47fce3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "f78f8d70-ca5f-4831-9475-e4369414c5b1"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f7a88213-58c1-4ee4-b791-4babfa0cd67a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f7ee89df-2233-495f-bff3-8e70ede7d793"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f80f56c0-949f-4009-8658-f47cc3ca13fa"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f80ffef9-a3c9-472f-a429-dd591ce7372b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f82d4a70-4581-4e06-858a-d52019ecbd0f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f8571940-a590-4f5f-a2bc-c57efd1853b7"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f859776a-9e93-4c62-9585-1f4aed2cbaa0"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f8f6d3e9-c012-4fac-a562-cfbb592a3263"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f906b412-ef19-4865-91ed-26582ed6a332"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f9385d18-0ee4-4c3a-a5a4-1855be105f86"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "f947a367-a17a-4cb3-9d43-93965c88d3bf"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f9534330-fcf4-4a34-a8ca-6b63fce8362b"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f95bef03-ef56-40c2-9ee8-bb27572c9277"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "f967e3c4-fc5b-4cd0-91d1-06030d51e31c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f979bda7-ce1e-4000-9f31-996cf1b031da"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f9ad013b-8208-4a02-8480-7c865c7577f6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f9bb5abb-8ef2-4a21-adb5-2504fc9e87bb"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "f9f8e1fa-4460-419a-97cf-1e0e2fb6a565"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fa425008-1b60-43fa-8ac9-31b17fba3821"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "fa58a468-7383-43cd-ae53-202b74c07f14"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "facb2c7f-777a-4eb0-8036-731853847f07"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fad5c73f-8725-47d0-b13c-372fefba62ea"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fadd9ef3-4d6a-4a8b-8b2a-250388ee531d"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "faf8f8ee-c092-48a8-a712-1133df65badd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fb56e557-87f8-4675-881f-a6f8c0885649"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "fb8c9056-7078-495a-81e0-4e3e0a0e24a5"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "fb9e7ccb-2ffd-4bb8-a78d-1e2993881090"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fbd17b3c-3aed-48d2-8682-df610a98a31c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fbe56df2-9a50-4b70-a012-f2e666d2f2f9"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fc029995-b6bb-4375-a5fa-9a0eb7d0fa85"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "fc215bfb-e68e-4aa0-844a-c15d8047f62f"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "fc337c87-1194-4407-b440-2b91f93dbdc7"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "fcc36c87-27e6-48cb-a701-c0188e545c6e"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "fce614a8-8697-45d3-9574-4b092231b0bd"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fce870cc-5856-4801-80e9-2b7a9ef96b1c"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fd07993c-983b-4d37-b01d-6ef8f8aeb7a6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "fe021c51-e3fb-407d-9f6c-b770ba056f15"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "fe268a4c-2d51-42f9-a00e-addd8fe217da"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "fe3f5d3d-79d9-4790-b4ca-6b80aec4f558"
+  },
+  {
+   "lists": [
+    "d1-marker-without-entry"
+   ],
+   "site_id": "fe4edbed-be84-4b80-b5de-62ab3e4c88ef"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fe663edf-4b9e-480b-a976-c8ecf135249d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fe6a7e02-39e4-46bf-abb9-b1862974f252"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "fe7d7ee7-ca93-4cf5-93d8-0cc80564ccd8"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fe89c03d-45e8-4d48-be8a-ad5efe92a99d"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "fea0865c-9b28-4d88-9f66-36e61ed0f0e2"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "feb1725e-7ef0-464d-8659-17912cfa7a05"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "feb1899e-d74e-4f5f-b22e-1fe3ff5c1f8e"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "feccbb16-9c3a-4d0e-9aac-ca8cf3d370d8"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card"
+   ],
+   "site_id": "fee01523-1686-437c-97ef-9e3566fba1c3"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "ungrounded-card"
+   ],
+   "site_id": "fee2da6d-ac67-4e7c-92b9-fbb82ae6bf8a"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "feeb5055-f18a-46f3-82cf-fbdfe23d72b4"
+  },
+  {
+   "lists": [
+    "phase3-cleared-card",
+    "ungrounded-card"
+   ],
+   "site_id": "ff3dcd2e-6e3b-405b-a532-09b7cf71dff0"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ff4dc88e-bebe-4b88-90d3-6697bffc9107"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ff53d37c-ab2b-4874-8ed8-a3336ccd12fc"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ff55d038-92b0-4fad-9973-96cab63ec8db"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ff76a431-09d7-40b4-8dc5-b80211b2e246"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ff7fc6c8-04f1-4988-954c-99c9b9f113e4"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ffb35fc7-24f7-4722-8036-e4173ac6d8e6"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description"
+   ],
+   "site_id": "ffd325ad-d579-4510-90c7-acb87b753c88"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ffd8b3fc-4127-4b2b-9df1-212aac377683"
+  },
+  {
+   "lists": [
+    "ungrounded-card"
+   ],
+   "site_id": "ffdc79c0-d3da-413f-9d4d-114a0719585c"
+  },
+  {
+   "lists": [
+    "phase3-cleared-description",
+    "phase3-cleared-card"
+   ],
+   "site_id": "fffb6208-b675-47ff-8a0b-4d11f455b0ff"
+  }
+ ],
+ "sites_sha256": "2bb2519438f72edaff350100f0c2b2fdeef4651dd16aaa8155a404f41d00f80e",
+ "unclaimed": {
+  "ungrounded-card": {
+   "not-in-snapshot": [
+    "95b33efa-d5eb-4cb8-ab61-746b3822762a"
+   ]
+  }
+ },
+ "version": 2
+}

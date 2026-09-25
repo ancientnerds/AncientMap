@@ -19023,7 +19023,7 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 scope4: a scope file other than the pinned one is read",
         P4S_SCOPE,
-        "    if found != SCOPE_SHA256:\n",
+        "    if found != pin:\n",
         "    if False:  # mutant\n",
         P4S_SCOPE_TEST,
         "test_the_scope_is_read_only_from_the_pinned_file",
@@ -19031,8 +19031,8 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 scope4: the pin is not the committed scope's digest",
         P4S_SCOPE,
-        'SCOPE_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a"\n',
-        'SCOPE_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6b"'
+        'SCOPE_SHA256 = "7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003173"\n',
+        'SCOPE_SHA256 = "7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003174"'
         "  # mutant\n",
         P4S_SCOPE_TEST,
         "test_the_committed_scope_is_the_pinned_one_with_the_recorded_counts",
@@ -19088,8 +19088,8 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 scope4: a scope of another version is read",
         P4S_SCOPE,
-        '    if payload["version"] != SCOPE_VERSION:\n',
-        "    if False:  # mutant\n",
+        '    if version not in VERSION_LISTS:\n        raise ScopeError(f"scope version',
+        '    if False:  # mutant\n        raise ScopeError(f"scope version',
         P4S_SCOPE_TEST,
         P4S_MALFORMED,
     ),
@@ -20909,6 +20909,270 @@ ACCEPTANCE_JUDGE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += ACCEPTANCE_JUDGE_MUTATIONS
+
+
+# ── Scope version 2 and the D9 run (owner order 2026-09-25, HUMAN_ONLY D9 (c)) ──────────────────
+#: A citation marker without an entry is a proven text defect: scope version 2 is version 1 plus the
+#: list `d1-marker-without-entry` (the orphan-citations lane's listing, each site checked against
+#: its own S0 row with D1's reading); version 1 stays readable at its own pin and rebuilds the mass
+#: run's plan; `plan4.py build --scope-list` plans one list from p4-0901, less every site an earlier
+#: plan carries; the gate refuses a batch short of its outcome files with its exit line. Each case
+#: breaks one guard and names the test that goes red.
+P4D9_SCOPE = "scripts/remediation/phase4/scope4.py"
+P4D9_PLAN = "scripts/remediation/phase4/plan4.py"
+P4D9_WRITE = "scripts/remediation/phase4/write4.py"
+P4D9_SCOPE_TEST = "tests/remediation/test_phase4_scope.py"
+P4D9_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4D9_V1 = "test_version_1_is_kept_at_its_pin_and_version_2_refuses_nothing_it_allowed"
+P4D9_VERSIONS = "test_each_version_is_read_from_its_own_pinned_file_and_is_that_version"
+P4D9_V2 = "test_version_2_is_version_1_and_the_list_of_markers_without_an_entry"
+P4D9_LISTED = "test_a_listed_site_must_fail_d1_on_its_own_row"
+P4D9_READ = "test_a_marker_without_an_entry_is_read_as_d1_reads_it"
+P4D9_LISTING = "test_the_listing_gives_its_marker_without_entry_sites_once_each_in_its_order"
+P4D9_LIST_PLAN = "test_the_list_plan_is_the_lists_sites_after_the_pilot_less_every_earlier_plans"
+P4D9_BLOCK = "test_the_list_plan_is_numbered_in_its_own_block_past_the_mass_runs_re_queue"
+P4D9_ACCOUNTED = "test_every_listed_site_is_accounted_for_and_the_list_plan_is_never_empty"
+P4D9_BUILD = "test_build_with_a_scope_list_writes_the_lists_plan_after_the_earlier_plans"
+P4D9_ARGS = "test_build_with_a_scope_list_needs_the_pilot_and_the_earlier_plans"
+
+P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── scope4: two pinned versions, each its own file ───────────────────────────────────────
+    (
+        "p4 d9 scope4: version 1's pin is not its committed digest",
+        P4D9_SCOPE,
+        'SCOPE_V1_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a"\n',
+        'SCOPE_V1_SHA256 = "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6b"'
+        "  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_V1,
+    ),
+    (
+        "p4 d9 scope4: version 1 is read from the current file",
+        P4D9_SCOPE,
+        "    if version == 1:\n        return SCOPE_V1_FILE, SCOPE_V1_SHA256\n",
+        "    if version == 1:\n        return SCOPE_FILE, SCOPE_SHA256  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_VERSIONS,
+    ),
+    (
+        "p4 d9 scope4: a file of another version is read at a pin",
+        P4D9_SCOPE,
+        "    if scope.version != version:\n",
+        "    if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_VERSIONS,
+    ),
+    (
+        "p4 d9 scope4: a version-1 site may name a later version's list",
+        P4D9_SCOPE,
+        "            if name not in carried:\n",
+        "            if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        "test_a_malformed_scope_is_refused",
+    ),
+    (
+        "p4 d9 scope4: the counts are asked of every list, not the version's",
+        P4D9_SCOPE,
+        "    counts = {name: sum(name in lists for lists in sites.values()) for name in carried}\n",
+        "    counts = {name: sum(name in lists for lists in sites.values()) for name in LISTS}"
+        "  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_V1,
+    ),
+    # ── scope4: the list of markers without an entry ─────────────────────────────────────────
+    (
+        "p4 d9 scope4: version 1 takes the marker list",
+        P4D9_SCOPE,
+        "    if markers and D1_MARKER_WITHOUT_ENTRY not in carried:\n",
+        "    if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        "test_version_1_takes_no_marker_list_and_no_other_version_is_built",
+    ),
+    (
+        "p4 d9 scope4: a listed site that is no curated row is taken",
+        P4D9_SCOPE,
+        '    if stray:\n        raise ScopeError(f"the D1 listing',
+        '    if False:  # mutant\n        raise ScopeError(f"the D1 listing',
+        P4D9_SCOPE_TEST,
+        P4D9_LISTED,
+    ),
+    (
+        "p4 d9 scope4: a listed site is taken on the listing's word",
+        P4D9_SCOPE,
+        "        if not markers_without_entry(by_row[site_id]):\n",
+        "        if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_LISTED,
+    ),
+    (
+        "p4 d9 scope4: a listed site joins no list",
+        P4D9_SCOPE,
+        "        members[D1_MARKER_WITHOUT_ENTRY].add(site_id)\n",
+        "        pass  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_V2,
+    ),
+    (
+        "p4 d9 scope4: version 2 records version 1's decision alone",
+        P4D9_SCOPE,
+        'DECISIONS: Mapping[int, str] = {1: DECISION, 2: f"{DECISION} {ORDER_2026_09_25}"}\n',
+        "DECISIONS: Mapping[int, str] = {1: DECISION, 2: DECISION}  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_V2,
+    ),
+    (
+        "p4 d9 scope4: every marker counts, the entries are not read",
+        P4D9_SCOPE,
+        '    return sorted(set(T08.marker_sequence(row["description"] or "")) - numbers)\n',
+        '    return sorted(set(T08.marker_sequence(row["description"] or "")))  # mutant\n',
+        P4D9_SCOPE_TEST,
+        P4D9_READ,
+    ),
+    (
+        "p4 d9 scope4: the markers are read without D1's range expansion",
+        P4D9_SCOPE,
+        '    return sorted(set(T08.marker_sequence(row["description"] or "")) - numbers)\n',
+        '    return sorted({int(n) for n in re.findall(r"\\[(\\d+)\\]", row["description"] or "")}'
+        " - numbers)  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_READ,
+    ),
+    (
+        "p4 d9 scope4: the listing's every reason is the list",
+        P4D9_SCOPE,
+        "        if reason != D1_REASON:\n            continue\n",
+        "        if False:  # mutant\n            continue\n",
+        P4D9_SCOPE_TEST,
+        P4D9_LISTING,
+    ),
+    (
+        "p4 d9 scope4: a site listed twice is taken twice",
+        P4D9_SCOPE,
+        "        if site_id in found:\n",
+        "        if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_LISTING,
+    ),
+    # ── plan4: the list plan, and the mass run's plan from version 1 ─────────────────────────
+    (
+        "p4 d9 plan4: the list plan asks an earlier plan's site again",
+        P4D9_PLAN,
+        "        site for site in sites[pilot:] if site.site_id in listed and site.site_id not in "
+        "earlier\n",
+        "        site for site in sites[pilot:] if site.site_id in listed  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_LIST_PLAN,
+    ),
+    (
+        "p4 d9 plan4: the list plan asks the pilot's sites again",
+        P4D9_PLAN,
+        "        site for site in sites[pilot:] if site.site_id in listed and site.site_id not in "
+        "earlier\n",
+        "        site for site in sites if site.site_id in listed and site.site_id not in earlier"
+        "  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_LIST_PLAN,
+    ),
+    (
+        "p4 d9 plan4: the list plan is numbered after the earlier plans",
+        P4D9_PLAN,
+        "    batches = batches_after([site.to_dict() for site in tail], LIST_PLAN_FIRST_BATCH - 1)\n",
+        "    batches = batches_after([site.to_dict() for site in tail], taken)  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_BLOCK,
+    ),
+    (
+        "p4 d9 plan4: an earlier plan inside the block is not refused",
+        P4D9_PLAN,
+        "    if taken >= LIST_PLAN_FIRST_BATCH:\n",
+        "    if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_BLOCK,
+    ),
+    (
+        "p4 d9 plan4: a listed site no plan accounts for passes",
+        P4D9_PLAN,
+        "    if unplaced:\n        raise R.InputError(",
+        "    if False:  # mutant\n        raise R.InputError(",
+        P4D9_SCOPE_TEST,
+        P4D9_ACCOUNTED,
+    ),
+    (
+        "p4 d9 plan4: an empty list plan is written",
+        P4D9_PLAN,
+        '    if not tail:\n        raise R.InputError(f"no site of the list',
+        '    if False:  # mutant\n        raise R.InputError(f"no site of the list',
+        P4D9_SCOPE_TEST,
+        P4D9_ACCOUNTED,
+    ),
+    (
+        "p4 d9 plan4: a list its scope's version does not carry is planned",
+        P4D9_PLAN,
+        "    if scope_list not in S.VERSION_LISTS[scope.version]:\n",
+        "    if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_ACCOUNTED,
+    ),
+    (
+        "p4 d9 plan4: --scope-list is taken without --after",
+        P4D9_PLAN,
+        "    if args.scope_list and (args.defect_scope or not args.pilot or not args.after):\n",
+        "    if args.scope_list and (args.defect_scope or not args.pilot):  # mutant\n",
+        P4D9_SCOPE_TEST,
+        P4D9_ARGS,
+    ),
+    (
+        "p4 d9 plan4: the list summary hides the sites earlier plans carry",
+        P4D9_PLAN,
+        '        "carried_by_earlier_plans": [site_id for site_id in listed if site_id in carried],\n',
+        '        "carried_by_earlier_plans": [],  # mutant\n',
+        P4D9_SCOPE_TEST,
+        P4D9_BUILD,
+    ),
+    (
+        "p4 d9 plan4: the mass run's plan is built from the current version",
+        P4D9_PLAN,
+        "    scope = S.load_scope(1)\n",
+        "    scope = S.load_scope()  # mutant\n",
+        P4D9_SCOPE_TEST,
+        "test_build_with_the_defect_scope_writes_the_mass_runs_plan",
+    ),
+    (
+        "p4 d9 plan4: scope version 2 is built without the D1 listing",
+        P4D9_PLAN,
+        "    if S.D1_MARKER_WITHOUT_ENTRY in S.VERSION_LISTS.get(args.version, ()):\n",
+        "    if False:  # mutant\n",
+        P4D9_SCOPE_TEST,
+        "test_plan4_scope_writes_version_2_with_the_d1_listing",
+    ),
+    (
+        "p4 d9 plan4: plan4 scope ignores --version",
+        P4D9_PLAN,
+        "        version=args.version,\n",
+        "        version=S.SCOPE_VERSION,  # mutant\n",
+        P4D9_SCOPE_TEST,
+        "test_plan4_scope_writes_the_scope_file_from_the_rows_and_the_refusals",
+    ),
+    # ── write4: a batch short of its outcome files is a hole, refused with the exit line ──────
+    (
+        "p4 d9 write4: a batch without its outcome files is read on",
+        P4D9_WRITE,
+        "        if not (batch_dir / name).exists():\n",
+        "        if False:  # mutant\n",
+        P4D9_WRITE_TEST,
+        "test_a_batch_short_of_its_outcome_files_is_refused_by_name",
+    ),
+    # ── the audit log records version 2's pin ────────────────────────────────────────────────
+    (
+        "p4 d9 scope: the audit log loses scope version 2's digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003173`",
+        "`mutant`",
+        P4D9_SCOPE_TEST,
+        "test_the_audit_log_records_the_pinned_scope",
+    ),
+]
+MUTATIONS += P4_D9_MUTATIONS
 
 
 def digest(path: Path) -> str:

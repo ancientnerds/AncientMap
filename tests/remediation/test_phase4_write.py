@@ -346,6 +346,30 @@ def test_a_batch_where_a_site_reached_no_outcome_is_a_hole_not_a_refusal(tmp_pat
         )
 
 
+@pytest.mark.parametrize("missing", [M.LANES_FILE, M.ASSEMBLY_FILE, M.HOLDS_FILE])
+def test_a_batch_short_of_its_outcome_files_is_refused_by_name(tmp_path: Path, missing) -> None:
+    """The D9 run's batch after its select export (2026-09-25): no `assembly.jsonl` until S4. The
+    batch has reached no outcome - a hole, refused as one (`PlanInputError`, so the gate prints its
+    `WRITE_EXIT=` line), not a `FileNotFoundError` that ends the gate without it."""
+    batch_dir = FX.write_batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly()])
+    (batch_dir / missing).unlink()
+    with pytest.raises(W4.PlanInputError, match=f"no {missing}: the batch has not reached"):
+        W4.load_batch(batch_dir)
+
+
+def test_the_gate_refuses_a_run_whose_batch_is_not_assembled_yet_with_its_exit_line(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    _gate_run(tmp_path, 1)
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    (tmp_path / "runs" / "pilot" / "p4-0001" / M.ASSEMBLY_FILE).unlink()
+    assert G.main(_gate_args(tmp_path), runner=_db(GATE_SITE)) == 1
+    captured = capsys.readouterr()
+    assert "no assembly.jsonl: the batch has not reached" in captured.err
+    assert captured.out.rstrip().endswith("WRITE_EXIT=1")
+    assert not (tmp_path / "apply").exists()
+
+
 def test_a_site_assembled_in_another_lane_than_assigned_is_refused_loudly(tmp_path: Path) -> None:
     batch = _batch(tmp_path, sites=[FX.plan_site()], assemblies=[FX.assembly(lane=M.Lane.S)])
     with pytest.raises(W4.PlanInputError, match="never changes lane"):
@@ -1029,7 +1053,7 @@ def test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it(
     assert G.main(_gate_args(tmp_path), runner=_db(first, second)) == 0
     out = capsys.readouterr().out
     assert "rows planned: 2 | refused by rule: {'outside-defect-scope': 1}" in out
-    assert "defect scope: SCOPE4.json v1 " in out
+    assert "defect scope: SCOPE4.json v2 " in out  # the current version, read from the pinned file
     refused = (tmp_path / "apply" / "p4-0002" / W4.REFUSED_FILE).read_text(encoding="utf-8")
     assert json.loads(refused)["rule"] == "outside-defect-scope"
 
@@ -1772,6 +1796,65 @@ def test_the_gate_reads_only_the_ledger_of_its_own_run(tmp_path, monkeypatch, ca
     assert rows
     for row in rows:
         assert row.evidence["ledger_labels"] == [f"{site_id}/select", f"{site_id}/review"]
+
+
+def test_a_third_run_is_written_into_the_apply_root_two_runs_wrote(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """The D9 run (owner order 2026-09-25) writes into the P4 apply root pilot 4 and the mass run
+    wrote. Its batch id is its own (`plan4.LIST_PLAN_FIRST_BATCH`, p4-0901), so the gate renders it
+    beside theirs and leaves their record byte for byte, asks its step's acceptance like any other,
+    and the lane plan the acceptance reads carries every run's rows."""
+    monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
+    batches = {"pilot4": "p4-0001", "mass": "p4-0010", "d9": "p4-0901"}
+    sites = {run: f"{n:08x}-0000-4000-8000-{n:012x}" for n, run in enumerate(batches, start=1)}
+    for run, batch_id in batches.items():
+        run_dir = tmp_path / "runs" / run
+        site_id = sites[run]
+        FX.write_batch(
+            run_dir,
+            sites=[FX.plan_site(site_id)],
+            assemblies=[FX.assembly(site_id)],
+            batch_id=batch_id,
+        )
+        (run_dir / M.LEDGER_FILE).write_text(
+            "".join(json.dumps(r) + "\n" for r in FX.ledger_rows(site_id, batch=batch_id)),
+            encoding="utf-8",
+        )
+    db = _db(*sites.values())
+    apply = tmp_path / "apply"
+
+    def gate(run: str, *extra: str) -> int:
+        args = ["--group", "P4", "--run", run, "--run-root", str(tmp_path / "runs"),
+                "--apply-root", str(apply), "--open-lanes", "W,S", *extra]  # fmt: skip
+        return G.main(args, runner=db)
+
+    for step, run in enumerate(("pilot4", "mass"), start=1):
+        assert gate(run, "--apply", "--step", "100") == 0
+        accepted = _acceptance(tmp_path, journal_rows=2 * step, name=f"accept-{step}.log")
+        assert gate(run, "--accept", str(accepted)) == 0
+    before = {
+        path: path.read_bytes()
+        for path in apply.rglob("*")
+        if path.is_file() and path.name != G.LANE_PLAN_FILE
+    }
+    capsys.readouterr()
+
+    assert gate("d9") == 0
+    assert "rows planned: 2 | refused by rule: {}" in capsys.readouterr().out
+    assert gate("d9", "--apply", "--step", "100") == 0
+
+    assert "STEP COMPLETE: 1 site(s) written in 1 batch(es)" in capsys.readouterr().out
+    step = json.loads((apply / G.STEP_FILE).read_text(encoding="utf-8"))
+    assert step["stamps"] == ["phase4:p4-0901:chunk-0001"]
+    assert {path: path.read_bytes() for path in before} == before
+    lane_plan = (apply / G.LANE_PLAN_FILE).read_text(encoding="utf-8").splitlines()
+    assert sorted(json.loads(line)["site_id"] for line in lane_plan) == sorted(
+        2 * [*sites.values()]
+    )
+    accepted = _acceptance(tmp_path, journal_rows=6, name="accept-3.log")
+    assert gate("d9", "--accept", str(accepted)) == 0
+    assert len(list((apply / G.ACCEPTED_DIR).glob("step-*.json"))) == 3
 
 
 def test_a_step_of_100_sites_never_writes_more_than_100(tmp_path, monkeypatch, capsys) -> None:
