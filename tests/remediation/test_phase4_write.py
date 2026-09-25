@@ -2504,3 +2504,33 @@ def test_p5_refuses_a_site_whose_live_provenance_names_a_card_it_will_not_write(
     (refusal,) = plan.refusals
     assert refusal.rule == W4.RULE_CARD_NAMED
     assert "revert the site first" in refusal.detail
+
+
+def test_a_reverted_round_keeps_its_plan_and_the_lane_plan_carries_it(
+    tmp_path, monkeypatch
+) -> None:
+    """2026-09-25 audit E5: once round 2 re-plans a batch, the acceptance compared round 1's
+    reverted journal rows with round 2's plan - a round whose plan changed could never be
+    accepted. The archived round keeps its own `PLAN.jsonl`, and the lane plan carries its rows
+    tagged with the round's stamp, so each reverted row is judged against the plan it was
+    written from."""
+    db, out = _reopened(tmp_path, monkeypatch)
+    kept = out / W4.CHUNKS_DIR / "chunk-0001" / W4.PLAN_FILE
+    round_1 = [json.loads(line) for line in kept.read_text(encoding="utf-8").splitlines()]
+    assert len(round_1) == 2
+    assert G.main(_gate_args(tmp_path, "--apply", "--round", "2"), runner=db) == 0
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    rows = [json.loads(line) for line in lane_plan.read_text(encoding="utf-8").splitlines()]
+    archived = [row for row in rows if "round_stamp" in row]
+    assert [{k: v for k, v in row.items() if k != "round_stamp"} for row in archived] == round_1
+    assert {row["round_stamp"] for row in archived} == {ROUND_1}
+    assert len(rows) - len(archived) == 2  # round 2's own rows
+
+
+def test_a_reverted_round_without_its_plan_is_refused_by_the_lane_plan(
+    tmp_path, monkeypatch
+) -> None:
+    db, out = _reopened(tmp_path, monkeypatch)
+    (out / W4.CHUNKS_DIR / "chunk-0001" / W4.PLAN_FILE).unlink()
+    with pytest.raises(SystemExit, match="keeps no PLAN.jsonl"):
+        G.write_lane_plan(tmp_path / "apply")

@@ -229,6 +229,9 @@ def accept4(
     """
     result = Acceptance4()
     plan: dict[Key, Mapping[str, Any]] = {}
+    #: A reverted round's own plan rows (`write_gate4.ROUND_STAMP`), by (that round's stamp, key):
+    #: they judge that round's reverted journal rows only - never a planned row still to write.
+    archived: dict[tuple[str, Key], Mapping[str, Any]] = {}
     for row in planned:
         key = (row["table"], row["column"], row["pk"])
         if (key[0], key[1]) not in columns:
@@ -236,7 +239,10 @@ def accept4(
                 f"PLANNED OUTSIDE THE LANE {key[2]} {key[0]}.{key[1]}: the lane writes "
                 f"{sorted(f'{t}.{c}' for t, c in columns)} only"
             )
-        plan[key] = row
+        if write_gate4.ROUND_STAMP in row:
+            archived[(row[write_gate4.ROUND_STAMP], key)] = row
+        else:
+            plan[key] = row
     lane_by_key: dict[Key, list[VW.Link]] = collections.defaultdict(list)
     for link in lane_links:
         if (link.table, link.column) not in columns:
@@ -258,20 +264,24 @@ def accept4(
         )
         result.deviations.extend(problems)
         row = plan.get(key)
-        if row is None:
-            result.deviations.append(f"OUTSIDE THE PLAN {where}: journalled, never planned")
         closed = {link.id for link in links if reverted(link, chain, change_keys)}
         open_links = [link for link in links if link.id not in closed]
+        if row is None and not all(
+            link.id in closed and (link.stamp, key) in archived for link in links
+        ):
+            result.deviations.append(f"OUTSIDE THE PLAN {where}: journalled, never planned")
         if len(open_links) > 1:
             ids = ", ".join(str(link.id) for link in open_links)
             result.deviations.append(f"WRITTEN TWICE {where}: journal rows {ids}")
         ids_in_chain = [link.id for link in chain]
         sound = not problems and row is not None and len(open_links) == 1
         for link in links:
-            if row is not None:
+            # A reverted round's row is judged against the plan that round was written from.
+            judged = archived.get((link.stamp, key), row)
+            if judged is not None:
                 want = (
-                    canonical(key[0], key[1], row["old_value"]),
-                    canonical(key[0], key[1], row["new_value"]),
+                    canonical(key[0], key[1], judged["old_value"]),
+                    canonical(key[0], key[1], judged["new_value"]),
                 )
                 if (link.old, link.new) != want:
                     sound = False
@@ -732,8 +742,9 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
         change_keys=production.change_keys,
         allowed=args.allow_stamp,
     )
+    current = sum(write_gate4.ROUND_STAMP not in row for row in planned)
     print(
-        f"lane {lane} | stamps {stamp_like} | planned rows {len(planned)} | lane journal rows "
+        f"lane {lane} | stamps {stamp_like} | planned rows {current} | lane journal rows "
         f"{len(production.lane_links)} | carried {len(result.carried)} | not yet written "
         f"{result.untouched} | superseded {sum(result.superseded.values())}"
     )

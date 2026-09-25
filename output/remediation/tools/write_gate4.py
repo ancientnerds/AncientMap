@@ -35,16 +35,20 @@ command to run (`verify_writes4.py --lane --plan --run`, 0 deviations).
 continue" as a precondition, not a promise. Every written batch is recorded in `STEP.json` (and the
 lane's plan in `LANE_PLAN.jsonl`); while `STEP.json` exists, `--apply` writes nothing. `--accept
 <file>` reads the saved output of `verify_writes4.py` and records `ACCEPTED/step-NNNN.json` only when
-it ends in `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has one lane line of the step's lane
-whose stamps cover the step's, read at least the rows written so far under those stamps (every
-round, the reverted ones too: their rows stay in the journal), and accepted no earlier step
-(`acceptance_problems`).
+it is the output of one run - its lane line first, one `RESULT:` and one exit line - that ends in
+`RESULT: 0 deviation(s)` and `ACCEPT_EXIT=0`, whose lane line is the step's lane with stamps
+covering the step's, that read at least the rows written so far under those stamps (every round,
+the reverted ones too: their rows stay in the journal), and that accepted no earlier step
+(`acceptance_problems`). A step is 1-100 sites (`STEP_MAX`); a stopped batch anywhere in the apply
+root stops every run, whatever `--batch` selects.
 
 **Write rounds** (the chunk number of the stamp). A batch taken back by `revert4` is written again
 as its next round: `--apply --round 2` re-opens a batch applied in round 1 only when production
 proves, read-only, that every row round 1 wrote has its own reversal kept (`revert4.reversal_read`,
-`prove_reverted`); round 1's `APPLIED.json` is then kept beside its statements in
-`chunks/chunk-0001/` with that proof (`REVERTED.json`), and chunk-0002 is rendered and written. A
+`prove_reverted`); round 1's `APPLIED.json` and `PLAN.jsonl` are then kept beside its statements
+in `chunks/chunk-0001/` with that proof (`REVERTED.json`), and chunk-0002 is rendered and written.
+Round 2 may be planned differently: the lane plan carries round 1's kept rows tagged with its stamp
+(`round_stamp`), and the acceptance judges round 1's reverted rows against them. A
 round the batch cannot take - round 3 over a live round 1, round 2 for a batch never written, round
 1 again for a re-opened one - is refused with `WRITE_EXIT=1`, never skipped. A step that was
 reverted before its acceptance can never be accepted (every link it wrote has a later one);
@@ -125,6 +129,8 @@ STEP_FILE = "STEP.json"
 ACCEPTED_DIR = "ACCEPTED"
 #: Every rendered write batch's plan rows, in batch order: the `--plan` the acceptance reads.
 LANE_PLAN_FILE = "LANE_PLAN.jsonl"
+#: The key a reverted round's archived plan row carries in `LANE_PLAN.jsonl`: that round's stamp.
+ROUND_STAMP = "round_stamp"
 #: The acceptance CLI (Track C, WB-C3) and the lines of its output `--accept` reads.
 VERIFY_TOOL = "output/remediation/tools/verify_writes4.py"
 ACCEPT_OK = "ACCEPT_EXIT=0"
@@ -479,9 +485,12 @@ def prove_reverted(
 
 
 def archive_round(out: pathlib.Path, record: Mapping[str, Any], proof: Mapping[str, Any]) -> None:
-    """Keep a reverted round's record beside its statements (`chunks/<label>/`): the proof first,
-    then its `APPLIED.json` moved there. The batch is open for its next round."""
+    """Keep a reverted round's record beside its statements (`chunks/<label>/`): the plan it was
+    written from, the proof, then its `APPLIED.json` moved there. The batch is open for its next
+    round, whose plan may differ: the acceptance judges this round's reverted rows against the plan
+    kept here (audit 2026-09-25 E5)."""
     directory = out / W4.CHUNKS_DIR / record["chunk"]
+    (directory / W4.PLAN_FILE).write_bytes((out / W4.PLAN_FILE).read_bytes())
     _mark(directory, REVERTED_FILE, proof)
     (out / APPLIED_FILE).replace(directory / APPLIED_FILE)
 
@@ -540,10 +549,23 @@ def pending_step(apply_root: pathlib.Path) -> dict[str, Any] | None:
 def write_lane_plan(apply_root: pathlib.Path) -> pathlib.Path:
     """Every rendered write batch's `PLAN.jsonl`, in batch order, as one file: the plan the
     acceptance compares the lane's whole journal against (a journal row outside it is a deviation,
-    a planned row not written yet is a later step)."""
+    a planned row not written yet is a later step). After them, every reverted round's own plan,
+    each row tagged `round_stamp` with that round's stamp: the acceptance judges the round's
+    reverted journal rows against it, never against a later round's re-plan (audit E5). A
+    reverted round that keeps no plan is refused - its rows could not be judged."""
     lines: list[str] = []
     for plan in sorted(apply_root.glob(f"*/{W4.PLAN_FILE}")):
         lines.extend(line for line in plan.read_text(encoding="utf-8").splitlines() if line)
+    for proof in sorted(apply_root.glob(f"*/{W4.CHUNKS_DIR}/*/{REVERTED_FILE}")):
+        kept = proof.parent / W4.PLAN_FILE
+        if not kept.exists():
+            raise SystemExit(f"{proof.parent}: a reverted round that keeps no PLAN.jsonl")
+        stamp = _read(proof.parent / APPLIED_FILE)["run_stamp"]
+        lines.extend(
+            json.dumps({**json.loads(line), ROUND_STAMP: stamp}, ensure_ascii=False, sort_keys=True)
+            for line in kept.read_text(encoding="utf-8").splitlines()
+            if line
+        )
     path = apply_root / LANE_PLAN_FILE
     path.write_text("".join(line + "\n" for line in lines), encoding="utf-8", newline="\n")
     return path

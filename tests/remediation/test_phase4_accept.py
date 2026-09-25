@@ -1177,3 +1177,43 @@ def test_a_batch_without_a_written_site_is_not_read(tmp_path: Path) -> None:
     assert A.index_run(written.run_dir, {SITE_ID}) == A.index_run(written.run_dir, [SITE_ID])
     with pytest.raises(SystemExit, match="cannot be read"):
         A.index_run(written.run_dir, {"later-site"})
+
+
+def test_a_round_2_whose_plan_changed_is_accepted_against_each_rounds_own_plan(
+    tmp_path: Path,
+) -> None:
+    """2026-09-25 audit E5: round 1 wrote D1, was reverted, and round 2 re-planned the description
+    to D2. Round 1's reverted rows are judged against round 1's archived plan (the lane plan's rows
+    tagged `round_stamp`), not against round 2's - otherwise the step can never be accepted."""
+    written = written_p4(tmp_path)
+    _revert(written)
+    round_1_plan = [dict(row, round_stamp=P4_STAMP) for row in written.plan]
+    d2 = "Round two's description [1]."
+    desc = next(r for r in written.production.journal if r["id"] == 11)
+    raw = next(r for r in written.production.journal if r["id"] == 12)
+    first = max(row["id"] for row in written.production.journal) + 1
+    written.production.journal += [
+        dict(desc, id=first, run_stamp=P4_ROUND_2, new_value=d2, change_key="k-desc-2"),
+        dict(raw, id=first + 1, run_stamp=P4_ROUND_2),
+    ]
+    written.production.sites[SITE_ID].update(
+        description=d2, raw_data=new_raw(written.case.site, written.case.assembly)
+    )
+    written.plan[0] = dict(written.plan[0], new_value=d2, change_key="k-desc-2")
+    without = _accept4(written)
+    assert any(d.startswith("OTHER VALUE") for d in without.deviations)
+    written.plan += round_1_plan
+    result = _accept4(written)
+    assert result.deviations == [] and len(result.carried) == 2
+    assert result.untouched == 0
+
+
+def test_an_archived_round_row_is_no_licence_for_an_open_write(tmp_path: Path) -> None:
+    """A round's archived plan only judges that round's reverted rows: a live write outside the
+    current plan stays OUTSIDE THE PLAN, and an archived row is never a planned row still to
+    write."""
+    written = written_p4(tmp_path)
+    written.plan = [dict(row, round_stamp=P4_STAMP) for row in written.plan]
+    result = _accept4(written)
+    assert sum(d.startswith("OUTSIDE THE PLAN") for d in result.deviations) == 2
+    assert result.untouched == 0 and result.carried == set()
