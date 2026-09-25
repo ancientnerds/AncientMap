@@ -3540,6 +3540,407 @@ REVERSAL_3_CASES: list[Case] = [
 CASES += REVERSAL_3_CASES
 
 
+# ------------------------------------------------------------- the wrong-both lane (2026-09-25)
+#: The correction lane of RULES.md rule 5 (`wrong_both.py`) and its registration in `lane.py`. A
+#: block of its own after journal-reversal-3's; every label starts with "wrong-both" -
+#: `mutation_sweep.py wrong-both` runs exactly these.
+WRONG_BOTH = MECHANICAL / "wrong_both.py"
+WRONG_BOTH_TESTS = "tests/remediation/test_mechanical_wrong_both.py"
+_YEAR_IN = "test_a_year_with_its_era_states_it"
+_YEAR_OUT = "test_a_year_without_its_era_or_in_another_does_not"
+_TYPE_IN = "test_a_term_the_normalizer_resolves_to_the_type_states_it"
+_COUNTRY_OUT = "test_a_country_outside_the_convention_is_named"
+_WRITTEN = "test_a_row_whose_judges_agree_and_whose_quote_states_the_value_is_written"
+WRONG_BOTH_CASES: list[Case] = [
+    *(
+        guard(f"wrong-both: {label}", WRONG_BOTH, needle, test, WRONG_BOTH_TESTS)
+        for label, needle, test in (
+            (
+                "the verdict file holds the basis's verdict",
+                '    if verdict["verdict"] != basis["verdict"]:',
+                "test_a_basis_whose_verdict_file_holds_another_verdict_is_refused",
+            ),
+            (
+                "the quote check is the verdict's own",
+                '    if [c["source"] for c in checked] != [q["source"] for q in verdict["quotes"]]:',
+                "test_a_quote_check_that_is_not_the_verdicts_own_is_refused",
+            ),
+            (
+                "the decisions exist",
+                '    if not path.exists():\n        raise PlanError(f"{path} is missing',
+                "test_missing_decisions_are_refused",
+            ),
+            (
+                "a decision once",
+                "        if key in seen:",
+                "test_a_decision_named_twice_is_refused",
+            ),
+            (
+                "a candidate carries a wrong-both",
+                "        if not any(j.verdict == WRONG_BOTH_VERDICT for j in judges):",
+                "test_every_row_with_a_wrong_both_on_its_route_is_a_candidate_with_its_judges",
+            ),
+            (
+                "the year's era",
+                '        if (match["bc"] is not None) == (year < 0):',
+                _YEAR_IN,
+            ),
+            (
+                "AD before the year",
+                "    if year > 0:\n        for match in _PREFIX.finditer(text):",
+                _YEAR_IN,
+            ),
+            (
+                "the year after AD is the year",
+                '            if int(match["n"].replace(",", "")) == year:',
+                _YEAR_IN,
+            ),
+            (
+                "a quote from the row's evidence file is about the site",
+                "    if not Q.is_url(source):\n        return EVIDENCE_FILE",
+                _WRITTEN,
+            ),
+            (
+                "a page that cannot be read refuses",
+                "    if read.failure:\n        raise PlanError(",
+                "test_a_page_the_audit_found_the_quote_on_must_still_hold_it",
+            ),
+            (
+                "a page without the name near the quote",
+                "            if word is None:\n                return None",
+                "test_a_page_quote_that_stands_far_from_the_site_s_name_is_no_evidence",
+            ),
+            (
+                "a country spelling the project carries",
+                "    if not _is_canonical(value, dict(codes), normalize):",
+                _COUNTRY_OUT,
+            ),
+            ("a country with an ISO code", "    if iso is None:", _COUNTRY_OUT),
+            (
+                "the United Kingdom by its parts",
+                '    if iso == "GB" and value not in UK_PARTS.allowed_new_values:',
+                _COUNTRY_OUT,
+            ),
+            (
+                "an uncounted judge gives no evidence",
+                "        if not judge.counted:\n            continue",
+                "test_a_quote_of_a_judge_that_does_not_count_is_no_evidence",
+            ),
+            (
+                "a quote the check did not find",
+                "            if outcome != Q.FOUND:",
+                "test_a_quote_the_check_did_not_find_is_no_evidence",
+            ),
+            (
+                "a quote that states nothing",
+                "            if stated is None:",
+                "test_no_quote_that_states_the_value_lists_the_row",
+            ),
+            (
+                "a quote not about the site",
+                "            if about is None:",
+                "test_a_page_quote_that_stands_far_from_the_site_s_name_is_no_evidence",
+            ),
+            (
+                "why no quote carries it",
+                "    if not stating:",
+                "test_no_quote_that_states_the_value_lists_the_row",
+            ),
+            (
+                "a kept row is listed",
+                "    if c.decision != REVERT:",
+                "test_a_row_the_audit_kept_is_listed",
+            ),
+            (
+                "a curated site",
+                '    if site is None or site["source_id"] != CURATED_SOURCE:',
+                "test_a_site_that_is_not_curated_is_listed",
+            ),
+            (
+                "the journal ends at the live value",
+                "    if broken is not None:\n        return refuse(*broken)",
+                "test_a_journal_that_does_not_end_at_the_live_value_is_listed",
+            ),
+            (
+                "the judges name one value",
+                "    if len(named) != 1:",
+                "test_judges_that_name_two_values_are_listed",
+            ),
+            (
+                "not the old value",
+                "    if value == c.old_value:",
+                "test_a_proposal_of_the_old_or_the_written_value_is_listed",
+            ),
+            (
+                "not the reverted value",
+                "    if value == c.written_value:",
+                "test_a_proposal_of_the_old_or_the_written_value_is_listed",
+            ),
+            (
+                "a canonical site type",
+                "        if value not in CANONICAL_TYPES:",
+                "test_a_site_type_that_is_not_a_canonical_fixed_point_is_listed",
+            ),
+            (
+                "the bucket rules agree",
+                "        if frontend(year) != bucket:",
+                "test_the_bucket_rules_must_agree",
+            ),
+            (
+                "a start in another bucket takes its label",
+                "        if live_label != bucket:",
+                "test_a_start_that_changes_bucket_writes_its_label_with_it",
+            ),
+            (
+                "a label to condition on",
+                "            if live_label is None:",
+                "test_a_label_the_row_holds_none_of_is_listed",
+            ),
+            (
+                "the label's journal ends at it",
+                "            if label_broken is not None:",
+                "test_a_label_whose_journal_does_not_end_at_it_is_listed",
+            ),
+            (
+                "the country convention lists the row",
+                "        if problem is not None:",
+                "test_a_country_row_outside_the_convention_is_listed",
+            ),
+            (
+                "no evidence lists the row",
+                "    if evidence is None:",
+                "test_no_quote_that_states_the_value_lists_the_row",
+            ),
+            (
+                "a correction without a label",
+                "    if label is None:\n        return (written,)",
+                _WRITTEN,
+            ),
+            (
+                "list and write are two runs",
+                "    if args.list and args.write:",
+                "test_list_and_write_in_one_run_are_refused",
+            ),
+            (
+                "no flag reads nothing",
+                "    if not (args.list or args.write):",
+                "test_no_flag_reads_nothing",
+            ),
+            (
+                "the plan follows the lane's list",
+                "            if rows != listed_rows():",
+                "test_write_refuses_a_plan_that_is_not_the_lane_s_list",
+            ),
+            (
+                "--list writes the list",
+                "        if args.list:",
+                "test_list_writes_the_journal_rows_the_corrections_follow",
+            ),
+        )
+    ),
+    *(
+        Case(f"wrong-both: {label}", WRONG_BOTH, old, new, test, WRONG_BOTH_TESTS)
+        for label, old, new, test in (
+            (
+                "a year in the other era states nothing",
+                '        if (match["bc"] is not None) == (year < 0):',
+                "        if True:",
+                _YEAR_OUT,
+            ),
+            (
+                "another year after AD states nothing",
+                '            if int(match["n"].replace(",", "")) == year:',
+                "            if True:",
+                _YEAR_OUT,
+            ),
+            (
+                "the judge counts as its basis says",
+                '        counted=bool(basis["counted"]),',
+                "        counted=True,",
+                "test_a_basis_that_did_not_count_is_read_as_one",
+            ),
+            (
+                "a term of several words",
+                "min(len(words), i + MAX_TERM_WORDS) + 1",
+                "min(len(words), i + 1) + 1",
+                _TYPE_IN,
+            ),
+            (
+                "a slash joins a word",
+                r'_WORD = re.compile(r"[^\W\d_]+(?:/[^\W\d_]+)*")',
+                r'_WORD = re.compile(r"[^\W\d_]+")',
+                _TYPE_IN,
+            ),
+            (
+                "the normalizer resolves the term",
+                "            if normalize_site_type(run) == value:",
+                "            if run.lower() == value.lower():",
+                _TYPE_IN,
+            ),
+            (
+                "the number is the year's",
+                '        if match is None or int(match["n"].replace(",", "")) != abs(year):',
+                "        if match is None:",
+                _YEAR_IN,
+            ),
+            (
+                "a range reads on to its era",
+                r'_RANGE = r"(?:\s?[–—\-/]\s?\d[\d,]*|\s(?:to|and)\s\d[\d,]*)*"',
+                '_RANGE = r""',
+                _YEAR_IN,
+            ),
+            (
+                "the era stands whole",
+                r'r"\s?(?:(?P<bc>" + _BC + r")|(?P<ad>" + _AD + r"))(?![^\W\d_])"',
+                r'r"\s?(?:(?P<bc>" + _BC + r")|(?P<ad>" + _AD + r"))"',
+                _YEAR_OUT,
+            ),
+            (
+                "a number starts whole",
+                r'_DIGIT = re.compile(r"(?<![\d.,])\d")',
+                r'_DIGIT = re.compile(r"\d")',
+                _YEAR_OUT,
+            ),
+            (
+                "a number with thousands commas",
+                r'_NUMBER = r"(?P<n>\d{1,3}(?:,\d{3})+|\d+)"',
+                r'_NUMBER = r"(?P<n>\d+)"',
+                _YEAR_IN,
+            ),
+            (
+                "AD stands whole before the year",
+                r'_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
+                r'_PREFIX = re.compile(r"(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
+                _YEAR_OUT,
+            ),
+            (
+                "a longer country name is not the country",
+                '        text = text.replace(longer, " " * len(longer))',
+                "        pass",
+                "test_a_country_is_stated_by_its_name_standing_whole",
+            ),
+            (
+                "a country name stands whole",
+                r'match = re.search(r"(?<![^\W_])" + re.escape(value) + r"(?![^\W_])", text)',
+                "match = re.search(re.escape(value), text)",
+                "test_a_country_is_stated_by_its_name_standing_whole",
+            ),
+            (
+                "another column is refused",
+                '    raise PlanError(f"{column!r} is not a column a wrong-both correction writes")',
+                "    return None",
+                "test_a_column_the_lane_does_not_correct_is_refused",
+            ),
+            (
+                "a page that no longer holds the quote refuses",
+                "    raise PlanError(f\"{source} no longer holds {text!r}, which the audit's check "
+                'found there")',
+                "    return None",
+                "test_a_page_the_audit_found_the_quote_on_must_still_hold_it",
+            ),
+            (
+                "only a counted judge names a value",
+                "        if judge.counted and judge.right_value:",
+                "        if judge.right_value:",
+                "test_only_a_counted_judge_s_value_counts",
+            ),
+            (
+                "the last write is a journal row",
+                "        last is None\n        or last.run_stamp",
+                "        False\n        or last.run_stamp",
+                "test_a_cell_the_journal_holds_nothing_for_is_listed",
+            ),
+            (
+                "the last write is journal-reversal-3's",
+                "        or last.run_stamp != REVERSAL_3.run_stamp\n",
+                "",
+                "test_a_cell_journal_reversal_3_did_not_restore_from_the_judged_write_is_listed",
+            ),
+            (
+                "journal-reversal-3 restored the judged write",
+                "        or (last.old_value, last.new_value) != (c.written_value, c.old_value)\n",
+                "",
+                "test_a_cell_journal_reversal_3_did_not_restore_from_the_judged_write_is_listed",
+            ),
+            (
+                "an integer year as the database prints it",
+                "            year = typed_value(LANE.cell(PERIOD_START), value)",
+                "            year = int(float(value))",
+                "test_a_period_start_that_is_not_an_integer_year_is_listed",
+            ),
+            (
+                "the corrections are counted apart from the labels",
+                '            "corrections": sum(v.rule == RULE for v in changes),',
+                '            "corrections": len(changes),',
+                "test_the_plan_writes_the_corrections_and_lists_the_rest",
+            ),
+            (
+                "the list is the corrections' rows",
+                "    return tuple(sorted(int(str(v.journal_id)) for v in plan.changes if v.rule == "
+                "RULE))",
+                "    return tuple(sorted(int(str(v.journal_id)) for v in plan.changes))",
+                "test_the_plan_writes_the_corrections_and_lists_the_rest",
+            ),
+        )
+    ),
+    *(
+        Case(f"wrong-both: {label}", LANE, old, new, test, WRONG_BOTH_TESTS)
+        for label, old, new, test in (
+            (
+                "the lane is registered",
+                "LANES[WRONG_BOTH.name] = WRONG_BOTH\n",
+                "",
+                "test_the_lane_owns_four_cells_and_reverses_no_journal_row",
+            ),
+            (
+                "the lane reads back",
+                "LANE_READBACKS[WRONG_BOTH.name] = WRONG_BOTH_READBACK\n",
+                "",
+                "test_the_lane_owns_four_cells_and_reverses_no_journal_row",
+            ),
+            (
+                "the lane owns the canonical types",
+                '        "site_type", "character varying", max_chars=100, '
+                "allowed_new_values=tuple(CANONICAL_TYPES)\n",
+                '        "site_type", "character varying", max_chars=100\n',
+                "test_the_lane_owns_four_cells_and_reverses_no_journal_row",
+            ),
+            (
+                "the lane owns the bucket labels",
+                "        allowed_new_values=tuple(label for label, _lo, _hi in PERIOD_BUCKETS),\n"
+                "    ),\n"
+                '    Column("country", "character varying", max_chars=100),\n)\n'
+                "_WRONG_BOTH_RESIDUAL",
+                "    ),\n"
+                '    Column("country", "character varying", max_chars=100),\n)\n'
+                "_WRONG_BOTH_RESIDUAL",
+                "test_the_lane_owns_four_cells_and_reverses_no_journal_row",
+            ),
+            (
+                "the residual is the lane's list",
+                "    reversal_residual(WRONG_BOTH_JOURNAL_IDS, _WRONG_BOTH_CELLS).predicate,",
+                "    reversal_residual(REVERSAL_3_JOURNAL_IDS, _WRONG_BOTH_CELLS).predicate,",
+                "test_the_residual_is_the_restored_values_the_list_names",
+            ),
+            (
+                "the lane reads back its list",
+                "        *reversal_metrics(WRONG_BOTH, WRONG_BOTH_JOURNAL_IDS, "
+                "_WRONG_BOTH_RESIDUAL),\n",
+                "",
+                "test_the_residual_is_the_restored_values_the_list_names",
+            ),
+            (
+                "the lane reads back the period pair",
+                "        (_PERIOD_MISMATCH.metric, _CURATED_ROWS + _PERIOD_MISMATCH.predicate),\n",
+                "",
+                "test_the_residual_is_the_restored_values_the_list_names",
+            ),
+        )
+    ),
+]
+CASES += WRONG_BOTH_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""
