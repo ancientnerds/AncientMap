@@ -66,19 +66,14 @@ const ENDING_LABELS: Record<keyof GlobeEndings, string> = {
   error: 'Error while starting',
   abandoned: 'Left while loading',
   no_signal: 'No signal',
-  unmeasured: 'Before these were recorded',
 }
 
 /** The rows of the split, in fixed order — zeros stay, the order is the
- *  reading. `unmeasured` only when the window holds loads that ran a build
- *  without the endings: loads from before the first ending event, or a
- *  returning visitor's first load after it (SQL_GLOBE measured_from), which
- *  can fall in any later window, so never hide the row by date. */
+ *  reading. */
 export function endingItems(g: GlobeData): BarItem[] {
   const n = g.not_reached
   const median = g.abandon_ms.median
   return (Object.keys(ENDING_LABELS) as Array<keyof GlobeEndings>)
-    .filter(key => key !== 'unmeasured' || n.unmeasured > 0)
     .map(key => ({
       key,
       label: ENDING_LABELS[key],
@@ -115,7 +110,8 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
           </div>
           <p className="dash-note">
             {timesLine(g)} The denominator is page loads of /globe.html, not visitors — one person
-            reloading counts twice, on purpose. {visitorsLine(g)}
+            reloading counts twice, on purpose. {visitorsLine(g)} Counted from the build of 24 Sep 2026
+            on, the first that reports how a load ends; loads of the earlier build are left out.
           </p>
           {/* An answer without the split is an API older than this bundle — every
               deploy has that window, because ci.yml builds the frontend before it
@@ -131,11 +127,6 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
                 page load, so a visitor's endings are matched to their loads in this order. No signal:
                 the page loaded and nothing else arrived — a crashed tab, or a visitor gone before the
                 tracker loaded.
-                {g.not_reached.unmeasured > 0 &&
-                  ' Before these were recorded: loads from before the globe started reporting how a load ends,' +
-                    ' and the first load after that by a returning visitor, which their browser still ran from' +
-                    ' the previous build. Some of those still land in No signal: to Umami a visit in an earlier' +
-                    ' month is another visitor.'}
               </p>
             </>
           )}

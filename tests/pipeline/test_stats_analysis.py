@@ -622,12 +622,9 @@ def _globe_row(
     context_lost=0,
     abandoned=0,
     abandon_ms=(),
-    views_before=0,
-    ready_before=0,
 ):
-    """views_before / ready_before: the session's page views and globe_readys
-    before the first ending event was ever recorded (SQL_GLOBE). 0 by default:
-    every default row is a measured one."""
+    """One SQL_GLOBE row: only the session's loads of the build with the
+    endings - the query leaves the earlier ones out."""
     return {
         "session_id": session,
         "views": views,
@@ -640,8 +637,6 @@ def _globe_row(
         "context_lost": context_lost,
         "abandoned": abandoned,
         "abandon_ms": list(abandon_ms),
-        "views_before": views_before,
-        "ready_before": ready_before,
     }
 
 
@@ -703,7 +698,6 @@ def test_globe_funnel_splits_every_unreached_load_exactly_once():
         "error": 1,
         "abandoned": 1,
         "no_signal": 3,
-        "unmeasured": 0,
     }
     assert sum(out["not_reached"].values()) == out["gave_up"] == 8
     # The totals the panel printed before the split are untouched.
@@ -730,7 +724,6 @@ def test_globe_funnel_caps_the_endings_at_the_unreached_loads_in_their_order():
         "error": 0,
         "abandoned": 0,
         "no_signal": 0,
-        "unmeasured": 0,
     }
     # The abandon that no load was left for is no measurement either.
     assert out["abandon_ms"]["samples"] == 0
@@ -783,80 +776,6 @@ def test_globe_funnel_hides_the_abandon_middle_below_the_sample_floor():
     assert few["samples"] == fs.GLOBE_MIN_SAMPLES - 1
     enough = fs.globe_funnel(rows(fs.GLOBE_MIN_SAMPLES))["abandon_ms"]
     assert enough["median"] == 3000.0 and enough["samples"] == fs.GLOBE_MIN_SAMPLES
-
-
-def test_globe_funnel_does_not_call_loads_before_the_endings_existed_no_signal():
-    """A load before the instrumentation went live carries none of the ending
-    events. As "no signal" it would read as the crash signature for as long as
-    the window reaches back, exactly in the weeks the change is judged."""
-    rows = [
-        _globe_row("old", views=3, ready=1, ready_ms=[9000.0], views_before=3, ready_before=1),
-        _globe_row("new", views=1),
-    ]
-    out = fs.globe_funnel(rows)
-    assert out["not_reached"]["unmeasured"] == 2
-    assert out["not_reached"]["no_signal"] == 1
-    assert sum(out["not_reached"].values()) == out["gave_up"]
-
-
-def test_globe_funnel_still_counts_the_endings_of_the_session_that_sent_the_first():
-    """The very first ending ever recorded belongs to a session whose page
-    view came a few seconds earlier - that session is instrumented, and its
-    ending counts. Only what would otherwise be "no signal" is unmeasured."""
-    row = _globe_row("first", views=2, gate_left=1, views_before=2)
-    out = fs.globe_funnel([row])
-    assert out["not_reached"]["gate"] == 1
-    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 0
-
-
-def test_globe_funnel_calls_everything_unmeasured_before_any_ending_was_sent():
-    # SQL_GLOBE counts every view as "before" while no ending exists
-    out = fs.globe_funnel([_globe_row("a", views=2, views_before=2)])
-    assert out["not_reached"]["unmeasured"] == 2 and out["not_reached"]["no_signal"] == 0
-
-
-def test_globe_funnel_calls_a_silent_load_after_the_endings_began_no_signal_in_a_session_from_before():
-    """An Umami session is one browser for a calendar month, so one session
-    holds loads from before and after the instrumentation went live. A silent
-    load that ran the new build could have sent an ending: it is the crash
-    signature, not "before these were recorded". The load of 2026-09-20
-    reached the globe; the first one after the deploy (09-26) ran the previous
-    build from the service-worker cache and reached it too, so SQL_GLOBE counts
-    both "before"; the one of 09-27 crashed."""
-    row = _globe_row(
-        "month", views=3, ready=2, ready_ms=[8000.0, 7000.0], views_before=2, ready_before=2
-    )
-    out = fs.globe_funnel([row])
-    assert out["not_reached"]["no_signal"] == 1 and out["not_reached"]["unmeasured"] == 0
-
-
-def test_globe_funnel_calls_the_stale_first_load_after_the_deploy_unmeasured():
-    """The first load after the deploy of a browser that had opened the globe
-    before ran the previous build, served cache-first by the service worker,
-    which sends no ending (SQL_GLOBE counts it "before"). One view before the
-    endings began, the stale load after it, both unreached, then a silent
-    crash on the new build: two unmeasured, one no signal."""
-    row = _globe_row("month", views=3, views_before=2)
-    out = fs.globe_funnel([row])
-    assert out["not_reached"]["unmeasured"] == 2 and out["not_reached"]["no_signal"] == 1
-    assert sum(out["not_reached"].values()) == out["gave_up"]
-
-
-def test_globe_funnel_calls_the_stale_load_unmeasured_when_the_earlier_one_reached_the_globe():
-    """The review's row: 09-20 reached the globe, the deploy followed, and on
-    09-26 the old service worker served the old bundle and the visitor left
-    while it loaded. That load could not have sent globe_abandon."""
-    row = _globe_row("month", views=2, ready=1, ready_ms=[8000.0], views_before=2, ready_before=1)
-    out = fs.globe_funnel([row])
-    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 0
-
-
-def test_globe_funnel_calls_unmeasured_only_as_many_loads_as_went_unreached_before():
-    """One unreached load before the endings began, two silent ones after."""
-    row = _globe_row("month", views=3, views_before=1)
-    out = fs.globe_funnel([row])
-    assert out["not_reached"]["unmeasured"] == 1 and out["not_reached"]["no_signal"] == 2
-    assert sum(out["not_reached"].values()) == out["gave_up"]
 
 
 # ---- clusters -------------------------------------------------------------

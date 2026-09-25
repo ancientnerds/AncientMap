@@ -297,10 +297,10 @@ GLOBE_PATH = "/globe.html"
 #:              when the loading overlay fades: the sites, the critical layers
 #:              and the focus lookup are in, no error screen, a live context.
 #:   ready_ms - the milliseconds each globe_ready carried, so the funnel and
-#:              the times come from ONE scan. Samples from before the
-#:              globe-load deploy (2026-09) measured the layers moment only
-#:              (Globe's layers callback); later ones include the sites payload
-#:              and the focus lookup, so the two are not comparable.
+#:              the times come from ONE scan. They include the sites payload
+#:              and the focus lookup; the samples of the build before the
+#:              globe-load deploy measured the layers moment only, and the
+#:              measured_from cut below leaves them out.
 #: The LEFT JOIN is load-bearing: a page view has no event_data row.
 #: There is deliberately no "did the bundle boot" column. web-vitals' onTTFB
 #: waits for document.readyState === 'complete', so a visitor who leaves
@@ -341,36 +341,37 @@ GLOBE_PATH = "/globe.html"
 #:                   the phone gate went away (analytics/globeAbandon.ts
 #:                   createLoadClock) - reading the gate is no loading wait.
 #:                   ready_ms counts from navigation, the gate included.
-#:   views_before  - the session's page views that ran a build without the
-#:                   endings, so if they did not reach the globe they are
-#:                   "unmeasured", not "no signal". The cut is measured_from:
-#:                   - endings_since, the first ending event ever recorded on
-#:                     the path (not the first in the window): the moment the
-#:                     instrumentation went live. Every view while no ending
-#:                     exists yet.
-#:                   - For a session that opened the globe before it, the
-#:                     second view at or after it: the globe page installed
-#:                     the service worker, which serves globe.html and its JS
-#:                     cache-first, so the first load after the deploy still
-#:                     ran the previous build and the next one runs the new
-#:                     (src/pwa/globeStartPrecache.ts). No such view yet: all
-#:                     of the session's views.
-#:                   Counted per load, not decided per session: an Umami
-#:                   session is one browser for a calendar month, so it holds
-#:                   loads from both sides. The `measured` CTE reads the
-#:                   session's whole history on the path, not the window: the
-#:                   view before the endings began can lie before :since.
-#:                   What this cannot see, so a stale first load still reads
-#:                   as "no signal": a browser whose earlier globe visit fell
-#:                   in an earlier month (another Umami session), or whose
-#:                   worker came from another page. The other way round, one
-#:                   view too many counts as before when the session's first
-#:                   load after the deploy came before the first ending, or
-#:                   when another page had already switched it to the new
-#:                   worker.
-#:   ready_before  - the session's globe_ready events before measured_from:
-#:                   the loads before it that reached the globe, the stale
-#:                   first load after the deploy included.
+#: Every column counts only the session's events from measured_from on, the
+#: first load that ran the build with the endings (the globe-load deploy of
+#: 2026-09-24). The loads before it are left out entirely, successes
+#: included: the old build was a different product (a ~16 s load, its ready
+#: measured the layers moment only) and sent no ending, so its unreached
+#: loads could only read as crashes. The founders asked for it on 2026-09-25,
+#: once the new build had proved itself. measured_from is the earlier of:
+#:   - worker_from: endings_since, the first ending event ever recorded on
+#:     the path (not the first in the window), the moment the instrumentation
+#:     went live. For a session that opened the globe before it, the second
+#:     view at or after it instead: the globe page installed the service
+#:     worker, which serves globe.html and its JS cache-first, so the first
+#:     load after the deploy still ran the previous build and the next one
+#:     runs the new (src/pwa/globeStartPrecache.ts).
+#:   - The session's last view at or before its own first ending: only the
+#:     new build sends one, so that load ran it. This keeps the load that
+#:     sent the very first ending (its view came before endings_since, live
+#:     2026-09-24: 40 s before), and a first load after the deploy that
+#:     another page had already switched to the new worker, whenever it
+#:     ended without the globe.
+#: Neither yet (no ending recorded, or an old session without a second view
+#: and without an ending of its own): none of the session's events count.
+#: Cut per load, not decided per session: an Umami session is one browser for
+#: a calendar month, so it holds loads from both sides. Both CTEs read the
+#: session's whole history on the path, not the window: the view before the
+#: endings began can lie before :since. What this cannot see, so a stale first
+#: load still counts: a browser whose earlier globe visit fell in an earlier
+#: month (another Umami session), or whose worker came from another page. The
+#: other way round, a session's first load after the deploy that already ran
+#: the new build is left out when it reached the globe or went silent: only an
+#: ending marks its build.
 #: choice and phase are strings (event_data.string_value); ms is a number and
 #: lives in number_value.
 SQL_GLOBE = """
@@ -392,16 +393,29 @@ ev AS (
       AND e.created_at >= :since AND e.created_at < :until
     GROUP BY e.event_id, e.session_id, e.created_at, e.event_type, e.event_name
 ),
-measured AS (
+switched AS (
     SELECT v.session_id,
-           CASE WHEN bool_or(v.created_at < f.endings_since)
+           CASE WHEN bool_or(v.event_type = 1 AND v.created_at < f.endings_since)
                 THEN (array_agg(v.created_at ORDER BY v.created_at)
-                          FILTER (WHERE v.created_at >= f.endings_since))[2]
-                ELSE f.endings_since END AS measured_from
+                          FILTER (WHERE v.event_type = 1 AND v.created_at >= f.endings_since))[2]
+                ELSE f.endings_since END AS worker_from,
+           min(v.created_at) FILTER (WHERE v.event_type <> 1) AS own_first_ending
     FROM website_event v CROSS JOIN first_ending f
-    WHERE v.website_id = :website_id AND v.url_path = :path AND v.event_type = 1
+    WHERE v.website_id = :website_id AND v.url_path = :path
+      AND (v.event_type = 1
+           OR v.event_name IN ('globe_gate', 'globe_unsupported', 'globe_error', 'globe_abandon'))
       AND v.session_id IN (SELECT session_id FROM ev)
     GROUP BY v.session_id, f.endings_since
+),
+measured AS (
+    SELECT s.session_id,
+           least(s.worker_from,
+                 (SELECT max(w.created_at)
+                  FROM website_event w
+                  WHERE w.website_id = :website_id AND w.url_path = :path
+                    AND w.event_type = 1 AND w.session_id = s.session_id
+                    AND w.created_at <= s.own_first_ending)) AS measured_from
+    FROM switched s
 )
 SELECT session_id,
        count(*) FILTER (WHERE event_type = 1)             AS views,
@@ -426,12 +440,9 @@ SELECT session_id,
                array_agg(ms ORDER BY created_at) FILTER (
                    WHERE event_name = 'globe_abandon' AND phase IS DISTINCT FROM 'gate'),
                NULL),
-           ARRAY[]::float8[]) AS abandon_ms,
-       count(*) FILTER (WHERE event_type = 1
-                          AND (m.measured_from IS NULL OR created_at < m.measured_from)) AS views_before,
-       count(*) FILTER (WHERE event_name = 'globe_ready'
-                          AND (m.measured_from IS NULL OR created_at < m.measured_from)) AS ready_before
-FROM ev LEFT JOIN measured m USING (session_id)
+           ARRAY[]::float8[]) AS abandon_ms
+FROM ev JOIN measured m USING (session_id)
+WHERE ev.created_at >= m.measured_from
 GROUP BY session_id
 """
 

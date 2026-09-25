@@ -255,23 +255,19 @@ export interface GlobeTimes {
 }
 
 /** How the loads that never fired globe_ready ended (stats_analysis.globe_funnel).
- *  The six counts sum to `gave_up`. Per session, capped by its unreached loads,
- *  in this order: gate, unsupported, error, abandoned; the rest is `no_signal`,
- *  or `unmeasured` for the unreached loads that ran a build without the
- *  endings: those from before the first ending event was recorded, and a
- *  returning visitor's first load after it, which the service worker served
- *  from the previous build (counted per load: a session spans a calendar
- *  month; SQL_GLOBE names the stale loads it cannot tell apart). */
+ *  The five counts sum to `gave_up`. Per session, capped by its unreached loads,
+ *  in this order: gate, unsupported, error, abandoned; the rest is `no_signal`. */
 export interface GlobeEndings {
   gate: number
   unsupported: number
   error: number
   abandoned: number
   no_signal: number
-  unmeasured: number
 }
 
-/** GET /api/stats/globe?days=N — the denominator is page loads, not sessions. */
+/** GET /api/stats/globe?days=N — the denominator is page loads, not sessions,
+ *  and only loads of the build that reports its endings (the globe-load deploy
+ *  of 2026-09-24) count: SQL_GLOBE leaves the earlier ones out. */
 export interface GlobeData {
   loads: number
   reached: number

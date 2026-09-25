@@ -635,11 +635,13 @@ def _spread(times: list[float]) -> dict[str, Any]:
 def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """How many globe loads reached an interactive globe, how long the ones
     that did took, and how the others ended. Rows are SQL_GLOBE's, one per
-    session.
+    session, and hold only the loads that ran the build with the endings
+    (the globe-load deploy of 2026-09-24; SQL_GLOBE's measured_from).
 
     Measured 2026-09-19: 33 loads, 8 of them reached - about three quarters of
-    the people who open the globe never see one. The denominator is page
-    loads, not sessions, and the panel says so.
+    the people who open the globe never see one. On the new build, seven
+    days on 2026-09-25: 26 loads, 21 reached. The denominator is page loads,
+    not sessions, and the panel says so.
 
     `min(ready, views)` per session, because a globe_ready can arrive eighty
     seconds after its page view and straddle the window edge.
@@ -660,19 +662,10 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     they belong to loads that reached the globe. `webgl_lost` while loading
     is an error: it is a start failure, and uncounted it would read as a
     crash. What no ending claims is `no_signal` - the page loaded and nothing
-    else arrived (a crashed tab, or a visitor gone before the tracker loaded) -
-    except the loads that ran a build without the endings and did not reach
-    the globe (SQL_GLOBE's `views_before` minus `ready_before`, capped like
-    `ready`): the loads before the first ending event was ever recorded, and
-    a returning visitor's first load after it, which the service worker
-    still served from the previous build. Such a load could not have sent
-    one, so it is `unmeasured`: otherwise every load from before the
-    instrumentation would read as a crash for as long as the window reaches
-    back. This is counted per load, not per session: an Umami session is one
-    browser for a calendar month, and its silent loads on the new build are
-    `no_signal`. SQL_GLOBE's comment names the stale loads it cannot tell
-    apart. Endings still claim loads first, and the unmeasured part is
-    capped by what they leave.
+    else arrived (a crashed tab, or a visitor gone before the tracker loaded).
+    Loads of the build without the endings are not in the rows at all, so
+    none of them can land there; SQL_GLOBE's comment names the stale loads
+    it cannot tell apart.
 
     `abandon_ms` is capped where `ready_ms` is not: only the abandons that the
     split actually counted feed it, the latest ones of the session. A
@@ -689,7 +682,6 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
     times: list[float] = []
     split = {name: 0 for name, _cols in GLOBE_ENDINGS}
     no_signal = 0
-    unmeasured = 0
     left_times: list[float] = []
     for r in rows:
         views = int(r["views"] or 0)
@@ -708,17 +700,14 @@ def globe_funnel(rows: list[dict[str, Any]]) -> dict[str, Any]:
             # `and take` is load-bearing: xs[-0:] is the whole list.
             if name == "abandoned" and take:
                 left_times.extend(float(ms) for ms in (r["abandon_ms"] or [])[-take:])
-        views_before = int(r["views_before"] or 0)
-        silent_before = min(views_before - min(int(r["ready_before"] or 0), views_before), left)
-        unmeasured += silent_before
-        no_signal += left - silent_before
+        no_signal += left
     return {
         "loads": loads,
         "reached": reached,
         "gave_up": loads - reached,
         "sessions": {"all": sum(1 for r in rows if r["views"]), "reached": reached_sessions},
         "ready_ms": _spread(times),
-        "not_reached": {**split, "no_signal": no_signal, "unmeasured": unmeasured},
+        "not_reached": {**split, "no_signal": no_signal},
         "abandon_ms": _spread(left_times),
     }
 

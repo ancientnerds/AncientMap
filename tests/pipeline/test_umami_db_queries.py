@@ -126,38 +126,56 @@ def test_the_globe_query_reads_how_the_unreached_loads_ended():
     assert "'globe_bg'" not in sql
     # endings_since is the first ending ever recorded on the path, not the
     # first inside the window: a window that starts after the instrumentation
-    # went live must not call its own early loads "before these were recorded".
+    # went live must not cut its own early loads away as the old build.
     sub = sql[sql.index("WITH first_ending AS (") : sql.index("ev AS (")]
     assert "SELECT min(e2.created_at) AS endings_since" in sub
     assert ":since" not in sub and ":until" not in sub
     assert "e2.website_id = :website_id" in sub and "e2.url_path = :path" in sub
-    # Before it, per load and not per session: an Umami session is one browser
-    # for a calendar month, so it holds loads from both sides.
+    # Every column counts from measured_from on, per load and not per session:
+    # an Umami session is one browser for a calendar month, so it holds loads
+    # from both sides. The loads of the old build are left out entirely,
+    # successes included (founders, 2026-09-25). An inner join: a session
+    # without a measured_from has no load of the new build.
     flat = " ".join(sql.split())
-    before = "(m.measured_from IS NULL OR created_at < m.measured_from)"
-    assert f"WHERE event_type = 1 AND {before}) AS views_before" in flat
-    assert f"WHERE event_name = 'globe_ready' AND {before}) AS ready_before" in flat
-    assert "FROM ev LEFT JOIN measured m USING (session_id)" in flat
-    assert "AS first_view" not in sql
+    assert (
+        "FROM ev JOIN measured m USING (session_id) WHERE ev.created_at >= m.measured_from" in flat
+    )
+    assert "views_before" not in sql and "ready_before" not in sql
     # Except the session's first load at or after endings_since, when the session
     # had opened the globe before it: the globe page installed the service
     # worker, which serves globe.html and its JS cache-first, so that load still
     # ran the previous build, which sends no ending
     # (ancient-nerds-map/src/pwa/globeStartPrecache.ts). The next one is measured.
-    sub = " ".join(sql[sql.index("measured AS (") : sql.index("SELECT session_id,")].split())
+    sub = " ".join(sql[sql.index("switched AS (") : sql.index("measured AS (")].split())
     assert (
-        "CASE WHEN bool_or(v.created_at < f.endings_since) "
+        "CASE WHEN bool_or(v.event_type = 1 AND v.created_at < f.endings_since) "
         "THEN (array_agg(v.created_at ORDER BY v.created_at) "
-        "FILTER (WHERE v.created_at >= f.endings_since))[2] "
-        "ELSE f.endings_since END AS measured_from"
+        "FILTER (WHERE v.event_type = 1 AND v.created_at >= f.endings_since))[2] "
+        "ELSE f.endings_since END AS worker_from"
     ) in sub
     # The session's whole history on the path, not the window: the view before the
     # endings began can lie before :since while the stale load lies inside it
     assert ":since" not in sub and ":until" not in sub
-    assert "v.website_id = :website_id AND v.url_path = :path AND v.event_type = 1" in sub
+    assert "v.website_id = :website_id AND v.url_path = :path" in sub
     assert "v.session_id IN (SELECT session_id FROM ev)" in sub
     assert "FROM website_event v CROSS JOIN first_ending f" in sub
     assert "GROUP BY v.session_id, f.endings_since" in sub
+    # Only views and the four endings: the session's first ending of its own
+    # must not be a vital or a globe_ready.
+    assert (
+        "AND (v.event_type = 1 OR v.event_name IN "
+        "('globe_gate', 'globe_unsupported', 'globe_error', 'globe_abandon'))"
+    ) in sub
+    assert "min(v.created_at) FILTER (WHERE v.event_type <> 1) AS own_first_ending" in sub
+    # Or earlier: the load that sent the session's first ending ran the new
+    # build, whatever the worker rule says. Live 2026-09-24: the load that sent
+    # the very first ending had its view 40 s before endings_since.
+    sub = " ".join(sql[sql.index("measured AS (") : sql.index("SELECT session_id,")].split())
+    assert "least(s.worker_from, (SELECT max(w.created_at) FROM website_event w" in sub
+    assert "w.event_type = 1 AND w.session_id = s.session_id" in sub
+    assert "AND w.created_at <= s.own_first_ending)) AS measured_from" in sub
+    assert "w.website_id = :website_id AND w.url_path = :path" in sub
+    assert ":since" not in sub and ":until" not in sub
 
 
 def test_the_ending_events_the_globe_query_reads_are_in_the_frontend_taxonomy():

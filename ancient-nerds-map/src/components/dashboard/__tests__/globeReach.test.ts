@@ -11,7 +11,7 @@ const live: GlobeData = {
   gave_up: 26,
   sessions: { all: 22, reached: 8 },
   ready_ms: { min: 9450, median: 19917, max: 80383, samples: 10 },
-  not_reached: { gate: 9, unsupported: 2, error: 3, abandoned: 7, no_signal: 5, unmeasured: 0 },
+  not_reached: { gate: 9, unsupported: 2, error: 3, abandoned: 7, no_signal: 5 },
   abandon_ms: { min: 3100, median: 9800, max: 44000, samples: 7 },
 }
 
@@ -95,12 +95,6 @@ describe('GlobeReach endingItems', () => {
     // Rows that happen to be zero stay: the order is the reading, not the rank.
     const quiet = endingItems({ ...live, not_reached: { ...live.not_reached, unsupported: 0 } })
     expect(quiet.map(i => i.key)).toEqual(['gate', 'unsupported', 'error', 'abandoned', 'no_signal'])
-  })
-
-  it('names the loads from before the endings were recorded only while there are any', () => {
-    const older = endingItems({ ...live, not_reached: { ...live.not_reached, unmeasured: 4 } })
-    expect(older[older.length - 1]).toMatchObject({ key: 'unmeasured', label: 'Before these were recorded', value: 4 })
-    expect(endingItems(live).some(i => i.key === 'unmeasured')).toBe(false)
   })
 
   it('hints the middle wait on the abandon row only when there is a middle', () => {

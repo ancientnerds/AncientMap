@@ -179,15 +179,13 @@ FIXTURES: dict[str, dict] = {
         "gave_up": 115,
         "sessions": {"all": 288, "reached": 214},
         "ready_ms": {"min": 3120.0, "median": 8940.0, "max": 41220.0, "samples": 297},
-        # Sums to gave_up (115), as stats_analysis.globe_funnel guarantees; the
-        # unmeasured row is on so the layout pass sees the longest list.
+        # Sums to gave_up (115), as stats_analysis.globe_funnel guarantees.
         "not_reached": {
             "gate": 41,
             "unsupported": 6,
             "error": 9,
             "abandoned": 27,
-            "no_signal": 20,
-            "unmeasured": 12,
+            "no_signal": 32,
         },
         "abandon_ms": {"min": 2210.0, "median": 11480.0, "max": 63900.0, "samples": 27},
     },
@@ -602,7 +600,6 @@ EMPTY_FIXTURES: dict[str, dict] = {
             "error": 0,
             "abandoned": 0,
             "no_signal": 0,
-            "unmeasured": 0,
         },
         "abandon_ms": {"min": None, "median": None, "max": None, "samples": 0},
     },

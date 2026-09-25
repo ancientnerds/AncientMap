@@ -282,8 +282,6 @@ def test_globe_asks_only_for_the_globe_path(monkeypatch):
             "context_lost": 0,
             "abandoned": 1,
             "abandon_ms": [6100.0],
-            "views_before": 0,
-            "ready_before": 0,
         }
     ]
     fetch = Fetch(**{"'globe_ready'": rows})
@@ -305,7 +303,6 @@ def test_globe_asks_only_for_the_globe_path(monkeypatch):
         "error": 0,
         "abandoned": 1,
         "no_signal": 0,
-        "unmeasured": 0,
     }
     assert out["abandon_ms"]["samples"] == 1
     assert len(fetch.calls) == 1 and fetch.calls[0][3] == {"path": fr.GLOBE_PATH}
