@@ -205,3 +205,31 @@ describe('useSiteSearch with "All sources"', () => {
     expect(latest!.isSearching).toBe(true)
   })
 })
+
+describe('useSiteSearch word by word', () => {
+  const site = (id: string, title: string, location: string): SiteData => ({ ...TEMPLE, id, title, location })
+  const VALLEY = site('valley', 'Valley of the Kings', 'Egypt')
+  const GIZA = site('giza', 'Great Pyramid of Giza', 'Egypt')
+  const COLLIERY = site('colliery', 'Afan Valley, Upper Workings', 'Wales')
+
+  it('finds the Valley of the Kings for the queries visitors typed (Umami, 2026-09-17..25)', () => {
+    render(baseOptions([VALLEY, GIZA, COLLIERY]))
+    for (const q of ['the valley of kings', 'the valley of kings, egypt', 'valley kings']) {
+      type(q)
+      expect(latest!.searchResults.map(r => r.id)).toEqual(['valley'])
+    }
+  })
+
+  it('lets a word name the place, ranked below a name that holds every word', () => {
+    const giza2 = site('giza2', 'Giza Plateau Egypt', 'Egypt')
+    render(baseOptions([GIZA, giza2]))
+    type('giza, egypt')
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['giza2', 'giza'])
+  })
+
+  it('needs a word to start a word: "kings" is not in "workings"', () => {
+    render(baseOptions([COLLIERY]))
+    type('valley kings')
+    expect(latest!.searchResults).toEqual([])
+  })
+})

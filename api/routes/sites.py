@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import random
+import re
 from pathlib import Path
 from typing import Annotated, Literal, NamedTuple
 
@@ -38,6 +39,7 @@ from api.services.jwt_auth import require_founder
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
+from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils.globe_payload import globe_projection
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
@@ -752,6 +754,75 @@ def random_sites(
     return response
 
 
+#: Words a visitor adds that no site name needs to contain: "the valley of
+#: kings" is the Valley of the Kings. Only the word tier drops them; the phrase
+#: tiers still read the whole query.
+SEARCH_STOPWORDS = frozenset({"the", "of", "and", "an", "in", "at", "on", "to", "near"})
+
+#: At most this many words take part in the word tier (one bind each).
+SEARCH_MAX_WORDS = 6
+
+#: A shorter word cannot drive the trigram index (pg_trgm needs three
+#: characters, migration 0024), and one word arm without an index turns the
+#: whole OR into a scan of 1.76M rows.
+SEARCH_MIN_WORD = 3
+
+#: How long the list of country names the word tier recognises is reused. It
+#: changes when curated sites do, not from one search to the next.
+SEARCH_COUNTRIES_TTL = 86400
+
+_WORD_SPLIT = re.compile(r"[^\w]+")
+
+#: The escape clause for a pattern built from _escape_ilike's output.
+_LIKE_ESCAPE = r"ESCAPE '\'"
+
+
+def search_words(q: str) -> list[str]:
+    """The words of a query the word tier requires, lower case, in order.
+
+    Umami, 2026-09-17..25: "the valley of kings", "the valley of kings, egypt"
+    and "giza, egypt" found nothing, because every tier matched the query as
+    one string. Each word has to start a word of the site's name, or name its
+    country; one word alone is what the substring tier already does.
+    """
+    words = [
+        w
+        for w in _WORD_SPLIT.split(q.lower())
+        if len(w) >= SEARCH_MIN_WORD and w not in SEARCH_STOPWORDS
+    ]
+    return list(dict.fromkeys(words))[:SEARCH_MAX_WORDS]
+
+
+def _search_countries(db: Session) -> list[str]:
+    """The curated sites' country names, keyed like name_normalized (lower,
+    unaccented). The other sources carry the same English names where they have
+    one, and codes or other languages where they do not."""
+    cached = cache_get("search:countries")
+    if cached is not None:
+        return cached
+    rows = db.execute(
+        text(
+            "SELECT DISTINCT lower(unaccent(country)) AS c FROM unified_sites "
+            "WHERE source_id = 'ancient_nerds' AND country IS NOT NULL"
+        )
+    )
+    countries = sorted(r.c for r in rows if r.c)
+    cache_set("search:countries", countries, ttl=SEARCH_COUNTRIES_TTL)
+    return countries
+
+
+def country_matches(word_key: str, countries: list[str]) -> list[str]:
+    """The countries one of whose words starts with the word: "egypt" and
+    "egy" name Egypt, "kingdom" names the United Kingdom. `word_key` is the
+    word keyed in Postgres like the names (site_key_sql), so "turkiye" and
+    "türkiye" both name Türkiye."""
+    return [c for c in countries if any(part.startswith(word_key) for part in _WORD_SPLIT.split(c))]
+
+
+#: Characters a Postgres regular expression treats as syntax.
+_REGEX_SYNTAX = re.compile(r"([.^$*+?()\[\]{}|\\])")
+
+
 @router.get("/search")
 def search_sites(
     req: Request,
@@ -760,64 +831,106 @@ def search_sites(
     db: Session = Depends(get_db),
 ):
     """
-    Search sites across all sources by name (spaceless-aware).
+    Search sites across all sources by name (spaceless-aware), and word by word
+    against the name and the country.
+
+    The query's key is computed in Postgres with the expression that fills
+    name_normalized (site_key_sql: lower(unaccent(...))), so the column needs no
+    function and every arm of the WHERE can use an index: the trigram indexes
+    of migration 0024 for the substrings and the word starts. Measured
+    2026-09-25 on production, before that migration: ~1.4 s for one word, a
+    parallel seq scan of 1.76M rows.
+
+    Ranks: 1 the name is the query, 2 the same without spaces, 3 the name
+    contains the query, 4 the name holds every word, 5 a word named the
+    country. Curated cards first, as before.
 
     Returns compact format matching /sites/all for frontend reuse.
     """
-    from pipeline.utils.text import normalize_name
-
     if not _search_limiter.check(get_client_ip(req)):
         raise HTTPException(status_code=429, detail="Too many requests")
 
-    normalized = normalize_name(q)
-    if not normalized or len(normalized) < 2:
+    raw = q.strip()
+    if len(raw) < 2:
         return {"count": 0, "sites": []}
 
-    # Cache keyed on the effective query params (normalized q + limit); the
+    # Cache keyed on the effective query params (lower-cased q + limit); the
     # "sites:" prefix means any site write busts it via cache_delete_pattern.
-    q_hash = hashlib.md5(normalized.encode(), usedforsecurity=False).hexdigest()
+    q_hash = hashlib.md5(raw.lower().encode(), usedforsecurity=False).hexdigest()
     cache_key = f"sites:search:{q_hash}:{limit}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
-    # Escape SQL LIKE wildcards in user input
-    normalized_escaped = _escape_ilike(normalized)
-    spaceless = normalized.replace(" ", "")
-    spaceless_escaped = _escape_ilike(spaceless)
+    # The keys come from Postgres, with the expression that fills
+    # name_normalized, in one statement without a table. The search then binds
+    # them as constants, which is what lets the planner use the trigram indexes.
+    words = search_words(raw)
+    key_params: dict[str, object] = {"raw": raw, "raw_like": _escape_ilike(raw)}
+    key_cols = [f"{site_key_sql(':raw')} AS k", f"{site_key_sql(':raw_like')} AS kl"]
+    for i, word in enumerate(words):
+        key_params[f"w{i}"] = word
+        key_cols.append(f"{site_key_sql(f':w{i}')} AS w{i}")
+    keys = db.execute(text("SELECT " + ", ".join(key_cols)), key_params).one()
 
-    # Single query: exact > spaceless > substring, prefer rows with card_description
+    params: dict[str, object] = {
+        "k": keys.k,
+        "k_space": keys.k.replace(" ", ""),
+        "p_name": f"%{keys.kl}%",
+        "p_space": f"%{keys.kl.replace(' ', '')}%",
+        "limit": limit,
+    }
+    arms = [
+        f"us.name_normalized LIKE :p_name {_LIKE_ESCAPE}",
+        f"replace(us.name_normalized, ' ', '') LIKE :p_space {_LIKE_ESCAPE}",
+    ]
+    all_in_name = "FALSE"
+    if len(words) >= 2:
+        countries = _search_countries(db)
+        in_name: list[str] = []
+        name_words: list[str] = []
+        country_words: list[str] = []
+        for i in range(len(words)):
+            word_key = getattr(keys, f"w{i}")
+            params[f"r{i}"] = r"\m" + _REGEX_SYNTAX.sub(r"\\\1", word_key)
+            hit = f"us.name_normalized ~ :r{i}"
+            in_name.append(hit)
+            named = country_matches(word_key, countries)
+            if named:
+                params[f"c{i}"] = named
+                country_words.append(
+                    f"(lower(unaccent(us.country)) = ANY(CAST(:c{i} AS text[])) OR {hit})"
+                )
+            else:
+                name_words.append(hit)
+        all_in_name = " AND ".join(in_name)
+        # Only when a word has to be in the name: that conjunct is what the
+        # index answers; the country test runs on its hits alone.
+        if name_words:
+            arms.append("(" + " AND ".join(name_words + country_words) + ")")
+
     query = text(f"""
         SELECT
             us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
             us.period_start, us.period_name, us.description, us.country, us.source_url,
             cs.card_description,
             CASE
-                WHEN unaccent(us.name_normalized) = :norm THEN 1
-                WHEN replace(unaccent(us.name_normalized), ' ', '') = :spaceless THEN 2
-                ELSE 3
+                WHEN us.name_normalized = :k THEN 1
+                WHEN replace(us.name_normalized, ' ', '') = :k_space THEN 2
+                WHEN {arms[0]} OR {arms[1]} THEN 3
+                WHEN {all_in_name} THEN 4
+                ELSE 5
             END AS rank
         FROM unified_sites us
         LEFT JOIN card_stats cs ON cs.site_id = us.id
-        WHERE (unaccent(us.name_normalized) = :norm
-           OR replace(unaccent(us.name_normalized), ' ', '') = :spaceless
-           OR unaccent(us.name_normalized) ILIKE :pattern ESCAPE '\\'
-           OR replace(unaccent(us.name_normalized), ' ', '') ILIKE :spaceless_pattern ESCAPE '\\')
+        WHERE ({" OR ".join(arms)})
           AND {_US_SHOWN}
-        ORDER BY (cs.card_description IS NULL), rank, us.name
+        ORDER BY (cs.card_description IS NULL), rank, (us.source_id <> 'ancient_nerds'),
+                 length(us.name), us.name
         LIMIT :limit
     """)
 
-    result = db.execute(
-        query,
-        {
-            "norm": normalized,
-            "spaceless": spaceless,
-            "pattern": f"%{normalized_escaped}%",
-            "spaceless_pattern": f"%{spaceless_escaped}%",
-            "limit": limit,
-        },
-    )
+    result = db.execute(query, params)
     sites = []
     for row in result:
         site = {

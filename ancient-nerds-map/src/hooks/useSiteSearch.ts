@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { SiteData, getCategoryColor, getPeriodColor, getSourceColor, resolvePeriod } from '../data/sites'
-import { normalizeForSearch, periodToYear, extractCountry } from '../utils/searchUtils'
+import { normalizeForSearch, periodToYear, extractCountry, searchWords, startsAWord } from '../utils/searchUtils'
 import { haversineDistance } from '../utils/geoMath'
 import { EmpirePolygonData, isSiteInEmpirePolygons } from '../utils/geometry'
 import { config } from '../config'
@@ -283,6 +283,21 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
 
     // Spaceless variants for matching "göbekli tepe" → "gobeklitepe"
     const querySpaceless = query.replace(/ /g, '')
+    // Word by word, for a query of two words or more: every word starts a word
+    // of the name (or an alternative name) or of the location. One word alone
+    // is what the phrase match already does.
+    const words = searchWords(query)
+    const byWords = words.length >= 2
+    const namesOf = (site: SiteData) => [normalizeForSearch(site.title), ...(site.altNames ?? []).map(normalizeForSearch)]
+    const wordsInNames = (site: SiteData) => {
+      const names = namesOf(site)
+      return words.every(w => names.some(n => startsAWord(n, w)))
+    }
+    const wordsInNamesOrPlace = (site: SiteData) => {
+      const names = namesOf(site)
+      const place = site.location ? normalizeForSearch(site.location) : ''
+      return words.every(w => names.some(n => startsAWord(n, w)) || startsAWord(place, w))
+    }
 
     // Filter and sort by relevance
     const matchingSites = sitesToSearch
@@ -292,7 +307,8 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           titleNorm.replace(/ /g, '').includes(querySpaceless) ||
           (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) ||
           (site.location && normalizeForSearch(site.location).includes(query)) ||
-          (site.description && normalizeForSearch(site.description).includes(query))
+          (site.description && normalizeForSearch(site.description).includes(query)) ||
+          (byWords && wordsInNamesOrPlace(site))
       })
       .map(site => {
         const titleNorm = normalizeForSearch(site.title)
@@ -310,8 +326,12 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           score = 55
         } else if (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) {
           score = 50
+        } else if (byWords && wordsInNames(site)) {
+          score = 45
         } else if (site.location && normalizeForSearch(site.location).includes(query)) {
           score = 40
+        } else if (byWords && wordsInNamesOrPlace(site)) {
+          score = 35
         } else {
           score = 20
         }
