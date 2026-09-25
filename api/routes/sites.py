@@ -803,7 +803,7 @@ def _search_countries(db: Session) -> list[str]:
     rows = db.execute(
         text(
             "SELECT DISTINCT lower(unaccent(country)) AS c FROM unified_sites "
-            "WHERE source_id = 'ancient_nerds' AND country IS NOT NULL"
+            f"WHERE source_id = 'ancient_nerds' AND country IS NOT NULL AND {not_retired()}"
         )
     )
     countries = sorted(r.c for r in rows if r.c)
