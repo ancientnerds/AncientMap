@@ -1012,13 +1012,19 @@ WRONG_BOTH_READBACK = journal_readback(
 LANES[WRONG_BOTH.name] = WRONG_BOTH
 LANE_READBACKS[WRONG_BOTH.name] = WRONG_BOTH_READBACK
 
+
 # ------------------------------------------------------------ the orphan-citations lane (D1)
-#: A citation marker, `[n]`, as the census and the acceptance's D1 read one
-#: (`t08_citation_markers._MARKER_RE`); every match of a curated description, as rows of `m(g)`.
-#: The census expands grouped and range forms first (`normalize_grouped_markers`); no curated
-#: description carries one (measured 2026-09-25, `citations.py`), and on that data this SQL finds
-#: exactly the 78 sites the Python D1 finds.
-_MARKERS_SQL = r"regexp_matches(coalesce(description, ''), '\[(\d+)\]', 'g')"
+def marker_matches(text: str) -> str:
+    """Every `[n]` of the text expression `text`, as the set-returning `regexp_matches`: a
+    citation marker as the census and the acceptance's D1 read one (`t08_citation_markers.
+    _MARKER_RE`). The census expands grouped and range forms first (`normalize_grouped_markers`);
+    no curated description carries one (measured 2026-09-25, `citations.py`)."""
+    return rf"regexp_matches(coalesce({text}, ''), '\[(\d+)\]', 'g')"
+
+
+#: Every marker of a curated description, as rows of `m(g)`; on the data of 2026-09-25 this SQL
+#: finds exactly the 78 sites the Python D1 finds.
+_MARKERS_SQL = marker_matches("description")
 #: Every `raw_data.description_citations` entry of the row, as rows of `e(entry)`; none where the
 #: key is absent or not an array.
 _ENTRIES_SQL = (
@@ -1066,29 +1072,47 @@ ORPHAN_CITATIONS = Lane(
     cells=(Column("raw_data", "jsonb"),),
 )
 
+#: D4 of the acceptance in SQL, on an unqualified `unified_sites` row: the row carries a
+#: `_description_provenance` whose `desc_sha256` is not the sha256 of its description.
+PROVENANCE_HASH_DIFFERS = (
+    "raw_data ? '_description_provenance' AND "
+    "encode(sha256(convert_to(coalesce(description, ''), 'UTF8')), 'hex') "
+    "IS DISTINCT FROM raw_data -> '_description_provenance' ->> 'desc_sha256'"
+)
+#: A `raw_data` journal row `l` whose new citation array holds an entry its old one did not.
+_ENTRY_ADDED = (
+    "EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(l.new_value::jsonb -> "
+    "'description_citations', '[]'::jsonb)) AS x(entry) WHERE NOT coalesce("
+    "l.old_value::jsonb -> 'description_citations', '[]'::jsonb) @> "
+    "jsonb_build_array(x.entry))"
+)
+#: The read-back rows both citation lanes print: D1's two halves and D4, over the curated rows.
+_CITATION_STATE = (
+    (
+        "curated rows with a description_citations entry no marker cites",
+        _CURATED_ROWS + CITATIONS_UNCITED,
+    ),
+    (
+        "curated rows with a marker no description_citations entry answers",
+        _CURATED_ROWS + CITATIONS_UNANSWERED,
+    ),
+)
+_D4_FAILS = (
+    "curated rows whose description is not the one its provenance hashes",
+    _CURATED_ROWS + PROVENANCE_HASH_DIFFERS,
+)
+
 _ORPHAN_STAMP = sql_literal(ORPHAN_CITATIONS.run_stamp)
 ORPHAN_CITATIONS_READBACK = journal_readback(
     ORPHAN_CITATIONS,
     [
         (_D1_FAILS.metric, _CURATED_ROWS + _D1_FAILS.predicate),
-        (
-            "curated rows with a description_citations entry no marker cites",
-            _CURATED_ROWS + CITATIONS_UNCITED,
-        ),
-        (
-            "curated rows with a marker no description_citations entry answers",
-            _CURATED_ROWS + CITATIONS_UNANSWERED,
-        ),
+        *_CITATION_STATE,
         (
             "curated rows carrying description_citations",
             _CURATED_ROWS + "raw_data ? 'description_citations'",
         ),
-        (
-            "curated rows whose description is not the one its provenance hashes",
-            _CURATED_ROWS + "raw_data ? '_description_provenance' AND "
-            "encode(sha256(convert_to(coalesce(description, ''), 'UTF8')), 'hex') "
-            "IS DISTINCT FROM raw_data -> '_description_provenance' ->> 'desc_sha256'",
-        ),
+        _D4_FAILS,
         (
             "journal rows for this run that changed a raw_data key other than "
             "description_citations",
@@ -1098,16 +1122,109 @@ ORPHAN_CITATIONS_READBACK = journal_readback(
         ),
         (
             "journal rows for this run that added a citation entry",
-            f"FROM remediation_change_log l WHERE l.run_stamp = {_ORPHAN_STAMP} AND EXISTS "
-            "(SELECT 1 FROM jsonb_array_elements(coalesce(l.new_value::jsonb -> "
-            "'description_citations', '[]'::jsonb)) AS x(entry) WHERE NOT coalesce("
-            "l.old_value::jsonb -> 'description_citations', '[]'::jsonb) @> "
-            "jsonb_build_array(x.entry))",
+            f"FROM remediation_change_log l WHERE l.run_stamp = {_ORPHAN_STAMP} AND "
+            + _ENTRY_ADDED,
         ),
     ],
 )
 LANES[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS
 LANE_READBACKS[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS_READBACK
+
+# ------------------------------------------------------------ the dangling-markers lane (D9)
+#: The markers of D9 (2026-09-25): a `[N]` of the description with no citation entry. The
+#: orphan-citations lane listed these sites for a human; the owner's order of 2026-09-25 takes D9's
+#: option (b) for the ones Phase 4 held - the marker points to no source, so it leaves the text and
+#: the claims stay, under lane L's marking that the text is AI-generated (`dangling_markers.py`).
+#: The lane writes two cells of one site in one transaction: the description without its dangling
+#: markers, and `raw_data` with `_description_provenance.desc_sha256` moved to the new text (D4) -
+#: plus, where the removal leaves an entry no marker cites, without that entry (D1, the
+#: orphan-citations rule). The premise is the legacy provenance less the hash it moves: guard 5
+#: refuses a site whose text is no longer lane L's, and holds for the write and its reversal alike.
+DANGLING_MARKERS = Lane(
+    name="dangling-markers",
+    key_prefix="dangling-markers",
+    run_stamp="2026-09-25_mechanical-dangling-markers",
+    test_id="T08/dangling-markers",
+    confidence="authoritative",
+    label="dangling marker removal",
+    plan_table="_dangling_markers_plan",
+    out_dir_name="mechanical_dangling_markers",
+    post_commit_residual=_D1_FAILS,
+    rehearsal_residual=_D1_FAILS,
+    premise_sql=(
+        "coalesce((u.raw_data -> '_description_provenance') - 'desc_sha256', 'null'::jsonb)::text"
+    ),
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=(Column("description", "text"), Column("raw_data", "jsonb")),
+)
+
+_DANGLING_STAMP = sql_literal(DANGLING_MARKERS.run_stamp)
+_DANGLING_ROWS = f"FROM remediation_change_log l WHERE l.run_stamp = {_DANGLING_STAMP} AND "
+#: A description as the markers' surroundings: every marker and every whitespace taken out.
+_PROSE = r"regexp_replace(regexp_replace(coalesce({}, ''), '\[\d+\]', '', 'g'), '\s', '', 'g')"
+
+
+def _raw_data_rows(predicate: str) -> str:
+    """This run's `raw_data` rows meeting `predicate` - behind a CASE, because the lane's
+    description rows are not JSON and a WHERE does not fix the order its casts run in."""
+    return _DANGLING_ROWS + f"CASE WHEN l.column_name = 'raw_data' THEN {predicate} ELSE false END"
+
+
+DANGLING_MARKERS_READBACK = journal_readback(
+    DANGLING_MARKERS,
+    [
+        (_D1_FAILS.metric, _CURATED_ROWS + _D1_FAILS.predicate),
+        *_CITATION_STATE,
+        _D4_FAILS,
+        (
+            "journal rows for this run whose description differs in more than markers and "
+            "whitespace",
+            _DANGLING_ROWS
+            + "l.column_name = 'description' AND "
+            + _PROSE.format("l.old_value")
+            + " IS DISTINCT FROM "
+            + _PROSE.format("l.new_value"),
+        ),
+        (
+            "journal rows for this run whose description gained a marker",
+            _DANGLING_ROWS
+            + "l.column_name = 'description' AND EXISTS (SELECT 1 FROM "
+            + f"{marker_matches('l.new_value')} AS m(g) WHERE NOT EXISTS (SELECT 1 FROM "
+            + f"{marker_matches('l.old_value')} AS o(g) WHERE o.g = m.g))",
+        ),
+        (
+            "journal rows for this run whose raw_data changed more than the citations and the hash",
+            _raw_data_rows(
+                "((l.old_value::jsonb - 'description_citations') #- "
+                "'{_description_provenance,desc_sha256}') IS DISTINCT FROM "
+                "((l.new_value::jsonb - 'description_citations') #- "
+                "'{_description_provenance,desc_sha256}')"
+            ),
+        ),
+        (
+            "journal rows for this run whose citation array gained an entry",
+            _raw_data_rows(_ENTRY_ADDED),
+        ),
+        (
+            "journal rows for this run whose provenance hash is not the description it wrote",
+            _raw_data_rows(
+                "NOT EXISTS (SELECT 1 FROM remediation_change_log d WHERE d.run_stamp = "
+                "l.run_stamp AND d.row_pk = l.row_pk AND d.column_name = 'description' AND "
+                "encode(sha256(convert_to(d.new_value, 'UTF8')), 'hex') = "
+                "l.new_value::jsonb -> '_description_provenance' ->> 'desc_sha256')"
+            ),
+        ),
+        (
+            "journal rows for this run whose provenance is not lane L",
+            _raw_data_rows(
+                "(l.new_value::jsonb -> '_description_provenance' ->> 'lane') IS DISTINCT FROM 'L'"
+            ),
+        ),
+    ],
+)
+LANES[DANGLING_MARKERS.name] = DANGLING_MARKERS
+LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK
 
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
