@@ -1193,6 +1193,21 @@ def test_l_refuses_an_apply_root_holding_write_batches_of_another_l_plan(tmp_pat
     assert not (tmp_path / "apply" / "p4l-1001").exists()
 
 
+def test_l_plans_the_named_batches_of_its_plan_and_names_what_is_missing(tmp_path, capsys) -> None:
+    """`--batch` names the L plan's own batches (the rehearsal of one step takes them so); a batch
+    the plan lacks, and a plan file that is not there, end the run with a word, never a guess."""
+    ids = _legacy_ids(16)
+    plan = _legacy_plan(tmp_path, *[FX.plan_site(site_id) for site_id in ids])
+    assert G.main(_legacy_args(tmp_path, plan, "--batch", "p4-1002"), runner=_db(*ids)) == 0
+    assert "rows planned: 1 |" in capsys.readouterr().out
+    assert sorted(path.name for path in (tmp_path / "apply").iterdir()) == ["p4l-1002"]
+    assert G.main(_legacy_args(tmp_path, plan, "--batch", "p4-0036"), runner=_db(*ids)) == 1
+    assert "no batch ['p4-0036']" in capsys.readouterr().err
+    absent = tmp_path / "absent.jsonl"
+    assert G.main(_legacy_args(tmp_path, absent), runner=_db(*ids)) == 1
+    assert "no such L plan" in capsys.readouterr().err
+
+
 def _rewritten(plan: Path, records: list[dict]) -> Path:
     plan.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
     return plan

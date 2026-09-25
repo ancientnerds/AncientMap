@@ -18195,6 +18195,296 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += P4_SCOPE_MUTATIONS
 
 
+# ── Lane L marks every March-AI text, from its own plan (owner decision 2026-09-24) ─────────────
+#: "Alle kennzeichnen (Recommended)": lane L - no text, only the provenance that shows the AI
+#: footnote - marks every March-AI text Phase 4 did not write, not only the defect scope's; P4 and
+#: P5 stay scoped. Its population is its own plan over every curated site (`plan4.py legacy`,
+#: `write4.load_legacy_plan`, `write_gate4 --group L --legacy-plan`). Each case breaks one part and
+#: names the test that goes red. A block of its own, so wip/p4-pilot's blocks merge beside it.
+P4L_WRITE = "scripts/remediation/phase4/write4.py"
+P4L_LEGACY = "scripts/remediation/phase4/legacy4.py"
+P4L_PLAN = "scripts/remediation/phase4/plan4.py"
+P4L_GATE = "output/remediation/tools/write_gate4.py"
+P4L_WRITE_TEST = "tests/remediation/test_phase4_write.py"
+P4L_LEGACY_TEST = "tests/remediation/test_phase4_legacy.py"
+P4L_PLAN_TEST = "tests/remediation/test_phase4_plan.py"
+P4L_UNSCOPED = "test_l_takes_no_defect_scope_and_marks_every_march_text"
+P4L_BOTH = "test_a_site_outside_the_pinned_scope_is_marked_by_l_and_refused_by_p4_and_p5"
+P4L_POPULATION = "test_l_plans_the_curated_population_from_its_own_plan_and_counts_every_exclusion"
+P4L_STEPS = "test_l_is_written_in_steps_of_its_own_plan_and_accepted_on_its_own_lane"
+P4L_SOURCE = "test_lane_l_plans_from_its_own_plan_and_p4_and_p5_from_a_run"
+P4L_FOREIGN = "test_l_refuses_an_apply_root_holding_write_batches_of_another_l_plan"
+P4L_BATCHES = "test_l_plans_the_named_batches_of_its_plan_and_names_what_is_missing"
+P4L_STRICT = "test_the_l_plan_is_read_strictly"
+P4L_ORDER = "test_the_legacy_plan_is_every_curated_site_in_id_order_from_batch_1001"
+P4L_ROWS = "test_a_legacy_plan_from_rows_of_another_shape_or_a_site_twice_is_refused"
+
+P4_LEGACY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── write4: plan_legacy without a scope; the L plan read strictly ────────────────────────
+    (
+        "p4l write4: L marks a site whose description Phase 4 wrote",
+        P4L_WRITE,
+        "    held = legacy4.held_sites(batch.sites, written=live)\n",
+        "    held = legacy4.held_sites(batch.sites, written=())  # mutant\n",
+        P4L_LEGACY_TEST,
+        P4L_UNSCOPED,
+    ),
+    (
+        "p4l write4: a site Phase 4 wrote is not counted as refused",
+        P4L_WRITE,
+        "        if site.site_id in live:\n            plan.refusals.append(\n",
+        "        if False:  # mutant\n            plan.refusals.append(\n",
+        P4L_LEGACY_TEST,
+        P4L_UNSCOPED,
+    ),
+    (
+        "p4l write4: a P4 plan is read as lane L's plan",
+        P4L_WRITE,
+        '        if record.get("pass") != legacy4.PLAN_MARK:\n',
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    (
+        "p4l write4: an L plan batch id is not a plan batch id",
+        P4L_WRITE,
+        "        group_batch_id(batch_id, Group.L)\n",
+        "        pass  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    (
+        "p4l write4: an L plan batch listed twice is read",
+        P4L_WRITE,
+        "        if batch_id in batch_ids:\n",
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    (
+        "p4l write4: a site listed twice in the L plan is read",
+        P4L_WRITE,
+        "            if site.site_id in seen:\n",
+        "            if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STRICT,
+    ),
+    # ── legacy4 and plan4: the L plan's mark, numbering, order and rows ──────────────────────
+    (
+        "p4l legacy4: the L plan's batches are numbered from 1",
+        P4L_LEGACY,
+        "FIRST_BATCH = 1001\n",
+        "FIRST_BATCH = 1  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l legacy4: the L plan carries no mark",
+        P4L_LEGACY,
+        'PLAN_MARK = "phase4-legacy"\n',
+        "PLAN_MARK = None  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the L plan keeps the read's order",
+        P4L_PLAN,
+        '    return [plan_site(row, flags=frozenset()) for row in sorted(rows, key=lambda row: row["id"])]\n',
+        "    return [plan_site(row, flags=frozenset()) for row in rows]  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the L plan derives Phase 4's flags",
+        P4L_PLAN,
+        '    return [plan_site(row, flags=frozenset()) for row in sorted(rows, key=lambda row: row["id"])]\n',
+        "    return [  # mutant\n"
+        "        _site(row, cleared=set(), t03={}, shared_qids=frozenset(),\n"
+        "              shared_titles=frozenset(), paired=False)\n"
+        '        for row in sorted(rows, key=lambda row: row["id"])\n'
+        "    ]\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: a site twice goes into the L plan",
+        P4L_PLAN,
+        '    if len(set(ids)) != len(ids):\n        raise R.InputError("a site id occurs twice in the rows")\n',
+        '    if False:  # mutant\n        raise R.InputError("a site id occurs twice in the rows")\n',
+        P4L_PLAN_TEST,
+        P4L_ROWS,
+    ),
+    (
+        "p4l plan4: a row of another shape goes into the L plan",
+        P4L_PLAN,
+        "        _check_row(row)\n"
+        '    ids = [row["id"] for row in rows]\n'
+        "    if len(set(ids)) != len(ids):\n"
+        '        raise R.InputError("a site id occurs twice in the rows")\n',
+        "        pass  # mutant\n"
+        '    ids = [row["id"] for row in rows]\n'
+        "    if len(set(ids)) != len(ids):\n"
+        '        raise R.InputError("a site id occurs twice in the rows")\n',
+        P4L_PLAN_TEST,
+        P4L_ROWS,
+    ),
+    (
+        "p4l plan4: the L plan's batches are not marked",
+        P4L_PLAN,
+        "    R.write_batches(path, [dataclasses.replace(batch, pass_name=L4.PLAN_MARK) for batch in batches])\n",
+        "    R.write_batches(path, batches)  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the L plan is numbered from p4-0001",
+        P4L_PLAN,
+        "    batches = batches_after([site.to_dict() for site in sites], L4.FIRST_BATCH - 1)\n",
+        "    batches = batches_after([site.to_dict() for site in sites], 0)  # mutant\n",
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: the summary does not count the read's provenance",
+        P4L_PLAN,
+        '        str((site.raw_data or {}).get(M.PROVENANCE_KEY, {}).get("lane", "none")) for site in sites\n',
+        '        "none" for site in sites  # mutant\n',
+        P4L_PLAN_TEST,
+        P4L_ORDER,
+    ),
+    (
+        "p4l plan4: plan_site drops the flags build derived",
+        P4L_PLAN,
+        "        flags=flags,\n",
+        "        flags=frozenset(),  # mutant\n",
+        P4L_PLAN_TEST,
+        "test_the_cleared_defects_flag_their_own_text",
+    ),
+    # ── write_gate4: one L population, from its own plan ─────────────────────────────────────
+    (
+        "p4l write_gate4: L plans under the defect scope",
+        P4L_GATE,
+        "        print(LEGACY_UNSCOPED)\n        options = {}\n",
+        '        print(LEGACY_UNSCOPED)\n        options = {"scope": _defect_scope()}  # mutant\n',
+        P4L_WRITE_TEST,
+        P4L_BOTH,
+    ),
+    (
+        "p4l write_gate4: L does not say the scope is not asked",
+        P4L_GATE,
+        "        print(LEGACY_UNSCOPED)\n",
+        "        pass  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_POPULATION,
+    ),
+    (
+        "p4l write_gate4: L plans a run's batches",
+        P4L_GATE,
+        "    if group is W4.Group.L:\n        plan_path = pathlib.Path(args.legacy_plan)\n",
+        "    if False:  # mutant\n        plan_path = pathlib.Path(args.legacy_plan)\n",
+        P4L_WRITE_TEST,
+        P4L_POPULATION,
+    ),
+    (
+        "p4l write_gate4: the L plan's digest is not printed",
+        P4L_GATE,
+        '            f"legacy plan {plan_path} (sha256 {hashlib.sha256(plan_path.read_bytes()).hexdigest()})"\n',
+        '            f"legacy plan {plan_path}"  # mutant\n',
+        P4L_WRITE_TEST,
+        P4L_POPULATION,
+    ),
+    (
+        "p4l write_gate4: L takes a run",
+        P4L_GATE,
+        "        if args.run is not None:\n",
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: L plans without its plan",
+        P4L_GATE,
+        "        if args.legacy_plan is None and not (args.accept or args.close_reverted):\n",
+        "        if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: P4 takes the L plan",
+        P4L_GATE,
+        "    if args.legacy_plan is not None:\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: P5 plans without a run",
+        P4L_GATE,
+        '    if args.run is None:\n        return "--run: P4 and P5',
+        '    if False:  # mutant\n        return "--run: P4 and P5',
+        P4L_WRITE_TEST,
+        P4L_SOURCE,
+    ),
+    (
+        "p4l write_gate4: another L plan's batches are planned beside this one",
+        P4L_GATE,
+        "    if foreign:\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_FOREIGN,
+    ),
+    (
+        "p4l write_gate4: this plan's own batches count as another plan's",
+        P4L_GATE,
+        "        if found.is_dir() and found.name not in ours\n",
+        "        if found.is_dir()  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STEPS,
+    ),
+    (
+        "p4l write_gate4: --batch is ignored for L",
+        P4L_GATE,
+        "    if not wanted:\n        return whole\n",
+        "    if True:  # mutant\n        return whole\n",
+        P4L_WRITE_TEST,
+        P4L_BATCHES,
+    ),
+    (
+        "p4l write_gate4: a batch the L plan lacks is skipped",
+        P4L_GATE,
+        '    if missing:\n        raise SystemExit(f"{path}: no batch {missing}")\n',
+        '    if False:  # mutant\n        raise SystemExit(f"{path}: no batch {missing}")\n',
+        P4L_WRITE_TEST,
+        P4L_BATCHES,
+    ),
+    (
+        "p4l write_gate4: a missing L plan is not named",
+        P4L_GATE,
+        "    if not path.is_file():\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_BATCHES,
+    ),
+    (
+        "p4l write_gate4: the L acceptance command names a run",
+        P4L_GATE,
+        "    if written and run_dir is None:\n",
+        "    if False:  # mutant\n",
+        P4L_WRITE_TEST,
+        P4L_STEPS,
+    ),
+    (
+        "p4l write_gate4: the L acceptance command names another lane",
+        P4L_GATE,
+        '            f"it before the next step: {VERIFY_TOOL} --lane {lane} --plan "\n',
+        '            f"it before the next step: {VERIFY_TOOL} --lane p4 --plan "  # mutant\n',
+        P4L_WRITE_TEST,
+        P4L_STEPS,
+    ),
+]
+MUTATIONS += P4_LEGACY_MUTATIONS
+
+
 # ── The mass run's mid-run audit (2026-09-25): the later namesake building, one site taken back ──
 #: T2 on Roman Bath, York (p4-0036): its lead was about the modern pub that shares the Roman bath
 #: house's name. Each case breaks one part of the fix and names the test that goes red: the
