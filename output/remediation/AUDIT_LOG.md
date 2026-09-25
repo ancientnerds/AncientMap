@@ -12061,3 +12061,34 @@ is left unmarked.
 * **The fresh acceptance draw** comes after these writes (a P4 write on a drawn site voids it, V3).
 * The lane-L acceptance's `--complete` counts a taken-back row a later allowed lane wrote as `NOT
   WRITTEN`; reading `not yet written 0` without `--complete` is the check (recorded, not changed).
+
+### Tests, sweep, gates (worktree `.claude/worktrees/p4-pilot`, main venv; commit `5b8edc6`)
+
+* 17 new test functions: `test_phase4_scope.py` 13 (version 2 and version 1 as committed, each
+  version at its own pin, the listing, D1's reading, the list plan, its block, its refusals and its
+  command), `test_phase4_write.py` 3 (the outcome-file refusal, 3 items; the gate's exit line; a
+  third run beside two in one apply root), `test_phase4_accept.py` 1 (lane L's row taken back
+  before a P4 write). Rewritten, strictly as strong: the version-1 scope tests name `version=1`, the
+  malformed-scope case "version" asks version 3 (version 2 is now known) and gains two cases (a
+  version-1 site naming the new list, a version-1 count of it), the audit-log test asks both pins,
+  the gate's scope line reads `v2`, and the mass run's plan test pins version 1 and a version 2
+  that adds a site the plan must not take. Red first: the scope module's tests (a collection error,
+  no `D1_MARKER_WITHOUT_ENTRY`), the gate's `v2` line, and the 4 outcome-file items (a
+  `FileNotFoundError` where a `PlanInputError` was asked). The third-run gate test and the lane-L
+  acceptance test pass on code that already did it; they pin the D9 path.
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`): **6,985 passed,
+  111 skipped, 57 deselected, 0 failed** (184.6 s; `logs/p4_d9/gates_pytest.log`); the 111 skips
+  are the gitignored data this worktree lacks, as before.
+* Sweep: 28 new cases (`P4_D9_MUTATIONS`), 3 cases re-anchored (`found != pin`, the version-2 pin
+  line, the version check of `parse_scope`), 2,446 labels, all unique, every anchor and test present
+  (`test_phase3_sweep.py` green). `logs/p4_d9/sweep_d9.py` - the sweep's own `main` over every case
+  whose target the change touched (write4 107, plan4 52, scope4 33, AUDIT_LOG 6, mutation_sweep 3):
+  **201/201 caught**, the tree byte-identical for its 5 files (and the contracts, checked by
+  digest), `git status` unchanged, no `# mutant` line left (`logs/p4_d9/sweep_d9.log` `850f6e82...`).
+* `ruff check` and `ruff format --check` clean on the 7 touched Python files (ruff 0.15.11); `ruff
+  check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean; the Lyra import check passes; gitleaks over the
+  staged commit: no leaks.
+* `mass4` hashes `phase4/*.py` before every batch: the D9 export ran under `6037a01ce927eb2d`, the
+  code of this commit less `write4`'s refusal, added afterwards; the next round prints the new
+  digest. No `mass4` invocation was in flight.
