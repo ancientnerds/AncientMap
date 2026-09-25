@@ -1301,6 +1301,95 @@ def test_revert4_reverts_the_live_round_and_refuses_the_reverted_one(tmp_path, p
     assert R.reversal_counts(first.stamp, runner=db, host="fake") == (2, 2)
 
 
+# ── revert4 --site: one written site taken back (the mass run's mid-run audit, 2026-09-25) ──────
+
+
+def _two_sites_written(tmp_path: Path) -> tuple[FX.FakeDb, W4.Chunk4]:
+    """One chunk that wrote sites A and B (two rows each), committed."""
+    batch = _batch(
+        tmp_path,
+        sites=[FX.plan_site(), FX.plan_site(FX.SITE_B)],
+        assemblies=[FX.assembly(), FX.assembly(FX.SITE_B)],
+    )
+    db = _db(FX.SITE_A, FX.SITE_B)
+    chunk, outcome = _write_round(tmp_path, _p4(batch), db, 1)
+    assert outcome.ok and len(chunk.rows) == 4
+    return db, chunk
+
+
+def _keep_site_reversal(db: FX.FakeDb, chunk: W4.Chunk4, site_id: str) -> None:
+    """What `revert4 --site` journals: the site's rows of the chunk written back, under the chunk's
+    stamp and each row's key plus `-rollback`; the chunk's other sites untouched."""
+    rows = tuple(row for row in chunk.rows if row.site_id == site_id)
+    _keep_reversal(db, dataclasses.replace(chunk, rows=rows))
+
+
+def test_a_site_revert_takes_back_only_that_sites_rows_of_the_matched_writes(tmp_path) -> None:
+    db, chunk = _two_sites_written(tmp_path)
+    journal = list(db.journal)
+    of_b = [e["id"] for e in journal if e["site_id_ref"] == FX.SITE_B]
+    assert len(of_b) == 2
+    assert _revert_set(R.render_revert(chunk.stamp, site=FX.SITE_B), journal) == of_b
+    assert _revert_set(R.render_revert("phase4:%", site=FX.SITE_B), journal) == of_b
+    assert FX.reversal_reads(R.render_revert(chunk.stamp, site=FX.SITE_B), journal) == {
+        "journalled writes matched": 2,
+        "reversals kept": 0,
+    }
+    _keep_site_reversal(db, chunk, FX.SITE_B)  # the site's revert commits
+    assert db.value(FX.SITE_B, "description") == FX.OLD_DESCRIPTION
+    assert db.value(FX.SITE_A, "description") == FX.DESCRIPTION  # the chunk's other site stays
+    assert _revert_set(R.render_revert(chunk.stamp, site=FX.SITE_B), db.journal) == []
+    assert FX.reversal_reads(R.render_revert(chunk.stamp, site=FX.SITE_B), db.journal) == {
+        "journalled writes matched": 2,
+        "reversals kept": 2,
+    }
+    # the chunk as a whole: its other site is still revertable, the reverted one is skipped
+    of_a = [e["id"] for e in journal if e["site_id_ref"] == FX.SITE_A]
+    assert _revert_set(R.render_revert(chunk.stamp), db.journal) == of_a
+    assert R.reversal_counts(chunk.stamp, runner=db, host="fake") == (4, 2)
+    assert R.reversal_counts(chunk.stamp, site=FX.SITE_B, runner=db, host="fake") == (2, 2)
+    assert R.reversal_counts(chunk.stamp, site=FX.SITE_A, runner=db, host="fake") == (2, 0)
+
+
+def test_a_site_revert_keeps_every_guard_and_invariant_of_the_pattern_revert() -> None:
+    """The site narrows the matched set - and so the set every guard, the loop and both invariants
+    run over - and changes nothing else: without its one predicate, the statement is the pattern's
+    own, byte for byte after the header line that names the site."""
+    stamp = "phase4:p4-0036:chunk-0001"
+    site = "70037a24-6487-4834-9b50-5242289009fe"
+    narrowed = R.render_revert(stamp, site=site, rehearse=True)
+    predicate = f" AND l.site_id_ref = '{site}'"
+    assert narrowed.count(predicate) == 4  # the count, the set, and both lines of the read after
+    plain = R.render_revert(stamp, rehearse=True)
+    assert narrowed.replace(predicate, "").split("BEGIN;", 1)[1] == plain.split("BEGIN;", 1)[1]
+    assert f"-- reverts every journalled write of site {site} whose run stamp is LIKE" in narrowed
+    assert "\nROLLBACK;\n" in narrowed and "\nCOMMIT;\n" in R.render_revert(stamp, site=site)
+
+
+@pytest.mark.parametrize(
+    "site",
+    [
+        "Roman Bath, York",
+        "70037A24-6487-4834-9B50-5242289009FE",
+        "70037a2464874834 9b505242289009fe",
+        "70037a24-6487-4834-9b50-5242289009fe' OR '1'='1",
+        "",
+    ],
+)
+def test_revert_refuses_a_site_that_is_not_a_site_id(site: str) -> None:
+    with pytest.raises(R.RevertRefused, match="is not a site id"):
+        R.render_revert("phase4:p4-0036:chunk-0001", site=site)
+
+
+def test_the_revert_command_takes_one_site(capsys: pytest.CaptureFixture[str]) -> None:
+    site = "70037a24-6487-4834-9b50-5242289009fe"
+    assert R.main(["--stamp-like", "phase4:p4-0036:chunk-0001", "--site", site]) == 0
+    out = capsys.readouterr().out
+    assert f"AND l.site_id_ref = '{site}'" in out and out.rstrip().endswith("WRITE_EXIT=0")
+    assert R.main(["--stamp-like", "phase4:p4-0036:chunk-0001", "--site", "York"]) == 1
+    assert capsys.readouterr().out.rstrip().endswith("WRITE_EXIT=1")
+
+
 @pytest.mark.parametrize(
     "answer",
     [
