@@ -93,7 +93,7 @@ def test_one_wikipedia_article_and_its_wikidata_item_are_one_source_family() -> 
 
 def test_correct_needs_two_quotes_from_two_source_families() -> None:
     wikidata = "https://www.wikidata.org/wiki/Q1"
-    with pytest.raises(A.AnswerError, match="two"):
+    with pytest.raises(A.AnswerError, match="two independent source families"):
         A.parse_stage1(s1(quotes=[q()]), "country", "Peru")
     with pytest.raises(A.AnswerError, match="source famil"):
         A.parse_stage1(s1(quotes=[q(), q(wikidata)]), "country", "Peru")

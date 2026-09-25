@@ -304,8 +304,6 @@ def parse_stage1(text: str, field: str, value: str) -> Answer1:
     _claims(field, value, quotes)
     if verdict == CORRECT:
         _null(data, ("right_value", "severity"), verdict)
-        if len(quotes) < 2:
-            raise AnswerError("CORRECT rests on at least two quotes")
         if len({source_family(q.url) for q in quotes}) < 2:
             raise AnswerError("CORRECT rests on at least two independent source families")
         if field in QN.TEXT_FIELDS:
