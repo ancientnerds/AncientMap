@@ -390,3 +390,18 @@ class TestThePlan:
 
 def _no_database(*_: Any, **__: Any) -> Any:
     raise AssertionError("--write plans from the export on disk and reads no database")
+
+
+def test_an_export_whose_premise_is_not_its_description_is_refused() -> None:
+    """Audit 2026-09-25 m8: `premise_of` was only ever called by a test, and `classify` never
+    compared the export's premise with the description it read - the dangling-markers lane does.
+    A premise that is not the description's sha256 means the export is not one snapshot."""
+    packed = C.Site(
+        site_id=KUNTUR,
+        name="Kuntur Amaya",
+        description=PLAIN,
+        raw_data='{"description_citations":[{"n":1,"url":"https://x.org"}]}',
+        premise=text_sha256("another description"),
+    )
+    with pytest.raises(P.PlanError, match="premise"):
+        C.classify(packed, ())

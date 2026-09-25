@@ -4795,6 +4795,13 @@ AUDIT_FIX_CASES: list[Case] = [
         "test_a_provenance_that_is_no_object_is_listed_not_a_crash",
         "tests/remediation/test_mechanical_dangling_markers.py",
     ),
+    guard(
+        "audit-fix: m8 the citations export's premise is not checked",
+        MECHANICAL / "citations.py",
+        "    if site.premise != premise_of(site.description):",
+        "test_an_export_whose_premise_is_not_its_description_is_refused",
+        "tests/remediation/test_mechanical_citations.py",
+    ),
 ]
 CASES += AUDIT_FIX_CASES
 

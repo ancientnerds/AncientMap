@@ -254,6 +254,11 @@ def classify(site: Site, links: Sequence[JournalLink]) -> Verdict | None:
     )
     if failure is None:
         return None
+    if site.premise != premise_of(site.description):
+        raise PlanError(
+            f"{site.site_id}: the export's premise {site.premise!r} is not the sha256 of the "
+            "description it read - the export is not one snapshot"
+        )
     text = site.description or ""
     found = {"source": "acceptance:D1", "url": D1_SOURCE, "quote": failure}
 
