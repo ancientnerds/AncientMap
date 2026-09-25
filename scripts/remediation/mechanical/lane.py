@@ -47,8 +47,9 @@ delivered plan), so it carries no fourth or fifth guard and no server bounds: `a
 
 A leaf module: it imports nothing from `plan.py` or `apply.py`, so both can import it. It does
 import the pipeline's own vocabularies a lane owns (the period buckets, the canonical site types,
-the scope vocabulary), so they are never copied, and the generated journal-row list of
-journal-reversal-3 (`reversal_3_list.py`). The card_stats lanes
+the scope vocabulary), so they are never copied, and the generated journal-row lists of
+journal-reversal-3 (`reversal_3_list.py`) and of the wrong-both correction (`wrong_both_list.py`).
+The card_stats lanes
 live in `card_stats.py`, which imports the card generator: `resolve_lane` reaches them lazily, so
 this module - and every lane that does not write card_stats - never imports the API package.
 """
@@ -60,6 +61,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from mechanical.reversal_3_list import JOURNAL_IDS as REVERSAL_3_JOURNAL_IDS
+from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
 from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.public_sites import SCOPE_STATUSES
 from pipeline.utils.text import PERIOD_BUCKETS
@@ -947,6 +949,68 @@ REVERSAL_3_READBACK = journal_readback(
 REVERSAL_LISTS[REVERSAL_3.name] = REVERSAL_3_JOURNAL_IDS
 LANES[REVERSAL_3.name] = REVERSAL_3
 LANE_READBACKS[REVERSAL_3.name] = REVERSAL_3_READBACK
+
+#: The wrong-both correction (2026-09-25): where the Opus re-verification reverted a write and its
+#: judges named the right value (RULES.md rule 5: "wrong-both rows carry a proposed value ... It goes
+#: to a later correction lane that writes only with a machine-verified verbatim quote"), that value
+#: is written over the old value journal-reversal-3 restored - with the `period_name` label of a
+#: `period_start` it moves to another bucket (`wrong_both.py`). The lane owns the canonical site
+#: types and the bucket labels. Its list is the journal-reversal-3 rows whose restored value a
+#: correction replaces, generated into `wrong_both_list.py` by `wrong_both.py --list`: the residual
+#: is the curated sites still holding one of those restored values. It reverses no journal row and
+#: derives from no premise: every cell is conditioned on its old value (guard 3). Registered below
+#: the three reversal lists, which stay as they were written.
+_WRONG_BOTH_CELLS = (
+    Column(
+        "site_type", "character varying", max_chars=100, allowed_new_values=tuple(CANONICAL_TYPES)
+    ),
+    Column("period_start", "integer"),
+    Column(
+        "period_name",
+        "character varying",
+        max_chars=100,
+        allowed_new_values=tuple(label for label, _lo, _hi in PERIOD_BUCKETS),
+    ),
+    Column("country", "character varying", max_chars=100),
+)
+_WRONG_BOTH_RESIDUAL = Residual(
+    "curated sites still holding a restored value a wrong-both correction replaces",
+    reversal_residual(WRONG_BOTH_JOURNAL_IDS, _WRONG_BOTH_CELLS).predicate,
+)
+
+WRONG_BOTH = Lane(
+    name="wrong-both",
+    key_prefix="wrong-both",
+    run_stamp="2026-09-25_mechanical-wrong-both",
+    test_id="P6/wrong-both",
+    confidence="authoritative",
+    label="wrong-both correction",
+    plan_table="_wrong_both_plan",
+    out_dir_name="mechanical_wrong_both",
+    post_commit_residual=_WRONG_BOTH_RESIDUAL,
+    rehearsal_residual=_WRONG_BOTH_RESIDUAL,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=_WRONG_BOTH_CELLS,
+)
+
+#: The period pair and the card country, read back as the reversal lanes read them.
+_CURATED_ROWS = "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
+_CARD_COUNTRY = (
+    "card_stats rows whose civilization differs from the site country",
+    "FROM card_stats cs JOIN unified_sites u ON u.id = cs.site_id WHERE u.source_id = "
+    "'ancient_nerds' AND cs.civilization IS DISTINCT FROM u.country",
+)
+WRONG_BOTH_READBACK = journal_readback(
+    WRONG_BOTH,
+    [
+        *reversal_metrics(WRONG_BOTH, WRONG_BOTH_JOURNAL_IDS, _WRONG_BOTH_RESIDUAL),
+        (_PERIOD_MISMATCH.metric, _CURATED_ROWS + _PERIOD_MISMATCH.predicate),
+        _CARD_COUNTRY,
+    ],
+)
+LANES[WRONG_BOTH.name] = WRONG_BOTH
+LANE_READBACKS[WRONG_BOTH.name] = WRONG_BOTH_READBACK
 
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
