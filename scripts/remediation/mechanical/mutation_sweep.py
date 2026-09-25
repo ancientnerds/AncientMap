@@ -4810,6 +4810,13 @@ AUDIT_FIX_CASES: list[Case] = [
         "test_a_country_row_outside_the_convention_is_listed",
         "tests/remediation/test_mechanical_wrong_both.py",
     ),
+    guard(
+        "audit-fix: m11 an undated Museum without a decision is pending",
+        SCOPE,
+        '        if decision is None and "museum" in str(site["site_type"]).casefold():',
+        "test_an_undated_museum_without_a_decision_is_refused_not_pending",
+        SCOPE_TESTS,
+    ),
     Case(
         "audit-fix: m9 jsonl_lines splits at every line break",
         PROD_WRITE,

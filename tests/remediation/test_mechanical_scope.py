@@ -191,6 +191,17 @@ class TestRuleBAndD:
         refused = build(export(not_a_museum), findings, keep)
         assert refused.refused[0][1] == "decision-not-allowed"
 
+    def test_an_undated_museum_without_a_decision_is_refused_not_pending(self) -> None:
+        """Audit 2026-09-25 m11: the module docstring's rule (d) needs a reviewed decision for
+        every Museum row, the undated ones included; one without was planned `pending`."""
+        museum = site(UNDATED, site_type="Museum", period_start=None, description="Roman finds.")
+        findings = {UNDATED: finding(UNDATED, S.UNDATED, "no date")}
+        result = build(export(museum), findings)
+        assert not result.decisions
+        assert [(r[0]["id"], r[1]) for r in result.refused] == [
+            (UNDATED, "museum-needs-a-decision")
+        ]
+
     def test_a_museum_past_the_cutoff_needs_a_reviewed_decision(self) -> None:
         museum = site(MUSEUM, site_type="Museum", period_start=1903, description="Mycenaean finds.")
         findings = {MUSEUM: finding(MUSEUM, S.MUSEUM, "founding year")}

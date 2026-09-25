@@ -605,10 +605,13 @@ def keep_the_period_label(
 ) -> list[Verdict]:
     """The list's decisions, with `period_name` kept the bucket of `period_start` (module doc).
 
-    First every planned label must be the bucket of the start the list leaves its site with; then
-    every planned start must not leave behind a label that was its bucket - with the labels that
-    survived the first step. A start refused on its own therefore takes its label with it, and a
-    label refused takes its start: the list never plans one without the other.
+    First every planned label must be the bucket of the start the site is left with: the planned
+    start, or the live one when no start is planned (or it was refused). Then every planned start
+    must leave a label that is its bucket - the planned label that survived the first step, or the
+    live one - unless the live label is already not the live start's bucket today (the list does
+    not break a pair that is broken already). So a refused start refuses a label that is only the
+    bucket of that start, and a refused label refuses a start whose bucket the live label is not; a
+    start or a label alone is planned only where the pair stays consistent.
     """
     out = list(verdicts)
     starts = {v.site_id: v for v in out if v.ok and v.column == PERIOD_START}

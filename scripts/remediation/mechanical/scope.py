@@ -39,8 +39,9 @@ never re-typed (`census/tests/t11_scope_window.py`) - plus the duplicate pairs.
   for the three section 8.2 names.
 
 Every quote must appear verbatim in the live description, or the decision is refused. A row whose
-`scope_status` is already set is left alone (the lane fills an unassessed column), and a site with
-two decisions is refused. Every write carries its premise - the date, point, type, name and
+`scope_status` is already set is left alone (the lane fills an unassessed column); a site decided
+twice in `DECISIONS.json` stops the plan, and a duplicate loser that another rule decides too is
+refused (`two-decisions`). Every write carries its premise - the date, point, type, name and
 description (as an md5) the decision rests on - so the transaction refuses a site that changed
 after the export (guard 5): a reviewed decision quotes the description, and a quote the row no
 longer holds is no evidence. What the premise does not hold is a duplicate's ranking (`created_at`
@@ -654,7 +655,16 @@ def classify_scope(
             )
             continue
         # UNDATED
-        if decision is None:
+        if decision is None and "museum" in str(site["site_type"]).casefold():
+            # rule (d): every Museum row is decided by hand, the undated ones too (audit m11)
+            refused.append(
+                (
+                    site,
+                    "museum-needs-a-decision",
+                    "plan section 8.2: an undated Museum row is decided by hand",
+                )
+            )
+        elif decision is None:
             out.append(
                 SiteDecision(
                     site,
