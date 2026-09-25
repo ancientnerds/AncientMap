@@ -283,6 +283,55 @@ def test_the_followed_drops_can_leave_too_few_sentences(tmp_path: Path) -> None:
     assert hold.reason is M.HoldReason.REVIEW_TOO_FEW_SENTENCES
 
 
+#: The mass run's mid-run audit (2026-09-25, T2: Roman Bath, York): the article's lead is about a
+#: later pub that carries the Roman bath house's name, and the next sentence leans on it ("It is
+#: built above ..."). W1 names the site; nothing after it does.
+NAMESAKE = (
+    "The Old Bath is a listed public house on the market square of Eburacum. "
+    "It is built above the remains of a Roman bath house. "
+    "The bath house served the soldiers of the legionary fortress in the second century. "
+    "Roof tiles stamped with the names of two legions were found at the bath house site. "
+    "The caldarium and part of the hypocaust can still be seen by visitors today.\n"
+)
+
+
+def test_a_later_namesake_building_is_dropped_with_the_sentence_that_leans_on_it(
+    tmp_path: Path,
+) -> None:
+    """The reviewer's DROP of a sentence about a later building that shares the site's name goes
+    through the import's own cascade (`follow_drops`): the pronoun sentence after it goes too, and
+    the site is verified again on what is left - whose first sentence no longer names the site, so
+    V6 holds it (measured on the real case: `logs/p4_mass/measure_roman_bath_cascade.log`)."""
+    setup = X.SiteSetup(
+        site=X.plan_site("site-1", name="Old Bath"),
+        lane=M.Lane.W,
+        sources={"W": (X.wiki_doc("W", NAMESAKE), NAMESAKE)},
+    )
+    batch_dir = X.make_batch(tmp_path, [setup])
+    select = "".join(f"DESC: W{n}\n" for n in range(1, 6)) + "CARD: W4\n"
+    runner = X.ScriptedRunner({("site-1", "select"): select})
+    assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir) == 0
+    answer = (
+        "R1: DROP its subject is the pub, a later building that shares the site's name\n"
+        "R2: KEEP\nR3: KEEP\nR4: KEEP\nR5: KEEP\nCARD: KEEP"
+    )
+    v6 = M.Hold(site_id="site-1", scope=M.HoldScope.SITE, reason=M.HoldReason.V6, detail="d")
+    code, _, verifier = _review(batch_dir, answer, Verifier([(v6,)]))
+    assert code == 0
+    report = json.loads((batch_dir / B.REVIEW_REPORT).read_text(encoding="utf-8"))
+    row = report["sites"][0]
+    assert row["kept"] == [3, 4, 5]
+    assert row["followed"] == [{"sentence": 2, "follows": 1, "reason": RV.FOLLOWS_A_DROP}]
+    (shown,) = verifier.seen
+    assert shown.description.startswith("The bath house served the soldiers")
+    assert "public house" not in shown.description and "It is built" not in shown.description
+    assert row["outcome"] == "held" and _written(batch_dir) == []
+    assert [hold.reason for hold in X.holds_of(batch_dir)] == [M.HoldReason.V6]
+
+
 def test_a_dropped_card_sentence_rebuilds_the_card_from_the_rest(tmp_path: Path) -> None:
     batch_dir = _assembled(tmp_path)
     answer = "R1: KEEP\nR2: KEEP\nR3: DROP changed meaning\nR4: KEEP\nCARD: KEEP"

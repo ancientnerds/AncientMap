@@ -15,7 +15,11 @@ is in no published sentence before it (the source sentences shown before it are 
 Since pilot 3 (2026-09-24, T7: Partiscum's lead, which the article's own body contradicts) the
 reviewer is also shown the passage the sentences were chosen from (`passage`: the selector's pool,
 or lane R's pages) and drops a sentence another sentence of it contradicts or reduces to a
-presumption, an assumption or a dispute.
+presumption, an assumption or a dispute. Since the mass run's mid-run audit (2026-09-25, T2: Roman
+Bath, York, whose lead is about the modern pub that shares the Roman bath house's name) it also
+drops a sentence whose subject is a later building, business or institution that shares or contains
+the site's name; what leans on such a sentence goes with it below, and V6 holds a site left without
+a sentence that names it.
 
 The verdict can only remove, and it fails closed:
 

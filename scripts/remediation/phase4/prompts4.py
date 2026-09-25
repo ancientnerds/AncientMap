@@ -43,6 +43,16 @@ in a prompt sits inside a `<source>` element, which is what that line names. The
 is never shown to the selector, so it cannot anchor on unsourced text; the site element carries only
 the Phase-3-verified fields.
 
+**The mass run's mid-run audit (2026-09-25).** Roman Bath, York was published opening "The Roman
+Bath is a Grade II* listed public house ...": the pub built in 1929-31 over the Roman bath house the
+record stands for (T2, WRONG_SITE). Rule (8) and the reviewer's matching line name only the modern
+village, town or municipality, and the sentence carries the site's name (rule 7 even made it the
+only sentence the selector could open with). The reviewer question gains "DROP a sentence whose
+subject is a later building, business or institution (a pub, hotel, house, museum, shop, church,
+station ...) that shares or contains the site's name rather than the ancient site itself, even when
+it names the site."; the review import's cascade (`review4.follow_drops`, S4 and S5 again) does the
+rest. The selector question is unchanged: the mass run's selector answers are given under its pin.
+
 A prompt travels as `model_stage.Prompt(stage, system=<question>, user=<block>)`, rendered by
 `Prompt.render()` into the Opus handoff's prompt file; this module builds the two strings and nothing
 else.
@@ -153,6 +163,9 @@ REVIEWER_QUESTION = (
     "card, against the description.\n"
     "DROP a sentence about the modern village, town or municipality (its administration, its "
     "population, its modern founding) rather than the site, even when it names the site.\n"
+    "DROP a sentence whose subject is a later building, business or institution (a pub, hotel, "
+    "house, museum, shop, church, station ...) that shares or contains the site's name rather "
+    "than the ancient site itself, even when it names the site.\n"
     'DROP a sentence with a definite reference ("the valley", "the mountain", "other ...", "it") '
     "whose antecedent is in no published sentence before it: the source sentences before it are "
     "not published.\n"
