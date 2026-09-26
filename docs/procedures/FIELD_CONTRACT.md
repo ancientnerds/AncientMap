@@ -161,6 +161,13 @@ first, journalled; then the file, byte for byte; then the push - in one sitting.
 4. Push #2 (owner), then 0 `[STARTUP] Card description overwritten` lines on both API containers
    and `card_json.py --check` (`ACCEPT_EXIT=0`).
 
+**Lane WB (teaser cards, owner decisions of 2026-09-26) keeps the same order** with its own tools:
+journalled steps of at most 100 sites (`scripts/remediation/mechanical/teaser.py plan`, `apply.py
+--lane teaser-prov-sNNN` / `teaser-card-sNNN`, `teaser.py accept`), then `teaser.py card-file`
+renders the file from a read-only production SELECT with `card_json`'s renderer - refusing any key
+the accepted steps did not write - then `card_json.py --check` and the push, at once
+(`docs/procedures/CARD_DESCRIPTIONS.md` section 5.5).
+
 **Pushing the file before the database write is forbidden**: the boot import would write the cards
 without a journal, and the journalled write would then refuse every row with matched_0. A red CI
 inside the sitting is answered by `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'`
