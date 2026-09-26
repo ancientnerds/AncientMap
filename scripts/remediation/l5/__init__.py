@@ -3,9 +3,10 @@
 Decided 2026-09-26 under the owner's O9 (`output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md`):
 an Opus agent reads each site; a Wikidata item or English Wikipedia title is written only when the
 item or article names exactly this site (no type, no container, no sibling), otherwise the wrong
-link is removed; a site is renamed only to a sourced name of that very site. L5 runs before WD1's
-Wikidata harvest trusts the links (`site_external_ids`, where the harvest reads each site's QID and
-enwiki title).
+link is removed; a site is renamed only to a sourced name of that very site - a name of its own
+item or article. L5 runs before WD1's Wikidata harvest trusts the links (`site_external_ids`, where
+the harvest reads each site's QID and enwiki title), and tells WD1 which links it left unproven
+(`UNTRUSTED_LINKS.jsonl`).
 
 * `population.py` - who is read, and the production read (read-only) the questions are built from;
 * `questions.py`  - the question and the exact answer shape;
@@ -14,10 +15,12 @@ enwiki title).
 * `web.py`        - the User-Agent and the title resolution (the refresh's query, L5's transport);
 * `decide.py`     - the machine checks of an answer: quotes found (`opus_audit/quotes.py`), titles
                     resolved the way the daily refresh resolves them, a replacement item at the
-                    site's place, the refresh's fixed point;
+                    site's place, the refresh's fixed point, a rename to a name of the site's own
+                    item or article;
 * `plan.py`       - the decisions as journalled writes: link steps of at most 100 sites through
                     `qid_repair.render_split(removals=True)` and the name lane `name-l5`
-                    (`mechanical/lane.py`, written by `mechanical/apply.py`);
+                    (`mechanical/lane.py`, written by `mechanical/apply.py`); the skips and the
+                    links WD1 must not trust;
 * `links.py`      - a link step's production commands (check, rehearse, probe-guards, apply, verify,
                     rehearse-rollback);
 * `run.py`        - the CLI; the runbook is `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`,
