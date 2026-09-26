@@ -213,7 +213,12 @@ class TestTheDecision:
             checker="teaser-check-v-001",
             checked_at="2026-09-26T14:00:00+00:00",
             claims=[{"claim": "a storm in 1850", "support": ["W1"]}],
-            verify={**T.VERIFIED, "stage": "verify2", "by": "teaser-verify2-001"},
+            verify={
+                **T.VERIFIED,
+                "stage": "verify2",
+                "by": "teaser-verify2-001",
+                "text_sha256": T.sha(T.GOOD[T.SKARA]),
+            },
             web_facts=[fact],
         )
         _prov, card = W.classify(outcome(provenance=provenance), live(), {}, "wb-test")

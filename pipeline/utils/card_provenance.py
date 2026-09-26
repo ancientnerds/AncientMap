@@ -23,8 +23,10 @@ marked as such wherever it is shown or narrated:
 * `verify` - the independent web verification of the card (owner O2: "natuerlich muessen sie
   inhaltlich stimmen"): `VERIFIED`, the only verdict lane WB writes - no claim contradicted by a
   page, at most `MAX_UNPROVEN_CLAIMS` claim without a proving quote and never the central one - with
-  the verifier's stage, agent and time and the counts of its claims and of those it could not prove.
-  The verifier is never the checker (nor, by the run's rule, anyone who wrote or checked the card);
+  the verifier's stage, agent and time, the counts of its claims and of those it could not prove, and
+  the sha256 of the text it judged (`text_sha256`: always the card's own - a verification of another
+  text proves nothing about this one). The verifier is never the checker (nor, by the run's rule,
+  anyone who wrote or checked the card);
 * `web_facts` - `[]`, except for a card rewritten after a failed verification (checker stage
   `check-v`, verifier stage `verify2`) that corrects a contradicted claim with a fact the first
   verifier quoted from a page: each such quote (`W1`, ...: id, URL, quote) that a claim of `check`
@@ -88,7 +90,7 @@ _KEYS = frozenset(
 )
 _CHECK_KEYS = frozenset({"verdict", "stage", "by", "at", "claims"})
 _CLAIM_KEYS = frozenset({"claim", "support"})
-_VERIFY_KEYS = frozenset({"verdict", "stage", "by", "at", "claims", "unproven"})
+_VERIFY_KEYS = frozenset({"verdict", "stage", "by", "at", "claims", "unproven", "text_sha256"})
 _WEB_FACT_KEYS = frozenset({"id", "url", "quote"})
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 #: A claim's support: a sentence of the description (`S3`) or a web fact (`W1`).
@@ -115,8 +117,9 @@ def validate(value: Any) -> dict[str, Any]:
 
     Nothing is defaulted: a missing or extra key, another kind, lane, mark or version, a hash that is
     not a sha256, a check verdict other than PASS, a claim without a sentence id, a verification
-    other than VERIFIED (beyond the unproven limit, by the checker, or out of step with the check),
-    or a web fact no claim cites (or a cited one missing) is refused, so a malformed provenance
+    other than VERIFIED (beyond the unproven limit, by the checker, out of step with the check, or
+    of another text than the card), or a web fact no claim cites (or a cited one missing) is
+    refused, so a malformed provenance
     fails on every reader alike instead of reading as "nothing to disclose".
     """
     _need(isinstance(value, dict), f"is not a JSON object but {type(value).__name__}")
@@ -151,7 +154,7 @@ def validate(value: Any) -> dict[str, Any]:
             f"claim {claim['claim']!r} names no sentence id",
         )
     _web_facts(value["web_facts"], claims, check["stage"])
-    _verify(value["verify"], check)
+    _verify(value["verify"], check, value["text_sha256"])
     return value
 
 
@@ -184,13 +187,18 @@ def _web_facts(facts: Any, claims: list[dict[str, Any]], stage: str) -> None:
     )
 
 
-def _verify(verify: Any, check: Mapping[str, Any]) -> None:
-    """The web verification: VERIFIED, within the unproven limit, by another agent than the
-    checker, at the verification stage that follows the check's stage."""
+def _verify(verify: Any, check: Mapping[str, Any], card_sha256: str) -> None:
+    """The web verification: VERIFIED, of the card this provenance hashes, within the unproven
+    limit, by another agent than the checker, at the verification stage that follows the check's
+    stage."""
     _need(
         isinstance(verify, dict) and set(verify) == _VERIFY_KEYS, "verify is not the verify shape"
     )
     _need(verify["verdict"] == VERIFIED, f"verify.verdict {verify['verdict']!r} is not VERIFIED")
+    _need(
+        verify["text_sha256"] == card_sha256,
+        "verify.text_sha256 is not the card the provenance hashes: the verifier judged another text",
+    )
     after_rewrite = check["stage"] == VERIFY_REWRITE_CHECK
     _need(
         verify["stage"] == (SECOND_VERIFY if after_rewrite else FIRST_VERIFY),
@@ -234,7 +242,8 @@ def build(
     web_facts: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """The provenance of one checked and verified teaser card, validated: the one place its shape
-    is built. `verify` carries `_VERIFY_KEYS`, each web fact `_WEB_FACT_KEYS`."""
+    is built. `verify` carries `_VERIFY_KEYS` (its `text_sha256` the sha256 of the text the verifier
+    judged, which `validate` holds to the card's), each web fact `_WEB_FACT_KEYS`."""
     return validate(
         {
             "v": VERSION,

@@ -205,16 +205,17 @@ VERIFIED = {
 
 def teaser(site_id: str, card: str | None = None, description: str | None = None) -> dict:
     """A lane-WB provenance of the site's good card, checked and verified."""
+    text = GOOD[site_id] if card is None else card
     return CP.build(
         run="wb-test",
         ai_system="Claude Opus (Anthropic): test",
-        card=GOOD[site_id] if card is None else card,
+        card=text,
         description=DESCRIPTIONS[site_id] if description is None else description,
         stage="check",
         checker="teaser-check-001",
         checked_at="2026-09-26T12:00:00+00:00",
         claims=[{"claim": "the site's main facts", "support": ["S1"]}],
-        verify=VERIFIED,
+        verify={**VERIFIED, "text_sha256": CP.text_sha256(text)},
         web_facts=[],
     )
 

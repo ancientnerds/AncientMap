@@ -400,9 +400,13 @@ def verify_rewrite_prompt(
         "or web fact writes them - nothing else, not your own knowledge. A web fact may be used "
         f"only if its page is a reputable source: {REPUTABLE}. When in doubt, drop the claim. "
         "(Rule 3 below extends to the web facts in this round only.)\n"
-        "2. At most one claim of the new card may be one the web check could not prove, and never "
+        "2. What the site is, and where, is never corrected from a web fact: a page that says the "
+        "site is something else, or somewhere else, may be about a namesake. If that claim is "
+        "contradicted, say it only as the description says it - the new verifier decides, and if "
+        "the web contradicts it again the site gets no card - or drop it.\n"
+        "3. At most one claim of the new card may be one the web check could not prove, and never "
         "the claim that says what the site is. Prefer the facts the web check proved.\n"
-        "3. For each contradicted claim above, in its order, name the sentence of the description "
+        "4. For each contradicted claim above, in its order, name the sentence of the description "
         "that states it, or null if no sentence does: this lists the description's own errors for "
         "their repair.\n\n"
         f"THE RULES\n{_numbered(RULES)}\n\nNEVER, for example:\n{_numbered(DONT)}\n\n"
@@ -448,7 +452,9 @@ def _web_rule(site: C.Basis) -> str:
     return (
         "   A claim may also rest on a WEB FACT (its id, W1, ...) - but only if that fact's page is "
         f"a reputable source ({REPUTABLE}); a claim that rests only on a web fact from any other "
-        "page has support [].\n"
+        "page has support []. A card that follows a web fact saying the site is something else, "
+        "or somewhere else, than the sentences say makes this_site false: that page may be about "
+        "a namesake.\n"
     )
 
 
@@ -511,7 +517,8 @@ def judge_prompt(name: str, country: str, card: str) -> str:
         "university pages, published papers. Some sites refuse automated readers (Historic "
         "England and the Heritage Gateway answer 403, UNESCO often refuses, PDFs may be "
         "unreadable): quote another page when you can. Never cite ancientnerds.com - it is the "
-        "text under test.\n\n"
+        "text under test - nor an AI aggregator or a copy of Wikipedia (wikiwand, dbpedia, ...): "
+        "the machine refuses such a page as a source, and its quote proves nothing.\n\n"
         f"{JUDGE_FORMAT}\n"
     )
 

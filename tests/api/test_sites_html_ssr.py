@@ -347,6 +347,7 @@ def test_site_detail_marks_a_teaser_card_as_ai_generated():
             "at": "2026-09-26T13:00:00+00:00",
             "claims": 2,
             "unproven": 0,
+            "text_sha256": CP.text_sha256(row.card_description),
         },
         web_facts=[],
     )

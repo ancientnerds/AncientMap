@@ -779,6 +779,7 @@ def _teaser_row(**over):
             "at": "2026-09-26T13:00:00+00:00",
             "claims": 2,
             "unproven": 0,
+            "text_sha256": CP.text_sha256(CARD),
         },
         web_facts=[],
     )

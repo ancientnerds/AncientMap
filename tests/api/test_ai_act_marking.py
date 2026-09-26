@@ -217,12 +217,13 @@ def _teaser(card: str = TEASER, description: str = DESCRIPTION) -> dict[str, Any
         checker="teaser-check1-k1-001",
         checked_at="2026-09-26T12:00:00+00:00",
         claims=[{"claim": "megalithic temples on Malta", "support": ["S1"]}],
-        verify=VERIFIED,
+        verify={**VERIFIED, "text_sha256": CP.text_sha256(card)},
         web_facts=[],
     )
 
 
-#: The web verification of a card the checker accepted (lane WB's stage `verify`).
+#: The web verification of a card the checker accepted (lane WB's stage `verify`); its
+#: `text_sha256` is the card's the verifier judged (the builders add it).
 VERIFIED = {
     "verdict": "VERIFIED",
     "stage": "verify",
@@ -288,12 +289,15 @@ def test_a_claim_without_a_sentence_id_is_refused():
         ({"unproven": 2}, "beyond the limit"),
         ({"claims": 1, "unproven": 1}, "beyond the limit"),
         ({"claims": 0, "unproven": 0}, "not a positive count"),
+        ({"text_sha256": CP.text_sha256(TEASER + " Another.")}, "not the card the provenance"),
+        ({"text_sha256": None}, "not the card the provenance"),
     ],
 )
 def test_only_a_verified_card_within_the_limit_is_a_teaser_provenance(verify, why):
     """The web verification (lane WB, owner O2): only VERIFIED is written - no claim contradicted,
     at most one without a proving quote and never the central one (so never every claim), by an
-    agent other than the checker, at the verification stage that follows the check."""
+    agent other than the checker, at the verification stage that follows the check, of the very
+    card the provenance hashes (a verification of another text proves nothing about this one)."""
     data = copy.deepcopy(_teaser())
     data["verify"] = {**data["verify"], **verify}
     with pytest.raises(ValueError, match=why):
@@ -311,7 +315,12 @@ def _rewritten(web_facts: list[dict[str, Any]], support: list[str]) -> dict[str,
         checker="teaser-check-v-001",
         checked_at="2026-09-26T14:00:00+00:00",
         claims=[{"claim": "restored in 1956", "support": support}],
-        verify={**VERIFIED, "stage": "verify2", "by": "teaser-verify2-001"},
+        verify={
+            **VERIFIED,
+            "stage": "verify2",
+            "by": "teaser-verify2-001",
+            "text_sha256": CP.text_sha256(TEASER),
+        },
         web_facts=web_facts,
     )
 
