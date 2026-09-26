@@ -12889,3 +12889,18 @@ and on restoration work on an aqueduct and latrines"), while RIB 1049 reads "a w
 erected a bath-building from ground-level". The card is faithful to its description: a description
 defect of the Wikipedia-based text (lane WA's class), recorded here for the description repair list.
 Per the runbook (5.2 step 5) the pilot failed either way; a new pilot runs with a new seed.
+
+## 2026-09-26 - Lane WB pilot 2 (wb-pilot-2026-09-26b): the fetch fix works; two description defects
+
+20 W sites (seed 20260927, pilot 1's sites excluded), all accepted by the checker at attempt 1
+(167-190 characters). Web judge: 122 claims, 120 SUPPORTED with a machine-found quote, 0 unproven,
+**2 CONTRADICTED** with a proving quote - both cards repeat their description faithfully, so both are
+defects of the Wikipedia-based descriptions (lane WA's class), not of lane WB:
+- Diocletian's Palace (`4e78a6c5-1811-46d3-8e62-8c613ec3afbe`): "granite sphinxes, originating from
+  the site of Egyptian Pharaoh Thutmose III" - dalmacijadanas.hr: the sphinxes are Thutmose III's.
+- Syberg (`70762563-db82-43f3-ad30-bce5fde9c9bd`): "in 775 AD; two years later the Saxons failed
+  with a reconquest" - de.wikipedia "Hohensyburg": the failed siege was in 776, the following year.
+With Concangis (pilot 1) that is 3 contradicted description sentences in 40 W sites. Consequence for
+lane WB (owner O2: "natürlich müssen sie inhaltlich stimmen"): a card faithful to a wrong sentence is
+still wrong when read aloud, so every card gets the independent web check before it is written
+(built in `wip/wb2`), and each contradicted description sentence is listed for the description repair.
