@@ -32,6 +32,8 @@ from typing import Any
 
 from sqlalchemy import text
 
+from pipeline.database import affected_rows
+
 logger = logging.getLogger(__name__)
 
 CARD_DESCRIPTIONS_PATH = Path("public/data/card_descriptions.json")
@@ -114,7 +116,7 @@ def import_card_descriptions(session: Any, descriptions: dict[str, str]) -> dict
                 value,
             )
         result = session.execute(_UPSERT_SQL, {"id": site_id, "desc": value})
-        imported += result.rowcount
+        imported += affected_rows(result)
 
     return {
         "imported": imported,

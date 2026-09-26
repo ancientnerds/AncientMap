@@ -38,9 +38,10 @@ from api.services.description_provenance import card_ai, description_disclosure,
 from api.services.jwt_auth import require_founder
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
-from pipeline.database import DiscordUser, get_db
+from pipeline.database import DiscordUser, affected_rows, get_db
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.utils.card_provenance import card_provenance_of
 from pipeline.utils.globe_payload import globe_projection
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
 
@@ -1150,7 +1151,7 @@ def restore_all_upload_snapshots(
             WHERE us.id = snap.site_id
         """)
     )
-    count = result.rowcount
+    count = affected_rows(result)
 
     db.commit()
     cache_delete_pattern("sites:*")
@@ -1374,7 +1375,7 @@ def get_site_detail(
         if disclosure is not None:
             resp["descriptionAi"] = disclosure["ai"]
             resp["descriptionAttribution"] = disclosure["attribution"]
-        marked_card = card_ai(provenance, row.card_description)
+        marked_card = card_ai(provenance, card_provenance_of(rd), row.card_description)
         if marked_card is not None:
             resp["cardAi"] = marked_card
 
@@ -2213,10 +2214,12 @@ def replace_source(
                 {"src": target_source},
             )
             # Now delete the sites themselves — no FK checks needed
-            deleted = db.execute(
-                text("DELETE FROM unified_sites WHERE source_id = :src"),
-                {"src": target_source},
-            ).rowcount
+            deleted = affected_rows(
+                db.execute(
+                    text("DELETE FROM unified_sites WHERE source_id = :src"),
+                    {"src": target_source},
+                )
+            )
 
             if deleted != len(existing_ids):
                 logger.warning(
@@ -2512,7 +2515,7 @@ def mark_sites_audited(
 
     return {
         "source_id": body.source_id,
-        "marked": result.rowcount,
+        "marked": affected_rows(result),
     }
 
 

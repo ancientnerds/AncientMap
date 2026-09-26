@@ -114,23 +114,34 @@ def sentence_span(text: str, index: int) -> tuple[int, int]:
     return start, end
 
 
+_OPENS_RE = re.compile(r"[\"'(\[«]?[A-Z0-9]")
+
+
+def opens_like_a_sentence(text: str) -> bool:
+    """True when ``text`` opens the way a sentence does: a capital or a digit, after at most one
+    quotation mark or bracket. A trailing fragment opens mid-clause ("drawing on 425 dates.")."""
+    return _OPENS_RE.match(text.strip()) is not None
+
+
+def ends_like_a_sentence(text: str) -> bool:
+    """True when ``text`` ends on a real terminator - ``.``, ``!`` or ``?``, before any closing
+    quotation mark or bracket - and not on an abbreviation ("... and Kevin C."). :func:`_protect`
+    is what tells those apart: it masks exactly the periods that are not sentence ends, so a masked
+    final period means the unit was cut mid-sentence."""
+    stripped = text.strip()
+    return bool(stripped) and _protect(stripped).rstrip("\"')]»").endswith((".", "!", "?"))
+
+
 def is_complete_sentence(text: str) -> bool:
     """True when ``text`` looks like a whole sentence rather than a fragment.
 
     Used as a safety net before deleting prose: removing a fragment cannot take
     the offending claim out cleanly, it only leaves ungrammatical debris.
 
-    Two shapes are rejected:
+    Two shapes are rejected, each by its own half (lane WC asks the halves apart):
 
-    * a trailing fragment, which opens mid-clause ("drawing on 425 dates.")
+    * a trailing fragment, which opens mid-clause (:func:`opens_like_a_sentence`)
     * a leading fragment, which ends on an abbreviation rather than a real
-      terminator ("... and Kevin C."). :func:`_protect` is what tells those
-      apart - it masks exactly the periods that are not sentence ends, so a
-      masked final period means the unit was cut mid-sentence.
+      terminator (:func:`ends_like_a_sentence`).
     """
-    stripped = text.strip()
-    if not stripped:
-        return False
-    if not re.match(r"[\"'(\[«]?[A-Z0-9]", stripped):
-        return False
-    return _protect(stripped).rstrip("\"')]»").endswith((".", "!", "?"))
+    return opens_like_a_sentence(text) and ends_like_a_sentence(text)

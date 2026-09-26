@@ -259,13 +259,14 @@ CASES: list[Case] = [
     guard(
         "statement must commit",
         APPLY,
-        '    if not sep:\n        raise PlanError("the emitted statement has no COMMIT',
+        "    if commits != 1:\n        raise PlanError(",
         "test_a_statement_without_a_commit_cannot_be_rehearsed",
     ),
-    guard(
+    Case(
         "rollback rehearsal must commit",
         APPLY,
-        '    if not sep:\n        raise PlanError("ROLLBACK.sql has no COMMIT',
+        '    head = _before_the_one_commit(sql, "ROLLBACK.sql")',
+        '    head = sql.partition("\\nCOMMIT;\\n")[0]',
         "test_a_rollback_without_a_commit_cannot_be_rehearsed",
     ),
     Case(
@@ -983,8 +984,8 @@ CASES: list[Case] = [
             (
                 "the apply sends only the verified statement",
                 APPLY,
-                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    already',
-                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    already',
+                '    sql = verify_pinned(\n        out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)\n    )\n    # The undo',
+                '    sql = (out / "APPLY.sql").read_text(encoding="utf-8")\n    # The undo',
                 "test_a_hand_edited_apply_is_refused",
                 TESTFILE,
             ),
@@ -1261,8 +1262,8 @@ CASES: list[Case] = [
     Case(
         "cells: a wave label is a date",
         LANE,
-        r'CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)$")',
-        r'CARD_STATS_LANE = re.compile(r"^card-stats-(.+)$")',
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")',
+        r'CARD_STATS_LANE = re.compile(r"^card-stats-(.+)\Z")',
         "test_a_card_stats_wave_resolves_and_nothing_else_does",
         CELL_TESTS,
     ),
@@ -1290,7 +1291,7 @@ CASES: list[Case] = [
             ),
             (
                 "NULL where the lane never leaves one",
-                "    if values[filled_side] is None:",
+                "    if values[filled_side] is None and not cell.clears:",
                 "test_a_fill_may_start_from_null_but_never_end_in_it",
             ),
             (
@@ -1376,8 +1377,8 @@ CASES: list[Case] = [
             ),
             (
                 "guard 2 refuses NULL on the filled side",
-                '        refused.append(f"{filled} IS NULL")',
-                "        pass",
+                '            refused.append(f"{filled} IS NULL")',
+                "            pass",
                 "test_guard_2_allows_null_only_on_the_side_the_lane_fills",
             ),
             (
@@ -1436,7 +1437,8 @@ CASES: list[Case] = [
             ),
             (
                 "the foreign-column probe names an unowned column",
-                '            corrupt(0, column="name"),',
+                "            corrupt(0, column=next(c for c in FOREIGN_COLUMNS if c not in "
+                "lane.columns)),",
                 "            corrupt(0),",
                 "test_the_foreign_column_probe_names_a_column_the_lane_does_not_own",
             ),
@@ -2123,7 +2125,7 @@ CASES: list[Case] = [
             ),
             (
                 "a reversal needs a reason and quotes",
-                "        if not r.reason or not r.quotes:",
+                "        if not r.reason or not r.quotes or any(not q.text.strip() for q in r.quotes):",
                 "test_a_reversal_without_a_reason_or_evidence_is_refused",
             ),
             (
@@ -2271,8 +2273,10 @@ CASES: list[Case] = [
             (
                 "the inverse probe restores another value from its own row",
                 APPLY,
-                "                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),",
-                "                corrupt(0, journal_id=0),",
+                '                "guard 6 - a cell that names its journal row but restores another '
+                'value",\n                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),',
+                '                "guard 6 - a cell that names its journal row but restores another '
+                'value",\n                corrupt(0, journal_id=0),',
                 "test_the_inverse_probe_names_its_own_row_and_restores_another_value",
             ),
             (
@@ -2505,7 +2509,7 @@ IMAGE_CASES: list[Case] = [
     Case(
         "img chunk: the scope guard names the source",
         CHUNK,
-        "     WHERE u.id IS NULL OR u.source_id <> {L(CURATED_SOURCE)};",
+        "     WHERE u.id IS NULL OR u.source_id <> {L(lane.source)};",
         "     WHERE u.id IS NULL;",
         "test_the_scope_guard_refuses_every_site_outside_the_curated_source",
         CHUNK_TESTS,
@@ -3048,7 +3052,7 @@ IMAGE_CASES: list[Case] = [
     ),
     Case(
         "img pv: JSON lines split at newlines only",
-        PERSIST,
+        PROD_WRITE,  # moved from persist_verdicts on 2026-09-25 (audit m9); pv re-exports it
         '    return text.split("\\n")',
         "    return text.splitlines()",
         "test_a_plan_record_with_a_line_separator_is_read_whole",
@@ -3809,8 +3813,8 @@ WRONG_BOTH_CASES: list[Case] = [
             ),
             (
                 "AD stands whole before the year",
-                r'_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
-                r'_PREFIX = re.compile(r"(?:A\.\s?D\.|AD)\s?" + _NUMBER)',
+                r'_PREFIX = re.compile(r"(?<![^\W\d_])(?:A\.\s?D\.|AD)\s?" + _NUMBER + r"(?![^\W_]|[.,]\d)")',
+                r'_PREFIX = re.compile(r"(?:A\.\s?D\.|AD)\s?" + _NUMBER + r"(?![^\W_]|[.,]\d)")',
                 _YEAR_OUT,
             ),
             (
@@ -4098,7 +4102,7 @@ PHASE6_CASES: list[Case] = [
             (
                 "only the writer's source is planned",
                 NAME_KEY,
-                '    if row["source_id"] != WRITER_SOURCE:',
+                '    if row["source_id"] != source:',
                 "test_a_row_of_another_source_is_listed_not_planned",
                 NAME_KEY_TESTS,
             ),
@@ -4475,6 +4479,2391 @@ ORPHAN_CITATIONS_CASES: list[Case] = [
     ),
 ]
 CASES += ORPHAN_CITATIONS_CASES
+
+# ---------------------------------------------- the dangling-markers lane (D9 (b), 2026-09-25)
+#: The removal of the markers without an entry (`dangling_markers.py`) and its registration in
+#: `lane.py`. Every label starts with "dangling-markers" - `mutation_sweep.py dangling-markers`.
+DANGLING = MECHANICAL / "dangling_markers.py"
+DANGLING_TESTS = "tests/remediation/test_mechanical_dangling_markers.py"
+_DANGLING_LANE_TEST = (
+    "test_the_lane_writes_the_description_and_raw_data_of_a_site_in_one_transaction"
+)
+_RULE = "test_a_dangling_marker_goes_with_the_space_before_its_run"
+_FAULTS = "test_a_removal_that_is_not_clean_is_named"
+DANGLING_MARKERS_CASES: list[Case] = [
+    *(
+        guard(f"dangling-markers: {label}", DANGLING, needle, test, DANGLING_TESTS)
+        for label, needle, test in (
+            (
+                "a site D1 holds on is no candidate",
+                "    if failure is None:",
+                "test_a_site_d1_holds_on_is_no_candidate",
+            ),
+            (
+                "the export's premise is its provenance",
+                "    if parse_json(site.premise) != parse_json(premise_of(raw)):",
+                "test_an_export_whose_premise_is_not_its_provenance_is_refused",
+            ),
+            (
+                "a failure without a dangling marker is listed",
+                "    if not dangling:",
+                "test_the_orphan_citations_class_is_listed_not_repaired_here",
+            ),
+            (
+                "grouped markers are listed",
+                "    if [int(n) for n in _TOKEN.findall(text)] != markers:",
+                "test_grouped_markers_are_listed",
+            ),
+            (
+                "no provenance is refused",
+                "    if provenance is None:\n        return listed(NO_PROVENANCE",
+                "test_a_site_without_the_lane_l_marking_is_refused",
+            ),
+            (
+                "a Phase-4 provenance is refused",
+                '    if not isinstance(provenance, dict) or provenance.get("lane") != '
+                "TextLane.L.value:",
+                "test_a_site_with_live_phase4_provenance_is_refused",
+            ),
+            (
+                "a hash that already differs is listed",
+                "    if legacy.desc_sha256 != text_sha256(text):",
+                "test_a_provenance_that_already_disagrees_with_the_text_is_listed",
+            ),
+            (
+                "each cell's journal ends at the live value",
+                "        if broken is not None:",
+                "test_the_description_journal_must_end_at_the_live_text",
+            ),
+            (
+                "the value is printed as Postgres prints it",
+                "    if site.raw_data is None or reprint(raw) != site.raw_data:",
+                "test_a_raw_data_the_writer_would_not_print_as_postgres_does_is_listed",
+            ),
+            (
+                "an unclean removal is listed",
+                "    if faults:",
+                "test_a_removal_that_is_not_clean_is_listed",
+            ),
+            (
+                "the kept markers are the old ones",
+                "    if marker_sequence(new) != kept:",
+                _FAULTS,
+            ),
+            (
+                "nothing but the tokens changes",
+                '    if re.sub(r"\\s", "", new) != re.sub(r"\\s", "", tokens_out):',
+                _FAULTS,
+            ),
+            (
+                "no spacing fault is added",
+                "        if len(pattern.findall(new)) > len(pattern.findall(old)):",
+                _FAULTS,
+            ),
+            (
+                "--write plans",
+                "        if args.write:",
+                "test_write_writes_the_lane_s_files_from_the_export_alone",
+            ),
+            (
+                "--export reads production",
+                "        if args.export:",
+                "test_export_reads_production_into_the_lane_s_export_directory",
+            ),
+            (
+                "the reversal is written with the plan",
+                "            if plan.changes:",
+                "test_write_writes_the_lane_s_files_from_the_export_alone",
+            ),
+        )
+    ),
+    *(
+        Case(f"dangling-markers: {label}", DANGLING, old, new, test, DANGLING_TESTS)
+        for label, old, new, test in (
+            (
+                "unreadable entries are listed",
+                "    except ValueError as exc:\n        return listed(NOT_READABLE",
+                "    except KeyError as exc:\n        return listed(NOT_READABLE",
+                "test_unreadable_citations_are_listed",
+            ),
+            (
+                "an unreadable legacy provenance is listed",
+                "    except ValueError as exc:\n        return listed(PROVENANCE_NOT_READABLE",
+                "    except KeyError as exc:\n        return listed(PROVENANCE_NOT_READABLE",
+                "test_a_provenance_that_does_not_read_is_listed",
+            ),
+            (
+                "the raw_data journal is compared as JSON",
+                "                    canonical(link.new_value),",
+                "                    link.new_value,",
+                "test_the_raw_data_journal_is_compared_as_json_and_must_end_at_the_live_value",
+            ),
+            (
+                "a run keeps its space while it keeps a marker",
+                '        return match["space"] + kept if kept else ""',
+                "        return kept",
+                _RULE,
+            ),
+            (
+                "a run that loses every marker loses its space",
+                '        return match["space"] + kept if kept else ""',
+                '        return match["space"] + kept',
+                _RULE,
+            ),
+            (
+                "only the dangling markers go",
+                "            if int(token.group(1)) not in dangling",
+                "            if int(token.group(1)) in dangling",
+                _RULE,
+            ),
+            (
+                "the hash moves to the new text",
+                "        key: {**value, HASH_KEY: text_sha256(description)} if key",
+                "        key: {**value} if key",
+                "test_a_dangling_marker_is_removed_and_the_hash_moves_in_the_same_site",
+            ),
+            (
+                "an entry left uncited goes",
+                "    fixed = repaired(raw, markers)",
+                "    fixed = dict(raw)",
+                "test_an_entry_the_removal_leaves_uncited_goes_with_the_orphan_citations_rule",
+            ),
+            (
+                "the premise leaves out the hash",
+                "provenance.items() if key != HASH_KEY})",
+                "provenance.items()})",
+                "test_the_premise_is_the_legacy_provenance_without_the_hash_the_lane_moves",
+            ),
+            (
+                "the plan is read against D1",
+                '(("D1", d1(after)), ("D4", d4(after)))',
+                '(("D1", None), ("D4", d4(after)))',
+                "test_a_plan_on_which_d1_would_still_fail_is_refused",
+            ),
+            (
+                "the plan is read against D4",
+                '(("D1", d1(after)), ("D4", d4(after)))',
+                '(("D1", d1(after)), ("D4", None))',
+                "test_a_plan_on_which_d4_would_fail_is_refused",
+            ),
+            (
+                "the journal is read in id order",
+                'for r in sorted(rows["journal"], key=lambda r: int(r["id"])):',
+                'for r in rows["journal"]:',
+                "test_the_export_is_parsed_into_sites_and_each_cell_s_journal_in_id_order",
+            ),
+            (
+                "the export reads both journals",
+                "l.column_name IN ('description', 'raw_data')",
+                "l.column_name IN ('raw_data')",
+                "test_the_export_is_one_read_only_snapshot_of_the_rows_and_both_journals",
+            ),
+            (
+                "the write is conditioned on its premise",
+                '        "premise": site.premise,\n',
+                "",
+                "test_the_plan_is_one_the_framework_renders_and_reverses",
+            ),
+        )
+    ),
+    *(
+        Case(f"dangling-markers: {label}", LANE, old, new, test, DANGLING_TESTS)
+        for label, old, new, test in (
+            (
+                "the lane is registered",
+                "LANES[DANGLING_MARKERS.name] = DANGLING_MARKERS\n",
+                "",
+                _DANGLING_LANE_TEST,
+            ),
+            (
+                "the lane reads back",
+                "LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK\n",
+                "",
+                _DANGLING_LANE_TEST,
+            ),
+            (
+                "the lane writes both cells",
+                '    cells=(Column("description", "text"), Column("raw_data", "jsonb")),',
+                '    cells=(Column("raw_data", "jsonb"),),',
+                _DANGLING_LANE_TEST,
+            ),
+            (
+                "the premise is the provenance less its hash",
+                "\"coalesce((u.raw_data -> '_description_provenance') - 'desc_sha256', "
+                "'null'::jsonb)::text\"",
+                "\"coalesce(u.raw_data -> '_description_provenance', 'null'::jsonb)::text\"",
+                "test_the_premise_is_the_legacy_provenance_without_the_hash_the_lane_moves",
+            ),
+            (
+                "the raw_data casts sit behind a CASE",
+                "    return _DANGLING_ROWS + f\"CASE WHEN l.column_name = 'raw_data' THEN "
+                '{predicate} ELSE false END"',
+                '    return _DANGLING_ROWS + f"{predicate}"',
+                "test_every_raw_data_cast_of_the_readback_skips_the_description_rows",
+            ),
+            (
+                "the readback names the provenance lane",
+                '            "journal rows for this run whose provenance is not lane L",\n',
+                '            "journal rows for this run whose provenance is not lane W",\n',
+                "test_the_residual_is_d1_and_the_readback_measures_d4_and_what_the_journal_may_hold",
+            ),
+            (
+                "the D4 predicate is shared",
+                '        _D4_FAILS,\n        (\n            "journal rows for this run that changed',
+                '        (\n            "journal rows for this run that changed',
+                "test_the_d4_predicate_is_shared_with_the_orphan_citations_readback",
+            ),
+        )
+    ),
+]
+CASES += DANGLING_MARKERS_CASES
+
+
+#: The fixes of the 2026-09-25 code audit (`output/remediation/CODE_AUDIT_2026-09-25.md`) in the
+#: mechanical lanes and the shared transport. Every label starts with "audit-fix:", so the list runs
+#: on its own: `mutation_sweep.py audit-fix:`.
+AUDIT_FIX_CASES: list[Case] = [
+    Case(
+        "audit-fix: M2 send delivers LF as LF",
+        PROD_WRITE,
+        '            input=sql.encode("utf-8"),',
+        '            input=sql.replace("\\n", "\\r\\n").encode("utf-8"),',
+        "test_send_delivers_a_newline_as_lf_on_every_platform",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: M7 AD-then-year has no right boundary",
+        MECHANICAL / "wrong_both.py",
+        r'_NUMBER + r"(?![^\W_]|[.,]\d)")',
+        "_NUMBER)",
+        "test_a_year_without_its_era_or_in_another_does_not",
+        "tests/remediation/test_mechanical_wrong_both.py",
+    ),
+    Case(
+        "audit-fix: M8 a found loser keeps its last pair",
+        SCOPE,
+        "    for dup in found:\n        own = by_loser.get(dup.loser)\n",
+        "    for dup in found:\n        own = None  # mutant\n",
+        "test_a_loser_found_with_two_survivors_is_refused_in_any_pair_order",
+        SCOPE_TESTS,
+    ),
+    Case(
+        "audit-fix: M9 the value table splits on |",
+        APPLY,
+        "    rows = psql_json_reader()(\n"
+        '        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "',
+        '    rows = (lambda sql: [dict(zip(("value", "n"), r)) for r in read_rows(sql)])(\n'
+        '        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "',
+        "test_a_value_with_the_separator_or_a_newline_is_read_whole",
+    ),
+    Case(
+        "audit-fix: m1 the apply sends beside an unverified undo",
+        APPLY,
+        '    verify_pinned(\n        out / "ROLLBACK.sql", plan_path=plan_path, expected=rollback_statement(records, lane)\n    )\n    already',
+        "    already",
+        "test_the_apply_refuses_an_edited_rollback_before_anything_is_sent",
+    ),
+    Case(
+        "audit-fix: m2 a second COMMIT is rehearsed away",
+        APPLY,
+        "    if commits != 1:\n",
+        "    if commits == 0:  # mutant\n",
+        "test_a_statement_with_two_commits_cannot_be_rehearsed",
+    ),
+    guard(
+        "audit-fix: m3 a NUL reaches psql inside a literal",
+        PROD_WRITE,
+        '    if "\\x00" in value:',
+        "test_one_quoting_rule_for_every_writer_and_it_refuses_nul",
+        PROD_TESTS,
+    ),
+    guard(
+        "audit-fix: m4 a spliced $$ ends the DO block",
+        APPLY,
+        '    if "$$" in block:',
+        "test_a_value_that_would_end_the_do_block_is_refused",
+    ),
+    Case(
+        "audit-fix: m6 an empty quote is evidence",
+        REVERSAL,
+        " or any(not q.text.strip() for q in r.quotes):",
+        ":",
+        "test_a_quote_without_text_is_no_evidence",
+        REVERSAL_TESTS,
+    ),
+    guard(
+        "audit-fix: m7 a list provenance crashes the premise",
+        MECHANICAL / "dangling_markers.py",
+        "    if isinstance(provenance, list):",
+        "test_a_provenance_that_is_no_object_is_listed_not_a_crash",
+        "tests/remediation/test_mechanical_dangling_markers.py",
+    ),
+    guard(
+        "audit-fix: m8 the citations export's premise is not checked",
+        MECHANICAL / "citations.py",
+        "    if site.premise != premise_of(site.description):",
+        "test_an_export_whose_premise_is_not_its_description_is_refused",
+        "tests/remediation/test_mechanical_citations.py",
+    ),
+    Case(
+        "audit-fix: m10 any other column is taken for the country",
+        MECHANICAL / "wrong_both.py",
+        "    elif c.column == COUNTRY:\n",
+        "    elif True:  # mutant\n",
+        "test_a_country_row_outside_the_convention_is_listed",
+        "tests/remediation/test_mechanical_wrong_both.py",
+    ),
+    guard(
+        "audit-fix: m11 an undated Museum without a decision is pending",
+        SCOPE,
+        '        if decision is None and "museum" in str(site["site_type"]).casefold():',
+        "test_an_undated_museum_without_a_decision_is_refused_not_pending",
+        SCOPE_TESTS,
+    ),
+    Case(
+        "audit-fix: m13 a UUID may end in a newline",
+        PLAN,
+        r'[0-9a-f]{12}\Z")',
+        r'[0-9a-f]{12}$")',
+        "test_a_uuid_with_a_trailing_newline_is_not_a_uuid",
+    ),
+    Case(
+        "audit-fix: m13 a lane constant may end in a newline",
+        LANE,
+        r'_KEY_PREFIX = re.compile(r"^[a-z0-9-]+\Z")',
+        r'_KEY_PREFIX = re.compile(r"^[a-z0-9-]+$")',
+        "test_a_lane_constant_with_a_trailing_newline_is_refused",
+    ),
+    Case(
+        "audit-fix: M10 the curated name match sends a Python key",
+        REPO / "pipeline/lyra/site_identifier.py",
+        "    site_ids = _match_site_ids(session, site_name)",
+        "    site_ids = _match_site_ids(session, normalized)",
+        "test_the_raw_name_goes_to_the_postgres_key",
+        "tests/pipeline/test_site_match_key.py",
+    ),
+    Case(
+        "audit-fix: M10 the curated name match takes any source",
+        REPO / "pipeline/lyra/site_identifier.py",
+        '.filter(UnifiedSite.id.in_(site_ids), UnifiedSite.source_id == "ancient_nerds")',
+        ".filter(UnifiedSite.id.in_(site_ids))",
+        "test_no_python_key_is_compared_with_the_column",
+        "tests/pipeline/test_site_match_key.py",
+    ),
+    Case(
+        "audit-fix: m9 jsonl_lines splits at every line break",
+        PROD_WRITE,
+        '    return text.split("\\n")',
+        "    return text.splitlines()",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: m9 the tagged export splits at every line break",
+        PLAN,
+        "    for line in jsonl_lines(text):",
+        "    for line in text.splitlines():",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+    Case(
+        "audit-fix: m9 the JSON reader splits at every line break",
+        PLAN,
+        "for line in jsonl_lines(proc.stdout) if line.strip()]",
+        "for line in proc.stdout.splitlines() if line.strip()]",
+        "test_every_psql_json_reader_splits_at_lf_only",
+        PROD_TESTS,
+    ),
+]
+CASES += AUDIT_FIX_CASES
+
+# ------------------------------------------------ lane WB: teaser cards (owner O2-O4, O10, 2026-09-26)
+TEASER = MECHANICAL / "teaser.py"
+TEASER_CONTRACT = REPO / "scripts/remediation/teaser/contract.py"
+TEASER_ANSWERS = REPO / "scripts/remediation/teaser/answers.py"
+TEASER_RUN = REPO / "scripts/remediation/teaser/run.py"
+CARD_PROVENANCE = REPO / "pipeline/utils/card_provenance.py"
+PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
+TEASER_WRITE_TESTS = "tests/remediation/test_mechanical_teaser.py"
+TEASER_TESTS = "tests/remediation/test_teaser.py"
+AI_ACT_TESTS = "tests/api/test_ai_act_marking.py"
+LASTMOD_TESTS = "tests/api/test_sitemap_lastmod.py"
+_TEASER_CHANGED = "test_a_site_that_changed_is_listed_not_written"
+
+TEASER_CASES: list[Case] = [
+    # ------------------------------------------------ the write: apply.py's clear, the lane's name
+    Case(
+        "teaser: NULL to NULL is never a change",
+        APPLY,
+        "    if r.old_value is None and r.new_value is None:",
+        "    if False:",
+        "test_null_to_null_is_never_a_change",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "teaser: a clearing column may write NULL",
+        APPLY,
+        "    if values[filled_side] is None and not cell.clears:",
+        "    if values[filled_side] is None:",
+        "test_a_clear_and_its_reversal_are_valid_on_the_card_lane",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "teaser: guard 2 drops the NULL refusal only for a clearing column",
+        APPLY,
+        "        if not cell.clears:\n            refused.append",
+        "        if True:\n            refused.append",
+        "test_guard_2_lets_the_card_lane_write_null_and_nothing_else",
+        TEASER_WRITE_TESTS,
+    ),
+    guard(
+        "teaser: apply resolves a step's lanes by name",
+        LANE,
+        "    if TEASER_LANE.match(name):",
+        "test_the_lanes_resolve_by_name_for_apply",
+        TEASER_WRITE_TESTS,
+    ),
+    # ------------------------------------------------ the write: one site's two cells
+    *(
+        guard(f"teaser: {label}", TEASER, needle, test, TEASER_WRITE_TESTS)
+        for label, needle, test in (
+            (
+                "a site the export lost",
+                "    if live is None:",
+                "test_a_site_the_export_did_not_return_is_listed",
+            ),
+            (
+                "a site retired since the run",
+                "    if live.scope_status == RETIRED:",
+                _TEASER_CHANGED,
+            ),
+            ("a site without a card row", "    if not live.has_card_row:", _TEASER_CHANGED),
+            (
+                "a description changed since the check",
+                '    if premise_of(live.description) != outcome["desc_sha256"]:',
+                _TEASER_CHANGED,
+            ),
+            (
+                "raw_data that is not an object",
+                "    if raw is not None and not isinstance(raw, dict):",
+                _TEASER_CHANGED,
+            ),
+            (
+                "raw_data the planner would spell differently",
+                "    if live.raw_data is not None and reprint(raw) != live.raw_data:",
+                _TEASER_CHANGED,
+            ),
+            (
+                "a journal that does not end at the live value",
+                "        if broken is not None:",
+                "test_a_cell_whose_journal_does_not_end_at_the_live_value_is_listed",
+            ),
+            (
+                "nothing to change is listed",
+                "    if prov is None and card is None:",
+                "test_nothing_to_change_is_listed",
+            ),
+            (
+                "the Phase-5 card key is nulled",
+                '    if isinstance(described, dict) and described.get("card") is not None:\n'
+                "        out[DESCRIPTION_PROVENANCE_KEY]",
+                "test_an_accepted_card_writes_its_provenance_and_the_card",
+            ),
+            (
+                "a step writes at most 100 sites",
+                "    if len(outcomes) > MAX_SITES:",
+                "test_a_step_writes_at_most_100_sites",
+            ),
+            (
+                "a step follows the closed one",
+                "    if step > 1 and not closed(step - 1, root):",
+                "test_the_next_step_waits_for_the_acceptance_of_the_last",
+            ),
+            (
+                "a run directory lies under the runs",
+                "    if resolved.parent != RUNS.resolve():",
+                "test_a_run_is_named_by_its_name_or_by_its_directory",
+            ),
+            (
+                "steps are numbered in order",
+                "    if step != expected:",
+                "test_the_next_step_waits_for_the_acceptance_of_the_last",
+            ),
+            (
+                "the acceptance counts rollback rows",
+                "        if undone:",
+                "test_a_rollback_row_is_a_deviation",
+            ),
+            (
+                "the acceptance counts the journal rows",
+                '        if len(by_site) != len(written) or set(by_site) != {r["site_id"] for r in '
+                "rows}:",
+                "test_a_missing_journal_row_is_a_deviation",
+            ),
+            (
+                "the acceptance reads the planned value",
+                "            if not held:",
+                "test_a_card_that_does_not_hold_is_a_deviation",
+            ),
+            (
+                "the acceptance finds a Phase-5 card key left",
+                '        if isinstance(described, dict) and described.get("card") is not None:\n'
+                "            found.append",
+                "test_a_phase5_card_key_left_behind_is_a_deviation",
+            ),
+            (
+                "the card file follows closed steps only",
+                "        if not closed(step, root):",
+                "test_a_step_without_acceptance_is_refused",
+            ),
+            (
+                "the card file carries no foreign card",
+                "    if foreign:",
+                "test_a_card_the_steps_did_not_write_is_refused",
+            ),
+            (
+                "the card file waits for every planned card",
+                "    if unwritten:",
+                "test_a_planned_card_production_does_not_hold_is_refused",
+            ),
+            (
+                "a step is closed once",
+                "    if path.exists():",
+                "test_a_step_is_closed_once",
+            ),
+            (
+                "an undone step is never accepted",
+                "    if reverted(step, root):",
+                "test_an_undone_step_is_never_accepted_afterwards",
+            ),
+            (
+                "an undone step holds its old values",
+                '            if same(held) != same(row["old_value"]):',
+                "test_a_write_still_standing_is_refused",
+            ),
+            (
+                "an undone step has a reversal per write",
+                "            if len(writes) > 1 or len(undos) != len(writes):",
+                "test_a_write_still_standing_is_refused",
+            ),
+            (
+                "an undone step's reversal is the write's inverse",
+                "                if not inverse:",
+                "test_a_reversal_that_is_not_the_inverse_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER, old, new, test, TEASER_WRITE_TESTS)
+        for label, old, new, test in (
+            (
+                "a planned site is not planned again",
+                '    return [o for o in sorted(outcomes, key=lambda o: o["site_id"]) if o["site_id"] '
+                "not in done][",
+                '    return [o for o in sorted(outcomes, key=lambda o: o["site_id"])][',
+                "test_a_planned_site_is_not_planned_again",
+            ),
+            (
+                "an undone step's sites are planned again",
+                '        if step["run"] == run and step["step"] not in undone',
+                '        if step["run"] == run',
+                "test_an_undone_step_is_closed_and_its_sites_are_planned_again",
+            ),
+            (
+                "an undone step is read as undone",
+                "    return _closing(REVERTED_DIR, step, root).exists()",
+                "    return False",
+                "test_an_undone_step_is_closed_and_its_sites_are_planned_again",
+            ),
+            (
+                "an acceptance is recorded once",
+                "    if not found and not closed(step, root):",
+                "    if not found:",
+                "test_an_acceptance_is_recorded_once",
+            ),
+            (
+                "an accepted step can still be undone",
+                "    if not found:\n        _record_closing(\n            REVERTED_DIR,",
+                "    if not found and not accepted(step, root):\n        _record_closing(\n"
+                "            REVERTED_DIR,",
+                "test_an_accepted_step_is_undone_closed_and_planned_again",
+            ),
+            (
+                "the undo keeps the acceptance it supersedes",
+                "                    if acceptance.exists()\n                    else None",
+                "                    if False\n                    else None",
+                "test_an_accepted_step_is_undone_closed_and_planned_again",
+            ),
+            (
+                "the card file expects an undone step's old cards",
+                '            planned[row["site_id"]] = row["old_value"] if undone else '
+                'row["new_value"]',
+                '            planned[row["site_id"]] = row["new_value"]',
+                "test_the_file_follows_production_after_an_undo",
+            ),
+            (
+                "the card file lets a later step's plan win",
+                "    for step in sorted(steps):",
+                "    for step in steps:",
+                "test_a_site_planned_again_after_an_undo_is_expected_as_the_later_step_wrote_it",
+            ),
+            (
+                "the acceptance finds a stale provenance",
+                "            elif CP.stale(teaser, site.description):",
+                "            elif False:",
+                "test_a_stale_provenance_is_a_deviation",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the card contract
+    *(
+        guard(f"teaser: {label}", TEASER_CONTRACT, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "160-190 characters",
+                "    if not MIN_CHARS <= length <= MAX_CHARS:",
+                "test_the_length_is_160_to_190_characters",
+            ),
+            (
+                "one line, no double space",
+                '    if card != card.strip() or "  " in card or any(ch in card for ch in '
+                '"\\n\\r\\t"):',
+                "test_layout_and_ending",
+            ),
+            ("a final stop", "    if not _TERMINAL.search(card):", "test_layout_and_ending"),
+            (
+                "one or two sentences",
+                "    if len(pieces) > MAX_SENTENCES:",
+                "test_at_most_two_sentences",
+            ),
+            (
+                "at most one question",
+                '    if card.count("?") > MAX_QUESTIONS:',
+                "test_at_most_one_short_question",
+            ),
+            (
+                "a short question",
+                '        if "?" in piece and len(piece.strip()) > MAX_QUESTION_CHARS:',
+                "test_at_most_one_short_question",
+            ),
+            (
+                "no bracket, marker, emoji or symbol",
+                "    if bad:",
+                "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            ("no bare circa", "    if _BARE_CIRCA.search(card):", "test_a_bare_circa_is_refused"),
+            (
+                "every numeral grounded",
+                "    if ungrounded:",
+                "test_every_numeral_is_grounded_in_the_description",
+            ),
+            (
+                "the card names the site",
+                "    if not names_in(card, site.forms):",
+                "test_the_card_names_the_site",
+            ),
+            ("the shorts font", "    if measured.missing:", "test_the_shorts_font_and_frame"),
+            (
+                "the caption frame",
+                "    if measured.px > V.MAX_CAPTION_PX:",
+                "test_the_shorts_font_and_frame",
+            ),
+            (
+                "no card without a description",
+                "    if not description.strip():",
+                "test_a_site_without_a_description_has_no_basis",
+            ),
+            (
+                "a sentence id of this description",
+                "    if unknown:",
+                "test_anything_else_is_refused",
+            ),
+            (
+                "a sentence id once",
+                "    if len(set(ids)) != len(ids):",
+                "test_anything_else_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER_CONTRACT, old, new, test, TEASER_TESTS)
+        for label, old, new, test in (
+            (
+                "a derived name form of 3 characters at least",
+                "            if len(key) >= MIN_FORM_CHARS and key not in seen:",
+                "            if key not in seen:",
+                "test_a_short_derived_form_is_dropped_but_a_short_name_stays",
+            ),
+            (
+                "no exclamation mark, hashtag or asterisk",
+                "            or ch in MARKS\n",
+                "",
+                "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            (
+                "no exclamation at the end",
+                '_TERMINAL = re.compile(r"[.?]',
+                '_TERMINAL = re.compile(r"[.!?]',
+                "test_layout_and_ending",
+            ),
+            (
+                "no math symbol or arrow",
+                '_FORBIDDEN_CATEGORIES = frozenset({"So", "Sm", "Cs", "Co", "Cn", "No"})',
+                '_FORBIDDEN_CATEGORIES = frozenset({"So", "Cs", "Co", "Cn", "No"})',
+                "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            (
+                "an alias only where the description uses it",
+                "    derived += [alt for alt in sorted(set(alt_names)) if names_in(description, "
+                "[alt])]",
+                "    derived += sorted(set(alt_names))",
+                "test_an_alias_counts_only_where_the_description_uses_it",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the answer shapes
+    *(
+        guard(f"teaser: {label}", TEASER_ANSWERS, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            ("a card rests on a sentence", "    if not basis:", "test_anything_else_is_refused"),
+            (
+                "no PASS with an unsupported claim",
+                "        if unsupported:",
+                "test_a_pass_with_an_unsupported_claim_is_refused",
+            ),
+            (
+                "no PASS with a broken rule",
+                '        if not (data["tone_ok"] and data["this_site"]):',
+                "test_a_pass_with_a_broken_rule_is_refused",
+            ),
+            (
+                "no PASS with a reason",
+                "        if reasons:",
+                "test_a_pass_with_a_reason_is_refused",
+            ),
+            (
+                "an UNVERIFIABLE claim cites nothing",
+                '            if raw["url"] is not None or raw["quote"] is not None:',
+                "test_anything_else_is_refused",
+            ),
+            (
+                "a judge's quote of 20 characters at least",
+                "        if len(quote.strip()) < MIN_QUOTE_CHARS:",
+                "test_anything_else_is_refused",
+            ),
+        )
+    ),
+    Case(
+        "teaser: no FAIL without a reason",
+        TEASER_ANSWERS,
+        "    elif not reasons:",
+        "    elif False:",
+        "test_a_fail_needs_a_reason",
+        TEASER_TESTS,
+    ),
+    # ------------------------------------------------ the run
+    *(
+        guard(f"teaser: {label}", TEASER_RUN, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "a sentence check is a basis while it hashes the text",
+                '    if row["check_desc_sha256"] == digest:',
+                "test_a_sentence_checked_text_is_a_basis_while_its_check_hashes_it",
+            ),
+            (
+                "a text nothing sources is not final",
+                "    if basis_of(row) is None:",
+                "test_who_is_a_candidate",
+            ),
+            (
+                "a run is selected once",
+                '    if (run / "RUN.json").exists():',
+                "test_select_fixes_the_candidates_once",
+            ),
+            (
+                "the sites file is the pinned one",
+                '    if CP.text_sha256(path.read_bytes().decode("utf-8").replace("\\r\\n", "\\n")) '
+                "!= record[key]:",
+                "test_a_changed_sites_file_is_refused",
+            ),
+            (
+                "a mechanical failure goes to a rewrite",
+                '        if written["problems"]:',
+                "test_a_card_that_fails_goes_to_a_rewrite_with_its_findings",
+            ),
+            (
+                "only a PASS accepts",
+                '        if checked["verdict"] == A.PASSED:',
+                "test_all_accepted_in_the_first_round",
+            ),
+            (
+                "an earlier stage is imported first",
+                "    if waiting:",
+                "test_an_earlier_stage_must_be_imported_before_the_next_is_asked",
+            ),
+            (
+                "the import rebuilds the question",
+                '        if OH.prompt_sha256(prompt) != line["prompt_sha256"]:',
+                "test_a_question_the_run_would_now_ask_differently_is_refused",
+            ),
+            (
+                "a checker is not the writer",
+                "            if answer.answered_by in others:",
+                "test_a_checker_that_wrote_the_card_is_refused",
+            ),
+            ("outcomes wait for every site", "    if due:", "test_outcomes_wait_for_every_site"),
+            (
+                "a site without a description gets its card cleared",
+                '        if listed["reason"] == NO_DESCRIPTION and listed["card"] is not None:',
+                "test_all_accepted_in_the_first_round",
+            ),
+            (
+                "a judge did not work on the card",
+                "            if answer.answered_by in writers[site_id]:",
+                "test_a_judge_who_worked_on_the_card_is_refused",
+            ),
+            (
+                "an unproven contradiction is counted",
+                '                if judged.verdict == "CONTRADICTED":',
+                "test_an_unproven_contradiction_fails_the_pilot",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER_RUN, old, new, test, TEASER_TESTS)
+        for label, old, new, test in (
+            (
+                "a Phase-4 lane counts only while it hashes the text",
+                '    if row["lane"] in BASIS_LANES and row["provenance_desc_sha256"] == digest:',
+                '    if row["lane"] in BASIS_LANES:',
+                "test_a_description_its_provenance_does_not_hash_is_not_final",
+            ),
+            (
+                "a clear is premised on the text as it was read",
+                '                    "desc_sha256": listed["desc_sha256"],',
+                '                    "desc_sha256": CP.text_sha256(""),',
+                "test_a_blank_description_clears_the_card_on_the_text_as_it_was_read",
+            ),
+            (
+                "a stale teaser is asked again",
+                "        and not CP.stale(teaser, description)\n",
+                "        and True\n",
+                "test_a_live_teaser_is_current_and_a_stale_one_a_candidate",
+            ),
+            (
+                "a site asked before is not asked again",
+                '        elif earlier.get(row["site_id"]) == CP.text_sha256(row["description"]):',
+                "        elif False:",
+                "test_a_site_asked_before_is_asked_again_only_after_its_description_moved",
+            ),
+            (
+                "the pilot gate refuses a contradiction",
+                "        no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0",
+                "        no_contradiction = self.contradicted_unproven == 0",
+                "test_a_proven_contradiction_fails_the_pilot",
+            ),
+            (
+                "the pilot gate refuses an unproven contradiction",
+                "        no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0",
+                "        no_contradiction = self.contradicted == 0",
+                "test_an_unproven_contradiction_fails_the_pilot",
+            ),
+            (
+                "a run asks only its bases",
+                "        elif basis is not None and basis_of(row) not in basis:",
+                "        elif False:",
+                "test_a_run_can_ask_one_basis_only",
+            ),
+            (
+                "a quote proves only when the page holds it",
+                "            proven = outcome == Q.FOUND",
+                "            proven = judged.url is not None",
+                "test_a_quote_the_page_does_not_hold_proves_nothing",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the page date: lane WB's card writes only
+    *(
+        Case(f"teaser: {label}", PUBLIC_SITES, old, new, test, LASTMOD_TESTS)
+        for label, old, new, test in (
+            (
+                "an earlier card write leaves the page date",
+                "        f\"(table_name = '{table}' AND column_name = '{column}' AND run_stamp LIKE "
+                "'{stamp_like}')\"",
+                "        f\"(table_name = '{table}' AND column_name = '{column}')\"",
+                "test_a_card_write_before_lane_wb_does_not_advance_the_page",
+            ),
+            (
+                "a stamped column is not counted unstamped",
+                '        "\'" + column + "\'" for column in columns if (table, column) not in '
+                "PAGE_COLUMN_STAMPS",
+                '        "\'" + column + "\'" for column in columns',
+                "test_a_card_write_before_lane_wb_does_not_advance_the_page",
+            ),
+            (
+                "a lane-WB card write moves the page date",
+                '    f"AND ({_PAGE_WRITE} OR {_STAMPED_PAGE_WRITE}) "',
+                '    f"AND ({_PAGE_WRITE}) "',
+                "test_a_lane_wb_card_write_advances_the_page",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the provenance and its readers
+    *(
+        Case(f"teaser: {label}", CARD_PROVENANCE, old, new, test, AI_ACT_TESTS)
+        for label, old, new, test in (
+            (
+                "only a PASS is a teaser provenance",
+                '    _need(check["verdict"] == ACCEPTING_VERDICT,',
+                "    _need(True,",
+                "test_a_malformed_teaser_provenance_is_refused_not_ignored",
+            ),
+            (
+                "a claim names a sentence id",
+                "            and bool(support)\n",
+                "            and True\n",
+                "test_a_claim_without_a_sentence_id_is_refused",
+            ),
+            (
+                "a stale card is not narrated",
+                '    return None if stale(provenance, description) else provenance["text_sha256"]',
+                '    return provenance["text_sha256"]',
+                "test_a_teaser_card_is_shorts_eligible_only_while_its_description_is_unchanged",
+            ),
+            (
+                "the mark is for the hashed card only",
+                "    return AI_GENERATED if describes(provenance, card) else None",
+                "    return AI_GENERATED",
+                "test_a_teaser_provenance_is_the_only_statement_about_the_card",
+            ),
+        )
+    ),
+]
+CASES += TEASER_CASES
+
+
+# ------------------------------------------ the WE lanes (HUMAN_ONLY decisions of 2026-09-26)
+#: The B2-L country lane, the lane invariant of the L5 name lane, the Lyra alias keys (Nr. 9) and
+#: L5's own checks (`scripts/remediation/l5/`).
+COUNTRY_B2 = MECHANICAL / "country_b2.py"
+COUNTRY_B2_TESTS = "tests/remediation/test_mechanical_country_b2.py"
+L5_DIR = REPO / "scripts/remediation/l5"
+L5_TESTS = "tests/remediation/test_l5.py"
+QID_REPAIR = REPO / "output/remediation/tools/qid_repair.py"
+WE_CASES: list[Case] = [
+    *(
+        guard(f"we: {label}", path, needle, test, testfile)
+        for label, path, needle, test, testfile in (
+            (
+                "b2: a row that moved is written",
+                COUNTRY_B2,
+                "    if site.country != candidate.decided_old:",
+                "test_each_check_refuses_on_its_own",
+                COUNTRY_B2_TESTS,
+            ),
+            (
+                "b2: a point outside the new country is written",
+                COUNTRY_B2,
+                "    if not inside or geo is None:",
+                "test_each_check_refuses_on_its_own",
+                COUNTRY_B2_TESTS,
+            ),
+            (
+                "b2: an item's P625 elsewhere is ignored",
+                COUNTRY_B2,
+                "        if not agrees:",
+                "test_a_p625_in_another_country_refuses",
+                COUNTRY_B2_TESTS,
+            ),
+            (
+                "name lane: the lane invariant is not rendered",
+                APPLY,
+                "    if lane.write_invariant is not None:\n        add(",
+                "test_the_statements_refuse_a_key_that_is_not_the_name_s",
+                L5_TESTS,
+            ),
+            (
+                "lyra keys: a lyra lane writes any column",
+                CHUNK,
+                "    if other:",
+                "test_a_lyra_lane_writes_alias_keys_and_nothing_else",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "l5: a replacement far from the site is decided",
+                L5_DIR / "decide.py",
+                "            if not placed:",
+                "test_a_replacement_item_far_from_the_site_is_held",
+                L5_TESTS,
+            ),
+            (
+                "l5: an entity redirect is decided",
+                L5_DIR / "decide.py",
+                "    if qid not in entities:",
+                "test_an_entity_page_of_another_item_is_a_redirect_and_held",
+                L5_TESTS,
+            ),
+            (
+                "l5: an article of another item is decided",
+                L5_DIR / "decide.py",
+                '    if res["qid"] != item:',
+                "test_the_article_must_be_the_item_s_own",
+                L5_TESTS,
+            ),
+            (
+                "l5: a site changed since the question is written",
+                L5_DIR / "plan.py",
+                "        if changed is not None:",
+                "test_a_site_changed_since_the_question_is_skipped",
+                L5_TESTS,
+            ),
+            (
+                "l5: a replacement another site carries is written",
+                L5_DIR / "plan.py",
+                "            if others:",
+                "test_a_replacement_another_curated_site_carries_is_a_duplicate_not_a_link",
+                L5_TESTS,
+            ),
+            (
+                "l5: a step is applied twice",
+                L5_DIR / "links.py",
+                "    if already:",
+                "test_apply_verifies_what_landed",
+                L5_TESTS,
+            ),
+            (
+                "l5: a rename without its name in a quote parses",
+                L5_DIR / "questions.py",
+                '            if not name.quotes or not any(_normal(new) in _normal(q["quote"]) for q in name.quotes):',
+                "test_a_rename_quotes_its_new_name",
+                L5_TESTS,
+            ),
+            # the review of e36de10 (2026-09-26): one item for two sites, the rename's tie to the
+            # site's own item, the pinned rename's wait, the rounds' order, what WD1 may trust
+            (
+                "l5: an item decided for two sites is written",
+                L5_DIR / "plan.py",
+                "            if twins:",
+                "test_two_decisions_replacing_to_one_item_are_both_skipped",
+                L5_TESTS,
+            ),
+            (
+                "l5: the write renders no guard 6",
+                QID_REPAIR,
+                "    if removals and not reversal:",
+                "test_the_write_refuses_an_item_planned_twice_and_checks_it_afterwards",
+                L5_TESTS,
+            ),
+            (
+                "l5: no guard 6 probe",
+                L5_DIR / "links.py",
+                "        if second:",
+                "test_the_guard6_probe_gives_a_second_site_the_first_site_s_new_item",
+                L5_TESTS,
+            ),
+            (
+                "l5: a rename to any name is decided",
+                L5_DIR / "decide.py",
+                "    if Q.normalise(new) not in {Q.normalise(n) for n in names}:",
+                "test_a_name_of_neither_the_item_nor_the_article_holds_the_site",
+                L5_TESTS,
+            ),
+            (
+                "l5: a rename to a shared item's name is decided",
+                L5_DIR / "decide.py",
+                "    if others:",
+                "test_a_kept_item_another_visible_site_carries_holds_the_rename",
+                L5_TESTS,
+            ),
+            (
+                "l5: a rename without links is decided",
+                L5_DIR / "decide.py",
+                "    if item is None:",
+                "test_a_site_left_without_links_keeps_its_name",
+                L5_TESTS,
+            ),
+            (
+                "l5: the pinned rename does not wait",
+                L5_DIR / "plan.py",
+                '        if row["scope_status"] != "retired" or row["scope_reason"] != reason:',
+                "test_the_pinned_rename_waits_for_the_empty_row_to_be_hidden",
+                L5_TESTS,
+            ),
+            (
+                "l5: a kept shared item is trusted",
+                L5_DIR / "plan.py",
+                "    if not others:",
+                "test_a_kept_item_another_visible_curated_site_carries_is_listed",
+                L5_TESTS,
+            ),
+            (
+                "l5: an older round is imported",
+                L5_DIR / "handoff.py",
+                "    if record.name != newest:",
+                "test_only_the_newest_round_is_imported",
+                L5_TESTS,
+            ),
+            (
+                "l5: a fourth round is exported",
+                L5_DIR / "handoff.py",
+                "    if len(rounds) >= MAX_ROUNDS:",
+                "test_a_re_ask_waits_for_the_import_and_stops_after_round_three",
+                L5_TESTS,
+            ),
+            (
+                "l5: the plan reads a round not imported",
+                L5_DIR / "handoff.py",
+                "    if not imported(out, rounds[-1].name):",
+                "test_the_plan_waits_for_the_newest_round_s_import",
+                L5_TESTS,
+            ),
+        )
+    ),
+    Case(
+        "we: l5: a self-contradicting record is asked its name",
+        L5_DIR / "population.py",
+        '            ask_name="name-n7" in entry["groups"] and sid not in PINNED_NAMES,',
+        '            ask_name=("name-n7" in entry["groups"] or sid in SELF_CONTRADICTORY)\n'
+        "            and sid not in PINNED_NAMES,",
+        "test_the_groups_come_from_the_waves_and_the_classifier",
+        L5_TESTS,
+    ),
+    Case(
+        "we: l5: a held site is trusted",
+        L5_DIR / "plan.py",
+        '        elif decided[sid]["status"] == HELD:',
+        "        elif False:",
+        "test_excluded_held_and_skipped_sites_are_listed_with_their_stored_links",
+        L5_TESTS,
+    ),
+    Case(
+        "we: l5: a step is written beside another plan",
+        L5_DIR / "plan.py",
+        "    for wave, rows in waves:\n        _delivered(wave, _body(rows))\n",
+        "",
+        "test_no_step_is_written_while_a_later_one_holds_another_plan",
+        L5_TESTS,
+    ),
+    Case(
+        "we: name lane: a key-keeping rename reads as moved",
+        LANE,
+        "f\"l.column_name = 'name' AND {site_key_sql('l.old_value')} <> \"",
+        "f\"l.column_name = 'name' AND {site_key_sql('l.old_value')} = \"",
+        "test_a_key_keeping_rename_and_a_full_rename_read_zero",
+        L5_TESTS,
+    ),
+    Case(
+        "we: lyra keys: an undecided lyra row is planned",
+        NAME_KEY,
+        "    if source == LYRA_SOURCE and (\n"
+        '        table != "unified_site_names" or int(row_key) not in LYRA_ALIAS_ROWS\n'
+        "    ):\n",
+        "    if False:\n",
+        "test_the_lyra_lane_lists_every_other_row",
+        NAME_KEY_TESTS,
+    ),
+]
+CASES += WE_CASES
+
+# ------------------------------------------------------------------------------ WD2 (2026-09-26)
+#: The served-image lane (O6), the E3 scope review (non-sites, O7 reinstatements) and its wave
+#: lane, and the O7 rule itself. Every label starts with "wd2" - `mutation_sweep.py wd2` runs
+#: exactly these.
+SCOPE_REVIEW = MECHANICAL / "scope_review.py"
+DATES = REPO / "pipeline/normalizers/dates.py"
+SERVED = REPO / "scripts/remediation/served_image"
+SCOPE_REVIEW_TESTS = "tests/remediation/test_scope_review.py"
+O7_TESTS = "tests/pipeline/test_e3_oceania.py"
+SERVED_TESTS = "tests/remediation/test_served_image.py"
+REPLACE_SHAPE = "test_a_replace_answer_out_of_shape"
+
+WD2_CASES: list[Case] = [
+    # -- the scope review: the funnel
+    Case(
+        "wd2 scope: a retired site is never asked",
+        SCOPE_REVIEW,
+        '        if site["scope_status"] == RETIRED:\n            continue\n        sid = str(site["id"])',
+        '        if False:\n            continue\n        sid = str(site["id"])',
+        "test_a_retired_site_is_never_asked",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: the harvest covers every shown site",
+        SCOPE_REVIEW,
+        '        sid = str(site["id"])\n        if sid not in harvest.qids:',
+        '        sid = str(site["id"])\n        if False:',
+        "test_a_shown_site_the_harvest_lacks_stops_the_funnel",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: the harvest covers every re-ask",
+        SCOPE_REVIEW,
+        "            reason = REASK_UNCOUNTED\n        if sid not in harvest.qids:",
+        "            reason = REASK_UNCOUNTED\n        if False:",
+        "test_a_site_the_harvest_no_longer_lists_stops_the_re_ask",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: the type signal",
+        SCOPE_REVIEW,
+        '        if site["site_type"] in NON_SITE_TYPES:',
+        "test_every_signal_puts_a_site_in_and_nothing_else_does",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: the Wikidata signal",
+        SCOPE_REVIEW,
+        "            if natural:",
+        "test_every_signal_puts_a_site_in_and_nothing_else_does",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: a deprecated class is no class",
+        MECHANICAL / "plan.py",
+        '    return [c for c in (entity.get("claims") or {}).get(prop, []) if c.get("rank") != "deprecated"]',
+        '    return [c for c in (entity.get("claims") or {}).get(prop, [])]',
+        "test_a_deprecated_class_is_no_signal",
+        SCOPE_REVIEW_TESTS,
+    ),
+    # -- the scope review: the answers and the quote check
+    guard(
+        "wd2 scope: the shape wants two websites",
+        SCOPE_REVIEW,
+        "        if len(sites) < MIN_SITES:",
+        "test_an_answer_out_of_shape",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: the Wikimedia projects are one website",
+        SCOPE_REVIEW,
+        "    return WIKIMEDIA if domain in _WIKIMEDIA_DOMAINS else domain",
+        "    return domain",
+        "test_the_website_of_a_url",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: a copy of Wikipedia is Wikipedia",
+        SCOPE_REVIEW,
+        '        "wikiwand.com",\n',
+        "",
+        "test_the_website_of_a_url",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: a site answer carries no quotes",
+        SCOPE_REVIEW,
+        "    if decision == SITE and quotes:",
+        "test_an_answer_out_of_shape",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: the import names every answer out of shape",
+        SCOPE_REVIEW,
+        "    if problems:",
+        "test_an_answer_out_of_shape_stops_the_import_and_names_the_remedy",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: the import fetches every cited page",
+        SCOPE_REVIEW,
+        '    collect([quote["url"] for _q, a, _r in parsed for quote in a.quotes])',
+        "    collect([])",
+        "test_a_not_a_site_counts_with_two_found_quotes_from_two_websites",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: counted needs found quotes of two websites",
+        SCOPE_REVIEW,
+        "        counted = a.decision == SITE or len({website(r.source) for r in found}) >= MIN_SITES",
+        "        counted = a.decision == SITE or len(found) >= MIN_SITES",
+        "test_two_found_quotes_of_one_website_do_not_count",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: counted needs the quotes found",
+        SCOPE_REVIEW,
+        "        counted = a.decision == SITE or len({website(r.source) for r in found}) >= MIN_SITES",
+        "        counted = a.decision == SITE or len({website(r.source) for r in results}) >= MIN_SITES",
+        "test_a_quote_the_page_does_not_hold_does_not_count",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: the import renders from the round snapshot",
+        SCOPE_REVIEW,
+        "    snapshot = parse_export(snapshot_text)",
+        "    snapshot = read_export(export_path(out))",
+        "test_the_import_renders_from_the_round_s_snapshot",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: the snapshot is the recorded one",
+        SCOPE_REVIEW,
+        '    if sha256_text(snapshot_text) != record["snapshot_sha256"]:',
+        "test_a_changed_snapshot_is_refused",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: round N leaves a counted answer on its entry",
+        SCOPE_REVIEW,
+        '            if site["premise"] == latest["premise"]:',
+        "test_round1_asks_only_what_round0_left_uncounted",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: round N asks a moved entry again",
+        SCOPE_REVIEW,
+        "            reason = REASK_MOVED",
+        "            continue",
+        "test_a_counted_answer_whose_entry_moved_is_asked_again",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: three asks at one premise at most",
+        SCOPE_REVIEW,
+        '            if sum(1 for r in rows if r["premise"] == site["premise"]) >= MAX_ASKS:',
+        "test_an_uncounted_answer_is_asked_three_times_at_most",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: a retired site is not asked again",
+        SCOPE_REVIEW,
+        '        if site["scope_status"] == RETIRED:\n            continue\n        if latest["counted"]:',
+        '        if False:\n            continue\n        if latest["counted"]:',
+        "test_a_retired_site_is_not_asked_again",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: a round that asks nothing writes nothing",
+        SCOPE_REVIEW,
+        "    if not asked:",
+        "test_a_round_that_asks_nothing_is_refused_before_it_writes",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: rounds run in order",
+        SCOPE_REVIEW,
+        "        if not files.record.is_file():",
+        "test_rounds_run_in_order",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: a round not imported stops the plan",
+        SCOPE_REVIEW,
+        "        if not files.answers.is_file():",
+        "test_a_round_exported_but_not_imported_stops_the_plan",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: the latest answer decides",
+        SCOPE_REVIEW,
+        '        if rows[-1]["decision"] == NOT_A_SITE and rows[-1]["counted"]',
+        '        if any(r["decision"] == NOT_A_SITE and r["counted"] for r in rows)',
+        "test_the_latest_answer_decides",
+        SCOPE_REVIEW_TESTS,
+    ),
+    # -- the scope review: the plan
+    Case(
+        "wd2 scope: a site retired since is skipped",
+        SCOPE_REVIEW,
+        '        if site["scope_status"] == RETIRED:\n            skipped.append(',
+        "        if False:\n            skipped.append(",
+        "test_a_site_retired_since_the_question_is_skipped",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: an entry that moved is skipped",
+        SCOPE_REVIEW,
+        '        if site["premise"] != row["premise"]:',
+        "test_an_entry_that_moved_since_the_answer_is_skipped",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: the evidence is the found quotes",
+        SCOPE_REVIEW,
+        '            if q["outcome"] == Q.FOUND\n',
+        "            if True\n",
+        "test_a_counted_not_a_site_is_retired_with_its_reason_and_found_quotes",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: O7 takes back Oceania only",
+        SCOPE_REVIEW,
+        "        if e3_region(site) == OCEANIA and passes_date_cutoff(site):",
+        "        if passes_date_cutoff(site):",
+        "test_nothing_else_is_taken_back",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: O7 takes back rule (a) only",
+        SCOPE_REVIEW,
+        '        if not str(site["scope_reason"] or "").startswith("E3: period_start"):',
+        "test_nothing_else_is_taken_back",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 scope: a wave is at most 100 sites",
+        SCOPE_REVIEW,
+        "    chosen = set(sorted({c.site_id for c in plan.changes})[:MAX_SITES])",
+        "    chosen = set(sorted({c.site_id for c in plan.changes}))",
+        "test_a_wave_is_its_first_hundred_sites",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: one export plans one wave",
+        SCOPE_REVIEW,
+        '        if json.loads(earlier.read_text(encoding="utf-8"))["export_sha256"] == export.sha256:',
+        "test_a_second_wave_from_the_same_export_is_refused",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: a delivered wave is never replaced",
+        SCOPE_REVIEW,
+        '    if (target / "PLAN.jsonl").exists():',
+        "test_a_delivered_wave_is_never_replaced",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 scope: a wave writes something",
+        SCOPE_REVIEW,
+        "    if not plan.changes:",
+        "test_a_wave_with_nothing_to_write_is_refused",
+        SCOPE_REVIEW_TESTS,
+    ),
+    # -- the scope review's wave lane
+    Case(
+        "wd2 lane: a scope-review wave label is a date",
+        LANE,
+        r'SCOPE_REVIEW_LANE = re.compile(r"^scope-review-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")',
+        r'SCOPE_REVIEW_LANE = re.compile(r"^scope-review-(.+)\Z")',
+        "test_a_wave_label_resolves_and_nothing_else_does",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 lane: resolve_lane reaches the waves",
+        LANE,
+        "    if review is not None:",
+        "test_a_wave_label_resolves_and_nothing_else_does",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 lane: the premise holds the country",
+        LANE,
+        "    \"coalesce(u.country, 'NULL'), coalesce(u.period_start::text, 'NULL'), \"",
+        "    \"coalesce(u.period_start::text, 'NULL'), \"",
+        "test_the_premise_is_what_the_decision_rests_on_and_not_the_description",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "wd2 lane: the readback of a wave is its own",
+        APPLY,
+        "    if SCOPE_REVIEW_LANE.match(lane.name) is not None:",
+        "test_the_readback_counts_the_review_s_own_rows",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "wd2 lane: the country key SQL is the last part",
+        LANE,
+        "    return f\"lower(trim(replace({c}, rtrim({c}, replace({c}, ',', '')), '')))\"",
+        '    return f"lower(trim({c}))"',
+        "test_the_country_key_is_python_s_in_a_real_sql_engine",
+        SCOPE_TESTS,
+    ),
+    # -- the O7 rule
+    Case(
+        "wd2 o7: Oceania is placed before the Americas",
+        DATES,
+        '    if in_oceania(record.get("country"), record.get("lat"), lon):\n        return OCEANIA',
+        "    if False:\n        return OCEANIA",
+        "test_passes_date_cutoff",
+        O7_TESTS,
+    ),
+    Case(
+        "wd2 o7: the ISO codes are Oceania",
+        DATES,
+        "OCEANIA_COUNTRIES = OCEANIA_ISO_CODES | frozenset(",
+        "OCEANIA_COUNTRIES = frozenset(",
+        "test_oceania",
+        O7_TESTS,
+    ),
+    Case(
+        "wd2 o7: the key is the last comma part",
+        DATES,
+        '    return country.rsplit(",", 1)[-1].strip(" ").lower()',
+        '    return country.strip(" ").lower()',
+        "test_oceania",
+        O7_TESTS,
+    ),
+    Case(
+        "wd2 o7: the code of a state has its boxes",
+        DATES,
+        '    "us": _US_PACIFIC,\n',
+        "",
+        "test_a_state_s_code_has_the_state_s_boxes",
+        O7_TESTS,
+    ),
+    guard(
+        "wd2 o7: the box of a state needs the point",
+        DATES,
+        "    if lat is None or lon is None:",
+        "test_a_state_s_box_needs_the_point",
+        O7_TESTS,
+    ),
+    Case(
+        "wd2 o7: the cutoff is the region's",
+        DATES,
+        "    return date <= E3_CUTOFFS[region]",
+        "    return date <= DATE_CUTOFF_REST_OF_WORLD",
+        "test_passes_date_cutoff",
+        O7_TESTS,
+    ),
+    # -- the served image: the read and the pre-check
+    guard(
+        "wd2 img: a thumbnail URL names its file",
+        SERVED / "state.py",
+        '    if host.endswith("wikimedia.org") and "commons" in parts and "thumb" in parts:',
+        "test_file_of_url",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: the item image confirms",
+        SERVED / "precheck.py",
+        "    if names & set(p18):",
+        "test_the_item_s_image_confirms",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: category membership is direct",
+        SERVED / "precheck.py",
+        "    hit = sorted(set(p373) & set(info.categories))",
+        "    hit = sorted(set(p373))",
+        "test_a_subcategory_does_not_confirm",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a missing file is unconfirmed",
+        SERVED / "precheck.py",
+        "    if info.status != OK:",
+        "test_everything_else_is_unconfirmed",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: the harvest covers the read",
+        SERVED / "precheck.py",
+        "    if missing and not subset:",
+        "test_the_run_covers_the_read_or_names_a_subset",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a harvest site the read does not know",
+        SERVED / "precheck.py",
+        "    if stray and not subset:",
+        "test_a_harvest_of_every_curated_site_lists_the_retired_ones_too",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: a retired harvest site passes",
+        SERVED / "precheck.py",
+        "    stray = [sid for sid in harvest.qids if sid not in state.sites and sid not in state.retired]",
+        "    stray = [sid for sid in harvest.qids if sid not in state.sites]",
+        "test_a_harvest_of_every_curated_site_lists_the_retired_ones_too",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a site both shown and retired",
+        SERVED / "state.py",
+        "    if retired & set(sites):",
+        "test_a_site_both_shown_and_retired_is_refused",
+        SERVED_TESTS,
+    ),
+    # -- the served image: the Commons transport
+    guard(
+        "wd2 img: a busy host stops the command",
+        SERVED / "commons.py",
+        '        if response.status_code != 200:\n            raise CommonsError(f"{response.url}',
+        "test_a_busy_host_stops_the_command",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: the tracking query is dropped",
+        SERVED / "commons.py",
+        '    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))',
+        "    return url",
+        "test_imageinfo_drops_the_tracking_query",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a private address is never fetched",
+        SERVED / "commons.py",
+        "        if not is_public_http_url(url):",
+        "test_a_private_address_is_never_fetched",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: a picture is a still image",
+        SERVED / "commons.py",
+        '    if info["status"] != OK or info.get("mime") not in STILL_IMAGE_MIMES:',
+        '    if info["status"] != OK:',
+        "test_a_picture_is_a_still_image_with_its_rendering",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: no thumburl is no rendering",
+        SERVED / "commons.py",
+        '                    "render_url": plain_url(thumb) if thumb else None,',
+        '                    "render_url": plain_url(thumb or info["url"]),',
+        "test_a_file_without_a_rendering_has_no_render_url",
+        SERVED_TESTS,
+    ),
+    # -- the served image: the vision stages
+    Case(
+        "wd2 img: every served image is asked by default",
+        SERVED / "vision.py",
+        "    population: str = ALL,",
+        "    population: str = UNCONFIRMED_ONLY,",
+        "test_every_served_image_is_asked_by_default",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a gallery file at production size",
+        SERVED / "vision.py",
+        '        if size != row["file_size_bytes"]:',
+        "test_a_gallery_file_is_shown_only_at_production_s_size",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: every candidate gets a verdict",
+        SERVED / "vision.py",
+        "    if not isinstance(given, dict) or set(given) != set(labels):",
+        REPLACE_SHAPE,
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: no null pick while one depicts",
+        SERVED / "vision.py",
+        "        if depicting:",
+        REPLACE_SHAPE,
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: the pick depicts",
+        SERVED / "vision.py",
+        "    elif pick not in depicting:",
+        "    elif False:",
+        REPLACE_SHAPE,
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: a gallery pick before a Commons pick",
+        SERVED / "vision.py",
+        "    elif gallery and pick not in gallery:",
+        "    elif False:",
+        REPLACE_SHAPE,
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: a broken thumbnail is checked through its file",
+        SERVED / "vision.py",
+        "                behind = file_behind(pictures, served, source, exc)",
+        "                behind = None",
+        "test_a_thumbnail_whose_address_is_broken_is_checked_through_its_file",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a gone file behind a thumbnail is no picture",
+        SERVED / "vision.py",
+        "    if render is None:",
+        "test_a_broken_thumbnail_whose_file_is_gone_has_no_picture",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: the repair is the rendering shown",
+        SERVED / "vision.py",
+        '    return {"render_url": render, "stored_url": stored_url, "error": str(error)}, data',
+        '    return {"render_url": info["url"], "stored_url": stored_url, "error": str(error)}, data',
+        "test_a_thumbnail_whose_address_is_broken_is_checked_through_its_file",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a W candidate is a picture",
+        SERVED / "vision.py",
+        "        if shown is None:",
+        "test_a_candidate_is_a_still_picture_shown_as_its_rendering",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: an unserved rendering is listed",
+        SERVED / "vision.py",
+        '                unavailable.append(gone | {"detail": str(exc)})',
+        "                raise",
+        "test_a_rendering_that_is_not_served_is_listed_not_fatal",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: a W pick is stored as its rendering",
+        SERVED / "vision.py",
+        '                image_id, file, url = None, c["file"], c["picture_url"]',
+        '                image_id, file, url = None, c["file"], c["file"]',
+        "test_a_commons_pick_stores_the_rendering_the_agent_saw",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: no question, no handoff",
+        SERVED / "vision.py",
+        '    if record["questions"]:  # the handoff exists from its first question on (`OH.export`)',
+        "    if True:",
+        "test_a_check_without_questions_records_its_unfetchable_thumbnails",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: an export that asked nothing",
+        SERVED / "vision.py",
+        '    if stage == STAGE_REPLACE and record["questions"] == 0:',
+        "test_an_export_that_asked_nothing_has_nothing_to_import",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: the pre-check is the pinned one",
+        SERVED / "vision.py",
+        '    if ST.file_sha256(run / PC.PRECHECK_FILE) != record["precheck_sha256"]:',
+        "test_a_pre_check_run_again_after_the_check_export_is_refused",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: a record file is written once",
+        SERVED / "state.py",
+        "    if path.exists():",
+        "test_the_pre_check_is_written_once",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: the import checks the shown picture",
+        SERVED / "vision.py",
+        "            if hashlib.sha256(shown.read_bytes()).hexdigest() != question.jpeg_sha256:",
+        "test_the_import_refuses_a_changed_picture",
+        SERVED_TESTS,
+    ),
+    # -- the served image: the plan and its acceptance
+    Case(
+        "wd2 img: a confirmed image aligns the thumbnail",
+        SERVED / "plan.py",
+        "    changes = _thumb(site, target, RULE_ALIGN, reason, evidence)\n    return SitePlan(sid, CONFIRMED",
+        "    changes = []\n    return SitePlan(sid, CONFIRMED",
+        "test_a_confirmed_image_aligns_the_thumbnail",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: a repaired thumbnail gets its rendering",
+        SERVED / "plan.py",
+        "        if repair is None:\n            return SitePlan(sid, CONFIRMED, None, thumb)",
+        "        if True:\n            return SitePlan(sid, CONFIRMED, None, thumb)",
+        "test_a_depicting_file_behind_a_broken_thumbnail_repairs_the_address",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: the old hero loses its flag",
+        SERVED / "plan.py",
+        '            if row.get("is_hero") and int(row["id"]) != new_id:',
+        "test_a_gallery_pick_moves_the_hero",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: other sites leave a replaced gallery",
+        SERVED / "plan.py",
+        "        changes += _other_sites_out(sid, live, served, check, rep or {}, shown)\n",
+        "",
+        "test_a_gallery_pick_moves_the_hero",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: the served row of another site leaves",
+        SERVED / "plan.py",
+        '    if check["verdict"] == V.OTHER_SITE:',
+        "test_a_gallery_pick_excludes_the_served_row_that_shows_another_site",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: no pick leaves no thumbnail",
+        SERVED / "plan.py",
+        "        new_thumb = None\n",
+        '        new_thumb = site.get("thumbnail_url") or None\n',
+        "test_no_pick_clears_to_no_image",
+        SERVED_TESTS,
+    ),
+    Case(
+        "wd2 img: a row nobody judged is never excluded",
+        SERVED / "plan.py",
+        "        elif rid in labels and rep is not None:",
+        "        elif True:",
+        "test_a_live_row_nobody_judged_is_never_excluded",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: accept compares the served row",
+        SERVED / "plan.py",
+        '        if served != want["served_image_id"]:',
+        "test_every_difference_is_named",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: accept compares the thumbnail",
+        SERVED / "plan.py",
+        '        if (site["thumbnail_url"] or None) != want["thumbnail_url"]:',
+        "test_every_difference_is_named",
+        SERVED_TESTS,
+    ),
+    guard(
+        "wd2 img: accept names two heroes",
+        SERVED / "plan.py",
+        '        if len(heroes) > 1 or any(r["is_excluded"] for r in heroes):',
+        "test_two_heroes_or_an_excluded_hero_deviate",
+        SERVED_TESTS,
+    ),
+]
+CASES += WD2_CASES
+
+# ------------------------------------------------------ the WD1 structured-field lane (2026-09-26)
+FIELDS = REPO / "scripts/remediation/fields"
+FIELDS_LANE_TESTS = "tests/remediation/test_mechanical_fields_lane.py"
+FIELDS_ANSWER_TESTS = "tests/remediation/test_fields_answers.py"
+FIELDS_CLASSIFY_TESTS = "tests/remediation/test_fields_classify.py"
+FIELDS_HANDOFF_TESTS = "tests/remediation/test_fields_handoff.py"
+FIELDS_PLAN_TESTS = "tests/remediation/test_fields_plan.py"
+
+#: What the mechanical writer gained for WD1 (a column a lane may empty, the coordinate types, site
+#: invariants) and WD1's own guards (the answer checks, the identity rule, the write plan's
+#: refusals, the step gate). Every label starts with "wd1:", so the list runs on its own:
+#: `mutation_sweep.py wd1:`.
+WD1_CASES: list[Case] = [
+    guard(
+        "wd1: plan-side NULL to NULL is no change",
+        APPLY,
+        "    if r.old_value is None and r.new_value is None:",
+        "test_null_to_null_is_no_change",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: plan-side an emptied cell owns no value",
+        APPLY,
+        "    if lane_value is None:",
+        "test_an_emptied_owned_cell_owns_no_value",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: plan-side a double is read as a number",
+        APPLY,
+        '    if cell.sql_type == "double precision":',
+        "test_a_double_is_compared_as_a_number",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: guard 2 refuses NULL where a column does not clear",
+        APPLY,
+        "        if not cell.clears:",
+        "test_guard_2_lets_a_clearing_column_end_in_null",
+        FIELDS_LANE_TESTS,
+    ),
+    Case(
+        "wd1: site invariants run on the write only",
+        APPLY,
+        "    for invariant in () if rollback else lane.site_invariants:",
+        "    for invariant in lane.site_invariants:",
+        "test_the_site_invariants_run_after_the_write_and_only_on_the_write",
+        FIELDS_LANE_TESTS,
+    ),
+    Case(
+        "wd1: site invariants are rendered",
+        APPLY,
+        "    for invariant in () if rollback else lane.site_invariants:",
+        "    for invariant in ():",
+        "test_the_site_invariants_run_after_the_write_and_only_on_the_write",
+        FIELDS_LANE_TESTS,
+    ),
+    Case(
+        "wd1: every invariant gets its probe",
+        APPLY,
+        "    for invariant in lane.site_invariants:\n        # the first planned cell",
+        "    for invariant in ():\n        # the first planned cell",
+        "test_each_invariant_gets_a_probe_that_breaks_it",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: a site invariant's message is checked",
+        LANE,
+        "        if not _SAYS.match(self.says):",
+        "test_a_site_invariant_is_checked_before_it_is_spliced",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: site invariants belong to a cell lane",
+        LANE,
+        "            if self.site_invariants:",
+        "test_a_site_invariant_is_checked_before_it_is_spliced",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: answers rest on two families",
+        FIELDS / "answers.py",
+        "    if len(quotes) < 2 or len({source_family(q.url) for q in quotes}) < 2:",
+        "test_keep_and_replace_rest_on_two_families",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a replaced point moves more than a kilometre",
+        FIELDS / "answers.py",
+        "    if answer.decision == REPLACE and distance <= KEEP_KM:",
+        "test_replace_moves_more_than_a_kilometre",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a coarse coordinate quote cannot place a site",
+        FIELDS / "answers.py",
+        "    if step > MAX_GRID * (1 + 1e-9):",
+        "test_a_coarse_quote_is_read_within_its_own_digits",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a period quote carries a date",
+        FIELDS / "answers.py",
+        "        if not dated(quote):",
+        "test_every_quote_carries_a_date",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a type is quoted by its word",
+        FIELDS / "answers.py",
+        "    if not any(holds_stem(q, s) for _, q in answer.quotes for s in stems):",
+        "test_a_type_that_is_not_canonical_or_not_quoted_is_refused",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a source_url is quoted from its own page",
+        FIELDS / "answers.py",
+        "    if not any(_page_of(url) == value for url, _ in answer.quotes):",
+        "test_what_a_source_url_value_may_not_be",
+        FIELDS_ANSWER_TESTS,
+    ),
+    Case(
+        "wd1: a container puts the item in doubt",
+        FIELDS / "classify.py",
+        "    return Identity(bool(containers) and not held, containers)",
+        "    return Identity(False, containers)",
+        "test_a_container_that_holds_no_stored_type_puts_the_item_in_doubt",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a specific class speaks before a generic one",
+        FIELDS / "classify.py",
+        "    if specific:\n        labels = ",
+        "test_a_generic_type_beside_a_specific_class_is_a_downgrade",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a section redirect is a conflict",
+        FIELDS / "classify.py",
+        '        if record["fragment"]:',
+        "test_what_makes_an_article_a_conflict",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: the harvest and the stored export are one state",
+        FIELDS / "classify.py",
+        "        if not _agrees(site, row):",
+        "test_a_harvest_and_an_export_of_different_states_are_refused",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a quote that is not found does not count",
+        FIELDS / "handoff.py",
+        "            if failed:",
+        "test_a_quote_not_on_its_page_is_asked_again",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: the import refuses an edited prompt",
+        FIELDS / "handoff.py",
+        '            if OH.prompt_sha256(prompt) != line["prompt_sha256"]:',
+        "test_an_edited_prompt_is_refused_at_import",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    Case(
+        "wd1: an exhausted point is held, not cleared",
+        FIELDS / "handoff.py",
+        '            if field == "coordinates":\n                outcome = A.UNRESOLVED',
+        "            if False:\n                outcome = A.UNRESOLVED",
+        "test_after_the_last_round_a_field_is_cleared_and_a_point_held",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: a point that crosses a border is held",
+        FIELDS / "plan.py",
+        '            if not country["agrees"]:',
+        "test_a_point_that_crosses_a_border_is_held",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a decision about another value is refused",
+        FIELDS / "plan.py",
+        "        if current_text != stored_text:",
+        "test_a_decision_about_another_value_is_refused",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a start after the end is refused",
+        FIELDS / "plan.py",
+        "            if new is not None and end is not None and int(end) != 0 and int(new) > int(end):",
+        "test_a_start_after_the_end_is_refused",
+        FIELDS_PLAN_TESTS,
+    ),
+    Case(
+        "wd1: a zero end is no end",
+        FIELDS / "plan.py",
+        "end is not None and int(end) != 0 and int(new) > int(end):",
+        "end is not None and int(new) > int(end):",
+        "test_a_zero_end_is_no_end",
+        FIELDS_PLAN_TESTS,
+    ),
+    Case(
+        "wd1: a label follows its start",
+        FIELDS / "plan.py",
+        '    elif label != live["period_name"]:',
+        "    elif False:",
+        "test_a_label_follows_an_unchanged_start",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a step waits for the one before it",
+        FIELDS / "plan.py",
+        '    if not accepted.exists():\n        raise PlanError(f"step {step - 1} is not accepted',
+        "test_a_step_waits_for_the_one_before_it",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a deviation refuses the step",
+        FIELDS / "plan.py",
+        "    if found:",
+        "test_any_deviation_refuses_the_step",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a stacked point is a conflict",
+        FIELDS / "classify.py",
+        "    if stacked:",
+        "test_a_stacked_point_is_a_conflict_whatever_the_witnesses",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    Case(
+        "wd1: a retired site stacks nothing",
+        FIELDS / "classify.py",
+        '        if row["scope_status"] != "retired"\n    )',
+        "    )",
+        "test_a_point_another_live_site_holds_is_stacked",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    Case(
+        "wd1: a flag asks its field",
+        FIELDS / "classify.py",
+        "        return self.status in ASKED or bool(self.flags)",
+        "        return self.status in ASKED",
+        "test_a_flag_asks_a_field_the_machine_confirms",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: the seeds file must exist",
+        FIELDS / "classify.py",
+        '    if not path.exists():\n        raise ClassifyError(f"{path} is missing - run `seeds.py',
+        "test_the_seeds_must_be_there_and_well_formed",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a seed names a WD1 field",
+        FIELDS / "classify.py",
+        '        if tuple(seed) != SEED_KEYS or seed["field"] not in FIELDS:',
+        "test_the_seeds_must_be_there_and_well_formed",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: an empty source_url is asked",
+        FIELDS / "classify.py",
+        "    if kind == H.URL_NONE:",
+        "test_no_url_is_asked_for_and_a_search_url_is_a_conflict",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a stale url record is refused",
+        FIELDS / "harvest.py",
+        '    if record["source_url"] != site["source_url"]:\n        raise HarvestError(',
+        "test_a_record_of_another_url_is_asked_again_and_never_read",
+        "tests/remediation/test_fields_harvest.py",
+    ),
+    guard(
+        "wd1: a stale url record is asked again",
+        FIELDS / "harvest.py",
+        '        if record["source_url"] != site["source_url"]:\n            return True',
+        "test_a_record_of_another_url_is_asked_again_and_never_read",
+        "tests/remediation/test_fields_harvest.py",
+    ),
+    guard(
+        "wd1: a canary is no seed",
+        FIELDS / "seeds.py",
+        '        if (str(row["site_id"]), str(row["field"])) in planted:',
+        "test_a_counted_wrong_verdict_on_a_wd1_field_is_a_seed",
+        "tests/remediation/test_fields_seeds.py",
+    ),
+    guard(
+        "wd1: B13 takes only its two reasons",
+        FIELDS / "seeds.py",
+        '        if row["reason"] not in WRONG_BOTH_REASONS:',
+        "test_only_the_two_open_reasons_are_seeds",
+        "tests/remediation/test_fields_seeds.py",
+    ),
+    Case(
+        "wd1: a part takes only its own sites",
+        FIELDS / "classify.py",
+        '        lines = [line for line in lines if in_conflict_part(line) == (part == "conflict")]',
+        "        lines = list(lines)",
+        "test_the_two_parts_split_the_sites_by_conflict_or_flag",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: the prompt shows a flag",
+        FIELDS / "handoff.py",
+        '        if status["flags"]:',
+        "test_a_flag_and_an_empty_field_are_shown",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    # the review's fixes (2026-09-26)
+    guard(
+        "wd1: a period quote states the value",
+        FIELDS / "answers.py",
+        "    if not any(states_year(quote, year) for _, quote in answer.quotes):",
+        "test_a_quote_states_the_value_itself",
+        FIELDS_ANSWER_TESTS,
+    ),
+    Case(
+        "wd1: a type stem begins a word",
+        FIELDS / "answers.py",
+        'return re.search(r"(?<!\\w)" + re.escape(stem), fold(',
+        "return re.search(re.escape(stem), fold(",
+        "test_a_type_word_is_read_where_a_word_begins",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a source_url value is written as sent",
+        FIELDS / "answers.py",
+        "    if C.url_form(value) != value:",
+        "test_a_value_is_written_percent_encoded_and_without_a_fragment",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a source_url value is no section link",
+        FIELDS / "answers.py",
+        "    if fragment:",
+        "test_a_value_is_written_percent_encoded_and_without_a_fragment",
+        FIELDS_ANSWER_TESTS,
+    ),
+    Case(
+        "wd1: a quote URL is compared in its sent form",
+        FIELDS / "answers.py",
+        "    return C.url_form(Q.canonical_url(url)[0])",
+        "    return Q.canonical_url(url)[0]",
+        "test_a_quote_on_the_value_s_page_may_spell_its_url_either_way",
+        FIELDS_ANSWER_TESTS,
+    ),
+    Case(
+        "wd1: a name without a distinctive word is read whole",
+        FIELDS / "classify.py",
+        "    return any(_has_phrase(phrase, hay) for phrase in name_phrases(name))",
+        "    return False",
+        "test_names_it_reads_a_name_without_a_distinctive_word_whole",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a name's generic frame is dropped",
+        FIELDS / "classify.py",
+        "    if len(core) >= 2 and core != words:",
+        "test_names_it_reads_a_name_without_its_generic_frame",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    Case(
+        "wd1: a one-word core names nothing",
+        FIELDS / "classify.py",
+        "    if len(core) >= 2 and core != words:",
+        "    if core != words:",
+        "test_names_it_reads_a_name_without_its_generic_frame",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    Case(
+        "wd1: the same page reads the percent-encoding",
+        FIELDS / "classify.py",
+        'return host, unquote(parts.path).rstrip("/") or "/", unquote(parts.query)',
+        'return host, parts.path.rstrip("/") or "/", parts.query',
+        "test_a_percent_encoded_url_is_the_same_page",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a stored section link is a conflict",
+        FIELDS / "classify.py",
+        "    if urlsplit(url).fragment:",
+        "test_a_stored_section_link_is_a_conflict",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: one witness confirms nothing",
+        FIELDS / "classify.py",
+        "    if len(witnesses) == 1:",
+        "test_one_witness_confirms_nothing",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a pilot draws from the asked sites only",
+        FIELDS / "classify.py",
+        "    if size > len(asked):",
+        "test_a_pilot_is_a_seeded_sample_of_asked_sites",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    Case(
+        "wd1: a part without its pilot drops the pilot's sites",
+        FIELDS / "classify.py",
+        '        lines = [line for line in lines if line["site_id"] not in taken]',
+        "        lines = list(lines)",
+        "test_a_part_without_its_pilot_is_disjoint_from_it",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a transient fetch failure is forgotten",
+        FIELDS / "handoff.py",
+        '        if meta_path.exists() and transient(json.loads(meta_path.read_text(encoding="utf-8"))):',
+        "test_a_transient_failure_is_fetched_again_before_the_next_import",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    Case(
+        "wd1: a server error is transient",
+        FIELDS / "handoff.py",
+        "    return status is None or int(status) == 429 or int(status) >= 500",
+        "    return status is None",
+        "test_a_transient_failure_is_fetched_again_before_the_next_import",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    Case(
+        "wd1: an unreadable-only exhaustion is held",
+        FIELDS / "handoff.py",
+        '            elif tries[-1]["unreadable"]:',
+        "            elif False:",
+        "test_a_field_whose_pages_cannot_be_read_is_held_not_cleared",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    Case(
+        "wd1: a refuted quote is not unreadable",
+        FIELDS / "handoff.py",
+        "                blind = all(_unreadable_quote(r, pages) for r in failed)",
+        "                blind = True",
+        "test_a_quote_that_is_not_there_still_clears",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: a counted answer must still count",
+        FIELDS / "handoff.py",
+        '            if (attempt["round"], site, field) in before and not attempt["counted"]:',
+        "test_an_answer_that_counted_must_still_count",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: a re-ask never names a counted field",
+        FIELDS / "handoff.py",
+        "    if stale:",
+        "test_a_re_ask_never_names_a_field_with_a_counted_answer",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: a re-ask shows why the answer failed",
+        FIELDS / "handoff.py",
+        "        if field in notes:",
+        "test_a_re_ask_says_why_the_earlier_answer_did_not_count",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    Case(
+        "wd1: the latest counted answer decides",
+        FIELDS / "handoff.py",
+        "            chosen = counted[-1]",
+        "            chosen = counted[0]",
+        "test_when_two_rounds_count_the_latest_decides",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: a pilot waits for every re-ask",
+        FIELDS / "handoff.py",
+        '    if reask["fields"]:\n        waiting = sum(',
+        "test_a_pilot_is_reported_when_every_field_is_decided",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: a country above its rate stops the pilot",
+        FIELDS / "handoff.py",
+        '        if figures["fields"] >= PILOT_MIN_FIELDS and figures["clear_rate"] > PILOT_MAX_COUNTRY_RATE:',
+        "test_a_country_above_its_rate_stops_the_part",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    Case(
+        "wd1: the wave lists held fields",
+        FIELDS / "plan.py",
+        '        if d["decision"] in (A.UNRESOLVED, HO.HELD)',
+        '        if d["decision"] in (A.UNRESOLVED,)',
+        "test_the_wave_lists_every_held_field",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: an edited wave is refused",
+        FIELDS / "plan.py",
+        "    if _sha256_text(path) != pin:",
+        "test_an_edited_wave_is_refused",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a step holds at most 100 sites",
+        FIELDS / "plan.py",
+        "    if len(sites) > STEP_SITES:",
+        "test_a_step_holds_at_most_a_hundred_sites",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a held field is refused",
+        FIELDS / "plan.py",
+        '        if decision["decision"] == HO.HELD:',
+        "test_a_held_field_is_neither_written_nor_cleared",
+        FIELDS_PLAN_TESTS,
+    ),
+    Case(
+        "wd1: a point is written whole",
+        FIELDS / "plan.py",
+        "            broken = [v for v in group if not v.ok]",
+        "            broken = []",
+        "test_a_point_is_written_whole_or_not_at_all",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a start is written only with its label",
+        FIELDS / "plan.py",
+        "    if not named.ok and started:",
+        "test_a_start_is_written_only_with_its_label",
+        FIELDS_PLAN_TESTS,
+    ),
+    Case(
+        "wd1: a source_url value's own page is collected",
+        FIELDS / "handoff.py",
+        '            and a["field"] == "source_url"\n            and a["answer"]["decision"] in (A.KEEP, A.REPLACE)\n        }',
+        "            and False\n        }",
+        "test_a_value_is_fetched_itself_however_its_quotes_spell_it",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: the hand-off waits for every step",
+        FIELDS / "plan.py",
+        '        if not accepted.exists():\n            raise PlanError(f"step {number} is not accepted',
+        "test_the_hand_off_lists_what_the_accepted_steps_wrote",
+        FIELDS_PLAN_TESTS,
+    ),
+]
+CASES += WD1_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

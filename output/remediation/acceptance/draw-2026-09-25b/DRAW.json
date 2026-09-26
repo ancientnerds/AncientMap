@@ -1,0 +1,30 @@
+{
+ "after": [
+  {
+   "draw": "draw-2026-09-25",
+   "sample_sha256": "9511373575fc7cd603da8e149d04afedd63c8755cba81e7907a0fb03748e2097",
+   "seed": 20260925
+  }
+ ],
+ "canaries": 10,
+ "canary_seed": 20260927,
+ "draw_py_sha256": "0a12beb461eb6aca6c921a4677b08472b4c8ff5068afd06af88a1baaf452515e",
+ "drawn_at": "2026-09-25T18:11:20Z",
+ "excluded": 724,
+ "frame": 4919,
+ "journal_at_draw": {
+  "max_applied_at": "2026-09-25 18:05:06.225794+00",
+  "max_id": 73911,
+  "rows": 19200
+ },
+ "pool": 4195,
+ "redraw_py_sha256": "fd12f2091066841ea46be120b81b0cc93ff98d05290326dc176d41c94d733fc9",
+ "sample_size": 60,
+ "seed": 20260926,
+ "sha256": {
+  "CANARIES.jsonl": "cb88009d2d9aca91cb67b7b97e96d1a3c65b37b47ed8afd915c7c1084cc89c52",
+  "EXCLUDED.json": "bbc01d9e8ce0df04a105130960df5a799ca2cc2ae6e78fc5240973f63de55f0f",
+  "FRAME.jsonl": "2b9c81f480c7cdbdad050a829a9c8611422493dbf90c48f2837f2188ae9c48f8",
+  "SAMPLE.jsonl": "95356f094937e08f0fb0d5fcadc56f24d011aeaa9c44df0dae18475a9050f6fc"
+ }
+}

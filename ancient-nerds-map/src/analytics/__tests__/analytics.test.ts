@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { applyTrackingChoice, errorProps, isForeignError, newDepthSteps, outboundHost, TRACKING_OFF_KEY } from '../boot'
+import { applyTrackingChoice, errorProps, isForeignError, newDepthSteps, outboundHost, TRACKING_OFF_KEY, vitalProps } from '../boot'
 import { _queuedForTests, _resetForTests, cleanProps, MAX_VALUE_CHARS, pageType, searchTerm, track } from '../index'
 
 // vitest runs in node: no DOM, so the tests install a minimal fake `window`.
@@ -180,5 +180,44 @@ describe('applyTrackingChoice', () => {
     expect(applyTrackingChoice(new URL('https://ancientnerds.com/news.html'), s).choice).toBeNull()
     expect(applyTrackingChoice(new URL('https://ancientnerds.com/news.html?notrack=yes'), s).choice).toBeNull()
     expect(s.items.size).toBe(0)
+  })
+})
+
+describe('vitalProps', () => {
+  type Metric = Parameters<typeof vitalProps>[0]
+  const inp = (value: number, rating: string, attribution: object) =>
+    ({ name: 'INP', value, rating, attribution }) as unknown as Metric
+
+  it('keeps a good vital to its four fields', () => {
+    const good = inp(80, 'good', { inputDelay: 5, processingDuration: 40, presentationDelay: 35, loadState: 'complete' })
+    expect(vitalProps(good, 'globe')).toEqual({ name: 'INP', value: 80, rating: 'good', page: 'globe' })
+  })
+
+  it('says where a slow interaction went: its element, its longest phase, the input', () => {
+    const slow = inp(1908.4, 'poor', {
+      inputDelay: 40,
+      processingDuration: 120,
+      presentationDelay: 1748,
+      interactionTarget: 'canvas',
+      interactionType: 'pointer',
+      loadState: 'complete',
+    })
+    expect(vitalProps(slow, 'globe')).toEqual({
+      name: 'INP', value: 1908, rating: 'poor', page: 'globe',
+      phase: 'presentation', target: 'canvas', input: 'pointer', load: 'complete',
+    })
+  })
+
+  it('names the slow part of a slow LCP', () => {
+    const lcp = {
+      name: 'LCP', value: 5620, rating: 'poor',
+      attribution: { timeToFirstByte: 300, resourceLoadDelay: 2900, resourceLoadDuration: 900, elementRenderDelay: 1520, target: 'img.lyra-discovery-image' },
+    } as unknown as Metric
+    expect(vitalProps(lcp, 'radar')).toMatchObject({ phase: 'load_delay', target: 'img.lyra-discovery-image' })
+  })
+
+  it('rounds CLS to three places and adds nothing to it', () => {
+    const cls = { name: 'CLS', value: 0.28149, rating: 'poor', attribution: {} } as unknown as Metric
+    expect(vitalProps(cls, 'radar')).toEqual({ name: 'CLS', value: 0.281, rating: 'poor', page: 'radar' })
   })
 })

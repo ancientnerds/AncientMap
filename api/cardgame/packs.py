@@ -3,7 +3,7 @@
 import random
 import uuid
 
-from sqlalchemy import func
+from sqlalchemy import func, true
 from sqlalchemy.orm import Session
 
 from api.cardgame.constants import PACK_PRICES, RARITY_WEIGHTS, STAR_LEVELS
@@ -44,7 +44,7 @@ def _pick_card(session: Session, tier: int, owned_site_ids: set[uuid.UUID]) -> C
         .filter(
             CardStats.rarity_tier == tier,
             card_site_in_scope(),
-            CardStats.site_id.notin_(owned_site_ids) if owned_site_ids else True,
+            CardStats.site_id.notin_(owned_site_ids) if owned_site_ids else true(),
         )
         .order_by(func.random())
         .first()

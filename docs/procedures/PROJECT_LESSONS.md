@@ -112,12 +112,17 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   Every API boot upserts `public/data/card_descriptions.json` into `card_stats`
   (`api/services/card_descriptions.py`). Pushed first, the file would write the cards without a
   journal and the journalled P5 write would then refuse every row with matched_0; written to the
-  database only, a card is reverted at the next boot. The order is the P5 sitting of
-  `docs/procedures/CARD_DESCRIPTIONS.md`: pre-render the file from the plan, write through the
-  journal in steps of 100, regenerate the file from production byte for byte, push, then 0
-  `[STARTUP] Card description overwritten` lines on both API containers. A red CI inside the
-  sitting: `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'` plus `git revert` of the
-  JSON commit. *(design entry [6], production_write, 2026-09-23)*
+  database only, a card is reverted at the next boot. The order was the P5 sitting: pre-render the
+  file from the plan, write through the journal in steps of 100, regenerate the file from production
+  byte for byte, push, then 0 `[STARTUP] Card description overwritten` lines on both API
+  containers. A red CI inside the sitting: `scripts/remediation/phase4/revert4.py --stamp-like
+  'phase5:%'` plus `git revert` of the JSON commit. *(design entry [6], production_write,
+  2026-09-23)* Lane WB's teaser cards keep the order: accepted journalled steps, then
+  `mechanical/teaser.py card-file` renders the file from production, then the push - no other push
+  and no API restart in between (`docs/procedures/CARD_DESCRIPTIONS.md` 5.5). Their undo - also
+  for a red CI inside the sitting - rolls the steps back, closes them with `close-reverted` and
+  renders the file back from production with `card-file`: never a `git revert`, so main's file is
+  always the database's (5.5, 5.6). *(2026-09-26)*
 - **A `db.html` batch upload from a stale export overwrites rewritten descriptions.**
   `POST /api/sites/batch-upload` sets `description = COALESCE(:description, description)`
   (`api/routes/sites.py:1686`) with no old-value condition and no journal row, so an export taken
@@ -149,12 +154,22 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 
 ## Inhalte und Scope
 
-- **Das mittelalterliche Alte Welt ist als Scope verboten**, Amerika bis 1500 AD. Die Regel
+- **Das mittelalterliche Alte Welt ist als Scope verboten**, Amerika bis 1500 AD, Ozeanien seit
+  O7 (Eigentümer, 2026-09-26) ebenfalls bis 1500 AD (`pipeline/normalizers/dates.py`,
+  `e3_region`: Land, ISO-Code oder „Region, Land“; Hawaii/Rapa Nui über Inselboxen). Die Regel
   liegt als Prompt-LABEL (`summary.txt`, PERIOD SCOPE) vor, nicht als Datumscheck — nur
   1,45 % der Sites sind datiert. Sichtbarkeit ab `significance>=2`, Rückzug = HTTP 410.
   *(`project-medieval-scope-rule`, 2026-09-11)*
 - **Jede Zitatstelle muss maschinell belegbar sein.** LLM setzt nie Zitationsnummern.
   *(`feedback_no_ai_slop`, 2026-04-08)*
+- **A Commons `thumburl` is no proof of a picture, and an original is no thumbnail.**
+  `list=categorymembers&cmtype=file` lists every file of a category, and `prop=imageinfo` with
+  `iiurlwidth` answers a JPEG page or frame for a PDF, a WebM or a DjVu and Commons' file-type icon
+  for an MP3 or a FLAC (measured 2026-09-26): the MIME type decides what is a picture
+  (`scripts/remediation/served_image/commons.py`, `picture_url`). Store the 1280 px rendering a
+  check was shown, never the original - the first 12 originals of Category:Casa Grande Ruins
+  National Monument are 9.0-20.1 MB each, and a TIFF original is no `<img>` source.
+  *(WD2 review, 2026-09-26)*
 - **Kein Fallback- und Defensiv-Code** — Ursache fixen oder `available=False` mit klarem
   Grund. *(`feedback_no_fallbacks`, 2026-04-13; auch in `CLAUDE.md`)*
 - **MiniMax PAYG existiert nicht** — nie nennen, immer in der Quota planen. `total_tokens`
@@ -181,6 +196,13 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 - **Kein LLM-über-LLM zur Quellenprüfung** — für Zitat-Treue maschinell prüfen
   (Keyword-Matching). Das betrifft *Quellen*, nicht das Code-Review durch Prüfer.
   *(`feedback_no_ai_slop`)*
+- **Wikimedia sperrt einen User-Agent ohne Kontakt** (`403 Please respect our robot policy`,
+  mit httpx gemessen 2026-09-26); die öffentliche Projekt-URL als Kontakt genügt
+  (`AncientMapRemediation/1.0 (https://ancientnerds.com; research)` bekommt 200) — dafür braucht
+  es keine personenbezogenen Daten. Eine Bot-Sperre wird nie umgangen (auch nicht über einen
+  anderen TLS-Handshake): UNESCO WHC, Atlas Obscura, Britannica und Historic England antworten
+  mit 403 und gelten als maschinell nicht lesbar. *(WD1-Review, `docs/procedures/FIELDS_WD1.md`,
+  2026-09-26)*
 
 ## Nicht mehr gültig
 

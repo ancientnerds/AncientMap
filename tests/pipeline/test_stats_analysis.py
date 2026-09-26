@@ -1155,3 +1155,15 @@ def test_problems_list_eight_rows_by_default():
     ]
     assert len(fs.problems([], not_found=[], vitals=[], errors=errors)) == 8
     assert len(fs.problems([], not_found=[], vitals=[], errors=errors, limit=5)) == 5
+
+
+def test_a_slow_page_names_where_it_usually_loses_the_time():
+    """boot.ts sends the longest phase and the element of a vital that was
+    not good (2026-09-26); the row says the most frequent of each, and says
+    nothing where the rows predate it."""
+    base = {"page": "globe", "name": "INP", "p75": 1908.0, "samples": 19, "sessions": 12, **LAST}
+    with_where = {**base, "top_phase": "presentation", "top_target": "canvas"}
+    [row] = [p for p in fs.problems([], vitals=[with_where], not_found=[], errors=[]) if p["kind"] == "slow_page"]
+    assert row["detail"] == "p75 1908 ms against a 200 ms budget, 19 samples; mostly presentation at canvas"
+    [old] = [p for p in fs.problems([], vitals=[base], not_found=[], errors=[]) if p["kind"] == "slow_page"]
+    assert old["detail"] == "p75 1908 ms against a 200 ms budget, 19 samples"

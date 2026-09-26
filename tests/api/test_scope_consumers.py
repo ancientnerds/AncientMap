@@ -95,7 +95,9 @@ def public_api():
     from api.routes import public_v1
 
     app = public_v1.create_public_api()
-    db = RecordingSession()
+    # A COUNT(*) returns exactly one row in Postgres, and the routes read it with
+    # scalar_one(): answered here, every route runs to its last statement.
+    db = RecordingSession({"SELECT COUNT(*)": [(1,)]})
     app.dependency_overrides[public_v1.get_db] = lambda: db
     app.dependency_overrides[public_v1.rate_limit_dependency] = lambda: None
     with (
@@ -122,7 +124,8 @@ def public_api():
 )
 def test_public_api_site_reads_carry_the_scope_filter(public_api, path):
     client, db = public_api
-    client.get(path)
+    # 200: the route ran every statement it has, so all of them are checked below.
+    assert client.get(path).status_code == 200, path
     site_reads = [sql for sql in db.statements() if "unified_sites" in sql]
     assert site_reads, path
     for sql in site_reads:

@@ -66,3 +66,38 @@ class TestKeyIsComputedInPostgres:
     def test_caller_filters_by_matchable_source(self):
         src = inspect.getsource(_find_site_by_name)
         assert "UnifiedSite.source_id.in_(matchable_sources)" in src
+
+
+class TestTheCuratedNameMatchKeysInPostgres:
+    """Audit 2026-09-25 M10 (read-only part): `site_identifier._check_name_an_match` compared
+    `normalize_name()` with `name_normalized` - the Python key the module docstring above rules
+    out. It asks `_match_site_ids` with the raw name and keeps the curated rows."""
+
+    def test_the_raw_name_goes_to_the_postgres_key(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from pipeline.lyra import site_identifier as SI
+
+        asked: list[str] = []
+        monkeypatch.setattr(SI, "_match_site_ids", lambda session, name: asked.append(name) or {1})
+        session = MagicMock()
+        found = SI._check_name_an_match(session, "Ayşepınar")
+        assert asked == ["Ayşepınar"]
+        assert found is session.query.return_value.filter.return_value.order_by.return_value.first()
+
+    def test_no_python_key_is_compared_with_the_column(self):
+        from pipeline.lyra import site_identifier as SI
+
+        src = inspect.getsource(SI._check_name_an_match)
+        assert ".name_normalized" not in src and "UnifiedSiteName" not in src
+        assert '== "ancient_nerds"' in src
+
+    def test_no_match_is_no_query(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from pipeline.lyra import site_identifier as SI
+
+        monkeypatch.setattr(SI, "_match_site_ids", lambda session, name: set())
+        session = MagicMock()
+        assert SI._check_name_an_match(session, "Stonehenge") is None
+        session.query.assert_not_called()

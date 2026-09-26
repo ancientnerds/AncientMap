@@ -233,3 +233,35 @@ describe('useSiteSearch word by word', () => {
     expect(latest!.searchResults).toEqual([])
   })
 })
+
+describe('useSiteSearch with a typo', () => {
+  const site = (id: string, title: string, location: string): SiteData => ({ ...TEMPLE, id, title, location })
+  const BAALBEK = site('baalbek', 'Baalbek', 'Lebanon')
+  const GIZA = site('giza', 'Giza Necropolis', 'Egypt')
+  const CRETE = site('knossos', 'Knossos', 'Crete, Greece')
+
+  it('finds a name one letter off, as the visitors of 2026-09-17..26 typed it', () => {
+    render(baseOptions([BAALBEK, GIZA, CRETE]))
+    type('baalk')
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['baalbek'])
+    type('gize, egy')
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['giza'])
+  })
+
+  it('looks for typos only when nothing matched as typed', () => {
+    // A typo never outranks an exact match, and checking every site for one
+    // doubled the time a search takes
+    const exact = site('gizeh', 'Gize Plateau', 'Egypt')
+    render(baseOptions([GIZA, exact]))
+    type('gize')
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['gizeh'])
+  })
+
+  it('leaves a word too far off, and a short one, unmatched', () => {
+    render(baseOptions([BAALBEK, GIZA, CRETE]))
+    type('notswa')
+    expect(latest!.searchResults).toEqual([])
+    type('gix')
+    expect(latest!.searchResults).toEqual([])
+  })
+})

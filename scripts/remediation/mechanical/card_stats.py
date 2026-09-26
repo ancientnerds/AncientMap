@@ -798,7 +798,6 @@ class CardStatsPlan:
     counters: Mapping[str, int] = field(default_factory=dict)
     tier_moves: Mapping[tuple[int, int], int] = field(default_factory=dict)
     group_moves: Mapping[tuple[str, str], int] = field(default_factory=dict)
-    changed_sites: int = 0
 
 
 def _explain(column: str, row: Mapping[str, Any], stats: Mapping[str, Any], combos: int) -> str:
@@ -1009,7 +1008,6 @@ def build_card_stats_plan(
         counters=counters,
         tier_moves=dict(tier_moves),
         group_moves=dict(group_moves),
-        changed_sites=counters["changed_rows"],
     )
 
 

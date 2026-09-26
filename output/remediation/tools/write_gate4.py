@@ -10,11 +10,16 @@ batch's statements, and runs them.
     write_gate4.py --group P4 --run pilot --open-lanes W,S --apply --step 100
     write_gate4.py --group P4 --run pilot --accept accept-step-1.log         # after verify_writes4
     write_gate4.py --group P5 --run mass --close-reverted                   # after revert4 of it
-    write_gate4.py --group P5 --run mass --apply --round 2                  # write it again
     write_gate4.py --group L --legacy-plan LEGACY4.jsonl --apply --step 100  # lane L's own plan
+    write_gate4.py --group WC --wc-plan WC4.pilot.jsonl --apply --step 100   # lane WC's plans
+
+**Group P5 writes no card since 2026-09-26** (owner decisions O2 and O3: lane WB writes every
+card): `--rehearse` and `--apply` are refused for every run, a first round and a round 2 after a
+revert4 alike (`closed_group_problem`); its dry run, `--accept` and `--close-reverted` remain.
 
 **Dry run by default**: nothing is sent to production except the read-only questions a group needs
-(L and P5: which sites carry a live Phase-4 provenance; `--round 2` and up: whether the round
+(L and P5: which sites carry a live Phase-4 provenance; P5: which have a card_stats row;
+`--round 2` and up: whether the round
 before is reverted; a written batch whose re-plan leaves a site out: whether that site's rows are
 reverted), and the report says so.
 
@@ -35,16 +40,21 @@ command to run (`verify_writes4.py --lane --plan --run`, 0 deviations).
 continue" as a precondition, not a promise. Every written batch is recorded in `STEP.json` (and the
 lane's plan in `LANE_PLAN.jsonl`); while `STEP.json` exists, `--apply` writes nothing. `--accept
 <file>` reads the saved output of `verify_writes4.py` and records `ACCEPTED/step-NNNN.json` only when
-it ends in `ACCEPT_EXIT=0`, says `RESULT: 0 deviation(s)`, has one lane line of the step's lane
-whose stamps cover the step's, read at least the rows written so far under those stamps (every
-round, the reverted ones too: their rows stay in the journal), and accepted no earlier step
-(`acceptance_problems`).
+it is the output of one run - its lane line first, one `RESULT:` and one exit line - that ends in
+`RESULT: 0 deviation(s)` and `ACCEPT_EXIT=0`, whose lane line is the step's lane with stamps
+covering the step's, that read at least the rows written so far under those stamps (every round,
+the reverted ones too: their rows stay in the journal), that read the lane plan's current row
+count, that allows no later stamp pattern covering the step's own stamps, and that accepted no
+earlier step (`acceptance_problems`). A step is 1-100 sites (`STEP_MAX`); a stopped batch anywhere
+in the apply root stops every run, whatever `--batch` selects.
 
 **Write rounds** (the chunk number of the stamp). A batch taken back by `revert4` is written again
 as its next round: `--apply --round 2` re-opens a batch applied in round 1 only when production
 proves, read-only, that every row round 1 wrote has its own reversal kept (`revert4.reversal_read`,
-`prove_reverted`); round 1's `APPLIED.json` is then kept beside its statements in
-`chunks/chunk-0001/` with that proof (`REVERTED.json`), and chunk-0002 is rendered and written. A
+`prove_reverted`); round 1's `APPLIED.json` and `PLAN.jsonl` are then kept beside its statements
+in `chunks/chunk-0001/` with that proof (`REVERTED.json`), and chunk-0002 is rendered and written.
+Round 2 may be planned differently: the lane plan carries round 1's kept rows tagged with its stamp
+(`round_stamp`), and the acceptance judges round 1's reverted rows against them. A
 round the batch cannot take - round 3 over a live round 1, round 2 for a batch never written, round
 1 again for a re-opened one - is refused with `WRITE_EXIT=1`, never skipped. A step that was
 reverted before its acceptance can never be accepted (every link it wrote has a later one);
@@ -64,13 +74,18 @@ Which lanes may write (`--open-lanes`) is the pilot's verdict, and lanes T and R
 audit's cleared list (`--audited`, one site id per line). The verifier is `phase4.verify4`
 (`verify_site`, V1-V15), imported when group P4 is planned.
 
-**P4 and P5 plan under the owner's defect scope** (decision 2026-09-23, `phase4/scope4.py`):
-`SCOPE4.json`, read only when its bytes hash to the pin in `scope4.SCOPE_SHA256`. A site outside it
+**P4 and P5 plan under the owner's defect scope** (decision 2026-09-23, `phase4/scope4.py`): the
+current version's file (`SCOPE4.v3.json` since 2026-09-26), read only when its bytes hash to the pin
+in `scope4.SCOPE_SHA256`. A site outside it
 is refused (`outside-defect-scope`, counted on the "refused by rule" line) in both. There is no flag
 to switch it off: it is the owner's standing decision, and a new scope is a new pinned version,
 never an option of this tool. **Lane L is not scoped** (decision 2026-09-24, "Alle kennzeichnen"):
 it writes no text, only the provenance that shows the existing AI footnote, so it marks every
 March-AI text Phase 4 did not write, and the gate neither reads nor asks the scope for it.
+**A descriptions-only run** (scope version 3's plan, whose batches carry
+`scope4.DESCRIPTIONS_ONLY_MARK`) is written by P4 alone, each description with `card: null`; P5
+refuses all of its sites (`descriptions-only-plan`), so its P5 group is never run and nothing waits
+for it: lane WB writes those cards (owner decisions 2026-09-26, O2 and O3).
 
 **Lane L plans from its own plan, never from a run** (`--legacy-plan`, written by `plan4.py legacy`
 from a fresh read-only `plan4.py read`): every curated site, in batches of 15 numbered from p4-1001,
@@ -83,6 +98,19 @@ set is final - after the last P4 step is accepted (design, production_write, ORD
 site P4 writes later moves that site's `raw_data`, and P4's preflight then refuses the whole P4
 batch.
 
+**Lane WC plans from its own plans** (`--wc-plan`, once per WC run in run order: the pilot's, then
+the mass run's; `scripts/remediation/wc/cli.py build` writes each from the run's checked outcomes;
+owner decision O5 of 2026-09-26, runbook `docs/procedures/SENTENCE_CHECK.md`). Like L it takes no
+`--run` and no scope. Production is asked, read-only, for each planned site's description and
+`raw_data` (`wc_live`, windows of 200): a site whose text Phase 4 wrote since is refused
+(`written-by-p4`), one whose pair moved since it was checked (`moved-since-check`), so a later
+write elsewhere never blocks a whole batch at the preflight. A written site stays its batch's while
+its description and WC's own `raw_data` keys are the outcome's (lane WB stamps others later), and a
+site a later WC plan asks again is that plan's (`asked-again-later`); should two batches still both
+plan one site, nothing is rendered (`write4.wc_sites_planned_twice`). The apply root holds these
+plans' write batches or none (`wc_batches`). The step's acceptance is `verify_writes4.py --lane
+p4wc --plan <apply root>/LANE_PLAN.jsonl --allow-stamp 'wb-teaser-prov-%'`, which reads no run.
+
 Every run prints its own `WRITE_EXIT=` line; that line is what is read.
 """
 
@@ -94,7 +122,6 @@ import json
 import pathlib
 import re
 import sys
-import uuid
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -104,14 +131,17 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import lanes  # noqa: E402 - the lane's paths, the JSON-lines reader and the database seam
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import snapshot_plan as SP  # noqa: E402 - the one reader of a site-id list
 from phase3 import write_stage as W  # noqa: E402
-from phase3.run import read_jsonl  # noqa: E402
+from phase3.run import InputError, read_jsonl  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402 - the reversal read: what "reverted" means
 from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 from phase4 import write4 as W4  # noqa: E402
 
-APPLIED_FILE = "APPLIED.json"
+APPLIED_FILE = W4.APPLIED_FILE
+#: The owner's step (2026-09-21): after every hundred sites, a check - the most one step may write.
+STEP_MAX = W.DEFAULT_CHUNK_SIZE
 STOPPED_FILE = "STOPPED.json"
 #: A reverted round's proof, kept with its `APPLIED.json` beside its statements (`chunks/<label>/`).
 REVERTED_FILE = "REVERTED.json"
@@ -123,12 +153,20 @@ STEP_FILE = "STEP.json"
 ACCEPTED_DIR = "ACCEPTED"
 #: Every rendered write batch's plan rows, in batch order: the `--plan` the acceptance reads.
 LANE_PLAN_FILE = "LANE_PLAN.jsonl"
+#: The key a reverted round's archived plan row carries in `LANE_PLAN.jsonl`: that round's stamp.
+ROUND_STAMP = "round_stamp"
 #: The acceptance CLI (Track C, WB-C3) and the lines of its output `--accept` reads.
 VERIFY_TOOL = "output/remediation/tools/verify_writes4.py"
 ACCEPT_OK = "ACCEPT_EXIT=0"
 ACCEPT_CLEAN = "RESULT: 0 deviation(s)"
+ACCEPT_RESULT = "RESULT:"
+#: The line `verify_writes4` prints for its `--allow-stamp` patterns, space-separated after it.
+ACCEPT_ALLOWED = "allowed later: "
+#: Any tool's own exit line, its code the group: one run prints exactly one. `verify_writes4`
+#: reads its card check's exit line with this same pattern.
+EXIT_LINE = re.compile(r"^[A-Z][A-Z0-9_]*_EXIT=(\d+)$")
 _ACCEPT_LANE = re.compile(
-    r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows \d+ \| "
+    r"lane (?P<lane>\S+) \| stamps (?P<stamps>\S+) \| planned rows (?P<planned>\d+) \| "
     r"lane journal rows (?P<journal>\d+) \|"
 )
 #: The Phase-3 refusal rule under which the reviewer-cleared text defects were set aside.
@@ -158,20 +196,14 @@ def batch_dirs(run_dir: pathlib.Path, wanted: Sequence[str]) -> list[pathlib.Pat
 
 
 def read_audited(path: pathlib.Path | None) -> frozenset[str]:
-    """The independent audit's cleared site ids (lanes T and R): one UUID per line."""
+    """The independent audit's cleared site ids (lanes T and R), read by the one reader of a
+    site-id list (`snapshot_plan.read_site_ids`, with its site-id check)."""
     if path is None:
         return frozenset()
-    ids: set[str] = set()
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            uuid.UUID(text)
-        except ValueError:
-            raise SystemExit(f"{path}:{number}: {text!r} is not a site id") from None
-        ids.add(text)
-    return frozenset(ids)
+    try:
+        return frozenset(SP.read_site_ids(path, uuids=True))
+    except InputError as exc:
+        raise SystemExit(str(exc)) from None
 
 
 def open_lanes(value: str) -> frozenset[M.Lane]:
@@ -211,6 +243,28 @@ def written_sites(site_ids: Sequence[str], *, run: Any, window: int = 200) -> di
     return found
 
 
+#: The first line of `card_rows_sql`: how the tests' fake psql recognises the read.
+CARD_ROWS_READ = "-- the named sites that have a card_stats row (read-only)"
+
+
+def card_rows_sql(site_ids: Sequence[str]) -> str:
+    return (
+        f"{CARD_ROWS_READ}\n"
+        "SELECT to_jsonb(t)::text FROM (SELECT site_id::text AS site_id FROM card_stats "
+        f"WHERE site_id IN ({', '.join(f'{lanes.sql_text(s)}::uuid' for s in site_ids)})) t;\n"
+    )
+
+
+def card_row_sites(site_ids: Sequence[str], *, run: Any, window: int = 200) -> frozenset[str]:
+    """The named sites production holds a card_stats row for: P5 plans no card and no clear for
+    any other (`write4.RULE_NO_CARD_ROW`)."""
+    found: set[str] = set()
+    for start in range(0, len(site_ids), window):
+        for row in lanes.json_rows(run(card_rows_sql(site_ids[start : start + window]))):
+            found.add(str(row["site_id"]))
+    return frozenset(found)
+
+
 def phase3_card_findings(
     refused: pathlib.Path, run_dir: pathlib.Path
 ) -> dict[str, list[dict[str, Any]]]:
@@ -237,18 +291,47 @@ def phase3_card_findings(
 
 
 def _defect_scope() -> S.DefectScope:
-    """The owner's defect scope: the pinned `SCOPE4.json` and no other. A file that is not the pin
-    ends the run (`WRITE_EXIT=1`) before anything is planned."""
+    """The owner's defect scope: the current version's pinned file (`scope4.load_scope()`,
+    `SCOPE4.v3.json` since 2026-09-26) and no other. A file that is not the pin ends the run
+    (`WRITE_EXIT=1`) before anything is planned."""
     try:
         return S.load_scope()
     except S.ScopeError as exc:
         raise SystemExit(str(exc)) from None
 
 
+#: The owner's decisions of 2026-09-26 (O2, O3, `FINISH_PLAN_2026-09-26.md`): every card is lane
+#: WB's teaser. Refused for every run, not only a descriptions-only plan's (second review of lane
+#: WA, 2026-09-26): after a revert4 of a P5 step, `--apply --round 2` of the mass run would write
+#: its extractive cards again.
+P5_CLOSED = (
+    "group P5 writes no card since 2026-09-26 (owner decisions O2 and O3: lane WB writes every "
+    "card): --rehearse and --apply are refused for every run; its dry run, --accept and "
+    "--close-reverted remain"
+)
+
+
+def closed_group_problem(group: W4.Group, args: argparse.Namespace) -> str | None:
+    """Why this invocation would rehearse or write a group that writes nothing any more, or
+    `None`: group P5 (`P5_CLOSED`)."""
+    if group is W4.Group.P5 and (args.rehearse or args.apply):
+        return P5_CLOSED
+    return None
+
+
 def plan_source_problem(group: W4.Group, args: argparse.Namespace) -> str | None:
     """Why this invocation names the wrong source for its group, or `None`. One L population (owner
     decision 2026-09-24): lane L plans from its own plan and never from a run, whose batches would
-    put a site into a second write batch of the lane; P4 and P5 plan a run and never the L plan."""
+    put a site into a second write batch of the lane; P4 and P5 plan a run and never the L plan.
+    Lane WC plans from its own plans (`--wc-plan`) and nothing else."""
+    if group is W4.Group.WC:
+        if args.run is not None or args.legacy_plan is not None:
+            return "--run, --legacy-plan: lane WC plans from its own plans (--wc-plan) only"
+        if not args.wc_plan and not (args.accept or args.close_reverted):
+            return "--wc-plan: lane WC plans from the plans wc/cli.py build wrote; name each"
+        return None
+    if args.wc_plan:
+        return "--wc-plan: only lane WC plans from it"
     if group is W4.Group.L:
         if args.run is not None:
             return (
@@ -299,6 +382,80 @@ def legacy_batches(
     return [by_name[name] for name in wanted]
 
 
+def wc_batches(
+    paths: Sequence[pathlib.Path], wanted: Sequence[str], *, apply_root: pathlib.Path
+) -> tuple[list[W4.BatchInputs], dict[str, Any]]:
+    """Lane WC's plan batches (`write4.load_wc_plan`, every plan named, in order) and their
+    outcomes, or exactly the named batches. The apply root holds these plans' write batches or
+    none: a write batch of a WC plan not named here would enter the lane plan the acceptance reads
+    and be judged as one of these - it is named and nothing is planned."""
+    for path in paths:
+        if not path.is_file():
+            raise SystemExit(f"{path}: no such WC plan (wc/cli.py build writes it)")
+    # The pilot's verdict (the review of 2026-09-26): imported here, when a WC plan is planned, as
+    # the verifier is for P4 (`_verifier`).
+    from wc import cli as wc_cli
+
+    try:
+        approvals = wc_cli.pilot_approval(paths)
+    except wc_cli.WcRunError as exc:
+        raise SystemExit(str(exc)) from None
+    print(
+        "pilot passed: "
+        + ", ".join(f"{a['run']} (RESULT.json sha256 {a['result_sha256']})" for a in approvals)
+    )
+    whole, outcomes = W4.load_wc_plan(paths)
+    ours = {W4.group_batch_id(batch.batch_id, W4.Group.WC) for batch in whole}
+    prefix = W4.GROUP_PREFIX[W4.Group.WC]
+    foreign = sorted(
+        found.name
+        for found in apply_root.glob(f"{prefix}-*")
+        if found.is_dir() and found.name not in ours
+    )
+    if foreign:
+        raise SystemExit(
+            f"{apply_root}: holds write batches of a WC plan not named here, {foreign[:10]} "
+            f"({len(foreign)}): name every WC plan (--wc-plan, once each), or move them aside."
+        )
+    if not wanted:
+        return whole, outcomes
+    by_name = {batch.batch_id: batch for batch in whole}
+    missing = [name for name in wanted if name not in by_name]
+    if missing:
+        raise SystemExit(f"no WC plan batch {missing}")
+    return [by_name[name] for name in wanted], outcomes
+
+
+#: The first line of `wc_live_sql`: how the tests' fake psql recognises the read.
+WC_LIVE_READ = "-- lane WC: the live description and raw_data of the named sites (read-only)"
+
+
+def wc_live_sql(site_ids: Sequence[str]) -> str:
+    return (
+        f"{WC_LIVE_READ}\n"
+        "SELECT to_jsonb(t)::text FROM (SELECT id::text AS id, description, raw_data "
+        f"FROM unified_sites WHERE id IN ({', '.join(f'{lanes.sql_text(s)}::uuid' for s in site_ids)})"
+        ") t;\n"
+    )
+
+
+def wc_live(site_ids: Sequence[str], *, run: Any, window: int = 200) -> dict[str, dict[str, Any]]:
+    """Site id -> production's description and raw_data now, for every named site production
+    holds: what `write4.plan_wc` compares with the pair each site was checked with."""
+    found: dict[str, dict[str, Any]] = {}
+    for start in range(0, len(site_ids), window):
+        for row in lanes.json_rows(run(wc_live_sql(site_ids[start : start + window]))):
+            found[str(row["id"])] = {"description": row["description"], "raw_data": row["raw_data"]}
+    return found
+
+
+#: What the gate prints for lane WC instead of the scope line (owner decision O5, 2026-09-26).
+WC_UNSCOPED = (
+    "defect scope: not asked for lane WC - it checks every curated March text that stays "
+    "(owner decision O5, 2026-09-26)"
+)
+
+
 def _verifier() -> W4.Verifier:
     """`phase4.verify4.verify_site` (V1-V15), Track C's verifier. Imported here, when a P4 plan
     needs it, so the dry run of L and P5 does not depend on it."""
@@ -319,10 +476,6 @@ class Planned:
     @property
     def applied(self) -> bool:
         return (self.out / APPLIED_FILE).exists()
-
-    @property
-    def stopped(self) -> bool:
-        return (self.out / STOPPED_FILE).exists()
 
 
 def render(
@@ -345,6 +498,10 @@ def render(
     """
     out = apply_root / plan.batch_id
     chunk = W4.chunk_for(plan, write_round=write_round)
+    if (out / STOPPED_FILE).exists():
+        # What was attempted stays as it stopped - plan and statements - until a person has read
+        # it; `run_batches` writes nothing while it exists (audit 2026-09-25 m14).
+        return Planned(out=out, plan=plan, chunk=chunk)
     if (out / APPLIED_FILE).exists():
         record = _read(out / APPLIED_FILE)
         if record["write_round"] == write_round:
@@ -421,10 +578,10 @@ def sites_taken_back(
 def drop_unwritten_statements(out: pathlib.Path, *, write_round: int) -> None:
     """A plan of the batch without a row: the statements an earlier plan rendered for this round
     are not this plan's, and beside an empty `PLAN.jsonl` they would still write the old rows by
-    hand. They go - never a round's record (`APPLIED.json`, `REVERTED.json`) nor a stopped batch's
-    statements, which are what was attempted."""
+    hand. They go - never a round's record (`APPLIED.json`, `REVERTED.json`). A stopped batch never
+    gets here: `render` leaves it as it stopped."""
     directory = out / W4.CHUNKS_DIR / f"chunk-{write_round:04d}"
-    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE, out / STOPPED_FILE)
+    kept = (directory / APPLIED_FILE, directory / REVERTED_FILE)
     if not directory.is_dir() or any(path.exists() for path in kept):
         return
     for name in (W4.APPLY_FILE, W4.REHEARSE_FILE, W4.ROLLBACK_FILE):
@@ -477,9 +634,12 @@ def prove_reverted(
 
 
 def archive_round(out: pathlib.Path, record: Mapping[str, Any], proof: Mapping[str, Any]) -> None:
-    """Keep a reverted round's record beside its statements (`chunks/<label>/`): the proof first,
-    then its `APPLIED.json` moved there. The batch is open for its next round."""
+    """Keep a reverted round's record beside its statements (`chunks/<label>/`): the plan it was
+    written from, the proof, then its `APPLIED.json` moved there. The batch is open for its next
+    round, whose plan may differ: the acceptance judges this round's reverted rows against the plan
+    kept here (audit 2026-09-25 E5)."""
     directory = out / W4.CHUNKS_DIR / record["chunk"]
+    (directory / W4.PLAN_FILE).write_bytes((out / W4.PLAN_FILE).read_bytes())
     _mark(directory, REVERTED_FILE, proof)
     (out / APPLIED_FILE).replace(directory / APPLIED_FILE)
 
@@ -538,10 +698,23 @@ def pending_step(apply_root: pathlib.Path) -> dict[str, Any] | None:
 def write_lane_plan(apply_root: pathlib.Path) -> pathlib.Path:
     """Every rendered write batch's `PLAN.jsonl`, in batch order, as one file: the plan the
     acceptance compares the lane's whole journal against (a journal row outside it is a deviation,
-    a planned row not written yet is a later step)."""
+    a planned row not written yet is a later step). After them, every reverted round's own plan,
+    each row tagged `round_stamp` with that round's stamp: the acceptance judges the round's
+    reverted journal rows against it, never against a later round's re-plan (audit E5). A
+    reverted round that keeps no plan is refused - its rows could not be judged."""
     lines: list[str] = []
     for plan in sorted(apply_root.glob(f"*/{W4.PLAN_FILE}")):
         lines.extend(line for line in plan.read_text(encoding="utf-8").splitlines() if line)
+    for proof in sorted(apply_root.glob(f"*/{W4.CHUNKS_DIR}/*/{REVERTED_FILE}")):
+        kept = proof.parent / W4.PLAN_FILE
+        if not kept.exists():
+            raise SystemExit(f"{proof.parent}: a reverted round that keeps no PLAN.jsonl")
+        stamp = _read(proof.parent / APPLIED_FILE)["run_stamp"]
+        lines.extend(
+            json.dumps({**json.loads(line), ROUND_STAMP: stamp}, ensure_ascii=False, sort_keys=True)
+            for line in kept.read_text(encoding="utf-8").splitlines()
+            if line
+        )
     path = apply_root / LANE_PLAN_FILE
     path.write_text("".join(line + "\n" for line in lines), encoding="utf-8", newline="\n")
     return path
@@ -581,20 +754,38 @@ def like_matches(pattern: str, stamp: str) -> bool:
 
 
 def acceptance_problems(
-    text: str, *, step: Mapping[str, Any], written: Sequence[Mapping[str, Any]], used: set[str]
+    text: str,
+    *,
+    step: Mapping[str, Any],
+    written: Sequence[Mapping[str, Any]],
+    used: set[str],
+    planned: int,
 ) -> list[str]:
     """Why `text` (the output of one `verify_writes4.py` run) does not accept `step`; empty = it
     does. It must end in `ACCEPT_EXIT=0` with 0 deviations, be the step's own lane, match every stamp
     the step wrote, have read at least every row written so far under the stamps it read - every
     round in `written`, the reverted ones too (so it was run after this step, not before it, not
     even between a revert and the round written after it) - and not be an output an earlier step was
-    accepted on."""
+    accepted on.
+
+    The output is one whole run (audit 2026-09-25 M1): its lane line first, exactly one `RESULT:`
+    line and one `*_EXIT=` line, the clean result right before `ACCEPT_EXIT=0`. A failing lane run
+    with a clean run of another mode appended to it is not an acceptance."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     problems: list[str] = []
+    results = sum(1 for line in lines if line.startswith(ACCEPT_RESULT))
+    exits = sum(1 for line in lines if EXIT_LINE.match(line))
+    if results != 1 or exits != 1:
+        problems.append(
+            f"the output holds {results} RESULT line(s) and {exits} exit line(s): "
+            "not the output of one run"
+        )
     if not lines or lines[-1] != ACCEPT_OK:
         problems.append(f"the output does not end in {ACCEPT_OK}")
-    if ACCEPT_CLEAN not in lines:
-        problems.append(f"the output does not say {ACCEPT_CLEAN!r}")
+    if len(lines) < 2 or lines[-2] != ACCEPT_CLEAN:
+        problems.append(f"the output does not say {ACCEPT_CLEAN!r} right before its exit line")
+    if not lines or not _ACCEPT_LANE.match(lines[0]):
+        problems.append("the output does not begin with its lane line")
     heads = [found for line in lines if (found := _ACCEPT_LANE.match(line))]
     if len(heads) != 1:
         problems.append(f"the output has {len(heads)} lane line(s), not one")
@@ -610,6 +801,24 @@ def acceptance_problems(
         for record in written
         if like_matches(head["stamps"], record["run_stamp"])
     )
+    # Tied to this lane plan and to this step (audit 2026-09-25 m16): the output read the lane
+    # plan's current rows, and no `--allow-stamp` pattern covers a stamp the step wrote - under
+    # such a pattern every later write of any lane would count as superseded.
+    if int(head["planned"]) != planned:
+        problems.append(
+            f"the output read planned rows {head['planned']}, the lane plan holds {planned}"
+        )
+    allowed = next(
+        (
+            line.removeprefix(ACCEPT_ALLOWED).split()
+            for line in lines
+            if line.startswith(ACCEPT_ALLOWED)
+        ),
+        [],
+    )
+    covering = [p for p in allowed if any(like_matches(p, stamp) for stamp in step["stamps"])]
+    if covering:
+        problems.append(f"the output allows later stamps {covering[0]!r} that cover the step's own")
     if int(head["journal"]) < written_rows:
         problems.append(
             f"the output read {head['journal']} lane journal row(s), {written_rows} are written: "
@@ -632,6 +841,9 @@ def accept_step(apply_root: pathlib.Path, output: pathlib.Path) -> int:
         step=step,
         written=written_rounds(apply_root),
         used={record["output_sha256"] for record in accepted},
+        planned=sum(
+            ROUND_STAMP not in row for row in lanes.read_jsonl(apply_root / LANE_PLAN_FILE)
+        ),
     )
     if problems:
         for problem in problems:
@@ -674,7 +886,9 @@ def run_batches(
     acceptance (`--accept`), `--apply` writes nothing. Every batch written here is recorded in a
     fresh `STEP.json` before the next one starts.
     """
-    stopped = [item.out.name for item in planned if item.stopped]
+    # Every batch of the apply root, not only the ones this run selected (`--batch`): a stopped
+    # batch anywhere is unread evidence, and no other batch is written past it (audit M4).
+    stopped = sorted(path.parent.name for path in apply_root.glob(f"*/{STOPPED_FILE}"))
     if stopped:
         print(
             f"STOP: {len(stopped)} batch(es) stopped in an earlier run and were never marked "
@@ -710,6 +924,17 @@ def run_batches(
                 _mark(item.out, STOPPED_FILE, {"batch_id": item.out.name, "error": str(exc)})
             print(f"STOP at {item.out.name}: {exc}")
             return 1
+        except W.OutcomeUnknown as exc:
+            # psql did not answer: the COMMIT may have landed. The batch is stopped as unknown, so
+            # the next run refuses it until the journal was read; the exit line says 5.
+            if not rehearse:
+                _mark(
+                    item.out,
+                    STOPPED_FILE,
+                    {"batch_id": item.out.name, "outcome": "unknown", "error": str(exc)},
+                )
+            print(f"STOP at {item.out.name}: the outcome is UNKNOWN")
+            raise
         report = outcome.to_dict()
         print(json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
         if not outcome.ok:
@@ -730,8 +955,8 @@ def run_batches(
         print(
             f"STEP COMPLETE: {written_sites} site(s) written in {len(written)} batch(es). Accept "
             f"it before the next step: {VERIFY_TOOL} --lane {lane} --plan "
-            f"{apply_root / LANE_PLAN_FILE} (0 deviations; lane L re-runs no verifier and reads "
-            "no run), then --accept <its output>."
+            f"{apply_root / LANE_PLAN_FILE} (0 deviations; lanes p4l and p4wc read no run), "
+            "then --accept <its output>."
         )
         return 0
     print(
@@ -751,6 +976,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--legacy-plan", default=None, help="L: lane L's own plan, LEGACY4.jsonl (plan4.py legacy)"
     )
+    parser.add_argument(
+        "--wc-plan",
+        action="append",
+        default=[],
+        help="WC: a WC plan (wc/cli.py build), once per WC run, in run order",
+    )
     parser.add_argument("--run-root", default=None, help="override phase4_runner/runs")
     parser.add_argument("--batch", action="append", default=[], help="only these plan batches")
     parser.add_argument(
@@ -764,7 +995,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--audited", default=None, help="P4: the audit's cleared ids (T and R)")
     parser.add_argument("--phase3-refused", default=str(lanes.lane().refused))
     parser.add_argument("--phase3-run", default=str(lanes.lane().run_dir))
-    parser.add_argument("--step", type=int, default=100, help="sites per step (--apply)")
+    parser.add_argument(
+        "--step", type=int, default=STEP_MAX, help=f"sites per step (--apply), 1-{STEP_MAX}"
+    )
     parser.add_argument("--host", default=lanes.HOST)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--rehearse", action="store_true")
@@ -791,22 +1024,33 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     group = W4.Group(args.group)
     lane = lanes.lane(W4.GROUP_PREFIX[group])
     apply_root = pathlib.Path(args.apply_root) if args.apply_root else lane.apply_root
-    problem = plan_source_problem(group, args)
+    problem = plan_source_problem(group, args) or closed_group_problem(group, args)
     if problem is not None:
         raise SystemExit(problem)
-    if args.step < 1:
-        raise SystemExit("--step: at least one site per step")
+    if not 1 <= args.step <= STEP_MAX:
+        raise SystemExit(
+            f"--step: at least one site per step, at most {STEP_MAX} sites per step (owner, "
+            "2026-09-21: after every hundred, a check)"
+        )
     if args.accept:
         return accept_step(apply_root, pathlib.Path(args.accept))
     if args.close_reverted:
         return close_reverted_step(apply_root, runner=runner, host=args.host)
     run_dir: pathlib.Path | None
+    wc_outcomes: dict[str, Any] = {}
     if group is W4.Group.L:
         plan_path = pathlib.Path(args.legacy_plan)
         batches = legacy_batches(plan_path, args.batch, apply_root=apply_root)
         run_dir = None
         source = (
             f"legacy plan {plan_path} (sha256 {hashlib.sha256(plan_path.read_bytes()).hexdigest()})"
+        )
+    elif group is W4.Group.WC:
+        paths = [pathlib.Path(path) for path in args.wc_plan]
+        batches, wc_outcomes = wc_batches(paths, args.batch, apply_root=apply_root)
+        run_dir = None
+        source = "WC plans " + ", ".join(
+            f"{path} (sha256 {hashlib.sha256(path.read_bytes()).hexdigest()})" for path in paths
         )
     else:
         run_dir = pathlib.Path(args.run_root or lane.run_dir) / args.run
@@ -818,6 +1062,13 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     if group is W4.Group.L:
         print(LEGACY_UNSCOPED)
         options = {}
+    elif group is W4.Group.WC:
+        print(WC_UNSCOPED)
+        live = wc_live(site_ids, run=lambda sql: W._exec(runner, sql, host=args.host))
+        print(
+            f"live description and raw_data: {len(live)} of {len(site_ids)} planned sites (read-only)"
+        )
+        options = {"outcomes": wc_outcomes, "live": live}
     else:
         scope = _defect_scope()
         print(
@@ -825,6 +1076,12 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
             f"{sum(site_id in scope for site_id in site_ids)} of the run's {len(site_ids)} sites"
         )
         options = {"scope": scope}
+        only = sum(batch.descriptions_only for batch in batches)
+        print(
+            f"descriptions-only batches ({S.DESCRIPTIONS_ONLY_MARK}): {only} of {len(batches)} - "
+            "P4 writes their descriptions with card: null, P5 plans none of their sites (owner "
+            "decisions 2026-09-26, O2 and O3: lane WB writes the cards)"
+        )
     if group is W4.Group.P4:
         options["open_lanes"] = open_lanes(args.open_lanes)
         if not options["open_lanes"]:
@@ -834,27 +1091,42 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         # The run's own ledger and no other: pilots reuse the batch ids p4-0001 .., so a ledger
         # shared across runs would put one pilot's calls into another's journal evidence.
         options["ledger"] = read_jsonl(run_dir / M.LEDGER_FILE)
-    else:
+    elif group is not W4.Group.WC:
         live = written_sites(site_ids, run=lambda sql: W._exec(runner, sql, host=args.host))
         options["written"] = live
         print(f"live phase-4 provenance: {len(live)} of {len(site_ids)} planned sites (read-only)")
         if group is W4.Group.P5:
+            options["card_rows"] = card_row_sites(
+                site_ids, run=lambda sql: W._exec(runner, sql, host=args.host)
+            )
             options["card_findings"] = phase3_card_findings(
                 pathlib.Path(args.phase3_refused), pathlib.Path(args.phase3_run)
             )
 
     waiting = pending_step(apply_root)
     frozen = frozenset(waiting["batches"]) if waiting is not None else frozenset()
+    plans = [W4.plan_writes(batch, group=group, **options) for batch in batches]
+    if group is W4.Group.WC:
+        twice = W4.wc_sites_planned_twice(plans)
+        if twice:
+            raise SystemExit(
+                "one WC site, one planning batch - nothing is rendered: "
+                + "; ".join(
+                    f"{site} is planned by {' and '.join(ids)}" for site, ids in twice.items()
+                )
+                + ". Two chunks read before either was written claim it: rebuild the later chunk "
+                "with --exclude for these sites (docs/procedures/SENTENCE_CHECK.md, section 4)."
+            )
     planned = [
         render(
             apply_root,
-            W4.plan_writes(batch, group=group, **options),
+            plan,
             write_round=args.round,
             frozen=frozen,
             runner=runner,
             host=args.host,
         )
-        for batch in batches
+        for plan in plans
     ]
     rows = sum(len(item.plan.rows) for item in planned)
     refused: dict[str, int] = {}

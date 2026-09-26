@@ -1,0 +1,40 @@
+{
+ "D1": {
+  "failures": [],
+  "holds": true
+ },
+ "D2": {
+  "failures": [],
+  "holds": true
+ },
+ "D3": {
+  "failures": [],
+  "holds": true
+ },
+ "D4": {
+  "failures": [],
+  "holds": true
+ },
+ "D5": {
+  "failures": [],
+  "holds": true
+ },
+ "D6": {
+  "failures": [],
+  "holds": true,
+  "outside_e3_without_decision": 0,
+  "retired": 78
+ },
+ "all_hold": true,
+ "api": {
+  "fields": "globe",
+  "sites_served": {
+   "ancient_nerds": 4926
+  },
+  "url": "https://ancientnerds.com/api/sites/all"
+ },
+ "checked_at": "2026-09-25T18:11:30+00:00",
+ "export_sha256": "71277231e2b5a8e62d7c4637bff2633bafa70b365be30274652774d05b40bf36",
+ "exported_at": "2026-09-25 18:11:28.718459+00",
+ "sample_sha256": "95356f094937e08f0fb0d5fcadc56f24d011aeaa9c44df0dae18475a9050f6fc"
+}

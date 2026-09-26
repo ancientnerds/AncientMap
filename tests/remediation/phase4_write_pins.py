@@ -259,6 +259,21 @@ BEGIN
         RAISE EXCEPTION 'revert: % journal row(s) are outside the phase-4/5 targets', bad;
     END IF;
 
+    -- guard: a site's text is not reverted while its phase-5 card, pinned by that text's
+    -- provenance, is live
+    SELECT count(*) INTO bad FROM remediation_change_log l
+     WHERE l.id = ANY(ids) AND l.run_stamp LIKE 'phase4:%'
+       AND EXISTS (SELECT 1 FROM remediation_change_log p
+                    WHERE p.site_id_ref = l.site_id_ref
+                      AND p.run_stamp LIKE 'phase5:%'
+                      AND p.run_stamp NOT LIKE '%-rollback'
+                      AND NOT EXISTS (SELECT 1 FROM remediation_change_log k
+                          WHERE k.change_key = p.change_key || '-rollback'
+                            AND k.run_stamp = p.run_stamp || '-rollback'));
+    IF bad > 0 THEN
+        RAISE EXCEPTION 'revert: % phase-4 row(s) of site(s) whose phase-5 card is live - revert the phase-5 card first', bad;
+    END IF;
+
     -- newest first; each row's conditional WHERE needs it to hold its written value
     FOR r IN SELECT * FROM remediation_change_log l
               WHERE l.id = ANY(ids) ORDER BY l.id DESC LOOP

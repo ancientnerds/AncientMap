@@ -1,9 +1,10 @@
 """Export one site's short-video inputs to `video-assets/shorts/<slug>/site.json`.
 
 Reads the card text and rarity from `card_stats`, the site row from
-`unified_sites` (with the card hash its `_description_provenance` pins, for the
-audit's S13 check), and every non-excluded Commons image with its attribution
-from `wiki_images`. Raw SQL on purpose: `card_stats` is an api-side model and the
+`unified_sites` (with the card hash its provenance pins, for the audit's S13
+check: a lane-WB teaser's `_card_provenance`, else the Phase-5 card key of
+`_description_provenance`), and every non-excluded Commons image with its
+attribution from `wiki_images`. Raw SQL on purpose: `card_stats` is an api-side model and the
 import-linter forbids pipeline -> api imports.
 """
 
@@ -18,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from pipeline.sites_html_renderer import site_path
+from pipeline.utils import card_provenance as teaser
 from pipeline.utils.public_sites import RETIRED, not_retired
 from pipeline.utils.slugs import slugify
 
@@ -187,7 +189,8 @@ _SITE_SQL = text(
            c.antiquity, c.fortification, c.cultural_influence, c.mystery, c.legacy,
            c.civilization,
            s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256'
-               AS card_text_sha256
+               AS card_text_sha256,
+           s.raw_data -> '_card_provenance' AS card_provenance
     FROM unified_sites s
     JOIN card_stats c ON c.site_id = s.id
     WHERE s.id = CAST(:site_id AS uuid)
@@ -218,9 +221,25 @@ _LOOKUP_SQL = text(
 )
 
 
+def card_pin_and_mark(row: Mapping) -> tuple[str | None, str | None]:
+    """The card hash S13 may narrate and the card's AI mark, from the row's provenance.
+
+    A lane-WB teaser provenance (`pipeline.utils.card_provenance`) is the card's only statement
+    once it exists: its hash while the description is the one the card was checked against (a
+    stale card is not narrated), and `generated` while it hashes the card. Without it, the Phase-5
+    card key of `_description_provenance` pins the card as before, and no AI note is claimed.
+    """
+    if row["card_provenance"] is None:
+        return row["card_text_sha256"], None
+    provenance = teaser.validate(row["card_provenance"])
+    card = (row["card_description"] or "").strip()
+    return teaser.shorts_pin(provenance, row["description"]), teaser.card_ai(provenance, card)
+
+
 def assemble_site(row: Mapping, images: list[Mapping]) -> dict:
     """Pure: shape one site row plus its image rows into the site.json record."""
     tier = int(row["rarity_tier"] or 1)
+    card_pin, card_ai = card_pin_and_mark(row)
     return {
         "id": row["id"],
         "name": row["name"],
@@ -234,9 +253,12 @@ def assemble_site(row: Mapping, images: list[Mapping]) -> dict:
         "period_name": row["period_name"],
         "page_path": site_path(row["country"] or "", row["name"], row["id"]),
         "card_text": (row["card_description"] or "").strip(),
-        # The sha256 the card's provenance pins (Phase 5); None when the card
-        # has none. The audit's S13 check compares it with the narrated text.
-        "card_text_sha256": row["card_text_sha256"],
+        # The sha256 the card's provenance pins (a lane-WB teaser, or Phase 5);
+        # None when the card has none or a teaser is stale. The audit's S13
+        # check compares it with the narrated text.
+        "card_text_sha256": card_pin,
+        # "generated" for a lane-WB teaser card: the description's AI note.
+        "card_ai": card_ai,
         "description": (row["description"] or "").strip(),
         "rarity_tier": tier,
         "rarity_name": RARITY_NAMES[tier],

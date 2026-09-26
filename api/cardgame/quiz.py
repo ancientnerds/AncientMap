@@ -294,7 +294,7 @@ def submit_quiz_answers(
         .filter(QuizSession.id == quiz.id)
         .populate_existing()
         .with_for_update()
-        .first()
+        .one()
     )
     if quiz.score is not None:
         raise QuizAlreadySubmittedError("Quiz already submitted")
@@ -305,7 +305,7 @@ def submit_quiz_answers(
         .filter(DiscordUser.id == user.id)
         .populate_existing()
         .with_for_update()
-        .first()
+        .one()
     )
 
     correct = 0

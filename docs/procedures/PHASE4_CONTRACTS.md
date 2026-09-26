@@ -987,7 +987,8 @@ fields section 6 lists. What the design left open, and how the writer settled it
      (the proof) and removes `STEP.json`. A row still live refuses the whole close. Until the step
      is accepted or closed, its batches are frozen: `--round` does not re-open them.
   2. `write_gate4.py --group <G> --run <run> --apply --round 2 --step 100` (the same `--round` for
-     every step of the second sitting). A batch applied in round 1 is re-opened on the proof (its
+     every step of the second sitting; `<G>` is P4 - group P5 rehearses and writes nothing for any
+     run since 2026-09-26, section 12). A batch applied in round 1 is re-opened on the proof (its
      round-1 record kept as in 1), and chunk-0002 is rendered and written. A round the batch cannot
      take is refused with `WRITE_EXIT=1`, never skipped: `--round 3` over a round-1 batch, `--round
      2` for a batch never written (name the reverted batches with `--batch`, or write the others
@@ -1110,14 +1111,14 @@ owner decision, ranks above the design.
 
 - **The scope is data, pinned.** `phase4/scope4.py` derives it; `phase4_runner/SCOPE4.json` (v1,
   sha256 `19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a`, pinned in
-  `scope4.SCOPE_SHA256`) holds every site id with the lists it came from, the inputs' sha256 and the
-  site list's own digest; `plan4.py scope` rebuilds it byte for byte from `S0_ROWS.jsonl`
-  (`2c99f96f...`) and `logs/_write_dry/ALL_REFUSED.jsonl` (`7b4026d0...`). Three lists:
-  `phase3-cleared-description` 322, `phase3-cleared-card` 709, `ungrounded-card` 876 - 1,623 sites.
-  Its readers take that file or none: a file whose bytes are not the pin is refused (the gate ends
-  `WRITE_EXIT=1`). A new scope is a new version and a new pin, never an edit of the file. Since
-  2026-09-25 the writers read version 2 (`SCOPE4.v2.json`, section 11); version 1 stays byte for
-  byte at its own pin and rebuilds the mass run's plan.
+  `scope4.SCOPE_SHA256`, since version 2 in `scope4.SCOPE_V1_SHA256`) holds every site id with the
+  lists it came from, the inputs' sha256 and the site list's own digest; `plan4.py scope` rebuilds
+  it byte for byte from `S0_ROWS.jsonl` (`2c99f96f...`) and `logs/_write_dry/ALL_REFUSED.jsonl`
+  (`7b4026d0...`). Three lists: `phase3-cleared-description` 322, `phase3-cleared-card` 709,
+  `ungrounded-card` 876 - 1,623 sites. Its readers take that file or none: a file whose bytes are
+  not the pin is refused (the gate ends `WRITE_EXIT=1`). A new scope is a new version and a new pin,
+  never an edit of the file. Since 2026-09-25 the writers read version 2 (`SCOPE4.v2.json`, section
+  11); version 1 stays byte for byte at its own pin and rebuilds the mass run's plan.
 - **Which flags are a proven text defect.** `cleared-description-defect` and `cleared-card-defect`
   (a defect Phase 3's reviewer cleared) and an ungrounded card (no `SiteFlag`; `scope4` derives it).
   Not `t03` - its own comment says "order only" - and not `t03-severe` on its own: T03 names a
@@ -1297,15 +1298,16 @@ entry for is a proven text defect - the reader sees a bare number and the source
 join the defect scope and get a sourced description through the same Phase-4 pipeline, or stay held
 with a closed-list reason. AUDIT_LOG, "HUMAN_ONLY D9 into Phase 4", has the evidence and numbers.
 
-- **Scope version 2** (`phase4_runner/SCOPE4.v2.json`, pinned in `scope4.SCOPE_SHA256`, 1,631
-  sites) is version 1 and the list `d1-marker-without-entry` (9 sites), derived by `plan4.py scope`
-  (the current version by default) from version 1's two inputs and the lane's listing
-  (`mechanical_citations/SKIPPED.jsonl`, `--markers`, reason `marker-without-entry`): each listed
-  site must be a curated S0 row whose own text fails D1 that way (`scope4.markers_without_entry`,
-  census T08's `marker_sequence` and `entries`), never taken on the listing's word. Every version-1
-  site keeps its lists and the new list is appended (`scope4.VERSION_LISTS`), so version 2 refuses
-  nothing version 1 allowed; the list adds no `SiteFlag` (V9's floor stays for its sites). The
-  writers (`write_gate4` for P4 and P5), `mass4` and `build --scope-list` read version 2.
+- **Scope version 2** (`phase4_runner/SCOPE4.v2.json`, pinned in `scope4.SCOPE_SHA256`, since
+  version 3 in `scope4.SCOPE_V2_SHA256`, 1,631 sites) is version 1 and the list
+  `d1-marker-without-entry` (9 sites), derived by `plan4.py scope` (the current version by default)
+  from version 1's two inputs and the lane's listing (`mechanical_citations/SKIPPED.jsonl`,
+  `--markers`, reason `marker-without-entry`): each listed site must be a curated S0 row whose own
+  text fails D1 that way (`scope4.markers_without_entry`, census T08's `marker_sequence` and
+  `entries`), never taken on the listing's word. Every version-1 site keeps its lists and the new
+  list is appended (`scope4.VERSION_LISTS`), so version 2 refuses nothing version 1 allowed; the
+  list adds no `SiteFlag` (V9's floor stays for its sites). The writers (`write_gate4` for P4 and
+  P5), `mass4` and `build --scope-list` read version 2.
 - **Version 1 stays** (`SCOPE4.json`, `scope4.SCOPE_V1_SHA256`, unchanged): `plan4.py scope
   --version 1` rebuilds it byte for byte, `scope4.load_scope(1)` reads it at its own pin, and `plan4.py
   build --pilot PILOT4.jsonl --defect-scope` builds the mass run's plan from it, so `PLAN4.scope.jsonl`
@@ -1318,11 +1320,13 @@ with a closed-list reason. AUDIT_LOG, "HUMAN_ONLY D9 into Phase 4", has the evid
   by the mass run's p4-0042 and stays so. `--after` names the plans that were run as a whole: not
   `PLAN4.pilot4.jsonl`, whose batches past the pilot's never ran (the pilot's sites are `--pilot`'s).
   Every listed site must be the pilot's, an earlier plan's or planned here; an empty plan is refused.
-- **Its own batch block, from p4-0901** (`plan4.LIST_PLAN_FIRST_BATCH`): every run writes into the
-  one P4 apply root and a journal stamp names its batch, the mass run's plan ends at p4-0115 and
-  `mass4.requeue_lines` numbers the mass run's re-queued sites on from p4-0116 (19
-  `revision-too-fresh` sites wait), and lane L's plan starts at p4-1001. A list plan refuses to start
-  where an earlier plan already numbers.
+- **Its own batch block, from p4-0901** (since 2026-09-26 `build --first-batch 901`, section 12):
+  every run writes into the one P4 apply root and a journal stamp names its batch, the mass run's
+  plan ends at p4-0115 and `mass4.requeue_lines` would number a re-queue of the mass run on from
+  p4-0116, and lane L's plan starts at p4-1001. (Superseded 2026-09-26: the mass run's 19
+  `revision-too-fresh` sites are not re-queued there - they are the v3d plan's, section 12 and
+  `PHASE4_V3_RUNBOOK.md` section 8, and `mass4` refuses a live round of the mass run once one of
+  them is ready.) A list plan refuses to start where an earlier plan already numbers.
 - **A batch short of its outcome files** (`lanes.jsonl`, `assembly.jsonl`, `holds.jsonl`) is refused
   by `write4.load_batch` as a hole (`PlanInputError`), so the gate prints `REFUSED` and its
   `WRITE_EXIT=1` line; before, a dry run over the D9 run after its select export ended in a
@@ -1336,10 +1340,139 @@ with a closed-list reason. AUDIT_LOG, "HUMAN_ONLY D9 into Phase 4", has the evid
   `--rehearse`d, `--apply`ed, then P4's rehearsal and write. A site P4 holds keeps its L row. Lane L's
   acceptance afterwards names `--allow-stamp 'phase4:%'` beside the orphan-citations stamp and runs
   without `--complete`: a taken-back L row that P4 then wrote is superseded, while `--complete` names
-  it `NOT WRITTEN`, as it names a P4 site taken back (section 10; tested). The same holds for the
-  mass run's 19 `revision-too-fresh` sites, whose re-queued plan lines are S0's and which lane L
-  marked as well.
+  it `NOT WRITTEN`, as it names a P4 site taken back (section 10; tested). The mass run's 19
+  `revision-too-fresh` sites do not take this way (superseded 2026-09-26): the v3d plan takes them
+  over from a fresh read (section 12, `PHASE4_V3_RUNBOOK.md` section 8), so P4 replaces their L
+  marking in the same cell and no L row of theirs is reverted.
 - **The D9 run** is `runs/d9-2026-09-25` (plan `PLAN4.d9.jsonl`, batch p4-0901), its handoff
   `handoff/p4-d9-select` and `-review`, its logs `logs/p4_d9`; it writes into the same apply roots
   (`logs/_write_apply_p4`, `_write_apply_p5`), and every acceptance of lanes p4 and p5 names all
   three runs: `--run runs/pilot4-2026-09-24 --run runs/mass-2026-09-25 --run runs/d9-2026-09-25`.
+
+## 12. Scope version 3: the March texts, descriptions only (lane WA, 2026-09-26)
+
+Owner decisions of 2026-09-26 (`output/remediation/FINISH_PLAN_2026-09-26.md`, O1-O11), over the
+design `output/remediation/REPAIR_TEXTS_2026-09-26.md`: the fresh acceptance's stage 1 measured the
+2026-03 texts wrong far above tolerance (old descriptions 9 of 29, old cards 18 of 43, all severe),
+so every curated site still carrying March text is a text-defect site. Its description goes through
+the unchanged Phase-4 pipeline (same selector and reviewer pins, lanes W and S; T and R stay closed);
+its card is lane WB's (O2, O3). The runbook, with the measured population and every command, is
+`docs/procedures/PHASE4_V3_RUNBOOK.md`; the evidence is AUDIT_LOG, "Lane WA".
+
+- **Scope version 3** (`phase4_runner/SCOPE4.v3.json`, `scope4.SCOPE_SHA256`
+  `fb775d0e5563d9d441c7b7a33bd6e96016a5ac2f9db9524c566f10aeb84ad0ef`, 4,954 sites) is version 2 and
+  the lists `march-description` (3,923: live provenance lane `L`) and `march-card` (3,822: a
+  non-empty card no live Phase-5 write put there - a forward `phase5:` row without its own reversal,
+  revert4's reading), retired sites in neither. Input: `MARCH4_ROWS.jsonl` (committed, `5a2949fb...`)
+  from one read-only SELECT (`plan4.py read-march`, `plan4.MARCH_SQL`), whose sites must be exactly
+  S0's (`scope4.march_lists`, `scope_payload(..., march_rows=)`). Versions 1 and 2 stay byte for byte
+  at their own pins (`SCOPE_V1_*`, `SCOPE_V2_*`; `load_scope(1)`, `load_scope(2)`); version 3
+  refuses nothing version 2 allowed. The March lists add no `SiteFlag` (V9's floor stays).
+- **Descriptions only.** A plan of a list version 3 added (`scope4.DESCRIPTIONS_ONLY_LISTS`) carries
+  `pass: phase4-descriptions-only` (`scope4.DESCRIPTIONS_ONLY_MARK`) on every batch. `run4 prepare`
+  copies it into `input.json`; `mass4` reads it (`line_pass`: none or the mark, lane L's plan and
+  anything else refused, one pass per plan) and gives it to every re-queued batch;
+  `write4.load_batch` reads it into `BatchInputs.descriptions_only`. Then P4 writes the description
+  with `card: null` (`without_card`, as for a card-scope hold; the journal evidence says
+  `card_withheld`), so no provenance names a card that is never served (acceptance D4), and P5
+  refuses every site of the batch (`descriptions-only-plan`, right after the scope): the P5 group of
+  a v3 run is never run, and `verify_writes4 --lane p4` re-verifies such a site with no card. The
+  plans of versions 1 and 2 carry no pass: their bytes are unchanged (the D9 plan rebuilds with
+  `--first-batch 901`).
+- **`plan4.py build --scope-list` is repeatable** (the union, each site once, in the plan's order)
+  and takes `--first-batch N` (required; replaces the constant p4-0901): the block must lie past
+  every `--after` ordinal and outside lane L's (`plan4.legacy_block`: p4-1001 .. p4-1334 for the
+  5,004 curated sites). `--exclude FILE` leaves sites out (read by phase 3's one reader of a
+  site-id list, `snapshot_plan.read_site_ids(uuids=True)`: a lowercase UUID per line, no blank
+  line, no repeat, each a curated row; the summary prints a count and the file's sha256, never the
+  ids; `write_gate4 --audited` reads through it too). `--take-deferred RUN_DIR` plans the sites a
+  run deferred `revision-too-fresh` in their latest batch although the deferring run's plan carries
+  them (`mass4.ready_to_hand_over`: refused while one still waits for its 48 h, or once the run
+  re-queued one itself; each must be in a listed list and carried by exactly one `--after` plan, in
+  the batch the run deferred it in - the deferring run's plan must be named, or its other sites
+  would be planned twice, and no other plan may carry it, or it would be planned a third time).
+- **A list plan plans no site twice** (second review of lane WA, 2026-09-26). Before anything is
+  written, `plan4.carried_problems` reads every run directory under `--run-root` (default
+  `phase4_runner/runs`) but `plan4.UNWRITTEN_RUNS` - the census and pilots 1-3, which never wrote
+  (production's journal holds `phase4:` rows of pilot 4, the mass run and D9 only) - through
+  `mass4.prepared_lines`, and the P4 apply root's plans (`--apply-root`, the live and the kept
+  rounds). Refused: a site a run carries in another batch than this plan's (a rebuild of the plan a
+  run was driven from passes; the deferring run's copy of a handed site and a run's re-queue batches
+  do not count), and a site the apply root plans from a run the check cannot see. So v3d built
+  without `--after PLAN4.v3.jsonl` is refused (the v3 run carries the 3,124 sites), before any P4
+  write could replace the first run's text; the summary names `runs_read`.
+- **The two v3 plans** (measured 2026-09-26 from a fresh read, `PHASE4_V3_RUNBOOK.md`): `PLAN4.v3.jsonl`,
+  3,238 sites in 216 batches, p4-2001 .. p4-2216 (`--after` the mass and D9 plans); and
+  `PLAN4.v3d.jsonl` for the mass run's 19 `revision-too-fresh` sites, due 2026-09-26T21:30:14Z ..
+  21:40:06Z: held there and never written, so not "new" - the v3 plan leaves them to the mass plan
+  that carries them, and the follow-up plan takes them over (`--after` also `PLAN4.v3.jsonl`,
+  `--take-deferred runs/mass-2026-09-25`, `--first-batch 2501`: 19 sites, p4-2501 .. p4-2502), run
+  `runs/v3d-<date>`. The main plan so need not wait for 21:40Z, and the block p4-2501 leaves v3's own
+  re-queue (p4-2217 on) room.
+- **A plan without a pass never re-queues a descriptions-only site**
+  (`mass4.descriptions_only_claims`, review finding 2026-09-26). A live round of the mass run after
+  the 19's 48 h would have re-queued them into its own plan (p4-0116): S0's old values, P5 planning
+  their extractive card, and then either v3d's `--take-deferred` refused or both runs assembling
+  them. So `mass4` refuses a live round of a plan without a pass (scope versions 1 and 2) while a
+  ready deferred site of it is named by a descriptions-only list, before `REQUEUE4.jsonl` is
+  written; the dry run names them (`hand over`). A descriptions-only plan re-queues its own sites as
+  before. The rule does not rest on the runbook's "never drive the mass run live again".
+- **Preconditions of the plan's read** (`PHASE4_V3_RUNBOOK.md` section 0): the link and name pass L5
+  (HUMAN_ONLY_DECISIONS B1-L, B1-N) is applied before `plan4.py read` - S1 fetches by the stored
+  `enwiki_title`, so a wrong link gives a sourced description of the wrong subject (43 of the 72
+  `link_suspect` sites are v3 sites), or L5's candidates are `--exclude`d and planned after L5; and
+  the `scope-pending` flags come from the merged tree's E3 rule at build time (WD2's O7 changes 0
+  of the v3 plan's 20, measured).
+- **The acceptance and a deferred site.** `verify_writes4.index_runs` refused a site two runs carry.
+  A run that held the site `revision-too-fresh` (site scope) and assembled nothing for it
+  (`RunSite.deferred`, `deferred_in`) never wrote it: the site is read from the other run, in either
+  order. Two runs that both could have written it stay refused.
+- **The handoff at scale** (O11, 16 agents): `phase4/handoff4.py` - `brief` prints one batch agent's
+  whole instruction for the selector or the reviewer (only its prompt files, no web, drafts in its
+  own `<handoff>-scratch/<batch>/`, recorded with `record` under `opus-<handoff name>-<batch>`);
+  `check-answer` reads a draft through the stage's own parser against the batch's own pool or
+  assembly, after proving the batch still builds the exported prompt, and asks a review for every
+  shown sentence and the CARD line once; `record` is the one way an agent records an answer - the
+  check first, a problem printed and nothing written, else `opus_handoff.write_answer` (second
+  review of 2026-09-26: agents that recorded through `opus_handoff.py answer` left three selections
+  the import refuses, whose corrected drafts could no longer be recorded); `ready --run-dir` names
+  the batches whose every question is answered in shape and whose every recorded answer passes the
+  check again (`shape_problems`: an answer recorded by any other path, or one to a batch that moved
+  since its export, keeps its batch out and `ok` false), lists a named batch of the run that asked
+  nothing (no folder: every site held before the stage) apart without waiting for it, and refuses a
+  name that is no batch of the run. Agents
+  answer different batches of one directory at once; `mass4` import rounds stay one at a time
+  (`--only` the ready batches); `mass4`'s dry run prints the done batches (`done` line) the write
+  gate may plan.
+- **Lane L and v3.** The plan reads production afresh (`plan4.py read`), so its `raw_data` old values
+  carry lane L's provenance and P4 replaces it in the same cell: no L row is reverted (section 11 was
+  needed only because the D9 plan named S0's values). Lane L's acceptance afterwards runs with
+  `--allow-stamp 'phase4:%'` (beside the orphan-citations and dangling-markers stamps) and without
+  `--complete`. A P4 revert of a v3 site restores the March text and its L marking together.
+- **Later lanes and the p4 acceptance.** The p4 acceptance re-reads every row P4 ever planned, so a
+  lane that writes a cell of a P4-written site afterwards is named with `--allow-stamp` in every
+  later p4 acceptance (its rows are then superseded, not re-verified as P4's): lane L `phase4l:%`,
+  lane WB's provenance lane `wb-teaser-prov-%` (a new `raw_data` key `_card_provenance`, V12 would
+  refuse it as P4's), lane WC `phase4wc:%`. WC and WB take only final sites: a site of a v3 batch
+  not yet written, or held `revision-too-fresh` (it comes back through the re-queue), is still
+  Phase 4's, and another lane's write would stop its batch at the preflight.
+- **Group P5 writes no card for any run** (owner decisions O2, O3; second review of lane WA,
+  2026-09-26). The descriptions-only refusal covered only a v3 plan's sites: `write_gate4 --group P5
+  --run mass-2026-09-25 --apply --round 2` after a revert4 of a P5 step would have written the mass
+  run's extractive cards again. `write_gate4.closed_group_problem` refuses `--rehearse` and
+  `--apply` of group P5 for every run; its dry run, `--accept` and `--close-reverted` remain.
+- **The audit's written list is the run's own** (`audit4.py written --run-dir R --apply-root A`,
+  second review of 2026-09-26): per batch directory of the run with a live `APPLIED.json` in the
+  apply root (`write4.APPLIED_FILE`), the sites of its write batch's `PLAN.jsonl`, less the sites the
+  run holds since (an audit hold); a write batch of the same id another run wrote is refused. It
+  replaces the runbook's glob over `p4-2*`, which also matched v3d's batches and kept taken-back
+  sites, so `audit4 draw` refused mid-run.
+- **One reader of a site-id list** (second review of 2026-09-26): `phase3/snapshot_plan.read_site_ids`
+  (one id per line; a blank line, a repeated id, an empty or missing file refused). `plan4.py build
+  --exclude` and `write_gate4.py --audited` read through it with `uuids=True` (each line a canonical
+  lowercase UUID); `audit4.py`'s `--written`, `--exclude` and `--site-ids` without it, since `draw`
+  and `sheet` refuse an id that is no reviewed site of the run. `plan4.read_excluded` and
+  `write_gate4.read_audited`'s own loop are gone, `audit4._ids` only reads an option not given as
+  no ids.
+- **Not built** (owner decisions 2026-09-26): the design's clearing group C (lanes WC and WB take the
+  held texts), and the exclusion of an acceptance draw (O1: no acceptance any more).

@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import re
 import subprocess
 import sys
@@ -63,13 +64,18 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
+    FIELDS_LANE,
     LANE_READBACKS,
     LANES,
+    SCOPE_REVIEW_LANE,
     T05,
+    TEASER_LANE,
     Column,
     Lane,
+    fields_readback,
     outside,
     resolve_lane,
+    scope_review_readback,
     typed_case,
     written_where,
 )
@@ -117,25 +123,13 @@ GUARD3_SAYS = "planned row(s) no longer hold the planned old value"
 GUARD4_SAYS = "planned row(s) {what} a value this lane does not own"
 GUARD5_SAYS = "planned row(s) no longer hold the premise the plan derived its value from"
 GUARD6_SAYS = "planned row(s) do not undo the last journal row of their cell"
+#: A lane's own invariant (`Lane.write_invariant`), counted over the planned sites after the write.
+INVARIANT_SAYS = "planned site(s) break the lane invariant after the write"
 
 
 def lane_dir(lane: Lane) -> Path:
     """Where a lane's plan and statements live: `output/remediation/<out_dir_name>/`."""
     return REPO / "output" / "remediation" / lane.out_dir_name
-
-
-DEFAULT_PLAN = lane_dir(T05) / "PLAN.jsonl"
-DEFAULT_OUT = lane_dir(T05)
-
-
-def change_key(site_id: str, lane: Lane = T05) -> str:
-    """The journal's identity for one row's *write* (see `Lane.change_key`)."""
-    return lane.change_key(site_id)
-
-
-def rollback_change_key(site_id: str, lane: Lane = T05) -> str:
-    """The journal's identity for one row's *reversal* (see `Lane.rollback_change_key`)."""
-    return lane.rollback_change_key(site_id)
 
 
 # --------------------------------------------------------------------------------- the records
@@ -261,6 +255,16 @@ def typed_value(cell: Column, text: str) -> Any:
             return json.loads(text)
         except json.JSONDecodeError as exc:
             raise PlanError(f"{cell.name}: {text!r} is not JSON") from exc
+    if cell.sql_type == "double precision":
+        # compared as the number it is: '51.10' and '51.1' are one value, and the database's own
+        # print of a double (`lat::text`) is what a planned old value carries
+        try:
+            number = float(text)
+        except ValueError as exc:
+            raise PlanError(f"{cell.name}: {text!r} is not a number") from exc
+        if not math.isfinite(number):
+            raise PlanError(f"{cell.name}: {text!r} is not a finite number")
+        return number
     return text
 
 
@@ -268,12 +272,16 @@ def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
     """One record of a cell lane, in its column's type.
 
     NULL is allowed on one side only, and only for a column the lane fills: the old value of a
-    write, the new value of its reversal. Everything else is a column lane's rule, per column.
+    write, the new value of its reversal - or, for a column the lane empties (`Column.clears`), the
+    new value of a write and the old value of its reversal. Never on both sides: NULL to NULL is no
+    change. Everything else is a column lane's rule, per column.
     """
     cell = lane.cell(r.column)
     empty_side, filled_side = ("new", "old") if rollback else ("old", "new")
     values = {"old": r.old_value, "new": r.new_value}
-    if values[filled_side] is None:
+    if r.old_value is None and r.new_value is None:
+        raise PlanError(f"{r.site_id}/{cell.name}: old and new are both NULL - NULL to NULL is not a change")
+    if values[filled_side] is None and not cell.clears:
         raise PlanError(
             f"{r.site_id}/{cell.name}: no {filled_side} value - this lane never "
             + ("undoes a NULL" if rollback else "clears a column")
@@ -294,6 +302,9 @@ def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
             f"holds {cell.max_chars}"
         )
     lane_value = r.old_value if rollback else r.new_value
+    if lane_value is None:
+        # an emptied cell (`Column.clears`) holds no value, and no value is what a lane owns
+        return
     if cell.allowed_new_values and lane_value not in cell.allowed_new_values:
         raise PlanError(
             f"{r.site_id}: {lane_value!r} is not a value the {lane.name} lane owns in "
@@ -407,7 +418,8 @@ def _writable_case(lane: Lane, *, rollback: bool) -> str:
         empty, filled = (
             ("p.new_value", "p.old_value") if rollback else ("p.old_value", "p.new_value")
         )
-        refused.append(f"{filled} IS NULL")
+        if not cell.clears:
+            refused.append(f"{filled} IS NULL")
         if not cell.fills_null:
             refused.append(f"{empty} IS NULL")
         if cell.max_chars is not None:
@@ -736,6 +748,28 @@ def render_transaction(
     )
     add("    END IF;")
     add("")
+    if lane.write_invariant is not None:
+        add("    -- invariant 3, the lane's own: no planned site is one of the")
+        add(f"    -- {lane.write_invariant.metric}")
+        add("    SELECT count(*) INTO bad FROM unified_sites")
+        add(f"     WHERE id IN (SELECT site_id FROM {table})")
+        add(f"       AND ({lane.write_invariant.predicate});")
+        add("    IF bad > 0 THEN")
+        add(f"        RAISE EXCEPTION '{label}: % {INVARIANT_SAYS}', bad;")
+        add("    END IF;")
+        add("")
+    for invariant in () if rollback else lane.site_invariants:
+        add(f"    -- site invariant: no planned site may be left with this - {invariant.says}")
+        add("    SELECT count(*) INTO bad")
+        add(
+            f"      FROM (SELECT DISTINCT site_id FROM {table}) p "
+            "JOIN unified_sites u ON u.id = p.site_id"
+        )
+        add(f"     WHERE {invariant.predicate.format(plan=table)};")
+        add("    IF bad > 0 THEN")
+        add(f"        RAISE EXCEPTION '{label}: % {invariant.says}', bad;")
+        add("    END IF;")
+        add("")
     if cells:
         add(
             f"    RAISE NOTICE '{label}: % of % planned cell(s) changed and journalled over "
@@ -745,6 +779,11 @@ def render_transaction(
         add(f"    RAISE NOTICE '{label}: % row(s) changed and journalled over % curated site(s)',")
     add("        moved, expected;")
     add("END $$;")
+    # The run stamp, test id, confidence, source, owned values and premise are spliced inside the
+    # dollar-quoted block: a `$$` in any of them would end it early (audit 2026-09-25 m4).
+    block = "\n".join(out).partition("\nDO $$\n")[2].rpartition("\nEND $$;")[0]
+    if "$$" in block:
+        raise PlanError(f"{lane.name}: a value spliced into the statement would end the DO block")
     add("")
     add("COMMIT;")
     add("")
@@ -1052,6 +1091,19 @@ SELECT pg_get_functiondef(p.oid) LIKE '%$1::%s WHERE%' AS casts_value_to_column_
 """
 
 
+def _before_the_one_commit(sql: str, what: str) -> str:
+    """The statement up to its one `COMMIT` line. None is refused - the rehearsal would be the
+    statement itself, and whatever it does would be kept - and so are two: a rehearsal swaps one
+    COMMIT, and a second transaction behind it would never be rehearsed (audit 2026-09-25 m2)."""
+    commits = sql.count("\nCOMMIT;\n")
+    if commits != 1:
+        raise PlanError(
+            f"{what} has {'no' if commits == 0 else commits} COMMIT line(s), not one - refusing "
+            "to rehearse it"
+        )
+    return sql.partition("\nCOMMIT;\n")[0]
+
+
 def rehearse(
     sql: str,
     *,
@@ -1064,9 +1116,7 @@ def rehearse(
     The point is to run the identical text - the same guards, the same calls - against
     production without keeping any of it, so a broken guard is found before it is committing.
     """
-    head, sep, _ = sql.partition("\nCOMMIT;\n")
-    if not sep:
-        raise PlanError("the emitted statement has no COMMIT - refusing to rehearse it")
+    head = _before_the_one_commit(sql, "the emitted statement")
     stamp = lane.run_stamp if run_stamp is None else run_stamp
     return head + "\nROLLBACK;\n" + rehearsal_reads(lane, run_stamp=stamp, source=source)
 
@@ -1204,16 +1254,25 @@ def _value_rows(lane: Lane) -> list[tuple[str, str, int]]:
     the hub route imports (`api/routes/sites_html.py:25`) and matches rows with - `/sites/{slug}`
     404s once no row's `country` slugs to it, and only redirects a *case variant* of a slug that
     still matches. Other columns have no hub page, so their slug is `-`.
+
+    Read as JSON (`psql_json_reader`), never split on `|`: a curated value may hold the separator
+    or a newline, and after a COMMIT a reader that raises turns a committed write into a refusal
+    (audit 2026-09-25 M9). A NULL is not a value and is not listed.
     """
     from pipeline.sites_html_renderer import country_slug
 
-    rows = read_rows(
-        f"SELECT {lane.column}, count(*) FROM unified_sites "
-        f"WHERE source_id = 'ancient_nerds' GROUP BY {lane.column} ORDER BY {lane.column}"
+    rows = psql_json_reader()(
+        f"SELECT {lane.column} AS value, count(*) AS n FROM unified_sites "
+        f"WHERE source_id = 'ancient_nerds' AND {lane.column} IS NOT NULL "
+        f"GROUP BY {lane.column} ORDER BY {lane.column}"
     )
     return [
-        (value, country_slug(value) if lane.column == "country" else "-", int(count))
-        for value, count in rows
+        (
+            str(row["value"]),
+            country_slug(str(row["value"])) if lane.column == "country" else "-",
+            int(row["n"]),
+        )
+        for row in rows
     ]
 
 
@@ -1307,9 +1366,6 @@ def cmd_rehearse(
         out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)
     )
     script = rehearse(sql, lane=lane)
-    head = sql.partition("\nCOMMIT;\n")[0]
-    if not script.startswith(head):
-        raise PlanError("the rehearsal is not the byte-identical statement up to COMMIT")
     path = out / "REHEARSAL.sql"
     path.write_text(script, encoding="utf-8", newline="\n")
     log.info("wrote %s (COMMIT -> ROLLBACK)", path)
@@ -1333,9 +1389,7 @@ def cmd_rehearse_rollback(
     if not path.exists():
         raise PlanError(f"{path} does not exist - there is no reversal to rehearse")
     sql = path.read_text(encoding="utf-8")
-    head, sep, _ = sql.partition("\nCOMMIT;\n")
-    if not sep:
-        raise PlanError("ROLLBACK.sql has no COMMIT - refusing to rehearse it")
+    head = _before_the_one_commit(sql, "ROLLBACK.sql")
     verify_pinned(path, plan_path=plan_path, expected=rollback_statement(records, lane))
     script = head + "\nROLLBACK;\n" + rollback_rehearsal_reads(records, lane)
     target = out / "REHEARSAL_ROLLBACK.sql"
@@ -1360,6 +1414,11 @@ def cmd_apply(
     """
     sql = verify_pinned(
         out / "APPLY.sql", plan_path=plan_path, expected=apply_statement(records, lane)
+    )
+    # The undo on disk is re-verified too: a write goes out only beside this plan's own, unedited
+    # reversal (audit 2026-09-25 m1 - the emit checked it, the apply did not).
+    verify_pinned(
+        out / "ROLLBACK.sql", plan_path=plan_path, expected=rollback_statement(records, lane)
     )
     already = journal_count(lane.run_stamp)
     if already:
@@ -1519,12 +1578,19 @@ NEVER_STORED = {
     "jsonb": '["probe: a value never stored"]',
     "text": "A value that was never there",
     "character varying": "A value that was never there",
+    "double precision": "-98.7654321",
+    "geometry": "SRID=4326;POINT(-179.987654 -89.987654)",
 }
+#: The column guard 2's foreign-column probe writes into: `name`, unless the lane owns it (the L5
+#: name lane does), then `description` - both `unified_sites` text columns no lane owns together.
+FOREIGN_COLUMNS = ("name", "description")
 NOT_OWNED = {
     "integer": "987654321",
     "jsonb": '["probe: a value this lane does not own"]',
     "text": "A value this lane does not own",
     "character varying": "A value this lane does not own",
+    "double precision": "98.7654321",
+    "geometry": "SRID=4326;POINT(179.987654 89.987654)",
 }
 
 
@@ -1559,7 +1625,7 @@ def _cell_probe_cases(
         (
             "guard2-foreign-column",
             "guard 2 - a cell in a column the lane does not own",
-            corrupt(0, column="name"),
+            corrupt(0, column=next(c for c in FOREIGN_COLUMNS if c not in lane.columns)),
             refusal(GUARD2_SAYS),
         ),
     ]
@@ -1614,6 +1680,16 @@ def _cell_probe_cases(
                 refusal(GUARD5_SAYS),
             )
         )
+    if lane.write_invariant is not None:
+        # the write lands inside the transaction, then the lane's invariant refuses it
+        probes.append(
+            (
+                "invariant-lane",
+                "invariant 3 - a written value that breaks the lane's own invariant",
+                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),
+                refusal(INVARIANT_SAYS),
+            )
+        )
     if lane.reverses_journal:
         probes.append(
             (
@@ -1633,14 +1709,39 @@ def _cell_probe_cases(
                 refusal(GUARD6_SAYS),
             )
         )
+    for invariant in lane.site_invariants:
+        # the first planned cell of the invariant's column is given a value that breaks it; a plan
+        # without such a cell cannot probe it, and `cmd_probe_guards` names that
+        index = next((i for i, r in enumerate(records) if r.column == invariant.probe_column), None)
+        if index is None:
+            continue
+        chosen = records[index]
+        value = next(
+            v for v in invariant.probe_values if v not in (chosen.old_value, chosen.new_value)
+        )
+        probes.append(
+            (
+                f"invariant-{invariant.probe_column}",
+                f"site invariant - {invariant.says}",
+                corrupt(index, new_value=value),
+                refusal(invariant.says),
+            )
+        )
     return probes
+
+
+def unprobed_invariants(records: Sequence[ChangeRecord], lane: Lane) -> list[str]:
+    """The site invariants this plan cannot probe: it plans no cell of their probe column."""
+    columns = {r.column for r in records}
+    return [i.says for i in lane.site_invariants if i.probe_column not in columns]
 
 
 def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
     """Corrupt one copy per guard and show, on production, that *that* guard refuses.
 
-    Each probe runs inside `BEGIN ... ROLLBACK` with its own run stamp. It writes nothing: the
-    guards fire before the loop, and the failed statement aborts the transaction. A probe counts
+    Each probe runs inside `BEGIN ... ROLLBACK` with its own run stamp. It keeps nothing: the
+    guards fire before the loop, a lane invariant's probe raises after it, and the failed
+    statement aborts the transaction. A probe counts
     only when psql stopped the script (`PSQL_SCRIPT_ERROR`) with an ERROR line carrying its own
     guard's refusal, and the journal holds no row for its stamp afterwards. Returns the number of
     probes that fell short.
@@ -1664,6 +1765,8 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
         raise PlanError("no non-curated row to probe the source guard with")
 
     failures = 0
+    for says in unprobed_invariants(records, lane):
+        print(f"[site invariant - {says}] not probed: the plan writes no cell it could corrupt")
     for suffix, name, mutated, expected in probe_cases(records, lane, foreign[0]):
         stamp = f"{lane.probe_run_stamp}-{suffix}"
         sql = render_transaction(
@@ -1696,28 +1799,45 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
 
 
 def readback_for(lane: Lane) -> str:
-    """The lane's read-only verification: `READBACKS`, or a card_stats wave's own."""
+    """The lane's read-only verification: `READBACKS`, a scope-review wave's, a WD1 fields
+    step's, or a card_stats wave's own."""
     if lane.name in READBACKS:
         return READBACKS[lane.name]
+    if SCOPE_REVIEW_LANE.match(lane.name) is not None:
+        return scope_review_readback(lane)
+    if FIELDS_LANE.match(lane.name):
+        return fields_readback(lane)
+    if TEASER_LANE.match(lane.name):
+        from mechanical.teaser import teaser_readback
+
+        return teaser_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
 
 
 def _lane_argument(name: str) -> str:
-    """`--lane`: a registered lane or a card_stats wave (`card-stats-2026-09-24`); anything else
-    is argparse's "invalid choice", as it was when the names were a fixed `choices` list."""
+    """`--lane`: a registered lane, a scope-review wave (`scope-review-2026-09-26`) or a
+    card_stats wave (`card-stats-2026-09-24`); anything else is argparse's "invalid choice", as it
+    was when the names were a fixed `choices` list."""
     try:
         resolve_lane(name)
     except KeyError as exc:
         raise argparse.ArgumentTypeError(
-            f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, card-stats-<wave>)"
+            f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
+            "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
+            "teaser-card-sNNN)"
         ) from exc
     return name
 
 
 # ------------------------------------------------------------------------------------ CLI
 def main(argv: list[str] | None = None) -> int:
+    # psql's answers are printed as they came: a name lane's values (L5) can hold any script, and
+    # a Windows console's cp1252 raised on one - after a COMMIT, a traceback instead of the exit
+    # code the runbook reads (the chunk writer's case, measured 2026-09-26).
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     ap = argparse.ArgumentParser(description="Apply one mechanical lane's plan")
     ap.add_argument(
         "--lane",

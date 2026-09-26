@@ -314,13 +314,18 @@ def store_page(
 def collect(
     urls: Iterable[str],
     pages: Path,
-    client: httpx.Client,
+    client: Any,
     *,
     now: Callable[[], str],
     sleep: Callable[[float], None] = time.sleep,
     pace: float = PACE_SECONDS,
+    errors: tuple[type[BaseException], ...] = (httpx.HTTPError,),
 ) -> dict[str, int]:
-    """Fetch every URL not yet kept, once; a failed fetch is kept too, with its status or error."""
+    """Fetch every URL not yet kept, once; a failed fetch is kept too, with its status or error.
+
+    `client` is an `httpx.Client` (`http_client`) or any object with the same `get(url)` whose
+    response has `status_code`, `url`, `headers` and `content`; `errors` are the exceptions its
+    failed fetch raises (lane WC fetches with `requests`, `wc/answers.Client`)."""
     counts = {"fetched": 0, "cached": 0, "not fetched": 0}
     last: dict[str, float] = {}
     for url in sorted({canonical_url(u)[0] for u in urls}):
@@ -336,7 +341,7 @@ def collect(
         last[host] = time.monotonic()
         try:
             response = client.get(url)
-        except httpx.HTTPError as exc:
+        except errors as exc:
             # the fetch failed: that is the record, and a quote on this page will not count
             store_page(
                 pages,
@@ -378,8 +383,14 @@ def page_index(urls: Iterable[str], pages: Path) -> list[dict[str, Any]]:
     return out
 
 
-def http_client() -> httpx.Client:
-    return httpx.Client(headers=HEADERS, follow_redirects=True, timeout=TIMEOUT_SECONDS)
+def http_client(user_agent: str = USER_AGENT) -> httpx.Client:
+    """The audit's client. A caller that asks the web under its own name passes its User-Agent
+    (lane WB's pilot judge: `AncientMapRemediation/1.0 (research)`, no personal data)."""
+    return httpx.Client(
+        headers={**HEADERS, "User-Agent": user_agent},
+        follow_redirects=True,
+        timeout=TIMEOUT_SECONDS,
+    )
 
 
 # ------------------------------------------------------------------------------ the check

@@ -132,16 +132,21 @@ _COORDINATOR = re.compile(r"\b(?:and|or)\b", re.IGNORECASE)
 _OPENS_WITH_COORDINATOR = re.compile(r"(?:and|or)\b", re.IGNORECASE)
 
 
-def _protected_pattern() -> re.Pattern[str]:
-    """One regex for every entry of `model4.PROTECTED_TOKENS`, by the list's own entry rules.
+def protected_pattern(*groups: str) -> re.Pattern[str]:
+    """One regex for every entry of `model4.PROTECTED_TOKENS` - or of the named groups only
+    (`hedges`, `negations`, `contrast`, `refutation`, `restriction`; lane WC reads the negations
+    and the refutation words apart) - by the list's own entry rules.
 
     Whole words, case-insensitive; a trailing `*` matches any word that starts with the rest, a
     leading `*` any word that ends with it; an entry with a space is a phrase of consecutive words;
     `c.` and `ca.` carry their full stop.
     """
+    unknown = sorted(set(groups) - set(M.PROTECTED_TOKENS))
+    if unknown:
+        raise ValueError(f"no protected-token group {unknown}")
     alternatives = []
-    for entries in M.PROTECTED_TOKENS.values():
-        for entry in entries:
+    for group in groups or tuple(M.PROTECTED_TOKENS):
+        for entry in M.PROTECTED_TOKENS[group]:
             if entry.endswith("*"):
                 alternatives.append(rf"\b{re.escape(entry[:-1])}\w*")
             elif entry.startswith("*"):
@@ -154,7 +159,7 @@ def _protected_pattern() -> re.Pattern[str]:
     return re.compile("|".join(alternatives), re.IGNORECASE)
 
 
-PROTECTED = _protected_pattern()
+PROTECTED = protected_pattern()
 
 
 def carries_protected_token(text: str) -> bool:

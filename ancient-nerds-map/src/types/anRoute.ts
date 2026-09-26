@@ -148,6 +148,9 @@ export interface SiteRoute {
   /** The description's AI mark and attribution; null without provenance for this text. */
   description_ai: DescriptionAi | null
   description_attribution: DescriptionAttribution | null
+  /** The AI mark of the site's card (a lane-WB teaser: 'generated'); null when no card
+   *  provenance hashes the card. The card is not on the page - its SiteCard opens it. */
+  card_ai: DescriptionAi | null
   alt_names: string[]
   /** Hero from wiki_images with its Commons attribution (licence!). */
   image: {

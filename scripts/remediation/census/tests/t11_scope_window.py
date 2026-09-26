@@ -14,7 +14,7 @@ executable:
 ## The rule, and the 69-versus-84 discrepancy the plan left open
 
 The scope rule is a pure function of two stored values, and it already exists in the code:
-`pipeline/normalizers/dates.py::passes_date_cutoff()` (lines 58-88) calls itself *"the GLOBAL
+`pipeline/normalizers/dates.py::passes_date_cutoff()` calls itself *"the GLOBAL
 regional date cutoff ... This defines project scope"* and is what `pipeline/unified_loader.py`
 applies to every record at load time. It reads `period_end or period_start`, decides the region
 from `AMERICAS_LON_MIN <= lon <= AMERICAS_LON_MAX` (-170..-30) and tests `date <= cutoff`.
@@ -29,9 +29,9 @@ all. The assessment's own S12 line says so verbatim, in
 Rest <= 500 AD): 4.920 pass / 84 fail (69 ausserhalb, 15 ohne period_start)"*. The plan's §7
 table kept the total and dropped the parenthetical, which is how 84 became unattributable.
 
-`passes_date_cutoff()` is explicit that it *includes* a record without a date - line 77-78,
+`passes_date_cutoff()` is explicit that it *includes* a record without a date -
 `if date is None: return True  # No date = include (conservative)` - and it does the same for a
-record without a location. That is the right behaviour for a loader (it must not drop rows it
+record without a location (`if region is None: return True  # No location = include`). That is the right behaviour for a loader (it must not drop rows it
 cannot judge) and the **wrong** behaviour for a census: a `pass` row in `census.jsonl` is a claim
 that the test applied here and found nothing, so a site whose date is unknown would be certified
 clean by a function that never looked at it. "Could not check" must not become "checked and
@@ -100,6 +100,18 @@ There is no `collect()`. Scope needs stored values only: the snapshot row and a 
 already unpacked. A missing dataset raises (`_geography`), exactly as it does in T02, rather than
 degrading to a longitude-only pass.
 
+## Oceania joins the Americas' cutoff (O7, owner, 2026-09-26)
+
+"Ozeanien wie Amerika": Oceania is in scope through 1500 AD. The region is `e3_region`'s now
+(`pipeline/normalizers/dates.py`): Oceania by the row's country - the UN M49 list plus the Pacific
+island groups of states whose rows carry the state's name (Easter Island as "Chile", French
+Polynesia as "France") - then the Americas by the longitude window, then the rest of the world.
+Natural Earth's CONTINENT `Oceania` answers 1500 AD too, so the Marquesas pair above now agrees in
+region as well as in verdict. The measurements in this docstring are the 2026-09-20 snapshot's
+under the rule as it was; on production on 2026-09-26 (read-only) the 45 curated Oceania rows
+(Australia 30, Easter Island 11, French Polynesia 3, Northern Mariana Islands 1) hold no date past
+500 AD outside the longitude window, so O7 moves no verdict of today's rows.
+
 ## What this check cannot decide from stored values
 
 Named here, flagged in the census, never silently passed:
@@ -118,7 +130,7 @@ from __future__ import annotations
 import functools
 import logging
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -132,7 +144,7 @@ if TYPE_CHECKING:
     from census.run import Context
 
 TEST_ID = "T11"
-NAME = "E3 scope window (Americas through 1500 AD, rest of world through 500 AD)"
+NAME = "E3 scope window (Americas and Oceania through 1500 AD, rest of world through 500 AD)"
 DIMENSION = "SCOPE"
 
 REPO = Path(__file__).resolve().parents[4]
@@ -147,6 +159,8 @@ FIELD = "scope_status"
 
 #: Natural Earth's own continent labels that mean the Americas.
 AMERICAS_CONTINENTS = frozenset({"North America", "South America"})
+#: Natural Earth's continent label of Oceania, whose cutoff is the Americas' since O7.
+OCEANIA_CONTINENT = "Oceania"
 
 #: CONTINENT values that answer nothing about the region: the ocean and the polar shelf are
 #: drawable, not inhabited, and E3 carries no cutoff for either.
@@ -162,19 +176,36 @@ log = logging.getLogger("census.t11")
 
 @dataclass(frozen=True)
 class _ScopeRule:
-    """The project's own E3 rule, bound to the module that implements it."""
+    """The project's own E3 rule, bound to the module that implements it.
+
+    Since O7 (owner, 2026-09-26: "Ozeanien wie Amerika") the region is `e3_region`'s: Oceania by
+    the row's country (or a Pacific island group of the state it names), then the Americas by the
+    longitude window, then the rest of the world.
+    """
 
     americas_lon_min: float
     americas_lon_max: float
-    cutoff_americas: int
-    cutoff_rest_of_world: int
+    cutoffs: Mapping[str, int]
+    region_of: Callable[[Mapping[str, Any]], str | None]
     passes: Callable[[dict[str, Any]], bool]
+    americas: str
+    oceania: str
+    rest_of_world: str
 
-    def region(self, lon: float) -> tuple[str, int]:
-        """(region name, cutoff in AD) for a longitude, by the project's own window."""
-        if self.americas_lon_min <= lon <= self.americas_lon_max:
-            return "Americas", self.cutoff_americas
-        return "rest of world", self.cutoff_rest_of_world
+    def region(self, site: Mapping[str, Any]) -> tuple[str, int]:
+        """(region name, cutoff in AD) for a site with a longitude, by the project's own rule."""
+        region = self.region_of(site)
+        if region is None:
+            raise AssertionError(f"{TEST_ID}: region asked for a site without a longitude")
+        return region, self.cutoffs[region]
+
+    def continent_cutoff(self, continent: str) -> int:
+        """The cutoff of a Natural Earth CONTINENT: 1500 AD for the Americas and Oceania."""
+        if continent in AMERICAS_CONTINENTS:
+            return self.cutoffs[self.americas]
+        if continent == OCEANIA_CONTINENT:
+            return self.cutoffs[self.oceania]
+        return self.cutoffs[self.rest_of_world]
 
 
 @functools.lru_cache(maxsize=1)
@@ -183,19 +214,25 @@ def _scope_rule() -> _ScopeRule:
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
     from pipeline.normalizers.dates import (
+        AMERICAS,
         AMERICAS_LON_MAX,
         AMERICAS_LON_MIN,
-        DATE_CUTOFF_AMERICAS,
-        DATE_CUTOFF_REST_OF_WORLD,
+        E3_CUTOFFS,
+        OCEANIA,
+        REST_OF_WORLD,
+        e3_region,
         passes_date_cutoff,
     )
 
     return _ScopeRule(
         americas_lon_min=float(AMERICAS_LON_MIN),
         americas_lon_max=float(AMERICAS_LON_MAX),
-        cutoff_americas=int(DATE_CUTOFF_AMERICAS),
-        cutoff_rest_of_world=int(DATE_CUTOFF_REST_OF_WORLD),
+        cutoffs=dict(E3_CUTOFFS),
+        region_of=e3_region,
         passes=passes_date_cutoff,
+        americas=AMERICAS,
+        oceania=OCEANIA,
+        rest_of_world=REST_OF_WORLD,
     )
 
 
@@ -266,8 +303,9 @@ def _is_museum(site: dict[str, Any]) -> bool:
 def _scope_evidence(date: int, lon: float, region: str, cutoff: int) -> Evidence:
     rule = _scope_rule()
     return Evidence(
-        source="pipeline/normalizers/dates.py:85-88 (passes_date_cutoff)",
-        quote=f"is_americas = {rule.americas_lon_min:g} <= lon <= {rule.americas_lon_max:g}; "
+        source="pipeline/normalizers/dates.py (passes_date_cutoff, e3_region)",
+        quote=f"region = Oceania by country (O7), else Americas if {rule.americas_lon_min:g} <= "
+        f"lon <= {rule.americas_lon_max:g}, else rest of world; "
         f"cutoff = {cutoff} ({region}); return date <= cutoff   "
         f"[lon = {lon}, date = {date}]",
     )
@@ -412,14 +450,14 @@ def _undecidable_date(site: dict[str, Any], sid: str, date: Any) -> Finding:
         Confidence.UNVERIFIABLE,
         f"{reason}, so the E3 window cannot be tested - and the bucket is the only dating value "
         "this row carries. The project's own scope function includes a record without a date "
-        "(\"No date = include (conservative)\", "
-        "pipeline/normalizers/dates.py:77-78), which is right for a loader and wrong for a "
+        '("No date = include (conservative)", passes_date_cutoff in '
+        "pipeline/normalizers/dates.py), which is right for a loader and wrong for a "
         "census: reporting this site as `pass` would certify it clean on a comparison that "
         "never happened. It needs a date from a source, or an explicit scope decision",
         [
             Evidence(
-                source="pipeline/normalizers/dates.py:76-78",
-                quote="date = record.get('period_end') or record.get('period_start'); "
+                source="pipeline/normalizers/dates.py (passes_date_cutoff)",
+                quote='date = record.get("period_end") or record.get("period_start"); '
                 "if date is None: return True  # No date = include (conservative)",
             ),
             Evidence(source="snapshot:unified_sites", quote=quote),
@@ -443,9 +481,13 @@ def _undecidable_location(site: dict[str, Any], sid: str) -> Finding:
         "never happened",
         [
             Evidence(
-                source="pipeline/normalizers/dates.py:80-83",
-                quote="lon = record.get('lon'); if lon is None: return True  "
+                source="pipeline/normalizers/dates.py (passes_date_cutoff)",
+                quote="region = e3_region(record); if region is None: return True  "
                 "# No location = include",
+            ),
+            Evidence(
+                source="pipeline/normalizers/dates.py (e3_region)",
+                quote='lon = record.get("lon"); if lon is None: return None',
             ),
             _storage_evidence(site, None),
         ],
@@ -507,7 +549,7 @@ def run(ctx: Context) -> list[Finding]:
             findings.append(_undecidable_date(site, sid, date))
             continue
 
-        region, cutoff = rule.region(lon)
+        region, cutoff = rule.region(site)
         in_window = date <= cutoff
         # The census must not invent a second scope rule. Where the project's own function can
         # answer at all it has to agree with the comparison above, or the two checks this
@@ -521,8 +563,7 @@ def run(ctx: Context) -> list[Finding]:
 
         continent, features = geo.continent(lon, lat)
         if continent is not None:
-            ne_americas = continent in AMERICAS_CONTINENTS
-            ne_cutoff = rule.cutoff_americas if ne_americas else rule.cutoff_rest_of_world
+            ne_cutoff = rule.continent_cutoff(continent)
             if (date <= ne_cutoff) != in_window:
                 findings.append(
                     _ambiguous_region(
@@ -535,9 +576,7 @@ def run(ctx: Context) -> list[Finding]:
             continue  # in scope, and the second geography agrees about the verdict
         if _is_museum(site):
             findings.append(
-                _museum_past_cutoff(
-                    site, sid, date, lon, region, cutoff, continent, features, geo
-                )
+                _museum_past_cutoff(site, sid, date, lon, region, cutoff, continent, features, geo)
             )
         else:
             findings.append(

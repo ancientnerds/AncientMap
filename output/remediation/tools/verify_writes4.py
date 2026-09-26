@@ -37,8 +37,8 @@ production directly, read-only, after every step of 100 sites and once more at t
    `_description_provenance.desc_sha256` (`p4`, `p4l`), and of the card equals its `card.
    text_sha256` (`p5`).
 4. **T08** (`census t08_citation_markers.run`) over the written sites (`p4`): 0 findings.
-5. **The card file** (`--card-check`, `p5`): `phase4/card_json.py --check` is run and its own
-   `*_EXIT=` line must read 0.
+5. **The card file** (`--card-check`, `p5`): `phase4/card_json.py --check` is run; it must exit 0
+   and print exactly one exit line, its own `ACCEPT_EXIT=0`.
 6. **The boot logs** (`--boot-logs --since <StartedAt>`, after Push #2): 0 `[STARTUP] Card
    description overwritten` lines in `ancient_nerds_api` and `ancient_nerds_api2`.
 
@@ -50,10 +50,18 @@ of the design are a Playwright check against production and not part of this too
     verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> --allow-stamp 'phase4l:%'
     verify_writes4.py --lane p4l --plan <PLAN.jsonl>
     verify_writes4.py --lane p5 --plan <PLAN.jsonl> --run <runs/<run>> --card-check
+    verify_writes4.py --lane p4wc --plan <PLAN.jsonl>
     verify_writes4.py --boot-logs --since 2026-09-24T10:00:00Z
 
 The lanes' journal stamps come from `lanes.py` (`p4`, `p4l`, `p5`: `phase4:`, `phase4l:`,
-`phase5:`, WB-D1); `--stamp-like` overrides one.
+`phase5:`, WB-D1; `p4wc`: `phase4wc:`); `--stamp-like` overrides one.
+
+**Lane p4wc** (the sentence check, owner decision O5 of 2026-09-26; `phase4/wc4.py`) reads no run:
+its journal evidence carries every decision and verified quote, so steps 1 and 3-4 re-check each
+written site from the database alone - the chain as above, lane WC's invariants on the live pair
+(`wc4.wc_problems`: the check record's and lane L's hashes, D1's citations, a clear without the WC
+keys), T08, and that the live description, citations and check record are exactly what the
+journal evidence of the site's last WC write composes (`wc4.evidence_problems`).
 """
 
 from __future__ import annotations
@@ -77,8 +85,11 @@ import write_gate4  # noqa: E402 - like_matches: SQL LIKE over one stamp, as the
 from census.tests import t08_citation_markers as T08  # noqa: E402 - on sys.path via lanes
 from journal_chain import ROLLBACK_SUFFIX  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import write_stage as W  # noqa: E402 - utf8_streams, the writers' stream rule
+from phase4 import batch4 as B  # noqa: E402 - the stages' own holds reader
 from phase4 import model4 as M  # noqa: E402
 from phase4 import verify4 as V4  # noqa: E402
+from phase4 import wc4  # noqa: E402 - lane WC's invariants and its evidence re-check
 
 REPO = lanes.REPO
 CARD_JSON = REPO / "scripts" / "remediation" / "phase4" / "card_json.py"
@@ -88,6 +99,7 @@ LANE_COLUMNS: dict[str, frozenset[tuple[str, str]]] = {
     "p4": frozenset({("unified_sites", "description"), ("unified_sites", "raw_data")}),
     "p4l": frozenset({("unified_sites", "raw_data")}),
     "p5": frozenset({("card_stats", "card_description")}),
+    "p4wc": frozenset({("unified_sites", "description"), ("unified_sites", "raw_data")}),
 }
 #: The jsonb column: compared as JSON.
 JSON_COLUMNS = frozenset({("unified_sites", "raw_data")})
@@ -102,7 +114,6 @@ API_CONTAINERS = ("ancient_nerds_api", "ancient_nerds_api2")
 #: An RFC 3339 instant, as `docker inspect -f '{{.State.StartedAt}}'` prints it. Checked because it
 #: travels through ssh into a remote shell.
 _INSTANT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})")
-_EXIT_LINE = re.compile(r"^[A-Z][A-Z0-9_]*_EXIT=(\d+)$")
 
 Key = tuple[str, str, str]  #: (table, column, row_pk)
 
@@ -230,6 +241,9 @@ def accept4(
     """
     result = Acceptance4()
     plan: dict[Key, Mapping[str, Any]] = {}
+    #: A reverted round's own plan rows (`write_gate4.ROUND_STAMP`), by (that round's stamp, key):
+    #: they judge that round's reverted journal rows only - never a planned row still to write.
+    archived: dict[tuple[str, Key], Mapping[str, Any]] = {}
     for row in planned:
         key = (row["table"], row["column"], row["pk"])
         if (key[0], key[1]) not in columns:
@@ -237,7 +251,16 @@ def accept4(
                 f"PLANNED OUTSIDE THE LANE {key[2]} {key[0]}.{key[1]}: the lane writes "
                 f"{sorted(f'{t}.{c}' for t, c in columns)} only"
             )
-        plan[key] = row
+        if write_gate4.ROUND_STAMP in row:
+            twice = (row[write_gate4.ROUND_STAMP], key) in archived
+            archived[(row[write_gate4.ROUND_STAMP], key)] = row
+        else:
+            twice = key in plan
+            plan[key] = row
+        if twice:  # never the last one silently (audit 2026-09-25 m15)
+            result.deviations.append(
+                f"PLANNED TWICE {key[2]} {key[0]}.{key[1]}: the lane plan names the row twice"
+            )
     lane_by_key: dict[Key, list[VW.Link]] = collections.defaultdict(list)
     for link in lane_links:
         if (link.table, link.column) not in columns:
@@ -259,20 +282,24 @@ def accept4(
         )
         result.deviations.extend(problems)
         row = plan.get(key)
-        if row is None:
-            result.deviations.append(f"OUTSIDE THE PLAN {where}: journalled, never planned")
         closed = {link.id for link in links if reverted(link, chain, change_keys)}
         open_links = [link for link in links if link.id not in closed]
+        if row is None and not all(
+            link.id in closed and (link.stamp, key) in archived for link in links
+        ):
+            result.deviations.append(f"OUTSIDE THE PLAN {where}: journalled, never planned")
         if len(open_links) > 1:
             ids = ", ".join(str(link.id) for link in open_links)
             result.deviations.append(f"WRITTEN TWICE {where}: journal rows {ids}")
         ids_in_chain = [link.id for link in chain]
         sound = not problems and row is not None and len(open_links) == 1
         for link in links:
-            if row is not None:
+            # A reverted round's row is judged against the plan that round was written from.
+            judged = archived.get((link.stamp, key), row)
+            if judged is not None:
                 want = (
-                    canonical(key[0], key[1], row["old_value"]),
-                    canonical(key[0], key[1], row["new_value"]),
+                    canonical(key[0], key[1], judged["old_value"]),
+                    canonical(key[0], key[1], judged["new_value"]),
                 )
                 if (link.old, link.new) != want:
                     sound = False
@@ -375,12 +402,13 @@ def chain_sql(pks: Sequence[str], columns: Iterable[tuple[str, str]]) -> str:
 
 def live_sql(pks: Sequence[str]) -> str:
     """The written values and Postgres' own hash invariants, one object per site."""
+    provenance = f"u.raw_data->{lanes.sql_text(M.PROVENANCE_KEY)}"
     return (
         "SELECT to_jsonb(t)::text FROM (SELECT u.id::text AS id, u.description, u.raw_data, "
         "c.site_id IS NOT NULL AS has_card_row, c.card_description, "
-        "(u.raw_data->'_description_provenance'->>'desc_sha256') = "
+        f"({provenance}->>'desc_sha256') = "
         "encode(sha256(convert_to(u.description, 'UTF8')), 'hex') AS desc_invariant, "
-        "(u.raw_data->'_description_provenance'->'card'->>'text_sha256') = "
+        f"({provenance}->'card'->>'text_sha256') = "
         "encode(sha256(convert_to(c.card_description, 'UTF8')), 'hex') AS card_invariant "
         "FROM unified_sites u LEFT JOIN card_stats c ON c.site_id = u.id "
         f"WHERE u.id IN ({_uuids(pks)})) t;\n"
@@ -455,11 +483,25 @@ def read_production(
 
 @dataclass(frozen=True)
 class RunSite:
-    """One site of the run: its batch, its plan record and its assembly (None if it had none)."""
+    """One site of the run: its batch, its plan record and its assembly (None if it had none), and
+    whether the run deferred it (`deferred_in`)."""
 
     batch_dir: pathlib.Path
     site: M.PlanSite
     assembly: M.Assembly | None
+    deferred: bool
+
+
+def deferred_in(site_id: str, holds: Iterable[M.Hold], assembly: M.Assembly | None) -> bool:
+    """The batch held the site `revision-too-fresh` (site scope) and assembled nothing for it: the
+    run deferred it to a later batch or a later run (`mass4` re-queue, `plan4 --take-deferred`) and
+    wrote nothing of it."""
+    return assembly is None and any(
+        hold.site_id == site_id
+        and hold.scope is M.HoldScope.SITE
+        and hold.reason is M.HoldReason.REVISION_TOO_FRESH
+        for hold in holds
+    )
 
 
 def batch_site_ids(batch_dir: pathlib.Path) -> set[str]:
@@ -483,8 +525,12 @@ def index_run(run_dir: pathlib.Path, written: Iterable[str] | None = None) -> di
         except (FileNotFoundError, ValueError) as exc:
             raise SystemExit(f"{batch_dir}: the batch cannot be read: {exc}") from exc
         assemblies = {assembly.site_id: assembly for assembly in inputs.assemblies}
+        holds = B.read_holds(batch_dir)
         for site_id, site in inputs.sites.items():
-            found[site_id] = RunSite(batch_dir, site, assemblies.get(site_id))
+            assembly = assemblies.get(site_id)
+            found[site_id] = RunSite(
+                batch_dir, site, assembly, deferred_in(site_id, holds, assembly)
+            )
     return found
 
 
@@ -492,17 +538,20 @@ def index_runs(
     run_dirs: Iterable[pathlib.Path], written: Iterable[str] | None = None
 ) -> dict[str, RunSite]:
     """`index_run` over every run a lane was written from (the pilot's and the mass run's share the
-    `phase4:` stamps). A site two runs carry is refused: which run's pinned texts it was written
-    from would be a guess."""
+    `phase4:` stamps). A site two runs carry is refused - which run's pinned texts it was written
+    from would be a guess - unless every run but one deferred it (`RunSite.deferred`): a site the
+    mass run held `revision-too-fresh` and a later plan took over (`plan4 --take-deferred`) is the
+    later run's, the only one that can have assembled it. A site every run deferred is the last
+    one's; none of them wrote it."""
     wanted = None if written is None else set(written)
     found: dict[str, RunSite] = {}
     for run_dir in run_dirs:
         for site_id, entry in index_run(run_dir, wanted).items():
-            if site_id in found:
-                raise SystemExit(
-                    f"{site_id} is in two runs: {found[site_id].batch_dir.parent} and {run_dir}"
-                )
-            found[site_id] = entry
+            kept = found.get(site_id)
+            if kept is not None and not kept.deferred and not entry.deferred:
+                raise SystemExit(f"{site_id} is in two runs: {kept.batch_dir.parent} and {run_dir}")
+            if kept is None or kept.deferred:
+                found[site_id] = entry
     return found
 
 
@@ -624,6 +673,46 @@ def invariant_deviations(*, lane: str, carried: Iterable[Key], production: Produ
             deviations.append(
                 f"INVARIANT {site_id}: card.text_sha256 is not Postgres' sha256 of the card"
             )
+        if lane == "p4wc":
+            deviations.extend(
+                f"INVARIANT {site_id}: {problem}"
+                for problem in wc4.wc_problems(row["description"], row["raw_data"])
+            )
+    return deviations
+
+
+def wc_evidence_sql(pks: Sequence[str], stamp_like: str) -> str:
+    """The evidence of each site's WC writes, oldest first. Both rows of one write carry the same
+    evidence, and a site may write one of them alone: its raw_data (a text kept byte for byte) or
+    its description (the clear of a NULL raw_data)."""
+    return (
+        "SELECT to_jsonb(t)::text FROM (SELECT id, row_pk, run_stamp, evidence "
+        f"FROM remediation_change_log WHERE (table_name, column_name) IN "
+        f"({_pairs(LANE_COLUMNS['p4wc'])}) AND row_pk IN ({lanes.sql_literals(pks)}) "
+        f"AND run_stamp LIKE {lanes.sql_text(stamp_like)} "
+        f"AND run_stamp NOT LIKE {lanes.sql_text('%' + ROLLBACK_SUFFIX)} ORDER BY id) t;\n"
+    )
+
+
+def wc_evidence_deviations(
+    site_ids: Iterable[str], production: Production, evidence_rows: Sequence[Mapping[str, Any]]
+) -> list[str]:
+    """Each carried WC site as production holds it is exactly what the journal evidence of its
+    last WC write composes (`wc4.evidence_problems`): the description from the decisions and the
+    verified quotes, the citations, the check record."""
+    deviations: list[str] = []
+    for site_id in sorted(site_ids):
+        rows = [row for row in evidence_rows if row["row_pk"] == site_id]
+        if not rows:
+            deviations.append(f"EVIDENCE {site_id}: no WC journal row of the site")
+            continue
+        row = production.rows[site_id]
+        deviations.extend(
+            f"EVIDENCE {site_id}: {problem}"
+            for problem in wc4.evidence_problems(
+                rows[-1]["evidence"], row["description"], row["raw_data"]
+            )
+        )
     return deviations
 
 
@@ -662,24 +751,28 @@ def run_command(argv: Sequence[str]) -> tuple[int, str]:
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
-def exit_line(output: str) -> int | None:
-    """The command's own last `*_EXIT=<n>` line; `None` when it printed none."""
-    codes = [
-        int(m.group(1))
-        for m in (_EXIT_LINE.match(line.strip()) for line in output.splitlines())
-        if m
+def exit_lines(output: str) -> list[str]:
+    """Every `*_EXIT=<n>` line the command printed, in order."""
+    return [
+        line.strip() for line in output.splitlines() if write_gate4.EXIT_LINE.match(line.strip())
     ]
-    return codes[-1] if codes else None
 
 
 def card_file_deviations(command: Callable[[Sequence[str]], tuple[int, str]]) -> list[str]:
-    """production_write: `card_json.py --check` - the file equals the database for every entry."""
+    """production_write: `card_json.py --check` - the file equals the database for every entry.
+
+    Clean only when the process exited 0 and printed exactly one exit line, its own
+    `ACCEPT_EXIT=0` - never another tool's tag, nor the last of two runs (audit 2026-09-25 m17).
+    """
     if not CARD_JSON.exists():
         return [f"CARD FILE: {CARD_JSON} is not on this tree (WB-D3)"]
-    _, output = command([sys.executable, str(CARD_JSON), "--check"])
-    code = exit_line(output)
-    if code != 0:
-        return [f"CARD FILE: card_json.py --check ended with its exit line {code!r}"]
+    status, output = command([sys.executable, str(CARD_JSON), "--check"])
+    lines = exit_lines(output)
+    if status != 0 or lines != [write_gate4.ACCEPT_OK]:
+        return [
+            f"CARD FILE: card_json.py --check exited {status} with the exit line(s) {lines!r}, "
+            f"not one {write_gate4.ACCEPT_OK}"
+        ]
     return []
 
 
@@ -733,8 +826,9 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
         change_keys=production.change_keys,
         allowed=args.allow_stamp,
     )
+    current = sum(write_gate4.ROUND_STAMP not in row for row in planned)
     print(
-        f"lane {lane} | stamps {stamp_like} | planned rows {len(planned)} | lane journal rows "
+        f"lane {lane} | stamps {stamp_like} | planned rows {current} | lane journal rows "
         f"{len(production.lane_links)} | carried {len(result.carried)} | not yet written "
         f"{result.untouched} | superseded {sum(result.superseded.values())}"
     )
@@ -759,6 +853,16 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             for site in written
             if production.live.get(("card_stats", "card_description", site)) is not None
         }
+    if lane == "p4wc":
+        wc_rows: list[dict[str, Any]] = []
+        ordered = sorted(written)
+        for start in range(0, len(ordered), WINDOW):
+            wc_rows += lanes.json_rows(
+                run(wc_evidence_sql(ordered[start : start + WINDOW], stamp_like))
+            )
+        deviations += wc_evidence_deviations(written, production, wc_rows)
+        deviations += t08_deviations(written, production)
+        print(f"re-checked {len(written)} written site(s) against their journal evidence")
     if lane in ("p4", "p5"):
         if not args.run:
             raise SystemExit(f"lane {lane} re-runs V1-V15 on the written sites: --run is required")
@@ -778,8 +882,7 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
 
 
 def main(argv: list[str] | None = None) -> int:
-    for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    W.utf8_streams()
     parser = argparse.ArgumentParser(prog="verify-writes4")
     parser.add_argument("--lane", choices=sorted(LANE_COLUMNS))
     parser.add_argument("--plan", help="the lane's PLAN.jsonl (write4)")

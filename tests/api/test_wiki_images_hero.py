@@ -113,3 +113,41 @@ def test_hero_status_names_the_hero_rows_own_file(filename):
     out = asyncio.run(wiki_images.get_hero_status(db=db))
     assert out[SITE_ID]["path"] == f"/data/images/wiki/abcdef12/{filename}"
     assert "filename" in db.statement_with("WHERE is_hero = true").split("FROM wiki_images")[0]
+
+
+# --------------------------------------------------------------------------------------
+# remove-image
+# --------------------------------------------------------------------------------------
+
+
+def test_removing_an_image_not_yet_cached_records_the_exclusion_and_succeeds():
+    """A gallery image with no wiki_images row gets an excluded row so no connector shows it.
+
+    Until 2026-09-26 the endpoint committed that row and then read ``row[0]`` of the empty
+    lookup for a closing log line: a TypeError, which the handler answered with a 500. The
+    exclusion was stored, but the founder's lightbox reported the removal as failed
+    (found by ``mypy api/``, HUMAN_ONLY A7: 'Value of type "Row[Any] | None" is not
+    indexable')."""
+    db = RecordingSession()  # the lookup finds no row
+    body = wiki_images.RemoveImageRequest(image_url="https://upload.wikimedia.org/x/Gate.jpg")
+
+    out = asyncio.run(wiki_images.remove_image(SITE_ID, body, db=db, _user=None))
+
+    assert out == {"success": True}
+    ((sql, params),) = [(s, p) for s, p in db.log if "INSERT INTO wiki_images" in s]
+    assert "is_excluded" in sql
+    assert params == {"sid": SITE_ID, "url": "https://upload.wikimedia.org/x/Gate.jpg"}
+    assert (db.commits, db.rollbacks) == (1, 0)
+
+
+def test_removing_a_cached_image_marks_its_row_excluded():
+    db = RecordingSession({"SELECT id, filename FROM wiki_images": [(77, "Gate.webp")]})
+    body = wiki_images.RemoveImageRequest(image_url="https://upload.wikimedia.org/x/Gate.jpg")
+
+    out = asyncio.run(wiki_images.remove_image(SITE_ID, body, db=db, _user=None))
+
+    assert out == {"success": True}
+    ((sql, params),) = [(s, p) for s, p in db.log if s.startswith("UPDATE wiki_images")]
+    assert "is_excluded = true" in sql
+    assert params == {"id": 77}
+    assert (db.commits, db.rollbacks) == (1, 0)

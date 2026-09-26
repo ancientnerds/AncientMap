@@ -1,0 +1,137 @@
+{
+ "coordinates": {
+  "CONFLICT: identity": 494,
+  "CONFLICT: stacked": 24,
+  "CONFLICT: stored point 1-10 km from a witness": 306,
+  "CONFLICT: stored point > 10 km": 119,
+  "CONFLICT: wikidata and enwiki disagree": 5,
+  "MISSING: no source point": 622,
+  "MISSING: one source point only": 248
+ },
+ "harvest_status": {
+  "population": {
+   "entities_harvested": 4633,
+   "enwiki_records": 4612,
+   "sites": 5004,
+   "url_records": {
+    "malformed": 7,
+    "none": 42,
+    "not-a-source": 14,
+    "web": 270,
+    "wikipedia": 4671
+   },
+   "with_enwiki_sitelink": 4612,
+   "with_qid": 4633
+  },
+  "sample": {
+   "entities_harvested": 190,
+   "enwiki_records": 190,
+   "sites": 200,
+   "url_records": {
+    "not-a-source": 1,
+    "web": 9,
+    "wikipedia": 190
+   },
+   "with_enwiki_sitelink": 190,
+   "with_qid": 190
+  }
+ },
+ "no_distinctive_word": {
+  "live_sites": 169,
+  "source_url_asked": 38
+ },
+ "questions_by_country": {
+  "pop-all": {
+   "fields_asked": 9496,
+   "fields_asked_top5": {
+    "England": 1672,
+    "Greece": 737,
+    "Peru": 772,
+    "Spain": 435,
+    "Türkiye": 556
+   },
+   "period_start_asked": 4694,
+   "period_start_asked_england": 1020
+  },
+  "pop-conflict": {
+   "fields_asked": 4013,
+   "fields_asked_top5": {
+    "England": 681,
+    "Greece": 332,
+    "Italy": 156,
+    "Peru": 269,
+    "Türkiye": 204
+   },
+   "period_start_asked": 1313,
+   "period_start_asked_england": 207
+  },
+  "pop-rest": {
+   "fields_asked": 5483,
+   "fields_asked_top5": {
+    "England": 991,
+    "Greece": 405,
+    "Mexico": 294,
+    "Peru": 503,
+    "Türkiye": 352
+   },
+   "period_start_asked": 3381,
+   "period_start_asked_england": 813
+  }
+ },
+ "seeds": {
+  "cells": 54,
+  "confirmed_by_the_machine": [
+   "Baltic Sea Anomaly (site_type)",
+   "Templo de Bel (period_start)"
+  ],
+  "machine_status": {
+   "coordinates: CONFLICT": 2,
+   "coordinates: MISSING": 2,
+   "period_start: CONFIRMED": 1,
+   "period_start: CONFLICT": 2,
+   "period_start: MISSING": 28,
+   "site_type: CONFIRMED": 1,
+   "site_type: CONFLICT": 10,
+   "site_type: MISSING": 5,
+   "source_url: CONFLICT": 3
+  },
+  "seeds": 65,
+  "sites": 46
+ },
+ "source_url": {
+  "CONFLICT: a disambiguation page": 4,
+  "CONFLICT: a section link": 7,
+  "CONFLICT: another item's article": 33,
+  "CONFLICT: dead": 26,
+  "CONFLICT: identity": 474,
+  "CONFLICT: malformed": 6,
+  "CONFLICT: not-a-source": 13,
+  "CONFLICT: redirects into a section": 8,
+  "CONFLICT: redirects to another article": 31,
+  "CONFLICT: redirects to another page": 16,
+  "MISSING: a page whose title names nothing of the site": 32,
+  "MISSING: an article no item of the site confirms": 39,
+  "MISSING: empty": 42,
+  "MISSING: not readable by machine": 64
+ },
+ "source_url_unreadable_by": {
+  "403": 37,
+  "429": 1,
+  "500": 1,
+  "522": 2,
+  "ConnectError": 19,
+  "ConnectTimeout": 2,
+  "ReadTimeout": 1,
+  "RemoteProtocolError": 1
+ },
+ "source_url_unreadable_hosts": {
+  "blog.delphinhotel.com": 1,
+  "diazoma.gr": 3,
+  "whc.unesco.org": 11,
+  "www.atlasobscura.com": 8,
+  "www.britannica.com": 3,
+  "www.britishmuseum.org": 1,
+  "www.touregypt.net": 2,
+  "www.tuerkei-antik.de": 6
+ }
+}

@@ -62,12 +62,12 @@ def render_hero_webp(image_bytes: bytes) -> tuple[bytes, int, int]:
     database or a disk. The mode handling is the endpoint's as it was: RGBA and palette images
     lose their alpha, every other mode is left to the WebP encoder.
     """
-    img = Image.open(BytesIO(image_bytes))
+    img: Image.Image = Image.open(BytesIO(image_bytes))
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
     if img.width > HERO_WIDTH:
         ratio = HERO_WIDTH / img.width
-        img = img.resize((HERO_WIDTH, int(img.height * ratio)), Image.LANCZOS)
+        img = img.resize((HERO_WIDTH, int(img.height * ratio)), Image.Resampling.LANCZOS)
     buf = BytesIO()
     img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
     return buf.getvalue(), img.width, img.height
@@ -282,7 +282,6 @@ async def remove_image(
             )
             db.commit()
             print(f"[remove-image] Excluded image id={row[0]}", flush=True)
-        print(f"[remove-image] Deleted row id={row[0]} for site {site_id}", flush=True)
         return {"success": True}
 
     except HTTPException:

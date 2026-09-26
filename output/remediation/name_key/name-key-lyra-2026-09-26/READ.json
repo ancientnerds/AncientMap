@@ -1,0 +1,116 @@
+{
+ "read_at": "2026-09-26T01:27:11Z",
+ "sites": [],
+ "names": [
+  {
+   "id": 3616643,
+   "site_id": "848cbe6d-136e-4c15-819c-b017b290a909",
+   "source_id": "lyra",
+   "name": "북센티널섬",
+   "name_normalized": "북센티널섬",
+   "name_type": "wikidata_alias",
+   "sql_key": "북센티널섬",
+   "collides_with": null
+  },
+  {
+   "id": 3616936,
+   "site_id": "6eb8b50f-b9dc-4069-8135-efeb491b9e1b",
+   "source_id": "lyra",
+   "name": "ドッガーランド",
+   "name_normalized": "トッカーラント",
+   "name_type": "wikidata_alias",
+   "sql_key": "ドッガーランド",
+   "collides_with": null
+  },
+  {
+   "id": 3616938,
+   "site_id": "6eb8b50f-b9dc-4069-8135-efeb491b9e1b",
+   "source_id": "lyra",
+   "name": "도거랜드",
+   "name_normalized": "도거랜드",
+   "name_type": "wikidata_alias",
+   "sql_key": "도거랜드",
+   "collides_with": null
+  },
+  {
+   "id": 3617031,
+   "site_id": "624a1828-419b-46e4-93d0-ef7b4981aa29",
+   "source_id": "lyra",
+   "name": "ヤップ島",
+   "name_normalized": "ヤッフ島",
+   "name_type": "wikidata_alias",
+   "sql_key": "ヤップ島",
+   "collides_with": null
+  },
+  {
+   "id": 3617034,
+   "site_id": "624a1828-419b-46e4-93d0-ef7b4981aa29",
+   "source_id": "lyra",
+   "name": "야프 제도",
+   "name_normalized": "야프 제도",
+   "name_type": "wikidata_alias",
+   "sql_key": "야프 제도",
+   "collides_with": null
+  },
+  {
+   "id": 3617035,
+   "site_id": "624a1828-419b-46e4-93d0-ef7b4981aa29",
+   "source_id": "lyra",
+   "name": "야프섬",
+   "name_normalized": "야프섬",
+   "name_type": "wikidata_alias",
+   "sql_key": "야프섬",
+   "collides_with": null
+  },
+  {
+   "id": 3617036,
+   "site_id": "624a1828-419b-46e4-93d0-ef7b4981aa29",
+   "source_id": "lyra",
+   "name": "야프제도",
+   "name_normalized": "야프제도",
+   "name_type": "wikidata_alias",
+   "sql_key": "야프제도",
+   "collides_with": null
+  },
+  {
+   "id": 3617283,
+   "site_id": "ccccdfe7-8288-4451-a222-07facc1bfe50",
+   "source_id": "lyra",
+   "name": "Cerutti Mastodon (CM) site",
+   "name_normalized": "cerutti mastodon  site",
+   "name_type": "wikidata_alias",
+   "sql_key": "cerutti mastodon (cm) site",
+   "collides_with": null
+  },
+  {
+   "id": 3617346,
+   "site_id": "85dbd052-9423-4404-a059-3f69cb7bb82d",
+   "source_id": "lyra",
+   "name": "ループクンド湖",
+   "name_normalized": "ルーフクント湖",
+   "name_type": "wikidata_alias",
+   "sql_key": "ループクンド湖",
+   "collides_with": null
+  },
+  {
+   "id": 3617349,
+   "site_id": "dab28cc0-615f-4779-9fef-882586a6ab6f",
+   "source_id": "lyra",
+   "name": "チャーンウッドの森",
+   "name_normalized": "チャーンウットの森",
+   "name_type": "wikidata_alias",
+   "sql_key": "チャーンウッドの森",
+   "collides_with": null
+  },
+  {
+   "id": 3617350,
+   "site_id": "dab28cc0-615f-4779-9fef-882586a6ab6f",
+   "source_id": "lyra",
+   "name": "チャーンウッドフォレスト",
+   "name_normalized": "チャーンウットフォレスト",
+   "name_type": "wikidata_alias",
+   "sql_key": "チャーンウッドフォレスト",
+   "collides_with": null
+  }
+ ]
+}

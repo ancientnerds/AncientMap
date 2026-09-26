@@ -699,6 +699,39 @@ class TestRenderTransaction:
         with pytest.raises(P.PlanError, match="no COMMIT"):
             A.rehearse("BEGIN;\nSELECT 1;\n")
 
+    @pytest.mark.parametrize(
+        "over",
+        [{"run_stamp": "stamp$$"}, {"lane": replace(L.T05, confidence="two$$source")}],
+        ids=["run-stamp", "confidence"],
+    )
+    def test_a_value_that_would_end_the_do_block_is_refused(self, over: dict[str, Any]) -> None:
+        """Audit 2026-09-25 m4: the run stamp, test id, confidence, owned values and premise are
+        spliced inside `DO $$ ... END $$;`; a `$$` in any of them would end the block early."""
+        with pytest.raises(P.PlanError, match="would end the DO block"):
+            A.render_transaction([record()], site_ids={SITE_GEORGIA}, **over)
+
+    def test_a_statement_with_two_commits_cannot_be_rehearsed(self) -> None:
+        """Audit 2026-09-25 m2: the rehearsal swapped the first COMMIT and dropped the rest, and
+        the check behind it (`script.startswith(head)`) held by construction. A second COMMIT is
+        a second transaction the rehearsal would not run: refused."""
+        with pytest.raises(P.PlanError, match="2 COMMIT"):
+            A.rehearse("BEGIN;\nSELECT 1;\nCOMMIT;\nBEGIN;\nSELECT 2;\nCOMMIT;\n")
+
+    def test_the_apply_refuses_an_edited_rollback_before_anything_is_sent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Audit 2026-09-25 m1: `--apply` re-verified APPLY.sql but not its undo: a ROLLBACK.sql
+        edited after the emit sat beside a write that went out."""
+        records, plan_path = delivered(tmp_path)
+        A.emit(records, tmp_path, plan_path=plan_path)
+        rollback = tmp_path / "ROLLBACK.sql"
+        rollback.write_text(
+            rollback.read_text(encoding="utf-8") + "-- edited\n", encoding="utf-8", newline="\n"
+        )
+        monkeypatch.setattr(A, "run_psql", lambda *a, **k: pytest.fail("sent to production"))
+        with pytest.raises(P.PlanError, match="ROLLBACK.sql is pinned to this plan but"):
+            A.cmd_apply(records, tmp_path, plan_path=plan_path)
+
     def test_the_rollback_swaps_the_values_and_its_run_stamp(self) -> None:
         rollback = [replace(record(), old_value="Georgia", new_value="Georgia (country)")]
         sql = A.render_transaction(
@@ -757,6 +790,11 @@ class TestReadBackStatements:
         be the file itself, and whatever it does would be kept. Raised before any psql call."""
         (tmp_path / "ROLLBACK.sql").write_text("BEGIN;\nSELECT 1;\n", encoding="utf-8")
         with pytest.raises(P.PlanError, match="no COMMIT"):
+            A.cmd_rehearse_rollback([record()], tmp_path, plan_path=tmp_path / "PLAN.jsonl")
+        (tmp_path / "ROLLBACK.sql").write_text(
+            "BEGIN;\nSELECT 1;\nCOMMIT;\nSELECT 2;\nCOMMIT;\n", encoding="utf-8"
+        )
+        with pytest.raises(P.PlanError, match="2 COMMIT"):
             A.cmd_rehearse_rollback([record()], tmp_path, plan_path=tmp_path / "PLAN.jsonl")
 
     def test_the_rollback_rehearsal_reads_name_the_planned_rows(self) -> None:
@@ -929,7 +967,14 @@ def shape_record(**over: Any) -> A.ChangeRecord:
 #: card_stats lanes are built by `lane.resolve_lane` (they import the card generator), so they
 #: are not in `L.LANES`, and a parametrisation over `L.LANES` alone would never reach them.
 CARD_STATS_WAVE = "card-stats-2026-09-23"
-ALL_LANES: dict[str, L.Lane] = {**L.LANES, CARD_STATS_WAVE: L.resolve_lane(CARD_STATS_WAVE)}
+#: A scope-review wave (`scope_review.py`): built by `lane.resolve_lane` like the card_stats waves,
+#: so the parametrisations reach it; its plan is fabricated (`scope_review_plan`).
+SCOPE_REVIEW_WAVE = "scope-review-2026-09-26"
+ALL_LANES: dict[str, L.Lane] = {
+    **L.LANES,
+    CARD_STATS_WAVE: L.resolve_lane(CARD_STATS_WAVE),
+    SCOPE_REVIEW_WAVE: L.resolve_lane(SCOPE_REVIEW_WAVE),
+}
 
 #: A row of another source, as `--probe-guards` reads it from production.
 FOREIGN = {
@@ -1385,13 +1430,17 @@ NEW_LANES = [
     for name in sorted(L.LANES)
     if name != L.T05.name and (A.lane_dir(L.LANES[name]) / "PLAN.jsonl").exists()
 ]
+#: Lanes whose plan is built from Opus answers still to be imported, so none is delivered yet: the
+#: L5 name lane (`scripts/remediation/l5/plan.py`, HUMAN_ONLY B1-N and Nr. 7, 2026-09-26). Its
+#: statements are tested on a fabricated plan (`name_l5_plan`).
+AWAITING_ANSWERS = frozenset({"name-l5"})
 
 
 class TestTheDeliveredLanes:
     """The committed statements of the lanes not yet applied are exactly what `--emit` renders."""
 
     def test_every_new_lane_has_a_delivered_plan(self) -> None:
-        assert sorted(NEW_LANES) == sorted(n for n in L.LANES if n != L.T05.name)
+        assert set(NEW_LANES) | AWAITING_ANSWERS == {n for n in L.LANES if n != L.T05.name}
 
     @pytest.mark.parametrize("name", NEW_LANES)
     def test_the_committed_statements_are_the_plan_s_own(self, name: str) -> None:
@@ -1467,6 +1516,10 @@ def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path
         return delivered(directory)
     if lane.target is L.CARD_STATS:
         return card_stats_plan(directory, lane)
+    if lane is L.NAME_L5:
+        return name_l5_plan(directory)
+    if L.SCOPE_REVIEW_LANE.match(lane.name):
+        return scope_review_plan(directory, lane)
     plan_path = directory / "PLAN.jsonl"
     plan_path.write_text(
         (A.lane_dir(lane) / "PLAN.jsonl").read_text(encoding="utf-8"),
@@ -1512,6 +1565,75 @@ def card_stats_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord]
         for site, column, old, new in cells
     )
     plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-23T00:00:00+00:00", lane=lane)
+    plan_path = directory / "PLAN.jsonl"
+    P.write_plan_jsonl(plan, plan_path)
+    P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
+    return A.load_records(plan_path), plan_path
+
+
+def name_l5_plan(directory: Path) -> tuple[list[A.ChangeRecord], Path]:
+    """The L5 name lane's plan, fabricated: it is built from the Opus readings once they are
+    imported (`scripts/remediation/l5/`), so no plan is delivered yet. Two renames, each a name
+    and its key, the way `l5/plan.py` writes them - the first is HUMAN_ONLY Nr. 7's."""
+    cells = [
+        (SITE_BOA, "name", "Zoque Culture Archaeological Zone", "Chiapa de Corzo"),
+        (SITE_BOA, "name_normalized", "zoque culture archaeological zone", "chiapa de corzo"),
+        (SITE_GIANTS_RING, "name", "Giants Ring", "Giant's Ring"),
+        (SITE_GIANTS_RING, "name_normalized", "giants ring", "giant's ring"),
+    ]
+    changes = tuple(
+        P.Verdict(
+            site_id=site,
+            site_name="a site",
+            ok=True,
+            old_value=old,
+            new_value=new,
+            rule="l5-name",
+            reason="",
+            note=f"{column} {old} -> {new}",
+            phase3=False,
+            finding_test_id="B1/name-l5",
+            evidence=({"source": "test", "quote": "x"},),
+            column=column,
+        )
+        for site, column, old, new in cells
+    )
+    plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-26T00:00:00+00:00", lane=L.NAME_L5)
+    plan_path = directory / "PLAN.jsonl"
+    P.write_plan_jsonl(plan, plan_path)
+    P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
+    return A.load_records(plan_path), plan_path
+
+
+def scope_review_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path]:
+    """A scope-review wave's plan, which an Opus run produces (`scope_review.py`), fabricated in
+    its two shapes: an unassessed row retired as no archaeological site, and a scope-e4
+    retirement taken back by O7."""
+    cells = [
+        (SITE_BOA, "scope_status", None, "retired"),
+        (SITE_BOA, "scope_reason", None, "E3: not an archaeological site (natural_formation): x"),
+        (SITE_GIANTS_RING, "scope_status", "retired", "in_scope"),
+        (SITE_GIANTS_RING, "scope_reason", "E3: period_start 1200 is 700 years past", "E3 (O7)"),
+    ]
+    changes = tuple(
+        P.Verdict(
+            site_id=site,
+            site_name="a site",
+            ok=True,
+            old_value=old,
+            new_value=new,
+            rule="scope-review",
+            reason="",
+            note=f"{column} {old} -> {new}",
+            phase3=False,
+            finding_test_id="E3/scope-review",
+            evidence=({"source": "test", "quote": "x"},),
+            premise=f"premise-of-{site[:8]}",
+            column=column,
+        )
+        for site, column, old, new in cells
+    )
+    plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-26T00:00:00+00:00", lane=lane)
     plan_path = directory / "PLAN.jsonl"
     P.write_plan_jsonl(plan, plan_path)
     P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
@@ -1889,10 +2011,30 @@ class TestTheLandedCheck:
 #: code as it was BEFORE the lanes were generalised to (table, key column, value column, curated-
 #: scope predicate) on 2026-09-23 - measured at commit c186008, the branch point. T05's apply,
 #: rollback and read-back digests are the ones pinned above since 2026-09-22 (the same numbers).
+#: One deliberate change since: the read-only `interests` query is read as JSON and skips NULL
+#: (audit 2026-09-25 M9: a value holding `|` broke the split reader) - re-pinned 2026-09-25. No
+#: write, undo, rehearsal or probe digest moved.
 COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
+    # the B2-L lane (WE, 2026-09-26): pinned as emitted, before its rehearsal
+    "country-b2": {
+        "apply": "71ff3eeeddc735ac024ef3b0029842ea8fe3bf530c911da6812f8c987f40a120",
+        "interests": "2838184adb059f6bc7b0f35b0fcb55146859e5c179d64f5804b32c34b1edc969",
+        "landed": "601108c72f75c7b6073d9adc96aeb110d476bd9242c9b0dd74aa64f27b9797f5",
+        "probe:guard1-other-source": "48fd4691556ef95e5cbb36358aab0b754135d980815b9d54b29d92edd7d31f7d",
+        "probe:guard2-no-op": "a468a0485518351282d027db10ee549be8c3878b8ce25fada91dd796d96038cb",
+        "probe:guard2-too-long": "a48095edb0a54953ccae4ce4b13c21d3af93bfff3cd0765c2721765bde601e6b",
+        "probe:guard3-foreign-old-value": "30b2ca99ce8d7468b615ffbc28afe20867f9e731dccbb21c5758a15c4f1f0c5f",
+        "probe:guard4-not-owned": "72def9c5b631ea3e8c53b64cd9c5f7dd7132a99ba53e530e959559339648eb06",
+        "probe:guard5-premise": "4696fd38d49346b1ead066b93f2fcc528edbe4ebd31779af6af12ea27e5a9a30",
+        "probe_foreign": "9d5bf7181303fac43324a2f9396a6daaf108b5f6b191dcd32b988fe0c5fcf19c",
+        "readback": "2347871e8ec9c356168a75f6af953dbb13ef73cd9e410ec1f12a587c4e47faf9",
+        "rehearsal": "59ef9d22876a0e88fbcf7612f3ae928aa85664af6b48feff60762afef15f2e90",
+        "rollback": "e119dbbff811a39ee96942f60ef30218f713347b081e06edc1598182fbe526e9",
+        "rollback_rehearsal": "df0ade3617ebcbe18811c2f46fe0a2263c06a261dc8ba4b5f8bed3644165fd04",
+    },
     "period-name": {
         "apply": "fe122a2edb983d35c30c3049987f02f0e4cf0d67769cf0fe8c1f4bdb95b4e716",
-        "interests": "cb5fe87a9b1e434efa03e9b19872bdbe85cd5897617764d0cd0fb00232e1949c",
+        "interests": "3b5e8257f890ceb98c0ad713db8b78dcf34e881257db462aceb17288f38822df",
         "landed": "ae19a74296d7ceba1debca126f9840a1007c2789eb8e1685e8e6a44697c5c175",
         "probe:guard1-other-source": "fcc1296af5f1e067479ab8a833e7c0fae0e7bc001b41b508d8a935541875cfc7",
         "probe:guard2-no-op": "0f27046e232845c73a157941a7e59e7a1868ea48f5df101b2d3bfd348b6be9e2",
@@ -1908,7 +2050,7 @@ COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     },
     "site-type-shape": {
         "apply": "d12f14e2ced6dd5700910700f0b06472ecb27f462c0ef381778b6ba1b0bd624c",
-        "interests": "904da5f4df72e6e90b384e1c6c5b2c41fc8585678233134a089f3cd8f60f95d6",
+        "interests": "a17ef8fe4dc246b7b99135686e42706b601597a22bfa4cb2eae96102753a446e",
         "landed": "cf4e4cdc273cedbe8b45cfb3445fb35fdc304f67f18ffd9aef24eed67bd50c60",
         "probe:guard1-other-source": "193173a78caaab5fce13ec100fa0c1d305c579a9fbf06e0a96dfc11ee6d99a59",
         "probe:guard2-no-op": "735c47353d117de3c9c04928062865c01c2a77dd9613478e8ad638ae9c51b37c",
@@ -1923,7 +2065,7 @@ COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     },
     "t05": {
         "apply": "f27845273ff0b34a458036e9ee4fcbe3e97ea4a53d08340c205ea66c3667f2ff",
-        "interests": "df54151807f6310cf8d91243be984a21d698ebdcd4bbbcb262bdce6d89315166",
+        "interests": "2838184adb059f6bc7b0f35b0fcb55146859e5c179d64f5804b32c34b1edc969",
         "landed": "c2bb4bd0fff25aecdc92dcf1cc5a42f10ee2812205ba7d6dccadf5dda06b246a",
         "probe:guard1-other-source": "9a0dac224c8afac00297e1f74435f6d1a80c6487ff2854f245bb87c9fcc04720",
         "probe:guard2-no-op": "d36f6f9e1adff29c418cee4cd31982b2db4e95f78aac0ba8cdd2756e74211d74",
@@ -1937,7 +2079,7 @@ COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     },
     "uk-parts": {
         "apply": "a2a404b171c921ffa6f8b1ee3faf9084a579ffeb3f9f8b5f870b2b429c5ccf41",
-        "interests": "df54151807f6310cf8d91243be984a21d698ebdcd4bbbcb262bdce6d89315166",
+        "interests": "2838184adb059f6bc7b0f35b0fcb55146859e5c179d64f5804b32c34b1edc969",
         "landed": "81db88dd47f58880d9ecde5889698c1afb0494ad1e82a1fdadded1540f932f77",
         "probe:guard1-other-source": "907c7796721216efdde09504f4935530ce8ba8c6ce412639075eb455829345e6",
         "probe:guard2-no-op": "7a88236d44697add7e7aede1c239cddee7c2eb2e91d2ca2f241e2e56eb5b20e6",
@@ -2027,3 +2169,70 @@ class TestTheColumnLanesAreByteNeutral:
             key: _sha(text) for key, text in _column_lane_renderings(lane, monkeypatch).items()
         }
         assert rendered == COLUMN_LANE_PINS[name]
+
+
+class TestTheValueTableReadsJson:
+    """Audit 2026-09-25 M9: `_value_rows` split unaligned psql output on `|`, so a curated value
+    holding a `|` (or a newline) raised an uncaught ValueError - after a COMMIT, that turned a
+    committed write into exit 1, a refusal. The table is read as JSON, like `_cell_value_rows`."""
+
+    def test_a_value_with_the_separator_or_a_newline_is_read_whole(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import subprocess
+
+        from pipeline.sites_html_renderer import country_slug
+
+        sent: list[str] = []
+        answer = (
+            json.dumps({"value": "Georgia|Kakheti", "n": 3})
+            + "\n"
+            + json.dumps({"value": "Georgia\nKakheti", "n": 1})
+            + "\n"
+            + json.dumps({"value": "Georgia", "n": 7})
+            + "\n"
+        )
+
+        def run_psql(sql: str, **kw: Any) -> Any:
+            sent.append(sql)
+            return subprocess.CompletedProcess([], 0, answer, "")
+
+        monkeypatch.setattr(A, "run_psql", run_psql)
+        assert A._value_rows(L.T05) == [
+            ("Georgia|Kakheti", country_slug("Georgia|Kakheti"), 3),
+            ("Georgia\nKakheti", country_slug("Georgia\nKakheti"), 1),
+            ("Georgia", country_slug("Georgia"), 7),
+        ]
+        assert "row_to_json" in sent[0] and "IS NOT NULL" in sent[0]
+        table = A.verify_interests([record(old_value="Georgia|Kakheti")], L.T05)
+        assert "Georgia|Kakheti" in table and "Georgia " in table
+
+
+class TestTheValidatorsTakeNoTrailingNewline:
+    """Audit 2026-09-25 m13: `^...$` with `.match` accepts a trailing newline, so a pair id or a
+    lane constant carrying one passed the check - and then silently matched nothing."""
+
+    def test_a_uuid_with_a_trailing_newline_is_not_a_uuid(self) -> None:
+        assert P.UUID_RE.match(SITE_GEORGIA)
+        assert P.UUID_RE.match(SITE_GEORGIA + "\n") is None
+        with pytest.raises(P.PlanError, match="is not a UUID"):
+            P.sql_ids([SITE_GEORGIA + "\n"])
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("plan_table", "_country_plan\n"),
+            ("label", "T05 country\n"),
+            ("key_prefix", "country-canonical\n"),
+            ("lock_timeout", "10s\n"),
+        ],
+    )
+    def test_a_lane_constant_with_a_trailing_newline_is_refused(
+        self, field: str, value: str
+    ) -> None:
+        with pytest.raises(ValueError):
+            replace(L.T05, **{field: value})
+
+    def test_an_export_kind_with_a_trailing_newline_is_refused(self) -> None:
+        with pytest.raises(P.PlanError, match="is not a kind"):
+            P.tagged_export_script([("site\n", "SELECT 1")])

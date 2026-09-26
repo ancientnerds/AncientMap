@@ -5,7 +5,17 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { SiteData, getCategoryColor, getPeriodColor, getSourceColor, resolvePeriod } from '../data/sites'
-import { normalizeForSearch, periodToYear, extractCountry, searchWords, startsAWord } from '../utils/searchUtils'
+import {
+  normalizeForSearch,
+  periodToYear,
+  extractCountry,
+  searchWords,
+  startsAWord,
+  trigramSimilarity,
+  trigrams,
+  TYPO_MIN_LENGTH,
+  TYPO_SIMILARITY,
+} from '../utils/searchUtils'
 import { haversineDistance } from '../utils/geoMath'
 import { EmpirePolygonData, isSiteInEmpirePolygons } from '../utils/geometry'
 import { config } from '../config'
@@ -83,6 +93,40 @@ export interface UseSiteSearchReturn {
   /** The "All sources" API search for the current query failed (no answer): what to show instead of a count. */
   searchError: string | null
   handleSearchResultSelect: (siteId: string, openPopup: boolean, onSiteClick: (site: SiteData) => void) => Promise<void>
+}
+
+/** A site's names and place, normalized: worked out once per site object, not
+ *  once per keystroke. */
+interface SiteWords {
+  names: string[]
+  place: string
+}
+
+const SITE_WORDS = new WeakMap<SiteData, SiteWords>()
+
+function siteWords(site: SiteData): SiteWords {
+  const known = SITE_WORDS.get(site)
+  if (known) return known
+  const words = {
+    names: [normalizeForSearch(site.title), ...(site.altNames ?? []).map(normalizeForSearch)],
+    place: site.location ? normalizeForSearch(site.location) : '',
+  }
+  SITE_WORDS.set(site, words)
+  return words
+}
+
+/** The trigrams of every name word of a site, for the typo search only - kept
+ *  apart from siteWords so the first word search does not build them for
+ *  every site (1366x768, CPU x4, 2026-09-26: a 391 ms task). */
+const NAME_TRIGRAMS = new WeakMap<SiteData, Set<string>[]>()
+
+function nameTrigrams(site: SiteData): Set<string>[] {
+  const known = NAME_TRIGRAMS.get(site)
+  if (known) return known
+  const nameWords = siteWords(site).names.flatMap(n => n.split(/[^\p{L}\p{N}]+/u)).filter(w => w.length >= 3)
+  const sets = nameWords.map(trigrams)
+  NAME_TRIGRAMS.set(site, sets)
+  return sets
 }
 
 export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchReturn {
@@ -288,28 +332,42 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     // is what the phrase match already does.
     const words = searchWords(query)
     const byWords = words.length >= 2
-    const namesOf = (site: SiteData) => [normalizeForSearch(site.title), ...(site.altNames ?? []).map(normalizeForSearch)]
     const wordsInNames = (site: SiteData) => {
-      const names = namesOf(site)
+      const { names } = siteWords(site)
       return words.every(w => names.some(n => startsAWord(n, w)))
     }
     const wordsInNamesOrPlace = (site: SiteData) => {
-      const names = namesOf(site)
-      const place = site.location ? normalizeForSearch(site.location) : ''
+      const { names, place } = siteWords(site)
       return words.every(w => names.some(n => startsAWord(n, w)) || startsAWord(place, w))
+    }
+    // Last, a mistyped word: every word found as above, or - from four letters
+    // on - close enough to a word of the name ("baalk" -> Baalbek, "gize, egy"
+    // -> Giza in Egypt). Only for a query nothing matched as typed: a typo
+    // never outranks an exact match, and checking every site for one doubled
+    // the time a search takes (1366x768, CPU x4, 2026-09-26: 111 -> 237 ms).
+    const typoTrigrams = words.map(w => (w.length >= TYPO_MIN_LENGTH ? trigrams(w) : null))
+    const byTypos = typoTrigrams.some(t => t !== null)
+    const wordsWithTypos = (site: SiteData) => {
+      const { names, place } = siteWords(site)
+      return words.every((w, i) => {
+        if (names.some(n => startsAWord(n, w)) || startsAWord(place, w)) return true
+        const typed = typoTrigrams[i]
+        return typed !== null && nameTrigrams(site).some(t => trigramSimilarity(typed, t) >= TYPO_SIMILARITY)
+      })
     }
 
     // Filter and sort by relevance
-    const matchingSites = sitesToSearch
-      .filter(site => {
-        const titleNorm = normalizeForSearch(site.title)
-        return titleNorm.includes(query) ||
-          titleNorm.replace(/ /g, '').includes(querySpaceless) ||
-          (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) ||
-          (site.location && normalizeForSearch(site.location).includes(query)) ||
-          (site.description && normalizeForSearch(site.description).includes(query)) ||
-          (byWords && wordsInNamesOrPlace(site))
-      })
+    const asTyped = sitesToSearch.filter(site => {
+      const titleNorm = normalizeForSearch(site.title)
+      return titleNorm.includes(query) ||
+        titleNorm.replace(/ /g, '').includes(querySpaceless) ||
+        (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) ||
+        (site.location && normalizeForSearch(site.location).includes(query)) ||
+        (site.description && normalizeForSearch(site.description).includes(query)) ||
+        (byWords && wordsInNamesOrPlace(site))
+    })
+    const found = asTyped.length > 0 || !byTypos ? asTyped : sitesToSearch.filter(wordsWithTypos)
+    const matchingSites = found
       .map(site => {
         const titleNorm = normalizeForSearch(site.title)
         const titleSpaceless = titleNorm.replace(/ /g, '')
@@ -332,8 +390,10 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           score = 40
         } else if (byWords && wordsInNamesOrPlace(site)) {
           score = 35
-        } else {
+        } else if (site.description && normalizeForSearch(site.description).includes(query)) {
           score = 20
+        } else {
+          score = 10 // a typo
         }
         return { site, score }
       })

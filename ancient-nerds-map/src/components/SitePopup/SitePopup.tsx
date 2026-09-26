@@ -89,6 +89,7 @@ import { disclosureFor, type ApiDisclosure } from './descriptionDisclosure'
 
 // Types
 import type { SitePopupProps, EmpireSeshatTab, AlternateSource } from './types'
+import type { DescriptionAi } from '../../types/anRoute'
 
 export default function SitePopup({
   site,
@@ -339,6 +340,8 @@ export default function SitePopup({
   const [rawData, setRawData] = useState<Record<string, unknown> | null>(null)
   // The disclosure /api/sites/{id} gave for the description it served (see descriptionDisclosure)
   const [apiDisclosure, setApiDisclosure] = useState<ApiDisclosure | null>(null)
+  // The AI mark /api/sites/{id} gave for the site's live card (a lane-WB teaser card)
+  const [apiCardAi, setApiCardAi] = useState<DescriptionAi | undefined>(undefined)
   const [rawDataLoading, setRawDataLoading] = useState(false)
 
   // Track if tooltip was pinned by clicking minimized bar
@@ -396,6 +399,7 @@ export default function SitePopup({
     setRawDataLoading(true)
     setApiReferenceLinks(undefined)
     setApiDisclosure(null)
+    setApiCardAi(undefined)
     fetch(`${config.api.baseUrl}/sites/${displaySite.id}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -405,6 +409,7 @@ export default function SitePopup({
         if (data?.referenceLinks) {
           setApiReferenceLinks(data.referenceLinks)
         }
+        setApiCardAi(data?.cardAi ?? undefined)
         if (data?.descriptionAi) {
           setApiDisclosure({
             description: data.description ?? undefined,
@@ -820,6 +825,7 @@ export default function SitePopup({
                 descriptionCitations={displaySite.descriptionCitations}
                 descriptionAi={descriptionDisclosure?.ai}
                 descriptionAttribution={descriptionDisclosure?.attribution}
+                cardAi={apiCardAi}
               />
             )}
 

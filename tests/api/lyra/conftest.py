@@ -1,22 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Conftest for Lyra tests — mock heavy dependencies to avoid import failures."""
+"""Conftest for Lyra tests."""
 
 import os
-import sys
-from unittest.mock import MagicMock
 
 # Set test environment before anything
 os.environ.setdefault("TESTING", "true")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
-# Mock heavy dependencies that aren't needed for unit tests
-# discord is only used by cardgame discord_commands — not relevant to Lyra tests
-for mod_name in [
-    "discord",
-    "discord.ext",
-    "discord.ext.commands",
-    "discord.app_commands",
-    "discord.ui",
-]:
-    if mod_name not in sys.modules:
-        sys.modules[mod_name] = MagicMock()
+# discord.py is not stubbed here. Until 2026-09-26 this file put a MagicMock under
+# sys.modules["discord"] whenever discord was not imported yet - and pytest collects this
+# package before the test modules beside it, so every test in the suite ran the Discord
+# bot and the card game's views against a mock, whatever they asserted. discord.py is a
+# declared dependency (requirements-api.txt, which CI's test job installs).

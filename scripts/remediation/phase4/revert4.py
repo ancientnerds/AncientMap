@@ -14,7 +14,9 @@ git revert the JSON commit") and to a systematic cause found by the mass-run aud
 What it refuses, before anything runs: a pattern outside the three phase-4/5 families (`phase4:`,
 `phase4l:`, `phase5:` - never phase 3, never the mechanical lanes) and a pattern naming reversals;
 inside the transaction, a pattern that matches no write, a pattern whose every matched write is
-reverted already, and a row outside the three written columns or outside the curated sites.
+reverted already, a row outside the three written columns or outside the curated sites, and a
+`phase4:` row of a site whose `phase5:` card is live (the card is reverted first: its pin lives in
+the provenance the text's reversal takes away).
 After the loop it asserts that every reverted field holds the old value of its oldest reverted link
 and that each reversal is journalled with the values swapped. Reversals are journalled under the
 write's stamp and key plus `-rollback` (`journal_chain.ROLLBACK_SUFFIX`), so every acceptance
@@ -123,6 +125,22 @@ def _reversed(alias: str) -> str:
     )
 
 
+def card_left_live(alias: str) -> str:
+    """The `phase4:` row `alias` belongs to a site whose `phase5:` card is live: journalled and
+    without its own reversal. Reverting the site's text takes the provenance that pins that card,
+    and the card would stay behind without one (audit 2026-09-25 m19) - the card goes first."""
+    text = W._sql_text(W4.GROUP_FAMILY[W4.Group.P4] + ":%")
+    card = W._sql_text(W4.GROUP_FAMILY[W4.Group.P5] + ":%")
+    return (
+        f"{alias}.run_stamp LIKE {text}\n"
+        f"       AND EXISTS (SELECT 1 FROM remediation_change_log p\n"
+        f"                    WHERE p.site_id_ref = {alias}.site_id_ref\n"
+        f"                      AND p.run_stamp LIKE {card}\n"
+        f"                      AND p.run_stamp NOT LIKE {W._sql_text('%' + W.ROLLBACK_KEY_SUFFIX)}\n"
+        f"                      AND NOT {_reversed('p')})"
+    )
+
+
 def _targets() -> str:
     return ", ".join(
         f"({W._sql_text(target.table)}, {W._sql_text(target.column)})"
@@ -203,6 +221,15 @@ def render_revert(stamp_like: str, *, site: str | None = None, rehearse: bool = 
         "            OR l.row_pk <> l.site_id_ref::text);",
         "    IF bad > 0 THEN",
         "        RAISE EXCEPTION 'revert: % journal row(s) are outside the phase-4/5 targets', bad;",
+        "    END IF;",
+        "",
+        "    -- guard: a site's text is not reverted while its phase-5 card, pinned by that text's",
+        "    -- provenance, is live",
+        "    SELECT count(*) INTO bad FROM remediation_change_log l",
+        f"     WHERE l.id = ANY(ids) AND {card_left_live('l')};",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'revert: % phase-4 row(s) of site(s) whose phase-5 card is live - "
+        "revert the phase-5 card first', bad;",
         "    END IF;",
         "",
         "    -- newest first; each row's conditional WHERE needs it to hold its written value",

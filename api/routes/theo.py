@@ -47,7 +47,13 @@ from api.services.theo_config import (
     THEO_RESEARCHER_ROLE_ID,
 )
 from api.services.theo_worker import get_live_events, release_reservation_in_session
-from pipeline.database import DiscordUser, ResearchRequest, TtsRequest, get_session
+from pipeline.database import (
+    DiscordUser,
+    ResearchRequest,
+    TtsRequest,
+    affected_rows,
+    get_session,
+)
 from pipeline.indexnow import page_url as indexnow_url
 from pipeline.indexnow import submit as indexnow_submit
 
@@ -979,7 +985,7 @@ async def patch_research_section(
                 "expected_version": body.expected_version,
             },
         )
-        if updated.rowcount == 0:
+        if affected_rows(updated) == 0:
             fresh_version = session.execute(
                 text(
                     "SELECT COALESCE((result_json::jsonb->'section_approvals'->>'version')::int, 0)"

@@ -282,6 +282,12 @@ def _confirm_and_enrich(res: Resolution) -> None:
         res.description = summary.get("description")
         res.thumbnail_url = res.thumbnail_url or summary.get("thumbnail_url")
     res.in_scope = passes_date_cutoff(
-        {"period_start": res.period_start, "period_end": res.period_end, "lon": res.lon}
+        {
+            "period_start": res.period_start,
+            "period_end": res.period_end,
+            "lat": res.lat,
+            "lon": res.lon,
+            "country": res.country,
+        }
     )
     res.verdict = "resolved"

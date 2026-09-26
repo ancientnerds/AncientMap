@@ -378,6 +378,20 @@ def test_every_protected_group_is_honoured() -> None:
     assert not S.carries_protected_token("etc. and so on")  # `c.` only as its own word
 
 
+def test_a_group_pattern_matches_its_own_entries_only() -> None:
+    """Lane WC reads the negations and the refutation words apart (`wc4.trim`), by the list's own
+    entry rules; the whole list stays `PROTECTED`."""
+    negations = S.protected_pattern("negations")
+    assert negations.search("it was never finished") and negations.search("they don't know")
+    assert not negations.search("it was probably finished")
+    refutation = S.protected_pattern("refutation")
+    assert refutation.search("its date is disputed") and refutation.search("a theory of giants")
+    assert not refutation.search("it was never finished")
+    assert S.protected_pattern().pattern == S.PROTECTED.pattern
+    with pytest.raises(ValueError, match="no protected-token group"):
+        S.protected_pattern("hedge")
+
+
 @pytest.mark.parametrize(("source_id", "text", "spans"), SPAN_CASES)
 def test_the_span_cases_both_finders_share(source_id: str, text: str, spans: dict) -> None:
     """The fixture verify4's parity test runs its own finder over (PHASE4_CONTRACTS section 7)."""

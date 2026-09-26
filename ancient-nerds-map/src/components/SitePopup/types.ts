@@ -208,6 +208,8 @@ export interface DescriptionSectionProps {
   /** The disclosure of exactly this description, or undefined (descriptionDisclosure.ts). */
   descriptionAi?: DescriptionAi
   descriptionAttribution?: DescriptionAttribution | null
+  /** The AI mark of the site's card as /api/sites/{id} reports it (a lane-WB teaser). */
+  cardAi?: DescriptionAi
 }
 
 export interface MapSectionProps {

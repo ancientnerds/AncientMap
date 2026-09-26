@@ -20,7 +20,11 @@ depends on *which* repair the plan is, except what a `Lane` names:
   psql ran the next statement 17 s after the client ssh was killed). Bounded on the server, a lock
   wait or a runaway statement raises inside the transaction instead - psql stops the script
   (exit 3) and nothing is kept, well inside the client's 900 s;
-* the residual predicates the read-backs print, and the output directory.
+* the residual predicates the read-backs print, and the output directory;
+* `write_invariant` (2026-09-26, the L5 name lane): a residual that must count 0 over the planned
+  sites once their rows are written, checked *inside* the transaction, write and reversal alike -
+  for a value whose correctness is a relation between cells the lane writes together (a name and
+  its match key), which no guard on the old values can see.
 
 ## Two shapes: a column lane and a cell lane (2026-09-23)
 
@@ -56,30 +60,27 @@ this module - and every lane that does not write card_stats - never imports the 
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from prod_write import sql_literal  # noqa: F401 - the one quoting rule, re-exported for the lanes
+
 from mechanical.reversal_3_list import JOURNAL_IDS as REVERSAL_3_JOURNAL_IDS
 from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
+from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.public_sites import SCOPE_STATUSES
 from pipeline.utils.text import PERIOD_BUCKETS
 
-_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
+_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*\Z")
 #: The label is spliced into RAISE message literals: no quote (it would end the literal) and no `%`
 #: (it would be read as a placeholder and consume an argument).
-_LABEL = re.compile(r"^[A-Za-z0-9 _/-]+$")
-_KEY_PREFIX = re.compile(r"^[a-z0-9-]+$")
+_LABEL = re.compile(r"^[A-Za-z0-9 _/-]+\Z")
+_KEY_PREFIX = re.compile(r"^[a-z0-9-]+\Z")
 #: A Postgres duration as `SET LOCAL ... = '<value>'` takes it: digits and a unit, nothing else.
-_DURATION = re.compile(r"^[1-9][0-9]*(ms|s|min)$")
-
-
-def sql_literal(value: str | None) -> str:
-    """A SQL string literal, quotes doubled; `None` is `NULL`. The one quoting rule of the lane."""
-    if value is None:
-        return "NULL"
-    return "'" + value.replace("'", "''") + "'"
+_DURATION = re.compile(r"^[1-9][0-9]*(ms|s|min)\Z")
 
 
 @dataclass(frozen=True)
@@ -97,8 +98,12 @@ TARGET_KEYS = {"unified_sites": "id", "card_stats": "site_id"}
 
 #: The types a cell's planned text is cast to before it is compared with the stored value - the
 #: base types of the columns the cell lanes write (read from the catalog on production,
-#: 2026-09-23). Spliced into SQL as `::<type>`, so the set is closed.
-CELL_TYPES = frozenset({"integer", "jsonb", "text", "character varying"})
+#: 2026-09-23; `double precision` and `geometry` for `unified_sites.lat`/`lon`/`geom`, read
+#: 2026-09-26: `geometry(Point,4326)`, no trigger on the table). Spliced into SQL as `::<type>`,
+#: so the set is closed.
+CELL_TYPES = frozenset(
+    {"integer", "jsonb", "text", "character varying", "double precision", "geometry"}
+)
 
 
 @dataclass(frozen=True)
@@ -140,8 +145,13 @@ class Column:
     `sql_type` is the base type the plan's text is cast to in every comparison
     (`t.mystery IS DISTINCT FROM p.old_value::integer`), so a comparison is made in the column's
     own type the way `apply_remediation_change()` makes it. `max_chars` is a declared width
-    (`character varying(50)`), `None` for a type without one. `fills_null`: the stored value may be
+    (`character varying(50)`), `None` for a type without one. `clears`: the lane may write NULL
+    into the column - lane WB clears the card of a site that gets none - and the reversal of such
+    a clear starts from NULL (2026-09-26). `fills_null`: the stored value may be
     NULL - the lane fills an unassessed column (`scope_status`), and its reversal restores the NULL.
+    `clears`: the planned value may be NULL - the lane empties the column (owner decision O6 of
+    2026-09-26, "replace only with a sourced value, else empty the field"), and its reversal
+    restores the value it emptied. A NULL is no value a lane owns: guard 4 never reads it.
     """
 
     name: str
@@ -149,6 +159,7 @@ class Column:
     max_chars: int | None = None
     allowed_new_values: tuple[str, ...] = ()
     fills_null: bool = False
+    clears: bool = False
 
     def __post_init__(self) -> None:
         if not _IDENTIFIER.match(self.name):
@@ -164,6 +175,42 @@ class Column:
     def cast(self, expression: str) -> str:
         """`expression` compared in this column's type."""
         return f"{expression}::{self.sql_type}"
+
+
+#: What a site invariant's RAISE says after `<label>: <count> ` - spliced into the message literal,
+#: so the lane label's rule holds for it too, and it must name what is wrong.
+_SAYS = re.compile(r"^[A-Za-z0-9 _/,()-]+\Z")
+
+
+@dataclass(frozen=True)
+class SiteInvariant:
+    """A condition every planned site must satisfy once its cells are written - checked inside the
+    write's transaction, after the loop, so a violating plan is rolled back whole.
+
+    `predicate` is SQL over the written site `u` and its plan row `p` (`p.site_id`) that is TRUE for
+    a site that violates the invariant; `{plan}` stands for the plan's temp table, so a predicate
+    can ask which of the site's cells are planned. It runs on the write only: a reversal restores the
+    state before the write, which the invariant may never have held (one curated site carried a NULL
+    `geom` on 2026-09-26). `probe_column` and `probe_values` let `--probe-guards` prove it: the probe
+    writes the first probe value that is neither the cell's old nor its new value into the first
+    planned cell of that column.
+    """
+
+    says: str
+    predicate: str
+    probe_column: str
+    probe_values: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not _SAYS.match(self.says):
+            raise ValueError(f"{self.says!r} cannot be spliced into a RAISE message")
+        if not self.predicate.strip() or "$$" in self.predicate:
+            raise ValueError(f"{self.says}: the predicate is empty or would end the DO block")
+        if not _IDENTIFIER.match(self.probe_column) or len(self.probe_values) < 3:
+            raise ValueError(
+                f"{self.says}: a probe needs its column and three values (one differs from any "
+                "old and new value)"
+            )
 
 
 def typed_case(
@@ -217,6 +264,12 @@ def _check_cell_lane(lane: Lane) -> None:
     names = [cell.name for cell in lane.cells]
     if len(set(names)) != len(names):
         raise ValueError(f"{lane.name}: a column appears twice in `cells`")
+    for invariant in lane.site_invariants:
+        if not lane.target.is_site or invariant.probe_column not in names:
+            raise ValueError(
+                f"{lane.name}: a site invariant reads a unified_sites row and probes one of the "
+                f"lane's cells, not {invariant.probe_column!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -247,12 +300,17 @@ class Lane:
     target: Target = UNIFIED_SITES
     cells: tuple[Column, ...] = ()
     reverses_journal: bool = False
+    write_invariant: Residual | None = None
+    #: Conditions every planned site satisfies after the write (`SiteInvariant`); cell lanes only.
+    site_invariants: tuple[SiteInvariant, ...] = ()
 
     def __post_init__(self) -> None:
         """Every field that reaches SQL unquoted is checked here, once, instead of trusted."""
         if self.cells:
             _check_cell_lane(self)
         else:
+            if self.site_invariants:
+                raise ValueError(f"{self.name}: site invariants belong to a cell lane")
             _check_column_lane(self)
         if not _IDENTIFIER.match(self.plan_table) or not self.plan_table.startswith("_"):
             raise ValueError(f"{self.plan_table!r} is not a temp-table name of the form _name")
@@ -267,6 +325,16 @@ class Lane:
         for bound in (self.lock_timeout, self.statement_timeout):
             if bound is not None and not _DURATION.match(bound):
                 raise ValueError(f"{self.name}: {bound!r} is not a duration like '10s'")
+        if self.write_invariant is not None and (
+            not self.cells
+            or not self.target.is_site
+            or not _LABEL.match(self.write_invariant.metric)
+        ):
+            raise ValueError(
+                f"{self.name}: a write invariant belongs to a cell lane on unified_sites (its "
+                "probe corrupts one cell of two written together), and its metric - spliced "
+                "into the statement - is plain words"
+            )
 
     @property
     def rollback_run_stamp(self) -> str:
@@ -631,18 +699,54 @@ SITE_TYPE_SHAPE_READBACK = journal_readback(
 
 
 # ------------------------------------------------------------------------ the scope lane (E4)
-def outside_e3_window(prefix: str = "") -> str:
+def country_key_sql(prefix: str = "") -> str:
+    """SQL: `pipeline.normalizers.dates.country_key` - the text after the country's last comma,
+    spaces trimmed, lower-cased. `rtrim(c, replace(c, ',', ''))` strips from the right every
+    character but the comma, which leaves the value up to its last comma (or '' without one);
+    replacing that prefix by '' leaves the last part. Portable: PostgreSQL and SQLite read `rtrim`
+    and `replace` alike (the equivalence test runs the rendered SQL in SQLite)."""
+    c = f"{prefix}country"
+    return f"lower(trim(replace({c}, rtrim({c}, replace({c}, ',', '')), '')))"
+
+
+def in_oceania_sql(prefix: str = "") -> str:
+    """SQL: the row lies in Oceania - `pipeline.normalizers.dates.in_oceania`, rendered from the
+    same lists: its `country_key` is one of `OCEANIA_COUNTRIES`, or it names a state of
+    `OCEANIA_PARTS` and its point lies in one of that state's Pacific boxes (edges included)."""
+    from pipeline.normalizers.dates import OCEANIA_COUNTRIES, OCEANIA_PARTS
+
+    p = prefix
+    country = country_key_sql(p)
+    listed = ", ".join(sql_literal(name) for name in sorted(OCEANIA_COUNTRIES))
+    parts = " OR ".join(
+        f"({country} = {sql_literal(state)} AND {p}lon BETWEEN {lon_min} AND {lon_max} "
+        f"AND {p}lat BETWEEN {lat_min} AND {lat_max})"
+        for state, boxes in sorted(OCEANIA_PARTS.items())
+        for lon_min, lat_min, lon_max, lat_max in boxes
+    )
+    return f"({country} IN ({listed}) OR {parts})"
+
+
+def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
     """SQL: the row's date lies past the E3 cutoff of its region - `passes_date_cutoff()` negated.
 
     Built from the project's own rule and constants (`pipeline/normalizers/dates.py`), never
     re-typed: the date is `period_end or period_start` (Python's `or`, so a 0 `period_end` falls
-    through too), the region is the longitude window, and a row without a date or a longitude is
-    never outside (the function includes it). `prefix` qualifies the columns (`u.`).
+    through too), the region is `e3_region`'s - Oceania (`in_oceania_sql`), then the longitude
+    window of the Americas, then the rest of the world - and a row without a date or a longitude
+    is never outside (the function includes it). `prefix` qualifies the columns (`u.`).
+
+    `before_o7=True` renders the rule as it stood until the owner's decision O7 (2026-09-26,
+    Oceania through 1500 AD): the longitude window alone. The scope-e4 lane was rehearsed and
+    applied on 2026-09-25 with that text in its residual, and its committed APPLY.sql and
+    ROLLBACK.sql must stay what its plan renders (`tests/remediation/test_mechanical.py`,
+    `TestTheDeliveredLanes`), so it keeps it.
     """
     from pipeline.normalizers.dates import (
         AMERICAS_LON_MAX,
         AMERICAS_LON_MIN,
         DATE_CUTOFF_AMERICAS,
+        DATE_CUTOFF_OCEANIA,
         DATE_CUTOFF_REST_OF_WORLD,
     )
 
@@ -651,8 +755,9 @@ def outside_e3_window(prefix: str = "") -> str:
         f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
         f"ELSE {p}period_start END)"
     )
+    oceania = "" if before_o7 else f"WHEN {in_oceania_sql(p)} THEN {DATE_CUTOFF_OCEANIA} "
     cutoff = (
-        f"(CASE WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
+        f"(CASE {oceania}WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
         f"THEN {DATE_CUTOFF_AMERICAS} ELSE {DATE_CUTOFF_REST_OF_WORLD} END)"
     )
     return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
@@ -660,7 +765,7 @@ def outside_e3_window(prefix: str = "") -> str:
 
 _UNDECIDED_OUT_OF_WINDOW = Residual(
     "curated rows outside the E3 window with no scope decision",
-    f"{outside_e3_window()} AND scope_status IS NULL",
+    f"{outside_e3_window(before_o7=True)} AND scope_status IS NULL",
 )
 
 #: E4 (owner decision 2026-09-19, migration 0020): flag an out-of-scope site AND hide it
@@ -1012,13 +1117,19 @@ WRONG_BOTH_READBACK = journal_readback(
 LANES[WRONG_BOTH.name] = WRONG_BOTH
 LANE_READBACKS[WRONG_BOTH.name] = WRONG_BOTH_READBACK
 
+
 # ------------------------------------------------------------ the orphan-citations lane (D1)
-#: A citation marker, `[n]`, as the census and the acceptance's D1 read one
-#: (`t08_citation_markers._MARKER_RE`); every match of a curated description, as rows of `m(g)`.
-#: The census expands grouped and range forms first (`normalize_grouped_markers`); no curated
-#: description carries one (measured 2026-09-25, `citations.py`), and on that data this SQL finds
-#: exactly the 78 sites the Python D1 finds.
-_MARKERS_SQL = r"regexp_matches(coalesce(description, ''), '\[(\d+)\]', 'g')"
+def marker_matches(text: str) -> str:
+    """Every `[n]` of the text expression `text`, as the set-returning `regexp_matches`: a
+    citation marker as the census and the acceptance's D1 read one (`t08_citation_markers.
+    _MARKER_RE`). The census expands grouped and range forms first (`normalize_grouped_markers`);
+    no curated description carries one (measured 2026-09-25, `citations.py`)."""
+    return rf"regexp_matches(coalesce({text}, ''), '\[(\d+)\]', 'g')"
+
+
+#: Every marker of a curated description, as rows of `m(g)`; on the data of 2026-09-25 this SQL
+#: finds exactly the 78 sites the Python D1 finds.
+_MARKERS_SQL = marker_matches("description")
 #: Every `raw_data.description_citations` entry of the row, as rows of `e(entry)`; none where the
 #: key is absent or not an array.
 _ENTRIES_SQL = (
@@ -1066,29 +1177,47 @@ ORPHAN_CITATIONS = Lane(
     cells=(Column("raw_data", "jsonb"),),
 )
 
+#: D4 of the acceptance in SQL, on an unqualified `unified_sites` row: the row carries a
+#: `_description_provenance` whose `desc_sha256` is not the sha256 of its description.
+PROVENANCE_HASH_DIFFERS = (
+    "raw_data ? '_description_provenance' AND "
+    "encode(sha256(convert_to(coalesce(description, ''), 'UTF8')), 'hex') "
+    "IS DISTINCT FROM raw_data -> '_description_provenance' ->> 'desc_sha256'"
+)
+#: A `raw_data` journal row `l` whose new citation array holds an entry its old one did not.
+_ENTRY_ADDED = (
+    "EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(l.new_value::jsonb -> "
+    "'description_citations', '[]'::jsonb)) AS x(entry) WHERE NOT coalesce("
+    "l.old_value::jsonb -> 'description_citations', '[]'::jsonb) @> "
+    "jsonb_build_array(x.entry))"
+)
+#: The read-back rows both citation lanes print: D1's two halves and D4, over the curated rows.
+_CITATION_STATE = (
+    (
+        "curated rows with a description_citations entry no marker cites",
+        _CURATED_ROWS + CITATIONS_UNCITED,
+    ),
+    (
+        "curated rows with a marker no description_citations entry answers",
+        _CURATED_ROWS + CITATIONS_UNANSWERED,
+    ),
+)
+_D4_FAILS = (
+    "curated rows whose description is not the one its provenance hashes",
+    _CURATED_ROWS + PROVENANCE_HASH_DIFFERS,
+)
+
 _ORPHAN_STAMP = sql_literal(ORPHAN_CITATIONS.run_stamp)
 ORPHAN_CITATIONS_READBACK = journal_readback(
     ORPHAN_CITATIONS,
     [
         (_D1_FAILS.metric, _CURATED_ROWS + _D1_FAILS.predicate),
-        (
-            "curated rows with a description_citations entry no marker cites",
-            _CURATED_ROWS + CITATIONS_UNCITED,
-        ),
-        (
-            "curated rows with a marker no description_citations entry answers",
-            _CURATED_ROWS + CITATIONS_UNANSWERED,
-        ),
+        *_CITATION_STATE,
         (
             "curated rows carrying description_citations",
             _CURATED_ROWS + "raw_data ? 'description_citations'",
         ),
-        (
-            "curated rows whose description is not the one its provenance hashes",
-            _CURATED_ROWS + "raw_data ? '_description_provenance' AND "
-            "encode(sha256(convert_to(coalesce(description, ''), 'UTF8')), 'hex') "
-            "IS DISTINCT FROM raw_data -> '_description_provenance' ->> 'desc_sha256'",
-        ),
+        _D4_FAILS,
         (
             "journal rows for this run that changed a raw_data key other than "
             "description_citations",
@@ -1098,25 +1227,457 @@ ORPHAN_CITATIONS_READBACK = journal_readback(
         ),
         (
             "journal rows for this run that added a citation entry",
-            f"FROM remediation_change_log l WHERE l.run_stamp = {_ORPHAN_STAMP} AND EXISTS "
-            "(SELECT 1 FROM jsonb_array_elements(coalesce(l.new_value::jsonb -> "
-            "'description_citations', '[]'::jsonb)) AS x(entry) WHERE NOT coalesce("
-            "l.old_value::jsonb -> 'description_citations', '[]'::jsonb) @> "
-            "jsonb_build_array(x.entry))",
+            f"FROM remediation_change_log l WHERE l.run_stamp = {_ORPHAN_STAMP} AND "
+            + _ENTRY_ADDED,
         ),
     ],
 )
 LANES[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS
 LANE_READBACKS[ORPHAN_CITATIONS.name] = ORPHAN_CITATIONS_READBACK
 
+# ------------------------------------------------------------ the dangling-markers lane (D9)
+#: The markers of D9 (2026-09-25): a `[N]` of the description with no citation entry. The
+#: orphan-citations lane listed these sites for a human; the owner's order of 2026-09-25 takes D9's
+#: option (b) for the ones Phase 4 held - the marker points to no source, so it leaves the text and
+#: the claims stay, under lane L's marking that the text is AI-generated (`dangling_markers.py`).
+#: The lane writes two cells of one site in one transaction: the description without its dangling
+#: markers, and `raw_data` with `_description_provenance.desc_sha256` moved to the new text (D4) -
+#: plus, where the removal leaves an entry no marker cites, without that entry (D1, the
+#: orphan-citations rule). The premise is the legacy provenance less the hash it moves: guard 5
+#: refuses a site whose text is no longer lane L's, and holds for the write and its reversal alike.
+DANGLING_MARKERS = Lane(
+    name="dangling-markers",
+    key_prefix="dangling-markers",
+    run_stamp="2026-09-25_mechanical-dangling-markers",
+    test_id="T08/dangling-markers",
+    confidence="authoritative",
+    label="dangling marker removal",
+    plan_table="_dangling_markers_plan",
+    out_dir_name="mechanical_dangling_markers",
+    post_commit_residual=_D1_FAILS,
+    rehearsal_residual=_D1_FAILS,
+    premise_sql=(
+        "coalesce((u.raw_data -> '_description_provenance') - 'desc_sha256', 'null'::jsonb)::text"
+    ),
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=(Column("description", "text"), Column("raw_data", "jsonb")),
+)
+
+_DANGLING_STAMP = sql_literal(DANGLING_MARKERS.run_stamp)
+_DANGLING_ROWS = f"FROM remediation_change_log l WHERE l.run_stamp = {_DANGLING_STAMP} AND "
+#: A description as the markers' surroundings: every marker and every whitespace taken out.
+_PROSE = r"regexp_replace(regexp_replace(coalesce({}, ''), '\[\d+\]', '', 'g'), '\s', '', 'g')"
+
+
+def _raw_data_rows(predicate: str) -> str:
+    """This run's `raw_data` rows meeting `predicate` - behind a CASE, because the lane's
+    description rows are not JSON and a WHERE does not fix the order its casts run in."""
+    return _DANGLING_ROWS + f"CASE WHEN l.column_name = 'raw_data' THEN {predicate} ELSE false END"
+
+
+DANGLING_MARKERS_READBACK = journal_readback(
+    DANGLING_MARKERS,
+    [
+        (_D1_FAILS.metric, _CURATED_ROWS + _D1_FAILS.predicate),
+        *_CITATION_STATE,
+        _D4_FAILS,
+        (
+            "journal rows for this run whose description differs in more than markers and "
+            "whitespace",
+            _DANGLING_ROWS
+            + "l.column_name = 'description' AND "
+            + _PROSE.format("l.old_value")
+            + " IS DISTINCT FROM "
+            + _PROSE.format("l.new_value"),
+        ),
+        (
+            "journal rows for this run whose description gained a marker",
+            _DANGLING_ROWS
+            + "l.column_name = 'description' AND EXISTS (SELECT 1 FROM "
+            + f"{marker_matches('l.new_value')} AS m(g) WHERE NOT EXISTS (SELECT 1 FROM "
+            + f"{marker_matches('l.old_value')} AS o(g) WHERE o.g = m.g))",
+        ),
+        (
+            "journal rows for this run whose raw_data changed more than the citations and the hash",
+            _raw_data_rows(
+                "((l.old_value::jsonb - 'description_citations') #- "
+                "'{_description_provenance,desc_sha256}') IS DISTINCT FROM "
+                "((l.new_value::jsonb - 'description_citations') #- "
+                "'{_description_provenance,desc_sha256}')"
+            ),
+        ),
+        (
+            "journal rows for this run whose citation array gained an entry",
+            _raw_data_rows(_ENTRY_ADDED),
+        ),
+        (
+            "journal rows for this run whose provenance hash is not the description it wrote",
+            _raw_data_rows(
+                "NOT EXISTS (SELECT 1 FROM remediation_change_log d WHERE d.run_stamp = "
+                "l.run_stamp AND d.row_pk = l.row_pk AND d.column_name = 'description' AND "
+                "encode(sha256(convert_to(d.new_value, 'UTF8')), 'hex') = "
+                "l.new_value::jsonb -> '_description_provenance' ->> 'desc_sha256')"
+            ),
+        ),
+        (
+            "journal rows for this run whose provenance is not lane L",
+            _raw_data_rows(
+                "(l.new_value::jsonb -> '_description_provenance' ->> 'lane') IS DISTINCT FROM 'L'"
+            ),
+        ),
+    ],
+)
+LANES[DANGLING_MARKERS.name] = DANGLING_MARKERS
+LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK
+
+# ------------------------------------------------------------------ the B2 country lane (WE)
+#: HUMAN_ONLY B2-L, decided 2026-09-26 under the owner's O9 ("nach meiner Empfehlung entscheiden",
+#: `output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md`): the two curated rows whose country the
+#: B2 classifier found wrong and no lane wrote. `(site id, name, stored value, decided value)`.
+#: Achladia lies with its item's P625 on Crete (P17 Greece); Delphinion lies in Miletus, 20 m from
+#: its item's P625. The dataset spells Türkiye (218 curated rows, 0 `Turkey`, read 2026-09-26).
+COUNTRY_B2_DECISIONS: tuple[tuple[str, str, str, str], ...] = (
+    ("74145e9b-76a6-48de-a902-08ecb2f1f7bb", "Achladia", "Germany", "Greece"),
+    ("6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed", "Delphinion", "Greece", "Türkiye"),
+)
+_B2_WRONG = Residual(
+    "curated rows still holding a country the B2 decision replaces",
+    "("
+    + " OR ".join(
+        f"(id = {sql_literal(site)}::uuid AND country = {sql_literal(old)})"
+        for site, _name, old, _new in COUNTRY_B2_DECISIONS
+    )
+    + ")",
+)
+
+#: The country lane of the B2 decision (`country_b2.py`). A column lane like the UK lane: it owns
+#: exactly the decided values, and every row carries its point as the premise - the decision rests
+#: on where the row lies, so a row whose point moved after the plan is refused (guard 5).
+COUNTRY_B2 = Lane(
+    name="country-b2",
+    column="country",
+    max_chars=100,
+    key_prefix="country-b2",
+    run_stamp="2026-09-26_mechanical-country-b2",
+    test_id="B2/country",
+    confidence="authoritative",
+    label="B2 country repair",
+    plan_table="_country_b2_plan",
+    out_dir_name="mechanical_country_b2",
+    post_commit_residual=_B2_WRONG,
+    rehearsal_residual=_B2_WRONG,
+    allowed_new_values=tuple(sorted({new for _site, _name, _old, new in COUNTRY_B2_DECISIONS})),
+    premise_sql="u.lat::text || ',' || u.lon::text",
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+)
+COUNTRY_B2_READBACK = journal_readback(
+    COUNTRY_B2,
+    [
+        (_B2_WRONG.metric, _CURATED_ROWS + _B2_WRONG.predicate),
+        *_country_rows(("Germany", "Greece", "Türkiye")),
+        _CARD_COUNTRY,
+    ],
+)
+LANES[COUNTRY_B2.name] = COUNTRY_B2
+LANE_READBACKS[COUNTRY_B2.name] = COUNTRY_B2_READBACK
+
+# ------------------------------------------------------------------ the L5 name lane (WE)
+#: A curated row whose match key is not the key Postgres derives from its name: the name lane's
+#: residual, 0 before (read 2026-09-26) and after - the lane writes each name and its key together.
+_NAME_KEY_DIFFERS = Residual(
+    "curated rows whose name_normalized is not the key of their name",
+    f"name_normalized IS DISTINCT FROM {site_key_sql('name')}",
+)
+
+#: HUMAN_ONLY B1-N and Nr. 7, decided 2026-09-26 under O9: L5's name pass renames a curated site
+#: only to a sourced name of that very site - an Opus reading whose quote the machine found
+#: (`scripts/remediation/l5/`) - and "Zoque Culture Archaeological Zone" to "Chiapa de Corzo", the
+#: English label of its item Q4384315. `name` is NOT NULL and `varchar(500)`; its match key moves
+#: with it in the same transaction, as the key Postgres computed from the new name when the plan
+#: was read (FIELD_CONTRACT 2.2: write `left(lower(unaccent(name)), 500)`, never a Python key); the
+#: transaction itself refuses to commit a planned site whose key is not its name's key
+#: (`write_invariant`), the rename and its reversal alike.
+NAME_L5 = Lane(
+    name="name-l5",
+    key_prefix="name-l5",
+    run_stamp="2026-09-26_mechanical-name-l5",
+    test_id="B1/name-l5",
+    confidence="authoritative",
+    label="L5 name repair",
+    plan_table="_name_l5_plan",
+    out_dir_name="mechanical_name_l5",
+    post_commit_residual=_NAME_KEY_DIFFERS,
+    rehearsal_residual=_NAME_KEY_DIFFERS,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=(
+        Column("name", "character varying", max_chars=500),
+        Column("name_normalized", "character varying", max_chars=500),
+    ),
+    write_invariant=_NAME_KEY_DIFFERS,
+)
+_NAME_STAMP = sql_literal(NAME_L5.run_stamp)
+#: The name lane's journal checks. A site journals one row (a rename that changes only case or
+#: accents keeps its key, and a cell that does not change is not written) or two (the name and its
+#: key): a key row always has the name row whose key it is, and a name row whose key moved always
+#: has its key row.
+NAME_L5_JOURNAL_METRICS: tuple[tuple[str, str], ...] = (
+    (
+        "journal rows for this run whose key is not the key of the name it wrote",
+        f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
+        "l.column_name = 'name_normalized' AND NOT EXISTS (SELECT 1 FROM "
+        f"remediation_change_log n WHERE n.run_stamp = {_NAME_STAMP} AND n.row_pk = l.row_pk "
+        f"AND n.column_name = 'name' AND {site_key_sql('n.new_value')} = l.new_value)",
+    ),
+    (
+        "journal rows for this run renaming a site whose key moved without its key row",
+        f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
+        f"l.column_name = 'name' AND {site_key_sql('l.old_value')} <> "
+        f"{site_key_sql('l.new_value')} AND NOT EXISTS (SELECT 1 FROM remediation_change_log k "
+        f"WHERE k.run_stamp = {_NAME_STAMP} AND k.row_pk = l.row_pk "
+        "AND k.column_name = 'name_normalized')",
+    ),
+)
+NAME_L5_READBACK = journal_readback(
+    NAME_L5,
+    [
+        (_NAME_KEY_DIFFERS.metric, _CURATED_ROWS + _NAME_KEY_DIFFERS.predicate),
+        *NAME_L5_JOURNAL_METRICS,
+    ],
+)
+LANES[NAME_L5.name] = NAME_L5
+LANE_READBACKS[NAME_L5.name] = NAME_L5_READBACK
+
+# -------------------------------------------------------------- the scope review (WD2, O7)
+#: The E3 scope review of 2026-09-26 (`scope_review.py`): an entry that is no archaeological site
+#: at all is retired with its reason - decided per site by Opus through the handoff, carried by
+#: machine-checked quotes, never by a pattern - and a scope-e4 retirement the O7 rule (Oceania
+#: through 1500 AD) no longer carries is taken back to `in_scope`. Two cells per site, like
+#: scope-e4; the old value may be NULL (an unassessed row) or a status (a `pending` row, a
+#: retirement taken back). The premise is what the decision rests on - the name, the type, the
+#: point, the country the O7 rule reads and the dates - and not the description: the description
+#: lanes (WA/WC) rewrite it in parallel, and a new text of the same entry does not move its scope.
+#:
+#: **One lane per wave** (`scope-review-<wave>`, like the card_stats waves): a write lands at
+#: most 100 sites, and a run stamp is applied once (`apply.py` refuses a stamp that already
+#: journals rows), so every step - and every later round's decisions - is a wave with its own
+#: stamp, key prefix and directory (`mechanical_scope_review/<wave>/`).
+SCOPE_REVIEW_LANE = re.compile(r"^scope-review-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
+SCOPE_REVIEW_ROOT = "mechanical_scope_review"
+_UNDECIDED_OUT_OF_WINDOW_O7 = Residual(
+    "curated rows outside the E3 window (O7) with no scope decision",
+    f"{outside_e3_window()} AND scope_status IS NULL",
+)
+#: The reason prefix of the lane's retirements, which the read-back counts.
+NOT_A_SITE_PREFIX = "E3: not an archaeological site"
+SCOPE_REVIEW_PREMISE_SQL = (
+    "concat_ws(' | ', u.name, coalesce(u.site_type, 'NULL'), u.lat::text, u.lon::text, "
+    "coalesce(u.country, 'NULL'), coalesce(u.period_start::text, 'NULL'), "
+    "coalesce(u.period_end::text, 'NULL'))"
+)
+
+
+def scope_review_lane(wave: str) -> Lane:
+    """The scope review's write of one wave: its own stamp, key prefix and directory.
+
+    `wave` is a date label (`2026-09-26`, `2026-09-26b`): the only labels `apply.py --lane
+    scope-review-<wave>` resolves, so a plan written under any other label could never be applied.
+    """
+    if SCOPE_REVIEW_LANE.match(f"scope-review-{wave}") is None:
+        raise ValueError(f"{wave!r} is not a wave label like 2026-09-26 or 2026-09-26b")
+    return Lane(
+        name=f"scope-review-{wave}",
+        key_prefix=f"scope-review-{wave}",
+        run_stamp=f"{wave}_mechanical-scope-review",
+        test_id="E3/scope-review",
+        confidence="authoritative",
+        label="E3 scope review",
+        plan_table="_scope_review_plan",
+        out_dir_name=f"{SCOPE_REVIEW_ROOT}/{wave}",
+        post_commit_residual=_UNDECIDED_OUT_OF_WINDOW_O7,
+        rehearsal_residual=_UNDECIDED_OUT_OF_WINDOW_O7,
+        premise_sql=SCOPE_REVIEW_PREMISE_SQL,
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        cells=(
+            Column("scope_status", "text", allowed_new_values=SCOPE_STATUSES, fills_null=True),
+            Column("scope_reason", "text", fills_null=True),
+        ),
+    )
+
+
+@functools.cache
+def scope_review_readback(lane: Lane) -> str:
+    """The read-only verification of a scope-review wave, before and after its write: the scope
+    counts, the O7 residual, the retirements it exists to write and the ones O7 takes back."""
+    return journal_readback(
+        lane,
+        [
+            *(
+                (
+                    f"curated rows with scope_status {status}",
+                    _CURATED_ROWS
+                    + (
+                        "scope_status IS NULL"
+                        if status == "NULL"
+                        else f"scope_status = {sql_literal(status)}"
+                    ),
+                )
+                for status in ("NULL", *SCOPE_STATUSES)
+            ),
+            (
+                _UNDECIDED_OUT_OF_WINDOW_O7.metric,
+                _CURATED_ROWS + _UNDECIDED_OUT_OF_WINDOW_O7.predicate,
+            ),
+            (
+                "curated rows retired as no archaeological site",
+                _CURATED_ROWS
+                + "scope_status = 'retired' AND "
+                + f"scope_reason LIKE {sql_literal(NOT_A_SITE_PREFIX + '%')}",
+            ),
+            (
+                "curated Oceania rows retired for their date",
+                _CURATED_ROWS
+                + "scope_status = 'retired' AND scope_reason LIKE 'E3: period_start%' AND "
+                + in_oceania_sql(),
+            ),
+            (
+                "curated rows with a scope_status but no scope_reason",
+                _CURATED_ROWS
+                + "scope_status IS NOT NULL AND (scope_reason IS NULL OR scope_reason = '')",
+            ),
+        ],
+    )
+
+
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
 #: twice" still holds, and its own directory.
-CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)$")
+CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
+#: Lane WB writes each step of at most 100 sites as two lanes of its own (`mechanical/teaser.py`):
+#: `teaser-prov-sNNN` (the card provenance in raw_data) and `teaser-card-sNNN` (the card).
+TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
+
+# ------------------------------------------------------------ the WD1 structured-field lane
+#: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
+#: period_start with its period_name, site_type and source_url of a step of at most 100 sites, one
+#: transaction per step. Each step is a lane of its own - `fields-wd1-<wave>-s<NNN>`, its own run
+#: stamp and directory - so "never apply a stamp twice" holds per step and each step is accepted
+#: before the next is planned (`fields/plan.py`).
+FIELDS_LANE = re.compile(r"^fields-wd1-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+FIELDS_ROOT = "fields/wd1/write"
+_BUCKETS = tuple(label for label, _lo, _hi in PERIOD_BUCKETS)
+
+#: A site's point is three cells: `lat` and `lon` (NOT NULL, corrected and never cleared -
+#: FIELD_CONTRACT 3) and `geom`, which every writer sets to their point
+#: (`bcases/coord_plan.py`; no trigger does it, read 2026-09-26). `geom` may start NULL (one curated
+#: site on 2026-09-26). The period pair and the other two fields may be emptied (owner decision O6),
+#: and each may start empty: an empty field is asked too and may get a sourced value (HUMAN_ONLY B3).
+FIELDS_CELLS = (
+    Column("lat", "double precision"),
+    Column("lon", "double precision"),
+    Column("geom", "geometry", fills_null=True),
+    Column("period_start", "integer", fills_null=True, clears=True),
+    Column(
+        "period_name",
+        "character varying",
+        max_chars=100,
+        allowed_new_values=_BUCKETS,
+        fills_null=True,
+        clears=True,
+    ),
+    Column(
+        "site_type",
+        "character varying",
+        max_chars=100,
+        allowed_new_values=tuple(CANONICAL_TYPES),
+        fills_null=True,
+        clears=True,
+    ),
+    Column("source_url", "text", fills_null=True, clears=True),
+)
+_POINT = "ST_SetSRID(ST_MakePoint(u.lon, u.lat), 4326)"
+FIELDS_INVARIANTS = (
+    SiteInvariant(
+        says="planned site(s) hold a geom that is not their point",
+        predicate=(
+            "EXISTS (SELECT 1 FROM {plan} q WHERE q.site_id = p.site_id "
+            f"AND q.column_name IN ('lat', 'lon', 'geom')) AND u.geom IS DISTINCT FROM {_POINT}"
+        ),
+        probe_column="geom",
+        probe_values=(
+            "SRID=4326;POINT(0 0)",
+            "SRID=4326;POINT(1 1)",
+            "SRID=4326;POINT(2 2)",
+        ),
+    ),
+    SiteInvariant(
+        says="planned site(s) hold a period_name that is not the bucket of their period_start",
+        predicate=(
+            "EXISTS (SELECT 1 FROM {plan} q WHERE q.site_id = p.site_id "
+            "AND q.column_name IN ('period_start', 'period_name')) AND u.period_name "
+            f"IS DISTINCT FROM {bucket_case('u.period_start')}"
+        ),
+        probe_column="period_name",
+        probe_values=_BUCKETS[:3],
+    ),
+)
+_GEOM_NOT_POINT = Residual(
+    "curated rows whose geom is not their point",
+    "geom IS DISTINCT FROM ST_SetSRID(ST_MakePoint(lon, lat), 4326)",
+)
+
+
+def fields_lane(wave: str, step: int) -> Lane:
+    """Step `step` of WD1 wave `wave` (a date label, `2026-09-27` or `2026-09-27b`)."""
+    name = f"fields-wd1-{wave}-s{step:03d}"
+    if FIELDS_LANE.match(name) is None or step < 1:
+        raise ValueError(f"{wave!r} step {step} is not a WD1 wave label and step number")
+    return Lane(
+        name=name,
+        key_prefix=name,
+        run_stamp=f"{wave}_fields-wd1-s{step:03d}",
+        test_id="WD1/structured-fields",
+        confidence="two_source",
+        label="WD1 field correction",
+        plan_table="_fields_wd1_plan",
+        out_dir_name=f"{FIELDS_ROOT}/{wave}/s{step:03d}",
+        post_commit_residual=_PERIOD_MISMATCH,
+        rehearsal_residual=_PERIOD_MISMATCH,
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        cells=FIELDS_CELLS,
+        site_invariants=FIELDS_INVARIANTS,
+    )
+
+
+def fields_readback(lane: Lane) -> str:
+    """The read-only verification of a WD1 step, before and after its write."""
+    stamp = sql_literal(lane.run_stamp)
+    return journal_readback(
+        lane,
+        [
+            *((r.metric, _CURATED_ROWS + r.predicate) for r in (_PERIOD_MISMATCH, _GEOM_NOT_POINT)),
+            ("curated rows with an empty period_start", _CURATED_ROWS + "period_start IS NULL"),
+            ("curated rows with an empty site_type", _CURATED_ROWS + "site_type IS NULL"),
+            (
+                "curated rows with an empty source_url",
+                _CURATED_ROWS + "(source_url IS NULL OR source_url = '')",
+            ),
+            (
+                "journal rows for this run that empty a column",
+                f"FROM remediation_change_log WHERE run_stamp = {stamp} AND new_value IS NULL",
+            ),
+        ],
+    )
 
 
 def resolve_lane(name: str) -> Lane:
-    """The lane called `name`: a registered one, or a card_stats wave. `KeyError` otherwise.
+    """The lane called `name`: a registered one, a scope-review wave, a WD1 fields step, a lane-WB
+    teaser step, or a card_stats wave.
+    `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
@@ -1124,6 +1685,16 @@ def resolve_lane(name: str) -> Lane:
     """
     if name in LANES:
         return LANES[name]
+    review = SCOPE_REVIEW_LANE.match(name)
+    if review is not None:
+        return scope_review_lane(review.group(1))
+    fields = FIELDS_LANE.match(name)
+    if fields is not None:
+        return fields_lane(fields.group(1), int(fields.group(2)))
+    if TEASER_LANE.match(name):
+        from mechanical.teaser import lane_of
+
+        return lane_of(name)
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

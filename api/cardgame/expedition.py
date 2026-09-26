@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, true
 from sqlalchemy.orm import Session
 
 from api.cardgame.constants import (
@@ -214,7 +214,7 @@ def _build_npc_deck(
             .filter(
                 CardStats.rarity_tier >= min_tier,
                 card_site_in_scope(),
-                CardStats.site_id.notin_(existing_ids) if existing_ids else True,
+                CardStats.site_id.notin_(existing_ids) if existing_ids else true(),
             )
             .order_by(func.random())
             .limit(10 - len(regional_cards))
@@ -327,8 +327,8 @@ def play_expedition_stage(
     if not deck_row or len(deck_row.card_ids) < 5:
         raise ValueError("You need an active deck with at least 5 cards")
 
-    player_cards = [session.get(CardStats, uuid.UUID(cid)) for cid in deck_row.card_ids]
-    player_cards = [c for c in player_cards if c is not None]
+    deck_cards = [session.get(CardStats, uuid.UUID(cid)) for cid in deck_row.card_ids]
+    player_cards = [c for c in deck_cards if c is not None]
 
     npc_deck = _build_npc_deck(session, exp["countries"], stage)
 

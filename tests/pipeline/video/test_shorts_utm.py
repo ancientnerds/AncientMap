@@ -11,6 +11,7 @@ SITE = {
     "name": "Machu Picchu",
     "country": "Peru",
     "card_text": "A citadel.",
+    "card_ai": None,
     "rarity_name": "Legendary",
     "rarity_tier": 5,
     "total_power": 33,

@@ -6,7 +6,9 @@ Exports register_commands(bot) — called once from discord_bot._get_bot().
 import asyncio
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -20,6 +22,10 @@ from api.cardgame.constants import (
 )
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter
+
+if TYPE_CHECKING:
+    # discord_bot imports this module when it builds the bot; the type is all we need.
+    from api.services.discord_bot import LyraBot
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +79,7 @@ def _find_card_site(session, name: str):
     )
 
 
-def register_commands(bot: discord.Client) -> None:
+def register_commands(bot: "LyraBot") -> None:
     """Register all card game slash commands on the bot's command tree."""
 
     # -------------------------------------------------------------------
@@ -1190,6 +1196,55 @@ def register_commands(bot: discord.Client) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Building blocks of the views below
+# ---------------------------------------------------------------------------
+
+
+class _CallbackButton(discord.ui.Button[discord.ui.View]):
+    """A button that runs the handler it is built with when clicked.
+
+    LyraView, QuizView and ExpeditionListView create their buttons at runtime, one per
+    tier, answer or expedition, each with its own handler. discord.py runs an item's
+    ``callback`` method on a click; the handler is passed in here instead of being
+    assigned over that method on the instance.
+    """
+
+    def __init__(
+        self,
+        on_click: Callable[[discord.Interaction], Awaitable[None]],
+        *,
+        label: str,
+        style: discord.ButtonStyle,
+        custom_id: str,
+        row: int,
+        disabled: bool = False,
+    ) -> None:
+        super().__init__(label=label, style=style, custom_id=custom_id, row=row, disabled=disabled)
+        self._on_click = on_click
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self._on_click(interaction)
+
+
+def _disable_buttons(view: discord.ui.View) -> None:
+    """Grey out the buttons of a view whose decision is taken (its only items)."""
+    for item in view.children:
+        if isinstance(item, discord.ui.Button):
+            item.disabled = True
+
+
+def _component_message(interaction: discord.Interaction) -> discord.Message:
+    """The message whose button was clicked.
+
+    discord.py sets ``Interaction.message`` for every component interaction; it is None
+    only for slash commands and modal submits, which never reach a view's button.
+    """
+    if interaction.message is None:
+        raise RuntimeError("a button interaction arrived without its message")
+    return interaction.message
+
+
+# ---------------------------------------------------------------------------
 # Lyra duel view
 # ---------------------------------------------------------------------------
 
@@ -1219,13 +1274,13 @@ class LyraView(discord.ui.View):
 
         for tier in [1, 2, 3, 4]:
             label = f"{tier_emojis[tier]} {tier_labels[tier]}"
-            btn = discord.ui.Button(
+            btn = _CallbackButton(
+                self._make_callback(tier),
                 label=label,
                 style=tier_colors[tier],
                 custom_id=f"lyra_tier_{tier}",
                 row=(tier - 1) // 2,
             )
-            btn.callback = self._make_callback(tier)
             self.add_item(btn)
 
     def _make_callback(self, tier: int):
@@ -1498,9 +1553,8 @@ class DuelView(discord.ui.View):
                     apply_battle_result(session, battle, result, challenger, defender)
 
             # Disable accept/decline buttons
-            for item in self.children:
-                item.disabled = True
-            await interaction.message.edit(view=self)
+            _disable_buttons(self)
+            await _component_message(interaction).edit(view=self)
 
             # If there's a stake, show partial results with snap opportunity
             if stake_credits > 0:
@@ -1567,8 +1621,7 @@ class DuelView(discord.ui.View):
             )
             return
 
-        for item in self.children:
-            item.disabled = True
+        _disable_buttons(self)
         await interaction.response.edit_message(
             content="Duel declined.",
             embed=None,
@@ -1604,6 +1657,8 @@ class SnapView(discord.ui.View):
         self.result = result
         self.original_stake = original_stake
         self.continued: set[str] = set()  # discord IDs who pressed Continue
+        # The message this view is on; DuelView sets it once the message is sent.
+        self.message: discord.Message | None = None
 
     @discord.ui.button(
         label="Snap! (2x stakes)", style=discord.ButtonStyle.danger, emoji="\ud83d\udca5"
@@ -1639,9 +1694,8 @@ class SnapView(discord.ui.View):
         )
 
         # Disable snap buttons
-        for item in self.children:
-            item.disabled = True
-        await interaction.message.edit(view=self)
+        _disable_buttons(self)
+        await _component_message(interaction).edit(view=self)
 
         response_view = SnapResponseView(
             battle_id=self.battle_id,
@@ -1676,8 +1730,7 @@ class SnapView(discord.ui.View):
         self._apply_and_stop(snap_multiplier=1)
         embed = _build_result_embed(self.result, self.challenger_id, self.defender_id)
         if self.message:
-            for item in self.children:
-                item.disabled = True
+            _disable_buttons(self)
             await self.message.edit(view=self)
             await self.message.reply(embed=embed)
 
@@ -1686,9 +1739,8 @@ class SnapView(discord.ui.View):
         self._apply_and_stop(snap_multiplier=1)
 
         embed = _build_result_embed(self.result, self.challenger_id, self.defender_id)
-        for item in self.children:
-            item.disabled = True
-        await interaction.message.edit(view=self)
+        _disable_buttons(self)
+        await _component_message(interaction).edit(view=self)
         await interaction.followup.send(embed=embed)
         self.stop()
 
@@ -1819,9 +1871,8 @@ class SnapResponseView(discord.ui.View):
             self.defender_id,
             snap_multiplier=snap_mult,
         )
-        for item in self.children:
-            item.disabled = True
-        await interaction.message.edit(view=self)
+        _disable_buttons(self)
+        await _component_message(interaction).edit(view=self)
         await interaction.followup.send(embed=embed)
         self.stop()
 
@@ -1881,9 +1932,8 @@ class SnapResponseView(discord.ui.View):
             self.defender_id,
             retreated_by=self.opponent_id,
         )
-        for item in self.children:
-            item.disabled = True
-        await interaction.message.edit(view=self)
+        _disable_buttons(self)
+        await _component_message(interaction).edit(view=self)
         await interaction.followup.send(embed=embed)
         self.stop()
 
@@ -1950,13 +2000,13 @@ class QuizView(discord.ui.View):
         q = self.quiz_data["questions"][self.current_q]
         for i, choice in enumerate(q["choices"]):
             label = choice[:80]  # Discord button label limit
-            btn = discord.ui.Button(
+            btn = _CallbackButton(
+                self._make_callback(choice),
                 label=label,
                 style=discord.ButtonStyle.primary,
                 custom_id=f"quiz_{self.current_q}_{i}",
                 row=i // 2,
             )
-            btn.callback = self._make_callback(choice)
             self.add_item(btn)
 
     def _make_callback(self, choice: str):
@@ -2059,14 +2109,14 @@ class ExpeditionListView(discord.ui.View):
                 else f"{exp['name']} (Done)"
             )
             style = discord.ButtonStyle.secondary if completed else discord.ButtonStyle.green
-            btn = discord.ui.Button(
+            btn = _CallbackButton(
+                self._make_callback(exp["id"]),
                 label=label[:80],
                 style=style,
                 disabled=completed,
                 custom_id=f"expedition_{exp['id']}",
                 row=i // 3,
             )
-            btn.callback = self._make_callback(exp["id"])
             self.add_item(btn)
 
     def _make_callback(self, expedition_id: str):

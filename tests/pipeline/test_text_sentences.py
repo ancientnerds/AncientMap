@@ -17,7 +17,9 @@ from pathlib import Path
 import pytest
 
 from pipeline.lyra.text_sentences import (
+    ends_like_a_sentence,
     is_complete_sentence,
+    opens_like_a_sentence,
     sentence_span,
     split_sentences,
 )
@@ -122,6 +124,24 @@ class TestIsCompleteSentence:
 
     def test_quoted_sentence_accepted(self):
         assert is_complete_sentence('"The chronology is in disarray," the authors wrote.')
+
+    @pytest.mark.parametrize(
+        ("text", "opens", "ends"),
+        [
+            ("The researchers compiled 424 radiocarbon dates.", True, True),
+            ("drawing on 425 radiocarbon dates.", False, True),
+            ("Kevin C.", True, False),
+            ("The researchers compiled 424 radiocarbon dates", True, False),
+            ('"The chronology is in disarray," the authors wrote.', True, True),
+            ("Židovar is a hill fort on", False, False),
+            ("   ", False, False),
+        ],
+    )
+    def test_the_two_halves_are_asked_apart(self, text, opens, ends):
+        """Lane WC compares a trimmed sentence's opening and its end with the stored sentence's
+        each on its own: a sentence that already lacks one must still keep the other."""
+        assert (opens_like_a_sentence(text), ends_like_a_sentence(text)) == (opens, ends)
+        assert is_complete_sentence(text) == (opens and ends)
 
 
 # WB-B1 (Phases 4 and 5 design, failure_modes): a date abbreviation in front of a number or an era

@@ -1,0 +1,16 @@
+{
+ "link:site_external_ids.enwiki_title:remove": 69,
+ "link:site_external_ids.enwiki_title:replace": 7,
+ "link:site_external_ids.wikidata_qid:remove": 48,
+ "link:site_external_ids.wikidata_qid:replace": 26,
+ "link:unified_sites.source_url:remove": 13,
+ "link:unified_sites.source_url:replace": 35,
+ "link_rows": 198,
+ "link_sites": 76,
+ "link_steps": 1,
+ "name_sites": 2,
+ "skip:duplicate-not-hidden-yet": 1,
+ "skip:item-carried-by-another-site": 1,
+ "skipped": 2,
+ "untrusted_links": 28
+}

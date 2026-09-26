@@ -285,8 +285,11 @@ function DbSourceBadge({ source }: { source: string | null }) {
   )
 }
 
-function RadarCard({ item, onViewSite, onApprove, onDismiss, onMerge }: {
+function RadarCard({ item, onViewSite, onApprove, onDismiss, onMerge, priority = false }: {
   item: RadarItem
+  /** A card of the first row: its thumbnail is on screen at load and is the
+   *  page's largest paint, so it loads at once and ahead of the rest. */
+  priority?: boolean
   onViewSite?: (site: SiteData) => void
   onApprove?: (id: string, overrides: Record<string, unknown>) => Promise<string | null>
   onDismiss?: (id: string) => void
@@ -378,6 +381,8 @@ function RadarCard({ item, onViewSite, onApprove, onDismiss, onMerge }: {
             fallbackSrc={item.thumbnail_url && item.screenshot_url ? item.screenshot_url : undefined}
             alt={item.display_name || ''}
             className="lyra-discovery-image"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
             onError={(e) => {
               // Hide entire image wrapper if all sources fail
               const wrap = (e.target as HTMLElement).closest('.lyra-discovery-image-wrap')
@@ -610,6 +615,10 @@ export default function LyraRadarPage() {
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [globeHiddenByScroll, setGlobeHiddenByScroll] = useState(false)
   const [globePinned, setGlobePinned] = useState(false)
+  // The map (Mapbox: ~1 MB of script, then its tiles) waits for the first page
+  // of cards: on a phone it competed with the list and the first thumbnail,
+  // the page's largest paint (radar LCP p75 5.6 s on phones, 2026-09-26).
+  const [firstPageSettled, setFirstPageSettled] = useState(false)
   const showGlobe = globePinned || !globeHiddenByScroll
   // 'radar' = the YouTube-fed queue; 'proposals' = the prospector's queue
   // (papers/stories, dedup-adjudicated). Founder-only on the API side.
@@ -792,6 +801,7 @@ export default function LyraRadarPage() {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
       setLoading(false)
+      setFirstPageSettled(true)
     }
   }, [minMentions, sortBy, statusFilter, categoryFilter, hideSpeculative])
 
@@ -1015,7 +1025,7 @@ export default function LyraRadarPage() {
         {/* LEFT: Map pane. Unmounted when collapsed so RadarMap's cleanup runs
             and its requestAnimationFrame sweep stops burning a CPU core. */}
         <div className="radar-split-map">
-          {showGlobe && (
+          {showGlobe && firstPageSettled && (
             <Suspense fallback={<div style={{ width: '100%', height: '100%' }} />}>
               <RadarMap items={allRadarMapItems} highlightId={highlightedCardId}
                         filterFn={mapFilterFn}
@@ -1095,11 +1105,11 @@ export default function LyraRadarPage() {
           <div className="lyra-discoveries-grid" ref={gridRef}>
             {Array.from({ length: columnCount }, (_, colIdx) => (
               <div key={colIdx} className="lyra-discoveries-column">
-                {items.filter((_, i) => i % columnCount === colIdx).map(item => (
+                {items.filter((_, i) => i % columnCount === colIdx).map((item, row) => (
                   <div key={item.id} data-radar-id={item.id}
                        onMouseEnter={() => setHighlightedCardId(item.id)}
                        onMouseLeave={() => setHighlightedCardId(null)}>
-                    <RadarCard item={item} onViewSite={setSelectedSite}
+                    <RadarCard item={item} onViewSite={setSelectedSite} priority={row === 0}
                                onApprove={isFounder ? handleApprove : undefined}
                                onDismiss={isFounder ? handleDismiss : undefined}
                                onMerge={isFounder ? handleMerge : undefined} />

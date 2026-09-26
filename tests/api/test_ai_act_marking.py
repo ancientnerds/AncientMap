@@ -34,6 +34,7 @@ from api.schemas.public_v1 import (
     SiteDetailResponse,
 )
 from api.services import description_provenance as DP
+from pipeline.utils import card_provenance as CP
 from tests.fake_sql import RecordingSession
 
 
@@ -57,6 +58,8 @@ def test_content_schemas_carry_ai_marking(schema, expected_system):
 SITE_ID = "4a5a324f-0000-4000-8000-000000000001"
 DESCRIPTION = "The Tarxien Temples are an archaeological complex in Tarxien, Malta [1]."
 CARD = "The Tarxien Temples are an archaeological complex in Malta's south."
+#: A lane-WB teaser card of the same site (its provenance hashes this text).
+TEASER = "Beneath Tarxien in Malta lie the Tarxien Temples, an archaeological complex of stone."
 PERMALINK = "https://en.wikipedia.org/w/index.php?title=Tarxien_Temples&oldid=1234567"
 #: The disclosure Phase 4 writes (`phase4/model4.AI_SYSTEM`, owner order 2026-09-23).
 AI_SYSTEM = (
@@ -195,12 +198,81 @@ def test_a_description_edited_after_its_provenance_discloses_nothing():
 
 
 def test_a_card_is_marked_only_while_it_is_the_card_the_provenance_hashes():
-    assert DP.card_ai(_provenance("W"), CARD) == "selected"
-    assert DP.card_ai(_provenance("W"), CARD + "!") is None
-    assert DP.card_ai(_legacy(), CARD) is None
+    assert DP.card_ai(_provenance("W"), None, CARD) == "selected"
+    assert DP.card_ai(_provenance("W"), None, CARD + "!") is None
+    assert DP.card_ai(_legacy(), None, CARD) is None
     no_card = copy.deepcopy(_provenance("W"))
     no_card["card"] = None
-    assert DP.card_ai(no_card, CARD) is None
+    assert DP.card_ai(no_card, None, CARD) is None
+
+
+def _teaser(card: str = TEASER, description: str = DESCRIPTION) -> dict[str, Any]:
+    """A lane-WB teaser provenance, built by the one builder its writer uses."""
+    return CP.build(
+        run="wb-2026-09-26",
+        ai_system=AI_SYSTEM,
+        card=card,
+        description=description,
+        stage="check1",
+        checker="teaser-check1-k1-001",
+        checked_at="2026-09-26T12:00:00+00:00",
+        claims=[{"claim": "megalithic temples on Malta", "support": ["S1"]}],
+    )
+
+
+def test_a_teaser_card_is_ai_generated_while_its_provenance_hashes_it():
+    """Owner decision O10: a teaser card is AI-generated text whatever the description is - also
+    under a lane-W description the AI only selected, and also once the description changed (the
+    card is then stale, not less generated)."""
+    assert DP.card_ai(_provenance("W"), _teaser(), TEASER) == "generated"
+    assert DP.card_ai(None, _teaser(), TEASER) == "generated"
+    assert DP.card_ai(_legacy(), _teaser(), TEASER) == "generated"
+    assert DP.card_ai(None, _teaser(description="another text"), TEASER) == "generated"
+
+
+def test_a_teaser_provenance_is_the_only_statement_about_the_card():
+    """With a teaser provenance present, a card it does not hash is marked by nothing - not by an
+    older Phase-5 card key that still happens to hash it (lane WB nulls that key; a card file
+    imported at boot is exactly such a card)."""
+    assert DP.card_ai(_provenance("W"), _teaser(), CARD) is None
+    assert DP.card_ai(_provenance("W"), _teaser(), None) is None
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"ai": "selected"},
+        {"kind": "extractive"},
+        {"text_sha256": "0" * 63},
+        {"v": True},
+        {"check": {"verdict": "FAIL"}},
+    ],
+)
+def test_a_malformed_teaser_provenance_is_refused_not_ignored(broken):
+    data = {**_teaser(), **broken}
+    if "check" in broken:
+        data["check"] = {**_teaser()["check"], **broken["check"]}
+    with pytest.raises(ValueError, match=CP.CARD_PROVENANCE_KEY):
+        CP.validate(data)
+    with pytest.raises(ValueError):
+        CP.card_provenance_of({CP.CARD_PROVENANCE_KEY: data})
+
+
+def test_a_claim_without_a_sentence_id_is_refused():
+    data = copy.deepcopy(_teaser())
+    data["check"]["claims"][0]["support"] = []
+    with pytest.raises(ValueError, match="names no sentence id"):
+        CP.validate(data)
+
+
+def test_a_teaser_card_is_shorts_eligible_only_while_its_description_is_unchanged():
+    """A stale card (the description changed since the card was checked against it) keeps its AI
+    mark but is not narrated: the shorts gate S13 gets no pin for it."""
+    fresh = _teaser()
+    assert CP.shorts_pin(fresh, DESCRIPTION) == CP.text_sha256(TEASER)
+    assert CP.shorts_pin(fresh, DESCRIPTION + " Edited.") is None
+    assert CP.shorts_pin(fresh, None) is None
+    assert CP.stale(fresh, DESCRIPTION + " Edited.") and not CP.stale(fresh, DESCRIPTION)
 
 
 def test_the_provenance_key_is_the_writers_own():
@@ -257,6 +329,14 @@ def test_the_site_api_surfaces_description_ai_and_attribution():
     assert resp["descriptionAi"] == "selected"
     assert resp["descriptionAttribution"]["url"] == PERMALINK
     assert resp["cardAi"] == "selected"
+
+
+def test_the_site_api_marks_a_teaser_card_generated():
+    raw = {DP.PROVENANCE_KEY: _provenance("W"), CP.CARD_PROVENANCE_KEY: _teaser()}
+    db = RecordingSession({"WHERE us.id::text = :site_id": [_detail_row(raw, card=TEASER)]})
+    resp = sr.get_site_detail(SITE_ID, db=db)
+    assert resp["descriptionAi"] == "selected"
+    assert resp["cardAi"] == "generated"
 
 
 def test_the_site_api_says_nothing_without_provenance():

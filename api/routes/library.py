@@ -8,7 +8,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import any_, text
 from sqlalchemy.orm import Session
 
 from api.services.background_jobs import JobAlreadyRunning, read_status, start_job
@@ -69,10 +69,10 @@ def search_library(
         )
 
     if period:
-        query = query.filter(LibrarySource.period_tags.any(period))
+        query = query.filter(any_(LibrarySource.period_tags) == period)
 
     if source_type:
-        query = query.filter(LibrarySource.source_types.any(source_type))
+        query = query.filter(any_(LibrarySource.source_types) == source_type)
 
     if tier is not None:
         query = query.filter(LibrarySource.reliability_tier == tier)

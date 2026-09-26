@@ -7,6 +7,72 @@ below (about 10,000 lines; the Phase-4 entries - pilots 3-4, the defect scope, t
 are on branch `wip/p4-pilot` until it is merged, see 2.4), and the plan is
 `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`.
 
+## 0. Resume point - paused 2026-09-25 evening at the owner's request (usage limit)
+
+Everything below section 0 was written before these last steps; where they differ, this section wins.
+
+**Done and live since the Phase-4 mass run** (every write journalled, rehearsed, read back, its
+rollback rehearsed, accepted with 0 deviations; the day's production log is in the session notes and
+in the AUDIT_LOG sections of 2026-09-25):
+- `wip/p4-pilot` merged into `integrate/wave1`, `origin/main` merged in; **Push #2 = 417386f**
+  (P5 sitting: backup drill passed, 1,107 cards in 13 accepted steps, card file byte-identical,
+  0 boot overwrites), then **2aa68cf** (the D9 run). `integrate/wave1` is ahead of `main` again by
+  the commits after 2aa68cf (docs, dangling-markers, acceptance draw, audit) - no code a deploy needs.
+- Lane L: 4,003 March-AI texts marked. card_stats: 4,106 cells over 1,082 cards (wave 2026-09-25
+  plans 0). Static export on the VPS (root-owned files fixed), Qdrant resync, IndexNow (5,085 + 4,919).
+- Acceptance run `draw-2026-09-25` recorded **FAIL on A3** (D1, Kuntur Amaya; no judge ran). Class
+  repaired: `orphan-citations` (69 sites), the D9 run (scope v2, 6 sourced descriptions),
+  `dangling-markers` (3 held sites). **D1 and D4 now hold on all 5,004 curated sites.**
+- `verify_writes4` gained `--allow-stamp` (use `'phase4l:%'` for P4; for L use the orphan-citations,
+  `phase4:%` and dangling-markers stamps) and multi-run `--run` (pilot4, mass, d9).
+
+**In flight, stopped cleanly:**
+1. **Fresh acceptance `draw-2026-09-25b`** (seed 20260926, canaries 20260927; sealed in AUDIT_LOG;
+   D1-D6 hold). Stage 1: 652 questions in 54 batches under
+   `output/remediation/handoff/acceptance-2026-09-25b-s1`; **14 answered** (card_description-01
+   complete, -02 partly). Resume the judges with the workflow script `C:/tmp/acceptance_s1.js`
+   (resumeFromRunId `wf_57394bdd-e52`, same args; each agent runs `judge.py brief ... --batch-id B`
+   and follows it; an already-recorded answer is refused as write-once - the re-run judge of
+   card_description-02 skips those labels). Then: `opus_handoff.py validate`, `judge.py import-stage1`,
+   re-asks (`export-reask`, at most twice), stage 2 / stage 3, `judge.py result`; commands in the
+   AUDIT_LOG section of the acceptance tooling. **No remediation write may touch a drawn site
+   before the result (V3)** - that includes the 19 `revision-too-fresh` sites below.
+   (Superseded 2026-09-26: the owner ended the acceptance as a measurement and lifted V3, O1 of
+   `FINISH_PLAN_2026-09-26.md`.)
+2. **Code audit** (docs/procedures/CODE_AUDIT.md, backend mode on the remediation's api/pipeline
+   changes + the production-writing tooling): steps 0.5-5 done, **no fix made yet**; report
+   `output/remediation/CODE_AUDIT_2026-09-25.md` (6e5d028). The 14 changed api/pipeline files check
+   out; the quality gate's hard conditions pass. **Fix before the next production write**: the 11
+   Major tooling findings in its fix order - above all `write_gate4 --accept` taking a log with a
+   failing and a passing run appended, `
+` -> `
+` on Windows in `prod_write.send` /
+   `write_stage.run_sql` (read-only checks found no damage), a psql timeout leaving no
+   `STOPPED.json`, `--batch` skipping the stopped-batch check, no 100-site cap on `--step`. Run its
+   mutation sweeps in a scratch worktree (the acceptance code imports `prod_write` and
+   `mechanical/lane`). A stray `%TEMP%/gettext.py` (an agent's page fetcher of 2026-09-23 that
+   shadowed the stdlib module) was renamed to `fetch_page_text_2026-09-23.py`.
+
+**Still open after that:** the 19 `revision-too-fresh` sites - since 2026-09-26 lane WA's **v3d
+plan** (`docs/procedures/PHASE4_V3_RUNBOOK.md` section 8, HUMAN_ONLY_DECISIONS D6): built with
+`plan4.py build --take-deferred runs/mass-2026-09-25` once the last is due (21:40:06Z), from a fresh
+read, so no L row is reverted and no card is planned. **`runs/mass-2026-09-25` is never driven live
+again**; `mass4` refuses its live rounds once one of the 19 is ready (`descriptions_only_claims`).
+**The v3 run's agents record with `handoff4.py record`, and `handoff4.py ready` runs before every
+import** (second review of lane WA, 2026-09-26): `opus_handoff.py answer` checks no shape, and the
+live run's agents recorded three selections the import refuses that way (p4-2006, p4-2011,
+p4-2061; their corrected drafts are in `handoff/p4-v3-select-scratch/`). p4-2006 and p4-2011 were
+imported at 09:41 and 09:45 UTC before the repair, so sites `2a63af83-...` and `593de422-...` are
+held `selection-refused` in the v3 run and go to lane WC like any held site. p4-2061
+(`27f27e7e-...`) was repaired before its select import (12:58 UTC, runbook section 5, "A recorded
+answer the import would refuse"; AUDIT_LOG, "Lane WA: the second review's findings"). `wip/wa` up
+to `3d3ba31` is in `integrate/wave1` since `c4b4dd1` and the p4-pilot worktree runs it; the later
+`wip/wa` commits (audit4's lists through the one reader, a re-anchored mutation case, these docs)
+are merged between import rounds;
+the owner items in `HUMAN_ONLY.md` (Ahin Posh coordinates, 21 wrong-both rows, Chiapa/Zoque,
+gallery eye labels, 11 lyra alias keys, 16 old shorts, deleted Commons files on the VPS, 876 vs 904);
+a final docs pass (this file's sections 2-7, CLAUDE.md's top paragraph) and a push of the docs.
+
 ## 1. The task
 
 Every one of the 5,004 `ancient_nerds` sites in the production database must be **correct** - and
@@ -99,10 +165,12 @@ It ends with `verify_writes4.py --lane p4l --plan logs/_write_apply_p4l/LANE_PLA
    IndexNow catch-up; (7) the checks, both acceptances; (8) the acceptance draw and its judging
    (`acceptance/PROTOCOL.md`, sealed; the draw excludes the mass run's audit samples
    `logs/p4_mass/midrun_sample.txt` and `audit500_sample.txt`).
-2. **The 19 `revision-too-fresh` sites** of the mass run: `mass4.py` re-queues them itself 48 h after
-   their hold, the first at 2026-09-26T21:30:14Z. Any P4 write they bring must land **before the
-   draw** (PROTOCOL: the acceptance is VOID when a write touches a drawn site after the draw); a
-   description written after the card_stats wave is the next card_stats wave's work.
+2. **The 19 `revision-too-fresh` sites** of the mass run, due 2026-09-26T21:30:14Z .. 21:40:06Z:
+   since 2026-09-26 they are lane WA's **v3d plan** (`docs/procedures/PHASE4_V3_RUNBOOK.md` section
+   8; HUMAN_ONLY_DECISIONS D6), descriptions only, from a fresh read. `runs/mass-2026-09-25` is
+   never driven live again: its re-queue (p4-0116) would give them S0's old values and an
+   extractive P5 card, and `mass4` refuses such a live round (`descriptions_only_claims`). The
+   earlier rule "write before the acceptance draw" is gone with the acceptance (O1).
 
 ### 2.5 Phase 3's own numbers (measured 2026-09-22)
 
@@ -244,7 +312,8 @@ every batch, which is why nothing there may be edited while a run is in flight.
 ## 6. Open work
 
 - **Lane L** to its end, then the **merge** of `wip/p4-pilot` and the **Phase-6 runbook** (2.4).
-- **The 19 `revision-too-fresh` sites** (2.4, item 2).
+- **The 19 `revision-too-fresh` sites** (2.4, item 2): lane WA's v3d plan
+  (`docs/procedures/PHASE4_V3_RUNBOOK.md` section 8); the mass run is never driven live again.
 - **Owner items** (`HUMAN_ONLY.md`, each with its evidence file): Ahin Posh Tape's point (no second
   independent witness; every source puts it about 95 km from the stored point, near Jalalabad); the
   21 wrong-both rows for a human (of 29 listed); Chiapa de Corzo / Zoque Culture Archaeological Zone;
@@ -256,7 +325,7 @@ every batch, which is why nothing there may be edited while a run is in flight.
   `Baltic Sea`).
 - Code, recorded and not built: the selector's rule (8) keeps the gap the reviewer's new DROP line
   closes; the gallery G runs' missing links (none can write while C1 admits no trigger); the mypy
-  `api/` debt (A7).
+  `api/` debt (A7), since built on `wip/we2` (93 -> 0, AUDIT_LOG 2026-09-26 "A7").
 
 ## 7. Traps that cost real time here
 

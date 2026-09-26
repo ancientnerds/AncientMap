@@ -72,6 +72,13 @@ OPENING_TRIM_S = 0.1  # the opening take holds its first pose this long; the fir
 # Mapbox ToS: satellite/terrain frames need attribution in the video itself;
 # the DOM logo is not part of the captured canvas.
 MAPBOX_CREDIT = "© Mapbox © Maxar"
+# EU AI Act Art. 50 (owner decision O10, 2026-09-26): a lane-WB teaser card - the narrated text -
+# is written by an AI system from the site's sourced description and checked claim by claim by a
+# second one (docs/procedures/CARD_DESCRIPTIONS.md). Said in the video description, as the voice is.
+TEASER_NOTE = (
+    "Text: AI-generated (Claude Opus) from the site's sourced description, "
+    "each claim checked against it."
+)
 
 # Music bed: looped under the whole short, faded in at the start and out
 # before the loop point so the video loops cleanly; MUSIC_GAIN_DB sits it
@@ -470,6 +477,9 @@ def build_description(
             "",
             f"Globe and terrain flyover: Mapbox Satellite Streets + Terrain DEM ({MAPBOX_CREDIT}).",
         ]
+    if site["card_ai"] == "generated":
+        # Owner decision O10 (2026-09-26): the narrated teaser card is AI-generated text.
+        lines += ["", TEASER_NOTE]
     lines += ["", f"Narration: AI-generated voice (MiniMax speech-2.8-hd, {voice_id})."]
     lines += ["", " ".join(hashtags(site))]
     return "\n".join(lines) + "\n"
