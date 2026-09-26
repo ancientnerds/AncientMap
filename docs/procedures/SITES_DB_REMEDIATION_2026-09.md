@@ -831,17 +831,57 @@ and on a generic or wrong item it would harvest `P625`, `P571` and `P18` of the 
 writes its corrections exactly there. The country lane and the Lyra key lane are independent of
 everything else. The L5 name lane runs after the L5 import (its plan is built from the answers).
 
+**What WD1 may trust (hand this to WD1).** WD1's harvest export (`wip/wd1`,
+`scripts/remediation/fields/harvest.py`, `EXPORT_SQL`) reads the links of every curated site and
+excludes none. Two rules make its harvest safe:
+
+1. The export is taken only **after every L5 link step has landed** (`run.py step verify --step N`
+   reads 0 deviations for each step `plan` wrote).
+2. For every site in `output/remediation/l5/UNTRUSTED_LINKS.jsonl` (written by `run.py plan`),
+   WD1 treats every Wikidata- or Wikipedia-derived value (`P625`, `P571`, `P18`, the article's
+   coordinates, the item's classes) as **absent** - not harvested, never a witness. Each line
+   names the site, its stored links and its `status`: `excluded` (retired, or not one item and
+   one article), `held` (no answer passed the machine checks by the last round), `skipped` (the
+   plan did not write it: it changed since the question, or its new item is carried by or
+   decided for another site) or `shared-item` (it keeps an item another visible curated row
+   carries - B1-D makes that WD2's question). A `shared-item` site becomes trusted once only one
+   visible curated row carries the item; read-only, at WD1's export:
+
+   ```sql
+   SELECT e.value, count(*) FROM site_external_ids e JOIN unified_sites u ON u.id = e.site_id
+    WHERE e.kind = 'wikidata_qid' AND u.source_id = 'ancient_nerds'
+      AND u.scope_status IS DISTINCT FROM 'retired' AND e.value IN (<the shared-item QIDs>)
+    GROUP BY e.value HAVING count(*) > 1;   -- the items still shared: their sites stay untrusted
+   ```
+
 **Hand-offs to WD2.** (1) HUMAN_ONLY Nr. 7: the empty row "Chiapa de Corzo"
 (`24aa135d-4714-47f5-96c0-d58f0bc04b6f`, 0 links, 0 images) is hidden by WD2 as
 `duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2` (the 20th duplicate entry, 2 cells); the rename
 of the kept row "Zoque Culture Archaeological Zone" to "Chiapa de Corzo" (the English label of its
-item Q4384315) is L5's name lane, pinned in `l5/population.py` (`PINNED_NAMES`). Until both have
-run, two visible rows 7.4 m apart carry the name - run WD2's hide and L5's name lane in the same
-session. (2) HUMAN_ONLY B1-D and B6: the nine rows of the duplicate candidates L5's sources list
-(Amathunta/Amathus, Tel Hermal Fort/Shaduppum, Ñustahispana, 39 Bridge Street Chester, the Lycian
-tomb entry and Amyntas Rock Tombs, both Temple of Artemis rows, Caesarea Philippi) are **not asked**
-by L5 (`DUPLICATE_CANDIDATES`): their item is right for the row that stays, and which row stays is
-WD2's retirement. L5 asking them could remove the item a pair is recognised by.
+item Q4384315) is L5's name lane, pinned in `l5/population.py` (`PINNED_NAMES`). **WD2 has not
+built that entry yet** (`wip/wd2` at `e1ba2de`: no `24aa135d` in `bcases/DUPLICATES.jsonl` nor in
+any script; production 2026-09-26: both rows visible, scope NULL). `run.py plan` therefore plans
+the rename only when the row is retired with exactly that `scope_reason`, and otherwise skips it
+(`duplicate-not-hidden-yet` in `SKIPPED.jsonl`) - two visible rows 7.4 m apart would both carry the
+name. Since `plan` runs once, WD2's hide lands **before** L5's `plan`; check it read-only first:
+
+```sql
+SELECT scope_status, scope_reason FROM unified_sites
+ WHERE id = '24aa135d-4714-47f5-96c0-d58f0bc04b6f';
+-- expected: retired | duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2
+```
+
+If `plan` has to run before it (WD1 waiting), the Nr. 7 rename stays open and needs a name lane of
+its own stamp later - report it, do not re-run `plan`. (2) HUMAN_ONLY B1-D and B6: one rule for
+every duplicate candidate. The nine rows L5's sources list (Amathunta/Amathus, Tel Hermal
+Fort/Shaduppum, Ñustahispana, 39 Bridge Street Chester, the Lycian tomb entry and Amyntas Rock
+Tombs, both Temple of Artemis rows, Caesarea Philippi) are **asked** like wave 3's
+`duplicate-candidate` rows (Enkomi/Engomi, the Biniai Nou pair, Hattusas, Qorikancha, ...): the
+question names the pair (`DUPLICATE_CANDIDATES`) and every curated row sharing the item, and a
+shared item that names exactly this site is kept. Which row stays is WD2's retirement; the links of
+a pair WD2 cannot prove to be one site (Tel Hermal Fort/Shaduppum 1.7 km, the Lycian tomb
+entry/Amyntas 1.1 km) are the ones L5 decided for each row. A site that keeps a shared item is
+listed `shared-item` for WD1 until WD2 has retired all but one of its rows.
 
 #### B2-L — the two country cells (lane `country-b2`)
 
@@ -900,35 +940,52 @@ no-op on a key that is already `left(lower(unaccent(name)), 500)`.
 **Who.** `run.py population` (read-only) builds the population from the waves' records and
 `bcases/names.jsonl`: wave 1's unresolved Tikal, wave 2's 47 unchanged wrong links, the 72
 link-suspect kept names, the 46 N7 names and Delphinion (its item Q2677787 is a class). A retired
-site, a duplicate candidate (above) and a site without exactly one item and one article are listed,
-not asked. The name is asked of the N7 names and the three self-contradicting records (Tikal,
-Ramesses III Temple, Rocca San Felice); Zoque's rename is pinned.
+site and a site without exactly one item and one article are listed, not asked; every duplicate
+candidate is asked (above). The name is asked of the N7 names only (B1-N); Zoque's rename is
+pinned. The three self-contradicting records (Tikal, Ramesses III Temple, Rocca San Felice) are
+asked their links and told that their name and point define the site - their description and
+source are WA/WC's to rewrite, and Tikal is the only curated "Tikal".
 
-**The question** (`questions.py`): the rules of B1-L/B1-N/O6 - a link names exactly this site (no
-type, container, sibling or namesake) or it goes; a replacement item cites its
-`Special:EntityData/<QID>.json`, a replacement article its own page; both links removed on an
-English-Wikipedia `source_url` forces a decision on the URL (REPLACE with a non-Wikipedia page about
-the site, or CLEAR), because the daily `refresh_site_external_ids` would derive the links from it
-again; a rename quotes a page with the new name. Every verdict but a KEEP of the URL or the name
-carries verbatim quotes.
+**The question** (`questions.py`): the rules of B1-L/B1-N/O6 - this site is the place its name
+designates at its stored point; a link names exactly this site (no type, container, sibling or
+namesake) or it goes, and an item a duplicate row shares is kept when it names this site; a
+replacement item cites its `Special:EntityData/<QID>.json`, a replacement article its own page; both
+links removed on an English-Wikipedia `source_url` forces a decision on the URL (REPLACE with a
+non-Wikipedia page about the site, or CLEAR), because the daily `refresh_site_external_ids` would
+derive the links from it again; a rename takes the English label or alias of the item kept or
+written, or the title of the article kept or written, and quotes a page with the new name. Every
+verdict but a KEEP of the URL or the name carries verbatim quotes.
 
 **The machine checks** (`decide.py`, on import): every quote found in its fetched page
 (`opus_audit/quotes.py`); a replacement item is the item its entity page serves (not a redirect)
 and lies within 1 km of the stored point by `P625` or by its article's coordinates (waves 2-3's
 gate - otherwise a coordinate question for WD1 first); the article kept or written exists under
 exactly that title (no redirect, no disambiguation page), resolved with the refresh's own query,
-and belongs to the item kept or written. A site failing any check is **held** with its reason and
-asked again in a new round, the reason in its prompt.
+and belongs to the item kept or written; a rename's new name is an English (`en`, `en-*`, `mul`)
+label or alias of the item kept or written - its entity page is read even when no quote cites it -
+or the title of the article kept or written, with or without its bracketed qualifier, and the item
+is carried by no other visible curated row (two rows named after one item is WD2's). A site failing
+any check is **held** with its reason and asked again in a new round, the reason in its prompt.
 
-**The writes.** `run.py plan` (read-only live read) skips a site whose links, URL, name or scope
-changed since the question's read, and a replacement item another curated site carries (a
-duplicate, WD2's), and writes: link steps of at most 100 sites into
+**The rounds.** Round 1 asks every asked site; a re-ask round asks the held sites, at most twice
+(`MAX_ROUNDS = 3`). Only the newest round is imported (an older one would overwrite newer
+decisions), and `export-reask` and `plan` refuse until it is.
+
+**The writes.** `run.py plan` (read-only live read, after the newest round's import) skips a site
+whose links, URL, name or scope changed since the question's read, a replacement item another
+curated site carries, and a replacement item decided for two sites (both are skipped:
+`item-planned-for-another-site`, WD2's), and writes: link steps of at most 100 sites into
 `output/remediation/qid_repair/l5/step-NNN/` through `qid_repair.render_split(removals=True)` - a
-removal deletes exactly the journalled `(site_id, kind, value)` row and its reversal re-inserts it,
-invariant 4 refuses a site left without any link on an English-Wikipedia `source_url` - and the
-name lane `name-l5` (`output/remediation/mechanical_name_l5/`: `name` and its key in one
-transaction, the key computed by Postgres, the lane invariant refusing a key that is not the new
-name's). Lyra's next boot adds each new name to `unified_site_names` as a `label` row; the old name
+removal deletes exactly the journalled `(site_id, kind, value)` row and its reversal re-inserts it;
+guard 6 refuses one new item planned for two sites and invariant 5 checks after the writes that
+every item written is carried by exactly one curated site (both in the write only, not in the
+reversal); invariant 4 refuses a site left without any link on an English-Wikipedia `source_url` -
+the name lane `name-l5` (`output/remediation/mechanical_name_l5/`: `name` and its key in one
+transaction, the key computed by Postgres and not written when a rename changes only case or
+accents, the lane invariant refusing a key that is not the new name's), `SKIPPED.jsonl`,
+`UNTRUSTED_LINKS.jsonl` (above) and `PLAN_COUNTS.json`. Everything that can refuse is computed
+before the first file is written, and no step is written while any step directory holds another
+plan. Lyra's next boot adds each new name to `unified_site_names` as a `label` row; the old name
 stays there, so an exact search finds both.
 
 **User-Agent.** `l5/web.py`: `AncientMapRemediation/1.0 (research; https://ancientnerds.com)` -
@@ -940,16 +997,17 @@ project URL added; no contact address, no name.
 $PY scripts/remediation/l5/run.py population            # read-only; refused once a round exists
 $PY scripts/remediation/l5/run.py export --handoff output/remediation/l5/handoff-r1
 # one Opus agent per batch (O11: up to 16 at a time); each agent's instruction:
-$PY scripts/remediation/l5/run.py brief --round r1 --batch-id r1-b01     # ... r1-b15
+$PY scripts/remediation/l5/run.py brief --round r1 --batch-id r1-b01     # ... r1-b16
 $PY scripts/remediation/opus_handoff.py validate --dir output/remediation/l5/handoff-r1
 $PY scripts/remediation/l5/run.py import --round r1     # fetches, checks, decides: DECISIONS.jsonl
-# held sites, at most twice more, each in a new directory:
+# held sites, at most twice more (r2, r3), each in a new directory, after the newest import:
 $PY scripts/remediation/l5/run.py export-reask --handoff output/remediation/l5/handoff-r2
 #   brief / validate / import --round r2 as above
+# before the plan: WD2's hide of 24aa135d has landed (the SQL under "Hand-offs to WD2")
 $PY scripts/remediation/l5/run.py plan                  # read-only; ONCE, after the last import
 $PY scripts/remediation/l5/run.py step check --step 1   # read-only: files = plan, old values hold
 $PY scripts/remediation/l5/run.py step rehearse --step 1
-$PY scripts/remediation/l5/run.py step probe-guards --step 1   # guards 1, 2, 3, 5 and invariant 4
+$PY scripts/remediation/l5/run.py step probe-guards --step 1   # guards 1, 2, 3, 5, 6, invariant 4
 $PY scripts/remediation/l5/run.py step apply --step 1
 $PY scripts/remediation/l5/run.py step verify --step 1
 $PY scripts/remediation/l5/run.py step rehearse-rollback --step 1
@@ -964,12 +1022,17 @@ $PY scripts/remediation/mechanical/apply.py --lane name-l5 --rehearse-rollback
 
 `plan` runs once: a step directory that holds a plan is never replaced (its ROLLBACK.sql may be
 the only undo of a landed write), and a site written by step 1 reads as changed on a second plan.
+`probe-guards` probes each guard the step can exercise: guard 2 needs a `source_url` row, guard 5
+a replaced item, guard 6 a replaced item and a second site's item row in the same step; invariant 5
+is the after-write form of guards 5 and 6 and cannot fire while they pass (its SQL is tested in
+`tests/remediation/test_l5.py`), so it is not probed.
 Exit codes of `step`: 0 OK, 1 REFUSED, 3 NOT COMMITTED, 4 COMMITTED (psql unclean, read-back
 confirmed), 5 OUTCOME UNKNOWN, 6 COMMITTED BUT NOT CONFIRMED, 7 a rehearsal or probe fell short. An
 outcome is settled from the journal (`run_stamp = '2026-09-26_l5-links-NNN'`), never by a retry.
 Files: `output/remediation/l5/` (`POPULATION.jsonl`, `COUNTS.json`, `ROUNDS.jsonl`,
 `answers/<round>.jsonl`, `DECISIONS.jsonl`, `TITLES.json`, `PAGES.jsonl`, `SKIPPED.jsonl`,
-`PLAN_COUNTS.json` versioned; `export/READ.json`, `handoff-*`, `pages/` local).
+`UNTRUSTED_LINKS.jsonl`, `PLAN_COUNTS.json` versioned; `export/READ.json`, `handoff-*`, `pages/`
+local).
 
 #### Nr. 8 — the six local copies of Commons-deleted files (a VPS step, run by the orchestrator)
 
@@ -979,7 +1042,7 @@ user is in the `docker` group, so the deletion runs as root in a throw-away cont
 network. `public/data/images/` is ignored by git, so the deploy's `git clean -fd` neither restores
 nor touches them.
 
-Pre-check, read-only - all three must hold before the deletion:
+Pre-check, read-only - all four must hold before the deletion:
 
 ```bash
 # 1. the database: the six rows excluded, not a hero, and nothing live names the files
@@ -996,7 +1059,34 @@ ssh ancientnerds 'cd /var/www/ancientnerds/public/data/images/wiki && ls -ln -- 
 for f in "403e3c53/Infopanel%20hardloopbaan%20Olympia.webp" "75374382/Athens%20Acropolis%20Stoa%20of%20Eumenes%20II%20%2828437052525%29.webp" 9a9a0dca/Dedan_tomb_1.webp 9a9a0dca/hero.webp "cb039044/Athens%20Acropolis%20Sanctuary%20of%20Dionysos%20Eleuthereus%20%2828154647030%29.webp" "fe252099/A%20Minecraft%20Movie%20McDonald%27s%20promotion%20-%203%20May%202025.webp" fe252099/hero.webp; do
   curl -s -o /dev/null -w "%{http_code} $f\n" -A "AncientMapRemediation/1.0 (research)" "https://ancientnerds.com/data/images/wiki/$f"
 done
+# 4. the static export: the globe builds a site's `im` as /data/images/wiki/<id8>/<hero_filename>
+#    (pipeline/static_exporter.py), so an export older than the 2026-09-25 exclusion still names
+#    9a9a0dca/hero.webp (this machine's March export does: index.json, details/africa.json,
+#    details/middle_east.json and their .gz). Expected: "no static JSON names one of the six".
+#    "NAMED BY THE STATIC EXPORT" means: run Nr. 8 after WF's static export instead.
+ssh ancientnerds 'sh -s' <<'SH'
+cd /var/www/ancientnerds/public/data/sites
+set -- -e '403e3c53/Infopanel hardloopbaan Olympia.webp' \
+  -e '75374382/Athens Acropolis Stoa of Eumenes II (28437052525).webp' \
+  -e '9a9a0dca/Dedan_tomb_1.webp' -e '9a9a0dca/hero.webp' \
+  -e 'cb039044/Athens Acropolis Sanctuary of Dionysos Eleuthereus (28154647030).webp' \
+  -e "fe252099/A Minecraft Movie McDonald's promotion - 3 May 2025.webp"
+named=$(grep -rlF --include='*.json' "$@" .; find . -name '*.json.gz' | while read -r f; do
+  if gzip -dc "$f" | grep -qF "$@"; then echo "$f"; fi
+done)
+if [ -n "$named" ]; then
+  printf 'NAMED BY THE STATIC EXPORT - wait for the next static export:\n%s\n' "$named"
+  exit 1
+fi
+echo "no static JSON names one of the six"
+SH
 ```
+
+Pre-check 4 was run locally (the script with only its `cd` pointed elsewhere): against this
+machine's March export it listed those six files and exited 1 (5.5 min on Windows, the 87 MB
+`index.json.gz` dominating); against a mock tree holding only `fe252099/hero.webp` in a `.json` and a
+`.json.gz` it exited 0; with the McDonald's path added in a `.json.gz` it listed that file and
+exited 1.
 
 The deletion (reviewed 2026-09-26; the script was run against a mock of the six files and the
 control: it removed exactly the six, left `fe252099/hero.webp`, and a second run exits 1 without
@@ -1025,10 +1115,13 @@ for up to a day (`Cache-Control: public, max-age=86400`).
 | B2-L rows holding the country the decision replaces | 2 (Germany 107, Greece 402, Türkiye 218 curated rows) |
 | Lyra alias rows whose key is not Postgres's key of their name | 11 on 6 sites, 0 colliding |
 | curated rows whose key is not their name's key (the name lane's residual) | 0 |
-| L5 population | 167: wave1-unresolved 1, wave2-unresolved 47, link-suspect 72, name-n7 46, found-by-we 1 |
-| L5 asked | 150 (names asked 46, pinned 1); not asked: 8 retired, 9 duplicate candidates |
-| L5 asked on an English-Wikipedia `source_url` | 150 |
-| L5 prompts (dry export of the first read) | 3,642-5,573 characters, median 4,300; 15 batches of 10 |
+| L5 population (read again 08:43Z after the review's fixes; nothing in production had moved) | 167: wave1-unresolved 1, wave2-unresolved 47, link-suspect 72, name-n7 46, found-by-we 1 |
+| L5 asked | 159 (names asked 43 - the N7 names less Zoque's pinned rename and 2 retired; duplicate candidates 9); not asked: 8 retired |
+| L5 asked on an English-Wikipedia `source_url` | 159 |
+| L5 asked sites whose item another curated row carries | 56 (48 with a visible row) |
+| L5 prompts (dry build from the read) | 3,997-5,928 characters, median 4,836; 16 batches of 10 |
+| Chiapa de Corzo (`24aa135d`) / Zoque row | both visible, scope NULL: WD2's hide has not landed |
+| journal maximum `remediation_change_log.id`; rows under L5's stamps | 73911; 0 |
 | Nr. 8 image rows excluded / live rows naming the files / thumbnails naming them | 6 / 0 / 0; each file served 200 |
 
 ---
