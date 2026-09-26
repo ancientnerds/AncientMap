@@ -20,7 +20,11 @@ depends on *which* repair the plan is, except what a `Lane` names:
   psql ran the next statement 17 s after the client ssh was killed). Bounded on the server, a lock
   wait or a runaway statement raises inside the transaction instead - psql stops the script
   (exit 3) and nothing is kept, well inside the client's 900 s;
-* the residual predicates the read-backs print, and the output directory.
+* the residual predicates the read-backs print, and the output directory;
+* `write_invariant` (2026-09-26, the L5 name lane): a residual that must count 0 over the planned
+  sites once their rows are written, checked *inside* the transaction, write and reversal alike -
+  for a value whose correctness is a relation between cells the lane writes together (a name and
+  its match key), which no guard on the old values can see.
 
 ## Two shapes: a column lane and a cell lane (2026-09-23)
 
@@ -64,6 +68,7 @@ from prod_write import sql_literal  # noqa: F401 - the one quoting rule, re-expo
 
 from mechanical.reversal_3_list import JOURNAL_IDS as REVERSAL_3_JOURNAL_IDS
 from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
+from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.public_sites import SCOPE_STATUSES
 from pipeline.utils.text import PERIOD_BUCKETS
@@ -242,6 +247,7 @@ class Lane:
     target: Target = UNIFIED_SITES
     cells: tuple[Column, ...] = ()
     reverses_journal: bool = False
+    write_invariant: Residual | None = None
 
     def __post_init__(self) -> None:
         """Every field that reaches SQL unquoted is checked here, once, instead of trusted."""
@@ -262,6 +268,16 @@ class Lane:
         for bound in (self.lock_timeout, self.statement_timeout):
             if bound is not None and not _DURATION.match(bound):
                 raise ValueError(f"{self.name}: {bound!r} is not a duration like '10s'")
+        if self.write_invariant is not None and (
+            not self.cells
+            or not self.target.is_site
+            or not _LABEL.match(self.write_invariant.metric)
+        ):
+            raise ValueError(
+                f"{self.name}: a write invariant belongs to a cell lane on unified_sites (its "
+                "probe corrupts one cell of two written together), and its metric - spliced "
+                "into the statement - is plain words"
+            )
 
     @property
     def rollback_run_stamp(self) -> str:
@@ -1220,6 +1236,116 @@ DANGLING_MARKERS_READBACK = journal_readback(
 )
 LANES[DANGLING_MARKERS.name] = DANGLING_MARKERS
 LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK
+
+# ------------------------------------------------------------------ the B2 country lane (WE)
+#: HUMAN_ONLY B2-L, decided 2026-09-26 under the owner's O9 ("nach meiner Empfehlung entscheiden",
+#: `output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md`): the two curated rows whose country the
+#: B2 classifier found wrong and no lane wrote. `(site id, name, stored value, decided value)`.
+#: Achladia lies with its item's P625 on Crete (P17 Greece); Delphinion lies in Miletus, 20 m from
+#: its item's P625. The dataset spells Türkiye (218 curated rows, 0 `Turkey`, read 2026-09-26).
+COUNTRY_B2_DECISIONS: tuple[tuple[str, str, str, str], ...] = (
+    ("74145e9b-76a6-48de-a902-08ecb2f1f7bb", "Achladia", "Germany", "Greece"),
+    ("6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed", "Delphinion", "Greece", "Türkiye"),
+)
+_B2_WRONG = Residual(
+    "curated rows still holding a country the B2 decision replaces",
+    "("
+    + " OR ".join(
+        f"(id = {sql_literal(site)}::uuid AND country = {sql_literal(old)})"
+        for site, _name, old, _new in COUNTRY_B2_DECISIONS
+    )
+    + ")",
+)
+
+#: The country lane of the B2 decision (`country_b2.py`). A column lane like the UK lane: it owns
+#: exactly the decided values, and every row carries its point as the premise - the decision rests
+#: on where the row lies, so a row whose point moved after the plan is refused (guard 5).
+COUNTRY_B2 = Lane(
+    name="country-b2",
+    column="country",
+    max_chars=100,
+    key_prefix="country-b2",
+    run_stamp="2026-09-26_mechanical-country-b2",
+    test_id="B2/country",
+    confidence="authoritative",
+    label="B2 country repair",
+    plan_table="_country_b2_plan",
+    out_dir_name="mechanical_country_b2",
+    post_commit_residual=_B2_WRONG,
+    rehearsal_residual=_B2_WRONG,
+    allowed_new_values=tuple(sorted({new for _site, _name, _old, new in COUNTRY_B2_DECISIONS})),
+    premise_sql="u.lat::text || ',' || u.lon::text",
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+)
+COUNTRY_B2_READBACK = journal_readback(
+    COUNTRY_B2,
+    [
+        (_B2_WRONG.metric, _CURATED_ROWS + _B2_WRONG.predicate),
+        *_country_rows(("Germany", "Greece", "Türkiye")),
+        _CARD_COUNTRY,
+    ],
+)
+LANES[COUNTRY_B2.name] = COUNTRY_B2
+LANE_READBACKS[COUNTRY_B2.name] = COUNTRY_B2_READBACK
+
+# ------------------------------------------------------------------ the L5 name lane (WE)
+#: A curated row whose match key is not the key Postgres derives from its name: the name lane's
+#: residual, 0 before (read 2026-09-26) and after - the lane writes each name and its key together.
+_NAME_KEY_DIFFERS = Residual(
+    "curated rows whose name_normalized is not the key of their name",
+    f"name_normalized IS DISTINCT FROM {site_key_sql('name')}",
+)
+
+#: HUMAN_ONLY B1-N and Nr. 7, decided 2026-09-26 under O9: L5's name pass renames a curated site
+#: only to a sourced name of that very site - an Opus reading whose quote the machine found
+#: (`scripts/remediation/l5/`) - and "Zoque Culture Archaeological Zone" to "Chiapa de Corzo", the
+#: English label of its item Q4384315. `name` is NOT NULL and `varchar(500)`; its match key moves
+#: with it in the same transaction, as the key Postgres computed from the new name when the plan
+#: was read (FIELD_CONTRACT 2.2: write `left(lower(unaccent(name)), 500)`, never a Python key); the
+#: transaction itself refuses to commit a planned site whose key is not its name's key
+#: (`write_invariant`), the rename and its reversal alike.
+NAME_L5 = Lane(
+    name="name-l5",
+    key_prefix="name-l5",
+    run_stamp="2026-09-26_mechanical-name-l5",
+    test_id="B1/name-l5",
+    confidence="authoritative",
+    label="L5 name repair",
+    plan_table="_name_l5_plan",
+    out_dir_name="mechanical_name_l5",
+    post_commit_residual=_NAME_KEY_DIFFERS,
+    rehearsal_residual=_NAME_KEY_DIFFERS,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=(
+        Column("name", "character varying", max_chars=500),
+        Column("name_normalized", "character varying", max_chars=500),
+    ),
+    write_invariant=_NAME_KEY_DIFFERS,
+)
+_NAME_STAMP = sql_literal(NAME_L5.run_stamp)
+NAME_L5_READBACK = journal_readback(
+    NAME_L5,
+    [
+        (_NAME_KEY_DIFFERS.metric, _CURATED_ROWS + _NAME_KEY_DIFFERS.predicate),
+        (
+            "journal rows for this run whose key is not the key of the name it wrote",
+            f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
+            "l.column_name = 'name_normalized' AND NOT EXISTS (SELECT 1 FROM "
+            f"remediation_change_log n WHERE n.run_stamp = {_NAME_STAMP} AND n.row_pk = l.row_pk "
+            f"AND n.column_name = 'name' AND {site_key_sql('n.new_value')} = l.new_value)",
+        ),
+        (
+            "journal rows for this run naming a site whose name and key did not move together",
+            f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND (SELECT "
+            f"count(*) FROM remediation_change_log m WHERE m.run_stamp = {_NAME_STAMP} AND "
+            "m.row_pk = l.row_pk) <> 2",
+        ),
+    ],
+)
+LANES[NAME_L5.name] = NAME_L5
+LANE_READBACKS[NAME_L5.name] = NAME_L5_READBACK
 
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp

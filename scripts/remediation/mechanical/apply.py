@@ -117,6 +117,8 @@ GUARD3_SAYS = "planned row(s) no longer hold the planned old value"
 GUARD4_SAYS = "planned row(s) {what} a value this lane does not own"
 GUARD5_SAYS = "planned row(s) no longer hold the premise the plan derived its value from"
 GUARD6_SAYS = "planned row(s) do not undo the last journal row of their cell"
+#: A lane's own invariant (`Lane.write_invariant`), counted over the planned sites after the write.
+INVARIANT_SAYS = "planned site(s) break the lane invariant after the write"
 
 
 def lane_dir(lane: Lane) -> Path:
@@ -722,6 +724,16 @@ def render_transaction(
     )
     add("    END IF;")
     add("")
+    if lane.write_invariant is not None:
+        add("    -- invariant 3, the lane's own: no planned site is one of the")
+        add(f"    -- {lane.write_invariant.metric}")
+        add("    SELECT count(*) INTO bad FROM unified_sites")
+        add(f"     WHERE id IN (SELECT site_id FROM {table})")
+        add(f"       AND ({lane.write_invariant.predicate});")
+        add("    IF bad > 0 THEN")
+        add(f"        RAISE EXCEPTION '{label}: % {INVARIANT_SAYS}', bad;")
+        add("    END IF;")
+        add("")
     if cells:
         add(
             f"    RAISE NOTICE '{label}: % of % planned cell(s) changed and journalled over "
@@ -1531,6 +1543,9 @@ NEVER_STORED = {
     "text": "A value that was never there",
     "character varying": "A value that was never there",
 }
+#: The column guard 2's foreign-column probe writes into: `name`, unless the lane owns it (the L5
+#: name lane does), then `description` - both `unified_sites` text columns no lane owns together.
+FOREIGN_COLUMNS = ("name", "description")
 NOT_OWNED = {
     "integer": "987654321",
     "jsonb": '["probe: a value this lane does not own"]',
@@ -1570,7 +1585,7 @@ def _cell_probe_cases(
         (
             "guard2-foreign-column",
             "guard 2 - a cell in a column the lane does not own",
-            corrupt(0, column="name"),
+            corrupt(0, column=next(c for c in FOREIGN_COLUMNS if c not in lane.columns)),
             refusal(GUARD2_SAYS),
         ),
     ]
@@ -1625,6 +1640,16 @@ def _cell_probe_cases(
                 refusal(GUARD5_SAYS),
             )
         )
+    if lane.write_invariant is not None:
+        # the write lands inside the transaction, then the lane's invariant refuses it
+        probes.append(
+            (
+                "invariant-lane",
+                "invariant 3 - a written value that breaks the lane's own invariant",
+                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),
+                refusal(INVARIANT_SAYS),
+            )
+        )
     if lane.reverses_journal:
         probes.append(
             (
@@ -1650,8 +1675,9 @@ def _cell_probe_cases(
 def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
     """Corrupt one copy per guard and show, on production, that *that* guard refuses.
 
-    Each probe runs inside `BEGIN ... ROLLBACK` with its own run stamp. It writes nothing: the
-    guards fire before the loop, and the failed statement aborts the transaction. A probe counts
+    Each probe runs inside `BEGIN ... ROLLBACK` with its own run stamp. It keeps nothing: the
+    guards fire before the loop, a lane invariant's probe raises after it, and the failed
+    statement aborts the transaction. A probe counts
     only when psql stopped the script (`PSQL_SCRIPT_ERROR`) with an ERROR line carrying its own
     guard's refusal, and the journal holds no row for its stamp afterwards. Returns the number of
     probes that fell short.
