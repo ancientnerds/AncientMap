@@ -1072,7 +1072,9 @@ def test_the_evidence_recheck_goes_red_on_a_moved_text(tmp_path: Path) -> None:
         json.loads((run / C.PLAN_FILE).read_text("utf-8").splitlines()[0])["outcomes"][0]
     )
     moved = outcome.description.replace("Malta", "Gozo")
-    assert WC4.evidence_problems(outcome.evidence, moved, outcome.raw_data)
+    assert "the description is not what the journal evidence composes" in (
+        WC4.evidence_problems(outcome.evidence, moved, outcome.raw_data)
+    )
     other = {**outcome.raw_data, WC4.CHECK_KEY: {**outcome.raw_data[WC4.CHECK_KEY], "run": "x"}}
     assert WC4.evidence_problems(outcome.evidence, outcome.description, other)
     # a March text that lost its AI footnote holds every invariant, and the evidence says so
