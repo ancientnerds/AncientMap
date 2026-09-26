@@ -12874,3 +12874,18 @@ docs):
 - `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80`: clean.
 - Nothing under `api/`, `pipeline/` or `ancient-nerds-map/` was touched, so there is no Lyra
   import check and no frontend gate.
+
+## 2026-09-26 - Lane WB pilot 1 (wb-pilot-2026-09-26) FAILED; its outcomes are never written
+
+20 W/S sites (seed 20260926), all 20 cards accepted by the checker at the first attempt (165-190
+characters). The independent web judge: 103 claims, 2 CONTRADICTED with a proving quote on one card,
+99 unproven. **Unproven**: all 21 English Wikipedia pages the import fetched answered 403 - the
+fetcher sent httpx with the bare User-Agent `AncientMapRemediation/1.0 (research)`, which Wikimedia's
+robot policy refuses; fixed in the commit before this entry (the lanes' one User-Agent,
+`research_web.USER_AGENT`). **Contradicted**: Concangis (`3c590c1e-d1d8-4768-b3f1-3146d9f04b8d`) - the
+card says the Antonine Wing inscription is "possibly restoring an aqueduct and latrines"; its
+description (Phase 4, lane W, Wikipedia "Concangis") says exactly that ("possibly on routine patrols
+and on restoration work on an aqueduct and latrines"), while RIB 1049 reads "a water-supply, and
+erected a bath-building from ground-level". The card is faithful to its description: a description
+defect of the Wikipedia-based text (lane WA's class), recorded here for the description repair list.
+Per the runbook (5.2 step 5) the pilot failed either way; a new pilot runs with a new seed.
