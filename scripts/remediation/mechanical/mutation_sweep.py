@@ -5401,6 +5401,14 @@ WD1_CASES: list[Case] = [
         "test_a_start_is_written_only_with_its_label",
         FIELDS_PLAN_TESTS,
     ),
+    Case(
+        "wd1: a source_url value's own page is collected",
+        FIELDS / "handoff.py",
+        '            and a["field"] == "source_url"\n            and a["answer"]["decision"] in (A.KEEP, A.REPLACE)\n        }',
+        "            and False\n        }",
+        "test_a_value_is_fetched_itself_however_its_quotes_spell_it",
+        FIELDS_HANDOFF_TESTS,
+    ),
     guard(
         "wd1: the hand-off waits for every step",
         FIELDS / "plan.py",

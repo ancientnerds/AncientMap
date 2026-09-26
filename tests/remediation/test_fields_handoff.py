@@ -416,6 +416,38 @@ class TestTheReAsk:
 
 
 class TestTheValuePage:
+    def test_a_value_is_fetched_itself_however_its_quotes_spell_it(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        # the quote cites the page with its title unencoded, the value is percent-encoded: two
+        # keys of the page cache - the value's own page is fetched too, and the answer counts
+        value = "https://de.wikipedia.org/wiki/Hephaisteion_%C3%84"
+        PAGES[value] = (
+            "<html><body><p>Das Hephaisteion ist der Tempel des Hephaestus.</p></body></html>"
+        )
+        lines = HO.read_classified(run)
+        lines[A_ID]["asked"] = ["source_url"]
+        (run / C.CLASSIFIED_FILE).write_text(
+            "".join(json.dumps(v) + "\n" for v in lines.values()), encoding="utf-8"
+        )
+        replace = {
+            "decision": "replace",
+            "value": value,
+            "quotes": [
+                {"url": "https://de.wikipedia.org/wiki/Hephaisteion_Ä",
+                 "quote": "Das Hephaisteion ist der Tempel des Hephaestus."},
+                {"url": REGISTER, "quote": "Hephaisteion, a temple of the 5th century BC."},
+            ],
+            "reasoning": "The German article is about this temple.",
+        }  # fmt: skip
+        try:
+            rounds_of(run, tmp_path, [answer(source_url=replace)], pages_client())
+        finally:
+            del PAGES[value]
+        decision = HO._read_jsonl(run / HO.DECISIONS_FILE)[0]
+        assert decision["via"] == HO.COUNTED and decision["value"] == value
+        assert decision["value_page"]["wikibase_item"] == "Q1"
+
     def test_a_source_url_value_carries_the_item_its_article_names(self, tmp_path: Path) -> None:
         from opus_audit import quotes as Q
 

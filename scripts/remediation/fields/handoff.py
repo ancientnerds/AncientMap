@@ -672,7 +672,18 @@ def import_rounds(
         if a["counted"]
     }
     pages = run / PAGES_DIR
-    urls = sorted({q[0] for a in attempts if a["answer"] for q in a["answer"]["quotes"]})
+    # every quoted page, and every source_url value itself: a quote may spell the value's page
+    # unencoded, the value is written percent-encoded - two keys of the page cache
+    urls = sorted(
+        {q[0] for a in attempts if a["answer"] for q in a["answer"]["quotes"]}
+        | {
+            str(a["answer"]["value"])
+            for a in attempts
+            if a["answer"]
+            and a["field"] == "source_url"
+            and a["answer"]["decision"] in (A.KEEP, A.REPLACE)
+        }
+    )
     refetched = forget_transient(urls, pages)
     if urls:
         if client is None:
