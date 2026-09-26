@@ -51,7 +51,37 @@ own re-queue, p4-2217 on, section 9).
    worktree while a round runs. Merge the other lanes that change `phase4/` (WC changes
    `write4.py`) before the export if they are ready, else only between rounds.
 2. Nobody drives `runs/mass-2026-09-25` live again: every live `mass4` round of a run re-queues
-   that run's ready deferred sites, and the mass run's 19 are v3d's (section 8).
+   that run's ready deferred sites, and the mass run's 19 are v3d's (section 8). Code holds this
+   too: a plan without a pass (the mass run's) re-queues no site a descriptions-only list names
+   (`mass4.descriptions_only_claims`), so from 2026-09-26T21:30:14Z on a live round of the mass run
+   is refused before `REQUEUE4.jsonl` is written, and its dry run prints `hand over  N ready
+   site(s) ...`.
+3. **The link and name pass L5 is applied and accepted before step 2's `plan4.py read`**
+   (`HUMAN_ONLY_DECISIONS_2026-09-26.md`, B1-L and B1-N: up to 120 sites whose Wikidata item or
+   enwiki title is generic, a container or a namesake), and no link or name lane writes while v3
+   runs. S1 fetches the article by the stored `enwiki_title` and checks only that title and stored
+   QID agree, so a wrong link gives a sourced description of the wrong subject, and no lane
+   revisits the description after L5 corrects the link. Measured offline on 2026-09-26 against the
+   plan of section 3 (the fresh read of 00:12 UTC): **43 of the 72 `link_suspect` sites** of
+   `bcases/names.jsonl` and 34 of its 46 N7 names are v3 sites - e.g. "The Temple of Artemis"
+   (Thasos) on Q43018 (Ephesus), "Ancient Theatre of Megalopolis" on the town's article, "Asklepion,
+   Kos" on the generic "Asclepieion". Step 1's pin check stays valid: L5 writes
+   `site_external_ids`, `name` and `name_normalized`, none of the March read's columns. **If WA
+   must start first**: step 3 takes `--exclude <L5's candidate list>` (the 47 + 72 + Tikal ids,
+   one per line; a list plan plans every listed site no `--after` plan carries, so every later
+   list plan built before L5 - v3d too - takes the same `--exclude`). The first list plan built
+   from a fresh read after L5 has been accepted plans them: v3d without `--exclude` (its summary
+   then counts them beside the 19), or, if v3d was built before, a plan of its own like section
+   8's without `--take-deferred`, `--after` every plan before it (mass, D9, v3, v3d) and its own
+   `--first-batch` past all of them (e.g. 2601).
+4. **The E3 rule the plan is built with is the merged tree's.** `plan4.py build` fixes the
+   `scope-pending` flag (S1 holds such a site) from `pipeline.normalizers.dates.passes_date_cutoff`
+   at build time. Merge WD2 (owner decision O7: Oceania to 1500 AD like the Americas) into
+   `integrate/wave1` before step 3 if it is ready. Measured 2026-09-26 with `wip/wd2`'s
+   `dates.py` over the same plan: its rule changes **0** of the plan's 20 `scope-pending` flags -
+   the v3 sites in Oceania dated after 500 AD are Easter Island's, which already lie inside the
+   Americas' longitude window - so the order matters only for a later read. Record in AUDIT_LOG
+   the commit whose `dates.py` built the plan.
 
 Every command below runs from the p4-pilot worktree:
 
@@ -93,6 +123,9 @@ population is a new scope version and a new pin, never an edit of the file.
 marking inside the same cell and **no L row is reverted** (unlike the D9 run, whose plan named S0's
 values). `names` asks Wikidata for the shared items' labels (`build` refuses a shared QID without
 them; on 2026-09-26 the 76 shared QIDs of the fresh read were exactly `S0_ITEM_NAMES.json`'s).
+`V3_ROWS.jsonl` is production bulk and stays ignored (`.gitignore`, its sha256 goes into AUDIT_LOG);
+`V3_ITEM_NAMES.json` is the small public read the plan was built from and is **committed** with the
+AUDIT_LOG entry of step 3, as `S0_ITEM_NAMES.json` is, so the plan rebuilds from a kept read.
 
 ## 3. The plan
 
@@ -106,7 +139,10 @@ plan's, excluded or planned; the block p4-2001 .. lies past every `--after` ordi
 lane L's block (p4-1001 .. p4-1334). Expected summary: `sites 3238`, `batches 216`, `first_batch
 p4-2001`, `last_batch p4-2216`, `pass phase4-descriptions-only`, `listed 4063`, `excluded null`,
 `taken_over {}`, `lane_l_block [1001, 1334]`, `STAGE_EXIT=0` (a later read may differ by the sites
-that moved since). Record the plan's `sha256` in AUDIT_LOG.
+that moved since; with L5's list as `--exclude`, `excluded` names its count and digest). Record in
+AUDIT_LOG, in one commit with `V3_ITEM_NAMES.json`: the plan's `sha256`, the sha256 of
+`V3_ROWS.jsonl` and `V3_ITEM_NAMES.json`, the commit whose `dates.py` fixed the flags (0.4), and
+whether L5 was applied before the read (0.3).
 
 ## 4. The export (all batches, one round)
 
@@ -139,7 +175,7 @@ mass run lost 4 sites that way, all 4 of which `check-answer` names (AUDIT_LOG, 
 **Importing** - by the orchestrator, one `mass4` round at a time, for a set G of batches whose
 answers are complete (6-10 batches is one write step's worth):
 
-    $PY $HF ready --handoff $H-select --batch p4-2001 --batch p4-2002 ...     # "ok": true, else wait
+    $PY $HF ready --run-dir $RUN --handoff $H-select --batch p4-2001 --batch p4-2002 ...   # "ok": true, else wait
     G=p4-2001,p4-2002,...
     $PY $P4/mass4.py $ROUNDS --live --only $G --stages select --handoff-import $H-select
     $PY $P4/mass4.py $ROUNDS --live --only $G --stages translate --handoff-export $H-translate
@@ -149,6 +185,12 @@ answers are complete (6-10 batches is one write step's worth):
 
 `ready` is `opus_handoff.validate` per batch: every question of the named batches answered in shape,
 and nowhere in the directory a stale or malformed answer or an answer file no question asks for.
+Name every batch of G, also those without a folder in the directory: such a batch asked no
+question (every site of it was held before the stage), `ready` lists it under
+`named_without_questions` and does not wait for it, and it is imported with the rest of G - its
+import asks nothing (had its export not run at all, its import stops at its first question, no
+answer file, and writes nothing). A name that is no batch of `$RUN` is refused (`REFUSED`, exit 2),
+so a typo never passes as such a batch.
 Every round must print `STAGE_EXIT=0`; a non-zero line stops the run (`mass4`'s `stop_reason`).
 `opus_handoff.py validate --dir $H-select` shows the whole directory.
 
@@ -160,12 +202,13 @@ assembly and asks one line for every shown sentence and one CARD line when a car
 card is shown and judged (the pinned reviewer question is unchanged) but never written. Then, per
 ready set G:
 
-    $PY $HF ready --handoff $H-review --batch ...
+    $PY $HF ready --run-dir $RUN --handoff $H-review --batch ...
     $PY $P4/mass4.py $ROUNDS --live --only $G --stages review --handoff-import $H-review
     $PY $P4/run4.py holds --run-dir $RUN
 
-A batch of G whose every site was held before S6 has no folder in `$H-review` (`ready` names it
-unknown): import it with the others - its review import asks nothing and writes its `review4.json`.
+A batch of G whose every site was held before S6 has no folder in `$H-review`: `ready` lists it
+under `named_without_questions` and `ok` does not wait for it; import it with the others - its
+review import asks nothing and writes its `review4.json`.
 
 ## 7. The write steps (at most 100 sites, each accepted before the next)
 
@@ -237,12 +280,15 @@ are taken over by a plan of the same two lists (descriptions only, fresh old val
       --take-deferred $R4/runs/mass-2026-09-25 --first-batch 2501 --out $R4/PLAN4.v3d.jsonl
 
 Expected: `sites 19`, `batches 2`, `p4-2501 .. p4-2502`, `taken_over {runs/mass-2026-09-25:
-{deferred 19, planned 19}}`, `STAGE_EXIT=0`. What `--take-deferred` checks
+{deferred 19, planned 19}}`, `STAGE_EXIT=0`. Commit `V3D_ITEM_NAMES.json` with the AUDIT_LOG entry
+that records the plan's sha256 (as in step 3). What `--take-deferred` checks
 (`mass4.ready_to_hand_over`, `plan4._list_summary`): the sites the run held `revision-too-fresh` in
 their latest prepared batch; refused while one still waits for its 48 h (it names the time), once the
 run re-queued one itself (`REQUEUE4.jsonl`), when a list of the plan does not name one, or when no
 `--after` plan carries one (the deferring run's plan must be named, or its other sites would be
-planned twice). Block p4-2501: past v3's p4-2216 with room for v3's own re-queue (p4-2217 on).
+planned twice). Block p4-2501: past v3's p4-2216 with room for v3's own re-queue (p4-2217 on). The
+mass run cannot take them back: `mass4` refuses its live rounds once one of them is ready (0.2), so
+neither a re-queue p4-0116 nor a second assembly of a v3d site can arise.
 
 Then sections 4-7 with `$ROUNDS_D`, `$HD-select`/`$HD-review` (agents `opus-p4-v3d-select-<B>`,
 `opus-p4-v3d-review-<B>`), `--run $RUNNAME_D` in the gate, and from the first v3d write on
@@ -296,12 +342,13 @@ into its build directly (one plan of 3,257 sites, 218 batches) and this section 
   fresh read's, so the reversal restores the March text **and** lane L's marking in one cell.
 - One step before its acceptance: `revert4.py --stamp-like '<each stamp of STEP.json>'`, then
   `write_gate4.py ... --close-reverted`.
-- The whole of v3 and v3d: `revert4.py --stamp-like 'phase4:p4-2%'` (matches only these plans'
-  blocks, v3's re-queue included; `phase4wc:` stamps do not match), `--rehearse` first, then
-  `--apply`; afterwards `verify_writes4 --lane p4 ...` shows every v3 row reverted and `--lane p4l`
-  carries the L rows again. A site whose card WB wrote since: WB's lanes are undone first (WB's
-  runbook), because the reverted description would no longer be the one its teaser was checked
-  against. The card file is not involved in WA: v3 writes no card.
+- The whole of v3 and v3d (and an L5 follow-up plan, 0.3): `revert4.py --stamp-like
+  'phase4:p4-2%'` (matches only these plans' blocks, v3's re-queue included; `phase4wc:` stamps do
+  not match), `--rehearse` first, then `--apply`; afterwards `verify_writes4 --lane p4 ...` shows
+  every v3 row reverted and `--lane p4l` carries the L rows again. A site whose card WB wrote
+  since: WB's lanes are undone first (WB's runbook), because the reverted description would no
+  longer be the one its teaser was checked against. The card file is not involved in WA: v3 writes
+  no card.
 - Nothing is deleted: every reversal is a journalled write of the old value (`-rollback` stamps).
 
 ## The handoff directories

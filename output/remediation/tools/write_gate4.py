@@ -280,8 +280,9 @@ def phase3_card_findings(
 
 
 def _defect_scope() -> S.DefectScope:
-    """The owner's defect scope: the pinned `SCOPE4.json` and no other. A file that is not the pin
-    ends the run (`WRITE_EXIT=1`) before anything is planned."""
+    """The owner's defect scope: the current version's pinned file (`scope4.load_scope()`,
+    `SCOPE4.v3.json` since 2026-09-26) and no other. A file that is not the pin ends the run
+    (`WRITE_EXIT=1`) before anything is planned."""
     try:
         return S.load_scope()
     except S.ScopeError as exc:

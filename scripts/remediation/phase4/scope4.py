@@ -12,7 +12,7 @@ Versions
 * **1** (`SCOPE4.json`, `SCOPE_V1_SHA256`, 2026-09-23/24): the three lists below, 1,623 sites. The mass
   run was planned (`plan4.py build --defect-scope`) and written under it; it stays byte for byte,
   rebuilt by `plan4.py scope --version 1` and read only to rebuild that plan.
-* **2** (`SCOPE4.v2.json`, `SCOPE_SHA256`, owner order 2026-09-25 "keine Fragen mehr, autonom
+* **2** (`SCOPE4.v2.json`, `SCOPE_V2_SHA256`, owner order 2026-09-25 "keine Fragen mehr, autonom
   Empfehlungen umsetzen", HUMAN_ONLY D9 (c)): version 1 and the list `d1-marker-without-entry` - a
   site whose description sets a `[N]` marker that `raw_data.description_citations` has no entry for
   is a proven text defect: the reader sees a bare number, and the source is not in the data. Every

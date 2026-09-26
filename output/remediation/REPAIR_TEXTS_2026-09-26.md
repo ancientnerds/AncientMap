@@ -166,7 +166,10 @@ After the acceptance result: (a) the drawn population sites as `PLAN4.v3b.jsonl`
 PLAN4.v3.jsonl`, no `--exclude`, `--first-batch 2501`, reusing `V3_ROWS.jsonl`: no write touched a
 drawn site), run `runs/v3b-<date>`, same cycle; (b) the mass run's 19 `revision-too-fresh` sites
 through `mass4.py --plan PLAN4.scope.jsonl --run-dir runs/mass-2026-09-25` (its re-queue,
-p4-0116..), still S0 lines, so lane-L-first as in the D9 run (contracts section 11); (c) the v3 run's
+p4-0116..), still S0 lines, so lane-L-first as in the D9 run (contracts section 11) - **superseded
+2026-09-26**: the 19 are lane WA's v3d plan from a fresh read (`PHASE4_CONTRACTS.md` section 12,
+`PHASE4_V3_RUNBOOK.md` section 8), no L revert, no card; the mass run is never driven live again
+and `mass4` refuses its re-queue of them; (c) the v3 run's
 own too-fresh sites, re-queued by `mass4` 48 h after its S1 (~2 % of the fetched articles, ~50-65).
 Every p4/p5 acceptance from then on names all five runs.
 
@@ -289,7 +292,8 @@ revisions overlaps it); the P5+C sitting ~1.5-2 h; follow-through ~1 h; then the
    and group C run after the result (C needs the final held set anyway). Model questions and writes
    on non-drawn sites do not touch V3.
 2. **The 19 `revision-too-fresh` sites**: due from 2026-09-26T21:30Z, run after the result, L row
-   first (section 2.4 (b)).
+   first (section 2.4 (b)). Superseded 2026-09-26: no acceptance result is awaited (O1) and the 19
+   are lane WA's v3d plan (`PHASE4_V3_RUNBOOK.md` section 8), with no L revert.
 3. **Every write through the journalled gates**: `write_gate4` dry -> `--rehearse` (APPLY ending in
    ROLLBACK) -> `--apply --step 100` (preflight, write, read-back both directions, the two sha256
    invariants, the inverse proof run as-is) -> `verify_writes4` saved -> `--accept`; `revert4.py
