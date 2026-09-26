@@ -1,0 +1,778 @@
+{
+ "titles": {
+  "39 Bridge Street, Chester": {
+   "canonical_title": "39 Bridge Street, Chester",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q4636108",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Agrour Amogjar": {
+   "canonical_title": "Agrour Amogjar",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q27749504",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Alalakh": {
+   "canonical_title": "Alalakh",
+   "disambiguation": false,
+   "lat": 36.23777778,
+   "lon": 36.38472222,
+   "qid": "Q575249",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Amathus": {
+   "canonical_title": "Amathus",
+   "disambiguation": false,
+   "lat": 34.7125,
+   "lon": 33.14166667,
+   "qid": "Q2343313",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Arch of Augustus (Susa)": {
+   "canonical_title": "Arch of Augustus (Susa)",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1892101",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Armazi": {
+   "canonical_title": "Armazi",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1280770",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Auquin Punta": {
+   "canonical_title": "Auquin Punta",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q17002586",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Baba-Dervish settlement": {
+   "canonical_title": "Baba-Dervish settlement",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q12837180",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Banias": {
+   "canonical_title": "Banias",
+   "disambiguation": false,
+   "lat": 33.24861111,
+   "lon": 35.69444444,
+   "qid": "Q606295",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Banna (Birdoswald)": {
+   "canonical_title": "Banna (Birdoswald)",
+   "disambiguation": false,
+   "lat": 54.9894,
+   "lon": -2.6023,
+   "qid": "Q2061016",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Bardal rock carvings": {
+   "canonical_title": "Bardal rock carvings",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q2853234",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Berel kurgan": {
+   "canonical_title": "Berel kurgan",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q25514691",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Biniai Nou hypogea": {
+   "canonical_title": "Biniai Nou hypogea",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q27987850",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Castro de A Cidá": {
+   "canonical_title": "Castro de A Cidá",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q2513720",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Cempoala": {
+   "canonical_title": "Cempoala",
+   "disambiguation": false,
+   "lat": 19.445,
+   "lon": -96.40888889,
+   "qid": "Q1053364",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Cheqollo": {
+   "canonical_title": "Cheqollo",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q28163321",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Chiapa de Corzo (Mesoamerican site)": {
+   "canonical_title": "Chiapa de Corzo (Mesoamerican site)",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q4384315",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Cittadella (Gozo)": {
+   "canonical_title": "Cittadella (Gozo)",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q867647",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Coricancha": {
+   "canonical_title": "Coricancha",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q817594",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Cáparra": {
+   "canonical_title": "Cáparra",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q2580972",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Dhank Caves": {
+   "canonical_title": "Dhank Caves",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q16924514",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Dhar Tichitt": {
+   "canonical_title": "Dhar Tichitt",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1165596",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Dodona": {
+   "canonical_title": "Dodona",
+   "disambiguation": false,
+   "lat": 39.54638889,
+   "lon": 20.78777778,
+   "qid": "Q382317",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Dolmen of Menga": {
+   "canonical_title": "Dolmen of Menga",
+   "disambiguation": false,
+   "lat": 37.02458611,
+   "lon": -4.54629167,
+   "qid": "Q1143218",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Dooey's Cairn": {
+   "canonical_title": "Dooey's Cairn",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1242421",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Double Pyramid": {
+   "canonical_title": "Double Pyramid",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1377626",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Els Munts (Roman villa)": {
+   "canonical_title": "Els Munts (Roman villa)",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q9093955",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Enkomi (archaeological site)": {
+   "canonical_title": "Enkomi (archaeological site)",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q22987223",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Festival Hall of Thutmose III": {
+   "canonical_title": "Festival Hall of Thutmose III",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q13218743",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Ganweriwal": {
+   "canonical_title": "Ganweriwal",
+   "disambiguation": false,
+   "lat": 28.59888889,
+   "lon": 71.15,
+   "qid": "Q3095220",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Great Basilica, Plovdiv": {
+   "canonical_title": "Great Basilica, Plovdiv",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q20500169",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Guldara stupa": {
+   "canonical_title": "Guldara stupa",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q5617331",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Hattusa": {
+   "canonical_title": "Hattusa",
+   "disambiguation": false,
+   "lat": 40.01972222,
+   "lon": 34.61527778,
+   "qid": "Q181007",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Hegra": {
+   "canonical_title": "Hegra",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q27356",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Inti Watana, Ayacucho": {
+   "canonical_title": "Inti Watana, Ayacucho",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q13190356",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Kadia Dungar Caves": {
+   "canonical_title": "Kadia Dungar Caves",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q16924762",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Khoit Tsenkher Cave Rock Art": {
+   "canonical_title": "Khoit Tsenkher Cave Rock Art",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q3123692",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Killarumiyuq": {
+   "canonical_title": "Killarumiyuq",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q17074808",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Kirkuk Citadel": {
+   "canonical_title": "Kirkuk Citadel",
+   "disambiguation": false,
+   "lat": 35.46972222,
+   "lon": 44.39583333,
+   "qid": "Q1144137",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Kızlar Castle": {
+   "canonical_title": "Kızlar Castle",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q20988469",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Lezhë Castle": {
+   "canonical_title": "Lezhë Castle",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q60529",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Lion of Babylon (statue)": {
+   "canonical_title": "Lion of Babylon (statue)",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q16120770",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Locmariaquer megaliths": {
+   "canonical_title": "Locmariaquer megaliths",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q508651",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Manika, Greece": {
+   "canonical_title": "Manika, Greece",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q17011932",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Marayniyoq": {
+   "canonical_title": "Marayniyoq",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q15949853",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Monastery of St Lot": {
+   "canonical_title": "Monastery of St Lot",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q7415721",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Mount Güllük-Termessos National Park": {
+   "canonical_title": "Mount Güllük-Termessos National Park",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q18844210",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Musawwarat es-Sufra": {
+   "canonical_title": "Musawwarat es-Sufra",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q286426",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Naples underground geothermal zone": {
+   "canonical_title": "Naples underground geothermal zone",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q721189",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Nasik Caves": {
+   "canonical_title": "Nasik Caves",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q7130537",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Obelisk of Axum": {
+   "canonical_title": "Obelisk of Axum",
+   "disambiguation": false,
+   "lat": 14.13222222,
+   "lon": 38.71972222,
+   "qid": "Q2308606",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "P'ungnapt'osŏng": {
+   "canonical_title": "P'ungnapt'osŏng",
+   "disambiguation": false,
+   "lat": 37.53026667,
+   "lon": 127.1162,
+   "qid": "Q11282530",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Palace of Darius in Susa": {
+   "canonical_title": "Palace of Darius in Susa",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1729938",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Perrhe": {
+   "canonical_title": "Perrhe",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1587735",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Petroglyphs Provincial Park": {
+   "canonical_title": "Petroglyphs Provincial Park",
+   "disambiguation": false,
+   "lat": 44.615225,
+   "lon": -78.04076,
+   "qid": "Q470703",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Porta Gemina": {
+   "canonical_title": "Porta Gemina",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q12630293",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Porta Maggiore": {
+   "canonical_title": "Porta Maggiore",
+   "disambiguation": false,
+   "lat": 41.8914573,
+   "lon": 12.5152419,
+   "qid": "Q751318",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Pozzuoli Cathedral": {
+   "canonical_title": "Pozzuoli Cathedral",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1239998",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Psychro Cave": {
+   "canonical_title": "Psychro Cave",
+   "disambiguation": false,
+   "lat": 35.1629,
+   "lon": 25.4451,
+   "qid": "Q1643807",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Pyla-Kokkinokremos": {
+   "canonical_title": "Pyla-Kokkinokremos",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q6426672",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Qasr el Banat, Lebanon": {
+   "canonical_title": "Qasr el Banat, Lebanon",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q7267046",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Reask": {
+   "canonical_title": "Reask",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q2134878",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Rocca San Felice": {
+   "canonical_title": "Rocca San Felice",
+   "disambiguation": false,
+   "lat": 40.95,
+   "lon": 15.16666667,
+   "qid": "Q55085",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Roman Bridge of Chaves": {
+   "canonical_title": "Roman Bridge of Chaves",
+   "disambiguation": false,
+   "lat": 41.7383,
+   "lon": -7.4672,
+   "qid": "Q1504273",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Shaduppum": {
+   "canonical_title": "Shaduppum",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q3481186",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Taq Kasra": {
+   "canonical_title": "Taq Kasra",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1486703",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Tarxien Temples": {
+   "canonical_title": "Tarxien Temples",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q1064331",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Temple of Artemis": {
+   "canonical_title": "Temple of Artemis",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q43018",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Temple of Asclepius, Kos": {
+   "canonical_title": "Temple of Asclepius, Kos",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q2655433",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Temple of Gerf Hussein": {
+   "canonical_title": "Temple of Gerf Hussein",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q267700",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Temple of the Feathered Serpent, Teotihuacan": {
+   "canonical_title": "Temple of the Feathered Serpent, Teotihuacan",
+   "disambiguation": false,
+   "lat": 19.6818,
+   "lon": -98.8461,
+   "qid": "Q7698758",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Temple of the Obelisks": {
+   "canonical_title": "Temple of the Obelisks",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q78355364",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Themistoclean Wall": {
+   "canonical_title": "Themistoclean Wall",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q12877842",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Tikal": {
+   "canonical_title": "Tikal",
+   "disambiguation": false,
+   "lat": 17.22194444,
+   "lon": -89.62361111,
+   "qid": "Q181172",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Tomb of Amyntas": {
+   "canonical_title": "Tomb of Amyntas",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q7818606",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Tomb of Samuel": {
+   "canonical_title": "Tomb of Samuel",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q2907254",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Tombs of the kings of Pontus": {
+   "canonical_title": "Tombs of the kings of Pontus",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q6022363",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Tubusuctu": {
+   "canonical_title": "Tubusuctu",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q3541821",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Twin Column Tomb": {
+   "canonical_title": "Twin Column Tomb",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q12605036",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Typallia": {
+   "canonical_title": "Typallia",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q65059216",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Veluška Tumba": {
+   "canonical_title": "Veluška Tumba",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q20564840",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Villa romana de Río Verde": {
+   "canonical_title": "Villa romana de Río Verde",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q97632504",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Visočica (hill)": {
+   "canonical_title": "Visočica (hill)",
+   "disambiguation": false,
+   "lat": 43.97833333,
+   "lon": 18.17777778,
+   "qid": "Q797511",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Wall of Tarragona": {
+   "canonical_title": "Wall of Tarragona",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q3121589",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Yerokambos": {
+   "canonical_title": "Yerokambos",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q99938254",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  },
+  "Ñusta Hispana": {
+   "canonical_title": "Ñusta Hispana",
+   "disambiguation": false,
+   "lat": null,
+   "lon": null,
+   "qid": "Q13191401",
+   "redirected": false,
+   "resolved_at": "2026-09-26T13:31:23+00:00"
+  }
+ }
+}
