@@ -10,7 +10,11 @@ Wikidata item that the gallery does not hold - its image (P18) and the first `ME
 its Commons category (P373) in the API's order (`W1`...). The agent gives every candidate a verdict
 and picks the best one it called `depicts` - a `G` candidate whenever one depicts the site, because
 only a gallery row can become the page's picture - or none. Candidates are packed by image count
-(`REPLACE_IMAGES_PER_BATCH`), a site never split.
+(`REPLACE_IMAGES_PER_BATCH`), a site never split. A `W` file is a candidate only as a still
+picture, shown as its Commons rendering (`commons.picture_url`) - the URL the thumbnail becomes
+when it is picked. A category file that is no still picture (a PDF, a video, a sound: `cmtype=file`
+lists them all) or whose rendering Commons does not serve is listed in `EXPORT_REPLACE.json`
+(`unavailable`, by site), never shown and never a reason to stop.
 
 **Which served images are checked (`--population`).** The design of 2026-09-26 sent only the
 images the pre-check could not confirm. Measured before any code relied on it (200-site sample,
@@ -24,8 +28,9 @@ an explicit choice.
 the image tree (`gallery_audit.vision.Images`, the exact-case lookup the gallery audit uses),
 accepted only when its size is the row's `file_size_bytes` (all 1,994 live rows of the sample
 matched); a thumbnail or a Commons candidate by its URL (`commons.Commons.download`). A thumbnail
-whose address serves no picture but names a Commons file Commons still holds is shown through that
-file's own rendering, and the question records the repair (`file_behind`): read on 2026-09-26, all
+whose address serves no picture but names a Commons file Commons still holds as a still picture is
+shown through that file's rendering, and the question records the repair - the rendering's URL,
+which the thumbnail becomes when the check confirms it (`file_behind`): read on 2026-09-26, all
 262 Commons `/thumb/` thumbnails ask a width Commons no longer renders (HTTP 400), while the file
 behind them stands - 10 of them are the only image their site serves. Every image is
 handed over as `pipeline.video.shorts_select.vlm_bytes` (RGB, longest side 1280, JPEG q85), like
@@ -34,7 +39,9 @@ the gallery audit's. A file that cannot be found or read stops the export - neve
 Each question is recorded when it is exported (`QUESTIONS_CHECK.jsonl`, `QUESTIONS_REPLACE.jsonl` in
 the run directory); the import re-renders every prompt from its record and refuses one that is not
 the prompt the manifest names, reads every answer through `opus_handoff.read_answer`, parses it with
-the same parser `check-answer` runs, and writes `CHECK.jsonl` / `REPLACE.jsonl`.
+the same parser `check-answer` runs, and writes `CHECK.jsonl` / `REPLACE.jsonl`. `EXPORT_CHECK.json`
+pins the pre-check it was exported from (`precheck_sha256`): the check's import, the replacement
+export and the plan refuse a `PRECHECK.jsonl` that is not that one.
 """
 
 from __future__ import annotations
@@ -56,11 +63,12 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 import opus_handoff as OH  # noqa: E402
 from gallery_audit.vision import Images, VisionError, pilot  # noqa: E402
 from phase3.fetch_stage import write_once  # noqa: E402 - the handoff's one write rule
+from phase3.run import read_jsonl  # noqa: E402 - the one JSONL reader
 
 from pipeline.video.shorts_select import vlm_bytes  # noqa: E402
 from served_image import precheck as PC  # noqa: E402
 from served_image import state as ST  # noqa: E402
-from served_image.commons import OK, Commons, Unfetchable  # noqa: E402
+from served_image.commons import OK, Commons, Unfetchable, picture_url  # noqa: E402
 
 STAGE_CHECK = "served-check"
 STAGE_REPLACE = "served-replace"
@@ -76,6 +84,10 @@ VERDICTS = (DEPICTS, REGION_OR_TYPE, OTHER_SITE)
 #: (`commons.Unfetchable`). Such an image depicts nothing, so it goes to the replacement stage.
 UNFETCHABLE = "unfetchable"
 MECHANICAL = "served_image/vision.py (no picture to show)"
+#: An `unavailable` Wikidata file that Commons holds but that is no still picture (its MIME type
+#: in `detail`). The two other statuses there: `commons.MISSING`, and `UNFETCHABLE` - a rendering
+#: Commons names but does not serve (the refusal in `detail`).
+NOT_A_PICTURE = "not a picture"
 
 ALL = "all"
 UNCONFIRMED_ONLY = "unconfirmed"
@@ -211,7 +223,7 @@ class CheckQuestion:
     source: str
     image: str
     jpeg_sha256: str
-    #: A thumbnail shown through its file's own rendering: `{"file_url", "stored_url", "error"}`.
+    #: A thumbnail shown through its file's rendering: `{"render_url", "stored_url", "error"}`.
     repair: Mapping[str, str] | None = None
 
     def prompt(self) -> str:
@@ -240,6 +252,8 @@ class Candidate:
     image_id: int | None
     file: str | None
     why: str
+    #: A `W` candidate's Commons rendering - the bytes shown, and what the thumbnail becomes when it
+    #: is picked; None for a gallery row, whose local file is served.
     url: str | None
     image: str
     jpeg_sha256: str
@@ -349,29 +363,14 @@ def parse_replace(text: str, question: ReplaceQuestion) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------ files
-def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> str:
-    if path.exists():
-        raise ST.StateError(f"{path} exists - an export or import is written once per run")
-    text = "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in rows)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
-    return ST.sha256_text(text)
-
-
-def _write_json(path: Path, data: Mapping[str, Any]) -> None:
-    if path.exists():
-        raise ST.StateError(f"{path} exists - an export or import is written once per run")
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, sort_keys=True, indent=1) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        raise ST.StateError(f"{path} does not exist")
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+def verify_precheck(run: Path) -> None:
+    """The run's PRECHECK.jsonl is the one the check stage was exported from."""
+    record = json.loads((run / EXPORT_CHECK).read_text(encoding="utf-8"))
+    if ST.file_sha256(run / PC.PRECHECK_FILE) != record["precheck_sha256"]:
+        raise ST.StateError(
+            f"{run / PC.PRECHECK_FILE} is not the pre-check the check stage was exported from "
+            "- the lane runs again in a new run directory"
+        )
 
 
 # ------------------------------------------------------------------------------ export: check
@@ -379,15 +378,17 @@ def file_behind(
     pictures: Pictures, served: Mapping[str, Any], stored_url: str, error: Unfetchable
 ) -> tuple[dict[str, str], bytes] | None:
     """A served thumbnail whose address serves no picture: the Commons file it names, when Commons
-    still holds it - its own URL (the repair) and a rendering of it - else None (no picture). A
-    rendering Commons names but does not serve stops the export, like every other missing file."""
+    still holds it as a still picture - its rendering's URL (the repair) and the rendering's bytes
+    - else None (no picture). A rendering Commons names but does not serve stops the export, like
+    every other missing file."""
     if served["file"] is None:
         return None
     info = pictures.commons.imageinfo([served["file"]])[served["file"]]
-    if info["status"] != OK:
+    render = picture_url(info)
+    if render is None:
         return None
-    data = pictures.url(info["render_url"])
-    return {"file_url": info["url"], "stored_url": stored_url, "error": str(error)}, data
+    data = pictures.url(render)
+    return {"render_url": render, "stored_url": stored_url, "error": str(error)}, data
 
 
 def export_check(
@@ -436,7 +437,7 @@ def export_check(
                     unfetchable.append({"site_id": sid, "url": source, "error": str(exc)})
                     continue
                 repair, data = behind
-                source = repair["file_url"]
+                source = repair["render_url"]
         image, digest = _image_ref(f"check-{sid}", data)
         question = CheckQuestion(
             batch_id=f"check-{n // per_batch + 1:03d}",
@@ -459,7 +460,9 @@ def export_check(
             image=data,
         )
         questions.append(question)
-    digest = _write_jsonl(run / QUESTIONS_CHECK, [q.as_json() for q in questions])
+    digest = ST.write_text_once(
+        run / QUESTIONS_CHECK, ST.jsonl_text(q.as_json() for q in questions)
+    )
     batches: dict[str, list[str]] = {}
     for q in questions:
         batches.setdefault(q.batch_id, []).append(q.site_id)
@@ -470,10 +473,11 @@ def export_check(
         "questions": len(questions),
         "questions_sha256": digest,
         "read_sha256": state.sha256,
+        "precheck_sha256": ST.file_sha256(run / PC.PRECHECK_FILE),
         "unfetchable": unfetchable,
         "batches": batches,
     }
-    _write_json(run / EXPORT_CHECK, summary)
+    ST.write_text_once(run / EXPORT_CHECK, ST.json_text(summary))
     return {k: v for k, v in summary.items() if k not in ("batches", "unfetchable")} | {
         "batches": len(batches),
         "unfetchable": len(unfetchable),
@@ -491,7 +495,9 @@ def candidates_for(
 
     G: every live row but the failed served one, in the order the page would serve them.
     W: the item's P18 files, then the first `MEMBERS_CAP` files of its P373 categories, that are
-    neither a gallery row's file nor the failed served file - each once, in that order.
+    neither a gallery row's file nor the failed served file - each once, in that order, and each a
+    still picture with its rendering (`picture_url`). A file Commons does not hold (`missing`) or
+    that is no still picture (`NOT_A_PICTURE`, its MIME type as `detail`) is `unavailable`.
     """
     sid = str(precheck["site_id"])
     served = precheck["served"]
@@ -521,9 +527,18 @@ def candidates_for(
     unavailable: list[dict[str, Any]] = []
     for name, why in files:
         if info[name]["status"] != OK:
-            unavailable.append({"file": name, "why": why, "status": info[name]["status"]})
+            unavailable.append(
+                {"file": name, "why": why, "status": info[name]["status"], "detail": ""}
+            )
             continue
-        out.append({"kind": COMMONS_CANDIDATE, "file": name, "why": why, "info": info[name]})
+        shown = picture_url(info[name])
+        if shown is None:
+            detail = str(info[name].get("mime"))
+            unavailable.append(
+                {"file": name, "why": why, "status": NOT_A_PICTURE, "detail": detail}
+            )
+            continue
+        out.append({"kind": COMMONS_CANDIDATE, "file": name, "why": why, "picture_url": shown})
     return out, unavailable
 
 
@@ -537,37 +552,51 @@ def export_replace(
     *,
     images_per_batch: int = REPLACE_IMAGES_PER_BATCH,
 ) -> dict[str, Any]:
-    """Every served image the check did not call `depicts`, with its candidates."""
+    """Every served image the check did not call `depicts`, with its candidates. A `W` rendering
+    Commons does not serve is `unavailable` (`UNFETCHABLE`); a gallery file that cannot be read
+    stops the export, as in the check stage."""
+    verify_precheck(run)
     checks = read_jsonl(run / CHECK)
     failed = [c for c in checks if c["verdict"] != DEPICTS]
     questions: list[ReplaceQuestion] = []
     without: list[dict[str, Any]] = []
+    not_shown: dict[str, list[dict[str, Any]]] = {}
     batch, in_batch = 1, 0
     for check in failed:
         sid = str(check["site_id"])
         precheck = prechecks[sid]
         found, unavailable = candidates_for(state, precheck, harvest, pictures.commons)
-        if not found:
+        shown: list[tuple[dict[str, Any], bytes]] = []
+        for c in found:
+            if c["kind"] == GALLERY_CANDIDATE:
+                shown.append((c, pictures.gallery(sid, c["row"])))
+                continue
+            try:
+                shown.append((c, pictures.url(c["picture_url"])))
+            except Unfetchable as exc:
+                gone = {"file": c["file"], "why": c["why"], "status": UNFETCHABLE}
+                unavailable.append(gone | {"detail": str(exc)})
+        if unavailable:
+            not_shown[sid] = unavailable
+        if not shown:
             without.append({"site_id": sid, "unavailable": unavailable})
             continue
-        if in_batch and in_batch + len(found) > images_per_batch:
+        if in_batch and in_batch + len(shown) > images_per_batch:
             batch, in_batch = batch + 1, 0
-        in_batch += len(found)
+        in_batch += len(shown)
         candidates: list[Candidate] = []
         g = w = 0
-        for c in found:
+        for c, data in shown:
             if c["kind"] == GALLERY_CANDIDATE:
                 g += 1
                 row = c["row"]
                 label, name = f"G{g}", f"replace-g-{int(row['id'])}"
-                data = pictures.gallery(sid, row)
                 image_id, file, url = int(row["id"]), ST.file_of_row(row), None
             else:
                 w += 1
                 label = f"W{w}"
                 name = "replace-w-" + hashlib.sha256(c["file"].encode("utf-8")).hexdigest()[:24]
-                data = pictures.url(c["info"]["render_url"])
-                image_id, file, url = None, c["file"], c["info"]["url"]
+                image_id, file, url = None, c["file"], c["picture_url"]
             image, digest = write_image(handoff, name, data)
             candidates.append(
                 Candidate(label, c["kind"], image_id, file, c["why"], url, image, digest)
@@ -591,7 +620,9 @@ def export_replace(
             prompt=question.prompt(),
         )
         questions.append(question)
-    digest = _write_jsonl(run / QUESTIONS_REPLACE, [q.as_json() for q in questions])
+    digest = ST.write_text_once(
+        run / QUESTIONS_REPLACE, ST.jsonl_text(q.as_json() for q in questions)
+    )
     batches: dict[str, list[str]] = {}
     for q in questions:
         batches.setdefault(q.batch_id, []).append(q.site_id)
@@ -603,9 +634,10 @@ def export_replace(
         "questions_sha256": digest,
         "check_sha256": ST.file_sha256(run / CHECK),
         "without_candidates": without,
+        "unavailable": not_shown,
         "batches": batches,
     }
-    _write_json(run / EXPORT_REPLACE, summary)
+    ST.write_text_once(run / EXPORT_REPLACE, ST.json_text(summary))
     return {
         "failed": len(failed),
         "questions": len(questions),
@@ -708,18 +740,27 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
     if not record_path.is_file():
         raise ST.StateError(f"{record_path} does not exist - export the stage first")
     record = json.loads(record_path.read_text(encoding="utf-8"))
+    if stage == STAGE_REPLACE and record["questions"] == 0:
+        raise ST.StateError(
+            f"{record_path.name}: the export asked nothing - there is nothing to import; `plan` "
+            "goes on without it"
+        )
+    verify_precheck(run)
     handoff = Path(record["handoff"])
     questions_file = run / (QUESTIONS_CHECK if stage == STAGE_CHECK else QUESTIONS_REPLACE)
     if ST.file_sha256(questions_file) != record["questions_sha256"]:
         raise ST.StateError(f"{questions_file} is not the file the export recorded")
-    validation = OH.validate(handoff)
-    if not validation.ok:
-        raise ST.StateError(
-            f"{handoff} does not validate: {len(validation.missing)} missing, "
-            f"{len(validation.stale)} stale, {len(validation.malformed)} malformed, "
-            f"{len(validation.orphans)} orphan answers - `opus_handoff.py validate --dir {handoff}`"
-        )
-    manifest = {(m["batch_id"], m["label"]): m for m in OH.manifest(handoff)}
+    manifest: dict[tuple[str, str], dict[str, Any]] = {}
+    if record["questions"]:  # the handoff exists from its first question on (`OH.export`)
+        validation = OH.validate(handoff)
+        if not validation.ok:
+            raise ST.StateError(
+                f"{handoff} does not validate: {len(validation.missing)} missing, "
+                f"{len(validation.stale)} stale, {len(validation.malformed)} malformed, "
+                f"{len(validation.orphans)} orphan answers - "
+                f"`opus_handoff.py validate --dir {handoff}`"
+            )
+        manifest = {(m["batch_id"], m["label"]): m for m in OH.manifest(handoff)}
     out: list[dict[str, Any]] = []
     problems: list[str] = []
     for (batch_id, label), question in _questions(run, stage).items():
@@ -764,7 +805,7 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
         )
     if stage == STAGE_CHECK:
         served = {q.site_id: q.served for q in _questions(run, stage).values()}
-        prechecks = PC.load_prechecks(run / "PRECHECK.jsonl")
+        prechecks = PC.load_prechecks(run / PC.PRECHECK_FILE)
         for gone in record["unfetchable"]:
             served[gone["site_id"]] = prechecks[gone["site_id"]]["served"]
             out.append(
@@ -783,7 +824,9 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
                     "basis": f"{gone['url']} serves no picture ({gone['error']})",
                 }
             )
-    digest = _write_jsonl(run / (CHECK if stage == STAGE_CHECK else REPLACE), out)
+    digest = ST.write_text_once(
+        run / (CHECK if stage == STAGE_CHECK else REPLACE), ST.jsonl_text(out)
+    )
     counts: dict[str, int] = {}
     for row in out:
         key = row["verdict"] if stage == STAGE_CHECK else ("pick" if row["pick"] else "no pick")

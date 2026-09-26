@@ -7,13 +7,17 @@ One rule per outcome (O6: "Belegt ersetzen, sonst leeren"), each site decided on
   `thumbnail_url` becomes the served row's local file when it names anything else, so the globe
   shows the confirmed image too (`gallery_audit/decide.py` rule T1). A served thumbnail that was
   checked through its file because its own address serves no picture (`vision.file_behind`) gets
-  the file's own URL (`wd2-thumb`).
+  the rendering of that file the check was shown (`wd2-thumb`).
 * **replaced** - the replacement stage picked a gallery row (`G`) it called `depicts`: `wd2-hero`
-  moves the hero flag onto it (and off the row that held it), `wd2-align` points the thumbnail at it.
+  moves the hero flag onto it (and off the row that held it), `wd2-align` points the thumbnail at
+  it, and `wd2-exclude` takes out of the gallery every live row judged `other_site` - the served
+  one by the check, the others by the replacement stage: another site's picture does not stay on
+  this site's page. A row judged `region_or_type` stays in the gallery below the new hero.
 * **cleared** - nothing the lane can serve depicts the site: `wd2-exclude` excludes every live row
   (each was called not `depicts` - the served one by the check, every other one by the replacement
-  stage) and takes the hero flag off it; `wd2-thumb` sets `thumbnail_url` to the confirmed Commons
-  file the replacement stage picked (`W`), else to NULL. The site then serves no image on its page.
+  stage) and takes the hero flag off it; `wd2-thumb` sets `thumbnail_url` to the rendering of the
+  confirmed Commons file the replacement stage picked (`W`) - the bytes the agent was shown - else
+  to NULL. The site then serves no image on its page.
 
 A site that serves nothing is left as it is. Every change carries the verdicts it rests on.
 
@@ -178,16 +182,53 @@ def decide_site(
             return SitePlan(sid, CONFIRMED, None, thumb)
         reason = (
             f"the served thumbnail's file depicts the site, but its address serves no picture "
-            f"({repair['error']}): the thumbnail becomes the file's own URL"
+            f"({repair['error']}): the thumbnail becomes the file's rendering the check was shown"
         )
         evidence = [*evidence, {"source": "served_image/CHECK.jsonl", "repair": dict(repair)}]
-        new = repair["file_url"]
+        new = repair["render_url"]
         return SitePlan(sid, CONFIRMED, None, new, _thumb(site, new, RULE_THUMB, reason, evidence))
     row = next(r for r in live if int(r["id"]) == served["image_id"])
     target = local_path(sid, str(row["filename"]))
     reason = f"the served image {row['id']} depicts the site; the globe shows it too"
     changes = _thumb(site, target, RULE_ALIGN, reason, evidence)
     return SitePlan(sid, CONFIRMED, int(row["id"]), target, changes)
+
+
+def _other_sites_out(
+    sid: str,
+    live: Sequence[Mapping[str, Any]],
+    served: Mapping[str, Any],
+    check: Mapping[str, Any],
+    rep: Mapping[str, Any],
+    shown: Mapping[str, Mapping[str, Any]],
+) -> list[CW.Change]:
+    """A replaced site's live rows judged `other_site` leave its gallery, each with its verdict:
+    the served row by the check, a `G` candidate by the replacement stage."""
+    judged: dict[int, list[dict[str, Any]]] = {}
+    if check["verdict"] == V.OTHER_SITE:
+        judged[int(served["image_id"])] = [_evidence_check(check)]
+    for label, verdict in rep["candidates"].items():
+        if verdict == V.OTHER_SITE and shown[label]["kind"] == V.GALLERY_CANDIDATE:
+            judged[int(shown[label]["image_id"])] = [
+                _evidence_check(check),
+                _evidence_replace(rep, label),
+            ]
+    return [
+        CW.Change(
+            "wiki_images",
+            "is_excluded",
+            str(row["id"]),
+            sid,
+            "false",
+            "true",
+            RULE_EXCLUDE,
+            f"row {row['id']} shows another site and leaves the gallery; a picture of this site "
+            "replaces the served image",
+            judged[int(row["id"])],
+        )
+        for row in live
+        if int(row["id"]) in judged
+    ]
 
 
 def _not_depicting(
@@ -236,6 +277,7 @@ def _not_depicting(
                 evidence,
             )
         )
+        changes += _other_sites_out(sid, live, served, check, rep or {}, shown)
         target = local_path(sid, str(new["filename"]))
         changes += _thumb(site, target, RULE_ALIGN, "the globe shows the replacement too", evidence)
         return SitePlan(sid, REPLACED, new_id, target, changes)
@@ -305,10 +347,11 @@ def _by_site(rows: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
 
 def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
     state = ST.load_read(run / "READ.json")
-    prechecks = PC.load_prechecks(run / "PRECHECK.jsonl")
     record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
     if record["read_sha256"] != state.sha256:
         raise ST.StateError("CHECK was exported from another READ.json - re-run the lane")
+    V.verify_precheck(run)
+    prechecks = PC.load_prechecks(run / PC.PRECHECK_FILE)
     population = record["population"]
     checks = _by_site(V.read_jsonl(run / V.CHECK))
     failed = [c for c in checks.values() if c["verdict"] != V.DEPICTS]

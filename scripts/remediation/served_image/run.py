@@ -4,6 +4,7 @@
     run.py read           --run-dir R          production (read-only) -> R/READ.json
     run.py precheck       --run-dir R [--harvest H] [--subset]
                                                P18/P373 against WD1's harvest -> R/PRECHECK.jsonl
+                                               (written once: a new harvest is a new run dir)
     run.py export-check   --run-dir R --handoff H-check [--population all|unconfirmed]
                                                every served image (default), 12 per batch
     run.py brief          --run-dir R --handoff H-check --batch-id B
@@ -13,7 +14,8 @@
     run.py export-replace --run-dir R --handoff H-replace
                                                every served image that does not depict its site
     (brief, check-answer, validate as above)
-    run.py import-replace --run-dir R          -> R/REPLACE.jsonl
+    run.py import-replace --run-dir R          -> R/REPLACE.jsonl (only when export-replace
+                                               reported questions > 0)
     run.py plan           --run-dir R          -> R/chunks/chunk-NNN (<= 100 sites each)
     chunk_writer.py R/chunks/chunk-NNN --check | --rehearse | --apply | --readback |
                                         --rehearse-rollback
@@ -39,6 +41,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 import opus_handoff as OH  # noqa: E402
 import research_web  # noqa: E402
 from gallery_audit.vision import Images  # noqa: E402
+from phase3.run import InputError  # noqa: E402
 
 from served_image import plan as PL  # noqa: E402
 from served_image import state as ST  # noqa: E402
@@ -46,6 +49,8 @@ from served_image import vision as V  # noqa: E402
 from served_image.commons import Commons  # noqa: E402
 from served_image.precheck import (  # noqa: E402
     DEFAULT_HARVEST,
+    PRECHECK_FILE,
+    PRECHECK_SUMMARY,
     load_harvest,
     load_prechecks,
     run_precheck,
@@ -53,8 +58,6 @@ from served_image.precheck import (  # noqa: E402
 )
 
 READ = "READ.json"
-PRECHECK = "PRECHECK.jsonl"
-PRECHECK_SUMMARY = "PRECHECK.json"
 
 
 def _print(payload: Any) -> None:
@@ -74,19 +77,14 @@ def cmd_read(run: Path) -> dict[str, Any]:
 def cmd_precheck(run: Path, harvest_root: Path, subset: bool) -> dict[str, Any]:
     state = ST.load_read(run / READ)
     result = run_precheck(state, load_harvest(harvest_root), commons_for(run), subset=subset)
-    write_prechecks(run / PRECHECK, result)
     summary = {
         "read_sha256": state.sha256,
         "harvest": str(harvest_root),
         "subset": subset,
         "counts": result.counts(),
-        "precheck_sha256": ST.file_sha256(run / PRECHECK),
+        "precheck_sha256": write_prechecks(run / PRECHECK_FILE, result),
     }
-    (run / PRECHECK_SUMMARY).write_text(
-        json.dumps(summary, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    ST.write_text_once(run / PRECHECK_SUMMARY, ST.json_text(summary))
     return summary
 
 
@@ -100,7 +98,7 @@ def cmd_export_check(run: Path, handoff: Path, population: str) -> dict[str, Any
         run,
         handoff,
         state,
-        load_prechecks(run / PRECHECK),
+        load_prechecks(run / PRECHECK_FILE),
         pictures_for(run),
         population=population,
     )
@@ -116,7 +114,7 @@ def cmd_export_replace(run: Path, handoff: Path, harvest_root: Path) -> dict[str
         run,
         handoff,
         state,
-        load_prechecks(run / PRECHECK),
+        load_prechecks(run / PRECHECK_FILE),
         load_harvest(harvest_root),
         pictures_for(run),
     )
@@ -197,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
             _print(PL.write_plan(run))
         else:
             return cmd_accept(run, args.chunk)
-    except (ST.StateError, OH.HandoffError) as exc:
+    except (ST.StateError, OH.HandoffError, FileNotFoundError, InputError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
     return 0

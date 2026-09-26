@@ -47,6 +47,36 @@ BIBI_INFO = {
     "title": "Rag-i Bibi relief.jpg",
     "url": "https://upload.wikimedia.org/wikipedia/commons/4/48/Rag-i_Bibi_relief.jpg",
     "render_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Rag-i_Bibi_relief.jpg/1280px-Rag-i_Bibi_relief.jpg",
+    "mime": "image/jpeg",
+}
+#: Three files of a site's Commons category, as `categorymembers` (`cmtype=file`) lists them: a
+#: TIFF (a still image Commons renders as JPEG), a PDF (rendered too: its first page) and a sound,
+#: whose `thumburl` is Commons' file-type icon (read on 2026-09-26 for an MP3 and a FLAC).
+TIFF = "Thasos plan.tif"
+PDF = "Thasos guide.pdf"
+OGG = "Thasos song.ogg"
+MEMBER_INFO = {
+    TIFF: {
+        "status": "ok",
+        "title": TIFF,
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Thasos_plan.tif",
+        "render_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Thasos_plan.tif/lossy-page1-1280px-Thasos_plan.tif.jpg",
+        "mime": "image/tiff",
+    },
+    PDF: {
+        "status": "ok",
+        "title": PDF,
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Thasos_guide.pdf",
+        "render_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Thasos_guide.pdf/page1-1280px-Thasos_guide.pdf.jpg",
+        "mime": "application/pdf",
+    },
+    OGG: {
+        "status": "ok",
+        "title": OGG,
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Thasos_song.ogg",
+        "render_url": "https://commons.wikimedia.org/w/resources/assets/file-type-icons/fileicon-ogg.png",
+        "mime": "audio/ogg",
+    },
 }
 
 
@@ -402,6 +432,16 @@ class TestThePrecheck:
         assert [c.site_id for c in result.checks] == [HABU]
         assert result.counts()[PC.CONFIRMED_P18] == 1 and result.counts()["not_in_harvest"] == 4
 
+    def test_the_pre_check_is_written_once(self, tmp_path: Path) -> None:
+        """Re-run after WD1 re-harvests, it would change the qids behind every later stage."""
+        state = write_read(tmp_path / "run")
+        write_harvest(tmp_path / "h", {HABU: "Q1"}, HARVEST_ENTITIES)
+        commons = FakeCommons({"Medinet Habu on West Bank in Luxor Egypt.jpg": []})
+        result = PC.run_precheck(state, PC.load_harvest(tmp_path / "h"), commons, subset=True)
+        PC.write_prechecks(tmp_path / "run" / PC.PRECHECK_FILE, result)
+        with pytest.raises(ST.StateError, match="never replaced"):
+            PC.write_prechecks(tmp_path / "run" / PC.PRECHECK_FILE, result)
+
     def test_a_harvest_of_every_curated_site_lists_the_retired_ones_too(
         self, tmp_path: Path
     ) -> None:
@@ -489,6 +529,55 @@ class TestCommons:
         got = C.Commons(tmp_path, _client(handler), pace=0).imageinfo(["T.jpg"])["T.jpg"]
         assert got["url"] == "https://upload.wikimedia.org/wikipedia/commons/6/6b/T.jpg"
         assert got["render_url"] == "https://thumb.wikimedia.org/.../1280px-T.jpg"
+        assert (
+            C.RENDER_WIDTH
+            in __import__("pipeline.wiki_image_downloader").wiki_image_downloader.COMMONS_BUCKETS
+        )
+
+    def test_a_file_without_a_rendering_has_no_render_url(self, tmp_path: Path) -> None:
+        """An answer without `thumburl`: the original is never taken for a rendering."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            info = {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/a/ab/T.jpg",
+                "mime": "image/jpeg",
+            }
+            page = {"title": "File:T.jpg", "imageinfo": [info]}
+            return httpx.Response(200, json={"query": {"pages": [page]}})
+
+        got = C.Commons(tmp_path, _client(handler), pace=0).imageinfo(["T.jpg"])["T.jpg"]
+        assert got["render_url"] is None and C.picture_url(got) is None
+
+    def test_a_sound_s_icon_is_no_picture(self) -> None:
+        """A sound's `thumburl` is Commons' file-type icon: the MIME type decides, not the URL."""
+        assert MEMBER_INFO[OGG]["render_url"] and C.picture_url(MEMBER_INFO[OGG]) is None
+
+    @pytest.mark.parametrize(
+        ("mime", "render", "shown"),
+        [
+            ("image/jpeg", "https://u/1280px-A.jpg", True),
+            ("image/png", "https://u/1280px-A.png", True),
+            ("image/tiff", "https://u/lossy-page1-1280px-A.tif.jpg", True),
+            ("image/svg+xml", "https://u/1280px-A.svg.png", True),
+            ("application/pdf", "https://u/page1-1280px-A.pdf.jpg", False),
+            ("image/vnd.djvu", "https://u/page1-1280px-A.djvu.jpg", False),
+            ("video/webm", "https://u/1280px--A.webm.jpg", False),
+            ("audio/mpeg", "https://c/file-type-icons/fileicon-ogg.png", False),
+            ("image/jpeg", None, False),
+        ],
+    )
+    def test_a_picture_is_a_still_image_with_its_rendering(
+        self, mime: str, render: str | None, shown: bool
+    ) -> None:
+        info = {
+            "status": C.OK,
+            "title": "A",
+            "url": "https://u/A",
+            "render_url": render,
+            "mime": mime,
+        }
+        assert C.picture_url(info) == (render if shown else None)
+        assert C.picture_url({"status": C.MISSING}) is None
 
     @pytest.mark.parametrize("status", [403, 404, 410])
     def test_a_gone_address_is_unfetchable(self, tmp_path: Path, status: int) -> None:
@@ -609,6 +698,7 @@ def _setup(
     gone: dict[str, str] | None = None,
     read: dict[str, Any] | None = None,
     info: dict[str, dict[str, Any]] | None = None,
+    members: list[str] | None = None,
 ) -> tuple[Path, Path, Any]:
     run = tmp_path / "served-image-2026-09-26"
     state = write_read(run, read)
@@ -619,24 +709,28 @@ def _setup(
             "Medinet Habu on West Bank in Luxor Egypt.jpg": ["Medinet Habu temple complex"],
             "Informacni panel.jpg": ["Kłopot, Lubusz Voivodeship"],
         },
-        members={"Thasos (ancient city)": ["Thasos agora.jpg", "Thasos gate.jpg", "Thasos.jpg"]},
-        info={
-            "Thasos gate.jpg": {
-                "status": C.OK,
-                "title": "Thasos gate.jpg",
-                "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Thasos_gate.jpg",
-                "render_url": "https://thumb.wikimedia.org/1280px-Thasos_gate.jpg",
-            },
-            **(info or {}),
+        members={
+            "Thasos (ancient city)": members
+            or ["Thasos agora.jpg", "Thasos gate.jpg", "Thasos.jpg"]
         },
+        info={"Thasos gate.jpg": GATE_INFO, **(info or {})},
     )
     result = PC.run_precheck(state, PC.load_harvest(tmp_path / "harvest"), fake)
-    PC.write_prechecks(run / "PRECHECK.jsonl", result)
+    PC.write_prechecks(run / PC.PRECHECK_FILE, result)
     (run / "PRECHECK.json").write_text(
         json.dumps({"read_sha256": state.sha256, "harvest": str(tmp_path / "harvest")}), "utf-8"
     )
     pictures = FakePictures(fake, gone=gone)
     return run, tmp_path / "handoff-check", pictures
+
+
+GATE_INFO = {
+    "status": C.OK,
+    "title": "Thasos gate.jpg",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Thasos_gate.jpg",
+    "render_url": "https://thumb.wikimedia.org/1280px-Thasos_gate.jpg",
+    "mime": "image/jpeg",
+}
 
 
 def _answer_all(handoff: Path, stage: str, answers: dict[str, str]) -> None:
@@ -688,8 +782,10 @@ class TestTheStages:
         batches = sorted({line["batch_id"] for line in OH.manifest(handoff)})
         assert batches == ["check-001", "check-002"]
 
-    def _full(self, tmp_path: Path, verdicts: dict[str, str]) -> tuple[Path, Any]:
-        run, handoff, pictures = _setup(tmp_path, gone={"https://example.org/relief.jpg": "404"})
+    def _full(self, tmp_path: Path, verdicts: dict[str, str], **setup: Any) -> tuple[Path, Any]:
+        run, handoff, pictures = _setup(
+            tmp_path, gone={"https://example.org/relief.jpg": "404"}, **setup
+        )
         state = ST.load_read(run / "READ.json")
         pre = PC.load_prechecks(run / "PRECHECK.jsonl")
         V.export_check(run, handoff, state, pre, pictures)
@@ -706,12 +802,14 @@ class TestTheStages:
         assert got[THASOS]["answered_by"] == "check-001"
         assert got[HOTLINK]["verdict"] == V.UNFETCHABLE and "404" in got[HOTLINK]["basis"]
 
-    def _broken_thumbnail(self, tmp_path: Path, *, file_known: bool) -> tuple[Path, Path, Any]:
+    def _broken_thumbnail(
+        self, tmp_path: Path, *, file_known: bool, mime: str = "image/jpeg"
+    ) -> tuple[Path, Path, Any]:
         """Rag-i Bibi serves only its thumbnail, a Commons rendering at a width Commons no longer
         renders (HTTP 400, as all 262 such thumbnails on 2026-09-26)."""
         read = read_fixture()
         read["sites"][0]["thumbnail_url"] = BROKEN_THUMB
-        info = {"Rag-i Bibi relief.jpg": BIBI_INFO} if file_known else {}
+        info = {"Rag-i Bibi relief.jpg": BIBI_INFO | {"mime": mime}} if file_known else {}
         return _setup(tmp_path, read=read, gone={BROKEN_THUMB: "HTTP 400"}, info=info)
 
     def test_a_thumbnail_whose_address_is_broken_is_checked_through_its_file(
@@ -726,11 +824,11 @@ class TestTheStages:
         assert ("url", BIBI_INFO["render_url"]) in pictures.asked
         [question] = [q for q in V.read_jsonl(run / V.QUESTIONS_CHECK) if q["site_id"] == HOTLINK]
         assert question["repair"] == {
-            "file_url": BIBI_INFO["url"],
+            "render_url": BIBI_INFO["render_url"],
             "stored_url": BROKEN_THUMB,
             "error": "HTTP 400",
         }
-        assert question["source"] == BIBI_INFO["url"]
+        assert question["source"] == BIBI_INFO["render_url"]
 
     def test_a_broken_thumbnail_whose_file_is_gone_has_no_picture(self, tmp_path: Path) -> None:
         run, handoff, pictures = self._broken_thumbnail(tmp_path, file_known=False)
@@ -739,6 +837,18 @@ class TestTheStages:
             run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures
         )
         assert got["unfetchable"] == 1 and got["questions"] == 3
+
+    def test_a_broken_thumbnail_whose_file_is_no_picture_has_no_picture(
+        self, tmp_path: Path
+    ) -> None:
+        run, handoff, pictures = self._broken_thumbnail(
+            tmp_path, file_known=True, mime="application/pdf"
+        )
+        state = ST.load_read(run / "READ.json")
+        got = V.export_check(
+            run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures
+        )
+        assert got["unfetchable"] == 1 and ("url", BIBI_INFO["render_url"]) not in pictures.asked
 
     def test_a_depicting_file_behind_a_broken_thumbnail_repairs_the_address(
         self, tmp_path: Path
@@ -753,12 +863,13 @@ class TestTheStages:
             state.sites[HOTLINK], (), PC.load_prechecks(run / "PRECHECK.jsonl")[HOTLINK],
             checks[HOTLINK], None, population=V.ALL,
         )  # fmt: skip
-        assert (plan.outcome, plan.thumbnail_url) == (PL.CONFIRMED, BIBI_INFO["url"])
+        # the rendering the agent saw (a standard 1280 bucket), not the original's many MB
+        assert (plan.outcome, plan.thumbnail_url) == (PL.CONFIRMED, BIBI_INFO["render_url"])
         [change] = plan.changes
         assert (change.column, change.old_value, change.new_value, change.rule) == (
             "thumbnail_url",
             BROKEN_THUMB,
-            BIBI_INFO["url"],
+            BIBI_INFO["render_url"],
             PL.RULE_THUMB,
         )
         assert "HTTP 400" in change.reason
@@ -811,6 +922,113 @@ class TestTheStages:
         ]
         assert unavailable == []
 
+    def test_a_candidate_is_a_still_picture_shown_as_its_rendering(self, tmp_path: Path) -> None:
+        """`categorymembers` with `cmtype=file` lists every file: a TIFF is a candidate, shown as
+        its JPEG rendering; a PDF and a sound are listed as no picture, never shown."""
+        run, _ = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.DEPICTS})
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        commons = FakeCommons(members={"Thasos (ancient city)": [TIFF, PDF, OGG]}, info=MEMBER_INFO)
+        found, unavailable = V.candidates_for(
+            state, pre[THASOS], PC.load_harvest(tmp_path / "harvest"), commons
+        )
+        w = [c for c in found if c["kind"] == V.COMMONS_CANDIDATE]
+        assert [(c["file"], c["picture_url"]) for c in w] == [
+            (TIFF, MEMBER_INFO[TIFF]["render_url"])
+        ]
+        assert unavailable == [
+            {"file": PDF, "why": 'in the site\'s Commons category "Thasos (ancient city)" (P373)',
+             "status": V.NOT_A_PICTURE, "detail": "application/pdf"},
+            {"file": OGG, "why": 'in the site\'s Commons category "Thasos (ancient city)" (P373)',
+             "status": V.NOT_A_PICTURE, "detail": "audio/ogg"},
+        ]  # fmt: skip
+
+    def test_a_commons_pick_stores_the_rendering_the_agent_saw(self, tmp_path: Path) -> None:
+        """A TIFF picked: the thumbnail becomes its JPEG rendering, which an <img> shows."""
+        run, pictures = self._full(
+            tmp_path,
+            {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.DEPICTS},
+            members=[TIFF, PDF, OGG],
+            info=MEMBER_INFO,
+        )
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        handoff = tmp_path / "handoff-replace"
+        V.export_replace(run, handoff, state, pre, PC.load_harvest(tmp_path / "harvest"), pictures)
+        assert ("url", MEMBER_INFO[TIFF]["render_url"]) in pictures.asked
+        record = json.loads((run / V.EXPORT_REPLACE).read_text(encoding="utf-8"))
+        assert [u["file"] for u in record["unavailable"][THASOS]] == [PDF, OGG]
+        [question] = V.read_jsonl(run / V.QUESTIONS_REPLACE)
+        assert question["candidates"][-1]["url"] == MEMBER_INFO[TIFF]["render_url"]
+        answer = json.dumps(
+            {
+                "candidates": {"G1": "other_site", "G2": "region_or_type", "W1": "depicts"},
+                "pick": "W1",
+                "basis": "the plan of the site",
+            }
+        )
+        _answer_all(handoff, V.STAGE_REPLACE, {THASOS: answer})
+        V.import_stage(run, V.STAGE_REPLACE)
+        PL.write_plan(run)
+        expected = {
+            e["site_id"]: e
+            for e in map(json.loads, (run / "chunks" / "EXPECTED.jsonl").read_text().splitlines())
+        }
+        assert expected[THASOS]["outcome"] == PL.CLEARED
+        assert expected[THASOS]["thumbnail_url"] == MEMBER_INFO[TIFF]["render_url"]
+
+    def test_a_rendering_that_is_not_served_is_listed_not_fatal(self, tmp_path: Path) -> None:
+        run, pictures = self._full(
+            tmp_path, {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.DEPICTS}
+        )
+        pictures.gone[GATE_INFO["render_url"]] = "HTTP 404"
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        got = V.export_replace(
+            run, tmp_path / "ho", state, pre, PC.load_harvest(tmp_path / "harvest"), pictures
+        )
+        assert got["questions"] == 1
+        [question] = V.read_jsonl(run / V.QUESTIONS_REPLACE)
+        assert [c["label"] for c in question["candidates"]] == ["G1", "G2"]
+        record = json.loads((run / V.EXPORT_REPLACE).read_text(encoding="utf-8"))
+        [gone] = record["unavailable"][THASOS]
+        assert (gone["file"], gone["status"], gone["detail"]) == (
+            "Thasos gate.jpg",
+            V.UNFETCHABLE,
+            "HTTP 404",
+        )
+
+    def test_an_export_that_asked_nothing_has_nothing_to_import(self, tmp_path: Path) -> None:
+        run, pictures = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.DEPICTS, BARE: V.DEPICTS})
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        got = V.export_replace(
+            run, tmp_path / "ho", state, pre, PC.load_harvest(tmp_path / "harvest"), pictures
+        )
+        assert got["questions"] == 0 and got["without_candidates"] == 1
+        with pytest.raises(ST.StateError, match="asked nothing"):
+            V.import_stage(run, V.STAGE_REPLACE)
+        assert PL.write_plan(run)["counts"]["cleared"] == 1  # the plan needs no import
+
+    def test_a_pre_check_run_again_after_the_check_export_is_refused(self, tmp_path: Path) -> None:
+        """EXPORT_CHECK pins the pre-check: one rewritten since (WD1 re-harvested into the same
+        directory) would change the qids behind the candidates and the plan's evidence."""
+        run, pictures = self._full(
+            tmp_path, {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.DEPICTS}
+        )
+        record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
+        assert record["precheck_sha256"] == ST.file_sha256(run / PC.PRECHECK_FILE)
+        path = run / PC.PRECHECK_FILE
+        path.write_text(path.read_text(encoding="utf-8").replace('"Q2"', '"Q9"'), "utf-8")
+        state = ST.load_read(run / "READ.json")
+        with pytest.raises(ST.StateError, match="not the pre-check"):
+            V.export_replace(
+                run, tmp_path / "ho", state, PC.load_prechecks(path),
+                PC.load_harvest(tmp_path / "harvest"), pictures,
+            )  # fmt: skip
+        with pytest.raises(ST.StateError, match="not the pre-check"):
+            PL.build(run)
+
     def test_replace_export_import_and_plan(self, tmp_path: Path) -> None:
         run, pictures = self._full(
             tmp_path, {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.REGION_OR_TYPE}
@@ -840,7 +1058,7 @@ class TestTheStages:
             "cleared": 2,
             "no image": 1,
             "sites with a change": 4,
-            "rows": 8,
+            "rows": 9,  # Thasos's G2, judged another site's picture, leaves the gallery
         }
         expected = {
             e["site_id"]: e
@@ -864,14 +1082,7 @@ class TestTheStages:
 def _setup_commons() -> FakeCommons:
     return FakeCommons(
         members={"Thasos (ancient city)": ["Thasos agora.jpg", "Thasos gate.jpg", "Thasos.jpg"]},
-        info={
-            "Thasos gate.jpg": {
-                "status": C.OK,
-                "title": "Thasos gate.jpg",
-                "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Thasos_gate.jpg",
-                "render_url": "https://thumb.wikimedia.org/1280px-Thasos_gate.jpg",
-            }
-        },
+        info={"Thasos gate.jpg": GATE_INFO},
     )
 
 
@@ -970,16 +1181,49 @@ class TestThePlan:
         assert cells == {
             ("1", "is_hero", "true", "false"),
             ("2", "is_hero", "false", "true"),
+            ("3", "is_excluded", "false", "true"),  # G2: another site's picture
             (THASOS, "thumbnail_url", None, "/data/images/wiki/33d2d754/Thasos_agora.webp"),
         }
         assert plan.outcome == PL.REPLACED and plan.served_image_id == 2 and not plan.may_empty
+        [excluded] = [c for c in plan.changes if c.column == "is_excluded"]
+        assert excluded.evidence[-1]["verdict"] == V.OTHER_SITE and excluded.rule == PL.RULE_EXCLUDE
+        for change in plan.changes:
+            CW.validate_change(change)
+
+    def test_a_gallery_pick_excludes_the_served_row_that_shows_another_site(
+        self, tmp_path: Path
+    ) -> None:
+        """The served row the check called another site's picture leaves the gallery too; a
+        region or landscape view stays in it below the new hero."""
+        state = _thasos_state(tmp_path)
+        served = ST.served_of(state.sites[THASOS], state.rows[THASOS])
+        shown = [
+            {"label": "G1", "kind": V.GALLERY_CANDIDATE, "image_id": 2, "file": "a", "url": None},
+            {"label": "G2", "kind": V.GALLERY_CANDIDATE, "image_id": 3, "file": "b", "url": None},
+        ]
+        plan = PL.decide_site(
+            state.sites[THASOS], state.rows[THASOS], _pre(THASOS, PC.UNCONFIRMED, served),
+            _checked(THASOS, V.OTHER_SITE, served),
+            _replaced("G1", {"G1": "depicts", "G2": "region_or_type"}, shown), population=V.ALL,
+        )  # fmt: skip
+        cells = {(c.row_key, c.column, c.old_value, c.new_value) for c in plan.changes}
+        assert cells == {
+            ("1", "is_hero", "true", "false"),
+            ("1", "is_excluded", "false", "true"),
+            ("2", "is_hero", "false", "true"),
+            (THASOS, "thumbnail_url", None, "/data/images/wiki/33d2d754/Thasos_agora.webp"),
+        }
+        [excluded] = [c for c in plan.changes if c.column == "is_excluded"]
+        assert excluded.evidence == [
+            e for e in excluded.evidence if e["source"] == "served_image/CHECK.jsonl"
+        ]
 
     def test_a_commons_pick_clears_the_gallery_and_points_the_thumbnail(
         self, tmp_path: Path
     ) -> None:
         state = _thasos_state(tmp_path)
         served = ST.served_of(state.sites[THASOS], state.rows[THASOS])
-        url = "https://upload.wikimedia.org/wikipedia/commons/1/12/Thasos_gate.jpg"
+        url = GATE_INFO["render_url"]
         shown = [
             {"label": "G1", "kind": V.GALLERY_CANDIDATE, "image_id": 2, "file": "a", "url": None},
             {"label": "G2", "kind": V.GALLERY_CANDIDATE, "image_id": 3, "file": "b", "url": None},

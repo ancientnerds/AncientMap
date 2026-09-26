@@ -42,10 +42,16 @@ from served_image.state import (  # noqa: E402
     State,
     StateError,
     canonical_file,
+    jsonl_text,
     served_of,
+    write_text_once,
 )
 
 DEFAULT_HARVEST = ROOT / "output" / "remediation" / "fields" / "harvest"
+#: The run directory's pre-check and its summary, each written once: the check stage's export
+#: pins the pre-check's sha256, and every later stage refuses another one.
+PRECHECK_FILE = "PRECHECK.jsonl"
+PRECHECK_SUMMARY = "PRECHECK.json"
 HARVEST_KEYS = frozenset(
     {"site_id", "name", "country", "lat", "lon", "qid", "enwiki_title", "source_url"}
 )
@@ -218,12 +224,9 @@ def run_precheck(
     return result
 
 
-def write_prechecks(path: Path, result: Result) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "".join(
-        json.dumps(c.as_json(), ensure_ascii=False, sort_keys=True) + "\n" for c in result.checks
-    )
-    path.write_text(text, encoding="utf-8", newline="\n")
+def write_prechecks(path: Path, result: Result) -> str:
+    """PRECHECK.jsonl, written once per run directory. Returns its sha256."""
+    return write_text_once(path, jsonl_text(c.as_json() for c in result.checks))
 
 
 def load_prechecks(path: Path) -> dict[str, dict[str, Any]]:

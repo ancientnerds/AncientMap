@@ -7,9 +7,20 @@ the lanes' User-Agent (`research_web.USER_AGENT`):
   chains the API applied (a renamed file answers under its new title), `missing: true` for a file
   that does not exist. `cllimit=max` caps a response at 500 categories across the batch, so the
   answer comes in pieces joined by `continue` (T10 measured the same, `_page_records`).
-* `list=categorymembers` with `cmtype=file` - a category's files, in the API's own order.
-* `prop=imageinfo` with `iiurlwidth` - the original's URL and a rendering of the requested width.
-  Both URLs carry `utm_*` parameters since 2026; they are dropped (`plain_url`).
+* `list=categorymembers` with `cmtype=file` - a category's files, in the API's own order. That is
+  every file, not only pictures: TIFFs, PDFs, DjVu scans, videos and sounds too.
+* `prop=imageinfo` with `iiurlwidth` - the original's URL, its MIME type and a rendering of the
+  requested width (`thumburl`). Both URLs carry `utm_*` parameters since 2026; they are dropped
+  (`plain_url`). A `thumburl` is no proof of a picture - measured on 2026-09-26: a TIFF, a PDF, a
+  WebM video and a DjVu scan each answer a JPEG rendering (a page or a frame), and an MP3 and a
+  FLAC answer Commons' file-type icon (`file-type-icons/fileicon-ogg.png`). The MIME type decides.
+
+**What a page can show** (`picture_url`): a still image, through its rendering at `RENDER_WIDTH` -
+the bytes the vision stage downloads and the agent judges, and the URL the lane stores. An original
+is never stored: a TIFF is no `<img>` source, and a JPEG original runs to 9.0-20.1 MB (measured on
+2026-09-26: the first 12 files of Category:Casa Grande Ruins National Monument, each 6,720 px
+wide), while the API answers each at 1280 px - one of Wikimedia's standard widths
+(`wiki_image_downloader.COMMONS_BUCKETS`), which Commons serves.
 
 Answers are kept under the run directory (`commons/*.json`, the bytes under `commons/files/`), so a
 repeated command asks nothing twice. A failed request raises: "Commons did not answer" is never
@@ -47,11 +58,19 @@ TITLES_PER_QUERY = 50
 MAX_CONTINUATIONS = 40
 #: Seconds between two requests to one host (Wikimedia's robot policy asks for serial requests).
 PACE_SECONDS = 1.0
-#: The rendering width the vision stages look at (a Commons standard thumbnail step).
+#: The rendering width the vision stages look at, and the width a stored URL names (a Commons
+#: standard thumbnail step, `wiki_image_downloader.COMMONS_BUCKETS`).
 RENDER_WIDTH = 1280
 
 OK = "ok"
 MISSING = "missing"
+
+#: The files a page can show as a picture: still images, each through its Commons rendering. A PDF
+#: or DjVu scan (`image/vnd.djvu`), a video and a sound are none - Commons renders a page or a
+#: frame of some of them, but that is not a picture of a site.
+STILL_IMAGE_MIMES = frozenset(
+    {"image/jpeg", "image/png", "image/gif", "image/webp", "image/tiff", "image/svg+xml"}
+)
 
 
 class CommonsError(StateError):
@@ -91,6 +110,15 @@ class FileInfo:
     status: str
     title: str | None
     categories: tuple[str, ...]
+
+
+def picture_url(info: Mapping[str, Any]) -> str | None:
+    """The URL a page shows for a file (`Commons.imageinfo`'s answer): the rendering of a still
+    image - or None for a file Commons does not hold, one that is no still image, or one without a
+    rendering."""
+    if info["status"] != OK or info.get("mime") not in STILL_IMAGE_MIMES:
+        return None
+    return info["render_url"]
 
 
 class Commons:
@@ -275,11 +303,13 @@ class Commons:
                     cached[name] = {"status": MISSING}
                     continue
                 info = page["imageinfo"][0]
+                thumb = info.get("thumburl")
                 cached[name] = {
                     "status": OK,
                     "title": canonical_file(page["title"]),
                     "url": plain_url(info["url"]),
-                    "render_url": plain_url(info.get("thumburl") or info["url"]),
+                    # no rendering is no rendering: the original is never taken for one
+                    "render_url": plain_url(thumb) if thumb else None,
                     "mime": info.get("mime"),
                     "sha1": info.get("sha1"),
                 }
