@@ -12472,3 +12472,64 @@ review), which the check refuses by design - an agent checks before the import.
   `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
   .vulture_whitelist.py --min-confidence 80` clean. Nothing under `api/`, `pipeline/` or
   `ancient-nerds-map/` was touched: no Lyra import check, no frontend gate.
+
+### Lane WA: the independent review's findings and their fixes (2026-09-26, branch `wip/wa`)
+
+An independent review of `wip/wa` (verdict "fix": 2 major, 4 minor) - each finding fixed, tests
+first:
+
+* **Major - the mass run's 19 rested on documentation alone.** HANDOVER still said `mass4`
+  re-queues them itself from 21:30Z; a live round of `runs/mass-2026-09-25` after that would have
+  re-queued them into the mass run's plan (p4-0116: S0's old values, an L revert first, and P5
+  planning their extractive card against owner decision O2/O3), after which v3d's
+  `--take-deferred` refuses, or - after v3d was built - both runs assemble them. Fixed in code:
+  `mass4.descriptions_only_claims` - a plan without a pass (scope versions 1 and 2) re-queues no
+  site a descriptions-only list names; `drive` refuses such a live round before `REQUEUE4.jsonl`
+  is written, the dry run prints `hand over`. This covers both windows (before and after the v3d
+  build) without a hand-over file. All 19 of the mass run's `revision-too-fresh` holds are
+  `march-description` sites of the pinned `SCOPE4.v3.json` (15 also `march-card`; read offline
+  from the p4-pilot worktree's `HOLDS4.jsonl`), so from 21:30:14Z on every live round of the mass
+  run is refused. A descriptions-only plan re-queues its own sites as before. HANDOVER (resume
+  point, 2.4 item 2, section 6), contracts sections 11 and 12, the runbook (0.2, section 8) and
+  REPAIR_TEXTS 2.4 (b) / 5.2 now say: the 19 are v3d's, the mass run is never driven live again.
+* **Major - L5 before the plan's read.** Runbook 0.3 (and contracts section 12): the link and name
+  pass L5 (HUMAN_ONLY_DECISIONS B1-L, B1-N) is applied and accepted before step 2's `plan4.py
+  read`, and no link or name lane writes while v3 runs - or L5's candidates are `--exclude`d and
+  planned after L5 in their own list plan. Measured offline against the plan of the 00:12 UTC fresh
+  read (`C:/tmp/wa2/PLAN4.v3.jsonl`, 3,238 sites): **43 of the 72 `link_suspect` sites** of
+  `bcases/names.jsonl` and 34 of its 46 N7 names are v3 sites (the reviewer's 43 confirmed).
+* **Minor - `ready` and a batch that asked nothing.** `handoff4.ready` now takes `--run-dir`: a
+  named batch of the run without a folder in the handoff directory (every site held before the
+  stage) is listed as `named_without_questions` and no longer keeps `ok` false; its import asks
+  nothing, and had its export not run, its import stops at the first question (no answer file). A
+  name that is no batch of the run is refused (exit 2), so a typo cannot pass as such a batch.
+  Runbook sections 5 and 6 updated.
+* **Minor - the E3 rule the plan is built with.** Runbook 0.4: merge WD2 (O7) before step 3 if
+  ready, and record which commit's `dates.py` fixed the flags. Measured with `wip/wd2`'s
+  `pipeline/normalizers/dates.py` (`git show wip/wd2:...`, loaded from a scratch file) over the same
+  plan and read: **0 of the plan's 20 `scope-pending` flags change** - the v3 sites in Oceania dated
+  after 500 AD (5, all on Easter Island, country Chile) already lie in the Americas' longitude
+  window.
+* **Minor - stale texts.** `scope4`'s docstring names version 2's pin `SCOPE_V2_SHA256`; contracts
+  section 9 and 11 name the renamed pins; contracts section 11's p4-0116 re-queue and its
+  "lane-L-first for the 19" are marked superseded with a pointer to section 12;
+  `write_gate4._defect_scope`'s docstring names the current version's pinned file; REPAIR_TEXTS
+  2.4 (b) and 5.2 are marked superseded.
+* **Minor - the item-name reads.** `V3_ITEM_NAMES.json` / `V3D_ITEM_NAMES.json` are committed with
+  the plan's AUDIT_LOG seal (runbook steps 2, 3 and section 8), as `S0_ITEM_NAMES.json` is; the
+  `.gitignore` comment says so (`V3*_ROWS.jsonl` stays ignored).
+
+Tests: `test_a_plan_without_the_pass_re_queues_no_site_a_descriptions_only_list_names`,
+`test_a_named_batch_that_asked_nothing_is_ready_and_a_stray_name_is_refused`, and the `ready` test
+with `--run-dir` (`tests/remediation/test_phase4_v3.py`). Six new mutation cases in
+`P4_V3_MUTATIONS` (four for the re-queue guard, two for `ready`).
+
+Gates (worktree `.claude/worktrees/wa`, main venv, 2026-09-26 ~02:30-02:50 UTC): the full suite
+(`-q -rs --timeout 90 -m "not integration and not live_llm"`, `-p no:cacheprovider`) **7,155
+passed, 119 skipped, 57 deselected, 0 failed** (434 s; the skips are the same gitignored working
+data as above plus the known three). Sweep: every `p4 v3` case and every case whose target is
+`mass4.py` or `handoff4.py` - **112/112 caught**, the tree byte-identical for its 8 files
+afterwards. `ruff check` and `ruff format --check` clean on the six touched Python files (ruff
+0.15.11); `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/
+pipeline/ .vulture_whitelist.py --min-confidence 80` clean. Nothing under `api/`, `pipeline/` or
+`ancient-nerds-map/` was touched: no Lyra import check, no frontend gate.
