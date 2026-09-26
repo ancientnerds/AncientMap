@@ -4880,9 +4880,11 @@ TEASER_CONTRACT = REPO / "scripts/remediation/teaser/contract.py"
 TEASER_ANSWERS = REPO / "scripts/remediation/teaser/answers.py"
 TEASER_RUN = REPO / "scripts/remediation/teaser/run.py"
 CARD_PROVENANCE = REPO / "pipeline/utils/card_provenance.py"
+PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
 TEASER_WRITE_TESTS = "tests/remediation/test_mechanical_teaser.py"
 TEASER_TESTS = "tests/remediation/test_teaser.py"
 AI_ACT_TESTS = "tests/api/test_ai_act_marking.py"
+LASTMOD_TESTS = "tests/api/test_sitemap_lastmod.py"
 _TEASER_CHANGED = "test_a_site_that_changed_is_listed_not_written"
 
 TEASER_CASES: list[Case] = [
@@ -4970,9 +4972,14 @@ TEASER_CASES: list[Case] = [
                 "test_a_step_writes_at_most_100_sites",
             ),
             (
-                "a step follows the accepted one",
-                "    if step > 1 and not accepted(step - 1, root):",
+                "a step follows the closed one",
+                "    if step > 1 and not closed(step - 1, root):",
                 "test_the_next_step_waits_for_the_acceptance_of_the_last",
+            ),
+            (
+                "a run directory lies under the runs",
+                "    if resolved.parent != RUNS.resolve():",
+                "test_a_run_is_named_by_its_name_or_by_its_directory",
             ),
             (
                 "steps are numbered in order",
@@ -5002,8 +5009,8 @@ TEASER_CASES: list[Case] = [
                 "test_a_phase5_card_key_left_behind_is_a_deviation",
             ),
             (
-                "the card file follows accepted steps only",
-                "        if not accepted(step, root):",
+                "the card file follows closed steps only",
+                "        if not closed(step, root):",
                 "test_a_step_without_acceptance_is_refused",
             ),
             (
@@ -5017,14 +5024,14 @@ TEASER_CASES: list[Case] = [
                 "test_a_planned_card_production_does_not_hold_is_refused",
             ),
             (
-                "the card file names no undone step",
-                "        if reverted(step, root):",
-                "test_the_card_file_names_written_steps_only",
-            ),
-            (
                 "a step is closed once",
                 "    if path.exists():",
                 "test_a_step_is_closed_once",
+            ),
+            (
+                "an undone step is never accepted",
+                "    if reverted(step, root):",
+                "test_an_undone_step_is_never_accepted_afterwards",
             ),
             (
                 "an undone step holds its old values",
@@ -5061,16 +5068,41 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "an undone step is read as undone",
-                '    return path.exists() and json.loads(path.read_text(encoding="utf-8"))["reverted"] '
-                "is True",
+                "    return _closing(REVERTED_DIR, step, root).exists()",
                 "    return False",
                 "test_an_undone_step_is_closed_and_its_sites_are_planned_again",
             ),
             (
                 "an acceptance is recorded once",
-                "    if not found and not accepted(step, root):",
+                "    if not found and not closed(step, root):",
                 "    if not found:",
                 "test_an_acceptance_is_recorded_once",
+            ),
+            (
+                "an accepted step can still be undone",
+                "    if not found:\n        _record_closing(\n            REVERTED_DIR,",
+                "    if not found and not accepted(step, root):\n        _record_closing(\n"
+                "            REVERTED_DIR,",
+                "test_an_accepted_step_is_undone_closed_and_planned_again",
+            ),
+            (
+                "the undo keeps the acceptance it supersedes",
+                "                    if acceptance.exists()\n                    else None",
+                "                    if False\n                    else None",
+                "test_an_accepted_step_is_undone_closed_and_planned_again",
+            ),
+            (
+                "the card file expects an undone step's old cards",
+                '            planned[row["site_id"]] = row["old_value"] if undone else '
+                'row["new_value"]',
+                '            planned[row["site_id"]] = row["new_value"]',
+                "test_the_file_follows_production_after_an_undo",
+            ),
+            (
+                "the card file lets a later step's plan win",
+                "    for step in sorted(steps):",
+                "    for step in steps:",
+                "test_a_site_planned_again_after_an_undo_is_expected_as_the_later_step_wrote_it",
             ),
             (
                 "the acceptance finds a stale provenance",
@@ -5172,6 +5204,12 @@ TEASER_CASES: list[Case] = [
                 "test_layout_and_ending",
             ),
             (
+                "no math symbol or arrow",
+                '_FORBIDDEN_CATEGORIES = frozenset({"So", "Sm", "Cs", "Co", "Cn", "No"})',
+                '_FORBIDDEN_CATEGORIES = frozenset({"So", "Cs", "Co", "Cn", "No"})',
+                "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            (
                 "an alias only where the description uses it",
                 "    derived += [alt for alt in sorted(set(alt_names)) if names_in(description, "
                 "[alt])]",
@@ -5241,7 +5279,7 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "the sites file is the pinned one",
-                '    if _sha256_text(path.read_bytes().decode("utf-8").replace("\\r\\n", "\\n")) '
+                '    if CP.text_sha256(path.read_bytes().decode("utf-8").replace("\\r\\n", "\\n")) '
                 "!= record[key]:",
                 "test_a_changed_sites_file_is_refused",
             ),
@@ -5281,6 +5319,11 @@ TEASER_CASES: list[Case] = [
                 "            if answer.answered_by in writers[site_id]:",
                 "test_a_judge_who_worked_on_the_card_is_refused",
             ),
+            (
+                "an unproven contradiction is counted",
+                '                if judged.verdict == "CONTRADICTED":',
+                "test_an_unproven_contradiction_fails_the_pilot",
+            ),
         )
     ),
     *(
@@ -5312,16 +5355,53 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "the pilot gate refuses a contradiction",
-                "        return self.contradicted == 0 and self.unproven_share <= "
-                "PILOT_MAX_UNPROVEN_SHARE",
-                "        return self.unproven_share <= PILOT_MAX_UNPROVEN_SHARE",
+                "        no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0",
+                "        no_contradiction = self.contradicted_unproven == 0",
                 "test_a_proven_contradiction_fails_the_pilot",
+            ),
+            (
+                "the pilot gate refuses an unproven contradiction",
+                "        no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0",
+                "        no_contradiction = self.contradicted == 0",
+                "test_an_unproven_contradiction_fails_the_pilot",
+            ),
+            (
+                "a run asks only its bases",
+                "        elif basis is not None and basis_of(row) not in basis:",
+                "        elif False:",
+                "test_a_run_can_ask_one_basis_only",
             ),
             (
                 "a quote proves only when the page holds it",
                 "            proven = outcome == Q.FOUND",
                 "            proven = judged.url is not None",
                 "test_a_quote_the_page_does_not_hold_proves_nothing",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the page date: lane WB's card writes only
+    *(
+        Case(f"teaser: {label}", PUBLIC_SITES, old, new, test, LASTMOD_TESTS)
+        for label, old, new, test in (
+            (
+                "an earlier card write leaves the page date",
+                "        f\"(table_name = '{table}' AND column_name = '{column}' AND run_stamp LIKE "
+                "'{stamp_like}')\"",
+                "        f\"(table_name = '{table}' AND column_name = '{column}')\"",
+                "test_a_card_write_before_lane_wb_does_not_advance_the_page",
+            ),
+            (
+                "a stamped column is not counted unstamped",
+                '        "\'" + column + "\'" for column in columns if (table, column) not in '
+                "PAGE_COLUMN_STAMPS",
+                '        "\'" + column + "\'" for column in columns',
+                "test_a_card_write_before_lane_wb_does_not_advance_the_page",
+            ),
+            (
+                "a lane-WB card write moves the page date",
+                '    f"AND ({_PAGE_WRITE} OR {_STAMPED_PAGE_WRITE}) "',
+                '    f"AND ({_PAGE_WRITE}) "',
+                "test_a_lane_wb_card_write_advances_the_page",
             ),
         )
     ),
