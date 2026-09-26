@@ -74,7 +74,6 @@ import json
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -85,10 +84,11 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
         sys.path.insert(0, _root)
 
 import opus_handoff as OH  # noqa: E402 - the one contract every model answer goes through
+import run_files as RF  # noqa: E402 - the shared clock and JSON writers
 from opus_audit import quotes as Q  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402 - the read-only psql seam
 from phase3.run import read_jsonl  # noqa: E402
-from phase4 import audit4, plan4, wc4  # noqa: E402 - the seeded draw, the plan read, lane WC
+from phase4 import audit4, plan4, revert4, wc4  # noqa: E402 - the draw, the read, site ids, WC
 from phase4 import model4 as M  # noqa: E402
 
 from wc import answers as A  # noqa: E402
@@ -130,10 +130,8 @@ class WcRunError(ValueError):
 
 
 # ------------------------------------------------------------------------------------ files
-def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
-
-
+# The clock and the writers are the shared ones (`run_files`); a path is shown relative to the
+# repository where it lies inside it, and a file's sha256 is that of its bytes as they are.
 def _shown(path: Path) -> str:
     resolved = path.resolve()
     try:
@@ -142,42 +140,23 @@ def _shown(path: Path) -> str:
         return resolved.as_posix()
 
 
-def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
-def _write_jsonl(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _ids(path: Path) -> set[str]:
-    """One site id per line (blank lines skipped); anything else stops the command."""
+    """One site id per line (blank lines skipped), each a lowercase, hyphenated UUID
+    (`revert4.check_site`); anything else stops the command."""
     ids: set[str] = set()
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         text = line.strip()
-        if text and not wc_id(text):
-            raise WcRunError(f"{path}:{number}: {text!r} is not a site id")
-        if text:
-            ids.add(text)
+        if not text:
+            continue
+        try:
+            ids.add(revert4.check_site(text))
+        except revert4.RevertRefused as exc:
+            raise WcRunError(f"{path}:{number}: {exc}") from None
     return ids
-
-
-def wc_id(text: str) -> bool:
-    return len(text) == 36 and text.count("-") == 4 and text == text.lower()
 
 
 # ------------------------------------------------------------------------------------ the read
@@ -185,9 +164,9 @@ def cmd_read(run: Path, *, runner: W.SqlRunner = W.run_sql, host: str = W.SSH_HO
     """The one read-only SELECT (`WC_SQL`): every curated row, as Phase 4 reads it, with its scope
     status. Written to `ROWS.jsonl`; `READ.json` records when and the file's sha256."""
     rows = W._json_rows(runner(WC_SQL, host=host))
-    _write_jsonl(run / ROWS_FILE, rows)
-    record = {"read_at": _now(), "rows": len(rows), "sha256": _sha256(run / ROWS_FILE)}
-    _write_json(run / READ_FILE, record)
+    RF.write_jsonl(run / ROWS_FILE, rows)
+    record = {"read_at": RF.now(), "rows": len(rows), "sha256": _sha256(run / ROWS_FILE)}
+    RF.write_json(run / READ_FILE, record)
     return record
 
 
@@ -349,7 +328,7 @@ def _export_round(
     record = {
         "round": number,
         "handoff": _shown(handoff),
-        "exported_at": _now(),
+        "exported_at": RF.now(),
         "batches": batches,
         "asked": {site_id: asked for site_id, asked, _ in questions},
         "failures": {site_id: failures for site_id, _, failures in questions if failures},
@@ -403,7 +382,7 @@ def cmd_export(
         drawn = asked[:limit]
     if not drawn:
         raise WcRunError(f"{run}: nothing to ask - the population is empty")
-    _write_jsonl(run / SITES_FILE, drawn)
+    RF.write_jsonl(run / SITES_FILE, drawn)
     counts = Counter(entry["marking"] for entry in asked)
     record = {
         "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
@@ -421,7 +400,7 @@ def cmd_export(
         "limit": limit,
         "asked": len(drawn),
     }
-    _write_json(run / POPULATION_FILE, record)
+    RF.write_json(run / POPULATION_FILE, record)
     questions = [
         (entry["site_id"], list(range(1, len(entry["sentences"]) + 1)), {}) for entry in drawn
     ]
@@ -475,7 +454,7 @@ def fetch(
     own = client or A.Client()
     try:
         extra = {} if sleep is None else {"sleep": sleep}
-        Q.collect(wanted, pages, own, now=_now, pace=pace, errors=A.FETCH_ERRORS, **extra)
+        Q.collect(wanted, pages, own, now=RF.now, pace=pace, errors=A.FETCH_ERRORS, **extra)
     finally:
         if client is None:
             own.close()
@@ -672,8 +651,8 @@ def cmd_import(
             {**attempt, "results": {str(n): result for n, result in sorted(results.items())}}
         )
     out = _round_dir(run, number)
-    _write_jsonl(out / "ANSWERS.jsonl", rows)
-    _write_json(out / "REASK.json", reask)
+    RF.write_jsonl(out / "ANSWERS.jsonl", rows)
+    RF.write_json(out / "REASK.json", reask)
     verdicts = Counter(
         result["answer"]["verdict"] if result["answer"] else "not in shape"
         for row in rows
@@ -840,7 +819,7 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
                 "evidence": outcome.evidence,
             }
         )
-    _write_jsonl(run / FINAL_FILE, finals)
+    RF.write_jsonl(run / FINAL_FILE, finals)
     by_site = {entry["site_id"]: entry for entry in sites}
     records = []
     for start in range(0, len(outcomes), batch_size):
@@ -855,7 +834,7 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
                 "outcomes": [o.to_dict() for o in chunk],
             }
         )
-    _write_jsonl(run / PLAN_FILE, records)
+    RF.write_jsonl(run / PLAN_FILE, records)
     summary = {
         "sites": len(finals),
         "cleared": sum(f["cleared"] for f in finals),
@@ -872,7 +851,7 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
             "last": records[-1]["batch_id"] if records else None,
         },
     }
-    _write_json(run / SUMMARY_FILE, summary)
+    RF.write_json(run / SUMMARY_FILE, summary)
     return summary
 
 
@@ -945,9 +924,9 @@ def cmd_judge_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, 
                 prompt=judge_prompt(finals[label], site),
             )
             batches.setdefault(batch_id, []).append(label)
-    _write_json(
+    RF.write_json(
         run / JUDGE_DIR / "ROUND.json",
-        {"handoff": _shown(handoff), "exported_at": _now(), "batches": batches},
+        {"handoff": _shown(handoff), "exported_at": RF.now(), "batches": batches},
     )
     return {"questions": len(labels), "batches": len(batches)}
 
@@ -1044,9 +1023,9 @@ def cmd_judge_import(
         label for labels in record["batches"].values() for label in labels
     }:
         raise WcRunError(f"{handoff}: the manifest is not the judge round's record")
-    _write_jsonl(run / JUDGE_DIR / "JUDGED.jsonl", judged)
+    RF.write_jsonl(run / JUDGE_DIR / "JUDGED.jsonl", judged)
     result = judge_result(judged)
-    _write_json(run / JUDGE_DIR / "RESULT.json", result)
+    RF.write_json(run / JUDGE_DIR / "RESULT.json", result)
     return result
 
 

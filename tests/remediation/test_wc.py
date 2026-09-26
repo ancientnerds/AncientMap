@@ -855,6 +855,18 @@ def test_excluded_and_earlier_sites_are_listed_not_asked(tmp_path: Path) -> None
     assert list(C.read_sites(run)) == [FX.SITE_C]
 
 
+@pytest.mark.parametrize(
+    "line",
+    ["zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz", FX.SITE_B.upper(), FX.SITE_B.replace("-", "")],
+)
+def test_an_exclude_file_takes_canonical_site_ids_only(tmp_path: Path, line: str) -> None:
+    """The id check is `revert4.check_site` (a lowercase, hyphenated UUID), not a look-alike."""
+    exclude = tmp_path / "exclude.txt"
+    exclude.write_text(f"{FX.SITE_A}\n\n{line}\n", encoding="utf-8")
+    with pytest.raises(C.WcRunError, match=r"exclude\.txt:3: .* is not a site id"):
+        _run(tmp_path, exclude=exclude)
+
+
 def test_the_pilot_is_a_seeded_draw_of_the_population(tmp_path: Path) -> None:
     first, _ = _run(tmp_path / "one", pilot=2, seed=7)
     again, _ = _run(tmp_path / "two", pilot=2, seed=7)

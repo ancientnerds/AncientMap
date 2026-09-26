@@ -51,7 +51,6 @@ import sys
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +72,9 @@ from mechanical.lane import sql_literal  # noqa: E402
 from mechanical.plan import PlanError, parse_tagged_export  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 from prod_write import send  # noqa: E402
+from run_files import now as _now  # noqa: E402 - the shared clock and JSON writers
+from run_files import write_json as _write_json  # noqa: E402
+from run_files import write_jsonl as _write_jsonl  # noqa: E402
 
 from acceptance import answers as A  # noqa: E402
 from acceptance import checks as C  # noqa: E402
@@ -88,10 +90,6 @@ JUDGING = "judging"
 
 class JudgeError(ValueError):
     """The step must not run on this state. Nothing was written by it."""
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _resolve(path: Path) -> Path:
@@ -116,18 +114,6 @@ def _sha256(path: Path) -> str:
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in _lf(path).decode("utf-8").split("\n") if line]
-
-
-def _write_jsonl(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
-    path.write_text(text, encoding="utf-8", newline="\n")
-
-
-def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
-    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 # ------------------------------------------------------------------------------ the draw's files
