@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern
+from pipeline.database import affected_rows
 from pipeline.static_exporter import write_file_snapshot
 
 logger = logging.getLogger(__name__)
@@ -357,7 +358,7 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
         """),
         {"sid": snapshot_id},
     )
-    restored = upserted.rowcount
+    restored = affected_rows(upserted)
 
     # The scope decision (E4, migration 0020) comes back only from a snapshot that
     # recorded it. A snapshot taken before 0020 has no scope key and knows nothing about
@@ -377,7 +378,7 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
             """),
             {"sources": list(restore_sources), "keep": snap_site_ids},
         )
-        deleted = result.rowcount
+        deleted = affected_rows(result)
 
     db.commit()
     cache_delete_pattern("sites:*")

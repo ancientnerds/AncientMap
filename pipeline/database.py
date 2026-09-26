@@ -7,7 +7,7 @@ Uses SQLAlchemy 2.0 with GeoAlchemy2 for PostGIS support.
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Optional
+from typing import Any, Optional, cast
 
 from geoalchemy2 import Geometry
 from sqlalchemy import (
@@ -24,6 +24,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.engine import CursorResult, Result
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -77,6 +78,18 @@ def get_session():
         raise
     finally:
         session.close()
+
+
+def affected_rows(result: Result[Any]) -> int:
+    """The rows an INSERT, UPDATE or DELETE run through ``Session.execute`` affected.
+
+    ``Session.execute`` is typed to return ``Result`` (sqlalchemy 2.0.45 has no overload for
+    data-changing statements), but for one - a ``text()`` UPDATE as much as an ORM-enabled
+    ``insert()`` - it returns the connection's ``CursorResult``, the only result class that
+    carries ``rowcount``. ``Connection.execute`` is typed that way; this states the same for
+    the session (pinned by tests/pipeline/test_database_affected_rows.py).
+    """
+    return cast(CursorResult[Any], result).rowcount
 
 
 # =============================================================================

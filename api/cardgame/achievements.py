@@ -32,6 +32,7 @@ from pipeline.database import (
     SiteLike,
     TokenUsageLog,
     UnifiedSite,
+    affected_rows,
 )
 
 # ---------------------------------------------------------------------------
@@ -2524,8 +2525,7 @@ def check_achievements(
                 )
                 .on_conflict_do_nothing(constraint="uq_user_achievement")
             )
-            result = session.execute(stmt)
-            if result.rowcount > 0:
+            if affected_rows(session.execute(stmt)) > 0:
                 a = ACHIEVEMENTS[aid]
                 newly_unlocked.append(
                     {

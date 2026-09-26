@@ -38,7 +38,7 @@ from api.services.description_provenance import card_ai, description_disclosure,
 from api.services.jwt_auth import require_founder
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
-from pipeline.database import DiscordUser, get_db
+from pipeline.database import DiscordUser, affected_rows, get_db
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils.globe_payload import globe_projection
@@ -1150,7 +1150,7 @@ def restore_all_upload_snapshots(
             WHERE us.id = snap.site_id
         """)
     )
-    count = result.rowcount
+    count = affected_rows(result)
 
     db.commit()
     cache_delete_pattern("sites:*")
@@ -2213,10 +2213,12 @@ def replace_source(
                 {"src": target_source},
             )
             # Now delete the sites themselves — no FK checks needed
-            deleted = db.execute(
-                text("DELETE FROM unified_sites WHERE source_id = :src"),
-                {"src": target_source},
-            ).rowcount
+            deleted = affected_rows(
+                db.execute(
+                    text("DELETE FROM unified_sites WHERE source_id = :src"),
+                    {"src": target_source},
+                )
+            )
 
             if deleted != len(existing_ids):
                 logger.warning(
@@ -2512,7 +2514,7 @@ def mark_sites_audited(
 
     return {
         "source_id": body.source_id,
-        "marked": result.rowcount,
+        "marked": affected_rows(result),
     }
 
 
