@@ -1584,15 +1584,16 @@ class Change:
     """One conditional change of one row, and what the journal records.
 
     A `site_external_ids` row (waves 1-4): `kind` is its kind, `old_value` None means the site has
-    no row of the kind and the row is inserted (wave 4). A `unified_sites` row (wave 4 only):
-    `kind` is the column, written through `apply_remediation_change()`.
+    no row of the kind and the row is inserted (wave 4). A `unified_sites` row (waves 4 and L5):
+    `kind` is the column, written through `apply_remediation_change()`. `new_value` None is a
+    removal - of the row, or a cleared column - and only L5 plans one (`render_split(removals=True)`).
     """
 
     site_id: str
     name: str
     kind: str
     old_value: str | None
-    new_value: str
+    new_value: str | None
     test_id: str
     confidence: str
     evidence: tuple[str, ...]
@@ -1619,7 +1620,7 @@ class Change:
 
 
 def change_key(
-    site_id: str, kind: str, old: str | None, new: str, test_id: str, *, table: str = TABLE
+    site_id: str, kind: str, old: str | None, new: str | None, test_id: str, *, table: str = TABLE
 ) -> str:
     parts = json.dumps([site_id, table, kind, old, new, test_id], ensure_ascii=False)
     return "external-id:" + hashlib.sha256(parts.encode("utf-8")).hexdigest()
@@ -2471,18 +2472,39 @@ def sql_value(value: str | None) -> str:
 
 
 def render_split(
-    rows: list[Change], *, reversal: bool, rehearsal: bool = False, wave: Wave = WAVE4
+    rows: list[Change],
+    *,
+    reversal: bool,
+    rehearsal: bool = False,
+    wave: Wave = WAVE4,
+    removals: bool = False,
 ) -> str:
     """Wave 4's transaction: the source_url rows through `apply_remediation_change()`, the
     external-id rows by their full key (a new row inserted where the site holds none of its kind;
-    the reversal deletes exactly that row), each journalled, then guards and invariants."""
+    the reversal deletes exactly that row), each journalled, then guards and invariants.
+
+    `removals` is L5's form of the same transaction (HUMAN_ONLY B1-L, 2026-09-26: "sonst wird der
+    falsche Link entfernt"): a planned new value may be None - the write deletes exactly that
+    external-id row, or clears `source_url` - and its reversal restores it. Three things change
+    with it, and nothing else: the plan tables take NULL on both sides; guard 5 (no other curated
+    site carries a planned item) reads the write only, because a reversal restores the state the
+    write found, an item two rows shared included; and invariant 4 (the fixed point) refuses a
+    planned site left without any external-id row while its `source_url` is still an English
+    Wikipedia article - `refresh_site_external_ids`, run daily by the prospector, would resolve
+    that URL and write the removed link back. Without `removals` the statement is wave 4's, byte
+    for byte (its delivered files are pinned).
+    """
     if not rows:
         raise SystemExit("refusing to render a statement with no rows")
     urls = [row for row in rows if row.table == SITES_TABLE]
     ext = [row for row in rows if row.table == TABLE]
     if len(urls) + len(ext) != len(rows) or any(row.kind != URL_COLUMN for row in urls):
         raise SystemExit("wave 4 writes unified_sites.source_url and site_external_ids only")
-    if any(row.new_value is None or CONTROL_RE.search(row.new_value) for row in rows):
+    if any(
+        (row.new_value is None and not removals)
+        or (row.new_value is not None and CONTROL_RE.search(row.new_value))
+        for row in rows
+    ):
         raise SystemExit("a planned new value carries a control character or is missing")
     stamp = wave.rollback_stamp if reversal else wave.run_stamp
     s = lanes.sql_text(stamp)
@@ -2512,15 +2534,19 @@ def render_split(
         "-- must match exactly one row; an old value NULL means the site holds no row of the kind and",
         "-- the row is inserted. Every row is journalled in the same transaction.",
     ]
-    if reversal:
+    if removals:
+        lines += [
+            "-- L5 (HUMAN_ONLY B1-L): a new value NULL removes exactly that external-id row, or clears",
+            "-- source_url; the reversal restores it. Invariant 4 keeps the fixed point of the daily",
+            "-- external-id refresh: no planned site is left without an external-id row while its",
+            "-- source_url is an English Wikipedia article.",
+        ]
+    elif reversal:
         lines += [
             "-- The reversal deletes exactly the rows the repair inserted, by their value. Once",
             "-- migration 0023 is applied, its CHECK refuses the two-URL source_url restored here.",
         ]
-    lines += [
-        "\\set ON_ERROR_STOP on",
-        "BEGIN;",
-        "",
+    url_table = [
         "CREATE TEMP TABLE _url_plan (",
         "    site_id    UUID PRIMARY KEY,",
         "    old_value  TEXT NOT NULL,",
@@ -2530,6 +2556,46 @@ def render_split(
         "    confidence TEXT NOT NULL,",
         "    evidence   JSONB NOT NULL",
         ") ON COMMIT DROP;",
+    ]
+    if removals:
+        url_table[2:4] = ["    old_value  TEXT,", "    new_value  TEXT,"]
+        url_table[7:8] = [
+            "    evidence   JSONB NOT NULL,",
+            "    CHECK (old_value IS NOT NULL OR new_value IS NOT NULL)",
+        ]
+    guard5 = [
+        "    SELECT count(*) INTO bad FROM _ext_plan p",
+        f"      JOIN {TABLE} e ON e.kind = p.kind AND e.value = p.new_value AND e.site_id <> p.site_id",
+        f"      JOIN unified_sites u ON u.id = e.site_id AND u.source_id = '{CURATED}'",
+        "     WHERE p.kind = 'wikidata_qid';",
+        "    IF bad > 0 THEN",
+        "        RAISE EXCEPTION 'source-url split: % planned item(s) are carried by another curated site', bad;",
+        "    END IF;",
+    ]
+    if removals and reversal:
+        guard5 = [
+            "    -- (the write's only: a reversal restores the items the write found, shared or not)"
+        ]
+    fixed_point: list[str] = []
+    if removals:
+        fixed_point = [
+            "    -- invariant 4: the fixed point - no planned site is left without an external-id row",
+            "    -- while its source_url is an English Wikipedia article (the daily refresh would",
+            "    -- resolve it and write the removed link back)",
+            "    SELECT count(*) INTO bad",
+            "      FROM (SELECT site_id FROM _url_plan UNION SELECT site_id FROM _ext_plan) p",
+            "      JOIN unified_sites u ON u.id = p.site_id",
+            f"     WHERE u.source_url LIKE {lanes.sql_text(ENWIKI + '%')}",
+            f"       AND NOT EXISTS (SELECT 1 FROM {TABLE} e WHERE e.site_id = p.site_id);",
+            "    IF bad > 0 THEN",
+            "        RAISE EXCEPTION 'source-url split: % site(s) left without a link on an English Wikipedia source_url', bad;",
+            "    END IF;",
+        ]
+    lines += [
+        "\\set ON_ERROR_STOP on",
+        "BEGIN;",
+        "",
+        *url_table,
         "",
         "CREATE TEMP TABLE _ext_plan (",
         "    site_id    UUID NOT NULL,",
@@ -2563,7 +2629,7 @@ def render_split(
         "        IF r.old_value IS NULL THEN",
         f"            INSERT INTO {TABLE} (site_id, kind, value) VALUES (r.site_id, r.kind, r.new_value);",
     ]
-    if reversal:
+    if reversal or removals:
         write_ext += [
             "        ELSIF r.new_value IS NULL THEN",
             f"            DELETE FROM {TABLE}",
@@ -2615,13 +2681,7 @@ def render_split(
         "        RAISE EXCEPTION 'source-url split: % site(s) already hold a row of a kind planned as new', bad;",
         "    END IF;",
         "    -- guard 5: no other curated site carries a planned item",
-        "    SELECT count(*) INTO bad FROM _ext_plan p",
-        f"      JOIN {TABLE} e ON e.kind = p.kind AND e.value = p.new_value AND e.site_id <> p.site_id",
-        f"      JOIN unified_sites u ON u.id = e.site_id AND u.source_id = '{CURATED}'",
-        "     WHERE p.kind = 'wikidata_qid';",
-        "    IF bad > 0 THEN",
-        "        RAISE EXCEPTION 'source-url split: % planned item(s) are carried by another curated site', bad;",
-        "    END IF;",
+        *guard5,
         "    -- the source_url writes: the journal primitive, one call and one journal row each",
         "    FOR r IN SELECT * FROM _url_plan ORDER BY site_id LOOP",
         "        moved := moved + apply_remediation_change(",
@@ -2689,6 +2749,7 @@ def render_split(
         "        RAISE EXCEPTION 'source-url split: this stamp journalled % row(s) outside the plan',",
         "            bad;",
         "    END IF;",
+        *fixed_point,
         "    RAISE NOTICE 'source-url split: % row(s) changed and journalled', moved;",
         "END $$;",
         "",
@@ -2898,7 +2959,9 @@ def read_rows(rows: list[Change], *, run: Callable[[str], str]) -> dict[tuple[st
             f"FROM {SITES_TABLE} WHERE id IN ({keys})) t;"
         )
         for record in lanes.json_rows(run(sql)):
-            found[(record["site_id"], URL_COLUMN)] = [record["value"]]
+            # a cleared source_url (an L5 removal) holds no value, like a removed external-id row
+            value = record["value"]
+            found[(record["site_id"], URL_COLUMN)] = [] if value is None else [value]
     return found
 
 
