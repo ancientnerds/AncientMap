@@ -35,13 +35,15 @@ source_url are CONFLICT (`identity`), and its dates are not read (period MISSING
 **coordinates.** The witnesses are the item's P625 (the first truthy statement, a preferred one
 first - `bcases.collect.claims_record`; Earth only) and the primary coordinates of the item's
 English article. Each has a tolerance: 1 km, or half the P625's stated precision in metres when that
-is larger (`census/tests/t01_wikidata_claims.py`, the rule T01 measured with). CONFIRMED when at
-least one witness exists, the stored point lies within every witness's tolerance, and two witnesses
-lie within tolerance of each other; CONFLICT when a witness is farther away or the two disagree (or
-on identity doubt), and when another curated site that is not retired holds exactly the same point
-(a placeholder: HUMAN_ONLY counted 34 sites on 12 such points on 2026-09-26, the Kilmartin Glen
-cairns, the Gyeongju belts); MISSING when there is no witness. The columns are NOT NULL: a coordinate
-is corrected, never cleared (FIELD_CONTRACT section 3).
+is larger (`census/tests/t01_wikidata_claims.py`, the rule T01 measured with). CONFIRMED when both
+witnesses exist, the stored point lies within each one's tolerance, and the two lie within
+tolerance of each other; CONFLICT when a witness is farther away or the two disagree (or on identity
+doubt), and when another curated site that is not retired holds exactly the same point (a
+placeholder: HUMAN_ONLY counted 34 sites on 12 such points on 2026-09-26, the Kilmartin Glen cairns,
+the Gyeongju belts); MISSING when there is no witness, or one only that the stored point agrees
+with (the stored point is often a copy of the one P625, so it confirms nothing - the spec's rule,
+"Wikidata's and Wikipedia's points agree"). The columns are NOT NULL: a coordinate is corrected,
+never cleared (FIELD_CONTRACT section 3).
 
 **period_start.** The item's earliest dated start: every value of P571 (inception) and P580 (start
 time), and the P1319 (earliest date) qualifiers on them, each read with its precision as a span of
@@ -61,13 +63,15 @@ doubt); MISSING when only generic classes speak and none names the stored type, 
 A class the table does not hold stops the classification (`TableError`): the table is completed and
 re-pinned first, so no class is ever read as silent.
 
-**source_url.** The harvest's record of the stored URL (`harvest.url_kind`). A Wikipedia article:
+**source_url.** The harvest's record of the stored URL (`harvest.url_kind`). A URL that is
+a section link (the URL's own `#fragment`) - CONFLICT, whatever the page. A Wikipedia article:
 missing, invalid, a disambiguation page, a redirect into a section, another item's article, or a
-redirect whose target title holds no distinctive word of the site's name - CONFLICT; the item's own
-article (the sitelink of that wiki, or the page whose item is the site's) - CONFIRMED. Another page:
-404/410 - CONFLICT; redirected to another page - CONFLICT; served, with a distinctive word of the
-name in its <title> - CONFIRMED; otherwise (403, 5xx, a network error, a title that names nothing)
-- MISSING. A search or translation URL, a malformed or non-public one - CONFLICT. Empty - MISSING.
+redirect whose target title does not name the site (`names_it`: a distinctive word of the name,
+the whole name when it has none, or the item's English label or an alias) - CONFLICT; the item's
+own article (the sitelink of that wiki, or the page whose item is the site's) - CONFIRMED. Another
+page: 404/410 - CONFLICT; redirected to another page - CONFLICT; served, with a <title> that names
+the site - CONFIRMED; otherwise (403, 5xx, a network error, a title that names nothing) - MISSING.
+A search or translation URL, a malformed or non-public one - CONFLICT. Empty - MISSING.
 
 Inputs in `--out` (default `output/remediation/fields/wd1/`): STORED.jsonl (`export`) and
 SEEDS.jsonl (`seeds.py build`; it may hold no line, it may not be absent). Output: CLASSIFIED.jsonl
@@ -87,7 +91,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
+
+import httpx
 
 _HERE = Path(__file__).resolve()
 REPO = _HERE.parents[3]
@@ -207,16 +213,41 @@ def unmapped_classes(
 
 
 # ------------------------------------------------------------------------------ small readers
-def names_it(name: str, text: str | None) -> bool:
-    """Whether `text` holds a distinctive word of the site's name as a whole word, both folded
-    the owner-case classifier's way (`bcases.classify.fold`)."""
+def _has_phrase(phrase: str, hay: str) -> bool:
+    """Whether the folded `phrase` stands in the folded `hay` as whole words (both single-spaced)."""
+    return bool(phrase) and re.search(r"(?<!\S)" + re.escape(phrase) + r"(?!\S)", hay) is not None
+
+
+def names_it(name: str, text: str | None, also: Sequence[str] = ()) -> bool:
+    """Whether `text` names the site, everything folded the owner-case classifier's way
+    (`bcases.classify.fold`): it holds a distinctive word of the stored name as a whole word, or -
+    when the name has none (every word generic or a type word: "Huaca del Sol", "Seven Barrows",
+    169 live sites on 2026-09-26) - the whole name as a phrase; or it holds one of `also` (the
+    item's own English label and aliases, `item_names`) as a phrase."""
     if not text:
         return False
     hay = fold(text, keep_parentheses=True)
-    return any(
-        re.search(r"(?<![\w-])" + re.escape(word) + r"(?![\w-])", hay)
-        for word in distinctive_words(name)
-    )
+    words = distinctive_words(name)
+    if words:
+        if any(_has_phrase(word, hay) for word in words):
+            return True
+    elif _has_phrase(fold(name), hay):
+        return True
+    return any(_has_phrase(fold(other), hay) for other in also)
+
+
+def item_names(entity: Mapping[str, Any] | None, who: Identity) -> list[str]:
+    """The item's English label and aliases, in Wikidata's order - none when there is no item or
+    it is in doubt (the island's label names the island)."""
+    if entity is None or who.doubt:
+        return []
+    label = ((entity.get("labels") or {}).get("en") or {}).get("value")
+    aliases = [a.get("value") for a in (entity.get("aliases") or {}).get("en") or ()]
+    out: list[str] = []
+    for value in (label, *aliases):
+        if isinstance(value, str) and value.strip() and value not in out:
+            out.append(value)
+    return out
 
 
 def bucket(year: int) -> str:
@@ -255,13 +286,22 @@ def km(a: tuple[float, float], b: tuple[float, float]) -> float:
     return haversine_distance(a[0], a[1], b[0], b[1])
 
 
-def _same_page(asked: str, final: str) -> bool:
-    """Whether a redirect only normalised the URL: scheme, a `www.`, host case, a trailing slash."""
+def url_form(url: str) -> str:
+    """The URL as httpx sends and records it: host lower-cased, a non-ASCII character or a space
+    percent-encoded, everything already encoded left as it is. Every stored source_url had this
+    form on 2026-09-26 (4,884 of 4,884 not retired)."""
+    return str(httpx.URL(url))
+
+
+def same_page(asked: str, final: str) -> bool:
+    """Whether a redirect only normalised the URL: scheme, a `www.`, host case, a trailing slash, or
+    the percent-encoding of the path and query (httpx records `G%C3%B6bekli_Tepe` for a request of
+    `Göbekli_Tepe`, and a server may serve `King%27s` for `King's`)."""
 
     def key(url: str) -> tuple[str, str, str]:
-        parts = urlsplit(url)
+        parts = urlsplit(url_form(url))
         host = (parts.hostname or "").lower().removeprefix("www.")
-        return host, parts.path.rstrip("/") or "/", parts.query
+        return host, unquote(parts.path).rstrip("/") or "/", unquote(parts.query)
 
     return key(asked) == key(final)
 
@@ -364,15 +404,18 @@ def classify_coordinates(
             shown,
             evidence,
         )
-    if len(witnesses) == 2:
-        apart = km(tuple(witnesses[0]["point"]), tuple(witnesses[1]["point"]))  # type: ignore[arg-type]
-        if apart * 1000.0 > max(w["tol_m"] for w in witnesses):
-            return Status(
-                CONFLICT, f"wikidata and enwiki disagree by {apart:.3f} km", shown, evidence
-            )
-    return Status(
-        CONFIRMED, f"within tolerance of {len(witnesses)} source point(s)", shown, evidence
-    )
+    if len(witnesses) == 1:
+        return Status(
+            MISSING,
+            f"one source point only ({witnesses[0]['source']}, within its tolerance): the stored "
+            "point may be a copy of it",
+            shown,
+            evidence,
+        )
+    apart = km(tuple(witnesses[0]["point"]), tuple(witnesses[1]["point"]))  # type: ignore[arg-type]
+    if apart * 1000.0 > max(w["tol_m"] for w in witnesses):
+        return Status(CONFLICT, f"wikidata and enwiki disagree by {apart:.3f} km", shown, evidence)
+    return Status(CONFIRMED, "within tolerance of both source points", shown, evidence)
 
 
 def spanned_buckets(low: int, high: int) -> list[str]:
@@ -455,6 +498,7 @@ def classify_source_url(
 ) -> Status:
     url, kind = record["source_url"], record["kind"]
     name, qid = str(site["name"]), site["qid"]
+    also = item_names(entity, who)
     evidence = {k: v for k, v in record.items() if k not in ("site_id", "source_url")}
 
     def status(value: str, reason: str) -> Status:
@@ -464,6 +508,10 @@ def classify_source_url(
         return status(MISSING, "empty: the site names no source page")
     if kind in (H.URL_NOT_A_SOURCE, H.URL_MALFORMED, H.URL_NOT_PUBLIC):
         return status(CONFLICT, f"{kind}: not a page about a site")
+    if urlsplit(url).fragment:
+        return status(
+            CONFLICT, f"a section link (#{urlsplit(url).fragment}), not the page's own URL"
+        )
     if kind == H.URL_WIKIPEDIA:
         if record["missing"] or record["invalid"]:
             return status(CONFLICT, "dead: the article does not exist")
@@ -477,7 +525,7 @@ def classify_source_url(
         page_item = record["wikibase_item"]
         if qid is not None and page_item is not None and page_item != qid:
             return status(CONFLICT, f"another item's article ({page_item}, the site's is {qid})")
-        if record["redirected"] and not names_it(name, record["resolved_title"]):
+        if record["redirected"] and not names_it(name, record["resolved_title"], also):
             return status(CONFLICT, f"redirects to another article: {record['resolved_title']}")
         if who.doubt:
             return status(CONFLICT, f"identity: the article is the {', '.join(who.containers)}'s")
@@ -495,9 +543,9 @@ def classify_source_url(
         return status(CONFLICT, f"dead: HTTP {code}")
     if code is None or not 200 <= int(code) < 300:
         return status(MISSING, f"not readable by machine: {record.get('error') or f'HTTP {code}'}")
-    if not _same_page(url, str(record["final_url"])):
+    if not same_page(url, str(record["final_url"])):
         return status(CONFLICT, f"redirects to another page: {record['final_url']}")
-    if names_it(name, record.get("page_title")):
+    if names_it(name, record.get("page_title"), also):
         return status(CONFIRMED, "a page whose title names the site")
     return status(MISSING, "a page whose title names nothing of the site")
 
@@ -543,6 +591,7 @@ def classify_site(
         "enwiki": None if entity is None else H.enwiki_sitelink(entity),
         "scope_status": stored["scope_status"],
         "identity": {"doubt": who.doubt, "containers": list(who.containers)},
+        "item_names": item_names(entity, who),
         "period_name": {
             "stored": stored["period_name"],
             "bucket_of_stored_start": None if start is None else bucket(int(start)),

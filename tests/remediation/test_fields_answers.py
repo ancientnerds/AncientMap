@@ -31,6 +31,7 @@ def line(**fields: Any) -> dict[str, Any]:
     return {
         "site_id": "0025b0ba-fd74-4c08-96e3-acc17956aa44",
         "name": "Temple of Hephaestus",
+        "item_names": ["Temple of Hephaestus", "Hephaisteion"],
         "fields": {name: {"stored": value} for name, value in stored.items()},
     }
 
@@ -125,7 +126,12 @@ class TestPeriod:
         assert checked("period_start", block("keep", "-449", self.QUOTES)).decision == "keep"
         assert "that is replace" in checked("period_start", block("keep", "-700", self.QUOTES))
         assert "that is keep" in checked("period_start", block("replace", "-400", self.QUOTES))
-        assert checked("period_start", block("replace", "-700", self.QUOTES)).decision == "replace"
+        older = [(WIKI, "a sanctuary from c. 700 BC"), (REGISTER, "the 7th century BC")]
+        assert checked("period_start", block("replace", "-700", older)).decision == "replace"
+        # the quotes date 449 BC: they do not source a start in 700 BC
+        assert "no quote states -700" in checked(
+            "period_start", block("replace", "-700", self.QUOTES)
+        )
 
     def test_an_empty_field_is_filled_by_replace_only(self) -> None:
         assert "that is replace" in checked(
@@ -143,6 +149,35 @@ class TestPeriod:
         assert "carries no date" in checked("period_start", block("keep", "-449", undated))
         worded = [(WIKI, "built in 449 BC"), (REGISTER, "au Ve siècle av. J.-C.")]
         assert checked("period_start", block("keep", "-449", worded)).decision == "keep"
+
+    def test_a_quote_states_the_value_itself(self) -> None:
+        # any digit is no date of this value: the review's counter-example passed before
+        loose = [(WIKI, "The site covers 12 hectares."), (REGISTER, "It lies 3 km from the coast.")]
+        assert "no quote states" in checked(
+            "period_start", block("replace", "-3000", loose), period_start=None
+        )
+        stated = [
+            "It was founded c. 3,000 BC.",
+            "gegründet um 3.000 v. Chr.",
+            "a village of the 30th century BC",
+            "founded in the 3rd millennium BC",
+            "fondé au IIIe millénaire av. J.-C.",
+            "it dates to the third millennium BC",
+            "del 3. Jahrtausend v. Chr.",
+        ]
+        for quote in stated:
+            quotes = [(WIKI, quote), (REGISTER, "a 12th-century chapel beside it")]
+            answer = checked("period_start", block("replace", "-3000", quotes), period_start=None)
+            assert not isinstance(answer, str), quote
+
+    def test_a_century_is_read_with_its_word_and_its_number(self) -> None:
+        assert A.states_year("the 5th or 4th century BC", -449)
+        assert A.states_year("siglo V a.C.", -449)
+        assert A.states_year("the 2nd century AD", 101)
+        assert not A.states_year("the 5th stone of the 4th row", -449)
+        assert not A.states_year("the 6th century BC", -449)
+        assert not A.states_year("built in 1449", -449)
+        assert A.states_year("in 449 BC", -449)
 
     def test_a_year_is_an_integer_a_site_can_start_in(self) -> None:
         assert "is not an integer year" in checked(
@@ -165,6 +200,13 @@ class TestSiteType:
         assert "not a canonical type" in checked("site_type", block("replace", "temple", quotes))
         assert "no quote holds a word" in checked("site_type", block("replace", "Stadium", quotes))
         assert "that is keep" in checked("site_type", block("replace", "Temple", quotes))
+
+    def test_a_type_word_is_read_where_a_word_begins(self) -> None:
+        # "temp" inside "contemporary" is no temple (the review's counter-example passed before)
+        inside = [(WIKI, "contemporary with the Bronze Age"), (REGISTER, "a contemporary site")]
+        assert "no quote holds a word" in checked("site_type", block("keep", "Temple", inside))
+        german = [(WIKI, "eine Tempelanlage des 5. Jahrhunderts"), (REGISTER, "Hephaisteion")]
+        assert checked("site_type", block("keep", "Temple", german)).decision == "keep"
 
     def test_the_stems_of_a_type(self) -> None:
         assert A.type_stems("Mound/tumulus") == ["moun", "tumul"]
@@ -191,3 +233,38 @@ class TestSourceUrl:
         assert "no quote names the site" in checked(
             "source_url", block("replace", REGISTER, unnamed)
         )
+
+    def test_a_value_is_written_percent_encoded_and_without_a_fragment(self) -> None:
+        # httpx sends and records a non-ASCII path percent-encoded; the value is written that way,
+        # so what is written is what was fetched (and what the other 4,884 stored URLs look like)
+        raw = "https://de.wikipedia.org/wiki/Hephaistos-Tempel_(Athen)_Ä"
+        quotes = [(raw, "Der Tempel des Hephaistos"), (REGISTER, "the Hephaisteion")]
+        problem = checked("source_url", block("replace", raw, quotes))
+        assert "percent-encoded" in problem
+        assert "https://de.wikipedia.org/wiki/Hephaistos-Tempel_(Athen)_%C3%84" in problem
+        section = WIKI + "#History"
+        quotes = [(section, "The Temple of Hephaestus"), (REGISTER, "the Hephaisteion")]
+        assert "a section link" in checked("source_url", block("replace", section, quotes))
+
+    def test_a_quote_on_the_value_s_page_may_spell_its_url_either_way(self) -> None:
+        encoded = "https://de.wikipedia.org/wiki/Hephaisteion_%C3%84"
+        quotes = [
+            ("https://de.wikipedia.org/wiki/Hephaisteion_Ä", "Das Hephaisteion"),
+            (REGISTER, "the Hephaisteion"),
+        ]
+        assert checked("source_url", block("replace", encoded, quotes)).decision == "replace"
+
+    def test_a_name_without_a_distinctive_word_is_named_whole(self) -> None:
+        # "Huaca del Sol" has no distinctive word: a correct keep was refused as naming nothing
+        wiki = "https://en.wikipedia.org/wiki/Huaca_del_Sol"
+        quotes = [
+            (wiki, "The Huaca del Sol is an adobe brick temple"),
+            ("https://www.britannica.com/place/Huaca-del-Sol", "Huaca del Sol, a Moche pyramid"),
+        ]
+        site = {**line(source_url=wiki), "name": "Huaca del Sol", "item_names": []}
+        answer = text(source_url=block("keep", wiki, quotes))
+        assert A.check_shape(answer, ["source_url"], site)["source_url"].decision == "keep"
+
+    def test_the_item_s_label_names_the_site(self) -> None:
+        quotes = [(REGISTER, "the Hephaisteion"), (WIKI, "The Hephaisteion stands on a hill")]
+        assert checked("source_url", block("replace", REGISTER, quotes)).decision == "replace"

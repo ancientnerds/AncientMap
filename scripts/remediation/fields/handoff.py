@@ -158,7 +158,10 @@ FIELD_RULES = {
         '-> "-800", "the 2nd century AD" -> "101").\n'
         "- clear: no two independent sources date the start. The field is emptied - an empty "
         "field beats a wrong one.\n"
-        "Each quote must carry the date as the page states it (a year, a century, a millennium)."
+        "Each quote must carry the date as the page states it (a year, a century, a millennium), "
+        'and at least one must state your value itself: its year ("c. 2500 BC" for -2500), or its '
+        'century or millennium with that word ("the 26th century BC", "the 3rd millennium BC"). A '
+        'year worked out from "4,500 years ago" or a BP date is not read.'
     ),
     "site_type": (
         "site_type is one canonical type: the most specific one that holds what the sources say "
@@ -178,7 +181,9 @@ FIELD_RULES = {
         "else in another language, else a heritage register entry or a scholarly page.\n"
         "- keep: the stored page is about this site. value = the stored URL, unchanged.\n"
         "- replace: another page is about this site. value = its URL - the article's own URL, not "
-        "a redirect, a section link, a search or a translation proxy.\n"
+        "a redirect, a section link (no #...), a search or a translation proxy - written "
+        "percent-encoded, as a browser's address bar copies it (\"https://de.wikipedia.org/wiki/"
+        'G%C3%B6bekli_Tepe", not "Göbekli_Tepe"); check-answer prints the form it wants.\n'
         "- clear: no page about this site can be found. The field is emptied.\n"
         "For keep and replace, at least one quote is from the value's page itself and names the "
         "site; a second quote, from an independent source family, names it too."
@@ -189,12 +194,13 @@ KNOWN_FETCH_TROUBLE = (
     "## Pages the quote check cannot read\n"
     "\n"
     "The checker fetches each page once with a plain GET and no browser. From this workstation it "
-    "has been refused by Historic England's list and the Heritage Gateway (403), the Megalithic "
+    "has been refused by Historic England's list and the Heritage Gateway (403) and by the UNESCO "
+    "World Heritage Centre (whc.unesco.org answers it with a bot challenge, 403), the Megalithic "
     "Portal (megalithic.co.uk) did not answer it (all 46 pages asked on 2026-09-26 timed out or "
     "gave 503), and it cannot read scanned PDFs or pages that build their text with scripts. "
-    "Wikipedia (every language), Wikidata, UNESCO, Pleiades and most national registers and "
-    "museum pages work. Prefer pages that show their text as plain HTML; a quote from a page the "
-    "checker cannot read does not count.\n"
+    "Wikipedia (every language), Wikidata, Pleiades and most national registers and museum pages "
+    "work. Prefer pages that show their text as plain HTML; a quote from a page the checker "
+    "cannot read does not count.\n"
 )
 
 ANSWER_FORMAT = (
@@ -471,7 +477,7 @@ def _value_page_problem(value: str, pages: Path, net: Fetcher | None) -> str | N
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     if meta["status"] is None or not 200 <= int(meta["status"]) < 300:
         return f"the value's page was not served: {meta['error'] or 'HTTP ' + str(meta['status'])}"
-    if not C._same_page(value, str(meta["final_url"])):
+    if not C.same_page(value, str(meta["final_url"])):
         return f"the value's page redirects to {meta['final_url']}"
     titled = wikipedia_title(value)
     if titled is None:

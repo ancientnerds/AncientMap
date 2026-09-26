@@ -26,13 +26,17 @@ Per field, beyond the shape (every rule here needs no page - `check_shape`):
   coarser than whole arcminutes (`MAX_GRID`).
 * **period_start** - an integer year, negative for BC. keep: the stored value's bucket
   (`categorize_period`); replace: another bucket, or any year when the stored value is empty. Every
-  quote must carry a date - a digit, or a century or millennium word (`DATE_WORDS`).
+  quote must carry a date - a digit, or a century or millennium word (`DATE_WORDS`) - and at
+  least one must state the value itself (`states_year`: its year, or its century or millennium).
 * **site_type** - one canonical type (`CANONICAL_TYPES`, a fixed point of `normalize_site_type`).
   keep: the stored type; replace: another. At least one quote must hold a word of the type
-  (`type_stems`: each word of the type cut to its stem, found in the folded quote).
+  (`type_stems`: each word of the type cut to its stem, found where a word of the folded quote
+  begins - `holds_stem`).
 * **source_url** - an http(s) URL that is public, not production, not a search or translation URL
-  (`harvest.url_kind`). keep: the stored URL; replace: another. At least one quote is from the
-  value's page itself, and at least one quote names the site (`classify.names_it`).
+  (`harvest.url_kind`), without a `#fragment` (a section link), written as httpx sends it
+  (`classify.url_form`: percent-encoded, the host in lower case). keep: the stored URL; replace: another. At least one quote is from the
+  value's page itself, and at least one quote names the site (`classify.names_it`: a distinctive
+  word of the name, the whole name when it has none, or the item's English label or an alias).
 
 What needs the pages - every quote found verbatim (`opus_audit/quotes.py`), and the value page of a
 source_url served and not redirected elsewhere - is `handoff.import_rounds`.
@@ -44,6 +48,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from acceptance.answers import AnswerError, _point, _quotes, _year, load_object, source_family
 from bcases.classify import fold, grid_name, grid_of
@@ -86,6 +91,36 @@ DATE_WORDS = frozenset(
 )  # fmt: skip
 #: Words of a canonical type that name no kind of site.
 TYPE_STOPWORDS = frozenset({"and", "of", "the", "complex", "structures"})
+#: The words that make a number a century or a millennium, folded (`fold`: no accents, no case,
+#: no punctuation): "the 5th century BC", "au Ve siecle", "siglo V", "das 3. Jahrtausend". "c" and
+#: "cent" are the abbreviations "5th c." and "5th cent.".
+CENTURY_WORDS = frozenset(
+    {
+        "century", "centuries", "c", "cent", "siecle", "siecles", "secolo", "secoli", "siglo",
+        "siglos", "seculo", "seculos", "jahrhundert", "jahrhunderts", "eeuw", "wiek",
+    }
+)  # fmt: skip
+MILLENNIUM_WORDS = frozenset(
+    {
+        "millennium", "millennia", "millenaire", "millenaires", "millennio", "millenni",
+        "milenio", "milenios", "jahrtausend", "jahrtausends", "tysiaclecie",
+    }
+)  # fmt: skip
+#: A number of a century or millennium may stand this many words before its word ("the 5th or
+#: 4th century") or one word after it ("siglo V").
+ORDINAL_REACH = 3
+ORDINAL_WORDS = (
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+    "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth",
+    "seventeenth", "eighteenth", "nineteenth", "twentieth",
+)  # fmt: skip
+ORDINAL_SUFFIXES = ("", "st", "nd", "rd", "th", "e", "er", "eme", "o", "a")
+_ROMAN = (
+    (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"),
+    (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+)  # fmt: skip
+#: A digit group separator between thousands: "3,000", "3.000", "3 000" (also no-break spaces).
+_THOUSANDS = re.compile(r"(?<=\d)[,.\u00a0\u202f\u2009 ](?=\d{3}(?!\d))")
 
 
 @dataclass(frozen=True)
@@ -171,10 +206,63 @@ def dated(quote: str) -> bool:
     return bool(set(fold(quote, keep_parentheses=True).split()) & DATE_WORDS)
 
 
+def _roman(number: int) -> str:
+    out = ""
+    for value, letters in _ROMAN:
+        while number >= value:
+            out += letters
+            number -= value
+    return out
+
+
+def ordinal_forms(number: int) -> frozenset[str]:
+    """How a folded text writes the n-th century or millennium: `5`, `5th`, `5e`, `v`, `ve`,
+    `fifth`."""
+    forms = {f"{number}{suffix}" for suffix in ORDINAL_SUFFIXES}
+    forms |= {_roman(number) + suffix for suffix in ("", "e", "er", "eme")}
+    if number <= len(ORDINAL_WORDS):
+        forms.add(ORDINAL_WORDS[number - 1])
+    return frozenset(forms)
+
+
+def _names_ordinal(words: Sequence[str], number: int, unit: frozenset[str]) -> bool:
+    forms = ordinal_forms(number)
+    for at, word in enumerate(words):
+        if word not in forms:
+            continue
+        after = words[at + 1 : at + 1 + ORDINAL_REACH]
+        if unit & set(after) or (at and words[at - 1] in unit):
+            return True
+    return False
+
+
+def states_year(quote: str, year: int) -> bool:
+    """Whether the quote states `year` itself: the year as a whole number (thousands separators
+    read), or its century or millennium - a number (arabic, Roman, an English ordinal word) beside
+    a century or millennium word. The n-th century BC runs from n x 100 BC to (n-1) x 100 + 1 BC
+    (the prompt's "the 8th century BC" -> -800), the n-th AD from (n-1) x 100 + 1."""
+    number = abs(year)
+    digits = _THOUSANDS.sub("", quote)
+    if number and re.search(rf"(?<!\d){number}(?!\d)", digits):
+        return True
+    words = fold(quote, keep_parentheses=True).split()
+    century = max(1, (number - 1) // 100 + 1)
+    millennium = max(1, (number - 1) // 1000 + 1)
+    return _names_ordinal(words, century, CENTURY_WORDS) or _names_ordinal(
+        words, millennium, MILLENNIUM_WORDS
+    )
+
+
 def type_stems(site_type: str) -> list[str]:
     """The stems of the words of a canonical type: `Mound/tumulus` -> `moun`, `tumul`."""
     words = [w for w in re.split(r"[/, ]+", site_type.casefold()) if w]
     return [w[: max(4, len(w) - 2)] for w in words if w not in TYPE_STOPWORDS]
+
+
+def holds_stem(quote: str, stem: str) -> bool:
+    """Whether a word of the folded quote begins with `stem` ("temp" in "Tempelanlage", not in
+    "contemporary")."""
+    return re.search(r"(?<!\w)" + re.escape(stem), fold(quote, keep_parentheses=True)) is not None
 
 
 def _check_coordinates(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
@@ -217,6 +305,11 @@ def _check_period(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
     for url, quote in answer.quotes:
         if not dated(quote):
             raise AnswerError(f"period_start: the quote on {url} carries no date")
+    if not any(states_year(quote, year) for _, quote in answer.quotes):
+        raise AnswerError(
+            f"period_start: no quote states {year} itself - its year, or its century or "
+            "millennium with that word"
+        )
 
 
 def _check_site_type(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
@@ -229,22 +322,38 @@ def _check_site_type(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
     if answer.decision == REPLACE and value == stored:
         raise AnswerError(f"site_type: replace, but {value!r} is the stored type - that is keep")
     stems = type_stems(value)
-    if not any(s in fold(q, keep_parentheses=True) for _, q in answer.quotes for s in stems):
+    if not any(holds_stem(q, s) for _, q in answer.quotes for s in stems):
         raise AnswerError(f"site_type: no quote holds a word of {value!r} ({', '.join(stems)})")
+
+
+def _page_of(url: str) -> str:
+    """The page a quote URL or a value names: `&amp;` read as `&`, then httpx's form."""
+    return C.url_form(Q.canonical_url(url)[0])
 
 
 def _check_source_url(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
     value = str(answer.value)
     if H.url_kind(value) not in (H.URL_WIKIPEDIA, H.URL_WEB) or Q.not_fetchable(value):
         raise AnswerError(f"source_url: {value!r} is not a public page about a site")
+    fragment = urlsplit(value).fragment
+    if fragment:
+        raise AnswerError(
+            f"source_url: {value!r} is a section link - give the page's own URL, without "
+            f"#{fragment}"
+        )
+    if C.url_form(value) != value:
+        raise AnswerError(
+            "source_url: write the URL as it is sent, percent-encoded (a non-ASCII character or a "
+            f"space as %XX, the host in lower case): {C.url_form(value)}"
+        )
     stored = line["fields"]["source_url"]["stored"]
     if answer.decision == KEEP and value != stored:
         raise AnswerError(f"source_url: keep, but {value!r} is not the stored URL")
     if answer.decision == REPLACE and value == stored:
         raise AnswerError("source_url: replace, but the value is the stored URL - that is keep")
-    if not any(Q.canonical_url(url)[0] == Q.canonical_url(value)[0] for url, _ in answer.quotes):
+    if not any(_page_of(url) == value for url, _ in answer.quotes):
         raise AnswerError("source_url: no quote is from the value's own page")
-    if not any(C.names_it(str(line["name"]), q) for _, q in answer.quotes):
+    if not any(C.names_it(str(line["name"]), q, line["item_names"]) for _, q in answer.quotes):
         raise AnswerError(f"source_url: no quote names the site ({line['name']!r})")
 
 

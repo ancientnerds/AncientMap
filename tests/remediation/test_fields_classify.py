@@ -19,6 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+from bcases.web_witness import distinctive_words  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import harvest as H  # noqa: E402
 
@@ -125,8 +126,21 @@ class TestCoordinates:
         assert status.status == C.CONFLICT and "km from wikidata P625" in status.reason
 
     def test_a_coarse_p625_widens_its_own_tolerance(self) -> None:
+        # 3 km from the stored point, written in tenths of a degree (half a step: about 5.6 km)
         coarse = entity(point=(37.99, 23.75), precision=0.1)
-        assert C.classify_coordinates(self.STORED, coarse, None, NO_DOUBT, 0).status == C.CONFIRMED
+        article = {"lat": 37.9716, "lon": 23.7266, "globe": "earth"}
+        assert (
+            C.classify_coordinates(self.STORED, coarse, article, NO_DOUBT, 0).status == C.CONFIRMED
+        )
+
+    def test_one_witness_confirms_nothing(self) -> None:
+        # WD1's rule: CONFIRMED needs Wikidata's and Wikipedia's points to agree - the stored point
+        # is often a copy of the one P625, so one witness beside it proves nothing
+        alone = C.classify_coordinates(self.STORED, entity(), None, NO_DOUBT, 0)
+        assert alone.status == C.MISSING and alone.reason.startswith("one source point")
+        article = {"lat": 37.9716, "lon": 23.7266, "globe": "earth"}
+        only = C.classify_coordinates(self.STORED, entity(point=None), article, NO_DOUBT, 0)
+        assert only.status == C.MISSING and "enwiki coordinates" in only.reason
 
     def test_two_witnesses_that_disagree_are_a_conflict(self) -> None:
         # each within 1 km of the stored point, 1.7 km from each other
@@ -294,6 +308,27 @@ class TestSourceUrl:
         benign = self.record(redirected=True, resolved_title="Hephaestus Temple")
         assert self.status(benign).status == C.CONFIRMED
 
+    def test_a_name_without_a_distinctive_word_is_read_whole(self) -> None:
+        site = {"name": "Huaca del Sol", "qid": "Q1"}
+        item = entity(sitelinks={"enwiki": "Huaca del Sol"})
+        redirect = self.record(
+            title="Huaca Del Sol", redirected=True, resolved_title="Huaca del Sol"
+        )
+        assert C.classify_source_url(site, redirect, item, NO_DOUBT).status == C.CONFIRMED
+        other = self.record(redirected=True, resolved_title="Huaca de la Luna")
+        assert C.classify_source_url(site, other, item, NO_DOUBT).status == C.CONFLICT
+        page = {"site_id": SITE, "source_url": "https://a.example/x", "kind": H.URL_WEB,
+                "status": 200, "final_url": "https://a.example/x",
+                "page_title": "Huaca del Sol - Moche"}  # fmt: skip
+        assert C.classify_source_url(site, page, item, NO_DOUBT).status == C.CONFIRMED
+
+    def test_the_item_s_label_names_the_site(self) -> None:
+        site = {"name": "Archaeological Site of the Tombs of the Kings", "qid": "Q1"}
+        item = {**entity(sitelinks={"enwiki": "Tombs of the Kings (Paphos)"}),
+                "labels": {"en": {"value": "Tombs of the Kings"}}}  # fmt: skip
+        redirect = self.record(redirected=True, resolved_title="Tombs of the Kings (Paphos)")
+        assert C.classify_source_url(site, redirect, item, NO_DOUBT).status == C.CONFIRMED
+
     def test_the_island_s_article_is_a_conflict(self) -> None:
         status = self.status(self.record(), who=C.Identity(True, ("island",)))
         assert status.status == C.CONFLICT and "island" in status.reason
@@ -328,6 +363,25 @@ class TestSourceUrl:
         record = {"site_id": SITE, "source_url": "http://a.example/x", "kind": H.URL_WEB, **page}
         assert self.status(record).status == expected
 
+    def test_a_percent_encoded_url_is_the_same_page(self) -> None:
+        # httpx records the final URL percent-encoded: a non-ASCII title is not a redirect
+        raw = "https://de.wikipedia.org/wiki/Göbekli_Tepe"
+        served = "https://de.wikipedia.org/wiki/G%C3%B6bekli_Tepe"
+        assert C.same_page(raw, served) and C.same_page(served, served)
+        assert C.same_page("https://en.wikipedia.org/wiki/King's_Quoit",
+                           "https://en.wikipedia.org/wiki/King%27s_Quoit")  # fmt: skip
+        assert not C.same_page(raw, "https://de.wikipedia.org/wiki/Nevali_Cori")
+        page = {"site_id": SITE, "source_url": raw, "kind": H.URL_WEB, "status": 200,
+                "final_url": served, "page_title": "Temple of Hephaestus"}  # fmt: skip
+        assert self.status(page).status == C.CONFIRMED
+
+    def test_a_stored_section_link_is_a_conflict(self) -> None:
+        linked = self.record(
+            source_url="https://en.wikipedia.org/wiki/Temple_of_Hephaestus#History"
+        )
+        status = self.status(linked)
+        assert status.status == C.CONFLICT and "a section link" in status.reason
+
     def test_no_url_is_asked_for_and_a_search_url_is_a_conflict(self) -> None:
         # HUMAN_ONLY_DECISIONS B3: an empty source_url gets a sourced URL of the site, or stays empty
         none = {"site_id": SITE, "source_url": None, "kind": H.URL_NONE}
@@ -347,6 +401,8 @@ class TestTheRun:
         (root / H.SITES_FILE).write_text(json.dumps(site) + "\n", encoding="utf-8")
         H._write_json(H.entity_path(root, "Q1"), entity(point=(37.9755, 23.7215),
                                                         sitelinks={"enwiki": "Temple of Hephaestus"}))  # fmt: skip
+        H._write_json(H.enwiki_path(root, "Q1"), {"qid": "Q1", "sitelink": "Temple of Hephaestus",
+                                                  "lat": 37.9756, "lon": 23.7214, "globe": "earth"})  # fmt: skip
         H._write_json(root / H.CLASSES_FILE, {"Q44539": {"label": "temple", "p279": []}})
         H._write_json(H.url_path(root, SITE), TestSourceUrl().record())
 
@@ -469,3 +525,27 @@ class TestTheRun:
         assert C.names_it("Nea Paphos", "Paphos Archaeological Park")
         assert not C.names_it("Temple of Apollo", "a temple")
         assert not C.names_it("Temple of Apollo", None)
+
+    def test_names_it_reads_a_name_without_a_distinctive_word_whole(self) -> None:
+        # 169 live names have no distinctive word (measured 2026-09-26): every word is generic or a
+        # type word - "Huaca del Sol", "Seven Barrows", "Kul-Oba". The whole folded name, as a
+        # phrase, names the site; its words scattered, or inflected, do not
+        assert distinctive_words("Huaca del Sol") == []
+        assert C.names_it("Huaca del Sol", "The Huaca del Sol is an adobe brick temple")
+        assert C.names_it("Kul-Oba", "The Kul Oba kurgan near Kerch")
+        assert not C.names_it("Huaca del Sol", "the sol above the huaca")
+        assert not C.names_it("Huaca del Sol", "Huacas del Sol y de la Luna")
+
+    def test_names_it_reads_the_item_s_own_label_and_aliases_as_phrases(self) -> None:
+        name = "Archaeological Site of the Tombs of the Kings"
+        assert not C.names_it(name, "Tombs of the Kings (Paphos)")
+        assert C.names_it(name, "Tombs of the Kings (Paphos)", also=["Tombs of the Kings"])
+        item = {
+            **entity(),
+            "labels": {"en": {"value": "Tombs of the Kings"}, "fr": {"value": "Tombeaux"}},
+            "aliases": {"en": [{"value": "Royal Tombs"}, {"value": "Tombs of the Kings"}]},
+        }
+        assert C.item_names(item, NO_DOUBT) == ["Tombs of the Kings", "Royal Tombs"]
+        # the island's label names the island, not the site
+        assert C.item_names(item, C.Identity(True, ("island",))) == []
+        assert C.item_names(None, NO_DOUBT) == []
