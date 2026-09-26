@@ -987,7 +987,8 @@ fields section 6 lists. What the design left open, and how the writer settled it
      (the proof) and removes `STEP.json`. A row still live refuses the whole close. Until the step
      is accepted or closed, its batches are frozen: `--round` does not re-open them.
   2. `write_gate4.py --group <G> --run <run> --apply --round 2 --step 100` (the same `--round` for
-     every step of the second sitting). A batch applied in round 1 is re-opened on the proof (its
+     every step of the second sitting; `<G>` is P4 - group P5 rehearses and writes nothing for any
+     run since 2026-09-26, section 12). A batch applied in round 1 is re-opened on the proof (its
      round-1 record kept as in 1), and chunk-0002 is rendered and written. A round the batch cannot
      take is refused with `WRITE_EXIT=1`, never skipped: `--round 3` over a round-1 batch, `--round
      2` for a batch never written (name the reverted batches with `--batch`, or write the others
@@ -1381,12 +1382,25 @@ its card is lane WB's (O2, O3). The runbook, with the measured population and ev
 - **`plan4.py build --scope-list` is repeatable** (the union, each site once, in the plan's order)
   and takes `--first-batch N` (required; replaces the constant p4-0901): the block must lie past
   every `--after` ordinal and outside lane L's (`plan4.legacy_block`: p4-1001 .. p4-1334 for the
-  5,004 curated sites). `--exclude FILE` leaves sites out (UUIDs, each a curated row; the summary
-  prints a count and the file's sha256, never the ids). `--take-deferred RUN_DIR` plans the sites a
-  run deferred `revision-too-fresh` in their latest batch although an `--after` plan carries them
-  (`mass4.ready_to_hand_over`: refused while one still waits for its 48 h, or once the run re-queued
-  one itself; each must be in a listed list and carried by an `--after` plan - the deferring run's
-  plan must be named, or its other sites would be planned twice).
+  5,004 curated sites). `--exclude FILE` leaves sites out (read by phase 3's one reader of a
+  site-id list, `snapshot_plan.read_site_ids(uuids=True)`: a lowercase UUID per line, no blank
+  line, no repeat, each a curated row; the summary prints a count and the file's sha256, never the
+  ids; `write_gate4 --audited` reads through it too). `--take-deferred RUN_DIR` plans the sites a
+  run deferred `revision-too-fresh` in their latest batch although the deferring run's plan carries
+  them (`mass4.ready_to_hand_over`: refused while one still waits for its 48 h, or once the run
+  re-queued one itself; each must be in a listed list and carried by exactly one `--after` plan, in
+  the batch the run deferred it in - the deferring run's plan must be named, or its other sites
+  would be planned twice, and no other plan may carry it, or it would be planned a third time).
+- **A list plan plans no site twice** (second review of lane WA, 2026-09-26). Before anything is
+  written, `plan4.carried_problems` reads every run directory under `--run-root` (default
+  `phase4_runner/runs`) but `plan4.UNWRITTEN_RUNS` - the census and pilots 1-3, which never wrote
+  (production's journal holds `phase4:` rows of pilot 4, the mass run and D9 only) - through
+  `mass4.prepared_lines`, and the P4 apply root's plans (`--apply-root`, the live and the kept
+  rounds). Refused: a site a run carries in another batch than this plan's (a rebuild of the plan a
+  run was driven from passes; the deferring run's copy of a handed site and a run's re-queue batches
+  do not count), and a site the apply root plans from a run the check cannot see. So v3d built
+  without `--after PLAN4.v3.jsonl` is refused (the v3 run carries the 3,124 sites), before any P4
+  write could replace the first run's text; the summary names `runs_read`.
 - **The two v3 plans** (measured 2026-09-26 from a fresh read, `PHASE4_V3_RUNBOOK.md`): `PLAN4.v3.jsonl`,
   3,238 sites in 216 batches, p4-2001 .. p4-2216 (`--after` the mass and D9 plans); and
   `PLAN4.v3d.jsonl` for the mass run's 19 `revision-too-fresh` sites, due 2026-09-26T21:30:14Z ..
@@ -1415,12 +1429,18 @@ its card is lane WB's (O2, O3). The runbook, with the measured population and ev
   order. Two runs that both could have written it stay refused.
 - **The handoff at scale** (O11, 16 agents): `phase4/handoff4.py` - `brief` prints one batch agent's
   whole instruction for the selector or the reviewer (only its prompt files, no web, drafts in its
-  own `<handoff>-scratch/<batch>/`, `--answered-by opus-<handoff name>-<batch>`); `check-answer`
-  reads a draft through the stage's own parser against the batch's own pool or assembly, after
-  proving the batch still builds the exported prompt, and asks a review for every shown sentence and
-  the CARD line once; `ready --run-dir` names the batches whose every question is answered in
-  shape, lists a named batch of the run that asked nothing (no folder: every site held before the
-  stage) apart without waiting for it, and refuses a name that is no batch of the run. Agents
+  own `<handoff>-scratch/<batch>/`, recorded with `record` under `opus-<handoff name>-<batch>`);
+  `check-answer` reads a draft through the stage's own parser against the batch's own pool or
+  assembly, after proving the batch still builds the exported prompt, and asks a review for every
+  shown sentence and the CARD line once; `record` is the one way an agent records an answer - the
+  check first, a problem printed and nothing written, else `opus_handoff.write_answer` (second
+  review of 2026-09-26: agents that recorded through `opus_handoff.py answer` left three selections
+  the import refuses, whose corrected drafts could no longer be recorded); `ready --run-dir` names
+  the batches whose every question is answered in shape and whose every recorded answer passes the
+  check again (`shape_problems`: an answer recorded by any other path, or one to a batch that moved
+  since its export, keeps its batch out and `ok` false), lists a named batch of the run that asked
+  nothing (no folder: every site held before the stage) apart without waiting for it, and refuses a
+  name that is no batch of the run. Agents
   answer different batches of one directory at once; `mass4` import rounds stay one at a time
   (`--only` the ready batches); `mass4`'s dry run prints the done batches (`done` line) the write
   gate may plan.
@@ -1436,5 +1456,16 @@ its card is lane WB's (O2, O3). The runbook, with the measured population and ev
   refuse it as P4's), lane WC `phase4wc:%`. WC and WB take only final sites: a site of a v3 batch
   not yet written, or held `revision-too-fresh` (it comes back through the re-queue), is still
   Phase 4's, and another lane's write would stop its batch at the preflight.
+- **Group P5 writes no card for any run** (owner decisions O2, O3; second review of lane WA,
+  2026-09-26). The descriptions-only refusal covered only a v3 plan's sites: `write_gate4 --group P5
+  --run mass-2026-09-25 --apply --round 2` after a revert4 of a P5 step would have written the mass
+  run's extractive cards again. `write_gate4.closed_group_problem` refuses `--rehearse` and
+  `--apply` of group P5 for every run; its dry run, `--accept` and `--close-reverted` remain.
+- **The audit's written list is the run's own** (`audit4.py written --run-dir R --apply-root A`,
+  second review of 2026-09-26): per batch directory of the run with a live `APPLIED.json` in the
+  apply root (`write4.APPLIED_FILE`), the sites of its write batch's `PLAN.jsonl`, less the sites the
+  run holds since (an audit hold); a write batch of the same id another run wrote is refused. It
+  replaces the runbook's glob over `p4-2*`, which also matched v3d's batches and kept taken-back
+  sites, so `audit4 draw` refused mid-run.
 - **Not built** (owner decisions 2026-09-26): the design's clearing group C (lanes WC and WB take the
   held texts), and the exclusion of an acceptance draw (O1: no acceptance any more).

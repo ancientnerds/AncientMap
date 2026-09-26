@@ -53,7 +53,11 @@ of the selector among source sentences, not text anybody writes:
 (`docs/procedures/FIELD_CONTRACT.md` section 2.3): every API boot upserts each key it carries into
 `card_stats` (`api/services/card_descriptions.py`, and it logs every non-empty value it replaces as
 `[STARTUP] Card description overwritten`). A normal blob, not LFS. Hence one order, in one sitting,
-and only once Martin confirms he pushes straight afterwards (design, production_write step 3):
+and only once Martin confirms he pushes straight afterwards (design, production_write step 3). **Since
+2026-09-26 no P5 sitting takes place**: every card is lane WB's teaser (owner decisions O2, O3), and
+`write_gate4.py --group P5` refuses `--rehearse` and `--apply` for every run, a round 2 included
+(its dry run, `--accept` and `--close-reverted` remain). The steps below record how the extractive
+cards were written:
 
 1. backup drill: `scripts/remediation/00_backup_and_drill.sh` with `DO_DRILL=1` on the VPS, judged
    by its printed `VERDICT` line;
