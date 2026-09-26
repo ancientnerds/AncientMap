@@ -85,8 +85,8 @@ class Fetcher:
         transport: httpx.BaseTransport | None = None,
         user_agent: str = USER_AGENT,
     ) -> None:
-        """`user_agent` is the census's own by default. A lane that must not send a contact
-        address (the fields harvest, `fields/harvest.py`) names its own."""
+        """`user_agent` is the census's own by default. A lane that must send no personal data
+        (the fields harvest, `fields/harvest.py`) names its own."""
         self.root = Path(root)
         self.workers = workers
         self.max_retries = max_retries

@@ -2,8 +2,8 @@
 
 DB-less and offline: production is a fake reader, the web an `httpx.MockTransport` behind the
 harvest's own clients. What is pinned: the SITES.jsonl contract, the sample, resumability (a file is
-fetched once), a merged item, the source-URL records of every kind, and the transport that carries
-the plain User-Agent past Wikimedia's and UNESCO's refusal of httpx's own handshake.
+fetched once), a merged item, the source-URL records of every kind, and the one User-Agent both
+clients send.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from typing import Any
 
 import httpx
 import pytest
-import requests
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
@@ -23,7 +22,6 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 
 from census.fetch import Fetcher  # noqa: E402
 from fields import harvest as H  # noqa: E402
-from fields import transport as T  # noqa: E402
 
 A_ID = "0025b0ba-fd74-4c08-96e3-acc17956aa44"
 B_ID = "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6"
@@ -62,7 +60,7 @@ class TestTheSites:
         assert result == {"sites": 2, "curated": 2, "retired": 1, "with_qid": 2}
         assert [s["site_id"] for s in H.read_sites(tmp_path)] == [A_ID, B_ID]
         meta = json.loads((tmp_path / H.META_FILE).read_text(encoding="utf-8"))
-        assert meta["user_agent"] == "AncientMapRemediation/1.0 (research)"
+        assert meta["user_agent"] == H.USER_AGENT
         assert meta["sample"] is None and "site_external_ids" in meta["sql"]
 
     def test_an_empty_export_is_refused(self, tmp_path: Path) -> None:
@@ -291,59 +289,21 @@ class TestTheUrlKinds:
         assert H.page_title(b"<html></html>", None) is None
 
 
-class TestTheTransport:
-    """The User-Agent without a contact address is refused by Wikimedia on httpx's own TLS
-    handshake (ALPN) and by UNESCO on httpx's request (measured 2026-09-26); the transport sends
-    through urllib3 and hands httpx the body as it came off the wire."""
+class TestTheAgent:
+    """The harvest and the quote check send one User-Agent: descriptive, with the project's public
+    URL as its contact (Wikimedia's policy), and no personal data - no e-mail address, no name.
+    Wikimedia answers an agent without a contact with `403 Please respect our robot policy`
+    (measured 2026-09-26 with httpx); this one gets 200. A host that refuses it (UNESCO's Cloudflare
+    challenge, Historic England's 403) is recorded as unreadable, never worked around."""
 
-    def test_the_request_leaves_through_requests_with_the_client_s_headers(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        seen: dict[str, Any] = {}
+    def test_the_agent_names_the_project_and_carries_no_personal_data(self) -> None:
+        assert H.USER_AGENT == "AncientMapRemediation/1.0 (https://ancientnerds.com; research)"
+        assert "@" not in H.USER_AGENT
 
-        class Raw:
-            headers = {"Content-Type": "text/plain", "Content-Encoding": "identity"}
-
-            def read(self, decode_content: bool) -> bytes:
-                seen["decode_content"] = decode_content
-                return b"hello"
-
-        class Answer:
-            status_code = 200
-            raw = Raw()
-
-            def close(self) -> None:
-                seen["closed"] = True
-
-        def request(self: Any, method: str, url: str, **kw: Any) -> Answer:
-            seen.update(method=method, url=url, **kw)
-            return Answer()
-
-        monkeypatch.setattr(requests.Session, "request", request)
-        with httpx.Client(
-            transport=T.RequestsTransport(), headers={"User-Agent": H.USER_AGENT}
-        ) as c:
-            response = c.get("https://www.wikidata.org/w/api.php?a=1")
-        assert response.text == "hello"
-        assert seen["headers"]["user-agent"] == H.USER_AGENT
-        assert "host" not in {k.lower() for k in seen["headers"]}
-        assert seen["allow_redirects"] is False and seen["stream"] is True
-        assert seen["decode_content"] is False and seen["closed"] is True
-
-    @pytest.mark.parametrize(
-        ("raised", "expected"),
-        [
-            (requests.Timeout("slow"), httpx.TimeoutException),
-            (requests.ConnectionError("reset"), httpx.ConnectError),
-            (requests.TooManyRedirects("loop"), httpx.TransportError),
-        ],
-    )
-    def test_a_failure_is_the_httpx_error_of_its_kind(
-        self, monkeypatch: pytest.MonkeyPatch, raised: Exception, expected: type
-    ) -> None:
-        def request(self: Any, method: str, url: str, **kw: Any) -> Any:
-            raise raised
-
-        monkeypatch.setattr(requests.Session, "request", request)
-        with httpx.Client(transport=T.RequestsTransport()) as c, pytest.raises(expected):
-            c.get("https://a.example/")
+    def test_both_clients_send_it_through_httpx_s_own_transport(self, tmp_path: Path) -> None:
+        with H.open_client() as client:
+            assert client.headers["User-Agent"] == H.USER_AGENT
+            assert type(client._transport) is httpx.HTTPTransport
+        with H.open_fetcher(tmp_path) as net:
+            assert net._client.headers["User-Agent"] == H.USER_AGENT
+            assert type(net._client._transport) is httpx.HTTPTransport

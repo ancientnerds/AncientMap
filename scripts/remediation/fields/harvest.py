@@ -31,7 +31,8 @@ other-language sitelink pilot failed its threshold and wrote nothing. So the exp
 from `site_external_ids` and nowhere else.
 
 **Read-only, everywhere.** Production is asked one `SELECT` (`export`); the web is asked with GET
-only, with the User-Agent `USER_AGENT` - no contact address, no name. Wikimedia API answers go
+only, through httpx, with the User-Agent `USER_AGENT` - the project's public URL as its contact
+(Wikimedia's User-Agent policy), no personal data. Wikimedia API answers go
 through `census.fetch.Fetcher` (its cache, its retry and back-off) and `bcases.collect.api_json`
 (an API error in a 200 raises; a transient one is asked again), one request at a time, `pace`
 seconds apart. Other hosts are asked once each, `pace` seconds apart per host. **Resumable:** every
@@ -41,7 +42,14 @@ to a temporary name and renamed).
 
 A failed Wikimedia request raises and stops the run - nothing is recorded as absent that was not
 answered as absent. A source page that cannot be read is recorded with its status or error: that is
-the finding (`classify.py` reads a 404 as dead, a 403 as unverifiable by machine).
+the finding (`classify.py` reads a 404 as dead, a 403 as unverifiable by machine). A host behind bot
+protection is not worked around: whc.unesco.org answers httpx with a Cloudflare challenge (403 "Just
+a moment...", measured 2026-09-26) and is recorded as that 403, like Historic England's refusal.
+
+**The agent, measured 2026-09-26 (httpx, this workstation).** Wikimedia answers an agent without a
+contact (`AncientMapRemediation/1.0 (research)`) with `403 Please respect our robot policy` on the
+API and on the article pages alike; `USER_AGENT`, which names the project's public site, gets 200
+from en/de.wikipedia (API and pages) and www.wikidata.org. curl got 200 with both agents.
 """
 
 from __future__ import annotations
@@ -78,15 +86,15 @@ from census.fetch import Fetcher, chunked  # noqa: E402
 from mechanical.plan import _claims, psql_json_reader  # noqa: E402
 from phase4.route_stage import wikipedia_title  # noqa: E402 - `(lang, title)` of an article URL
 
-from fields.transport import RequestsTransport  # noqa: E402 - why: its docstring
 from pipeline.lyra.prospector.wiki import CONTROL_RE  # noqa: E402 - migration 0023's control set
 from pipeline.utils.http import is_public_http_url  # noqa: E402 - Lyra's own SSRF check
 
 log = logging.getLogger("fields.harvest")
 
-#: The only User-Agent this harvest sends (FINISH_PLAN standing rule: no personal data in any web
-#: request). Wikimedia asks for a descriptive agent; this one says what it is.
-USER_AGENT = "AncientMapRemediation/1.0 (research)"
+#: The only User-Agent the WD1 lane sends - the harvest and the quote check alike. The FINISH_PLAN
+#: standing rule allows no personal data in any web request (no e-mail address, no name); Wikimedia's
+#: User-Agent policy asks for a contact, so the agent names the project's public site.
+USER_AGENT = "AncientMapRemediation/1.0 (https://ancientnerds.com; research)"
 DEFAULT_ROOT = REPO / "output" / "remediation" / "fields" / "harvest"
 
 SITES_FILE = "SITES.jsonl"
@@ -579,25 +587,15 @@ def fetch_urls(
 
 # ------------------------------------------------------------------------------ the run
 def open_fetcher(root: Path) -> Fetcher:
-    """The Wikimedia API client: the census Fetcher, with this harvest's cache and agent, sending
-    through `RequestsTransport` (Wikimedia refuses httpx's own TLS handshake with this agent)."""
-    return Fetcher(
-        root / CACHE,
-        workers=1,
-        timeout=TIMEOUT_SECONDS,
-        transport=RequestsTransport(TIMEOUT_SECONDS),
-        user_agent=USER_AGENT,
-    )
+    """The Wikimedia API client: the census Fetcher, with this harvest's cache and agent."""
+    return Fetcher(root / CACHE, workers=1, timeout=TIMEOUT_SECONDS, user_agent=USER_AGENT)
 
 
 def open_client() -> httpx.Client:
-    """The client for the stored source pages: this harvest's agent, redirects followed, through
-    `RequestsTransport` like the API client."""
+    """The client for the stored source pages and the quoted pages: this lane's agent, redirects
+    followed."""
     return httpx.Client(
-        headers={"User-Agent": USER_AGENT},
-        follow_redirects=True,
-        timeout=TIMEOUT_SECONDS,
-        transport=RequestsTransport(TIMEOUT_SECONDS),
+        headers={"User-Agent": USER_AGENT}, follow_redirects=True, timeout=TIMEOUT_SECONDS
     )
 
 
