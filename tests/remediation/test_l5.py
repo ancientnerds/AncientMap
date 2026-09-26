@@ -820,3 +820,41 @@ class TestTheWeb:
             params["ppprop"] == "wikibase_item|disambiguation"
             and params["titles"] == "Mundo Perdido"
         )
+
+
+class TestTheNamePlan:
+    def test_a_rename_that_keeps_the_key_writes_the_name_alone(self) -> None:
+        rename = {"verdict": "RENAME", "old": "Tikal", "new": "TIKAL", "why": "w",
+                  "quotes": [q(WP + "Tikal", "TIKAL")], "note": ""}  # fmt: skip
+        built = L5P.build(
+            [decided(name=rename)],
+            {TIKAL: site()},
+            live(site(), keys={"TIKAL": "tikal"}),
+            pinned={},
+        )
+        assert [(v.column, v.new_value) for v in built.names] == [("name", "TIKAL")]
+
+    def test_the_name_lane_files_are_the_mechanical_lane_s(self, tmp_path: Path) -> None:
+        built = L5P.build([], {}, live(ZOQUE_ROW, keys={"Chiapa de Corzo": "chiapa de corzo"}))
+        plan = L5P.name_plan(built, NOW)
+        L5P.write_names(plan, tmp_path)
+        records = A.load_records(tmp_path / "PLAN.jsonl")
+        A.validate_records(records, lane=L.NAME_L5)
+        assert A.emit(records, tmp_path, L.NAME_L5, plan_path=tmp_path / "PLAN.jsonl") == 2
+        MP.verify_pinned(tmp_path / "APPLY.sql", plan_path=tmp_path / "PLAN.jsonl",
+                         expected=A.apply_statement(records, L.NAME_L5))  # fmt: skip
+        assert "Chiapa de Corzo" in (tmp_path / "PLAN.md").read_text(encoding="utf-8")
+
+
+def test_the_population_is_never_read_again_once_a_round_is_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    from l5 import run as RUN
+
+    (tmp_path / H.ROUNDS_FILE).write_text(
+        json.dumps({"name": "r1", "handoff": "h", "exported_at": NOW, "read_at": READ_AT,
+                    "batches": {}, "earlier": {}}) + "\n", encoding="utf-8",
+    )  # fmt: skip
+    monkeypatch.setattr(RUN, "OUT", tmp_path)
+    assert RUN.main(["population"]) == 1
+    assert "would orphan them" in capsys.readouterr().err

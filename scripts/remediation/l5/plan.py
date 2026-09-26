@@ -214,6 +214,9 @@ def _name_verdicts(
             column=column,
         )
         for column, old, new in (("name", name, new_name), ("name_normalized", old_key, new_key))
+        # a rename that keeps the key (only case or accents differ) writes the name alone: a cell
+        # that does not change is no change, and guard 2 would refuse the whole transaction
+        if old != new
     ]
 
 

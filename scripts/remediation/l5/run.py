@@ -54,6 +54,12 @@ def _print(payload: Any) -> None:
 
 
 def cmd_population() -> dict[str, Any]:
+    rounds = H.load_rounds(OUT)
+    if rounds:
+        raise H.HandoffError(
+            f"round {rounds[0].name} was exported from the read of {rounds[0].read_at}: every "
+            "question is rebuilt from that read on import, so a new read would orphan them"
+        )
     population = POP.members(POP.load_names())
     read = POP.read_production(population, MP.psql_json_reader())
     return POP.write(OUT, population, read)
