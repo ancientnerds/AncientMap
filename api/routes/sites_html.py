@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
 from api.seo_shell import ssr_shell_response
-from api.services.description_provenance import description_disclosure
+from api.services.description_provenance import card_ai, description_disclosure
 from pipeline.article_html_renderer import render_error_html
 from pipeline.database import NewsItem, get_db
 from pipeline.sites_html_renderer import (
@@ -33,6 +33,7 @@ from pipeline.sites_html_renderer import (
     site_path,
     site_slug,
 )
+from pipeline.utils.card_provenance import validate as validate_card_provenance
 from pipeline.utils.public_sites import RETIRED, curated_page, not_retired
 from pipeline.utils.slugs import story_slug
 
@@ -304,7 +305,8 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
                    parent_site_id::text AS parent_site_id,
                    raw_data -> 'description_citations' AS description_citations,
                    raw_data -> '_description_provenance' AS description_provenance,
-                   cs.best_wiki_url, cs.source_language
+                   raw_data -> '_card_provenance' AS card_provenance,
+                   cs.best_wiki_url, cs.source_language, cs.card_description
             FROM unified_sites
             LEFT JOIN card_stats cs ON cs.site_id = unified_sites.id
             WHERE {_CURATED_WHERE} AND LEFT(REPLACE(id::text, '-', ''), 8) = :prefix
@@ -340,6 +342,15 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
     # The disclosure (AI mark and CC BY-SA attribution) is derived by the one
     # function /api/sites/{id} uses, and only for the text the provenance hashes.
     disclosure = description_disclosure(row.description_provenance, row.description)
+    # The card is not on the page, but the SiteCard that opens the page carries it: a teaser
+    # card is AI-generated (lane WB, owner decision O10), so the page shows the AI footnote
+    # for it as well - derived by the one function /api/sites/{id} uses.
+    teaser = row.card_provenance
+    marked_card = card_ai(
+        row.description_provenance,
+        None if teaser is None else validate_card_provenance(teaser),
+        row.card_description,
+    )
     return ssr_shell_response(
         "site.html",
         {
@@ -360,6 +371,7 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
             "description_citations": row.description_citations,
             "description_ai": None if disclosure is None else disclosure["ai"],
             "description_attribution": None if disclosure is None else disclosure["attribution"],
+            "card_ai": marked_card,
             **_related_content(row, db),
         },
         _HTML_HEADERS,

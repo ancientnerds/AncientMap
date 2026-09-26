@@ -3,8 +3,10 @@
 Checks the things a viewer would notice and a batch would silently get wrong:
 container/format, clip completeness, black frames, the loop seam, the audio
 timeline (voice from 0, spoken name in its window, silence at the loop point),
-loudness, the selection, and that the narrated card is the one its
-`_description_provenance` pins (S13, `card_traced`). Writes `audit.json` next
+loudness, the selection, and that the narrated card is the one its provenance
+pins (S13, `card_traced`: a lane-WB teaser's `_card_provenance` while its
+description is unchanged, else the Phase-5 card key of `_description_provenance`,
+as `shorts_export.card_pin_and_mark` reads them). Writes `audit.json` next
 to the short; the `evaluate` helpers are pure and unit tested, `audit_site`
 does the probing.
 """
@@ -284,8 +286,8 @@ def card_sha256(card_text: str) -> str:
 
 def card_trace(site: dict) -> dict:
     """S13's two inputs out of `site.json`: the hash of the card the short narrates
-    (`card_text`), and the hash its `_description_provenance` pins (`card_text_sha256`, the
-    export's; `None` for a card without card provenance). Each from its own side: taking one from
+    (`card_text`), and the hash its provenance pins (`card_text_sha256`, the export's; `None` for
+    a card without card provenance or a stale teaser). Each from its own side: taking one from
     the other would make S13 pass every card that has any pin."""
     return {
         "card_sha256": card_sha256(site["card_text"]),

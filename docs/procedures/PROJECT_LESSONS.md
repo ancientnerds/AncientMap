@@ -112,12 +112,17 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   Every API boot upserts `public/data/card_descriptions.json` into `card_stats`
   (`api/services/card_descriptions.py`). Pushed first, the file would write the cards without a
   journal and the journalled P5 write would then refuse every row with matched_0; written to the
-  database only, a card is reverted at the next boot. The order is the P5 sitting of
-  `docs/procedures/CARD_DESCRIPTIONS.md`: pre-render the file from the plan, write through the
-  journal in steps of 100, regenerate the file from production byte for byte, push, then 0
-  `[STARTUP] Card description overwritten` lines on both API containers. A red CI inside the
-  sitting: `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'` plus `git revert` of the
-  JSON commit. *(design entry [6], production_write, 2026-09-23)*
+  database only, a card is reverted at the next boot. The order was the P5 sitting: pre-render the
+  file from the plan, write through the journal in steps of 100, regenerate the file from production
+  byte for byte, push, then 0 `[STARTUP] Card description overwritten` lines on both API
+  containers. A red CI inside the sitting: `scripts/remediation/phase4/revert4.py --stamp-like
+  'phase5:%'` plus `git revert` of the JSON commit. *(design entry [6], production_write,
+  2026-09-23)* Lane WB's teaser cards keep the order: accepted journalled steps, then
+  `mechanical/teaser.py card-file` renders the file from production, then the push - no other push
+  and no API restart in between (`docs/procedures/CARD_DESCRIPTIONS.md` 5.5). Their undo - also
+  for a red CI inside the sitting - rolls the steps back, closes them with `close-reverted` and
+  renders the file back from production with `card-file`: never a `git revert`, so main's file is
+  always the database's (5.5, 5.6). *(2026-09-26)*
 - **A `db.html` batch upload from a stale export overwrites rewritten descriptions.**
   `POST /api/sites/batch-upload` sets `description = COALESCE(:description, description)`
   (`api/routes/sites.py:1686`) with no old-value condition and no journal row, so an export taken

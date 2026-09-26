@@ -20,7 +20,8 @@ nothing of their wording is published, and no attribution line names them.
 A disclosure is a statement about one text. It is made only while the description served is the
 one the provenance hashes (``desc_sha256``): a description edited afterwards by any other path is
 no longer the text the provenance describes, so nothing is claimed for it, as for a description
-without provenance. The same holds for the card (``card.text_sha256``).
+without provenance. The same holds for the card (``card.text_sha256``, and a teaser card's own
+``raw_data._card_provenance``, see ``card_ai``).
 
 One derivation for every reader - ``/api/sites/{id}`` (camelCase), the SSR payload of
 ``/sites/{country}/{slug}`` and the public v1 API - so the three cannot disagree. The frontend
@@ -33,6 +34,8 @@ import hashlib
 import json
 from collections.abc import Mapping
 from typing import Any
+
+from pipeline.utils.card_provenance import card_ai as teaser_card_ai
 
 #: The raw_data key the writer uses (``scripts/remediation/phase4/model4.py:PROVENANCE_KEY``; a
 #: test pins that the two spellings agree). The leading underscore keeps it out of the generic
@@ -112,8 +115,21 @@ def description_disclosure(
     }
 
 
-def card_ai(provenance: Mapping[str, Any] | None, card: str | None) -> str | None:
-    """The AI mark of a card, when it is exactly the card the provenance hashes; else ``None``."""
+def card_ai(
+    provenance: Mapping[str, Any] | None,
+    card_provenance: Mapping[str, Any] | None,
+    card: str | None,
+) -> str | None:
+    """The AI mark of a card, when it is exactly the card a provenance hashes; else ``None``.
+
+    A teaser card (lane WB, ``raw_data._card_provenance``, ``pipeline.utils.card_provenance``) is
+    the only statement about the card once it exists: it marks the card ``generated`` while it
+    hashes it, and says nothing for any other card. Without it, the extractive Phase-5 card key of
+    the description's provenance (``card.text_sha256``) is read as before; lane WB sets that key to
+    ``null`` when it writes a teaser, so the two never both describe one card.
+    """
+    if card_provenance is not None:
+        return teaser_card_ai(card_provenance, card)
     if provenance is None or card is None or provenance["lane"] == "L":
         return None
     recorded = provenance["card"]

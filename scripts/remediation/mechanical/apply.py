@@ -69,6 +69,7 @@ from mechanical.lane import (  # noqa: E402
     LANES,
     SCOPE_REVIEW_LANE,
     T05,
+    TEASER_LANE,
     Column,
     Lane,
     fields_readback,
@@ -279,7 +280,7 @@ def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
     empty_side, filled_side = ("new", "old") if rollback else ("old", "new")
     values = {"old": r.old_value, "new": r.new_value}
     if r.old_value is None and r.new_value is None:
-        raise PlanError(f"{r.site_id}/{cell.name}: old and new are both NULL - not a change")
+        raise PlanError(f"{r.site_id}/{cell.name}: old and new are both NULL - NULL to NULL is not a change")
     if values[filled_side] is None and not cell.clears:
         raise PlanError(
             f"{r.site_id}/{cell.name}: no {filled_side} value - this lane never "
@@ -1806,6 +1807,10 @@ def readback_for(lane: Lane) -> str:
         return scope_review_readback(lane)
     if FIELDS_LANE.match(lane.name):
         return fields_readback(lane)
+    if TEASER_LANE.match(lane.name):
+        from mechanical.teaser import teaser_readback
+
+        return teaser_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1820,7 +1825,8 @@ def _lane_argument(name: str) -> str:
     except KeyError as exc:
         raise argparse.ArgumentTypeError(
             f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
-            "scope-review-<wave>, card-stats-<wave>)"
+            "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
+            "teaser-card-sNNN)"
         ) from exc
     return name
 

@@ -29,6 +29,7 @@ from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
     NAME_AUDIO_DELAY_S,
     NARRATION_TAIL_S,
+    TEASER_NOTE,
     Segment,
     StillPick,
     build_comment,
@@ -246,6 +247,7 @@ class TestText:
             "name": "Machu Picchu",
             "country": "Peru",
             "card_text": "A citadel.",
+            "card_ai": None,
             "rarity_name": "Legendary",
             "rarity_tier": 5,
             "total_power": 33,
@@ -277,6 +279,11 @@ class TestText:
         assert "AI-generated voice" in text
         assert text.rstrip().endswith("#Shorts #archaeology #ancienthistory #Peru #MachuPicchu")
         assert "Mapbox" not in build_description(site, imgs, "v")
+        # A card without a teaser provenance claims no AI text (O10 marks the teaser cards).
+        assert TEASER_NOTE not in text
+        teaser = build_description({**site, "card_ai": "generated"}, imgs, "v")
+        assert TEASER_NOTE in teaser
+        assert teaser.index(TEASER_NOTE) < teaser.index("AI-generated voice")
 
     def test_hashtags_use_the_specific_place_and_skip_duplicates(self):
         tags = hashtags({"name": "Rano Raraku", "country": "Chile, Easter Island"})
@@ -494,6 +501,7 @@ class TestExportShape:
             "legacy": 5,
             "civilization": "Inca",
             "card_text_sha256": None,
+            "card_provenance": None,
         }
         imgs = [
             {
@@ -562,6 +570,7 @@ _EXPORT_ROW = {
     "legacy": 0,
     "civilization": None,
     "card_text_sha256": None,
+    "card_provenance": None,
 }
 
 
@@ -746,6 +755,51 @@ def test_s13_the_export_reads_the_hash_from_the_card_provenance():
         "s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256' "
         "AS card_text_sha256" in sql
     )
+    assert "s.raw_data -> '_card_provenance' AS card_provenance" in sql
+
+
+def _teaser_row(**over):
+    from pipeline.utils import card_provenance as CP
+
+    description = "Machu Picchu is a 15th-century Inca citadel at 2,430 metres."
+    row = dict(_EXPORT_ROW, description=description, card_description=CARD)
+    row["card_provenance"] = CP.build(
+        run="wb-test",
+        ai_system="Claude Opus (Anthropic)",
+        card=CARD,
+        description=description,
+        stage="check",
+        checker="teaser-check-b001",
+        checked_at="2026-09-26T12:00:00+00:00",
+        claims=[{"claim": "a 15th-century Inca citadel", "support": ["S1"]}],
+    )
+    return {**row, **over}
+
+
+def test_s13_a_teaser_card_is_pinned_by_its_own_provenance_and_marked_generated():
+    """Lane WB: the teaser provenance is the card's only statement - its hash (not the Phase-5
+    key, which the lane nulls) goes to S13, and the AI note is claimed for the card."""
+    site = assemble_site(_teaser_row(card_text_sha256="f" * 64), [])
+    assert site["card_text_sha256"] == CARD_SHA
+    assert site["card_ai"] == "generated"
+    checks = {c.name: c.ok for c in evaluate(_measurements(**card_trace(site)))}
+    assert checks["card_traced"] is True
+
+
+def test_s13_a_stale_teaser_card_is_not_narrated_but_stays_marked():
+    """The description changed since the card was checked against it: still AI text, no pin."""
+    site = assemble_site(_teaser_row(description="An edited description."), [])
+    assert site["card_text_sha256"] is None
+    assert site["card_ai"] == "generated"
+    failed = [c for c in evaluate(_measurements(**card_trace(site))) if not c.ok]
+    assert [c.name for c in failed] == ["card_traced"]
+
+
+def test_s13_a_card_the_teaser_provenance_does_not_hash_fails_and_is_not_marked():
+    site = assemble_site(_teaser_row(card_description="Another card."), [])
+    assert site["card_ai"] is None
+    failed = [c for c in evaluate(_measurements(**card_trace(site))) if not c.ok]
+    assert [c.name for c in failed] == ["card_traced"]
 
 
 #: A real FreeType face (Pillow's own) at the caption size, for the width tests.

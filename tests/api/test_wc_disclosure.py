@@ -83,7 +83,7 @@ def test_a_checked_march_text_keeps_the_existing_ai_footnote_and_claims_no_licen
         "licence": None,
         "attribution": None,
     }
-    assert DP.card_ai(DP.provenance_of(raw), "An old card.") is None
+    assert DP.card_ai(DP.provenance_of(raw), None, "An old card.") is None
 
 
 def test_the_site_api_serves_the_checked_text_with_its_new_citations_and_the_footnote():

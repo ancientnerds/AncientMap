@@ -1377,8 +1377,8 @@ CASES: list[Case] = [
             ),
             (
                 "guard 2 refuses NULL on the filled side",
-                '        refused.append(f"{filled} IS NULL")',
-                "        pass",
+                '            refused.append(f"{filled} IS NULL")',
+                "            pass",
                 "test_guard_2_allows_null_only_on_the_side_the_lane_fills",
             ),
             (
@@ -4876,6 +4876,570 @@ AUDIT_FIX_CASES: list[Case] = [
     ),
 ]
 CASES += AUDIT_FIX_CASES
+
+# ------------------------------------------------ lane WB: teaser cards (owner O2-O4, O10, 2026-09-26)
+TEASER = MECHANICAL / "teaser.py"
+TEASER_CONTRACT = REPO / "scripts/remediation/teaser/contract.py"
+TEASER_ANSWERS = REPO / "scripts/remediation/teaser/answers.py"
+TEASER_RUN = REPO / "scripts/remediation/teaser/run.py"
+CARD_PROVENANCE = REPO / "pipeline/utils/card_provenance.py"
+PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
+TEASER_WRITE_TESTS = "tests/remediation/test_mechanical_teaser.py"
+TEASER_TESTS = "tests/remediation/test_teaser.py"
+AI_ACT_TESTS = "tests/api/test_ai_act_marking.py"
+LASTMOD_TESTS = "tests/api/test_sitemap_lastmod.py"
+_TEASER_CHANGED = "test_a_site_that_changed_is_listed_not_written"
+
+TEASER_CASES: list[Case] = [
+    # ------------------------------------------------ the write: apply.py's clear, the lane's name
+    Case(
+        "teaser: NULL to NULL is never a change",
+        APPLY,
+        "    if r.old_value is None and r.new_value is None:",
+        "    if False:",
+        "test_null_to_null_is_never_a_change",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "teaser: a clearing column may write NULL",
+        APPLY,
+        "    if values[filled_side] is None and not cell.clears:",
+        "    if values[filled_side] is None:",
+        "test_a_clear_and_its_reversal_are_valid_on_the_card_lane",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "teaser: guard 2 drops the NULL refusal only for a clearing column",
+        APPLY,
+        "        if not cell.clears:\n            refused.append",
+        "        if True:\n            refused.append",
+        "test_guard_2_lets_the_card_lane_write_null_and_nothing_else",
+        TEASER_WRITE_TESTS,
+    ),
+    guard(
+        "teaser: apply resolves a step's lanes by name",
+        LANE,
+        "    if TEASER_LANE.match(name):",
+        "test_the_lanes_resolve_by_name_for_apply",
+        TEASER_WRITE_TESTS,
+    ),
+    # ------------------------------------------------ the write: one site's two cells
+    *(
+        guard(f"teaser: {label}", TEASER, needle, test, TEASER_WRITE_TESTS)
+        for label, needle, test in (
+            (
+                "a site the export lost",
+                "    if live is None:",
+                "test_a_site_the_export_did_not_return_is_listed",
+            ),
+            (
+                "a site retired since the run",
+                "    if live.scope_status == RETIRED:",
+                _TEASER_CHANGED,
+            ),
+            ("a site without a card row", "    if not live.has_card_row:", _TEASER_CHANGED),
+            (
+                "a description changed since the check",
+                '    if premise_of(live.description) != outcome["desc_sha256"]:',
+                _TEASER_CHANGED,
+            ),
+            (
+                "raw_data that is not an object",
+                "    if raw is not None and not isinstance(raw, dict):",
+                _TEASER_CHANGED,
+            ),
+            (
+                "raw_data the planner would spell differently",
+                "    if live.raw_data is not None and reprint(raw) != live.raw_data:",
+                _TEASER_CHANGED,
+            ),
+            (
+                "a journal that does not end at the live value",
+                "        if broken is not None:",
+                "test_a_cell_whose_journal_does_not_end_at_the_live_value_is_listed",
+            ),
+            (
+                "nothing to change is listed",
+                "    if prov is None and card is None:",
+                "test_nothing_to_change_is_listed",
+            ),
+            (
+                "the Phase-5 card key is nulled",
+                '    if isinstance(described, dict) and described.get("card") is not None:\n'
+                "        out[DESCRIPTION_PROVENANCE_KEY]",
+                "test_an_accepted_card_writes_its_provenance_and_the_card",
+            ),
+            (
+                "a step writes at most 100 sites",
+                "    if len(outcomes) > MAX_SITES:",
+                "test_a_step_writes_at_most_100_sites",
+            ),
+            (
+                "a step follows the closed one",
+                "    if step > 1 and not closed(step - 1, root):",
+                "test_the_next_step_waits_for_the_acceptance_of_the_last",
+            ),
+            (
+                "a run directory lies under the runs",
+                "    if resolved.parent != RUNS.resolve():",
+                "test_a_run_is_named_by_its_name_or_by_its_directory",
+            ),
+            (
+                "steps are numbered in order",
+                "    if step != expected:",
+                "test_the_next_step_waits_for_the_acceptance_of_the_last",
+            ),
+            (
+                "the acceptance counts rollback rows",
+                "        if undone:",
+                "test_a_rollback_row_is_a_deviation",
+            ),
+            (
+                "the acceptance counts the journal rows",
+                '        if len(by_site) != len(written) or set(by_site) != {r["site_id"] for r in '
+                "rows}:",
+                "test_a_missing_journal_row_is_a_deviation",
+            ),
+            (
+                "the acceptance reads the planned value",
+                "            if not held:",
+                "test_a_card_that_does_not_hold_is_a_deviation",
+            ),
+            (
+                "the acceptance finds a Phase-5 card key left",
+                '        if isinstance(described, dict) and described.get("card") is not None:\n'
+                "            found.append",
+                "test_a_phase5_card_key_left_behind_is_a_deviation",
+            ),
+            (
+                "the card file follows closed steps only",
+                "        if not closed(step, root):",
+                "test_a_step_without_acceptance_is_refused",
+            ),
+            (
+                "the card file carries no foreign card",
+                "    if foreign:",
+                "test_a_card_the_steps_did_not_write_is_refused",
+            ),
+            (
+                "the card file waits for every planned card",
+                "    if unwritten:",
+                "test_a_planned_card_production_does_not_hold_is_refused",
+            ),
+            (
+                "a step is closed once",
+                "    if path.exists():",
+                "test_a_step_is_closed_once",
+            ),
+            (
+                "an undone step is never accepted",
+                "    if reverted(step, root):",
+                "test_an_undone_step_is_never_accepted_afterwards",
+            ),
+            (
+                "an undone step holds its old values",
+                '            if same(held) != same(row["old_value"]):',
+                "test_a_write_still_standing_is_refused",
+            ),
+            (
+                "an undone step has a reversal per write",
+                "            if len(writes) > 1 or len(undos) != len(writes):",
+                "test_a_write_still_standing_is_refused",
+            ),
+            (
+                "an undone step's reversal is the write's inverse",
+                "                if not inverse:",
+                "test_a_reversal_that_is_not_the_inverse_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER, old, new, test, TEASER_WRITE_TESTS)
+        for label, old, new, test in (
+            (
+                "a planned site is not planned again",
+                '    return [o for o in sorted(outcomes, key=lambda o: o["site_id"]) if o["site_id"] '
+                "not in done][",
+                '    return [o for o in sorted(outcomes, key=lambda o: o["site_id"])][',
+                "test_a_planned_site_is_not_planned_again",
+            ),
+            (
+                "an undone step's sites are planned again",
+                '        if step["run"] == run and step["step"] not in undone',
+                '        if step["run"] == run',
+                "test_an_undone_step_is_closed_and_its_sites_are_planned_again",
+            ),
+            (
+                "an undone step is read as undone",
+                "    return _closing(REVERTED_DIR, step, root).exists()",
+                "    return False",
+                "test_an_undone_step_is_closed_and_its_sites_are_planned_again",
+            ),
+            (
+                "an acceptance is recorded once",
+                "    if not found and not closed(step, root):",
+                "    if not found:",
+                "test_an_acceptance_is_recorded_once",
+            ),
+            (
+                "an accepted step can still be undone",
+                "    if not found:\n        _record_closing(\n            REVERTED_DIR,",
+                "    if not found and not accepted(step, root):\n        _record_closing(\n"
+                "            REVERTED_DIR,",
+                "test_an_accepted_step_is_undone_closed_and_planned_again",
+            ),
+            (
+                "the undo keeps the acceptance it supersedes",
+                "                    if acceptance.exists()\n                    else None",
+                "                    if False\n                    else None",
+                "test_an_accepted_step_is_undone_closed_and_planned_again",
+            ),
+            (
+                "the card file expects an undone step's old cards",
+                '            planned[row["site_id"]] = row["old_value"] if undone else '
+                'row["new_value"]',
+                '            planned[row["site_id"]] = row["new_value"]',
+                "test_the_file_follows_production_after_an_undo",
+            ),
+            (
+                "the card file lets a later step's plan win",
+                "    for step in sorted(steps):",
+                "    for step in steps:",
+                "test_a_site_planned_again_after_an_undo_is_expected_as_the_later_step_wrote_it",
+            ),
+            (
+                "the acceptance finds a stale provenance",
+                "            elif CP.stale(teaser, site.description):",
+                "            elif False:",
+                "test_a_stale_provenance_is_a_deviation",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the card contract
+    *(
+        guard(f"teaser: {label}", TEASER_CONTRACT, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "160-190 characters",
+                "    if not MIN_CHARS <= length <= MAX_CHARS:",
+                "test_the_length_is_160_to_190_characters",
+            ),
+            (
+                "one line, no double space",
+                '    if card != card.strip() or "  " in card or any(ch in card for ch in '
+                '"\\n\\r\\t"):',
+                "test_layout_and_ending",
+            ),
+            ("a final stop", "    if not _TERMINAL.search(card):", "test_layout_and_ending"),
+            (
+                "one or two sentences",
+                "    if len(pieces) > MAX_SENTENCES:",
+                "test_at_most_two_sentences",
+            ),
+            (
+                "at most one question",
+                '    if card.count("?") > MAX_QUESTIONS:',
+                "test_at_most_one_short_question",
+            ),
+            (
+                "a short question",
+                '        if "?" in piece and len(piece.strip()) > MAX_QUESTION_CHARS:',
+                "test_at_most_one_short_question",
+            ),
+            (
+                "no bracket, marker, emoji or symbol",
+                "    if bad:",
+                "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            ("no bare circa", "    if _BARE_CIRCA.search(card):", "test_a_bare_circa_is_refused"),
+            (
+                "every numeral grounded",
+                "    if ungrounded:",
+                "test_every_numeral_is_grounded_in_the_description",
+            ),
+            (
+                "the card names the site",
+                "    if not names_in(card, site.forms):",
+                "test_the_card_names_the_site",
+            ),
+            ("the shorts font", "    if measured.missing:", "test_the_shorts_font_and_frame"),
+            (
+                "the caption frame",
+                "    if measured.px > V.MAX_CAPTION_PX:",
+                "test_the_shorts_font_and_frame",
+            ),
+            (
+                "no card without a description",
+                "    if not description.strip():",
+                "test_a_site_without_a_description_has_no_basis",
+            ),
+            (
+                "a sentence id of this description",
+                "    if unknown:",
+                "test_anything_else_is_refused",
+            ),
+            (
+                "a sentence id once",
+                "    if len(set(ids)) != len(ids):",
+                "test_anything_else_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER_CONTRACT, old, new, test, TEASER_TESTS)
+        for label, old, new, test in (
+            (
+                "a derived name form of 3 characters at least",
+                "            if len(key) >= MIN_FORM_CHARS and key not in seen:",
+                "            if key not in seen:",
+                "test_a_short_derived_form_is_dropped_but_a_short_name_stays",
+            ),
+            (
+                "no exclamation mark, hashtag or asterisk",
+                "            or ch in MARKS\n",
+                "",
+                "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            (
+                "no exclamation at the end",
+                '_TERMINAL = re.compile(r"[.?]',
+                '_TERMINAL = re.compile(r"[.!?]',
+                "test_layout_and_ending",
+            ),
+            (
+                "no math symbol or arrow",
+                '_FORBIDDEN_CATEGORIES = frozenset({"So", "Sm", "Cs", "Co", "Cn", "No"})',
+                '_FORBIDDEN_CATEGORIES = frozenset({"So", "Cs", "Co", "Cn", "No"})',
+                "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            (
+                "an alias only where the description uses it",
+                "    derived += [alt for alt in sorted(set(alt_names)) if names_in(description, "
+                "[alt])]",
+                "    derived += sorted(set(alt_names))",
+                "test_an_alias_counts_only_where_the_description_uses_it",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the answer shapes
+    *(
+        guard(f"teaser: {label}", TEASER_ANSWERS, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            ("a card rests on a sentence", "    if not basis:", "test_anything_else_is_refused"),
+            (
+                "no PASS with an unsupported claim",
+                "        if unsupported:",
+                "test_a_pass_with_an_unsupported_claim_is_refused",
+            ),
+            (
+                "no PASS with a broken rule",
+                '        if not (data["tone_ok"] and data["this_site"]):',
+                "test_a_pass_with_a_broken_rule_is_refused",
+            ),
+            (
+                "no PASS with a reason",
+                "        if reasons:",
+                "test_a_pass_with_a_reason_is_refused",
+            ),
+            (
+                "an UNVERIFIABLE claim cites nothing",
+                '            if raw["url"] is not None or raw["quote"] is not None:',
+                "test_anything_else_is_refused",
+            ),
+            (
+                "a judge's quote of 20 characters at least",
+                "        if len(quote.strip()) < MIN_QUOTE_CHARS:",
+                "test_anything_else_is_refused",
+            ),
+        )
+    ),
+    Case(
+        "teaser: no FAIL without a reason",
+        TEASER_ANSWERS,
+        "    elif not reasons:",
+        "    elif False:",
+        "test_a_fail_needs_a_reason",
+        TEASER_TESTS,
+    ),
+    # ------------------------------------------------ the run
+    *(
+        guard(f"teaser: {label}", TEASER_RUN, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "a sentence check is a basis while it hashes the text",
+                '    if row["check_desc_sha256"] == digest:',
+                "test_a_sentence_checked_text_is_a_basis_while_its_check_hashes_it",
+            ),
+            (
+                "a text nothing sources is not final",
+                "    if basis_of(row) is None:",
+                "test_who_is_a_candidate",
+            ),
+            (
+                "a run is selected once",
+                '    if (run / "RUN.json").exists():',
+                "test_select_fixes_the_candidates_once",
+            ),
+            (
+                "the sites file is the pinned one",
+                '    if CP.text_sha256(path.read_bytes().decode("utf-8").replace("\\r\\n", "\\n")) '
+                "!= record[key]:",
+                "test_a_changed_sites_file_is_refused",
+            ),
+            (
+                "a mechanical failure goes to a rewrite",
+                '        if written["problems"]:',
+                "test_a_card_that_fails_goes_to_a_rewrite_with_its_findings",
+            ),
+            (
+                "only a PASS accepts",
+                '        if checked["verdict"] == A.PASSED:',
+                "test_all_accepted_in_the_first_round",
+            ),
+            (
+                "an earlier stage is imported first",
+                "    if waiting:",
+                "test_an_earlier_stage_must_be_imported_before_the_next_is_asked",
+            ),
+            (
+                "the import rebuilds the question",
+                '        if OH.prompt_sha256(prompt) != line["prompt_sha256"]:',
+                "test_a_question_the_run_would_now_ask_differently_is_refused",
+            ),
+            (
+                "a checker is not the writer",
+                "            if answer.answered_by in others:",
+                "test_a_checker_that_wrote_the_card_is_refused",
+            ),
+            ("outcomes wait for every site", "    if due:", "test_outcomes_wait_for_every_site"),
+            (
+                "a site without a description gets its card cleared",
+                '        if listed["reason"] == NO_DESCRIPTION and listed["card"] is not None:',
+                "test_all_accepted_in_the_first_round",
+            ),
+            (
+                "a judge did not work on the card",
+                "            if answer.answered_by in writers[site_id]:",
+                "test_a_judge_who_worked_on_the_card_is_refused",
+            ),
+            (
+                "an unproven contradiction is counted",
+                '                if judged.verdict == "CONTRADICTED":',
+                "test_an_unproven_contradiction_fails_the_pilot",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER_RUN, old, new, test, TEASER_TESTS)
+        for label, old, new, test in (
+            (
+                "a Phase-4 lane counts only while it hashes the text",
+                '    if row["lane"] in BASIS_LANES and row["provenance_desc_sha256"] == digest:',
+                '    if row["lane"] in BASIS_LANES:',
+                "test_a_description_its_provenance_does_not_hash_is_not_final",
+            ),
+            (
+                "a clear is premised on the text as it was read",
+                '                    "desc_sha256": listed["desc_sha256"],',
+                '                    "desc_sha256": CP.text_sha256(""),',
+                "test_a_blank_description_clears_the_card_on_the_text_as_it_was_read",
+            ),
+            (
+                "a stale teaser is asked again",
+                "        and not CP.stale(teaser, description)\n",
+                "        and True\n",
+                "test_a_live_teaser_is_current_and_a_stale_one_a_candidate",
+            ),
+            (
+                "a site asked before is not asked again",
+                '        elif earlier.get(row["site_id"]) == CP.text_sha256(row["description"]):',
+                "        elif False:",
+                "test_a_site_asked_before_is_asked_again_only_after_its_description_moved",
+            ),
+            (
+                "the pilot gate refuses a contradiction",
+                "        no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0",
+                "        no_contradiction = self.contradicted_unproven == 0",
+                "test_a_proven_contradiction_fails_the_pilot",
+            ),
+            (
+                "the pilot gate refuses an unproven contradiction",
+                "        no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0",
+                "        no_contradiction = self.contradicted == 0",
+                "test_an_unproven_contradiction_fails_the_pilot",
+            ),
+            (
+                "a run asks only its bases",
+                "        elif basis is not None and basis_of(row) not in basis:",
+                "        elif False:",
+                "test_a_run_can_ask_one_basis_only",
+            ),
+            (
+                "a quote proves only when the page holds it",
+                "            proven = outcome == Q.FOUND",
+                "            proven = judged.url is not None",
+                "test_a_quote_the_page_does_not_hold_proves_nothing",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the page date: lane WB's card writes only
+    *(
+        Case(f"teaser: {label}", PUBLIC_SITES, old, new, test, LASTMOD_TESTS)
+        for label, old, new, test in (
+            (
+                "an earlier card write leaves the page date",
+                "        f\"(table_name = '{table}' AND column_name = '{column}' AND run_stamp LIKE "
+                "'{stamp_like}')\"",
+                "        f\"(table_name = '{table}' AND column_name = '{column}')\"",
+                "test_a_card_write_before_lane_wb_does_not_advance_the_page",
+            ),
+            (
+                "a stamped column is not counted unstamped",
+                '        "\'" + column + "\'" for column in columns if (table, column) not in '
+                "PAGE_COLUMN_STAMPS",
+                '        "\'" + column + "\'" for column in columns',
+                "test_a_card_write_before_lane_wb_does_not_advance_the_page",
+            ),
+            (
+                "a lane-WB card write moves the page date",
+                '    f"AND ({_PAGE_WRITE} OR {_STAMPED_PAGE_WRITE}) "',
+                '    f"AND ({_PAGE_WRITE}) "',
+                "test_a_lane_wb_card_write_advances_the_page",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the provenance and its readers
+    *(
+        Case(f"teaser: {label}", CARD_PROVENANCE, old, new, test, AI_ACT_TESTS)
+        for label, old, new, test in (
+            (
+                "only a PASS is a teaser provenance",
+                '    _need(check["verdict"] == ACCEPTING_VERDICT,',
+                "    _need(True,",
+                "test_a_malformed_teaser_provenance_is_refused_not_ignored",
+            ),
+            (
+                "a claim names a sentence id",
+                "            and bool(support)\n",
+                "            and True\n",
+                "test_a_claim_without_a_sentence_id_is_refused",
+            ),
+            (
+                "a stale card is not narrated",
+                '    return None if stale(provenance, description) else provenance["text_sha256"]',
+                '    return provenance["text_sha256"]',
+                "test_a_teaser_card_is_shorts_eligible_only_while_its_description_is_unchanged",
+            ),
+            (
+                "the mark is for the hashed card only",
+                "    return AI_GENERATED if describes(provenance, card) else None",
+                "    return AI_GENERATED",
+                "test_a_teaser_provenance_is_the_only_statement_about_the_card",
+            ),
+        )
+    ),
+]
+CASES += TEASER_CASES
 
 
 # ------------------------------------------ the WE lanes (HUMAN_ONLY decisions of 2026-09-26)

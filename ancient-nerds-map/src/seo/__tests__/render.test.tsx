@@ -285,6 +285,36 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
       expect(html).not.toContain('data-ai-generated')
       expect(html).not.toContain('data-description-attribution')
     })
+
+    // Lane WB (owner decision O10, 2026-09-26): a teaser card is AI-generated. The card lives on
+    // the SiteCard, which only carries data-card-ai; the visible notice is the page's AiFootnote -
+    // once, also where the description is AI-generated itself.
+    const cardCases = [
+      { lane: 'W', ai: 'selected', attribution: attribution('sentences selected and shortened') },
+      { lane: 'L', ai: 'generated', attribution: null },
+      { lane: 'none', ai: null, attribution: null },
+    ] as const
+    for (const c of cardCases) {
+      it(`a teaser card on a lane-${c.lane} page: exactly one AI footnote`, () => {
+        const page = renderRoute({
+          ...FIXTURES.site,
+          description_ai: c.ai,
+          description_attribution: c.attribution,
+          card_ai: 'generated',
+        })
+        expect(page.split('data-ai-generated="true"').length - 1).toBe(1)
+      })
+    }
+
+    it('a card without teaser provenance adds no footnote', () => {
+      const page = renderRoute({
+        ...FIXTURES.site,
+        description_ai: 'selected',
+        description_attribution: attribution('sentences selected and shortened'),
+        card_ai: null,
+      })
+      expect(page).not.toContain('data-ai-generated')
+    })
   })
 
   it('Fußnotenmarker werden im Crawler-Body zu Quellen-Links aufgelöst', () => {

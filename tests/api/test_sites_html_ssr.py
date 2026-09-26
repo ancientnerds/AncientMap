@@ -14,6 +14,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from api.routes.sites_html import site_detail, sites_by_country, sites_index
 
 
@@ -164,8 +166,10 @@ def _borremose_row() -> SimpleNamespace:
             {"n": 1, "url": "https://example.org/ref", "title": "Ref", "domain": "example.org"}
         ],
         description_provenance=None,
+        card_provenance=None,
         best_wiki_url="https://da.wikipedia.org/wiki/Borremose",
         source_language="da",
+        card_description=None,
     )
 
 
@@ -231,6 +235,7 @@ def test_site_detail_hands_the_full_raw_payload():
     assert route["description_citations"][0]["url"] == "https://example.org/ref"
     # No provenance, no disclosure: nothing is claimed for a text without one.
     assert route["description_ai"] is None and route["description_attribution"] is None
+    assert route["card_ai"] is None
     # _related_content: fertige Pfade, Attribution vollständig.
     assert route["alt_names"] == ["Borremose fortress"]
     assert route["image"] == {
@@ -301,6 +306,47 @@ def test_site_detail_hands_the_disclosure_of_the_description_it_serves():
         "changes": "sentences selected and shortened",
         "revisionDate": "2026-09-01",
     }
+
+
+def _teaser_route(row: SimpleNamespace) -> dict:
+    news_chain = MagicMock()
+    news_chain.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+    render, shell = _patched()
+    with (
+        render as render_mock,
+        shell,
+        patch("api.routes.sites_html.public_stories_query", return_value=news_chain),
+    ):
+        asyncio.run(site_detail("denmark", "borremose-5281654c", db=FakeDb([row], [], [], [], [])))
+    return render_mock.call_args[0][0]
+
+
+def test_site_detail_marks_a_teaser_card_as_ai_generated():
+    """Lane WB (owner decision O10): the card is not on the page, but the SiteCard that opens it
+    is, so the page carries the card's AI mark - read with the card in the same statement, and
+    only while the teaser provenance hashes that card."""
+    from pipeline.utils import card_provenance as CP
+
+    row = _borremose_row()
+    row.card_description = (
+        "A bog fortress of the Iron Age, where three causeways still cross a moat."
+    )
+    row.card_provenance = CP.build(
+        run="wb-test",
+        ai_system="Claude Opus (Anthropic)",
+        card=row.card_description,
+        description=row.description,
+        stage="check",
+        checker="teaser-check-b001",
+        checked_at="2026-09-26T12:00:00+00:00",
+        claims=[{"claim": "an Iron Age bog fortress", "support": ["S1"]}],
+    )
+    assert _teaser_route(row)["card_ai"] == "generated"
+    row.card_description = "Another card, written by another path."
+    assert _teaser_route(row)["card_ai"] is None
+    row.card_provenance = {**row.card_provenance, "ai": "selected"}
+    with pytest.raises(ValueError, match="ai"):
+        _teaser_route(row)
 
 
 def test_site_detail_301s_a_stale_slug_to_the_canonical_url():

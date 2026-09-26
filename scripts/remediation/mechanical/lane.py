@@ -145,7 +145,9 @@ class Column:
     `sql_type` is the base type the plan's text is cast to in every comparison
     (`t.mystery IS DISTINCT FROM p.old_value::integer`), so a comparison is made in the column's
     own type the way `apply_remediation_change()` makes it. `max_chars` is a declared width
-    (`character varying(50)`), `None` for a type without one. `fills_null`: the stored value may be
+    (`character varying(50)`), `None` for a type without one. `clears`: the lane may write NULL
+    into the column - lane WB clears the card of a site that gets none - and the reversal of such
+    a clear starts from NULL (2026-09-26). `fills_null`: the stored value may be
     NULL - the lane fills an unassessed column (`scope_status`), and its reversal restores the NULL.
     `clears`: the planned value may be NULL - the lane empties the column (owner decision O6 of
     2026-09-26, "replace only with a sourced value, else empty the field"), and its reversal
@@ -1554,6 +1556,9 @@ def scope_review_readback(lane: Lane) -> str:
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
 #: twice" still holds, and its own directory.
 CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
+#: Lane WB writes each step of at most 100 sites as two lanes of its own (`mechanical/teaser.py`):
+#: `teaser-prov-sNNN` (the card provenance in raw_data) and `teaser-card-sNNN` (the card).
+TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 
 # ------------------------------------------------------------ the WD1 structured-field lane
 #: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
@@ -1670,8 +1675,8 @@ def fields_readback(lane: Lane) -> str:
 
 
 def resolve_lane(name: str) -> Lane:
-    """The lane called `name`: a registered one, a scope-review wave, a WD1 fields step, or a
-    card_stats wave.
+    """The lane called `name`: a registered one, a scope-review wave, a WD1 fields step, a lane-WB
+    teaser step, or a card_stats wave.
     `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
@@ -1686,6 +1691,10 @@ def resolve_lane(name: str) -> Lane:
     fields = FIELDS_LANE.match(name)
     if fields is not None:
         return fields_lane(fields.group(1), int(fields.group(2)))
+    if TEASER_LANE.match(name):
+        from mechanical.teaser import lane_of
+
+        return lane_of(name)
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)
