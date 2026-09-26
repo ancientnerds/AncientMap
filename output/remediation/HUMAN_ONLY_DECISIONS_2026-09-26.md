@@ -52,6 +52,14 @@ Dokumentation: **4** (A6, B12, Nr. 11, D8). Owner wirklich nötig: nur **A4** (W
   Abhängigkeiten) ist sauber. Heute meldet das Repo-venv „Found 93 errors in 14 files“, alle vorbestehend.
 - **Entscheidung:** getrennt führen. Kein Gate ist rot, und es ist keine Remediation-Arbeit.
 - **Ausführung:** eigene Code-Änderung nach WF (etwa `/audit` bei freier Quota). **Owner nötig: nein.**
+- **Nachtrag 2026-09-26 (vorgezogen):** Die Abschluss-Orchestrierung hat A7 als WE2 in WE gelegt, und WE kommt nach
+  FINISH_PLAN §3 vor WF. Gebaut auf `wip/we2`: mit dem Repo-venv (mypy 1.19.1) 93 → 0 Fehler, mit mypy 2.3.1 ebenfalls
+  0; der CI-gleiche Lauf ohne Abhängigkeiten endet vorher wie nachher mit Exit 0. Die Änderung ist Typisierung plus zwei
+  echte Fehlerbehebungen mit Tests (`52d37fa` remove-image, `c6b58ff` `/ask`) und dem Entfernen des Discord-Mocks der
+  Testsuite (`7e6d0e5`); kein Gate war rot. Sie geht wie jede grüne Code-Änderung nach `main`. Ein Push baut das
+  api-Image (Discord-Bot, Kartenspiel) und, wegen `pipeline/database.py`, das Lyra-Image neu; api und api2 starten
+  nacheinander hinter Health-Checks neu. Die journalisierten Lanes schreiben über psql (`mechanical/apply.py`), nicht
+  über die API. Beleg: AUDIT_LOG 2026-09-26 „A7“, Runbook `docs/procedures/CODE_AUDIT.md`.
 
 ## B. Einzelfälle und Regeln
 

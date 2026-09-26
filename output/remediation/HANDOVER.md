@@ -306,7 +306,7 @@ every batch, which is why nothing there may be edited while a run is in flight.
   `Baltic Sea`).
 - Code, recorded and not built: the selector's rule (8) keeps the gap the reviewer's new DROP line
   closes; the gallery G runs' missing links (none can write while C1 admits no trigger); the mypy
-  `api/` debt (A7).
+  `api/` debt (A7), since built on `wip/we2` (93 -> 0, AUDIT_LOG 2026-09-26 "A7").
 
 ## 7. Traps that cost real time here
 

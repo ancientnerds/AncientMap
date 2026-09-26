@@ -12421,3 +12421,78 @@ agents in parallel (O11). The plan and its progress log: `FINISH_PLAN_2026-09-26
 
 Files: `CANARIES.jsonl`, `judging/QUESTIONS.jsonl`, `judging/ROUNDS.jsonl`, `judging/STAGE1.jsonl`,
 `judging/REASK_S1.json` (committed with this entry; the fetched pages stay local).
+
+## 2026-09-26 - A7: `mypy api/` from 93 errors to 0 (WE2, branch `wip/we2`; code only, nothing written to production, not pushed)
+
+**What A7 names.** HUMAN_ONLY A7 ("`mypy api/` Altbestand") is `./.venv/Scripts/python.exe -m mypy
+api/` in the repo venv: the project's dependencies installed, mypy 1.19.1, the `[tool.mypy]` section
+of `pyproject.toml`. CI's `lint-backend` job runs a different configuration: it installs only
+`ruff mypy import-linter==2.13 vulture==2.16` (`ci.yml:118`, mypy unpinned, today 2.3.1) and runs
+`mypy api/ --no-error-summary` (`ci.yml:136`). Without the dependencies `ignore_missing_imports`
+makes every SQLAlchemy, discord.py, pydantic and LangChain type `Any`, so CI's run exits 0 before
+and after this work. A7's "CI-Gate kann dadurch rot sein" never held.
+
+**Measured** (80 source files each run; the base on a `git archive 7b6c736 api pipeline
+pyproject.toml` export):
+
+| run | base `7b6c736` | head of `wip/we2` |
+|---|---|---|
+| repo venv, mypy 1.19.1, with dependencies (A7) | 93 errors in 14 files | **0** |
+| mypy 2.3.1 (`PYTHONPATH=/tmp/mypy2`), with dependencies | 95 errors in 15 files | **0** |
+| CI's install in a throwaway venv (mypy 2.3.1, no dependencies), `--no-error-summary` | exit 0 | exit 0 |
+
+**Two real bugs**, each fixed with a test written first:
+
+* `52d37fa` - remove-image answered 500 after it had stored the exclusion when the image had no
+  cached row.
+* `c6b58ff` - `/ask` in a thread (Lyra's follow-up threads included) or a voice channel's chat
+  called `create_thread` on a channel without it: the player got "Something went wrong" after Lyra
+  had written the answer and charged the credit. The thread is opened only in a text channel now.
+
+And one test-suite fix: `7e6d0e5` - `tests/api/lyra/conftest.py` put a `MagicMock` under
+`sys.modules["discord"]`, and pytest 9 collects that package first, so in every full run the
+Discord bot and the card game's views ran against the mock whatever the tests asserted.
+
+**The rest are typed spellings with the same behaviour**, each commit tagged `(A7)` with its own
+tests: `605d7aa` and `95c9432` (`pipeline.database.affected_rows` for every `rowcount` of a
+data-changing `Session.execute`; none is read directly in `api/` any more), `b19b61b` (`.one()` for
+card-game rows re-read `FOR UPDATE`), `925c309` (`true()` for the empty "not owned" filter),
+`b7e80c9` (the public API's `scalar_one()` counts, `dict(result.tuples())` breakdowns,
+`Field(default=...)`), `95daac4` (`any_()` array membership in the library search), `0e586f2`
+(`list[BaseMessage]` for Lyra's marker injection), `68f24e7` and `904d460` (the Discord views'
+`_CallbackButton`, `_disable_buttons`, `_component_message`; `register_commands(bot: LyraBot)`),
+`7a7a531` (the homepage cache's body typed as Starlette's `bytes | memoryview`, found by mypy 2.3.1).
+
+**The independent review** (verdict ship, three minor findings) and what was done:
+
+1. The status edits were uncommitted and pointed to this entry, which did not exist: written now,
+   committed with them; the `HANDOVER.md` and `HUMAN_ONLY.md` edits are limited to the A7 lines.
+2. The view tests pinned the new helpers and all failed against the base: rewritten
+   (`904d460`). They read `View.to_components()` and click through `item.callback`; with
+   `7b6c736`'s `discord_commands.py` swapped in, 7 of 8 pass, and the eighth, which pins the helpers,
+   fails with `AttributeError: ... '_CallbackButton'` as it must (file restored, `git diff` empty).
+3. Five `.rowcount` reads stayed direct because their sessions are `Any`: routed (`95c9432`).
+   Annotating `get_session() -> Iterator[Session]` was tried and not kept: it surfaces 29 more
+   errors in 3 files (25 `discord_commands.py`, 3 `vector_sync.py`, 1 `theo.py`), a follow-up
+   beyond A7 recorded in the runbook.
+
+**Runbook:** `docs/procedures/CODE_AUDIT.md`, "Type check: `mypy api/` in two configurations"
+(both commands, the typed spellings, how to try a newer mypy without touching the venv, the
+`get_session` measurement, and the gate gap below).
+
+**Open.** (a) No gate enforces the dependency-aware run: `.githooks/pre-push` runs no mypy, and CI
+installs neither the dependencies nor a pinned mypy. Moving the run into the hook or into CI is a
+gate change, so it waits for the owner (HUMAN_ONLY A7); until then the runbook is run after every
+merge that touches `api/` or the models in `pipeline/database.py`. (b) The `get_session`
+annotation and its 29 errors, among them `DuelView.accept_button` reading `c_deck_row.card_ids`
+before the line that treats the deck as possibly `None`. (c) Deploy effect of merging: the api
+image rebuilds, and because of `pipeline/database.py` the Lyra image too (Lyra import check green).
+
+**Gates** (worktree `.claude/worktrees/we2`, main venv, head `904d460` plus this entry): pytest
+`-q -rs --timeout 90 -m "not integration and not live_llm"` **7,150 passed, 118 skipped, 57
+deselected, 0 failed** (379 s; the skips are the gitignored remediation inputs, fonts and Natural
+Earth cache this worktree does not carry); `ruff check api/ pipeline/` clean and `ruff format
+--check` clean on the 31 touched Python files (ruff 0.15.11); `lint-imports` 2 kept, 0 broken;
+`vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80` clean; the three mypy runs in the
+table above; the Lyra-image import check (`markdown`/`nh3` blocked) imports
+`pipeline.lyra.orchestrator`.

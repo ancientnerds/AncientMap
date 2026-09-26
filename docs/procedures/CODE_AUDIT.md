@@ -337,6 +337,23 @@ with dependencies can add findings (mypy 2.x enables `--strict-bytes`): check wi
 `pip install --target /tmp/mypy2 mypy==<ci version>` and
 `PYTHONPATH=/tmp/mypy2 ./.venv/Scripts/python.exe -m mypy api/` without touching the venv.
 
+Both runs see a session from `pipeline.database.get_session()` as `Any`: the context manager
+has no return annotation, so what is done with such a session is not checked. Annotating it
+`-> Iterator[Session]` (tried 2026-09-26, after A7, and not kept) surfaces 29 more errors in
+3 files: 25 in `api/cardgame/discord_commands.py` (the duel paths re-read both players and
+decks with `.first()`, typed Optional; `DuelView.accept_button` reads `c_deck_row.card_ids`
+before the line that treats the deck as possibly `None`), 3 in `api/routes/vector_sync.py`
+(`COUNT(*)` read with `.scalar()` in arithmetic) and 1 in `api/routes/theo.py` (the same in
+a comparison). That annotation is a follow-up beyond A7. Meanwhile use the spellings above
+on such sessions as well - every `rowcount` in `api/` goes through `affected_rows` - so the
+annotation, once made, does not turn working reads into new errors.
+
+No gate enforces the dependency-aware run: `.githooks/pre-push` runs no mypy, and CI installs
+neither the dependencies nor a pinned mypy, so a new CI mypy release can change CI's result
+without a code change. Until the owner decides to move this run into the hook or into CI (both
+are gate changes), run the first command after every merge that touches `api/` or the
+SQLAlchemy models in `pipeline/database.py`, and fix what it reports before the push.
+
 ---
 
 ## Severity Classification
