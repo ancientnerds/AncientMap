@@ -466,6 +466,13 @@ def problems(
             continue
         if row["samples"] < VITAL_MIN_SAMPLES:
             continue
+        # Where the slow samples usually lost the time (boot.ts vitalProps,
+        # from 2026-09-26 on): absent from older rows, and then unsaid.
+        where = ""
+        if row.get("top_phase"):
+            where = f"; mostly {row['top_phase']}"
+            if row.get("top_target"):
+                where += f" at {row['top_target']}"
         found.append(
             {
                 "kind": "slow_page",
@@ -475,7 +482,7 @@ def problems(
                 # `samples`, for the same reason js_error counts sessions.
                 "score": round(row["sessions"] * row["p75"] / limit_ms),
                 "detail": (
-                    f"p75 {round(row['p75'])} ms against a {limit_ms} ms budget, {row['samples']} samples"
+                    f"p75 {round(row['p75'])} ms against a {limit_ms} ms budget, {row['samples']} samples{where}"
                 ),
                 "at": row.get("last_at"),
                 "last": _last_visitor(row),
