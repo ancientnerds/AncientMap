@@ -1318,7 +1318,7 @@ with a closed-list reason. AUDIT_LOG, "HUMAN_ONLY D9 into Phase 4", has the evid
   by the mass run's p4-0042 and stays so. `--after` names the plans that were run as a whole: not
   `PLAN4.pilot4.jsonl`, whose batches past the pilot's never ran (the pilot's sites are `--pilot`'s).
   Every listed site must be the pilot's, an earlier plan's or planned here; an empty plan is refused.
-- **Its own batch block, from p4-0901** (`plan4.LIST_PLAN_FIRST_BATCH`): every run writes into the
+- **Its own batch block, from p4-0901** (since 2026-09-26 `build --first-batch 901`, section 12): every run writes into the
   one P4 apply root and a journal stamp names its batch, the mass run's plan ends at p4-0115 and
   `mass4.requeue_lines` numbers the mass run's re-queued sites on from p4-0116 (19
   `revision-too-fresh` sites wait), and lane L's plan starts at p4-1001. A list plan refuses to start
@@ -1343,3 +1343,78 @@ with a closed-list reason. AUDIT_LOG, "HUMAN_ONLY D9 into Phase 4", has the evid
   `handoff/p4-d9-select` and `-review`, its logs `logs/p4_d9`; it writes into the same apply roots
   (`logs/_write_apply_p4`, `_write_apply_p5`), and every acceptance of lanes p4 and p5 names all
   three runs: `--run runs/pilot4-2026-09-24 --run runs/mass-2026-09-25 --run runs/d9-2026-09-25`.
+
+## 12. Scope version 3: the March texts, descriptions only (lane WA, 2026-09-26)
+
+Owner decisions of 2026-09-26 (`output/remediation/FINISH_PLAN_2026-09-26.md`, O1-O11), over the
+design `output/remediation/REPAIR_TEXTS_2026-09-26.md`: the fresh acceptance's stage 1 measured the
+2026-03 texts wrong far above tolerance (old descriptions 9 of 29, old cards 18 of 43, all severe),
+so every curated site still carrying March text is a text-defect site. Its description goes through
+the unchanged Phase-4 pipeline (same selector and reviewer pins, lanes W and S; T and R stay closed);
+its card is lane WB's (O2, O3). The runbook, with the measured population and every command, is
+`docs/procedures/PHASE4_V3_RUNBOOK.md`; the evidence is AUDIT_LOG, "Lane WA".
+
+- **Scope version 3** (`phase4_runner/SCOPE4.v3.json`, `scope4.SCOPE_SHA256`
+  `fb775d0e5563d9d441c7b7a33bd6e96016a5ac2f9db9524c566f10aeb84ad0ef`, 4,954 sites) is version 2 and
+  the lists `march-description` (3,923: live provenance lane `L`) and `march-card` (3,822: a
+  non-empty card no live Phase-5 write put there - a forward `phase5:` row without its own reversal,
+  revert4's reading), retired sites in neither. Input: `MARCH4_ROWS.jsonl` (committed, `5a2949fb...`)
+  from one read-only SELECT (`plan4.py read-march`, `plan4.MARCH_SQL`), whose sites must be exactly
+  S0's (`scope4.march_lists`, `scope_payload(..., march_rows=)`). Versions 1 and 2 stay byte for byte
+  at their own pins (`SCOPE_V1_*`, `SCOPE_V2_*`; `load_scope(1)`, `load_scope(2)`); version 3
+  refuses nothing version 2 allowed. The March lists add no `SiteFlag` (V9's floor stays).
+- **Descriptions only.** A plan of a list version 3 added (`scope4.DESCRIPTIONS_ONLY_LISTS`) carries
+  `pass: phase4-descriptions-only` (`scope4.DESCRIPTIONS_ONLY_MARK`) on every batch. `run4 prepare`
+  copies it into `input.json`; `mass4` reads it (`line_pass`: none or the mark, lane L's plan and
+  anything else refused, one pass per plan) and gives it to every re-queued batch;
+  `write4.load_batch` reads it into `BatchInputs.descriptions_only`. Then P4 writes the description
+  with `card: null` (`without_card`, as for a card-scope hold; the journal evidence says
+  `card_withheld`), so no provenance names a card that is never served (acceptance D4), and P5
+  refuses every site of the batch (`descriptions-only-plan`, right after the scope): the P5 group of
+  a v3 run is never run, and `verify_writes4 --lane p4` re-verifies such a site with no card. The
+  plans of versions 1 and 2 carry no pass: their bytes are unchanged (the D9 plan rebuilds with
+  `--first-batch 901`).
+- **`plan4.py build --scope-list` is repeatable** (the union, each site once, in the plan's order)
+  and takes `--first-batch N` (required; replaces the constant p4-0901): the block must lie past
+  every `--after` ordinal and outside lane L's (`plan4.legacy_block`: p4-1001 .. p4-1334 for the
+  5,004 curated sites). `--exclude FILE` leaves sites out (UUIDs, each a curated row; the summary
+  prints a count and the file's sha256, never the ids). `--take-deferred RUN_DIR` plans the sites a
+  run deferred `revision-too-fresh` in their latest batch although an `--after` plan carries them
+  (`mass4.ready_to_hand_over`: refused while one still waits for its 48 h, or once the run re-queued
+  one itself; each must be in a listed list and carried by an `--after` plan - the deferring run's
+  plan must be named, or its other sites would be planned twice).
+- **The two v3 plans** (measured 2026-09-26 from a fresh read, `PHASE4_V3_RUNBOOK.md`): `PLAN4.v3.jsonl`,
+  3,238 sites in 216 batches, p4-2001 .. p4-2216 (`--after` the mass and D9 plans); and
+  `PLAN4.v3d.jsonl` for the mass run's 19 `revision-too-fresh` sites, due 2026-09-26T21:30:14Z ..
+  21:40:06Z: held there and never written, so not "new" - the v3 plan leaves them to the mass plan
+  that carries them, and the follow-up plan takes them over (`--after` also `PLAN4.v3.jsonl`,
+  `--take-deferred runs/mass-2026-09-25`, `--first-batch 2501`: 19 sites, p4-2501 .. p4-2502), run
+  `runs/v3d-<date>`. The main plan so need not wait for 21:40Z, and the block p4-2501 leaves v3's own
+  re-queue (p4-2217 on) room.
+- **The acceptance and a deferred site.** `verify_writes4.index_runs` refused a site two runs carry.
+  A run that held the site `revision-too-fresh` (site scope) and assembled nothing for it
+  (`RunSite.deferred`, `deferred_in`) never wrote it: the site is read from the other run, in either
+  order. Two runs that both could have written it stay refused.
+- **The handoff at scale** (O11, 16 agents): `phase4/handoff4.py` - `brief` prints one batch agent's
+  whole instruction for the selector or the reviewer (only its prompt files, no web, drafts in its
+  own `<handoff>-scratch/<batch>/`, `--answered-by opus-<handoff name>-<batch>`); `check-answer`
+  reads a draft through the stage's own parser against the batch's own pool or assembly, after
+  proving the batch still builds the exported prompt, and asks a review for every shown sentence and
+  the CARD line once; `ready` names the batches whose every question is answered in shape. Agents
+  answer different batches of one directory at once; `mass4` import rounds stay one at a time
+  (`--only` the ready batches); `mass4`'s dry run prints the done batches (`done` line) the write
+  gate may plan.
+- **Lane L and v3.** The plan reads production afresh (`plan4.py read`), so its `raw_data` old values
+  carry lane L's provenance and P4 replaces it in the same cell: no L row is reverted (section 11 was
+  needed only because the D9 plan named S0's values). Lane L's acceptance afterwards runs with
+  `--allow-stamp 'phase4:%'` (beside the orphan-citations and dangling-markers stamps) and without
+  `--complete`. A P4 revert of a v3 site restores the March text and its L marking together.
+- **Later lanes and the p4 acceptance.** The p4 acceptance re-reads every row P4 ever planned, so a
+  lane that writes a cell of a P4-written site afterwards is named with `--allow-stamp` in every
+  later p4 acceptance (its rows are then superseded, not re-verified as P4's): lane L `phase4l:%`,
+  lane WB's provenance lane `wb-teaser-prov-%` (a new `raw_data` key `_card_provenance`, V12 would
+  refuse it as P4's), lane WC `phase4wc:%`. WC and WB take only final sites: a site of a v3 batch
+  not yet written, or held `revision-too-fresh` (it comes back through the re-queue), is still
+  Phase 4's, and another lane's write would stop its batch at the preflight.
+- **Not built** (owner decisions 2026-09-26): the design's clearing group C (lanes WC and WB take the
+  held texts), and the exclusion of an acceptance draw (O1: no acceptance any more).
