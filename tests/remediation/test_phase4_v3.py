@@ -14,9 +14,11 @@ The quiet mistakes worth a test: a retired site, a live Phase-5 card or a P5 cle
 a March read of other sites than S0's; a version-3 plan that loses its descriptions-only mark (in a
 re-queue, too) and so writes a provenance naming a card that is never served, or lets P5 plan an
 extractive card; a plan numbered into lane L's block; an excluded site planned anyway; a deferred
-site taken over while the run could still re-queue it, or refused by the acceptance as "in two
-runs"; an agent's answer checked against another pool or prompt than its question's. The mutation
-cases are `P4_V3_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py`.
+site taken over while the run could still re-queue it, re-queued by a plan without the pass
+although a descriptions-only list names it, or refused by the acceptance as "in two runs"; an
+agent's answer checked against another pool or prompt than its question's; a group of batches kept
+waiting by a batch that asked nothing. The mutation cases are `P4_V3_MUTATIONS` in
+`scripts/remediation/phase3/mutation_sweep.py`.
 """
 
 from __future__ import annotations
@@ -558,6 +560,51 @@ def test_build_takes_over_the_deferred_sites_an_earlier_plan_carries(
         )  # fmt: skip
 
 
+def _mark_plan(plan: Path) -> Path:
+    """The plan file, every line given the descriptions-only pass (the plan of a v3 list)."""
+    lines = [{**line, "pass": MARK} for line in R.read_jsonl(plan)]
+    plan.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+    return plan
+
+
+def test_a_plan_without_the_pass_re_queues_no_site_a_descriptions_only_list_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The mass run's 19 (review finding 2026-09-26): a live round of the mass run after their 48 h
+    would re-queue them into its own plan - S0's old values, and P5 would plan their extractive card
+    although lane WB writes every card (O2, O3) - and v3d's `--take-deferred` would then refuse, or
+    both runs would assemble them. So a plan without the descriptions-only pass re-queues no site a
+    descriptions-only list names: the live round is refused before REQUEUE4 is written, the dry run
+    says so, and a descriptions-only plan re-queues its own sites as before."""
+    from tests.remediation.test_phase4_runner import LIVE_ROUND, _args
+
+    def no_run(**kwargs: Any) -> int:
+        raise AssertionError("a refused round started the loop")
+
+    plan, run_dir = _deferring_run(tmp_path, ("2020-01-01T08:00:00Z", "2020-01-02T08:00:00Z"))
+    scope = _v3_scope({"site-1": (MD,), "site-2": (S.CLEARED_CARD,)})
+    monkeypatch.setattr(S, "load_scope", lambda *args, **kwargs: scope)
+    monkeypatch.setattr(MR, "run_mass", no_run)
+    assert M4.descriptions_only_claims(M4.read_plan4_lines(plan), scope) == ["site-1"]
+    capsys.readouterr()
+
+    assert M4.drive(_args(tmp_path, plan)) == 0  # dry: names what a live round refuses
+    assert "hand over     1 ready site(s) a descriptions-only list names" in capsys.readouterr().out
+    with pytest.raises(MR.PlanError, match="1 ready deferred site.*first site-1.*take-deferred"):
+        M4.drive(_args(tmp_path, plan, *LIVE_ROUND))
+    assert not (run_dir / M4.REQUEUE_FILE).exists()
+
+    # the same sites deferred by a descriptions-only plan: its own re-queue, as before
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(MR, "run_mass", lambda **kw: seen.update(kw) or 0)
+    _mark_plan(plan)
+    assert M4.descriptions_only_claims(M4.read_plan4_lines(plan), scope) == []
+    assert M4.drive(_args(tmp_path, plan, *LIVE_ROUND)) == 0
+    assert [b.batch_id for b in seen["batches"]] == ["p4-0001", "p4-0002", "p4-0003"]
+    (line,) = M4.read_requeue(run_dir, M4.read_plan4_lines(plan))
+    assert ([s.site_id for s in line.sites], line.pass_name) == (["site-1", "site-2"], MARK)
+
+
 # ============================================================================ mass4: the pass
 
 
@@ -839,13 +886,7 @@ def test_check_answer_reads_the_review_whole(tmp_path: Path) -> None:
         assert problem is not None and match in problem, (text, problem)
 
 
-def test_ready_names_the_batches_whose_every_question_is_answered(tmp_path: Path) -> None:
-    batch_dir, handoff = _select_export(tmp_path)
-    result = H.ready(handoff, ["p4-2001"])
-    assert not result["ok"] and result["ready"] == [] and result["named_not_ready"] == ["p4-2001"]
-    assert result["not_ready"] == {
-        "p4-2001": {"answered": 0, "missing": 1, "stale": 0, "malformed": 0}
-    }
+def _answer_select(handoff: Path) -> None:
     OH.write_answer(
         handoff,
         batch_id="p4-2001",
@@ -855,10 +896,46 @@ def test_ready_names_the_batches_whose_every_question_is_answered(tmp_path: Path
         answered_by=H.agent_name(handoff, "p4-2001"),
         now=lambda: "2026-09-26T12:00:00+00:00",
     )
-    result = H.ready(handoff, ["p4-2001"])
+
+
+def test_ready_names_the_batches_whose_every_question_is_answered(tmp_path: Path) -> None:
+    batch_dir, handoff = _select_export(tmp_path)
+    run = batch_dir.parent
+    result = H.ready(handoff, run, ["p4-2001"])
+    assert not result["ok"] and result["ready"] == [] and result["named_not_ready"] == ["p4-2001"]
+    assert result["not_ready"] == {
+        "p4-2001": {"answered": 0, "missing": 1, "stale": 0, "malformed": 0}
+    }
+    _answer_select(handoff)
+    result = H.ready(handoff, run, ["p4-2001"])
     assert result["ok"] and result["ready"] == ["p4-2001"]
-    assert H.main(["ready", "--handoff", str(handoff), "--batch", "p4-2001"]) == 0
-    assert H.main(["ready", "--handoff", str(handoff), "--batch", "p4-2009"]) == 1
+    ready = ["ready", "--run-dir", str(run), "--handoff", str(handoff)]
+    assert H.main([*ready, "--batch", "p4-2001"]) == 0
     orphan = handoff / "p4-2001" / "finder" / "x%2Fselect.answer.json"
     orphan.write_text("{}", encoding="utf-8")
-    assert not H.ready(handoff)["ok"]
+    assert not H.ready(handoff, run)["ok"]
+
+
+def test_a_named_batch_that_asked_nothing_is_ready_and_a_stray_name_is_refused(
+    tmp_path: Path,
+) -> None:
+    """Review finding 2026-09-26: a batch whose every site was held before the stage has no folder
+    in the directory, so `ok` stayed false for a whole group, forever. It is a batch of the run that
+    asked nothing: named apart and importable with the rest (had its export not run, its import
+    stops at the first question: no answer file). A name that is no batch of the run is refused,
+    so a typo can never pass as a batch without questions."""
+    batch_dir, handoff = _select_export(tmp_path)
+    run = batch_dir.parent
+    X.make_batch(tmp_path, [X.w_site("site-2")], run="v3", batch="p4-2002")
+    result = H.ready(handoff, run, ["p4-2001", "p4-2002"])
+    assert not result["ok"] and result["named_not_ready"] == ["p4-2001"]
+    assert result["named_without_questions"] == ["p4-2002"]
+    _answer_select(handoff)
+    result = H.ready(handoff, run, ["p4-2001", "p4-2002"])
+    assert result["ok"] and result["ready"] == ["p4-2001"]
+    assert (result["named_not_ready"], result["named_without_questions"]) == ([], ["p4-2002"])
+    with pytest.raises(H.HandoffCheckError, match=r"no batch of the run: \['p4-2009'\]"):
+        H.ready(handoff, run, ["p4-2001", "p4-2009"])
+    ready = ["ready", "--run-dir", str(run), "--handoff", str(handoff)]
+    assert H.main([*ready, "--batch", "p4-2001", "--batch", "p4-2002"]) == 0
+    assert H.main([*ready, "--batch", "p4-2009"]) == 2

@@ -40,7 +40,12 @@ stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4
   descriptions only), so the writer treats it as the plan's. **A later plan may take the deferred
   sites over instead** (`plan4.py build --take-deferred RUN_DIR`, `ready_to_hand_over`): once every
   one of them is ready and the run never re-queued one itself; from then on that run is not driven
-  live again (its re-queue would ask them twice).
+  live again (its re-queue would ask them twice). **A plan without a pass re-queues no site a
+  descriptions-only list names** (`descriptions_only_claims`): such a plan's batch would write it
+  over S0's old values and let P5 plan its extractive card, while every card is lane WB's (owner
+  decisions 2026-09-26) - a live round with such a ready site is refused before `REQUEUE4.jsonl`
+  is written, and the dry run names it. This is what keeps the mass run's 19 `revision-too-fresh`
+  sites for the v3d plan.
 * **A plan's batches carry one `pass`**: none (the plans of scope versions 1 and 2) or
   `scope4.DESCRIPTIONS_ONLY_MARK`; lane L's plan (`legacy4.PLAN_MARK`) and anything else is
   refused - lane L asks no model question.
@@ -334,6 +339,22 @@ def ready_to_hand_over(run_dir: Path, *, now: datetime) -> list[Deferred]:
     return deferred
 
 
+def descriptions_only_claims(lines: Sequence[PlanLine], scope: S.DefectScope) -> list[str]:
+    """The sites of `lines` from a plan without a pass (scope versions 1 and 2) that a
+    descriptions-only list of `scope` names (`scope4.DESCRIPTIONS_ONLY_LISTS`). Re-queued by such a
+    plan, a site would be written with S0's old values and P5 would plan its extractive card, while
+    every card is lane WB's (owner decisions 2026-09-26, O2 and O3): a descriptions-only plan takes
+    it over instead (`plan4.py build --take-deferred`, `ready_to_hand_over`)."""
+    wanted = set(S.DESCRIPTIONS_ONLY_LISTS)
+    return [
+        site.site_id
+        for line in lines
+        if line.pass_name is None
+        for site in line.sites
+        if wanted & set(scope.sites.get(site.site_id, ()))
+    ]
+
+
 def append_requeue(run_dir: Path, new: Sequence[PlanLine]) -> None:
     """Append the new batches to `REQUEUE4.jsonl`; the lines already there are never rewritten."""
     path = run_dir / REQUEUE_FILE
@@ -598,6 +619,17 @@ def drive(args: argparse.Namespace) -> int:
     now = datetime.now(UTC)
     new = requeue_lines([*planned, *requeued], deferred, now=now)
     waiting = sorted(item.ready_at for item in deferred if item.ready_at > now)
+    scope = S.load_scope()
+    claimed = descriptions_only_claims(new, scope)
+    if args.live and claimed:
+        raise MR.PlanError(
+            f"{len(claimed)} ready deferred site(s) of this plan (first {claimed[0]}) are named by "
+            f"a descriptions-only list of {scope.label}: this plan carries no pass, so a re-queue "
+            "would write them over S0's old values and P5 would plan their extractive card, while "
+            "every card is lane WB's (owner decisions 2026-09-26). A descriptions-only plan takes "
+            f"them over (plan4.py build --take-deferred {run_dir}); this run is not driven live "
+            "again."
+        )
     if args.live and new:
         append_requeue(run_dir, new)
         requeued += new
@@ -613,7 +645,6 @@ def drive(args: argparse.Namespace) -> int:
     if args.jobs < 1 or args.failures_before_stop < 1:
         raise MR.PlanError("--jobs and --failures-before-stop are at least 1")
     chosen = {b.batch_id for b in batches}
-    scope = S.load_scope()
     outside = outside_scope(
         [line for line in [*planned, *requeued] if line.batch_id in chosen], scope, run_dir=run_dir
     )
@@ -647,6 +678,11 @@ def drive(args: argparse.Namespace) -> int:
         f"{'re-queued now' if args.live else '(written by a live run)'}, {len(waiting)} waiting"
         + (f" (the first until {S1.iso_utc(waiting[0])})" if waiting else "")
     )
+    if claimed:  # only a dry run gets here: a live one was refused above
+        print(
+            f"hand over     {len(claimed)} ready site(s) a descriptions-only list names: a live "
+            f"run refuses; plan4.py build --take-deferred {run_dir}"
+        )
     print(f"budget        {budget.as_text()}")
     print(f"defect scope  {scope.label}: {len(outside)} site(s) of the open batches outside it")
     if args.searches_off:

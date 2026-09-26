@@ -21211,6 +21211,8 @@ P4V3_MOVED = "test_check_answer_refuses_a_question_the_batch_no_longer_builds"
 P4V3_REVIEW = "test_check_answer_reads_the_review_whole"
 P4V3_READY = "test_ready_names_the_batches_whose_every_question_is_answered"
 P4V3_BRIEF = "test_the_brief_names_the_batch_its_files_its_scratch_and_its_agent"
+P4V3_CLAIMS = "test_a_plan_without_the_pass_re_queues_no_site_a_descriptions_only_list_names"
+P4V3_ASKED_NOTHING = "test_a_named_batch_that_asked_nothing_is_ready_and_a_stray_name_is_refused"
 
 P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── scope4: the March lists ───────────────────────────────────────────────────────────────
@@ -21671,6 +21673,55 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    return root.parent / f"{root.name}-scratch"  # mutant\n',
         P4V3_TEST,
         P4V3_BRIEF,
+    ),
+    # ── the review findings of 2026-09-26: the mass run's 19 stay v3d's; a batch that asked nothing
+    (
+        "p4 v3 mass4: a pass-less plan re-queues a descriptions-only site",
+        P4V3_MASS,
+        "    if args.live and claimed:\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_CLAIMS,
+    ),
+    (
+        "p4 v3 mass4: a descriptions-only plan's own re-queue is claimed",
+        P4V3_MASS,
+        "        if line.pass_name is None\n",
+        "        if True  # mutant\n",
+        P4V3_TEST,
+        P4V3_CLAIMS,
+    ),
+    (
+        "p4 v3 mass4: a site of another list is claimed",
+        P4V3_MASS,
+        "        if wanted & set(scope.sites.get(site.site_id, ()))\n",
+        "        if site.site_id in scope  # mutant\n",
+        P4V3_TEST,
+        P4V3_CLAIMS,
+    ),
+    (
+        "p4 v3 mass4: the dry run hides what a live round refuses",
+        P4V3_MASS,
+        "    if claimed:  # only a dry run gets here",
+        "    if False:  # mutant",
+        P4V3_TEST,
+        P4V3_CLAIMS,
+    ),
+    (
+        "p4 v3 handoff4: a batch that asked nothing keeps its group waiting",
+        P4V3_HANDOFF,
+        "    waiting = sorted(set(batches) - set(done) - set(without))\n",
+        "    waiting = sorted(set(batches) - set(done))  # mutant\n",
+        P4V3_TEST,
+        P4V3_ASKED_NOTHING,
+    ),
+    (
+        "p4 v3 handoff4: a name that is no batch of the run passes",
+        P4V3_HANDOFF,
+        "    if strays:\n        raise HandoffCheckError(",
+        "    if False:  # mutant\n        raise HandoffCheckError(",
+        P4V3_TEST,
+        P4V3_ASKED_NOTHING,
     ),
 ]
 MUTATIONS += P4_V3_MUTATIONS

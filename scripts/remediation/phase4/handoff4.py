@@ -12,7 +12,7 @@ one `mass4.py --only <ready batches> --handoff-import` round at a time.
 
     handoff4.py brief        --run-dir R --handoff H --batch-id B
     handoff4.py check-answer --run-dir R --handoff H --batch-id B --label L --text-file F
-    handoff4.py ready        --handoff H [--batch B ...]
+    handoff4.py ready        --run-dir R --handoff H [--batch B ...]
 
 * `brief` prints the whole instruction of the agent that answers batch B: which files it may read,
   where it writes its drafts (`<handoff>-scratch/<batch>/`), how it checks and records each answer,
@@ -28,7 +28,9 @@ one `mass4.py --only <ready batches> --handoff-import` round at a time.
   agent's.
 * `ready` reads `opus_handoff.validate` per batch: the batches whose every question is answered in
   shape (0 missing, stale, malformed) can be imported alone; stale or malformed answers anywhere, or
-  answer files no question asks for, fail it.
+  answer files no question asks for, fail it. A named batch of the run without a folder in the
+  directory asked nothing (every site held before the stage) and is imported with the others
+  (`named_without_questions`); a name that is no batch of the run is refused.
 
 Only lanes W and S are open (the translate and restricted stages ask nothing while T and R stay
 closed), so only the selector's and the reviewer's questions have a brief. Nothing here calls a
@@ -287,11 +289,20 @@ def check_answer(run_dir: Path, handoff: Path, batch_id: str, label: str, text: 
 # ------------------------------------------------------------------------------------ ready
 
 
-def ready(handoff: Path, batches: Sequence[str] = ()) -> dict[str, Any]:
+def ready(handoff: Path, run_dir: Path, batches: Sequence[str] = ()) -> dict[str, Any]:
     """Per batch of the directory: its questions and what `opus_handoff.validate` says of them. A
     batch is ready when every question is answered in shape; `ok` is false while any answer is
     stale or malformed, an answer file no question asks for lies there, or a named batch is not
-    ready (or not there)."""
+    ready.
+
+    Every named batch must be a batch of the run (`<run>/<batch>/input.json`), else refused. A named
+    batch with no folder in the directory asked no question - every site of it was held before the
+    stage, so the export wrote nothing - and is listed as `named_without_questions`: it is imported
+    with the others, and its import asks nothing. Had its export not run at all, its import stops
+    at its first question (`HandoffRunner`: no answer file) and writes nothing."""
+    strays = sorted(b for b in set(batches) if not (run_dir / b / M.INPUT_FILE).exists())
+    if strays:
+        raise HandoffCheckError(f"{run_dir}: no batch of the run: {strays}")
     result = OH.validate(handoff)
     per: dict[str, dict[str, int]] = {}
     for status, entries in (
@@ -306,14 +317,14 @@ def ready(handoff: Path, batches: Sequence[str] = ()) -> dict[str, Any]:
             )
             counts[status] += 1
     done = sorted(b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == 0)
-    unknown = sorted(set(batches) - set(per))
-    waiting = sorted(set(batches) - set(done))
+    without = sorted(set(batches) - set(per))
+    waiting = sorted(set(batches) - set(done) - set(without))
     return {
         "ok": not (result.stale or result.malformed or result.orphans or waiting),
         "ready": done,
         "not_ready": {b: c for b, c in sorted(per.items()) if b not in done},
         "named_not_ready": waiting,
-        "named_unknown": unknown,
+        "named_without_questions": without,
         "stale": result.stale,
         "malformed": result.malformed,
         "orphans": result.orphans,
@@ -341,6 +352,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.choices["check-answer"].add_argument("--label", required=True)
     sub.choices["check-answer"].add_argument("--text-file", required=True, type=Path)
     batches = sub.add_parser("ready", help="the batches whose every question is answered in shape")
+    batches.add_argument("--run-dir", required=True, type=Path)
     batches.add_argument("--handoff", required=True, type=Path)
     batches.add_argument("--batch", action="append", default=[], help="a batch that must be ready")
     return parser
@@ -363,7 +375,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             problem = check_answer(args.run_dir, args.handoff, args.batch_id, args.label, text)
             _print({"ok": problem is None, "problem": problem})
             return 0 if problem is None else 1
-        payload = ready(args.handoff, args.batch)
+        payload = ready(args.handoff, args.run_dir, args.batch)
         _print(payload)
         return 0 if payload["ok"] else 1
     except (HandoffCheckError, OH.HandoffError) as exc:
