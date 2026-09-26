@@ -12930,3 +12930,25 @@ Castell Henllys n2 (digging began 1981), Tarragona n2 (colony under Caesar/Augus
 (Ascope Province), Marcahuamachuco n2 (AD 400 is not the Middle Horizon) and n3 (Inca conquest in the
 15th century). Two records whose scope is in question go to WD2's scope review: Richat Structure
 (a natural formation) and Hadrian's Wall Path (a footpath opened 2003).
+
+## 2026-09-27 - Lane WA complete: 1,769 sites with a new sourced description (v3 1,750, v3d 19)
+
+- **v3** (`PLAN4.v3.jsonl` `779021ad...`, 3,124 sites, 209 batches, the L5 population excluded):
+  40 write steps (P4 apply root steps up to 44), each accepted with 0 deviations; **1,750 sites
+  written**, 1,374 held (HOLDS4 of `runs/v3-2026-09-26`: abstained, search-stopped (no source),
+  V10, V14, V9, V6, no-source, card-scope holds, revision-too-fresh 48 - re-queued, due from
+  2026-09-28T07:57Z). Mid-run audits after 572, 1,147 and 1,729 written sites: 10 sites each,
+  186 of 186 sentences SUPPORTED by an independent Opus auditor (`logs/p4_v3/AUDIT_{1,2,3}_*`);
+  informational Wikipedia errors listed for the description repair (audit 3 adds Tumulus of
+  Bougon n7).
+- **v3d** (`PLAN4.v3d.jsonl` `7a147b7f...`, built after the 48 h window and after L5 landed: the
+  mass run's 19 deferred sites plus the L5 population's March sites, 133 sites in 9 batches):
+  19 written in one accepted step, 114 held (search-stopped 68, no-source 15, abstained 13, ...);
+  2 re-queued (due 2026-09-28T21:42Z).
+- **Lane L after v3** (read-only, `accept-p4l-after-v3.log`): 4,003 planned L rows, 2,187 carried,
+  1,774 superseded by `phase4:%`, **0 deviations**.
+- One incident (recorded above): a duplicate loop instance's preflight refused p4-2085 after the
+  other instance wrote it; nothing was written twice. One acceptance run failed on a truncated psql
+  read-back line (line 4462 not JSON); the re-run over the same data read 0 deviations and was
+  accepted - a transport hiccup, not data.
+The held sites (final ones) go to lane WC; the 50 re-queued ones return through v3/v3d's re-queue.
