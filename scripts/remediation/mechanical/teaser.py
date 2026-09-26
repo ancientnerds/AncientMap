@@ -1,9 +1,12 @@
 """Lane WB's write: a run's teaser outcomes as journalled mechanical lanes, in steps of 100 sites.
 
 The cards are decided by `scripts/remediation/teaser/run.py` (writer, independent checker, up to two
-rewrites; `OUTCOMES.jsonl`). This module plans their write and nothing else; `mechanical/apply.py`
-renders, rehearses, probes, applies and reads back every statement, as for every other mechanical
-lane. Contract and runbook: `docs/procedures/CARD_DESCRIPTIONS.md`.
+rewrites, then the independent web verification of every accepted card with one rewrite after a
+failed one; `OUTCOMES.jsonl`). This module plans their write and nothing else: only a VERIFIED card
+is written (an accepted outcome without that verification is listed `not-verified`), and a site the
+run cleared - `contradicted-after-verify` included - loses its card; `mechanical/apply.py` renders,
+rehearses, probes, applies and reads back every statement, as for every other mechanical lane.
+Contract and runbook: `docs/procedures/CARD_DESCRIPTIONS.md`.
 
 ## Why a mechanical lane and not `write_gate4.py --group P5`
 
@@ -24,7 +27,8 @@ the read-back - and needs only the one extension this lane brings: a column that
 step of at most 100 sites is therefore two lanes, written in this order:
 
 1. **`teaser-prov-sNNN`** (`unified_sites.raw_data`): the site's `_card_provenance` (the checked
-   card's hash, the description's hash, the checker's verdict and claims), and
+   card's hash, the description's hash, the checker's verdict and claims, the verifier and its
+   VERIFIED verdict, the web facts a rewrite's claims cite), and
    `_description_provenance.card` set to `null` where a Phase-5 extractive card key is left - the
    card it names is being replaced, and acceptance D4 would otherwise fail. For a cleared card the
    row removes a teaser provenance and nulls that key, and is planned only when there is one to
@@ -332,6 +336,7 @@ def parse_export(text: str) -> tuple[dict[str, Live], dict[tuple[str, str], list
 
 
 # ------------------------------------------------------------------------------ the decision
+NOT_VERIFIED = "not-verified"
 STALE_DESCRIPTION = "stale-description"
 SITE_RETIRED = "retired"
 NO_CARD_ROW = "no-card-row"
@@ -340,6 +345,8 @@ RAW_DATA_NOT_OBJECT = "raw-data-not-an-object"
 NOT_REPRINTED = "raw-data-not-reprinted"
 NOTHING_TO_CHANGE = "nothing-to-change"
 REFUSAL_MEANING = {
+    NOT_VERIFIED: "the accepted card carries no VERIFIED web verification (an outcome written "
+    "before the verify stage existed): never written - ask the site again in a new run",
     STALE_DESCRIPTION: "the description changed after the card was checked: run lane WB again",
     SITE_RETIRED: "the site was retired after the run: its card is never drawn",
     NO_CARD_ROW: "no card_stats row to write the card into",
@@ -395,7 +402,14 @@ def _evidence(outcome: Mapping[str, Any], run: str) -> tuple[dict[str, Any], ...
     source = f"output/remediation/teaser/runs/{run}/OUTCOMES.jsonl"
     if outcome["status"] == ACCEPTED:
         check = outcome["provenance"]["check"]
+        verify = outcome["provenance"]["verify"]
         claims = "; ".join(f"{c['claim']} [{', '.join(c['support'])}]" for c in check["claims"])
+        final = outcome["verifications"][-1]
+        judged = "; ".join(
+            f"{c['claim']} [{c['verdict']}{'' if c['proven'] else ', no proving quote'}: "
+            f"{c['url']}]"
+            for c in final["claims"]
+        )
         return (
             {
                 "source": f"lane WB run {run}: writer {outcome['writer']['answered_by']}",
@@ -407,6 +421,16 @@ def _evidence(outcome: Mapping[str, Any], run: str) -> tuple[dict[str, Any], ...
                 "url": source,
                 "quote": claims,
             },
+            {
+                "source": f"lane WB run {run}: verifier {verify['by']} ({verify['stage']}), "
+                f"{verify['verdict']}",
+                "url": source,
+                "quote": judged,
+            },
+            *(
+                {"source": f"web fact {fact['id']}", "url": fact["url"], "quote": fact["quote"]}
+                for fact in outcome["provenance"]["web_facts"]
+            ),
         )
     reasons = "; ".join(r for f in outcome["findings"] for r in f["reasons"]) or outcome["reason"]
     return ({"source": f"lane WB run {run}: {outcome['reason']}", "url": source, "quote": reasons},)
@@ -421,6 +445,9 @@ def classify(
     """One site's two cells - (provenance, card), either `None` when it needs no change - or the
     refusal that lists it."""
     site_id, name = outcome["site_id"], outcome["name"]
+    # only a VERIFIED card is written; an OUTCOMES.jsonl from before the verify stage has no key
+    if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:
+        return _refused(site_id, name, NOT_VERIFIED, "no VERIFIED web verification")
     if live is None:
         return _refused(site_id, name, NOT_CURATED, "the export did not return the site")
     if live.scope_status == RETIRED:
@@ -486,7 +513,8 @@ def classify(
             new_value=outcome["card"],
             rule=rule,
             note=(
-                f"teaser card, {len(outcome['card'])} characters, checked PASS"
+                f"teaser card, {len(outcome['card'])} characters, checked PASS, web-verified "
+                "VERIFIED"
                 if outcome["status"] == ACCEPTED
                 else f"card cleared ({outcome['reason']})"
             ),

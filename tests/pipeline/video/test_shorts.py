@@ -772,6 +772,16 @@ def _teaser_row(**over):
         checker="teaser-check-b001",
         checked_at="2026-09-26T12:00:00+00:00",
         claims=[{"claim": "a 15th-century Inca citadel", "support": ["S1"]}],
+        verify={
+            "verdict": "VERIFIED",
+            "stage": "verify",
+            "by": "teaser-verify-001",
+            "at": "2026-09-26T13:00:00+00:00",
+            "claims": 2,
+            "unproven": 0,
+            "text_sha256": CP.text_sha256(CARD),
+        },
+        web_facts=[],
     )
     return {**row, **over}
 

@@ -8,7 +8,9 @@ checker (`prompts.checker_prompt`). Pure: no database, no network, no model, no 
 ## The fact basis (`Basis`)
 
 A card may claim only what the site's **published description** says, plus the site's name and
-country. The description is shown to the writer and to the checker as numbered sentences
+country - and, in the one rewrite after a failed web verification, a *web fact* (`WebFact`, `W1`,
+...): a quote the first verifier found on a page contradicting a claim, offered as a correction. The
+description is shown to the writer and to the checker as numbered sentences
 (`description_sentences`): citation markers taken out (`[1]`, `[2, 3]`, `[4-6]`, with the space
 before them - the frontend's `stripCitations` shape), each non-empty line split by the project's one
 sentence splitter (`pipeline.lyra.text_sentences.split_sentences`, which keeps `c. 3000 BC`, `St.`
@@ -53,7 +55,8 @@ On the **final** card - the writer's text after the assembler's one spoken edit
 * every numeral is grounded: `phase4.scope4.numerals` - the numeral reading of the ungrounded-card
   list (`scope4.ungrounded_card`): ASCII digits with comma thousands and a decimal part, read as a
   value - of the card, each of which must be a numeral of the fact basis (the site's name and the
-  description without its markers). `ungrounded_card` itself is not called: it reads only the first
+  description without its markers, and in the one rewrite after a failed web verification the web
+  facts' quotes - `Basis.web`). `ungrounded_card` itself is not called: it reads only the first
   500 characters of its input, the March generator's; the fact basis here is the whole description;
 * the card names the site (`name_forms`, above);
 * the shorts can render it: every glyph in the brand font and every caption word within the frame
@@ -70,7 +73,7 @@ import re
 import sys
 import unicodedata
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -126,8 +129,19 @@ class Sentence:
 
 
 @dataclass(frozen=True)
+class WebFact:
+    """A quote the first web verifier found on a page contradicting a claim of the card: after a
+    failed verification it may correct that claim (`run.web_facts` chooses which count)."""
+
+    id: str
+    url: str
+    quote: str
+
+
+@dataclass(frozen=True)
 class Basis:
-    """A site's fact basis: the only facts its card may claim."""
+    """A site's fact basis: the only facts its card may claim - the description's sentences, and in
+    the one rewrite after a failed web verification the web facts (`web`) beside them."""
 
     site_id: str
     name: str
@@ -135,6 +149,7 @@ class Basis:
     description: str
     sentences: tuple[Sentence, ...]
     forms: tuple[str, ...]
+    web: tuple[WebFact, ...] = ()
 
     @property
     def desc_sha256(self) -> str:
@@ -142,12 +157,29 @@ class Basis:
         return text_sha256(self.description)
 
     @property
-    def sentence_ids(self) -> frozenset[str]:
+    def described_ids(self) -> frozenset[str]:
+        """The ids of the description's own sentences (`S1`, ...), never a web fact's."""
         return frozenset(sentence.id for sentence in self.sentences)
 
+    @property
+    def sentence_ids(self) -> frozenset[str]:
+        """Every id a card may rest on: the description's sentences and the web facts."""
+        return self.described_ids | {fact.id for fact in self.web}
+
     def grounding(self) -> str:
-        """The text every numeral of a card must come from: the name and the description."""
-        return "\n".join([self.name, *(sentence.text for sentence in self.sentences)])
+        """The text every numeral of a card must come from: the name, the description and the web
+        facts."""
+        return "\n".join(
+            [
+                self.name,
+                *(sentence.text for sentence in self.sentences),
+                *(fact.quote for fact in self.web),
+            ]
+        )
+
+    def with_web(self, facts: Iterable[WebFact]) -> Basis:
+        """The same basis with these web facts beside the description."""
+        return replace(self, web=tuple(facts))
 
 
 def description_sentences(description: str) -> tuple[Sentence, ...]:
