@@ -371,6 +371,17 @@ output/remediation/fields/wd1/write/*/*/REHEARSAL.sql
 !output/remediation/fields/wd1-rest/
 output/remediation/fields/wd1-rest/*
 !output/remediation/fields/wd1-rest/COUNTS.json
+# Each part's pilot (runbook 3.3): its counts and its gate report are versioned, the rest local.
+!output/remediation/fields/wd1-pilot/
+output/remediation/fields/wd1-pilot/*
+!output/remediation/fields/wd1-pilot/COUNTS.json
+!output/remediation/fields/wd1-pilot/PILOT.json
+!output/remediation/fields/wd1-rest-pilot/
+output/remediation/fields/wd1-rest-pilot/*
+!output/remediation/fields/wd1-rest-pilot/COUNTS.json
+!output/remediation/fields/wd1-rest-pilot/PILOT.json
+# The read-only measurements behind the runbook's section 5 (counts and coverage only).
+!output/remediation/fields/measurements/
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
 # nothing and is rendered again by `qid_repair.py render`.
