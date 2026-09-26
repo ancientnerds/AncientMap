@@ -71,3 +71,7 @@ WA mass run -> WC -> WB (per site after its description is final) -> WD conflict
 (appended as the work proceeds; newest last)
 
 - 2026-09-26 ~01:30 UTC: decisions O1-O11 recorded; stage-1 import of `draw-2026-09-25b` running.
+- 2026-09-26 ~01:45 UTC: stage-1 import done (494 counted: 370 CORRECT, 37 UNVERIFIABLE, 87 WRONG; 158 not counted); the run ends as a measurement (O1), recorded in AUDIT_LOG with its files (1bff027).
+- 2026-09-26 ~01:50 UTC: `wip/audit-fix` merged (4a973d9); gates green (pytest 7219 passed); origin/main (9 commits from other sessions) merged; pushed **9eb6416** to main.
+- 2026-09-26 ~01:50 UTC: workflow `finish-build-lanes` (wf_c86bd2b6-da0) builds WA, WB, WC, WD1, WD2 in worktrees `.claude/worktrees/{wa,wb,wc,wd1,wd2}` (branches `wip/*` from 4a973d9), each followed by an adversarial review and a fix round.
+- 2026-09-26 ~02:15 UTC: WE analysis written to `HUMAN_ONLY_DECISIONS_2026-09-26.md` (27 open items: 13 go to a workstream, 10 need their own action, 4 documentation only). Genuinely owner-only: A4 (the VPS has no MTA - a Discord webhook URL or a relay account is needed) and A5's third copy location (a storage account). **Ordering constraint:** B1-L/B1-N (a journalled link/name pass "L5", up to 120 sites with generic or wrong Wikidata items) must run before WD1's harvest is trusted.
