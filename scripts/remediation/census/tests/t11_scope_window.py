@@ -14,7 +14,7 @@ executable:
 ## The rule, and the 69-versus-84 discrepancy the plan left open
 
 The scope rule is a pure function of two stored values, and it already exists in the code:
-`pipeline/normalizers/dates.py::passes_date_cutoff()` (lines 58-88) calls itself *"the GLOBAL
+`pipeline/normalizers/dates.py::passes_date_cutoff()` calls itself *"the GLOBAL
 regional date cutoff ... This defines project scope"* and is what `pipeline/unified_loader.py`
 applies to every record at load time. It reads `period_end or period_start`, decides the region
 from `AMERICAS_LON_MIN <= lon <= AMERICAS_LON_MAX` (-170..-30) and tests `date <= cutoff`.
@@ -29,9 +29,9 @@ all. The assessment's own S12 line says so verbatim, in
 Rest <= 500 AD): 4.920 pass / 84 fail (69 ausserhalb, 15 ohne period_start)"*. The plan's §7
 table kept the total and dropped the parenthetical, which is how 84 became unattributable.
 
-`passes_date_cutoff()` is explicit that it *includes* a record without a date - line 77-78,
+`passes_date_cutoff()` is explicit that it *includes* a record without a date -
 `if date is None: return True  # No date = include (conservative)` - and it does the same for a
-record without a location. That is the right behaviour for a loader (it must not drop rows it
+record without a location (`if region is None: return True  # No location = include`). That is the right behaviour for a loader (it must not drop rows it
 cannot judge) and the **wrong** behaviour for a census: a `pass` row in `census.jsonl` is a claim
 that the test applied here and found nothing, so a site whose date is unknown would be certified
 clean by a function that never looked at it. "Could not check" must not become "checked and
@@ -144,7 +144,7 @@ if TYPE_CHECKING:
     from census.run import Context
 
 TEST_ID = "T11"
-NAME = "E3 scope window (Americas through 1500 AD, rest of world through 500 AD)"
+NAME = "E3 scope window (Americas and Oceania through 1500 AD, rest of world through 500 AD)"
 DIMENSION = "SCOPE"
 
 REPO = Path(__file__).resolve().parents[4]
@@ -450,14 +450,14 @@ def _undecidable_date(site: dict[str, Any], sid: str, date: Any) -> Finding:
         Confidence.UNVERIFIABLE,
         f"{reason}, so the E3 window cannot be tested - and the bucket is the only dating value "
         "this row carries. The project's own scope function includes a record without a date "
-        '("No date = include (conservative)", '
-        "pipeline/normalizers/dates.py:77-78), which is right for a loader and wrong for a "
+        '("No date = include (conservative)", passes_date_cutoff in '
+        "pipeline/normalizers/dates.py), which is right for a loader and wrong for a "
         "census: reporting this site as `pass` would certify it clean on a comparison that "
         "never happened. It needs a date from a source, or an explicit scope decision",
         [
             Evidence(
-                source="pipeline/normalizers/dates.py:76-78",
-                quote="date = record.get('period_end') or record.get('period_start'); "
+                source="pipeline/normalizers/dates.py (passes_date_cutoff)",
+                quote='date = record.get("period_end") or record.get("period_start"); '
                 "if date is None: return True  # No date = include (conservative)",
             ),
             Evidence(source="snapshot:unified_sites", quote=quote),
@@ -481,9 +481,13 @@ def _undecidable_location(site: dict[str, Any], sid: str) -> Finding:
         "never happened",
         [
             Evidence(
-                source="pipeline/normalizers/dates.py:80-83",
-                quote="lon = record.get('lon'); if lon is None: return True  "
+                source="pipeline/normalizers/dates.py (passes_date_cutoff)",
+                quote="region = e3_region(record); if region is None: return True  "
                 "# No location = include",
+            ),
+            Evidence(
+                source="pipeline/normalizers/dates.py (e3_region)",
+                quote='lon = record.get("lon"); if lon is None: return None',
             ),
             _storage_evidence(site, None),
         ],

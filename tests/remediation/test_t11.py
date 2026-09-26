@@ -422,6 +422,33 @@ class TestT11Contract:
         assert t11.TEST_ID == "T11"
         assert t11.DIMENSION == "SCOPE"
         assert callable(t11.run)
+        assert "Oceania" in t11.NAME  # O7: Americas and Oceania through 1500 AD
+
+    def test_what_it_quotes_from_dates_py_stands_in_dates_py(self, t11: Any, world: Any) -> None:
+        """A finding quotes the project's scope function as its evidence: every quote of
+        `pipeline/normalizers/dates.py` must stand in that file as it is now, and cite no line
+        number (O7 moved the lines once already). Code quotes join lines with "; "."""
+        dates = (REPO / "pipeline" / "normalizers" / "dates.py").read_text(encoding="utf-8")
+        source = " ".join(dates.split())
+        findings = t11.run(
+            _ctx(
+                [
+                    _site("noda", lat=10.0, lon=10.0, period_start=None),
+                    _site("nopoint", lat=None, lon=None, period_start=1700),
+                ]
+            )
+        )
+        quoted = [
+            e for f in findings for e in f.evidence if "pipeline/normalizers/dates.py" in e.source
+        ]
+        assert {f.test_id for f in findings} == {"T11/undecidable-date", "T11/undecidable-location"}
+        assert len(quoted) >= 3
+        for evidence in quoted:
+            assert ":" not in evidence.source.split("dates.py", 1)[1].split(" ", 1)[0]
+            for fragment in evidence.quote.split("; "):
+                assert " ".join(fragment.split()) in source, fragment
+        for finding in findings:
+            assert "dates.py:" not in finding.note
 
     def test_the_cutoffs_are_the_projects_own_constants(self, t11: Any) -> None:
         """Re-typing 1500/500 here would let the census drift from the loader silently."""
