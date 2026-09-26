@@ -379,6 +379,7 @@ class TestTheSelection:
         run = make_run(tmp_path, rows)
         record = json.loads((run / "RUN.json").read_text(encoding="utf-8"))
         assert record["basis"] == {"W": 4, "WC": 1}
+        assert record["basis_asked"] is None
         sites = {s["site_id"]: s["basis"] for s in R.read_jsonl(run / "SITES.jsonl")}
         assert sites[T.MARCH] == "WC"
 
@@ -416,6 +417,20 @@ class TestTheSelection:
         assert [s["site_id"] for s in chosen.sites] == [T.SKARA]
         with pytest.raises(R.RunError, match="no curated site"):
             R.select_rows(rows, earlier={}, sites={"f" * 8}, pilot=None)
+
+    def test_a_run_can_ask_one_basis_only(self) -> None:
+        """The pilot of the sentence-checked March texts (basis WC) draws from them alone: the
+        first pilot's candidates are Wikipedia-assembled (W/S), which WC texts are not."""
+        checked = T.row(T.MARCH, lane="L", check_desc_sha256=T.sha(T.DESCRIPTIONS[T.MARCH]))
+        rows = [checked if r["site_id"] == T.MARCH else r for r in T.production_rows()]
+        chosen = R.select_rows(rows, earlier={}, sites=None, pilot=None, basis={"WC"})
+        assert [s["site_id"] for s in chosen.sites] == [T.MARCH]
+        other = {r["site_id"] for r in chosen.listed if r["reason"] == R.OTHER_BASIS}
+        assert other == {T.SKARA, T.NEWGRANGE, T.STONEHENGE, T.SACSAY}
+        drawn = R.select_rows(rows, earlier={}, sites=None, pilot=(1, 7), basis={"WC"})
+        assert [s["site_id"] for s in drawn.sites] == [T.MARCH]
+        both = R.select_rows(rows, earlier={}, sites=None, pilot=None, basis={"W", "WC"})
+        assert len(both.sites) == 5
 
 
 # ------------------------------------------------------------------------------ the run
@@ -632,6 +647,8 @@ class TestTheRun:
         assert "handoff-write-scratch/write-001/<label>.json" in text
         assert "no web research" in text
         assert 'Skip every question whose "answer_path"' in text
+        # independence is the orchestrator's rule (module doc): the brief makes a reused agent stop
+        assert "answered no other batch of lane WB" in text and "stop now and say so" in text
         with pytest.raises(R.RunError, match="no batch"):
             R.brief(run, handoff, "write-009")
 
@@ -639,24 +656,38 @@ class TestTheRun:
 # ------------------------------------------------------------------------------ the pilot judge
 PAGE = "https://example.org/skara-brae"
 PAGE_TEXT = b"<html><body><p>The site was occupied from roughly 3180 BC to around 2500 BC.</p></body></html>"
+#: A register that refuses automated readers (as Historic England does): its quote cannot be proven.
+REFUSING = "https://register.example/skara-brae"
 
 
 def judge_client() -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url) == PAGE:
             return httpx.Response(200, headers={"Content-Type": "text/html"}, content=PAGE_TEXT)
+        if str(request.url) == REFUSING:
+            return httpx.Response(403, content=b"forbidden")
         return httpx.Response(404, content=b"no")
 
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
+def claim(
+    verdict: str = "SUPPORTED",
+    quote: str = "occupied from roughly 3180 BC to around 2500 BC",
+    url: str = PAGE,
+) -> dict[str, Any]:
+    return {
+        "claim": "lived in from roughly 3180 BC",
+        "verdict": verdict,
+        "url": url,
+        "quote": quote,
+    }
+
+
 def judged(
     verdict: str = "SUPPORTED", quote: str = "occupied from roughly 3180 BC to around 2500 BC"
 ) -> str:
-    claims = [
-        {"claim": "lived in from roughly 3180 BC", "verdict": verdict, "url": PAGE, "quote": quote}
-    ]
-    return json.dumps({"claims": claims})
+    return json.dumps({"claims": [claim(verdict, quote)]})
 
 
 class TestThePilotJudge:
@@ -683,6 +714,24 @@ class TestThePilotJudge:
     def test_a_proven_contradiction_fails_the_pilot(self, tmp_path: Path) -> None:
         result = self._judge(self._accepted_run(tmp_path), tmp_path, judged("CONTRADICTED"))
         assert result["pilot"] == "FAIL" and result["wrong_cards"] == [T.SKARA]
+        assert (result["contradicted"], result["contradicted_unproven"]) == (1, 0)
+
+    def test_an_unproven_contradiction_fails_the_pilot(self, tmp_path: Path) -> None:
+        """A contradiction on a page that refused the machine (403) is still a contradiction: the
+        pilot fails, even though its one unproven claim of 11 stays under the 10 % share."""
+        claims = [claim() for _ in range(10)]
+        claims.append(
+            claim("CONTRADICTED", "Skara Brae was occupied from about 4000 BC.", REFUSING)
+        )
+        run = self._accepted_run(tmp_path)
+        result = self._judge(run, tmp_path, json.dumps({"claims": claims}))
+        assert (result["contradicted"], result["contradicted_unproven"]) == (0, 1)
+        assert result["unproven_share"] <= R.PILOT_MAX_UNPROVEN_SHARE
+        assert result["pilot"] == "FAIL" and result["disputed_cards"] == [T.SKARA]
+        report = (run / "JUDGE.md").read_text(encoding="utf-8")
+        head, _, body = report.partition("## Every contradiction")
+        assert "1 contradicted without a proving quote" in head
+        assert f"CONTRADICTED (not proven): lived in from roughly 3180 BC - {REFUSING}" in body
 
     def test_a_quote_the_page_does_not_hold_proves_nothing(self, tmp_path: Path) -> None:
         text = judged(quote="occupied from roughly 4000 BC to around 2500 BC")
@@ -696,4 +745,7 @@ class TestThePilotJudge:
     def test_the_import_asks_the_web_without_personal_data(self) -> None:
         with R.judge_client() as client:
             agent = client.headers["User-Agent"]
+            timeout = client.timeout
         assert agent == "AncientMapRemediation/1.0 (research)" and "@" not in agent
+        with R.Q.http_client() as audit:
+            assert audit.timeout == timeout and audit.follow_redirects

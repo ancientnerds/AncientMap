@@ -8,7 +8,8 @@ write is `scripts/remediation/mechanical/teaser.py` (plan) and `mechanical/apply
 
     T=scripts/remediation/teaser/run.py
     R=output/remediation/teaser/runs/<run>    H=output/remediation/handoff/teaser-<run>
-    $T select --run R [--pilot 20 --seed N] [--sites FILE] [--exclude-run R0 ...]  (read-only)
+    $T select --run R [--pilot 20 --seed N] [--sites FILE] [--basis WC ...] [--exclude-run R0 ...]
+        (read-only)
     $T export --run R --stage write --handoff $H-write     one question per site, batches of 15
     $T brief --run R --handoff $H-write --batch-id B       the instruction of batch B's agent
         (the agent drafts, runs `check-answer` until it is clean, and records with
@@ -27,10 +28,15 @@ write is `scripts/remediation/mechanical/teaser.py` (plan) and `mechanical/apply
 `write` asks every candidate; `check` asks a different agent about every card that passed the
 mechanical checks (`contract.problems`), one checker per writer batch; a card that failed either goes
 to `rewrite1` with its findings and is checked by a new checker in `check1`; once more in `rewrite2`
-and `check2`; after that the site gets no card (cleared). A checker may not have written or checked
-any earlier card of the site (`answered_by`, refused at import). Each stage's round is exported once,
-into a handoff directory of its own; the import rebuilds every prompt from the run's files and
-refuses an answer to any other.
+and `check2`; after that the site gets no card (cleared). Each stage's round is exported once, into a
+handoff directory of its own; the import rebuilds every prompt from the run's files and refuses an
+answer to any other.
+
+**Independence is a process rule, kept by the orchestrator**: every batch of every stage (and of the
+judge) is answered by a new agent, and the brief tells an agent that answered another batch of lane
+WB to stop. The import cannot see an agent - `answered_by` is the batch's name, `teaser-<batch_id>`,
+and batch ids carry their stage - so its refusal of a checker (or judge) whose name wrote or checked
+the site before catches a reused or mistyped name, never one agent reused under two batch names.
 
 ## The run's files (`output/remediation/teaser/runs/<run>/`, gitignored: they hold description text)
 
@@ -43,7 +49,6 @@ is not a candidate, and why), `ROUNDS.jsonl`, `STAGE-<stage>.jsonl`, `OUTCOMES.j
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import random
 import statistics
@@ -71,6 +76,7 @@ from mechanical.plan import (  # noqa: E402
     write_tagged_export,
 )
 from opus_audit import quotes as Q  # noqa: E402
+from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
 from phase4 import model4 as M  # noqa: E402 - AI_SYSTEM, the disclosure's model string
 from phase4 import verify4 as V  # noqa: E402 - card_fit, V10's font measurement
 
@@ -94,6 +100,8 @@ BASIS_LANES = frozenset({"W", "S", "T", "R"})
 CHECK_KEY = "_description_check"
 #: The basis a candidate's description is (`SITES.jsonl` "basis"): a Phase-4 lane, or lane WC's check.
 SENTENCE_CHECKED = "WC"
+#: What `select --basis` may restrict a run to.
+BASES = tuple(sorted(BASIS_LANES | {SENTENCE_CHECKED}))
 BATCH_SIZE = 15
 JUDGE_BATCH_SIZE = 5
 WRITER_STAGES = ("write", "rewrite1", "rewrite2")
@@ -103,8 +111,9 @@ STAGES = tuple(stage for pair in ROUNDS for stage in pair)
 JUDGE_STAGE = "judge"
 #: The web requests of the pilot judge's import: no personal data (owner rule for this work).
 USER_AGENT = "AncientMapRemediation/1.0 (research)"
-#: The pilot gate (sealed with the runbook): no claim proven wrong, and at most this share of all
-#: claims left without a proving quote (UNVERIFIABLE, or a quote the machine did not find).
+#: The pilot gate (sealed with the runbook): no claim CONTRADICTED - with a proving quote or
+#: without one - and at most this share of all claims left without a proving quote (UNVERIFIABLE,
+#: or a quote the machine did not find).
 PILOT_MAX_UNPROVEN_SHARE = 0.10
 
 #: Why a curated site is not a candidate (LISTED.jsonl).
@@ -113,6 +122,7 @@ NOT_FINAL = "not-final"
 CURRENT = "current"
 NO_CARD_ROW = "no-card-row"
 ASKED_BEFORE = "asked-before"
+OTHER_BASIS = "other-basis"
 NOT_DRAWN = "not-drawn"
 NOT_LISTED = "not-in-sites-file"
 
@@ -136,15 +146,6 @@ def _shown(path: Path) -> str:
         return path.as_posix()
 
 
-def _sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
-    return [json.loads(line) for line in text.split("\n") if line]
-
-
 def jsonl_text(rows: Iterable[Mapping[str, Any]]) -> str:
     return "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
 
@@ -153,7 +154,7 @@ def write_jsonl(path: Path, rows: Iterable[Mapping[str, Any]]) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = jsonl_text(rows)
     path.write_text(text, encoding="utf-8", newline="\n")
-    return _sha256_text(text)
+    return CP.text_sha256(text)
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -248,12 +249,14 @@ def select_rows(
     earlier: Mapping[str, str],
     sites: set[str] | None,
     pilot: tuple[int, int] | None,
+    basis: set[str] | None = None,
 ) -> Selection:
     """The candidates of a run and the listing of every other curated site. Pure.
 
     `earlier` maps a site asked in an earlier run to the description sha256 it was asked with: it is
     asked again only when its description changed since. `sites` restricts the run to a list;
-    `pilot` = (n, seed) draws n candidates at random with that seed.
+    `basis` to the candidates of these bases (`BASES`: the pilot of the sentence-checked texts asks
+    `WC` alone); `pilot` = (n, seed) then draws n candidates at random with that seed.
     """
     candidates: list[dict[str, Any]] = []
     listed: list[dict[str, Any]] = []
@@ -279,6 +282,8 @@ def select_rows(
             listing(row, ASKED_BEFORE, "asked in an earlier run with this description")
         elif sites is not None and row["site_id"] not in sites:
             listing(row, NOT_LISTED, "not in the run's sites file")
+        elif basis is not None and basis_of(row) not in basis:
+            listing(row, OTHER_BASIS, f"basis {basis_of(row)} is not asked (--basis)")
         else:
             candidates.append(_site_row(row))
     if sites is not None:
@@ -315,6 +320,7 @@ def select(
     sites_file: Path | None,
     pilot: tuple[int, int] | None,
     exclude: Sequence[Path],
+    basis: set[str] | None = None,
 ) -> dict[str, Any]:
     """Read production once (read-only) and fix the run's candidates. Once per run."""
     if (run / "RUN.json").exists():
@@ -332,7 +338,7 @@ def select(
             line.strip() for line in sites_file.read_text("utf-8").splitlines() if line.strip()
         }
     selection = select_rows(
-        parsed["site"], earlier=earlier_sites(exclude), sites=wanted, pilot=pilot
+        parsed["site"], earlier=earlier_sites(exclude), sites=wanted, pilot=pilot, basis=basis
     )
     if not selection.sites:
         raise RunError("no candidate: nothing to ask")
@@ -340,13 +346,14 @@ def select(
         "run": run.name,
         "selected_at": _now(),
         "exported_at": exported_at,
-        "export_sha256": _sha256_text(text),
+        "export_sha256": CP.text_sha256(text),
         "sites": len(selection.sites),
         "sites_sha256": write_jsonl(run / "SITES.jsonl", selection.sites),
         "listed_sha256": write_jsonl(run / "LISTED.jsonl", selection.listed),
         "listed": dict(sorted(Counter(r["reason"] for r in selection.listed).items())),
         "basis_lanes": sorted(BASIS_LANES),
         "basis": dict(sorted(Counter(site["basis"] for site in selection.sites).items())),
+        "basis_asked": None if basis is None else sorted(basis),
         "pilot": None if pilot is None else {"n": pilot[0], "seed": pilot[1]},
         "sites_file": None if sites_file is None else _shown(sites_file),
         "excluded_runs": [_shown(path) for path in exclude],
@@ -360,7 +367,7 @@ def select(
 def _pinned_jsonl(run: Path, name: str, key: str) -> list[dict[str, Any]]:
     record = json.loads((run / "RUN.json").read_text(encoding="utf-8"))
     path = run / name
-    if _sha256_text(path.read_bytes().decode("utf-8").replace("\r\n", "\n")) != record[key]:
+    if CP.text_sha256(path.read_bytes().decode("utf-8").replace("\r\n", "\n")) != record[key]:
         raise RunError(f"{path} is not the file RUN.json pins")
     return read_jsonl(path)
 
@@ -531,14 +538,17 @@ def export_stage(run: Path, stage: str, handoff: Path) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------ import
 def agent_name(batch_id: str) -> str:
-    """The name a batch's agent answers under: unique per stage and batch by construction."""
+    """The name a batch's agent answers under: unique per stage and batch by construction. It names
+    the batch, not the agent - that each batch has a new agent is the orchestrator's rule (module
+    doc, "Independence")."""
     return f"teaser-{batch_id}"
 
 
 def _earlier_agents(
     site_id: str, stage: str, records: Mapping[str, Mapping[str, Mapping[str, Any]]]
 ) -> set[str]:
-    """Every agent that wrote or checked the site before `stage`."""
+    """Every name that wrote or checked the site before `stage` (a reused or mistyped name is
+    refused by it; one agent under two batch names is not visible here)."""
     return {
         records[earlier][site_id]["answered_by"]
         for earlier in STAGES[: STAGES.index(stage)]
@@ -678,6 +688,9 @@ _BRIEF_HEAD = {
 }
 
 BRIEF = """{head}
+
+This batch needs an agent that has answered no other batch of lane WB (no card written, checked \
+or judged): if you have, stop now and say so - the independence of every check rests on it.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" and its "prompt_path" (relative to {handoff}). Open no other file of the \
@@ -906,19 +919,24 @@ def export_judge(run: Path, handoff: Path) -> dict[str, Any]:
 
 
 def judge_client() -> httpx.Client:
-    """The pilot import's HTTP client: its own User-Agent, no personal data."""
-    return httpx.Client(
-        headers={"User-Agent": USER_AGENT}, follow_redirects=True, timeout=Q.TIMEOUT_SECONDS
-    )
+    """The pilot import's HTTP client: the audit's (`quotes.http_client`) under lane WB's own
+    User-Agent, no personal data."""
+    return Q.http_client(USER_AGENT)
 
 
 @dataclass
 class JudgeTally:
+    """The pilot's count. `contradicted` has a proving quote; `contradicted_unproven` does not (a
+    page that refused the machine, a PDF, a quote not found) and still fails the pilot until the
+    card is fixed: a contradiction is never waved through as merely unproven."""
+
     claims: int = 0
     supported: int = 0
     contradicted: int = 0
+    contradicted_unproven: int = 0
     unproven: int = 0
     wrong_cards: list[str] = field(default_factory=list)
+    disputed_cards: list[str] = field(default_factory=list)
 
     @property
     def unproven_share(self) -> float:
@@ -926,7 +944,8 @@ class JudgeTally:
 
     @property
     def passed(self) -> bool:
-        return self.contradicted == 0 and self.unproven_share <= PILOT_MAX_UNPROVEN_SHARE
+        no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0
+        return no_contradiction and self.unproven_share <= PILOT_MAX_UNPROVEN_SHARE
 
 
 def import_judge(
@@ -953,7 +972,7 @@ def import_judge(
             prompt = P.judge_prompt(site.name, site.country, cards[site_id])
             answer = OH.read_answer(handoff, batch_id=batch_id, stage=JUDGE_STAGE, label=site_id,
                                     prompt=prompt)  # fmt: skip
-            if answer.answered_by in writers[site_id]:
+            if answer.answered_by in writers[site_id]:  # a reused name; the agent: module doc
                 raise RunError(f"{site_id}: the judge {answer.answered_by} worked on this card")
             try:
                 parsed[site_id] = (answer, A.parse_judge(answer.text))
@@ -992,6 +1011,10 @@ def import_judge(
                     tally.wrong_cards.append(site_id)
             else:
                 tally.unproven += 1
+                if judged.verdict == "CONTRADICTED":
+                    tally.contradicted_unproven += 1
+                    if site_id not in tally.disputed_cards:
+                        tally.disputed_cards.append(site_id)
             results.append({**asdict(judged), "quote_outcome": outcome, "proven": proven})
         rows.append(
             {
@@ -1008,9 +1031,11 @@ def import_judge(
         "claims": tally.claims,
         "supported": tally.supported,
         "contradicted": tally.contradicted,
+        "contradicted_unproven": tally.contradicted_unproven,
         "unproven": tally.unproven,
         "unproven_share": round(tally.unproven_share, 4),
         "wrong_cards": tally.wrong_cards,
+        "disputed_cards": tally.disputed_cards,
         "pilot": "PASS" if tally.passed else "FAIL",
     }
     (run / "JUDGE.md").write_text(
@@ -1023,14 +1048,33 @@ def judge_markdown(run: Path, rows: Sequence[Mapping[str, Any]], summary: Mappin
     lines = [
         f"# Lane WB pilot `{run.name}` - the independent web judge",
         "",
-        f"Written {_now()} by `run.py judge-import`. Gate: no claim proven CONTRADICTED, and at "
-        f"most {PILOT_MAX_UNPROVEN_SHARE:.0%} of all claims without a proving quote.",
+        f"Written {_now()} by `run.py judge-import`. Gate: no claim CONTRADICTED - with a proving "
+        "quote or without one (a page that refused the machine, a PDF, a quote not found) - and "
+        f"at most {PILOT_MAX_UNPROVEN_SHARE:.0%} of all claims without a proving quote.",
         "",
         f"**PILOT: {summary['pilot']}** - {summary['cards']} cards, {summary['claims']} claims: "
-        f"{summary['supported']} supported, {summary['contradicted']} contradicted, "
-        f"{summary['unproven']} unproven ({summary['unproven_share']:.1%}).",
+        f"{summary['supported']} supported, {summary['contradicted']} contradicted with a proving "
+        f"quote, {summary['contradicted_unproven']} contradicted without a proving quote, "
+        f"{summary['unproven']} unproven in all ({summary['unproven_share']:.1%}).",
+        "",
+        "## Every contradiction (read each before anything else)",
         "",
     ]
+    contradictions = [
+        (row, claim)
+        for row in rows
+        for claim in row["claims"]
+        if claim["verdict"] == "CONTRADICTED"
+    ]
+    for row, claim in contradictions:
+        mark = "CONTRADICTED" if claim["proven"] else "CONTRADICTED (not proven)"
+        lines.append(
+            f"- {row['name']} (`{row['site_id'][:8]}`) {mark}: {claim['claim']} - {claim['url']} "
+            f"({claim['quote_outcome']})"
+        )
+    if not contradictions:
+        lines.append("None.")
+    lines.append("")
     for row in rows:
         lines += [f"## {row['name']} (`{row['site_id'][:8]}`)", "", f"> {row['card']}", ""]
         for claim in row["claims"]:
@@ -1083,6 +1127,9 @@ def main(argv: list[str] | None = None) -> int:
     commands["select"].add_argument("--pilot", type=int, help="draw this many candidates")
     commands["select"].add_argument("--seed", type=int, help="the pilot draw's seed")
     commands["select"].add_argument("--exclude-run", type=Path, action="append", default=[])
+    commands["select"].add_argument(
+        "--basis", action="append", choices=BASES, help="ask only candidates of these bases"
+    )
     args = parser.parse_args(argv)
     run = _resolve(args.run)
     try:
@@ -1096,6 +1143,7 @@ def main(argv: list[str] | None = None) -> int:
                     sites_file=None if args.sites is None else _resolve(args.sites),
                     pilot=None if args.pilot is None else (args.pilot, args.seed),
                     exclude=args.exclude_run,
+                    basis=None if args.basis is None else set(args.basis),
                 )
             )
         elif args.command == "export":

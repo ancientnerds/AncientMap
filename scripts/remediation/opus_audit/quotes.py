@@ -378,8 +378,14 @@ def page_index(urls: Iterable[str], pages: Path) -> list[dict[str, Any]]:
     return out
 
 
-def http_client() -> httpx.Client:
-    return httpx.Client(headers=HEADERS, follow_redirects=True, timeout=TIMEOUT_SECONDS)
+def http_client(user_agent: str = USER_AGENT) -> httpx.Client:
+    """The audit's client. A caller that asks the web under its own name passes its User-Agent
+    (lane WB's pilot judge: `AncientMapRemediation/1.0 (research)`, no personal data)."""
+    return httpx.Client(
+        headers={**HEADERS, "User-Agent": user_agent},
+        follow_redirects=True,
+        timeout=TIMEOUT_SECONDS,
+    )
 
 
 # ------------------------------------------------------------------------------ the check
