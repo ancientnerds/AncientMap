@@ -19064,8 +19064,12 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 scope4: a scope site id need not be a UUID",
         P4S_SCOPE,
-        "            uuid.UUID(site_id)\n",
-        "            pass  # mutant\n",
+        # Anchored on the scope reader's own message: lane WA's `march_lists` (2026-09-26) put a
+        # second `uuid.UUID(site_id)` above it, and the bare line mutated that one instead.
+        "            uuid.UUID(site_id)\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"{site_id!r} is not a site id") from None\n',
+        "            pass  # mutant\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"{site_id!r} is not a site id") from None\n',
         P4S_SCOPE_TEST,
         P4S_MALFORMED,
     ),
@@ -21253,6 +21257,16 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4V3_SCOPE,
         "        if set(row) != MARCH_ROW_KEYS:\n",
         "        if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_SHAPE,
+    ),
+    (
+        "p4 v3 scope4: a March row's id need not be a UUID",
+        P4V3_SCOPE,
+        "            uuid.UUID(site_id)\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"March row {number}: {site_id!r} is not a site id") from None\n',
+        "            pass  # mutant\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"March row {number}: {site_id!r} is not a site id") from None\n',
         P4V3_TEST,
         P4V3_SHAPE,
     ),
