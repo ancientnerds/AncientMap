@@ -301,6 +301,10 @@ Notes that follow from the table:
   `'cited_enrichment'`, `'QuetzalcoatlCat'`, `'initial'`). `'remediation-2026-09'` is 18 and fits;
   anything longer fails. Do not invent a marker that does not fit.
 - **`lat`/`lon` are `NOT NULL` and `double precision`.** They can be corrected, never cleared.
+- **`geom` (`geometry(Point,4326)`) does not follow `lat`/`lon` by itself**: no trigger exists on
+  `unified_sites` (read on production 2026-09-26, PostGIS 3.4.3). A writer that moves a point sets
+  `geom` to `ST_SetSRID(ST_MakePoint(lon, lat), 4326)` in the same transaction - WD1's cell lane
+  does it and checks it as a site invariant (`docs/procedures/FIELDS_WD1.md`).
 - **`card_description` is 200 characters**, and the startup import truncates to 200 as well. A
   longer generated text is silently cut, so a card-text fix that relies on the tail of a sentence is
   a fix that will not appear.
@@ -335,5 +339,8 @@ read through this contract before it becomes a write:
 - `migrations/0017_remediation_change_log.sql` — the write primitive.
 - `scripts/remediation/0017_migration_selftest.sql` — its seven verified properties.
 - `scripts/remediation/census/tests/t04_site_type.py` — the fixed-point rule as executable code.
+- `docs/procedures/FIELDS_WD1.md` — lane WD1 (2026-09-26): coordinates, period_start/period_name,
+  site_type and source_url, sourced or emptied (owner decision O6), written as journalled cell-lane
+  steps of 100 sites.
 - `output/remediation/recon/schema-and-overwriters.md` — the recon this contract was verified
   against (three claims re-read at source on 2026-09-20 before this file was written).
