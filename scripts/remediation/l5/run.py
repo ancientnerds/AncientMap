@@ -1,6 +1,6 @@
 """L5, the journalled link and name pass (HUMAN_ONLY B1-L, B1-N, Nr. 7) - the command line.
 
-The runbook is `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`, section "WE lanes". In order:
+The runbook is `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`, section "Phase 6b - The WE lanes". In order:
 
     run.py population                       read-only: who is asked, and the read the questions
                                             are built from (POPULATION.jsonl, COUNTS.json,
