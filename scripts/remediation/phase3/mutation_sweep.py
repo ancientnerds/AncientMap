@@ -21190,6 +21190,7 @@ P4V3_GATE = "output/remediation/tools/write_gate4.py"
 P4V3_ACCEPT = "output/remediation/tools/verify_writes4.py"
 P4V3_HANDOFF = "scripts/remediation/phase4/handoff4.py"
 P4V3_IDS = "scripts/remediation/phase3/snapshot_plan.py"
+P4V3_AUDIT = "scripts/remediation/phase4/audit4.py"
 P4V3_TEST = "tests/remediation/test_phase4_v3.py"
 P4V3_SCOPE_TEST = "tests/remediation/test_phase4_scope.py"
 P4V3_ACCEPT_TEST = "tests/remediation/test_phase4_accept.py"
@@ -21225,6 +21226,7 @@ P4V3_RUN_CARRIES = "test_a_list_plan_never_plans_a_site_a_run_carries_in_another
 P4V3_APPLY_ROOT = (
     "test_a_list_plan_never_plans_a_site_the_apply_root_wrote_from_a_run_it_cannot_read"
 )
+P4V3_WRITTEN = "test_the_written_sites_of_a_run_are_its_own_live_write_batches_less_what_it_holds"
 
 P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── scope4: the March lists ───────────────────────────────────────────────────────────────
@@ -21931,6 +21933,31 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n",
         P4V3_TEST,
         P4V3_APPLY_ROOT,
+    ),
+    # ── the second review of 2026-09-26: the audit's written list is the run's own
+    (
+        "p4 v3 audit4: a rendered write batch counts as written",
+        P4V3_AUDIT,
+        "        if not (out / W4.APPLIED_FILE).exists():\n            continue\n",
+        "        if False:  # mutant\n            continue\n",
+        P4V3_TEST,
+        P4V3_WRITTEN,
+    ),
+    (
+        "p4 v3 audit4: a site held after its write stays written",
+        P4V3_AUDIT,
+        "        found |= {row.site_id for row in rows} - B.site_held(B.read_holds(batch_dir))\n",
+        "        found |= {row.site_id for row in rows}  # mutant\n",
+        P4V3_TEST,
+        P4V3_WRITTEN,
+    ),
+    (
+        "p4 v3 audit4: another run's write batch of the same id is listed",
+        P4V3_AUDIT,
+        "        if runs:\n            raise InputError(",
+        "        if False:  # mutant\n            raise InputError(",
+        P4V3_TEST,
+        P4V3_WRITTEN,
     ),
     # ── the second review of 2026-09-26: P5 writes no card for any run (O2, O3)
     (

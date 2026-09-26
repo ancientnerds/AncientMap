@@ -162,6 +162,9 @@ PLAN_FILE = "PLAN.jsonl"
 REFUSED_FILE = "REFUSED.jsonl"
 UNCLAIMED_FILE = "UNCLAIMED.jsonl"
 CHUNKS_DIR = "chunks"
+#: The write gate's record that a write batch's current round is written (`write_gate4`); a round
+#: revert4 took back keeps it under `chunks/<round>/` once the gate closed or re-opened it.
+APPLIED_FILE = "APPLIED.json"
 APPLY_FILE = "APPLY.sql"
 REHEARSE_FILE = "REHEARSE.sql"
 ROLLBACK_FILE = "ROLLBACK.sql"

@@ -18,10 +18,20 @@ mid-run and final samples are samples of written sites. A draw is seeded and det
 ids, seed, count and exclusions give the same sample on every machine. A stratum with fewer sites
 than the count is taken whole.
 
+    audit4.py written --run-dir R --apply-root logs/_write_apply_p4 > written.out
     audit4.py draw  --run-dir R --seed 20260922 --count 10 --written written.txt [--lane W]
                     [--exclude used.txt]
     audit4.py sheet --run-dir R --site-ids drawn.txt --out sheet.md
     audit4.py hold  --run-dir R --site <site id> --audit MIDRUN_AUDIT_VERDICTS.json
+
+**The written list** (`written`, second review of lane WA, 2026-09-26) is the run's own: every batch
+directory of the run whose write batch in the P4 apply root carries a live `APPLIED.json` (a round
+revert4 took back keeps its record under `chunks/` once the gate closed or re-opened it), the sites
+of that write batch's `PLAN.jsonl` (which stays what was written), less the sites the run holds
+since - an audit hold, whose site the runbook takes back with `revert4 --site` before the next
+draw. A write batch whose rows name another run is refused: pilots 1-3 took the batch ids pilot 4
+wrote. A glob over the apply root would list another run's batches (v3d's p4-25xx beside v3's) and
+the taken-back sites, and the draw would refuse them.
 
 **A finding holds its site** (the mass run's mid-run audit, 2026-09-25). `hold` reads the auditor's
 verdict file (one record per site: `site_id`, `name`, every sentence's `n`, `verdict` and `note`,
@@ -60,6 +70,7 @@ from phase4 import mass4 as M4  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import review4 as RV  # noqa: E402
 from phase4 import run4 as R4  # noqa: E402
+from phase4 import write4 as W4  # noqa: E402 - the write batch's plan and its written record
 
 SENTENCE_VERDICTS = "SUPPORTED | UNSUPPORTED | WRONG_SITE"
 CARD_VERDICTS = "CONTAINED | NOT_CONTAINED"
@@ -131,6 +142,28 @@ def reviewed_sites(run_dir: Path) -> dict[str, tuple[Path, M.Assembly]]:
             if assembly.site_id not in held:
                 found[assembly.site_id] = (batch_dir, assembly)
     return found
+
+
+def written_sites(run_dir: Path, apply_root: Path) -> list[str]:
+    """The run's sites the write gate wrote and did not take back, sorted (the module's "written
+    list"). A write batch of one of the run's batch ids that another run wrote is refused."""
+    found: set[str] = set()
+    for batch_dir in sorted(p for p in run_dir.iterdir() if (p / M.INPUT_FILE).exists()):
+        out = apply_root / batch_dir.name
+        if not (out / W4.APPLIED_FILE).exists():
+            continue
+        rows = W4.read_plan(out, group=W4.Group.P4)
+        runs = sorted({str(row.evidence.get("run")) for row in rows} - {run_dir.name})
+        if runs:
+            raise InputError(f"{out.name}: written from run(s) {runs}, not {run_dir.name}")
+        found |= {row.site_id for row in rows} - B.site_held(B.read_holds(batch_dir))
+    return sorted(found)
+
+
+def cmd_written(args: argparse.Namespace) -> int:
+    for site_id in written_sites(Path(args.run_dir), Path(args.apply_root)):
+        print(site_id)
+    return 0
 
 
 def _ids(path: str | None) -> set[str]:
@@ -267,6 +300,10 @@ def cmd_hold(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="phase4-audit", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
+    written = sub.add_parser("written", help="print the run's written site ids (the draw's input)")
+    written.add_argument("--run-dir", required=True)
+    written.add_argument("--apply-root", required=True, help="the P4 apply root")
+    written.set_defaults(func=cmd_written)
     draw = sub.add_parser("draw", help="print a seeded sample of written site ids")
     draw.add_argument("--run-dir", required=True)
     draw.add_argument("--seed", type=int, required=True)

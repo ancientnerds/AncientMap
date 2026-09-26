@@ -125,7 +125,7 @@ from phase4 import revert4 as R  # noqa: E402 - the reversal read: what "reverte
 from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 from phase4 import write4 as W4  # noqa: E402
 
-APPLIED_FILE = "APPLIED.json"
+APPLIED_FILE = W4.APPLIED_FILE
 #: The owner's step (2026-09-21): after every hundred sites, a check - the most one step may write.
 STEP_MAX = W.DEFAULT_CHUNK_SIZE
 STOPPED_FILE = "STOPPED.json"

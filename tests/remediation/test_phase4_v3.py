@@ -45,6 +45,7 @@ import write_gate4 as G  # noqa: E402
 from phase3 import mass_run as MR  # noqa: E402
 from phase3 import run as R  # noqa: E402
 from phase3 import snapshot_plan as SP  # noqa: E402
+from phase4 import audit4 as AU  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402
 from phase4 import handoff4 as H  # noqa: E402
 from phase4 import mass4 as M4  # noqa: E402
@@ -939,6 +940,66 @@ def test_p5_rehearses_and_writes_nothing_for_any_run(
         assert not (tmp_path / "apply-p5").exists()
     assert G.main(base, runner=_db(site)) == 0
     assert "dry run, nothing is sent" in capsys.readouterr().out
+
+
+# ============================================================================ the audit's draw
+
+
+def _written_batch(
+    run: Path, apply: Path, batch_id: str, *site_ids: str, applied: bool = True
+) -> Path:
+    """A reviewed batch of `run` and its P4 write batch in `apply` (`write4.write_plan_files`),
+    with `APPLIED.json` when the gate wrote it."""
+    batch_dir = FX.write_batch(
+        run,
+        sites=[FX.plan_site(site_id) for site_id in site_ids],
+        assemblies=[FX.assembly(site_id) for site_id in site_ids],
+        batch_id=batch_id,
+    )
+    plan = W4.plan_p4(
+        W4.load_batch(batch_dir),
+        scope=FX.EVERY_SITE,
+        open_lanes=frozenset({M.Lane.W, M.Lane.S}),
+        audited=frozenset(),
+        verify=FX.Verify(),
+        ledger=FX.ledger_rows(*site_ids, batch=batch_id),
+    )
+    assert {row.site_id for row in plan.rows} == set(site_ids)
+    W4.write_plan_files(apply / batch_id, plan, W4.chunk_for(plan, write_round=1))
+    if applied:
+        (apply / batch_id / W4.APPLIED_FILE).write_text("{}", encoding="utf-8")
+    return batch_dir
+
+
+def test_the_written_sites_of_a_run_are_its_own_live_write_batches_less_what_it_holds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Second review of 2026-09-26: the runbook's written list globbed every `p4-2*/PLAN.jsonl` of
+    the apply root, so v3d's batches (p4-25xx) and a site taken back after an audit hold made the
+    draw refuse ("written but not reviewed in this run") in the middle of the run. `audit4.py
+    written` lists only the run's own batches with a live `APPLIED.json`, less the sites the run
+    holds since, and refuses a write batch another run wrote under the same id."""
+    run = tmp_path / "runs" / "pilot-20260923"  # the fixtures' provenance names this run
+    apply = tmp_path / "apply"
+    _written_batch(run, apply, "p4-2001", FX.SITE_A, FX.SITE_B)
+    _written_batch(run, apply, "p4-2002", FX.SITE_C, applied=False)  # rendered, not written
+    _written_batch(tmp_path / "v3d" / "pilot-20260923", apply, "p4-2501", FX.SITE_C)
+    assert AU.written_sites(run, apply) == sorted([FX.SITE_A, FX.SITE_B])
+
+    hold = M.Hold(
+        site_id=FX.SITE_B, scope=M.HoldScope.SITE, reason=M.HoldReason.AUDIT_WRONG_SITE,
+        detail="AUDIT.json sha256 x: sentence 1 WRONG_SITE: another site",
+    )  # fmt: skip
+    B.append_holds(run / "p4-2001", [hold])
+    assert AU.written_sites(run, apply) == [FX.SITE_A]
+    assert AU.main(["written", "--run-dir", str(run), "--apply-root", str(apply)]) == 0
+    assert capsys.readouterr().out.split() == [FX.SITE_A, "STAGE_EXIT=0"]
+
+    # pilots 1-3 took the batch ids pilot 4 wrote: another run's write batch is never this run's
+    other = tmp_path / "runs" / "pilot3"
+    FX.write_batch(other, sites=[FX.plan_site()], assemblies=[FX.assembly()], batch_id="p4-2001")
+    with pytest.raises(R.InputError, match=r"p4-2001: written from run\(s\) \['pilot-20260923'\]"):
+        AU.written_sites(other, apply)
 
 
 # ============================================================================ handoff4
