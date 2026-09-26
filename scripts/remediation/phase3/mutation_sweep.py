@@ -22568,7 +22568,7 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc answers: the fetcher speaks with another User-Agent",
         WC_ANSWERS,
-        'USER_AGENT = "AncientMapRemediation/1.0 (research)"\n',
+        "USER_AGENT = research_web.USER_AGENT\n",
         'USER_AGENT = "python-requests"  # mutant\n',
         WC_TEST,
         "test_the_fetcher_speaks_with_the_projects_user_agent_and_no_personal_data",
