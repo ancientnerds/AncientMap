@@ -253,6 +253,7 @@ specific. No citations, no markdown, plain text only.
 
 Every factual paragraph that carries a checkable claim gets an entry in `evidence.json`:
 `{id: "ev-NN", anchor_text, claim, source_ids, quote, quote_source_id, verdict}`. `anchor_text` is the
-opening of that paragraph, copied verbatim (at least 20 characters after normalisation), so that it matches
-exactly one paragraph; `quote` is copied verbatim from the archived text of `quote_source_id`. Evidence ids
-are never renumbered or reused once published.
+paragraph's opening, copied verbatim from its first word, at least 20 characters after normalisation and
+opening no other paragraph; if it runs past a citation marker, copy the marker too (`[S:<id>]` and `[N]`
+are ignored by the matcher, but leaving one out shifts the punctuation). `quote` is copied verbatim from
+the archived text of `quote_source_id`. Evidence ids are never renumbered or reused once published.

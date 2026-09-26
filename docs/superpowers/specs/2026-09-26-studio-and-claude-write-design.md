@@ -139,20 +139,23 @@ becomes `failed`), unlike today's fail-soft corpus writes. All text is NUL-strip
 ### 2.3 Archive completion (`pipeline/lyra/archive_completion.py`)
 
 For every source id referenced by moderated `final_claims`, `revised_claims` or
-`speculative_claims` whose latest archive row is missing or `content_type='adapter/snippet'`:
+`speculative_claims` whose best archive row (`training_corpus.best_archive_rows`: a fetched full text
+before a TDM reservation before an adapter abstract, newest within each) is missing or an adapter abstract:
 
 1. Resolve the fetchable URL. For doi.org, follow redirects to the publisher landing page.
    Wikipedia is fetched through its REST HTML endpoint.
 2. Fetch with the existing fetch stack (`pipeline/utils` HTTP helpers, content_fetch's `_SKIP`
    rules, **except** that Wikipedia, doi.org and YouTube are allowed here).
 3. Extract text: HTML via `pipeline/utils/text.extract_text_from_html`; PDF via `pypdf`
-   (added to requirements-api.txt, pinned). YouTube is recorded as a transcript source when the
-   transcript adapter has one; otherwise it is marked missing.
+   (added to requirements-api.txt, pinned). YouTube counts as full text when `news_videos` holds
+   its transcript; otherwise the fetch fails like any other: the reason goes into
+   `manifest.archive.failures`, and the source falls back to its adapter abstract (`abstract_only`)
+   or is `missing` without one.
 4. Write the result through `archive_documents` and record the run link in `theo_source_archive_runs`
    with `cited=true` (meaning "cited by a moderated claim").
 
 Respect `tdm_opt_out`: store metadata without the body, and mark the source as
-`tdm_reserved` in the manifest. The local fact check will read those live. The step is bounded
+`tdm_reserved` in the manifest. The local fact check treats them as source_missing (3.5). The step is bounded
 (`THEO_ARCHIVE_COMPLETION_MAX_S`, default 1800 s; `THEO_ARCHIVE_COMPLETION_CONCURRENCY` 4).
 Coverage numbers go into the manifest. Failures per source are recorded, never silent.
 
@@ -237,7 +240,7 @@ prints `PublishOutcome` JSON. Exit code ≠ 0 on any failed gate.
 bundle to stdout:
 
 ```json
-{"version":1, "request": {id, question, status, is_batch, user_id, created_at, completed_at},
+{"version":1, "texts_mode":"cited", "request": {id, question, status, is_batch, user_id, created_at, completed_at},
  "manifest": {...}, "moderated": {...}, "synthesis": {...}, "debate": {...},
  "angles": [ {id, topic, description, findings:[...]} ],
  "sources": [ {id, url, title, domain, reliability_tier, doi, authors, venue, date, license,
@@ -293,8 +296,8 @@ publish_outcome.json
 
 This ports the editorial spec of `v2_paper_outline/hook/section/connecting/otherside/assessment.txt`:
 
-- h2 sequence: opening hook section → 2–4 investigation sections → `Connecting the Dots` →
-  `The Other Side` → `What We Actually Know` → `References`.
+- Sequence: hook (1–2 paragraphs under the title, no heading) → 2–4 investigation sections →
+  `Connecting the Dots` → `The Other Side` → `What We Actually Know` → `References`.
 - 5,000–7,500 words. Every factual paragraph over 50 chars carries at least one citation.
 - Speculation is labelled as speculation, and "The Other Side" argues the opposing case at full strength.
 - Probability language for verdicts: almost certain · very likely · likely · roughly even ·
@@ -309,7 +312,9 @@ The brief lives in `pipeline/studio/paper/brief_template.md` (versioned) and is 
 ### 3.4 Deterministic gates (`pipeline/studio/paper/gates.py`, pure, tested)
 
 1. `validate_paper_artifact(report)` passes (theo_citations).
-2. All six required h2 sections are present, in order, and the word count is inside the range.
+2. The five fixed or counted h2 groups are present in order (2–4 investigation h2s,
+   `Connecting the Dots`, `The Other Side`, `What We Actually Know`, `References`), the hook has
+   1–2 paragraphs, and the word count is inside the range.
 3. Every `[N]` resolves in `sources.json`, and every source id exists in the dossier.
 4. `hallucination_gate.extract_specifics` over the report: every number, date and proper-noun
    specific is found in the cited sources' archived texts (`verify_against_pack` with the texts as

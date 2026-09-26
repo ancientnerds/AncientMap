@@ -4,7 +4,7 @@
 
 **Goal:** Theo (MiniMax M3 on the VPS) stops after moderation, persists a complete, loudly-written dossier with archived full texts of every cited source and ends in status `researched`; the VPS gains the CLIs a local Claude session uses to export that dossier and to publish, correct and video-link Claude-written papers through one gated, journalled sequence.
 
-**Architecture:** A new `DossierHandler` is the only listener on `ModeratorComplete`: it writes every dossier kind to `research_artifacts` with replace semantics, runs a bounded archive-completion step (`archive_completion.py`), writes the manifest last and emits `DossierReady`, the orchestrator's new done signal. The orchestrator runs the event cascade as a task beside its watch loop, so deadline, 30 s flush and external cancellation finally run. The M3 writing chain (paper, probative-image handler, fact check, presentation, hero pick, judge) and its prompts are deleted. `theo_publishing.py` holds the shared publish sequence (slug rule, gates, evidence-anchor matching, journal, IndexNow/Qdrant side effects); `theo_publish.py` and `theo_dossier.py` are the CLIs run via `ssh ancientnerds docker exec -i ancient_nerds_api python -m …`.
+**Architecture:** A new `DossierHandler` is the only listener on `ModeratorComplete`: it writes every dossier kind to `research_artifacts` with replace semantics, runs a bounded archive-completion step (`archive_completion.py`), writes the manifest last and emits `DossierReady`, the orchestrator's new done signal. The orchestrator runs the event cascade as a task beside its watch loop, so deadline, 30 s flush and external cancellation finally run. The M3 writing chain (paper, probative-image handler, fact check, presentation, hero pick, judge) and its prompts are deleted. `theo_publishing.py` holds the shared publish sequence (slug rule, gates, evidence-anchor matching on the markdown and on the page's own HTML, the page's validators as a gate, journal, IndexNow/Qdrant side effects, the owner notice); `theo_publish.py` and `theo_dossier.py` are the CLIs run via `ssh ancientnerds docker exec -i ancient_nerds_api python -m …`.
 
 **Tech Stack:** Python 3.11 (ruff target py311), asyncio, SQLAlchemy 2 `text()` against PostgreSQL, httpx (+ `httpx.MockTransport` in tests), pypdf 6.19.0, pytest + pytest-asyncio (`asyncio_mode = "auto"`), FastAPI TestClient; React 18 + TypeScript + vitest for the two Theo UI files.
 
@@ -22,6 +22,18 @@
   git commit -m "<sentence>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   ```
 - After every Python task run ruff on the files you touched: `./.venv/Scripts/python.exe -m ruff format <files> && ./.venv/Scripts/python.exe -m ruff check --fix <files>` (`--fix` also settles import-block blank lines, which `ruff format` leaves alone). CI runs `ruff format --check`, the pre-push hook does not.
+- Before implementation the orchestrator merges `origin/main` into `feat/studio` (integration item I11). `origin/main` already carries the remediation branch's `pipeline.database.affected_rows` and uses it in `api/services/theo_worker.py` (`from pipeline.database import affected_rows, get_session`; `affected_rows(claimed)`, `affected_rows(completed)`) and `api/routes/theo.py` (a parenthesised `from pipeline.database import (…, affected_rows, get_session)` block), checked 2026-09-26 against `origin/main` 63668be. The line numbers this plan cites were taken before that merge: locate every edit in those two files (Tasks 13, 14 and 21) by its function name or anchor text, never by line number. Check first: `grep -c "def affected_rows" pipeline/database.py` prints `1`; if it prints `0`, the merge has not happened yet: stop and ask the orchestrator.
+
+## Dependencies on stream B (order)
+
+| Task | Needs |
+|---|---|
+| 1-12, 14, 16, 19-24 | nothing outside this plan |
+| 13 | the orchestrator's merge of `origin/main` (integration item I11): its success branch calls `pipeline.database.affected_rows` (Ground rules) |
+| 15, 17, 18 | stream B Tasks 1-2 (`pipeline/research_html_renderer.py`: `paper_markdown`, `parse_evidence`, `resolve_evidence_anchors(html, evidence)`, `paper_extras`, `PaperPageError`). The gates run the page's own functions, so "gate passed" means "the page renders" (contract C9) |
+| 26 | the push that carries streams A-D |
+
+Stream B's Tasks 1-2 need only this plan's Task 2 (`EVIDENCE_ID_RE`, `normalize_anchor_text`, `MIN_ANCHOR_CHARS`), so there is no cycle: A Task 2 → B Tasks 1-2 → A Tasks 15, 17, 18. Check before Task 15: `grep -cE "^def (paper_markdown|parse_evidence|resolve_evidence_anchors|paper_extras)\(|^class PaperPageError" pipeline/research_html_renderer.py` prints `5`. If it prints less, do Tasks 16, 20, 22, 23 and 24 first (none of them imports the publish functions) and come back; Tasks 19 and 21 import names that Tasks 15, 17 and 18 create, so they follow those. Never stub the B functions: the tests must call the real page code.
 
 ---
 
@@ -31,18 +43,18 @@
 
 | File | Responsibility |
 |---|---|
-| `docs/superpowers/plans/assets/writer-brief-editorial.md` | The editorial spec of the deleted `v2_paper_*.txt` prompts, ported for the Claude writer. Stream C copies it into `pipeline/studio/paper/brief_template.md`. (Pre-written during planning; Task 1 verifies and commits it.) |
+| `docs/superpowers/plans/assets/writer-brief-editorial.md` | The editorial spec of the deleted `v2_paper_*.txt` prompts, ported for the Claude writer. Stream C copies it into `pipeline/studio/paper/brief_template.md`. Exists (committed in 992302f); Task 1 only verifies it. |
 | `pipeline/lyra/dossier_manifest.py` | Pure dossier shape: `DOSSIER_KINDS`, `moderated_source_ids`, `cited_source_ids`, `build_manifest`, `manifest_summary`. |
 | `pipeline/lyra/archive_completion.py` | Fetch and archive the full text of every source a moderated claim cites (Wikipedia REST, doi redirects, PDF via pypdf, YouTube transcripts), bounded in time and concurrency, TDM-aware, per-source failures recorded. |
 | `pipeline/lyra/handlers/dossier.py` | `DossierHandler`: persist dossier kinds (replace semantics), run archive completion, write manifest last, set `DONE`, emit `DossierReady`. Idempotent. Fails loudly. |
-| `pipeline/lyra/theo_publishing.py` | Shared publish sequence: `normalize_anchor_text`, `report_paragraphs`, `resolve_evidence_anchors`, `make_slug`, `pick_slug`, the gates, `publish_paper`, `correct_paper`, `register_video`, `run_publish_side_effects`, `PublishOutcome`, error classes. |
+| `pipeline/lyra/theo_publishing.py` | Shared publish sequence: `EVIDENCE_ID_RE` (the one definition of the evidence-id format), `normalize_anchor_text`, `report_paragraphs`, `resolve_evidence_anchors` (markdown), `check_evidence_anchors` (markdown + the page's HTML, the one acceptance function of contract C9), `make_slug`, `pick_slug`, the gates (incl. `check_page`, the page's own validators, and `check_evidence_retention`), `publish_paper`, `correct_paper` (incl. the full republish), `register_video`, `run_publish_side_effects`, `notify_published`, `PublishOutcome`, error classes. |
 | `pipeline/lyra/theo_publish.py` | CLI `python -m pipeline.lyra.theo_publish (--dry-run \| --apply \| --correct [--dry-run] \| --register-video [--dry-run]) < input.json`. |
 | `pipeline/lyra/theo_dossier.py` | CLI `python -m pipeline.lyra.theo_dossier list` and `export <request_id> [--texts cited\|all]` (gzip JSON on stdout), incl. legacy runs without a manifest. |
 | `migrations/0025_theo_paper_publications.sql` | Journal table `theo_paper_publications` + index `research_artifacts (request_id, kind, created_at DESC)`. |
 | `tests/pipeline/theo_publish_fixtures.py` | Shared test fixtures: one paper that passes every gate, a fake session that behaves like the `research_requests` row. |
-| `tests/pipeline/test_theo_publishing_anchors.py` | Anchor normalisation and resolution. |
+| `tests/pipeline/test_theo_publishing_anchors.py` | Anchor normalisation and markdown resolution. |
 | `tests/pipeline/test_training_corpus_nul.py` | NUL stripping of every corpus write. |
-| `tests/pipeline/test_research_state_dossier.py` | `findings_by_specialist`, dossier fields, `MODERATING`, `DossierReady`, deadline phase. |
+| `tests/pipeline/test_research_state_dossier.py` | `findings_by_specialist`, dossier fields, `MODERATING`, `DossierReady`, deadline phase, the moderator runs once per run. |
 | `tests/pipeline/test_dossier_manifest.py` | Manifest helpers. |
 | `tests/pipeline/test_training_corpus_dossier.py` | Replace semantics, returned ids, best archive rows, classification, monotonic `cited`. |
 | `tests/pipeline/test_archive_completion.py` | Archive completion end to end with `httpx.MockTransport`. |
@@ -52,15 +64,15 @@
 | `tests/pipeline/test_orchestrator_research_only.py` | Wiring ends at DossierHandler, `DossierReady` done signal, dossier guard, writing chain gone. |
 | `tests/pipeline/test_probative_disabled_return.py` | `embed_probative_images` returns five parts when disabled. |
 | `tests/pipeline/test_research_only_prompts.py` | Writing prompts and LLM repair/coherence calls are gone. |
-| `tests/pipeline/test_theo_publishing_gates.py` | Slug rule and every gate. |
+| `tests/pipeline/test_theo_publishing_gates.py` | Slug rule and every gate, incl. the page-side anchor check and `check_page`. |
 | `tests/pipeline/test_migration_0025.py` | Migration shape. |
-| `tests/pipeline/test_theo_publishing_publish.py` | `publish_paper` and `run_publish_side_effects`. |
-| `tests/pipeline/test_theo_publishing_corrections.py` | `correct_paper` and `register_video`. |
-| `tests/pipeline/test_theo_publish_cli.py` | CLI modes, exit codes, bundle hashing. |
+| `tests/pipeline/test_theo_publishing_publish.py` | `publish_paper` (incl. re-publishing an unpublished paper: evidence ids, log and videos kept), `run_publish_side_effects` and the owner notice. |
+| `tests/pipeline/test_theo_publishing_corrections.py` | `correct_paper` (incl. the full republish of a legacy paper, credited to Theo) and `register_video`. |
+| `tests/pipeline/test_theo_publish_cli.py` | CLI modes, exit codes, bundle hashing, canonical request ids. |
 | `tests/pipeline/test_theo_dossier.py` | Export (manifest and legacy), list, CLI. |
 | `tests/pipeline/test_tts_published_report.py` | TTS narrates `published_report`. |
 | `tests/api/test_theo_worker_researched.py` | Worker researched branch, no auto-publish, feeder cap, pacing average. |
-| `tests/api/test_theo_routes_researched.py` | Stream terminal set, DELETE of researched rows, shared slug rule. |
+| `tests/api/test_theo_routes_researched.py` | Stream terminal set, owner detail of a researched row, DELETE of researched rows, shared slug rule, the founder publish route refuses a paper its page could not render. |
 | `ancient-nerds-map/src/components/theo/__tests__/theoResearchLive.test.ts` | Live panel phases end at the dossier. |
 | `ancient-nerds-map/src/pages/__tests__/theoStatusLabel.test.ts` | Owner-list status label for `researched`. |
 
@@ -74,7 +86,7 @@
 | `pipeline/lyra/training_corpus.py` | NUL-safe writes; `save_artifact(..., replace=)` returns the id; `registry_payload` (renamed); `classify_archive_row`; `best_archive_rows[_in]`; `persist_run_corpus` without `citation_registry`, `cited` from moderated claims, monotonic. |
 | `pipeline/lyra/handlers/state_persist.py` | specialist_analyses from the angles; no `moderated` write; replace semantics. |
 | `pipeline/lyra/handlers/deadline.py` | Forced moderation sets `MODERATING` (not `WRITING`). |
-| `pipeline/lyra/handlers/moderator.py` | Sets `MODERATING`; docstring. |
+| `pipeline/lyra/handlers/moderator.py` | Sets `MODERATING`; moderates once per run (the forced-deadline path can emit a second `DebateComplete`); docstring. |
 | `pipeline/lyra/handlers/content_fetch.py` | `fetch_domain_policy` and `domain_of` become module functions (reused by archive completion). |
 | `pipeline/lyra/handlers/probative_images.py` | − `ProbativeImagesHandler` class and its imports; disabled branch returns five parts. |
 | `pipeline/lyra/handlers/angle_image_research.py`, `pipeline/lyra/image_diversity.py` | Docstrings no longer name the deleted handler. |
@@ -82,10 +94,12 @@
 | `pipeline/lyra/tts_generator.py` | `report_for_audio()`: narrate `published_report`. |
 | `api/services/theo_worker.py` | Success → `researched` with `{"dossier": …, "title": null}`; − `_auto_publish`, `_paper_artifact`; notification; corpus close-out without registry; pacing on research-only runs; feeder cap. |
 | `api/services/theo_config.py` | `THEO_RUN_COST_PCT` (9), `THEO_RUN_EST_HOURS` (11), `THEO_MAX_UNWRITTEN_DOSSIERS` (6); − `THEO_PAPER_*`, `THEO_AUTO_PUBLISH_AUTHOR`. |
-| `api/routes/theo.py` | Stream terminal set gains `researched`; publish route uses `pick_slug` + `run_publish_side_effects`; − `_make_slug`, `import re`. |
+| `api/routes/theo.py` | Stream terminal set gains `researched`; publish route uses `pick_slug` + `run_publish_side_effects` and refuses (409) a paper whose page would not render (`check_page`, `check_evidence_anchors`); − `_make_slug`, `import re`. |
 | `ancient-nerds-map/src/components/theo/TheoResearchLive.tsx` | Phases end MODERATE → DOSSIER; no WRITE/JUDGE, no paper/quality_judge stages, no quality flash; "DOSSIER READY". |
 | `ancient-nerds-map/src/pages/TheoPage.tsx` | "Researched · awaiting write" label; notifications for researched/published. |
-| `requirements-api.txt` | `pypdf==6.19.0`. |
+| `requirements-api.txt`, `requirements.txt` | `pypdf==6.19.0` (the API image and the local dev list; CI pip-audits both). |
+| `ancient-nerds-map/src/types/pipeline.ts` | `PIPELINE_STAGES` gains the `dossier` stage (the live trace shows a Dossier LED). |
+| `scripts/swap_theo_worker_when_idle.sh`, `scripts/rework_paper_images.sh` | Comments: no `_auto_publish` any more; `THEO_RUN_COST_PCT` replaces `THEO_PAPER_COST_PCT`. |
 | `tests/pipeline/test_training_corpus.py` | Registry rename; close-out marks moderated sources cited, writes no registry. |
 | `tests/pipeline/test_coherence_pass.py`, `tests/pipeline/test_hallucination_gate.py` | − tests of the removed LLM calls. |
 | `tests/api/test_theo_worker_quota.py` | Budget numbers for `THEO_RUN_COST_PCT = 9` and 11 h runs. |
@@ -95,7 +109,7 @@
 
 `pipeline/lyra/handlers/paper.py`, `fact_check.py`, `presentation.py`, `image_generation.py`, `judge.py`; `pipeline/lyra/prompts/v2_paper_outline.txt`, `v2_paper_hook.txt`, `v2_paper_section.txt`, `v2_paper_connecting.txt`, `v2_paper_otherside.txt`, `v2_paper_assessment.txt`, `coherence_pass.txt`, `hallucination_repair.txt`; `tests/pipeline/test_paper_claim_pack.py`, `test_paper_repair_pass.py`, `test_paper_title_validation.py`, `test_empty_paper_guard.py`, `test_shining_ones_regen.py` (they only covered removed code).
 
-Kept on purpose (used elsewhere or by the publish gate): `theo_citations`, `quality_gate`, deterministic `hallucination_gate`/`coherence_pass`, `hero_picker`, `theo_image_captions`, `image_fetcher`, `image_gates`, `image_diversity`, `embed_probative_images`/`_claim_image_content`/`_limit_tagged`, `illustration_specialist`, `citation_verifier`. The paper fields on `ResearchState` (`paper_text`, `paper_title`, …) stay: four scripts outside this stream read them (see Cross-stream requests).
+Kept on purpose (used elsewhere or by the publish gate): `theo_citations`, `quality_gate`, deterministic `hallucination_gate`/`coherence_pass`, `hero_picker`, `theo_image_captions`, `image_fetcher`, `image_gates`, `image_diversity`, `embed_probative_images`/`_claim_image_content`/`_limit_tagged`, `illustration_specialist`, `citation_verifier`. The paper fields on `ResearchState` (`paper_text`, `paper_title`, …) stay: four host scripts read them (`scripts/entitaet_research_host.py`, `smoke_theo_host.py`, `theo_ab_compare.py`, `theo_test_run.py`). Those scripts run the orchestrator with `request_id=""`, and the DossierHandler (Task 7) refuses a run without a `research_requests` row, so after this plan they end with `ctx.error`; pointing them at `ctx.dossier_summary` would not help (it stays empty). They are left untouched pending the owner's decision (retire them, or give their runs a row): open question 1 in `docs/superpowers/plans/2026-09-26-owner-questions.md`, which the orchestrator adds (integration item I9).
 
 ---
 
@@ -153,9 +167,26 @@ gzip (mtime 0) of UTF-8 JSON on stdout. Exit 0 ok, 1 no/incomplete dossier, 2 ba
                 "revised_claims": [{"original": "…", "revised": "…", "reason": "…", "source_ids": ["…"]}],
                 "speculative_claims": [{"claim": "…", "confidence": "low", "source_ids": ["…"], "notes": "…", "what_would_strengthen": "…"}],
                 "dropped_claims": []},
-  "synthesis": {"synthesis": {"consensus_claims": [], "contested_claims": [], "unique_insights": [], "open_questions": []},
-                "cross_angle_connections": [{"from_angle": "3f9a0c1b", "to_angle": "77d2e4aa", "description": "…"}]},
-  "debate": {"rounds": 4, "challenges": [], "defenses": []},
+  "synthesis": {"synthesis": {"consensus_claims": [{"claim": "…", "source_ids": ["a1b2c3d4e5f6"], "confidence": "high",
+                                                    "supporting_specialists": ["field_archaeologist"]}],
+                              "contested_claims": [{"claim": "…", "for": {"evidence": "…", "specialists": ["…"]},
+                                                    "against": {"evidence": "…", "specialists": ["…"]}, "source_ids": ["…"]}],
+                              "unique_insights": [{"claim": "…", "source_ids": ["…"], "specialist": "…", "confidence": "medium"}],
+                              "open_questions": ["…"],
+                              "convergent_findings": [{"pattern": "…", "significance": "…",
+                                                       "angles_involved": [{"angle_id": 1, "angle_topic": "…", "finding": "…",
+                                                                            "source_ids": ["…"]}]}],
+                              "contradictions": [{"description": "…", "side_a": {"angle_id": 2, "angle_topic": "…", "position": "…"},
+                                                  "side_b": {"angle_id": 4, "angle_topic": "…", "position": "…"}}],
+                              "cross_angle_gaps": [{"topic": "…", "why_important": "…", "suggested_queries": ["…"]}]},
+                "cross_angle_connections": [{"description": "…",
+                                             "from_angle": {"angle_id": 1, "finding": "…", "source_ids": ["…"]},
+                                             "to_angle": {"angle_id": 5, "finding": "…", "source_ids": ["…"]}}]},
+  "debate": {"rounds": 4,
+             "challenges": [{"target_claim": "…", "target_specialist": "…", "suggestion_type": "…", "suggestion": "…",
+                             "evidence": "…", "source_ids": ["…"], "challenger_id": "…"}],
+             "defenses": [{"suggestion_id": 0, "response": "accept", "argument": "…", "additional_evidence": "…",
+                           "source_ids": ["…"], "defender_id": "…"}]},
   "angles": [{"id": "3f9a0c1b", "topic": "…", "description": "…",
               "findings": [{"claim": "…", "evidence": "…", "source_ids": ["a1b2c3d4e5f6"], "confidence": "high", "specialist_id": "field_archaeologist"}]}],
   "sources": [{"id": "a1b2c3d4e5f6", "url": "https://…", "title": "…", "domain": "…", "reliability_tier": 1,
@@ -169,9 +200,16 @@ gzip (mtime 0) of UTF-8 JSON on stdout. Exit 0 ok, 1 no/incomplete dossier, 2 ba
 }
 ```
 
-Rules: `sources` lists every registry source; `archive` is `null` when nothing is archived for it. `texts` holds only sources with a body that is not TDM-reserved. `--texts cited` = sources of moderated final/revised/speculative claims plus every source of an angle finding that shares a source with them; `--texts all` = every registry source. Legacy runs (no `dossier` row, e.g. 95fa3798) export too; their manifest is `{"version": 1, "legacy": true, "request_id", "question", "created_at": null, "angle_ids": [every angle_findings ref], "counts": {…}, "kinds": [kinds present], "archive": {counts…, "failures": [], "duration_s": 0.0, "timed_out": false}, "research": {"llm_calls", "total_tokens", "duration_s"}}` and `images` comes from the `paper_final` artifact's `image_candidate_pool`.
+Top-level keys: exactly the eleven above (`version`, `texts_mode` ("cited"|"all"), `request`, `manifest`, `moderated`, `synthesis`, `debate`, `angles`, `sources`, `texts`, `images`); a reader requires the ten of spec 2.8 and may ignore `texts_mode`.
 
-`python -m pipeline.lyra.theo_dossier list` prints a JSON array: `[{"id", "question", "status": "researched", "is_batch", "created_at", "completed_at", "dossier": <C2 summary>}]`, oldest first.
+Item shapes (all verbatim from the run; `?` = the producing schema does not require the key, so a reader uses `.get`):
+- `moderated`: `final_claims[]` `{claim, source_ids, confidence?, notes?}`; `revised_claims[]` `{revised, source_ids, original?, reason?}` (MODERATOR_SCHEMA requires only `revised` and `source_ids`); `speculative_claims[]` `{claim, source_ids, confidence?, notes?, what_would_strengthen?}`.
+- `synthesis`: `{"synthesis": {consensus_claims: [{claim, source_ids, confidence?, supporting_specialists?}], contested_claims: [{claim, for?: {evidence, specialists}, against?: {evidence, specialists}, source_ids?}], unique_insights: [{claim, source_ids, specialist?, confidence?}], open_questions: [str], convergent_findings?: [{pattern, significance, angles_involved: [{angle_id: int, angle_topic, finding, source_ids}]}], contradictions?: [{description, side_a: {angle_id, angle_topic, position}, side_b: {…}}], cross_angle_gaps?: [{topic, why_important, suggested_queries}]}, "cross_angle_connections": [{description, from_angle: {angle_id: int, finding, source_ids}, to_angle: {angle_id: int, finding, source_ids}}]}`. The three cross-angle lists are merged into `synthesis` by `handlers/synthesis.py` and are absent when cross-angle detection was skipped; CROSS_ANGLE_SCHEMA types their items only as objects, so every key inside them is read with `.get`. `angle_id` there is the cross-angle LLM's ordinal (1, 2, …), **not** the 8-hex angle id of `angles[].id`.
+- `debate`: `{rounds: int, challenges: [{target_claim, target_specialist?, suggestion_type?, suggestion, evidence?, source_ids, challenger_id}], defenses: [{suggestion_id?, response: "accept"|"note"|"decline", argument, additional_evidence?, source_ids?, defender_id}]}`. `suggestion_id` is round-local: it indexes the challenges of one round that targeted that defender, and the artifact records no round, so a defense cannot be paired with its challenge from the export.
+
+Rules: `sources` lists every registry source; `archive` is `null` when nothing is archived for it. `texts` holds only sources with a body that is not TDM-reserved. `--texts cited` = sources of moderated final/revised/speculative claims plus every source of an angle finding that shares a source with them (`pipeline.lyra.dossier_manifest.cited_source_ids(moderated, angles)`); `--texts all` = every registry source. The Claude writer may cite exactly `cited_source_ids(export["moderated"], export["angles"])` intersected with the ids in `sources`: the set whose non-TDM bodies `--texts cited` ships. A TDM-reserved source has no text anywhere and is never read live: a claim resting only on it is `source_missing` and must be re-sourced or removed (spec 3.5). Legacy runs (no `dossier` row, e.g. 95fa3798) export too; their manifest is `{"version": 1, "legacy": true, "request_id", "question", "created_at": null, "angle_ids": [every angle_findings ref], "counts": {…}, "kinds": [kinds present], "archive": {counts…, "failures": [], "duration_s": 0.0, "timed_out": false}, "research": {"llm_calls", "total_tokens", "duration_s"}}` and `images` comes from the `paper_final` artifact's `image_candidate_pool`.
+
+`python -m pipeline.lyra.theo_dossier list` prints one JSON array (indent 2, not JSON lines): `[{"id", "question", "status": "researched", "is_batch", "created_at", "completed_at", "dossier": <C2 summary>}]`, oldest first. `export` accepts any UUID spelling and exports under the canonical lowercase id (`research_artifacts.request_id` is TEXT).
 
 ### C4. Publish bundle — `python -m pipeline.lyra.theo_publish --dry-run|--apply < bundle.json`
 
@@ -213,11 +251,11 @@ Top-level keys exactly `version`, `request_id`, `writer`, `result`.
 }
 ```
 
-`result` keys allowed: the ones above; `audit` and `writer` optional (a `result.writer` must equal the top-level `writer`); nothing else. Image web paths must be `/data/research-images/<request_id>/<name>` with `<name>` matching `[A-Za-z0-9][A-Za-z0-9._-]*`, and the file must exist under the container's `/app/public/data/research-images/<request_id>/` (upload by scp before `--apply`).
+`request_id` (here and in C5/C6) is the canonical lowercase UUID, the spelling `theo_dossier export` writes (`str(uuid.UUID(request_id)) == request_id`); any other spelling (uppercase, braces, `urn:uuid:`, no hyphens) is unusable input (exit 2), because the image paths, the slug suffix and the journal all use the id as given. `writer` (here and in C5/C6) has exactly the keys `model`, `tool`, `research_model` (non-empty strings), `published` (`"automatic"` or `"manual"`, the two values the page's disclosure line knows) and `human_review` (bool). `result` keys allowed: the ones above; `audit` and `writer` optional (a `result.writer` must equal the top-level `writer`); nothing else. `result.corrections` is always `[]`: the server owns the published log (C5). `published_by` is always `PUBLISH_AUTHOR = "Theo"` (spec 3.7), on a first publish and on a full republish (C5); the bundle carries no author and no image list. Image web paths must be `/data/research-images/<request_id>/<name>` with `<name>` matching `[A-Za-z0-9][A-Za-z0-9._-]*`, and the file must exist under the container's `/app/public/data/research-images/<request_id>/` (upload by scp to `/var/www/ancientnerds/public/data/research-images/<request_id>/` before `--dry-run`: the dry run checks the files too). The uploader derives its file list from the bundle itself (the basenames of `probative_images[].web_path` and of `hero_image.src`/`web_path`).
 
 ### C5. Correction input — `python -m pipeline.lyra.theo_publish --correct [--dry-run] < correction.json`
 
-Top-level keys `version`, `request_id`, `writer`, `corrections_append` (required) and `report`, `evidence` (optional).
+Top-level keys `version`, `request_id`, `writer`, `corrections_append` (required) and `report`, `evidence`, `result` (optional). `result` (a full republish) excludes `report` and `evidence`: sending it together with either is unusable input (exit 2).
 
 ```json
 {"version": 1, "request_id": "95fa3798-…",
@@ -227,7 +265,12 @@ Top-level keys `version`, `request_id`, `writer`, `corrections_append` (required
  "corrections_append": [{"date": "2026-10-02", "text": "Corrected the 2014 block's weight range.", "evidence_id": "ev-03"}]}
 ```
 
-Every evidence id published before must stay in `evidence`, unless an entry of `corrections_append` names it (then it is retired); a retired id is never reused.
+Three kinds of correction:
+- **Log entry only** (`corrections_append` alone): the text and `published_by` stay, the log grows.
+- **Text correction** (`report`, optionally `evidence`): report and published_report are replaced together; title, card, `probative_images`, `hero_image`, `quality_score` and `published_by` stay as stored (a changed image set, title or card description goes through the full republish; stream C refuses a text correction whose image set, title or card description differs from the published bundle). Every image the new text references must still exist in the paper's folder. Works for legacy M3 papers too: `report` without `evidence` keeps the stored evidence (none on a legacy paper). The quality gate recomputes the stored `quality_score` against the fresh audit of the new text. 10 of the 31 public papers fail it with their stored text (read-only check 2026-09-26). For 9 of them the audit of the stored text fails (uncited paragraphs, non-Latin script), so a text correction whose report passes `validate_paper_artifact` passes, while a log-only correction fails. mogollon-pithouse-sites-across-the-upper-gila also carries a stored `undefined_title_terms = 1` and changes only through the full republish.
+- **Full republish** (`result`, exactly the C4 `result` keys): the way to replace a public paper wholesale, e.g. a Claude rewrite of one of the 31 legacy M3 papers (spec 0 and 2.6 step 4: a republish of a public paper goes through the correction path). `result.corrections` must be `[]` (the bundle as `paper bundle` builds it); the stored log is kept and grows only through `corrections_append`. The gates are those of a first publish (shape, snapshot, artifact, quality with the stored verdict required, evidence, images, page) plus retention; the stored `result_json` becomes `{**current, **result, corrections: current + corrections_append, audit: <fresh>, writer: <this writer>}` (the `dossier` summary and any legacy key stay); slug and `published_at` stay, `published_by` becomes `Theo` (spec 3.7; 7 of the 31 public papers carry a founder's name, read-only check 2026-09-26), and the side effects re-index under that author.
+
+Every `corrections_append` entry is `{date: "YYYY-MM-DD", text, evidence_id?}`, and `date` lies between the paper's publication day (UTC) and today (UTC): the page turns the newest date into JSON-LD `dateModified`. Every evidence id published before must stay in the new evidence, unless an entry of `corrections_append` names it (then it is retired). A retired id is never reused and never named again by a later correction, so the correction that retired it stays the last entry naming it (the page anchors a retired id there).
 
 ### C6. Video registration input — `python -m pipeline.lyra.theo_publish --register-video [--dry-run] < video.json`
 
@@ -241,9 +284,11 @@ Top-level keys exactly `version`, `request_id`, `writer`, `youtube_id`, `title`,
  "evidence_timestamps": {"ev-01": 41, "ev-03": 312}}
 ```
 
+`youtube_id` is `[A-Za-z0-9_-]{11}`; each timestamp is a whole number of seconds ≥ 0 (not a bool) for an id that is a current evidence id of the paper or one retired by a stored correction (the page's `anchor_ids`). A video has no `poster` (spec 2.7): the page shows its posterless player.
+
 ### C7. `result_json` of a published paper (what stream B renders)
 
-The C4 `result` plus: `"audit"` (recomputed), `"writer"` (C4 writer), `"dossier"` (C2 summary, carried over from the research row), later `"corrections": [{"date": "YYYY-MM-DD", "text": "…", "evidence_id": "ev-03"}]` (`evidence_id` optional) and `"videos": [{"youtube_id", "title", "published_at", "evidence_timestamps": {"ev-01": 41}, "registered_at": "<ISO UTC>"}]`. Table columns: `status='completed'`, `is_public=TRUE`, `published_by='Theo'`, `published_at`, `completed_at` (both NOW() at publish), `slug`.
+The C4 `result` plus: `"audit"` (recomputed), `"writer"` (C4 writer), `"dossier"` (C2 summary, carried over from the research row), later `"corrections": [{"date": "YYYY-MM-DD", "text": "…", "evidence_id": "ev-03"}]` (`evidence_id` optional) and `"videos": [{"youtube_id", "title", "published_at", "evidence_timestamps": {"ev-01": 41}, "registered_at": "<ISO UTC>"}]` (no `poster`). Table columns: `status='completed'`, `is_public=TRUE`, `published_by='Theo'`, `published_at`, `completed_at` (both NOW() at publish), `slug`. Every write (publish, correct, register_video) passes the page's own validators on exactly this dict first (`page` gate, C8), so a stored paper always renders. The founder publish route (`POST /theo/research/{id}/publish`, `api/routes/theo.py`, Task 21) runs the same page and anchor checks (`check_page`, `check_evidence_anchors` on its assembled `published_report`) before its UPDATE and answers 409 when they fail, `?override=1` included: a paper unpublished, edited and re-approved there cannot go live unrenderable either. A paper unpublished that way and published again through `theo_publish --apply` keeps its `corrections` log, its `videos` and every evidence id it had (the `retention` gate, C8).
 
 ### C8. `PublishOutcome` (stdout of every `theo_publish` mode)
 
@@ -257,48 +302,52 @@ The C4 `result` plus: `"audit"` (recomputed), `"writer"` (C4 writer), `"dossier"
            "artifact": {"passed": true, "issues": []},
            "quality": {"passed": true, "issues": [], "stored_passed": true, "recomputed_passed": true},
            "evidence": {"passed": true, "issues": [], "resolved": {"ev-01": 0}},
-           "images": {"passed": true, "issues": [], "checked": 10, "missing": [], "foreign": []}},
- "side_effects": {"indexnow": {"ok": true}, "qdrant": {"ok": true, "sections": 7}},
+           "retention": {"passed": true, "issues": []},
+           "images": {"passed": true, "issues": [], "checked": 10, "missing": [], "foreign": []},
+           "page": {"passed": true, "issues": []}},
+ "side_effects": {"indexnow": {"ok": true}, "qdrant": {"ok": true, "sections": 7}, "notify": {"discord": false}},
  "journal_id": 12}
 ```
 
-`correct` has gates `status`, `shape`, `retention`, `artifact`, `quality` (recompute only), `evidence`, `images`; `register_video` has `status`, `shape`, `evidence_refs`, `duplicate`, and `side_effects` holds only `indexnow`. Dry runs never write: `journal_id` null, `side_effects` `{}`. A dry run of a publish on an already public row passes the status gate with `apply_allowed: false` (it answers "would this content pass"). Exit codes: 0 ok (side-effect failures are reported, not fatal), 1 a gate failed, 2 unusable input, 3 row changed between read and write (nothing committed), 4 committed but the re-read row differs.
+Gates per action: `publish` = `status`, `shape`, `snapshot`, `artifact`, `quality`, `evidence`, `retention`, `images`, `page` (`retention` compares with the evidence the row already stores: it passes trivially on a first publish and keeps every evidence id of a paper the founder route unpublished); `correct` = `status`, `shape`, `retention`, `artifact`, `quality` (recompute only; a full republish also requires the stored verdict of its new `quality_score`), `evidence`, `images`, `page` (a full republish adds `snapshot`); `register_video` = `status`, `shape`, `evidence_refs`, `duplicate`, `page`. When `shape` fails the later gates are absent. `evidence.resolved` maps each id to its index in `report_paragraphs` (C9). `page` runs the page's own validators (`pipeline.research_html_renderer.paper_extras`) on exactly the `result_json` about to be stored (evidence, corrections, videos, writer); a `PaperPageError` becomes its one issue. Side effects: `publish` = `indexnow`, `qdrant`, `notify`; `correct` = `indexnow`, `qdrant` (re-index); `register_video` = `indexnow`. `notify` = `{"discord": <bool>}`: a `thinking_log` `run_event` `paper_published` is always written (log_thinking logs its own failure), and the Discord embed goes out only while `DISCORD_WEBHOOK_URL` is set (unset by owner decision 5, so `false` is the normal value). Dry runs never write and never notify: `journal_id` null, `side_effects` `{}`. A dry run of a publish on an already public row passes the status gate with `apply_allowed: false` (it answers "would this content pass"; the paper changes only through `--correct`). Exit codes: 0 ok (side-effect failures are reported, not fatal), 1 a gate failed, 2 unusable input, 3 row changed between read and write (nothing committed), 4 committed but the re-read row differs (side effects not run, journal `side_effects` NULL). Errors print `{"ok": false, "error": "…"}`.
 
-### C9. Evidence-anchor matching rule (shared with stream B)
+### C9. Evidence-anchor matching rule (shared with streams B and C)
 
-`from pipeline.lyra.theo_publishing import normalize_anchor_text`. An evidence entry anchors to the paragraph whose `normalize_anchor_text(<paragraph text>)` **starts with** `normalize_anchor_text(anchor_text)`. On the page, apply it to each `<p>`'s text content (tags removed, entities unescaped). A published entry always matched exactly one markdown prose paragraph (`report_paragraphs`), and its normalised anchor is at least `MIN_ANCHOR_CHARS` (20) long. Several entries may anchor to the same paragraph.
+`from pipeline.lyra.theo_publishing import EVIDENCE_ID_RE, MIN_ANCHOR_CHARS, check_evidence_anchors, normalize_anchor_text`.
+- `EVIDENCE_ID_RE` (`ev-` plus at least two digits, always applied with `.fullmatch`) is the one definition of the evidence-id format. The page (stream B's `parse_evidence` and `parse_corrections`, imported inside the function) and the studio (stream C's local check, publish step and case file) import it; the frontend's `PAPER_HASH_RE` (TypeScript) keeps a copy whose comment names this constant as its source.
+- `key = normalize_anchor_text(anchor_text)`; an entry whose key is shorter than `MIN_ANCHOR_CHARS` (20) is rejected.
+- A paragraph matches when `normalize_anchor_text(<paragraph text>)` **starts with** `key`; exactly one paragraph must match; several entries may share a paragraph. The writer copies the paragraph's opening verbatim from its first word, citation markers included (writer brief section 9): the normaliser replaces `[N]` and `[S:<id>]` by a space, so an anchor that runs past a marker but leaves it out stops matching wherever punctuation follows the marker (`"… 1,000 t [1]. It lies"` matches, `"… 1,000 t. It lies"` does not).
+- An entry must resolve both among the markdown prose paragraphs (`report_paragraphs(report)`) **and** among the plain `<p>` elements of the HTML the page serves: `markdown_to_html(paper_markdown(report, title))`, each `<p>`'s text content with tags removed and entities unescaped (stream B's `pipeline.research_html_renderer.resolve_evidence_anchors(html, evidence)`, same rule).
+- `check_evidence_anchors(report, title, evidence) -> (resolved, issues)` runs both and is the one acceptance function: the publish and correction gates call it, and stream C's local check imports it. `resolved` holds `report_paragraphs` indices; a page-side failure is one issue `"paper page: <PaperPageError message>"`.
 
 ---
 
-## Task 1: Commit the ported editorial spec
+## Task 1: Verify the ported editorial spec
 
-The M3 writing prompts are deleted in Task 12; their editorial spec must exist first. The file was written during planning.
+The M3 writing prompts are deleted in Task 12; their editorial spec must exist first. The file was written during planning and is already committed (992302f), so this task only verifies it and commits nothing.
 
 **Files:**
-- Create (verify + commit): `docs/superpowers/plans/assets/writer-brief-editorial.md`
+- Verify (no change): `docs/superpowers/plans/assets/writer-brief-editorial.md`
 
-- [ ] **Step 1: Verify the file is present and complete**
+- [ ] **Step 1: Verify the file is tracked and complete**
 
-Run: `test -f docs/superpowers/plans/assets/writer-brief-editorial.md && grep -c "^## " docs/superpowers/plans/assets/writer-brief-editorial.md`
-Expected: `9` (sections 1 Voice … 9 Evidence entries). If the file is missing, stop and ask the planner for it: it is the ported text of `pipeline/lyra/prompts/v2_paper_*.txt` and must not be re-invented.
+Run: `git ls-files --error-unmatch docs/superpowers/plans/assets/writer-brief-editorial.md && grep -cE "^## [0-9]+\. " docs/superpowers/plans/assets/writer-brief-editorial.md`
+Expected: the path, then `9` (sections 1 Voice … 9 Evidence entries; a plain `grep -c "^## "` prints 15, because the house-format template inside the file has six `## ` lines of its own). If `git ls-files` fails, stop and ask the planner for the file: it is the ported text of `pipeline/lyra/prompts/v2_paper_*.txt` and must not be re-invented.
 
 - [ ] **Step 2: Check it names every rule stream C gates on**
 
 Run: `grep -E "5,000 to 7,500 words|\[S:<source_id>\]|almost certain · very likely · likely · roughly even|Connecting the Dots|The Other Side|What We Actually Know|anchor_text" docs/superpowers/plans/assets/writer-brief-editorial.md | wc -l`
 Expected: a number ≥ 7.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: No commit**
 
-```bash
-git add docs/superpowers/plans/assets/writer-brief-editorial.md
-git commit -m "Port the editorial spec of Theo's M3 writing prompts into a writer brief for the Claude write" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-```
+`git status --porcelain docs/superpowers/plans/assets/` prints nothing: 992302f contains the file, and the reconcile's section-9 wording (`anchor_text` copied from the paragraph's first word, citation markers included) is committed with the plans before any implementer task (integration item I10). If the file shows as modified, stop and ask the orchestrator: the asset is not this task's to commit. Record the check in the task report instead of committing.
 
 ---
 
 ## Task 2: Evidence-anchor normalisation (`theo_publishing.py`, part 1)
 
-Stream B imports `normalize_anchor_text`, so this lands first. The module starts small and grows in Tasks 15, 17 and 18.
+Stream B imports `EVIDENCE_ID_RE`, `normalize_anchor_text` and `MIN_ANCHOR_CHARS`, so this lands first. This function is the only definition of the normalisation (stream B's CS-2 refers to it and carries no reference implementation of its own), and `EVIDENCE_ID_RE` the only Python definition of the evidence-id format (contract C9). The module starts small and grows in Tasks 15, 17 and 18.
 
 **Files:**
 - Create: `pipeline/lyra/theo_publishing.py`
@@ -312,8 +361,9 @@ Stream B imports `normalize_anchor_text`, so this lands first. The module starts
 ```python
 """Shared fixtures for the Theo publish tests: one paper that passes every gate.
 
-REPORT was checked against validate_paper_artifact (passed, no issues) and
-recompute_quality_passed (True with QUALITY) when this plan was written.
+REPORT was checked against validate_paper_artifact (passed, no issues),
+recompute_quality_passed (True with QUALITY) and, with TITLE, against the
+paper page's own anchor resolution when this plan was written.
 """
 
 from __future__ import annotations
@@ -330,6 +380,7 @@ IMG_NAME = "p1_trilithon.jpg"
 IMG = f"/data/research-images/{REQ}/{IMG_NAME}"
 SOURCE_A = "a1b2c3d4e5f6"
 SOURCE_B = "0f1e2d3c4b5a"
+TITLE = "The Baalbek Trilithon"
 
 REPORT = f"""# The Baalbek Trilithon
 
@@ -440,7 +491,7 @@ DOSSIER_SUMMARY = {
 def make_result(**overrides) -> dict:
     """A publish-bundle `result` that passes every gate."""
     result = {
-        "title": "The Baalbek Trilithon",
+        "title": TITLE,
         "card_description": "The quarry blocks of Baalbek are Roman work, moved with capstans and ramps.",
         "report": REPORT,
         "published_report": REPORT,
@@ -492,6 +543,7 @@ class PublishSession(RecordingSession):
         self.tamper = tamper
         self.written = None
         self.slug_after = row.slug
+        self.published_by_after = row.published_by
 
     def execute(self, stmt, params=None):
         super().execute(stmt, params)
@@ -503,10 +555,11 @@ class PublishSession(RecordingSession):
         if sql.lstrip().startswith("UPDATE research_requests"):
             self.written = params["result"]
             self.slug_after = params.get("slug", self.row.slug)
+            self.published_by_after = params.get("author", self.row.published_by)
             return FakeResult([], rowcount=self.update_rowcount)
         if "INSERT INTO theo_paper_publications" in sql:
             return FakeResult([(42,)])
-        if "SELECT status, is_public, slug, result_json" in sql:
+        if "SELECT status, is_public, slug, published_by, result_json" in sql:
             written = json.dumps({"tampered": True}) if self.tamper else self.written
             return FakeResult(
                 [
@@ -514,6 +567,7 @@ class PublishSession(RecordingSession):
                         status="completed",
                         is_public=True,
                         slug=self.slug_after,
+                        published_by=self.published_by_after,
                         result_json=written,
                     )
                 ]
@@ -528,7 +582,10 @@ class PublishSession(RecordingSession):
 ```python
 """Evidence anchors: one normalisation for the markdown here and the page's HTML (stream B)."""
 
+import pytest
+
 from pipeline.lyra.theo_publishing import (
+    EVIDENCE_ID_RE,
     MIN_ANCHOR_CHARS,
     normalize_anchor_text,
     report_paragraphs,
@@ -543,6 +600,43 @@ def test_markdown_and_rendered_text_normalise_to_the_same_string():
     expected = 'the stone of the "pregnant" woman - a block weighs...'
     assert normalize_anchor_text(markdown) == expected
     assert normalize_anchor_text(rendered) == expected
+
+
+# (markdown source, the text content markdown_to_html renders for it): both
+# sides must fold to one key. The rendered forms were taken from
+# pipeline.article_html_renderer.markdown_to_html (tags removed, entities
+# unescaped) when this plan was written.
+@pytest.mark.parametrize(
+    ("markdown", "rendered"),
+    [
+        (
+            "See <https://example.org/x> for the survey [8].",
+            "See https://example.org/x for the survey [8].",
+        ),
+        ("A backslash \\*escaped\\* star [9].", "A backslash *escaped* star [9]."),
+        ("Escaped \\[brackets\\] and a \\_word\\_ stay [10].", "Escaped [brackets] and a _word_ stay [10]."),
+        ("Aa &amp; bb &mdash; cc [12].", "Aa & bb — cc [12]."),
+    ],
+)
+def test_autolinks_escapes_and_entities_fold_like_the_rendered_text(markdown, rendered):
+    assert normalize_anchor_text(markdown) == normalize_anchor_text(rendered)
+
+
+@pytest.mark.parametrize(
+    ("typographic", "typed"),
+    [
+        ("«Guillemets», a 5′ block, a 3″ gap ‒ and ― dashes [13].", "\"Guillemets\", a 5' block, a 3\" gap - and - dashes [13]."),
+        ("STRASSE and Straße fold alike [14].", "strasse and strasse fold alike [14]."),
+    ],
+)
+def test_rare_typography_and_case_fold_to_what_a_writer_types(typographic, typed):
+    assert normalize_anchor_text(typographic) == normalize_anchor_text(typed)
+
+
+def test_ids_are_matched_whole():
+    assert EVIDENCE_ID_RE.fullmatch("ev-01")
+    assert EVIDENCE_ID_RE.fullmatch("ev-01\n") is None
+    assert EVIDENCE_ID_RE.fullmatch("ev-1") is None
 
 
 def test_citation_and_draft_markers_disappear():
@@ -613,12 +707,14 @@ side-effect sequence: pipeline must not import api.
 Nothing here repairs a paper. Every gate either passes or reports what is wrong;
 the local check (pipeline/studio/paper) is the only place a paper gets fixed.
 
-Module-level imports stay light (no pipeline.indexnow, no DB models): stream B's
-paper renderer imports normalize_anchor_text from here.
+Module-level imports stay light (no pipeline.indexnow, no DB models, no
+markdown/nh3): stream B's paper renderer imports normalize_anchor_text from
+here, and the Lyra image (no markdown, no nh3) must be able to import it.
 """
 
 from __future__ import annotations
 
+import html
 import re
 import unicodedata
 
@@ -632,8 +728,11 @@ from pipeline.lyra.theo_citations import (
 # Evidence anchors (contract C9, shared with the paper page)
 # ---------------------------------------------------------------------------
 
-#: An evidence id: "ev-" plus at least two digits ("ev-03", "ev-117").
-EVIDENCE_ID_RE = re.compile(r"^ev-\d{2,}$")
+#: An evidence id: "ev-" plus at least two digits ("ev-03", "ev-117"). Always
+#: applied with fullmatch: "$" in re.match also accepts a trailing newline.
+#: The one definition: the paper page (pipeline.research_html_renderer) and the
+#: studio (pipeline.studio) import it, the frontend's PAPER_HASH_RE copies it.
+EVIDENCE_ID_RE = re.compile(r"ev-\d{2,}")
 
 #: Shortest normalised anchor text accepted. Shorter openings ("The site")
 #: match many paragraphs and say nothing about which one is meant.
@@ -645,15 +744,23 @@ _TYPOGRAPHY = str.maketrans(
         "’": "'",
         "‚": "'",
         "‛": "'",
+        "′": "'",
         "“": '"',
         "”": '"',
         "„": '"',
         "‟": '"',
+        "″": '"',
+        "«": '"',
+        "»": '"',
+        "‒": "-",
         "–": "-",
         "—": "-",
+        "―": "-",
         "−": "-",
     }
 )
+_MD_ESCAPE_RE = re.compile(r"\\([\\`*_{}\[\]()#+\-.!])")
+_AUTOLINK_RE = re.compile(r"<(https?://[^>\s]+)>")
 _MD_LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 _CITATION_MARKER_RE = re.compile(r"\[(?:\d+(?:\s*[,-]\s*\d+)*|S:[^\]\s]+)\]")
 _DASH_RUN_RE = re.compile(r"-{2,}")
@@ -664,25 +771,30 @@ _WHITESPACE_RE = re.compile(r"\s+")
 def normalize_anchor_text(text: str) -> str:
     """Fold paragraph text so markdown source and rendered HTML text compare equal.
 
-    The matching rule shared with the paper page: an evidence entry anchors to
-    the paragraph whose normalised text STARTS WITH its normalised anchor_text.
-    Apply this to the markdown paragraph here and to the paragraph's text
-    content (tags stripped, entities unescaped) on the page.
+    The matching rule shared with the paper page (contract C9): an evidence
+    entry anchors to the paragraph whose normalised text STARTS WITH its
+    normalised anchor_text. Apply this to the markdown paragraph here and to
+    the paragraph's text content (tags stripped, entities unescaped) on the page.
 
-    Steps, in order: Unicode NFKC (an ellipsis becomes "...", a no-break space a
-    space); curly quotes to straight ones, en/em dash and minus to "-"; markdown
+    Steps, in order: HTML entities decoded ("&amp;" in the markdown is "&" on
+    the page); curly and angle quotes, primes to straight ones, the dash family
+    and minus to "-" (before NFKC, which would split a double prime in two);
+    Unicode NFKC (an ellipsis becomes "...", a no-break space a space); markdown
+    backslash escapes dropped; autolinks <https://...> to their URL; markdown
     links and images to their text; citation markers [N], [N, M], [N-M] and
     draft markers [S:<id>] removed; runs of "-" folded to one ("--" is what the
     renderer turns into an en dash); emphasis markers * and ` removed, _ removed
-    at word edges; whitespace folded to single spaces; stripped; lower-cased.
+    at word edges; whitespace folded to single spaces; stripped; case-folded.
     """
-    folded = unicodedata.normalize("NFKC", text).translate(_TYPOGRAPHY)
+    folded = unicodedata.normalize("NFKC", html.unescape(text).translate(_TYPOGRAPHY))
+    folded = _MD_ESCAPE_RE.sub(r"\1", folded)
+    folded = _AUTOLINK_RE.sub(r"\1", folded)
     folded = _MD_LINK_RE.sub(r"\1", folded)
     folded = _CITATION_MARKER_RE.sub(" ", folded)
     folded = _DASH_RUN_RE.sub("-", folded)
     folded = folded.replace("*", "").replace("`", "")
     folded = _EDGE_UNDERSCORE_RE.sub("", folded)
-    return _WHITESPACE_RE.sub(" ", folded).strip().lower()
+    return _WHITESPACE_RE.sub(" ", folded).strip().casefold()
 
 
 def report_paragraphs(report: str) -> list[str]:
@@ -732,7 +844,7 @@ def resolve_evidence_anchors(
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_theo_publishing_anchors.py -m "not integration and not live_llm" -q`
-Expected: `6 passed`.
+Expected: `13 passed` (the two fold tests count 4 + 2 parameters).
 
 - [ ] **Step 6: Lint and commit**
 
@@ -963,7 +1075,7 @@ git commit -m "Strip NUL characters from every training-corpus write so one page
 - Modify: `pipeline/lyra/research_state.py` (enum lines 27-35, fields after line 144, new function at the end)
 - Modify: `pipeline/lyra/research_events.py` (after `ModeratorComplete`, line 92)
 - Modify: `pipeline/lyra/handlers/deadline.py` (lines 55-60)
-- Modify: `pipeline/lyra/handlers/moderator.py` (docstring + start of `_on_debate_complete`)
+- Modify: `pipeline/lyra/handlers/moderator.py` (docstring, a once-per-run guard in a new `__init__`, start of `_on_debate_complete`)
 - Create: `pipeline/lyra/dossier_manifest.py`
 - Test: `tests/pipeline/test_research_state_dossier.py`, `tests/pipeline/test_dossier_manifest.py`
 
@@ -976,9 +1088,13 @@ git commit -m "Strip NUL characters from every training-corpus write so one page
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
+from pipeline.lyra import convergence_orchestrator
+from pipeline.lyra.handlers import moderator
 from pipeline.lyra.handlers.deadline import DeadlineHandler
-from pipeline.lyra.research_events import DebateComplete, DossierReady, EventBus
+from pipeline.lyra.handlers.moderator import ModeratorHandler
+from pipeline.lyra.research_events import DebateComplete, DossierReady, EventBus, ModeratorComplete
 from pipeline.lyra.research_state import (
     ResearchAngle,
     ResearchPhase,
@@ -1040,6 +1156,44 @@ async def test_imminent_deadline_forces_moderation_once():
     # MODERATING is outside (SYNTHESIZING, DEBATING): the next tick forces nothing.
     assert await handler.check_deadline() is False
     assert fired == [ResearchPhase.MODERATING]
+
+
+async def test_moderator_runs_once_per_run(monkeypatch):
+    # The forced-deadline path emits DebateComplete while the debate still runs;
+    # the debate's own DebateComplete follows later and must not moderate again,
+    # or it rewrites state.moderated_result while the DossierHandler persists it.
+    calls: list[str] = []
+
+    def fake_llm(*args, **kwargs):
+        calls.append("llm")
+        return {
+            "final_claims": [{"claim": "c", "source_ids": ["s"]}],
+            "revised_claims": [],
+            "speculative_claims": [],
+            "dropped_claims": [],
+        }
+
+    monkeypatch.setattr(moderator, "structured_llm_call", fake_llm)
+    monkeypatch.setattr(moderator, "_get_settings", lambda: SimpleNamespace(temperature_verification=0.1))
+    monkeypatch.setattr(convergence_orchestrator, "_flush_progress_to_db", lambda state, rid: None)
+    state = ResearchState(question="q")
+    bus = EventBus(state=state)
+    ModeratorHandler(state, bus, asyncio.Semaphore(1)).register()
+    completed: list[ModeratorComplete] = []
+
+    async def on_moderator_complete(event: ModeratorComplete):
+        completed.append(event)
+
+    bus.on(ModeratorComplete, on_moderator_complete)
+
+    await bus.emit(DebateComplete())
+    await bus.emit(DebateComplete())
+
+    assert calls == ["llm"]
+    assert len(completed) == 1
+    assert state.moderated_result["final_claims"] == [{"claim": "c", "source_ids": ["s"]}]
+    assert state.phase is ResearchPhase.MODERATING
+    assert state.error == ""
 ```
 
 - [ ] **Step 2: Write the failing manifest tests**
@@ -1242,7 +1396,9 @@ with:
             await self.bus.emit(DebateComplete())
 ```
 
-- [ ] **Step 7: Let the moderator mark its phase**
+- [ ] **Step 7: Let the moderator mark its phase and moderate once per run**
+
+The forced-deadline path (Step 6) emits `DebateComplete` while the debate may still run, and the debate emits its own `DebateComplete` when it ends (`handlers/debate.py` assigns `debate_result` only then). Without a guard the moderator runs twice: the second run rewrites `state.moderated_result` while the DossierHandler (Task 7) is still persisting it, so the stored `moderated` artifact, the archive completion and the manifest counts can come from different moderations, and a failing second LLM call sets `state.error` after `DossierReady`. The moderator therefore moderates once per run; the DossierHandler keeps its own lock (spec 2.1: the handler is idempotent on its own).
 
 In `pipeline/lyra/handlers/moderator.py` replace the module docstring with:
 
@@ -1252,9 +1408,24 @@ claims, revises contested claims, and produces the filtered claim set the
 dossier (handlers/dossier.py) hands to the Claude writer."""
 ```
 
-add `from pipeline.lyra.research_state import ResearchPhase` to its imports, and make the first line of `_on_debate_complete`:
+add `from pipeline.lyra.research_state import ResearchPhase` to its imports, add to `ModeratorHandler`, directly above `register`:
 
 ```python
+    def __init__(self, state, bus, semaphore):
+        super().__init__(state, bus, semaphore)
+        # The forced-deadline path (handlers/deadline.py) emits DebateComplete while the
+        # debate may still run; the debate's own DebateComplete must not moderate again,
+        # or it rewrites state.moderated_result under the DossierHandler.
+        self._started = False
+```
+
+and make these the first lines of `_on_debate_complete`:
+
+```python
+        if self._started:
+            self.state.log("moderator", "DebateComplete fired again: the claims are already moderated, ignored")
+            return
+        self._started = True
         self.state.phase = ResearchPhase.MODERATING
 ```
 
@@ -1371,7 +1542,7 @@ def manifest_summary(manifest: dict, artifact_id: int) -> dict:
 - [ ] **Step 9: Run the tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_research_state_dossier.py tests/pipeline/test_dossier_manifest.py tests/pipeline/test_research_events_quota.py -m "not integration and not live_llm" -q`
-Expected: all pass (`5` + `4` + the existing 3).
+Expected: all pass (`6` + `4` + the existing 3).
 
 - [ ] **Step 10: Lint and commit**
 
@@ -1379,7 +1550,7 @@ Expected: all pass (`5` + `4` + the existing 3).
 ./.venv/Scripts/python.exe -m ruff format pipeline/lyra/research_state.py pipeline/lyra/research_events.py pipeline/lyra/handlers/deadline.py pipeline/lyra/handlers/moderator.py pipeline/lyra/dossier_manifest.py tests/pipeline/test_research_state_dossier.py tests/pipeline/test_dossier_manifest.py
 ./.venv/Scripts/python.exe -m ruff check --fix pipeline/lyra/research_state.py pipeline/lyra/research_events.py pipeline/lyra/handlers/deadline.py pipeline/lyra/handlers/moderator.py pipeline/lyra/dossier_manifest.py tests/pipeline/test_research_state_dossier.py tests/pipeline/test_dossier_manifest.py
 git add pipeline/lyra/research_state.py pipeline/lyra/research_events.py pipeline/lyra/handlers/deadline.py pipeline/lyra/handlers/moderator.py pipeline/lyra/dossier_manifest.py tests/pipeline/test_research_state_dossier.py tests/pipeline/test_dossier_manifest.py
-git commit -m "Give a Theo run a dossier: state fields, the DossierReady event, a moderating phase and the manifest shape" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "Give a Theo run a dossier: state fields, the DossierReady event, a moderating phase that moderates once per run and the manifest shape" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1786,7 +1957,7 @@ git commit -m "Keep one current research artifact per run, kind and ref, and rea
 **Files:**
 - Modify: `pipeline/lyra/handlers/content_fetch.py` (static methods `_domain_policy`/`_domain_of`, lines 280-309, become module functions)
 - Create: `pipeline/lyra/archive_completion.py`
-- Modify: `requirements-api.txt`
+- Modify: `requirements-api.txt`, `requirements.txt`
 - Test: `tests/pipeline/test_archive_completion.py`
 
 Prerequisite: `./.venv/Scripts/python.exe -m pip install pypdf==6.19.0`.
@@ -1889,6 +2060,11 @@ def test_limits_come_from_the_environment(monkeypatch):
     assert ac.archive_completion_limits() == (600.0, 2)
     monkeypatch.setenv("THEO_ARCHIVE_COMPLETION_CONCURRENCY", "0")
     with pytest.raises(ValueError, match="at least 1"):
+        ac.archive_completion_limits()
+    monkeypatch.setenv("THEO_ARCHIVE_COMPLETION_CONCURRENCY", "2")
+    # Above the worker's stall grace (2700 s) the guard would kill a finished run.
+    monkeypatch.setenv("THEO_ARCHIVE_COMPLETION_MAX_S", "3000")
+    with pytest.raises(ValueError, match="between 1 and 2400 s"):
         ac.archive_completion_limits()
 
 
@@ -2128,9 +2304,11 @@ claim against archived text, so this step fetches what is missing:
 * YouTube as the transcript news_videos holds (what the transcript adapter cites).
 
 TDM reservations are honoured as content_fetch honours them: the row is stored
-without its body and the source counts as tdm_reserved (the local fact check
-reads it live). The step is bounded in time and concurrency
-(THEO_ARCHIVE_COMPLETION_MAX_S, THEO_ARCHIVE_COMPLETION_CONCURRENCY), and every
+without its body and the source counts as tdm_reserved; the Claude writer must
+cite another source for any claim that rests on it (spec 3.5: nothing reads a
+reserved source live, its claims are source_missing). The step is bounded in
+time and concurrency (THEO_ARCHIVE_COMPLETION_MAX_S, at most
+MAX_ARCHIVE_COMPLETION_S; THEO_ARCHIVE_COMPLETION_CONCURRENCY), and every
 per-source failure is recorded in the manifest, never dropped.
 """
 
@@ -2169,9 +2347,15 @@ from pipeline.utils.text import extract_text_from_html
 TRANSCRIPT_CONTENT_TYPE = "youtube/transcript"
 _HTTP_TIMEOUT_S = 20.0
 _MAX_PDF_BYTES = 30_000_000
-_YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_YOUTUBE_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
 _TRANSCRIPT_SQL = text("SELECT transcript_text FROM news_videos WHERE id = :id")
 _TIME_BUDGET_REASON = "archive completion time budget exhausted"
+
+#: Upper bound of THEO_ARCHIVE_COMPLETION_MAX_S. Archive completion makes no LLM
+#: call, so the worker's stall guard sees a frozen progress signature for its
+#: whole duration; it must stay below theo_worker._STALL_GRACE_SECONDS (2700 s),
+#: or the guard kills a finished run during completion and it ends failed.
+MAX_ARCHIVE_COMPLETION_S = 2400.0
 
 
 class ArchiveFetchError(Exception):
@@ -2216,6 +2400,11 @@ def archive_completion_limits() -> tuple[float, int]:
     """(THEO_ARCHIVE_COMPLETION_MAX_S, THEO_ARCHIVE_COMPLETION_CONCURRENCY), defaults 1800 s and 4."""
     max_seconds = float(os.getenv("THEO_ARCHIVE_COMPLETION_MAX_S", "1800"))
     concurrency = int(os.getenv("THEO_ARCHIVE_COMPLETION_CONCURRENCY", "4"))
+    if not 1 <= max_seconds <= MAX_ARCHIVE_COMPLETION_S:
+        raise ValueError(
+            f"THEO_ARCHIVE_COMPLETION_MAX_S must be between 1 and {MAX_ARCHIVE_COMPLETION_S:.0f} s "
+            f"(the worker's stall guard fires after 2700 s without progress), got {max_seconds}"
+        )
     if concurrency < 1:
         raise ValueError(f"THEO_ARCHIVE_COMPLETION_CONCURRENCY must be at least 1, got {concurrency}")
     return max_seconds, concurrency
@@ -2233,7 +2422,7 @@ def youtube_video_id(url: str) -> str | None:
             candidate = urllib.parse.parse_qs(parsed.query).get("v", [""])[0]
         elif parsed.path.startswith(("/embed/", "/shorts/", "/live/")):
             candidate = parsed.path.split("/")[2]
-    return candidate if _YOUTUBE_ID_RE.match(candidate) else None
+    return candidate if _YOUTUBE_ID_RE.fullmatch(candidate) else None
 
 
 def resolve_fetch_url(url: str) -> tuple[str, str]:
@@ -2507,6 +2696,14 @@ In `requirements-api.txt`, under `# --- Content rendering ---` after the `youtub
 pypdf==6.19.0  # archive completion: text of cited PDF sources (pipeline/lyra/archive_completion.py)
 ```
 
+and in `requirements.txt` (the local dev list, pip-audited by CI as well), under `# DATA PROCESSING` after the `shapely` line, add:
+
+```
+pypdf==6.19.0               # PDF text of cited sources (pipeline/lyra/archive_completion.py)
+```
+
+so a fresh venv runs the three PDF tests instead of skipping them.
+
 - [ ] **Step 6: Run the tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_archive_completion.py tests/pipeline/test_content_fetch_archive.py -m "not integration and not live_llm" -q`
@@ -2517,7 +2714,7 @@ Expected: `13 passed` in the new file (without pypdf installed, the three PDF te
 ```bash
 ./.venv/Scripts/python.exe -m ruff format pipeline/lyra/handlers/content_fetch.py pipeline/lyra/archive_completion.py tests/pipeline/test_archive_completion.py
 ./.venv/Scripts/python.exe -m ruff check --fix pipeline/lyra/handlers/content_fetch.py pipeline/lyra/archive_completion.py tests/pipeline/test_archive_completion.py
-git add pipeline/lyra/handlers/content_fetch.py pipeline/lyra/archive_completion.py requirements-api.txt tests/pipeline/test_archive_completion.py
+git add pipeline/lyra/handlers/content_fetch.py pipeline/lyra/archive_completion.py requirements-api.txt requirements.txt tests/pipeline/test_archive_completion.py
 git commit -m "Archive the full text of every source a moderated claim cites, including Wikipedia, doi landing pages, PDFs and transcripts" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2732,9 +2929,9 @@ class DossierHandler(BaseHandler):
 
     def __init__(self, state, bus, semaphore):
         super().__init__(state, bus, semaphore)
-        # The forced-deadline path can emit DebateComplete while the debate is
-        # still running, so ModeratorComplete may fire twice. The lock makes the
-        # second call wait for the first and then find dossier_ref set.
+        # The moderator runs once per run (handlers/moderator.py), but spec 2.1
+        # asks this handler to be idempotent on its own: a second
+        # ModeratorComplete waits for the first and then finds dossier_ref set.
         self._lock = asyncio.Lock()
 
     def register(self):
@@ -4169,7 +4366,7 @@ In `tests/pipeline/test_hex_token_scrubber.py` delete the function `test_handler
 - [ ] **Step 9: Nothing may still reference the removed names**
 
 Run: `grep -rnE "PaperReady|ProbativeImagesReady|FactCheckComplete|PresentationChecked|ImageGenComplete|QualityPassed|QualityFailed|ResearchPhase\.(WRITING|IMAGE_CURATION|JUDGING)|handlers\.(paper|judge|presentation|fact_check|image_generation)|ProbativeImagesHandler|_empty_paper_error" --include=*.py pipeline api scripts tests`
-Expected: only the assertions in `tests/pipeline/test_orchestrator_research_only.py` and one comment line in `api/services/theo_worker.py` (`_paper_artifact`'s docstring, deleted in Task 13).
+Expected: only the assertions in `tests/pipeline/test_orchestrator_research_only.py`, one comment line in `api/services/theo_worker.py` (`_paper_artifact`'s docstring, deleted in Task 13), and two historical incident notes that stay unchanged: `pipeline/lyra/minimax_limiter.py:138` (`# 15h run at FactCheckComplete …`) and `tests/pipeline/test_rate_throttle_429.py:4` (`… killed a 15h run at FactCheckComplete …`).
 
 - [ ] **Step 10: Run the orchestrator and pipeline tests**
 
@@ -4388,8 +4585,9 @@ git commit -m "Delete Theo's M3 writing prompts and the LLM repair and coherence
 ## Task 13: The worker ends a successful run as `researched`
 
 **Files:**
-- Modify: `api/services/theo_worker.py` (header docstring, imports lines 26-28, `_paper_artifact` 255-274, `_persist_training_corpus` 300-322, success branch 494-586, `_auto_publish` 771-922)
+- Modify: `api/services/theo_worker.py` (header docstring, the two `pipeline.indexnow` imports, `_paper_artifact`, `_persist_training_corpus`, the success branch of `_process_request`, `_auto_publish`; the pre-merge line numbers were 26-28, 255-274, 300-322, 494-586 and 771-922: locate by name, see Ground rules)
 - Modify: `api/services/theo_config.py` (lines 23-27)
+- Modify: `scripts/swap_theo_worker_when_idle.sh` (comment lines 31-36, echo line 57)
 - Test: `tests/api/test_theo_worker_researched.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -4538,7 +4736,7 @@ dossier waits in research_artifacts for the Claude write (spec 2.4).
 """
 ```
 
-(b) Delete the two imports `from pipeline.indexnow import page_url as indexnow_url` and `from pipeline.indexnow import submit as indexnow_submit` (only `_auto_publish` used them).
+(b) Delete the two imports `from pipeline.indexnow import page_url as indexnow_url` and `from pipeline.indexnow import submit as indexnow_submit` (only `_auto_publish` used them). `from pipeline.database import affected_rows, get_session` stays as the I11 merge left it (Ground rules): the new success branch uses both.
 
 (c) Delete the function `_paper_artifact` entirely.
 
@@ -4644,7 +4842,7 @@ def _notify_dossier_ready(request_id: str, question: str, summary: dict) -> None
                 session.commit()
             # Snippet documents + run links (the dossier itself is already written).
             await _persist_training_corpus(ctx, request_id, None)
-            if written.rowcount == 0:
+            if affected_rows(written) == 0:
                 logger.warning(
                     "[THEO] Request %s was no longer 'running' at research end (cancelled "
                     "mid-run?): the dossier stays in research_artifacts, the status was not written.",
@@ -4703,18 +4901,48 @@ with
 THEO_FEEDER_USER_ID = os.getenv("THEO_FEEDER_USER_ID", "442000112756064260")
 ```
 
-- [ ] **Step 5: Run the worker tests**
+- [ ] **Step 5: The swap script no longer waits for an auto-publish**
+
+In `scripts/swap_theo_worker_when_idle.sh` (LF line endings, pinned by `.gitattributes`) replace
+
+```bash
+# 'running' -> 'completed' is committed BEFORE _auto_publish runs
+# (theo_worker.py: the completion UPDATE, then `await asyncio.to_thread(
+# _auto_publish, ...)`), and auto-publish then does citation repair, the
+# publish transaction and Qdrant indexing. A count of 0 therefore does NOT
+# mean the worker is finished. Wait this long and re-check before swapping,
+# so the swap can't cut a publish in half.
+```
+
+with
+
+```bash
+# 'running' -> 'researched' is committed BEFORE the run's close-out
+# (theo_worker.py: the researched UPDATE, then the training-corpus close-out,
+# the graph node and the owner notice). A count of 0 therefore does NOT mean
+# the worker is finished. Wait this long and re-check before swapping, so the
+# swap can't cut the close-out in half.
+```
+
+and replace `settling ${SETTLE_SECONDS}s so auto-publish can finish.` with `settling ${SETTLE_SECONDS}s so the run's close-out can finish.`
+
+Run: `grep -c "auto.publish\|_auto_publish" scripts/swap_theo_worker_when_idle.sh; bash -n scripts/swap_theo_worker_when_idle.sh && echo syntax-ok`
+Expected: `0`, then `syntax-ok`.
+
+The four host scripts that read `ctx.paper_text`/`paper_title`/`quality_score` stay untouched (see "Kept on purpose" under File structure: they cannot produce a dossier without a `research_requests` row; the owner decides their fate: open question 1 of `docs/superpowers/plans/2026-09-26-owner-questions.md`).
+
+- [ ] **Step 6: Run the worker tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_theo_worker_researched.py tests/api/test_theo_worker_quota.py tests/api/test_theo_worker_stall_guard.py tests/api/test_theo_worker_pacing.py tests/api/test_theo_live_event_bridge.py tests/api/test_worker_container_split.py -m "not integration and not live_llm" -q`
 Expected: all pass.
 
-- [ ] **Step 6: Lint and commit**
+- [ ] **Step 7: Lint and commit**
 
 ```bash
 ./.venv/Scripts/python.exe -m ruff format api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py
 ./.venv/Scripts/python.exe -m ruff check --fix api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py
 ./.venv/Scripts/python.exe -m vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80
-git add api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py
+git add api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py scripts/swap_theo_worker_when_idle.sh
 git commit -m "End a successful Theo run as researched with its dossier summary and drop the M3 auto-publish" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -4726,6 +4954,7 @@ git commit -m "End a successful Theo run as researched with its dossier summary 
 - Modify: `api/services/theo_config.py` (lines 64-100)
 - Modify: `api/services/theo_worker.py` (imports, `_avg_batch_run_hours`, `_batch_claim_allowed`, `_feeder_loop`)
 - Modify: `tests/api/test_theo_worker_quota.py` (section 3 and 4)
+- Modify: `scripts/rework_paper_images.sh` (the reserve comment, lines 42-46)
 - Test: `tests/api/test_theo_worker_researched.py` (append)
 
 - [ ] **Step 1: Append the failing tests**
@@ -5050,21 +5279,39 @@ def test_window_env_override(monkeypatch):
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_theo_worker_researched.py tests/api/test_theo_worker_quota.py tests/api/test_theo_worker_pacing.py -m "not integration and not live_llm" -q`
 Expected: all pass (`12` in the researched file).
 
-Check nothing still uses the old names: `grep -rn "THEO_PAPER_COST_PCT\|THEO_PAPER_EST_HOURS\|THEO_AUTO_PUBLISH_AUTHOR" api pipeline tests`
-Expected: no output.
+In `scripts/rework_paper_images.sh` replace
+
+```bash
+# Reserve for Theo: THEO_PAPER_COST_PCT says one research run costs ~25% of
+# the weekly budget and the batch window opens Friday, so 25 is the floor
+# that keeps ONE paper possible. 45 leaves room for the billing lag above —
+```
+
+with
+
+```bash
+# Reserve for Theo: THEO_RUN_COST_PCT says one research-only run costs ~9% of
+# the weekly budget (the M3 paper run it replaced cost ~25%, which set this
+# floor), and the batch window opens Friday. 45 leaves room for the billing lag above —
+```
+
+Check nothing still uses the old names: `grep -rn --include=*.py --include=*.sh "THEO_PAPER_COST_PCT\|THEO_PAPER_EST_HOURS\|THEO_AUTO_PUBLISH_AUTHOR" api pipeline tests scripts`
+Expected: only the two `assert not hasattr(theo_config, "THEO_PAPER_…")` lines of `tests/api/test_theo_worker_researched.py`, which pin the removal (`--include` keeps `__pycache__` out).
 
 - [ ] **Step 7: Lint and commit**
 
 ```bash
 ./.venv/Scripts/python.exe -m ruff format api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py tests/api/test_theo_worker_quota.py
 ./.venv/Scripts/python.exe -m ruff check --fix api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py tests/api/test_theo_worker_quota.py
-git add api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py tests/api/test_theo_worker_quota.py
+git add api/services/theo_worker.py api/services/theo_config.py tests/api/test_theo_worker_researched.py tests/api/test_theo_worker_quota.py scripts/rework_paper_images.sh
 git commit -m "Pace Theo's batch runs on research-only durations and stop the feeder while six dossiers wait for a write" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
 ## Task 15: Slug rule and publish gates (`theo_publishing.py`, part 2)
+
+Needs stream B Tasks 1-2 (see "Dependencies on stream B"): the evidence gate and the page gate call the page's own functions.
 
 **Files:**
 - Modify: `pipeline/lyra/theo_publishing.py`
@@ -5075,7 +5322,7 @@ git commit -m "Pace Theo's batch runs on research-only durations and stop the fe
 `tests/pipeline/test_theo_publishing_gates.py`:
 
 ```python
-"""Publish gates: slug, shape, snapshot, artifact, quality, evidence, images, status."""
+"""Publish gates: slug, shape, snapshot, artifact, quality, evidence, images, status, page."""
 
 from __future__ import annotations
 
@@ -5095,6 +5342,7 @@ from tests.pipeline.theo_publish_fixtures import (
     REPORT,
     REQ,
     SOURCE_A,
+    TITLE,
     WRITER,
     make_result,
 )
@@ -5124,7 +5372,16 @@ def test_pick_slug_appends_the_id_on_collision():
     assert tp.pick_slug(taken, "The Baalbek Trilithon", REQ) == "the-baalbek-trilithon-11111111"
 
 
-# --- shape and snapshot -------------------------------------------------------
+# --- writer, shape and snapshot ------------------------------------------------------
+
+
+def test_the_writer_record_is_what_the_disclosure_line_knows():
+    assert tp.check_writer(WRITER) == []
+    assert tp.check_writer({**WRITER, "published": "auto"}) == [
+        "writer.published must be 'automatic' or 'manual'"
+    ]
+    assert tp.check_writer({**WRITER, "published": "manual"}) == []
+    assert tp.check_writer({**WRITER, "extra": 1}) == ["writer has unknown keys: ['extra']"]
 
 
 def test_a_complete_bundle_passes_shape_and_snapshot():
@@ -5194,7 +5451,7 @@ def test_quality_needs_the_stored_verdict_and_the_recomputation():
 
 
 def test_published_evidence_resolves():
-    gate = tp.check_evidence(REPORT, copy.deepcopy(EVIDENCE))
+    gate = tp.check_evidence(REPORT, TITLE, copy.deepcopy(EVIDENCE))
     assert gate == {"passed": True, "issues": [], "resolved": {"ev-01": 1, "ev-02": 4}}
 
 
@@ -5204,20 +5461,51 @@ def test_only_supported_well_formed_evidence_is_published():
     bad[1]["quote_source_id"] = SOURCE_A
     bad.append({**EVIDENCE[0], "id": "ev-1"})
     bad.append({**EVIDENCE[1]})
-    gate = tp.check_evidence(REPORT, bad)
+    bad.append({**EVIDENCE[0], "id": "ev-05", "source_ids": [SOURCE_A + "\n"], "quote_source_id": SOURCE_A + "\n"})
+    gate = tp.check_evidence(REPORT, TITLE, bad)
     assert gate["passed"] is False
     assert gate["resolved"] == {}
     assert "ev-01: verdict is 'partly'; only 'supported' may be published" in gate["issues"]
     assert "ev-02: quote_source_id is not one of source_ids" in gate["issues"]
     assert "ev-1: id must look like ev-NN" in gate["issues"]
     assert "ev-02: duplicate id" in gate["issues"]
+    assert "ev-05: source_ids must be a non-empty list of 12-hex source ids" in gate["issues"]
 
 
 def test_evidence_with_missing_keys_is_reported_not_crashed():
-    gate = tp.check_evidence(REPORT, [{"id": "ev-01"}, "not an object"])
+    gate = tp.check_evidence(REPORT, TITLE, [{"id": "ev-01"}, "not an object"])
     assert gate["passed"] is False
     assert gate["issues"][0].startswith("ev-01: missing [")
     assert gate["issues"][1] == "evidence[1]: must be an object"
+
+
+# A References line is no prose paragraph for report_paragraphs, but the page
+# serves it as a <p>: a prose paragraph that opens with a reference's title
+# resolves once in the markdown and twice on the page, where the page would
+# raise (an HTTP 500 on the live paper). The gate must see what the page sees.
+PAGE_ONLY_CLASH = REPORT.replace(
+    "## The Quarry Blocks\n",
+    "## The Quarry Blocks\n\nBaalbek quarry survey results were published in 2014 by the institute [1].\n",
+)
+
+
+def test_an_anchor_must_also_resolve_on_the_served_page():
+    evidence = [
+        *copy.deepcopy(EVIDENCE),
+        {**EVIDENCE[0], "id": "ev-03", "anchor_text": "Baalbek quarry survey"},
+    ]
+    resolved, issues = tp.check_evidence_anchors(PAGE_ONLY_CLASH, TITLE, evidence)
+    assert resolved == {"ev-01": 2, "ev-02": 5, "ev-03": 1}
+    assert len(issues) == 1
+    assert issues[0].startswith("paper page: ")
+    assert "ev-03" in issues[0]
+    gate = tp.check_evidence(PAGE_ONLY_CLASH, TITLE, evidence)
+    assert gate["passed"] is False
+    assert gate["issues"] == issues
+
+
+def test_markdown_indices_are_what_the_evidence_gate_reports():
+    assert tp.check_evidence_anchors(REPORT, TITLE, copy.deepcopy(EVIDENCE)) == ({"ev-01": 1, "ev-02": 4}, [])
 
 
 # --- images -------------------------------------------------------------------------
@@ -5241,6 +5529,8 @@ def test_missing_foreign_and_unsafe_images_fail(tmp_path):
     assert gate["foreign"] == [foreign]
     assert "probative_images[1] has no web_path" in gate["issues"]
     assert f"not a research-images path: /data/research-images/{REQ}/../etc.jpg" in gate["issues"]
+    trailing = tp.check_images(REQ, "", [{"web_path": IMG + "\n"}], None, images_root=tmp_path)
+    assert trailing["issues"] == [f"not a research-images path: {IMG}\n"]
 
 
 # --- status -------------------------------------------------------------------------
@@ -5254,6 +5544,20 @@ def test_status_gate_for_publish():
     assert public_dry["passed"] is True
     assert public_dry["apply_allowed"] is False
     assert tp.check_publish_status("completed", True, dry_run=False)["passed"] is False
+
+
+# --- page -----------------------------------------------------------------------------
+
+
+def test_the_page_gate_runs_the_pages_own_validators():
+    stored = {**make_result(), "writer": WRITER}
+    assert tp.check_page(REQ, stored) == {"passed": True, "issues": []}
+    gate = tp.check_page(REQ, {**stored, "writer": {**WRITER, "published": "semi"}})
+    assert gate["passed"] is False
+    assert len(gate["issues"]) == 1
+    assert "writer.published" in gate["issues"][0]
+    # A legacy M3 paper has none of the extras and renders as before.
+    assert tp.check_page(REQ, {"title": "Old", "report": REPORT})["passed"] is True
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -5268,9 +5572,11 @@ In `pipeline/lyra/theo_publishing.py` replace the import block with:
 ```python
 from __future__ import annotations
 
+import html
 import re
 import unicodedata
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import text
@@ -5287,6 +5593,35 @@ from pipeline.lyra.theo_citations import (
 and append at the end of the module:
 
 ```python
+def check_evidence_anchors(
+    report: str, title: str, evidence: list[dict]
+) -> tuple[dict[str, int], list[str]]:
+    """Contract C9's one acceptance function: every anchor resolves in the markdown and on the page.
+
+    First among report_paragraphs (resolve_evidence_anchors above); when that
+    passes, among the plain <p> of the HTML /research/{slug} serves, through the
+    page's own resolver (stream B, pipeline.research_html_renderer). The two
+    paragraph sets differ (captions, reference lines, blockquotes, list items),
+    so passing one does not imply the other. `resolved` holds report_paragraphs
+    indices; a page-side failure is one issue "paper page: <message>". Entries
+    must already be well-formed (check_evidence validates the shape first).
+    """
+    resolved, issues = resolve_evidence_anchors(report, evidence)
+    if issues:
+        return resolved, issues
+    # Imported here: the renderers need markdown and nh3, which the Lyra image
+    # lacks, and research_html_renderer imports this module back.
+    from pipeline.article_html_renderer import markdown_to_html
+    from pipeline.research_html_renderer import PaperPageError, paper_markdown, parse_evidence
+    from pipeline.research_html_renderer import resolve_evidence_anchors as resolve_on_page
+
+    try:
+        resolve_on_page(markdown_to_html(paper_markdown(report, title)), parse_evidence(evidence))
+    except PaperPageError as exc:
+        return resolved, [f"paper page: {exc}"]
+    return resolved, []
+
+
 # ---------------------------------------------------------------------------
 # Slug
 # ---------------------------------------------------------------------------
@@ -5322,14 +5657,17 @@ def pick_slug(session: Any, title: str, request_id: str) -> str:
 #: /var/www/ancientnerds/public/data); the repo root's public/data elsewhere.
 RESEARCH_IMAGES_DIR = Path(__file__).resolve().parents[2] / "public" / "data" / "research-images"
 
-SOURCE_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+#: A citation-registry source id; applied with fullmatch like every id pattern here.
+SOURCE_ID_RE = re.compile(r"[0-9a-f]{12}")
 WRITER_KEYS = ("model", "tool", "research_model", "published", "human_review")
+#: writer.published values the page's disclosure line knows (stream B's parse_writer).
+WRITER_PUBLISHED = ("automatic", "manual")
 MAX_TITLE_CHARS = 200
 MAX_CARD_CHARS = 600
 
 _IMAGE_REF_RE = re.compile(r"/data/research-images/[^\s)\"'<>]+")
 _IMAGE_PATH_RE = re.compile(
-    r"^/data/research-images/(?P<rid>[^/]+)/(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)$"
+    r"/data/research-images/(?P<rid>[^/]+)/(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)"
 )
 _EVIDENCE_KEYS = frozenset(
     {"id", "anchor_text", "claim", "source_ids", "quote", "quote_source_id", "verdict"}
@@ -5358,9 +5696,11 @@ def check_writer(writer: Any) -> list[str]:
     if not isinstance(writer, dict):
         return ["writer must be an object"]
     issues = [f"writer.{key} missing" for key in WRITER_KEYS if key not in writer]
-    for key in ("model", "tool", "research_model", "published"):
+    for key in ("model", "tool", "research_model"):
         if key in writer and not (isinstance(writer[key], str) and writer[key].strip()):
             issues.append(f"writer.{key} must be a non-empty string")
+    if "published" in writer and writer["published"] not in WRITER_PUBLISHED:
+        issues.append("writer.published must be 'automatic' or 'manual'")
     if "human_review" in writer and not isinstance(writer["human_review"], bool):
         issues.append("writer.human_review must be true or false")
     unknown = sorted(set(writer) - set(WRITER_KEYS))
@@ -5369,9 +5709,15 @@ def check_writer(writer: Any) -> list[str]:
     return issues
 
 
-def check_publish_shape(result: dict, writer: Any) -> dict:
-    """Every key the published paper needs, with the right type, and nothing else."""
-    issues = check_writer(writer)
+def _result_issues(result: dict, writer: Any, *, republish: bool) -> list[str]:
+    """Issues with a C4 `result`; the caller checks `writer` itself.
+
+    result.corrections must be [] for a first publish and for a full republish
+    through --correct alike (C5): the server owns the published log, which a
+    republish keeps and extends by corrections_append. `republish` only picks
+    the hint of that issue.
+    """
+    issues: list[str] = []
     for key, kind in _RESULT_REQUIRED.items():
         if not isinstance(result.get(key), kind):
             issues.append(f"result.{key} must be a {kind.__name__}")
@@ -5384,7 +5730,7 @@ def check_publish_shape(result: dict, writer: Any) -> dict:
     if unknown:
         issues.append(f"result has unknown keys: {unknown}")
     if issues:
-        return _gate(issues)
+        return issues
     title = result["title"].strip()
     if not title or "\n" in title or len(title) > MAX_TITLE_CHARS:
         issues.append(f"result.title must be one line of 1-{MAX_TITLE_CHARS} characters")
@@ -5396,14 +5742,23 @@ def check_publish_shape(result: dict, writer: Any) -> dict:
     if result["published_block_ids"]:
         issues.append("result.published_block_ids must be [] (no block review on this path)")
     if result["corrections"]:
-        issues.append("result.corrections must be [] at first publish (use --correct afterwards)")
+        issues.append(
+            "result.corrections must be []: the published log is kept and grows only through corrections_append"
+            if republish
+            else "result.corrections must be [] at first publish (use --correct afterwards)"
+        )
     if not result["evidence"]:
         issues.append("result.evidence is empty: every paper carries evidence entries")
     if "writer" in result and result["writer"] != writer:
         issues.append("result.writer differs from the bundle's writer")
     if not isinstance(result["quality_score"].get("audit_gate_failures"), dict):
         issues.append("result.quality_score.audit_gate_failures missing")
-    return _gate(issues)
+    return issues
+
+
+def check_publish_shape(result: dict, writer: Any) -> dict:
+    """Every key the published paper needs, with the right type, and nothing else."""
+    return _gate(check_writer(writer) + _result_issues(result, writer, republish=False))
 
 
 def check_snapshot(result: dict) -> dict:
@@ -5438,8 +5793,9 @@ def check_quality(quality_score: dict, audit: dict, *, require_stored_passed: bo
     return _gate(issues, stored_passed=stored, recomputed_passed=recomputed)
 
 
-def check_evidence(report: str, evidence: list) -> dict:
-    """Every entry well-formed and 'supported', every anchor on exactly one paragraph (C9)."""
+def check_evidence(report: str, title: str, evidence: list) -> dict:
+    """Every entry well-formed and 'supported'; every anchor on exactly one paragraph
+    of the markdown and of the served page (C9, check_evidence_anchors)."""
     issues: list[str] = []
     seen: set[str] = set()
     for index, entry in enumerate(evidence):
@@ -5455,7 +5811,7 @@ def check_evidence(report: str, evidence: list) -> dict:
             issues.append(f"{label}: unknown keys {unknown}")
         if missing:
             continue
-        if not isinstance(entry["id"], str) or not EVIDENCE_ID_RE.match(entry["id"]):
+        if not isinstance(entry["id"], str) or not EVIDENCE_ID_RE.fullmatch(entry["id"]):
             issues.append(f"{label}: id must look like ev-NN")
         elif entry["id"] in seen:
             issues.append(f"{label}: duplicate id")
@@ -5468,7 +5824,7 @@ def check_evidence(report: str, evidence: list) -> dict:
         if not (
             isinstance(source_ids, list)
             and source_ids
-            and all(isinstance(s, str) and SOURCE_ID_RE.match(s) for s in source_ids)
+            and all(isinstance(s, str) and SOURCE_ID_RE.fullmatch(s) for s in source_ids)
         ):
             issues.append(f"{label}: source_ids must be a non-empty list of 12-hex source ids")
         elif entry["quote_source_id"] not in source_ids:
@@ -5477,7 +5833,7 @@ def check_evidence(report: str, evidence: list) -> dict:
             issues.append(f"{label}: verdict is {entry['verdict']!r}; only 'supported' may be published")
     if issues:
         return _gate(issues, resolved={})
-    resolved, anchor_issues = resolve_evidence_anchors(report, evidence)
+    resolved, anchor_issues = check_evidence_anchors(report, title, evidence)
     return _gate(anchor_issues, resolved=resolved)
 
 
@@ -5511,12 +5867,12 @@ def check_images(
     *,
     images_root: Path,
 ) -> dict:
-    """Every referenced image is a file in research-images/<request_id>/ (uploaded before --apply)."""
+    """Every referenced image is a file in research-images/<request_id>/ (uploaded before the dry run)."""
     paths, issues = referenced_images(report, probative_images, hero_image)
     missing: list[str] = []
     foreign: list[str] = []
     for path in paths:
-        match = _IMAGE_PATH_RE.match(path)
+        match = _IMAGE_PATH_RE.fullmatch(path)
         if match is None:
             issues.append(f"not a research-images path: {path}")
             continue
@@ -5552,12 +5908,39 @@ def check_publish_status(status: str, is_public: bool, *, dry_run: bool) -> dict
         "is_public": bool(is_public),
         "apply_allowed": apply_allowed,
     }
+
+
+def check_page(request_id: str, stored: dict) -> dict:
+    """The paper page's own validators on exactly the result_json about to be stored.
+
+    pipeline.research_html_renderer.paper_extras raises PaperPageError (an HTTP
+    500 on /research/{slug} and /api/v1/research/{slug}) for evidence,
+    corrections, videos or a writer record it cannot render. The gates above
+    check the same rules, so a failure here means gate and page disagree. The
+    page-side anchor resolution runs in the evidence gate (check_evidence_anchors).
+    The four keys are optional in result_json (legacy papers have none), which
+    is why they are read with .get: absent is what the page's jsonb columns see.
+    """
+    from pipeline.research_html_renderer import PaperPageError, paper_extras
+
+    row = SimpleNamespace(
+        id=request_id,
+        evidence=stored.get("evidence"),
+        videos=stored.get("videos"),
+        corrections=stored.get("corrections"),
+        writer=stored.get("writer"),
+    )
+    try:
+        paper_extras(row)
+    except PaperPageError as exc:
+        return _gate([str(exc)])
+    return _gate([])
 ```
 
 - [ ] **Step 4: Run the tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_theo_publishing_gates.py tests/pipeline/test_theo_publishing_anchors.py -m "not integration and not live_llm" -q`
-Expected: all pass (`17` gates tests counting the three slug parameters, `6` anchor tests).
+Expected: all pass (`21` gates tests counting the three slug parameters, `13` anchor tests).
 
 - [ ] **Step 5: Lint and commit**
 
@@ -5565,7 +5948,7 @@ Expected: all pass (`17` gates tests counting the three slug parameters, `6` anc
 ./.venv/Scripts/python.exe -m ruff format pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_gates.py
 ./.venv/Scripts/python.exe -m ruff check --fix pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_gates.py
 git add pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_gates.py
-git commit -m "Add the shared slug rule and the publish gates a Claude-written Theo paper must pass" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "Add the shared slug rule and the publish gates a Claude-written Theo paper must pass, checked against the paper page's own code" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -5706,6 +6089,8 @@ git commit -m "Add migration 0025, the journal of every Claude publish, correcti
 
 ## Task 17: `publish_paper` and the side-effect sequence (`theo_publishing.py`, part 3)
 
+Needs stream B Tasks 1-2 (the evidence and page gates run inside `publish_paper`).
+
 **Files:**
 - Modify: `pipeline/lyra/theo_publishing.py`
 - Test: `tests/pipeline/test_theo_publishing_publish.py`
@@ -5715,10 +6100,11 @@ git commit -m "Add migration 0025, the journal of every Claude publish, correcti
 `tests/pipeline/test_theo_publishing_publish.py`:
 
 ```python
-"""publish_paper (spec 2.6): gates, one guarded transaction with its journal row, re-read, side effects."""
+"""publish_paper (spec 2.6): gates, one guarded transaction with its journal row, re-read, side effects, notice."""
 
 from __future__ import annotations
 
+import copy
 import json
 
 import pytest
@@ -5727,6 +6113,7 @@ from pipeline.lyra import theo_publishing as tp
 from tests.fake_sql import FakeResult
 from tests.pipeline.theo_publish_fixtures import (
     DOSSIER_SUMMARY,
+    EVIDENCE,
     IMG_NAME,
     REPORT,
     REQ,
@@ -5738,6 +6125,7 @@ from tests.pipeline.theo_publish_fixtures import (
 
 SHA = "a" * 64
 EFFECTS = {"indexnow": {"ok": True}, "qdrant": {"ok": True, "sections": 6}}
+URL = "https://ancientnerds.com/research/the-baalbek-trilithon"
 
 
 @pytest.fixture
@@ -5759,6 +6147,20 @@ def effects(monkeypatch) -> list[dict]:
     return calls
 
 
+@pytest.fixture(autouse=True)
+def notices(monkeypatch) -> dict[str, list]:
+    """The owner notice: the thinking_log event and the Discord webhook (unset: returns False)."""
+    calls: dict[str, list] = {"thinking": [], "discord": []}
+    monkeypatch.setattr(
+        "pipeline.lyra.thinking_log.log_thinking",
+        lambda kind, summary, details=None: calls["thinking"].append((kind, summary, details)),
+    )
+    monkeypatch.setattr(
+        "pipeline.utils.notify.send_discord_webhook", lambda payload: calls["discord"].append(payload) or False
+    )
+    return calls
+
+
 def _publish(session, images, *, dry_run=False, result=None):
     return tp.publish_paper(
         session,
@@ -5771,16 +6173,26 @@ def _publish(session, images, *, dry_run=False, result=None):
     )
 
 
-def test_publish_writes_journals_verifies_and_announces(images, effects):
+def test_publish_writes_journals_verifies_and_announces(images, effects, notices):
     session = PublishSession(research_row())
     outcome = _publish(session, images)
 
     assert outcome.ok is True
     assert outcome.slug == "the-baalbek-trilithon"
-    assert outcome.url == "https://ancientnerds.com/research/the-baalbek-trilithon"
+    assert outcome.url == URL
     assert outcome.journal_id == 42
-    assert outcome.side_effects == EFFECTS
-    assert set(outcome.gates) == {"status", "shape", "snapshot", "artifact", "quality", "evidence", "images"}
+    assert outcome.side_effects == {**EFFECTS, "notify": {"discord": False}}
+    assert set(outcome.gates) == {
+        "status",
+        "shape",
+        "snapshot",
+        "artifact",
+        "quality",
+        "evidence",
+        "retention",
+        "images",
+        "page",
+    }
 
     update = session.statement_with("UPDATE research_requests")
     assert "status IN ('researched', 'completed') AND is_public = FALSE" in update
@@ -5795,7 +6207,8 @@ def test_publish_writes_journals_verifies_and_announces(images, effects):
     assert journal_params["action"] == "publish"
     assert journal_params["bundle_sha256"] == SHA
     assert json.loads(journal_params["writer"]) == WRITER
-    assert session.statement_with("UPDATE theo_paper_publications SET side_effects")
+    recorded = next(p for sql, p in session.log if "UPDATE theo_paper_publications SET side_effects" in sql)
+    assert json.loads(recorded["side_effects"])["notify"] == {"discord": False}
     assert session.commits == 2
 
     (call,) = effects
@@ -5804,8 +6217,25 @@ def test_publish_writes_journals_verifies_and_announces(images, effects):
     assert call["reindex"] is False
     assert call["paper_text"] == REPORT
 
+    (event,) = notices["thinking"]
+    assert event == (
+        "run_event",
+        "Paper published: The Baalbek Trilithon",
+        {
+            "request_id": REQ,
+            "event": "paper_published",
+            "slug": "the-baalbek-trilithon",
+            "url": URL,
+            "journal_id": 42,
+            "writer_model": "claude-opus-5-5",
+        },
+    )
+    (embed,) = notices["discord"][0]["embeds"]
+    assert embed["title"] == "Theo paper published (written by Claude)"
+    assert URL in embed["description"]
 
-def test_a_dry_run_writes_nothing(images, effects):
+
+def test_a_dry_run_writes_nothing_and_notifies_nobody(images, effects, notices):
     session = PublishSession(research_row())
     outcome = _publish(session, images, dry_run=True)
     assert outcome.ok is True
@@ -5813,9 +6243,10 @@ def test_a_dry_run_writes_nothing(images, effects):
     assert outcome.side_effects == {}
     assert not [sql for sql in session.statements() if "UPDATE" in sql or "INSERT" in sql]
     assert effects == []
+    assert notices == {"thinking": [], "discord": []}
 
 
-def test_a_failed_gate_blocks_the_write(images, effects):
+def test_a_failed_gate_blocks_the_write(images, effects, notices):
     result = make_result()
     result["evidence"][0]["verdict"] = "partly"
     session = PublishSession(research_row())
@@ -5823,6 +6254,7 @@ def test_a_failed_gate_blocks_the_write(images, effects):
     assert outcome.ok is False
     assert outcome.gates["evidence"]["passed"] is False
     assert not [sql for sql in session.statements() if "UPDATE" in sql]
+    assert notices == {"thinking": [], "discord": []}
 
 
 def test_a_public_row_passes_a_dry_run_but_refuses_apply(images, effects):
@@ -5836,19 +6268,53 @@ def test_a_public_row_passes_a_dry_run_but_refuses_apply(images, effects):
     assert not [sql for sql in session.statements() if "UPDATE" in sql]
 
 
-def test_a_row_changed_underneath_raises_a_conflict(images, effects):
+def test_an_unpublished_paper_keeps_its_evidence_ids_log_and_videos(images, effects):
+    # The founder route's unpublish (api/routes/theo.py) leaves the row completed
+    # and not public, with the paper's public record still in result_json.
+    earlier = {"date": "2026-09-21", "text": "An earlier fix."}
+    video = {
+        "youtube_id": "dQw4w9WgXcQ",
+        "title": "Who Really Moved the Baalbek Stones?",
+        "published_at": "2026-09-22T16:00:00+00:00",
+        "evidence_timestamps": {"ev-01": 41, "ev-02": 312},
+        "registered_at": "2026-09-22T16:05:00+00:00",
+    }
+    previous = {
+        **make_result(),
+        "writer": WRITER,
+        "dossier": DOSSIER_SUMMARY,
+        "corrections": [earlier],
+        "videos": [video],
+    }
+    row = research_row(status="completed", result_json=json.dumps(previous))
+
+    dropped = _publish(PublishSession(row), images, result=make_result(evidence=[copy.deepcopy(EVIDENCE[0])]))
+    assert dropped.ok is False
+    assert dropped.gates["retention"]["issues"] == ["ev-02 removed without a correction entry naming it"]
+
+    session = PublishSession(row)
+    assert _publish(session, images).ok is True
+    stored = json.loads(session.written)
+    assert stored["corrections"] == [earlier]
+    assert stored["videos"] == [video]
+    assert stored["dossier"] == DOSSIER_SUMMARY
+
+
+def test_a_row_changed_underneath_raises_a_conflict(images, effects, notices):
     session = PublishSession(research_row(), update_rowcount=0)
     with pytest.raises(tp.PublishConflictError):
         _publish(session, images)
     assert session.rollbacks == 1
     assert effects == []
+    assert notices["thinking"] == []
 
 
-def test_a_re_read_that_differs_raises_after_commit(images, effects):
+def test_a_re_read_that_differs_raises_after_commit(images, effects, notices):
     session = PublishSession(research_row(), tamper=True)
     with pytest.raises(tp.PublishVerificationError, match="result_json differs"):
         _publish(session, images)
     assert effects == []
+    assert notices["thinking"] == []
 
 
 def test_an_unknown_request_is_an_input_error(images, effects):
@@ -5908,6 +6374,15 @@ def test_a_reindex_deletes_the_old_sections_first(monkeypatch):
     )
     assert order == ["delete", "index"]
     assert effects["qdrant"] == {"ok": True, "sections": 6}
+
+
+def test_the_notice_writes_thinking_log_and_calls_the_webhook(notices):
+    assert tp.notify_published(REQ, "T" * 300, "s", "https://x/s", 7, WRITER) == {"discord": False}
+    (kind, summary, details), = notices["thinking"]
+    assert kind == "run_event"
+    assert summary == "Paper published: " + "T" * 200
+    assert details["event"] == "paper_published"
+    assert len(notices["discord"]) == 1
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -5969,7 +6444,9 @@ _ROW_SQL = text("""
     FROM research_requests
     WHERE id = :id
 """)
-_VERIFY_SQL = text("SELECT status, is_public, slug, result_json FROM research_requests WHERE id = :id")
+_VERIFY_SQL = text(
+    "SELECT status, is_public, slug, published_by, result_json FROM research_requests WHERE id = :id"
+)
 _JOURNAL_SQL = text("""
     INSERT INTO theo_paper_publications
         (request_id, action, slug, writer, bundle_sha256, gates, side_effects)
@@ -6028,8 +6505,13 @@ def _journal(
     return int(journal_id)
 
 
-def _verify(session: Any, request_id: str, *, result: dict, slug: str | None) -> None:
-    """Re-read the committed row; raise when it is not what was written."""
+def _verify(
+    session: Any, request_id: str, *, result: dict, slug: str | None, published_by: str | None = None
+) -> None:
+    """Re-read the committed row; raise when it is not what was written.
+
+    published_by is checked when the write set it (a publish, a full republish).
+    """
     row = session.execute(_VERIFY_SQL, {"id": request_id}).fetchone()
     if row is None:
         raise PublishVerificationError(f"{request_id} vanished after the commit")
@@ -6040,6 +6522,8 @@ def _verify(session: Any, request_id: str, *, result: dict, slug: str | None) ->
         problems.append("is_public is not true")
     if row.slug != slug:
         problems.append(f"slug is {row.slug!r}, expected {slug!r}")
+    if published_by is not None and row.published_by != published_by:
+        problems.append(f"published_by is {row.published_by!r}, expected {published_by!r}")
     if json.loads(row.result_json or "null") != result:
         problems.append("result_json differs from what was written")
     if problems:
@@ -6097,9 +6581,79 @@ def run_publish_side_effects(
     return effects
 
 
+def notify_published(
+    request_id: str, title: str, slug: str, url: str, journal_id: int, writer: dict
+) -> dict[str, bool]:
+    """Tell the owner that Claude published a paper (spec 0: automatic publish, owner notified).
+
+    The thinking_log run_event is always written (log_thinking logs its own
+    failure). The Discord embed goes out only while DISCORD_WEBHOOK_URL is set:
+    send_discord_webhook returns False otherwise, and owner decision 5 keeps it
+    unset for now. The sender is pipeline.utils.notify (api.services.notify only
+    re-exports it): pipeline must not import api.
+    """
+    from pipeline.lyra.thinking_log import log_thinking
+    from pipeline.utils.notify import send_discord_webhook
+
+    log_thinking(
+        "run_event",
+        f"Paper published: {title[:200]}",
+        {
+            "request_id": request_id,
+            "event": "paper_published",
+            "slug": slug,
+            "url": url,
+            "journal_id": journal_id,
+            "writer_model": writer["model"],
+        },
+    )
+    sent = send_discord_webhook(
+        {
+            "embeds": [
+                {
+                    "title": "Theo paper published (written by Claude)",
+                    "description": f"`{request_id}`\n**{title[:200]}**\n{url}",
+                    "color": 0x2ECC71,
+                }
+            ]
+        }
+    )
+    return {"discord": sent}
+
+
 # ---------------------------------------------------------------------------
 # Publish (spec 2.6)
 # ---------------------------------------------------------------------------
+
+
+def check_evidence_retention(
+    old_evidence: list, new_evidence: list, old_corrections: list, appended: list
+) -> dict:
+    """Published evidence ids stay: an id is retired only by a correction naming it.
+
+    A retired id is never reused and never named again, so the correction that
+    retired it stays the last entry naming it: the page anchors a retired id
+    on that entry (stream B's parse_corrections). Used by publish_paper (a
+    paper the founder route unpublished keeps its ids; appended is [] there)
+    and by correct_paper.
+    """
+    old_ids = {entry["id"] for entry in old_evidence}
+    new_ids = {entry["id"] for entry in new_evidence if isinstance(entry, dict) and "id" in entry}
+    named = {entry["evidence_id"] for entry in appended if entry.get("evidence_id")}
+    previously_retired = {
+        entry["evidence_id"] for entry in old_corrections if entry.get("evidence_id")
+    } - old_ids
+    issues = [f"{ev} removed without a correction entry naming it" for ev in sorted(old_ids - new_ids - named)]
+    issues += [f"{ev} was retired earlier and may not be reused" for ev in sorted(new_ids & previously_retired)]
+    issues += [
+        f"{ev} was retired earlier; a retired id cannot be named again"
+        for ev in sorted(named & previously_retired)
+    ]
+    issues += [
+        f"a correction names {ev}, which this paper never had"
+        for ev in sorted(named - old_ids - new_ids - previously_retired)
+    ]
+    return _gate(issues)
 
 
 def publish_paper(
@@ -6115,23 +6669,31 @@ def publish_paper(
 ) -> PublishOutcome:
     """Gate, then publish a Claude-written paper in one guarded transaction with its journal row.
 
-    Order: every gate (no repair) -> slug with collision handling -> UPDATE
-    guarded on status IN ('researched','completed') AND is_public = FALSE plus the
-    journal INSERT, one commit -> re-read and verify -> IndexNow + Qdrant, whose
-    outcome is recorded in the journal row. A dry run stops after the slug.
-    result_json keeps the research row's `dossier` summary.
+    Order: every gate (no repair; the last one runs the page's own validators
+    on exactly the result_json about to be stored) -> slug with collision
+    handling -> UPDATE guarded on status IN ('researched','completed') AND
+    is_public = FALSE plus the journal INSERT, one commit -> re-read and verify
+    -> IndexNow + Qdrant -> owner notice; the side effects are recorded in the
+    journal row. A dry run stops after the slug. result_json keeps the row's
+    `dossier` summary and, for a paper the founder route unpublished, its public
+    record: the `corrections` log, the `videos` and every evidence id it had
+    (the retention gate, spec 2.7). result.corrections itself must be [].
     """
     row = _read_row(session, request_id)
+    previous = _stored_result(row)
     gates: dict[str, dict] = {
         "status": check_publish_status(row.status, row.is_public, dry_run=dry_run),
         "shape": check_publish_shape(result, writer),
     }
-    audit: dict = {}
+    stored: dict = {}
     if gates["shape"]["passed"]:
         gates["snapshot"] = check_snapshot(result)
         gates["artifact"], audit = check_artifact(result["report"])
         gates["quality"] = check_quality(result["quality_score"], audit, require_stored_passed=True)
-        gates["evidence"] = check_evidence(result["report"], result["evidence"])
+        gates["evidence"] = check_evidence(result["report"], result["title"], result["evidence"])
+        gates["retention"] = check_evidence_retention(
+            previous.get("evidence", []), result["evidence"], previous.get("corrections", []), []
+        )
         gates["images"] = check_images(
             request_id,
             result["report"],
@@ -6139,6 +6701,11 @@ def publish_paper(
             result["hero_image"],
             images_root=images_root,
         )
+        stored = {**result, "audit": audit, "writer": writer}
+        for key in ("dossier", "corrections", "videos"):
+            if key in previous:
+                stored[key] = previous[key]
+        gates["page"] = check_page(request_id, stored)
     outcome = PublishOutcome(
         ok=all(gate["passed"] for gate in gates.values()),
         action="publish",
@@ -6157,10 +6724,6 @@ def publish_paper(
     if dry_run or not outcome.ok:
         return outcome
 
-    stored = {**result, "audit": audit, "writer": writer}
-    previous = _stored_result(row)
-    if "dossier" in previous:
-        stored["dossier"] = previous["dossier"]
     updated = session.execute(
         _PUBLISH_SQL,
         {"id": request_id, "result": json.dumps(stored), "author": author, "slug": slug},
@@ -6180,17 +6743,22 @@ def publish_paper(
         gates=gates,
     )
     session.commit()
-    _verify(session, request_id, result=stored, slug=slug)
-    outcome.side_effects = run_publish_side_effects(
-        request_id=request_id,
-        slug=slug,
-        title=result["title"],
-        paper_text=stored["published_report"],
-        author_username=author,
-        author_discord_id=row.user_id,
-        published_at=datetime.now(UTC).isoformat(),
-        reindex=False,
-    )
+    _verify(session, request_id, result=stored, slug=slug, published_by=author)
+    outcome.side_effects = {
+        **run_publish_side_effects(
+            request_id=request_id,
+            slug=slug,
+            title=result["title"],
+            paper_text=stored["published_report"],
+            author_username=author,
+            author_discord_id=row.user_id,
+            published_at=datetime.now(UTC).isoformat(),
+            reindex=False,
+        ),
+        "notify": notify_published(
+            request_id, result["title"], slug, outcome.url, outcome.journal_id, writer
+        ),
+    }
     _record_side_effects(session, outcome.journal_id, outcome.side_effects)
     return outcome
 ```
@@ -6198,7 +6766,7 @@ def publish_paper(
 - [ ] **Step 4: Run the tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_theo_publishing_publish.py tests/pipeline/test_theo_publishing_gates.py tests/pipeline/test_theo_publishing_anchors.py -m "not integration and not live_llm" -q`
-Expected: all pass (`9` publish tests).
+Expected: all pass (`11` publish tests).
 
 - [ ] **Step 5: Lint and commit**
 
@@ -6206,12 +6774,14 @@ Expected: all pass (`9` publish tests).
 ./.venv/Scripts/python.exe -m ruff format pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_publish.py
 ./.venv/Scripts/python.exe -m ruff check --fix pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_publish.py
 git add pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_publish.py
-git commit -m "Publish a Claude-written Theo paper in one gated, journalled, re-verified transaction, then announce and index it" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "Publish a Claude-written Theo paper in one gated, journalled, re-verified transaction, then announce, index and notify the owner" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
 ## Task 18: Corrections and video registration (`theo_publishing.py`, part 4)
+
+Needs stream B Tasks 1-2 (the evidence and page gates run inside both functions).
 
 **Files:**
 - Modify: `pipeline/lyra/theo_publishing.py`
@@ -6240,6 +6810,7 @@ from tests.pipeline.theo_publish_fixtures import (
     IMG_NAME,
     REPORT,
     REQ,
+    TITLE,
     WRITER,
     PublishSession,
     make_result,
@@ -6248,6 +6819,9 @@ from tests.pipeline.theo_publish_fixtures import (
 
 SHA = "b" * 64
 SLUG = "the-baalbek-trilithon"
+# Correction dates must lie between the publication day and today: both are in
+# the past for any run of this suite.
+PUBLISHED_AT = datetime(2026, 9, 20, 10, 0, tzinfo=UTC)
 NEW_REPORT = REPORT.replace(
     "The quarry dates to the Roman period, which the excavation layers confirm [2].",
     "The quarry dates to the Roman period, as the stratified excavation layers confirm [2].",
@@ -6267,7 +6841,34 @@ def _live_row(**result_overrides):
         is_public=True,
         slug=SLUG,
         published_by="Theo",
-        published_at=datetime(2026, 9, 28, 10, 0, tzinfo=UTC),
+        published_at=PUBLISHED_AT,
+        result_json=json.dumps(stored),
+    )
+
+
+def _legacy_row(published_by: str = "Theo"):
+    """A public M3 paper: no writer, no evidence, no dossier, a stored verdict that fails today's gate."""
+    stored = {
+        "title": "Who Cut the Baalbek Stones?",
+        "report": "# Who Cut the Baalbek Stones?\n\nAn M3 text.\n",
+        "published_report": "# Who Cut the Baalbek Stones?\n\nAn M3 text.\n",
+        "card_description": "An old card.",
+        "hero_image": None,
+        "published_hero_image": None,
+        "probative_images": [],
+        "quality_score": {
+            "score": 71,
+            "passed": False,
+            "audit_gate_failures": {"audit_passed": False, "hallucination_final": 4},
+        },
+        "approved_by": "Theo",
+    }
+    return research_row(
+        status="completed",
+        is_public=True,
+        slug="who-cut-the-baalbek-stones",
+        published_by=published_by,
+        published_at=PUBLISHED_AT,
         result_json=json.dumps(stored),
     )
 
@@ -6298,7 +6899,7 @@ def _correction(**overrides) -> dict:
         "writer": WRITER,
         "report": NEW_REPORT,
         "corrections_append": [
-            {"date": "2026-10-02", "text": "Clarified how the dating was established.", "evidence_id": "ev-02"}
+            {"date": "2026-09-22", "text": "Clarified how the dating was established.", "evidence_id": "ev-02"}
         ],
     }
     correction.update(overrides)
@@ -6317,6 +6918,7 @@ def test_a_correction_replaces_both_texts_and_logs_itself(images, effects):
     assert outcome.action == "correct"
     assert outcome.slug == SLUG
     assert outcome.journal_id == 42
+    assert set(outcome.gates) == {"status", "shape", "retention", "artifact", "quality", "evidence", "images", "page"}
     stored = json.loads(session.written)
     assert stored["report"] == NEW_REPORT
     assert stored["published_report"] == NEW_REPORT
@@ -6324,18 +6926,19 @@ def test_a_correction_replaces_both_texts_and_logs_itself(images, effects):
     assert [entry["id"] for entry in stored["evidence"]] == ["ev-01", "ev-02"]
     update = session.statement_with("UPDATE research_requests")
     assert "result_json = :previous" in update
+    assert "published_by" not in update  # only a full republish re-credits the paper
     journal_params = next(p for sql, p in session.log if "INSERT INTO theo_paper_publications" in sql)
     assert journal_params["action"] == "correct"
     (call,) = effects
     assert call["reindex"] is True
     assert call["paper_text"] == NEW_REPORT
-    assert call["published_at"] == "2026-09-28T10:00:00+00:00"
+    assert call["published_at"] == "2026-09-20T10:00:00+00:00"
 
 
 def test_removing_an_evidence_id_needs_a_correction_that_names_it(images, effects):
     unnamed = _correction(
         evidence=[copy.deepcopy(EVIDENCE[0])],
-        corrections_append=[{"date": "2026-10-02", "text": "Dropped a claim."}],
+        corrections_append=[{"date": "2026-09-22", "text": "Dropped a claim."}],
     )
     outcome = _correct(PublishSession(_live_row()), images, unnamed)
     assert outcome.ok is False
@@ -6343,13 +6946,13 @@ def test_removing_an_evidence_id_needs_a_correction_that_names_it(images, effect
 
     named = _correction(
         evidence=[copy.deepcopy(EVIDENCE[0])],
-        corrections_append=[{"date": "2026-10-02", "text": "Retired the dating claim.", "evidence_id": "ev-02"}],
+        corrections_append=[{"date": "2026-09-22", "text": "Retired the dating claim.", "evidence_id": "ev-02"}],
     )
     assert _correct(PublishSession(_live_row()), images, named).ok is True
 
 
-def test_a_retired_evidence_id_is_never_reused(images, effects):
-    row = _live_row(corrections=[{"date": "2026-10-01", "text": "Retired ev-03.", "evidence_id": "ev-03"}])
+def test_a_retired_evidence_id_is_never_reused_nor_named_again(images, effects):
+    row = _live_row(corrections=[{"date": "2026-09-21", "text": "Retired ev-03.", "evidence_id": "ev-03"}])
     reused = {
         **copy.deepcopy(EVIDENCE[1]),
         "id": "ev-03",
@@ -6359,6 +6962,22 @@ def test_a_retired_evidence_id_is_never_reused(images, effects):
     outcome = _correct(PublishSession(row), images, correction)
     assert outcome.ok is False
     assert "ev-03 was retired earlier and may not be reused" in outcome.gates["retention"]["issues"]
+
+    # The retiring entry must stay the last one naming the id: the page anchors
+    # a retired id on that entry (stream B's parse_corrections).
+    renamed = _correction(corrections_append=[{"date": "2026-09-22", "text": "More on ev-03.", "evidence_id": "ev-03"}])
+    outcome = _correct(PublishSession(row), images, renamed)
+    assert outcome.gates["retention"]["issues"] == ["ev-03 was retired earlier; a retired id cannot be named again"]
+
+
+def test_a_correction_date_lies_between_publication_and_today(images, effects):
+    early = _correction(corrections_append=[{"date": "2026-09-19", "text": "Before the paper existed."}])
+    late = _correction(corrections_append=[{"date": "2999-01-01", "text": "From the future."}])
+    for correction in (early, late):
+        outcome = _correct(PublishSession(_live_row()), images, correction, dry_run=True)
+        assert outcome.gates["shape"]["issues"] == [
+            "corrections_append[0].date must lie between the publication day and today"
+        ]
 
 
 def test_only_a_public_paper_takes_corrections(images, effects):
@@ -6377,6 +6996,84 @@ def test_a_correction_dry_run_writes_nothing(images, effects):
 def test_a_concurrent_change_is_a_conflict(images, effects):
     with pytest.raises(tp.PublishConflictError):
         _correct(PublishSession(_live_row(), update_rowcount=0), images, _correction())
+
+
+# --- full republish (C5 `result`) -----------------------------------------------------
+
+
+def _republish(**overrides) -> dict:
+    return {
+        "version": 1,
+        "request_id": REQ,
+        "writer": WRITER,
+        "result": make_result(**overrides),
+        "corrections_append": [{"date": "2026-09-22", "text": "Rewritten by Claude from Theo's research."}],
+    }
+
+
+def test_a_legacy_paper_is_republished_in_full(images, effects):
+    session = PublishSession(_legacy_row())
+    outcome = _correct(session, images, _republish())
+
+    assert outcome.ok is True
+    assert outcome.slug == "who-cut-the-baalbek-stones"
+    assert set(outcome.gates) == {
+        "status",
+        "shape",
+        "snapshot",
+        "retention",
+        "artifact",
+        "quality",
+        "evidence",
+        "images",
+        "page",
+    }
+    stored = json.loads(session.written)
+    assert stored["title"] == TITLE
+    assert stored["published_report"] == REPORT
+    assert stored["writer"] == WRITER
+    assert stored["evidence"] == EVIDENCE
+    assert stored["corrections"] == _republish()["corrections_append"]
+    assert stored["approved_by"] == "Theo"
+    assert stored["quality_score"]["passed"] is True
+    (call,) = effects
+    assert call["reindex"] is True
+    assert call["title"] == TITLE
+    assert call["slug"] == "who-cut-the-baalbek-stones"
+
+
+def test_a_republish_keeps_the_log_and_needs_its_own_passing_verdict(images, effects):
+    earlier = {"date": "2026-09-21", "text": "An earlier fix."}
+    row = _live_row(corrections=[earlier])
+    # The bundle never carries the log (stream C's `paper bundle` always sends []):
+    # the server keeps the stored one and appends corrections_append.
+    carried = _correct(PublishSession(row), images, _republish(corrections=[earlier]), dry_run=True)
+    assert carried.ok is False
+    assert (
+        "result.corrections must be []: the published log is kept and grows only through corrections_append"
+        in carried.gates["shape"]["issues"]
+    )
+    quality = {**make_result()["quality_score"], "passed": False}
+    held = _correct(PublishSession(row), images, _republish(quality_score=quality), dry_run=True)
+    assert held.gates["shape"]["passed"] is True
+    assert held.gates["quality"]["issues"] == ["quality_score.passed is not true"]
+
+    session = PublishSession(row)
+    assert _correct(session, images, _republish()).ok is True
+    assert json.loads(session.written)["corrections"] == [earlier, *_republish()["corrections_append"]]
+
+
+def test_a_republish_credits_theo_where_a_founder_published_the_legacy_paper(images, effects):
+    # 7 of the 31 public papers carry a founder's name in published_by (read-only
+    # check 2026-09-26); the public API shows it as the author. A Claude rewrite
+    # is Theo's (spec 3.7).
+    session = PublishSession(_legacy_row(published_by="MrSchneebly"))
+    assert _correct(session, images, _republish()).ok is True
+    sql, params = next((sql, p) for sql, p in session.log if sql.lstrip().startswith("UPDATE research_requests"))
+    assert "published_by = :author" in sql
+    assert params["author"] == "Theo"
+    (call,) = effects
+    assert call["author_username"] == "Theo"
 
 
 # --- register_video -------------------------------------------------------------
@@ -6407,11 +7104,13 @@ def test_a_video_is_appended_and_announced(pinged):
     session = PublishSession(_live_row())
     outcome = tp.register_video(session, REQ, _video(), bundle_sha256=SHA, dry_run=False)
     assert outcome.ok is True
+    assert set(outcome.gates) == {"status", "shape", "evidence_refs", "duplicate", "page"}
     stored = json.loads(session.written)
     (video,) = stored["videos"]
     assert video["youtube_id"] == "dQw4w9WgXcQ"
     assert video["evidence_timestamps"] == {"ev-01": 41, "ev-02": 312}
     assert "registered_at" in video
+    assert "poster" not in video
     assert outcome.side_effects == {"indexnow": {"ok": True}}
     assert pinged == [[f"https://ancientnerds.com/research/{SLUG}"]]
     journal_params = next(p for sql, p in session.log if "INSERT INTO theo_paper_publications" in sql)
@@ -6423,12 +7122,24 @@ def test_a_video_must_point_at_known_evidence_and_be_new(pinged):
         PublishSession(_live_row()), REQ, _video(evidence_timestamps={"ev-09": 5}), bundle_sha256=SHA, dry_run=False
     )
     assert unknown.ok is False
-    assert unknown.gates["evidence_refs"]["issues"] == ["ev-09 is not an evidence id of this paper"]
+    assert unknown.gates["evidence_refs"]["issues"] == [
+        "ev-09 is neither an evidence id of this paper nor retired by a correction"
+    ]
 
     row = _live_row(videos=[{"youtube_id": "dQw4w9WgXcQ"}])
     duplicate = tp.register_video(PublishSession(row), REQ, _video(), bundle_sha256=SHA, dry_run=False)
     assert duplicate.ok is False
     assert duplicate.gates["duplicate"]["passed"] is False
+
+
+def test_a_video_may_time_a_retired_evidence_id(pinged):
+    # ev-03 was retired by a correction; a video made before that keeps its
+    # timestamp, and the page anchors ev-03 on the correction entry.
+    row = _live_row(corrections=[{"date": "2026-09-21", "text": "Retired ev-03.", "evidence_id": "ev-03"}])
+    outcome = tp.register_video(
+        PublishSession(row), REQ, _video(evidence_timestamps={"ev-01": 41, "ev-03": 90}), bundle_sha256=SHA, dry_run=True
+    )
+    assert outcome.ok is True
 
 
 def test_a_malformed_video_fails_the_shape_gate(pinged):
@@ -6444,6 +7155,11 @@ def test_a_malformed_video_fails_the_shape_gate(pinged):
     assert "youtube_id must be an 11-character YouTube id" in issues
     assert "published_at must be an ISO 8601 date-time with a UTC offset" in issues
     assert "evidence_timestamps['ev-01'] must be a whole number of seconds >= 0" in issues
+    trailing = tp.check_video_shape(_video(youtube_id="dQw4w9WgXcQ\n", evidence_timestamps={"ev-01": True}))
+    assert trailing["issues"] == [
+        "youtube_id must be an 11-character YouTube id",
+        "evidence_timestamps['ev-01'] must be a whole number of seconds >= 0",
+    ]
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -6460,11 +7176,19 @@ Add to the imports of `pipeline/lyra/theo_publishing.py`: `from datetime import 
 # Corrections and videos (spec 2.7). Only a completed, public paper changes here.
 # ---------------------------------------------------------------------------
 
-YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+#: A YouTube video id; applied with fullmatch like every id pattern here.
+YOUTUBE_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
 _CORRECTION_ENTRY_KEYS = frozenset({"date", "text", "evidence_id"})
 _UPDATE_RESULT_SQL = text("""
     UPDATE research_requests
     SET result_json = :result
+    WHERE id = :id AND status = 'completed' AND is_public = TRUE AND result_json = :previous
+""")
+#: A full republish also credits Theo (spec 3.7): 7 of the 31 legacy papers carry
+#: a founder's name in published_by, which the public API shows as the author.
+_REPUBLISH_SQL = text("""
+    UPDATE research_requests
+    SET result_json = :result, published_by = :author
     WHERE id = :id AND status = 'completed' AND is_public = TRUE AND result_json = :previous
 """)
 
@@ -6477,7 +7201,10 @@ def check_live_status(status: str, is_public: bool) -> dict:
     return _gate(issues, status=status, is_public=bool(is_public))
 
 
-def _correction_entry_issues(entries: Any) -> list[str]:
+def _correction_entry_issues(entries: Any, *, earliest: date | None, latest: date) -> list[str]:
+    """Issues with corrections_append. Dates lie in [earliest, latest]: the page
+    turns the newest one into JSON-LD dateModified. earliest is None only while
+    the row is not public (the status gate reports that)."""
     if not isinstance(entries, list) or not entries:
         return ["corrections_append must be a non-empty list: every change is logged on the page"]
     issues = []
@@ -6491,22 +7218,29 @@ def _correction_entry_issues(entries: Any) -> list[str]:
             issues.append(f"{label} has unknown keys {unknown}")
         day = entry.get("date")
         try:
-            valid_day = isinstance(day, str) and date.fromisoformat(day).isoformat() == day
+            parsed = date.fromisoformat(day) if isinstance(day, str) else None
         except ValueError:
-            valid_day = False
-        if not valid_day:
+            parsed = None
+        if parsed is None or parsed.isoformat() != day:
             issues.append(f"{label}.date must be YYYY-MM-DD")
+        elif (earliest is not None and parsed < earliest) or parsed > latest:
+            issues.append(f"{label}.date must lie between the publication day and today")
         if not (isinstance(entry.get("text"), str) and entry["text"].strip()):
             issues.append(f"{label}.text must be a non-empty string")
         if "evidence_id" in entry and not (
-            isinstance(entry["evidence_id"], str) and EVIDENCE_ID_RE.match(entry["evidence_id"])
+            isinstance(entry["evidence_id"], str) and EVIDENCE_ID_RE.fullmatch(entry["evidence_id"])
         ):
             issues.append(f"{label}.evidence_id must look like ev-NN")
     return issues
 
 
-def check_correction_shape(correction: dict) -> dict:
-    """Value types of a correction input (the CLI checked the keys, contract C5)."""
+def check_correction_shape(correction: dict, *, published_on: date | None, today: date) -> dict:
+    """Value types of a correction input (the CLI checked the keys, contract C5).
+
+    A full republish (`result`) is checked like a first publish: result.corrections
+    must be [] there too, because the stored log is kept and grows only through
+    corrections_append.
+    """
     issues = check_writer(correction.get("writer"))
     if "report" in correction and not (
         isinstance(correction["report"], str) and correction["report"].strip()
@@ -6514,34 +7248,21 @@ def check_correction_shape(correction: dict) -> dict:
         issues.append("report must be a non-empty string when given")
     if "evidence" in correction and not isinstance(correction["evidence"], list):
         issues.append("evidence must be a list when given")
-    issues.extend(_correction_entry_issues(correction.get("corrections_append")))
-    return _gate(issues)
-
-
-def check_evidence_retention(
-    old_evidence: list, new_evidence: list, old_corrections: list, appended: list
-) -> dict:
-    """Published evidence ids stay: an id is retired only by a correction naming it, and never reused."""
-    old_ids = {entry["id"] for entry in old_evidence}
-    new_ids = {entry["id"] for entry in new_evidence if isinstance(entry, dict) and "id" in entry}
-    named = {entry["evidence_id"] for entry in appended if entry.get("evidence_id")}
-    previously_retired = {
-        entry["evidence_id"] for entry in old_corrections if entry.get("evidence_id")
-    } - old_ids
-    issues = [f"{ev} removed without a correction entry naming it" for ev in sorted(old_ids - new_ids - named)]
-    issues += [f"{ev} was retired earlier and may not be reused" for ev in sorted(new_ids & previously_retired)]
-    issues += [
-        f"a correction names {ev}, which this paper never had"
-        for ev in sorted(named - old_ids - new_ids)
-    ]
-    return _gate(issues)
-
-
-def _update_result(session: Any, row: Any, stored: dict) -> None:
-    updated = session.execute(
-        _UPDATE_RESULT_SQL,
-        {"id": row.id, "result": json.dumps(stored), "previous": row.result_json},
+    if "result" in correction:
+        issues.extend(_result_issues(correction["result"], correction.get("writer"), republish=True))
+    issues.extend(
+        _correction_entry_issues(correction.get("corrections_append"), earliest=published_on, latest=today)
     )
+    return _gate(issues)
+
+
+def _update_result(session: Any, row: Any, stored: dict, *, author: str | None = None) -> None:
+    """Guarded write of a public paper's result_json; with `author` (a full republish) also published_by."""
+    params = {"id": row.id, "result": json.dumps(stored), "previous": row.result_json}
+    if author is None:
+        updated = session.execute(_UPDATE_RESULT_SQL, params)
+    else:
+        updated = session.execute(_REPUBLISH_SQL, {**params, "author": author})
     if updated.rowcount != 1:
         session.rollback()
         raise PublishConflictError(f"{row.id} changed between read and write; nothing committed")
@@ -6556,38 +7277,74 @@ def correct_paper(
     dry_run: bool,
     images_root: Path = RESEARCH_IMAGES_DIR,
 ) -> PublishOutcome:
-    """Re-gate and apply a correction to a public paper: report and published_report
-    change together, the corrections log grows, evidence ids are kept (C5)."""
+    """Re-gate and apply a correction to a public paper (contract C5).
+
+    Three kinds: a log entry only; a text correction (report and
+    published_report change together, title, card, images, hero and
+    quality_score stay); or, with `result`, a full republish that replaces the
+    paper wholesale (a Claude rewrite of a legacy M3 paper, spec 2.6 step 4),
+    gated like a first publish and credited to PUBLISH_AUTHOR (spec 3.7; a
+    founder who published the legacy paper did not write the rewrite). The
+    corrections log grows in every case, every evidence id is kept unless a
+    correction names it, and slug and published_at never change. The CLI
+    refuses `result` together with `report` or `evidence` (exit 2).
+    """
     from pipeline.indexnow import page_url
 
     row = _read_row(session, request_id)
+    current = _stored_result(row)
+    stored_corrections = current.get("corrections", [])
+    republish = "result" in correction
+    author = PUBLISH_AUTHOR if republish else None
     gates: dict[str, dict] = {
         "status": check_live_status(row.status, row.is_public),
-        "shape": check_correction_shape(correction),
+        # published_at is `timestamp without time zone`, written as NOW() by the
+        # UTC database: its date is the UTC publication day.
+        "shape": check_correction_shape(
+            correction,
+            published_on=row.published_at.date() if row.published_at is not None else None,
+            today=datetime.now(UTC).date(),
+        ),
     }
-    current = _stored_result(row)
-    new_report = correction.get("report", current.get("report", ""))
-    new_evidence = correction.get("evidence", current.get("evidence", []))
-    audit: dict = {}
+    stored: dict = {}
     if gates["status"]["passed"] and gates["shape"]["passed"]:
+        if republish:
+            paper = correction["result"]
+            gates["snapshot"] = check_snapshot(paper)
+            quality_score, require_stored_passed = paper["quality_score"], True
+        else:
+            paper = {
+                **current,
+                "report": correction.get("report", current.get("report", "")),
+                "evidence": correction.get("evidence", current.get("evidence", [])),
+            }
+            quality_score, require_stored_passed = current.get("quality_score") or {}, False
         gates["retention"] = check_evidence_retention(
             current.get("evidence", []),
-            new_evidence,
-            current.get("corrections", []),
+            paper["evidence"],
+            stored_corrections,
             correction["corrections_append"],
         )
-        gates["artifact"], audit = check_artifact(new_report)
-        gates["quality"] = check_quality(
-            current.get("quality_score") or {}, audit, require_stored_passed=False
-        )
-        gates["evidence"] = check_evidence(new_report, new_evidence)
+        gates["artifact"], audit = check_artifact(paper["report"])
+        gates["quality"] = check_quality(quality_score, audit, require_stored_passed=require_stored_passed)
+        gates["evidence"] = check_evidence(paper["report"], paper["title"], paper["evidence"])
         gates["images"] = check_images(
             request_id,
-            new_report,
-            current.get("probative_images") or [],
-            current.get("hero_image"),
+            paper["report"],
+            paper.get("probative_images") or [],
+            paper.get("hero_image"),
             images_root=images_root,
         )
+        stored = {
+            **current,
+            **paper,
+            "published_report": paper["report"],
+            "corrections": [*stored_corrections, *correction["corrections_append"]],
+            "audit": audit,
+        }
+        if republish:
+            stored["writer"] = correction["writer"]
+        gates["page"] = check_page(request_id, stored)
     outcome = PublishOutcome(
         ok=all(gate["passed"] for gate in gates.values()),
         action="correct",
@@ -6600,15 +7357,7 @@ def correct_paper(
     if dry_run or not outcome.ok:
         return outcome
 
-    stored = {
-        **current,
-        "report": new_report,
-        "published_report": new_report,
-        "evidence": new_evidence,
-        "corrections": [*current.get("corrections", []), *correction["corrections_append"]],
-        "audit": audit,
-    }
-    _update_result(session, row, stored)
+    _update_result(session, row, stored, author=author)
     outcome.journal_id = _journal(
         session,
         request_id=request_id,
@@ -6619,13 +7368,13 @@ def correct_paper(
         gates=gates,
     )
     session.commit()
-    _verify(session, request_id, result=stored, slug=row.slug)
+    _verify(session, request_id, result=stored, slug=row.slug, published_by=author)
     outcome.side_effects = run_publish_side_effects(
         request_id=request_id,
         slug=row.slug,
-        title=current["title"],
-        paper_text=new_report,
-        author_username=row.published_by,
+        title=stored["title"],
+        paper_text=stored["published_report"],
+        author_username=PUBLISH_AUTHOR if republish else row.published_by,
         author_discord_id=row.user_id,
         published_at=row.published_at.isoformat(),
         reindex=True,
@@ -6637,7 +7386,7 @@ def correct_paper(
 def check_video_shape(video: dict) -> dict:
     """Value types of a video registration (the CLI checked the keys, contract C6)."""
     issues = check_writer(video.get("writer"))
-    if not (isinstance(video.get("youtube_id"), str) and YOUTUBE_ID_RE.match(video["youtube_id"])):
+    if not (isinstance(video.get("youtube_id"), str) and YOUTUBE_ID_RE.fullmatch(video["youtube_id"])):
         issues.append("youtube_id must be an 11-character YouTube id")
     if not (isinstance(video.get("title"), str) and video["title"].strip()):
         issues.append("title must be a non-empty string")
@@ -6673,15 +7422,33 @@ def register_video(
         "shape": check_video_shape(video),
     }
     current = _stored_result(row)
+    stored: dict = {}
     if gates["status"]["passed"] and gates["shape"]["passed"]:
-        known = {entry["id"] for entry in current.get("evidence", [])}
+        # A timestamp may name a current evidence id or one a correction retired
+        # (a video made before the correction keeps it): the page's anchor_ids.
+        current_ids = {entry["id"] for entry in current.get("evidence", [])}
+        retired = {
+            entry["evidence_id"] for entry in current.get("corrections", []) if entry.get("evidence_id")
+        } - current_ids
         gates["evidence_refs"] = _gate(
-            [f"{ev} is not an evidence id of this paper" for ev in sorted(set(video["evidence_timestamps"]) - known)]
+            [
+                f"{ev} is neither an evidence id of this paper nor retired by a correction"
+                for ev in sorted(set(video["evidence_timestamps"]) - current_ids - retired)
+            ]
         )
         already = any(v.get("youtube_id") == video["youtube_id"] for v in current.get("videos", []))
         gates["duplicate"] = _gate(
             [f"video {video['youtube_id']} is already registered"] if already else []
         )
+        entry = {
+            "youtube_id": video["youtube_id"],
+            "title": video["title"],
+            "published_at": video["published_at"],
+            "evidence_timestamps": video["evidence_timestamps"],
+            "registered_at": datetime.now(UTC).isoformat(),
+        }
+        stored = {**current, "videos": [*current.get("videos", []), entry]}
+        gates["page"] = check_page(request_id, stored)
     outcome = PublishOutcome(
         ok=all(gate["passed"] for gate in gates.values()),
         action="register_video",
@@ -6694,14 +7461,6 @@ def register_video(
     if dry_run or not outcome.ok:
         return outcome
 
-    entry = {
-        "youtube_id": video["youtube_id"],
-        "title": video["title"],
-        "published_at": video["published_at"],
-        "evidence_timestamps": video["evidence_timestamps"],
-        "registered_at": datetime.now(UTC).isoformat(),
-    }
-    stored = {**current, "videos": [*current.get("videos", []), entry]}
     _update_result(session, row, stored)
     outcome.journal_id = _journal(
         session,
@@ -6722,7 +7481,7 @@ def register_video(
 - [ ] **Step 4: Run the tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_theo_publishing_corrections.py tests/pipeline/test_theo_publishing_publish.py tests/pipeline/test_theo_publishing_gates.py tests/pipeline/test_theo_publishing_anchors.py -m "not integration and not live_llm" -q`
-Expected: all pass (`9` correction/video tests).
+Expected: all pass (`14` correction/video tests).
 
 - [ ] **Step 5: Lint and commit**
 
@@ -6730,7 +7489,7 @@ Expected: all pass (`9` correction/video tests).
 ./.venv/Scripts/python.exe -m ruff format pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_corrections.py
 ./.venv/Scripts/python.exe -m ruff check --fix pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_corrections.py
 git add pipeline/lyra/theo_publishing.py tests/pipeline/test_theo_publishing_corrections.py
-git commit -m "Let public Theo papers change only through gated, journalled corrections and video registrations that keep every evidence id" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "Let public Theo papers change only through gated, journalled corrections, full republishes and video registrations that keep every evidence id" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -6850,6 +7609,8 @@ def test_a_failed_gate_exits_1(seen, monkeypatch):
         b"{not json",
         json.dumps(_bundle(version=2)).encode(),
         json.dumps(_bundle(request_id="not-a-uuid")).encode(),
+        # A valid UUID in another spelling (REQ has no hex letters, so .upper() would not change it).
+        json.dumps(_bundle(request_id=REQ.replace("-", ""))).encode(),
         json.dumps(_bundle(author="Somebody")).encode(),
         json.dumps({"version": 1, "request_id": REQ, "writer": WRITER}).encode(),
         json.dumps(_bundle(result=[])).encode(),
@@ -6871,6 +7632,24 @@ def test_a_conflict_exits_3(seen, monkeypatch):
     code, outcome = _run(["--apply"], _raw(_bundle()))
     assert code == 3
     assert outcome == {"ok": False, "error": "row changed"}
+
+
+def test_a_republish_excludes_report_and_evidence(seen):
+    correction = {
+        "version": 1,
+        "request_id": REQ,
+        "writer": WRITER,
+        "corrections_append": [{"date": "2026-09-22", "text": "Rewritten."}],
+        "result": make_result(),
+        "report": "# T\n",
+    }
+    code, outcome = _run(["--correct"], _raw(correction))
+    assert code == 2
+    assert outcome == {"ok": False, "error": "result (a full republish) excludes report and evidence"}
+    assert seen == []
+    del correction["report"]
+    assert _run(["--correct", "--dry-run"], _raw(correction))[0] == 0
+    assert seen[0][:3] == ("correct", REQ, True)
 
 
 @pytest.mark.parametrize("args", [[], ["--apply", "--dry-run"], ["--apply", "--correct"]])
@@ -6895,12 +7674,12 @@ leave the VPS:
 
     ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --dry-run < bundle.json
     ... --apply < bundle.json
-    ... --correct [--dry-run] < correction.json
+    ... --correct [--dry-run] < correction.json   (a log entry, a text correction, or a full republish via `result`)
     ... --register-video [--dry-run] < video.json
 
 Prints a PublishOutcome as JSON (contract C8). Exit codes: 0 ok, 1 a gate
 failed, 2 unusable input, 3 the row changed between read and write (nothing
-committed), 4 committed but the re-read row differs.
+committed), 4 committed but the re-read row differs (side effects not run).
 """
 
 from __future__ import annotations
@@ -6933,7 +7712,7 @@ ENVELOPES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "publish": (frozenset({"version", "request_id", "writer", "result"}), frozenset()),
     "correct": (
         frozenset({"version", "request_id", "writer", "corrections_append"}),
-        frozenset({"report", "evidence"}),
+        frozenset({"report", "evidence", "result"}),
     ),
     "register_video": (
         frozenset(
@@ -6981,12 +7760,19 @@ def _check_envelope(payload: object, action: str) -> dict:
         raise PublishInputError(f"unknown keys: {unknown}")
     if payload["version"] != 1:
         raise PublishInputError(f"unsupported version {payload['version']!r} (expected 1)")
+    # One spelling only (C4): the image paths, the slug suffix and the journal use
+    # the id as given, and theo_dossier exports under the canonical lowercase form.
+    rid = payload["request_id"]
     try:
-        uuid.UUID(str(payload["request_id"]))
+        canonical = isinstance(rid, str) and str(uuid.UUID(rid)) == rid
     except ValueError:
-        raise PublishInputError(f"request_id is not a UUID: {payload['request_id']!r}") from None
-    if action == "publish" and not isinstance(payload["result"], dict):
+        canonical = False
+    if not canonical:
+        raise PublishInputError(f"request_id is not a canonical lowercase UUID: {rid!r}")
+    if "result" in payload and not isinstance(payload["result"], dict):
         raise PublishInputError("result must be a JSON object")
+    if action == "correct" and "result" in payload and {"report", "evidence"} & set(payload):
+        raise PublishInputError("result (a full republish) excludes report and evidence")
     return payload
 
 
@@ -7008,7 +7794,7 @@ def main(
     except PublishInputError as exc:
         return _error(out, str(exc), EXIT_INPUT)
     bundle_sha256 = hashlib.sha256(raw).hexdigest()
-    request_id = str(payload["request_id"])
+    request_id = payload["request_id"]
     try:
         with get_session() as session:
             if args.action == "publish":
@@ -7045,7 +7831,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run the tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_theo_publish_cli.py -m "not integration and not live_llm" -q`
-Expected: `14 passed` (6 input variants and 3 mode variants counted).
+Expected: `16 passed` (7 input variants and 3 mode variants counted).
 
 - [ ] **Step 5: Lint and commit**
 
@@ -7292,6 +8078,17 @@ def test_the_cli_rejects_a_bad_id_and_reports_a_missing_dossier(monkeypatch):
     assert td.main(["export", "nope"], stdout_bytes=io.BytesIO()) == 2
     monkeypatch.setattr(td, "get_session", lambda: RecordingSession({}))
     assert td.main(["export", REQ], stdout_bytes=io.BytesIO()) == 1
+
+
+def test_the_cli_exports_any_uuid_spelling_under_the_canonical_id(monkeypatch):
+    # research_artifacts.request_id is TEXT: only the canonical lowercase id finds the rows.
+    session = _session(DOSSIER_ARTIFACTS)
+    monkeypatch.setattr(td, "get_session", lambda: session)
+    buffer = io.BytesIO()
+    # REQ has no hex letters (.upper() would not change it): the hyphen-less spelling is the other form.
+    assert td.main(["export", REQ.replace("-", "")], stdout_bytes=buffer) == 0
+    assert json.loads(gzip.decompress(buffer.getvalue()).decode("utf-8"))["request"]["id"] == REQ
+    assert {params["id"] for _sql, params in session.log if "id" in params} == {REQ}
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -7552,13 +8349,16 @@ def main(
         return 0
 
     try:
-        uuid.UUID(args.request_id)
+        # Canonical lowercase: research_requests.id is a uuid column and matches
+        # any spelling, but research_artifacts.request_id is TEXT and matches
+        # only this one.
+        request_id = str(uuid.UUID(args.request_id))
     except ValueError:
         print(f"not a request id: {args.request_id!r}", file=sys.stderr)
         return 2
     try:
         with get_session() as session:
-            bundle = build_export(session, args.request_id, texts=args.texts)
+            bundle = build_export(session, request_id, texts=args.texts)
     except DossierExportError as exc:
         print(f"dossier export failed: {exc}", file=sys.stderr)
         return 1
@@ -7574,7 +8374,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run the tests**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_theo_dossier.py -m "not integration and not live_llm" -q`
-Expected: `8 passed`.
+Expected: `9 passed`.
 
 - [ ] **Step 5: Lint and commit**
 
@@ -7590,7 +8390,7 @@ git commit -m "Add the theo_dossier CLI that lists researched runs and exports a
 ## Task 21: API routes know `researched` and share the publish sequence
 
 **Files:**
-- Modify: `api/routes/theo.py` (imports lines 20-52, `_make_slug` 117-122, stream 1070-1083, publish route 1414-1488)
+- Modify: `api/routes/theo.py` (the import block, `_make_slug`, `stream_research`, `publish_research`; the pre-merge line numbers were 20-52, 117-122, 1070-1083 and 1266-1488: locate by name and anchor text, see Ground rules. After the I11 merge the `pipeline.database` import is a parenthesised block that includes `affected_rows`; leave it as it is)
 - Test: `tests/api/test_theo_routes_researched.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -7602,6 +8402,8 @@ git commit -m "Add the theo_dossier CLI that lists researched runs and exports a
 
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -7611,6 +8413,7 @@ from fastapi.testclient import TestClient
 from api.routes import theo as theo_routes
 from pipeline.lyra import theo_publishing
 from tests.fake_sql import RecordingSession
+from tests.pipeline.theo_publish_fixtures import WRITER, make_result
 
 REQ = "11111111-2222-3333-4444-555555555555"
 
@@ -7635,6 +8438,35 @@ def test_the_stream_of_a_researched_run_ends_at_once(client, monkeypatch):
     assert '"status": "researched"' in response.text
 
 
+def test_the_detail_of_a_researched_run_carries_its_dossier(client, monkeypatch):
+    dossier = {"artifact_id": 8812, "version": 1, "counts": {"final_claims": 38}}
+    row = SimpleNamespace(
+        id=REQ,
+        user_id="owner-1",
+        question="Who cut the Baalbek monoliths?",
+        status="researched",
+        result_json=json.dumps({"dossier": dossier, "title": None}),
+        pipeline_trace=None,
+        debug_log=None,
+        sites_found=3697,
+        tools_used=12,
+        total_tokens=12345678,
+        llm_calls=399,
+        duration_ms=39_600_000,
+        error_message=None,
+        created_at=datetime(2026, 9, 27, 20, 0),
+        completed_at=datetime(2026, 9, 28, 9, 15),
+    )
+    session = RecordingSession({"pipeline_trace, debug_log, sites_found": [row]})
+    monkeypatch.setattr(theo_routes, "get_session", lambda: session)
+    response = client.get(f"/research/{REQ}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "researched"
+    assert body["result"] == {"dossier": dossier, "title": None}
+    assert body["completed_at"] == "2026-09-28T09:15:00"
+
+
 def test_deleting_a_researched_row_archives_it_first(client, monkeypatch):
     session = RecordingSession(
         {
@@ -7657,12 +8489,52 @@ def test_the_route_uses_the_shared_slug_rule_and_side_effects():
     assert theo_routes.pick_slug is theo_publishing.pick_slug
     assert theo_routes.run_publish_side_effects is theo_publishing.run_publish_side_effects
     assert "researched" in theo_routes._STREAM_TERMINAL_STATUSES
+
+
+def test_the_founder_route_refuses_a_paper_its_page_could_not_render(client, monkeypatch):
+    # A Claude-written paper, unpublished, edited and re-approved here: its second
+    # evidence anchor no longer opens a paragraph, so /research/{slug} would 500.
+    result = {**make_result(), "writer": WRITER, "approved_by": "QuetzalcoatlCat"}
+    result["evidence"][1]["anchor_text"] = "No paragraph of this paper opens with these words"
+    row = SimpleNamespace(
+        id=REQ,
+        user_id="owner-1",
+        status="completed",
+        is_public=False,
+        result_json=json.dumps(result),
+        question="Who cut the Baalbek monoliths?",
+    )
+    session = RecordingSession({"SELECT id::text, user_id, status, is_public, result_json, question": [row]})
+    monkeypatch.setattr(theo_routes, "get_session", lambda: session)
+
+    async def fresh_roles(user):
+        return []
+
+    monkeypatch.setattr(theo_routes, "_require_fresh_researcher", fresh_roles)
+
+    def announce(urls):
+        # An Exception, not pytest.fail: a BaseException would stop the TestClient's portal.
+        raise AssertionError("the refused paper was announced")
+
+    monkeypatch.setattr(theo_routes, "indexnow_submit", announce)
+    client.app.dependency_overrides[theo_routes.get_current_user] = lambda: SimpleNamespace(
+        id=1, discord_id="owner-1", username="QuetzalcoatlCat"
+    )
+
+    response = client.post(f"/research/{REQ}/publish")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "error": "the paper page would not render",
+        "issues": ["ev-02: anchor_text matches 0 paragraphs (needs exactly 1)"],
+    }
+    assert not [sql for sql in session.statements() if "UPDATE research_requests" in sql]
 ```
 
 - [ ] **Step 2: Run to verify failure**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_theo_routes_researched.py -m "not integration and not live_llm" -q --timeout 20`
-Expected: the stream test fails by timeout (with the current code a `researched` row falls into the 5-minute polling stream), the shared-rule test fails (`_make_slug` still exists); the delete test already passes (it pins existing behaviour).
+Expected: the stream test fails by timeout (with the current code a `researched` row falls into the 5-minute polling stream), the shared-rule test fails (`_make_slug` still exists), the founder-route test fails with `AssertionError: the refused paper was announced` (the current route writes the paper and pings IndexNow; the stub stops it there, so no request leaves the machine); the detail and delete tests already pass (they pin existing behaviour: the owner detail returns any status with its `result_json`, spec 2.5 "the owner list and detail show it"). The UI offers no Read/Review button for a researched row (there is no paper yet); its badge (Task 24) is the indicator.
 
 - [ ] **Step 3: Implement**
 
@@ -7671,7 +8543,12 @@ In `api/routes/theo.py`:
 (a) Remove `import re` (its only use was `_make_slug`), and add below the `from pipeline.indexnow import …` lines:
 
 ```python
-from pipeline.lyra.theo_publishing import pick_slug, run_publish_side_effects
+from pipeline.lyra.theo_publishing import (
+    check_evidence_anchors,
+    check_page,
+    pick_slug,
+    run_publish_side_effects,
+)
 ```
 
 (b) Delete the function `_make_slug` (it lives on as `pipeline.lyra.theo_publishing.make_slug`).
@@ -7715,6 +8592,24 @@ with
 
 ```python
         paper_title = result.get("title", row.question)
+        # The paper page's own validators and anchor check, as in the Claude
+        # publish CLI's page and evidence gates (contract C9): a Claude-written
+        # paper unpublished, edited (PATCH /research/{id}, /section) and
+        # re-approved here must still render, or /research/{slug} and
+        # /api/v1/research/{slug} answer HTTP 500. ?override=1 cannot bypass it.
+        # check_page validates the evidence entries' shape (parse_evidence), which
+        # the anchor check needs, so the anchors run only once it passed.
+        page = check_page(request_id, result)
+        anchor_issues: list[str] = []
+        if result.get("evidence") and page["passed"]:
+            _resolved, anchor_issues = check_evidence_anchors(
+                assembled["published_report"], paper_title, result["evidence"]
+            )
+        if page["issues"] or anchor_issues:
+            raise HTTPException(
+                status_code=409,
+                detail={"error": "the paper page would not render", "issues": page["issues"] + anchor_issues},
+            )
         slug = pick_slug(session, paper_title, request_id)
 ```
 
@@ -7752,7 +8647,7 @@ and replace the block after the `with get_session() as session:` block, from `  
 - [ ] **Step 4: Run the route tests and mypy**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_theo_routes_researched.py -m "not integration and not live_llm" -q --timeout 20`
-Expected: `3 passed`.
+Expected: `5 passed`.
 
 Run: `./.venv/Scripts/python.exe -m mypy api/ 2>&1 | grep -E "theo(_worker|_config)?\.py"`
 Expected: no output. (CI runs `mypy api/`; the local venv reports the same pre-existing errors in other files as a clean checkout, 93 in 14 files on 2026-09-26, none in the Theo files.)
@@ -7763,7 +8658,7 @@ Expected: no output. (CI runs `mypy api/`; the local venv reports the same pre-e
 ./.venv/Scripts/python.exe -m ruff format api/routes/theo.py tests/api/test_theo_routes_researched.py
 ./.venv/Scripts/python.exe -m ruff check --fix api/routes/theo.py tests/api/test_theo_routes_researched.py
 git add api/routes/theo.py tests/api/test_theo_routes_researched.py
-git commit -m "Treat researched as a finished run in the owner stream and share the slug rule and publish side effects with the Claude publish CLI" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "Treat researched as a finished run in the owner stream, share the slug rule, page checks and publish side effects with the Claude publish CLI, and refuse a founder publish whose page would not render" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -7852,6 +8747,7 @@ git commit -m "Narrate a paper's published text, not its pre-publish report, in 
 
 **Files:**
 - Modify: `ancient-nerds-map/src/components/theo/TheoResearchLive.tsx`
+- Modify: `ancient-nerds-map/src/types/pipeline.ts` (`PIPELINE_STAGES`: the Dossier LED of the live trace)
 - Test: `ancient-nerds-map/src/components/theo/__tests__/theoResearchLive.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -8050,15 +8946,23 @@ and `{labels[phase]}` inside the button with `{THEO_PHASE_LABELS[phase]}`.
         )}
 ```
 
-- [ ] **Step 4: Run the test and the type check**
+(k) In `ancient-nerds-map/src/types/pipeline.ts`, add after the `moderator` entry of `PIPELINE_STAGES`:
 
-Run: `cd ancient-nerds-map && npx vitest run src/components/theo/__tests__/theoResearchLive.test.ts && npm run type-check`
-Expected: `5 passed`; type-check clean (noUnusedLocals catches a leftover `qualityFlash`).
+```ts
+  { id: 'dossier', label: 'Dossier', sublabel: 'Archive completion + manifest' },
+```
+
+Keep the now-dead ids (`paper_assembly`, `quality_judge`, `image_generation`, `presentation`, `fact_check`): stored traces of older runs carry them. `src/types/pipeline.test.ts` only checks that some ids exist and that all ids are unique.
+
+- [ ] **Step 4: Run the tests and the type check**
+
+Run: `cd ancient-nerds-map && npx vitest run src/components/theo/__tests__/theoResearchLive.test.ts src/types/pipeline.test.ts && npm run type-check`
+Expected: `5 passed` in the new file, the pipeline tests pass; type-check clean (noUnusedLocals catches a leftover `qualityFlash`).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add ancient-nerds-map/src/components/theo/TheoResearchLive.tsx ancient-nerds-map/src/components/theo/__tests__/theoResearchLive.test.ts
+git add ancient-nerds-map/src/components/theo/TheoResearchLive.tsx ancient-nerds-map/src/components/theo/__tests__/theoResearchLive.test.ts ancient-nerds-map/src/types/pipeline.ts
 git commit -m "End Theo's live panel at the moderated dossier instead of the removed write and judge phases" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -8205,6 +9109,7 @@ Expected: all pass; the only skips are the pre-existing ones (remediation caches
 ./.venv/Scripts/python.exe -m mypy api/
 ./.venv/Scripts/semgrep.exe scan --config .semgrep api/ pipeline/ ancient-nerds-map/src/
 ./.venv/Scripts/pip-audit.exe -r requirements-api.txt --ignore-vuln CVE-2026-25990
+./.venv/Scripts/pip-audit.exe -r requirements.txt --ignore-vuln CVE-2026-25990
 ```
 
 Expected: ruff clean, format clean, `Contracts: 2 kept, 0 broken.`, vulture prints nothing, mypy reports no more errors than a clean checkout of `origin/main` (93 in 14 files locally on 2026-09-26, none in a Theo file), semgrep 0 findings, pip-audit "No known vulnerabilities found".
@@ -8242,15 +9147,86 @@ No commit (nothing changed). Report the pass counts and any gate that could not 
 
 ---
 
+## Task 26: Rollout on the VPS (spec §8.2-8.4a)
+
+Runs after the push that carries streams A-D (the push itself follows the repo's deploy rules; the deploy applies 0025/0026 before the image rebuild). Every command reads production only, except the worker swap in Step 3 (a container recreate on an idle worker, the documented path). `ssh ancientnerds` is the default ops alias. No commit.
+
+This task is steps (1) and (2) of the orchestrator's final acceptance (integration item I12). The rest of I12 runs after it and belongs to no stream plan: (3) spec 8.4(b), the first `researched` row after the swap written through the `theo-write` skill and published with `paper publish` (apply); (4) spec 8.4(c), the Baalbek claim-5 slice through the `studio-video` skill (stream C's `episode init` … `package`, stream D's captures and renderer), no upload; (5) owner decision 6, the Roswell date of the UFO/UAP paper as the first real correction (`python -m pipeline.studio paper correct <UFO/UAP request id> --report-file <fixed markdown> --text '<Roswell date correction>'`, starting from the content of `GET /api/v1/research/{slug}`; dry run first, as stream C's `publish.py` enforces).
+
+- [ ] **Step 1: The deployed API runs this commit**
+
+Run: `ssh ancientnerds "curl -s http://localhost:8000/" | ./.venv/Scripts/python.exe -c "import json, sys; print(json.load(sys.stdin)['commit'])"` and `git rev-parse --short HEAD`
+Expected: the same short hash twice. If they differ, the drift guard has not run yet or the deploy failed: read the CI deploy job before anything else.
+
+- [ ] **Step 2: Both migrations are applied**
+
+Run: `ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -Atc \"SELECT filename FROM applied_migrations WHERE filename IN ('0025_theo_paper_publications.sql', '0026_studio_episodes.sql') ORDER BY 1\""`
+Expected: both file names, one per line.
+
+Run: `ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -c '\d theo_paper_publications'"`
+Expected: the table with both CHECK constraints (`theo_paper_publications_action_vocab`, `theo_paper_publications_sha256_shape`) and the FK `ON DELETE SET NULL`.
+
+- [ ] **Step 3: The Theo worker runs the research-only image**
+
+Run: `ssh ancientnerds "docker exec ancient_nerds_theo_worker python -c 'import pipeline.lyra.handlers.dossier' && echo new-image"`
+Expected: `new-image`. A `ModuleNotFoundError` means the deploy skipped the worker because a run was `running` (ci.yml rebuilds theo-worker only when idle). Then start the swap, detached, and repeat this step once `/tmp/theo_swap.log` says the new container is in:
+
+```bash
+ssh ancientnerds "cd /var/www/ancientnerds && setsid nohup scripts/swap_theo_worker_when_idle.sh > /tmp/theo_swap.log 2>&1 &"
+ssh ancientnerds "tail -n 5 /tmp/theo_swap.log"
+```
+
+The run in flight finishes on the old code (an M3 paper that auto-publishes; owner decision 2 lets it).
+
+- [ ] **Step 4: The first researched row carries a complete dossier**
+
+After the next batch run on the new image ends:
+
+Run: `ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -Atc \"SELECT id, result_json::jsonb->'dossier'->'counts' FROM research_requests WHERE status = 'researched' ORDER BY completed_at\""`
+Expected: at least one row with its counts. For that id (`<ID>`):
+
+Run: `ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -Atc \"SELECT kind, count(*) FROM research_artifacts WHERE request_id = '<ID>' GROUP BY kind ORDER BY kind\""`
+Expected: exactly 1 each of `citation_registry`, `debate`, `dossier`, `image_candidate_pool`, `moderated`, `specialist_analyses`, `synthesis`, and `angle_findings` ≥ `counts.angles` (more only when the run resumed after a deferral: stale angle rows stay, the export reads `manifest.angle_ids`). No `paper_final` row.
+
+Run: `ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -Atc \"SELECT jsonb_typeof(payload->'analyses'), (SELECT count(*) FROM jsonb_object_keys(payload->'analyses')) FROM research_artifacts WHERE request_id = '<ID>' AND kind = 'specialist_analyses'\""`
+Expected: `object|<n>` with n > 0 (the analyses are no longer empty, spec fact 4; the old run 95fa3798 prints `object|0`).
+
+Run: `ssh ancientnerds "docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier export <ID> | gunzip | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)[\"manifest\"][\"archive\"], indent=2))'"`
+Expected: the archive coverage (`cited_sources`, `full_text`, …, `failures`, `timed_out`); `full_text / cited_sources` well above the old ~50 % (spec fact 6). Record the numbers in the task report.
+
+- [ ] **Step 5: Acceptance (a) — a legacy dossier and a dry-run publish**
+
+Run: `ssh ancientnerds "docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier export 95fa3798-1678-40a4-ae2e-58595de93918" > /tmp/95fa3798.json.gz; echo "exit=$?"` and `gunzip -c /tmp/95fa3798.json.gz | ./.venv/Scripts/python.exe -c "import json, sys; print(json.load(sys.stdin)['manifest']['legacy'])"`
+Expected: `exit=0`, then `True`.
+
+Count the journal first: `ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -Atc 'SELECT count(*) FROM theo_paper_publications'"` (note the number).
+
+The bundle comes from a `theo-write` session on 95fa3798-1678-40a4-ae2e-58595de93918 (I12 step 2), in stream C's order: `python -m pipeline.studio paper pull 95fa3798-1678-40a4-ae2e-58595de93918`, then Claude writes `draft.md`, `paper_meta.json` and `evidence.json`, then `paper number`, `paper claims-export`, the theo-claim-check workflow, `paper claims-import`, `paper images-export`, the theo-image-check workflow, `paper images-import`, `paper check`, `paper bundle`. Then `python -m pipeline.studio paper publish 95fa3798-1678-40a4-ae2e-58595de93918 --dry-run`: it uploads the content-hash-named images to `research-images/95fa3798-1678-40a4-ae2e-58595de93918/` (C4) and then stops with "change it with `paper correct`", because 95fa3798 is already public. That stop is expected: the paper is not rewritten now (spec §0/§9).
+
+Then dry-run that bundle directly: `ssh ancientnerds "docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --dry-run" < bundle.json; echo "exit=$?"`
+Expected: `exit=0`, `"ok": true`, `gates.status.apply_allowed` is `false` (95fa3798 is public: existing papers are not rewritten now, spec §0/§9), `journal_id` null. Re-count the journal: the same number. Delete `/tmp/95fa3798.json.gz` afterwards.
+
+- [ ] **Step 6: Record the result**
+
+Report each step's output. A step that could not run (no ssh, no run finished yet) is reported as not run, never as passed.
+
+---
+
 ## Cross-stream requests (changes outside this stream's files)
 
-1. **`requirements.txt`** (local dev list, owner of that file): add `pypdf==6.19.0` so a fresh venv runs the three PDF tests instead of skipping them.
-2. **`ancient-nerds-map/src/types/pipeline.ts`** (optional, cosmetic): add `{ id: 'dossier', label: 'Dossier', sublabel: 'Archive completion + manifest' }` to `PIPELINE_STAGES` so the live trace shows a Dossier LED; `paper_assembly`, `quality_judge`, `image_generation`, `presentation`, `fact_check` are dead stage ids since this stream. The phase strip works without it (it reads raw stage names).
-3. **Stream B (paper page):** import `normalize_anchor_text` from `pipeline.lyra.theo_publishing` and apply contract C9 to the text of each `<p>`; render `result_json.evidence` / `corrections` / `videos` per contract C7. Note that `GET /api/theo/public/{slug}` returns the full `result_json`, which now includes the `dossier` summary, `writer`, `evidence`, `corrections` and `videos` (no source texts).
-4. **Stream C (paper studio):** copy `docs/superpowers/plans/assets/writer-brief-editorial.md` into `pipeline/studio/paper/brief_template.md`; build bundles per contracts C3–C6; read `PublishOutcome` per C8. `report_paragraphs` and `resolve_evidence_anchors` are importable for the local gate 3.4.6. The M3 hook carries no heading of its own in all 31 published papers (the asset says so); align the "six required h2 sections" gate with that.
-5. **`scripts/`** (owner of scripts): `entitaet_research_host.py`, `smoke_theo_host.py`, `theo_ab_compare.py`, `theo_test_run.py` read `ctx.paper_text`, `ctx.paper_title`, `ctx.quality_score`; after the split these are always empty. Point them at `ctx.dossier_summary`, then the dead paper fields on `ResearchState` can be removed. `scripts/swap_theo_worker_when_idle.sh` explains its 300 s settle with `_auto_publish`, which no longer exists.
-6. **Docs (CLAUDE.md / docs/procedures, stream D):** the Theo section: research-only, status `researched`, `theo_dossier` and `theo_publish` CLIs and their exit codes, `THEO_RUN_COST_PCT` / `THEO_RUN_EST_HOURS` / `THEO_MAX_UNWRITTEN_DOSSIERS` / `THEO_ARCHIVE_COMPLETION_*`. `docs/TRAINING_DATA_POLICY.md` states that nothing reads the corpus back for control flow; the dossier export and archive completion now do.
-7. **Migration numbering:** this stream owns `0025_theo_paper_publications.sql`; `0026_studio_episodes.sql` belongs to the studio stream.
+Items this plan now owns itself are gone from this list: `requirements.txt` (Task 6), `ancient-nerds-map/src/types/pipeline.ts` (Task 23) and the two shell-script comments (Tasks 13 and 14).
+
+1. **Stream B (paper page):** import `normalize_anchor_text` and `MIN_ANCHOR_CHARS` from `pipeline.lyra.theo_publishing` (this plan's Task 2 is the only definition of the normalisation; B's CS-2 refers to it and carries no reference implementation), and `EVIDENCE_ID_RE` inside `parse_evidence` and `parse_corrections` (lazy, like `resolve_evidence_anchors`; B keeps no module constant of its own, C9). `resolve_evidence_anchors(html, evidence)` applies contract C9's rule to each plain `<p>` (starts-with, at least `MIN_ANCHOR_CHARS`, exactly one match) and keeps its message `"<id> matches <n> paragraphs"`. This plan's gates call B's `paper_markdown`, `parse_evidence`, `resolve_evidence_anchors`, `paper_extras` and `PaperPageError` (B's CS-3, done here by `check_evidence_anchors` and `check_page`), so B Tasks 1-2 land before this plan's Tasks 15, 17 and 18. Render `result_json.evidence` / `corrections` / `videos` / `writer` per contract C7: videos carry no `poster` (spec 2.7; CS-7 is withdrawn), `writer.published` is `automatic` or `manual`, and a retired evidence id is anchored on the last correction entry naming it (C5 guarantees that entry is the retiring one). `GET /api/theo/public/{slug}` returns the full `result_json`, which now includes the `dossier` summary, `writer`, `evidence`, `corrections` and `videos` (no source texts).
+2. **Stream C (paper studio):** copy `docs/superpowers/plans/assets/writer-brief-editorial.md` into `pipeline/studio/paper/brief_template.md`; build inputs exactly per contracts C3-C6 (the publish bundle is `{version, request_id, writer, result}`: no `author`, no `images`; corrections and videos carry `version` and `writer`; no `poster`); read `PublishOutcome` per C8 including exit codes 3/4 and `gates.status.apply_allowed`. For the local check import `check_evidence_anchors`, `report_paragraphs`, `resolve_evidence_anchors`, `normalize_anchor_text`, `MIN_ANCHOR_CHARS` and `EVIDENCE_ID_RE` (also in `publish.py` and `casefile.py`, which keep no copy of their own) from `pipeline.lyra.theo_publishing` (C9) and `moderated_source_ids` / `cited_source_ids` from `pipeline.lyra.dossier_manifest` (the citable set, C3); evidence entries publish only with `verdict: "supported"`. A rewrite of a legacy paper goes through `--correct` with `result` (C5), whose `result.corrections` is `[]` as `paper bundle` builds it; a text correction whose image set, title or card description differs from the published bundle is refused locally (C5). Send `request_id` only in the canonical lowercase form (C4). The owner notice after a publish is sent here (`notify_published`); C's own request for it is done. The M3 hook carries no heading of its own in all 31 published papers (the asset says so); align the "six required h2 sections" gate with that.
+3. **Orchestrator (the reconcile's integration list, cited by item name): the docs of I5-I7, which no plan touches, and what this plan needs from I9, I10 and I12:**
+   - I5 `CLAUDE.md`: the Theo section (research-only, status `researched`, the `theo_dossier` and `theo_publish` CLIs and their exit codes 0-4, the correction kinds of C5, `THEO_RUN_COST_PCT` / `THEO_RUN_EST_HOURS` / `THEO_MAX_UNWRITTEN_DOSSIERS` / `THEO_ARCHIVE_COMPLETION_MAX_S` (at most 2400) / `THEO_ARCHIVE_COMPLETION_CONCURRENCY`).
+   - I6 `docs/procedures/STUDIO.md`: the same, in the runbook.
+   - I7 `docs/TRAINING_DATA_POLICY.md`: in the "What is collected" table, `handlers/dossier.py` joins the writers of `research_artifacts` and `archive_completion.py` those of `theo_source_archive`/`theo_source_archive_runs`; `theo_source_archive_runs.cited` now means "cited by a moderated claim" (Task 5), not "the finished paper cited it"; a new sentence says the dossier export (`theo_dossier`) and archive completion read the corpus back (best archive row per source, Task 5). Under "Lawful access", "`doi.org` is excluded from the archive" no longer holds for archive completion: it follows doi.org redirects to the publisher page and archives what that page serves, under the same TDM check (spec 2.3, Task 6); content_fetch's own exclusion stays.
+   - Done (2026-09-26, in the working-tree spec that I10 commits): spec 2.3's "The local fact check will read those live." reads "The local fact check treats them as source_missing (3.5)."; spec 2.8's example carries `"texts_mode"`; spec 2.3's selection rule and YouTube sentence describe what Tasks 5 and 6 do (the best archive row, not the latest; a YouTube video without a `news_videos` transcript fails like any fetch and falls back to its abstract).
+   - I9: open question 1 in `docs/superpowers/plans/2026-09-26-owner-questions.md`, the four host scripts ("Kept on purpose").
+   - I10: the commit of the spec and plans also carries `docs/superpowers/plans/assets/writer-brief-editorial.md` (its section 9 changed in the reconcile; Task 1 Step 3 expects it committed).
+   - I12: Task 26 is steps (1) and (2) of the final acceptance; steps (3)-(5) are listed at its top.
+4. **Migration numbering:** this stream owns `0025_theo_paper_publications.sql`; `0026_studio_episodes.sql` belongs to the studio stream.
 
 ---
 
@@ -8263,3 +9239,16 @@ Every code block of this plan was applied to a scratch copy of the worktree (`C:
 - `ruff format` reformats a few long lines of the new modules and `ruff check --fix` settles two import-block blank lines: run both as each task says.
 
 Task 9 alone (before Task 10) was checked separately: its 7 tests plus the still-present `test_empty_paper_guard.py` pass.
+
+Reconcile fix pass (2026-09-26, after the cross-plan review): the code blocks of Tasks 2-21 were re-applied to a fresh scratch copy (`git archive` of `feat/studio`, the same build script with the two block-index shifts of this pass) together with stream B's Tasks 1-2 renderer code as the B plan stands (its resolver already on the C9 starts-with rule):
+- the changed files (anchors 13, gates 21, publish 10, corrections 13, CLI 15, dossier 9, archive completion 13, route 4, worker 12) all passed on the first run; `tests/pipeline` + `tests/api` in the scratch: 2247 passed, every failure an environment one (files outside the scratch copy: frontend sources, `.github`, `docker-compose.yml`, no git) plus the known `test_handler_uses_same_regex` that Task 10 deletes;
+- the four markdown/rendered anchor pairs of Task 2 were checked against `markdown_to_html` + B's `_paragraph_text` (exact rendered text, equal keys), as were B's five contract cases;
+- `ruff check` clean on the new modules and tests (`ruff format` reformats long lines as before), vulture clean, `lint-imports` 2 kept, the Lyra import check passes, mypy shows no error in `theo_publishing`/`theo_publish`/`theo_dossier`/`routes/theo.py`;
+- the `pipeline.ts` Dossier stage: `src/types/pipeline.test.ts` 26 passed; the shell-script edits pass `bash -n` and their greps;
+- Task 26's read-only commands (API commit, `applied_migrations`, the artifact and `specialist_analyses` queries, python3/gunzip on the host) were run against production once to check their quoting.
+
+Second fix pass (2026-09-26, issues dossier-1, publish-1/2/4/5/7, evidence-1/3/4/5/6, ownership-1/2/6/7/9): the code blocks of Tasks 2-5, 13-15 and 17-21 were applied to a minimal scratch copy (`git archive` of `feat/studio` for `pipeline/`, `api/` and the test helpers, with `origin/main`'s `pipeline/database.py`, `api/services/theo_worker.py` and `api/routes/theo.py` standing in for the I11 merge, so Tasks 13, 14 and 21 were located by anchor text on the merged files), together with stream B's Tasks 1-2 renderer code as the B plan stands (its `parse_evidence`/`parse_corrections` already import `EVIDENCE_ID_RE` from here):
+- all passed: state/dossier 6, manifest 4, events quota 3, anchors 13, gates 21, publish 11, corrections 14, CLI 16, dossier 9, route 5, worker 12 (Tasks 13+14), plus B's extras and anchor tests and the Task 3/5 corpus tests;
+- the new moderator test fails without the once-per-run guard (`['llm', 'llm'] == ['llm']`), and the new route test fails on `origin/main`'s unmodified route with `AssertionError: the refused paper was announced`;
+- `normalize_anchor_text` confirms the writer-brief rule: `"… 1,000 t [1]. It lies …"` is matched by an anchor that copies the marker and not by one that drops it;
+- `ruff format` + `ruff check --fix` clean, vulture clean, the Lyra import check passes, `mypy api/` reports 93 errors in 14 files with none in a Theo file (the known baseline).
