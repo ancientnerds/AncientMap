@@ -12904,3 +12904,15 @@ With Concangis (pilot 1) that is 3 contradicted description sentences in 40 W si
 lane WB (owner O2: "natürlich müssen sie inhaltlich stimmen"): a card faithful to a wrong sentence is
 still wrong when read aloud, so every card gets the independent web check before it is written
 (built in `wip/wb2`), and each contradicted description sentence is listed for the description repair.
+
+## 2026-09-26 - WA v3 writes: two write loops raced once; nothing was written twice
+
+The orchestrator started the WA write loop a second time while an earlier instance (detached from its
+shell, still running) was writing - an orchestration error. At 22:07 local both instances took batch
+p4-2085: one wrote it (`APPLIED.json`: 20/20 rows read back, 20 journal rows, inverse proven) and it
+was accepted in step 23 (`ACCEPTED/step-0023.json`, 11 batches, 99 sites, 0 deviations); the other's
+read-only preflight refused every row ("no longer holds the planned old value"; the stamp already
+journalled 20 rows) and left `STOPPED.json`, so nothing was written twice. The stop record was read
+and kept as `p4-2085/STOPPED.read-2026-09-26-duplicate-loop.json`; a fresh read-only acceptance over
+pilot 4, mass, D9 and v3 then reported 1,753 written sites re-verified with V1-V15, **0 deviations**.
+From here the loop runs only as a tracked background task, one instance.
