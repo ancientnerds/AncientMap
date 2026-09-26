@@ -56,6 +56,7 @@ def live(**over: Any) -> dict[str, Any]:
 def decision(field: str, verdict: str, value: Any, stored: Any) -> dict[str, Any]:
     return {
         "site_id": SITE,
+        "name": "Corycus",
         "field": field,
         "decision": verdict,
         "value": value,
@@ -66,6 +67,8 @@ def decision(field: str, verdict: str, value: Any, stored: Any) -> dict[str, Any
         "answered_by": "wd1-r0-b0001",
         "quotes": QUOTES if verdict in ("keep", "replace") else [],
         "reasoning": "sources",
+        "counted_rounds": [0] if verdict in ("keep", "replace", "clear") else [],
+        "value_page": None,
     }
 
 
@@ -182,6 +185,38 @@ class TestSiteCells:
         )
         assert [v.reason for v in out] == ["not-a-curated-live-site"]
 
+    def test_a_held_field_is_neither_written_nor_cleared(self) -> None:
+        # its last answer failed only on pages the checker could not read (handoff.HELD)
+        out = cells([decision("site_type", "held", None, "City")])
+        assert [(v.column, v.reason) for v in out] == [("site_type", "held-unreadable")]
+        assert written(out) == {}
+
+    def test_a_point_is_written_whole_or_not_at_all(self) -> None:
+        # lat's journal ends elsewhere: lon and geom alone would break the site invariant (geom is
+        # its point) inside the transaction and fail the whole step at --rehearse
+        journals = {"lat": (JournalLink(9, "x", "t", "35.0", "35.2"),)}
+        out = cells(
+            [decision("coordinates", "replace", "36.5, 34.1", "35.1, 33.4")], journals=journals
+        )
+        assert written(out) == {}
+        assert {v.column: v.reason for v in out} == {
+            "lat": "journal-disagrees",
+            "lon": "point-incomplete",
+            "geom": "point-incomplete",
+        }
+
+    def test_a_start_is_written_only_with_its_label(self) -> None:
+        journals = {"period_name": (JournalLink(9, "x", "t", "x", "3000 - 1500 BC"),)}
+        out = cells([decision("period_start", "replace", "-2500", -700)], journals=journals)
+        assert written(out) == {}
+        assert {v.column: v.reason for v in out} == {
+            "period_start": "period-name-refused",
+            "period_name": "journal-disagrees",
+        }
+        apart = cells([decision("period_start", "replace", "-2500", -700)], frontend=lambda y: "?")
+        assert written(apart) == {}
+        assert [v.reason for v in apart] == ["period-name-refused", "implementations-disagree"]
+
 
 # ------------------------------------------------------------------------------ wave and step
 @pytest.fixture
@@ -228,7 +263,7 @@ def step(wave: str = "2026-09-27", number: int = 1) -> dict[str, Any]:
 class TestWaveAndStep:
     def test_the_wave_takes_the_sites_with_a_write(self, repo: Path) -> None:
         result = FP.build_wave(repo / "run", "2026-09-27")
-        assert result == {"wave": "2026-09-27", "sites": 1, "steps": 1}
+        assert result == {"wave": "2026-09-27", "sites": 1, "steps": 1, "held": 0}
         with pytest.raises(PlanError, match="planned once"):
             FP.build_wave(repo / "run", "2026-09-27")
 
@@ -257,9 +292,43 @@ class TestWaveAndStep:
         FP.build_wave(repo / "run", "2026-09-27")
         wave = FP.read_wave("2026-09-27")
         wave["steps"].append([OTHER])
-        HO._write_json(FP.wave_dir("2026-09-27") / FP.WAVE_FILE, wave)
+        FP.write_wave("2026-09-27", wave)
         with pytest.raises(PlanError, match="step 1 is not accepted"):
             step(number=2)
+
+    def test_an_edited_wave_is_refused(self, repo: Path) -> None:
+        FP.build_wave(repo / "run", "2026-09-27")
+        wave = FP.read_wave("2026-09-27")
+        wave["steps"][0].append(OTHER)
+        HO._write_json(FP.wave_dir("2026-09-27") / FP.WAVE_FILE, wave)
+        with pytest.raises(PlanError, match="not the pinned wave"):
+            step()
+
+    def test_a_step_holds_at_most_a_hundred_sites(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        FP.build_wave(repo / "run", "2026-09-27")
+        wave = FP.read_wave("2026-09-27")
+        wave["steps"][0] = [SITE, *(f"99a98235-0000-4000-8000-{n:012d}" for n in range(100))]
+        FP.write_wave("2026-09-27", wave)
+        with pytest.raises(PlanError, match="101 sites: a step holds at most 100"):
+            step()
+
+    def test_the_wave_lists_every_held_field(self, repo: Path) -> None:
+        # a site whose only decision is held is in no step: HELD.jsonl (versioned) is its record
+        held = [
+            decision("site_type", "replace", "Temple", "City"),
+            {**decision("coordinates", "unresolved", None, "35.1, 33.4"), "site_id": OTHER},
+            {**decision("period_start", "held", None, -700), "site_id": OTHER},
+        ]
+        HO._write_jsonl(repo / "run" / HO.DECISIONS_FILE, held)
+        assert FP.build_wave(repo / "run", "2026-09-27")["sites"] == 1
+        lines = HO._read_jsonl(FP.wave_dir("2026-09-27") / FP.HELD_FILE)
+        assert [(h["site_id"], h["field"], h["decision"]) for h in lines] == [
+            (OTHER, "coordinates", "unresolved"),
+            (OTHER, "period_start", "held"),
+        ]
+        assert lines[0]["reasoning"] == "sources" and lines[0]["stored"] == "35.1, 33.4"
 
     def test_changed_decisions_are_refused(self, repo: Path) -> None:
         FP.build_wave(repo / "run", "2026-09-27")
@@ -303,6 +372,49 @@ class TestTheAcceptance:
         with pytest.raises(PlanError, match="2 deviation"):
             FP.accept("2026-09-27", 1, read_rows=lambda sql: counts)
         assert not (FP.step_dir("2026-09-27", 1) / FP.ACCEPTED_FILE).exists()
+
+    def test_an_oversized_step_is_not_accepted(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self.emitted(repo)
+        monkeypatch.setattr(FP, "STEP_SITES", 0)
+        with pytest.raises(PlanError, match="a step holds at most 0"):
+            FP.accept("2026-09-27", 1, read_rows=lambda sql: [])
+
+    def test_the_hand_off_lists_what_the_accepted_steps_wrote(self, repo: Path) -> None:
+        url = "https://en.wikipedia.org/wiki/Corycus"
+        page = {"problem": None, "unreadable": False, "lang": "en",
+                "resolved_title": "Corycus (Cilicia)", "wikibase_item": "Q9"}  # fmt: skip
+        HO._write_jsonl(repo / "run" / HO.DECISIONS_FILE, [
+            {**decision("source_url", "replace", url + "_(Cilicia)", url), "value_page": page},
+            decision("period_start", "replace", "-2500", -700),
+        ])  # fmt: skip
+        FP.build_wave(repo / "run", "2026-09-27")
+        step()
+        with pytest.raises(PlanError, match="step 1 is not accepted"):
+            FP.handoff("2026-09-27")
+        lane = FP.fields_lane("2026-09-27", 1)
+        out = FP.step_dir("2026-09-27", 1)
+        records = MA.load_records(out / "PLAN.jsonl")
+        MA.emit(records, out, lane, plan_path=out / "PLAN.jsonl")
+        n = str(len(records))
+        counts = [
+            ["planned cells holding their new value", n],
+            ["journal rows for the stamp", n],
+            ["journal rows matching a planned cell exactly", n],
+            ["journal rows of another stamp on a planned cell since", "0"],
+        ]
+        FP.accept("2026-09-27", 1, read_rows=lambda sql: counts)
+        result = FP.handoff("2026-09-27")
+        assert result["sites_written"] == [SITE]
+        assert result["source_urls"] == [
+            {"site_id": SITE, "name": "Corycus", "old": url, "new": url + "_(Cilicia)",
+             "lang": "en", "resolved_title": "Corycus (Cilicia)", "wikibase_item": "Q9"}
+        ]  # fmt: skip
+        assert result["starts"] == [{"site_id": SITE, "name": "Corycus", "old": "-700",
+                                     "new": "-2500"}]  # fmt: skip
+        saved = json.loads((FP.wave_dir("2026-09-27") / FP.HANDOFF_FILE).read_text("utf-8"))
+        assert saved["source_urls"] == result["source_urls"]
 
     def test_the_acceptance_reads_every_cell_typed_and_every_invariant(self, repo: Path) -> None:
         lane, records = self.emitted(repo)
