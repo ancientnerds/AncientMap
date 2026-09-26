@@ -5125,8 +5125,8 @@ PHASE4_WRITE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write4: a held card is written into the provenance",
         P4_WRITE,
-        "    if card_held:\n        assembly = without_card(assembly)\n",
-        "    if False:  # mutant\n        assembly = without_card(assembly)\n",
+        "    if card_held or batch.descriptions_only:\n        assembly = without_card(assembly)\n",
+        "    if batch.descriptions_only:  # mutant\n        assembly = without_card(assembly)\n",
         P4_WRITE_TEST,
         "test_a_held_card_writes_the_description_with_card_null",
     ),
@@ -7246,7 +7246,7 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: a site two runs carry is taken from the last",
         P4_ACCEPT,
-        "            if site_id in found:\n",
+        "            if kept is not None and not kept.deferred and not entry.deferred:\n",
         "            if False:  # mutant\n",
         P4_ACCEPT_TEST,
         "test_a_site_two_runs_carry_is_refused",
@@ -19031,11 +19031,11 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 scope4: the pin is not the committed scope's digest",
         P4S_SCOPE,
-        'SCOPE_SHA256 = "7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003173"\n',
-        'SCOPE_SHA256 = "7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003174"'
+        'SCOPE_V2_SHA256 = "7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003173"\n',
+        'SCOPE_V2_SHA256 = "7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003174"'
         "  # mutant\n",
         P4S_SCOPE_TEST,
-        "test_the_committed_scope_is_the_pinned_one_with_the_recorded_counts",
+        "test_the_committed_version_2_is_pinned_with_the_recorded_counts",
     ),
     (
         "p4 scope4: a site list that is not its digest is read",
@@ -21015,8 +21015,8 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 d9 scope4: version 2 records version 1's decision alone",
         P4D9_SCOPE,
-        'DECISIONS: Mapping[int, str] = {1: DECISION, 2: f"{DECISION} {ORDER_2026_09_25}"}\n',
-        "DECISIONS: Mapping[int, str] = {1: DECISION, 2: DECISION}  # mutant\n",
+        '    2: f"{DECISION} {ORDER_2026_09_25}",\n',
+        "    2: DECISION,  # mutant\n",
         P4D9_SCOPE_TEST,
         P4D9_V2,
     ),
@@ -21057,26 +21057,26 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 d9 plan4: the list plan asks an earlier plan's site again",
         P4D9_PLAN,
-        "        site for site in sites[pilot:] if site.site_id in listed and site.site_id not in "
-        "earlier\n",
-        "        site for site in sites[pilot:] if site.site_id in listed  # mutant\n",
+        "        if site.site_id in listed and site.site_id not in earlier and site.site_id not in "
+        "excluded\n",
+        "        if site.site_id in listed and site.site_id not in excluded  # mutant\n",
         P4D9_SCOPE_TEST,
         P4D9_LIST_PLAN,
     ),
     (
         "p4 d9 plan4: the list plan asks the pilot's sites again",
         P4D9_PLAN,
-        "        site for site in sites[pilot:] if site.site_id in listed and site.site_id not in "
-        "earlier\n",
-        "        site for site in sites if site.site_id in listed and site.site_id not in earlier"
-        "  # mutant\n",
+        "        for site in sites[pilot:]\n        if site.site_id in listed and site.site_id not in "
+        "earlier",
+        "        for site in sites  # mutant\n        if site.site_id in listed and site.site_id not "
+        "in earlier",
         P4D9_SCOPE_TEST,
         P4D9_LIST_PLAN,
     ),
     (
         "p4 d9 plan4: the list plan is numbered after the earlier plans",
         P4D9_PLAN,
-        "    batches = batches_after([site.to_dict() for site in tail], LIST_PLAN_FIRST_BATCH - 1)\n",
+        "    batches = batches_after([site.to_dict() for site in tail], first_batch - 1)\n",
         "    batches = batches_after([site.to_dict() for site in tail], taken)  # mutant\n",
         P4D9_SCOPE_TEST,
         P4D9_BLOCK,
@@ -21084,7 +21084,7 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 d9 plan4: an earlier plan inside the block is not refused",
         P4D9_PLAN,
-        "    if taken >= LIST_PLAN_FIRST_BATCH:\n",
+        "    if taken >= first_batch:\n",
         "    if False:  # mutant\n",
         P4D9_SCOPE_TEST,
         P4D9_BLOCK,
@@ -21100,8 +21100,8 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 d9 plan4: an empty list plan is written",
         P4D9_PLAN,
-        '    if not tail:\n        raise R.InputError(f"no site of the list',
-        '    if False:  # mutant\n        raise R.InputError(f"no site of the list',
+        '    if not tail:\n        raise R.InputError(f"no site of {',
+        '    if False:  # mutant\n        raise R.InputError(f"no site of {',
         P4D9_SCOPE_TEST,
         P4D9_ACCOUNTED,
     ),
@@ -21116,15 +21116,16 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 d9 plan4: --scope-list is taken without --after",
         P4D9_PLAN,
-        "    if args.scope_list and (args.defect_scope or not args.pilot or not args.after):\n",
-        "    if args.scope_list and (args.defect_scope or not args.pilot):  # mutant\n",
+        "        args.defect_scope or not args.pilot or not args.after or args.first_batch is None\n",
+        "        args.defect_scope or not args.pilot or args.first_batch is None  # mutant\n",
         P4D9_SCOPE_TEST,
         P4D9_ARGS,
     ),
     (
         "p4 d9 plan4: the list summary hides the sites earlier plans carry",
         P4D9_PLAN,
-        '        "carried_by_earlier_plans": [site_id for site_id in listed if site_id in carried],\n',
+        '        "carried_by_earlier_plans": [s for s in listed if s in carried and s not in '
+        "handed_ids],\n",
         '        "carried_by_earlier_plans": [],  # mutant\n',
         P4D9_SCOPE_TEST,
         P4D9_BUILD,
@@ -21140,7 +21141,7 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 d9 plan4: scope version 2 is built without the D1 listing",
         P4D9_PLAN,
-        "    if S.D1_MARKER_WITHOUT_ENTRY in S.VERSION_LISTS.get(args.version, ()):\n",
+        "    if S.D1_MARKER_WITHOUT_ENTRY in carried:\n",
         "    if False:  # mutant\n",
         P4D9_SCOPE_TEST,
         "test_plan4_scope_writes_version_2_with_the_d1_listing",
@@ -21173,6 +21174,506 @@ P4_D9_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += P4_D9_MUTATIONS
+
+#: 2026-09-26, lane WA (owner decisions O1-O11, REPAIR_TEXTS_2026-09-26.md): scope version 3 adds the
+#: two March lists from one read-only production read; a plan of them writes descriptions only (its
+#: batches carry the mark P4 and P5 read, kept through a re-queue); `plan4 build` takes several lists,
+#: a first batch outside lane L's block, exclusions and the deferred sites of an earlier run; the
+#: acceptance reads a site one run deferred from the run that wrote it; `handoff4` briefs one batch's
+#: agent and checks an answer against the question's own pool or assembly. Each case breaks one
+#: guard and names the test that goes red.
+P4V3_SCOPE = "scripts/remediation/phase4/scope4.py"
+P4V3_PLAN = "scripts/remediation/phase4/plan4.py"
+P4V3_MASS = "scripts/remediation/phase4/mass4.py"
+P4V3_WRITE = "scripts/remediation/phase4/write4.py"
+P4V3_GATE = "output/remediation/tools/write_gate4.py"
+P4V3_ACCEPT = "output/remediation/tools/verify_writes4.py"
+P4V3_HANDOFF = "scripts/remediation/phase4/handoff4.py"
+P4V3_TEST = "tests/remediation/test_phase4_v3.py"
+P4V3_SCOPE_TEST = "tests/remediation/test_phase4_scope.py"
+P4V3_ACCEPT_TEST = "tests/remediation/test_phase4_accept.py"
+P4V3_LISTS = "test_the_march_lists_are_the_live_marking_and_the_card_no_live_p5_write_put_there"
+P4V3_SHAPE = "test_a_march_row_of_another_shape_is_refused"
+P4V3_V3 = "test_version_3_is_version_2_and_the_two_march_lists"
+P4V3_MARK = "test_a_plan_of_a_version_3_list_writes_descriptions_only"
+P4V3_EXCLUDE = "test_an_excluded_site_is_left_out_and_accounted_for"
+P4V3_EXCLUDE_FILE = "test_an_exclude_file_is_read_strictly"
+P4V3_BLOCK = "test_the_first_batch_lies_past_every_earlier_plan_and_outside_lane_ls_block"
+P4V3_TAKE = "test_build_takes_over_the_deferred_sites_an_earlier_plan_carries"
+P4V3_CARRIED = "test_a_plans_pass_is_carried_into_its_lines_and_its_re_queue"
+P4V3_PASSES = "test_a_plan_of_lane_l_or_of_two_passes_is_refused"
+P4V3_LOAD = "test_load_batch_reads_the_descriptions_only_mark"
+P4V3_CARD_NULL = "test_a_descriptions_only_site_is_written_with_card_null"
+P4V3_DEFERRED = "test_a_site_one_run_deferred_and_a_later_run_wrote_is_the_later_runs"
+P4V3_DEFERRAL = "test_a_deferral_is_a_too_fresh_site_hold_of_a_site_the_batch_did_not_assemble"
+P4V3_SELECT = "test_check_answer_reads_the_selection_through_the_stages_own_parser"
+P4V3_MOVED = "test_check_answer_refuses_a_question_the_batch_no_longer_builds"
+P4V3_REVIEW = "test_check_answer_reads_the_review_whole"
+P4V3_READY = "test_ready_names_the_batches_whose_every_question_is_answered"
+P4V3_BRIEF = "test_the_brief_names_the_batch_its_files_its_scratch_and_its_agent"
+
+P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── scope4: the March lists ───────────────────────────────────────────────────────────────
+    (
+        "p4 v3 scope4: a retired site is listed",
+        P4V3_SCOPE,
+        '        if row["scope_status"] == RETIRED:\n            continue\n',
+        "        if False:  # mutant\n            continue\n",
+        P4V3_TEST,
+        P4V3_LISTS,
+    ),
+    (
+        "p4 v3 scope4: a live Phase-5 card is a March card",
+        P4V3_SCOPE,
+        '        if row["card"] and not row["live_p5"]:\n',
+        '        if row["card"]:  # mutant\n',
+        P4V3_TEST,
+        P4V3_LISTS,
+    ),
+    (
+        "p4 v3 scope4: a March row of another shape is read",
+        P4V3_SCOPE,
+        "        if set(row) != MARCH_ROW_KEYS:\n",
+        "        if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_SHAPE,
+    ),
+    (
+        "p4 v3 scope4: a non-boolean card flag is read as one",
+        P4V3_SCOPE,
+        "            if not isinstance(row[key], bool):\n",
+        "            if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_SHAPE,
+    ),
+    (
+        "p4 v3 scope4: a site read twice is taken",
+        P4V3_SCOPE,
+        "        if site_id in seen:\n",
+        "        if False:  # mutant\n",
+        P4V3_TEST,
+        "test_a_site_read_twice_is_refused",
+    ),
+    (
+        "p4 v3 scope4: the March read may name other sites than S0",
+        P4V3_SCOPE,
+        "        if read != known:\n",
+        "        if False:  # mutant\n",
+        P4V3_TEST,
+        "test_the_march_read_names_exactly_the_s0_rows_sites",
+    ),
+    (
+        "p4 v3 scope4: version 3 is built without the March read",
+        P4V3_SCOPE,
+        "    if bool(march_rows) != (MARCH_DESCRIPTION in carried):\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        "test_version_3_needs_the_march_read_and_no_earlier_version_takes_it",
+    ),
+    (
+        "p4 v3 scope4: version 3 records no March method",
+        P4V3_SCOPE,
+        "    3: {**METHODS, **D1_METHOD, **MARCH_METHODS},\n",
+        "    3: {**METHODS, **D1_METHOD},  # mutant\n",
+        P4V3_TEST,
+        P4V3_V3,
+    ),
+    (
+        "p4 v3 scope4: version 2 is read from the current file",
+        P4V3_SCOPE,
+        "    if version == 2:\n        return SCOPE_V2_FILE, SCOPE_V2_SHA256\n",
+        "    if version == 2:\n        return SCOPE_FILE, SCOPE_SHA256  # mutant\n",
+        P4V3_SCOPE_TEST,
+        "test_each_version_is_read_from_its_own_pinned_file_and_is_that_version",
+    ),
+    (
+        "p4 v3 scope4: the pin is not the committed version 3's digest",
+        P4V3_SCOPE,
+        'SCOPE_SHA256 = "fb775d0e5563d9d441c7b7a33bd6e96016a5ac2f9db9524c566f10aeb84ad0ef"\n',
+        'SCOPE_SHA256 = "fb775d0e5563d9d441c7b7a33bd6e96016a5ac2f9db9524c566f10aeb84ad0ee"'
+        "  # mutant\n",
+        P4V3_TEST,
+        "test_the_committed_version_3_is_the_pinned_one_with_the_recorded_counts",
+    ),
+    (
+        "p4 v3 scope4: one March list is planned with cards",
+        P4V3_SCOPE,
+        "DESCRIPTIONS_ONLY_LISTS = (MARCH_DESCRIPTION, MARCH_CARD)\n",
+        "DESCRIPTIONS_ONLY_LISTS = (MARCH_CARD,)  # mutant\n",
+        P4V3_TEST,
+        "test_the_descriptions_only_lists_are_the_lists_version_3_added",
+    ),
+    (
+        "p4 v3 scope: the audit log loses scope version 3's digest",
+        "output/remediation/AUDIT_LOG.md",
+        "`fb775d0e5563d9d441c7b7a33bd6e96016a5ac2f9db9524c566f10aeb84ad0ef`",
+        "`mutant`",
+        P4V3_SCOPE_TEST,
+        "test_the_audit_log_records_the_pinned_scope",
+    ),
+    # ── plan4: the read and the plan ──────────────────────────────────────────────────────────
+    (
+        "p4 v3 plan4: a reverted Phase-5 write still counts as live",
+        P4V3_PLAN,
+        "    f\"AND NOT {RV._reversed('j')}) AS live_p5 \"\n",
+        '    ") AS live_p5 "  # mutant\n',
+        P4V3_TEST,
+        "test_the_march_read_is_one_select_that_reads_reversals_as_revert4_does",
+    ),
+    (
+        "p4 v3 plan4: read-march sends another statement",
+        P4V3_PLAN,
+        "    return W._json_rows(runner(MARCH_SQL, host=host))\n",
+        "    return W._json_rows(runner(PLAN_SQL, host=host))  # mutant\n",
+        P4V3_TEST,
+        "test_read_march_writes_the_rows_and_counts_the_lists",
+    ),
+    (
+        "p4 v3 plan4: scope version 3 is built without --march",
+        P4V3_PLAN,
+        "    if S.MARCH_DESCRIPTION in carried:\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        "test_plan4_scope_writes_version_3_with_the_march_read",
+    ),
+    (
+        "p4 v3 plan4: a version-3 plan loses its descriptions-only mark",
+        P4V3_PLAN,
+        "    mark = S.DESCRIPTIONS_ONLY_MARK if wanted & set(S.DESCRIPTIONS_ONLY_LISTS) else None\n",
+        "    mark = None  # mutant\n",
+        P4V3_TEST,
+        P4V3_MARK,
+    ),
+    (
+        "p4 v3 plan4: every list plan is marked descriptions-only",
+        P4V3_PLAN,
+        "    mark = S.DESCRIPTIONS_ONLY_MARK if wanted & set(S.DESCRIPTIONS_ONLY_LISTS) else None\n",
+        "    mark = S.DESCRIPTIONS_ONLY_MARK  # mutant\n",
+        P4V3_TEST,
+        P4V3_MARK,
+    ),
+    (
+        "p4 v3 plan4: an excluded site is planned",
+        P4V3_PLAN,
+        "        if site.site_id in listed and site.site_id not in earlier and site.site_id not in "
+        "excluded\n",
+        "        if site.site_id in listed and site.site_id not in earlier  # mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE,
+    ),
+    (
+        "p4 v3 plan4: an exclusion that is no curated row passes",
+        P4V3_PLAN,
+        '    if stray:\n        raise R.InputError(\n            f"--exclude names',
+        '    if False:  # mutant\n        raise R.InputError(\n            f"--exclude names',
+        P4V3_TEST,
+        P4V3_EXCLUDE,
+    ),
+    (
+        "p4 v3 plan4: an exclusion line that is no site id is read",
+        P4V3_PLAN,
+        "            uuid.UUID(text)\n",
+        "            text.strip()  # mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 plan4: an exclusion listed twice is read",
+        P4V3_PLAN,
+        "        if text in ids:\n",
+        "        if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 plan4: a plan numbered into lane L's block passes",
+        P4V3_PLAN,
+        "    if block.start < lane_l.stop and lane_l.start < block.stop:\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_BLOCK,
+    ),
+    (
+        "p4 v3 plan4: lane L's block is not its plan's length",
+        P4V3_PLAN,
+        "    return range(L4.FIRST_BATCH, L4.FIRST_BATCH + -(-curated // BATCH_SIZE))\n",
+        "    return range(L4.FIRST_BATCH, L4.FIRST_BATCH + 1)  # mutant\n",
+        P4V3_TEST,
+        P4V3_BLOCK,
+    ),
+    (
+        "p4 v3 plan4: a list plan's flags are taken without a list",
+        P4V3_PLAN,
+        "    if not args.scope_list and (args.first_batch is not None or args.exclude or "
+        "args.take_deferred):\n",
+        "    if False:  # mutant\n",
+        P4V3_SCOPE_TEST,
+        "test_build_with_a_scope_list_needs_the_pilot_and_the_earlier_plans",
+    ),
+    (
+        "p4 v3 plan4: the summary prints the excluded ids",
+        P4V3_PLAN,
+        '            "sites": len(excluded),\n',
+        '            "sites": excluded,  # mutant\n',
+        P4V3_TEST,
+        "test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest",
+    ),
+    (
+        "p4 v3 plan4: a deferred site stays the earlier plan's",
+        P4V3_PLAN,
+        "        earlier=carried - handed_ids,\n",
+        "        earlier=carried,  # mutant\n",
+        P4V3_TEST,
+        P4V3_TAKE,
+    ),
+    (
+        "p4 v3 plan4: a deferred site no list names is taken over",
+        P4V3_PLAN,
+        "    if unlisted:\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_TAKE,
+    ),
+    (
+        "p4 v3 plan4: a deferred site is taken over without its run's plan among --after",
+        P4V3_PLAN,
+        "    if uncarried:\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_TAKE,
+    ),
+    # ── mass4: the pass and the hand-over ─────────────────────────────────────────────────────
+    (
+        "p4 v3 mass4: a deferred site is handed over before its 48 h",
+        P4V3_MASS,
+        '    if waiting:\n        raise MR.PlanError(\n            f"{run_dir}: {len(waiting)}',
+        '    if False:  # mutant\n        raise MR.PlanError(\n            f"{run_dir}: {len(waiting)}',
+        P4V3_TEST,
+        "test_a_run_hands_over_its_deferred_sites_once_every_one_is_ready",
+    ),
+    (
+        "p4 v3 mass4: a site the run re-queued itself is handed over",
+        P4V3_MASS,
+        "        if mine:\n",
+        "        if False:  # mutant\n",
+        P4V3_TEST,
+        "test_a_run_that_re_queued_a_deferred_site_itself_keeps_it",
+    ),
+    (
+        "p4 v3 mass4: a re-queued batch loses its plan's pass",
+        P4V3_MASS,
+        "            pass_name=mark,\n        )\n        for k, start in enumerate",
+        "            pass_name=None,  # mutant\n        )\n        for k, start in enumerate",
+        P4V3_TEST,
+        P4V3_CARRIED,
+    ),
+    (
+        "p4 v3 mass4: a plan line's pass is not written",
+        P4V3_MASS,
+        "            batch_id=self.batch_id, ordinal=self.ordinal, sites=sites, "
+        "pass_name=self.pass_name\n",
+        "            batch_id=self.batch_id, ordinal=self.ordinal, sites=sites  # mutant\n",
+        P4V3_TEST,
+        P4V3_CARRIED,
+    ),
+    (
+        "p4 v3 mass4: lane L's plan is driven",
+        P4V3_MASS,
+        "    if found is not None and found != S.DESCRIPTIONS_ONLY_MARK:\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_PASSES,
+    ),
+    (
+        "p4 v3 mass4: a plan of two passes is driven",
+        P4V3_MASS,
+        "    if len({line.pass_name for line in lines}) != 1:\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_PASSES,
+    ),
+    (
+        "p4 v3 mass4: a re-queue line without its plan's pass is read",
+        P4V3_MASS,
+        "        if line_pass(row, where) != mark:\n",
+        "        if False:  # mutant\n",
+        P4V3_TEST,
+        "test_a_re_queue_line_without_its_plans_pass_is_refused",
+    ),
+    (
+        "p4 v3 mass4: the dry run hides the done batches",
+        P4V3_MASS,
+        """        print(f"done          {','.join(done) if done else '-'}")\n""",
+        "        pass  # mutant\n",
+        P4V3_TEST,
+        "test_the_dry_run_names_the_done_batches_the_write_gate_may_plan",
+    ),
+    # ── write4 and the gate: descriptions only ────────────────────────────────────────────────
+    (
+        "p4 v3 write4: the mark is not read",
+        P4V3_WRITE,
+        "        descriptions_only=mark == S.DESCRIPTIONS_ONLY_MARK,\n",
+        "        descriptions_only=False,  # mutant\n",
+        P4V3_TEST,
+        P4V3_LOAD,
+    ),
+    (
+        "p4 v3 write4: an unknown pass is read as none",
+        P4V3_WRITE,
+        "    if mark is not None and mark != S.DESCRIPTIONS_ONLY_MARK:\n        raise PlanInputError(",
+        "    if False:  # mutant\n        raise PlanInputError(",
+        P4V3_TEST,
+        P4V3_LOAD,
+    ),
+    (
+        "p4 v3 write4: a descriptions-only site is written with its card",
+        P4V3_WRITE,
+        "    if card_held or batch.descriptions_only:\n",
+        "    if card_held:  # mutant\n",
+        P4V3_TEST,
+        P4V3_CARD_NULL,
+    ),
+    (
+        "p4 v3 write4: the journal does not say why the card is withheld",
+        P4V3_WRITE,
+        '    if batch.descriptions_only:\n        evidence["card_withheld"] = (',
+        '    if False:  # mutant\n        evidence["card_withheld"] = (',
+        P4V3_TEST,
+        P4V3_CARD_NULL,
+    ),
+    (
+        "p4 v3 write4: P5 plans a descriptions-only site's card",
+        P4V3_WRITE,
+        "        elif batch.descriptions_only:\n",
+        "        elif False:  # mutant\n",
+        P4V3_TEST,
+        "test_p5_plans_no_card_and_no_clear_for_a_descriptions_only_batch",
+    ),
+    (
+        "p4 v3 write_gate4: the descriptions-only batches are not named",
+        P4V3_GATE,
+        "        only = sum(batch.descriptions_only for batch in batches)\n",
+        "        only = 0  # mutant\n",
+        P4V3_TEST,
+        "test_the_gate_names_the_descriptions_only_batches",
+    ),
+    # ── verify_writes4: a site one run deferred ───────────────────────────────────────────────
+    (
+        "p4 v3 verify_writes4: an assembled site counts as deferred",
+        P4V3_ACCEPT,
+        "    return assembly is None and any(\n",
+        "    return any(  # mutant\n",
+        P4V3_ACCEPT_TEST,
+        P4V3_DEFERRAL,
+    ),
+    (
+        "p4 v3 verify_writes4: a card-scope hold defers the site",
+        P4V3_ACCEPT,
+        "        and hold.scope is M.HoldScope.SITE\n",
+        "        and True  # mutant\n",
+        P4V3_ACCEPT_TEST,
+        P4V3_DEFERRAL,
+    ),
+    (
+        "p4 v3 verify_writes4: the deferring run's entry is kept",
+        P4V3_ACCEPT,
+        "            if kept is None or kept.deferred:\n",
+        "            if kept is None:  # mutant\n",
+        P4V3_ACCEPT_TEST,
+        P4V3_DEFERRED,
+    ),
+    (
+        "p4 v3 verify_writes4: no run's deferral is read",
+        P4V3_ACCEPT,
+        "                batch_dir, site, assembly, deferred_in(site_id, holds, assembly)\n",
+        "                batch_dir, site, assembly, False  # mutant\n",
+        P4V3_ACCEPT_TEST,
+        P4V3_DEFERRED,
+    ),
+    # ── handoff4: the brief, the check, the ready batches ─────────────────────────────────────
+    (
+        "p4 v3 handoff4: the selection is not parsed",
+        P4V3_HANDOFF,
+        "        SEL.parse_selection(site_id, text, pool)\n",
+        "        pass  # mutant\n",
+        P4V3_TEST,
+        P4V3_SELECT,
+    ),
+    (
+        "p4 v3 handoff4: the selector's prompt is not compared with the export",
+        P4V3_HANDOFF,
+        "    _exported(line, prompt.render())\n",
+        "    prompt.render()  # mutant\n",
+        P4V3_TEST,
+        P4V3_MOVED,
+    ),
+    (
+        "p4 v3 handoff4: a moved question's digest is not compared",
+        P4V3_HANDOFF,
+        '    if OH.prompt_sha256(prompt) != line["prompt_sha256"]:\n',
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_MOVED,
+    ),
+    (
+        "p4 v3 handoff4: a review is not read whole",
+        P4V3_HANDOFF,
+        "    return review_lines_problem(verdict, sentences=len(built.sentences), card=card)\n",
+        "    return None  # mutant\n",
+        P4V3_TEST,
+        P4V3_REVIEW,
+    ),
+    (
+        "p4 v3 handoff4: a sentence named twice passes",
+        P4V3_HANDOFF,
+        "    if sorted(numbers) != wanted:\n",
+        "    if not set(wanted) <= set(numbers):  # mutant\n",
+        P4V3_TEST,
+        P4V3_REVIEW,
+    ),
+    (
+        "p4 v3 handoff4: a missing CARD line passes",
+        P4V3_HANDOFF,
+        "    if cards != (1 if card else 0):\n",
+        "    if cards > 1:  # mutant\n",
+        P4V3_TEST,
+        P4V3_REVIEW,
+    ),
+    (
+        "p4 v3 handoff4: a batch with missing answers is ready",
+        P4V3_HANDOFF,
+        '    done = sorted(b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] '
+        "== 0)\n",
+        "    done = sorted(per)  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY,
+    ),
+    (
+        "p4 v3 handoff4: an orphan answer file passes",
+        P4V3_HANDOFF,
+        '        "ok": not (result.stale or result.malformed or result.orphans or waiting),\n',
+        '        "ok": not (result.stale or result.malformed or waiting),  # mutant\n',
+        P4V3_TEST,
+        P4V3_READY,
+    ),
+    (
+        "p4 v3 handoff4: every agent answers under one name",
+        P4V3_HANDOFF,
+        '    return f"opus-{handoff.resolve().name}-{batch_id}"\n',
+        '    return "opus-agent"  # mutant\n',
+        P4V3_TEST,
+        P4V3_BRIEF,
+    ),
+    (
+        "p4 v3 handoff4: the agents of one directory share a scratch folder",
+        P4V3_HANDOFF,
+        '    return root.parent / f"{root.name}-scratch" / batch_id\n',
+        '    return root.parent / f"{root.name}-scratch"  # mutant\n',
+        P4V3_TEST,
+        P4V3_BRIEF,
+    ),
+]
+MUTATIONS += P4_V3_MUTATIONS
 
 # ── the fixes of the 2026-09-25 code audit (`output/remediation/CODE_AUDIT_2026-09-25.md`) ───────
 # Every name starts with "audit-fix:", so the list runs on its own: `mutation_sweep.py audit-fix:`.

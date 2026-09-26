@@ -70,13 +70,18 @@ Which lanes may write (`--open-lanes`) is the pilot's verdict, and lanes T and R
 audit's cleared list (`--audited`, one site id per line). The verifier is `phase4.verify4`
 (`verify_site`, V1-V15), imported when group P4 is planned.
 
-**P4 and P5 plan under the owner's defect scope** (decision 2026-09-23, `phase4/scope4.py`):
-`SCOPE4.json`, read only when its bytes hash to the pin in `scope4.SCOPE_SHA256`. A site outside it
+**P4 and P5 plan under the owner's defect scope** (decision 2026-09-23, `phase4/scope4.py`): the
+current version's file (`SCOPE4.v3.json` since 2026-09-26), read only when its bytes hash to the pin
+in `scope4.SCOPE_SHA256`. A site outside it
 is refused (`outside-defect-scope`, counted on the "refused by rule" line) in both. There is no flag
 to switch it off: it is the owner's standing decision, and a new scope is a new pinned version,
 never an option of this tool. **Lane L is not scoped** (decision 2026-09-24, "Alle kennzeichnen"):
 it writes no text, only the provenance that shows the existing AI footnote, so it marks every
 March-AI text Phase 4 did not write, and the gate neither reads nor asks the scope for it.
+**A descriptions-only run** (scope version 3's plan, whose batches carry
+`scope4.DESCRIPTIONS_ONLY_MARK`) is written by P4 alone, each description with `card: null`; P5
+refuses all of its sites (`descriptions-only-plan`), so its P5 group is never run and nothing waits
+for it: lane WB writes those cards (owner decisions 2026-09-26, O2 and O3).
 
 **Lane L plans from its own plan, never from a run** (`--legacy-plan`, written by `plan4.py legacy`
 from a fresh read-only `plan4.py read`): every curated site, in batches of 15 numbered from p4-1001,
@@ -936,6 +941,12 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
             f"{sum(site_id in scope for site_id in site_ids)} of the run's {len(site_ids)} sites"
         )
         options = {"scope": scope}
+        only = sum(batch.descriptions_only for batch in batches)
+        print(
+            f"descriptions-only batches ({S.DESCRIPTIONS_ONLY_MARK}): {only} of {len(batches)} - "
+            "P4 writes their descriptions with card: null, P5 plans none of their sites (owner "
+            "decisions 2026-09-26, O2 and O3: lane WB writes the cards)"
+        )
     if group is W4.Group.P4:
         options["open_lanes"] = open_lanes(args.open_lanes)
         if not options["open_lanes"]:

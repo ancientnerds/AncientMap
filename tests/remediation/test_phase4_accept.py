@@ -753,6 +753,25 @@ def test_a_written_row_an_allowed_later_lane_changed_is_superseded_not_carried(
     )
 
 
+def test_a_teaser_provenance_on_a_descriptions_only_site_is_superseded_under_wbs_stamp(
+    tmp_path: Path,
+) -> None:
+    """Lane WA's runbook, section 10: a scope-v3 site is written with `card: null`, and lane WB
+    later writes its `_card_provenance` into the same `raw_data` (stamp `wb-teaser-prov-sNNN`).
+    Every later p4 acceptance names WB's pattern: the row is superseded and not re-verified as
+    P4's (V12 would refuse a key P4 never planned); without it the row is CHANGED LATER."""
+    written = written_p4(tmp_path, card_held=True)
+    raw = written.production.sites[SITE_ID]["raw_data"]
+    teaser = dict(raw, _card_provenance={"text_sha256": "e" * 64})
+    _later(written, old=raw, new=teaser, stamp="wb-teaser-prov-s001")
+    assert any(
+        d.startswith("CHANGED LATER") for d in accept(written, tmp_path, allow_stamp=["phase4l:%"])
+    )
+    result = _accept4(written, allowed=("phase4l:%", "wb-teaser-prov-%"))
+    assert (result.deviations, result.superseded) == ([], {"wb-teaser-prov-%": 1})
+    assert accept(written, tmp_path, allow_stamp=["phase4l:%", "wb-teaser-prov-%"]) == []
+
+
 def test_the_lane_never_supersedes_itself(tmp_path: Path) -> None:
     """A pattern that also matches the lane's own stamps does not make the lane's own later links a
     later lane's: a reversal under another key and a second write stay CHANGED LATER."""
@@ -800,7 +819,7 @@ def test_main_takes_repeatable_allowed_stamps_and_the_gate_reads_its_lane_line(
     )
 
 
-#: The D9 run's P4 stamp (owner order 2026-09-25; `plan4.LIST_PLAN_FIRST_BATCH`).
+#: The D9 run's P4 stamp (owner order 2026-09-25; `plan4.py build --first-batch 901`).
 D9_STAMP = "phase4:p4-0901:chunk-0001"
 
 
@@ -1173,6 +1192,62 @@ def test_a_site_two_runs_carry_is_refused(tmp_path: Path) -> None:
     second = written_p4(tmp_path / "b")
     with pytest.raises(SystemExit, match="is in two runs"):
         A.index_runs([first.run_dir, second.run_dir])
+
+
+def _deferring_mass_run(tmp_path: Path, case: Case, *, hold: M.Hold | None) -> Path:
+    """A run whose batch planned the case's site and assembled nothing for it: with `hold`, the
+    run's own reason (the mass run's `revision-too-fresh`, 2026-09-24)."""
+    batch_dir = tmp_path / "runs" / "mass" / "p4-0010"
+    batch_dir.mkdir(parents=True)
+    batch = {"batch_id": "p4-0010", "ordinal": 10, "sites": [case.site.to_dict()]}
+    (batch_dir / M.INPUT_FILE).write_text(json.dumps(batch) + "\n", encoding="utf-8")
+    lane = M.LaneAssignment(site_id=SITE_ID, lane=M.Lane.ZERO, sources=(), detail="held in S1")
+    (batch_dir / M.LANES_FILE).write_text(M.dump_jsonl([lane]), encoding="utf-8")
+    (batch_dir / M.ASSEMBLY_FILE).write_text("", encoding="utf-8")
+    (batch_dir / M.HOLDS_FILE).write_text(
+        M.dump_jsonl([] if hold is None else [hold]), encoding="utf-8"
+    )
+    return batch_dir.parent
+
+
+def _too_fresh(scope: M.HoldScope = M.HoldScope.SITE) -> M.Hold:
+    return M.Hold(
+        site_id=SITE_ID,
+        scope=scope,
+        reason=M.HoldReason.REVISION_TOO_FRESH,
+        detail="S1: revision 7 of 'Stone Temple' was 9.5 h old at 2026-09-24T21:30:42Z",
+    )
+
+
+def test_a_site_one_run_deferred_and_a_later_run_wrote_is_the_later_runs(tmp_path: Path) -> None:
+    """Scope version 3 (2026-09-26): the mass run held 19 sites `revision-too-fresh` and the v3
+    plan took them over (`plan4 --take-deferred`). Both runs carry the site; only the later one
+    can have assembled it, so its pinned texts are the ones re-verified - in either order."""
+    written = written_p4(tmp_path)
+    mass = _deferring_mass_run(tmp_path, make_case(), hold=_too_fresh())
+    for runs in ([mass, written.run_dir], [written.run_dir, mass]):
+        entry = A.index_runs(runs)[SITE_ID]
+        assert entry.batch_dir == written.run_dir / "p4-0001" and not entry.deferred
+    assert A.index_run(mass)[SITE_ID].deferred
+    assert accept(written, tmp_path, run=[str(mass), str(written.run_dir)]) == []
+
+
+@pytest.mark.parametrize("hold", [None, _too_fresh(M.HoldScope.CARD)], ids=["no-hold", "card-hold"])
+def test_a_site_two_runs_carry_without_a_deferral_is_still_refused(tmp_path: Path, hold) -> None:
+    written = written_p4(tmp_path)
+    mass = _deferring_mass_run(tmp_path, make_case(), hold=hold)
+    with pytest.raises(SystemExit, match="is in two runs"):
+        A.index_runs([mass, written.run_dir])
+
+
+def test_a_deferral_is_a_too_fresh_site_hold_of_a_site_the_batch_did_not_assemble() -> None:
+    case = make_case()
+    assert A.deferred_in(SITE_ID, [_too_fresh()], None)
+    assert not A.deferred_in(SITE_ID, [_too_fresh()], case.assembly)
+    assert not A.deferred_in(SITE_ID, [_too_fresh(M.HoldScope.CARD)], None)
+    assert not A.deferred_in("another-site", [_too_fresh()], None)
+    other = M.Hold(site_id=SITE_ID, scope=M.HoldScope.SITE, reason=M.HoldReason.V9, detail="d")
+    assert not A.deferred_in(SITE_ID, [other], None)
 
 
 def test_a_batch_without_a_written_site_is_not_read(tmp_path: Path) -> None:

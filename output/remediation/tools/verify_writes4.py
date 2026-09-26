@@ -78,6 +78,7 @@ from census.tests import t08_citation_markers as T08  # noqa: E402 - on sys.path
 from journal_chain import ROLLBACK_SUFFIX  # noqa: E402
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402 - utf8_streams, the writers' stream rule
+from phase4 import batch4 as B  # noqa: E402 - the stages' own holds reader
 from phase4 import model4 as M  # noqa: E402
 from phase4 import verify4 as V4  # noqa: E402
 
@@ -472,11 +473,25 @@ def read_production(
 
 @dataclass(frozen=True)
 class RunSite:
-    """One site of the run: its batch, its plan record and its assembly (None if it had none)."""
+    """One site of the run: its batch, its plan record and its assembly (None if it had none), and
+    whether the run deferred it (`deferred_in`)."""
 
     batch_dir: pathlib.Path
     site: M.PlanSite
     assembly: M.Assembly | None
+    deferred: bool
+
+
+def deferred_in(site_id: str, holds: Iterable[M.Hold], assembly: M.Assembly | None) -> bool:
+    """The batch held the site `revision-too-fresh` (site scope) and assembled nothing for it: the
+    run deferred it to a later batch or a later run (`mass4` re-queue, `plan4 --take-deferred`) and
+    wrote nothing of it."""
+    return assembly is None and any(
+        hold.site_id == site_id
+        and hold.scope is M.HoldScope.SITE
+        and hold.reason is M.HoldReason.REVISION_TOO_FRESH
+        for hold in holds
+    )
 
 
 def batch_site_ids(batch_dir: pathlib.Path) -> set[str]:
@@ -500,8 +515,12 @@ def index_run(run_dir: pathlib.Path, written: Iterable[str] | None = None) -> di
         except (FileNotFoundError, ValueError) as exc:
             raise SystemExit(f"{batch_dir}: the batch cannot be read: {exc}") from exc
         assemblies = {assembly.site_id: assembly for assembly in inputs.assemblies}
+        holds = B.read_holds(batch_dir)
         for site_id, site in inputs.sites.items():
-            found[site_id] = RunSite(batch_dir, site, assemblies.get(site_id))
+            assembly = assemblies.get(site_id)
+            found[site_id] = RunSite(
+                batch_dir, site, assembly, deferred_in(site_id, holds, assembly)
+            )
     return found
 
 
@@ -509,17 +528,20 @@ def index_runs(
     run_dirs: Iterable[pathlib.Path], written: Iterable[str] | None = None
 ) -> dict[str, RunSite]:
     """`index_run` over every run a lane was written from (the pilot's and the mass run's share the
-    `phase4:` stamps). A site two runs carry is refused: which run's pinned texts it was written
-    from would be a guess."""
+    `phase4:` stamps). A site two runs carry is refused - which run's pinned texts it was written
+    from would be a guess - unless every run but one deferred it (`RunSite.deferred`): a site the
+    mass run held `revision-too-fresh` and a later plan took over (`plan4 --take-deferred`) is the
+    later run's, the only one that can have assembled it. A site every run deferred is the last
+    one's; none of them wrote it."""
     wanted = None if written is None else set(written)
     found: dict[str, RunSite] = {}
     for run_dir in run_dirs:
         for site_id, entry in index_run(run_dir, wanted).items():
-            if site_id in found:
-                raise SystemExit(
-                    f"{site_id} is in two runs: {found[site_id].batch_dir.parent} and {run_dir}"
-                )
-            found[site_id] = entry
+            kept = found.get(site_id)
+            if kept is not None and not kept.deferred and not entry.deferred:
+                raise SystemExit(f"{site_id} is in two runs: {kept.batch_dir.parent} and {run_dir}")
+            if kept is None or kept.deferred:
+                found[site_id] = entry
     return found
 
 
