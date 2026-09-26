@@ -11,6 +11,7 @@ batch's statements, and runs them.
     write_gate4.py --group P4 --run pilot --accept accept-step-1.log         # after verify_writes4
     write_gate4.py --group P5 --run mass --close-reverted                   # after revert4 of it
     write_gate4.py --group L --legacy-plan LEGACY4.jsonl --apply --step 100  # lane L's own plan
+    write_gate4.py --group WC --wc-plan WC4.pilot.jsonl --apply --step 100   # lane WC's plans
 
 **Group P5 writes no card since 2026-09-26** (owner decisions O2 and O3: lane WB writes every
 card): `--rehearse` and `--apply` are refused for every run, a first round and a round 2 after a
@@ -96,6 +97,19 @@ plan the acceptance reads, so the gate names it and plans nothing. The L plan is
 set is final - after the last P4 step is accepted (design, production_write, ORDER): an L row on a
 site P4 writes later moves that site's `raw_data`, and P4's preflight then refuses the whole P4
 batch.
+
+**Lane WC plans from its own plans** (`--wc-plan`, once per WC run in run order: the pilot's, then
+the mass run's; `scripts/remediation/wc/cli.py build` writes each from the run's checked outcomes;
+owner decision O5 of 2026-09-26, runbook `docs/procedures/SENTENCE_CHECK.md`). Like L it takes no
+`--run` and no scope. Production is asked, read-only, for each planned site's description and
+`raw_data` (`wc_live`, windows of 200): a site whose text Phase 4 wrote since is refused
+(`written-by-p4`), one whose pair moved since it was checked (`moved-since-check`), so a later
+write elsewhere never blocks a whole batch at the preflight. A written site stays its batch's while
+its description and WC's own `raw_data` keys are the outcome's (lane WB stamps others later), and a
+site a later WC plan asks again is that plan's (`asked-again-later`); should two batches still both
+plan one site, nothing is rendered (`write4.wc_sites_planned_twice`). The apply root holds these
+plans' write batches or none (`wc_batches`). The step's acceptance is `verify_writes4.py --lane
+p4wc --plan <apply root>/LANE_PLAN.jsonl --allow-stamp 'wb-teaser-prov-%'`, which reads no run.
 
 Every run prints its own `WRITE_EXIT=` line; that line is what is read.
 """
@@ -308,7 +322,16 @@ def closed_group_problem(group: W4.Group, args: argparse.Namespace) -> str | Non
 def plan_source_problem(group: W4.Group, args: argparse.Namespace) -> str | None:
     """Why this invocation names the wrong source for its group, or `None`. One L population (owner
     decision 2026-09-24): lane L plans from its own plan and never from a run, whose batches would
-    put a site into a second write batch of the lane; P4 and P5 plan a run and never the L plan."""
+    put a site into a second write batch of the lane; P4 and P5 plan a run and never the L plan.
+    Lane WC plans from its own plans (`--wc-plan`) and nothing else."""
+    if group is W4.Group.WC:
+        if args.run is not None or args.legacy_plan is not None:
+            return "--run, --legacy-plan: lane WC plans from its own plans (--wc-plan) only"
+        if not args.wc_plan and not (args.accept or args.close_reverted):
+            return "--wc-plan: lane WC plans from the plans wc/cli.py build wrote; name each"
+        return None
+    if args.wc_plan:
+        return "--wc-plan: only lane WC plans from it"
     if group is W4.Group.L:
         if args.run is not None:
             return (
@@ -357,6 +380,80 @@ def legacy_batches(
     if missing:
         raise SystemExit(f"{path}: no batch {missing}")
     return [by_name[name] for name in wanted]
+
+
+def wc_batches(
+    paths: Sequence[pathlib.Path], wanted: Sequence[str], *, apply_root: pathlib.Path
+) -> tuple[list[W4.BatchInputs], dict[str, Any]]:
+    """Lane WC's plan batches (`write4.load_wc_plan`, every plan named, in order) and their
+    outcomes, or exactly the named batches. The apply root holds these plans' write batches or
+    none: a write batch of a WC plan not named here would enter the lane plan the acceptance reads
+    and be judged as one of these - it is named and nothing is planned."""
+    for path in paths:
+        if not path.is_file():
+            raise SystemExit(f"{path}: no such WC plan (wc/cli.py build writes it)")
+    # The pilot's verdict (the review of 2026-09-26): imported here, when a WC plan is planned, as
+    # the verifier is for P4 (`_verifier`).
+    from wc import cli as wc_cli
+
+    try:
+        approvals = wc_cli.pilot_approval(paths)
+    except wc_cli.WcRunError as exc:
+        raise SystemExit(str(exc)) from None
+    print(
+        "pilot passed: "
+        + ", ".join(f"{a['run']} (RESULT.json sha256 {a['result_sha256']})" for a in approvals)
+    )
+    whole, outcomes = W4.load_wc_plan(paths)
+    ours = {W4.group_batch_id(batch.batch_id, W4.Group.WC) for batch in whole}
+    prefix = W4.GROUP_PREFIX[W4.Group.WC]
+    foreign = sorted(
+        found.name
+        for found in apply_root.glob(f"{prefix}-*")
+        if found.is_dir() and found.name not in ours
+    )
+    if foreign:
+        raise SystemExit(
+            f"{apply_root}: holds write batches of a WC plan not named here, {foreign[:10]} "
+            f"({len(foreign)}): name every WC plan (--wc-plan, once each), or move them aside."
+        )
+    if not wanted:
+        return whole, outcomes
+    by_name = {batch.batch_id: batch for batch in whole}
+    missing = [name for name in wanted if name not in by_name]
+    if missing:
+        raise SystemExit(f"no WC plan batch {missing}")
+    return [by_name[name] for name in wanted], outcomes
+
+
+#: The first line of `wc_live_sql`: how the tests' fake psql recognises the read.
+WC_LIVE_READ = "-- lane WC: the live description and raw_data of the named sites (read-only)"
+
+
+def wc_live_sql(site_ids: Sequence[str]) -> str:
+    return (
+        f"{WC_LIVE_READ}\n"
+        "SELECT to_jsonb(t)::text FROM (SELECT id::text AS id, description, raw_data "
+        f"FROM unified_sites WHERE id IN ({', '.join(f'{lanes.sql_text(s)}::uuid' for s in site_ids)})"
+        ") t;\n"
+    )
+
+
+def wc_live(site_ids: Sequence[str], *, run: Any, window: int = 200) -> dict[str, dict[str, Any]]:
+    """Site id -> production's description and raw_data now, for every named site production
+    holds: what `write4.plan_wc` compares with the pair each site was checked with."""
+    found: dict[str, dict[str, Any]] = {}
+    for start in range(0, len(site_ids), window):
+        for row in lanes.json_rows(run(wc_live_sql(site_ids[start : start + window]))):
+            found[str(row["id"])] = {"description": row["description"], "raw_data": row["raw_data"]}
+    return found
+
+
+#: What the gate prints for lane WC instead of the scope line (owner decision O5, 2026-09-26).
+WC_UNSCOPED = (
+    "defect scope: not asked for lane WC - it checks every curated March text that stays "
+    "(owner decision O5, 2026-09-26)"
+)
 
 
 def _verifier() -> W4.Verifier:
@@ -858,8 +955,8 @@ def run_batches(
         print(
             f"STEP COMPLETE: {written_sites} site(s) written in {len(written)} batch(es). Accept "
             f"it before the next step: {VERIFY_TOOL} --lane {lane} --plan "
-            f"{apply_root / LANE_PLAN_FILE} (0 deviations; lane L re-runs no verifier and reads "
-            "no run), then --accept <its output>."
+            f"{apply_root / LANE_PLAN_FILE} (0 deviations; lanes p4l and p4wc read no run), "
+            "then --accept <its output>."
         )
         return 0
     print(
@@ -878,6 +975,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run", default=None, help="P4, P5: the phase-4 run directory's name")
     parser.add_argument(
         "--legacy-plan", default=None, help="L: lane L's own plan, LEGACY4.jsonl (plan4.py legacy)"
+    )
+    parser.add_argument(
+        "--wc-plan",
+        action="append",
+        default=[],
+        help="WC: a WC plan (wc/cli.py build), once per WC run, in run order",
     )
     parser.add_argument("--run-root", default=None, help="override phase4_runner/runs")
     parser.add_argument("--batch", action="append", default=[], help="only these plan batches")
@@ -934,12 +1037,20 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     if args.close_reverted:
         return close_reverted_step(apply_root, runner=runner, host=args.host)
     run_dir: pathlib.Path | None
+    wc_outcomes: dict[str, Any] = {}
     if group is W4.Group.L:
         plan_path = pathlib.Path(args.legacy_plan)
         batches = legacy_batches(plan_path, args.batch, apply_root=apply_root)
         run_dir = None
         source = (
             f"legacy plan {plan_path} (sha256 {hashlib.sha256(plan_path.read_bytes()).hexdigest()})"
+        )
+    elif group is W4.Group.WC:
+        paths = [pathlib.Path(path) for path in args.wc_plan]
+        batches, wc_outcomes = wc_batches(paths, args.batch, apply_root=apply_root)
+        run_dir = None
+        source = "WC plans " + ", ".join(
+            f"{path} (sha256 {hashlib.sha256(path.read_bytes()).hexdigest()})" for path in paths
         )
     else:
         run_dir = pathlib.Path(args.run_root or lane.run_dir) / args.run
@@ -951,6 +1062,13 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     if group is W4.Group.L:
         print(LEGACY_UNSCOPED)
         options = {}
+    elif group is W4.Group.WC:
+        print(WC_UNSCOPED)
+        live = wc_live(site_ids, run=lambda sql: W._exec(runner, sql, host=args.host))
+        print(
+            f"live description and raw_data: {len(live)} of {len(site_ids)} planned sites (read-only)"
+        )
+        options = {"outcomes": wc_outcomes, "live": live}
     else:
         scope = _defect_scope()
         print(
@@ -973,7 +1091,7 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         # The run's own ledger and no other: pilots reuse the batch ids p4-0001 .., so a ledger
         # shared across runs would put one pilot's calls into another's journal evidence.
         options["ledger"] = read_jsonl(run_dir / M.LEDGER_FILE)
-    else:
+    elif group is not W4.Group.WC:
         live = written_sites(site_ids, run=lambda sql: W._exec(runner, sql, host=args.host))
         options["written"] = live
         print(f"live phase-4 provenance: {len(live)} of {len(site_ids)} planned sites (read-only)")
@@ -987,16 +1105,28 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
 
     waiting = pending_step(apply_root)
     frozen = frozenset(waiting["batches"]) if waiting is not None else frozenset()
+    plans = [W4.plan_writes(batch, group=group, **options) for batch in batches]
+    if group is W4.Group.WC:
+        twice = W4.wc_sites_planned_twice(plans)
+        if twice:
+            raise SystemExit(
+                "one WC site, one planning batch - nothing is rendered: "
+                + "; ".join(
+                    f"{site} is planned by {' and '.join(ids)}" for site, ids in twice.items()
+                )
+                + ". Two chunks read before either was written claim it: rebuild the later chunk "
+                "with --exclude for these sites (docs/procedures/SENTENCE_CHECK.md, section 4)."
+            )
     planned = [
         render(
             apply_root,
-            W4.plan_writes(batch, group=group, **options),
+            plan,
             write_round=args.round,
             frozen=frozen,
             runner=runner,
             host=args.host,
         )
-        for batch in batches
+        for plan in plans
     ]
     rows = sum(len(item.plan.rows) for item in planned)
     refused: dict[str, int] = {}

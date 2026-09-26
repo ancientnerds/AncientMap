@@ -23,11 +23,13 @@ for _path in (REPO / "scripts" / "remediation", REPO / "output" / "remediation" 
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import write_gate4 as G  # noqa: E402 - the WC live read's marker
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402
 from phase4 import scope4 as S  # noqa: E402
+from phase4 import wc4 as WC4  # noqa: E402
 from phase4 import write4 as W4  # noqa: E402
 
 SITE_A = "4a5a324f-0000-4000-8000-000000000001"
@@ -342,6 +344,17 @@ _ROW = re.compile(
 _TUPLE = re.compile(r"\('([^']*)', '([^']*)', '([^']*)', '([^']*)'\)")
 
 
+def _null_tests(sql: str) -> set[str]:
+    """The test ids guard 3 lets write NULL, read from the statement itself (`write4.
+    _null_tests_sql`): one `p.test_id <> '...'`, or a `NOT IN (...)` list."""
+    line = sql.split("OR (p.new_value IS NULL AND ", 1)[1].split("\n", 1)[0]
+    return {_literal(found) for found in re.findall(r"'(?:[^']|'')*'", line)}
+
+
+def _sha_or_null(text: str | None) -> str | None:
+    return None if text is None else M.text_sha256(text)
+
+
 def _literal(text: str) -> str | None:
     return None if text == "NULL" else text[1:-1].replace("''", "'")
 
@@ -481,6 +494,19 @@ class FakeDb:
                 for site_id in re.findall(r"'([0-9a-f-]{36})'::uuid", sql)
                 if site_id in self.sites and self.sites[site_id].card_row
             )
+        if sql.startswith(G.WC_LIVE_READ):
+            return "".join(
+                json.dumps(
+                    {
+                        "id": site_id,
+                        "description": self.sites[site_id].description,
+                        "raw_data": self.sites[site_id].raw_data,
+                    }
+                )
+                + "\n"
+                for site_id in re.findall(r"'([0-9a-f-]{36})'::uuid", sql)
+                if site_id in self.sites
+            )
         if sql.startswith(R.REVERSAL_READ):
             return "".join(f"{m}|{n}\n" for m, n in reversal_reads(sql, self.journal).items())
         if "->> 'lane' AS lane" in sql:  # write_gate4.written_sql: the live provenance's lane
@@ -586,16 +612,38 @@ class FakeDb:
             for row in rows:
                 if row["new"] == row["old"] or row["new"] == "":
                     raise PsqlError("guard 3: not a change")
-                if row["new"] is None and row["test_id"] != W4.TEST_CARD_CLEAR:
-                    raise PsqlError("guard 3: NULL outside a card clear")
-                if row["column"] == "raw_data" and row["old"] is not None:
+                if row["new"] is None and row["test_id"] not in _null_tests(sql):
+                    raise PsqlError("guard 3: NULL outside a card clear or a WC clear")
+                if row["column"] == "raw_data" and None not in (row["old"], row["new"]):
                     if json.loads(row["new"]) == json.loads(row["old"]):
                         raise PsqlError("guard 3: the same jsonb")
         for row in rows:
             if not self._holds(row["site"], row["column"], row["old"]):
                 raise PsqlError("guard 4: a row no longer holds its old value")
 
+    def _wc_invariants(self, sql: str, rows: list[dict[str, Any]]) -> None:
+        """Invariants 5 and 6 of a WC chunk, with Postgres' NULL semantics: the check record hashes
+        the description (NULL on both sides is not distinct), a provenance beside it is lane L's
+        and hashes it, and a cleared description leaves none of the WC keys."""
+        for row in rows:
+            if row["column"] != "raw_data":
+                continue
+            site = self.sites[row["site"]]
+            raw = site.raw_data or {}
+            digest = _sha_or_null(site.description)
+            if (raw.get(WC4.CHECK_KEY) or {}).get("desc_sha256") != digest:
+                raise PsqlError("invariant 5 (WC): the check record's desc_sha256")
+            provenance = raw.get(M.PROVENANCE_KEY)
+            if provenance is not None and (
+                provenance.get("lane") != "L" or provenance.get("desc_sha256") != digest
+            ):
+                raise PsqlError("invariant 6 (WC): the provenance")
+            if site.description is None and WC4.WC_KEYS & raw.keys():
+                raise PsqlError("invariant 6 (WC): a cleared description beside WC keys")
+
     def _invariants(self, sql: str, rows: list[dict[str, Any]]) -> None:
+        if "-- invariant 5 (WC)" in sql or "-- invariant 6 (WC)" in sql:
+            self._wc_invariants(sql, rows)
         if "-- invariant 3" in sql:
             for row in rows:
                 if row["column"] != "raw_data":

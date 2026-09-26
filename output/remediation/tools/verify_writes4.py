@@ -50,10 +50,18 @@ of the design are a Playwright check against production and not part of this too
     verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> --allow-stamp 'phase4l:%'
     verify_writes4.py --lane p4l --plan <PLAN.jsonl>
     verify_writes4.py --lane p5 --plan <PLAN.jsonl> --run <runs/<run>> --card-check
+    verify_writes4.py --lane p4wc --plan <PLAN.jsonl>
     verify_writes4.py --boot-logs --since 2026-09-24T10:00:00Z
 
 The lanes' journal stamps come from `lanes.py` (`p4`, `p4l`, `p5`: `phase4:`, `phase4l:`,
-`phase5:`, WB-D1); `--stamp-like` overrides one.
+`phase5:`, WB-D1; `p4wc`: `phase4wc:`); `--stamp-like` overrides one.
+
+**Lane p4wc** (the sentence check, owner decision O5 of 2026-09-26; `phase4/wc4.py`) reads no run:
+its journal evidence carries every decision and verified quote, so steps 1 and 3-4 re-check each
+written site from the database alone - the chain as above, lane WC's invariants on the live pair
+(`wc4.wc_problems`: the check record's and lane L's hashes, D1's citations, a clear without the WC
+keys), T08, and that the live description, citations and check record are exactly what the
+journal evidence of the site's last WC write composes (`wc4.evidence_problems`).
 """
 
 from __future__ import annotations
@@ -81,6 +89,7 @@ from phase3 import write_stage as W  # noqa: E402 - utf8_streams, the writers' s
 from phase4 import batch4 as B  # noqa: E402 - the stages' own holds reader
 from phase4 import model4 as M  # noqa: E402
 from phase4 import verify4 as V4  # noqa: E402
+from phase4 import wc4  # noqa: E402 - lane WC's invariants and its evidence re-check
 
 REPO = lanes.REPO
 CARD_JSON = REPO / "scripts" / "remediation" / "phase4" / "card_json.py"
@@ -90,6 +99,7 @@ LANE_COLUMNS: dict[str, frozenset[tuple[str, str]]] = {
     "p4": frozenset({("unified_sites", "description"), ("unified_sites", "raw_data")}),
     "p4l": frozenset({("unified_sites", "raw_data")}),
     "p5": frozenset({("card_stats", "card_description")}),
+    "p4wc": frozenset({("unified_sites", "description"), ("unified_sites", "raw_data")}),
 }
 #: The jsonb column: compared as JSON.
 JSON_COLUMNS = frozenset({("unified_sites", "raw_data")})
@@ -663,6 +673,46 @@ def invariant_deviations(*, lane: str, carried: Iterable[Key], production: Produ
             deviations.append(
                 f"INVARIANT {site_id}: card.text_sha256 is not Postgres' sha256 of the card"
             )
+        if lane == "p4wc":
+            deviations.extend(
+                f"INVARIANT {site_id}: {problem}"
+                for problem in wc4.wc_problems(row["description"], row["raw_data"])
+            )
+    return deviations
+
+
+def wc_evidence_sql(pks: Sequence[str], stamp_like: str) -> str:
+    """The evidence of each site's WC writes, oldest first. Both rows of one write carry the same
+    evidence, and a site may write one of them alone: its raw_data (a text kept byte for byte) or
+    its description (the clear of a NULL raw_data)."""
+    return (
+        "SELECT to_jsonb(t)::text FROM (SELECT id, row_pk, run_stamp, evidence "
+        f"FROM remediation_change_log WHERE (table_name, column_name) IN "
+        f"({_pairs(LANE_COLUMNS['p4wc'])}) AND row_pk IN ({lanes.sql_literals(pks)}) "
+        f"AND run_stamp LIKE {lanes.sql_text(stamp_like)} "
+        f"AND run_stamp NOT LIKE {lanes.sql_text('%' + ROLLBACK_SUFFIX)} ORDER BY id) t;\n"
+    )
+
+
+def wc_evidence_deviations(
+    site_ids: Iterable[str], production: Production, evidence_rows: Sequence[Mapping[str, Any]]
+) -> list[str]:
+    """Each carried WC site as production holds it is exactly what the journal evidence of its
+    last WC write composes (`wc4.evidence_problems`): the description from the decisions and the
+    verified quotes, the citations, the check record."""
+    deviations: list[str] = []
+    for site_id in sorted(site_ids):
+        rows = [row for row in evidence_rows if row["row_pk"] == site_id]
+        if not rows:
+            deviations.append(f"EVIDENCE {site_id}: no WC journal row of the site")
+            continue
+        row = production.rows[site_id]
+        deviations.extend(
+            f"EVIDENCE {site_id}: {problem}"
+            for problem in wc4.evidence_problems(
+                rows[-1]["evidence"], row["description"], row["raw_data"]
+            )
+        )
     return deviations
 
 
@@ -803,6 +853,16 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             for site in written
             if production.live.get(("card_stats", "card_description", site)) is not None
         }
+    if lane == "p4wc":
+        wc_rows: list[dict[str, Any]] = []
+        ordered = sorted(written)
+        for start in range(0, len(ordered), WINDOW):
+            wc_rows += lanes.json_rows(
+                run(wc_evidence_sql(ordered[start : start + WINDOW], stamp_like))
+            )
+        deviations += wc_evidence_deviations(written, production, wc_rows)
+        deviations += t08_deviations(written, production)
+        print(f"re-checked {len(written)} written site(s) against their journal evidence")
     if lane in ("p4", "p5"):
         if not args.run:
             raise SystemExit(f"lane {lane} re-runs V1-V15 on the written sites: --run is required")

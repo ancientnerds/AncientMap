@@ -314,13 +314,18 @@ def store_page(
 def collect(
     urls: Iterable[str],
     pages: Path,
-    client: httpx.Client,
+    client: Any,
     *,
     now: Callable[[], str],
     sleep: Callable[[float], None] = time.sleep,
     pace: float = PACE_SECONDS,
+    errors: tuple[type[BaseException], ...] = (httpx.HTTPError,),
 ) -> dict[str, int]:
-    """Fetch every URL not yet kept, once; a failed fetch is kept too, with its status or error."""
+    """Fetch every URL not yet kept, once; a failed fetch is kept too, with its status or error.
+
+    `client` is an `httpx.Client` (`http_client`) or any object with the same `get(url)` whose
+    response has `status_code`, `url`, `headers` and `content`; `errors` are the exceptions its
+    failed fetch raises (lane WC fetches with `requests`, `wc/answers.Client`)."""
     counts = {"fetched": 0, "cached": 0, "not fetched": 0}
     last: dict[str, float] = {}
     for url in sorted({canonical_url(u)[0] for u in urls}):
@@ -336,7 +341,7 @@ def collect(
         last[host] = time.monotonic()
         try:
             response = client.get(url)
-        except httpx.HTTPError as exc:
+        except errors as exc:
             # the fetch failed: that is the record, and a quote on this page will not count
             store_page(
                 pages,

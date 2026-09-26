@@ -12,10 +12,20 @@ write_gate4.py` runs what it renders, `phase4/revert4.py` renders the reversal f
 | P4 | 2, site-atomic | `P4/description`, `P4/raw_data` | `unified_sites.description`, `.raw_data` | `phase4` | `p4-NNNN` |
 | L | 1 | `P4/legacy-provenance` | `unified_sites.raw_data` | `phase4l` | `p4l-NNNN` |
 | P5 | 1 | `P5/card`, `P5/card-clear` | `card_stats.card_description` | `phase5` | `p5-NNNN` |
+| WC | 2, site-atomic | `WC/description`, `WC/raw_data` (a clear: `WC/description-clear`, `WC/raw_data-clear`) | `unified_sites.description`, `.raw_data` | `phase4wc` | `p4wc-NNNN` |
 
 A write batch is the rows one group takes from one plan batch (`PLAN4.jsonl`, `p4-NNNN`, 15 sites),
 under that batch's number with the group's prefix, and it is written as **one chunk**: at most 100
-sites (the owner's step, PIECE6_BRIEF section 7), at most 200 rows for P4 and 100 for L and P5.
+sites (the owner's step, PIECE6_BRIEF section 7), at most 200 rows for P4 and WC and 100 for L and
+P5.
+
+**WC** (owner decision O5 of 2026-09-26, `phase4/wc4.py`, runbook `docs/procedures/SENTENCE_CHECK.md`)
+writes the March descriptions that stay after the sentence check: the kept sentences with new
+markers, and `raw_data` with the rebuilt citations, the check record and lane L's moved provenance -
+or, when nothing is kept, the description NULL and `raw_data` without those keys (NULL when nothing
+else remains). It plans from its own plan (`wc/cli.py build` -> `WC4.<run>.jsonl`), like L, and each
+site's live description and `raw_data` are read at the gate: a site that moved since it was checked
+is refused, never written over.
 The journal stamp is `<family>:<batch id>:chunk-NNNN`, where the chunk number is the write round
 (1 unless a batch is written again after a revert: the stamps of a reverted round stay in the
 journal, so a second round needs its own). `write_gate4.py --step 100` walks the batches and
@@ -89,7 +99,7 @@ from phase3 import fetch_stage as F  # noqa: E402 - the batch's evidence store
 from phase3 import write_stage as W  # noqa: E402 - the psql seam, quoting, digests, change keys
 from phase3.run import read_jsonl  # noqa: E402 - the one JSON-lines reader
 
-from phase4 import legacy4  # noqa: E402 - lane L's decision, one spelling
+from phase4 import legacy4, wc4  # noqa: E402 - lane L's decision; lane WC's invariants
 from phase4 import model4 as M  # noqa: E402
 from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 
@@ -99,23 +109,57 @@ from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 
 
 class Group(StrEnum):
-    """The three row groups of production_write."""
+    """The three row groups of production_write, and lane WC's (owner decision O5, 2026-09-26)."""
 
     P4 = "P4"  #: description and raw_data of a written site, site-atomic
     L = "L"  #: raw_data legacy provenance of a held site
     P5 = "P5"  #: card_stats.card_description, and card clears
+    WC = "WC"  #: a March description checked sentence by sentence: trimmed or cleared, site-atomic
 
 
 #: The journal family: `write_stage.change_key`'s lane and the run stamp's first part.
-GROUP_FAMILY: Mapping[Group, str] = {Group.P4: "phase4", Group.L: "phase4l", Group.P5: "phase5"}
+GROUP_FAMILY: Mapping[Group, str] = {
+    Group.P4: "phase4",
+    Group.L: "phase4l",
+    Group.P5: "phase5",
+    Group.WC: "phase4wc",
+}
 #: The write batch's id prefix. `output/remediation/tools/lanes.py` registers these as its lanes.
-GROUP_PREFIX: Mapping[Group, str] = {Group.P4: "p4", Group.L: "p4l", Group.P5: "p5"}
+GROUP_PREFIX: Mapping[Group, str] = {
+    Group.P4: "p4",
+    Group.L: "p4l",
+    Group.P5: "p5",
+    Group.WC: "p4wc",
+}
 
 TEST_DESCRIPTION = "P4/description"
 TEST_RAW_DATA = "P4/raw_data"
 TEST_LEGACY = "P4/legacy-provenance"
 TEST_CARD = "P5/card"
 TEST_CARD_CLEAR = "P5/card-clear"
+TEST_WC_DESCRIPTION = "WC/description"
+TEST_WC_RAW_DATA = "WC/raw_data"
+#: A site whose check kept nothing: the description NULL, raw_data without the WC keys.
+TEST_WC_DESCRIPTION_CLEAR = "WC/description-clear"
+TEST_WC_RAW_DATA_CLEAR = "WC/raw_data-clear"
+#: The test ids whose row may write NULL, by group. Guard 3 renders them (`_null_tests_sql`).
+NULL_TESTS: Mapping[Group, frozenset[str]] = {
+    Group.P4: frozenset({TEST_CARD_CLEAR}),
+    Group.L: frozenset({TEST_CARD_CLEAR}),
+    Group.P5: frozenset({TEST_CARD_CLEAR}),
+    Group.WC: frozenset({TEST_WC_DESCRIPTION_CLEAR, TEST_WC_RAW_DATA_CLEAR}),
+}
+#: A WC site's rows are one of these sets: a kept text (its description and raw_data), a clear, a
+#: kept text whose every sentence and marker stayed byte for byte (raw_data alone: the rebuilt
+#: citations and the check record), or the clear of a site whose raw_data is NULL and stays NULL
+#: (the description alone: 12 of the 14 unclaimed texts had no raw_data on 2026-09-26, and a NULL
+#: written over NULL is no change).
+WC_PAIRS = (
+    frozenset({TEST_WC_DESCRIPTION, TEST_WC_RAW_DATA}),
+    frozenset({TEST_WC_DESCRIPTION_CLEAR, TEST_WC_RAW_DATA_CLEAR}),
+    frozenset({TEST_WC_RAW_DATA}),
+    frozenset({TEST_WC_DESCRIPTION_CLEAR}),
+)
 
 
 @dataclass(frozen=True)
@@ -148,11 +192,19 @@ GROUP_ROWS: Mapping[Group, frozenset[tuple[str, str]]] = {
     Group.P4: frozenset({("description", TEST_DESCRIPTION), ("raw_data", TEST_RAW_DATA)}),
     Group.L: frozenset({("raw_data", TEST_LEGACY)}),
     Group.P5: frozenset({("card_description", TEST_CARD), ("card_description", TEST_CARD_CLEAR)}),
+    Group.WC: frozenset(
+        {
+            ("description", TEST_WC_DESCRIPTION),
+            ("raw_data", TEST_WC_RAW_DATA),
+            ("description", TEST_WC_DESCRIPTION_CLEAR),
+            ("raw_data", TEST_WC_RAW_DATA_CLEAR),
+        }
+    ),
 }
 
 #: One chunk is one step: at most 100 sites (the owner's rule), and at most this many rows.
 CHUNK_SITES = 100
-MAX_CHUNK_ROWS: Mapping[Group, int] = {Group.P4: 200, Group.L: 100, Group.P5: 100}
+MAX_CHUNK_ROWS: Mapping[Group, int] = {Group.P4: 200, Group.L: 100, Group.P5: 100, Group.WC: 200}
 #: `card_stats.card_description` is varchar(200); a longer card would be refused by the primitive
 #: inside the transaction and take the chunk with it, so the plan refuses the one site instead.
 CARD_MAX_CHARS = 200
@@ -199,6 +251,13 @@ RULE_OUT_OF_SCOPE = "outside-defect-scope"
 #: The owner's decisions of 2026-09-26 (O2, O3): a descriptions-only plan's card is lane WB's, so P5
 #: plans none of its sites - no card and no clear.
 RULE_DESCRIPTIONS_ONLY = "descriptions-only-plan"
+
+#: WC: production no longer holds the description or raw_data the site was checked with (a later
+#: write - a P4 text, a revert, a hand edit): the check answers a text that is not served.
+RULE_MOVED = "moved-since-check"
+#: WC: a later WC plan asks the site again (its batch refused it here, or it was never written), so
+#: that plan's answer is the one planned - one site, one planning batch (the review of 2026-09-26).
+RULE_TAKEN_OVER = "asked-again-later"
 
 _PLAN_BATCH = re.compile(r"p4-(?P<number>[0-9]{4,})")
 
@@ -549,8 +608,11 @@ def validate_rows(group: Group, rows: Sequence[Row4]) -> None:
             raise W.WriteRefused(f"{where}: pk {row.pk!r} is not the site id")
         if row.new_value == row.old_value:
             raise W.WriteRefused(f"{where}: old and new are the same value - not a change")
-        if row.new_value is None and row.test_id != TEST_CARD_CLEAR:
-            raise W.WriteRefused(f"{where}: only a card clear writes NULL")
+        if row.new_value is None and row.test_id not in NULL_TESTS[group]:
+            raise W.WriteRefused(
+                f"{where}: only a card clear or a WC clear writes NULL "
+                f"({sorted(NULL_TESTS[group])} in a {group.value} plan)"
+            )
         if row.new_value is not None and not row.new_value.strip():
             raise W.WriteRefused(f"{where}: an empty new value")
         if row.column == "card_description" and row.new_value is not None:
@@ -591,10 +653,72 @@ def validate_rows(group: Group, rows: Sequence[Row4]) -> None:
                     f"{row.site_id}: the provenance's desc_sha256 is not the sha256 of the "
                     "description this plan writes"
                 )
+    if group is Group.WC:
+        _validate_wc_sites(rows)
+
+
+def _validate_wc_sites(rows: Sequence[Row4]) -> None:
+    """A WC site is written site-atomic - its description and raw_data rows together (both
+    kept-text rows or both clear rows), or its raw_data alone when the kept text is the stored one
+    byte for byte - and the pair it leaves holds lane WC's invariants (`wc4.wc_problems`: the check
+    record's and lane L's hashes, the citations D1 needs; a clear carries none of the three keys).
+    The description it leaves is the evidence's (`wc4.EVIDENCE_DESCRIPTION`), which the description
+    row, where there is one, writes. Every raw_data key outside the three stays as it was."""
+    by_site: dict[str, dict[str, Row4]] = {}
+    for row in rows:
+        by_site.setdefault(row.site_id, {})[row.column] = row
+    for site_id, pair in by_site.items():
+        tests = frozenset(row.test_id for row in pair.values())
+        if tests not in WC_PAIRS:
+            raise W.WriteRefused(
+                f"{site_id}: a WC site is written site-atomic (a kept text, a clear, a kept text "
+                f"that stayed byte for byte, or the clear of a NULL raw_data); this plan has "
+                f"{sorted(tests)}"
+            )
+        evidence = (pair.get("raw_data") or pair["description"]).evidence
+        left = evidence[wc4.EVIDENCE_DESCRIPTION]
+        if "description" in pair and (
+            pair["description"].evidence != evidence
+            or pair["description"].new_value != left
+            or pair["description"].old_value != evidence["checked"]
+        ):
+            raise W.WriteRefused(
+                f"{site_id}: the description row is not the evidence's transition (the checked "
+                "text to the one its decisions compose)"
+            )
+        if "description" not in pair and (left is None or left != evidence["checked"]):
+            raise W.WriteRefused(
+                f"{site_id}: a WC raw_data row without its description row leaves the stored text"
+            )
+        # Without a raw_data row the site's raw_data is NULL and stays NULL (the one such pair is a
+        # clear, WC_PAIRS); the transaction's invariant 6 holds the stored value to it.
+        raw = pair.get("raw_data")
+        new = None if raw is None or raw.new_value is None else M.parse_json(raw.new_value)
+        old = None if raw is None or raw.old_value is None else M.parse_json(raw.old_value)
+        # the invariants, the recorded marking re-derived from the row's own old value, and the AI
+        # disclosure that marking requires (the review of 2026-09-26: required, not only checked)
+        marking = evidence["marking"]
+        problems = (
+            wc4.wc_problems(left, new)
+            + wc4.old_marking_problems(marking, evidence["checked"], old)
+            + wc4.disclosure_problems(marking, left, new)
+        )
+        if problems:
+            raise W.WriteRefused(f"{site_id}: " + "; ".join(problems))
+        kept = {key: value for key, value in (new or {}).items() if key not in wc4.WC_KEYS}
+        before = {key: value for key, value in (old or {}).items() if key not in wc4.WC_KEYS}
+        if kept != before:
+            raise W.WriteRefused(
+                f"{site_id}/raw_data: a WC row changes keys outside {sorted(wc4.WC_KEYS)}"
+            )
 
 
 def _validate_raw_data(row: Row4) -> None:
-    """A raw_data row writes a JSON object whose provenance is the group's kind."""
+    """A raw_data row writes a JSON object whose provenance is the group's kind (WC: lane L's or
+    none, and NULL for a cleared site that has nothing left - `_validate_wc_sites` checks the rest)."""
+    if row.group is Group.WC:
+        _validate_wc_raw_data(row)
+        return
     new = M.parse_json(str(row.new_value))
     if not isinstance(new, dict):
         raise W.WriteRefused(f"{row.site_id}/raw_data: the new value is not a JSON object")
@@ -608,6 +732,19 @@ def _validate_raw_data(row: Row4) -> None:
             f"{'legacy' if legacy else 'full'} provenance"
         )
     if row.old_value is not None and M.parse_json(row.old_value) == new:
+        raise W.WriteRefused(f"{row.site_id}/raw_data: the same JSON value - not a change")
+
+
+def _validate_wc_raw_data(row: Row4) -> None:
+    """A WC raw_data row: JSON objects (or NULL) on both sides and a real change as jsonb (NULL only
+    for a clear: guard 3's test ids). What the object may carry - lane L's provenance or none, never
+    a full Phase-4 one - is `wc4.wc_problems`, asked of the site's pair by `_validate_wc_sites`."""
+    old = None if row.old_value is None else M.parse_json(row.old_value)
+    new = None if row.new_value is None else M.parse_json(row.new_value)
+    for side, value in (("old", old), ("new", new)):
+        if value is not None and not isinstance(value, dict):
+            raise W.WriteRefused(f"{row.site_id}/raw_data: the {side} value is not a JSON object")
+    if old == new:
         raise W.WriteRefused(f"{row.site_id}/raw_data: the same JSON value - not a change")
 
 
@@ -747,6 +884,76 @@ def load_legacy_plan(path: Path) -> list[BatchInputs]:
             )
         )
     return batches
+
+
+#: The keys of one WC plan batch (`wc/cli.py build`).
+_WC_PLAN_KEYS = frozenset({"batch_id", "ordinal", "pass", "sites", "outcomes"})
+
+
+#: Lane WC's outcomes by plan batch id, in plan order (`load_wc_plan`): site id -> outcome.
+WcOutcomes = Mapping[str, Mapping[str, wc4.WcOutcome]]
+
+
+def load_wc_plan(
+    paths: Sequence[Path],
+) -> tuple[list[BatchInputs], dict[str, dict[str, wc4.WcOutcome]]]:
+    """Lane WC's gate plans (`wc/cli.py build`, one per run - the pilot's, then each chunk's), read
+    strictly and together: every batch carries `wc4.PLAN_MARK` and a plan batch id; no batch id
+    occurs twice across the plans, and no site twice within one plan; every site has exactly one
+    outcome (`wc4.WcOutcome`) and every outcome a site. The outcomes come back by plan batch, in
+    plan order: a site a later plan asks again - its earlier batch refused it, or never wrote it -
+    is that later plan's (`plan_wc`, `RULE_TAKEN_OVER`). A WC batch has no directory and no stage
+    outcome: `root` is its plan file, and lanes, assemblies and holds are empty."""
+    batches: list[BatchInputs] = []
+    outcomes: dict[str, dict[str, wc4.WcOutcome]] = {}
+    for path in paths:
+        in_plan: set[str] = set()
+        for number, record in enumerate(read_jsonl(path), start=1):
+            where = f"{path}:{number}"
+            if set(record) != _WC_PLAN_KEYS or record["pass"] != wc4.PLAN_MARK:
+                raise PlanInputError(
+                    f"{where}: not a lane-WC plan batch (keys {sorted(record)}, pass "
+                    f"{record.get('pass')!r}; wc/cli.py build writes {wc4.PLAN_MARK!r})"
+                )
+            batch_id = record["batch_id"]
+            group_batch_id(batch_id, Group.WC)
+            if batch_id in outcomes:
+                raise PlanInputError(f"{where}: batch {batch_id} twice")
+            sites = tuple(M.PlanSite.from_dict(site) for site in record["sites"])
+            own = [wc4.WcOutcome.from_dict(outcome) for outcome in record["outcomes"]]
+            if [o.site_id for o in own] != [s.site_id for s in sites]:
+                raise PlanInputError(f"{where}: the outcomes are not the batch's sites, in order")
+            outcomes[batch_id] = {}
+            for site, outcome in zip(sites, own, strict=True):
+                if site.site_id in in_plan:
+                    raise PlanInputError(f"{where}: {site.site_id} is listed twice in one plan")
+                in_plan.add(site.site_id)
+                outcomes[batch_id][site.site_id] = outcome
+            batches.append(
+                BatchInputs(
+                    root=path,
+                    batch_id=batch_id,
+                    sites=sites,
+                    lanes={},
+                    assemblies={},
+                    holds={},
+                    # WC writes descriptions only: the card is lane WB's (O2, O3), P5 plans none
+                    descriptions_only=True,
+                )
+            )
+    return batches, outcomes
+
+
+def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
+    """Site id -> the WC write batches that plan rows for it, for every site more than one plans.
+    `plan_wc` gives a site to one batch (`RULE_TAKEN_OVER`); two chunks read before either was
+    written can still both claim it - two identical clears each read as its own write - and the
+    gate then stops before anything is rendered."""
+    by_site: dict[str, list[str]] = {}
+    for plan in plans:
+        for site_id in dict.fromkeys(row.site_id for row in plan.rows):
+            by_site.setdefault(site_id, []).append(plan.batch_id)
+    return {site_id: ids for site_id, ids in by_site.items() if len(ids) > 1}
 
 
 def source_files(
@@ -996,6 +1203,126 @@ def plan_legacy(batch: BatchInputs, *, written: Iterable[str]) -> WritePlan4:
     return plan
 
 
+def _wc_part(raw: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The keys of `raw_data` a WC write owns (`wc4.WC_KEYS`)."""
+    return {key: value for key, value in (raw or {}).items() if key in wc4.WC_KEYS}
+
+
+def plan_wc(
+    batch: BatchInputs,
+    *,
+    outcomes: WcOutcomes,
+    live: Mapping[str, Mapping[str, Any]],
+) -> WritePlan4:
+    """WC: the rows of each checked site of the batch (owner decision O5, 2026-09-26).
+
+    `outcomes` are every named WC plan's, by plan batch in plan order (`load_wc_plan`); `live` is
+    production's description and raw_data of each planned site (`write_gate4`, read-only, at the
+    gate). Per site, in this order:
+
+    * a live full Phase-4 provenance: refused (`written-by-p4`);
+    * written by this batch - the live description is the outcome's and so are WC's own three
+      `raw_data` keys (`wc4.WC_KEYS`; a later lane may have stamped others: lane WB's
+      `_card_provenance`, the review of 2026-09-26): its rows, so a written batch re-plans to the
+      rows it was written from, as lane L's does from its plan file;
+    * named by a later WC plan's batch: refused (`asked-again-later`) - that plan's answer to the
+      text now served is the one planned; a site the batch wrote and `revert4 --site` took back
+      then leaves the re-plan on the reversal proof the gate asks for (`sites_taken_back`);
+    * the pair it was checked with, whole (the transaction holds the old values): its rows;
+    * anything else, and no row at all: refused (`moved-since-check`) - the check answers a text
+      that is not served.
+
+    No scope: the population is every curated March text that stays (`wc/cli.py`). The rows write
+    the outcome's pair: the description (NULL for a clear) and raw_data - raw_data alone when the
+    kept text is the stored one byte for byte, the description alone for the clear of a NULL
+    raw_data.
+    """
+    plan = WritePlan4(group=Group.WC, batch_id=group_batch_id(batch.batch_id, Group.WC))
+    full = {lane.value for lane in M.LANE_CHANGES}
+    order = list(outcomes)
+    later = {
+        site_id
+        for batch_id in order[order.index(batch.batch_id) + 1 :]
+        for site_id in outcomes[batch_id]
+    }
+    for site in batch.sites:
+        outcome = outcomes[batch.batch_id].get(site.site_id)
+        if outcome is None or outcome.evidence["checked"] != site.description:
+            raise PlanInputError(
+                f"{batch.batch_id}: {site.site_id} has no outcome for the text it was checked with"
+            )
+        now = live.get(site.site_id)
+        lane = ((now or {}).get("raw_data") or {}).get(M.PROVENANCE_KEY, {}).get("lane")
+        if lane in full:
+            plan.refusals.append(
+                W.Refusal(site.site_id, "description", RULE_WRITTEN, "Phase 4 wrote this text")
+            )
+            continue
+        written = (
+            now is not None
+            and now["description"] == outcome.description
+            and _wc_part(now["raw_data"]) == _wc_part(outcome.raw_data)
+        )
+        if not written and site.site_id in later:
+            plan.refusals.append(
+                W.Refusal(
+                    site.site_id,
+                    "description",
+                    RULE_TAKEN_OVER,
+                    "a later WC plan asks this site again; its answer is the one planned",
+                )
+            )
+            continue
+        checked = now is not None and (now["description"], now["raw_data"]) == (
+            site.description,
+            site.raw_data,
+        )
+        if not (written or checked):
+            plan.refusals.append(
+                W.Refusal(
+                    site.site_id,
+                    "description",
+                    RULE_MOVED,
+                    "production no longer holds the description and raw_data it was checked with",
+                )
+            )
+            continue
+        cleared = outcome.description is None
+        if not cleared and outcome.description == site.description:
+            if outcome.raw_data == site.raw_data:
+                plan.refusals.append(
+                    W.Refusal(site.site_id, "raw_data", RULE_NOT_A_CHANGE, "nothing moves")
+                )
+                continue
+        else:
+            plan.rows.append(
+                make_row(
+                    group=Group.WC,
+                    site=site,
+                    column="description",
+                    old_value=site.description,
+                    new_value=outcome.description,
+                    test_id=TEST_WC_DESCRIPTION_CLEAR if cleared else TEST_WC_DESCRIPTION,
+                    evidence=outcome.evidence,
+                )
+            )
+        if cleared and site.raw_data is None and outcome.raw_data is None:
+            continue  # NULL stays NULL: the clear is the description row alone (WC_PAIRS)
+        plan.rows.append(
+            make_row(
+                group=Group.WC,
+                site=site,
+                column="raw_data",
+                old_value=None if site.raw_data is None else raw_json(site.raw_data),
+                new_value=None if outcome.raw_data is None else raw_json(outcome.raw_data),
+                test_id=TEST_WC_RAW_DATA_CLEAR if cleared else TEST_WC_RAW_DATA,
+                evidence=outcome.evidence,
+            )
+        )
+    validate_rows(Group.WC, plan.rows)
+    return plan
+
+
 def card_to_write(
     batch: BatchInputs, site: M.PlanSite, *, written: Mapping[str, str | None]
 ) -> M.Assembly | None:
@@ -1148,11 +1475,13 @@ def plan_writes(batch: BatchInputs, *, group: Group, **inputs: Any) -> WritePlan
     """The write plan of one row group for one plan batch (`docs/procedures/PHASE4_CONTRACTS.md`
     section 5): `plan_p4`, `plan_legacy` or `plan_cards`, called with that planner's own keyword
     inputs - a missing or foreign input is a `TypeError`, never a default. P4 and P5 take the
-    owner's defect `scope` (`phase4/scope4.py`); L takes none (owner decision 2026-09-24)."""
+    owner's defect `scope` (`phase4/scope4.py`); L takes none (owner decision 2026-09-24), and
+    neither does WC (`plan_wc`: the checked outcomes and production's live pair)."""
     planners: Mapping[Group, Callable[..., WritePlan4]] = {
         Group.P4: plan_p4,
         Group.L: plan_legacy,
         Group.P5: plan_cards,
+        Group.WC: plan_wc,
     }
     return planners[group](batch, **inputs)
 
@@ -1350,6 +1679,47 @@ def _allowed_tuples(group: Group) -> str:
     return ", ".join(tuples)
 
 
+def _null_tests_sql(group: Group) -> str:
+    """Guard 3's test of a NULL new value: true for a row whose test id may not write NULL. One test
+    id is `p.test_id <> '...'` - the text P4, L and P5 have always rendered - and WC's two clear
+    tests are a `NOT IN` list."""
+    tests = sorted(NULL_TESTS[group])
+    if len(tests) == 1:
+        return f"p.test_id <> {W._sql_text(tests[0])}"
+    return f"p.test_id NOT IN ({', '.join(W._sql_text(test) for test in tests)})"
+
+
+def _wc_invariants(label: str) -> list[str]:
+    """WC's in-database invariants, in place of invariant 3 (a checked text that was unmarked
+    carries no provenance, so invariant 3's premise does not hold for it): the check record hashes
+    the description it describes, and lane L's provenance, where present, is lane L's and hashes it
+    too; a cleared description (NULL) leaves none of the three WC keys in raw_data. NULL on both
+    sides of `IS DISTINCT FROM` is a cleared site's, and not distinct."""
+    keys = ", ".join(W._sql_text(key) for key in sorted(wc4.WC_KEYS))
+    digest = "encode(sha256(convert_to(u.description, 'UTF8')), 'hex')"
+    return [
+        "    -- invariant 5 (WC): the check record's desc_sha256 is the sha256 of the description",
+        "    SELECT count(*) INTO bad",
+        f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id",
+        "     WHERE p.column_name = 'raw_data'",
+        f"       AND (u.raw_data -> {W._sql_text(wc4.CHECK_KEY)} ->> 'desc_sha256')",
+        f"           IS DISTINCT FROM {digest};",
+        *_raise_if(f"{label}: % site(s) break the check record sha256 invariant"),
+        "",
+        "    -- invariant 6 (WC): a provenance beside a checked text is lane L's and hashes it; a",
+        "    -- cleared description leaves none of the WC keys in raw_data.",
+        "    SELECT count(*) INTO bad",
+        f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id",
+        "     WHERE p.column_name = 'raw_data' AND (",
+        "           (u.raw_data ? '_description_provenance' AND (",
+        "               (u.raw_data -> '_description_provenance' ->> 'lane') IS DISTINCT FROM 'L'",
+        "               OR (u.raw_data -> '_description_provenance' ->> 'desc_sha256')",
+        f"                  IS DISTINCT FROM {digest}))",
+        f"        OR (u.description IS NULL AND u.raw_data ?| ARRAY[{keys}]));",
+        *_raise_if(f"{label}: % site(s) break the provenance or clear invariant"),
+    ]
+
+
 def render_apply(chunk: Chunk4, *, rehearse: bool = False) -> str:
     """One transaction that writes the chunk and journals every row, or writes nothing.
 
@@ -1405,7 +1775,7 @@ def render_apply(chunk: Chunk4, *, rehearse: bool = False) -> str:
     add("    -- jsonb, so a re-serialisation of the same object is refused as the no-op it is.")
     add(f"    SELECT count(*) INTO bad FROM {PLAN_TABLE} p")
     add("     WHERE p.new_value IS NOT DISTINCT FROM p.old_value OR p.new_value = ''")
-    add(f"        OR (p.new_value IS NULL AND p.test_id <> {W._sql_text(TEST_CARD_CLEAR)})")
+    add(f"        OR (p.new_value IS NULL AND {_null_tests_sql(chunk.group)})")
     add(
         "        OR "
         + only_for(
@@ -1468,13 +1838,18 @@ def render_apply(chunk: Chunk4, *, rehearse: bool = False) -> str:
     )
     add("    END IF;")
     add("")
-    add("    -- invariant 3 (P4, L): the provenance's desc_sha256 is the sha256 of the description")
-    add("    SELECT count(*) INTO bad")
-    add(f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id")
-    add("     WHERE p.column_name = 'raw_data'")
-    add("       AND (u.raw_data -> '_description_provenance' ->> 'desc_sha256')")
-    add("           IS DISTINCT FROM encode(sha256(convert_to(u.description, 'UTF8')), 'hex');")
-    out.extend(_raise_if(f"{label}: % site(s) break the description sha256 invariant"))
+    if chunk.group is Group.WC:
+        out.extend(_wc_invariants(label))
+    else:
+        add(
+            "    -- invariant 3 (P4, L): the provenance's desc_sha256 is the sha256 of the description"
+        )
+        add("    SELECT count(*) INTO bad")
+        add(f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id")
+        add("     WHERE p.column_name = 'raw_data'")
+        add("       AND (u.raw_data -> '_description_provenance' ->> 'desc_sha256')")
+        add("           IS DISTINCT FROM encode(sha256(convert_to(u.description, 'UTF8')), 'hex');")
+        out.extend(_raise_if(f"{label}: % site(s) break the description sha256 invariant"))
     add("")
     add("    -- invariant 4 (P5): a written card's sha256 is its provenance's card.text_sha256")
     add("    SELECT count(*) INTO bad")
@@ -1692,12 +2067,15 @@ def holds_value(stored: Mapping[str, Any], row: Row4, planned: str | None) -> bo
 
 
 def invariant_problems(stored: Mapping[str, Any], rows: Sequence[Row4]) -> list[str]:
-    """The two in-database sha256 invariants, re-checked on what the read returned."""
+    """The two in-database sha256 invariants, re-checked on what the read returned (a WC site:
+    lane WC's own, `wc4.wc_problems`)."""
     problems: list[str] = []
     columns = {row.column for row in rows}
     raw = stored.get("raw_data")
     provenance = raw.get(M.PROVENANCE_KEY) if isinstance(raw, dict) else None
     site = stored.get("id")
+    if rows and rows[0].group is Group.WC:
+        return [f"{site}: {problem}" for problem in wc4.wc_problems(stored.get("description"), raw)]
     if "raw_data" in columns:
         description = stored.get("description")
         if (
