@@ -12614,16 +12614,27 @@ after that merge.
   concatenate the earlier `drawn-*.txt`.
 
 **Two sweeps raced in the worktree (2026-09-26 13:01:45 UTC).**
-- What happened: two writers raced on `scripts/remediation/phase3/snapshot_plan.py` in
-  `.claude/worktrees/wa`, in the pattern of two concurrent `mutation_sweep` runs sharing
-  `output/remediation/logs/phase3_mutations/backup/`. The second copied the file into the backup
-  after the first had written its mutant. Both restored that mutant and stopped on "restore is not
-  byte-identical", leaving the first case's mutant ("country dropped from the planned fields") in
-  the file and in the backup.
-- Found by: this lane's own sweep, started two seconds later. It stopped on "anchor not found"
-  before writing anything.
-- Who: no process of this lane and none of the orchestrator's (it confirmed); another agent of the
-  build workflow is the likely writer.
+- Who: this lane's builder, running as two instances. After the interruption, the WA builder ran
+  twice at once: one agent id (`a6344ab0150ae043a`), one `claude.exe` (pid 26224) and one
+  transcript, so a message sent to that id came back to its sender. Each instance saw the other
+  only from about 13:05 UTC, through edits in the worktree it had not made. Instance A ran
+  `C:/tmp/wa_sweep_driver.py` (354 cases, log `C:/tmp/wa_sweep.log`) from 13:01:41 UTC. Instance B
+  ran `C:/tmp/wa_sweep/driver.py` from about 13:01:43 UTC. No process of the orchestrator was
+  involved.
+- What happened: both sweeps started with the same two `snapshot_plan.py` cases and shared
+  `output/remediation/logs/phase3_mutations/backup/snapshot_plan.py`. The order below is read from
+  the backup's mtime and the two runs' outputs:
+  1. A's second case ("country dropped from the planned fields") wrote its mutant at 13:01:45.44.
+  2. B's first case then copied that mutated file into the shared backup. `copy2` keeps the mtime,
+     and the backup's mtime is 13:01:45.44.
+  3. B wrote its own mutant, restored the backup (A's mutant) and passed its own restore check.
+  4. B's second case stopped on "anchor not found", because the `"country",` line was gone.
+  5. A restored from the backup that B had overwritten. It stopped on "restore is not
+     byte-identical (88f2b6bf... -> 987f714b...)".
+
+  The file and the backup kept A's mutant.
+- Found by: the sweeps' own checks (A's restore check, B's anchor check). Re-run alone with a
+  separate backup directory (`C:/tmp/wa_sweep_backup_probe`), both cases restore byte-identically.
 - Repair: the file was restored from HEAD (`git checkout --`). Nothing was committed with the
   mutant, and the full suite had finished at 13:00:36 on the intact tree. The orchestrator checked
   that `c4b4dd1`, the main checkout and the p4-pilot worktree carry the `"country",` line.
