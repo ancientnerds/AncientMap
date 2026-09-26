@@ -184,8 +184,10 @@ jobs:
       # which are git-lfs objects (26 MB): a checkout without lfs hands them over as pointer
       # files and every tag_site() call dies on json.load. The objects are cached by their OID
       # list, so the LFS bandwidth (shared with the VPS deploy) is spent once per change.
+      # data/boundaries/countries.geojson (the reverse geocoder's countries, an LFS object too)
+      # is read by tests/pipeline/test_e3_oceania.py since the O7 rule of 2026-09-26.
       - name: List the boundary LFS objects
-        run: git lfs ls-files --long --include "public/data/historical/**" | cut -d' ' -f1 | sort > .lfs-historical-oids
+        run: git lfs ls-files --long --include "public/data/historical/**,data/boundaries/countries.geojson" | cut -d' ' -f1 | sort > .lfs-historical-oids
 
       - name: Cache the boundary LFS objects
         uses: actions/cache@v4
@@ -194,7 +196,7 @@ jobs:
           key: lfs-historical-${{ hashFiles('.lfs-historical-oids') }}
 
       - name: Pull the boundary LFS objects
-        run: git lfs pull --include "public/data/historical/**"
+        run: git lfs pull --include "public/data/historical/**,data/boundaries/countries.geojson"
 
       - name: Setup Python
         uses: actions/setup-python@v5
