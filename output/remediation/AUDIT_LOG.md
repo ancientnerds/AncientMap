@@ -12715,3 +12715,19 @@ deselected, 0 failed** (337 s; the skips are gitignored working data this worktr
 clean, `ruff format --check` clean on the 13 touched Python files; `lint-imports` 2 kept, 0 broken;
 `vulture` clean; the Lyra import check passes (nothing under `pipeline/` or `api/` touched, so no
 mypy run).
+
+## 2026-09-26 - WA v3: one recorded selector answer repaired before its import (runbook section 5)
+
+`handoff4.py ready` (wip/wa's shape check, 3d3ba31) over `handoff/p4-v3-select` named three recorded
+answers the select import refuses (`CARD W5: a1 and t1 overlap; no offered span is their union`).
+Two were already imported with p4-pilot at 6e448e3, whose `ready` had no shape check: p4-2006 and
+p4-2011 - their sites stay held `selection-refused` and go to lane WC. The third was repaired while
+`runs/v3-2026-09-26/p4-2061/select.json` did not exist: site `27f27e7e-4224-4378-b0d2-ef22f88bd725`,
+label `27f27e7e-4224-4378-b0d2-ef22f88bd725/select`; the agent's corrected draft
+(`p4-v3-select-scratch/p4-2061/27f27e7e-...fixed.txt`, sha256
+`22ee9c7639d4634f075103c4bbb1c3974a28f2f157dcd1b13199ebb132cb7277`) passed `check-answer`; the
+refused answer (sha256 `85d04877a4fb1bf737b930116c684504e1919a8d8ebe98eefe49222c6541a2af`, kept at
+`C:/tmp/wa_run/p4-2061.refused-answer.json`) was deleted and the draft recorded with `handoff4.py
+record`; `ready` then read ok with 0 shape problems. wip/wa's second-review fixes were merged
+(c4b4dd1) and the p4-pilot worktree fast-forwarded between import rounds (no mass4 process
+running), so every later brief records through `record` and every import's `ready` checks shapes.
