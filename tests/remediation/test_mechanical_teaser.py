@@ -35,20 +35,45 @@ CARD = W.teaser_lane(W.CARD, 1)
 P5_KEY = {"lane": "W", "desc_sha256": "0" * 64, "card": {"items": [], "text_sha256": "1" * 64}}
 
 
+#: The verification an accepted outcome carries (`teaser/run.py outcomes`): its one claim proven.
+VERIFICATION = {
+    "stage": "verify",
+    "batch_id": "verify-001",
+    "answered_by": "teaser-verify-001",
+    "answered_at": "2026-09-26T13:00:00+00:00",
+    "card": "c",
+    "verdict": "VERIFIED",
+    "unproven": 0,
+    "claims": [
+        {
+            "claim": "lived in from roughly 3180 BC",
+            "verdict": "SUPPORTED",
+            "url": "https://example.org/skara-brae",
+            "quote": "occupied from roughly 3180 BC to around 2500 BC",
+            "quote_outcome": "found",
+            "proven": True,
+        }
+    ],
+}
+
+
 def outcome(site_id: str = T.SKARA, status: str = W.ACCEPTED, **over: Any) -> dict[str, Any]:
+    accepted = status == W.ACCEPTED
     base: dict[str, Any] = {
         "site_id": site_id,
         "name": T.NAMES[site_id],
         "desc_sha256": T.sha(T.DESCRIPTIONS.get(site_id) or ""),
         "status": status,
-        "reason": None if status == W.ACCEPTED else "failed-after-two-rewrites",
-        "card": T.GOOD.get(site_id) if status == W.ACCEPTED else None,
+        "reason": None if accepted else "failed-after-two-rewrites",
+        "card": T.GOOD.get(site_id) if accepted else None,
         "writer": {"stage": "write", "answered_by": "teaser-write-001", "answered_at": "t"}
-        if status == W.ACCEPTED
+        if accepted
         else None,
-        "provenance": T.teaser(site_id) if status == W.ACCEPTED else None,
-        "findings": [] if status == W.ACCEPTED else [{"card": "x", "reasons": ["Unsupported."]}],
-        "attempts": 1 if status == W.ACCEPTED else 3,
+        "provenance": T.teaser(site_id) if accepted else None,
+        "findings": [] if accepted else [{"card": "x", "reasons": ["Unsupported."]}],
+        "attempts": 1 if accepted else 3,
+        "verification": "VERIFIED" if accepted else None,
+        "verifications": [VERIFICATION] if accepted else [],
     }
     base.update(over)
     return base
@@ -163,6 +188,55 @@ class TestTheDecision:
         desc_sha = T.sha(T.DESCRIPTIONS[T.SKARA])
         assert card.premise == f"{text_sha}|{desc_sha}|{desc_sha}"
         assert card.evidence[1]["quote"].startswith("the site's main facts [S1]")
+
+    def test_the_verifier_and_its_verdict_are_the_write_s_evidence(self) -> None:
+        _prov, card = W.classify(outcome(), live(), {}, "wb-test")
+        verifier = card.evidence[2]
+        assert (
+            verifier["source"]
+            == "lane WB run wb-test: verifier teaser-verify-001 (verify), VERIFIED"
+        )
+        assert (
+            verifier["quote"]
+            == "lived in from roughly 3180 BC [SUPPORTED: https://example.org/skara-brae]"
+        )
+        assert "web-verified VERIFIED" in card.note and len(card.evidence) == 3
+
+    def test_a_web_fact_the_card_rests_on_is_evidence_of_its_write(self) -> None:
+        fact = {"id": "W1", "url": "https://en.wikipedia.org/wiki/X", "quote": "In 1850 a storm."}
+        provenance = CP.build(
+            run="wb-test",
+            ai_system="Claude Opus (Anthropic): test",
+            card=T.GOOD[T.SKARA],
+            description=T.DESCRIPTIONS[T.SKARA],
+            stage="check-v",
+            checker="teaser-check-v-001",
+            checked_at="2026-09-26T14:00:00+00:00",
+            claims=[{"claim": "a storm in 1850", "support": ["W1"]}],
+            verify={**T.VERIFIED, "stage": "verify2", "by": "teaser-verify2-001"},
+            web_facts=[fact],
+        )
+        _prov, card = W.classify(outcome(provenance=provenance), live(), {}, "wb-test")
+        assert card.evidence[-1] == {
+            "source": "web fact W1",
+            **{k: fact[k] for k in ("url", "quote")},
+        }
+
+    @pytest.mark.parametrize("verification", [None, "CONTRADICTED", "UNPROVEN"])
+    def test_an_accepted_card_that_is_not_verified_is_never_written(self, verification) -> None:
+        decided = W.classify(outcome(verification=verification), live(), {}, "wb-test")
+        assert decided.reason == W.NOT_VERIFIED
+
+    def test_an_outcome_from_before_the_verification_is_never_written(self) -> None:
+        old = {k: v for k, v in outcome().items() if k not in ("verification", "verifications")}
+        assert W.classify(old, live(), {}, "wb-test").reason == W.NOT_VERIFIED
+
+    def test_a_card_contradicted_after_its_rewrite_is_cleared(self) -> None:
+        cleared = outcome(status=W.CLEARED, reason="contradicted-after-verify")
+        prov, card = W.classify(cleared, live(), {}, "wb-test")
+        assert (card.old_value, card.new_value) == (T.OLD_CARD, None)
+        assert card.rule == "card-clear-contradicted-after-verify"
+        assert json.loads(prov.new_value)["_description_provenance"]["card"] is None
 
     def test_a_cleared_card_removes_the_teaser_provenance_and_writes_null(self) -> None:
         raw = json.dumps({"_card_provenance": T.teaser(T.SKARA)}, ensure_ascii=False)
