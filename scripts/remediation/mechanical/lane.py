@@ -60,6 +60,7 @@ this module - and every lane that does not write card_stats - never imports the 
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -642,18 +643,54 @@ SITE_TYPE_SHAPE_READBACK = journal_readback(
 
 
 # ------------------------------------------------------------------------ the scope lane (E4)
-def outside_e3_window(prefix: str = "") -> str:
+def country_key_sql(prefix: str = "") -> str:
+    """SQL: `pipeline.normalizers.dates.country_key` - the text after the country's last comma,
+    spaces trimmed, lower-cased. `rtrim(c, replace(c, ',', ''))` strips from the right every
+    character but the comma, which leaves the value up to its last comma (or '' without one);
+    replacing that prefix by '' leaves the last part. Portable: PostgreSQL and SQLite read `rtrim`
+    and `replace` alike (the equivalence test runs the rendered SQL in SQLite)."""
+    c = f"{prefix}country"
+    return f"lower(trim(replace({c}, rtrim({c}, replace({c}, ',', '')), '')))"
+
+
+def in_oceania_sql(prefix: str = "") -> str:
+    """SQL: the row lies in Oceania - `pipeline.normalizers.dates.in_oceania`, rendered from the
+    same lists: its `country_key` is one of `OCEANIA_COUNTRIES`, or it names a state of
+    `OCEANIA_PARTS` and its point lies in one of that state's Pacific boxes (edges included)."""
+    from pipeline.normalizers.dates import OCEANIA_COUNTRIES, OCEANIA_PARTS
+
+    p = prefix
+    country = country_key_sql(p)
+    listed = ", ".join(sql_literal(name) for name in sorted(OCEANIA_COUNTRIES))
+    parts = " OR ".join(
+        f"({country} = {sql_literal(state)} AND {p}lon BETWEEN {lon_min} AND {lon_max} "
+        f"AND {p}lat BETWEEN {lat_min} AND {lat_max})"
+        for state, boxes in sorted(OCEANIA_PARTS.items())
+        for lon_min, lat_min, lon_max, lat_max in boxes
+    )
+    return f"({country} IN ({listed}) OR {parts})"
+
+
+def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
     """SQL: the row's date lies past the E3 cutoff of its region - `passes_date_cutoff()` negated.
 
     Built from the project's own rule and constants (`pipeline/normalizers/dates.py`), never
     re-typed: the date is `period_end or period_start` (Python's `or`, so a 0 `period_end` falls
-    through too), the region is the longitude window, and a row without a date or a longitude is
-    never outside (the function includes it). `prefix` qualifies the columns (`u.`).
+    through too), the region is `e3_region`'s - Oceania (`in_oceania_sql`), then the longitude
+    window of the Americas, then the rest of the world - and a row without a date or a longitude
+    is never outside (the function includes it). `prefix` qualifies the columns (`u.`).
+
+    `before_o7=True` renders the rule as it stood until the owner's decision O7 (2026-09-26,
+    Oceania through 1500 AD): the longitude window alone. The scope-e4 lane was rehearsed and
+    applied on 2026-09-25 with that text in its residual, and its committed APPLY.sql and
+    ROLLBACK.sql must stay what its plan renders (`tests/remediation/test_mechanical.py`,
+    `TestTheDeliveredLanes`), so it keeps it.
     """
     from pipeline.normalizers.dates import (
         AMERICAS_LON_MAX,
         AMERICAS_LON_MIN,
         DATE_CUTOFF_AMERICAS,
+        DATE_CUTOFF_OCEANIA,
         DATE_CUTOFF_REST_OF_WORLD,
     )
 
@@ -662,8 +699,9 @@ def outside_e3_window(prefix: str = "") -> str:
         f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
         f"ELSE {p}period_start END)"
     )
+    oceania = "" if before_o7 else f"WHEN {in_oceania_sql(p)} THEN {DATE_CUTOFF_OCEANIA} "
     cutoff = (
-        f"(CASE WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
+        f"(CASE {oceania}WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
         f"THEN {DATE_CUTOFF_AMERICAS} ELSE {DATE_CUTOFF_REST_OF_WORLD} END)"
     )
     return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
@@ -671,7 +709,7 @@ def outside_e3_window(prefix: str = "") -> str:
 
 _UNDECIDED_OUT_OF_WINDOW = Residual(
     "curated rows outside the E3 window with no scope decision",
-    f"{outside_e3_window()} AND scope_status IS NULL",
+    f"{outside_e3_window(before_o7=True)} AND scope_status IS NULL",
 )
 
 #: E4 (owner decision 2026-09-19, migration 0020): flag an out-of-scope site AND hide it
@@ -1356,6 +1394,108 @@ NAME_L5_READBACK = journal_readback(
 LANES[NAME_L5.name] = NAME_L5
 LANE_READBACKS[NAME_L5.name] = NAME_L5_READBACK
 
+# -------------------------------------------------------------- the scope review (WD2, O7)
+#: The E3 scope review of 2026-09-26 (`scope_review.py`): an entry that is no archaeological site
+#: at all is retired with its reason - decided per site by Opus through the handoff, carried by
+#: machine-checked quotes, never by a pattern - and a scope-e4 retirement the O7 rule (Oceania
+#: through 1500 AD) no longer carries is taken back to `in_scope`. Two cells per site, like
+#: scope-e4; the old value may be NULL (an unassessed row) or a status (a `pending` row, a
+#: retirement taken back). The premise is what the decision rests on - the name, the type, the
+#: point, the country the O7 rule reads and the dates - and not the description: the description
+#: lanes (WA/WC) rewrite it in parallel, and a new text of the same entry does not move its scope.
+#:
+#: **One lane per wave** (`scope-review-<wave>`, like the card_stats waves): a write lands at
+#: most 100 sites, and a run stamp is applied once (`apply.py` refuses a stamp that already
+#: journals rows), so every step - and every later round's decisions - is a wave with its own
+#: stamp, key prefix and directory (`mechanical_scope_review/<wave>/`).
+SCOPE_REVIEW_LANE = re.compile(r"^scope-review-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
+SCOPE_REVIEW_ROOT = "mechanical_scope_review"
+_UNDECIDED_OUT_OF_WINDOW_O7 = Residual(
+    "curated rows outside the E3 window (O7) with no scope decision",
+    f"{outside_e3_window()} AND scope_status IS NULL",
+)
+#: The reason prefix of the lane's retirements, which the read-back counts.
+NOT_A_SITE_PREFIX = "E3: not an archaeological site"
+SCOPE_REVIEW_PREMISE_SQL = (
+    "concat_ws(' | ', u.name, coalesce(u.site_type, 'NULL'), u.lat::text, u.lon::text, "
+    "coalesce(u.country, 'NULL'), coalesce(u.period_start::text, 'NULL'), "
+    "coalesce(u.period_end::text, 'NULL'))"
+)
+
+
+def scope_review_lane(wave: str) -> Lane:
+    """The scope review's write of one wave: its own stamp, key prefix and directory.
+
+    `wave` is a date label (`2026-09-26`, `2026-09-26b`): the only labels `apply.py --lane
+    scope-review-<wave>` resolves, so a plan written under any other label could never be applied.
+    """
+    if SCOPE_REVIEW_LANE.match(f"scope-review-{wave}") is None:
+        raise ValueError(f"{wave!r} is not a wave label like 2026-09-26 or 2026-09-26b")
+    return Lane(
+        name=f"scope-review-{wave}",
+        key_prefix=f"scope-review-{wave}",
+        run_stamp=f"{wave}_mechanical-scope-review",
+        test_id="E3/scope-review",
+        confidence="authoritative",
+        label="E3 scope review",
+        plan_table="_scope_review_plan",
+        out_dir_name=f"{SCOPE_REVIEW_ROOT}/{wave}",
+        post_commit_residual=_UNDECIDED_OUT_OF_WINDOW_O7,
+        rehearsal_residual=_UNDECIDED_OUT_OF_WINDOW_O7,
+        premise_sql=SCOPE_REVIEW_PREMISE_SQL,
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        cells=(
+            Column("scope_status", "text", allowed_new_values=SCOPE_STATUSES, fills_null=True),
+            Column("scope_reason", "text", fills_null=True),
+        ),
+    )
+
+
+@functools.cache
+def scope_review_readback(lane: Lane) -> str:
+    """The read-only verification of a scope-review wave, before and after its write: the scope
+    counts, the O7 residual, the retirements it exists to write and the ones O7 takes back."""
+    return journal_readback(
+        lane,
+        [
+            *(
+                (
+                    f"curated rows with scope_status {status}",
+                    _CURATED_ROWS
+                    + (
+                        "scope_status IS NULL"
+                        if status == "NULL"
+                        else f"scope_status = {sql_literal(status)}"
+                    ),
+                )
+                for status in ("NULL", *SCOPE_STATUSES)
+            ),
+            (
+                _UNDECIDED_OUT_OF_WINDOW_O7.metric,
+                _CURATED_ROWS + _UNDECIDED_OUT_OF_WINDOW_O7.predicate,
+            ),
+            (
+                "curated rows retired as no archaeological site",
+                _CURATED_ROWS
+                + "scope_status = 'retired' AND "
+                + f"scope_reason LIKE {sql_literal(NOT_A_SITE_PREFIX + '%')}",
+            ),
+            (
+                "curated Oceania rows retired for their date",
+                _CURATED_ROWS
+                + "scope_status = 'retired' AND scope_reason LIKE 'E3: period_start%' AND "
+                + in_oceania_sql(),
+            ),
+            (
+                "curated rows with a scope_status but no scope_reason",
+                _CURATED_ROWS
+                + "scope_status IS NOT NULL AND (scope_reason IS NULL OR scope_reason = '')",
+            ),
+        ],
+    )
+
+
 #: A card_stats recompute is re-run after every later write wave, each wave a lane of its own
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
 #: twice" still holds, and its own directory.
@@ -1363,7 +1503,8 @@ CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
 
 
 def resolve_lane(name: str) -> Lane:
-    """The lane called `name`: a registered one, or a card_stats wave. `KeyError` otherwise.
+    """The lane called `name`: a registered one, a scope-review wave or a card_stats wave.
+    `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
@@ -1371,6 +1512,9 @@ def resolve_lane(name: str) -> Lane:
     """
     if name in LANES:
         return LANES[name]
+    review = SCOPE_REVIEW_LANE.match(name)
+    if review is not None:
+        return scope_review_lane(review.group(1))
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

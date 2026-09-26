@@ -650,6 +650,104 @@ class TestTheWindowPredicate:
         assert "period_end IS NOT NULL AND period_end <> 0 THEN period_end" in sql
         assert L.outside_e3_window("u.").startswith("(u.lon IS NOT NULL AND ")
 
+    def test_the_o7_window_is_passes_date_cutoff_negated_in_a_real_sql_engine(self) -> None:
+        """O7 (2026-09-26): Oceania through 1500 AD. The SQL is rendered from the same lists as the
+        Python rule; evaluated in SQLite over every kind of row the rule distinguishes, it must
+        answer exactly `not passes_date_cutoff` - a list or a box rendered wrong answers wrong."""
+        import sqlite3
+
+        from pipeline.normalizers.dates import OCEANIA_PARTS, passes_date_cutoff
+
+        rows = [
+            ("Australia", -37.21, 144.81),
+            (" NEW ZEALAND ", -41.29, 174.78),
+            ("Northern Mariana Islands", 14.97, 145.62),
+            ("Chile", -27.11, -109.39),
+            ("Chile", -33.45, -70.65),
+            ("France", -22.27, 166.45),
+            ("France", 48.85, 2.35),
+            ("USA", 13.44, 144.79),
+            ("United States", 34.05, -118.24),
+            ("Indonesia", -4.0, 138.0),
+            ("Japan", 24.44, 123.01),
+            (None, -37.21, 144.81),
+            ("Mexico", 20.0, -100.0),
+            # the spellings of the other sources (read-only, 2026-09-26): ISO codes, "Region, State"
+            ("AU", -37.21, 144.81),
+            ("gu", 13.44, 144.79),
+            ("US", 19.42, -155.29),
+            ("US", 34.05, -118.24),
+            ("Queensland, Australia", -27.0, 153.0),
+            ("Western Australia,Australia", -22.59, 117.18),
+            ("Chile, Easter Island", -27.11, -109.39),
+            ("Hawaii, United States", 19.42, -155.29),
+            ("Texas, United States", 31.0, -100.0),
+            ("Korea, South", 37.57, 126.98),
+            ("a, b, c, fiji", -18.0, 178.0),
+            ("Australia,", -37.21, 144.81),
+            (",", -37.21, 144.81),
+            ("", -37.21, 144.81),
+        ]
+        for state, boxes in OCEANIA_PARTS.items():
+            for lon_min, lat_min, lon_max, lat_max in boxes:
+                rows += [(state, lat_min, lon_min), (state, lat_max, lon_max)]
+                rows += [(state, lat_min - 0.5, lon_min), (state, lat_max, lon_max + 0.5)]
+        db = sqlite3.connect(":memory:")
+        db.execute(
+            "CREATE TABLE s (country TEXT, lat REAL, lon REAL, period_start INT, period_end INT)"
+        )
+        records = [
+            {"country": c, "lat": la, "lon": lo, "period_start": year, "period_end": None}
+            for c, la, lo in rows
+            for year in (499, 500, 501, 1200, 1500, 1501)
+        ]
+        db.executemany(
+            "INSERT INTO s VALUES (:country, :lat, :lon, :period_start, :period_end)", records
+        )
+        sql = f"SELECT country, lat, lon, period_start, {L.outside_e3_window()} FROM s"
+        got = {(c, la, lo, y): bool(out) for c, la, lo, y, out in db.execute(sql)}
+        want = {
+            (r["country"], r["lat"], r["lon"], r["period_start"]): not passes_date_cutoff(r)
+            for r in records
+        }
+        assert got == want
+        assert got[("France", -22.27, 166.45, 1200)] is False
+        assert got[("France", 48.85, 2.35, 1200)] is True
+        assert got[("Queensland, Australia", -27.0, 153.0, 1200)] is False
+        assert got[("Korea, South", 37.57, 126.98, 1200)] is True
+
+    def test_the_country_key_is_python_s_in_a_real_sql_engine(self) -> None:
+        """`country_key_sql` is `dates.country_key`, value for value, commas and spaces included."""
+        import sqlite3
+
+        from pipeline.normalizers.dates import country_key
+
+        values = [
+            "Australia",
+            "  New Zealand ",
+            "Queensland, Australia",
+            "a,b,c",
+            "b, a, b",
+            "x ,  y ",
+            "Australia,",
+            ",",
+            "",
+            ",,",
+            "Congo, Democratic Republic of the [Zaire]",
+            "Ukraine, Türkei, Bulgarien",
+        ]
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE s (country TEXT)")
+        db.executemany("INSERT INTO s VALUES (?)", [(v,) for v in values])
+        got = dict(db.execute(f"SELECT country, {L.country_key_sql()} FROM s"))
+        assert got == {v: country_key(v) for v in values}
+
+    def test_before_o7_is_the_longitude_window_alone(self) -> None:
+        sql = L.outside_e3_window(before_o7=True)
+        assert "country" not in sql
+        assert "country" in L.outside_e3_window()
+        assert L.in_oceania_sql("u.") in L.outside_e3_window("u.")
+
 
 class TestTheCells:
     def test_every_decision_fills_both_columns_from_null(self) -> None:

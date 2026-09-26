@@ -967,7 +967,14 @@ def shape_record(**over: Any) -> A.ChangeRecord:
 #: card_stats lanes are built by `lane.resolve_lane` (they import the card generator), so they
 #: are not in `L.LANES`, and a parametrisation over `L.LANES` alone would never reach them.
 CARD_STATS_WAVE = "card-stats-2026-09-23"
-ALL_LANES: dict[str, L.Lane] = {**L.LANES, CARD_STATS_WAVE: L.resolve_lane(CARD_STATS_WAVE)}
+#: A scope-review wave (`scope_review.py`): built by `lane.resolve_lane` like the card_stats waves,
+#: so the parametrisations reach it; its plan is fabricated (`scope_review_plan`).
+SCOPE_REVIEW_WAVE = "scope-review-2026-09-26"
+ALL_LANES: dict[str, L.Lane] = {
+    **L.LANES,
+    CARD_STATS_WAVE: L.resolve_lane(CARD_STATS_WAVE),
+    SCOPE_REVIEW_WAVE: L.resolve_lane(SCOPE_REVIEW_WAVE),
+}
 
 #: A row of another source, as `--probe-guards` reads it from production.
 FOREIGN = {
@@ -1511,6 +1518,8 @@ def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path
         return card_stats_plan(directory, lane)
     if lane is L.NAME_L5:
         return name_l5_plan(directory)
+    if L.SCOPE_REVIEW_LANE.match(lane.name):
+        return scope_review_plan(directory, lane)
     plan_path = directory / "PLAN.jsonl"
     plan_path.write_text(
         (A.lane_dir(lane) / "PLAN.jsonl").read_text(encoding="utf-8"),
@@ -1590,6 +1599,41 @@ def name_l5_plan(directory: Path) -> tuple[list[A.ChangeRecord], Path]:
         for site, column, old, new in cells
     )
     plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-26T00:00:00+00:00", lane=L.NAME_L5)
+    plan_path = directory / "PLAN.jsonl"
+    P.write_plan_jsonl(plan, plan_path)
+    P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
+    return A.load_records(plan_path), plan_path
+
+
+def scope_review_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path]:
+    """A scope-review wave's plan, which an Opus run produces (`scope_review.py`), fabricated in
+    its two shapes: an unassessed row retired as no archaeological site, and a scope-e4
+    retirement taken back by O7."""
+    cells = [
+        (SITE_BOA, "scope_status", None, "retired"),
+        (SITE_BOA, "scope_reason", None, "E3: not an archaeological site (natural_formation): x"),
+        (SITE_GIANTS_RING, "scope_status", "retired", "in_scope"),
+        (SITE_GIANTS_RING, "scope_reason", "E3: period_start 1200 is 700 years past", "E3 (O7)"),
+    ]
+    changes = tuple(
+        P.Verdict(
+            site_id=site,
+            site_name="a site",
+            ok=True,
+            old_value=old,
+            new_value=new,
+            rule="scope-review",
+            reason="",
+            note=f"{column} {old} -> {new}",
+            phase3=False,
+            finding_test_id="E3/scope-review",
+            evidence=({"source": "test", "quote": "x"},),
+            premise=f"premise-of-{site[:8]}",
+            column=column,
+        )
+        for site, column, old, new in cells
+    )
+    plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-26T00:00:00+00:00", lane=lane)
     plan_path = directory / "PLAN.jsonl"
     P.write_plan_jsonl(plan, plan_path)
     P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)

@@ -3,7 +3,11 @@
 ## The decision it carries out
 
 E3 (owner, 2026-09-19): the project covers the Americas through 1500 AD and the rest of the world
-through 500 AD, and museums stay if they exhibit ancient material. E4: an out-of-scope site is
+through 500 AD, and museums stay if they exhibit ancient material. O7 (owner, 2026-09-26) puts
+Oceania on the Americas' cutoff; this lane (scope-e4, applied 2026-09-25) ran before it and keeps
+the rule it ran with (`lane.outside_e3_window(before_o7=True)`) - the rule as it stands now is
+`pipeline.normalizers.dates.e3_region`, and `scope_review.py` re-reads this lane's retirements
+under it (none lies in Oceania, 2026-09-26). E4: an out-of-scope site is
 flagged AND hidden platform-wide, never deleted. Migration 0020 added `scope_status`
 (`in_scope`/`retired`/`pending`) and `scope_reason`; every consumer reads it through
 `pipeline/utils/public_sites.not_retired()`. On 2026-09-23 both are NULL on all 5,004 curated rows.

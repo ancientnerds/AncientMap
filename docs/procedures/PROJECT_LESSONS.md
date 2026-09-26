@@ -149,12 +149,22 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 
 ## Inhalte und Scope
 
-- **Das mittelalterliche Alte Welt ist als Scope verboten**, Amerika bis 1500 AD. Die Regel
+- **Das mittelalterliche Alte Welt ist als Scope verboten**, Amerika bis 1500 AD, Ozeanien seit
+  O7 (Eigentümer, 2026-09-26) ebenfalls bis 1500 AD (`pipeline/normalizers/dates.py`,
+  `e3_region`: Land, ISO-Code oder „Region, Land“; Hawaii/Rapa Nui über Inselboxen). Die Regel
   liegt als Prompt-LABEL (`summary.txt`, PERIOD SCOPE) vor, nicht als Datumscheck — nur
   1,45 % der Sites sind datiert. Sichtbarkeit ab `significance>=2`, Rückzug = HTTP 410.
   *(`project-medieval-scope-rule`, 2026-09-11)*
 - **Jede Zitatstelle muss maschinell belegbar sein.** LLM setzt nie Zitationsnummern.
   *(`feedback_no_ai_slop`, 2026-04-08)*
+- **A Commons `thumburl` is no proof of a picture, and an original is no thumbnail.**
+  `list=categorymembers&cmtype=file` lists every file of a category, and `prop=imageinfo` with
+  `iiurlwidth` answers a JPEG page or frame for a PDF, a WebM or a DjVu and Commons' file-type icon
+  for an MP3 or a FLAC (measured 2026-09-26): the MIME type decides what is a picture
+  (`scripts/remediation/served_image/commons.py`, `picture_url`). Store the 1280 px rendering a
+  check was shown, never the original - the first 12 originals of Category:Casa Grande Ruins
+  National Monument are 9.0-20.1 MB each, and a TIFF original is no `<img>` source.
+  *(WD2 review, 2026-09-26)*
 - **Kein Fallback- und Defensiv-Code** — Ursache fixen oder `available=False` mit klarem
   Grund. *(`feedback_no_fallbacks`, 2026-04-13; auch in `CLAUDE.md`)*
 - **MiniMax PAYG existiert nicht** — nie nennen, immer in der Quota planen. `total_tokens`

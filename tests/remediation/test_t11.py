@@ -118,7 +118,10 @@ def _world(t11: Any) -> Any:
       Earth and not to the longitude window in the same run.
     * `Polynesia` covers the Marquesas pair (lon -139 / -151) and is Oceania: the region differs
       from the window, the verdict does not.
-    * `Atlantis` covers lon -35 at the equator and is Oceania: here the verdict differs too.
+    * `Atlantis` covers lon -35 at the equator and is Africa: here the verdict differs too.
+      (Until O7 of 2026-09-26 it was Oceania, whose cutoff was then 500 AD; since O7
+      Oceania's cutoff is the Americas' 1500 AD and agrees with the window - the fixture
+      keeps its purpose, a continent whose cutoff is not the window's, under Africa.)
     * `Mare` is one of Natural Earth's own sea features, which answer nothing about a region.
 
     shapely's `box` takes (minx, miny, maxx, maxy) - longitude first, then latitude.
@@ -136,7 +139,7 @@ def _world(t11: Any) -> Any:
             "Europa": "Europe",
             "Mexica": "North America",
             "Polynesia": "Oceania",
-            "Atlantis": "Oceania",
+            "Atlantis": "Africa",
             "Mare": "Seven seas (open ocean)",
         },
         retrieved_at=None,
@@ -299,7 +302,7 @@ class TestT11ScopeWindow:
     def test_a_region_the_two_geographies_disagree_about_is_undecidable(
         self, t11: Any, world: Any
     ) -> None:
-        """lon -35 is the Americas to the longitude window and Oceania to Natural Earth.
+        """lon -35 is the Americas to the longitude window and Africa to Natural Earth.
 
         With 800 AD the two rules give opposite verdicts, so neither may be asserted.
         """
@@ -384,6 +387,34 @@ class TestT11ScopeWindow:
         assert flagged == {s["id"] for s in sites if not passes_date_cutoff(s)}
         assert flagged == {"b", "d", "f"}
 
+    def test_oceania_is_in_scope_through_1500_ad(self, t11: Any, world: Any) -> None:
+        """O7 (owner, 2026-09-26): "Ozeanien wie Amerika". An Oceania row dated 1200 AD passes
+        whether the longitude window holds it or not; 1501 AD is past the cutoff and the note
+        names the region."""
+        from pipeline.normalizers.dates import passes_date_cutoff
+
+        sites = [
+            {**_site("syd", lat=-33.87, lon=151.21, period_start=1200), "country": "Australia"},
+            {**_site("late", lat=-33.87, lon=151.21, period_start=1501), "country": "Australia"},
+            {**_site("noum", lat=-22.27, lon=166.45, period_start=1200), "country": "France"},
+            {**_site("paris", lat=48.85, lon=2.35, period_start=1200), "country": "France"},
+            {**_site("rapa", lat=-27.11, lon=-109.39, period_start=1200), "country": "Chile"},
+        ]
+        got = t11.run(_ctx(sites))
+        assert {f.site_id for f in got} == {"late", "paris"}
+        assert {f.site_id for f in got} == {s["id"] for s in sites if not passes_date_cutoff(s)}
+        late = next(f for f in got if f.site_id == "late")
+        assert "past the Oceania cutoff of 1500 AD" in late.note
+
+    def test_the_marquesas_pair_now_agrees_in_region_too(self, t11: Any, world: Any) -> None:
+        """Hane (stored as France, inside the window) is Oceania to both geographies since O7, so
+        a date the Americas' window admits cannot come out ambiguous."""
+        hane = {
+            **_site("hane", lat=-8.92, lon=-139.53, period_start=1200),
+            "country": "France",
+        }
+        assert t11.run(_ctx([hane])) == []
+
 
 # ------------------------------------------------------------------------- the contract
 class TestT11Contract:
@@ -391,6 +422,33 @@ class TestT11Contract:
         assert t11.TEST_ID == "T11"
         assert t11.DIMENSION == "SCOPE"
         assert callable(t11.run)
+        assert "Oceania" in t11.NAME  # O7: Americas and Oceania through 1500 AD
+
+    def test_what_it_quotes_from_dates_py_stands_in_dates_py(self, t11: Any, world: Any) -> None:
+        """A finding quotes the project's scope function as its evidence: every quote of
+        `pipeline/normalizers/dates.py` must stand in that file as it is now, and cite no line
+        number (O7 moved the lines once already). Code quotes join lines with "; "."""
+        dates = (REPO / "pipeline" / "normalizers" / "dates.py").read_text(encoding="utf-8")
+        source = " ".join(dates.split())
+        findings = t11.run(
+            _ctx(
+                [
+                    _site("noda", lat=10.0, lon=10.0, period_start=None),
+                    _site("nopoint", lat=None, lon=None, period_start=1700),
+                ]
+            )
+        )
+        quoted = [
+            e for f in findings for e in f.evidence if "pipeline/normalizers/dates.py" in e.source
+        ]
+        assert {f.test_id for f in findings} == {"T11/undecidable-date", "T11/undecidable-location"}
+        assert len(quoted) >= 3
+        for evidence in quoted:
+            assert ":" not in evidence.source.split("dates.py", 1)[1].split(" ", 1)[0]
+            for fragment in evidence.quote.split("; "):
+                assert " ".join(fragment.split()) in source, fragment
+        for finding in findings:
+            assert "dates.py:" not in finding.note
 
     def test_the_cutoffs_are_the_projects_own_constants(self, t11: Any) -> None:
         """Re-typing 1500/500 here would let the census drift from the loader silently."""
@@ -398,7 +456,9 @@ class TestT11Contract:
             AMERICAS_LON_MAX,
             AMERICAS_LON_MIN,
             DATE_CUTOFF_AMERICAS,
+            DATE_CUTOFF_OCEANIA,
             DATE_CUTOFF_REST_OF_WORLD,
+            e3_region,
             passes_date_cutoff,
         )
 
@@ -407,17 +467,44 @@ class TestT11Contract:
             AMERICAS_LON_MIN,
             AMERICAS_LON_MAX,
         )
-        assert rule.cutoff_americas == DATE_CUTOFF_AMERICAS == 1500
-        assert rule.cutoff_rest_of_world == DATE_CUTOFF_REST_OF_WORLD == 500
+        assert rule.cutoffs[rule.americas] == DATE_CUTOFF_AMERICAS == 1500
+        assert rule.cutoffs[rule.oceania] == DATE_CUTOFF_OCEANIA == 1500
+        assert rule.cutoffs[rule.rest_of_world] == DATE_CUTOFF_REST_OF_WORLD == 500
         assert rule.passes is passes_date_cutoff
+        assert rule.region_of is e3_region
 
-    def test_the_region_rule_is_the_projects_longitude_window(self, t11: Any) -> None:
+    def test_the_region_rule_is_the_projects_own(self, t11: Any) -> None:
+        """Rewritten for O7 (2026-09-26): `region` took a longitude and knew two regions; it now
+        takes the row, because Oceania is decided by the row's country. The longitude window's
+        edges are asserted as before, and the Oceania cases are added."""
         rule = t11._scope_rule()
-        assert rule.region(-170.0) == ("Americas", 1500)
-        assert rule.region(-30.0) == ("Americas", 1500)
-        assert rule.region(-29.99) == ("rest of world", 500)
-        assert rule.region(0.0) == ("rest of world", 500)
-        assert rule.region(144.81) == ("rest of world", 500)
+
+        def row(lon: float, country: str = "Nowhere", lat: float = 0.0) -> dict[str, Any]:
+            return {"lon": lon, "lat": lat, "country": country}
+
+        assert rule.region(row(-170.0)) == ("Americas", 1500)
+        assert rule.region(row(-30.0)) == ("Americas", 1500)
+        assert rule.region(row(-29.99)) == ("rest of world", 500)
+        assert rule.region(row(0.0)) == ("rest of world", 500)
+        assert rule.region(row(144.81)) == ("rest of world", 500)
+        # House of Taga, Tinian (measured on production 2026-09-26)
+        assert rule.region(row(145.62, "Northern Mariana Islands", 14.97)) == ("Oceania", 1500)
+        # Ahu Akivi, stored as Chile: Oceania, not the Americas, though the window holds it
+        assert rule.region(row(-109.39, "Chile", -27.11)) == ("Oceania", 1500)
+        assert rule.region(row(-70.65, "Chile", -33.45)) == ("Americas", 1500)
+        with pytest.raises(AssertionError, match="without a longitude"):
+            rule.region({"lon": None, "lat": None, "country": "Australia"})
+
+    def test_natural_earth_s_oceania_answers_the_americas_cutoff(self, t11: Any) -> None:
+        """O7: the second geography must not call an Oceania point a 500 AD region, or every
+        Oceania site dated 501-1500 would come out ambiguous."""
+        rule = t11._scope_rule()
+        assert rule.continent_cutoff("Oceania") == 1500
+        assert rule.continent_cutoff("North America") == 1500
+        assert rule.continent_cutoff("South America") == 1500
+        assert rule.continent_cutoff("Asia") == 500
+        assert rule.continent_cutoff("Europe") == 500
+        assert rule.continent_cutoff("Africa") == 500
 
     def test_it_never_touches_the_network(self, t11: Any) -> None:
         """Scope is a pure function of stored values: a `collect()` here would be a defect."""
@@ -426,7 +513,7 @@ class TestT11Contract:
     def test_a_missing_dataset_raises_instead_of_reporting_nothing(
         self, t11: Any, tmp_path: Path
     ) -> None:
-        """"Could not check" must never become "checked and clean"."""
+        """ "Could not check" must never become "checked and clean"."""
         with pytest.raises(FileNotFoundError, match="missing"):
             t11.run(_ctx([_site("a", lat=51.0, lon=0.0, period_start=1775)], cache=tmp_path))
 

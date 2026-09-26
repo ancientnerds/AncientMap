@@ -65,11 +65,13 @@ from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 from mechanical.lane import (  # noqa: E402
     LANE_READBACKS,
     LANES,
+    SCOPE_REVIEW_LANE,
     T05,
     Column,
     Lane,
     outside,
     resolve_lane,
+    scope_review_readback,
     typed_case,
     written_where,
 )
@@ -1733,22 +1735,27 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
 
 
 def readback_for(lane: Lane) -> str:
-    """The lane's read-only verification: `READBACKS`, or a card_stats wave's own."""
+    """The lane's read-only verification: `READBACKS`, or a scope-review or card_stats wave's
+    own."""
     if lane.name in READBACKS:
         return READBACKS[lane.name]
+    if SCOPE_REVIEW_LANE.match(lane.name) is not None:
+        return scope_review_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
 
 
 def _lane_argument(name: str) -> str:
-    """`--lane`: a registered lane or a card_stats wave (`card-stats-2026-09-24`); anything else
-    is argparse's "invalid choice", as it was when the names were a fixed `choices` list."""
+    """`--lane`: a registered lane, a scope-review wave (`scope-review-2026-09-26`) or a
+    card_stats wave (`card-stats-2026-09-24`); anything else is argparse's "invalid choice", as it
+    was when the names were a fixed `choices` list."""
     try:
         resolve_lane(name)
     except KeyError as exc:
         raise argparse.ArgumentTypeError(
-            f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, card-stats-<wave>)"
+            f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
+            "scope-review-<wave>, card-stats-<wave>)"
         ) from exc
     return name
 

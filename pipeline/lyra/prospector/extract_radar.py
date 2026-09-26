@@ -127,7 +127,13 @@ def prefill_for(unit: RadarUnit) -> Prefill:
             thumbnail_url=unit.thumbnail_url,
             wikipedia_url=unit.wikipedia_url,
             in_scope=passes_date_cutoff(
-                {"period_start": unit.period_start, "period_end": unit.period_end, "lon": unit.lon}
+                {
+                    "period_start": unit.period_start,
+                    "period_end": unit.period_end,
+                    "lat": unit.lat,
+                    "lon": unit.lon,
+                    "country": unit.country,
+                }
             ),
             note="coordinates and metadata from the radar's own enrichment",
         )
