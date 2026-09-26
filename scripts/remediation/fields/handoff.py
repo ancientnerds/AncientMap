@@ -189,11 +189,12 @@ KNOWN_FETCH_TROUBLE = (
     "## Pages the quote check cannot read\n"
     "\n"
     "The checker fetches each page once with a plain GET and no browser. From this workstation it "
-    "has been refused by Historic England's list and the Heritage Gateway (403), and it cannot "
-    "read scanned PDFs or pages that build their text with scripts. Wikipedia (every language), "
-    "Wikidata, UNESCO, Pleiades and most national registers and museum pages work. Prefer pages "
-    "that show their text as plain HTML; a quote from a page the checker cannot read does not "
-    "count.\n"
+    "has been refused by Historic England's list and the Heritage Gateway (403), the Megalithic "
+    "Portal (megalithic.co.uk) did not answer it (all 46 pages asked on 2026-09-26 timed out or "
+    "gave 503), and it cannot read scanned PDFs or pages that build their text with scripts. "
+    "Wikipedia (every language), Wikidata, UNESCO, Pleiades and most national registers and "
+    "museum pages work. Prefer pages that show their text as plain HTML; a quote from a page the "
+    "checker cannot read does not count.\n"
 )
 
 ANSWER_FORMAT = (

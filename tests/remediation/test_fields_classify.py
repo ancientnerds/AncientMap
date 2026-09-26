@@ -369,7 +369,7 @@ class TestTheRun:
     def test_a_site_is_classified_and_counted(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         self.stored(tmp_path / "o")
-        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
         line = json.loads((tmp_path / "o" / C.CLASSIFIED_FILE).read_text(encoding="utf-8"))
         assert line["asked"] == ["period_start"]
         assert line["enwiki"] == "Temple of Hephaestus"
@@ -379,20 +379,20 @@ class TestTheRun:
     def test_a_retired_site_is_not_classified(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         self.stored(tmp_path / "o", scope_status="retired")
-        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
         assert counts["sites"] == 0 and counts["retired_not_classified"] == 1
 
     def test_a_harvest_and_an_export_of_different_states_are_refused(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         self.stored(tmp_path / "o", lat_text="37.0")
         with pytest.raises(C.ClassifyError, match="disagree on its point or URL"):
-            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
 
     def test_a_flag_asks_a_field_the_machine_confirms(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         seeds = self.seed("coordinates") + self.seed("coordinates", "again")
         self.stored(tmp_path / "o", seeds=seeds)
-        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
         line = json.loads((tmp_path / "o" / C.CLASSIFIED_FILE).read_text(encoding="utf-8"))
         assert line["asked"] == ["coordinates", "period_start"]
         assert line["fields"]["coordinates"]["status"] == C.CONFIRMED
@@ -403,12 +403,33 @@ class TestTheRun:
         assert counts["flagged_only"]["coordinates"] == 1
         assert counts["seeds"] == {"sites": 1, "cells": 1, "sites_not_classified": []}
 
+    def test_the_two_parts_split_the_sites_by_conflict_or_flag(self, tmp_path: Path) -> None:
+        # the temple's only asked field is a MISSING start: it belongs to the rest; a flag on its
+        # confirmed point moves it to the conflict part
+        self.write_harvest(tmp_path / "h")
+        self.stored(tmp_path / "o")
+        assert (
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="rest")["sites"] == 1
+        )
+        conflict = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="conflict")
+        assert conflict["sites"] == 0 and conflict["part"] == "conflict"
+        self.stored(tmp_path / "o", seeds=self.seed("coordinates"))
+        assert (
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="conflict")["sites"]
+            == 1
+        )
+        assert (
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="rest")["sites"] == 0
+        )
+        with pytest.raises(C.ClassifyError, match="is not one of"):
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="some")
+
     def test_the_seeds_must_be_there_and_well_formed(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         self.stored(tmp_path / "o")
         (tmp_path / "o" / C.SEEDS_FILE).unlink()
         with pytest.raises(C.ClassifyError, match="seeds.py build"):
-            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
         for bad in (
             self.seed("period_name"),
             self.seed("site_type", " "),
@@ -416,14 +437,14 @@ class TestTheRun:
         ):
             self.stored(tmp_path / "o", seeds=bad)
             with pytest.raises(C.ClassifyError, match="is not a seed|no finding"):
-                C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+                C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
 
     def test_a_point_another_live_site_holds_is_stacked(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         twin = {"site_id": "99a98235-0000-4000-8000-000000000001", "name": "Stoa"}
         gone = {"site_id": "99a98235-0000-4000-8000-000000000002", "scope_status": "retired"}
         self.stored(tmp_path / "o", twin, gone)
-        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+        counts = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
         line = json.loads((tmp_path / "o" / C.CLASSIFIED_FILE).read_text(encoding="utf-8"))
         assert line["fields"]["coordinates"]["evidence"]["stacked"] == 1  # the retired one not
         assert "coordinates" in line["asked"] and counts["stacked_points"] == 1
@@ -434,14 +455,14 @@ class TestTheRun:
         stale = {**TestSourceUrl().record(), "source_url": "https://en.wikipedia.org/wiki/Theseion"}
         H._write_json(H.url_path(tmp_path / "h", SITE), stale)
         with pytest.raises(H.HarvestError, match="run `harvest.py fetch` again"):
-            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE)
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="all")
 
     def test_a_class_the_table_lacks_stops_the_classification(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         self.stored(tmp_path / "o")
         partial = {q: e for q, e in TABLE.items() if q != "Q44539"}
         with pytest.raises(C.TableError, match="Q44539 'temple' x1"):
-            C.classify_all(tmp_path / "h", tmp_path / "o", table=partial)
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=partial, part="all")
 
     def test_names_it_reads_a_distinctive_word_folded(self) -> None:
         assert C.names_it("Tempio di Ercole", "Il tempio di ERCOLE")

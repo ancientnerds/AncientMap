@@ -71,8 +71,8 @@ name in its <title> - CONFIRMED; otherwise (403, 5xx, a network error, a title t
 
 Inputs in `--out` (default `output/remediation/fields/wd1/`): STORED.jsonl (`export`) and
 SEEDS.jsonl (`seeds.py build`; it may hold no line, it may not be absent). Output: CLASSIFIED.jsonl
-(one line per site not retired: every field's status, the stored value, the machine evidence, the
-reason and the flags) and COUNTS.json.
+(one line per site not retired - or per site of the chosen `--part`, `PARTS`: every field's status,
+the stored value, the machine evidence, the reason and the flags) and COUNTS.json.
 """
 
 from __future__ import annotations
@@ -613,7 +613,24 @@ def _agrees(site: Mapping[str, Any], stored: Mapping[str, Any]) -> bool:
     )
 
 
-def classify_all(root: Path, out: Path, *, table: Mapping[str, ClassEntry]) -> dict[str, Any]:
+#: A run takes every site (`all`) or one of two disjoint parts, each a run of its own (its own
+#: --out, rounds and waves): `conflict` - the sites with a field a machine source contradicts or an
+#: earlier reading flagged; `rest` - every other site, the unasked ones included (a label off its
+#: start is written by the rest's wave). Measured 2026-09-26: 4,752 of 4,926 sites are asked, most
+#: only because no machine source dates their start; the parts let the contradicted ones be decided
+#: and written first.
+PARTS = ("all", "conflict", "rest")
+
+
+def in_conflict_part(line: Mapping[str, Any]) -> bool:
+    return any(f["status"] == CONFLICT or f["flags"] for f in line["fields"].values())
+
+
+def classify_all(
+    root: Path, out: Path, *, table: Mapping[str, ClassEntry], part: str
+) -> dict[str, Any]:
+    if part not in PARTS:
+        raise ClassifyError(f"{part!r} is not one of {PARTS}")
     sites = H.read_sites(root)
     stored = read_stored(out)
     seeds = read_seeds(out)
@@ -656,12 +673,15 @@ def classify_all(root: Path, out: Path, *, table: Mapping[str, ClassEntry]) -> d
                 flags=seeds.get(site["site_id"], {}),
             )
         )
+    classified = {line["site_id"] for line in lines}
+    if part != "all":
+        lines = [line for line in lines if in_conflict_part(line) == (part == "conflict")]
     out.mkdir(parents=True, exist_ok=True)
     text = "".join(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n" for line in lines)
     (out / CLASSIFIED_FILE).write_text(text, encoding="utf-8", newline="\n")
     counts = count(lines)
+    counts["part"] = part
     counts["retired_not_classified"] = retired
-    classified = {line["site_id"] for line in lines}
     counts["seeds"] = {
         "sites": len(seeds),
         "cells": sum(len(by_field) for by_field in seeds.values()),
@@ -720,14 +740,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("export", help="STORED.jsonl from production (one read-only SELECT)")
-    sub.add_parser("classify", help="CLASSIFIED.jsonl and COUNTS.json, from files only")
+    run = sub.add_parser("classify", help="CLASSIFIED.jsonl and COUNTS.json, from files only")
+    run.add_argument("--part", choices=PARTS, required=True, help="every site or one part")
     sub.add_parser("unmapped", help="the P31 classes the table lacks, with labels and counts")
     args = parser.parse_args(argv)
     try:
         if args.command == "export":
             print(json.dumps({"stored": export_stored(args.out, reader=psql_json_reader())}))
         elif args.command == "classify":
-            result = classify_all(args.root, args.out, table=load_table())
+            result = classify_all(args.root, args.out, table=load_table(), part=args.part)
             print(json.dumps(result, indent=1, sort_keys=True))
         else:
             sites = H.read_sites(args.root)

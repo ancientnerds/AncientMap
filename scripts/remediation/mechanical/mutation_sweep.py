@@ -5161,6 +5161,14 @@ WD1_CASES: list[Case] = [
         "test_only_the_two_open_reasons_are_seeds",
         "tests/remediation/test_fields_seeds.py",
     ),
+    Case(
+        "wd1: a part takes only its own sites",
+        FIELDS / "classify.py",
+        '        lines = [line for line in lines if in_conflict_part(line) == (part == "conflict")]',
+        "        lines = list(lines)",
+        "test_the_two_parts_split_the_sites_by_conflict_or_flag",
+        FIELDS_CLASSIFY_TESTS,
+    ),
     guard(
         "wd1: the prompt shows a flag",
         FIELDS / "handoff.py",
