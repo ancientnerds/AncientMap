@@ -21,5 +21,5 @@ enwiki title).
 * `links.py`      - a link step's production commands (check, rehearse, probe-guards, apply, verify,
                     rehearse-rollback);
 * `run.py`        - the CLI; the runbook is `docs/procedures/SITES_DB_REMEDIATION_2026-09.md`,
-                    "WE lanes".
+                    "Phase 6b - The WE lanes".
 """
