@@ -14,8 +14,9 @@ The quiet mistakes worth a test: a retired site, a live Phase-5 card or a P5 cle
 a March read of other sites than S0's; a version-3 plan that loses its descriptions-only mark (in a
 re-queue, too) and so writes a provenance naming a card that is never served, or lets P5 plan an
 extractive card; a plan numbered into lane L's block; an excluded site planned anyway; a deferred
-site taken over while the run could still re-queue it, re-queued by a plan without the pass
-although a descriptions-only list names it, or refused by the acceptance as "in two runs"; an
+site taken over while the run could still re-queue it, from another plan than the deferring run's,
+re-queued by a plan without the pass although a descriptions-only list names it, or refused by the
+acceptance as "in two runs"; a site planned again that a run or the P4 apply root carries; an
 agent's answer checked against another pool or prompt than its question's, or recorded without its
 shape check (and passed as ready); a group of batches kept waiting by a batch that asked nothing.
 The mutation cases are `P4_V3_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py`.
@@ -459,6 +460,7 @@ def test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest(
 
     argv = [
         *argv,
+        *_roots(tmp_path),
         f"--pilot={pilot}",
         f"--scope-list={MD}",
         f"--scope-list={MC}",
@@ -491,6 +493,46 @@ def test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest(
 
 
 READY = datetime(2026, 9, 27, tzinfo=UTC)
+
+
+def _roots(tmp_path: Path) -> list[str]:
+    """The run root and the P4 apply root a list plan reads (`plan4.carried_by_runs`): empty unless
+    a test puts a run or a write batch there."""
+    (tmp_path / "runs").mkdir(exist_ok=True)
+    (tmp_path / "apply").mkdir(exist_ok=True)
+    return [f"--run-root={tmp_path / 'runs'}", f"--apply-root={tmp_path / 'apply'}"]
+
+
+def _take_over_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[list[str], Path, Path, Path]:
+    """The mass run's shape: `PLAN4.scope.jsonl` carries sites 1 and 4 in p4-0010, the run held
+    both `revision-too-fresh` there long ago; the pilot is site 5; the v3 lists name 1, 3 and 4.
+    Returns the build's argv (inputs and roots), the pilot, the earlier plan and the run."""
+    rows = _marker_rows()
+    argv = [*_build_inputs(tmp_path, rows), *_roots(tmp_path)]
+    pilot = tmp_path / "PILOT.jsonl"
+    pilot.write_text(json.dumps({"site_id": uuid(5)}) + "\n", encoding="utf-8")
+    earlier = tmp_path / "PLAN4.scope.jsonl"
+    carried = [X.plan_site(uuid(1)).to_dict(), X.plan_site(uuid(4)).to_dict()]
+    earlier.write_text(
+        json.dumps({"batch_id": "p4-0010", "ordinal": 10, "sites": carried}) + "\n",
+        encoding="utf-8",
+    )
+    run_dir = tmp_path / "runs" / "mass"
+    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0010", "--plan", str(earlier)])
+    B.append_holds(
+        run_dir / "p4-0010",
+        [
+            _fresh_hold(uuid(1), "2020-01-01T08:00:00Z"),
+            _fresh_hold(uuid(4), "2020-01-01T09:00:00Z"),
+        ],
+    )
+    data = S.render_scope(
+        S.scope_payload(rows, _cleared(), inputs=INPUTS_V3, version=3, march_rows=_march_rows(rows))
+    )
+    _pinned(monkeypatch, tmp_path, data)
+    return argv, pilot, earlier, run_dir
 
 
 def test_a_run_hands_over_its_deferred_sites_once_every_one_is_ready(tmp_path: Path) -> None:
@@ -527,29 +569,7 @@ def test_build_takes_over_the_deferred_sites_an_earlier_plan_carries(
 ) -> None:
     """HOLDS4 of the mass run: 19 sites held `revision-too-fresh`, due from 2026-09-26T21:30Z. They
     were held, not written, so the v3 plan takes them over from the plan that carries them."""
-    rows = _marker_rows()
-    argv = _build_inputs(tmp_path, rows)
-    pilot = tmp_path / "PILOT.jsonl"
-    pilot.write_text(json.dumps({"site_id": uuid(5)}) + "\n", encoding="utf-8")
-    earlier = tmp_path / "PLAN4.scope.jsonl"
-    carried = [X.plan_site(uuid(1)).to_dict(), X.plan_site(uuid(4)).to_dict()]
-    earlier.write_text(
-        json.dumps({"batch_id": "p4-0010", "ordinal": 10, "sites": carried}) + "\n",
-        encoding="utf-8",
-    )
-    run_dir = tmp_path / "runs" / "mass"
-    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0010", "--plan", str(earlier)])
-    B.append_holds(
-        run_dir / "p4-0010",
-        [
-            _fresh_hold(uuid(1), "2020-01-01T08:00:00Z"),
-            _fresh_hold(uuid(4), "2020-01-01T09:00:00Z"),
-        ],
-    )
-    data = S.render_scope(
-        S.scope_payload(rows, _cleared(), inputs=INPUTS_V3, version=3, march_rows=_march_rows(rows))
-    )
-    _pinned(monkeypatch, tmp_path, data)
+    argv, pilot, earlier, run_dir = _take_over_inputs(tmp_path, monkeypatch)
     capsys.readouterr()
     base = [*argv, f"--pilot={pilot}", f"--after={earlier}", "--first-batch=2001"]
 
@@ -563,6 +583,7 @@ def test_build_takes_over_the_deferred_sites_an_earlier_plan_carries(
     summary = json.loads(capsys.readouterr().out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
     assert summary["taken_over"] == {str(run_dir): {"deferred": 2, "planned": 2}}
     assert summary["carried_by_earlier_plans"] == []
+    assert summary["runs_read"] == ["mass"]
     with pytest.raises(R.InputError, match="no list of this plan names"):
         P.main([*base, f"--scope-list={MC}", f"--take-deferred={run_dir}"])
     # The deferring run's plan must be among --after: its other sites are that run's.
@@ -574,6 +595,95 @@ def test_build_takes_over_the_deferred_sites_an_earlier_plan_carries(
             [*argv, f"--pilot={pilot}", f"--after={other}", "--first-batch=2001",
              f"--scope-list={MD}", f"--scope-list={MC}", f"--take-deferred={run_dir}"]
         )  # fmt: skip
+
+
+def test_a_deferred_site_is_taken_over_only_from_the_deferring_runs_own_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Second review of 2026-09-26: `--take-deferred` checked only that some `--after` plan carries
+    each handed site. With v3d's own plan among `--after` (a follow-up plan, a rebuild) the 19
+    would be planned a third time. A handed site must be carried by exactly one `--after` plan, in
+    the batch the run deferred it in - the deferring run's own plan."""
+    argv, pilot, earlier, run_dir = _take_over_inputs(tmp_path, monkeypatch)
+    lists = [f"--scope-list={MD}", f"--scope-list={MC}", f"--take-deferred={run_dir}"]
+    v3d = tmp_path / "PLAN4.v3d.jsonl"
+    base = [*argv, f"--pilot={pilot}", f"--after={earlier}", *lists]
+    assert P.main([*base, "--first-batch=2501", f"--out={v3d}"]) == 0
+    with pytest.raises(
+        R.InputError, match=r"2 deferred site\(s\) to take over that 2 --after plans"
+    ):
+        P.main([*base, f"--after={v3d}", "--first-batch=2601"])
+    # One --after plan that carries them, but not where the run deferred them: another plan.
+    other = tmp_path / "PLAN4.other.jsonl"
+    line = {**R.read_jsonl(earlier)[0], "batch_id": "p4-0011", "ordinal": 11}
+    other.write_text(json.dumps(line) + "\n", encoding="utf-8")
+    with pytest.raises(
+        R.InputError, match=r"carries it in p4-0011; the run deferred it in p4-0010"
+    ):
+        P.main([*argv, f"--pilot={pilot}", f"--after={other}", *lists, "--first-batch=2601"])
+
+
+def test_a_list_plan_never_plans_a_site_a_run_carries_in_another_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Second review of 2026-09-26: v3d built without `--after PLAN4.v3.jsonl` would plan every v3
+    site again (3,257 sites in p4-2501 ..), and only the acceptance's "in two runs" stopped it -
+    after a second P4 write had replaced the first run's text. Every run directory that can write
+    is read: a site one of them carries in another batch is refused. A rebuild of the plan the run
+    was driven from passes (same batches), the run's own re-queue is its plan batch's
+    continuation, and the runs that never wrote (`plan4.UNWRITTEN_RUNS`) are not read."""
+    argv, pilot, earlier, _ = _take_over_inputs(tmp_path, monkeypatch)
+    v3 = tmp_path / "PLAN4.v3.jsonl"
+    base = [*argv, f"--pilot={pilot}", f"--after={earlier}", f"--scope-list={MD}",
+            f"--scope-list={MC}"]  # fmt: skip
+    assert P.main([*base, "--first-batch=2001", f"--out={v3}"]) == 0
+    (line,) = R.read_jsonl(v3)
+    assert [s["site_id"] for s in line["sites"]] == [uuid(3)]
+    run = tmp_path / "runs" / "v3"
+    R4.main(["prepare", "--run-dir", str(run), "--batch-id", "p4-2001", "--plan", str(v3)])
+    census, census_plan = tmp_path / "runs" / "census-2026-09-24", tmp_path / "PLAN4.census.jsonl"
+    census_plan.write_text(json.dumps({**line, "batch_id": "p4-0001", "ordinal": 1}) + "\n")
+    R4.main(
+        ["prepare", "--run-dir", str(census), "--batch-id", "p4-0001", "--plan", str(census_plan)]
+    )
+    requeue = run / M4.REQUEUE_FILE
+    requeue.write_text(json.dumps({**line, "batch_id": "p4-2002", "ordinal": 2002}) + "\n")
+    R4.main(["prepare", "--run-dir", str(run), "--batch-id", "p4-2002", "--plan", str(requeue)])
+    capsys.readouterr()
+
+    rebuilt = tmp_path / "PLAN4.v3.rebuilt.jsonl"
+    assert P.main([*base, "--first-batch=2001", f"--out={rebuilt}"]) == 0
+    assert rebuilt.read_bytes() == v3.read_bytes()
+    summary = json.loads(capsys.readouterr().out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
+    assert summary["runs_read"] == ["mass", "v3"]
+    with pytest.raises(R.InputError, match=f"{uuid(3)}: run v3 carries it in p4-2001; this plan "
+                       "would put it into p4-2501"):  # fmt: skip
+        P.main([*base, "--first-batch=2501", f"--out={tmp_path / 'PLAN4.v3d.jsonl'}"])
+    assert not (tmp_path / "PLAN4.v3d.jsonl").exists()
+
+
+def test_a_list_plan_never_plans_a_site_the_apply_root_wrote_from_a_run_it_cannot_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The P4 apply root is the write gate's record of every batch it planned: a site whose write
+    batch (its live `PLAN.jsonl` or a reverted round's kept one) no run directory carries was
+    written from a run the check cannot see, and is refused. So are missing roots."""
+    argv, pilot, earlier, _ = _take_over_inputs(tmp_path, monkeypatch)
+    base = [*argv, f"--pilot={pilot}", f"--after={earlier}", f"--scope-list={MD}",
+            f"--scope-list={MC}", "--first-batch=2001"]  # fmt: skip
+    for kept in ("p4-0050", "p4-0050/chunks/chunk-0001"):
+        written = tmp_path / "apply" / kept
+        written.mkdir(parents=True)
+        (written / W4.PLAN_FILE).write_text(json.dumps({"site_id": uuid(3)}) + "\n")
+        with pytest.raises(
+            R.InputError, match=f"{uuid(3)}: the P4 apply root plans it in p4-0050, which no run"
+        ):
+            P.main(base)
+        (written / W4.PLAN_FILE).unlink()
+    assert P.main(base) == 0
+    for flag, match in (("--run-root", "no run directory root"), ("--apply-root", "no P4 apply")):
+        with pytest.raises(R.InputError, match=match):
+            P.main([*base, f"{flag}={tmp_path / 'nowhere'}"])
 
 
 def _mark_plan(plan: Path) -> Path:

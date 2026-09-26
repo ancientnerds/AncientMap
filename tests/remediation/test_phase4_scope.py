@@ -807,12 +807,16 @@ def test_build_with_a_scope_list_writes_the_lists_plan_after_the_earlier_plans(
     data = S.render_scope(scope)
     _pinned(monkeypatch, tmp_path, data)
 
+    (tmp_path / "runs").mkdir()
+    (tmp_path / "apply").mkdir()
     argv = [
         *argv,
         f"--pilot={pilot}",
         f"--scope-list={D1}",
         f"--after={earlier}",
         "--first-batch=901",
+        f"--run-root={tmp_path / 'runs'}",
+        f"--apply-root={tmp_path / 'apply'}",
     ]
     assert P.main(argv) == 0
 

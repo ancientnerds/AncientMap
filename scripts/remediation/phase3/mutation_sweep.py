@@ -21220,6 +21220,11 @@ P4V3_READY_MOVED = "test_ready_names_an_answer_whose_batch_moved_since_the_expor
 P4V3_READY_REVIEW = "test_ready_reads_a_recorded_review_whole"
 P4V3_P5_CLOSED = "test_p5_rehearses_and_writes_nothing_for_any_run"
 P4V3_EXCLUDE_CLI = "test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest"
+P4V3_ONLY_DEFERRING = "test_a_deferred_site_is_taken_over_only_from_the_deferring_runs_own_plan"
+P4V3_RUN_CARRIES = "test_a_list_plan_never_plans_a_site_a_run_carries_in_another_batch"
+P4V3_APPLY_ROOT = (
+    "test_a_list_plan_never_plans_a_site_the_apply_root_wrote_from_a_run_it_cannot_read"
+)
 
 P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── scope4: the March lists ───────────────────────────────────────────────────────────────
@@ -21829,6 +21834,103 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    return None  # mutant\n",
         P4V3_TEST,
         P4V3_READY_REVIEW,
+    ),
+    # ── the second review of 2026-09-26: a list plan plans no site another plan or run carries
+    (
+        "p4 v3 plan4: a handed site another --after plan carries is taken",
+        P4V3_PLAN,
+        "    many = sorted(i for i in handed_ids if len(carriers[i]) > 1)\n",
+        "    many: list[str] = []  # mutant\n",
+        P4V3_TEST,
+        P4V3_ONLY_DEFERRING,
+    ),
+    (
+        "p4 v3 plan4: a handed site is taken from a plan that did not defer it",
+        P4V3_PLAN,
+        "            if batch_id != held_in:\n",
+        "            if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_ONLY_DEFERRING,
+    ),
+    (
+        "p4 v3 plan4: a site a run carries in another batch is planned",
+        P4V3_PLAN,
+        "                if carrier == batch.batch_id or handed.get(site_id) == run_dir:\n",
+        "                if True:  # mutant\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: a rebuild of the run's own plan is refused",
+        P4V3_PLAN,
+        "                if carrier == batch.batch_id or handed.get(site_id) == run_dir:\n",
+        "                if handed.get(site_id) == run_dir:  # mutant\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: the deferring run refuses the site it hands over",
+        P4V3_PLAN,
+        "                if carrier == batch.batch_id or handed.get(site_id) == run_dir:\n",
+        "                if carrier == batch.batch_id:  # mutant\n",
+        P4V3_TEST,
+        P4V3_TAKE,
+    ),
+    (
+        "p4 v3 plan4: a run that never wrote is read",
+        P4V3_PLAN,
+        "        if run_dir.name in UNWRITTEN_RUNS:\n            continue\n",
+        "        if False:  # mutant\n            continue\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: a run's re-queue batch counts as another carrier",
+        P4V3_PLAN,
+        "                if line.batch_id not in again:\n",
+        "                if True:  # mutant\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: the carried sites are never refused",
+        P4V3_PLAN,
+        "    if problems:\n        raise R.InputError(\n",
+        "    if False:  # mutant\n        raise R.InputError(\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: a site the apply root wrote from an unseen run is planned",
+        P4V3_PLAN,
+        "            if unseen:\n",
+        "            if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
+    ),
+    (
+        "p4 v3 plan4: the apply root's writes all count as seen",
+        P4V3_PLAN,
+        "                - carried.batches.get(site_id, frozenset())\n",
+        "                - carried.written.get(site_id, frozenset())  # mutant\n",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
+    ),
+    (
+        "p4 v3 plan4: a reverted round's kept plan is not read",
+        P4V3_PLAN,
+        '        *apply_root.glob(f"{BATCH_PREFIX}-*/{W4.CHUNKS_DIR}/*/{W4.PLAN_FILE}"),\n',
+        "",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
+    ),
+    (
+        "p4 v3 plan4: a missing run root reads nothing",
+        P4V3_PLAN,
+        "    if not run_root.is_dir():\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
     ),
     # ── the second review of 2026-09-26: P5 writes no card for any run (O2, O3)
     (

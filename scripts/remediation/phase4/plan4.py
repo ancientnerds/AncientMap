@@ -29,9 +29,12 @@ rebuilt from it offline, byte for byte:
             numbered from p4-N (`write_list_plan`). `--exclude FILE` leaves the named sites out
             (accounted, printed as a count and the file's sha256), `--take-deferred RUN_DIR` plans
             the sites that run deferred `revision-too-fresh` once their 48 h have passed although
-            an `--after` plan carries them. A plan of a list version 3 added writes descriptions
-            only (`scope4.DESCRIPTIONS_ONLY_LISTS`): its batches carry
-            `scope4.DESCRIPTIONS_ONLY_MARK`.
+            the deferring run's plan carries them (and no other `--after` plan). A list plan never
+            plans a site a run that can write already carries in another batch (every run
+            directory under `--run-root` but `UNWRITTEN_RUNS`), nor one the P4 apply root
+            (`--apply-root`) plans from a run it cannot see (`carried_problems`). A plan of a list
+            version 3 added writes descriptions only (`scope4.DESCRIPTIONS_ONLY_LISTS`): its batches
+            carry `scope4.DESCRIPTIONS_ONLY_MARK`.
 * `read-march` - the one read-only production SELECT of scope version 3 (`MARCH_SQL`): per curated
             site its `scope_status`, its provenance lane, whether it has a card and whether a
             Phase-5 write of it is live. Written to `MARCH4_ROWS.jsonl`.
@@ -99,6 +102,7 @@ from phase4 import revert4 as RV  # noqa: E402 - what "reverted" means in the jo
 from phase4 import scope4 as S  # noqa: E402
 from phase4 import sources_stage as S1  # noqa: E402
 from phase4 import subject_gate as SG  # noqa: E402
+from phase4 import write4 as W4  # noqa: E402 - the write batch's plan file and chunk folders
 from pipeline.normalizers.dates import passes_date_cutoff  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
 
@@ -122,6 +126,18 @@ DEFAULT_LEGACY_ROWS = RUNNER / "LEGACY4_ROWS.jsonl"
 DEFAULT_LEGACY_PLAN = RUNNER / "LEGACY4.jsonl"
 #: Scope version 3's read (`read-march`): committed beside the scope file it was built into.
 DEFAULT_MARCH = RUNNER / "MARCH4_ROWS.jsonl"
+#: What a list plan reads to plan no site twice (`carried_by_runs`): the run directories and the
+#: write gate's P4 apply root (`output/remediation/tools/lanes.py`, lane p4).
+DEFAULT_RUN_ROOT = RUNNER / "runs"
+DEFAULT_APPLY_ROOT = REPO / "output" / "remediation" / "logs" / "_write_apply_p4"
+#: The run directories under `runs/` that never wrote a P4 row and never will, so a list plan does
+#: not read them: the census of 2026-09-24 (lanes only, searches off, no model question) and pilots
+#: 1-3 (superseded by pilot 4, which took their batch ids). Production's journal holds `phase4:`
+#: rows of pilot 4, the mass run and D9 only (read-only, 2026-09-26: 52, 1,920 and 12 rows by
+#: `evidence->>'run'`). Every other run directory can write and is read.
+UNWRITTEN_RUNS = frozenset(
+    {"census-2026-09-24", "pilot-2026-09-24", "pilot2-2026-09-24", "pilot3-2026-09-24"}
+)
 
 #: The pre-March snapshot lane L compares against (plan section 15.3; `db_snapshots`, 5,005 rows).
 SNAPSHOT_ID = "d4526691-28eb-4623-b9eb-daeabafb167e"
@@ -458,8 +474,14 @@ def legacy_block(curated: int) -> range:
     return range(L4.FIRST_BATCH, L4.FIRST_BATCH + -(-curated // BATCH_SIZE))
 
 
-def write_list_plan(
-    path: Path,
+def write_list_plan(path: Path, sites: Sequence[M.PlanSite], **shape: Any) -> list[M.PlanSite]:
+    """`list_plan`, written to `path`. Returns the plan's sites."""
+    tail, batches = list_plan(sites, **shape)
+    R.write_batches(path, batches)
+    return tail
+
+
+def list_plan(
     sites: Sequence[M.PlanSite],
     *,
     pilot: int,
@@ -469,7 +491,7 @@ def write_list_plan(
     taken: int,
     first_batch: int,
     excluded: Collection[str],
-) -> list[M.PlanSite]:
+) -> tuple[list[M.PlanSite], list[R.Batch]]:
     """The plan of the lists a later scope version added (owner orders 2026-09-25, HUMAN_ONLY D9, and
     2026-09-26, scope version 3): the plan's sites after the pilot's, in the plan's order, whose
     scope lists name one of `scope_lists` (their union), less every site an `earlier` plan carries -
@@ -482,7 +504,7 @@ def write_list_plan(
     Every listed site is accounted for: the pilot's, an earlier plan's, excluded, or planned here.
     A plan of a list version 3 added writes descriptions only: its batches carry
     `scope4.DESCRIPTIONS_ONLY_MARK` (owner decisions 2026-09-26, O2 and O3). Returns the plan's
-    sites."""
+    sites and its batches; nothing is written."""
     if not scope_lists or len(set(scope_lists)) != len(scope_lists):
         raise R.InputError(f"--scope-list names each list once, at least one: {list(scope_lists)}")
     for scope_list in scope_lists:
@@ -526,8 +548,106 @@ def write_list_plan(
         )
     mark = S.DESCRIPTIONS_ONLY_MARK if wanted & set(S.DESCRIPTIONS_ONLY_LISTS) else None
     batches = batches_after([site.to_dict() for site in tail], first_batch - 1)
-    R.write_batches(path, [dataclasses.replace(batch, pass_name=mark) for batch in batches])
-    return tail
+    return tail, [dataclasses.replace(batch, pass_name=mark) for batch in batches]
+
+
+@dataclasses.dataclass(frozen=True)
+class Carried:
+    """Where a list plan's sites stand before it is written (`carried_by_runs`).
+
+    `runs`: per site, per run directory that can write, the batch of the run's plan that carries it
+    (a re-queue batch is not counted there: it continues the plan batch that deferred the site).
+    `batches`: per site, every batch of those runs that carries it, re-queues included.
+    `written`: per site, the P4 write batches whose plan carries it (a live `PLAN.jsonl` or a
+    reverted round's kept one)."""
+
+    runs: Mapping[str, Mapping[Path, str]]
+    batches: Mapping[str, frozenset[str]]
+    written: Mapping[str, frozenset[str]]
+    runs_read: tuple[str, ...]
+
+
+def carried_by_runs(run_root: Path, apply_root: Path) -> Carried:
+    """Every site the run directories under `run_root` carry (but `UNWRITTEN_RUNS`), through
+    `mass4.prepared_lines` - the batches each run prepared, whatever plan file it was driven from -
+    and every site the P4 apply root plans. A missing root is refused: the check would read
+    nothing."""
+    # mass4 imports this module; its reading of a run's batches is imported when it is needed.
+    from phase4 import mass4
+
+    if not run_root.is_dir():
+        raise R.InputError(f"{run_root}: no run directory root (--run-root)")
+    if not apply_root.is_dir():
+        raise R.InputError(f"{apply_root}: no P4 apply root (--apply-root)")
+    runs: dict[str, dict[Path, str]] = {}
+    batches: dict[str, set[str]] = {}
+    read: list[str] = []
+    for run_dir in sorted(p for p in run_root.iterdir() if p.is_dir()):
+        if run_dir.name in UNWRITTEN_RUNS:
+            continue
+        read.append(run_dir.name)
+        requeue = run_dir / mass4.REQUEUE_FILE
+        again = (
+            {line.batch_id for line in mass4.read_plan4_lines(requeue)}
+            if requeue.exists()
+            else set()
+        )
+        for line in mass4.prepared_lines(run_dir):
+            for site in line.sites:
+                batches.setdefault(site.site_id, set()).add(line.batch_id)
+                if line.batch_id not in again:
+                    runs.setdefault(site.site_id, {})[run_dir.resolve()] = line.batch_id
+    written: dict[str, set[str]] = {}
+    plans = [
+        *apply_root.glob(f"{BATCH_PREFIX}-*/{W4.PLAN_FILE}"),
+        *apply_root.glob(f"{BATCH_PREFIX}-*/{W4.CHUNKS_DIR}/*/{W4.PLAN_FILE}"),
+    ]
+    for plan in sorted(plans):
+        batch_id = plan.relative_to(apply_root).parts[0]
+        for row in R.read_jsonl(plan):
+            written.setdefault(row["site_id"], set()).add(batch_id)
+    return Carried(
+        runs=runs,
+        batches={site_id: frozenset(ids) for site_id, ids in batches.items()},
+        written={site_id: frozenset(ids) for site_id, ids in written.items()},
+        runs_read=tuple(read),
+    )
+
+
+def carried_problems(
+    batches: Sequence[R.Batch], carried: Carried, handed: Mapping[str, Path]
+) -> list[str]:
+    """Why a site of `batches` would be planned a second time, one line per finding (second review
+    of lane WA, 2026-09-26: v3d built without `--after PLAN4.v3.jsonl` would plan every v3 site
+    again, and only the acceptance's "in two runs" would stop it - after a second P4 write had
+    replaced the first run's text).
+
+    Refused: a run that can write carries the site in another batch - unless it is the run that
+    deferred a site this plan takes over (`handed`: site -> the run directory, resolved); the same
+    batch is the plan that run was driven from, rebuilt. And a write batch of the P4 apply root
+    plans the site while no run read here carries it in that batch: it was written from a run
+    this check cannot see."""
+    problems: list[str] = []
+    for batch in batches:
+        for record in batch.sites:
+            site_id = record["site_id"]
+            for run_dir, carrier in sorted(carried.runs.get(site_id, {}).items()):
+                if carrier == batch.batch_id or handed.get(site_id) == run_dir:
+                    continue
+                problems.append(
+                    f"{site_id}: run {run_dir.name} carries it in {carrier}; this plan would put "
+                    f"it into {batch.batch_id}"
+                )
+            unseen = sorted(
+                carried.written.get(site_id, frozenset())
+                - carried.batches.get(site_id, frozenset())
+            )
+            if unseen:
+                problems.append(
+                    f"{site_id}: the P4 apply root plans it in {', '.join(unseen)}, which no run "
+                    "read here carries"
+                )
+    return problems
 
 
 def pilot_site_ids(path: Path) -> list[str]:
@@ -776,17 +896,20 @@ def _scoped_summary(
     return 0
 
 
-def taken_over(run_dirs: Sequence[str], *, now: datetime) -> dict[str, list[str]]:
+def taken_over(run_dirs: Sequence[str], *, now: datetime) -> dict[str, list[tuple[str, str]]]:
     """`--take-deferred`: per run directory, the sites it deferred `revision-too-fresh` in their
-    latest batch whose 48 h have passed (`mass4.ready_to_hand_over`, which refuses while one still
-    waits or once the run re-queued one itself). A later plan takes them over: the run held them and
-    wrote nothing of them, and `verify_writes4.index_runs` reads them from the run that writes
-    them."""
+    latest batch whose 48 h have passed, each with that batch (`mass4.ready_to_hand_over`, which
+    refuses while one still waits or once the run re-queued one itself - so that batch is always
+    one of the run's plan). A later plan takes them over: the run held them and wrote nothing of
+    them, and `verify_writes4.index_runs` reads them from the run that writes them."""
     # mass4 imports this module; its re-queue reading is imported when a plan takes sites over.
     from phase4 import mass4
 
     return {
-        run_dir: [item.site.site_id for item in mass4.ready_to_hand_over(Path(run_dir), now=now)]
+        run_dir: [
+            (item.site.site_id, item.held_in)
+            for item in mass4.ready_to_hand_over(Path(run_dir), now=now)
+        ]
         for run_dir in run_dirs
     }
 
@@ -801,10 +924,15 @@ def _list_summary(
 ) -> int:
     scope = S.load_scope()
     earlier = [R.read_jsonl(Path(path)) for path in args.after]
-    carried = {site["site_id"] for plan in earlier for batch in plan for site in batch["sites"]}
+    carriers: dict[str, list[tuple[str, str]]] = {}
+    for path, plan in zip(args.after, earlier, strict=True):
+        for batch in plan:
+            for site in batch["sites"]:
+                carriers.setdefault(site["site_id"], []).append((path, batch["batch_id"]))
+    carried = set(carriers)
     taken = max((batch["ordinal"] for plan in earlier for batch in plan), default=0)
     handed = taken_over(args.take_deferred, now=now)
-    handed_ids = {site_id for ids in handed.values() for site_id in ids}
+    handed_ids = {site_id for pairs in handed.values() for site_id, _ in pairs}
     wanted = set(args.scope_list)
     listed = sorted(site_id for site_id, lists in scope.sites.items() if wanted & set(lists))
     unlisted = sorted(handed_ids - set(listed))
@@ -821,10 +949,26 @@ def _list_summary(
             f"{len(uncarried)} deferred site(s) to take over that no --after plan carries: name "
             f"the plan the deferring run was driven from ({uncarried[:3]})"
         )
+    # ... and only its plan: another --after plan that carries a handed site (a follow-up plan, a
+    # rebuild of the plan that took them over) would have them planned a third time.
+    many = sorted(i for i in handed_ids if len(carriers[i]) > 1)
+    if many:
+        raise R.InputError(
+            f"{len(many)} deferred site(s) to take over that {len(carriers[many[0]])} --after plans "
+            f"carry, not only the deferring run's: {many[0]} in "
+            f"{[f'{path} {batch}' for path, batch in carriers[many[0]]]}"
+        )
+    for run_dir, pairs in handed.items():
+        for site_id, held_in in pairs:
+            ((path, batch_id),) = carriers[site_id]
+            if batch_id != held_in:
+                raise R.InputError(
+                    f"{site_id}: {path} carries it in {batch_id}; the run deferred it in "
+                    f"{held_in} ({run_dir}): that plan is not the one the run was driven from"
+                )
     exclude_path = Path(args.exclude) if args.exclude else None
     excluded = SP.read_site_ids(exclude_path, uuids=True) if exclude_path is not None else []
-    tail = write_list_plan(
-        out,
+    tail, planned_batches = list_plan(
         sites,
         pilot=len(pilot),
         scope=scope,
@@ -834,6 +978,20 @@ def _list_summary(
         first_batch=args.first_batch,
         excluded=set(excluded),
     )
+    elsewhere = carried_by_runs(Path(args.run_root), Path(args.apply_root))
+    deferring = {
+        site_id: Path(run_dir).resolve()
+        for run_dir, pairs in handed.items()
+        for site_id, _ in pairs
+    }
+    problems = carried_problems(planned_batches, elsewhere, deferring)
+    if problems:
+        raise R.InputError(
+            f"{len(problems)} site(s) this plan would plan a second time (runs read: "
+            f"{', '.join(elsewhere.runs_read)}; name the plan that carries them with --after): "
+            f"{problems[:5]}"
+        )
+    R.write_batches(out, planned_batches)
     batches = R.read_jsonl(out)
     planned = {site.site_id for site in tail}
     block = legacy_block(len(sites))
@@ -858,12 +1016,13 @@ def _list_summary(
         "out": str(out),
         "pass": batches[0].get("pass"),
         "pilot": args.pilot,
+        "runs_read": list(elsewhere.runs_read),
         "scope": scope.label,
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "sites": len(tail),
         "taken_over": {
-            run_dir: {"deferred": len(ids), "planned": sum(i in planned for i in ids)}
-            for run_dir, ids in handed.items()
+            run_dir: {"deferred": len(pairs), "planned": sum(i in planned for i, _ in pairs)}
+            for run_dir, pairs in handed.items()
         },
     }
     print(json.dumps(summary, indent=1, sort_keys=True))
@@ -1002,6 +1161,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="RUN_DIR",
         help="--scope-list: plan the sites this run deferred revision-too-fresh, once ready",
+    )
+    build.add_argument(
+        "--run-root",
+        default=str(DEFAULT_RUN_ROOT),
+        help="--scope-list: the run directories whose sites are never planned again",
+    )
+    build.add_argument(
+        "--apply-root",
+        default=str(DEFAULT_APPLY_ROOT),
+        help="--scope-list: the P4 apply root whose planned sites are never planned again",
     )
     build.set_defaults(handler=cmd_build)
     scope = sub.add_parser("scope", help="the owner's defect scope of one version, offline")
