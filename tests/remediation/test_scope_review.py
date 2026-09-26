@@ -446,6 +446,17 @@ class TestTheRounds:
         assert line["label"] == BALTIC
         assert "latitude 55.0" in (handoff / line["prompt_path"]).read_text(encoding="utf-8")
 
+    def test_a_site_the_harvest_no_longer_lists_stops_the_re_ask(self, review) -> None:
+        run_round0(review, {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, "no")])}, {})
+        write_harvest(review["harvest"], {STONEHENGE: "Q39671"})
+        with pytest.raises(R.ScopeReviewError, match="not in the harvest"):
+            R.export_round(
+                review["out"],
+                review["out"].parent / "handoff-r1",
+                1,
+                load_harvest(review["harvest"]),
+            )
+
     def test_a_retired_site_is_not_asked_again(self, review) -> None:
         run_round0(review, {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, "no")])}, {})
         rows = sites()

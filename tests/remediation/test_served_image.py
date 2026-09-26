@@ -998,6 +998,24 @@ class TestTheStages:
             "HTTP 404",
         )
 
+    def test_a_check_without_questions_records_its_unfetchable_thumbnails(
+        self, tmp_path: Path
+    ) -> None:
+        """Every served image an unfetchable thumbnail: no question, so no handoff - the import
+        still records each one as `unfetchable`, for the replacement stage."""
+        read = read_fixture()
+        read["sites"] = [s for s in read["sites"] if s["id"] in (HOTLINK, NOTHING)]
+        read["images"] = []
+        read["retired"] += [HABU, THASOS, BARE]  # the harvest lists every curated site
+        run, handoff, pictures = _setup(
+            tmp_path, read=read, gone={"https://example.org/relief.jpg": "HTTP 404"}
+        )
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / PC.PRECHECK_FILE)
+        got = V.export_check(run, handoff, state, pre, pictures)
+        assert (got["questions"], got["unfetchable"]) == (0, 1) and not handoff.exists()
+        assert V.import_stage(run, V.STAGE_CHECK)["counts"] == {V.UNFETCHABLE: 1}
+
     def test_an_export_that_asked_nothing_has_nothing_to_import(self, tmp_path: Path) -> None:
         run, pictures = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.DEPICTS, BARE: V.DEPICTS})
         state = ST.load_read(run / "READ.json")
