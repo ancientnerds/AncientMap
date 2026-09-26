@@ -53,6 +53,10 @@ class FakeResult:
             return row[0]
         return row
 
+    def tuples(self) -> FakeResult:
+        # Result.tuples() is a typing filter: the same rows, the same object.
+        return self
+
     def mappings(self) -> FakeResult:
         return FakeResult([dict(vars(r)) if hasattr(r, "__dict__") else r for r in self._rows])
 

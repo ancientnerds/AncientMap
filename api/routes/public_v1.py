@@ -330,10 +330,10 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        total = db.execute(text("SELECT COUNT(*) FROM unified_sites WHERE " + _SHOWN)).scalar()
+        total = db.execute(text("SELECT COUNT(*) FROM unified_sites WHERE " + _SHOWN)).scalar_one()
         source_count = db.execute(
             text("SELECT COUNT(*) FROM source_meta WHERE enabled = true")
-        ).scalar()
+        ).scalar_one()
 
         response = StatusResponse(
             status="ok",
@@ -722,7 +722,7 @@ def create_public_api() -> FastAPI:
         count = db.execute(
             text("SELECT COUNT(*) FROM unified_sites WHERE source_id = :source_id AND " + _SHOWN),
             {"source_id": source_id},
-        ).scalar()
+        ).scalar_one()
 
         if not meta and count == 0:
             raise HTTPException(status_code=404, detail="Source not found")
@@ -739,7 +739,7 @@ def create_public_api() -> FastAPI:
         """),
             {"source_id": source_id},
         )
-        types = {row.site_type: row.count for row in type_result}
+        types = dict(type_result.tuples())
 
         # Period breakdown
         period_result = db.execute(
@@ -765,7 +765,7 @@ def create_public_api() -> FastAPI:
         """),
             {"source_id": source_id},
         )
-        periods = {row.period: row.count for row in period_result}
+        periods = dict(period_result.tuples())
 
         name = source_id.replace("_", " ").title()
         color = _SOURCE_COLORS.get(source_id, _SOURCE_COLORS["default"])
@@ -854,7 +854,7 @@ def create_public_api() -> FastAPI:
             """),
             params,
         )
-        total_count = count_result.scalar()
+        total_count = count_result.scalar_one()
 
         query = text(f"""
             SELECT
@@ -979,7 +979,7 @@ def create_public_api() -> FastAPI:
         if cached:
             return cached
 
-        total = db.execute(text("SELECT COUNT(*) FROM unified_sites WHERE " + _SHOWN)).scalar()
+        total = db.execute(text("SELECT COUNT(*) FROM unified_sites WHERE " + _SHOWN)).scalar_one()
         result = db.execute(
             text(f"""
             SELECT source_id, COUNT(*) as count
@@ -989,7 +989,7 @@ def create_public_api() -> FastAPI:
             ORDER BY count DESC
         """)
         )
-        by_source = {row.source_id: row.count for row in result}
+        by_source = dict(result.tuples())
 
         last_updated_row = db.execute(
             text("SELECT MAX(COALESCE(updated_at, created_at)) FROM unified_sites WHERE " + _SHOWN)
@@ -1159,7 +1159,7 @@ def create_public_api() -> FastAPI:
             JOIN unified_sites us ON cs.site_id = us.id
             WHERE {where_clause}
         """)
-        total = db.execute(count_query, params).scalar()
+        total = db.execute(count_query, params).scalar_one()
 
         query = text(f"""
             SELECT us.id::text as site_id, us.name, cs.card_description,
@@ -1365,7 +1365,7 @@ def create_public_api() -> FastAPI:
             # nosemgrep: semgrep.api-sql-fstring-interpolation -- where_clause is built from hardcoded fragments only; user input is bound via :params
             text(f"SELECT COUNT(*) FROM user_contributions uc WHERE {where_clause}"),
             params,
-        ).scalar()
+        ).scalar_one()
 
         query = text(f"""
             SELECT uc.id::text, uc.name, uc.corrected_name, uc.country, uc.site_type,
