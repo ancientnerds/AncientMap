@@ -165,12 +165,17 @@ first, journalled; then the file, byte for byte; then the push - in one sitting.
 journalled steps of at most 100 sites (`scripts/remediation/mechanical/teaser.py plan`, `apply.py
 --lane teaser-prov-sNNN` / `teaser-card-sNNN`, `teaser.py accept`), then `teaser.py card-file`
 renders the file from a read-only production SELECT with `card_json`'s renderer - refusing any key
-the accepted steps did not write - then `card_json.py --check` and the push, at once
-(`docs/procedures/CARD_DESCRIPTIONS.md` section 5.5).
+the named steps did not write, and any card production does not hold as the steps left it - then
+`card_json.py --check` and the push, at once (`docs/procedures/CARD_DESCRIPTIONS.md` section 5.5).
+Its undo never reverts a commit: each step's two `ROLLBACK.sql` (card lane first), `teaser.py
+close-reverted` on production's proof, then `card-file` renders the file back from production (an
+undone step's cards at their values from before it), `card_json.py --check` and the push
+(section 5.6); a red CI inside a lane-WB sitting is answered by that undo of every step of the
+sitting (section 5.5).
 
 **Pushing the file before the database write is forbidden**: the boot import would write the cards
 without a journal, and the journalled write would then refuse every row with matched_0. A red CI
-inside the sitting is answered by `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'`
+inside the P5 sitting is answered by `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'`
 plus a `git revert` of the JSON commit (rehearsed first; `revert4` skips a write that already has
 its own reversal, so the same pattern reverts only the live round of a batch written again). The
 full sitting is in `docs/procedures/CARD_DESCRIPTIONS.md` ("How a card reaches production").

@@ -76,7 +76,7 @@ the Phase-4 assembler's one spoken edit (`phase4.assemble.spoken`: `c.`/`ca.` be
 | layout | one line: no leading/trailing space, no double space, no tab or line break |
 | ending | ends with `.` or `?` (a closing quote may follow) |
 | sentences | one or two (`split_sentences`); at most one `?`, and the question's sentence at most 60 characters |
-| characters | no bracket `()[]{}<>` (citation markers included), no `!`, `#` or `*`; no Unicode `So` (emoji, pictographs, (c), degree), `No` (superscripts, fractions), `Cs`, `Co`, `Cn`, no zero-width joiner or variation selector |
+| characters | no bracket `()[]{}<>` (citation markers included), no `!`, `#` or `*`; no Unicode `So` (emoji, pictographs, (c), degree), `Sm` (math symbols and most arrows: `+ = \| ~ × ± →`), `No` (superscripts, fractions), `Cs`, `Co`, `Cn`, no zero-width joiner or variation selector |
 | circa | no bare `c.`/`ca.` left over |
 | numerals | every numeral of the card is a numeral of the fact basis (name + description without markers), read by `phase4.scope4.numerals` - the numeral reading of `scope4.ungrounded_card` (digits with comma thousands and a decimal part, compared as values: `3,701` = `3701`). `ungrounded_card` itself is not called because it reads only the first 500 characters of its input (the March generator's); the basis here is the whole description |
 | name | the card contains one of the site's **name forms** (1.4) |
@@ -108,14 +108,17 @@ rule is never a guess.
 
 ### 1.5 Style (the writer's rules, `teaser/prompts.py`)
 
-No citation markers, no parentheses, no emojis, no hashtags, no asterisks, no exclamation marks, no
-marketing phrases ("hidden gem", "must-see", "step back in time"); numbers written with digits exactly as the
-description writes them, never computed ("5,000 years ago" from "3000 BC"), rounded or converted;
-the country only where it adds to the image (the card shows the flag). The writer's prompt carries
-four good examples written for this lane from the live descriptions of Skara Brae, Newgrange,
-Stonehenge and Sacsayhuamán (read-only SELECT, 2026-09-26 01:13 UTC), each with the sentences it
-rests on under the ids the full description gives them and its claim-to-sentence map; a test pins
-every id and text against the full live texts (`tests/remediation/teaser_cases.py`).
+No citation markers, no parentheses, no emojis, no symbols (`+`, `=`, arrows), no hashtags, no
+asterisks, no exclamation marks, no marketing phrases ("hidden gem", "must-see", "step back in
+time"); numbers written with digits exactly as the description writes them, never computed ("5,000
+years ago" from "3000 BC"), rounded or converted; the country only where it adds to the image (the
+card shows the flag). The writer's prompt carries four good examples written for this lane from the
+live descriptions of Skara Brae, Newgrange, Stonehenge and Sacsayhuamán (read-only SELECT,
+2026-09-26 01:13 UTC), each with the sentences it rests on under the ids the full description gives
+them and its claim-to-sentence map; a test pins every id and text against the full live texts
+(`tests/remediation/teaser_cases.py`). No example asks a question: the first Sacsayhuamán draft
+ended "How do you make stone fit like that?", which implies a mystery of technique that its own
+sentence S4 answers (the workers cut the boulders to fit) - the pattern a strict checker fails.
 
 ## 2. The checker
 
@@ -131,8 +134,14 @@ with a reason is refused, and so is a FAIL without a reason.
 A card that fails (mechanically or at the checker) is **rewritten** by a new writer whose prompt
 carries every earlier card and why it failed, and checked by a **new** checker - up to two rewrites
 (stages `write`/`check`, `rewrite1`/`check1`, `rewrite2`/`check2`). **After the second failed rewrite
-the site gets no card: it is cleared.** A checker may not have written or checked any earlier card of
-the site (refused at import by `answered_by`).
+the site gets no card: it is cleared.**
+
+**Independence is a process rule, kept by whoever runs the batches**: every batch of every stage -
+and of the pilot judge - gets a **new** agent, and the brief (`run.py brief`) tells an agent that
+answered any other batch of lane WB to stop. The import cannot see an agent: `answered_by` is the
+batch's name (`teaser-<batch_id>`, and every batch id carries its stage), so its refusal of a checker
+or judge whose name wrote or checked the site before catches only a reused or mistyped name - one
+agent reused under two batch names goes undetected by code.
 
 ## 3. Storage and display
 
@@ -158,7 +167,10 @@ When lane WB writes a teaser it also sets a Phase-5 extractive `_description_pro
   provenance first) - the SiteCard's `data-card-ai`; the site page's SSR payload carries `card_ai`
   and `DescriptionDisclosure` shows the existing AI footnote once, whichever of description and card
   is AI-generated; `card_stats.card_description` is therefore a page column (`PAGE_COLUMNS`, lastmod
-  and IndexNow). A card changed by any other path is not the card the provenance describes and
+  and IndexNow) - counted only as lane WB writes it (`PAGE_COLUMN_STAMPS`: `wb-teaser-card-%`, the
+  reversals included), because the earlier card writes (the P5 sitting, the card-stats waves)
+  changed no byte of the page when they were made and would otherwise move those pages' dates once,
+  on the deploy. A card changed by any other path is not the card the provenance describes and
   nothing is claimed for it.
 - **Stale** when the description changed after the check (`desc_sha256` differs): the card keeps its
   AI mark, but the shorts export gives it no pin (`shorts_pin` -> S13 fails), so a short narrates
@@ -177,7 +189,10 @@ One read-only transaction (`BEGIN TRANSACTION READ ONLY` ... `ROLLBACK`) through
 `ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -At"`,
 counting `unified_sites` (`source_id = 'ancient_nerds'`) joined to `card_stats`, grouped by
 `raw_data._description_provenance.lane`, whether its `desc_sha256` hashes the description, whether a
-card exists and whether a Phase-5 card key exists. Journal high-water mark 73911.
+card exists and whether a Phase-5 card key exists. Journal high-water mark 73911. Re-measured
+2026-09-26 08:26 UTC the same way (curated, not retired, with a description and a card row; per
+lane and hash): every number below unchanged - 4,926; W 963, S 26, L 3,923, none 14; 4,583 cards; 0
+sentence checks, 0 teaser provenances.
 
 | what | sites |
 | --- | --- |
@@ -226,7 +241,8 @@ H=output/remediation/handoff/teaser-wb-pilot-2026-09-27     # $H-<stage>: one di
 1. `$PY $T export --run $RUN --stage <stage> --handoff $H-<stage>` - the stage's questions, batches of
    15 (`<stage>-001`, ...). It refuses while an earlier stage waits for its import, a second export of
    the stage, and a non-empty directory. `"questions": 0` means nobody is due: go to the next stage.
-2. For each batch `B`, a **new** Opus agent; its whole instruction is the output of
+2. For each batch `B`, a **new** Opus agent - never one that answered another batch of lane WB (the
+   independence rule, section 2; the code cannot check it); its whole instruction is the output of
    `$PY $T brief --run $RUN --handoff $H-<stage> --batch-id B`. At most 16 agents at a time; each
    answers its own batch into its own scratch directory (`$H-<stage>-scratch/B/`), checks every answer
    with `run.py check-answer` (a writer until it prints `"ok": true`; nothing is recorded by it) and
@@ -235,9 +251,10 @@ H=output/remediation/handoff/teaser-wb-pilot-2026-09-27     # $H-<stage>: one di
 3. `$PY $OH validate --dir $H-<stage>` - every question answered, for its exact prompt, by Opus, in
    shape. Gate: no missing, stale, malformed or orphan answer.
 4. `$PY $T import --run $RUN --stage <stage>` - rebuilds every prompt from the run's pinned files and
-   refuses an answer to any other, refuses a checker that wrote or checked the site before and a
-   malformed answer (delete that answer file, re-brief the batch). Writes `STAGE-<stage>.jsonl`;
-   prints the mechanical failures (writer stages) or the verdicts (checker stages).
+   refuses an answer to any other, a checker answer recorded under a name that wrote or checked the
+   site before (a reused name, section 2) and a malformed answer (delete that answer file, re-brief
+   the batch). Writes `STAGE-<stage>.jsonl`; prints the mechanical failures (writer stages) or the
+   verdicts (checker stages).
 5. `$PY $T status --run $RUN` - who is due where, accepted, cleared.
 
 The stages in order: `write`, `check`, `rewrite1`, `check1`, `rewrite2`, `check2`. Then
@@ -245,37 +262,58 @@ The stages in order: `write`, `check`, `rewrite1`, `check1`, `rewrite2`, `check2
 accepted card with its provenance; each cleared site with its reason: `failed-after-two-rewrites`,
 or `no-description` for a site without a description that still has a card) and `OUTCOMES.md`.
 
-### 5.2 The pilot: 20 sites and an independent web judge
+### 5.2 The pilots: 20 sites each and an independent web judge
 
-1. `$PY $T select --run $RUN --pilot 20 --seed <N>` - one read-only production snapshot
-   (`EXPORT.jsonl`), 20 candidates drawn with the seed; `RUN.json` pins `SITES.jsonl` and
-   `LISTED.jsonl` by sha256 and prints the counts per listing reason and per basis. Once per run.
+There are two pilots, one per kind of fact basis, because the two kinds of text differ: the
+**first** draws from the Phase-4 texts (lanes W/S/T/R: assembled from or restated after a pinned
+Wikipedia source - today all 989 candidates are W or S), the **second** from lane WC's
+sentence-checked March texts (basis `WC`: shorter, trimmed, the bulk of the final population, about
+3,900 sites), before the first mass run over WC texts. Each is the same procedure with its own run:
+
+1. `$PY $T select --run $RUN --pilot 20 --seed <N> --basis W --basis S --basis T --basis R` (the
+   first) or `... --basis WC` (the second, `RUN=output/remediation/teaser/runs/wb-pilot-wc-<date>`)
+   - one read-only production snapshot (`EXPORT.jsonl`), 20 candidates of those bases drawn with the
+   seed (every other candidate is listed `other-basis` or `not-drawn`); `RUN.json` pins `SITES.jsonl`
+   and `LISTED.jsonl` by sha256, records `basis_asked` and prints the counts per listing reason and
+   per basis. Once per run.
 2. The six stages and `outcomes` (5.1).
 3. `$PY $T judge-export --run $RUN --handoff $H-judge` - every accepted card, 5 per batch, to a new
    Opus agent with web access (the brief from `$PY $T brief --run $RUN --handoff $H-judge --batch-id
-   judge-NNN`). The judge sees only the site's name, country and card (`prompts.judge_prompt`) and
-   decides every claim SUPPORTED / CONTRADICTED / UNVERIFIABLE against pages it opens and quotes; it is
-   told which hosts refuse automated readers (Historic England and the Heritage Gateway answer 403,
-   UNESCO often refuses, PDFs may be unreadable) and never to cite ancientnerds.com.
-4. `$PY $OH validate --dir $H-judge`, then `$PY $T judge-import --run $RUN` - refuses a judge that
-   wrote or checked the card; fetches every cited page once (User-Agent
-   `AncientMapRemediation/1.0 (research)`, no personal data) into `$RUN/pages/` and checks every quote
-   by machine (`scripts/remediation/opus_audit/quotes.py`); writes `JUDGE.jsonl` and `JUDGE.md`.
-   **Gate (exit 0): no claim proven CONTRADICTED, and at most 10 % of all claims without a proving
-   quote** (UNVERIFIABLE, or a quote the machine did not find on the page).
-5. Read `OUTCOMES.md` for the tone (evocative, a little mysterious, about the same length). A FAIL or
-   a flat tone: change the prompts or the contract (code, tests, commit) and draw a **new** pilot run;
-   a failed pilot's outcomes are never written. A PASS: write the pilot's outcomes (5.4) - they are
-   the first step - and start the mass run.
+   judge-NNN`) that has worked on no card of the run. The judge sees only the site's name, country and
+   card (`prompts.judge_prompt`) and decides every claim SUPPORTED / CONTRADICTED / UNVERIFIABLE
+   against pages it opens and quotes; it is told which hosts refuse automated readers (Historic
+   England and the Heritage Gateway answer 403, UNESCO often refuses, PDFs may be unreadable) and
+   never to cite ancientnerds.com.
+4. `$PY $OH validate --dir $H-judge`, then `$PY $T judge-import --run $RUN` - refuses a judge answer
+   recorded under a name that wrote or checked the card (section 2); fetches every cited page once
+   (User-Agent `AncientMapRemediation/1.0 (research)`, no personal data) into `$RUN/pages/` and
+   checks every quote by machine (`scripts/remediation/opus_audit/quotes.py`); writes `JUDGE.jsonl`
+   and `JUDGE.md`. **Gate (exit 0): no claim CONTRADICTED - with a proving quote or without one -
+   and at most 10 % of all claims without a proving quote** (UNVERIFIABLE, or a quote the machine did
+   not find on the page). A contradiction whose page refused the machine (403, a PDF, a JS page) or
+   whose quote was mis-copied is still a contradiction: it is counted apart
+   (`contradicted_unproven`, `disputed_cards`), shown in the summary line and in `JUDGE.md`'s header,
+   and fails the pilot like a proven one.
+5. Read `JUDGE.md`: first its section **"Every contradiction"** - each line, proven or not, with the
+   page it cites: is the card wrong, or is its description (the card says what a sentence says)? -
+   then `OUTCOMES.md` for the tone (evocative, a little mysterious, about the same length). A card
+   that departs from its description is a lane-WB failure (prompts or contract); a card faithful to a
+   sentence the web contradicts is a description defect - record it in AUDIT_LOG for the lane that
+   owns the text (WA/WC). Either way the pilot FAILED: change the prompts or the contract (code,
+   tests, commit) where the card was at fault, and draw a **new** pilot run with a new seed; a failed
+   pilot's outcomes are never written. A PASS: write the pilot's outcomes (5.4) - they are the first
+   step of their kind - and start the mass run over that basis.
 
 ### 5.3 The mass run
 
 Preconditions: the sites' descriptions are final - lane WA's P4 writes and lane WC's writes are
-accepted for the sites to be asked. Sites whose text is not final yet are listed `not-final` and are
-asked by a later run.
+accepted for the sites to be asked - and the pilot of their basis passed (5.2). Sites whose text is
+not final yet are listed `not-final` and are asked by a later run.
 
-1. `$PY $T select --run $RUN2 --exclude-run $RUN` (every earlier run of lane WB with its own
-   `--exclude-run`): a site asked before is asked again only if its description changed since.
+1. `$PY $T select --run $RUN2 --exclude-run $RUN --basis W --basis S --basis T --basis R` (every
+   earlier run of lane WB with its own `--exclude-run`): a site asked before is asked again only if
+   its description changed since. The `--basis` list keeps the sentence-checked texts out until their
+   own pilot passed; after that, a run over them names `--basis WC` (or no `--basis` at all).
 2. The six stages and `outcomes` (5.1), 16 agents at a time.
 3. The write (5.4), step by step.
 4. After WC finishes, the same again for the sites WC made final (`--exclude-run` for every earlier
@@ -302,22 +340,24 @@ file).
 Per step `N` (`NNN` = the step number with three digits; step numbers run across runs):
 
 ```bash
-$PY $MW plan --run <run> --step N
-#   read-only; the next <=100 outcomes of the run: output/remediation/mechanical_teaser/sNNN/
-#   (export.jsonl, PLAN.md, SKIPPED.jsonl, prov/ and card/ with PLAN.jsonl and ROLLBACK.sql).
+$PY $MW plan --run $RUN --step N
+#   read-only; --run takes the run's directory ($RUN, as run.py does) or its bare name. The next
+#   <=100 outcomes of the run: output/remediation/mechanical_teaser/sNNN/ (export.jsonl, PLAN.md,
+#   SKIPPED.jsonl, prov/ and card/ with PLAN.jsonl, and ROLLBACK.sql for a lane with cells).
 #   Refused while step N-1 is not closed (accept, or close-reverted after an undo). A site that
 #   changed since its check is listed, not written: stale-description, retired, no-card-row,
 #   journal-chain-broken, journal-disagrees, raw-data-not-an-object, raw-data-not-reprinted,
 #   nothing-to-change (PLAN.md explains each).
-for L in prov card; do          # a lane whose plan has 0 cells (PLAN.md) is skipped
+for L in prov card; do          # SKIP a lane whose plan has 0 cells (PLAN.md): nothing to write
   $PY $AP --lane teaser-$L-sNNN --emit             # APPLY.sql, pinned to the plan
   $PY $AP --lane teaser-$L-sNNN --rehearse         # the statement with COMMIT -> ROLLBACK
   $PY $AP --lane teaser-$L-sNNN --probe-guards     # every guard refuses its corrupted copy (exit 0)
   $PY $AP --lane teaser-$L-sNNN --apply            # exit 0 = committed and read back
   $PY $AP --lane teaser-$L-sNNN --verify           # read-only read-back
 done
-$PY $AP --lane teaser-card-sNNN --rehearse-rollback  # the undo runs (then ROLLBACK), card first
-$PY $AP --lane teaser-prov-sNNN --rehearse-rollback
+for L in card prov; do          # the undo runs (then ROLLBACK), card first; SKIP a 0-cell lane:
+  $PY $AP --lane teaser-$L-sNNN --rehearse-rollback  # it has no ROLLBACK.sql
+done
 $PY $MW accept --step N          # read-only; ACCEPT_EXIT=0 and "RESULT: 0 deviation(s)" only
 ```
 
@@ -343,7 +383,8 @@ What the gates check:
   every planned cell holds its value and has exactly its journal row, no rollback row, no Phase-5
   card key left, an accepted site's teaser provenance hashes the live card and is not stale, a
   cleared site has neither card nor teaser provenance. Only then it records
-  `ACCEPTED/step-NNN.json` (once; a later `accept` only re-reads), which the next `plan` requires.
+  `ACCEPTED/step-NNN.json` (once; a later `accept` only re-reads, and a step closed as undone is
+  never accepted), which - or a `REVERTED/step-NNN.json` (5.6) - the next `plan` requires.
 
 Between the two applies of a step the old card is live and marked by nothing (its Phase-5 key is
 nulled, and the teaser provenance hashes the new card): a window of minutes in which a site claims
@@ -361,17 +402,18 @@ VPS checkout, which the deploy pulls. **So after each write sitting, before anyt
 $PY $MW card-file --steps A-B       # the sitting's steps; read-only; WRITE_EXIT=0
 $PY scripts/remediation/phase4/card_json.py --check     # ACCEPT_EXIT=0: file == production
 git add public/data/card_descriptions.json
-git add -f output/remediation/mechanical_teaser/STEPS.jsonl output/remediation/mechanical_teaser/ACCEPTED \
-  output/remediation/mechanical_teaser/sNNN/PLAN.md output/remediation/mechanical_teaser/sNNN/SKIPPED.jsonl \
-  output/remediation/mechanical_teaser/sNNN/prov output/remediation/mechanical_teaser/sNNN/card   # every step of the sitting
+MT=output/remediation/mechanical_teaser
+git add -f $MT/STEPS.jsonl $MT/ACCEPTED $MT/sNNN/PLAN.md $MT/sNNN/SKIPPED.jsonl \
+  $MT/sNNN/prov $MT/sNNN/card          # every step of the sitting; $MT/REVERTED too once it exists
 git commit -m "Lane WB steps A-B: the card file regenerated from production"
 git push origin main                # immediately; the deploy pulls the file
 ```
 
 `card-file` renders with `card_json`'s own renderer (`file_from_cards`, `canonical`: existing key
 order, new keys in UUID order, cleared keys removed) from a read-only production SELECT, and refuses
-unless every step named is accepted, every key it changes is a card cell of those steps, and
-production holds every planned card - so the file is exactly the database's for these steps and
+unless every step named is closed, every key it changes is a card cell of those steps, and
+production holds each such cell as the steps left it (an accepted step's planned card; an undone
+step's card from before the step, 5.6) - so the file is exactly the database's for these steps and
 nothing else. After the deploy: re-read `StartedAt` of both API containers (they restarted with the
 new file), 0 `[STARTUP] Card description overwritten` lines in both containers' logs
 (`ssh ancientnerds "docker logs ancient_nerds_api 2>&1 | grep -c 'Card description overwritten'"`,
@@ -387,35 +429,71 @@ lines name the sites), stop: the step's `accept` lists the sites as deviations, 
 as `journal-disagrees` from then on - an incident for AUDIT_LOG, repaired by its own journalled lane,
 never by a second push.
 
+**A red CI inside the sitting** (the pre-push hook aborts the push, or the pushed commit fails a CI
+gate, so no deploy pulls the file): the database holds the new cards, the VPS checkout still the old
+file, and any API restart until a green deploy would put the old cards back without a journal.
+Answer it as P5 did, by undoing the sitting - never by leaving the database ahead of the deployed
+file: 5.6's commands 1 and 2 (both `ROLLBACK.sql`, `close-reverted`) for **every** step of the
+sitting, the last step first; then its commands 3 and 4 once for the sitting: `card-file --steps
+A-B` (every step is now closed as undone, so the file is rendered back to the cards from before the
+sitting), `card_json.py --check`, one commit (the file and the trail, `REVERTED/` included) and the
+push. Main's file then equals the deployed one whatever the CI does next. (If the hook aborted the
+sitting's push, `origin/main` still holds the old file, which the undo made the database's again:
+the two local commits go out together with the next green push.) Record the incident in AUDIT_LOG,
+and write the sitting again, as new steps, once the CI is green.
+
 ### 5.6 Undo
 
-A step, card lane first (its premise needs the provenance the provenance lane wrote), each
-`ROLLBACK.sql` rehearsed in 5.4:
+One step - after its acceptance (its file may be out already) or before it - or, in reverse step
+order, every step of a sitting. The whole order, one command after the other, **no API restart and
+no other push in between** (`StartedAt` of both API containers read before and after, as in 5.4):
 
 ```bash
+# 1. The database: each lane's ROLLBACK.sql (rehearsed in 5.4), card lane first - its premise needs
+#    the provenance the provenance lane wrote. A lane that has no ROLLBACK.sql (0 cells) is skipped.
 ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" \
   < output/remediation/mechanical_teaser/sNNN/card/ROLLBACK.sql
 ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" \
   < output/remediation/mechanical_teaser/sNNN/prov/ROLLBACK.sql
+# 2. The proof, read-only: ACCEPT_EXIT=0 and "RESULT: 0 write(s) still standing"
+$PY $MW close-reverted --step N
+# 3. The file, rendered back from production - never a `git revert` of the sitting's commit
+$PY $MW card-file --steps N         # or the sitting's A-B; read-only; WRITE_EXIT=0
+$PY scripts/remediation/phase4/card_json.py --check     # ACCEPT_EXIT=0 - before the push
+# 4. The file and the whole trail in one commit, pushed at once
+git add public/data/card_descriptions.json
+git add -f output/remediation/mechanical_teaser/STEPS.jsonl output/remediation/mechanical_teaser/ACCEPTED \
+  output/remediation/mechanical_teaser/REVERTED output/remediation/mechanical_teaser/sNNN/PLAN.md \
+  output/remediation/mechanical_teaser/sNNN/SKIPPED.jsonl output/remediation/mechanical_teaser/sNNN/prov \
+  output/remediation/mechanical_teaser/sNNN/card
+git commit -m "Lane WB step N undone: the card file rendered back from production"
+git push origin main
 ```
 
-Each reversal is journalled under the lane's `-rollback` stamp and refuses unless the row still holds
-exactly what the step wrote. Then:
+What each gate checks:
 
-```bash
-$PY $MW close-reverted --step N   # read-only; ACCEPT_EXIT=0 and "RESULT: 0 write(s) still standing"
-```
+- each reversal is journalled under the lane's `-rollback` stamp and refuses unless the row still
+  holds exactly what the step wrote;
+- `close-reverted` closes the step on production's proof that none of its writes stands: every
+  planned cell holds its value from before the step, and every write the step had is followed by
+  exactly one reversal, its inverse (a lane never applied has neither). It writes
+  `REVERTED/step-NNN.json` (once) **beside** an `ACCEPTED/step-NNN.json` if the step had one - the
+  acceptance stays as history. `plan` goes on, and the next step plans the undone step's sites again
+  from the same outcomes (while their description is still the one checked): no undone site is
+  dropped. If the cards themselves were the reason for the undo, the run's outcomes are suspect:
+  plan no further step from it, fix the cause, and ask the sites again in a new run (`select --sites
+  FILE` without `--exclude-run` of the old one). A step planned and never applied is closed the same
+  way;
+- `card-file` renders the file from production and expects each card cell of an undone step at its
+  value from before the step (a later named step that planned the same site again wins), each of an
+  accepted step at its planned card - so it re-renders after an undo exactly as after a sitting, and
+  only the undone step's keys change; the other steps of the sitting keep their teasers;
+- `card_json.py --check` proves file == production before anything is pushed. The trail files are
+  never reverted: `STEPS.jsonl`, `ACCEPTED/`, `REVERTED/` and the step's plans are the record the
+  next `plan`, `accept` and `card-file` read.
 
-It closes the step on production's proof that none of its writes stands: every planned cell holds
-its value from before the step, and every write the step had is followed by exactly one reversal,
-its inverse (a lane never applied has neither). Its record (`ACCEPTED/step-NNN.json`, `"reverted":
-true`) lets `plan` go on, and the next step plans the undone step's sites again (while their
-description is still the one checked); `card-file` refuses to name an undone step. A step planned
-and never applied is closed the same way. Then the card file, if it had been rendered for the step:
-`git revert` its commit (never a reset on `main`) and push at once - the database first, then the
-file, as always - then `card_json.py --check` (`ACCEPT_EXIT=0`). A commit that was not pushed yet
-goes out together with its revert, so the deployed file never changes. Record the undo and its reason
-in AUDIT_LOG.
+After the deploy: the checks of 5.5 (both `StartedAt` moved, 0 overwrite lines, `card_json.py
+--check`, the `commit` field). Record the undo and its reason in AUDIT_LOG.
 
 ### 5.7 Later
 
@@ -431,7 +509,8 @@ in AUDIT_LOG.
 `LISTED.jsonl`, `ROUNDS.jsonl`, `STAGE-<stage>.jsonl`, `OUTCOMES.jsonl`, `OUTCOMES.md`; for the pilot
 `JUDGE.jsonl`, `JUDGE.md`, `pages/`. `output/remediation/handoff/teaser-<run>-<stage>/` (and
 `-scratch/`): the handoff. `output/remediation/mechanical_teaser/`: `STEPS.jsonl`, `sNNN/...`,
-`ACCEPTED/step-NNN.json` - force-added to git with the card-file commit (the proof trail).
+`ACCEPTED/step-NNN.json`, `REVERTED/step-NNN.json` - force-added to git with the card-file commit
+(the proof trail; never reverted).
 
 ## 6. Why a mechanical lane and not `write_gate4.py --group P5`
 

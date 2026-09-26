@@ -119,7 +119,10 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   'phase5:%'` plus `git revert` of the JSON commit. *(design entry [6], production_write,
   2026-09-23)* Lane WB's teaser cards keep the order: accepted journalled steps, then
   `mechanical/teaser.py card-file` renders the file from production, then the push - no other push
-  and no API restart in between (`docs/procedures/CARD_DESCRIPTIONS.md` 5.5). *(2026-09-26)*
+  and no API restart in between (`docs/procedures/CARD_DESCRIPTIONS.md` 5.5). Their undo - also
+  for a red CI inside the sitting - rolls the steps back, closes them with `close-reverted` and
+  renders the file back from production with `card-file`: never a `git revert`, so main's file is
+  always the database's (5.5, 5.6). *(2026-09-26)*
 - **A `db.html` batch upload from a stale export overwrites rewritten descriptions.**
   `POST /api/sites/batch-upload` sets `description = COALESCE(:description, description)`
   (`api/routes/sites.py:1686`) with no old-value condition and no journal row, so an export taken
