@@ -1423,13 +1423,17 @@ NEW_LANES = [
     for name in sorted(L.LANES)
     if name != L.T05.name and (A.lane_dir(L.LANES[name]) / "PLAN.jsonl").exists()
 ]
+#: Lanes whose plan is built from Opus answers still to be imported, so none is delivered yet: the
+#: L5 name lane (`scripts/remediation/l5/plan.py`, HUMAN_ONLY B1-N and Nr. 7, 2026-09-26). Its
+#: statements are tested on a fabricated plan (`name_l5_plan`).
+AWAITING_ANSWERS = frozenset({"name-l5"})
 
 
 class TestTheDeliveredLanes:
     """The committed statements of the lanes not yet applied are exactly what `--emit` renders."""
 
     def test_every_new_lane_has_a_delivered_plan(self) -> None:
-        assert sorted(NEW_LANES) == sorted(n for n in L.LANES if n != L.T05.name)
+        assert set(NEW_LANES) | AWAITING_ANSWERS == {n for n in L.LANES if n != L.T05.name}
 
     @pytest.mark.parametrize("name", NEW_LANES)
     def test_the_committed_statements_are_the_plan_s_own(self, name: str) -> None:
@@ -1505,6 +1509,8 @@ def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path
         return delivered(directory)
     if lane.target is L.CARD_STATS:
         return card_stats_plan(directory, lane)
+    if lane is L.NAME_L5:
+        return name_l5_plan(directory)
     plan_path = directory / "PLAN.jsonl"
     plan_path.write_text(
         (A.lane_dir(lane) / "PLAN.jsonl").read_text(encoding="utf-8"),
@@ -1550,6 +1556,40 @@ def card_stats_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord]
         for site, column, old, new in cells
     )
     plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-23T00:00:00+00:00", lane=lane)
+    plan_path = directory / "PLAN.jsonl"
+    P.write_plan_jsonl(plan, plan_path)
+    P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
+    return A.load_records(plan_path), plan_path
+
+
+def name_l5_plan(directory: Path) -> tuple[list[A.ChangeRecord], Path]:
+    """The L5 name lane's plan, fabricated: it is built from the Opus readings once they are
+    imported (`scripts/remediation/l5/`), so no plan is delivered yet. Two renames, each a name
+    and its key, the way `l5/plan.py` writes them - the first is HUMAN_ONLY Nr. 7's."""
+    cells = [
+        (SITE_BOA, "name", "Zoque Culture Archaeological Zone", "Chiapa de Corzo"),
+        (SITE_BOA, "name_normalized", "zoque culture archaeological zone", "chiapa de corzo"),
+        (SITE_GIANTS_RING, "name", "Giants Ring", "Giant's Ring"),
+        (SITE_GIANTS_RING, "name_normalized", "giants ring", "giant's ring"),
+    ]
+    changes = tuple(
+        P.Verdict(
+            site_id=site,
+            site_name="a site",
+            ok=True,
+            old_value=old,
+            new_value=new,
+            rule="l5-name",
+            reason="",
+            note=f"{column} {old} -> {new}",
+            phase3=False,
+            finding_test_id="B1/name-l5",
+            evidence=({"source": "test", "quote": "x"},),
+            column=column,
+        )
+        for site, column, old, new in cells
+    )
+    plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-26T00:00:00+00:00", lane=L.NAME_L5)
     plan_path = directory / "PLAN.jsonl"
     P.write_plan_jsonl(plan, plan_path)
     P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
@@ -1931,6 +1971,23 @@ class TestTheLandedCheck:
 #: (audit 2026-09-25 M9: a value holding `|` broke the split reader) - re-pinned 2026-09-25. No
 #: write, undo, rehearsal or probe digest moved.
 COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
+    # the B2-L lane (WE, 2026-09-26): pinned as emitted, before its rehearsal
+    "country-b2": {
+        "apply": "71ff3eeeddc735ac024ef3b0029842ea8fe3bf530c911da6812f8c987f40a120",
+        "interests": "2838184adb059f6bc7b0f35b0fcb55146859e5c179d64f5804b32c34b1edc969",
+        "landed": "601108c72f75c7b6073d9adc96aeb110d476bd9242c9b0dd74aa64f27b9797f5",
+        "probe:guard1-other-source": "48fd4691556ef95e5cbb36358aab0b754135d980815b9d54b29d92edd7d31f7d",
+        "probe:guard2-no-op": "a468a0485518351282d027db10ee549be8c3878b8ce25fada91dd796d96038cb",
+        "probe:guard2-too-long": "a48095edb0a54953ccae4ce4b13c21d3af93bfff3cd0765c2721765bde601e6b",
+        "probe:guard3-foreign-old-value": "30b2ca99ce8d7468b615ffbc28afe20867f9e731dccbb21c5758a15c4f1f0c5f",
+        "probe:guard4-not-owned": "72def9c5b631ea3e8c53b64cd9c5f7dd7132a99ba53e530e959559339648eb06",
+        "probe:guard5-premise": "4696fd38d49346b1ead066b93f2fcc528edbe4ebd31779af6af12ea27e5a9a30",
+        "probe_foreign": "9d5bf7181303fac43324a2f9396a6daaf108b5f6b191dcd32b988fe0c5fcf19c",
+        "readback": "2347871e8ec9c356168a75f6af953dbb13ef73cd9e410ec1f12a587c4e47faf9",
+        "rehearsal": "59ef9d22876a0e88fbcf7612f3ae928aa85664af6b48feff60762afef15f2e90",
+        "rollback": "e119dbbff811a39ee96942f60ef30218f713347b081e06edc1598182fbe526e9",
+        "rollback_rehearsal": "df0ade3617ebcbe18811c2f46fe0a2263c06a261dc8ba4b5f8bed3644165fd04",
+    },
     "period-name": {
         "apply": "fe122a2edb983d35c30c3049987f02f0e4cf0d67769cf0fe8c1f4bdb95b4e716",
         "interests": "3b5e8257f890ceb98c0ad713db8b78dcf34e881257db462aceb17288f38822df",

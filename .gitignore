@@ -447,3 +447,19 @@ output/remediation/sitelink/*
 !output/remediation/sitelink/pilot/
 output/remediation/sitelink/pilot/*
 !output/remediation/sitelink/pilot/questions.json
+# The WE lanes (2026-09-26, HUMAN_ONLY_DECISIONS_2026-09-26.md): the B2 country lane and the L5
+# name lane are versioned like the other mechanical lanes (plan, refusals, undo, statement - never
+# the rehearsal). L5's link steps live under qid_repair/l5/ (the directory rule above); their
+# rehearsal and probe files keep nothing. L5's own record (population, answers as imported,
+# decisions) is versioned; the handoff prompts, the agents' scratch files and the fetched pages'
+# raw bytes stay local - ANSWERS.jsonl keeps each quote's outcome and PAGES.jsonl each page's sha256.
+!output/remediation/mechanical_country_b2/
+output/remediation/mechanical_country_b2/REHEARSAL.sql
+!output/remediation/mechanical_name_l5/
+output/remediation/mechanical_name_l5/REHEARSAL.sql
+output/remediation/qid_repair/l5/step-*/REHEARSAL.sql
+output/remediation/qid_repair/l5/step-*/probes/
+!output/remediation/l5/
+output/remediation/l5/handoff*/
+output/remediation/l5/pages/
+output/remediation/l5/export/

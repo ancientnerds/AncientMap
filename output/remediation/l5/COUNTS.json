@@ -1,0 +1,19 @@
+{
+ "asked": 159,
+ "asked_on_an_enwiki_source_url": 159,
+ "by_group": {
+  "found-by-we": 1,
+  "link-suspect": 72,
+  "name-n7": 46,
+  "wave1-unresolved": 1,
+  "wave2-unresolved": 47
+ },
+ "duplicate_candidates_asked": 9,
+ "excluded": {
+  "retired": 8
+ },
+ "members": 167,
+ "names_asked": 43,
+ "names_pinned": 1,
+ "read_at": "2026-09-26T08:43:15+00:00"
+}

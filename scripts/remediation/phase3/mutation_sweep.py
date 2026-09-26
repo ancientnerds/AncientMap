@@ -14271,7 +14271,7 @@ SOURCE_URL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "source url: the apply statement may delete",
         _SU_REPAIR,
-        "    if reversal:\n        write_ext += [\n",
+        "    if reversal or removals:\n        write_ext += [\n",
         "    if True:  # mutant\n        write_ext += [\n",
         TOOLS_TEST,
         _SU_STATEMENT,
@@ -14303,8 +14303,8 @@ SOURCE_URL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "source url: a new value with a control character is rendered",
         _SU_REPAIR,
-        "    if any(row.new_value is None or CONTROL_RE.search(row.new_value) for row in rows):\n",
-        "    if False:  # mutant\n",
+        "        or (row.new_value is not None and CONTROL_RE.search(row.new_value))\n",
+        "        or False  # mutant\n",
         TOOLS_TEST,
         "test_a_statement_is_refused_for_a_new_value_with_a_control_character",
     ),

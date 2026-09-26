@@ -253,3 +253,161 @@ class TestTheCommand:
         assert NK.main(["chunk", "--out", str(out)]) == 1
         assert "nothing to plan" in capsys.readouterr().err
         assert not out.exists()
+
+
+# --------------------------------------------------- the eleven Lyra alias keys (HUMAN_ONLY Nr. 9)
+#: The eleven rows as production held them on 2026-09-26 (read-only): the alias and its stored key.
+#: Postgres's key of each is the lower-cased alias itself. The Hangul keys print alike but are the
+#: decomposed jamo Python's NFKD left behind (`name_normalized = normalize(name, NFD)` read true);
+#: the Japanese ones lost a (han)dakuten, Cerutti's a parenthesised part.
+LYRA_READ = [
+    (3616643, "848cbe6d-136e-4c15-819c-b017b290a909", "북센티널섬", "NFD"),
+    (3616936, "6eb8b50f-b9dc-4069-8135-efeb491b9e1b", "ドッガーランド", "トッカーラント"),
+    (3616938, "6eb8b50f-b9dc-4069-8135-efeb491b9e1b", "도거랜드", "NFD"),
+    (3617031, YAP, "ヤップ島", "ヤッフ島"),
+    (3617034, YAP, "야프 제도", "NFD"),
+    (3617035, YAP, "야프섬", "NFD"),
+    (3617036, YAP, "야프제도", "NFD"),
+    (3617283, CERUTTI, "Cerutti Mastodon (CM) site", "cerutti mastodon  site"),
+    (3617346, "85dbd052-9423-4404-a059-3f69cb7bb82d", "ループクンド湖", "ルーフクント湖"),
+    (3617349, "dab28cc0-615f-4779-9fef-882586a6ab6f", "チャーンウッドの森", "チャーンウットの森"),
+    (
+        3617350,
+        "dab28cc0-615f-4779-9fef-882586a6ab6f",
+        "チャーンウッドフォレスト",
+        "チャーンウットフォレスト",
+    ),
+]
+
+
+def _lyra_rows() -> list[dict[str, Any]]:
+    import unicodedata
+
+    return [
+        _name_row(
+            row_id,
+            site,
+            name,
+            unicodedata.normalize("NFD", name) if stored == "NFD" else stored,
+            name.lower(),
+            source_id="lyra",
+        )
+        for row_id, site, name, stored in LYRA_READ
+    ]
+
+
+class TestTheLyraAliasKeys:
+    def test_the_decision_names_eleven_rows_on_six_sites(self):
+        assert len(NK.LYRA_ALIAS_ROWS) == len(set(NK.LYRA_ALIAS_ROWS)) == 11
+        assert sorted(NK.LYRA_ALIAS_ROWS) == [row for row, *_ in LYRA_READ]
+        assert len({site for _, site, *_ in LYRA_READ}) == 6
+
+    def test_a_lyra_directory_names_the_lyra_lane(self, tmp_path):
+        lane = NK.chunk_lane(tmp_path / "name-key-lyra-2026-09-26")
+        assert (lane.name, lane.test_id, lane.stamp, lane.source) == (
+            "name-key-lyra",
+            "P6/name-key-lyra",
+            "name-key-lyra-2026-09-26",
+            "lyra",
+        )
+        assert NK.chunk_lane(tmp_path / "name-key-2026-09-26").source == "ancient_nerds"
+
+    def test_the_lyra_lane_plans_exactly_the_decided_rows(self):
+        rows = _lyra_rows()
+        changes, listed = NK.plan_keys([], rows, source="lyra")
+        assert listed == []
+        assert [int(c.row_key) for c in changes] == sorted(NK.LYRA_ALIAS_ROWS)
+        for change, row in zip(changes, rows, strict=True):
+            assert (change.old_value, change.new_value) == (row["name_normalized"], row["sql_key"])
+
+    def test_the_lyra_lane_lists_every_other_row(self):
+        undecided = _name_row(3700000, YAP, "Yap", "yap island", "yap", source_id="lyra")
+        curated = _name_row()
+        site = _site_row(source_id="lyra")
+        changes, listed = NK.plan_keys([site], [undecided, curated], source="lyra")
+        assert changes == []
+        assert [(e["row"], e["reason"]) for e in listed] == [
+            (CERUTTI, "lyra-row-not-decided"),
+            ("3700000", "lyra-row-not-decided"),
+            ("3617031", "source-ancient_nerds-not-the-writer-s"),
+        ]
+
+    def test_the_curated_lane_still_lists_the_lyra_rows(self):
+        changes, listed = NK.plan_keys([], _lyra_rows())
+        assert changes == [] and len(listed) == 11
+        assert {e["reason"] for e in listed} == {"source-lyra-not-the-writer-s"}
+
+    def test_the_command_writes_one_chunk_of_eleven_keys_whose_guard_1_asks_for_lyra(
+        self, tmp_path, monkeypatch
+    ):
+        read = {"read_at": "2026-09-26T01:00:00Z", "sites": [], "names": _lyra_rows()}
+        monkeypatch.setattr(NK, "read_production", lambda: read)
+        out = tmp_path / "name-key-lyra-2026-09-26"
+        assert NK.main(["chunk", "--out", str(out)]) == 0
+        chunk = C.check_delivered(out / "chunk-001")
+        assert chunk.lane.source == "lyra" and chunk.run_stamp == "name-key-lyra-2026-09-26-001"
+        assert len(chunk.changes) == 11 and len(chunk.sites) == 6
+        head = json.loads((out / "chunk-001" / "CHUNK.json").read_text(encoding="utf-8"))
+        assert head["source"] == "lyra"
+        apply_sql = (out / "chunk-001" / "APPLY.sql").read_text(encoding="utf-8")
+        assert "WHERE u.id IS NULL OR u.source_id <> 'lyra';" in apply_sql
+        assert "planned site(s) are not % sites', bad, 'lyra';" in apply_sql
+        assert "-- scope source_id = 'lyra';" in apply_sql
+        assert "'ancient_nerds'" not in apply_sql
+        C.lint_statement(apply_sql)
+
+
+class TestTheWriterSource:
+    def test_a_curated_chunk_names_no_source_and_renders_as_before(self):
+        (chunk,) = C.chunk_changes(LANE, [_name_change()])
+        assert "source" not in C.header(chunk)
+        sql = C.render_statement(chunk)
+        assert "WHERE u.id IS NULL OR u.source_id <> 'ancient_nerds';" in sql
+
+    def test_only_the_key_only_sources_can_be_named(self):
+        with pytest.raises(C.ChunkError, match="alias keys of"):
+            C.Lane("x", "P6/x", "x-2026-09-26", "authoritative", "x", "geonames")
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            _site_change(),
+            C.Change("wiki_images", "is_hero", "101", YAP, "false", "true", "H1", "w", EV),
+        ],
+    )
+    def test_a_lyra_lane_writes_alias_keys_and_nothing_else(self, change):
+        lane = C.Lane("k", "P6/k", "k-2026-09-26", "authoritative", "k", "lyra")
+        with pytest.raises(C.ChunkError, match="alias keys only"):
+            C.chunk_changes(lane, [change])
+
+    def test_a_delivered_lyra_chunk_that_writes_another_column_is_refused(self, tmp_path):
+        lane = C.Lane("k", "P6/k", "k-2026-09-26", "authoritative", "k", "lyra")
+        (chunk,) = C.chunk_changes(lane, [_name_change()])
+        directory = C.emit_chunk(tmp_path, chunk)
+        assert C.check_delivered(directory).lane == lane
+        plan = directory / "PLAN.jsonl"
+        row = json.loads(plan.read_text(encoding="utf-8"))
+        row.update(table="unified_sites", column="name_normalized", row_key=YAP)
+        row["change_key"] = C.change_key(lane, C.Change(**{k: row[k] for k in (
+            "table", "column", "row_key", "site_id", "old_value", "new_value", "rule", "reason",
+            "evidence")}))  # fmt: skip
+        plan.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+        with pytest.raises(C.ChunkError, match="alias keys only"):
+            C.load_chunk(directory)
+
+
+class TestTheCommandLine:
+    def test_a_read_back_naming_a_japanese_key_is_printed_not_raised(self, tmp_path, monkeypatch):
+        """cp1252 cannot encode the Lyra keys; after a COMMIT a traceback would hide the exit code."""
+        import io
+
+        lane = C.Lane("k", "P6/k", "k-2026-09-26", "authoritative", "k", "lyra")
+        (chunk,) = C.chunk_changes(lane, [_name_change()])
+        directory = C.emit_chunk(tmp_path, chunk)
+        raw = io.BytesIO()
+        console = io.TextIOWrapper(raw, encoding="cp1252")
+        monkeypatch.setattr(sys, "stdout", console)
+        monkeypatch.setattr(C, "readback", lambda chunk, rollback=False: ["holds 'ヤッフ島'"])
+        assert C.main([str(directory), "--readback"]) == C.EXIT_COMMITTED_UNCONFIRMED
+        console.flush()
+        assert "holds 'ヤッフ島'" in raw.getvalue().decode("utf-8")

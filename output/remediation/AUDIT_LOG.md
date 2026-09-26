@@ -12642,3 +12642,76 @@ Earth cache this worktree does not carry); `ruff check api/ pipeline/` clean and
 `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80` clean; the three mypy runs in the
 table above; the Lyra-image import check (`markdown`/`nh3` blocked) imports
 `pipeline.lyra.orchestrator`.
+
+## 2026-09-26 - The WE lanes (HUMAN_ONLY decisions under O9): B2-L, Nr. 9, L5, Nr. 8 - built, reviewed and measured, nothing written
+
+The data actions of `HUMAN_ONLY_DECISIONS_2026-09-26.md` no other workstream covers. Branch `wip/we1`
+(worktree `.claude/worktrees/we1`, from `integrate/wave1` at `7b6c736`); runbook
+`docs/procedures/SITES_DB_REMEDIATION_2026-09.md`, "Phase 6b - The WE lanes". Nothing was written to
+production; every production read below is a SELECT.
+
+**Built** (`e6a1751` .. `e36de10`): the B2-L country lane `country-b2` (2 cells, plan delivered in
+`mechanical_country_b2/`); Nr. 9, the chunk writer admitting `lyra` for exactly the 11 decided
+`unified_site_names.name_normalized` rows (`name-key-lyra-2026-09-26/chunk-001`, 11 keys on 6
+sites); L5 (`scripts/remediation/l5/`: population, question, Opus handoff rounds, machine checks,
+link steps through `qid_repair.render_split(removals=True)`, the name lane `name-l5`); Nr. 8 as a
+reviewed VPS step for the orchestrator, with read-only pre-checks.
+
+**Measured** (read-only, 2026-09-26 08:43-08:50 UTC; journal maximum still 73911): B2-L rows holding
+the replaced country 2 (curated `Türkiye` 218, `Turkey` 0); `lyra` alias rows whose key is not
+Postgres's key of their name 11 on 6 sites, exactly the decided 11; curated rows whose key is not
+their name's key 0; the six Nr. 8 image rows excluded 6, hero 0; "Chiapa de Corzo" (`24aa135d`) and
+the Zoque row both visible, scope NULL. L5, population read again at 08:43Z (nothing had moved since
+the 01:38Z read): 167 members (wave1-unresolved 1, wave2-unresolved 47, link-suspect 72, name-n7 46,
+found-by-we 1), **159 asked** (9 duplicate candidates among them), 8 retired not asked, **43 names
+asked**, 1 rename pinned; 56 asked sites share their item with another curated row (48 with a
+visible one); prompts 3,997-5,928 characters (median 4,836), 16 batches of 10.
+
+### The independent review of `e36de10` and its fixes
+
+Verdict "fix" (4 major, 4 minor). The session fixing it was interrupted at 04:48: three working-tree
+files (`qid_repair.py`, `l5/links.py`, `mechanical/lane.py`) were left as NUL bytes. HEAD was intact;
+the three were restored from it, the surviving half of the fix round kept, the lost edits redone,
+and nothing was committed from the damaged tree.
+
+* **Major - one item for two sites.** The plan skips both sites of a replacement item decided for
+  two (`item-planned-for-another-site`, WD2's); the write refuses such a plan (guard 6, probed by
+  giving a second site of the step the first site's new item) and checks after its writes that
+  every written item is carried by exactly one curated site (invariant 5; write only, not the
+  reversal; not probeable while guards 5 and 6 pass, its SQL tested in SQLite).
+* **Major - WD1 was not told which links L5 leaves unproven.** `plan` writes
+  `UNTRUSTED_LINKS.jsonl`: every member excluded, held after the last round, skipped by the plan,
+  or keeping an item another visible curated row carries (`shared-item`). The runbook tells WD1 to
+  take its export after every link step and to treat those sites' Wikidata-derived values as absent.
+  One rule for all duplicate candidates: the nine B1-D/B6 rows are now asked like wave 3's
+  `duplicate-candidate` rows, their question naming the pair.
+* **Major - L5 asked names B1-N does not list, and a rename was tied to a quote only.** The name is
+  asked of the N7 names only; the three self-contradicting records are told their name and point
+  define the site. A rename is held unless the new name is an English label or alias of the item
+  kept or written (its entity page read even when uncited) or the title of the article kept or
+  written (with or without its qualifier), and held when another visible curated row carries that
+  item.
+* **Minor - a rename that keeps its key** raised in `write_names` after the step files existed: the
+  page shows "unchanged", everything that can refuse is computed before the first file (and no step
+  is written while any step directory holds another plan), and the name read-back counts a key row
+  without its name row and a moved key without its key row instead of "<> 2 rows".
+* **Minor - the pinned Chiapa de Corzo rename** is planned only once `24aa135d` is retired as
+  `duplicate_of:ed186ea9-...` (`duplicate-not-hidden-yet` otherwise). `wip/wd2` (`e1ba2de`) has no
+  entry for `24aa135d` yet; since `plan` runs once, the runbook puts WD2's hide before L5's plan.
+* **Minor - the rounds' order**: only the newest round is imported, a re-ask and the plan wait for
+  its import, at most three rounds.
+* **Minor - Nr. 8's pre-check proved the database only.** Pre-check 4 greps every `.json` and
+  `.json.gz` under `public/data/sites` for the six paths; this machine's March export names
+  `9a9a0dca/hero.webp` in six files, so on such an export Nr. 8 waits for WF's static export.
+
+Handed on, not done here: WD1's harvest code (`wip/wd1`, `fields/harvest.py`) must read
+`UNTRUSTED_LINKS.jsonl`; WD2 must build the 20th duplicate entry (`24aa135d`).
+
+**Tests, sweep, gates** (worktree `.claude/worktrees/we1`, main venv): full gate suite
+(`-q -rs --timeout 90 -m "not integration and not live_llm"`) **7,324 passed, 78 skipped, 57
+deselected, 0 failed** (337 s; the skips are gitignored working data this worktree does not hold);
+`tests/remediation/test_l5.py` 81; the WE sweep group `mutation_sweep.py "we:"` **28 of 28 fired**
+(15 new cases, the duplicate-exclusion case retired with the exclusion); `ruff check api/ pipeline/`
+clean, `ruff format --check` clean on the 13 touched Python files; `lint-imports` 2 kept, 0 broken;
+`vulture` clean; the Lyra import check passes (nothing under `pipeline/` or `api/` touched, so no
+mypy run).

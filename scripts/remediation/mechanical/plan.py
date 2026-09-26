@@ -828,10 +828,13 @@ def load_sites(site_ids: Iterable[str], *, reader: Any, strict: bool = True) -> 
 
 
 # ------------------------------------------------------------------------------- the witnesses
-def get_json(endpoint: str, params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
-    """One GET with the project's `USER_AGENT`, parsed as JSON - one attempt, no mirror loop."""
+def get_json(
+    endpoint: str, params: Mapping[str, str], *, timeout: int = 60, user_agent: str = USER_AGENT
+) -> dict[str, Any]:
+    """One GET, parsed as JSON - one attempt, no mirror loop. `user_agent` is the census's by
+    default; a lane that must not send a contact address names its own (`country_b2.py`)."""
     url = endpoint + "?" + urllib.parse.urlencode(dict(params))
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -839,9 +842,14 @@ def get_json(endpoint: str, params: Mapping[str, str], *, timeout: int = 60) -> 
         raise PlanError(f"request failed: {url}: {exc}") from exc
 
 
-def _wikidata(params: Mapping[str, str], *, timeout: int = 60) -> dict[str, Any]:
+def _wikidata(
+    params: Mapping[str, str], *, timeout: int = 60, user_agent: str = USER_AGENT
+) -> dict[str, Any]:
     return get_json(
-        WIKIDATA_API, {**params, "format": "json", "formatversion": "2"}, timeout=timeout
+        WIKIDATA_API,
+        {**params, "format": "json", "formatversion": "2"},
+        timeout=timeout,
+        user_agent=user_agent,
     )
 
 
@@ -946,14 +954,17 @@ def resolve_anchors(sites: Mapping[str, Site], known_qids: Mapping[str, str]) ->
     return anchors
 
 
-def fetch_entities(qids: Iterable[str], props: str, **extra: str) -> dict[str, Any]:
+def fetch_entities(
+    qids: Iterable[str], props: str, *, user_agent: str = USER_AGENT, **extra: str
+) -> dict[str, Any]:
     """`wbgetentities` for `qids`, 40 per request; a missing entity is an error, not a gap."""
     wanted = sorted(set(qids))
     entities: dict[str, Any] = {}
     for chunk in [wanted[i : i + 40] for i in range(0, len(wanted), 40)]:
         got = (
             _wikidata(
-                {"action": "wbgetentities", "ids": "|".join(chunk), "props": props, **extra}
+                {"action": "wbgetentities", "ids": "|".join(chunk), "props": props, **extra},
+                user_agent=user_agent,
             ).get("entities")
             or {}
         )
@@ -964,14 +975,18 @@ def fetch_entities(qids: Iterable[str], props: str, **extra: str) -> dict[str, A
     return entities
 
 
-def country_codes(country_qids: Iterable[str]) -> dict[str, dict[str, Any]]:
+def country_codes(
+    country_qids: Iterable[str], *, user_agent: str = USER_AGENT
+) -> dict[str, dict[str, Any]]:
     """`P297` (ISO 3166-1 alpha-2) and the English label of every country entity named."""
     return {
         qid: {
             "label": ((entity.get("labels") or {}).get("en") or {}).get("value"),
             "p297": next(iter(_claim_strings(entity, "P297")), None),
         }
-        for qid, entity in fetch_entities(country_qids, "claims|labels", languages="en").items()
+        for qid, entity in fetch_entities(
+            country_qids, "claims|labels", user_agent=user_agent, languages="en"
+        ).items()
     }
 
 
