@@ -96,9 +96,12 @@ owner decision O5 of 2026-09-26, runbook `docs/procedures/SENTENCE_CHECK.md`). L
 `--run` and no scope. Production is asked, read-only, for each planned site's description and
 `raw_data` (`wc_live`, windows of 200): a site whose text Phase 4 wrote since is refused
 (`written-by-p4`), one whose pair moved since it was checked (`moved-since-check`), so a later
-write elsewhere never blocks a whole batch at the preflight. The apply root holds these plans'
-write batches or none (`wc_batches`). The step's acceptance is `verify_writes4.py --lane p4wc
---plan <apply root>/LANE_PLAN.jsonl`, which reads no run.
+write elsewhere never blocks a whole batch at the preflight. A written site stays its batch's while
+its description and WC's own `raw_data` keys are the outcome's (lane WB stamps others later), and a
+site a later WC plan asks again is that plan's (`asked-again-later`); should two batches still both
+plan one site, nothing is rendered (`write4.wc_sites_planned_twice`). The apply root holds these
+plans' write batches or none (`wc_batches`). The step's acceptance is `verify_writes4.py --lane
+p4wc --plan <apply root>/LANE_PLAN.jsonl --allow-stamp 'wb-teaser-prov-%'`, which reads no run.
 
 Every run prints its own `WRITE_EXIT=` line; that line is what is read.
 """
@@ -1062,16 +1065,28 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
 
     waiting = pending_step(apply_root)
     frozen = frozenset(waiting["batches"]) if waiting is not None else frozenset()
+    plans = [W4.plan_writes(batch, group=group, **options) for batch in batches]
+    if group is W4.Group.WC:
+        twice = W4.wc_sites_planned_twice(plans)
+        if twice:
+            raise SystemExit(
+                "one WC site, one planning batch - nothing is rendered: "
+                + "; ".join(
+                    f"{site} is planned by {' and '.join(ids)}" for site, ids in twice.items()
+                )
+                + ". Two chunks read before either was written claim it: rebuild the later chunk "
+                "with --exclude for these sites (docs/procedures/SENTENCE_CHECK.md, section 4)."
+            )
     planned = [
         render(
             apply_root,
-            W4.plan_writes(batch, group=group, **options),
+            plan,
             write_round=args.round,
             frozen=frozen,
             runner=runner,
             host=args.host,
         )
-        for batch in batches
+        for plan in plans
     ]
     rows = sum(len(item.plan.rows) for item in planned)
     refused: dict[str, int] = {}

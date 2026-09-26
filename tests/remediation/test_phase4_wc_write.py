@@ -119,7 +119,7 @@ def test_each_checked_site_becomes_its_rows_kept_cleared_or_raw_data_alone(tmp_p
         M.LegacyProvenance(desc_sha256=M.text_sha256(TEXT_E)).to_dict()
     )
     assert all(row.change_key.startswith("phase4wc:") for row in plan.rows)
-    assert rows[(FX.SITE_A, "raw_data")].evidence == outcomes[FX.SITE_A].evidence
+    assert rows[(FX.SITE_A, "raw_data")].evidence == outcomes[batch.batch_id][FX.SITE_A].evidence
 
 
 def test_a_site_phase4_wrote_or_that_moved_since_its_check_is_refused_not_written(
@@ -142,14 +142,85 @@ def test_a_site_phase4_wrote_or_that_moved_since_its_check_is_refused_not_writte
     assert {row.site_id for row in plan.rows} == {UNCHANGED}
 
 
+def _written(db: PFX.FakeDb, outcomes, batch) -> None:
+    """Production as the batch's write leaves it: each site holds its outcome's pair."""
+    for site_id, outcome in outcomes[batch.batch_id].items():
+        db.sites[site_id].description = outcome.description
+        db.sites[site_id].raw_data = outcome.raw_data
+
+
+def test_a_written_site_a_later_lane_stamped_still_re_plans_to_its_rows(tmp_path: Path) -> None:
+    """The review of 2026-09-26: lane WB writes `raw_data._card_provenance` into the sites WC
+    wrote. Such a site still counts as written by this plan - its description and WC's three keys
+    are the outcome's - so the written batch re-plans to exactly the rows it was written from."""
+    batch, outcomes = _loaded(tmp_path)
+    written = W4.plan_wc(batch, outcomes=outcomes, live=_live(_db()))
+    db = _db()
+    _written(db, outcomes, batch)
+    db.sites[FX.SITE_A].raw_data = {**db.sites[FX.SITE_A].raw_data, "_card_provenance": {"v": 1}}
+    again = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert [r.change_key for r in again.rows] == [r.change_key for r in written.rows]
+    assert not again.refusals
+    # one of WC's own keys moved since: that is no longer this plan's text
+    db.sites[FX.SITE_A].raw_data = {**db.sites[FX.SITE_A].raw_data, M.CITATIONS_KEY: []}
+    moved = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert [(r.site_id, r.rule) for r in moved.refusals] == [(FX.SITE_A, W4.RULE_MOVED)]
+
+
+def test_a_site_not_written_yet_whose_other_raw_data_moved_is_refused(tmp_path: Path) -> None:
+    """Before the write, the whole pair must be the checked one: the write's old value is held in
+    the transaction (guard 4), so another key that moved would stop the whole batch there."""
+    batch, outcomes = _loaded(tmp_path)
+    db = _db()
+    db.sites[FX.SITE_A].raw_data = {**db.sites[FX.SITE_A].raw_data, "_card_provenance": {"v": 1}}
+    plan = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert [(r.site_id, r.rule) for r in plan.refusals] == [(FX.SITE_A, W4.RULE_MOVED)]
+
+
+def test_a_site_a_later_plan_asks_again_leaves_every_earlier_batch_that_did_not_write_it(
+    tmp_path: Path,
+) -> None:
+    """The review of 2026-09-26: a site a written batch refused (moved since its check) is asked
+    again by a later chunk. The later plan takes it over: the earlier batch refuses it
+    (`asked-again-later`) unless that batch wrote it - so one site is planned by one batch."""
+    batch, outcomes = _loaded(tmp_path)
+    later = {**outcomes, "p4-4002": {FX.SITE_B: outcomes[batch.batch_id][FX.SITE_B]}}
+    plan = W4.plan_wc(batch, outcomes=later, live=_live(_db()))
+    assert [(r.site_id, r.rule) for r in plan.refusals] == [(FX.SITE_B, W4.RULE_TAKEN_OVER)]
+    assert FX.SITE_B not in {row.site_id for row in plan.rows}
+    db = _db()
+    _written(db, outcomes, batch)
+    kept = W4.plan_wc(batch, outcomes=later, live=_live(db))
+    assert not kept.refusals and FX.SITE_B in {row.site_id for row in kept.rows}
+
+
+def test_the_clear_of_a_null_raw_data_is_its_description_row_alone(tmp_path: Path) -> None:
+    """12 of the 14 unclaimed texts had no raw_data (2026-09-26): their clear writes the
+    description alone - a raw_data row NULL over NULL is no change, and the plan's rules refused
+    the whole batch for it. A clear that drops a raw_data row it needs is refused."""
+    text = "The Tarxien Temples are an archaeological complex in Tarxien, Malta."
+    rows = [FX.row(FX.SITE_B, text, raw_data=None, name="Tarxien B")]
+    path = FX.build_run(tmp_path, rows, {FX.SITE_B: FX.answer(FX.SITE_B, [FX.drop(1)])})[1]
+    (batch,), outcomes = W4.load_wc_plan([path])
+    plan = W4.plan_wc(batch, outcomes=outcomes, live=_live(_db(rows)))
+    assert [(r.column, r.test_id, r.new_value) for r in plan.rows] == [
+        ("description", W4.TEST_WC_DESCRIPTION_CLEAR, None)
+    ]
+    full = _rows_of(tmp_path / "full")
+    without = [r for r in full if not (r.site_id == FX.SITE_C and r.column == "raw_data")]
+    with pytest.raises(W4.W.WriteRefused, match="recorded marking"):
+        W4.validate_rows(W4.Group.WC, without)
+
+
 def test_an_outcome_for_another_text_than_the_plans_is_a_hole_not_a_refusal(
     tmp_path: Path,
 ) -> None:
     batch, outcomes = _loaded(tmp_path)
-    evidence = {**outcomes[FX.SITE_A].evidence, "checked": "another text"}
-    broken = {**outcomes, FX.SITE_A: WC4.WcOutcome(
-        site_id=FX.SITE_A, description=outcomes[FX.SITE_A].description,
-        raw_data=outcomes[FX.SITE_A].raw_data, evidence=evidence)}  # fmt: skip
+    own = outcomes[batch.batch_id]
+    evidence = {**own[FX.SITE_A].evidence, "checked": "another text"}
+    broken = {batch.batch_id: {**own, FX.SITE_A: WC4.WcOutcome(
+        site_id=FX.SITE_A, description=own[FX.SITE_A].description,
+        raw_data=own[FX.SITE_A].raw_data, evidence=evidence)}}  # fmt: skip
     with pytest.raises(W4.PlanInputError, match="no outcome for the text it was checked with"):
         W4.plan_wc(batch, outcomes=broken, live=_live(_db()))
 
@@ -218,11 +289,16 @@ def _remade(row: W4.Row4, **change: Any) -> W4.Row4:
         (lambda rows: [_remade(r, new_value=_unmarked(r.new_value))
                        if r.site_id == FX.SITE_A and r.column == "raw_data" else r for r in rows],
          "AI disclosure"),
-        # ... nor does an evidence that records the March text as unclaimed to excuse it
-        (lambda rows: [_remade(r, new_value=_unmarked(r.new_value), evidence={
+        # ... nor does an evidence (of both rows) that records the March text as unclaimed
+        (lambda rows: [_remade(r, **({"new_value": _unmarked(r.new_value)}
+                                     if r.column == "raw_data" else {}), evidence={
                            **r.evidence, "marking": {**r.evidence["marking"], "old": "unclaimed"}})
-                       if r.site_id == FX.SITE_A and r.column == "raw_data" else r for r in rows],
+                       if r.site_id == FX.SITE_A else r for r in rows],
          "recorded marking"),
+        # the two rows of one site carry one evidence
+        (lambda rows: [_remade(r, evidence={**r.evidence, "run": "another run"})
+                       if r.site_id == FX.SITE_A and r.column == "raw_data" else r for r in rows],
+         "not the evidence's transition"),
     ],
 )  # fmt: skip
 def test_every_wc_plan_rule_refuses_a_broken_plan(tmp_path: Path, mutate, message) -> None:
@@ -245,8 +321,12 @@ def test_a_wc_plan_is_read_strictly(tmp_path: Path) -> None:
         with pytest.raises((W4.PlanInputError, ValueError), match=message):
             W4.load_wc_plan([path])
     path.write_text(json.dumps(record) + "\n", encoding="utf-8")
-    with pytest.raises(W4.PlanInputError, match="twice"):
+    with pytest.raises(W4.PlanInputError, match="batch p4-4001 twice"):
         W4.load_wc_plan([path, path])
+    twice = {**record, "sites": record["sites"] * 2, "outcomes": record["outcomes"] * 2}
+    path.write_text(json.dumps(twice) + "\n", encoding="utf-8")
+    with pytest.raises(W4.PlanInputError, match="listed twice"):
+        W4.load_wc_plan([path])
 
 
 # ------------------------------------------------------------------------------ the statement
@@ -287,7 +367,7 @@ def test_a_wc_chunk_is_written_read_back_and_its_inverse_proven(tmp_path: Path) 
     assert rehearsed.ok and db.sites[FX.SITE_A].description == FX.TEXT_A and not db.journal
     outcome = W4.apply_chunk(chunk, out=out, rehearse=False, runner=db)
     assert outcome.ok and outcome.written == len(plan.rows)
-    for site_id, result in outcomes.items():
+    for site_id, result in outcomes[batch.batch_id].items():
         site = db.sites[site_id]
         assert (site.description, site.raw_data) == (result.description, result.raw_data)
         assert WC4.wc_problems(site.description, site.raw_data) == []
@@ -337,10 +417,10 @@ def _production(db: PFX.FakeDb, lane_plan: Path) -> FakeProduction:
     )
 
 
-def _accept_output(tmp_path, capsys, monkeypatch, production: FakeProduction) -> str:
+def _accept_output(tmp_path, capsys, monkeypatch, production: FakeProduction, *extra: str) -> str:
     monkeypatch.setattr(A.lanes, "psql", lambda sql, host: production(sql))
     lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
-    code = A.main(["--lane", "p4wc", "--plan", str(lane_plan)])
+    code = A.main(["--lane", "p4wc", "--plan", str(lane_plan), *extra])
     out = capsys.readouterr().out
     assert out.strip().endswith(f"ACCEPT_EXIT={code}")
     return out
@@ -448,6 +528,117 @@ def test_a_site_that_moved_is_refused_at_the_plan_and_the_rest_is_written(tmp_pa
     assert "refused by rule: {'moved-since-check': 1}" in out
     assert db.sites[FX.SITE_B].description == "Edited since the check."
     assert db.sites[FX.SITE_C].description is None
+
+
+#: Lane WB's provenance stamp (`mechanical/teaser.py`, `wb-teaser-prov-sNNN`): the later lane that
+#: writes `raw_data._card_provenance` into the sites WC made final.
+WB_STAMP = "wb-teaser-prov-s001"
+
+
+def _stamp_card_provenance(db: PFX.FakeDb, site_id: str) -> None:
+    """Lane WB's write of one site's `raw_data`, journalled as its lane journals it."""
+    site = db.sites[site_id]
+    old, new = site.raw_data, {**site.raw_data, "_card_provenance": {"v": 1}}
+    site.raw_data = new
+    db.journal.append({
+        "id": len(db.journal) + 1, "run_stamp": WB_STAMP, "change_key": f"{WB_STAMP}:{site_id}",
+        "table_name": "unified_sites", "column_name": "raw_data", "row_pk": site_id,
+        "old_value": json.dumps(old), "new_value": json.dumps(new),
+        "test_id": "WB/card-provenance", "site_id_ref": site_id,
+    })  # fmt: skip
+
+
+def _accept_step(tmp_path, capsys, monkeypatch, db, *extra: str) -> str:
+    """The pending step's acceptance: its output, then `--accept` on it (which must accept)."""
+    capsys.readouterr()
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    output = _accept_output(tmp_path, capsys, monkeypatch, _production(db, lane_plan), *extra)
+    log = tmp_path / f"accept-{len(list(tmp_path.glob('accept-*.log'))) + 1}.log"
+    log.write_text(output, encoding="utf-8")
+    assert G.main(["--group", "WC", "--apply-root", str(tmp_path / "apply"),
+                   "--accept", str(log)], runner=db) == 0, output  # fmt: skip
+    capsys.readouterr()
+    return output
+
+
+def test_a_site_a_later_lane_stamped_is_accepted_when_the_step_names_that_lane(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The review of 2026-09-26: after WB stamps a WC-written site, the gate still re-plans the
+    written batch (no refusal, no `sites_taken_back` stop), and the acceptance reads WB's write as
+    a later lane the operator names (`--allow-stamp 'wb-teaser-prov-%'`, the runbook's accept
+    command) - without it, as CHANGED LATER."""
+    plan = _plan(tmp_path)
+    db = _db()
+    assert G.main(_args(tmp_path, plan, "--apply"), runner=db) == 0
+    capsys.readouterr()
+    _stamp_card_provenance(db, FX.SITE_A)
+    assert G.main(_args(tmp_path, plan), runner=db) == 0
+    assert "rows planned: 7 | refused by rule: {}" in capsys.readouterr().out
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    plain = _accept_output(tmp_path, capsys, monkeypatch, _production(db, lane_plan))
+    assert f"CHANGED LATER {FX.SITE_A} unified_sites.raw_data" in plain
+    assert "ACCEPT_EXIT=1" in plain
+    output = _accept_step(tmp_path, capsys, monkeypatch, db, "--allow-stamp", "wb-teaser-prov-%")
+    assert "RESULT: 0 deviation(s)" in output and "superseded by wb-teaser-prov-%: 1" in output
+    assert "re-checked 4 written site(s)" in output
+
+
+def _read_rows(db: PFX.FakeDb) -> list[dict[str, Any]]:
+    """A fresh read of the fake production, in the read's shape."""
+    names = {row["id"]: row["name"] for row in _rows()}
+    return [
+        FX.row(site_id, site.description, raw_data=site.raw_data, name=names[site_id])
+        for site_id, site in db.sites.items()
+    ]
+
+
+def test_a_site_a_written_plan_refused_is_written_by_the_later_plan_that_asks_it_again(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The review of 2026-09-26: the pilot's gate refused a site that moved since its check; the
+    next chunk, read afresh, asks it again, and the gate - naming every plan, the pilot's
+    included - lets the later plan take it over instead of refusing the run as 'listed twice'."""
+    pilot = FX.build_run(tmp_path / "pilot", _rows(), _answers())[1]
+    db = _db()
+    db.sites[FX.SITE_B].description = "The Tarxien Temples lie in the town of Tarxien in Malta."
+    assert G.main(_args(tmp_path, pilot, "--apply"), runner=db) == 0
+    assert "refused by rule: {'moved-since-check': 1}" in capsys.readouterr().out
+    _accept_step(tmp_path, capsys, monkeypatch, db)
+    run, mass = FX.build_run(tmp_path / "mass", _read_rows(db),
+                             {FX.SITE_B: FX.answer(FX.SITE_B, [FX.drop(1)])},
+                             first_batch=4002, name="wc-mass")  # fmt: skip
+    assert list(json.loads((run / "POPULATION.json").read_text("utf-8"))["listed"]) == [
+        "checked-before", "no-description"
+    ]  # fmt: skip
+    both = ["--group", "WC", "--wc-plan", str(pilot), "--wc-plan", str(mass),
+            "--apply-root", str(tmp_path / "apply")]  # fmt: skip
+    assert G.main(both, runner=db) == 0
+    assert "refused by rule: {'asked-again-later': 1}" in capsys.readouterr().out
+    assert G.main([*both, "--apply"], runner=db) == 0
+    assert db.sites[FX.SITE_B].description is None
+    output = _accept_step(tmp_path, capsys, monkeypatch, db)
+    assert "RESULT: 0 deviation(s)" in output
+
+
+def test_one_site_planned_by_two_batches_stops_the_gate_before_anything_is_rendered(
+    tmp_path, capsys
+) -> None:
+    """Two chunks read before either was written (the runbook's `--after` left out) can both plan
+    one site: here two identical clears, which each batch reads as its own write. The gate names
+    the site and renders nothing."""
+    first = FX.build_run(tmp_path / "one", _rows(), _answers(), name="wc-one")[1]
+    second = FX.build_run(tmp_path / "two", _rows(), _answers(), first_batch=4002,
+                          name="wc-two")[1]  # fmt: skip
+    db = _db()
+    assert G.main(_args(tmp_path, first, "--apply"), runner=db) == 0
+    capsys.readouterr()
+    both = ["--group", "WC", "--wc-plan", str(first), "--wc-plan", str(second),
+            "--apply-root", str(tmp_path / "apply")]  # fmt: skip
+    assert G.main(both, runner=db) == 1
+    captured = capsys.readouterr()
+    assert f"{FX.SITE_C} is planned by p4wc-4001 and p4wc-4002" in captured.err
+    assert not (tmp_path / "apply" / "p4wc-4002").exists()
 
 
 # ------------------------------------------------------------------------------ the registry

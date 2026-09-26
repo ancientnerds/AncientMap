@@ -660,12 +660,13 @@ def invariant_deviations(*, lane: str, carried: Iterable[Key], production: Produ
 
 
 def wc_evidence_sql(pks: Sequence[str], stamp_like: str) -> str:
-    """The evidence of each site's WC raw_data writes (every WC site writes raw_data; the
-    description row carries the same evidence), oldest first."""
+    """The evidence of each site's WC writes, oldest first. Both rows of one write carry the same
+    evidence, and a site may write one of them alone: its raw_data (a text kept byte for byte) or
+    its description (the clear of a NULL raw_data)."""
     return (
         "SELECT to_jsonb(t)::text FROM (SELECT id, row_pk, run_stamp, evidence "
-        "FROM remediation_change_log WHERE table_name = 'unified_sites' "
-        f"AND column_name = 'raw_data' AND row_pk IN ({lanes.sql_literals(pks)}) "
+        f"FROM remediation_change_log WHERE (table_name, column_name) IN "
+        f"({_pairs(LANE_COLUMNS['p4wc'])}) AND row_pk IN ({lanes.sql_literals(pks)}) "
         f"AND run_stamp LIKE {lanes.sql_text(stamp_like)} "
         f"AND run_stamp NOT LIKE {lanes.sql_text('%' + ROLLBACK_SUFFIX)} ORDER BY id) t;\n"
     )
@@ -681,7 +682,7 @@ def wc_evidence_deviations(
     for site_id in sorted(site_ids):
         rows = [row for row in evidence_rows if row["row_pk"] == site_id]
         if not rows:
-            deviations.append(f"EVIDENCE {site_id}: no WC journal row of its raw_data")
+            deviations.append(f"EVIDENCE {site_id}: no WC journal row of the site")
             continue
         row = production.rows[site_id]
         deviations.extend(

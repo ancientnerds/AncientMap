@@ -142,13 +142,16 @@ NULL_TESTS: Mapping[Group, frozenset[str]] = {
     Group.P5: frozenset({TEST_CARD_CLEAR}),
     Group.WC: frozenset({TEST_WC_DESCRIPTION_CLEAR, TEST_WC_RAW_DATA_CLEAR}),
 }
-#: A WC site's rows are one of these sets: a kept text (its description and raw_data), a clear, or
-#: a kept text whose every sentence and marker stayed byte for byte (raw_data alone: the rebuilt
-#: citations and the check record).
+#: A WC site's rows are one of these sets: a kept text (its description and raw_data), a clear, a
+#: kept text whose every sentence and marker stayed byte for byte (raw_data alone: the rebuilt
+#: citations and the check record), or the clear of a site whose raw_data is NULL and stays NULL
+#: (the description alone: 12 of the 14 unclaimed texts had no raw_data on 2026-09-26, and a NULL
+#: written over NULL is no change).
 WC_PAIRS = (
     frozenset({TEST_WC_DESCRIPTION, TEST_WC_RAW_DATA}),
     frozenset({TEST_WC_DESCRIPTION_CLEAR, TEST_WC_RAW_DATA_CLEAR}),
     frozenset({TEST_WC_RAW_DATA}),
+    frozenset({TEST_WC_DESCRIPTION_CLEAR}),
 )
 
 
@@ -238,6 +241,9 @@ RULE_OUT_OF_SCOPE = "outside-defect-scope"
 #: WC: production no longer holds the description or raw_data the site was checked with (a later
 #: write - a P4 text, a revert, a hand edit): the check answers a text that is not served.
 RULE_MOVED = "moved-since-check"
+#: WC: a later WC plan asks the site again (its batch refused it here, or it was never written), so
+#: that plan's answer is the one planned - one site, one planning batch (the review of 2026-09-26).
+RULE_TAKEN_OVER = "asked-again-later"
 
 _PLAN_BATCH = re.compile(r"p4-(?P<number>[0-9]{4,})")
 
@@ -649,33 +655,38 @@ def _validate_wc_sites(rows: Sequence[Row4]) -> None:
         by_site.setdefault(row.site_id, {})[row.column] = row
     for site_id, pair in by_site.items():
         tests = frozenset(row.test_id for row in pair.values())
-        if "raw_data" not in pair or tests not in WC_PAIRS:
+        if tests not in WC_PAIRS:
             raise W.WriteRefused(
-                f"{site_id}: a WC site is written site-atomic (a kept text, a clear, or a kept text "
-                f"that stayed byte for byte); this plan has {sorted(tests)}"
+                f"{site_id}: a WC site is written site-atomic (a kept text, a clear, a kept text "
+                f"that stayed byte for byte, or the clear of a NULL raw_data); this plan has "
+                f"{sorted(tests)}"
             )
-        raw = pair["raw_data"]
-        left = raw.evidence[wc4.EVIDENCE_DESCRIPTION]
+        evidence = (pair.get("raw_data") or pair["description"]).evidence
+        left = evidence[wc4.EVIDENCE_DESCRIPTION]
         if "description" in pair and (
-            pair["description"].new_value != left
-            or pair["description"].old_value != raw.evidence["checked"]
+            pair["description"].evidence != evidence
+            or pair["description"].new_value != left
+            or pair["description"].old_value != evidence["checked"]
         ):
             raise W.WriteRefused(
                 f"{site_id}: the description row is not the evidence's transition (the checked "
                 "text to the one its decisions compose)"
             )
-        if "description" not in pair and (left is None or left != raw.evidence["checked"]):
+        if "description" not in pair and (left is None or left != evidence["checked"]):
             raise W.WriteRefused(
                 f"{site_id}: a WC raw_data row without its description row leaves the stored text"
             )
-        new = None if raw.new_value is None else M.parse_json(raw.new_value)
-        old = None if raw.old_value is None else M.parse_json(raw.old_value)
+        # Without a raw_data row the site's raw_data is NULL and stays NULL (the one such pair is a
+        # clear, WC_PAIRS); the transaction's invariant 6 holds the stored value to it.
+        raw = pair.get("raw_data")
+        new = None if raw is None or raw.new_value is None else M.parse_json(raw.new_value)
+        old = None if raw is None or raw.old_value is None else M.parse_json(raw.old_value)
         # the invariants, the recorded marking re-derived from the row's own old value, and the AI
         # disclosure that marking requires (the review of 2026-09-26: required, not only checked)
-        marking = raw.evidence["marking"]
+        marking = evidence["marking"]
         problems = (
             wc4.wc_problems(left, new)
-            + wc4.old_marking_problems(marking, raw.evidence["checked"], old)
+            + wc4.old_marking_problems(marking, evidence["checked"], old)
             + wc4.disclosure_problems(marking, left, new)
         )
         if problems:
@@ -850,18 +861,24 @@ def load_legacy_plan(path: Path) -> list[BatchInputs]:
 _WC_PLAN_KEYS = frozenset({"batch_id", "ordinal", "pass", "sites", "outcomes"})
 
 
+#: Lane WC's outcomes by plan batch id, in plan order (`load_wc_plan`): site id -> outcome.
+WcOutcomes = Mapping[str, Mapping[str, wc4.WcOutcome]]
+
+
 def load_wc_plan(
     paths: Sequence[Path],
-) -> tuple[list[BatchInputs], dict[str, wc4.WcOutcome]]:
-    """Lane WC's gate plans (`wc/cli.py build`, one per run - the pilot's, then the mass run's),
-    read strictly and together: every batch carries `wc4.PLAN_MARK` and a plan batch id; no batch
-    id and no site occurs twice across the plans; every site has exactly one outcome
-    (`wc4.WcOutcome`) and every outcome a site. A WC batch has no directory and no stage outcome:
-    `root` is its plan file, and lanes, assemblies and holds are empty."""
+) -> tuple[list[BatchInputs], dict[str, dict[str, wc4.WcOutcome]]]:
+    """Lane WC's gate plans (`wc/cli.py build`, one per run - the pilot's, then each chunk's), read
+    strictly and together: every batch carries `wc4.PLAN_MARK` and a plan batch id; no batch id
+    occurs twice across the plans, and no site twice within one plan; every site has exactly one
+    outcome (`wc4.WcOutcome`) and every outcome a site. The outcomes come back by plan batch, in
+    plan order: a site a later plan asks again - its earlier batch refused it, or never wrote it -
+    is that later plan's (`plan_wc`, `RULE_TAKEN_OVER`). A WC batch has no directory and no stage
+    outcome: `root` is its plan file, and lanes, assemblies and holds are empty."""
     batches: list[BatchInputs] = []
-    outcomes: dict[str, wc4.WcOutcome] = {}
-    batch_ids: set[str] = set()
+    outcomes: dict[str, dict[str, wc4.WcOutcome]] = {}
     for path in paths:
+        in_plan: set[str] = set()
         for number, record in enumerate(read_jsonl(path), start=1):
             where = f"{path}:{number}"
             if set(record) != _WC_PLAN_KEYS or record["pass"] != wc4.PLAN_MARK:
@@ -871,23 +888,36 @@ def load_wc_plan(
                 )
             batch_id = record["batch_id"]
             group_batch_id(batch_id, Group.WC)
-            if batch_id in batch_ids:
+            if batch_id in outcomes:
                 raise PlanInputError(f"{where}: batch {batch_id} twice")
-            batch_ids.add(batch_id)
             sites = tuple(M.PlanSite.from_dict(site) for site in record["sites"])
             own = [wc4.WcOutcome.from_dict(outcome) for outcome in record["outcomes"]]
             if [o.site_id for o in own] != [s.site_id for s in sites]:
                 raise PlanInputError(f"{where}: the outcomes are not the batch's sites, in order")
+            outcomes[batch_id] = {}
             for site, outcome in zip(sites, own, strict=True):
-                if site.site_id in outcomes:
-                    raise PlanInputError(f"{where}: {site.site_id} is listed twice")
-                outcomes[site.site_id] = outcome
+                if site.site_id in in_plan:
+                    raise PlanInputError(f"{where}: {site.site_id} is listed twice in one plan")
+                in_plan.add(site.site_id)
+                outcomes[batch_id][site.site_id] = outcome
             batches.append(
                 BatchInputs(
                     root=path, batch_id=batch_id, sites=sites, lanes={}, assemblies={}, holds={}
                 )
             )
     return batches, outcomes
+
+
+def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
+    """Site id -> the WC write batches that plan rows for it, for every site more than one plans.
+    `plan_wc` gives a site to one batch (`RULE_TAKEN_OVER`); two chunks read before either was
+    written can still both claim it - two identical clears each read as its own write - and the
+    gate then stops before anything is rendered."""
+    by_site: dict[str, list[str]] = {}
+    for plan in plans:
+        for site_id in dict.fromkeys(row.site_id for row in plan.rows):
+            by_site.setdefault(site_id, []).append(plan.batch_id)
+    return {site_id: ids for site_id, ids in by_site.items() if len(ids) > 1}
 
 
 def source_files(
@@ -1132,29 +1162,50 @@ def plan_legacy(batch: BatchInputs, *, written: Iterable[str]) -> WritePlan4:
     return plan
 
 
+def _wc_part(raw: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The keys of `raw_data` a WC write owns (`wc4.WC_KEYS`)."""
+    return {key: value for key, value in (raw or {}).items() if key in wc4.WC_KEYS}
+
+
 def plan_wc(
     batch: BatchInputs,
     *,
-    outcomes: Mapping[str, wc4.WcOutcome],
+    outcomes: WcOutcomes,
     live: Mapping[str, Mapping[str, Any]],
 ) -> WritePlan4:
     """WC: the rows of each checked site of the batch (owner decision O5, 2026-09-26).
 
-    `live` is production's description and raw_data of each planned site (`write_gate4`, read-only,
-    at the gate): a site whose live provenance is a full Phase-4 one is refused (`written-by-p4`),
-    and one whose description and raw_data are neither the pair it was checked with (not written
-    yet) nor the outcome's (written by this plan) is refused (`moved-since-check`) - the check
-    answers a text that is not served. A site production holds no row for is refused the same way.
-    So a written batch re-plans to the rows it was written from, and a site a later write moved
-    leaves the re-plan only on the reversal proof the gate asks for (`sites_taken_back`). No scope:
-    the population is every curated March text that stays (`wc/cli.py`). The rows write the
-    outcome's pair: the description (NULL for a clear) and raw_data, or raw_data alone when the
-    kept text is the stored one byte for byte.
+    `outcomes` are every named WC plan's, by plan batch in plan order (`load_wc_plan`); `live` is
+    production's description and raw_data of each planned site (`write_gate4`, read-only, at the
+    gate). Per site, in this order:
+
+    * a live full Phase-4 provenance: refused (`written-by-p4`);
+    * written by this batch - the live description is the outcome's and so are WC's own three
+      `raw_data` keys (`wc4.WC_KEYS`; a later lane may have stamped others: lane WB's
+      `_card_provenance`, the review of 2026-09-26): its rows, so a written batch re-plans to the
+      rows it was written from, as lane L's does from its plan file;
+    * named by a later WC plan's batch: refused (`asked-again-later`) - that plan's answer to the
+      text now served is the one planned; a site the batch wrote and `revert4 --site` took back
+      then leaves the re-plan on the reversal proof the gate asks for (`sites_taken_back`);
+    * the pair it was checked with, whole (the transaction holds the old values): its rows;
+    * anything else, and no row at all: refused (`moved-since-check`) - the check answers a text
+      that is not served.
+
+    No scope: the population is every curated March text that stays (`wc/cli.py`). The rows write
+    the outcome's pair: the description (NULL for a clear) and raw_data - raw_data alone when the
+    kept text is the stored one byte for byte, the description alone for the clear of a NULL
+    raw_data.
     """
     plan = WritePlan4(group=Group.WC, batch_id=group_batch_id(batch.batch_id, Group.WC))
     full = {lane.value for lane in M.LANE_CHANGES}
+    order = list(outcomes)
+    later = {
+        site_id
+        for batch_id in order[order.index(batch.batch_id) + 1 :]
+        for site_id in outcomes[batch_id]
+    }
     for site in batch.sites:
-        outcome = outcomes.get(site.site_id)
+        outcome = outcomes[batch.batch_id].get(site.site_id)
         if outcome is None or outcome.evidence["checked"] != site.description:
             raise PlanInputError(
                 f"{batch.batch_id}: {site.site_id} has no outcome for the text it was checked with"
@@ -1166,13 +1217,26 @@ def plan_wc(
                 W.Refusal(site.site_id, "description", RULE_WRITTEN, "Phase 4 wrote this text")
             )
             continue
-        # The checked pair (not written yet) or the outcome's (this plan wrote it): a written
-        # batch is re-planned to the rows it was written from, as lane L's is from its plan file.
-        pair = None if now is None else (now["description"], now["raw_data"])
-        if pair not in (
-            (site.description, site.raw_data),
-            (outcome.description, outcome.raw_data),
-        ):
+        written = (
+            now is not None
+            and now["description"] == outcome.description
+            and _wc_part(now["raw_data"]) == _wc_part(outcome.raw_data)
+        )
+        if not written and site.site_id in later:
+            plan.refusals.append(
+                W.Refusal(
+                    site.site_id,
+                    "description",
+                    RULE_TAKEN_OVER,
+                    "a later WC plan asks this site again; its answer is the one planned",
+                )
+            )
+            continue
+        checked = now is not None and (now["description"], now["raw_data"]) == (
+            site.description,
+            site.raw_data,
+        )
+        if not (written or checked):
             plan.refusals.append(
                 W.Refusal(
                     site.site_id,
@@ -1201,6 +1265,8 @@ def plan_wc(
                     evidence=outcome.evidence,
                 )
             )
+        if cleared and site.raw_data is None and outcome.raw_data is None:
+            continue  # NULL stays NULL: the clear is the description row alone (WC_PAIRS)
         plan.rows.append(
             make_row(
                 group=Group.WC,
