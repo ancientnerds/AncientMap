@@ -94,7 +94,10 @@ def curated_page(alias: str = "") -> str:
 #: - ``card_stats``: the page's Wikipedia link and its language, and - since lane WB (owner
 #:   decision O10, 2026-09-26) - ``card_description``: the card itself never appears on the
 #:   page, but the page shows the AI footnote while a teaser provenance hashes the live card
-#:   (``pipeline.utils.card_provenance``), so a card write can change the page. Lane WB
+#:   (``pipeline.utils.card_provenance``), so lane WB's card write changes the page. It counts
+#:   only as lane WB writes it (``PAGE_COLUMN_STAMPS``): the earlier card writes - the P5
+#:   sitting, the card-stats waves - changed no byte of the page when they were made, and
+#:   counting them would move the date of those pages once, on the deploy of lane WB. Lane WB
 #:   writes the provenance (``raw_data``) of the same sites in the same step, so the card
 #:   column adds no page to what the hourly IndexNow cycle announces for that step.
 #: - ``wiki_images`` (orchestrator decision D6, 2026-09-23): the page shows one image - the
@@ -142,12 +145,31 @@ PAGE_COLUMNS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: Page columns that count only for the journal stamps given (``LIKE`` patterns): lane WB's
+#: card writes and their reversals (``wb-teaser-card-sNNN``, ``wb-teaser-card-sNNN-rollback``).
+PAGE_COLUMN_STAMPS: dict[tuple[str, str], str] = {
+    ("card_stats", "card_description"): "wb-teaser-card-%",
+}
+
+
 def _page_write(table: str, columns: tuple[str, ...]) -> str:
-    listed = ", ".join("'" + column + "'" for column in columns)
+    listed = ", ".join(
+        "'" + column + "'" for column in columns if (table, column) not in PAGE_COLUMN_STAMPS
+    )
     return f"(table_name = '{table}' AND column_name IN ({listed}))"
 
 
+def _stamped_page_write(table: str, column: str, stamp_like: str) -> str:
+    return (
+        f"(table_name = '{table}' AND column_name = '{column}' AND run_stamp LIKE '{stamp_like}')"
+    )
+
+
 _PAGE_WRITE = " OR ".join(_page_write(table, columns) for table, columns in PAGE_COLUMNS.items())
+_STAMPED_PAGE_WRITE = " OR ".join(
+    _stamped_page_write(table, column, stamp_like)
+    for (table, column), stamp_like in PAGE_COLUMN_STAMPS.items()
+)
 
 #: LEFT JOIN target: the newest journal write per site that changed its page. Joined as
 #: ``jlast``; the grouped subquery reads the journal once (6,572 rows on 2026-09-22)
@@ -155,7 +177,7 @@ _PAGE_WRITE = " OR ".join(_page_write(table, columns) for table, columns in PAGE
 JOURNAL_LAST_WRITE = (
     "(SELECT site_id_ref, MAX(applied_at AT TIME ZONE 'UTC') AS applied_at "
     "FROM remediation_change_log WHERE site_id_ref IS NOT NULL "
-    f"AND ({_PAGE_WRITE}) "
+    f"AND ({_PAGE_WRITE} OR {_STAMPED_PAGE_WRITE}) "
     "GROUP BY site_id_ref)"
 )
 

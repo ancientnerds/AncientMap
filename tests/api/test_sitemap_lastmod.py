@@ -32,13 +32,22 @@ NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 SITE = "4a5a324f-0000-4000-8000-000000000001"
 
 
-def _journal_engine(rows: list[tuple[str | None, str, str, str]]) -> sqlite3.Connection:
+#: The stamp of a journal row whose stamp does not matter to the test: a Phase-4 chunk.
+ANY_STAMP = "phase4:p4-0001:chunk-0001"
+
+
+def _journal_engine(rows: list[tuple[str | None, ...]]) -> sqlite3.Connection:
+    """The journal as the grouping reads it; a row is (site, table, column, applied_at) or the same
+    with its run_stamp."""
     conn = sqlite3.connect(":memory:")
     conn.execute(
         "CREATE TABLE remediation_change_log (site_id_ref TEXT, table_name TEXT, "
-        "column_name TEXT, applied_at TEXT)"
+        "column_name TEXT, applied_at TEXT, run_stamp TEXT NOT NULL)"
     )
-    conn.executemany("INSERT INTO remediation_change_log VALUES (?, ?, ?, ?)", rows)
+    conn.executemany(
+        "INSERT INTO remediation_change_log VALUES (?, ?, ?, ?, ?)",
+        [row if len(row) == 5 else (*row, ANY_STAMP) for row in rows],
+    )
     return conn
 
 
@@ -89,18 +98,32 @@ def test_a_journalled_write_the_page_does_not_render_does_not_advance_it():
     assert _newest(conn) == {SITE: "2026-10-02 09:00:00"}
 
 
-def test_a_card_write_advances_the_page():
+def test_a_lane_wb_card_write_advances_the_page():
     """Owner decision O10 (2026-09-26): the page shows the AI footnote while a lane-WB teaser
-    provenance hashes the site's live card (`card_ai` in the SSR payload), so a card write - a
-    teaser, a clear, a card imported from the file - can add or remove that notice and moves the
-    page's date. Before lane WB the card never touched the page and this write was excluded."""
+    provenance hashes the site's live card (`card_ai` in the SSR payload), so lane WB's card write -
+    a teaser, a clear - and its reversal add or remove that notice and move the page's date."""
+    for stamp in ("wb-teaser-card-s001", "wb-teaser-card-s001-rollback"):
+        conn = _journal_engine(
+            [
+                (SITE, "unified_sites", "description", "2026-10-02 09:00:00"),
+                (SITE, "card_stats", "card_description", "2026-10-09 09:00:00", stamp),
+            ]
+        )
+        assert _newest(conn) == {SITE: "2026-10-09 09:00:00"}, stamp
+
+
+def test_a_card_write_before_lane_wb_does_not_advance_the_page():
+    """Before lane WB the card never touched the page: the P5 sitting's ~761 cards and clears and
+    the card-stats waves are journalled, but counting them would move the date of pages that did
+    not change when they were written (a one-time lastmod jump on the WB deploy)."""
     conn = _journal_engine(
         [
             (SITE, "unified_sites", "description", "2026-10-02 09:00:00"),
-            (SITE, "card_stats", "card_description", "2026-10-09 09:00:00"),
+            (SITE, "card_stats", "card_description", "2026-10-09 09:00:00", ANY_STAMP),
+            (SITE, "card_stats", "card_description", "2026-10-10 09:00:00", "phase5:p5-0001:c-1"),
         ]
     )
-    assert _newest(conn) == {SITE: "2026-10-09 09:00:00"}
+    assert _newest(conn) == {SITE: "2026-10-02 09:00:00"}
 
 
 def test_a_hero_change_advances_the_page():
@@ -123,11 +146,14 @@ def test_every_column_the_site_page_reads_advances_it():
     unified_sites columns the SSR site page renders, which later lanes journal (period_name, the
     coordinates), the two card_stats columns the page shows (its Wikipedia link and language), and
     the image columns: every one of them moves the date, in its own table only. The card text is
-    one of them since lane WB (the page's AI footnote reads it, `test_a_card_write_advances_the_page`)."""
+    one of them since lane WB, as lane WB writes it (the page's AI footnote reads it,
+    `test_a_lane_wb_card_write_advances_the_page`)."""
     for table, columns in PS.PAGE_COLUMNS.items():
         for column in columns:
-            conn = _journal_engine([(SITE, table, column, "2026-10-02 09:00:00")])
+            stamp = PS.PAGE_COLUMN_STAMPS.get((table, column), ANY_STAMP).replace("%", "s001")
+            conn = _journal_engine([(SITE, table, column, "2026-10-02 09:00:00", stamp)])
             assert _newest(conn) == {SITE: "2026-10-02 09:00:00"}, (table, column)
+    assert set(PS.PAGE_COLUMN_STAMPS) == {("card_stats", "card_description")}
     assert {"description", "raw_data", "name", "country", "site_type", "period_start"} <= set(
         PS.PAGE_COLUMNS["unified_sites"]
     )
