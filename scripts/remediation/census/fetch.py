@@ -83,7 +83,10 @@ class Fetcher:
         timeout: float = 30.0,
         max_retries: int = 4,
         transport: httpx.BaseTransport | None = None,
+        user_agent: str = USER_AGENT,
     ) -> None:
+        """`user_agent` is the census's own by default. A lane that must not send a contact
+        address (the fields harvest, `fields/harvest.py`) names its own."""
         self.root = Path(root)
         self.workers = workers
         self.max_retries = max_retries
@@ -93,7 +96,7 @@ class Fetcher:
         self._client = httpx.Client(
             timeout=timeout,
             follow_redirects=True,
-            headers={"User-Agent": USER_AGENT, "Accept-Encoding": "gzip, deflate"},
+            headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
             limits=httpx.Limits(max_connections=workers * 2, max_keepalive_connections=workers),
             transport=transport,
         )
