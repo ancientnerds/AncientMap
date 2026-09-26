@@ -80,9 +80,8 @@ def cmd_plan() -> dict[str, Any]:
     # everything that can refuse is computed before the first file is written
     steps = L5P.steps(built.links)
     names = L5P.name_plan(built, H.now_utc()) if built.names else None
-    untrusted = L5P.untrusted(POP.load_population(OUT), every, built.skipped, str(read["read_at"]))
-    for number, rows in enumerate(steps, start=1):
-        L5P.write_step(L5P.step_wave(number), rows)
+    untrusted = L5P.untrusted(POP.load_population(OUT), every, built.skipped, read)
+    L5P.write_steps(steps)
     if names is not None:
         L5P.write_names(names, A.lane_dir(NAME_L5))
     H.write_jsonl(OUT / "SKIPPED.jsonl", built.skipped)

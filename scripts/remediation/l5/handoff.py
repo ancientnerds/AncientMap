@@ -18,8 +18,9 @@ and there are at most `MAX_ROUNDS` rounds: round 1 and two re-asks.
 **The import** of a round writes `answers/<round>.jsonl` (every answer as decided: the verdicts,
 their quotes, each quote's outcome, the machine notes, or why it was held), merges `DECISIONS.jsonl`
 (per site, the decision of its latest imported round), `TITLES.json` (each title's resolution,
-kept once resolved) and `PAGES.jsonl` (each cited URL's fetch record and the sha256 of its bytes;
-the bytes stay under `pages/`, not versioned).
+kept once resolved) and `PAGES.jsonl` (the fetch record and the sha256 of the bytes of each page
+read: every cited URL, and the entity page of each item a rename is checked against; the bytes
+stay under `pages/`, not versioned).
 """
 
 from __future__ import annotations
@@ -295,16 +296,21 @@ def load_titles(out: Path) -> dict[str, dict[str, Any]]:
 
 
 def _final_titles(site: Mapping[str, Any], answer: QN.Answer) -> set[str]:
-    stored = QN.stored(site, "enwiki_title")
-    title = {"KEEP": stored, "REPLACE": answer.title.value, "REMOVE": None}[answer.title.verdict]
+    title = D.final_links(site, answer)["enwiki_title"]
     return {title} if title else set()
 
 
-def _cited(answer: QN.Answer) -> set[str]:
+def _pages(site: Mapping[str, Any], answer: QN.Answer) -> set[str]:
+    """Every page the checks read: each cited URL, and the entity page of the item a rename is
+    checked against (`decide._rename`), cited or not."""
     cells = [answer.qid, answer.title, answer.source_url]
     if answer.name is not None:
         cells.append(answer.name)
-    return {q["source"] for cell in cells for q in cell.quotes}
+    urls = {q["source"] for cell in cells for q in cell.quotes}
+    item = D.final_links(site, answer)["wikidata_qid"]
+    if D.renames(answer) and item is not None:
+        urls.add(QN.ENTITY_DATA.format(item))
+    return urls
 
 
 def _shape_held(
@@ -366,7 +372,7 @@ def import_round(
                 held[sid] = _shape_held(site, round_name, answer.answered_by, str(exc))
 
     pages = out / PAGES_DIR
-    urls = sorted({u for a, _ in parsed.values() for u in _cited(a)})
+    urls = sorted({u for sid, (a, _) in parsed.items() for u in _pages(read["sites"][sid], a)})
     titles = load_titles(out)
     wanted = sorted(
         {t for sid, (a, _) in parsed.items() for t in _final_titles(read["sites"][sid], a)}
@@ -394,6 +400,7 @@ def import_round(
             answered_by=f"{raw.answered_by} ({raw.answered_at})",
             library=library,
             titles=titles,
+            sharers=read["sharers"],
         )
     records = [json.loads(decisions[sid].to_json()) for sid in sorted(decisions)]
     write_jsonl(out / ANSWERS_DIR / f"{round_name}.jsonl", records)

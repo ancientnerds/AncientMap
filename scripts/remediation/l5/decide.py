@@ -14,15 +14,22 @@ written, and its reason is what a re-ask shows the next agent (`questions.prompt
    redirect, not a disambiguation page), resolved the way `refresh_site_external_ids` resolves a
    title (`pipeline.lyra.prospector.wiki.resolve_titles`), and its item is the item kept or
    written - so the refresh's `--all` path would store exactly these two rows (its fixed point).
+4. **A rename** (B1-N) takes a name of the site's own item or article: an English label or alias
+   of the item kept or written (its entity page, read even when no quote cites it), or the title
+   of the article kept or written, with or without its bracketed qualifier. The item is itself
+   gate-checked (a replacement) or deliberately kept, so the new name stays tied to the stored
+   point. A rename is held when the item is also carried by another visible curated site: two
+   rows named after one item is WD2's duplicate question (B1-D), not a rename.
 
-Pure: the pages, the entity bodies and the title resolutions are given.
+Pure: the pages, the entity bodies, the title resolutions and the item sharers are given.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -41,6 +48,8 @@ from l5 import questions as QN  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
 
 DECIDED, HELD = "decided", "held"
+#: The bracketed qualifier of an article title: "Chiapa de Corzo (Mesoamerican site)".
+QUALIFIER = re.compile(r" \([^()]*\)\Z")
 
 
 @dataclass(frozen=True)
@@ -83,17 +92,80 @@ def _quotes_found(
         raise Held(f"{key}: a quote does not count ({failed.outcome}: {failed.source})")
 
 
-def _entity(library: Q.Library, qid: str) -> Mapping[str, Any]:
-    """The item as its cited entity page served it - never a redirect target's."""
+def final_links(site: Mapping[str, Any], answer: QN.Answer) -> dict[str, str | None]:
+    """The item and the article an answer leaves the site with."""
+    return {
+        "wikidata_qid": {
+            "KEEP": QN.stored(site, "wikidata_qid"),
+            "REPLACE": answer.qid.value,
+            "REMOVE": None,
+        }[answer.qid.verdict],
+        "enwiki_title": {
+            "KEEP": QN.stored(site, "enwiki_title"),
+            "REPLACE": answer.title.value,
+            "REMOVE": None,
+        }[answer.title.verdict],
+    }
+
+
+def renames(answer: QN.Answer) -> bool:
+    return answer.name is not None and answer.name.verdict == "RENAME"
+
+
+def _entity(library: Q.Library, qid: str, key: str = "wikidata_qid") -> Mapping[str, Any]:
+    """The item as its entity page served it - never a redirect target's."""
     url = QN.ENTITY_DATA.format(qid)
     page = library.url(url)
     if page.failure:
-        raise Held(f"wikidata_qid: {url} could not be read ({page.failure})")
+        raise Held(f"{key}: {url} could not be read ({page.failure})")
     body = json.loads((library.pages / f"{Q.url_key(url)}.body").read_bytes().decode("utf-8"))
     entities = body.get("entities") or {}
     if qid not in entities:
-        raise Held(f"wikidata_qid: {url} answers for {sorted(entities)}, not {qid} (a redirect)")
+        raise Held(f"{key}: {url} answers for {sorted(entities)}, not {qid} (a redirect)")
     return dict(entities[qid])
+
+
+def _english(code: str) -> bool:
+    return code == "mul" or code == "en" or code.startswith("en-")
+
+
+def _rename(
+    site: Mapping[str, Any],
+    new: str,
+    item: str | None,
+    title: str | None,
+    library: Q.Library,
+    sharers: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> str:
+    """Check a rename against the item and article the site keeps; return a note."""
+    if item is None:
+        raise Held(
+            "name: a rename takes a name of this site's own item or article - the answer keeps "
+            "neither"
+        )
+    others = [
+        s
+        for s in sharers.get(item, [])
+        if str(s["site_id"]) != str(site["site_id"]) and s["scope_status"] != "retired"
+    ]
+    if others:
+        named = ", ".join(f"{s['name']} ({s['site_id']})" for s in others)
+        raise Held(
+            f"name: {item} is carried by {named} too - two rows named after one item is WD2's "
+            "duplicate question, not a rename: keep the name"
+        )
+    entity = _entity(library, item, "name")
+    names = {v["value"] for code, v in entity["labels"].items() if _english(code)}
+    names |= {a["value"] for code, vs in entity["aliases"].items() if _english(code) for a in vs}
+    if title is not None:
+        names |= {title, QUALIFIER.sub("", title)}
+    if Q.normalise(new) not in {Q.normalise(n) for n in names}:
+        shown = ", ".join(repr(n) for n in sorted(names)[:8])
+        raise Held(
+            f"name: {new!r} is no English label or alias of {item} and no title of its article "
+            f"{title!r} - a rename takes one of them ({shown or 'none'})"
+        )
+    return f"{new!r} is a name of {item} (its English label or alias, or its article's title)"
 
 
 def _article(title: str, titles: Mapping[str, Mapping[str, Any]], item: str | None) -> str:
@@ -124,25 +196,22 @@ def decide(
     answered_by: str,
     library: Q.Library,
     titles: Mapping[str, Mapping[str, Any]],
+    sharers: Mapping[str, Sequence[Mapping[str, Any]]],
 ) -> Decision:
-    """Every machine check of one parsed answer, in order; the first failure holds the site."""
-    stored_qid = QN.stored(site, "wikidata_qid")
-    stored_title = QN.stored(site, "enwiki_title")
-    final = {
-        "wikidata_qid": {
-            "KEEP": stored_qid,
-            "REPLACE": answer.qid.value,
-            "REMOVE": None,
-        }[answer.qid.verdict],
-        "enwiki_title": {
-            "KEEP": stored_title,
-            "REPLACE": answer.title.value,
-            "REMOVE": None,
-        }[answer.title.verdict],
-    }
+    """Every machine check of one parsed answer, in order; the first failure holds the site.
+    `sharers` is the question's read of the curated sites carrying each stored item."""
+    final = final_links(site, answer)
     cells: dict[str, dict[str, Any]] = {
-        "wikidata_qid": {"old": stored_qid, "new": final["wikidata_qid"], "note": ""},
-        "enwiki_title": {"old": stored_title, "new": final["enwiki_title"], "note": ""},
+        "wikidata_qid": {
+            "old": QN.stored(site, "wikidata_qid"),
+            "new": final["wikidata_qid"],
+            "note": "",
+        },
+        "enwiki_title": {
+            "old": QN.stored(site, "enwiki_title"),
+            "new": final["enwiki_title"],
+            "note": "",
+        },
         "source_url": {
             "old": site["source_url"],
             "new": {
@@ -200,6 +269,10 @@ def decide(
             what, metres = min(placed, key=lambda p: p[1])
             cells["wikidata_qid"]["note"] = (
                 f"{item} ({record['en_label']!r}): {what} {metres:.0f} m from the stored point"
+            )
+        if answer.name is not None and renames(answer):
+            cells["name"]["note"] = _rename(
+                site, str(answer.name.value), item, title, library, sharers
             )
     except Held as exc:
         return decision(HELD, str(exc))

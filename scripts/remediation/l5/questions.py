@@ -2,9 +2,12 @@
 
 The prompt is a pure function of the site's production read (`population.READ.json`), so the
 import can rebuild it and refuse an answer to any other prompt (`opus_handoff.read_answer`). The
-rules it states are the owner's (HUMAN_ONLY_DECISIONS_2026-09-26, B1-L, B1-N, O6): a link names
-exactly this site - no type, no container, no sibling - or it goes; a replacement and a rename need a
-source that names this very site; a quote is verbatim text of a cited page, found by the machine.
+rules it states are the owner's (HUMAN_ONLY_DECISIONS_2026-09-26, B1-L, B1-N, O6): this site is the
+place its name designates at its stored point (a description or source about another place is
+wrong, and rewritten by other lanes); a link names exactly this site - no type, no container, no
+sibling - or it goes, and an item a duplicate row shares is kept when it names this site; a
+replacement needs a source that names this very site, a rename takes a name of the site's own item
+or article; a quote is verbatim text of a cited page, found by the machine.
 
 `parse` checks the shape and the rules the answer itself can break (nothing is fetched); `decide.py`
 checks what needs the pages and Wikipedia.
@@ -111,11 +114,15 @@ WHY THIS SITE IS ASKED
 {why}
 {earlier}
 THE RULES (the owner's decisions B1-L, B1-N and O6 of 2026-09-26)
-1. A link must name exactly THIS site: the item or article is about this site itself - not a type \
-or genus ("dolmen", "milecastle", "Asclepeion"), not a container (the town, park, island, region or \
-larger complex it lies in), not a sibling (another monument of the same complex), not a namesake \
+1. THIS site is the place the record's name designates at its stored point; where the description \
+or source_url describe another place, they are wrong here (other lanes rewrite them). A link must \
+name exactly this site: the item or article is about this site itself - not a type or genus \
+("dolmen", "milecastle", "Asclepeion"), not a container (the town, park, island, region or larger \
+complex it lies in), not a sibling (another monument of the same complex), not a namesake \
 elsewhere. A record that is itself a group ("Dolmens of Sardinia") has no item of its own unless an \
-item is exactly that group.
+item is exactly that group. Another curated site carrying the same item does not make it wrong: \
+if both records are this one site (a duplicate), KEEP the item - which record stays is decided \
+elsewhere.
 2. KEEP a link that names exactly this site.
 3. REPLACE a wrong link only with one that names exactly this site:
    - wikidata_qid: an item whose label, alias or description names this site. Cite \
@@ -149,10 +156,13 @@ ANSWER with only this JSON object:
 "value" is the new value for REPLACE{rename}, and null otherwise.
 """
 
-NAME_RULE = """6. The name: KEEP it unless a source names this very site otherwise and the stored \
-name is not a name of it. RENAME only to a name a quoted page gives this site, and quote that page \
-with the name in the quote. Another language, a transliteration or a descriptive form of a right \
-name is no reason to rename.
+NAME_RULE = """6. The name: KEEP it unless this site's own item or article names it otherwise and \
+the stored name is not a name of this site. RENAME only to the English label or an English alias of \
+the item you keep or replace with, or to the title of the article you keep or replace with (a \
+bracketed qualifier such as "(Mesoamerican site)" may be left off) - the machine checks the new \
+name against that item and article - and quote a page with the new name in the quote. KEEP the \
+name when another curated site carries the same item. Another language, a transliteration or a \
+descriptive form of a right name is no reason to rename.
 """
 
 

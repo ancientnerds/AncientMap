@@ -17,8 +17,9 @@ A decided site is written only as it was asked: a site whose stored links, `sour
 scope changed since the question's read is skipped, and so is a replacement item another curated
 site carries or another decided site is given too (a duplicate candidate - WD2's, not a link). The
 pinned rename waits until the row that holds its new name is hidden. Every skip is listed with its
-reason (`SKIPPED.jsonl`), and every site whose stored links L5 leaves unproven - excluded, held or
-skipped - is listed for WD1 (`UNTRUSTED_LINKS.jsonl`, `untrusted`).
+reason (`SKIPPED.jsonl`), and every site whose stored links L5 leaves unproven - excluded, held,
+skipped, or keeping an item another visible curated site carries (B1-D, WD2's) - is listed for WD1
+(`UNTRUSTED_LINKS.jsonl`, `untrusted`).
 """
 
 from __future__ import annotations
@@ -369,14 +370,36 @@ def build(
     return plan
 
 
+def _shared(
+    sid: str, decision: Mapping[str, Any], sharers: Mapping[str, Sequence[Mapping[str, Any]]]
+) -> str | None:
+    """Why a decided site's kept item is not its own: another visible curated site carries it."""
+    item = decision["cells"]["wikidata_qid"]
+    if item["verdict"] != "KEEP":
+        return None
+    others = [
+        s
+        for s in sharers.get(str(item["old"]), [])
+        if str(s["site_id"]) != sid and s["scope_status"] != "retired"
+    ]
+    if not others:
+        return None
+    named = ", ".join(f"{s['name']} ({s['site_id']})" for s in others)
+    return (
+        f"the kept item {item['old']} is carried by {named} too - one site or two is WD2's "
+        "(HUMAN_ONLY B1-D); trusted once only one visible curated row carries it"
+    )
+
+
 def untrusted(
     population: Sequence[Mapping[str, Any]],
     decisions: Sequence[Mapping[str, Any]],
     skipped: Sequence[Mapping[str, Any]],
-    read_at: str,
+    read: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
     """`UNTRUSTED_LINKS.jsonl`: every member of the population whose stored links L5 leaves
-    unproven - excluded from the question, held after the last round, or skipped by the plan -
+    unproven - excluded from the question, held after the last round, skipped by the plan, or
+    keeping an item another visible curated site carries (the question's read of the sharers) -
     with the links as the question's read found them. WD1 must not trust the Wikidata values it
     harvests for these sites (the runbook, "Order"). Pure, in site order."""
     decided = {str(d["site_id"]): d for d in decisions}
@@ -392,6 +415,8 @@ def untrusted(
             status, why = "held", str(decided[sid]["reason"])
         elif sid in skips:
             status, why = "skipped", f"{skips[sid]['reason']}: {skips[sid]['note']}"
+        elif (shared := _shared(sid, decided[sid], read["sharers"])) is not None:
+            status, why = "shared-item", shared
         else:
             continue
         out.append(
@@ -401,7 +426,7 @@ def untrusted(
                 "status": status,
                 "why": why,
                 **{k: sorted(e["value"] for e in member["ext"] if e["kind"] == k) for k in KINDS},
-                "read_at": read_at,
+                "read_at": str(read["read_at"]),
             }
         )
     return out
@@ -443,18 +468,30 @@ def step_markdown(rows: Sequence[QR.Change], wave: QR.Wave) -> str:
     return "\n".join(lines)
 
 
+def _body(rows: Sequence[QR.Change]) -> str:
+    return "".join(row.to_json_line() + "\n" for row in rows)
+
+
+def _delivered(wave: QR.Wave, body: str) -> bool:
+    """Whether the step directory holds exactly this plan already; another plan is refused."""
+    plan_path = wave.out / "PLAN.jsonl"
+    if not plan_path.exists():
+        return False
+    if plan_path.read_text(encoding="utf-8") != body:
+        raise MP.PlanError(
+            f"{wave.out} holds another plan - a delivered step is never replaced; move it "
+            "aside only if its run stamp has no journal row"
+        )
+    return True
+
+
 def write_step(wave: QR.Wave, rows: list[QR.Change]) -> None:
     """One step's files. A step directory that holds another plan is never overwritten: its
     ROLLBACK.sql may be the only undo of a write that has landed."""
-    body = "".join(row.to_json_line() + "\n" for row in rows)
-    plan_path = wave.out / "PLAN.jsonl"
-    if plan_path.exists():
-        if plan_path.read_text(encoding="utf-8") != body:
-            raise MP.PlanError(
-                f"{wave.out} holds another plan - a delivered step is never replaced; move it "
-                "aside only if its run stamp has no journal row"
-            )
+    body = _body(rows)
+    if _delivered(wave, body):
         return
+    plan_path = wave.out / "PLAN.jsonl"
     wave.out.mkdir(parents=True, exist_ok=True)
     plan_path.write_text(body, encoding="utf-8", newline="\n")
     rendered = statements(rows, wave)
@@ -462,6 +499,15 @@ def write_step(wave: QR.Wave, rows: list[QR.Change]) -> None:
     for name in ("ROLLBACK.sql", "APPLY.sql"):
         (wave.out / name).write_text(rendered[name], encoding="utf-8", newline="\n")
     (wave.out / "PLAN.md").write_text(step_markdown(rows, wave), encoding="utf-8", newline="\n")
+
+
+def write_steps(steps: Sequence[list[QR.Change]]) -> None:
+    """Every step's files, numbered from 1 - none while any step directory holds another plan."""
+    waves = [(step_wave(number), rows) for number, rows in enumerate(steps, start=1)]
+    for wave, rows in waves:
+        _delivered(wave, _body(rows))
+    for wave, rows in waves:
+        write_step(wave, rows)
 
 
 def load_step(wave: QR.Wave) -> list[QR.Change]:

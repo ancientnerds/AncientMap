@@ -153,9 +153,14 @@ class TestThePopulation:
         assert not members[ZOQUE].ask_name, "the Nr. 7 rename is decided, not asked"
         tikal = [m for m in members.values() if m.groups == ("wave1-unresolved",)]
         assert [m.name for m in tikal] == ["Tikal"]
-        assert tikal[0].ask_name, "a record that contradicts itself is asked its name too"
         contradictory = [m for m in members.values() if m.site_id in POP.SELF_CONTRADICTORY]
-        assert len(contradictory) == 3 and all(m.ask_name for m in contradictory)
+        assert len(contradictory) == 3 and not any(m.ask_name for m in contradictory), (
+            "B1-N asks the N7 names only: a record that contradicts itself keeps its name, and "
+            "its links follow the name and the point"
+        )
+        for m in contradictory:
+            assert any(w.startswith("self-contradictory: ") and "the name and the point" in w
+                       for w in m.why)  # fmt: skip
         wave2 = [m for m in members.values() if "wave2-unresolved" in m.groups]
         assert len(wave2) == sum(1 for s in QR.WAVE2_SITES if s.rule == "unresolved") == 47
         assert "6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed" in members  # Delphinion, found by WE
@@ -170,12 +175,24 @@ class TestThePopulation:
             ({"source_id": "lyra"}, "a lyra row"),
             ({"scope_status": "retired"}, "retired"),
             ({"ext": [{"kind": "wikidata_qid", "value": "Q1"}]}, "links:"),
-            ({"site_id": "ce7db300-8777-425d-917a-2f6d9f325b58"}, "duplicate candidate: Caesarea"),
         ],
     )
     def test_who_is_not_asked(self, over: dict[str, Any], reason: str) -> None:
         assert str(POP.excluded(site(**over))).startswith(reason)
         assert POP.excluded(site()) is None
+
+    def test_a_duplicate_candidate_is_asked_and_told_its_pair(self) -> None:
+        """One rule for every duplicate candidate (HUMAN_ONLY B1-D/B6): asked like any site, the
+        pair named - which row stays is WD2's, the link is L5's."""
+        caesarea = "ce7db300-8777-425d-917a-2f6d9f325b58"
+        assert POP.excluded(site(caesarea)) is None
+        names = [{**self.NAMES[0], "site_id": caesarea, "name": "Caesarea Philippi"}]
+        members = {m.site_id: m for m in POP.members(names)}
+        assert "duplicate-candidate: Caesarea Philippi / Banias (290 m, B6)" in " | ".join(
+            members[caesarea].why
+        )
+        tel_hermal = members["0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3"]  # wave 2's record
+        assert any(w.startswith("duplicate-candidate: Tel Hermal Fort") for w in tel_hermal.why)
 
     def test_the_delivered_population_is_the_measured_one(self) -> None:
         path = POP.OUT / "COUNTS.json"
@@ -184,6 +201,11 @@ class TestThePopulation:
         counts = json.loads(path.read_text(encoding="utf-8"))
         assert counts["members"] == sum(counts["by_group"].values())
         assert counts["asked"] + sum(counts["excluded"].values()) == counts["members"]
+        assert "duplicate candidate" not in counts["excluded"]
+        assert counts["duplicate_candidates_asked"] == len(POP.DUPLICATE_CANDIDATES)
+        records = POP.load_population()
+        assert all(r["ask_name"] == ("name-n7" in r["groups"] and r["site_id"] not in
+                                     POP.PINNED_NAMES) for r in records)  # fmt: skip
 
 
 # ------------------------------------------------------------------------------ the question
@@ -195,11 +217,15 @@ class TestTheQuestion:
         assert "wikidata_qid: Q100" in one and "enwiki_title: Mundo Perdido, Tikal" in one
         assert '"name"' not in one and "6. The name" not in one
         assert "AN EARLIER ANSWER" not in one
+        assert "THIS site is the place the record's name designates at its stored point" in one
+        assert "if both records are this one site (a duplicate), KEEP the item" in one
 
     def test_a_name_question_and_a_re_ask_say_so(self) -> None:
         r = read_of(site())
         text = QN.prompt(site(), member(ask_name=True), r, "wikidata_qid: a quote does not count")
         assert "6. The name" in text and '"name": {"verdict": "KEEP | RENAME"' in text
+        assert "the English label or an English alias of the item you keep or replace" in text
+        assert "KEEP the name when another curated site carries the same item" in text
         assert "AN EARLIER ANSWER TO THIS QUESTION WAS NOT COUNTED" in text
         assert "a quote does not count" in text
 
@@ -293,12 +319,30 @@ def store(
     )  # fmt: skip
 
 
-def entity(qid: str, label: str, lat: float | None, lon: float | None) -> bytes:
+def entity(
+    qid: str,
+    label: str,
+    lat: float | None,
+    lon: float | None,
+    aliases: dict[str, list[str]] | None = None,
+) -> bytes:
     claims = {}
     if lat is not None:
         value = {"latitude": lat, "longitude": lon, "precision": 0.0001, "globe": "Q2"}
         claims["P625"] = [{"mainsnak": {"datavalue": {"value": value}}, "rank": "normal"}]
-    body = {"entities": {qid: {"id": qid, "labels": {"en": {"value": label}}, "claims": claims}}}
+    body = {
+        "entities": {
+            qid: {
+                "id": qid,
+                "labels": {"en": {"language": "en", "value": label}},
+                "aliases": {
+                    lang: [{"language": lang, "value": v} for v in values]
+                    for lang, values in (aliases or {}).items()
+                },
+                "claims": claims,
+            }
+        }
+    }
     return json.dumps(body).encode()
 
 
@@ -340,11 +384,18 @@ def library(tmp_path: Path) -> Q.Library:
 
 
 def decide(
-    data: dict[str, Any], library: Q.Library, titles: dict[str, Any] | None = None
+    data: dict[str, Any],
+    library: Q.Library,
+    titles: dict[str, Any] | None = None,
+    *,
+    s: dict[str, Any] | None = None,
+    m: dict[str, Any] | None = None,
+    sharers: dict[str, Any] | None = None,
 ) -> D.Decision:
+    s, m = s or site(), m or member()
     return D.decide(
-        site(), member(), parse(data), round_name="r1", answered_by="r1-b01", library=library,
-        titles=TITLES if titles is None else titles,
+        s, m, parse(data, s, m), round_name="r1", answered_by="r1-b01", library=library,
+        titles=TITLES if titles is None else titles, sharers=sharers or {},
     )  # fmt: skip
 
 
@@ -403,6 +454,84 @@ class TestTheMachineChecks:
         titles = {**TITLES, "Tikal": {**TITLES["Tikal"], **resolution}}
         got = decide(answer(), library, titles)
         assert got.status == D.HELD and says in got.reason
+
+
+class TestTheRenameCheck:
+    """A rename takes a name of the item or article the site keeps or is given (B1-N): its English
+    label or alias, or the article's title without its bracketed qualifier."""
+
+    LOST = site(name="Lost World")
+    ASKED = member(ask_name=True)
+
+    def rename(self, new: str, quote: str = "Tikal", **cells: Any) -> dict[str, Any]:
+        return answer(name=cell("RENAME", new, [q(WP + "Tikal", quote)]), **cells)
+
+    def test_the_item_s_label_is_a_name_the_site_may_take(self, library: Q.Library) -> None:
+        got = decide(self.rename("Tikal"), library, s=self.LOST, m=self.ASKED)
+        assert got.status == D.DECIDED, got.reason
+        assert got.cells["name"]["new"] == "Tikal" and "Q200" in got.cells["name"]["note"]
+
+    def test_a_name_of_neither_the_item_nor_the_article_holds_the_site(
+        self, library: Q.Library
+    ) -> None:
+        got = decide(
+            self.rename("Ancient City", "ancient city"), library, s=self.LOST, m=self.ASKED
+        )
+        assert got.status == D.HELD
+        assert got.reason.startswith("name: 'Ancient City' is no English label or alias of Q200")
+        assert "'Tikal'" in got.reason, "the reason lists the names a re-ask may choose from"
+
+    def test_an_alias_and_a_title_without_its_qualifier_count(
+        self, tmp_path: Path, library: Q.Library
+    ) -> None:
+        store(library.pages, ENT.format("Q500"),
+              entity("Q500", "Chiapa de Corzo site", 17.2225, -89.6235, {"en": ["Zoque capital"]}),
+              content_type="application/json")  # fmt: skip
+        store(library.pages, WP + "Chiapa_de_Corzo_(Mesoamerican_site)",
+              b"<h1>Chiapa de Corzo (Mesoamerican site)</h1><p>Chiapa de Corzo is a Zoque "
+              b"capital.</p>")  # fmt: skip
+        title = "Chiapa de Corzo (Mesoamerican site)"
+        titles = {**TITLES, title: {**TITLES["Tikal"], "canonical_title": title, "qid": "Q500"}}
+        links = {
+            "wikidata_qid": cell("REPLACE", "Q500", [q(ENT.format("Q500"), "Zoque capital")]),
+            "enwiki_title": cell("REPLACE", title, [q(WP + "Chiapa_de_Corzo_(Mesoamerican_site)",
+                                                     "Chiapa de Corzo is a Zoque capital")]),
+        }  # fmt: skip
+        for new in ("Zoque capital", "Chiapa de Corzo", title):
+            data = answer(
+                name=cell("RENAME", new, [q(WP + "Chiapa_de_Corzo_(Mesoamerican_site)", new)]),
+                **links,
+            )
+            got = decide(data, library, titles, s=self.LOST, m=self.ASKED)
+            assert got.status == D.DECIDED, (new, got.reason)
+
+    def test_a_kept_item_another_visible_site_carries_holds_the_rename(
+        self, library: Q.Library
+    ) -> None:
+        store(library.pages, ENT.format("Q100"), entity("Q100", "Tikal", None, None),
+              content_type="application/json")  # fmt: skip
+        keep = {
+            "wikidata_qid": cell("KEEP", None, [q(WP + "Tikal", "Tikal")]),
+            "enwiki_title": cell("REMOVE", None, [q(WP + "Tikal", "Tikal")]),
+        }
+        other = {"site_id": OTHER, "name": "Tikal", "lat": "17.2", "lon": "-89.6"}
+        visible = {"Q100": [{**other, "scope_status": None}]}
+        got = decide(self.rename("Tikal", **keep), library, s=self.LOST, m=self.ASKED,
+                     sharers=visible)  # fmt: skip
+        assert got.status == D.HELD and got.reason.startswith("name: Q100 is carried by Tikal")
+        hidden = {"Q100": [{**other, "scope_status": "retired"}]}
+        got = decide(self.rename("Tikal", **keep), library, s=self.LOST, m=self.ASKED,
+                     sharers=hidden)  # fmt: skip
+        assert got.status == D.DECIDED, got.reason
+
+    def test_a_site_left_without_links_keeps_its_name(self, library: Q.Library) -> None:
+        gone = {
+            "wikidata_qid": cell("REMOVE", None, [q(WP + "Tikal", "Tikal")]),
+            "enwiki_title": cell("REMOVE", None, [q(WP + "Tikal", "Tikal")]),
+            "source_url": cell("CLEAR", None, [q(WP + "Tikal", "Tikal")]),
+        }
+        got = decide(self.rename("Tikal", **gone), library, s=self.LOST, m=self.ASKED)
+        assert got.status == D.HELD and "keeps neither" in got.reason
 
 
 # ------------------------------------------------------------------------------ the handoff
@@ -510,6 +639,33 @@ class TestTheHandoff:
             in json.loads((out / H.TITLES_FILE).read_text(encoding="utf-8"))["titles"]
         )
         assert len(H.load_rounds(out)) == 2 and (out / H.ANSWERS_DIR / "r2.jsonl").exists()
+
+    def test_a_rename_reads_the_kept_item_s_page_even_when_no_quote_cites_it(
+        self, out: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(H, "REPO", tmp_path)
+        page = WP + "Mundo_Perdido,_Tikal"
+        store(out / "pages", page, b"<p>Mundo Perdido, the Lost World, is a complex of Tikal.</p>")
+        store(out / "pages", ENT.format("Q100"),
+              entity("Q100", "Mundo Perdido", None, None, {"en": ["Lost World"]}),
+              content_type="application/json")  # fmt: skip
+        record = H.export_round(
+            out, tmp_path / "handoff-r1", H.first_round_sites(out), per_batch=1, now=lambda: NOW
+        )
+        rename = answer(
+            OTHER,
+            wikidata_qid=cell("KEEP", None, [q(page, "Mundo Perdido, the Lost World")]),
+            enwiki_title=cell("KEEP", None, [q(page, "a complex of Tikal")]),
+            name=cell("RENAME", "Lost World", [q(page, "the Lost World")]),
+        )
+        answer_all(tmp_path / "handoff-r1", record, {TIKAL: answer(), OTHER: rename})
+        H.import_round(out, "r1", http=FakeClient, resolver=resolver, now=lambda: NOW, pace=0)
+        decisions = {d["site_id"]: d for d in H.load_decisions(out)}
+        assert decisions[OTHER]["status"] == D.DECIDED, decisions[OTHER]["reason"]
+        assert decisions[OTHER]["cells"]["name"]["new"] == "Lost World"
+        assert ENT.format("Q100") in {r["url"] for r in H._read_jsonl(out / H.PAGES_FILE)}, (
+            "the rename check read the kept item's entity page: it is part of the record"
+        )
 
     def test_a_round_is_never_exported_into_a_used_directory(
         self, out: Path, tmp_path: Path
@@ -655,6 +811,20 @@ class TestThePlan:
         L5P.write_step(wave, built.links)  # the same plan again is a no-op
         with pytest.raises(MP.PlanError, match="holds another plan"):
             L5P.write_step(wave, built.links[:1])
+
+    def test_no_step_is_written_while_a_later_one_holds_another_plan(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(L5P, "STEPS", tmp_path)
+        rows = two_site_rows()
+        first = [r for r in rows if r.site_id == min(r.site_id for r in rows)]
+        second = [r for r in rows if r not in first]
+        L5P.write_step(L5P.step_wave(2), first)  # a plan of another run in step 2
+        with pytest.raises(MP.PlanError, match="step-002 holds another plan"):
+            L5P.write_steps([first, second])
+        assert not (tmp_path / "step-001").exists()
+        L5P.write_steps([second, first])
+        assert L5P.load_step(L5P.step_wave(1)) == second
 
 
 class TestTheNameLane:
@@ -1080,13 +1250,15 @@ class TestOneItemForTwoSites:
 class TestTheUntrustedLinks:
     DUP = "ce7db300-8777-425d-917a-2f6d9f325b58"
     GONE = "00000000-0000-4000-8000-000000000001"
+    KEEP = {"verdict": "KEEP", "old": "Q100", "new": "Q100", "why": "w",
+            "quotes": [q(WP + "Tikal", "T")], "note": ""}  # fmt: skip
 
     def test_excluded_held_and_skipped_sites_are_listed_with_their_stored_links(self) -> None:
         population = [
             {**member(), "ext": site()["ext"]},
             {**member(OTHER), "ext": site()["ext"]},
             {**member(self.DUP), "ext": [{"kind": "wikidata_qid", "value": "Q606295"}],
-             "excluded": "duplicate candidate: Caesarea Philippi / Banias"},
+             "excluded": "retired: hidden everywhere, nothing of it is written"},
             {**member(self.GONE), "ext": site()["ext"]},
             {**member(ZOQUE), "ext": site()["ext"]},
         ]  # fmt: skip
@@ -1101,7 +1273,7 @@ class TestTheUntrustedLinks:
              "note": "moved"},
             {"site_id": ZOQUE, "name": "Zoque", "reason": "duplicate-not-hidden-yet", "note": "n"},
         ]  # fmt: skip
-        got = L5P.untrusted(population, decisions, skipped, READ_AT)
+        got = L5P.untrusted(population, decisions, skipped, read_of())
         assert [(r["site_id"], r["status"]) for r in got] == sorted(
             [(self.DUP, "excluded"), (self.GONE, "skipped"), (OTHER, "held")]
         ), "a name-only skip leaves the site's decided links trusted"
@@ -1116,7 +1288,25 @@ class TestTheUntrustedLinks:
 
     def test_an_asked_site_without_a_decision_is_refused(self) -> None:
         with pytest.raises(MP.PlanError, match="no decision"):
-            L5P.untrusted([{**member(), "ext": []}], [], [], READ_AT)
+            L5P.untrusted([{**member(), "ext": []}], [], [], read_of())
+
+    def test_a_kept_item_another_visible_curated_site_carries_is_listed(self) -> None:
+        """B1-D: a shared item is WD2's question - until one row is retired, WD1 would harvest one
+        item's values for two rows (Ramesses III Temple at Karnak keeping Medinet Habu's item)."""
+        population = [{**member(), "ext": site()["ext"]}]
+        itself = {"site_id": TIKAL, "name": "Tikal", "lat": "17.2", "lon": "-89.6"}
+        other = {"site_id": OTHER, "name": "Mundo Perdido", "lat": "17.2", "lon": "-89.6"}
+        listed = []
+        for scope in (None, "retired"):
+            read = read_of(site(), sharers={"Q100": [{**itself, "scope_status": None},
+                                                     {**other, "scope_status": scope}]})  # fmt: skip
+            listed.append(L5P.untrusted(population, [decided(wikidata_qid=self.KEEP)], [], read))
+        assert [(r["site_id"], r["status"]) for r in listed[0]] == [(TIKAL, "shared-item")]
+        assert f"Mundo Perdido ({OTHER})" in listed[0][0]["why"]
+        assert listed[1] == [], "a retired row is hidden everywhere: the item is this site's alone"
+        replaced = L5P.untrusted(population, [decided()], [], read_of(site(), sharers={
+            "Q100": [{**itself, "scope_status": None}, {**other, "scope_status": None}]}))  # fmt: skip
+        assert replaced == [], "the stored item is replaced: the plan checked the new one's holders"
 
 
 # ------------------------------------------------------------------------------ the rounds' order

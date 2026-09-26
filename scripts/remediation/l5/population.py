@@ -14,17 +14,21 @@
   N7): their name is asked too;
 * **found-by-we** - links found wrong while the WE lanes were planned (`EXTRA`).
 
-The groups are disjoint on the data of 2026-09-26 (167 sites). The name is asked too of the three
-records that contradict themselves (`SELF_CONTRADICTORY`, HUMAN_ONLY Nr. 6 "2 widersprüchliche +
-Tikal"): which site the record is decides its links and its name together.
+The groups are disjoint on the data of 2026-09-26 (167 sites). The name is asked of the N7 names
+only (B1-N lists those 46). The three records that contradict themselves (`SELF_CONTRADICTORY`,
+HUMAN_ONLY Nr. 6 "2 widersprüchliche + Tikal", B1-L) are asked their links, told that their name
+and point define the site: their description and source are other lanes' to rewrite, and a rename
+there would move a site off the map (Tikal is the only curated "Tikal").
+
+Every duplicate candidate is asked like any other site, one rule for all of them
+(`DUPLICATE_CANDIDATES`, HUMAN_ONLY B1-D and B6, and wave 3's `duplicate-candidate` rows): its
+question names the pair and every curated site sharing its item, and a shared item that names
+exactly this site is kept - which row stays is WD2's retirement (`duplicate_of:<uuid>`), the link is
+L5's. A pair WD2 cannot prove to be one site keeps the links L5 decided for each row.
 
 Not asked, each listed with its reason (`excluded`):
 
 * a retired site - hidden everywhere, nothing of it is written;
-* a duplicate candidate (`DUPLICATE_CANDIDATES`, HUMAN_ONLY B1-D and B6): both rows of a pair carry
-  the pair's one item because they are one site, so the link is right for the row that stays and
-  the question is which row stays - WD2's, which retires the other (`duplicate_of:<uuid>`). L5
-  asking them could take away the item the pair is recognised by;
 * a site whose links are not one item and one article - the question's shape.
 
 "Zoque Culture Archaeological Zone" is an N7 name whose rename is decided (HUMAN_ONLY Nr. 7,
@@ -75,7 +79,8 @@ EXTRA: tuple[tuple[str, str, str], ...] = (
 
 
 #: HUMAN_ONLY Nr. 6, "2 widersprüchliche Einträge (+ Tikal aus Welle 1)": records whose name and
-#: point say one site and whose description and source another (`qid_repair` waves 1 and 2).
+#: point say one site and whose description and source another (`qid_repair` waves 1 and 2). Their
+#: question says so; their name is not asked (B1-N is the N7 names).
 SELF_CONTRADICTORY: dict[str, str] = {
     "30d3fb78-6b80-42f9-87f8-7616e63bec4f": "Tikal",
     "3a86a102-9b92-4f11-8dcf-4230d3534858": "Ramesses III Temple",
@@ -83,7 +88,8 @@ SELF_CONTRADICTORY: dict[str, str] = {
 }
 
 #: HUMAN_ONLY B1-D and B6 (decided 2026-09-26 under O9, executed by WD2): the duplicate candidates
-#: of the link research and their other rows, as far as L5's sources list them.
+#: of the link research and their other rows, as far as L5's sources list them. Each is asked like
+#: every other site, its question naming the pair.
 DUPLICATE_CANDIDATES: dict[str, str] = {
     "3ebb514f-ac4a-4913-b54b-409bcc29eff4": "Ancient Amathunta / Amathus (about 10 m)",
     "0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3": "Tel Hermal Fort / Shaduppum (1.7 km)",
@@ -194,14 +200,26 @@ def members(names: Sequence[Mapping[str, Any]]) -> list[Member]:
             _add(found, sid, str(row["name"]), "name-n7", why)
     for sid, name, why in EXTRA:
         _add(found, sid, name, "found-by-we", [why])
+    for sid, name in SELF_CONTRADICTORY.items():
+        if sid in found:
+            found[sid]["why"].append(
+                f"self-contradictory: the record's name and point are {name}, its description and "
+                "source_url describe another site (HUMAN_ONLY Nr. 6) - this site is the one the "
+                "name and the point define; the description is rewritten by other lanes"
+            )
+    for sid, pair in DUPLICATE_CANDIDATES.items():
+        if sid in found:
+            found[sid]["why"].append(
+                f"duplicate-candidate: {pair} - if both rows are this one site, their shared item "
+                "names exactly this site; which row stays is decided elsewhere (HUMAN_ONLY B1-D)"
+            )
     return [
         Member(
             site_id=sid,
             name=entry["name"],
             groups=tuple(entry["groups"]),
             why=tuple(entry["why"]),
-            ask_name=("name-n7" in entry["groups"] or sid in SELF_CONTRADICTORY)
-            and sid not in PINNED_NAMES,
+            ask_name="name-n7" in entry["groups"] and sid not in PINNED_NAMES,
         )
         for sid, entry in sorted(found.items())
     ]
@@ -262,11 +280,6 @@ def excluded(row: Mapping[str, Any]) -> str | None:
         return f"a {row['source_id']} row, not curated"
     if row["scope_status"] == "retired":
         return "retired: hidden everywhere, nothing of it is written"
-    if str(row["site_id"]) in DUPLICATE_CANDIDATES:
-        return (
-            f"duplicate candidate: {DUPLICATE_CANDIDATES[str(row['site_id'])]} - which row stays "
-            "is WD2's (HUMAN_ONLY B1-D/B6), the pair's item is right for it"
-        )
     kinds = Counter(str(e["kind"]) for e in row["ext"])
     if kinds != Counter({"wikidata_qid": 1, "enwiki_title": 1}):
         return f"links: {dict(sorted(kinds.items()))} - the question reads one item and one article"
@@ -302,6 +315,7 @@ def counts(records: Sequence[Mapping[str, Any]], read_at: str) -> dict[str, Any]
         "asked": len(asked),
         "names_asked": sum(1 for r in asked if r["ask_name"]),
         "names_pinned": sum(1 for r in asked if r["site_id"] in PINNED_NAMES),
+        "duplicate_candidates_asked": sum(1 for r in asked if r["site_id"] in DUPLICATE_CANDIDATES),
         "excluded": dict(
             Counter(str(r["excluded"]).split(":")[0] for r in records if r["excluded"])
         ),
