@@ -10,7 +10,11 @@
  *   system · source →", in the existing popup-wiki-source-link element — no new styling;
  * - ai === 'generated' (lanes T, R and the legacy lane L): the existing AiFootnote,
  *   unchanged;
- * - nothing without provenance: a text nobody recorded is claimed for by nobody.
+ * - nothing without provenance: a text nobody recorded is claimed for by nobody;
+ * - cardAi === 'generated' (a teaser card of lane WB, owner decision O10 of 2026-09-26): the
+ *   site's card is AI-generated. The card is shown on the SiteCard, which carries only the
+ *   machine-readable data-card-ai; the visible notice is here, on the page the card opens -
+ *   the same AiFootnote, once, whichever of the two texts is AI-generated.
  *
  * One component for the popup (DescriptionSection) and the crawler record (SitePage), so the
  * two views cannot say it differently. Every anchor carries one string child, so the
@@ -23,9 +27,11 @@ import AiFootnote from './news/AiFootnote'
 interface DescriptionDisclosureProps {
   ai?: DescriptionAi | null
   attribution?: DescriptionAttribution | null
+  /** The AI mark of the site's card (not shown here): 'generated' for a lane-WB teaser. */
+  cardAi?: DescriptionAi | null
 }
 
-export default function DescriptionDisclosure({ ai, attribution }: DescriptionDisclosureProps) {
+export default function DescriptionDisclosure({ ai, attribution, cardAi }: DescriptionDisclosureProps) {
   // Without provenance the server sends neither field, so both branches below stay empty.
   const revision = attribution?.revisionDate ? ` (revision of ${attribution.revisionDate})` : ''
   return (
@@ -58,7 +64,7 @@ export default function DescriptionDisclosure({ ai, attribution }: DescriptionDi
           </a>
         </span>
       )}
-      {ai === 'generated' && <AiFootnote />}
+      {(ai === 'generated' || cardAi === 'generated') && <AiFootnote />}
     </>
   )
 }

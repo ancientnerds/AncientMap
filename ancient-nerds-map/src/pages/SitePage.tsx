@@ -120,6 +120,7 @@ function SiteRecord({ site }: { site: SiteRoute }) {
           <DescriptionDisclosure
             ai={site.description_ai}
             attribution={site.description_attribution}
+            cardAi={site.card_ai}
           />
         )}
       </div>

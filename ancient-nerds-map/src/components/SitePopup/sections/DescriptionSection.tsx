@@ -27,6 +27,7 @@ export function DescriptionSection({
   descriptionCitations,
   descriptionAi,
   descriptionAttribution,
+  cardAi,
 }: DescriptionSectionProps) {
   const [showCitations, setShowCitations] = useState(false)
   const [showMoreInfo, setShowMoreInfo] = useState(false)
@@ -94,7 +95,11 @@ export function DescriptionSection({
 
           {/* EU AI Act Art. 50 and CC BY-SA 4.0: graded by the text's provenance */}
           {description && (
-            <DescriptionDisclosure ai={descriptionAi} attribution={descriptionAttribution} />
+            <DescriptionDisclosure
+              ai={descriptionAi}
+              attribution={descriptionAttribution}
+              cardAi={cardAi}
+            />
           )}
 
           {/* Source attribution for non-English wiki sources */}

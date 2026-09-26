@@ -39,6 +39,7 @@ from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.utils.card_provenance import card_provenance_of
 from pipeline.utils.globe_payload import globe_projection
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
 
@@ -1261,7 +1262,7 @@ def get_site_detail(
         if disclosure is not None:
             resp["descriptionAi"] = disclosure["ai"]
             resp["descriptionAttribution"] = disclosure["attribution"]
-        marked_card = card_ai(provenance, row.card_description)
+        marked_card = card_ai(provenance, card_provenance_of(rd), row.card_description)
         if marked_card is not None:
             resp["cardAi"] = marked_card
 

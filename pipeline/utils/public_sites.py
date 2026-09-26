@@ -91,9 +91,12 @@ def curated_page(alias: str = "") -> str:
 #:   period_end, lat, lon, source_url and parent_site_id are rendered on the same page,
 #:   and later lanes journal some of them (period_name: 220 rows, lat/lon: 9, read
 #:   2026-09-23).
-#: - ``card_stats``: only the page's Wikipedia link and its language. The card itself
-#:   never appears on the page, and the ~4,300 P5 card writes would otherwise move the
-#:   lastmod and the hourly IndexNow announcement of pages whose content did not change.
+#: - ``card_stats``: the page's Wikipedia link and its language, and - since lane WB (owner
+#:   decision O10, 2026-09-26) - ``card_description``: the card itself never appears on the
+#:   page, but the page shows the AI footnote while a teaser provenance hashes the live card
+#:   (``pipeline.utils.card_provenance``), so a card write can change the page. Lane WB
+#:   writes the provenance (``raw_data``) of the same sites in the same step, so the card
+#:   column adds no page to what the hourly IndexNow cycle announces for that step.
 #: - ``wiki_images`` (orchestrator decision D6, 2026-09-23): the page shows one image - the
 #:   hero, else the lead, else the first by sort order, never an excluded one - so a write
 #:   of a column that chooses it (a hero change) or of one it renders of it (file, author,
@@ -123,7 +126,7 @@ PAGE_COLUMNS: dict[str, tuple[str, ...]] = {
         "source_url",
         "parent_site_id",
     ),
-    "card_stats": ("best_wiki_url", "source_language"),
+    "card_stats": ("best_wiki_url", "source_language", "card_description"),
     "wiki_images": (
         "is_hero",
         "is_excluded",

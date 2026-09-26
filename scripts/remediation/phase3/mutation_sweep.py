@@ -6406,8 +6406,8 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 api: the page's Wikipedia link is not counted",
         "pipeline/utils/public_sites.py",
-        '    "card_stats": ("best_wiki_url", "source_language"),\n',
-        '    "card_stats": ("source_language",),  # mutant\n',
+        '    "card_stats": ("best_wiki_url", "source_language", "card_description"),\n',
+        '    "card_stats": ("source_language", "card_description"),  # mutant\n',
         P4_SITEMAP_TEST,
         "test_the_page_columns_are_exactly_the_ones_the_ssr_route_reads",
     ),
@@ -7456,8 +7456,8 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 shorts_export: site.json drops the pinned card hash",
         SHORTS_EXPORT,
-        '        "card_text_sha256": row["card_text_sha256"],\n',
-        '        "card_text_sha256": None,  # mutant\n',
+        '        return row["card_text_sha256"], None\n',
+        '        return None, None  # mutant\n',
         SHORTS_TEST,
         "test_s13_the_export_carries_the_pinned_hash_into_site_json",
     ),

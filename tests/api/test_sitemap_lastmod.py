@@ -69,14 +69,12 @@ def test_a_phase4_description_write_advances_the_page():
 
 
 def test_a_journalled_write_the_page_does_not_render_does_not_advance_it():
-    """A P5 card write (card_stats.card_description) changes no byte of the site page - the card
-    lives in the globe's card, not on /sites/... - so it must not move the lastmod, nor make the
-    hourly IndexNow cycle announce ~4,300 unchanged pages. Nor does a unified_sites column the
-    page never shows."""
+    """The card game's stats and a unified_sites column the page never shows change no byte of the
+    site page, so they must not move the lastmod, nor make the hourly IndexNow cycle announce
+    unchanged pages. (The card text itself is a page column since lane WB: the next test.)"""
     conn = _journal_engine(
         [
             (SITE, "unified_sites", "description", "2026-10-02 09:00:00"),
-            (SITE, "card_stats", "card_description", "2026-10-09 09:00:00"),
             (SITE, "card_stats", "antiquity", "2026-10-09 10:00:00"),  # the card game's stats
             (SITE, "unified_sites", "geom", "2026-10-10 09:00:00"),
             (SITE, "unified_sites", "thumbnail_url", "2026-10-10 10:00:00"),  # the hub's fallback
@@ -89,6 +87,20 @@ def test_a_journalled_write_the_page_does_not_render_does_not_advance_it():
         ]
     )
     assert _newest(conn) == {SITE: "2026-10-02 09:00:00"}
+
+
+def test_a_card_write_advances_the_page():
+    """Owner decision O10 (2026-09-26): the page shows the AI footnote while a lane-WB teaser
+    provenance hashes the site's live card (`card_ai` in the SSR payload), so a card write - a
+    teaser, a clear, a card imported from the file - can add or remove that notice and moves the
+    page's date. Before lane WB the card never touched the page and this write was excluded."""
+    conn = _journal_engine(
+        [
+            (SITE, "unified_sites", "description", "2026-10-02 09:00:00"),
+            (SITE, "card_stats", "card_description", "2026-10-09 09:00:00"),
+        ]
+    )
+    assert _newest(conn) == {SITE: "2026-10-09 09:00:00"}
 
 
 def test_a_hero_change_advances_the_page():
@@ -110,7 +122,8 @@ def test_every_column_the_site_page_reads_advances_it():
     """The design's six (description, raw_data, name, country, site_type, period_start), the other
     unified_sites columns the SSR site page renders, which later lanes journal (period_name, the
     coordinates), the two card_stats columns the page shows (its Wikipedia link and language), and
-    the image columns: every one of them moves the date, in its own table only."""
+    the image columns: every one of them moves the date, in its own table only. The card text is
+    one of them since lane WB (the page's AI footnote reads it, `test_a_card_write_advances_the_page`)."""
     for table, columns in PS.PAGE_COLUMNS.items():
         for column in columns:
             conn = _journal_engine([(SITE, table, column, "2026-10-02 09:00:00")])
@@ -118,7 +131,7 @@ def test_every_column_the_site_page_reads_advances_it():
     assert {"description", "raw_data", "name", "country", "site_type", "period_start"} <= set(
         PS.PAGE_COLUMNS["unified_sites"]
     )
-    assert "card_description" not in PS.PAGE_COLUMNS["card_stats"]
+    assert "card_description" in PS.PAGE_COLUMNS["card_stats"]
 
 
 def _columns(listed: str) -> set[str]:
