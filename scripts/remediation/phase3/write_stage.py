@@ -384,9 +384,10 @@ def _json_rows(text: str) -> list[dict[str, Any]]:
 # ------------------------------------------------------------------------------------- the plan
 #: The journal lanes a change key can name: this stage's own, and the three row groups of phases 4
 #: and 5 (design entry [6], production_write, JOURNAL: `change_key(..., lane='phase4'|'phase4l'|
-#: 'phase5')` - the descriptions, the legacy disclosure and the cards). Closed: a key prefixed with
-#: a lane nobody registered would name a family no acceptance reads.
-CHANGE_KEY_LANES: tuple[str, ...] = ("phase3", "phase4", "phase4l", "phase5")
+#: 'phase5')` - the descriptions, the legacy disclosure and the cards), and lane WC's sentence
+#: check (`phase4wc`, owner decision O5 of 2026-09-26; `verify_writes4.py --lane p4wc` reads it).
+#: Closed: a key prefixed with a lane nobody registered would name a family no acceptance reads.
+CHANGE_KEY_LANES: tuple[str, ...] = ("phase3", "phase4", "phase4l", "phase5", "phase4wc")
 
 
 def change_key(
