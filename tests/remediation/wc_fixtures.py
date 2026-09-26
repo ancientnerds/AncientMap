@@ -224,6 +224,28 @@ class ReadRunner:
         return "".join(json.dumps(r) + "\n" for r in self.rows)
 
 
+def judge_all(run: Path, handoff: Path) -> dict[str, Any]:
+    """The pilot's judge round, answered by a judge that checked nothing: every kept sentence
+    SUPPORTED, every drop DROP_OK, every text coherent - `judge/RESULT.json` passes."""
+    from wc import cli
+
+    cli.cmd_judge_export(run, handoff, batch_size=5)
+    answers = {}
+    for site_id, final in cli._finals(run).items():
+        kept, dropped = cli._judge_counts(final)
+        answers[site_id] = json.dumps({
+            "site_id": site_id,
+            "kept": [{"k": k, "verdict": "SUPPORTED", "quotes": [], "note": "judged"}
+                     for k in range(1, kept + 1)],
+            "dropped": [{"d": d, "verdict": "DROP_OK", "quotes": [], "note": "judged"}
+                        for d in range(1, dropped + 1)],
+            "coherent": True,
+            "note": "judged",
+        })  # fmt: skip
+    record_answers(handoff, answers, by="opus-judge")
+    return cli.cmd_judge_import(run, handoff, client=FakeClient(), pace=0.0)
+
+
 def build_run(
     root: Path,
     rows: Sequence[Mapping[str, Any]],
@@ -231,16 +253,26 @@ def build_run(
     *,
     first_batch: int = WC4.FIRST_BATCH,
     name: str = "wc-test",
+    pilot: bool = True,
+    judged: bool = True,
 ) -> tuple[Path, Path]:
-    """A WC run end to end with every answer counted in round 1: read, export, answer, import,
-    build. Returns the run directory and its gate plan (`WC4.jsonl`)."""
+    """A WC run end to end with every answer counted in round 1: read, export - a pilot that draws
+    the whole population, or with `pilot=False` a chunk - answer, import, build; a pilot is then
+    judged and passes (`judge_all`) unless `judged` is false. The gate writes no WC plan before a
+    passed pilot heads the named plans (`cli.pilot_approval`). Returns the run directory and its
+    gate plan (`WC4.jsonl`)."""
+    from phase3.run import read_jsonl
     from wc import cli
 
     run, handoff = root / "runs" / name, root / "handoff" / f"{name}-r1"
     run.mkdir(parents=True)
     cli.cmd_read(run, runner=ReadRunner(rows))
-    cli.cmd_export(run, handoff, batch_size=5, exclude=None, after=[], pilot=None, seed=None)
+    asked, _ = cli.population(read_jsonl(run / cli.ROWS_FILE), excluded=set(), earlier=set())
+    draw = {"pilot": len(asked), "seed": 1} if pilot else {"pilot": None, "seed": None}
+    cli.cmd_export(run, handoff, batch_size=5, exclude=None, after=[], **draw)
     record_answers(handoff, answers)
     cli.cmd_import(run, handoff, client=FakeClient(), pace=0.0)
     cli.cmd_build(run, first_batch=first_batch)
+    if pilot and judged:
+        judge_all(run, root / "handoff" / f"{name}-judge")
     return run, run / cli.PLAN_FILE

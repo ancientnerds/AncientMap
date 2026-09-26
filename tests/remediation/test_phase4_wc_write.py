@@ -511,6 +511,30 @@ def test_wc_plans_from_its_own_plans_only(tmp_path, capsys, args, message) -> No
     assert message in capsys.readouterr().err
 
 
+def test_the_gate_writes_no_wc_plan_before_a_passed_pilot_heads_the_named_plans(
+    tmp_path, capsys
+) -> None:
+    """The review of 2026-09-26: nothing tied a mass plan to a passed pilot. The first plan named
+    is a pilot run's whose judge passed, and every pilot named passed: a chunk alone, a pilot not
+    judged and a failed pilot plan nothing."""
+    chunk = FX.build_run(tmp_path / "chunk", _rows(), _answers(), name="wc-chunk", pilot=False)[1]
+    assert G.main(_args(tmp_path, chunk), runner=_db()) == 1
+    assert "is not a pilot" in capsys.readouterr().err
+    unjudged = FX.build_run(tmp_path / "unjudged", _rows(), _answers(), name="wc-u", judged=False)
+    assert G.main(_args(tmp_path, unjudged[1]), runner=_db()) == 1
+    assert "was not judged" in capsys.readouterr().err
+    pilot_run, pilot = FX.build_run(tmp_path / "pilot", _rows(), _answers(), name="wc-pilot")
+    result = pilot_run / "judge" / "RESULT.json"
+    passed = result.read_text(encoding="utf-8")
+    result.write_text(passed.replace('"passed": true', '"passed": false'), encoding="utf-8")
+    assert G.main(_args(tmp_path, pilot), runner=_db()) == 1
+    assert "did not pass" in capsys.readouterr().err
+    result.write_text(passed, encoding="utf-8")
+    assert G.main(_args(tmp_path, pilot), runner=_db()) == 0
+    assert "pilot passed: " in capsys.readouterr().out
+    assert not (tmp_path / "apply" / "p4wc-4002").exists()
+
+
 def test_wc_refuses_an_apply_root_holding_batches_of_a_plan_not_named(tmp_path, capsys) -> None:
     plan = _plan(tmp_path)
     (tmp_path / "apply" / "p4wc-4999").mkdir(parents=True)
@@ -607,7 +631,7 @@ def test_a_site_a_written_plan_refused_is_written_by_the_later_plan_that_asks_it
     _accept_step(tmp_path, capsys, monkeypatch, db)
     run, mass = FX.build_run(tmp_path / "mass", _read_rows(db),
                              {FX.SITE_B: FX.answer(FX.SITE_B, [FX.drop(1)])},
-                             first_batch=4002, name="wc-mass")  # fmt: skip
+                             first_batch=4002, name="wc-mass", pilot=False)  # fmt: skip
     assert list(json.loads((run / "POPULATION.json").read_text("utf-8"))["listed"]) == [
         "checked-before", "no-description"
     ]  # fmt: skip
@@ -629,7 +653,7 @@ def test_one_site_planned_by_two_batches_stops_the_gate_before_anything_is_rende
     the site and renders nothing."""
     first = FX.build_run(tmp_path / "one", _rows(), _answers(), name="wc-one")[1]
     second = FX.build_run(tmp_path / "two", _rows(), _answers(), first_batch=4002,
-                          name="wc-two")[1]  # fmt: skip
+                          name="wc-two", pilot=False)[1]  # fmt: skip
     db = _db()
     assert G.main(_args(tmp_path, first, "--apply"), runner=db) == 0
     capsys.readouterr()

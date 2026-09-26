@@ -370,6 +370,18 @@ def wc_batches(
     for path in paths:
         if not path.is_file():
             raise SystemExit(f"{path}: no such WC plan (wc/cli.py build writes it)")
+    # The pilot's verdict (the review of 2026-09-26): imported here, when a WC plan is planned, as
+    # the verifier is for P4 (`_verifier`).
+    from wc import cli as wc_cli
+
+    try:
+        approvals = wc_cli.pilot_approval(paths)
+    except wc_cli.WcRunError as exc:
+        raise SystemExit(str(exc)) from None
+    print(
+        "pilot passed: "
+        + ", ".join(f"{a['run']} (RESULT.json sha256 {a['result_sha256']})" for a in approvals)
+    )
     whole, outcomes = W4.load_wc_plan(paths)
     ours = {W4.group_batch_id(batch.batch_id, W4.Group.WC) for batch in whole}
     prefix = W4.GROUP_PREFIX[W4.Group.WC]

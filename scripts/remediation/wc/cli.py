@@ -1098,6 +1098,38 @@ def judge_result(judged: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
+    """The pilot verdict every WC plan the gate writes rests on (`write_gate4.wc_batches`; the review
+    of 2026-09-26: nothing tied a mass plan to a passed pilot). Each plan is `<run>/WC4.jsonl`. The
+    first plan named is a pilot run's (`export --pilot`), and every pilot run named was judged and
+    passed (`judge/RESULT.json`, `passed: true`): a failed pilot's outcomes are never written, and
+    no chunk is written before a passed pilot. Returns each pilot run with its result's sha256."""
+    if not plans:
+        raise WcRunError("no WC plan named")
+    approvals: list[dict[str, str]] = []
+    for index, plan in enumerate(plans):
+        run = plan.parent
+        pilot = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))["pilot"]
+        if index == 0 and pilot is None:
+            raise WcRunError(
+                f"{plan}: the first WC plan named is the pilot's (export --pilot), whose judge "
+                "passed - this run is not a pilot"
+            )
+        if pilot is None:
+            continue
+        path = run / JUDGE_DIR / "RESULT.json"
+        if not path.exists():
+            raise WcRunError(f"{run}: the pilot was not judged (judge-import writes {path.name})")
+        result = json.loads(path.read_text(encoding="utf-8"))
+        if result["passed"] is not True:
+            raise WcRunError(
+                f"{run}: the pilot's judge did not pass ({result['failures']}): its outcomes are "
+                "never written - fix the cause and run a new pilot"
+            )
+        approvals.append({"run": _shown(run), "result_sha256": _sha256(path)})
+    return approvals
+
+
 # ------------------------------------------------------------------------------------ the CLI
 def _print(payload: Any) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
