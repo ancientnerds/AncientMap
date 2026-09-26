@@ -251,3 +251,21 @@ class TestTheDeliveredPlan:
             payload = json.loads(line)
             assert payload["run_stamp"] == L.COUNTRY_B2.run_stamp
             assert payload["evidence"][0]["source"] == B.DECISION_SOURCE
+
+
+def test_the_command_line_prints_any_script(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A name lane's psql answers can hold any script; cp1252 raised on one (2026-09-26)."""
+    import io
+
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", console)
+
+    def printing(*_: Any, **__: Any) -> int:
+        print("Kırklareli Ναός")
+        return 0
+
+    monkeypatch.setattr(A, "run", printing)
+    assert A.main(["--lane", "country-b2", "--verify"]) == 0
+    console.flush()
+    assert "Kırklareli Ναός" in raw.getvalue().decode("utf-8")

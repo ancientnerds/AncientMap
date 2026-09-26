@@ -394,3 +394,20 @@ class TestTheWriterSource:
         plan.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
         with pytest.raises(C.ChunkError, match="alias keys only"):
             C.load_chunk(directory)
+
+
+class TestTheCommandLine:
+    def test_a_read_back_naming_a_japanese_key_is_printed_not_raised(self, tmp_path, monkeypatch):
+        """cp1252 cannot encode the Lyra keys; after a COMMIT a traceback would hide the exit code."""
+        import io
+
+        lane = C.Lane("k", "P6/k", "k-2026-09-26", "authoritative", "k", "lyra")
+        (chunk,) = C.chunk_changes(lane, [_name_change()])
+        directory = C.emit_chunk(tmp_path, chunk)
+        raw = io.BytesIO()
+        console = io.TextIOWrapper(raw, encoding="cp1252")
+        monkeypatch.setattr(sys, "stdout", console)
+        monkeypatch.setattr(C, "readback", lambda chunk, rollback=False: ["holds 'ヤッフ島'"])
+        assert C.main([str(directory), "--readback"]) == C.EXIT_COMMITTED_UNCONFIRMED
+        console.flush()
+        assert "holds 'ヤッフ島'" in raw.getvalue().decode("utf-8")

@@ -1755,6 +1755,11 @@ def _lane_argument(name: str) -> str:
 
 # ------------------------------------------------------------------------------------ CLI
 def main(argv: list[str] | None = None) -> int:
+    # psql's answers are printed as they came: a name lane's values (L5) can hold any script, and
+    # a Windows console's cp1252 raised on one - after a COMMIT, a traceback instead of the exit
+    # code the runbook reads (the chunk writer's case, measured 2026-09-26).
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     ap = argparse.ArgumentParser(description="Apply one mechanical lane's plan")
     ap.add_argument(
         "--lane",

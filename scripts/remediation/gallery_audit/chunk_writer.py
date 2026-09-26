@@ -1033,6 +1033,11 @@ def command_readback(directory: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The Lyra alias keys are Japanese and Korean (name_key/plan.py): on a Windows console's
+    # cp1252 a read-back line naming one raised UnicodeEncodeError - after a COMMIT that turned a
+    # landed write into a traceback instead of its exit code (measured 2026-09-26).
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
