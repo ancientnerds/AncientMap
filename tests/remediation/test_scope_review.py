@@ -25,6 +25,7 @@ from mechanical import apply as A  # noqa: E402
 from mechanical import lane as L  # noqa: E402
 from mechanical import scope_review as R  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
+from phase3.run import read_jsonl  # noqa: E402
 from served_image.precheck import load_harvest  # noqa: E402
 
 BALTIC = "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded"  # Baltic Sea Anomaly, Underwater structures
@@ -186,6 +187,11 @@ def not_a_site(quotes: list[tuple[str, str]], kind: str = "natural_formation") -
 
 
 SITE_ANSWER = json.dumps({"decision": "site", "kind": None, "reason": "Ruins.", "quotes": []})
+#: A site answer that cites a page: the reviewer's case of 2026-09-26 (Khortytsia, one quote).
+SITE_WITH_QUOTE = json.dumps(
+    {"decision": "site", "kind": None, "reason": "An island with Scythian burials.",
+     "quotes": [{"url": "https://en.wikipedia.org/wiki/Khortytsia", "quote": "burials"}]}
+)  # fmt: skip
 
 
 def pages_for(pages: Path, bodies: dict[str, str]) -> Any:
@@ -217,7 +223,7 @@ def review(tmp_path: Path) -> dict[str, Path]:
 
 
 def answer_round(handoff: Path, out: Path, round_no: int, texts: dict[str, str]) -> None:
-    for q in R._read_jsonl(R.round_files(out, round_no).questions):
+    for q in read_jsonl(R.round_files(out, round_no).questions):
         OH.write_answer(
             handoff,
             batch_id=q["batch_id"],
@@ -228,11 +234,29 @@ def answer_round(handoff: Path, out: Path, round_no: int, texts: dict[str, str])
         )
 
 
-def run_round0(review: dict[str, Path], texts: dict[str, str], bodies: dict[str, str]) -> dict:
+def run_round(
+    review: dict[str, Path], round_no: int, texts: dict[str, str], bodies: dict[str, str]
+) -> dict:
+    """One round end to end: exported into its own handoff, answered, imported."""
     out = review["out"]
-    R.export_round(out, review["handoff"], 0, load_harvest(review["harvest"]))
-    answer_round(review["handoff"], out, 0, texts)
-    return R.import_round(out, 0, Q.Library(REPO, out / "pages"), pages_for(out / "pages", bodies))
+    handoff = out.parent / f"handoff-r{round_no}"
+    R.export_round(out, handoff, round_no, load_harvest(review["harvest"]))
+    answer_round(handoff, out, round_no, texts)
+    pages = out / "pages"
+    return R.import_round(out, round_no, Q.Library(REPO, pages), pages_for(pages, bodies))
+
+
+def run_round0(review: dict[str, Path], texts: dict[str, str], bodies: dict[str, str]) -> dict:
+    return run_round(review, 0, texts, bodies)
+
+
+def move_baltic(review: dict[str, Path]) -> dict[str, Any]:
+    """A fresh export in which WD1 has moved the Baltic Sea Anomaly's point."""
+    rows = sites()
+    rows[0]["lat"] = 55.0
+    rows[0]["premise"] = premise(rows[0])
+    write_export(review["out"], rows, at="t1")
+    return rows[0]
 
 
 # ------------------------------------------------------------------------------ the funnel
@@ -299,6 +323,8 @@ class TestTheAnswers:
             (not_a_site([(WIKI, "a")]), "2 websites"),
             (not_a_site([(WIKI, "a"), (WIKI, "b")]), "2 websites"),
             (not_a_site([(WIKI, "a"), (WIKIDATA, "b")]), "Wikimedia"),
+            (not_a_site([(WIKI, "a"), ("https://www.wikiwand.com/en/X", "b")]), "Wikimedia"),
+            (SITE_WITH_QUOTE, "a site answer carries no quotes"),
         ],
     )  # fmt: skip
     def test_an_answer_out_of_shape(self, text: str, problem: str) -> None:
@@ -316,10 +342,22 @@ class TestTheAnswers:
             ("https://www.abc.net.au/news/x", "abc.net.au"),
             ("https://www.britannica.com/place/x", "britannica.com"),
             ("https://whc.unesco.org/en/list/1", "unesco.org"),
+            # copies of Wikipedia: its text, so no second website
+            ("https://www.wikiwand.com/en/articles/Baltic_Sea_anomaly", R.WIKIMEDIA),
+            ("https://dbpedia.org/page/Baltic_Sea_anomaly", R.WIKIMEDIA),
+            ("https://www.wikizero.com/en/Baltic_Sea_anomaly", R.WIKIMEDIA),
+            ("https://alchetron.com/Baltic-Sea-anomaly", R.WIKIMEDIA),
+            ("https://en-academic.com/dic.nsf/enwiki/123", R.WIKIMEDIA),
+            ("https://wikimili.com/en/Baltic_Sea_anomaly", R.WIKIMEDIA),
         ],
     )
     def test_the_website_of_a_url(self, url: str, site: str) -> None:
         assert R.website(url) == site
+
+    def test_the_prompt_says_what_a_site_answer_and_a_mirror_are(self) -> None:
+        prompt = R.prompt_for(sites()[0], "Q123")
+        assert '"quotes" is []' in prompt and "Wikiwand" in prompt
+        assert R.PROMPT_ID == "scope-nonsite-v2"
 
 
 # ------------------------------------------------------------------------------ the rounds
@@ -353,9 +391,73 @@ class TestTheRounds:
         with pytest.raises(R.ScopeReviewError, match="exported already"):
             R.export_round(review["out"], review["out"].parent / "other", 0, harvest)
 
-    def test_rounds_run_up_to_two(self, review) -> None:
-        with pytest.raises(R.ScopeReviewError, match="rounds run"):
-            R.export_round(review["out"], review["handoff"], 3, load_harvest(review["harvest"]))
+    def test_rounds_run_in_order(self, review) -> None:
+        harvest = load_harvest(review["harvest"])
+        with pytest.raises(R.ScopeReviewError, match="count from 0"):
+            R.export_round(review["out"], review["handoff"], -1, harvest)
+        run_round0(review, {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, "no")])}, {})
+        with pytest.raises(R.ScopeReviewError, match="round 1 was never exported"):
+            R.export_round(review["out"], review["out"].parent / "handoff-r2", 2, harvest)
+
+    def test_a_funnel_that_asks_nothing_is_refused(self, tmp_path: Path) -> None:
+        write_export(tmp_path / "out", [r for r in sites() if r["id"] in (STONEHENGE, MUNGO)])
+        write_harvest(tmp_path / "h")
+        with pytest.raises(R.ScopeReviewError, match="asks nothing"):
+            R.export_round(tmp_path / "out", tmp_path / "ho", 0, load_harvest(tmp_path / "h"))
+        assert not list((tmp_path / "out").glob("*_R0.*")) and not (tmp_path / "ho").exists()
+
+    def test_a_round_that_asks_nothing_is_refused_before_it_writes(self, review) -> None:
+        """Round 0 answered `site` throughout: round 1 has nothing to re-ask. It writes no file, so
+        the plan is not stopped by a round that was exported but never imported."""
+        run_round0(review, {}, {})
+        handoff = review["out"].parent / "handoff-r1"
+        with pytest.raises(R.ScopeReviewError, match="asks nothing"):
+            R.export_round(review["out"], handoff, 1, load_harvest(review["harvest"]))
+        files = R.round_files(review["out"], 1)
+        assert not any(p.exists() for p in (files.questions, files.snapshot, files.record))
+        assert not handoff.exists()
+        assert R.decisions(review["out"]) == {}
+        assert R.write_wave(review["out"], WAVE, built_at="x")["o7_reinstated"] == 1
+
+    def test_an_uncounted_answer_is_asked_three_times_at_most(self, review) -> None:
+        """The first ask and two re-asks at one premise, as the acceptance judges re-ask."""
+        uncounted = {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, "not on the page")])}
+        bodies = {WIKI: WIKI_TEXT, NEWS: NEWS_TEXT}
+        assert R.MAX_ASKS == 3
+        for round_no in range(R.MAX_ASKS):
+            result = run_round(review, round_no, uncounted, bodies)
+            assert result["tally"]["not_a_site (not counted)"] == 1
+        with pytest.raises(R.ScopeReviewError, match="asks nothing"):
+            R.export_round(
+                review["out"],
+                review["out"].parent / "handoff-r3",
+                3,
+                load_harvest(review["harvest"]),
+            )
+
+    def test_a_counted_answer_whose_entry_moved_is_asked_again(self, review) -> None:
+        """WD1 moves points in parallel: an answer about the old entry is none about the new."""
+        counted_baltic(review)
+        move_baltic(review)
+        handoff = review["out"].parent / "handoff-r1"
+        record = R.export_round(review["out"], handoff, 1, load_harvest(review["harvest"]))
+        assert record["questions"] == 1 and record["signals"] == {"reask-moved": 1}
+        [line] = OH.manifest(handoff)
+        assert line["label"] == BALTIC
+        assert "latitude 55.0" in (handoff / line["prompt_path"]).read_text(encoding="utf-8")
+
+    def test_a_retired_site_is_not_asked_again(self, review) -> None:
+        run_round0(review, {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, "no")])}, {})
+        rows = sites()
+        rows[0]["scope_status"] = "retired"
+        write_export(review["out"], rows, at="t1")
+        with pytest.raises(R.ScopeReviewError, match="asks nothing"):
+            R.export_round(
+                review["out"],
+                review["out"].parent / "handoff-r1",
+                1,
+                load_harvest(review["harvest"]),
+            )
 
     def test_the_brief_names_the_batch_s_files_and_the_shape_check(self, review) -> None:
         R.export_round(review["out"], review["handoff"], 0, load_harvest(review["harvest"]))
@@ -381,7 +483,7 @@ class TestTheRounds:
             {WIKI: WIKI_TEXT, NEWS: NEWS_TEXT},
         )
         assert result["tally"] == {"not_a_site": 1, "site": 3}
-        rows = {r["site_id"]: r for r in R._read_jsonl(R.round_files(review["out"], 0).answers)}
+        rows = {r["site_id"]: r for r in read_jsonl(R.round_files(review["out"], 0).answers)}
         assert rows[BALTIC]["counted"] and [q["outcome"] for q in rows[BALTIC]["quotes"]] == [
             Q.FOUND,
             Q.FOUND,
@@ -394,7 +496,7 @@ class TestTheRounds:
             {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, "a paraphrase of the page")])},
             {WIKI: WIKI_TEXT, NEWS: NEWS_TEXT},
         )
-        rows = {r["site_id"]: r for r in R._read_jsonl(R.round_files(review["out"], 0).answers)}
+        rows = {r["site_id"]: r for r in read_jsonl(R.round_files(review["out"], 0).answers)}
         assert not rows[BALTIC]["counted"]
         assert [q["outcome"] for q in rows[BALTIC]["quotes"]] == [Q.FOUND, Q.NOT_FOUND]
 
@@ -404,7 +506,7 @@ class TestTheRounds:
             {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, NEWS_TEXT)])},
             {WIKI: WIKI_TEXT},
         )
-        rows = {r["site_id"]: r for r in R._read_jsonl(R.round_files(review["out"], 0).answers)}
+        rows = {r["site_id"]: r for r in read_jsonl(R.round_files(review["out"], 0).answers)}
         assert not rows[BALTIC]["counted"]
         assert rows[BALTIC]["quotes"][1]["outcome"] == Q.FETCH_FAILED
 
@@ -416,7 +518,7 @@ class TestTheRounds:
             {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (other, WIKI_TEXT), (NEWS, "not there")])},
             {WIKI: WIKI_TEXT, other: WIKI_TEXT, NEWS: NEWS_TEXT},
         )
-        rows = {r["site_id"]: r for r in R._read_jsonl(R.round_files(review["out"], 0).answers)}
+        rows = {r["site_id"]: r for r in read_jsonl(R.round_files(review["out"], 0).answers)}
         assert not rows[BALTIC]["counted"]
 
     def test_the_import_renders_from_the_round_s_snapshot(self, review) -> None:
@@ -445,6 +547,21 @@ class TestTheRounds:
         with pytest.raises(R.ScopeReviewError, match="does not validate"):
             R.import_round(out, 0, Q.Library(REPO, out / "pages"), pages_for(out / "p", {}))
 
+    def test_a_site_answer_with_a_quote_is_refused_by_the_shape_check(self, review) -> None:
+        R.export_round(review["out"], review["handoff"], 0, load_harvest(review["harvest"]))
+        problem = R.check_answer(review["out"], 0, "r0-001", KHORTYTSIA, SITE_WITH_QUOTE)
+        assert problem is not None and "no quotes" in problem
+
+    def test_an_answer_out_of_shape_stops_the_import_and_names_the_remedy(self, review) -> None:
+        """An answer recorded past `check-answer`: named with the way out, never an AuditError
+        about a page nobody collected."""
+        out = review["out"]
+        R.export_round(out, review["handoff"], 0, load_harvest(review["harvest"]))
+        answer_round(review["handoff"], out, 0, {KHORTYTSIA: SITE_WITH_QUOTE})
+        with pytest.raises(R.ScopeReviewError, match=rf"1 answer\(s\).*delete.*{KHORTYTSIA}"):
+            R.import_round(out, 0, Q.Library(REPO, out / "pages"), pages_for(out / "pages", {}))
+        assert not R.round_files(out, 0).answers.exists()
+
     def test_round1_asks_only_what_round0_left_uncounted(self, review) -> None:
         run_round0(
             review,
@@ -456,7 +573,7 @@ class TestTheRounds:
         )
         handoff = review["out"].parent / "handoff-r1"
         record = R.export_round(review["out"], handoff, 1, load_harvest(review["harvest"]))
-        assert record["questions"] == 1
+        assert record["questions"] == 1 and record["signals"] == {"reask-uncounted": 1}
         assert [m["label"] for m in OH.manifest(handoff)] == [BALTIC]
 
     def test_a_round_exported_but_not_imported_stops_the_plan(self, review) -> None:
@@ -557,14 +674,37 @@ class TestThePlan:
         )
         assert BALTIC not in plan.sites
         assert [(v.site_id, v.reason) for v in plan.skipped] == [(BALTIC, "premise-moved")]
+        assert "export-round" in plan.skipped[0].note
 
-    def test_a_site_counted_in_two_rounds_is_refused(self, review) -> None:
+    def test_the_latest_answer_decides(self, review) -> None:
+        """Counted on the old entry, asked again on the moved one and answered `site`: the new
+        answer decides, so the site is not retired."""
         counted_baltic(review)
-        files0, files1 = R.round_files(review["out"], 0), R.round_files(review["out"], 1)
-        files1.record.write_text("{}", encoding="utf-8")
-        files1.answers.write_text(files0.answers.read_text(encoding="utf-8"), encoding="utf-8")
-        with pytest.raises(R.ScopeReviewError, match="two rounds"):
-            R.decisions(review["out"])
+        move_baltic(review)
+        run_round(review, 1, {}, {})
+        assert BALTIC not in R.decisions(review["out"])
+        export = R.read_export(R.export_path(review["out"]))
+        plan = R.build_plan(
+            export, R.decisions(review["out"]), built_at="x", lane=L.scope_review_lane(WAVE)
+        )
+        assert BALTIC not in plan.sites and plan.skipped == ()
+
+    def test_a_moved_entry_counted_again_is_written_on_the_new_answer(self, review) -> None:
+        counted_baltic(review)
+        moved = move_baltic(review)
+        run_round(
+            review,
+            1,
+            {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, NEWS_TEXT)])},
+            {WIKI: WIKI_TEXT, NEWS: NEWS_TEXT},
+        )
+        decided = R.decisions(review["out"])
+        assert decided[BALTIC]["round"] == 1
+        export = R.read_export(R.export_path(review["out"]))
+        plan = R.build_plan(export, decided, built_at="x", lane=L.scope_review_lane(WAVE))
+        status = {(c.site_id, c.column): c for c in plan.changes}[(BALTIC, "scope_status")]
+        assert status.new_value == "retired" and status.premise == moved["premise"]
+        assert plan.skipped == ()
 
     def test_a_wave_is_its_first_hundred_sites(self, tmp_path: Path) -> None:
         rows = [

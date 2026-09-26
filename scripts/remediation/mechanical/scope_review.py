@@ -10,12 +10,20 @@ Opus agent through the handoff, with sources - never by a pattern: the agent res
 and answers `site` or `not_a_site` with a kind (`natural_formation`, `modern`, `object`,
 `legend_or_hoax`), a reason and verbatim quotes. A `not_a_site` counts only when its quotes
 found word for word on the fetched pages come from at least `MIN_SITES` different websites
-(`opus_audit/quotes.py`, the one quote check; the Wikimedia projects count as one website, and
-the project's own site is never fetched) - so at least `MIN_SITES` quotes are found. A counted `not_a_site` retires the site
-with the reason `E3: not an archaeological site (<kind>): <reason>`; a `site` writes nothing; a
-`not_a_site` that does not count writes nothing and goes to the next round (`export-round --round
-N` asks the ones round N-1 left uncounted again, the same prompt to a new agent, as the acceptance
-judges re-ask; at most `MAX_ROUND`).
+(`opus_audit/quotes.py`, the one quote check; the Wikimedia projects and the known copies of
+Wikipedia count as one website, and the project's own site is never fetched) - so at least
+`MIN_SITES` quotes are found. A `site` carries no quotes (nothing is written on it, so nothing of
+it is checked). A counted `not_a_site` retires the site with the reason `E3: not an archaeological
+site (<kind>): <reason>`; a `site` writes nothing; a `not_a_site` that does not count writes
+nothing.
+
+**Rounds.** Round 0 asks the funnel's candidates. Round N (`export-round --round N`, every earlier
+round imported) asks again, each from the current export and to a new agent: a site whose latest
+answer is a `not_a_site` that did not count - the same prompt, as the acceptance judges re-ask, at
+most `MAX_ASKS` times at one premise - and a site whose latest answer is a counted `not_a_site`
+about an entry that has moved since (WD1 corrects name, type, point, country and dates in
+parallel: an answer about the old entry says nothing about the new one). A round with nothing to
+ask is refused before it writes a file. The latest answer of a site decides.
 
 Which entries are asked is a funnel - it chooses the questions, never an answer - and every
 candidate names the signals that put it there:
@@ -43,7 +51,8 @@ Files (`output/remediation/mechanical_scope_review/`): `export/export.jsonl` (re
 current snapshot), per round `QUESTIONS_R<n>.jsonl`, `SNAPSHOT_R<n>.jsonl` (the export its prompts
 were rendered from), `EXPORT_R<n>.json` and `NONSITE_R<n>.jsonl` (every answer, counted or not,
 with each quote's outcome and the premise it judged), `pages/` (every cited page, fetched once);
-per wave `<label>/PLAN.jsonl`, `SKIPPED.jsonl`, `PLAN.md`, `ROLLBACK.sql`, `SOURCE.json`.
+per wave `<label>/PLAN.jsonl`, `SKIPPED.jsonl`, `PLAN.md`, `ROLLBACK.sql`, `SOURCE.json`. Every
+record file is written once (`served_image.state.write_text_once`).
 The runbook is `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md`.
 """
 
@@ -68,8 +77,15 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 import opus_handoff as OH  # noqa: E402
 import research_web  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
+from phase3.run import InputError, read_jsonl  # noqa: E402 - the one JSONL reader
 from served_image.precheck import Harvest, load_harvest  # noqa: E402
-from served_image.state import sha256_text  # noqa: E402
+from served_image.state import (  # noqa: E402 - the lane's one write-once rule
+    StateError,
+    json_text,
+    jsonl_text,
+    sha256_text,
+    write_text_once,
+)
 from vlm_pilot.common import extract_json  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
@@ -103,7 +119,8 @@ DEFAULT_HARVEST = REPO / "output" / "remediation" / "fields" / "harvest"
 IN_SCOPE = "in_scope"
 STAGE = "scope-nonsite"
 PER_BATCH = 12
-MAX_ROUND = 2
+#: How often an uncounted `not_a_site` is asked at one premise: the first ask and two re-asks.
+MAX_ASKS = 3
 MAX_SITES = 100
 MIN_SITES = 2
 EXCERPT = 600
@@ -150,7 +167,7 @@ NATURAL_CLASSES: Mapping[str, str] = {
 SITE, NOT_A_SITE = "site", "not_a_site"
 KINDS = ("natural_formation", "modern", "object", "legend_or_hoax")
 
-PROMPT_ID = "scope-nonsite-v1"
+PROMPT_ID = "scope-nonsite-v2"
 PROMPT = """You decide whether an entry of a map of archaeological sites is an archaeological site at all.
 
 The entry: "{name}" - site type "{site_type}", {country}; latitude {lat}, longitude {lon}.
@@ -171,8 +188,8 @@ Research the entry on the web. Return JSON only, no prose:
  "reason": "<one sentence>",
  "quotes": [{{"url": "<the page>", "quote": "<text copied word for word from that page>"}}]}}
 
-site: kind is null; quotes may be empty.
-not_a_site: kind is one of the four; give quotes from at least {min_sites} different websites that show it (the Wikipedias, Wikidata and Commons count as one website) - each copied word for word from a page you read. The pages are fetched and every quote is checked character for character (whitespace aside), so copy, never paraphrase. Prefer plain HTML pages (Wikipedia, a museum, a university, a heritage register); a PDF may not be readable, and some registers refuse automated requests.
+site: kind is null and "quotes" is [] - a site needs no evidence here.
+not_a_site: kind is one of the four; give quotes from at least {min_sites} different websites that show it (the Wikipedias, Wikidata and Commons count as one website, and so do copies of Wikipedia such as Wikiwand, DBpedia or WikiZero) - each copied word for word from a page you read. The pages are fetched and every quote is checked character for character (whitespace aside), so copy, never paraphrase. Prefer plain HTML pages (Wikipedia, a museum, a university, a heritage register); a PDF may not be readable, and some registers refuse automated requests.
 """
 
 
@@ -302,28 +319,70 @@ def round_files(out: Path, round_no: int) -> RoundFiles:
     )
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        raise ScopeReviewError(f"{path} does not exist")
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+def exported_rounds(out: Path) -> int:
+    """How many rounds were exported: rounds 0..n-1 have their record."""
+    n = 0
+    while round_files(out, n).record.is_file():
+        n += 1
+    return n
 
 
-def _write_once(path: Path, text: str) -> None:
-    if path.exists():
-        raise ScopeReviewError(f"{path} exists - a round's or a wave's files are written once")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
+def answered(out: Path, rounds: int) -> dict[str, list[dict[str, Any]]]:
+    """Every answer of rounds 0..rounds-1, by site, in round order. Each of those rounds must be
+    exported and imported - a round not imported stops everything that reads the answers."""
+    history: dict[str, list[dict[str, Any]]] = {}
+    for round_no in range(rounds):
+        files = round_files(out, round_no)
+        if not files.record.is_file():
+            raise ScopeReviewError(f"round {round_no} was never exported - rounds run in order")
+        if not files.answers.is_file():
+            raise ScopeReviewError(f"round {round_no} is exported but not imported")
+        for row in read_jsonl(files.answers):
+            history.setdefault(row["site_id"], []).append(row)
+    return history
 
 
-def _jsonl(rows: Sequence[Mapping[str, Any]]) -> str:
-    return "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in rows)
+REASK_UNCOUNTED = "reask-uncounted"
+REASK_MOVED = "reask-moved"
+
+
+def reasks(
+    export: Export, history: Mapping[str, Sequence[Mapping[str, Any]]], harvest: Harvest
+) -> list[Candidate]:
+    """What round N asks again, in site order, each with its reason: a latest answer that is an
+    uncounted `not_a_site` (at most `MAX_ASKS` asks at the entry's current premise), or a counted
+    `not_a_site` about an entry that has moved since. A retired site is asked nothing."""
+    by_id = export.by_id()
+    out: list[Candidate] = []
+    for sid, rows in sorted(history.items()):
+        latest = rows[-1]
+        if latest["decision"] != NOT_A_SITE:
+            continue
+        site = by_id.get(sid)
+        if site is None:
+            raise ScopeReviewError(f"{sid} was answered but is not in the export")
+        if site["scope_status"] == RETIRED:
+            continue
+        if latest["counted"]:
+            if site["premise"] == latest["premise"]:
+                continue
+            reason = REASK_MOVED
+        else:
+            if sum(1 for r in rows if r["premise"] == site["premise"]) >= MAX_ASKS:
+                continue
+            reason = REASK_UNCOUNTED
+        if sid not in harvest.qids:
+            raise ScopeReviewError(f"{sid} is not in the harvest - it must cover every shown site")
+        out.append(Candidate(sid, (reason,), harvest.qids[sid]))
+    return out
 
 
 def export_round(out: Path, handoff: Path, round_no: int, harvest: Harvest) -> dict[str, Any]:
-    """Round 0: every funnel candidate. Round N: every `not_a_site` of round N-1 that did not
-    count. The prompts are rendered from the current export, kept as the round's snapshot."""
-    if not 0 <= round_no <= MAX_ROUND:
-        raise ScopeReviewError(f"round {round_no}: rounds run 0..{MAX_ROUND}")
+    """Round 0: every funnel candidate. Round N: what the answers of rounds 0..N-1 leave to ask
+    again (`reasks`). The prompts are rendered from the current export, kept as the round's
+    snapshot. A round with nothing to ask is refused before any file is written."""
+    if round_no < 0:
+        raise ScopeReviewError(f"round {round_no}: rounds count from 0")
     files = round_files(out, round_no)
     for path in (files.questions, files.snapshot, files.record):
         if path.exists():
@@ -336,13 +395,16 @@ def export_round(out: Path, handoff: Path, round_no: int, harvest: Harvest) -> d
     if round_no == 0:
         asked = candidates(export, harvest)
     else:
-        before = round_files(out, round_no - 1)
-        previous = {c["site_id"]: c for c in _read_jsonl(before.questions)}
-        asked = [
-            Candidate(r["site_id"], tuple(previous[r["site_id"]]["signals"]), r["qid"])
-            for r in _read_jsonl(before.answers)
-            if r["decision"] == NOT_A_SITE and not r["counted"]
-        ]
+        asked = reasks(export, answered(out, round_no), harvest)
+    if not asked:
+        raise ScopeReviewError(
+            f"round {round_no} asks nothing - "
+            + (
+                "the funnel finds no candidate"
+                if round_no == 0
+                else "no answer is left to ask again; go on with `write`"
+            )
+        )
     questions = []
     for n, cand in enumerate(asked):
         batch_id = f"r{round_no}-{n // PER_BATCH + 1:03d}"
@@ -358,8 +420,8 @@ def export_round(out: Path, handoff: Path, round_no: int, harvest: Harvest) -> d
         questions.append(
             asdict(cand) | {"batch_id": batch_id, "prompt_sha256": OH.prompt_sha256(prompt)}
         )
-    _write_once(files.snapshot, text)
-    _write_once(files.questions, _jsonl(questions))
+    write_text_once(files.snapshot, text)
+    write_text_once(files.questions, jsonl_text(questions))
     signals: dict[str, int] = {}
     for q in questions:
         for signal in q["signals"]:
@@ -375,7 +437,7 @@ def export_round(out: Path, handoff: Path, round_no: int, harvest: Harvest) -> d
         "batches": len({q["batch_id"] for q in questions}),
         "signals": signals,
     }
-    _write_once(files.record, json.dumps(record, indent=1, sort_keys=True) + "\n")
+    write_text_once(files.record, json_text(record))
     return record
 
 
@@ -412,6 +474,10 @@ def parse_answer(text: str) -> Answer:
         for q in quotes
     ):
         raise ScopeReviewError("'quotes' must be a list of {url, quote} with an http(s) url")
+    if decision == SITE and quotes:
+        raise ScopeReviewError(
+            "a site answer carries no quotes: 'quotes' must be [] (only a not_a_site is checked)"
+        )
     if decision == NOT_A_SITE:
         sites = {website(q["url"]) for q in quotes}
         if len(sites) < MIN_SITES:
@@ -425,7 +491,8 @@ def parse_answer(text: str) -> Answer:
 #: Second-level labels under which a country code registers names (bbc.co.uk, abc.net.au).
 _SECOND_LEVEL = frozenset({"ac", "co", "com", "edu", "gov", "net", "org", "or", "ne", "go"})
 #: The Wikimedia projects: one editorial family, so one website for the two-website rule - a
-#: Wikipedia article and its Wikidata item are not two independent sources.
+#: Wikipedia article and its Wikidata item are not two independent sources. The copies of
+#: Wikipedia belong to it too: their text is Wikipedia's, so a quote there is a Wikipedia quote.
 WIKIMEDIA = "wikimedia"
 _WIKIMEDIA_DOMAINS = frozenset(
     {
@@ -440,6 +507,19 @@ _WIKIMEDIA_DOMAINS = frozenset(
         "wikiquote.org",
         "wikiversity.org",
         "mediawiki.org",
+        # copies and forks of Wikipedia's text
+        "wikiwand.com",
+        "dbpedia.org",
+        "wikizero.com",
+        "wikimili.com",
+        "wiki2.org",
+        "alchetron.com",
+        "en-academic.com",
+        "infogalactic.com",
+        "everybodywiki.com",
+        "justapedia.org",
+        "wikiless.org",
+        "wikiwix.com",
     }
 )
 
@@ -464,7 +544,7 @@ def _record(out: Path, round_no: int) -> dict[str, Any]:
 def check_answer(out: Path, round_no: int, batch_id: str, label: str, text: str) -> str | None:
     """The shape problem of an answer, or None - no page is fetched, no quote checked."""
     asked = {
-        (q["batch_id"], q["site_id"]) for q in _read_jsonl(round_files(out, round_no).questions)
+        (q["batch_id"], q["site_id"]) for q in read_jsonl(round_files(out, round_no).questions)
     }
     if (batch_id, label) not in asked:
         raise ScopeReviewError(f"{batch_id}/{label} is no question of round {round_no}")
@@ -506,7 +586,7 @@ When every question of the batch is recorded, report how many answers you record
 def brief(out: Path, round_no: int, batch_id: str) -> str:
     handoff = Path(_record(out, round_no)["handoff"])
     count = sum(
-        1 for q in _read_jsonl(round_files(out, round_no).questions) if q["batch_id"] == batch_id
+        1 for q in read_jsonl(round_files(out, round_no).questions) if q["batch_id"] == batch_id
     )
     if not count:
         raise ScopeReviewError(f"{batch_id} is no batch of round {round_no}")
@@ -523,8 +603,10 @@ def brief(out: Path, round_no: int, batch_id: str) -> str:
 
 
 def import_round(out: Path, round_no: int, library: Q.Library, collect: Any) -> dict[str, Any]:
-    """Every answer of a round: validated, re-prompted from the round's snapshot, parsed and, for a
-    `not_a_site`, every cited page fetched once (`collect`) and every quote checked (`library`)."""
+    """Every answer of a round: validated, re-prompted from the round's snapshot, parsed with the
+    parser `check-answer` runs, every cited page fetched once (`collect`) and every quote checked
+    (`library`) - only a `not_a_site` carries quotes. An answer out of shape stops the import, all
+    of them named, with nothing written."""
     record = _record(out, round_no)
     files = round_files(out, round_no)
     snapshot_text = files.snapshot.read_text(encoding="utf-8")
@@ -537,17 +619,24 @@ def import_round(out: Path, round_no: int, library: Q.Library, collect: Any) -> 
         raise ScopeReviewError(f"{handoff} does not validate: {validation.to_dict()}")
     by_id = snapshot.by_id()
     parsed: list[tuple[dict[str, Any], Answer, OH.Answer]] = []
-    for q in _read_jsonl(files.questions):
+    problems: list[str] = []
+    for q in read_jsonl(files.questions):
         prompt = prompt_for(by_id[q["site_id"]], q["qid"])
         if OH.prompt_sha256(prompt) != q["prompt_sha256"]:
             raise ScopeReviewError(f"{q['site_id']}: the prompt is not the one the round asked")
         answer = OH.read_answer(
             handoff, batch_id=q["batch_id"], stage=STAGE, label=q["site_id"], prompt=prompt
         )
-        parsed.append((q, parse_answer(answer.text), answer))
-    collect(
-        [quote["url"] for _q, a, _r in parsed if a.decision == NOT_A_SITE for quote in a.quotes]
-    )
+        try:
+            parsed.append((q, parse_answer(answer.text), answer))
+        except ScopeReviewError as exc:
+            problems.append(f"{q['batch_id']}/{q['site_id']}: {exc}")
+    if problems:
+        raise ScopeReviewError(
+            f"{len(problems)} answer(s) are not in shape - delete them from {handoff} and have "
+            "them answered again: " + "; ".join(problems[:5])
+        )
+    collect([quote["url"] for _q, a, _r in parsed for quote in a.quotes])
     rows = []
     for q, a, raw in parsed:
         results = [
@@ -576,7 +665,7 @@ def import_round(out: Path, round_no: int, library: Q.Library, collect: Any) -> 
                 "prompt_sha256": q["prompt_sha256"],
             }
         )
-    _write_once(files.answers, _jsonl(rows))
+    write_text_once(files.answers, jsonl_text(rows))
     tally: dict[str, int] = {}
     for r in rows:
         key = f"{r['decision']}{'' if r['counted'] else ' (not counted)'}"
@@ -586,21 +675,15 @@ def import_round(out: Path, round_no: int, library: Q.Library, collect: Any) -> 
 
 # ------------------------------------------------------------------------------ the plan
 def decisions(out: Path) -> dict[str, dict[str, Any]]:
-    """The counted `not_a_site` of every imported round, by site; a site counted twice is
-    refused. A round exported but not yet imported stops the plan."""
-    out_rows: dict[str, dict[str, Any]] = {}
-    for round_no in range(MAX_ROUND + 1):
-        files = round_files(out, round_no)
-        if not files.record.is_file():
-            break
-        if not files.answers.is_file():
-            raise ScopeReviewError(f"round {round_no} is exported but not imported")
-        for row in _read_jsonl(files.answers):
-            if row["decision"] == NOT_A_SITE and row["counted"]:
-                if row["site_id"] in out_rows:
-                    raise ScopeReviewError(f"{row['site_id']} is decided in two rounds")
-                out_rows[row["site_id"]] = row
-    return out_rows
+    """The sites whose latest answer is a counted `not_a_site`, by site - a later round's answer
+    about a moved entry replaces the earlier one. A round exported but not imported stops the
+    plan."""
+    history = answered(out, exported_rounds(out))
+    return {
+        sid: rows[-1]
+        for sid, rows in sorted(history.items())
+        if rows[-1]["decision"] == NOT_A_SITE and rows[-1]["counted"]
+    }
 
 
 def reinstatements(export: Export) -> list[tuple[dict[str, Any], dict[str, Any]]]:
@@ -680,7 +763,7 @@ def build_plan(
                     site,
                     "premise-moved",
                     f"the entry the answer judged ({row['premise']}) is now {site['premise']}: "
-                    "ask it again in a new review",
+                    "the next round asks it again (`export-round --round <next>`)",
                 )
             )
             continue
@@ -775,7 +858,7 @@ def write_wave(out: Path, wave: str, *, built_at: str) -> dict[str, Any]:
             lines += [f"  * {e['source']}: {e['quote']}" for e in change.evidence]
     (target / "PLAN.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     source = {"export_sha256": export.sha256, "exported_at": export.exported_at, "wave": wave}
-    _write_once(target / SOURCE, json.dumps(source, indent=1, sort_keys=True) + "\n")
+    write_text_once(target / SOURCE, json_text(source))
     return dict(plan.counters) | {"lane": lane.name, "dir": str(target)}
 
 
@@ -850,7 +933,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             result = write_wave(out, args.wave, built_at=_now())
             print(json.dumps(result, indent=1, sort_keys=True))
-    except (PlanError, OH.HandoffError, Q.AuditError) as exc:
+    except (
+        PlanError,
+        StateError,
+        OH.HandoffError,
+        Q.AuditError,
+        FileNotFoundError,
+        InputError,
+    ) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
     return 0

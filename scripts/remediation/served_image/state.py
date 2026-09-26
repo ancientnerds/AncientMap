@@ -35,7 +35,7 @@ import hashlib
 import json
 import re
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -110,12 +110,27 @@ def read_production() -> dict[str, Any]:
 
 def write_read(path: Path, data: Mapping[str, Any]) -> str:
     """READ.json, written once per run directory. Returns its sha256."""
+    return write_text_once(path, json_text(data))
+
+
+def write_text_once(path: Path, text: str) -> str:
+    """A new file holding `text`; an existing one is refused, never replaced - the one write rule
+    of the lane's record files (the read, the pre-check, a stage's questions and answers) and of
+    the scope review's rounds and waves. Returns the text's sha256."""
     if path.exists():
-        raise StateError(f"{path} exists - a run's read is never replaced; use a new run directory")
-    text = json.dumps(data, ensure_ascii=False, sort_keys=True, indent=1) + "\n"
+        raise StateError(f"{path} exists - a recorded file is written once and never replaced")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
     return sha256_text(text)
+
+
+def jsonl_text(rows: Iterable[Mapping[str, Any]]) -> str:
+    """One JSON object per line, keys sorted, LF - the form every record file of the lane has."""
+    return "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in rows)
+
+
+def json_text(data: Mapping[str, Any]) -> str:
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, indent=1) + "\n"
 
 
 def sha256_text(text: str) -> str:
