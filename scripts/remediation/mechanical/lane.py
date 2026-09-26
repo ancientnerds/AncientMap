@@ -1325,23 +1325,32 @@ NAME_L5 = Lane(
     write_invariant=_NAME_KEY_DIFFERS,
 )
 _NAME_STAMP = sql_literal(NAME_L5.run_stamp)
+#: The name lane's journal checks. A site journals one row (a rename that changes only case or
+#: accents keeps its key, and a cell that does not change is not written) or two (the name and its
+#: key): a key row always has the name row whose key it is, and a name row whose key moved always
+#: has its key row.
+NAME_L5_JOURNAL_METRICS: tuple[tuple[str, str], ...] = (
+    (
+        "journal rows for this run whose key is not the key of the name it wrote",
+        f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
+        "l.column_name = 'name_normalized' AND NOT EXISTS (SELECT 1 FROM "
+        f"remediation_change_log n WHERE n.run_stamp = {_NAME_STAMP} AND n.row_pk = l.row_pk "
+        f"AND n.column_name = 'name' AND {site_key_sql('n.new_value')} = l.new_value)",
+    ),
+    (
+        "journal rows for this run renaming a site whose key moved without its key row",
+        f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
+        f"l.column_name = 'name' AND {site_key_sql('l.old_value')} <> "
+        f"{site_key_sql('l.new_value')} AND NOT EXISTS (SELECT 1 FROM remediation_change_log k "
+        f"WHERE k.run_stamp = {_NAME_STAMP} AND k.row_pk = l.row_pk "
+        "AND k.column_name = 'name_normalized')",
+    ),
+)
 NAME_L5_READBACK = journal_readback(
     NAME_L5,
     [
         (_NAME_KEY_DIFFERS.metric, _CURATED_ROWS + _NAME_KEY_DIFFERS.predicate),
-        (
-            "journal rows for this run whose key is not the key of the name it wrote",
-            f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
-            "l.column_name = 'name_normalized' AND NOT EXISTS (SELECT 1 FROM "
-            f"remediation_change_log n WHERE n.run_stamp = {_NAME_STAMP} AND n.row_pk = l.row_pk "
-            f"AND n.column_name = 'name' AND {site_key_sql('n.new_value')} = l.new_value)",
-        ),
-        (
-            "journal rows for this run naming a site whose name and key did not move together",
-            f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND (SELECT "
-            f"count(*) FROM remediation_change_log m WHERE m.run_stamp = {_NAME_STAMP} AND "
-            "m.row_pk = l.row_pk) <> 2",
-        ),
+        *NAME_L5_JOURNAL_METRICS,
     ],
 )
 LANES[NAME_L5.name] = NAME_L5

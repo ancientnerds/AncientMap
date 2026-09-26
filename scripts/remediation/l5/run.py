@@ -13,7 +13,10 @@ In order:
     opus_handoff.py validate --dir DIR      every question answered, in shape, by Opus
     run.py import --round R                 fetch, quote-check, resolve, decide; DECISIONS.jsonl
     run.py export-reask --handoff DIR2      a new round for the held sites, each with its reason
-    run.py plan                             read-only live read; the link steps and the name lane
+                                            (after the newest round's import; at most r3)
+    run.py plan                             read-only live read, after the newest round's import;
+                                            the link steps, the name lane, SKIPPED.jsonl and
+                                            UNTRUSTED_LINKS.jsonl (the links WD1 must not trust)
     run.py step COMMAND --step N            check | rehearse | probe-guards | apply | verify |
                                             rehearse-rollback, per link step (`links.py`)
     apply.py --lane name-l5 --emit ...      the name lane, like every mechanical lane
@@ -48,6 +51,7 @@ from l5 import population as POP  # noqa: E402
 from l5.decide import DECIDED  # noqa: E402
 
 OUT = POP.OUT
+UNTRUSTED_FILE = "UNTRUSTED_LINKS.jsonl"
 
 
 def _print(payload: Any) -> None:
@@ -67,17 +71,23 @@ def cmd_population() -> dict[str, Any]:
 
 
 def cmd_plan() -> dict[str, Any]:
-    decisions = [d for d in H.load_decisions(OUT) if d["status"] == DECIDED]
+    H.latest_imported(OUT, "the plan")
+    every = H.load_decisions(OUT)
+    decisions = [d for d in every if d["status"] == DECIDED]
     read = POP.load_read(OUT)
     live = L5P.read_live(decisions, POP.PINNED_NAMES, MP.psql_json_reader())
     built = L5P.build(decisions, read["sites"], live)
+    # everything that can refuse is computed before the first file is written
     steps = L5P.steps(built.links)
+    names = L5P.name_plan(built, H.now_utc()) if built.names else None
+    untrusted = L5P.untrusted(POP.load_population(OUT), every, built.skipped, str(read["read_at"]))
     for number, rows in enumerate(steps, start=1):
         L5P.write_step(L5P.step_wave(number), rows)
-    if built.names:
-        L5P.write_names(L5P.name_plan(built, H.now_utc()), A.lane_dir(NAME_L5))
+    if names is not None:
+        L5P.write_names(names, A.lane_dir(NAME_L5))
     H.write_jsonl(OUT / "SKIPPED.jsonl", built.skipped)
-    counts = built.counts()
+    H.write_jsonl(OUT / UNTRUSTED_FILE, untrusted)
+    counts = {**built.counts(), "untrusted_links": len(untrusted)}
     (OUT / "PLAN_COUNTS.json").write_text(
         json.dumps(counts, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -126,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
                 {"round": record.name, "sites": len(record.sites), "batches": len(record.batches)}
             )
         elif args.command == "export-reask":
-            held = H.held_sites(OUT)
+            held = H.reask_sites(OUT)
             record = H.export_round(
                 OUT,
                 H.resolve_path(args.handoff),

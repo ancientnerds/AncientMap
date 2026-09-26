@@ -2485,14 +2485,17 @@ def render_split(
 
     `removals` is L5's form of the same transaction (HUMAN_ONLY B1-L, 2026-09-26: "sonst wird der
     falsche Link entfernt"): a planned new value may be None - the write deletes exactly that
-    external-id row, or clears `source_url` - and its reversal restores it. Three things change
+    external-id row, or clears `source_url` - and its reversal restores it. Four things change
     with it, and nothing else: the plan tables take NULL on both sides; guard 5 (no other curated
     site carries a planned item) reads the write only, because a reversal restores the state the
-    write found, an item two rows shared included; and invariant 4 (the fixed point) refuses a
-    planned site left without any external-id row while its `source_url` is still an English
-    Wikipedia article - `refresh_site_external_ids`, run daily by the prospector, would resolve
-    that URL and write the removed link back. Without `removals` the statement is wave 4's, byte
-    for byte (its delivered files are pinned).
+    write found, an item two rows shared included; the write alone also refuses one new item
+    planned for two sites (guard 6 - guard 5 reads the state before the write, so both would pass
+    it) and checks after its writes that every item it wrote is carried by exactly one curated site
+    (invariant 5); and invariant 4 (the fixed point) refuses a planned site left without any
+    external-id row while its `source_url` is still an English Wikipedia article -
+    `refresh_site_external_ids`, run daily by the prospector, would resolve that URL and write the
+    removed link back. Without `removals` the statement is wave 4's, byte for byte (its delivered
+    files are pinned).
     """
     if not rows:
         raise SystemExit("refusing to render a statement with no rows")
@@ -2575,6 +2578,30 @@ def render_split(
     if removals and reversal:
         guard5 = [
             "    -- (the write's only: a reversal restores the items the write found, shared or not)"
+        ]
+    one_site: list[str] = []
+    one_site_after: list[str] = []
+    if removals and not reversal:
+        one_site = [
+            "    -- guard 6: no item is planned for two sites (guard 5 reads the state before the",
+            "    -- write, so two planned sites given one new item would both pass it)",
+            "    SELECT count(*) INTO bad FROM (SELECT new_value FROM _ext_plan",
+            "     WHERE kind = 'wikidata_qid' AND new_value IS NOT NULL",
+            "     GROUP BY new_value HAVING count(*) > 1) d;",
+            "    IF bad > 0 THEN",
+            "        RAISE EXCEPTION 'source-url split: % item(s) are planned for more than one site', bad;",
+            "    END IF;",
+        ]
+        one_site_after = [
+            "    -- invariant 5: every item written is carried by exactly one curated site",
+            "    SELECT count(*) INTO bad FROM _ext_plan p",
+            "     WHERE p.kind = 'wikidata_qid' AND p.new_value IS NOT NULL",
+            f"       AND (SELECT count(*) FROM {TABLE} e",
+            f"              JOIN unified_sites u ON u.id = e.site_id AND u.source_id = '{CURATED}'",
+            "             WHERE e.kind = 'wikidata_qid' AND e.value = p.new_value) <> 1;",
+            "    IF bad > 0 THEN",
+            "        RAISE EXCEPTION 'source-url split: % written item(s) are not carried by exactly one curated site', bad;",
+            "    END IF;",
         ]
     fixed_point: list[str] = []
     if removals:
@@ -2682,6 +2709,7 @@ def render_split(
         "    END IF;",
         "    -- guard 5: no other curated site carries a planned item",
         *guard5,
+        *one_site,
         "    -- the source_url writes: the journal primitive, one call and one journal row each",
         "    FOR r IN SELECT * FROM _url_plan ORDER BY site_id LOOP",
         "        moved := moved + apply_remediation_change(",
@@ -2750,6 +2778,7 @@ def render_split(
         "            bad;",
         "    END IF;",
         *fixed_point,
+        *one_site_after,
         "    RAISE NOTICE 'source-url split: % row(s) changed and journalled', moved;",
         "END $$;",
         "",

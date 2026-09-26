@@ -11,7 +11,9 @@ round `r1` asks every site of the population that is asked; a re-ask round `r<n>
 whose latest answer was held, each prompt carrying why (`questions.prompt(earlier=...)`), so the
 import can rebuild each prompt exactly and refuse an answer to any other. Batches of `PER_BATCH`
 sites, one Opus agent each (O11: up to 16 agents at a time). The rounds are recorded in
-`ROUNDS.jsonl`.
+`ROUNDS.jsonl`; a round is imported once `answers/<round>.jsonl` exists. Only the newest round is
+imported (an older one would overwrite the newer decisions), a re-ask and the plan wait until it is,
+and there are at most `MAX_ROUNDS` rounds: round 1 and two re-asks.
 
 **The import** of a round writes `answers/<round>.jsonl` (every answer as decided: the verdicts,
 their quotes, each quote's outcome, the machine notes, or why it was held), merges `DECISIONS.jsonl`
@@ -54,6 +56,8 @@ PAGES_FILE = "PAGES.jsonl"
 PAGES_DIR = "pages"
 ANSWERS_DIR = "answers"
 PER_BATCH = 10
+#: Round 1 and at most two re-asks (the runbook); what is held after them stays held.
+MAX_ROUNDS = 3
 
 
 class HandoffError(ValueError):
@@ -117,6 +121,35 @@ def find_round(out: Path, name: str) -> Round:
         if r.name == name:
             return r
     raise HandoffError(f"no round {name!r} in {out / ROUNDS_FILE}")
+
+
+def imported(out: Path, name: str) -> bool:
+    return (out / ANSWERS_DIR / f"{name}.jsonl").exists()
+
+
+def latest_imported(out: Path, doing: str) -> list[Round]:
+    """The rounds, only if the newest one is imported: `doing` would otherwise read decisions
+    older than the answers already exported, and those answers could never be written."""
+    rounds = load_rounds(out)
+    if not rounds:
+        raise HandoffError(f"no round is exported yet - {doing} reads the imported answers")
+    if not imported(out, rounds[-1].name):
+        raise HandoffError(
+            f"round {rounds[-1].name} is exported but not imported - import it before {doing}"
+        )
+    return rounds
+
+
+def reask_sites(out: Path) -> dict[str, str]:
+    """The held sites a new round asks, with their reasons - once the newest round is imported,
+    and only while fewer than `MAX_ROUNDS` rounds are out."""
+    rounds = latest_imported(out, "a re-ask")
+    if len(rounds) >= MAX_ROUNDS:
+        raise HandoffError(
+            f"{len(rounds)} rounds are out: a held site is asked at most twice more - what stays "
+            "held is listed in UNTRUSTED_LINKS.jsonl by the plan"
+        )
+    return held_sites(out)
 
 
 def batches(site_ids: Sequence[str], round_name: str, per_batch: int) -> dict[str, list[str]]:
@@ -299,6 +332,12 @@ def import_round(
 ) -> dict[str, Any]:
     """Parse, fetch, resolve and decide every answer of one round; merge the decisions."""
     record = find_round(out, round_name)
+    newest = load_rounds(out)[-1].name
+    if record.name != newest:
+        raise HandoffError(
+            f"round {round_name} is not the newest ({newest}): its answers would overwrite the "
+            "newer round's decisions"
+        )
     root = resolve_path(record.handoff)
     check = OH.validate(root)
     if not check.ok:

@@ -15,7 +15,10 @@ planned with them. `apply.py --lane name-l5` then emits, rehearses, probes, appl
 
 A decided site is written only as it was asked: a site whose stored links, `source_url`, name or
 scope changed since the question's read is skipped, and so is a replacement item another curated
-site carries (a duplicate candidate - WD2's, not a link). Every skip is listed with its reason.
+site carries or another decided site is given too (a duplicate candidate - WD2's, not a link). The
+pinned rename waits until the row that holds its new name is hidden. Every skip is listed with its
+reason (`SKIPPED.jsonl`), and every site whose stored links L5 leaves unproven - excluded, held or
+skipped - is listed for WD1 (`UNTRUSTED_LINKS.jsonl`, `untrusted`).
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ from mechanical import plan as MP  # noqa: E402
 from mechanical.lane import NAME_L5, sql_literal  # noqa: E402
 
 from l5 import population as POP  # noqa: E402
-from l5.decide import DECIDED  # noqa: E402
+from l5.decide import DECIDED, HELD  # noqa: E402
 from pipeline.lyra.site_key import site_key_sql  # noqa: E402
 
 STEPS = QR.OUT / "l5"
@@ -48,6 +51,16 @@ RESEARCH = "L5 link pass 2026-09-26 (Opus reading, quotes machine-checked)"
 SITES_PER_STEP = 100
 CONFIDENCE = "authoritative"
 KINDS = ("wikidata_qid", "enwiki_title")
+#: The skips that leave a site's stored links as L5 found them; a skip of the pinned rename alone
+#: (`pinned-name-moved`, `duplicate-not-hidden-yet`) does not touch the site's decided links.
+LINK_SKIPS = frozenset(
+    {
+        "gone",
+        "changed-since-the-question",
+        "item-carried-by-another-site",
+        "item-planned-for-another-site",
+    }
+)
 
 
 def step_wave(number: int) -> QR.Wave:
@@ -90,6 +103,14 @@ def holders_sql(qids: Sequence[str]) -> str:
     )
 
 
+def hidden_sql(site_ids: Sequence[str]) -> str:
+    """The scope of each row a pinned rename waits for (`PinnedName.hidden_first`)."""
+    return (
+        "SELECT u.id::text AS site_id, u.name, u.scope_status, u.scope_reason FROM unified_sites u "
+        f"WHERE u.id IN ({MP.sql_ids(site_ids)}) ORDER BY u.id"
+    )
+
+
 def keys_sql(names: Sequence[str]) -> str:
     """Postgres's match key of each new name - the key is never computed in Python."""
     values = ", ".join(f"({sql_literal(n)})" for n in sorted(set(names)))
@@ -103,6 +124,8 @@ class Live:
     sites: Mapping[str, Mapping[str, Any]]
     holders: Mapping[str, list[Mapping[str, Any]]]
     keys: Mapping[str, str]
+    #: site id -> the scope of a row a pinned rename waits for
+    hidden: Mapping[str, Mapping[str, Any]]
 
 
 def read_live(
@@ -128,7 +151,9 @@ def read_live(
         if "name" in d["cells"] and d["cells"]["name"]["verdict"] == "RENAME"
     ]
     keys = {str(r["name"]): str(r["key"]) for r in reader(keys_sql(names))} if names else {}
-    return Live(sites, holders, keys)
+    waits = [p.hidden_first[0] for p in pinned.values()]
+    hidden = {str(r["site_id"]): r for r in reader(hidden_sql(waits))} if waits else {}
+    return Live(sites, holders, keys, hidden)
 
 
 # ------------------------------------------------------------------------------ the plan
@@ -247,6 +272,12 @@ def build(
             }
         )
 
+    # guard 5 of the write reads the state before it: two sites given one new item would both pass
+    planned: dict[str, list[str]] = {}
+    for decision in decisions:
+        item = decision["cells"]["wikidata_qid"]
+        if item["verdict"] == "REPLACE":
+            planned.setdefault(item["new"], []).append(str(decision["site_id"]))
     for decision in sorted(decisions, key=lambda d: str(d["site_id"])):
         if decision["status"] != DECIDED:
             raise MP.PlanError(f"{decision['site_id']} is not decided - DECISIONS.jsonl is stale")
@@ -266,6 +297,15 @@ def build(
             if others:
                 named = ", ".join(f"{h['name']} ({h['site_id']})" for h in others)
                 skip(decision, "item-carried-by-another-site", f"{item['new']} is {named}'s")
+                continue
+            twins = [t for t in planned[item["new"]] if t != sid]
+            if twins:
+                skip(
+                    decision,
+                    "item-planned-for-another-site",
+                    f"{item['new']} is decided for {', '.join(sorted(twins))} too - one site "
+                    "or two is WD2's question",
+                )
                 continue
         for kind in KINDS:
             cell = cells[kind]
@@ -303,6 +343,20 @@ def build(
                 }
             )
             continue
+        other, reason = rename.hidden_first
+        row = live.hidden[other]
+        if row["scope_status"] != "retired" or row["scope_reason"] != reason:
+            plan.skipped.append(
+                {
+                    "site_id": sid,
+                    "name": rename.old,
+                    "reason": "duplicate-not-hidden-yet",
+                    "note": f"{row['name']!r} ({other}) holds scope_status "
+                    f"{row['scope_status']!r}, scope_reason {row['scope_reason']!r}: WD2 hides it "
+                    f"as {reason!r} first, or two visible rows carry {rename.new!r}",
+                }
+            )
+            continue
         plan.names += _name_verdicts(
             sid,
             rename.old,
@@ -313,6 +367,44 @@ def build(
             "HUMAN_ONLY Nr. 7 (O9, 2026-09-26): the kept row takes its item's English label",
         )
     return plan
+
+
+def untrusted(
+    population: Sequence[Mapping[str, Any]],
+    decisions: Sequence[Mapping[str, Any]],
+    skipped: Sequence[Mapping[str, Any]],
+    read_at: str,
+) -> list[dict[str, Any]]:
+    """`UNTRUSTED_LINKS.jsonl`: every member of the population whose stored links L5 leaves
+    unproven - excluded from the question, held after the last round, or skipped by the plan -
+    with the links as the question's read found them. WD1 must not trust the Wikidata values it
+    harvests for these sites (the runbook, "Order"). Pure, in site order."""
+    decided = {str(d["site_id"]): d for d in decisions}
+    skips = {str(s["site_id"]): s for s in skipped if s["reason"] in LINK_SKIPS}
+    out: list[dict[str, Any]] = []
+    for member in sorted(population, key=lambda m: str(m["site_id"])):
+        sid = str(member["site_id"])
+        if member["excluded"] is not None:
+            status, why = "excluded", str(member["excluded"])
+        elif sid not in decided:
+            raise MP.PlanError(f"{sid} is asked but has no decision - import every round first")
+        elif decided[sid]["status"] == HELD:
+            status, why = "held", str(decided[sid]["reason"])
+        elif sid in skips:
+            status, why = "skipped", f"{skips[sid]['reason']}: {skips[sid]['note']}"
+        else:
+            continue
+        out.append(
+            {
+                "site_id": sid,
+                "name": member["name"],
+                "status": status,
+                "why": why,
+                **{k: sorted(e["value"] for e in member["ext"] if e["kind"] == k) for k in KINDS},
+                "read_at": read_at,
+            }
+        )
+    return out
 
 
 def steps(links: Sequence[QR.Change]) -> list[list[QR.Change]]:
@@ -406,7 +498,7 @@ def write_names(plan: MP.Plan, out: Path) -> None:
         "",
         f"Built {plan.built_at} by `scripts/remediation/l5/plan.py`: {plan.counters['sites']} "
         f"site(s), {plan.counters['cells']} cell(s) (`name` and its match key, the key computed by "
-        "Postgres from the new name). Run stamp "
+        "Postgres from the new name; a key that does not move is not written). Run stamp "
         f"`{NAME_L5.run_stamp}`, journal test id `{NAME_L5.test_id}`.",
         "",
         "| site | old name | new name | new key |",
@@ -416,9 +508,11 @@ def write_names(plan: MP.Plan, out: Path) -> None:
     for v in plan.changes:
         by_site.setdefault(v.site_id, {})[str(v.column)] = v
     for sid, cells in sorted(by_site.items()):
+        # a rename that changes only case or accents keeps its key and plans no key cell
+        key = cells.get("name_normalized")
+        shown = "unchanged" if key is None else f"`{key.new_value}`"
         lines.append(
-            f"| `{sid}` | {cells['name'].old_value} | {cells['name'].new_value} | "
-            f"`{cells['name_normalized'].new_value}` |"
+            f"| `{sid}` | {cells['name'].old_value} | {cells['name'].new_value} | {shown} |"
         )
     lines += ["", "## Evidence", ""]
     for sid, cells in sorted(by_site.items()):

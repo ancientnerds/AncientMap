@@ -100,17 +100,20 @@ DUPLICATE_CANDIDATES: dict[str, str] = {
 @dataclass(frozen=True)
 class PinnedName:
     """A rename the owner's decisions settle, so no agent is asked: the stored name it replaces,
-    the new name, and the evidence the decision rests on."""
+    the new name, the evidence the decision rests on, and the row that must be hidden first -
+    `(site id, the scope_reason it carries once retired)` - because it holds the new name."""
 
     old: str
     new: str
     evidence: tuple[dict[str, Any], ...]
+    hidden_first: tuple[str, str]
 
 
 #: HUMAN_ONLY Nr. 7, decided 2026-09-26 under O9: one site; the row kept is "Zoque Culture
 #: Archaeological Zone" (3 content links, 20 images, Q4384315), renamed "Chiapa de Corzo" - the
 #: English label of Q4384315, its enwiki article "Chiapa de Corzo (Mesoamerican site)". The empty
-#: row "Chiapa de Corzo" (24aa135d) is hidden by WD2 as `duplicate_of:ed186ea9-...`.
+#: row "Chiapa de Corzo" (24aa135d) is hidden by WD2 as `duplicate_of:ed186ea9-...`; until it is,
+#: the rename is not planned (two visible rows 7.4 m apart would both carry the name).
 PINNED_NAMES: dict[str, PinnedName] = {
     "ed186ea9-9ed1-415d-828b-97d9f21401d2": PinnedName(
         "Zoque Culture Archaeological Zone",
@@ -127,6 +130,10 @@ PINNED_NAMES: dict[str, PinnedName] = {
                 "url": "https://www.wikidata.org/wiki/Q4384315",
                 "quote": "en label = 'Chiapa de Corzo' (bcases/names.jsonl, read 2026-09-23)",
             },
+        ),
+        (
+            "24aa135d-4714-47f5-96c0-d58f0bc04b6f",
+            "duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2",
         ),
     )
 }

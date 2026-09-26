@@ -52,6 +52,7 @@ SAYS = {
     "guard2": "source_url value(s) no longer hold the planned old value",
     "guard3": "external-id row(s) no longer hold the planned old value",
     "guard5": "planned item(s) are carried by another curated site",
+    "guard6": "item(s) are planned for more than one site",
     "invariant4": "site(s) left without a link on an English Wikipedia source_url",
 }
 NEVER_STORED = "never stored (L5 probe)"
@@ -149,6 +150,21 @@ def probe_cases(
                 [*rows[:i], replace(replaced[0], new_value=str(live["shared"])), *rows[i + 1 :]],
             )
         )
+        # a second site of the step is given the first site's new item: guard 5 reads the state
+        # before the write and lets both pass, guard 6 refuses them
+        second = [r for r in ext if r.kind == "wikidata_qid" and r.site_id != replaced[0].site_id]
+        if second:
+            j = rows.index(second[0])
+            cases.append(
+                (
+                    "guard6",
+                    [
+                        *rows[:j],
+                        replace(second[0], new_value=replaced[0].new_value),
+                        *rows[j + 1 :],
+                    ],
+                )
+            )
     # the first site loses both links and keeps its English Wikipedia source_url
     sid = first.site_id
     removal = [

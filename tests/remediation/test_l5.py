@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,7 @@ from opus_audit import quotes as Q  # noqa: E402
 TIKAL = "11111111-2222-4333-8444-555555555555"
 ZOQUE = "ed186ea9-9ed1-415d-828b-97d9f21401d2"
 OTHER = "99999999-8888-4777-8666-555555555555"
+LYRA = "77777777-6666-4555-8444-333333333333"
 READ_AT = "2026-09-26T01:32:44+00:00"
 NOW = "2026-09-26T02:00:00+00:00"
 ENT = "https://www.wikidata.org/wiki/Special:EntityData/{}.json"
@@ -543,8 +545,12 @@ def live(
     *sites: dict[str, Any],
     holders: dict[str, Any] | None = None,
     keys: dict[str, str] | None = None,
+    hidden: list[dict[str, Any]] | None = None,
 ) -> L5P.Live:
-    return L5P.Live({s["site_id"]: s for s in sites}, holders or {}, keys or {})  # fmt: skip
+    return L5P.Live(
+        {s["site_id"]: s for s in sites}, holders or {}, keys or {},
+        {h["site_id"]: h for h in hidden or []},
+    )  # fmt: skip
 
 
 ZOQUE_ROW = site(
@@ -552,6 +558,10 @@ ZOQUE_ROW = site(
     name="Zoque Culture Archaeological Zone",
     name_normalized="zoque culture archaeological zone",
 )
+CHIAPA = "24aa135d-4714-47f5-96c0-d58f0bc04b6f"
+#: HUMAN_ONLY Nr. 7: the empty row as WD2 leaves it - hidden as a duplicate of the Zoque row.
+CHIAPA_HIDDEN = {"site_id": CHIAPA, "name": "Chiapa de Corzo", "scope_status": "retired",
+                 "scope_reason": f"duplicate_of:{ZOQUE}"}  # fmt: skip
 
 
 class TestThePlan:
@@ -559,8 +569,11 @@ class TestThePlan:
         built = L5P.build(
             [decided()],
             {TIKAL: site()},
-            live(site(), ZOQUE_ROW, keys={"Chiapa de Corzo": "chiapa de corzo"}),
-        )
+            live(
+                site(), ZOQUE_ROW, keys={"Chiapa de Corzo": "chiapa de corzo"},
+                hidden=[CHIAPA_HIDDEN],
+            ),
+        )  # fmt: skip
         assert [(c.table, c.kind, c.old_value, c.new_value) for c in built.links] == [
             ("site_external_ids", "wikidata_qid", "Q100", "Q200"),
             ("site_external_ids", "enwiki_title", "Mundo Perdido, Tikal", None),
@@ -822,20 +835,70 @@ class TestTheWeb:
         )
 
 
+KEEPS_THE_KEY = {"verdict": "RENAME", "old": "Tikal", "new": "TIKAL", "why": "w",
+                 "quotes": [q(WP + "Tikal", "TIKAL")], "note": ""}  # fmt: skip
+
+
 class TestTheNamePlan:
-    def test_a_rename_that_keeps_the_key_writes_the_name_alone(self) -> None:
-        rename = {"verdict": "RENAME", "old": "Tikal", "new": "TIKAL", "why": "w",
-                  "quotes": [q(WP + "Tikal", "TIKAL")], "note": ""}  # fmt: skip
+    def test_a_rename_that_keeps_the_key_writes_the_name_alone(self, tmp_path: Path) -> None:
         built = L5P.build(
-            [decided(name=rename)],
+            [decided(name=KEEPS_THE_KEY)],
             {TIKAL: site()},
             live(site(), keys={"TIKAL": "tikal"}),
             pinned={},
         )
         assert [(v.column, v.new_value) for v in built.names] == [("name", "TIKAL")]
+        # ... and runs through the lane's files: the plan, its page and the statements
+        plan = L5P.name_plan(built, NOW)
+        L5P.write_names(plan, tmp_path)
+        page = (tmp_path / "PLAN.md").read_text(encoding="utf-8")
+        assert f"| `{TIKAL}` | Tikal | TIKAL | unchanged |" in page
+        records = A.load_records(tmp_path / "PLAN.jsonl")
+        A.validate_records(records, lane=L.NAME_L5)
+        assert A.emit(records, tmp_path, L.NAME_L5, plan_path=tmp_path / "PLAN.jsonl") == 1
+        assert (tmp_path / "ROLLBACK.sql").exists()
+
+    def test_the_pinned_rename_waits_for_the_empty_row_to_be_hidden(self) -> None:
+        """HUMAN_ONLY Nr. 7: two visible rows 7.4 m apart would both be called Chiapa de Corzo."""
+        keys = {"Chiapa de Corzo": "chiapa de corzo"}
+        for row in (
+            {**CHIAPA_HIDDEN, "scope_status": None, "scope_reason": None},
+            {**CHIAPA_HIDDEN, "scope_reason": "duplicate_of:" + OTHER},
+            {**CHIAPA_HIDDEN, "scope_status": "in_scope"},
+        ):
+            built = L5P.build([], {}, live(ZOQUE_ROW, keys=keys, hidden=[row]))
+            assert built.names == []
+            assert [s["reason"] for s in built.skipped] == ["duplicate-not-hidden-yet"]
+            assert CHIAPA in built.skipped[0]["note"]
+        built = L5P.build([], {}, live(ZOQUE_ROW, keys=keys, hidden=[CHIAPA_HIDDEN]))
+        assert [v.new_value for v in built.names] == ["Chiapa de Corzo", "chiapa de corzo"]
+        assert POP.PINNED_NAMES[ZOQUE].hidden_first == (CHIAPA, f"duplicate_of:{ZOQUE}")
+
+    def test_the_live_read_reads_the_row_a_pinned_rename_waits_for(self) -> None:
+        seen: list[str] = []
+
+        def reader(sql: str) -> list[dict[str, Any]]:
+            seen.append(sql)
+            if "scope_reason" in sql:
+                return [CHIAPA_HIDDEN]
+            if "FROM (VALUES" in sql:
+                return [{"name": "Chiapa de Corzo", "key": "chiapa de corzo"}]
+            if "e.value IN" in sql:
+                return []
+            return [site(), ZOQUE_ROW]
+
+        got = L5P.read_live([decided()], POP.PINNED_NAMES, reader)
+        assert got.hidden == {CHIAPA: CHIAPA_HIDDEN}
+        assert sorted(got.sites) == [TIKAL, ZOQUE] and got.keys == {
+            "Chiapa de Corzo": "chiapa de corzo"
+        }
+        assert f"'{CHIAPA}'" in next(sql for sql in seen if "scope_reason" in sql)
 
     def test_the_name_lane_files_are_the_mechanical_lane_s(self, tmp_path: Path) -> None:
-        built = L5P.build([], {}, live(ZOQUE_ROW, keys={"Chiapa de Corzo": "chiapa de corzo"}))
+        built = L5P.build(
+            [], {},
+            live(ZOQUE_ROW, keys={"Chiapa de Corzo": "chiapa de corzo"}, hidden=[CHIAPA_HIDDEN]),
+        )  # fmt: skip
         plan = L5P.name_plan(built, NOW)
         L5P.write_names(plan, tmp_path)
         records = A.load_records(tmp_path / "PLAN.jsonl")
@@ -844,6 +907,307 @@ class TestTheNamePlan:
         MP.verify_pinned(tmp_path / "APPLY.sql", plan_path=tmp_path / "PLAN.jsonl",
                          expected=A.apply_statement(records, L.NAME_L5))  # fmt: skip
         assert "Chiapa de Corzo" in (tmp_path / "PLAN.md").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------------------ the name read-back
+def journal_metric(metric: str, rows: list[tuple[str, str, str | None, str]]) -> int:
+    """One of the name lane's journal metrics, counted by SQLite over `rows` of the journal
+    (`row_pk, column_name, old_value, new_value`, all under the lane's run stamp)."""
+    import sqlite3
+    import unicodedata
+
+    def unaccent(text: str) -> str:
+        return "".join(
+            c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
+        )
+
+    db = sqlite3.connect(":memory:")
+    db.create_function("unaccent", 1, unaccent)
+    db.create_function("left", 2, lambda text, n: text[:n])
+    db.execute(
+        "CREATE TABLE remediation_change_log (id INTEGER PRIMARY KEY, run_stamp TEXT, row_pk TEXT, "
+        "column_name TEXT, old_value TEXT, new_value TEXT)"
+    )
+    db.executemany(
+        "INSERT INTO remediation_change_log (run_stamp, row_pk, column_name, old_value, new_value) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [(L.NAME_L5.run_stamp, *row) for row in rows],
+    )
+    where = dict(L.NAME_L5_JOURNAL_METRICS)[metric]
+    return int(db.execute(f"SELECT count(*) {where}").fetchone()[0])
+
+
+class TestTheNameReadBack:
+    KEYED = "journal rows for this run whose key is not the key of the name it wrote"
+    MOVED = "journal rows for this run renaming a site whose key moved without its key row"
+    RENAME = [(ZOQUE, "name", "Zoque Culture Archaeological Zone", "Chiapa de Corzo"),
+              (ZOQUE, "name_normalized", "zoque culture archaeological zone", "chiapa de corzo")]  # fmt: skip
+
+    def test_both_metrics_are_the_read_back_s(self) -> None:
+        readback = L.LANE_READBACKS[L.NAME_L5.name]
+        assert all(metric in readback for metric in (self.KEYED, self.MOVED))
+        assert "<> 2" not in readback
+
+    def test_a_key_keeping_rename_and_a_full_rename_read_zero(self) -> None:
+        rows = [(TIKAL, "name", "Tikal", "TIKAL"), *self.RENAME]
+        assert journal_metric(self.KEYED, rows) == 0
+        assert journal_metric(self.MOVED, rows) == 0
+
+    def test_a_name_that_moved_its_key_without_a_key_row_is_counted(self) -> None:
+        assert journal_metric(self.MOVED, self.RENAME[:1]) == 1
+        assert journal_metric(self.KEYED, self.RENAME[:1]) == 0
+
+    def test_a_key_row_without_its_name_row_is_counted(self) -> None:
+        assert journal_metric(self.KEYED, self.RENAME[1:]) == 1
+        wrong = [self.RENAME[0], (ZOQUE, "name_normalized", "zoque culture", "chiapa")]
+        assert journal_metric(self.KEYED, wrong) == 1
+
+
+# ------------------------------------------------------------------------------ one item, two sites
+def two_site_rows() -> list[QR.Change]:
+    """Tikal's item replaced, the other site's item removed - a step of two sites."""
+    tikal = L5P.build([decided()], {TIKAL: site()}, live(site()), pinned={}).links
+    remove = {"verdict": "REMOVE", "old": "Q100", "new": None, "why": "w",
+              "quotes": [q(ENT.format("Q200"), "Tikal")], "note": ""}  # fmt: skip
+    other = site(OTHER, name="Mundo Perdido")
+    theirs = L5P.build(
+        [{**decided(OTHER, wikidata_qid=remove), "name": "Mundo Perdido"}],
+        {OTHER: other},
+        live(other),
+        pinned={},
+    ).links
+    return tikal + theirs
+
+
+class TestOneItemForTwoSites:
+    def test_two_decisions_replacing_to_one_item_are_both_skipped(self) -> None:
+        other = site(OTHER, name="Mundo Perdido")
+        built = L5P.build(
+            [decided(), {**decided(OTHER), "name": "Mundo Perdido"}],
+            {TIKAL: site(), OTHER: other},
+            live(site(), other),
+            pinned={},
+        )
+        assert built.links == []
+        assert sorted((s["site_id"], s["reason"]) for s in built.skipped) == sorted(
+            [(TIKAL, "item-planned-for-another-site"), (OTHER, "item-planned-for-another-site")]
+        )
+        notes = {s["site_id"]: s["note"] for s in built.skipped}
+        assert OTHER in notes[TIKAL] and TIKAL in notes[OTHER]
+
+    def test_the_write_refuses_an_item_planned_twice_and_checks_it_afterwards(self) -> None:
+        rows = two_site_rows()
+        write = QR.render_split(rows, reversal=False, wave=L5P.step_wave(1), removals=True)
+        assert "guard 6: no item is planned for two sites" in write
+        assert LK.SAYS["guard6"] in write
+        assert "invariant 5: every item written is carried by exactly one curated site" in write
+        undo = QR.render_split(rows, reversal=True, wave=L5P.step_wave(1), removals=True)
+        assert "guard 6" not in undo and "invariant 5" not in undo, (
+            "a reversal restores the items the write found, shared ones included"
+        )
+        wave4 = QR.render_split(
+            [replace(r, new_value=r.new_value or "Q1") for r in rows], reversal=False
+        )
+        assert "guard 6" not in wave4 and "invariant 5" not in wave4
+
+    @staticmethod
+    def counted(sql: str, heading: str, db: Any) -> int:
+        """The `SELECT count(*) INTO bad` of one guard or invariant of `sql`, run by SQLite."""
+        lines = sql.splitlines()
+        start = next(i for i, line in enumerate(lines) if heading in line)
+        first = next(i for i in range(start, len(lines)) if "SELECT count(*) INTO bad" in lines[i])
+        last = next(i for i in range(first, len(lines)) if lines[i].rstrip().endswith(";"))
+        statement = "\n".join(lines[first : last + 1]).replace(" INTO bad", "").rstrip(";")
+        return int(db.execute(statement).fetchone()[0])
+
+    def test_guard6_and_invariant5_count_what_they_say(self) -> None:
+        import sqlite3
+
+        def db(plan: list[QR.Change], carried: list[tuple[str, str]]) -> Any:
+            con = sqlite3.connect(":memory:")
+            con.executescript(
+                "CREATE TABLE unified_sites (id TEXT, source_id TEXT);"
+                "CREATE TABLE site_external_ids (site_id TEXT, kind TEXT, value TEXT);"
+                "CREATE TABLE _ext_plan (site_id TEXT, kind TEXT, old_value TEXT, new_value TEXT);"
+            )
+            con.executemany(
+                "INSERT INTO unified_sites VALUES (?, ?)",
+                [(TIKAL, "ancient_nerds"), (OTHER, "ancient_nerds"), (ZOQUE, "ancient_nerds"),
+                 (LYRA, "lyra")],
+            )  # fmt: skip
+            con.executemany("INSERT INTO site_external_ids VALUES (?, 'wikidata_qid', ?)", carried)
+            con.executemany(
+                "INSERT INTO _ext_plan VALUES (?, ?, ?, ?)",
+                [
+                    (r.site_id, r.kind, r.old_value, r.new_value)
+                    for r in plan
+                    if r.table == QR.TABLE
+                ],
+            )
+            return con
+
+        rows = two_site_rows()
+        write = QR.render_split(rows, reversal=False, wave=L5P.step_wave(1), removals=True)
+        twice = [replace(r, new_value="Q200") if r.site_id == OTHER and r.kind == "wikidata_qid"
+                 else r for r in rows]  # fmt: skip
+        guard6 = "-- guard 6: no item is planned for two sites"
+        assert self.counted(write, guard6, db(rows, [])) == 0
+        assert self.counted(write, guard6, db(twice, [])) == 1
+        inv5 = "-- invariant 5: every item written is carried by exactly one curated site"
+        assert self.counted(write, inv5, db(rows, [(TIKAL, "Q200"), (LYRA, "Q200")])) == 0, (
+            "a row of another source does not count"
+        )
+        assert self.counted(write, inv5, db(rows, [(TIKAL, "Q200"), (ZOQUE, "Q200")])) == 1
+        assert self.counted(write, inv5, db(twice, [(TIKAL, "Q200"), (OTHER, "Q200")])) == 2
+
+    def test_the_guard6_probe_gives_a_second_site_the_first_site_s_new_item(self) -> None:
+        rows = two_site_rows()
+        live_state = {"foreign": ZOQUE, "shared": "Q555", "links": [("wikidata_qid", "Q100")]}
+        cases = dict(LK.probe_cases(rows, live_state))
+        assert "guard6" in cases
+        items = [(c.site_id, c.new_value) for c in cases["guard6"] if c.kind == "wikidata_qid"]
+        assert sorted(items) == sorted([(TIKAL, "Q200"), (OTHER, "Q200")])
+        sql = QR.render_split(
+            cases["guard6"], reversal=False, rehearsal=True, wave=L5P.step_wave(1), removals=True
+        )
+        assert LK.SAYS["guard6"] in sql
+        assert LK.refused_by(
+            "guard6", "ERROR:  source-url split: 1 item(s) are planned for more than one site"
+        )
+
+
+# ------------------------------------------------------------------------------ what WD1 must not trust
+class TestTheUntrustedLinks:
+    DUP = "ce7db300-8777-425d-917a-2f6d9f325b58"
+    GONE = "00000000-0000-4000-8000-000000000001"
+
+    def test_excluded_held_and_skipped_sites_are_listed_with_their_stored_links(self) -> None:
+        population = [
+            {**member(), "ext": site()["ext"]},
+            {**member(OTHER), "ext": site()["ext"]},
+            {**member(self.DUP), "ext": [{"kind": "wikidata_qid", "value": "Q606295"}],
+             "excluded": "duplicate candidate: Caesarea Philippi / Banias"},
+            {**member(self.GONE), "ext": site()["ext"]},
+            {**member(ZOQUE), "ext": site()["ext"]},
+        ]  # fmt: skip
+        decisions = [
+            decided(),
+            {**decided(OTHER), "status": D.HELD, "reason": "wikidata_qid: Q300 is not proven"},
+            decided(self.GONE),
+            decided(ZOQUE),
+        ]
+        skipped = [
+            {"site_id": self.GONE, "name": "x", "reason": "changed-since-the-question",
+             "note": "moved"},
+            {"site_id": ZOQUE, "name": "Zoque", "reason": "duplicate-not-hidden-yet", "note": "n"},
+        ]  # fmt: skip
+        got = L5P.untrusted(population, decisions, skipped, READ_AT)
+        assert [(r["site_id"], r["status"]) for r in got] == sorted(
+            [(self.DUP, "excluded"), (self.GONE, "skipped"), (OTHER, "held")]
+        ), "a name-only skip leaves the site's decided links trusted"
+        by_id = {r["site_id"]: r for r in got}
+        assert by_id[self.DUP]["wikidata_qid"] == ["Q606295"]
+        assert by_id[self.DUP]["enwiki_title"] == []
+        assert by_id[OTHER]["wikidata_qid"] == ["Q100"]
+        assert by_id[OTHER]["enwiki_title"] == ["Mundo Perdido, Tikal"]
+        assert "not proven" in by_id[OTHER]["why"]
+        assert by_id[self.GONE]["why"].startswith("changed-since-the-question")
+        assert all(r["read_at"] == READ_AT for r in got)
+
+    def test_an_asked_site_without_a_decision_is_refused(self) -> None:
+        with pytest.raises(MP.PlanError, match="no decision"):
+            L5P.untrusted([{**member(), "ext": []}], [], [], READ_AT)
+
+
+# ------------------------------------------------------------------------------ the rounds' order
+def a_round(out: Path, name: str, *, imported: bool) -> None:
+    with (out / H.ROUNDS_FILE).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"name": name, "handoff": f"h-{name}", "exported_at": NOW,
+                             "read_at": READ_AT, "batches": {}, "earlier": {}}) + "\n")  # fmt: skip
+    if imported:
+        (out / H.ANSWERS_DIR).mkdir(exist_ok=True)
+        (out / H.ANSWERS_DIR / f"{name}.jsonl").write_text("", encoding="utf-8")
+
+
+class TestTheRoundsOrder:
+    def test_only_the_newest_round_is_imported(self, out: Path) -> None:
+        a_round(out, "r1", imported=True)
+        a_round(out, "r2", imported=False)
+        with pytest.raises(H.HandoffError, match="not the newest"):
+            H.import_round(out, "r1", http=FakeClient, resolver=resolver, now=lambda: NOW)
+
+    def test_a_re_ask_waits_for_the_import_and_stops_after_round_three(self, out: Path) -> None:
+        with pytest.raises(H.HandoffError, match="no round is exported"):
+            H.reask_sites(out)
+        a_round(out, "r1", imported=False)
+        with pytest.raises(H.HandoffError, match="exported but not imported"):
+            H.reask_sites(out)
+        (out / H.ANSWERS_DIR).mkdir()
+        (out / H.ANSWERS_DIR / "r1.jsonl").write_text("", encoding="utf-8")
+        assert H.reask_sites(out) == {}
+        a_round(out, "r2", imported=True)
+        a_round(out, "r3", imported=True)
+        with pytest.raises(H.HandoffError, match="at most twice more"):
+            H.reask_sites(out)
+
+    def test_the_plan_waits_for_the_newest_round_s_import(
+        self, out: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        from l5 import run as RUN
+
+        monkeypatch.setattr(RUN, "OUT", out)
+        assert RUN.main(["plan"]) == 1
+        assert "no round is exported" in capsys.readouterr().err
+        a_round(out, "r1", imported=True)
+        a_round(out, "r2", imported=False)
+        assert RUN.main(["plan"]) == 1
+        assert "round r2 is exported but not imported" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------------------ the plan command
+def test_the_plan_command_writes_every_file_for_a_key_keeping_rename(
+    out: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`run.py plan` end to end against a fake read: the link step, the name lane (a rename that
+    keeps its key), the skips, the counts and the links WD1 must not trust."""
+    from l5 import run as RUN
+
+    a_round(out, "r1", imported=True)
+    held = {**decided(OTHER), "name": "Mundo Perdido", "status": D.HELD,
+            "reason": "wikidata_qid: Q300 is not proven at the site's place"}  # fmt: skip
+    H.write_jsonl(out / H.DECISIONS_FILE, [decided(name=KEEPS_THE_KEY), held])
+    (out / "POPULATION.jsonl").write_text(
+        "".join(
+            json.dumps({**r, "ext": site()["ext"]}) + "\n"
+            for r in (member(), {**member(OTHER), "name": "Mundo Perdido", "ask_name": True})
+        ),
+        encoding="utf-8",
+    )
+
+    def reader(sql: str) -> list[dict[str, Any]]:
+        if "scope_reason" in sql:
+            return [CHIAPA_HIDDEN]
+        if "FROM (VALUES" in sql:
+            return [{"name": "TIKAL", "key": "tikal"},
+                    {"name": "Chiapa de Corzo", "key": "chiapa de corzo"}]  # fmt: skip
+        if "e.value IN" in sql:
+            return []
+        return [site(), ZOQUE_ROW]
+
+    monkeypatch.setattr(RUN, "OUT", out)
+    monkeypatch.setattr(MP, "psql_json_reader", lambda: reader)
+    monkeypatch.setattr(L5P, "STEPS", tmp_path / "steps")
+    monkeypatch.setattr(A, "lane_dir", lambda lane: tmp_path / lane.out_dir_name)
+    got = RUN.cmd_plan()
+    assert got["steps"] == ["step-001"] and got["name_sites"] == 2 and got["untrusted_links"] == 1
+    names = (tmp_path / L.NAME_L5.out_dir_name / "PLAN.md").read_text(encoding="utf-8")
+    assert "| Tikal | TIKAL | unchanged |" in names and "`chiapa de corzo`" in names
+    assert (tmp_path / L.NAME_L5.out_dir_name / "ROLLBACK.sql").exists()
+    assert (tmp_path / "steps" / "step-001" / "APPLY.sql").exists()
+    untrusted = H._read_jsonl(out / "UNTRUSTED_LINKS.jsonl")
+    assert [(r["site_id"], r["status"]) for r in untrusted] == [(OTHER, "held")]
+    counts = json.loads((out / "PLAN_COUNTS.json").read_text(encoding="utf-8"))
+    assert counts["untrusted_links"] == 1 and (out / "SKIPPED.jsonl").exists()
 
 
 def test_the_population_is_never_read_again_once_a_round_is_out(
