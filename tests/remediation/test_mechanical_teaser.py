@@ -252,8 +252,9 @@ def planned(tmp_path: Path) -> Path:
 
 
 def closed(root: Path, step: int = 1, *, reverted: bool = False) -> None:
-    """The closing record `accept` (written) or `close-reverted` (undone) leaves."""
-    W._record_acceptance(step, root, {"reverted": reverted})
+    """The closing record `accept` (written: `ACCEPTED/`) or `close-reverted` (undone: `REVERTED/`)
+    leaves."""
+    W._record_closing(W.REVERTED_DIR if reverted else W.ACCEPTED_DIR, step, root, {})
 
 
 class TestThePlan:
@@ -282,6 +283,17 @@ class TestThePlan:
         assert [o["site_id"] for o in W.next_outcomes("wb-test", OUTCOMES, steps)] == [T.NEWGRANGE]
         again = W.next_outcomes("wb-test", OUTCOMES, steps, frozenset({1}))
         assert [o["site_id"] for o in again] == sorted([T.SKARA, T.NEWGRANGE])
+
+    def test_a_run_is_named_by_its_name_or_by_its_directory(self, tmp_path: Path) -> None:
+        """`plan --run` takes the run as `teaser/run.py --run` does - its directory - or its bare
+        name; a directory outside the runs directory is no run of lane WB."""
+        assert W.run_name("wb-pilot-2026-09-27") == "wb-pilot-2026-09-27"
+        assert W.run_name("output/remediation/teaser/runs/wb-pilot-2026-09-27") == (
+            "wb-pilot-2026-09-27"
+        )
+        assert W.run_name(str(W.RUNS / "wb-mass-1")) == "wb-mass-1"
+        with pytest.raises(MP.PlanError, match="not a run directory"):
+            W.run_name(str(tmp_path / "wb-pilot-2026-09-27"))
 
 
 def written_state() -> tuple[list[W.Live], list[dict[str, Any]]]:
@@ -391,6 +403,20 @@ def undone_state() -> tuple[list[W.Live], list[dict[str, Any]]]:
     return list(LIVES), [*journal, *undos]
 
 
+def accept_on(
+    tmp_path: Path, root: Path, lives: list[W.Live], journal: list[dict]
+) -> tuple[int, list[str]]:
+    """`accept --step 1` against a fixture production, the run's OUTCOMES.jsonl under `W.RUNS`."""
+    run_dir = tmp_path / "runs" / "wb-test"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "OUTCOMES.jsonl").write_text(
+        "".join(json.dumps(o) + "\n" for o in OUTCOMES), encoding="utf-8"
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(W, "RUNS", tmp_path / "runs")
+        return W.accept_step(1, read=lambda _sql: export_for(lives, journal), root=root)
+
+
 class TestTheUndo:
     def _close(self, tmp_path: Path, lives: list[W.Live], journal: list[dict]) -> tuple:
         root = planned(tmp_path)
@@ -401,18 +427,48 @@ class TestTheUndo:
         lives, journal = undone_state()
         code, found, root = self._close(tmp_path, lives, journal)
         assert (code, found) == (0, [])
+        assert W.closed(1, root) and W.reverted(1, root) and not W.accepted(1, root)
+        record = json.loads((root / "REVERTED" / "step-001.json").read_text(encoding="utf-8"))
+        assert (record["reversed_cells"], record["unwritten_cells"]) == (4, 0)
+        assert record["superseded_acceptance"] is None
+        again = W.plan_step(
+            "wb-test", 2, read=lambda _sql: export_for(LIVES), root=root, outcomes=OUTCOMES
+        )
+        assert again["outcomes"] == sorted([T.SKARA, T.NEWGRANGE])
+
+    def test_an_accepted_step_is_undone_closed_and_planned_again(self, tmp_path: Path) -> None:
+        """The undo of 5.6: a step accepted as written (its card file may be out already) is
+        rolled back; `close-reverted` records the undo beside the acceptance, the acceptance stays
+        as history, and the next step plans the undone sites again - none is dropped."""
+        root = planned(tmp_path)
+        written, journal = written_state()
+        assert accept_on(tmp_path, root, written, journal) == (0, [])
+        lives, undone_journal = undone_state()
+        code, found = W.close_reverted(
+            1, read=lambda _sql: export_for(lives, undone_journal), root=root
+        )
+        assert (code, found) == (0, [])
         assert W.accepted(1, root) and W.reverted(1, root)
-        record = json.loads((root / "ACCEPTED" / "step-001.json").read_text(encoding="utf-8"))
+        acceptance = json.loads((root / "ACCEPTED" / "step-001.json").read_text(encoding="utf-8"))
+        record = json.loads((root / "REVERTED" / "step-001.json").read_text(encoding="utf-8"))
+        assert record["superseded_acceptance"] == acceptance
         assert (record["reversed_cells"], record["unwritten_cells"]) == (4, 0)
         again = W.plan_step(
             "wb-test", 2, read=lambda _sql: export_for(LIVES), root=root, outcomes=OUTCOMES
         )
         assert again["outcomes"] == sorted([T.SKARA, T.NEWGRANGE])
 
+    def test_an_undone_step_is_never_accepted_afterwards(self, tmp_path: Path) -> None:
+        lives, journal = undone_state()
+        _code, _found, root = self._close(tmp_path, lives, journal)
+        code, found = accept_on(tmp_path, root, lives, journal)
+        assert code == 1 and not W.accepted(1, root)
+        assert found[0] == "step 1 is closed as undone (REVERTED): it is never accepted"
+
     def test_a_step_never_applied_is_closed_the_same_way(self, tmp_path: Path) -> None:
         code, _found, root = self._close(tmp_path, list(LIVES), [])
         assert code == 0 and W.reverted(1, root)
-        record = json.loads((root / "ACCEPTED" / "step-001.json").read_text(encoding="utf-8"))
+        record = json.loads((root / "REVERTED" / "step-001.json").read_text(encoding="utf-8"))
         assert (record["reversed_cells"], record["unwritten_cells"]) == (0, 4)
 
     def test_a_write_still_standing_is_refused(self, tmp_path: Path) -> None:
@@ -431,14 +487,8 @@ class TestTheUndo:
     def test_a_step_is_closed_once(self, tmp_path: Path) -> None:
         lives, journal = undone_state()
         _code, _found, root = self._close(tmp_path, lives, journal)
-        with pytest.raises(MP.PlanError, match="closed already"):
+        with pytest.raises(MP.PlanError, match="has its REVERTED record already"):
             W.close_reverted(1, read=lambda _sql: export_for(lives, journal), root=root)
-
-    def test_the_card_file_names_written_steps_only(self, tmp_path: Path) -> None:
-        root = planned(tmp_path)
-        closed(root, reverted=True)
-        with pytest.raises(MP.PlanError, match="was undone"):
-            W.card_file(tmp_path / "unused.json", [1], run_sql=lambda _sql: "", root=root)
 
 
 # ------------------------------------------------------------------------------ the card file
@@ -482,8 +532,41 @@ class TestTheCardFile:
         closed(root)
         path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD})
         live_cards = {T.SKARA: T.OLD_CARD, T.NEWGRANGE: None}
-        with pytest.raises(MP.PlanError, match="not in production"):
+        with pytest.raises(MP.PlanError, match="production does not hold"):
             W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
+
+    def test_the_file_follows_production_after_an_undo(self, tmp_path: Path) -> None:
+        """5.6: the file was rendered and pushed for step 1, then the step was undone. `card-file`
+        renders it back - the undone step's cards expected at their values from before the step -
+        and never needs a `git revert` of the sitting's commit."""
+        root = planned(tmp_path)
+        closed(root)
+        closed(root, reverted=True)
+        path = self._file(tmp_path, {T.SKARA: T.GOOD[T.SKARA]})
+        live_cards = {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD}
+        result = W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
+        assert (result["changed"], result["removed"]) == (2, 0)
+        assert CJ.read_cards(path) == live_cards
+
+    def test_an_undone_step_whose_card_still_stands_is_refused(self, tmp_path: Path) -> None:
+        root = planned(tmp_path)
+        closed(root, reverted=True)
+        path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD})
+        live_cards = {T.SKARA: T.GOOD[T.SKARA], T.NEWGRANGE: T.OLD_CARD}
+        with pytest.raises(MP.PlanError, match="production does not hold"):
+            W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
+
+    def test_a_site_planned_again_after_an_undo_is_expected_as_the_later_step_wrote_it(
+        self, tmp_path: Path
+    ) -> None:
+        root = planned(tmp_path)
+        closed(root, reverted=True)
+        W.plan_step("wb-test", 2, read=lambda _sql: export_for(LIVES), root=root, outcomes=OUTCOMES)
+        closed(root, 2)
+        path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD})
+        live_cards = {T.SKARA: T.GOOD[T.SKARA], T.NEWGRANGE: None}
+        W.card_file(path, [2, 1], run_sql=self._live(live_cards), root=root)
+        assert CJ.read_cards(path) == {T.SKARA: T.GOOD[T.SKARA]}
 
 
 class TestStale:

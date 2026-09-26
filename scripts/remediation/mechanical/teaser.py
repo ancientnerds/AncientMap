@@ -44,15 +44,19 @@ more. Undo runs the other way: the card lane's `ROLLBACK.sql` first, then the pr
 `output/remediation/mechanical_teaser/`: `STEPS.jsonl` (every planned step, its run and sites),
 `sNNN/PLAN.md`, `sNNN/SKIPPED.jsonl`, `sNNN/export.jsonl` (the read-only production read the step
 was planned from), `sNNN/prov/` and `sNNN/card/` (each lane's `PLAN.jsonl`, `ROLLBACK.sql`, and after
-`apply.py --emit` its `APPLY.sql`), and `ACCEPTED/step-NNN.json`. `plan --step N` refuses while step
-N-1 has no acceptance; `accept --step N` re-reads production (read-only) and records the acceptance
-only at 0 deviations. A step that was undone (its `ROLLBACK.sql` files run), or planned and never
-applied, is closed by `close-reverted --step N` on production's proof that none of its writes stands
-(every planned cell holds its value from before the step, every write it had is reversed by its
-inverse); its record says `reverted`, and a later step plans its sites again.
+`apply.py --emit` its `APPLY.sql`), `ACCEPTED/step-NNN.json` and `REVERTED/step-NNN.json`. A step is
+**closed** by either record. `plan --step N` refuses while step N-1 is not closed; `accept --step N`
+re-reads production (read-only) and records the acceptance only at 0 deviations, and never for a
+step closed as undone. A step that was undone (its `ROLLBACK.sql` files run) - after its acceptance
+or before it - or planned and never applied, is closed by `close-reverted --step N` on production's
+proof that none of its writes stands (every planned cell holds its value from before the step, every
+write it had is reversed by its inverse). Its `REVERTED` record stands beside an acceptance the step
+had (which it copies as `superseded_acceptance`), and a later step plans its sites again.
+`card-file` expects the cards of an undone step at their values from before it.
 
     M=scripts/remediation/mechanical
-    $M/teaser.py plan --run <run> --step N      (read-only; the next <=100 sites of the run)
+    $M/teaser.py plan --run <run> --step N      (read-only; the next <=100 sites of the run;
+                                                 <run> is the run's directory or its bare name)
     $M/apply.py --lane teaser-prov-sNNN --emit | --rehearse | --probe-guards | --apply | --verify
     $M/apply.py --lane teaser-card-sNNN --emit | --rehearse | --probe-guards | --apply | --verify
     $M/apply.py --lane teaser-card-sNNN --rehearse-rollback ; then teaser-prov-sNNN
@@ -82,6 +86,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
         sys.path.insert(0, _root)
 
 from phase3 import write_stage as WS  # noqa: E402 - the psql seam card_json reads through
+from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
 from phase4 import card_json as CJ  # noqa: E402 - the card file's one renderer
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
@@ -127,6 +132,9 @@ PROV, CARD = "prov", "card"
 DESCRIPTION_PROVENANCE_KEY = "_description_provenance"
 RETIRED = "retired"
 ACCEPTED, CLEARED = "accepted", "cleared"
+#: The two closing records of a step (directories under the root): written as planned (`accept`),
+#: or undone (`close-reverted`) - after an acceptance, beside it, or instead of one.
+ACCEPTED_DIR, REVERTED_DIR = "ACCEPTED", "REVERTED"
 
 #: Guard 5 of the provenance lane: the description's sha256, as Postgres computes it - the
 #: orphan-citations lane's premise, the same text (`citations.premise_of` is its Python half).
@@ -551,37 +559,54 @@ def read_steps(root: Path = ROOT) -> list[dict[str, Any]]:
     path = root / "STEPS.jsonl"
     if not path.exists():
         return []
-    text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
-    return [json.loads(line) for line in text.split("\n") if line]
+    return read_jsonl(path)
 
 
-def _acceptance(step: int, root: Path) -> Path:
-    return root / "ACCEPTED" / f"step-{step:03d}.json"
+def _closing(kind: str, step: int, root: Path) -> Path:
+    """The path of a step's closing record of one kind (`ACCEPTED_DIR` or `REVERTED_DIR`)."""
+    return root / kind / f"step-{step:03d}.json"
 
 
 def accepted(step: int, root: Path = ROOT) -> bool:
-    """Whether the step is closed: accepted as written (`accept`) or as undone (`close-reverted`)."""
-    return _acceptance(step, root).exists()
+    """Whether the step was accepted as written (`accept`) - it may have been undone since."""
+    return _closing(ACCEPTED_DIR, step, root).exists()
 
 
 def reverted(step: int, root: Path = ROOT) -> bool:
     """Whether the step was closed as undone: none of its writes stands, its sites are planned
     again."""
-    path = _acceptance(step, root)
-    return path.exists() and json.loads(path.read_text(encoding="utf-8"))["reverted"] is True
+    return _closing(REVERTED_DIR, step, root).exists()
 
 
-def _record_acceptance(step: int, root: Path, record: Mapping[str, Any]) -> None:
-    """The step's one closing record; a step is closed once."""
-    path = _acceptance(step, root)
+def closed(step: int, root: Path = ROOT) -> bool:
+    """Whether the step is settled - accepted as written, or closed as undone - so the next step
+    may be planned and the card file may name it."""
+    return accepted(step, root) or reverted(step, root)
+
+
+def _record_closing(kind: str, step: int, root: Path, record: Mapping[str, Any]) -> None:
+    """A step's closing record of one kind; each kind is written once."""
+    path = _closing(kind, step, root)
     if path.exists():
-        raise PlanError(f"step {step} is closed already ({path})")
+        raise PlanError(f"step {step} has its {kind} record already ({path})")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"step": step, **record}, indent=1, sort_keys=True) + "\n",
         encoding="utf-8",
         newline="\n",
     )
+
+
+def run_name(value: str) -> str:
+    """The run `plan --run` names: its bare name, or its directory as `teaser/run.py --run` takes
+    it (relative to the repository or absolute), which must lie directly under `RUNS`."""
+    path = Path(value)
+    if len(path.parts) == 1:
+        return value
+    resolved = (path if path.is_absolute() else REPO / path).resolve()
+    if resolved.parent != RUNS.resolve():
+        raise PlanError(f"{value} is not a run directory (a run lies directly under {RUNS})")
+    return resolved.name
 
 
 def next_outcomes(
@@ -632,8 +657,7 @@ def _read_outcomes(run: str) -> list[dict[str, Any]]:
     path = RUNS / run / "OUTCOMES.jsonl"
     if not path.exists():
         raise PlanError(f"{path} does not exist - run `teaser/run.py outcomes` first")
-    text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
-    return [json.loads(line) for line in text.split("\n") if line]
+    return read_jsonl(path)
 
 
 def plan_step(
@@ -649,8 +673,11 @@ def plan_step(
     expected = max((s["step"] for s in steps), default=0) + 1
     if step != expected:
         raise PlanError(f"the next step is {expected}, not {step}")
-    if step > 1 and not accepted(step - 1, root):
-        raise PlanError(f"step {step - 1} has no acceptance: `teaser.py accept --step {step - 1}`")
+    if step > 1 and not closed(step - 1, root):
+        raise PlanError(
+            f"step {step - 1} has no acceptance: `teaser.py accept --step {step - 1}` (or "
+            "`close-reverted` after an undo)"
+        )
     undone = frozenset(s["step"] for s in steps if reverted(s["step"], root))
     todo = next_outcomes(run, _read_outcomes(run) if outcomes is None else outcomes, steps, undone)
     if not todo:
@@ -691,11 +718,6 @@ def plan_step(
 
 
 # ------------------------------------------------------------------------------ the acceptance
-def _plan_rows(path: Path) -> list[dict[str, Any]]:
-    text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
-    return [json.loads(line) for line in text.split("\n") if line]
-
-
 ACCEPT_JOURNAL_SQL = (
     "SELECT l.row_pk, l.column_name, l.run_stamp, l.old_value, l.new_value "
     "FROM remediation_change_log l WHERE l.run_stamp IN ({stamps}) ORDER BY l.id"
@@ -765,8 +787,8 @@ def _step_read(
     if record is None:
         raise PlanError(f"step {step} was never planned")
     out = root / step_name(step)
-    prov_rows = _plan_rows(out / PROV / "PLAN.jsonl")
-    card_rows = _plan_rows(out / CARD / "PLAN.jsonl")
+    prov_rows = read_jsonl(out / PROV / "PLAN.jsonl")
+    card_rows = read_jsonl(out / CARD / "PLAN.jsonl")
     listed = ", ".join(
         sql_literal(stamp)
         for kind in (PROV, CARD)
@@ -789,16 +811,18 @@ def accept_step(
     step: int, *, read: Callable[[str], str] = read_production, root: Path = ROOT
 ) -> tuple[int, list[str]]:
     """Re-read production (read-only) for one step; record its acceptance at 0 deviations - once:
-    a closed step is only re-read."""
+    a closed step is only re-read, and a step closed as undone is never accepted."""
     record, prov_rows, card_rows, live, journal, exported_at = _step_read(step, read, root)
     outcomes = {o["site_id"]: o for o in _read_outcomes(record["run"])}
     found = deviations(record, prov_rows, card_rows, live, journal, outcomes)
-    if not found and not accepted(step, root):
-        _record_acceptance(
+    if reverted(step, root):
+        found.insert(0, f"step {step} is closed as undone ({REVERTED_DIR}): it is never accepted")
+    if not found and not closed(step, root):
+        _record_closing(
+            ACCEPTED_DIR,
             step,
             root,
             {
-                "reverted": False,
                 "accepted_at": datetime.now(UTC).isoformat(timespec="seconds"),
                 "read_at": exported_at,
                 "sites": len(record["sites"]),
@@ -858,16 +882,24 @@ def close_reverted(
     step: int, *, read: Callable[[str], str] = read_production, root: Path = ROOT
 ) -> tuple[int, list[str]]:
     """Close an undone (or never applied) step on production's proof that none of its writes
-    stands; its sites are then planned again by a later step. Read-only."""
+    stands; its sites are then planned again by a later step. Read-only. A step accepted before
+    its undo keeps its acceptance as history: the `REVERTED` record copies it
+    (`superseded_acceptance`) and is what `plan`, `accept` and `card-file` read from then on."""
     _record, prov_rows, card_rows, live, journal, exported_at = _step_read(step, read, root)
     found, reversed_cells = standing_writes(step, prov_rows, card_rows, live, journal)
+    acceptance = _closing(ACCEPTED_DIR, step, root)
     if not found:
-        _record_acceptance(
+        _record_closing(
+            REVERTED_DIR,
             step,
             root,
             {
-                "reverted": True,
                 "closed_at": datetime.now(UTC).isoformat(timespec="seconds"),
+                "superseded_acceptance": (
+                    json.loads(acceptance.read_text(encoding="utf-8"))
+                    if acceptance.exists()
+                    else None
+                ),
                 "read_at": exported_at,
                 "sites": len(live),
                 "reversed_cells": reversed_cells,
@@ -890,18 +922,24 @@ def card_file(
     The API boot imports the file into `card_stats` (FIELD_CONTRACT 2.3), so after the card writes
     the file must be the database's before it is pushed - immediately. `card_json`'s own renderer
     (`file_from_cards`, `canonical`, the existing key order, new keys in UUID order, cleared keys
-    removed) renders it; this refuses unless every key it changes is a card cell of the named steps
-    that production now holds, and every one of those steps is accepted. `card_json.py --check`
-    (`ACCEPT_EXIT=0`) is the acceptance of the file that follows."""
+    removed) renders it; this refuses unless every one of the named steps is closed, every key it
+    changes is a card cell of those steps, and production holds each such cell as the steps left
+    it: an accepted step's planned card, an undone step's card from before the step (5.6 of the
+    runbook: after an undo the file is rendered back the same way, never `git revert`-ed). Where
+    two named steps planned the same site - an undone step's site planned again - the later step's
+    expectation wins. `card_json.py --check` (`ACCEPT_EXIT=0`) is the acceptance of the file that
+    follows."""
     for step in steps:
-        if not accepted(step, root):
-            raise PlanError(f"step {step} has no acceptance: the file follows accepted writes only")
-        if reverted(step, root):
-            raise PlanError(f"step {step} was undone: name the written steps only")
+        if not closed(step, root):
+            raise PlanError(
+                f"step {step} has no acceptance: the file follows closed steps only (`accept`, or "
+                "`close-reverted` after an undo)"
+            )
     planned: dict[str, str | None] = {}
-    for step in steps:
-        for row in _plan_rows(root / step_name(step) / CARD / "PLAN.jsonl"):
-            planned[row["site_id"]] = row["new_value"]
+    for step in sorted(steps):
+        undone = reverted(step, root)
+        for row in read_jsonl(root / step_name(step) / CARD / "PLAN.jsonl"):
+            planned[row["site_id"]] = row["old_value"] if undone else row["new_value"]
     current = CJ.read_cards(path)
     live = CJ.production_cards(run_sql)
     moved = {
@@ -917,7 +955,10 @@ def card_file(
         )
     unwritten = sorted(site_id for site_id, card in planned.items() if live.get(site_id) != card)
     if unwritten:
-        raise PlanError(f"{len(unwritten)} planned card(s) are not in production: {unwritten[:3]}")
+        raise PlanError(
+            f"{len(unwritten)} card(s) of the named steps: production does not hold them as the "
+            f"steps left them (first: {unwritten[:3]})"
+        )
     text = CJ.canonical(CJ.file_from_cards(current, live))
     path.write_text(text, encoding="utf-8", newline="\n")
     return {
@@ -972,7 +1013,7 @@ def _print(payload: Any) -> None:
 
 def _run(args: argparse.Namespace) -> int:
     if args.command == "plan":
-        _print(plan_step(args.run, args.step))
+        _print(plan_step(run_name(args.run), args.step))
         return 0
     if args.command == "accept":
         code, found = accept_step(args.step)
@@ -1000,7 +1041,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="teaser", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     plan = sub.add_parser("plan", help="plan the next step of a run (read-only)")
-    plan.add_argument("--run", required=True)
+    plan.add_argument("--run", required=True, help="the run's directory or its bare name")
     plan.add_argument("--step", required=True, type=int)
     accept = sub.add_parser("accept", help="re-read one written step; record it at 0 deviations")
     accept.add_argument("--step", required=True, type=int)
