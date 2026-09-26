@@ -48,7 +48,8 @@ On the **final** card - the writer's text after the assembler's one spoken edit
 * no bracket of any kind (`()[]{}<>` - citation markers included); no `!` (an exclamation is
   marketing, not mystery), `#` (a hashtag) or `*` (markdown emphasis); no superscript or other
   number sign (Unicode `No`), no emoji or pictographic symbol (Unicode `So`, `Cs`, `Co`, `Cn`, the
-  zero-width joiner and the variation selectors); and no bare `c.`/`ca.` left over;
+  zero-width joiner and the variation selectors), no math symbol or arrow (Unicode `Sm`: `+`, `=`,
+  `|`, `~`, `×`, `→`, ...); and no bare `c.`/`ca.` left over;
 * every numeral is grounded: `phase4.scope4.numerals` - the numeral reading of the ungrounded-card
   list (`scope4.ungrounded_card`): ASCII digits with comma thousands and a decimal part, read as a
   value - of the card, each of which must be a numeral of the fact basis (the site's name and the
@@ -104,9 +105,10 @@ _LEADING_THE = re.compile(r"^the\s+", re.IGNORECASE)
 BRACKETS = frozenset("()[]{}<>")
 #: Marks no card carries: an exclamation (marketing, not mystery), a hashtag, markdown emphasis.
 MARKS = frozenset("!#*")
-#: Unicode categories no card may carry: other symbols (emoji, pictographs, (c), degree, arrows),
-#: surrogates, private use, unassigned; and `No` (superscripts, fractions: a footnote in disguise).
-_FORBIDDEN_CATEGORIES = frozenset({"So", "Cs", "Co", "Cn", "No"})
+#: Unicode categories no card may carry: other symbols (`So`: emoji, pictographs, (c), degree),
+#: math symbols (`Sm`: most arrows, `+ = | ~ × ±` - none belongs in a spoken teaser), surrogates,
+#: private use, unassigned; and `No` (superscripts, fractions: a footnote in disguise).
+_FORBIDDEN_CATEGORIES = frozenset({"So", "Sm", "Cs", "Co", "Cn", "No"})
 _FORBIDDEN_CHARS = frozenset({chr(0x200D), chr(0xFE0E), chr(0xFE0F)})  # ZWJ, variation selectors
 _BARE_CIRCA = re.compile(r"(?<![\w.])[Cc]a?\.")
 _TERMINAL = re.compile(r"[.?][\"'”’]?\Z")

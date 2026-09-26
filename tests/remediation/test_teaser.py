@@ -138,7 +138,9 @@ class TestTheMechanicalChecks:
         assert C.MIN_CHARS <= len(long_q) <= C.MAX_CHARS
         assert any(p.startswith("question:") for p in problems(long_q))
 
-    @pytest.mark.parametrize("bad", ["(", "[1]", "🗿", "²", "©", "!", "#", "*"])
+    @pytest.mark.parametrize(
+        "bad", ["(", "[1]", "🗿", "²", "©", "!", "#", "*", "→", "×", "+", "=", "~", "|", "±"]
+    )
     def test_brackets_markers_emojis_and_symbols_are_refused(self, bad: str) -> None:
         card = T.GOOD[T.SKARA].replace("Neolithic", f"Neolithic{bad}")
         assert any(p.startswith("characters") for p in problems(card))

@@ -50,7 +50,8 @@ RULES: tuple[str, ...] = (
     "Name the site: the card must contain one of its NAME FORMS, exactly as listed.",
     "At most one question, at most 60 characters, and it must not imply a claim: 'Who built it?' "
     "says the builders are unknown - only ask it if a sentence says so.",
-    "No brackets, no citation markers, no emojis, no hashtags, no asterisks, no abbreviation 'c.' "
+    "No brackets, no citation markers, no emojis, no symbols (+, =, arrows), no hashtags, no "
+    "asterisks, no abbreviation 'c.' "
     "(write 'circa'); no exclamation marks, no marketing phrases ('hidden gem', 'must-see', 'step "
     "back in time').",
     "The card already shows the site's country and flag: name the country only if it adds to the "
@@ -229,15 +230,16 @@ EXAMPLES: tuple[Example, ...] = (
         ),
         card=(
             "On a hilltop outside Cusco, 3,701 metres up, the Inca walls of Sacsayhuamán lock "
-            "huge, carefully cut boulders together without mortar. How do you make stone fit like "
-            "that?"
+            "huge boulders together without mortar, each one carefully cut to fit its neighbours "
+            "tightly."
         ),
         claims=(
             ("on a hilltop", ("S5",)),
             ("outside Cusco", ("S1",)),
             ("at 3,701 metres", ("S2",)),
             ("the walls are Inca work", ("S2", "S6")),
-            ("huge boulders, carefully cut, fitted together without mortar", ("S4",)),
+            ("huge boulders fitted together without mortar", ("S4",)),
+            ("each boulder carefully cut to fit tightly", ("S4",)),
         ),
     ),
 )
