@@ -304,6 +304,39 @@ Run these searches across all files in scope. Each hit is a candidate finding.
 | `_live_events\[.*\]\.append\|_dict\[.*\]\.append` without cap | `*.py` | D4-PERF | Unbounded in-memory growth per request |
 | `SELECT COUNT\(\*\)` without `WHERE.*user_id\|WHERE.*source` | `*.py` | D1-CORRECT | Aggregate may count wrong scope |
 
+### Type check: `mypy api/` in two configurations
+
+CI's `lint-backend` job installs only `ruff mypy import-linter vulture` and runs
+`mypy api/ --no-error-summary`: without the project's dependencies, `ignore_missing_imports`
+turns every SQLAlchemy, discord.py, pydantic and LangChain type into `Any`, so that run only
+sees errors inside `api/`'s own code. The repo venv has the dependencies installed and sees
+their real types. That run carried 93 errors in 14 files until 2026-09-26 (HUMAN_ONLY A7);
+since then both are clean, and an audit keeps both clean:
+
+```bash
+./.venv/Scripts/python.exe -m mypy api/                  # with dependencies (A7): 0 errors
+# CI's install and nothing else, in a throwaway venv (any Python >= 3.11; on the dev
+# machine C:/Users/marti/AppData/Local/Programs/Python/Python313/python.exe):
+<python> -m venv /tmp/mypy-ci
+/tmp/mypy-ci/Scripts/python.exe -m pip install ruff mypy import-linter==2.13 vulture==2.16
+/tmp/mypy-ci/Scripts/python.exe -m mypy api/ --no-error-summary    # CI's run: exit 0
+```
+
+The dependency-aware run found two real bugs in `api/`: remove-image answered 500 after it
+had stored the exclusion, and `/ask` failed after answering when used in a thread or a voice
+chat (commits tagged `(A7)`, each with a test). The typed spellings that replaced the other
+errors, to reuse rather than silence:
+`pipeline.database.affected_rows(result)` for the rowcount of a data-changing
+`Session.execute`; `.one()` for a row re-read `FOR UPDATE` that must exist; `.scalar_one()` for
+a `COUNT(*)`; `dict(result.tuples())` for two-column rows (not `row.count`, which types as the
+tuple method); `any_(Model.array_column) == value` for array membership;
+`Field(default=...)` for a pydantic default a constructor call omits (a positional default is
+invisible to mypy); in the Discord views `_CallbackButton`, `_disable_buttons` and
+`_component_message` (`api/cardgame/discord_commands.py`) and `LyraBot.own_id`. A newer mypy
+with dependencies can add findings (mypy 2.x enables `--strict-bytes`): check with
+`pip install --target /tmp/mypy2 mypy==<ci version>` and
+`PYTHONPATH=/tmp/mypy2 ./.venv/Scripts/python.exe -m mypy api/` without touching the venv.
+
 ---
 
 ## Severity Classification
@@ -627,6 +660,7 @@ The audit passes only if ALL conditions are met:
 | Docker images pinned | All |
 | LLM prompts have injection guards | All (currently 61, CI-enforced) |
 | Deprecated API usage (P6) | 0 (no `datetime.utcnow()`, no removed stdlib) |
+| `mypy api/`, both configurations (Scanning Strategy) | 0 errors |
 | No `eval()`/`exec()`/`ast.literal_eval()` on external data | 0 |
 | API contract preserved (P9) | No changed defaults/limits without frontend update |
 | DB schema compatible (P10) | No broken queries from schema changes |
