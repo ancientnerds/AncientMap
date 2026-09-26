@@ -12533,3 +12533,135 @@ afterwards. `ruff check` and `ruff format --check` clean on the six touched Pyth
 0.15.11); `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/
 pipeline/ .vulture_whitelist.py --min-confidence 80` clean. Nothing under `api/`, `pipeline/` or
 `ancient-nerds-map/` was touched: no Lyra import check, no frontend gate.
+
+### Lane WA: the second review's findings and their fixes (2026-09-26, branch `wip/wa`)
+
+A second independent review of `wip/wa` (verdict "fix": 1 major, 4 minor). Each finding is fixed,
+tests first, in `bf3669a`, `0002b41`, `bb769c9`, `3e9bb25` and `42691d6`, documented in `3d3ba31` and
+this commit. The orchestrator merged `wip/wa` up to `3d3ba31` into `integrate/wave1` (`c4b4dd1`) and
+fast-forwarded the p4-pilot worktree to it between import rounds; `42691d6` and this commit come
+after that merge.
+
+* **Major - an answer was recorded without its shape check.** The brief only asked for
+  `check-answer`, `opus_handoff.py answer` records any text once, and `ready` read only digests.
+  Fixed: `handoff4.py record` runs `check_answer` first. On a problem it prints it, exits 1 and
+  writes nothing; otherwise it calls `opus_handoff.write_answer` under the batch agent's name. The
+  brief's step 4 records through it. `ready` reads every recorded answer of the batches it judges
+  through `check_answer` again (`shape_problems`, `shape` per batch, `ok` false), so an answer
+  recorded by any other path is caught before its import. Tests:
+  `test_record_writes_an_answer_only_through_its_shape_check`,
+  `test_ready_fails_on_a_recorded_answer_the_import_would_refuse`,
+  `test_ready_names_an_answer_whose_batch_moved_since_the_export`,
+  `test_ready_reads_a_recorded_review_whole`.
+  **The live run, read-only.** This branch's `ready` over all of `handoff/p4-v3-select` (the p4-pilot
+  worktree, 2026-09-26 12:54 UTC, 127 s) found 2,569 selector questions, all answered, and 206
+  batches ready. It found 3 recorded answers the import refuses, all `span-not-offered` ("a1 and t1
+  overlap; no offered span is their union"):
+  - p4-2006 `2a63af83-136d-4c7c-b909-d40ccd3463dc/select` (DESC W4);
+  - p4-2011 `593de422-8bfc-4101-8e13-3db406830e60/select` (DESC W6);
+  - p4-2061 `27f27e7e-4224-4378-b0d2-ef22f88bd725/select` (CARD W5).
+
+  p4-2006 and p4-2011 had already been imported, at 09:41 and 09:45 UTC (the `select.json` mtimes).
+  That was before the fix reached the p4-pilot worktree, which still ran `6e448e3`. Both sites are
+  held `selection-refused` in `runs/v3-2026-09-26` (their batches' `holds.jsonl`) and keep their
+  March description. They go to lane WC like any held site. The finding's point 4 (re-record
+  before their import) came too late for these two.
+  The orchestrator repaired p4-2061 before its select import, at 12:58 UTC, following runbook
+  section 5, "A recorded answer the import would refuse":
+  - The agent's corrected draft,
+    `handoff/p4-v3-select-scratch/p4-2061/27f27e7e-4224-4378-b0d2-ef22f88bd725.fixed.txt` (sha256
+    `22ee9c7639d4634f075103c4bbb1c3974a28f2f157dcd1b13199ebb132cb7277`), passed `check-answer`.
+  - The refused answer file (sha256
+    `85d04877a4fb1bf737b930116c684504e1919a8d8ebe98eefe49222c6541a2af`) was saved to
+    `C:/tmp/wa_run/p4-2061.refused-answer.json` and deleted.
+  - The draft was recorded with `handoff4.py record`, and `ready` then showed 0 shape problems.
+  - Read-only check: the answer file is from 12:58:20 UTC, and p4-2061 had no `select.json` at
+    13:0x UTC.
+
+  The review answers, read the same way (HEAD's `ready` from a clean `git archive` copy, over
+  `handoff/p4-v3-review`, 13:11 UTC, before any review import): 88 batches with 747 questions; 79
+  batches ready, 9 still being answered (51 missing); **0 shape problems**, `ok: true`. So far the
+  run asks 0.690 review questions per selector question (747 of the 1,083 in those 88 batches),
+  about 1,770 for all 2,569.
+* **Minor - no plan-time guard against planning a site twice** (`bb769c9`). A handed site
+  (`--take-deferred`) must be carried by exactly one `--after` plan, in the batch the run deferred
+  it in. `carried_by_runs` reads every run directory under `--run-root` except `UNWRITTEN_RUNS`
+  (the census and pilots 1-3). Production's journal holds `phase4:` rows of pilot 4, mass and D9
+  only (read-only, 2026-09-26: 52, 1,920 and 12 rows). It also reads the P4 apply root's plans,
+  live and kept rounds. `carried_problems` refuses a site another batch carries, and a site the
+  apply root plans from a run it cannot see. Nothing is written on a refusal. Measured offline with
+  the real inputs:
+  - the v3 rebuild gives `779021ad...` again (3,124 sites, p4-2001..p4-2209);
+  - v3d at 21:41Z gives 19 sites in p4-2501..p4-2502 (`a5b1a0c2...`);
+  - both of the review's scenarios are refused: `--after` v3d as well (19 sites), and without
+    `--after PLAN4.v3.jsonl` (3,124 sites).
+* **Minor - the audit's written list** (`3e9bb25`). `audit4.py written --run-dir R --apply-root A`
+  lists, per batch directory of the run whose write batch carries a live `APPLIED.json`, the sites
+  of that write batch's `PLAN.jsonl`, less the sites the run holds since. A write batch of the same
+  id that another run wrote is refused. Read-only: mass 958, pilot 4 26, D9 6, v3 0; pilot 3 is
+  refused (p4-0001 was written from pilot 4). Runbook section 7 builds `written.txt` from it,
+  replacing the glob over `p4-2*/PLAN.jsonl`.
+* **Minor - P5 for a run without the pass** (`0002b41`). `write_gate4.closed_group_problem`
+  refuses `--rehearse` and `--apply` of group P5 for every run (O2, O3); its dry run, `--accept`
+  and `--close-reverted` remain.
+* **Minor - duplicated site-id readers** (`0002b41`, `42691d6`). `snapshot_plan.read_site_ids(path,
+  uuids=...)` is now the one reader. `plan4.read_excluded` is deleted, and `write_gate4.read_audited`
+  reads through it with `uuids=True`. `audit4._ids`, the third reader the review named, reads
+  `--written`, `--exclude` and `--site-ids` through it without the UUID check, because `draw` and
+  `sheet` already refuse an id that is no reviewed site of the run. A blank line, a repeated id, or
+  an empty or missing list is now refused. The real `V3_EXCLUDE_L5.txt` (167 ids) passes. No v3
+  audit has drawn yet. Runbook section 7: the first draw gives no `--exclude`, and later draws
+  concatenate the earlier `drawn-*.txt`.
+
+**Two sweeps raced in the worktree (2026-09-26 13:01:45 UTC).**
+- What happened: two writers raced on `scripts/remediation/phase3/snapshot_plan.py` in
+  `.claude/worktrees/wa`, in the pattern of two concurrent `mutation_sweep` runs sharing
+  `output/remediation/logs/phase3_mutations/backup/`. The second copied the file into the backup
+  after the first had written its mutant. Both restored that mutant and stopped on "restore is not
+  byte-identical", leaving the first case's mutant ("country dropped from the planned fields") in
+  the file and in the backup.
+- Found by: this lane's own sweep, started two seconds later. It stopped on "anchor not found"
+  before writing anything.
+- Who: no process of this lane and none of the orchestrator's (it confirmed); another agent of the
+  build workflow is the likely writer.
+- Repair: the file was restored from HEAD (`git checkout --`). Nothing was committed with the
+  mutant, and the full suite had finished at 13:00:36 on the intact tree. The orchestrator checked
+  that `c4b4dd1`, the main checkout and the p4-pilot worktree carry the `"country",` line.
+- Lesson: never run two sweeps in one worktree, because the backup folder is shared.
+
+**`42691d6` and `b1d50c9`, after the merge.** `42691d6` reads audit4's lists through the one
+reader (above). `b1d50c9` re-anchors "p4 scope4: a scope site id need not be a UUID". This lane's
+`march_lists` (1946183) put a second `uuid.UUID(site_id)` above the scope reader's, and the sweep
+replaces the first occurrence, so the case had been mutating the March reader while its test reads a
+scope file. It is anchored on the scope reader's own message now. A new case, "p4 v3 scope4: a March
+row's id need not be a UUID", covers the March reader's check. A scan of every older case whose
+anchor occurs more often in its target than at `4a973d9` finds this one only. Both need merging
+into `integrate/wave1`. `42691d6` changes `phase4/audit4.py`, so like every `phase4/` change it
+waits for a gap between import rounds, while no `mass4` process runs.
+
+Sweep (this worktree, 13:43-14:24 UTC, one sweep at a time): every case whose target is a file this
+branch changed in `phase4/`, `snapshot_plan.py`, `write_gate4.py` or `verify_writes4.py`, 497
+cases. **495 caught**, and the tree was byte-identical for its 9 files afterwards. The 2 misses:
+- "card_description read from unified_sites": its test skips here, because the gitignored
+  production snapshot is not in the worktree;
+- the scope4 case above: re-anchored in `b1d50c9`, then caught together with the new March case
+  (2/2).
+
+The AUDIT_LOG case ("the audit log loses scope version 3's digest") was run after this entry was
+written. A first run of the same 497 cases had finished its loop with every restore byte-identical,
+but its result table died on a non-cp1252 character printed to a redirected stdout. The driver now
+prints UTF-8.
+
+Gates (worktree `.claude/worktrees/wa`, main venv, 2026-09-26, tree `b1d50c9` plus this commit's
+docs):
+- full suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`, `-p no:cacheprovider`),
+  14:32-14:41 UTC: **7,168 passed, 116 skipped, 57 deselected, 0 failed** (534 s). The skips are the
+  gitignored working data missing from the worktree (Natural Earth caches, the production snapshot,
+  the phase-3 worklist, the bcases cache, the S0 export, design files, `video-assets`) plus the
+  known three: two refactored `article_generator` tests and `THEO_REGEN_TEST`.
+- `ruff check api/ pipeline/` clean; `ruff check` and `ruff format --check` clean on the 15 Python
+  files the branch touched (ruff 0.15.11).
+- `lint-imports`: 2 kept, 0 broken.
+- `vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80`: clean.
+- Nothing under `api/`, `pipeline/` or `ancient-nerds-map/` was touched, so there is no Lyra
+  import check and no frontend gate.

@@ -1467,5 +1467,12 @@ its card is lane WB's (O2, O3). The runbook, with the measured population and ev
   run holds since (an audit hold); a write batch of the same id another run wrote is refused. It
   replaces the runbook's glob over `p4-2*`, which also matched v3d's batches and kept taken-back
   sites, so `audit4 draw` refused mid-run.
+- **One reader of a site-id list** (second review of 2026-09-26): `phase3/snapshot_plan.read_site_ids`
+  (one id per line; a blank line, a repeated id, an empty or missing file refused). `plan4.py build
+  --exclude` and `write_gate4.py --audited` read through it with `uuids=True` (each line a canonical
+  lowercase UUID); `audit4.py`'s `--written`, `--exclude` and `--site-ids` without it, since `draw`
+  and `sheet` refuse an id that is no reviewed site of the run. `plan4.read_excluded` and
+  `write_gate4.read_audited`'s own loop are gone, `audit4._ids` only reads an option not given as
+  no ids.
 - **Not built** (owner decisions 2026-09-26): the design's clearing group C (lanes WC and WB take the
   held texts), and the exclusion of an acceptance draw (O1: no acceptance any more).
