@@ -5417,9 +5417,52 @@ TEASER_CASES: list[Case] = [
                 "test_each_mapped_contradiction_is_a_description_defect_for_its_lane",
             ),
             (
-                "verify: the rewrite and its check see the web facts",
-                "    if stage in (VERIFY_REWRITE, VERIFY_CHECK):",
+                "verify: the rewrite sees the web facts",
+                "    if stage == VERIFY_REWRITE:\n"
+                "        return site.with_web(web_facts(state.verified[0]))",
                 "test_a_contradicted_card_is_rewritten_with_the_pages_and_quotes",
+            ),
+            (
+                "verify: the rewrite's check sees its web facts",
+                "    if stage == VERIFY_CHECK:\n        assert state.writer is not None",
+                "test_a_correction_rests_on_its_web_fact_and_the_fact_basis_records_it",
+            ),
+            (
+                "verify: recorded web facts are still the offered ones",
+                "    if recorded != web_facts(state.verified[0]):",
+                "test_the_rewrite_and_its_check_keep_the_web_facts_they_were_asked_with",
+            ),
+            (
+                "verify: a judgement counts only for its card",
+                '    if judged is not None and judged["card"] != written["card"]:',
+                "test_a_judgement_of_another_card_is_refused",
+            ),
+            (
+                "verify: a re-import cannot swap a judged card",
+                '    if judged is not None and judged["card"] != written["card"]:',
+                "test_a_stage_imported_again_with_another_card_is_refused",
+            ),
+            (
+                "verify: a second verifier's contradiction is a defect",
+                "        if len(state.verified) == 2:",
+                "test_still_contradicted_after_the_rewrite_the_site_gets_no_card",
+            ),
+            (
+                "verify: web facts alone make no defect",
+                "            if not candidates:",
+                "test_a_second_contradiction_of_a_card_on_web_facts_alone_is_no_defect",
+            ),
+            (
+                "verify: a verifier lists the checker's claims",
+                "    if listed < floor:",
+                "test_a_verifier_who_lists_fewer_claims_than_the_checker_is_refused",
+            ),
+            (
+                "verify: the verify import holds the claim floor",
+                "                if short is not None:\n"
+                "                    raise A.AnswerError(short)\n"
+                "                parsed: dict[str, Any] = {}",
+                "test_a_verifier_who_lists_fewer_claims_than_the_checker_is_refused",
             ),
         )
     ),
@@ -5446,15 +5489,80 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "verify: a web fact is a proven contradiction",
-                '        if claim["proven"] and url_problem(claim["url"]) is None',
-                '        if url_problem(claim["url"]) is None',
-                "test_the_web_facts_are_the_proven_contradictions_on_admitted_pages",
+                '        if claim["verdict"] == CONTRADICTED and claim["proven"]',
+                '        if claim["verdict"] == CONTRADICTED',
+                "test_the_web_facts_are_the_proven_contradictions_beyond_the_central_claim",
             ),
             (
-                "verify: a web fact's page passes lane WC's source rule",
-                '        if claim["proven"] and url_problem(claim["url"]) is None',
-                '        if claim["proven"]',
-                "test_the_web_facts_are_the_proven_contradictions_on_admitted_pages",
+                "verify: the central claim is never a web fact",
+                '        for claim in verified["claims"][1:]',
+                '        for claim in verified["claims"]',
+                "test_the_web_facts_are_the_proven_contradictions_beyond_the_central_claim",
+            ),
+            (
+                "verify: a proof's page passes lane WC's source rule",
+                "        elif (refused := url_problem(judged.url)) is not None:",
+                "        elif False:",
+                "test_a_quote_on_a_page_the_source_rule_refuses_proves_nothing",
+            ),
+            (
+                "verify: a refused page is never fetched",
+                "    return sorted({j.url for j in claims if j.url is not None and url_problem(j.url) "
+                "is None})",
+                "    return sorted({j.url for j in claims if j.url is not None})",
+                "test_a_quote_on_a_page_the_source_rule_refuses_proves_nothing",
+            ),
+            (
+                "verify: the provenance's web facts are the recorded ones",
+                '    offered = recorded_web_facts(check, state) if check["stage"] == VERIFY_CHECK '
+                "else ()",
+                '    offered = web_facts(state.verified[0]) if check["stage"] == VERIFY_CHECK '
+                "else ()",
+                "test_the_rewrite_and_its_check_keep_the_web_facts_they_were_asked_with",
+            ),
+            (
+                "verify: an import that would swap a judged card is refused",
+                "        progress(site_id, settled)",
+                "        del site_id",
+                "test_a_stage_imported_again_with_another_card_is_refused",
+            ),
+            (
+                "verify: check-answer holds the claim floor",
+                "claims_floor(len(claims), judge_floor(run, stage, label))",
+                "claims_floor(len(claims), 0)",
+                "test_a_verifier_who_lists_fewer_claims_than_the_checker_is_refused",
+            ),
+            (
+                "verify: the pilot judge holds the claim floor",
+                "                short = claims_floor(len(parsed[site_id][1]), floor)\n"
+                "                if short is not None:",
+                "                short = claims_floor(len(parsed[site_id][1]), floor)\n"
+                "                if False:",
+                "test_a_judge_who_lists_fewer_claims_than_the_checker_is_refused",
+            ),
+            (
+                "verify: a failed fetch that may pass is tried again",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return False",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
+            ),
+            (
+                "verify: no answer at all may pass",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return status == TOO_MANY_REQUESTS or status >= 500",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
+            ),
+            (
+                "verify: a 429 may pass",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return status is None or status >= 500",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
+            ),
+            (
+                "verify: a 5xx may pass",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return status is None or status == TOO_MANY_REQUESTS",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
             ),
             (
                 "verify: a verifier never wrote or checked the card",
@@ -5561,6 +5669,12 @@ TEASER_CASES: list[Case] = [
                 "    _need(len(set(ids)) == len(ids),",
                 "    _need(True,",
                 "test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it",
+            ),
+            (
+                "verify: the verified text is the card",
+                '        verify["text_sha256"] == card_sha256,',
+                "        True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
             ),
         )
     ),
