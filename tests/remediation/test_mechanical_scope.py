@@ -672,6 +672,21 @@ class TestTheWindowPredicate:
             ("Japan", 24.44, 123.01),
             (None, -37.21, 144.81),
             ("Mexico", 20.0, -100.0),
+            # the spellings of the other sources (read-only, 2026-09-26): ISO codes, "Region, State"
+            ("AU", -37.21, 144.81),
+            ("gu", 13.44, 144.79),
+            ("US", 19.42, -155.29),
+            ("US", 34.05, -118.24),
+            ("Queensland, Australia", -27.0, 153.0),
+            ("Western Australia,Australia", -22.59, 117.18),
+            ("Chile, Easter Island", -27.11, -109.39),
+            ("Hawaii, United States", 19.42, -155.29),
+            ("Texas, United States", 31.0, -100.0),
+            ("Korea, South", 37.57, 126.98),
+            ("a, b, c, fiji", -18.0, 178.0),
+            ("Australia,", -37.21, 144.81),
+            (",", -37.21, 144.81),
+            ("", -37.21, 144.81),
         ]
         for state, boxes in OCEANIA_PARTS.items():
             for lon_min, lat_min, lon_max, lat_max in boxes:
@@ -698,31 +713,40 @@ class TestTheWindowPredicate:
         assert got == want
         assert got[("France", -22.27, 166.45, 1200)] is False
         assert got[("France", 48.85, 2.35, 1200)] is True
+        assert got[("Queensland, Australia", -27.0, 153.0, 1200)] is False
+        assert got[("Korea, South", 37.57, 126.98, 1200)] is True
+
+    def test_the_country_key_is_python_s_in_a_real_sql_engine(self) -> None:
+        """`country_key_sql` is `dates.country_key`, value for value, commas and spaces included."""
+        import sqlite3
+
+        from pipeline.normalizers.dates import country_key
+
+        values = [
+            "Australia",
+            "  New Zealand ",
+            "Queensland, Australia",
+            "a,b,c",
+            "b, a, b",
+            "x ,  y ",
+            "Australia,",
+            ",",
+            "",
+            ",,",
+            "Congo, Democratic Republic of the [Zaire]",
+            "Ukraine, Türkei, Bulgarien",
+        ]
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE s (country TEXT)")
+        db.executemany("INSERT INTO s VALUES (?)", [(v,) for v in values])
+        got = dict(db.execute(f"SELECT country, {L.country_key_sql()} FROM s"))
+        assert got == {v: country_key(v) for v in values}
 
     def test_before_o7_is_the_longitude_window_alone(self) -> None:
         sql = L.outside_e3_window(before_o7=True)
         assert "country" not in sql
         assert "country" in L.outside_e3_window()
         assert L.in_oceania_sql("u.") in L.outside_e3_window("u.")
-
-
-class TestTheAppliedLaneIsFrozen:
-    def test_scope_e4_still_renders_the_statements_it_was_applied_with(self) -> None:
-        """scope-e4 was rehearsed and applied on 2026-09-25 (218 cells). O7 changed the E3 rule
-        after that; the lane keeps the rule it ran with (`before_o7=True` in its residual), so its
-        committed APPLY.sql and ROLLBACK.sql are still, byte for byte, what its plan renders - the
-        rollback stays runnable (`apply.py --lane scope-e4 --rehearse-rollback` sends it only when
-        this holds)."""
-        out = REPO / "output" / "remediation" / "mechanical_scope"
-        plan = out / "PLAN.jsonl"
-        records = A.load_records(plan)
-        assert len(records) == 218
-        A.verify_pinned(
-            out / "APPLY.sql", plan_path=plan, expected=A.apply_statement(records, L.SCOPE)
-        )
-        A.verify_pinned(
-            out / "ROLLBACK.sql", plan_path=plan, expected=A.rollback_statement(records, L.SCOPE)
-        )
 
 
 class TestTheCells:

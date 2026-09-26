@@ -43,7 +43,7 @@ A public short-form video ("site short") with spoken narration is to be generate
 |---|---|---|
 | E1 | Write access | The audit **may** apply confirmed fixes. Preconditions: backup + snapshot first, conditional WHERE clauses, change journal as a file. No `DELETE`. No bulk rewrite of descriptions without separate approval. |
 | E2 | Coverage | **All 5,004 sites**, two-stage (finder + adversarial reviewer). |
-| E3 | Scope | Museums stay **if they exhibit ancient material**. Cutoff: **Americas through 1500 AD, rest of world through 500 AD.** |
+| E3 | Scope | Museums stay **if they exhibit ancient material**. Cutoff: **Americas through 1500 AD, rest of world through 500 AD.** Since O7 (owner, 2026-09-26: "Ozeanien wie Amerika") **Oceania through 1500 AD** like the Americas - the one coded rule is `pipeline/normalizers/dates.py` (`e3_region`, `passes_date_cutoff`), its SQL `mechanical/lane.py` (`outside_e3_window`); runbook `WD2_SERVED_IMAGE_AND_SCOPE.md`. |
 | E4 | Out-of-scope handling | **Flag it AND hide it platform-wide.** A new column for this is approved — but only during implementation, not during assessment. |
 | E5 | Card texts | Deferred to the end: review them once the rest of the database is 100 % clean. *(See section 5 — this finding arrived after the decision and should reopen it.)* |
 | E6 | MiniMax | **Not** for the audit. **Explicitly approved for the VLM image scan**, and free to use in live operation later. |

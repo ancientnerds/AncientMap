@@ -36,10 +36,21 @@ class TestTheRegion:
             ("New Zealand", -41.29, 174.78),
             ("  Papua New Guinea ", -6.0, 147.0),  # spaces around the name are stripped
             ("TONGA", -21.13, -175.20),  # case does not matter
+            # the ISO codes geonames and dare store
+            ("AU", -33.75, 143.08),
+            ("GU", 13.44, 144.79),
+            ("PF", -17.53, -149.57),
+            ("US", 19.42, -155.29),  # Hawaii Island
+            ("CL", -27.11, -109.39),  # Rapa Nui
+            # "Region, Country" as earth_impacts and radiocarbon_paleo store it
+            ("Queensland, Australia", -27.0, 153.0),
+            ("Western Australia, Australia", -22.59, 117.18),
+            ("Chile, Easter Island", None, None),  # the island's own name needs no point
+            ("Hawaii, United States", 19.42, -155.29),
         ],
     )
-    def test_oceania(self, country: str, lat: float, lon: float) -> None:
-        assert D.e3_region({"country": country, "lat": lat, "lon": lon}) == D.OCEANIA
+    def test_oceania(self, country: str, lat: float | None, lon: float | None) -> None:
+        assert D.in_oceania(country, lat, lon)
 
     @pytest.mark.parametrize(
         ("country", "lat", "lon", "region"),
@@ -55,6 +66,13 @@ class TestTheRegion:
             ("Japan", 24.44, 123.01, D.REST_OF_WORLD),  # Yonaguni
             (None, -33.75, 143.08, D.REST_OF_WORLD),  # no country: the longitude alone decides
             ("Mexico", 20.0, -100.0, D.AMERICAS),
+            ("US", 34.05, -118.24, D.AMERICAS),  # the code of a state is placed by its boxes too
+            ("FR", 48.85, 2.35, D.REST_OF_WORLD),
+            ("Texas, United States", 31.0, -100.0, D.AMERICAS),
+            ("Korea, South", 37.57, 126.98, D.REST_OF_WORLD),
+            ("Congo, Republic of the", -4.27, 15.28, D.REST_OF_WORLD),
+            ("ID", -4.0, 138.0, D.REST_OF_WORLD),
+            ("Australia,", -33.75, 143.08, D.REST_OF_WORLD),  # nothing after the last comma
         ],
     )
     def test_not_oceania(self, country: str | None, lat: float, lon: float, region: str) -> None:
@@ -74,17 +92,60 @@ class TestTheRegion:
     def test_without_a_longitude_the_region_is_unknown(self) -> None:
         assert D.e3_region({"country": "Australia", "lat": -30.0, "lon": None}) is None
 
-    def test_the_lists_compare_like_sql_lower_trim(self) -> None:
-        """`mechanical/lane.py` renders the lists into `lower(trim(country)) IN (...)`: every name
-        must be what that expression yields for it, in ASCII, where SQL's lower and Python's agree."""
+    def test_the_lists_compare_like_the_rendered_sql(self) -> None:
+        """`mechanical/lane.py` renders the lists into `<country_key> IN (...)`: every name must be
+        what `country_key` yields for it, in ASCII, where SQL's lower and Python's agree - and
+        without a comma, which `country_key` never leaves in a key."""
         for name in (*D.OCEANIA_COUNTRIES, *D.OCEANIA_PARTS):
-            assert name.isascii() and name == name.strip(" ").lower() and name
+            assert name.isascii() and name == D.country_key(name) and name and "," not in name
         assert D.country_key("  New Zealand ") == "new zealand"
+        assert D.country_key("Northern Territory, Australia") == "australia"
+        assert D.country_key("a, b ,  C ") == "c"
+        assert D.country_key("Australia,") == ""
         assert D.country_key(None) is None
+
+    def test_the_codes_are_the_names_of_the_project_s_own_table(self) -> None:
+        """`country_lookup.NAME_TO_ISO` is the project's name -> ISO table: a name it files under an
+        Oceania code is in the list, and a listed name it knows has a listed code - except the
+        island names placed on their state (Easter Island is CL, whose Rapa Nui is a part)."""
+        from pipeline.utils.country_lookup import NAME_TO_ISO
+
+        islands = {"hawaii", "easter island", "rapa nui"}
+        for name, iso in NAME_TO_ISO.items():
+            if iso.lower() in D.OCEANIA_ISO_CODES:
+                assert name in D.OCEANIA_COUNTRIES, name
+            elif name in D.OCEANIA_COUNTRIES:
+                assert name in islands and iso.lower() in D.OCEANIA_PARTS, name
+
+    def test_every_name_lookup_country_gives_an_oceania_territory_is_listed(self) -> None:
+        """`lookup_country` (the loader's and Lyra's reverse geocoder) answers with the `name` of
+        `data/boundaries/countries.geojson`; for every territory under an Oceania code that name is
+        in the list, so a row it placed is Oceania by its name."""
+        import json
+
+        from pipeline.utils.country_lookup import COUNTRIES_FILE
+
+        features = json.loads(COUNTRIES_FILE.read_text(encoding="utf-8"))["features"]
+        names = {
+            f["properties"]["name"]
+            for f in features
+            if str(f["properties"]["ISO3166-1-Alpha-2"]).lower() in D.OCEANIA_ISO_CODES
+        }
+        assert len(names) >= 20
+        assert all(D.country_key(name) in D.OCEANIA_COUNTRIES for name in names), names
 
     def test_no_state_with_a_pacific_box_is_oceania_as_a_whole(self) -> None:
         """A state in both lists would make its boxes dead code - and its mainland Oceania."""
         assert not set(D.OCEANIA_PARTS) & D.OCEANIA_COUNTRIES
+
+    def test_a_state_s_code_has_the_state_s_boxes(self) -> None:
+        for name, code in (
+            ("chile", "cl"),
+            ("france", "fr"),
+            ("united kingdom", "gb"),
+            ("united states", "us"),
+        ):
+            assert D.OCEANIA_PARTS[code] == D.OCEANIA_PARTS[name]
 
     def test_every_box_is_a_box(self) -> None:
         for boxes in D.OCEANIA_PARTS.values():

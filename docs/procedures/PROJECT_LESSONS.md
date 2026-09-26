@@ -143,7 +143,9 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 
 ## Inhalte und Scope
 
-- **Das mittelalterliche Alte Welt ist als Scope verboten**, Amerika bis 1500 AD. Die Regel
+- **Das mittelalterliche Alte Welt ist als Scope verboten**, Amerika bis 1500 AD, Ozeanien seit
+  O7 (Eigentümer, 2026-09-26) ebenfalls bis 1500 AD (`pipeline/normalizers/dates.py`,
+  `e3_region`: Land, ISO-Code oder „Region, Land“; Hawaii/Rapa Nui über Inselboxen). Die Regel
   liegt als Prompt-LABEL (`summary.txt`, PERIOD SCOPE) vor, nicht als Datumscheck — nur
   1,45 % der Sites sind datiert. Sichtbarkeit ab `significance>=2`, Rückzug = HTTP 410.
   *(`project-medieval-scope-rule`, 2026-09-11)*

@@ -626,14 +626,24 @@ SITE_TYPE_SHAPE_READBACK = journal_readback(
 
 
 # ------------------------------------------------------------------------ the scope lane (E4)
+def country_key_sql(prefix: str = "") -> str:
+    """SQL: `pipeline.normalizers.dates.country_key` - the text after the country's last comma,
+    spaces trimmed, lower-cased. `rtrim(c, replace(c, ',', ''))` strips from the right every
+    character but the comma, which leaves the value up to its last comma (or '' without one);
+    replacing that prefix by '' leaves the last part. Portable: PostgreSQL and SQLite read `rtrim`
+    and `replace` alike (the equivalence test runs the rendered SQL in SQLite)."""
+    c = f"{prefix}country"
+    return f"lower(trim(replace({c}, rtrim({c}, replace({c}, ',', '')), '')))"
+
+
 def in_oceania_sql(prefix: str = "") -> str:
     """SQL: the row lies in Oceania - `pipeline.normalizers.dates.in_oceania`, rendered from the
-    same lists: its `lower(trim(country))` is one of `OCEANIA_COUNTRIES`, or it names a state of
+    same lists: its `country_key` is one of `OCEANIA_COUNTRIES`, or it names a state of
     `OCEANIA_PARTS` and its point lies in one of that state's Pacific boxes (edges included)."""
     from pipeline.normalizers.dates import OCEANIA_COUNTRIES, OCEANIA_PARTS
 
     p = prefix
-    country = f"lower(trim({p}country))"
+    country = country_key_sql(p)
     listed = ", ".join(sql_literal(name) for name in sorted(OCEANIA_COUNTRIES))
     parts = " OR ".join(
         f"({country} = {sql_literal(state)} AND {p}lon BETWEEN {lon_min} AND {lon_max} "
@@ -655,8 +665,9 @@ def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
 
     `before_o7=True` renders the rule as it stood until the owner's decision O7 (2026-09-26,
     Oceania through 1500 AD): the longitude window alone. The scope-e4 lane was rehearsed and
-    applied on 2026-09-25 with that text in its residual, and its APPLY.sql and ROLLBACK.sql are
-    pinned to it (`tests/remediation/test_mechanical_scope.py`), so it keeps it.
+    applied on 2026-09-25 with that text in its residual, and its committed APPLY.sql and
+    ROLLBACK.sql must stay what its plan renders (`tests/remediation/test_mechanical.py`,
+    `TestTheDeliveredLanes`), so it keeps it.
     """
     from pipeline.normalizers.dates import (
         AMERICAS_LON_MAX,

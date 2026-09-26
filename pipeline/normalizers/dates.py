@@ -31,13 +31,56 @@ E3_CUTOFFS: Mapping[str, int] = {
 
 #: Oceania as the United Nations geoscheme draws it (M49 region 009, with its four sub-regions
 #: Australia and New Zealand, Melanesia, Micronesia and Polynesia): every state and territory,
-#: under the names a row's `country` carries, compared lower-cased. Three island names M49 files
-#: under another region's state are added because a row may carry the island's own name: Hawaii
-#: (United States) and Easter Island / Rapa Nui (Chile). Rows that carry the state's name instead
-#: - on production on 2026-09-26 Easter Island's eleven rows say "Chile" and French Polynesia's
-#: three say "France" - are placed by `OCEANIA_PARTS`. Western New Guinea is Indonesia's, which
-#: M49 files under South-eastern Asia: it stays in the rest of the world.
-OCEANIA_COUNTRIES = frozenset(
+#: under the names a row's `country` carries, compared as `country_key` reads them. Three island
+#: names M49 files under another region's state are added because a row may carry the island's own
+#: name: Hawaii (United States) and Easter Island / Rapa Nui (Chile). Rows that carry the state's
+#: name instead - on production on 2026-09-26 Easter Island's eleven curated rows say "Chile" and
+#: French Polynesia's three say "France" - are placed by `OCEANIA_PARTS`. Western New Guinea is
+#: Indonesia's, which M49 files under South-eastern Asia: it stays in the rest of the world.
+#:
+#: The spellings are the ones `unified_sites.country` holds (read-only, 2026-09-26): the curated
+#: rows and `lookup_country` (Natural Earth's `name`) spell the name out; `geonames` and `dare`
+#: store the ISO 3166-1 alpha-2 code (`AU`, `GU`, `PF`, ...), so every Oceania code is listed too;
+#: `earth_impacts` and `radiocarbon_paleo` store "Region, Country" ("Queensland, Australia"),
+#: which `country_key` reads by its last part.
+OCEANIA_ISO_CODES = frozenset(
+    {
+        # Australia and New Zealand
+        "au",
+        "nz",
+        "cx",
+        "cc",
+        "hm",
+        "nf",
+        # Melanesia
+        "fj",
+        "nc",
+        "pg",
+        "sb",
+        "vu",
+        # Micronesia
+        "gu",
+        "ki",
+        "mh",
+        "fm",
+        "nr",
+        "mp",
+        "pw",
+        "um",
+        # Polynesia
+        "as",
+        "ck",
+        "nu",
+        "pn",
+        "pf",
+        "ws",
+        "tk",
+        "to",
+        "tv",
+        "wf",
+    }
+)
+OCEANIA_COUNTRIES = OCEANIA_ISO_CODES | frozenset(
     {
         # Australia and New Zealand
         "australia",
@@ -91,30 +134,40 @@ _US_PACIFIC: tuple[tuple[float, float, float, float], ...] = (
     (166.0, 19.0, 167.0, 20.0),  # Wake Island
 )
 
-#: The Pacific islands of states whose rows carry the state's name: one box per island group,
-#: `(lon_min, lat_min, lon_max, lat_max)` in degrees, each drawn around the group and reaching no
-#: other part of that state. A row is Oceania when its lower-cased `country` is the key and its
+_RAPA_NUI = ((-110.0, -28.0, -105.0, -26.0),)  # Rapa Nui and Salas y Gomez
+_FRENCH_PACIFIC = (
+    (-155.0, -28.5, -134.0, -7.0),  # French Polynesia
+    (157.0, -24.0, 173.0, -17.0),  # New Caledonia with Chesterfield, Matthew and Hunter
+    (-179.0, -15.0, -176.0, -13.0),  # Wallis and Futuna
+)
+_PITCAIRN = ((-131.0, -26.0, -124.0, -23.0),)  # the Pitcairn Islands
+
+#: The Pacific islands of states whose rows carry the state's name (or its ISO code): one box per
+#: island group, `(lon_min, lat_min, lon_max, lat_max)` in degrees, each drawn around the group and
+#: reaching no other part of that state. A row is Oceania when its `country_key` is the key and its
 #: point lies in one of the key's boxes (the edges count).
 OCEANIA_PARTS: Mapping[str, tuple[tuple[float, float, float, float], ...]] = {
-    "chile": ((-110.0, -28.0, -105.0, -26.0),),  # Rapa Nui and Salas y Gomez
-    "france": (
-        (-155.0, -28.5, -134.0, -7.0),  # French Polynesia
-        (157.0, -24.0, 173.0, -17.0),  # New Caledonia with Chesterfield, Matthew and Hunter
-        (-179.0, -15.0, -176.0, -13.0),  # Wallis and Futuna
-    ),
-    "united kingdom": ((-131.0, -26.0, -124.0, -23.0),),  # the Pitcairn Islands
+    "chile": _RAPA_NUI,
+    "cl": _RAPA_NUI,
+    "france": _FRENCH_PACIFIC,
+    "fr": _FRENCH_PACIFIC,
+    "united kingdom": _PITCAIRN,
+    "gb": _PITCAIRN,
     "united states": _US_PACIFIC,
     "united states of america": _US_PACIFIC,
     "usa": _US_PACIFIC,
+    "us": _US_PACIFIC,
 }
 
 
 def country_key(country: str | None) -> str | None:
-    """A `country` value as the Oceania lists compare it: spaces stripped, lower-cased - SQL's
-    `lower(trim(country))`, which `mechanical/lane.py` renders from the same lists."""
+    """A `country` value as the Oceania lists compare it: the text after its last comma (the
+    whole value when it has none - "Queensland, Australia" is read as "australia"), spaces
+    stripped, lower-cased. `mechanical/lane.py` renders the same reading into SQL from the same
+    lists (`in_oceania_sql`)."""
     if country is None:
         return None
-    return country.strip(" ").lower()
+    return country.rsplit(",", 1)[-1].strip(" ").lower()
 
 
 def in_oceania(country: str | None, lat: float | None, lon: float | None) -> bool:
