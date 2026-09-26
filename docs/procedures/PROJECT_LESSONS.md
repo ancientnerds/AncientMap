@@ -191,6 +191,13 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 - **Kein LLM-über-LLM zur Quellenprüfung** — für Zitat-Treue maschinell prüfen
   (Keyword-Matching). Das betrifft *Quellen*, nicht das Code-Review durch Prüfer.
   *(`feedback_no_ai_slop`)*
+- **Wikimedia sperrt einen User-Agent ohne Kontakt** (`403 Please respect our robot policy`,
+  mit httpx gemessen 2026-09-26); die öffentliche Projekt-URL als Kontakt genügt
+  (`AncientMapRemediation/1.0 (https://ancientnerds.com; research)` bekommt 200) — dafür braucht
+  es keine personenbezogenen Daten. Eine Bot-Sperre wird nie umgangen (auch nicht über einen
+  anderen TLS-Handshake): UNESCO WHC, Atlas Obscura, Britannica und Historic England antworten
+  mit 403 und gelten als maschinell nicht lesbar. *(WD1-Review, `docs/procedures/FIELDS_WD1.md`,
+  2026-09-26)*
 
 ## Nicht mehr gültig
 
