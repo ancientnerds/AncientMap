@@ -1,0 +1,246 @@
+{
+ "countries": {
+  "Afghanistan": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 3
+  },
+  "Algeria": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 3
+  },
+  "Azerbaijan": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 3
+  },
+  "Bahrain": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 4
+  },
+  "Belize": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 4
+  },
+  "Bulgaria": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 8
+  },
+  "Cyprus": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Denmark": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 3
+  },
+  "Egypt": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 14
+  },
+  "England": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 47
+  },
+  "Eritrea": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 6
+  },
+  "Ethiopia": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 1
+  },
+  "France": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Georgia": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Germany": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 13
+  },
+  "Greece": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 10
+  },
+  "Guatemala": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 3
+  },
+  "Honduras": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Indonesia": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Iraq": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 10
+  },
+  "Israel": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 4
+  },
+  "Italy": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 12
+  },
+  "Lebanon": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Mexico": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Mongolia": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Netherlands": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Northern Ireland": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Pakistan": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 5
+  },
+  "Peru": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 10
+  },
+  "Scotland": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 4
+  },
+  "South Korea": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 1
+  },
+  "Spain": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Sweden": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 4
+  },
+  "Switzerland": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 2
+  },
+  "Türkiye": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 5
+  },
+  "USA": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 11
+  },
+  "Ukraine": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 8
+  },
+  "Wales": {
+   "clear_rate": 0.0,
+   "exhausted_clear": 0,
+   "exhausted_held": 0,
+   "fields": 8
+  }
+ },
+ "gate": {
+  "max_country_rate": 0.2,
+  "max_rate": 0.1,
+  "min_country_fields": 10
+ },
+ "overall": {
+  "clear_rate": 0.0,
+  "exhausted_clear": 0,
+  "exhausted_held": 0,
+  "fields": 228
+ },
+ "reported_at": "2026-09-26T20:01:07+00:00",
+ "stopped_by": [],
+ "verdict": "PASS"
+}

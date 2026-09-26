@@ -1,0 +1,64 @@
+{
+ "asked_field_sets": {
+  "coordinates+period_start": 13,
+  "coordinates+period_start+site_type": 15,
+  "coordinates+period_start+site_type+source_url": 29,
+  "coordinates+period_start+source_url": 1,
+  "period_start": 5,
+  "period_start+site_type": 15,
+  "period_start+source_url": 1,
+  "site_type": 1
+ },
+ "fields_asked": 228,
+ "flagged": {
+  "coordinates": 0,
+  "period_start": 4,
+  "site_type": 2,
+  "source_url": 0
+ },
+ "flagged_only": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "identity_doubt": 25,
+ "part": "conflict",
+ "per_field": {
+  "coordinates": {
+   "CONFIRMED": 22,
+   "CONFLICT": 50,
+   "MISSING": 8
+  },
+  "period_start": {
+   "CONFIRMED": 1,
+   "CONFLICT": 6,
+   "MISSING": 73
+  },
+  "site_type": {
+   "CONFIRMED": 20,
+   "CONFLICT": 46,
+   "MISSING": 14
+  },
+  "source_url": {
+   "CONFIRMED": 49,
+   "CONFLICT": 31
+  }
+ },
+ "period_name_not_bucket_of_start": 0,
+ "pilot": {
+  "seed": 20260927,
+  "size": 80
+ },
+ "retired_not_classified": 78,
+ "seeds": {
+  "cells": 54,
+  "sites": 46,
+  "sites_not_classified": []
+ },
+ "sites": 80,
+ "sites_asked": 80,
+ "stacked_points": 3,
+ "table_sha256": "7be7543dbf10817ad9ca51a58f65e3618e321149c86e3325997c00a5636abcde",
+ "without": null
+}
