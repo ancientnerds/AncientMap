@@ -579,6 +579,37 @@ video/test/                 vitest: layout overlap geometry, marker transform ma
 Common to all: hook, ClaimBoard + Meter, EvidenceCard/SourceViewer, twist, ShareCard, verdict,
 "what would change our mind".
 
+### 4.11 GPU: always the NVIDIA RTX 3080, never the integrated AMD (binding, owner 2026-09-26)
+
+The workstation is a hybrid laptop: **NVIDIA GeForce RTX 3080 Laptop GPU** (Windows Task Manager
+"GPU 1"; the only CUDA device, so CUDA/NVENC index **0**) and an integrated **AMD Radeon** (Task
+Manager "GPU 0"). Owner rule: every GPU workload of the studio runs on the NVIDIA; the AMD is never
+used, and a run that would land on it (or on software rendering) must fail loudly instead.
+
+- **Every Chromium the studio drives** (the Puppeteer recorder `ancient-nerds-map/video/record.ts`,
+  the Playwright platform and source captures, Remotion's browser for lint/render/still) runs on the
+  NVIDIA. For Puppeteer/Playwright: the flags `record.ts` already uses (`--use-angle=d3d11`,
+  `--force_high_performance_gpu`, `--force-high-performance-gpu`, `--enable-gpu-rasterization`,
+  `--ignore-gpu-blocklist`). Remotion does not accept arbitrary Chromium flags, so its browser
+  executable gets the Windows per-app GPU preference (registry
+  `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, value name = absolute exe path, data
+  `GpuPreference=2;`), set by `python -m pipeline.studio doctor --fix-gpu` and checked by `doctor`.
+- **Proof, not assumption:** each capture and each lint/render/still start reads WebGL's
+  `UNMASKED_RENDERER_WEBGL` in the page it drives and aborts with a precise error unless it names
+  the NVIDIA (not AMD, not SwiftShader/"Basic Render"). The capture manifest and the render ledger
+  record the renderer string.
+- **Encoding:** H.264/HEVC encodes run on NVENC explicitly (`h264_nvenc`/`hevc_nvenc` with
+  `-gpu 0`). Remotion's `hardwareAcceleration: 'if-possible'` is not used: on Windows it silently
+  encodes in software, which is exactly the fallback this project forbids. If Remotion itself cannot
+  encode on NVENC here, it renders an intermediate (e.g. ProRes/PNG sequence or a lossless chunk) and
+  the studio encodes that with ffmpeg NVENC; a missing NVENC is an error, not a software encode.
+- **Transcription:** the studio's word timings run faster-whisper on `device="cuda",
+  device_index=0` (float16). If the CUDA runtime libraries do not load, that is a setup error to fix
+  (install the pinned NVIDIA wheels), never a silent CPU run. The site Shorts keep their current CPU
+  setting unless changed deliberately; the studio passes its device explicitly.
+- `doctor` reports the GPU state (nvidia-smi, the renderer strings, the registry preference, NVENC
+  availability) and exits non-zero on any mismatch.
+
 ## 5. Claude Code operation
 
 - The `.gitignore` gains exceptions `!.claude/skills/`, `!.claude/skills/**`, `!.claude/workflows/`,
