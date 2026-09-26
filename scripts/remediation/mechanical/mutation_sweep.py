@@ -5068,6 +5068,14 @@ WD1_CASES: list[Case] = [
         "test_a_start_after_the_end_is_refused",
         FIELDS_PLAN_TESTS,
     ),
+    Case(
+        "wd1: a zero end is no end",
+        FIELDS / "plan.py",
+        "end is not None and int(end) != 0 and int(new) > int(end):",
+        "end is not None and int(new) > int(end):",
+        "test_a_zero_end_is_no_end",
+        FIELDS_PLAN_TESTS,
+    ),
     guard(
         "wd1: a label follows its start",
         FIELDS / "plan.py",

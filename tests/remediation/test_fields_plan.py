@@ -134,6 +134,12 @@ class TestSiteCells:
         out = cells([decision("period_start", "replace", "100", -700)], row=live(period_end=-100))
         assert out[0].reason == "period-end-precedes-start" and written(out) == {}
 
+    def test_a_zero_end_is_no_end(self) -> None:
+        # the codebase reads a site's date as `period_end or period_start` (mechanical/lane.py),
+        # so a period_end of 0 is no end and refuses no start
+        out = cells([decision("period_start", "replace", "100", -700)], row=live(period_end=0))
+        assert written(out)["period_start"] == ("-700", "100") and not [v for v in out if not v.ok]
+
     def test_a_decision_about_another_value_is_refused(self) -> None:
         out = cells([decision("site_type", "replace", "Temple", "Town")])
         assert out[0].reason == "moved-since-classification"
