@@ -1,0 +1,8246 @@
+{
+ "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes); pinned by fields/classify.py TABLE_SHA256.",
+ "classes": {
+  "Q5": {
+   "label": "human",
+   "kind": "other",
+   "types": []
+  },
+  "Q358": {
+   "label": "heritage site",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q474": {
+   "label": "aqueduct",
+   "kind": "site",
+   "types": [
+    "Aqueduct",
+    "Reservoir/aqueduct/canal",
+    "Infrastructure"
+   ]
+  },
+  "Q515": {
+   "label": "city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q532": {
+   "label": "village",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2977": {
+   "label": "cathedral",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery"
+   ]
+  },
+  "Q3914": {
+   "label": "school",
+   "kind": "container",
+   "types": []
+  },
+  "Q3947": {
+   "label": "house",
+   "kind": "site",
+   "types": [
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Settlement"
+   ]
+  },
+  "Q3957": {
+   "label": "town",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q4022": {
+   "label": "river",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q4421": {
+   "label": "forest",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q4817": {
+   "label": "column",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial",
+    "Sculptured stone",
+    "Minaret/tower"
+   ]
+  },
+  "Q5084": {
+   "label": "hamlet",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q5737": {
+   "label": "burial mound",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork"
+   ]
+  },
+  "Q7075": {
+   "label": "library",
+   "kind": "generic",
+   "types": []
+  },
+  "Q8072": {
+   "label": "volcano",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q8502": {
+   "label": "mountain",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q9259": {
+   "label": "World Heritage Site",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q9621": {
+   "label": "human skeleton",
+   "kind": "other",
+   "types": []
+  },
+  "Q12277": {
+   "label": "arch",
+   "kind": "site",
+   "types": [
+    "Gate/archway/bridge",
+    "Gate",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q12280": {
+   "label": "bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q12284": {
+   "label": "canal",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q12323": {
+   "label": "dam",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q12516": {
+   "label": "pyramid",
+   "kind": "site",
+   "types": [
+    "Pyramid complex",
+    "City/town/settlement, Pyramid complex",
+    "Tomb",
+    "Temple",
+    "Temple complex",
+    "Monument",
+    "Necropolis/tombs complex",
+    "Funerary"
+   ]
+  },
+  "Q12518": {
+   "label": "tower",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Fortification",
+    "Fort",
+    "Military"
+   ]
+  },
+  "Q16560": {
+   "label": "palace",
+   "kind": "site",
+   "types": [
+    "Palace",
+    "Castle/palace",
+    "Residence/villa/farmhouse"
+   ]
+  },
+  "Q16970": {
+   "label": "church building",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery"
+   ]
+  },
+  "Q17737": {
+   "label": "theory",
+   "kind": "other",
+   "types": []
+  },
+  "Q19757": {
+   "label": "Roman theatre",
+   "kind": "site",
+   "types": [
+    "Theater",
+    "Theatre",
+    "Amphitheatre"
+   ]
+  },
+  "Q22698": {
+   "label": "park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q22731": {
+   "label": "stone",
+   "kind": "site",
+   "types": [
+    "Megalithic stones",
+    "Standing stone",
+    "Sculptured stone",
+    "Natural feature",
+    "Inscription",
+    "Megalithic"
+   ]
+  },
+  "Q22746": {
+   "label": "urban park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q23397": {
+   "label": "lake",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q23413": {
+   "label": "castle",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort"
+   ]
+  },
+  "Q23442": {
+   "label": "island",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q23790": {
+   "label": "natural monument",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q24354": {
+   "label": "theatre building",
+   "kind": "site",
+   "types": [
+    "Theater",
+    "Theatre",
+    "Amphitheatre"
+   ]
+  },
+  "Q27919": {
+   "label": "lava tube",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q29553": {
+   "label": "sanctuary",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
+  "Q32815": {
+   "label": "mosque",
+   "kind": "site",
+   "types": [
+    "Mosque",
+    "Religious"
+   ]
+  },
+  "Q33506": {
+   "label": "museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q33837": {
+   "label": "archipelago",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q34023": {
+   "label": "tumulus",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork"
+   ]
+  },
+  "Q34442": {
+   "label": "road",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q34627": {
+   "label": "synagogue",
+   "kind": "site",
+   "types": [
+    "Religious",
+    "Temple"
+   ]
+  },
+  "Q34763": {
+   "label": "peninsula",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q35509": {
+   "label": "cave",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q39594": {
+   "label": "bay",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q39614": {
+   "label": "cemetery",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q39715": {
+   "label": "lighthouse",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Harbor",
+    "Port",
+    "Monument",
+    "Infrastructure"
+   ]
+  },
+  "Q39816": {
+   "label": "valley",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q40357": {
+   "label": "prison",
+   "kind": "generic",
+   "types": []
+  },
+  "Q41176": {
+   "label": "building",
+   "kind": "generic",
+   "types": []
+  },
+  "Q42195": {
+   "label": "petroglyph",
+   "kind": "site",
+   "types": [
+    "Rock art",
+    "Petroglyphs",
+    "Rock relief/carving",
+    "Cave Structures, Rock art",
+    "Geoglyphs",
+    "Sculptured stone"
+   ]
+  },
+  "Q42948": {
+   "label": "wall",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Megalithic walls",
+    "Military",
+    "Earthwork"
+   ]
+  },
+  "Q43616": {
+   "label": "mummy",
+   "kind": "other",
+   "types": []
+  },
+  "Q43742": {
+   "label": "oasis",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Natural feature"
+   ]
+  },
+  "Q44377": {
+   "label": "tunnel",
+   "kind": "site",
+   "types": [
+    "Infrastructure",
+    "Reservoir/aqueduct/canal",
+    "Aqueduct",
+    "Road",
+    "Road/avenue/trackway",
+    "Cave Structures"
+   ]
+  },
+  "Q44475": {
+   "label": "spear",
+   "kind": "other",
+   "types": []
+  },
+  "Q44539": {
+   "label": "temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q44613": {
+   "label": "monastery",
+   "kind": "site",
+   "types": [
+    "Monastery",
+    "Religious",
+    "Church",
+    "Church/cathedral",
+    "Temple complex"
+   ]
+  },
+  "Q45776": {
+   "label": "fjord",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q45791": {
+   "label": "geoglyph",
+   "kind": "site",
+   "types": [
+    "Geoglyphs",
+    "Rock art",
+    "Earthwork"
+   ]
+  },
+  "Q46169": {
+   "label": "national park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q47521": {
+   "label": "stream",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q48634": {
+   "label": "sarcophagus",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q53060": {
+   "label": "gate",
+   "kind": "site",
+   "types": [
+    "Gate",
+    "Gate/archway/bridge",
+    "Fortification",
+    "Monument"
+   ]
+  },
+  "Q54050": {
+   "label": "hill",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q54831": {
+   "label": "amphitheatre",
+   "kind": "site",
+   "types": [
+    "Amphitheatre",
+    "Theatre",
+    "Theater",
+    "Stadium"
+   ]
+  },
+  "Q56061": {
+   "label": "administrative territorial entity",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q57058": {
+   "label": "municipality of Croatia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q57346": {
+   "label": "defensive wall",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Megalithic walls",
+    "Military",
+    "Earthwork"
+   ]
+  },
+  "Q57821": {
+   "label": "fortification",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle",
+    "Wall",
+    "Earthwork",
+    "Gate"
+   ]
+  },
+  "Q57831": {
+   "label": "fortress",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q60129": {
+   "label": "monopteros",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site",
+    "Monument"
+   ]
+  },
+  "Q70208": {
+   "label": "municipality of Switzerland",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q74047": {
+   "label": "ghost town",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q75520": {
+   "label": "plateau",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q80793": {
+   "label": "sundial",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial",
+    "Sculptured stone",
+    "Inscription"
+   ]
+  },
+  "Q81917": {
+   "label": "fortified tower",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Fortification",
+    "Fort",
+    "Military",
+    "Fortress"
+   ]
+  },
+  "Q82101": {
+   "label": "blockhouse",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q82117": {
+   "label": "city gate",
+   "kind": "site",
+   "types": [
+    "Gate",
+    "Gate/archway/bridge",
+    "Fortification",
+    "Monument"
+   ]
+  },
+  "Q82137": {
+   "label": "broch",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Fortification",
+    "Fort",
+    "Settlement",
+    "Megalithic structures"
+   ]
+  },
+  "Q82794": {
+   "label": "region",
+   "kind": "container",
+   "types": []
+  },
+  "Q83620": {
+   "label": "thoroughfare",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q88205": {
+   "label": "castrum",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q88291": {
+   "label": "citadel",
+   "kind": "site",
+   "types": [
+    "Citadel",
+    "Fortress/citadel",
+    "Fortress",
+    "Fortification",
+    "Castle",
+    "Fort"
+   ]
+  },
+  "Q88598": {
+   "label": "gord",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Fort",
+    "Fortification",
+    "Fortress",
+    "Earthwork"
+   ]
+  },
+  "Q89477": {
+   "label": "castellum",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q91759": {
+   "label": "crannog",
+   "kind": "site",
+   "types": [
+    "Settlement",
+    "Residence/villa/farmhouse",
+    "Fortification",
+    "Underwater structures",
+    "Village"
+   ]
+  },
+  "Q91818": {
+   "label": "dun",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q92026": {
+   "label": "Japanese castle",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort"
+   ]
+  },
+  "Q92062": {
+   "label": "motte-and-bailey castle",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort",
+    "Earthwork",
+    "Mound/tumulus"
+   ]
+  },
+  "Q92086": {
+   "label": "promontory fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q92383": {
+   "label": "ringfort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q101659": {
+   "label": "dolmen",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Tomb",
+    "Burial",
+    "Funerary"
+   ]
+  },
+  "Q101687": {
+   "label": "altar",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious",
+    "Monument"
+   ]
+  },
+  "Q102496": {
+   "label": "parish",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q105190": {
+   "label": "levee",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall",
+    "Reservoir/aqueduct/canal"
+   ]
+  },
+  "Q108325": {
+   "label": "chapel",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery"
+   ]
+  },
+  "Q109391": {
+   "label": "volcanic crater",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q109607": {
+   "label": "ruins",
+   "kind": "generic",
+   "types": [
+    "Ruin",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q115278": {
+   "label": "fire temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q120560": {
+   "label": "minor basilica",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery"
+   ]
+  },
+  "Q123705": {
+   "label": "neighborhood",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q124714": {
+   "label": "spring",
+   "kind": "site",
+   "types": [
+    "Well",
+    "Natural feature",
+    "Sacred site",
+    "Reservoir/aqueduct/canal",
+    "Bath"
+   ]
+  },
+  "Q130003": {
+   "label": "ski resort",
+   "kind": "container",
+   "types": []
+  },
+  "Q131295": {
+   "label": "brothel",
+   "kind": "generic",
+   "types": []
+  },
+  "Q131559": {
+   "label": "shield",
+   "kind": "other",
+   "types": []
+  },
+  "Q131596": {
+   "label": "farm",
+   "kind": "container",
+   "types": [
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Settlement",
+    "Village"
+   ]
+  },
+  "Q131668": {
+   "label": "acropolis",
+   "kind": "site",
+   "types": [
+    "Citadel",
+    "Fortress/citadel",
+    "Fortress",
+    "Fortification",
+    "Temple complex",
+    "Temple",
+    "Sanctuary",
+    "City",
+    "City/town/settlement",
+    "Settlement"
+   ]
+  },
+  "Q131681": {
+   "label": "reservoir",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q133056": {
+   "label": "mountain pass",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q133067": {
+   "label": "mosaic",
+   "kind": "other",
+   "types": []
+  },
+  "Q133156": {
+   "label": "colony",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q133442": {
+   "label": "city-state",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q134626": {
+   "label": "district capital",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q143912": {
+   "label": "triumphal arch",
+   "kind": "site",
+   "types": [
+    "Gate/archway/bridge",
+    "Gate",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q146083": {
+   "label": "Ancient Egyptian deity",
+   "kind": "other",
+   "types": []
+  },
+  "Q146924": {
+   "label": "Roman limes",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Military",
+    "Fort",
+    "Earthwork",
+    "Road/avenue/trackway"
+   ]
+  },
+  "Q148837": {
+   "label": "polis",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q150784": {
+   "label": "canyon",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q151710": {
+   "label": "Q151710",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q156030": {
+   "label": "liman",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q156362": {
+   "label": "winery",
+   "kind": "container",
+   "types": []
+  },
+  "Q158438": {
+   "label": "arch bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q159334": {
+   "label": "secondary school",
+   "kind": "container",
+   "types": []
+  },
+  "Q160091": {
+   "label": "plain",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q162875": {
+   "label": "mausoleum",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Funerary",
+    "Burial",
+    "Monument",
+    "Memorial",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q163687": {
+   "label": "basilica",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery",
+    "Forum"
+   ]
+  },
+  "Q164099": {
+   "label": "hoard",
+   "kind": "other",
+   "types": []
+  },
+  "Q164240": {
+   "label": "megalith",
+   "kind": "site",
+   "types": [
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Megalithic walls",
+    "Stone circle",
+    "Dolmen",
+    "Standing stone"
+   ]
+  },
+  "Q167346": {
+   "label": "botanical garden",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q169358": {
+   "label": "stratovolcano",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q170153": {
+   "label": "ziggurat",
+   "kind": "site",
+   "types": [
+    "Pyramid complex",
+    "City/town/settlement, Pyramid complex",
+    "Tomb",
+    "Temple",
+    "Temple complex",
+    "Monument",
+    "Necropolis/tombs complex",
+    "Funerary"
+   ]
+  },
+  "Q170980": {
+   "label": "obelisk",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial",
+    "Megalithic stones",
+    "Standing stone",
+    "Inscription",
+    "Sculptured stone"
+   ]
+  },
+  "Q172896": {
+   "label": "catacombs",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cave Structures"
+   ]
+  },
+  "Q173387": {
+   "label": "grave",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q174782": {
+   "label": "square",
+   "kind": "site",
+   "types": [
+    "Forum",
+    "Urban",
+    "Monument"
+   ]
+  },
+  "Q175582": {
+   "label": "Egyptian pyramids",
+   "kind": "site",
+   "types": [
+    "Pyramid complex",
+    "City/town/settlement, Pyramid complex",
+    "Tomb",
+    "Temple",
+    "Temple complex",
+    "Monument",
+    "Necropolis/tombs complex",
+    "Funerary"
+   ]
+  },
+  "Q177380": {
+   "label": "hot spring",
+   "kind": "site",
+   "types": [
+    "Well",
+    "Natural feature",
+    "Sacred site",
+    "Reservoir/aqueduct/canal",
+    "Bath"
+   ]
+  },
+  "Q178561": {
+   "label": "battle",
+   "kind": "other",
+   "types": []
+  },
+  "Q178743": {
+   "label": "stele",
+   "kind": "site",
+   "types": [
+    "Inscription",
+    "Sculptured stone",
+    "Monument",
+    "Rock relief/carving",
+    "Standing stone",
+    "Megalithic stones",
+    "Memorial"
+   ]
+  },
+  "Q179049": {
+   "label": "nature reserve",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q179700": {
+   "label": "statue",
+   "kind": "site",
+   "types": [
+    "Sculptured stone",
+    "Megalithic statues",
+    "Monument",
+    "Memorial",
+    "Rock relief/carving"
+   ]
+  },
+  "Q180174": {
+   "label": "folly",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q180370": {
+   "label": "hospital",
+   "kind": "container",
+   "types": []
+  },
+  "Q180927": {
+   "label": "mastaba",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q180987": {
+   "label": "stupa",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Religious",
+    "Sacred site",
+    "Monument",
+    "Sanctuary"
+   ]
+  },
+  "Q183061": {
+   "label": "façade",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Rock relief/carving",
+    "Tomb",
+    "Temple"
+   ]
+  },
+  "Q185113": {
+   "label": "cape",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q185187": {
+   "label": "watermill",
+   "kind": "site",
+   "types": [
+    "Infrastructure",
+    "Reservoir/aqueduct/canal"
+   ]
+  },
+  "Q186685": {
+   "label": "marae",
+   "kind": "site",
+   "types": [
+    "Sacred site",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Religious",
+    "Temple",
+    "Megalithic",
+    "Monument",
+    "Sanctuary"
+   ]
+  },
+  "Q187909": {
+   "label": "agora",
+   "kind": "site",
+   "types": [
+    "Forum",
+    "Urban",
+    "Monument"
+   ]
+  },
+  "Q187971": {
+   "label": "wadi",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q188040": {
+   "label": "quarry",
+   "kind": "site",
+   "types": [
+    "Mine",
+    "Quarry",
+    "Mine/quarry",
+    "Infrastructure"
+   ]
+  },
+  "Q188509": {
+   "label": "suburb",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q189771": {
+   "label": "vault",
+   "kind": "generic",
+   "types": []
+  },
+  "Q191992": {
+   "label": "headland",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q192601": {
+   "label": "oppidum",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Fort",
+    "Fortification",
+    "Fortress",
+    "Earthwork"
+   ]
+  },
+  "Q192619": {
+   "label": "crypt",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial",
+    "Church",
+    "Religious",
+    "Cave Structures"
+   ]
+  },
+  "Q193475": {
+   "label": "menhir",
+   "kind": "site",
+   "types": [
+    "Standing stone",
+    "Megalithic stones",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic statues"
+   ]
+  },
+  "Q194029": {
+   "label": "Roman road",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q200141": {
+   "label": "necropolis",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q200250": {
+   "label": "metropolis",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q207326": {
+   "label": "summit",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q207524": {
+   "label": "islet",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q207694": {
+   "label": "art museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q210272": {
+   "label": "cultural heritage",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q212198": {
+   "label": "pub",
+   "kind": "container",
+   "types": []
+  },
+  "Q213468": {
+   "label": "municipium",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q214334": {
+   "label": "cave painting",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Petroglyphs",
+    "Cave Structures"
+   ]
+  },
+  "Q217123": {
+   "label": "oracle",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
+  "Q219538": {
+   "label": "scheduled monument",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q220659": {
+   "label": "archaeological artefact",
+   "kind": "other",
+   "types": []
+  },
+  "Q225467": {
+   "label": "compact city",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q240854": {
+   "label": "hall",
+   "kind": "generic",
+   "types": []
+  },
+  "Q245016": {
+   "label": "military base",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q252021": {
+   "label": "villa rustica",
+   "kind": "site",
+   "types": [
+    "Villa",
+    "Residence/villa/farmhouse",
+    "Settlement"
+   ]
+  },
+  "Q253019": {
+   "label": "Ortsteil",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q253030": {
+   "label": "major regional center",
+   "kind": "site",
+   "types": [
+    "City",
+    "Settlement",
+    "City/town/settlement",
+    "Mound/tumulus",
+    "Earthwork",
+    "Pyramid complex"
+   ]
+  },
+  "Q261201": {
+   "label": "beehive tomb",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q267596": {
+   "label": "ancient Greek temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q271669": {
+   "label": "landform",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q281132": {
+   "label": "serapeum",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q283202": {
+   "label": "harbor",
+   "kind": "site",
+   "types": [
+    "Harbor",
+    "Port",
+    "Infrastructure",
+    "Underwater structures"
+   ]
+  },
+  "Q284279": {
+   "label": "court cairn",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q285562": {
+   "label": "Marilyn",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q321053": {
+   "label": "cenotaph",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Funerary",
+    "Burial",
+    "Monument",
+    "Memorial",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q325017": {
+   "label": "causewayed enclosure",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q327328": {
+   "label": "stoa",
+   "kind": "site",
+   "types": [
+    "Forum",
+    "Urban",
+    "Monument"
+   ]
+  },
+  "Q331317": {
+   "label": "pylon",
+   "kind": "site",
+   "types": [
+    "Gate",
+    "Gate/archway/bridge",
+    "Fortification",
+    "Monument",
+    "Temple",
+    "Temple complex"
+   ]
+  },
+  "Q333109": {
+   "label": "Überrest",
+   "kind": "generic",
+   "types": [
+    "Ruin",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q350723": {
+   "label": "country park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q350895": {
+   "label": "abandoned village",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q355304": {
+   "label": "watercourse",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q358316": {
+   "label": "chamber tomb",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q378636": {
+   "label": "village with a church",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q381885": {
+   "label": "tomb",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q391414": {
+   "label": "architectural element",
+   "kind": "generic",
+   "types": []
+  },
+  "Q402996": {
+   "label": "ahu",
+   "kind": "site",
+   "types": [
+    "Sacred site",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Religious",
+    "Temple",
+    "Megalithic",
+    "Monument",
+    "Sanctuary"
+   ]
+  },
+  "Q422211": {
+   "label": "Site of Special Scientific Interest",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q428759": {
+   "label": "wooden bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q448998": {
+   "label": "wedge tomb",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q452212": {
+   "label": "cursus",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall",
+    "Road/avenue/trackway"
+   ]
+  },
+  "Q457879": {
+   "label": "Clava cairn",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex",
+    "Stone circle"
+   ]
+  },
+  "Q465299": {
+   "label": "archaeological culture",
+   "kind": "other",
+   "types": []
+  },
+  "Q465434": {
+   "label": "Celtic deity",
+   "kind": "other",
+   "types": []
+  },
+  "Q473972": {
+   "label": "protected area",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q477396": {
+   "label": "circus",
+   "kind": "site",
+   "types": [
+    "Stadium",
+    "Amphitheatre"
+   ]
+  },
+  "Q483275": {
+   "label": "Historic sites of South Korea",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q483453": {
+   "label": "fountain",
+   "kind": "site",
+   "types": [
+    "Well",
+    "Reservoir/aqueduct/canal",
+    "Monument",
+    "Sacred site"
+   ]
+  },
+  "Q484170": {
+   "label": "commune of France",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q486972": {
+   "label": "human settlement",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q490329": {
+   "label": "dong of South Korea",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q492255": {
+   "label": "tetrapylon",
+   "kind": "site",
+   "types": [
+    "Gate/archway/bridge",
+    "Gate",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q504400": {
+   "label": "gymnasium",
+   "kind": "site",
+   "types": [
+    "Stadium",
+    "Bath",
+    "Forum"
+   ]
+  },
+  "Q514050": {
+   "label": "fen",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q537127": {
+   "label": "road bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q543876": {
+   "label": "Peak sanctuary",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
+  "Q555937": {
+   "label": "tidal island",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q562061": {
+   "label": "market municipality",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q567555": {
+   "label": "anomaly",
+   "kind": "site",
+   "types": [
+    "Magnetic anomaly",
+    "Natural feature",
+    "Geological interest",
+    "Underwater structures",
+    "Unknown"
+   ]
+  },
+  "Q575759": {
+   "label": "war memorial",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q581776": {
+   "label": "boulder",
+   "kind": "site",
+   "types": [
+    "Megalithic stones",
+    "Standing stone",
+    "Sculptured stone",
+    "Natural feature",
+    "Inscription",
+    "Megalithic"
+   ]
+  },
+  "Q585490": {
+   "label": "chambered cairn",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q596073": {
+   "label": "dugout canoe",
+   "kind": "other",
+   "types": []
+  },
+  "Q614316": {
+   "label": "private museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q615980": {
+   "label": "parish of the Church of Sweden",
+   "kind": "container",
+   "types": []
+  },
+  "Q618123": {
+   "label": "geographical feature",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q623525": {
+   "label": "rotunda",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Religious",
+    "Monument",
+    "Church",
+    "Tomb"
+   ]
+  },
+  "Q631305": {
+   "label": "rock formation",
+   "kind": "site",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site",
+    "Rock art",
+    "Megalithic stones"
+   ]
+  },
+  "Q636819": {
+   "label": "archaeological open-air museum",
+   "kind": "container",
+   "types": [
+    "Museum",
+    "Archaeological site",
+    "Heritage site"
+   ]
+  },
+  "Q647160": {
+   "label": "palaestra",
+   "kind": "site",
+   "types": [
+    "Stadium",
+    "Bath",
+    "Forum"
+   ]
+  },
+  "Q653208": {
+   "label": "monolith",
+   "kind": "site",
+   "types": [
+    "Standing stone",
+    "Megalithic stones",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Sculptured stone",
+    "Natural feature"
+   ]
+  },
+  "Q655593": {
+   "label": "emporium",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Harbor",
+    "Port",
+    "Infrastructure",
+    "Underwater structures"
+   ]
+  },
+  "Q665247": {
+   "label": "hypogeum",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial",
+    "Cave Structures",
+    "Temple",
+    "Sacred site"
+   ]
+  },
+  "Q666586": {
+   "label": "macellum",
+   "kind": "site",
+   "types": [
+    "Forum",
+    "Urban",
+    "Monument"
+   ]
+  },
+  "Q667509": {
+   "label": "municipality of Austria",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q672490": {
+   "label": "deme",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q676050": {
+   "label": "old town",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q677678": {
+   "label": "fortified town",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q684740": {
+   "label": "real property",
+   "kind": "generic",
+   "types": []
+  },
+  "Q690840": {
+   "label": "district of Ethiopia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q697295": {
+   "label": "shrine",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
+  "Q699405": {
+   "label": "dwelling",
+   "kind": "site",
+   "types": [
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Settlement"
+   ]
+  },
+  "Q731841": {
+   "label": "Asclepeion",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious",
+    "Bath"
+   ]
+  },
+  "Q731966": {
+   "label": "nymphaeum",
+   "kind": "site",
+   "types": [
+    "Well",
+    "Reservoir/aqueduct/canal",
+    "Monument",
+    "Sanctuary",
+    "Temple",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q734271": {
+   "label": "mass grave",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial",
+    "Cemetery",
+    "Necropolis"
+   ]
+  },
+  "Q740445": {
+   "label": "mountain ridge",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q744099": {
+   "label": "hillfort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q747074": {
+   "label": "comune of Italy",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q751876": {
+   "label": "château",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort",
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Palace"
+   ]
+  },
+  "Q755017": {
+   "label": "tell",
+   "kind": "site",
+   "types": [
+    "Settlement",
+    "City",
+    "Town",
+    "Village",
+    "City/town/settlement",
+    "Urban",
+    "Mound/tumulus"
+   ]
+  },
+  "Q756102": {
+   "label": "open-air museum",
+   "kind": "container",
+   "types": [
+    "Museum",
+    "Archaeological site",
+    "Heritage site"
+   ]
+  },
+  "Q756780": {
+   "label": "Roman colony",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q763590": {
+   "label": "vicus",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q765822": {
+   "label": "underwater archaeology",
+   "kind": "other",
+   "types": []
+  },
+  "Q782970": {
+   "label": "domus",
+   "kind": "site",
+   "types": [
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Settlement"
+   ]
+  },
+  "Q783930": {
+   "label": "municipalities and cities of Serbia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q785952": {
+   "label": "bathhouse",
+   "kind": "site",
+   "types": [
+    "Bath"
+   ]
+  },
+  "Q811165": {
+   "label": "architectural heritage monument",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q811430": {
+   "label": "fixed construction",
+   "kind": "generic",
+   "types": []
+  },
+  "Q811979": {
+   "label": "built structure",
+   "kind": "generic",
+   "types": []
+  },
+  "Q814254": {
+   "label": "feature",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q815241": {
+   "label": "runestone",
+   "kind": "site",
+   "types": [
+    "Inscription",
+    "Sculptured stone",
+    "Monument",
+    "Rock relief/carving",
+    "Standing stone",
+    "Megalithic stones",
+    "Memorial"
+   ]
+  },
+  "Q819426": {
+   "label": "mining museum",
+   "kind": "container",
+   "types": [
+    "Museum",
+    "Mine",
+    "Mine/quarry"
+   ]
+  },
+  "Q819435": {
+   "label": "mining region",
+   "kind": "container",
+   "types": [
+    "Mine",
+    "Mine/quarry"
+   ]
+  },
+  "Q820477": {
+   "label": "mine",
+   "kind": "site",
+   "types": [
+    "Mine",
+    "Quarry",
+    "Mine/quarry",
+    "Infrastructure"
+   ]
+  },
+  "Q839954": {
+   "label": "archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q842402": {
+   "label": "Hindu temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q845945": {
+   "label": "Shinto shrine",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
+  "Q854550": {
+   "label": "hoodoo",
+   "kind": "site",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site",
+    "Rock art",
+    "Megalithic stones"
+   ]
+  },
+  "Q855747": {
+   "label": "Egyptian temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q860861": {
+   "label": "sculpture",
+   "kind": "site",
+   "types": [
+    "Sculptured stone",
+    "Megalithic statues",
+    "Monument",
+    "Memorial",
+    "Rock relief/carving"
+   ]
+  },
+  "Q863404": {
+   "label": "subterranea",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q863974": {
+   "label": "lake island",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q867143": {
+   "label": "Roman temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q878223": {
+   "label": "highland",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q879050": {
+   "label": "manor house",
+   "kind": "site",
+   "types": [
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Castle/palace",
+    "Palace",
+    "Castle"
+   ]
+  },
+  "Q893775": {
+   "label": "National Monument of the United States",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q899959": {
+   "label": "cliff dwelling",
+   "kind": "site",
+   "types": [
+    "Cave Structures",
+    "Settlement",
+    "Residence/villa/farmhouse",
+    "Village",
+    "Cave"
+   ]
+  },
+  "Q902814": {
+   "label": "border city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q907116": {
+   "label": "Monument (Spain)",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q918230": {
+   "label": "Roman villa",
+   "kind": "site",
+   "types": [
+    "Villa",
+    "Residence/villa/farmhouse",
+    "Settlement"
+   ]
+  },
+  "Q925381": {
+   "label": "city with powiat rights in Poland",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q935773": {
+   "label": "cromlech",
+   "kind": "site",
+   "types": [
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Megalithic walls",
+    "Stone circle",
+    "Dolmen",
+    "Standing stone"
+   ]
+  },
+  "Q943017": {
+   "label": "national park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q955236": {
+   "label": "transboundary protected area",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q989946": {
+   "label": "shelter",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q1015644": {
+   "label": "deserted castle site",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort"
+   ]
+  },
+  "Q1016853": {
+   "label": "burnt mound",
+   "kind": "site",
+   "types": [
+    "Mound/tumulus",
+    "Earthwork"
+   ]
+  },
+  "Q1021711": {
+   "label": "seaside resort",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1035294": {
+   "label": "henge",
+   "kind": "site",
+   "types": [
+    "Henge",
+    "Earthwork",
+    "Stone circle",
+    "Timber circle",
+    "Megalithic",
+    "Megalithic structures",
+    "Sacred site"
+   ]
+  },
+  "Q1057440": {
+   "label": "Heraion",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q1060893": {
+   "label": "medicine wheel",
+   "kind": "site",
+   "types": [
+    "Stone circle",
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Henge",
+    "Standing stone",
+    "Sacred site"
+   ]
+  },
+  "Q1062780": {
+   "label": "forum",
+   "kind": "site",
+   "types": [
+    "Forum",
+    "Urban",
+    "Monument"
+   ]
+  },
+  "Q1068842": {
+   "label": "footbridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q1074523": {
+   "label": "planned community",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1076486": {
+   "label": "sports venue",
+   "kind": "site",
+   "types": [
+    "Stadium",
+    "Amphitheatre"
+   ]
+  },
+  "Q1081138": {
+   "label": "historic site",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q1092661": {
+   "label": "moorland",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q1115575": {
+   "label": "civil parish",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1129474": {
+   "label": "cultural landscape",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site",
+    "Natural feature"
+   ]
+  },
+  "Q1131329": {
+   "label": "grotto",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q1134686": {
+   "label": "frazione",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1137365": {
+   "label": "entrance",
+   "kind": "site",
+   "types": [
+    "Gate",
+    "Gate/archway/bridge",
+    "Fortification",
+    "Monument"
+   ]
+  },
+  "Q1143046": {
+   "label": "odeon",
+   "kind": "site",
+   "types": [
+    "Theater",
+    "Theatre",
+    "Amphitheatre"
+   ]
+  },
+  "Q1145153": {
+   "label": "statue menhir",
+   "kind": "site",
+   "types": [
+    "Standing stone",
+    "Megalithic stones",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Sculptured stone"
+   ]
+  },
+  "Q1149405": {
+   "label": "rock shelter",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q1151014": {
+   "label": "mithraeum",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site",
+    "Cave Structures"
+   ]
+  },
+  "Q1166801": {
+   "label": "Dartmoor Pound",
+   "kind": "site",
+   "types": [
+    "Settlement",
+    "Wall",
+    "Earthwork",
+    "Megalithic walls"
+   ]
+  },
+  "Q1168120": {
+   "label": "chariot burial",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q1187811": {
+   "label": "college town",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1193438": {
+   "label": "bullring",
+   "kind": "site",
+   "types": [
+    "Amphitheatre",
+    "Theatre",
+    "Theater",
+    "Stadium"
+   ]
+  },
+  "Q1193753": {
+   "label": "stone row",
+   "kind": "site",
+   "types": [
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Megalithic walls",
+    "Stone circle",
+    "Dolmen",
+    "Standing stone"
+   ]
+  },
+  "Q1195705": {
+   "label": "rocca",
+   "kind": "container",
+   "types": [
+    "Castle",
+    "Fortress",
+    "Natural feature"
+   ]
+  },
+  "Q1200957": {
+   "label": "tourist destination",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q1211146": {
+   "label": "rock art",
+   "kind": "site",
+   "types": [
+    "Rock art",
+    "Petroglyphs",
+    "Rock relief/carving",
+    "Cave Structures, Rock art",
+    "Geoglyphs",
+    "Sculptured stone"
+   ]
+  },
+  "Q1223230": {
+   "label": "Roman bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q1234523": {
+   "label": "naveta",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q1234547": {
+   "label": "talaiot",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Megalithic structures",
+    "Megalithic",
+    "Settlement",
+    "Fortification"
+   ]
+  },
+  "Q1239455": {
+   "label": "treasury (ancient Greece)",
+   "kind": "site",
+   "types": [
+    "Religious",
+    "Sanctuary",
+    "Temple",
+    "Monument",
+    "Sacred site"
+   ]
+  },
+  "Q1245089": {
+   "label": "promontory",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q1247845": {
+   "label": "Settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1253315": {
+   "label": "downland",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q1254933": {
+   "label": "astronomical observatory",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Sacred site",
+    "Megalithic structures",
+    "Stone circle",
+    "Temple",
+    "Religious"
+   ]
+  },
+  "Q1284677": {
+   "label": "site plan",
+   "kind": "other",
+   "types": []
+  },
+  "Q1291195": {
+   "label": "location of discovery",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q1298668": {
+   "label": "science project",
+   "kind": "other",
+   "types": []
+  },
+  "Q1309666": {
+   "label": "praetorium",
+   "kind": "site",
+   "types": [
+    "Palace",
+    "Military",
+    "Fort",
+    "Residence/villa/farmhouse",
+    "Villa"
+   ]
+  },
+  "Q1324228": {
+   "label": "hypostyle",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site",
+    "Palace",
+    "Monument"
+   ]
+  },
+  "Q1325302": {
+   "label": "dormant volcano",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q1330749": {
+   "label": "ring cairn",
+   "kind": "site",
+   "types": [
+    "Cairn",
+    "Burial",
+    "Funerary",
+    "Barrow",
+    "Mound/tumulus",
+    "Tomb",
+    "Megalithic structures",
+    "Megalithic",
+    "Stone circle"
+   ]
+  },
+  "Q1341387": {
+   "label": "spa",
+   "kind": "site",
+   "types": [
+    "Bath"
+   ]
+  },
+  "Q1343179": {
+   "label": "tor",
+   "kind": "site",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site",
+    "Rock art",
+    "Megalithic stones"
+   ]
+  },
+  "Q1343246": {
+   "label": "English country house",
+   "kind": "site",
+   "types": [
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Castle/palace",
+    "Palace",
+    "Castle"
+   ]
+  },
+  "Q1345069": {
+   "label": "entrance grave",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q1348073": {
+   "label": "underground city",
+   "kind": "site",
+   "types": [
+    "Cave Structures",
+    "City",
+    "Settlement",
+    "City/town/settlement",
+    "Cave"
+   ]
+  },
+  "Q1349587": {
+   "label": "earthworks",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q1349648": {
+   "label": "municipality of Greece",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1351659": {
+   "label": "oval barrow",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork"
+   ]
+  },
+  "Q1352786": {
+   "label": "Necromanteion",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
+  "Q1355334": {
+   "label": "buttress dam",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q1356770": {
+   "label": "Heroön",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Temple",
+    "Religious",
+    "Sacred site",
+    "Tomb",
+    "Monument",
+    "Funerary"
+   ]
+  },
+  "Q1357964": {
+   "label": "county town",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1368970": {
+   "label": "volcanic cone",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q1370598": {
+   "label": "structure of worship",
+   "kind": "site",
+   "types": [
+    "Religious",
+    "Temple",
+    "Temple complex",
+    "Church",
+    "Church/cathedral",
+    "Monastery",
+    "Mosque",
+    "Sanctuary",
+    "Sacred site"
+   ]
+  },
+  "Q1399576": {
+   "label": "cist",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q1404150": {
+   "label": "rock",
+   "kind": "site",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site",
+    "Rock art",
+    "Megalithic stones"
+   ]
+  },
+  "Q1404229": {
+   "label": "rock-cut tomb",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial",
+    "Cave Structures",
+    "Rock relief/carving",
+    "Necropolis"
+   ]
+  },
+  "Q1406331": {
+   "label": "scenic route",
+   "kind": "generic",
+   "types": []
+  },
+  "Q1416685": {
+   "label": "rampart",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Megalithic walls",
+    "Military",
+    "Earthwork"
+   ]
+  },
+  "Q1426772": {
+   "label": "passage grave",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q1428504": {
+   "label": "gallery grave",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q1433492": {
+   "label": "stone ship",
+   "kind": "site",
+   "types": [
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Megalithic walls",
+    "Stone circle",
+    "Dolmen",
+    "Standing stone",
+    "Burial",
+    "Funerary"
+   ]
+  },
+  "Q1456099": {
+   "label": "step pyramid",
+   "kind": "site",
+   "types": [
+    "Pyramid complex",
+    "City/town/settlement, Pyramid complex",
+    "Tomb",
+    "Temple",
+    "Temple complex",
+    "Monument",
+    "Necropolis/tombs complex",
+    "Funerary"
+   ]
+  },
+  "Q1472063": {
+   "label": "early ecclesiastical enclosure",
+   "kind": "site",
+   "types": [
+    "Monastery",
+    "Religious",
+    "Church",
+    "Earthwork"
+   ]
+  },
+  "Q1492515": {
+   "label": "Romano-Celtic temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q1497364": {
+   "label": "building complex",
+   "kind": "generic",
+   "types": []
+  },
+  "Q1497375": {
+   "label": "architectural ensemble",
+   "kind": "generic",
+   "types": []
+  },
+  "Q1520970": {
+   "label": "tambo",
+   "kind": "site",
+   "types": [
+    "Settlement",
+    "Infrastructure",
+    "Road/avenue/trackway",
+    "Residence/villa/farmhouse"
+   ]
+  },
+  "Q1523627": {
+   "label": "giants' grave",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q1523821": {
+   "label": "socken",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1529096": {
+   "label": "village of Turkey",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1549591": {
+   "label": "big city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1570262": {
+   "label": "unfinished building",
+   "kind": "generic",
+   "types": []
+  },
+  "Q1584134": {
+   "label": "mound",
+   "kind": "site",
+   "types": [
+    "Mound/tumulus",
+    "Earthwork",
+    "Barrow",
+    "Burial",
+    "Pyramid complex",
+    "Temple",
+    "Religious"
+   ]
+  },
+  "Q1595639": {
+   "label": "local museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q1617500": {
+   "label": "hieron",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
+  "Q1617625": {
+   "label": "Hierothesion",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Temple",
+    "Religious",
+    "Sacred site",
+    "Tomb",
+    "Monument",
+    "Funerary"
+   ]
+  },
+  "Q1620908": {
+   "label": "historical region",
+   "kind": "container",
+   "types": []
+  },
+  "Q1639395": {
+   "label": "bridle path",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q1640824": {
+   "label": "inscription",
+   "kind": "site",
+   "types": [
+    "Inscription",
+    "Sculptured stone",
+    "Monument",
+    "Rock relief/carving",
+    "Standing stone",
+    "Megalithic stones",
+    "Memorial"
+   ]
+  },
+  "Q1652352": {
+   "label": "long barrow",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork",
+    "Megalithic structures",
+    "Megalithic",
+    "Dolmen"
+   ]
+  },
+  "Q1662011": {
+   "label": "industrial building",
+   "kind": "container",
+   "types": []
+  },
+  "Q1681353": {
+   "label": "bog",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q1708422": {
+   "label": "settlement site",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1709247": {
+   "label": "blockfield",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q1753584": {
+   "label": "tropaion",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q1778846": {
+   "label": "military training area",
+   "kind": "container",
+   "types": [
+    "Military"
+   ]
+  },
+  "Q1779653": {
+   "label": "colossal statue",
+   "kind": "site",
+   "types": [
+    "Sculptured stone",
+    "Megalithic statues",
+    "Monument",
+    "Memorial",
+    "Rock relief/carving"
+   ]
+  },
+  "Q1784293": {
+   "label": "cordon",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Military",
+    "Fort",
+    "Earthwork",
+    "Road/avenue/trackway"
+   ]
+  },
+  "Q1785071": {
+   "label": "fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q1787688": {
+   "label": "Rondel enclosure",
+   "kind": "site",
+   "types": [
+    "Henge",
+    "Earthwork",
+    "Stone circle",
+    "Timber circle",
+    "Megalithic",
+    "Megalithic structures",
+    "Sacred site"
+   ]
+  },
+  "Q1814183": {
+   "label": "national park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q1849719": {
+   "label": "municipal formation in Russia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1852859": {
+   "label": "cadastral populated place in the Netherlands",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1901835": {
+   "label": "seat of government",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1916821": {
+   "label": "water deity",
+   "kind": "other",
+   "types": []
+  },
+  "Q1922209": {
+   "label": "cannery",
+   "kind": "container",
+   "types": []
+  },
+  "Q1922704": {
+   "label": "sun temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q1930585": {
+   "label": "victory column",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial",
+    "Sculptured stone",
+    "Minaret/tower"
+   ]
+  },
+  "Q1935728": {
+   "label": "stone circle",
+   "kind": "site",
+   "types": [
+    "Stone circle",
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Henge",
+    "Standing stone"
+   ]
+  },
+  "Q1952852": {
+   "label": "municipality of Mexico",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q1959314": {
+   "label": "protected area of Russia",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q1969077": {
+   "label": "shaft tomb",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q1969178": {
+   "label": "nature reserve in Israel",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q1969226": {
+   "label": "national park of Russia",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q1972766": {
+   "label": "Choragic Monument",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q1975533": {
+   "label": "Rock Art of the Mediterranean Basin on the Iberian Peninsula",
+   "kind": "site",
+   "types": [
+    "Rock art",
+    "Petroglyphs",
+    "Rock relief/carving",
+    "Cave Structures, Rock art",
+    "Geoglyphs",
+    "Sculptured stone"
+   ]
+  },
+  "Q1975546": {
+   "label": "royal forest",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q2006279": {
+   "label": "provincial park of Canada",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q2031836": {
+   "label": "Eastern Orthodox church building",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery"
+   ]
+  },
+  "Q2039348": {
+   "label": "municipality of the Netherlands",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2046310": {
+   "label": "bowl barrow",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork"
+   ]
+  },
+  "Q2046325": {
+   "label": "round barrow",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork"
+   ]
+  },
+  "Q2048319": {
+   "label": "ditch",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q2055789": {
+   "label": "Irish passage tomb",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q2065736": {
+   "label": "cultural property",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q2074737": {
+   "label": "municipality of Spain",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2087181": {
+   "label": "historic house museum",
+   "kind": "container",
+   "types": [
+    "Museum",
+    "Archaeological site",
+    "Heritage site",
+    "Residence/villa/farmhouse",
+    "Villa"
+   ]
+  },
+  "Q2094954": {
+   "label": "pilgrims' hostel",
+   "kind": "site",
+   "types": [
+    "Religious",
+    "Monastery",
+    "Residence/villa/farmhouse"
+   ]
+  },
+  "Q2151232": {
+   "label": "townland",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2179671": {
+   "label": "Roman roads in Britain",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q2202509": {
+   "label": "Roman city",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2230328": {
+   "label": "cup marked stone",
+   "kind": "site",
+   "types": [
+    "Rock art",
+    "Petroglyphs",
+    "Megalithic stones",
+    "Standing stone",
+    "Sculptured stone"
+   ]
+  },
+  "Q2232001": {
+   "label": "show cave",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q2264924": {
+   "label": "port city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Harbor",
+    "Port"
+   ]
+  },
+  "Q2276925": {
+   "label": "municipality of Galicia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2292572": {
+   "label": "district of Costa Rica",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2293362": {
+   "label": "group of sculptures",
+   "kind": "site",
+   "types": [
+    "Sculptured stone",
+    "Megalithic statues",
+    "Monument",
+    "Memorial",
+    "Rock relief/carving"
+   ]
+  },
+  "Q2319498": {
+   "label": "architectural landmark",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q2330559": {
+   "label": "standing stone",
+   "kind": "site",
+   "types": [
+    "Standing stone",
+    "Megalithic stones",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic statues"
+   ]
+  },
+  "Q2434238": {
+   "label": "heritage",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q2455463": {
+   "label": "dripstone cave",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q2463705": {
+   "label": "Special Protection Area",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q2466889": {
+   "label": "hydraulic structure",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q2479824": {
+   "label": "altepetl",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2561694": {
+   "label": "City-kingdom of Cyprus",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2593777": {
+   "label": "grave field",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q2596406": {
+   "label": "ridge and furrow",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q2616791": {
+   "label": "urban municipality of Poland",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2624046": {
+   "label": "mountain chain",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q2734310": {
+   "label": "territorial demarcation of Mexico City",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2736554": {
+   "label": "Candi",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site",
+    "Monument"
+   ]
+  },
+  "Q2772772": {
+   "label": "military museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q2794629": {
+   "label": "portal tomb",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q2860319": {
+   "label": "Greek theatre",
+   "kind": "site",
+   "types": [
+    "Theater",
+    "Theatre",
+    "Amphitheatre"
+   ]
+  },
+  "Q2890064": {
+   "label": "ditch",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q2916962": {
+   "label": "sepulcher",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q2918952": {
+   "label": "hill figure",
+   "kind": "site",
+   "types": [
+    "Geoglyphs",
+    "Rock art",
+    "Earthwork"
+   ]
+  },
+  "Q2919841": {
+   "label": "protected area of Brazil",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q2920343": {
+   "label": "sarsen",
+   "kind": "site",
+   "types": [
+    "Megalithic stones",
+    "Standing stone",
+    "Sculptured stone",
+    "Natural feature",
+    "Inscription",
+    "Megalithic"
+   ]
+  },
+  "Q2973801": {
+   "label": "defense line",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Military",
+    "Fort",
+    "Earthwork",
+    "Road/avenue/trackway"
+   ]
+  },
+  "Q2974842": {
+   "label": "lost city",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2983893": {
+   "label": "quarter",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2985026": {
+   "label": "combe",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q2988353": {
+   "label": "verraco",
+   "kind": "site",
+   "types": [
+    "Sculptured stone",
+    "Megalithic statues",
+    "Monument",
+    "Memorial",
+    "Rock relief/carving"
+   ]
+  },
+  "Q2989398": {
+   "label": "commune of Algeria",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q2989470": {
+   "label": "commune of Mauritania",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q3024240": {
+   "label": "historical country",
+   "kind": "other",
+   "types": []
+  },
+  "Q3055118": {
+   "label": "single entity of population",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q3078732": {
+   "label": "ancient woodland",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q3131754": {
+   "label": "national park of Guatemala",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q3199141": {
+   "label": "city of Indonesia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q3240227": {
+   "label": "raised bog",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q3241565": {
+   "label": "woodland",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q3241965": {
+   "label": "tributary state",
+   "kind": "other",
+   "types": []
+  },
+  "Q3247173": {
+   "label": "type site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q3257686": {
+   "label": "locality",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q3294251": {
+   "label": "hillock",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q3329412": {
+   "label": "archaeological museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q3352369": {
+   "label": "footpath",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q3363945": {
+   "label": "archaeological park",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q3378136": {
+   "label": "ancient lighthouse",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Harbor",
+    "Port",
+    "Monument",
+    "Infrastructure"
+   ]
+  },
+  "Q3395377": {
+   "label": "ancient monument",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q3397526": {
+   "label": "stone bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q3397551": {
+   "label": "built-on bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q3398414": {
+   "label": "ancient port",
+   "kind": "site",
+   "types": [
+    "Harbor",
+    "Port",
+    "Infrastructure",
+    "Underwater structures"
+   ]
+  },
+  "Q3408055": {
+   "label": "ancient trackway",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q3457526": {
+   "label": "local nature reserve",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q3497768": {
+   "label": "dry lake",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q3531146": {
+   "label": "cruciform passage grave",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q3542199": {
+   "label": "Roman tunnel",
+   "kind": "site",
+   "types": [
+    "Infrastructure",
+    "Reservoir/aqueduct/canal",
+    "Aqueduct",
+    "Road",
+    "Road/avenue/trackway",
+    "Cave Structures"
+   ]
+  },
+  "Q3558970": {
+   "label": "village of Poland",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q3559137": {
+   "label": "Gallo-Roman city",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q3622002": {
+   "label": "geographical area",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q3699460": {
+   "label": "defile",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q3737909": {
+   "label": "Giant's church",
+   "kind": "site",
+   "types": [
+    "Megalithic structures",
+    "Megalithic walls",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q3822604": {
+   "label": "roman mausoleum",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Funerary",
+    "Burial",
+    "Monument",
+    "Memorial",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q3867560": {
+   "label": "Italian national museum",
+   "kind": "container",
+   "types": [
+    "Museum",
+    "Archaeological site",
+    "Heritage site"
+   ]
+  },
+  "Q3927261": {
+   "label": "quarter of Naples",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q3976659": {
+   "label": "subdivisions of Belgrade",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q4167410": {
+   "label": "Wikimedia disambiguation page",
+   "kind": "other",
+   "types": []
+  },
+  "Q4174776": {
+   "label": "village of Japan",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q4224624": {
+   "label": "kmetstvo of Bulgaria",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q4313794": {
+   "label": "populated place in Georgia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q4362293": {
+   "label": "underground living",
+   "kind": "site",
+   "types": [
+    "Cave Structures",
+    "Settlement",
+    "Residence/villa/farmhouse",
+    "Village",
+    "Cave"
+   ]
+  },
+  "Q4363262": {
+   "label": "smooth-sided pyramid",
+   "kind": "site",
+   "types": [
+    "Pyramid complex",
+    "City/town/settlement, Pyramid complex",
+    "Tomb",
+    "Temple",
+    "Temple complex",
+    "Monument",
+    "Necropolis/tombs complex",
+    "Funerary"
+   ]
+  },
+  "Q4443227": {
+   "label": "Stone Age site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument",
+    "Cave",
+    "Cave Structures",
+    "Settlement"
+   ]
+  },
+  "Q4502142": {
+   "label": "visual artwork",
+   "kind": "other",
+   "types": []
+  },
+  "Q4588528": {
+   "label": "sacred place",
+   "kind": "site",
+   "types": [
+    "Sacred site",
+    "Sanctuary",
+    "Religious",
+    "Temple",
+    "Natural feature"
+   ]
+  },
+  "Q4668385": {
+   "label": "Aboriginal stone arrangement",
+   "kind": "site",
+   "types": [
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Megalithic walls",
+    "Stone circle",
+    "Dolmen",
+    "Standing stone",
+    "Sacred site"
+   ]
+  },
+  "Q4671329": {
+   "label": "academy school",
+   "kind": "container",
+   "types": []
+  },
+  "Q4812872": {
+   "label": "Atash Behram",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q4845841": {
+   "label": "settlement in Croatia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q4895508": {
+   "label": "battlefield",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Site",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q4946461": {
+   "label": "spa town",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Bath"
+   ]
+  },
+  "Q4989906": {
+   "label": "monument",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q5003624": {
+   "label": "memorial",
+   "kind": "site",
+   "types": [
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q5050823": {
+   "label": "castro",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q5069563": {
+   "label": "chambered long barrow",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q5228121": {
+   "label": "dava",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Fort",
+    "Fortification",
+    "Fortress",
+    "Earthwork"
+   ]
+  },
+  "Q5375483": {
+   "label": "enclosure",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall",
+    "Settlement"
+   ]
+  },
+  "Q5393308": {
+   "label": "Buddhist temple",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site",
+    "Monastery"
+   ]
+  },
+  "Q5464137": {
+   "label": "fogou",
+   "kind": "site",
+   "types": [
+    "Cave Structures",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q5670577": {
+   "label": "alqueria",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Residence/villa/farmhouse",
+    "Villa"
+   ]
+  },
+  "Q5999924": {
+   "label": "Illinois state park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q6023295": {
+   "label": "funerary structure",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q6063204": {
+   "label": "regional park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q6304550": {
+   "label": "anta",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Tomb",
+    "Burial",
+    "Funerary"
+   ]
+  },
+  "Q6502179": {
+   "label": "turret",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Fortification",
+    "Fort",
+    "Military"
+   ]
+  },
+  "Q6581615": {
+   "label": "thermae",
+   "kind": "site",
+   "types": [
+    "Bath"
+   ]
+  },
+  "Q6815560": {
+   "label": "memorial gate or arch",
+   "kind": "site",
+   "types": [
+    "Gate/archway/bridge",
+    "Gate",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q6838244": {
+   "label": "Chinese AAAAA-rated tourist attraction",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q6857854": {
+   "label": "military road",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure",
+    "Military"
+   ]
+  },
+  "Q6936383": {
+   "label": "municipality of Lebanon",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q6974552": {
+   "label": "National Nature Reserve (England)",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q7265965": {
+   "label": "qal'a",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort"
+   ]
+  },
+  "Q7321974": {
+   "label": "cairn",
+   "kind": "site",
+   "types": [
+    "Cairn",
+    "Burial",
+    "Funerary",
+    "Barrow",
+    "Mound/tumulus",
+    "Tomb",
+    "Megalithic structures",
+    "Megalithic"
+   ]
+  },
+  "Q7362268": {
+   "label": "Roman amphitheatre",
+   "kind": "site",
+   "types": [
+    "Amphitheatre",
+    "Theatre",
+    "Theater",
+    "Stadium"
+   ]
+  },
+  "Q7543008": {
+   "label": "small burgh",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q7558985": {
+   "label": "solutional cave",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q7786697": {
+   "label": "tholos",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex",
+    "Temple",
+    "Sanctuary",
+    "Religious"
+   ]
+  },
+  "Q7856224": {
+   "label": "Hadrian's Wall turret",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Fortification",
+    "Fort",
+    "Military",
+    "Wall"
+   ]
+  },
+  "Q7897276": {
+   "label": "unparished area",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q7930989": {
+   "label": "city or town",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q7969215": {
+   "label": "ward of the City of London",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q9096832": {
+   "label": "paleontological site",
+   "kind": "site",
+   "types": [
+    "Geological interest",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q9381142": {
+   "label": "hill chain",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q10296658": {
+   "label": "cultural heritage site in Ukraine",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q10300916": {
+   "label": "cultural heritage of China",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q10508453": {
+   "label": "grave and settlement area",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q10521078": {
+   "label": "megalithic tomb",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q10855061": {
+   "label": "archaeological find",
+   "kind": "other",
+   "types": []
+  },
+  "Q11183787": {
+   "label": "Ortschaft",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q11269813": {
+   "label": "cave with prehistoric art",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Petroglyphs",
+    "Cave Structures"
+   ]
+  },
+  "Q11486300": {
+   "label": "former bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q11558926": {
+   "label": "underwater archaeological site",
+   "kind": "site",
+   "types": [
+    "Underwater structures",
+    "Shipwreck",
+    "Harbor",
+    "Port"
+   ]
+  },
+  "Q11688446": {
+   "label": "Roman deity",
+   "kind": "other",
+   "types": []
+  },
+  "Q11691318": {
+   "label": "Kulturdenkmal",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q11880367": {
+   "label": "earthworks",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q12057999": {
+   "label": "fortification system",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle",
+    "Wall",
+    "Earthwork",
+    "Gate"
+   ]
+  },
+  "Q12131624": {
+   "label": "city in Ukraine",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q12137573": {
+   "label": "Paleolithic site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument",
+    "Cave",
+    "Cave Structures",
+    "Settlement"
+   ]
+  },
+  "Q12223988": {
+   "label": "sphinx",
+   "kind": "site",
+   "types": [
+    "Sculptured stone",
+    "Megalithic statues",
+    "Monument",
+    "Memorial",
+    "Rock relief/carving"
+   ]
+  },
+  "Q12397176": {
+   "label": "civil parish of Galicia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q12413618": {
+   "label": "international border",
+   "kind": "other",
+   "types": []
+  },
+  "Q12433046": {
+   "label": "Roman military frontiers and fortifications",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Military",
+    "Fort",
+    "Earthwork",
+    "Road/avenue/trackway"
+   ]
+  },
+  "Q12621161": {
+   "label": "earthen castle",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort",
+    "Earthwork",
+    "Mound/tumulus"
+   ]
+  },
+  "Q12813115": {
+   "label": "urban area in Sweden",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q13033698": {
+   "label": "market square",
+   "kind": "site",
+   "types": [
+    "Forum",
+    "Urban",
+    "Monument"
+   ]
+  },
+  "Q13065566": {
+   "label": "former port",
+   "kind": "site",
+   "types": [
+    "Harbor",
+    "Port",
+    "Infrastructure",
+    "Underwater structures"
+   ]
+  },
+  "Q13127000": {
+   "label": "Welsh princes' castles",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort"
+   ]
+  },
+  "Q13218676": {
+   "label": "Roman aqueduct",
+   "kind": "site",
+   "types": [
+    "Aqueduct",
+    "Reservoir/aqueduct/canal",
+    "Infrastructure"
+   ]
+  },
+  "Q13405588": {
+   "label": "long-distance trail",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q13406463": {
+   "label": "Wikimedia list article",
+   "kind": "other",
+   "types": []
+  },
+  "Q13466456": {
+   "label": "house of millions of years",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q13516676": {
+   "label": "cross dyke",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q13539802": {
+   "label": "place with town rights and privileges",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q14276458": {
+   "label": "deck arch bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q14562306": {
+   "label": "bas-relief",
+   "kind": "site",
+   "types": [
+    "Rock relief/carving",
+    "Sculptured stone",
+    "Monument",
+    "Inscription",
+    "Rock art"
+   ]
+  },
+  "Q14616455": {
+   "label": "destroyed city",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q14625152": {
+   "label": "cave city",
+   "kind": "site",
+   "types": [
+    "Cave Structures",
+    "City",
+    "Settlement",
+    "City/town/settlement",
+    "Cave",
+    "Monastery"
+   ]
+  },
+  "Q14752696": {
+   "label": "ancient Roman structure",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q14770218": {
+   "label": "cantonal capital of Switzerland",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q14839548": {
+   "label": "minor locality in Sweden",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q15069452": {
+   "label": "Natura 2000 site",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q15105893": {
+   "label": "town in Croatia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q15120977": {
+   "label": "grave cairn",
+   "kind": "site",
+   "types": [
+    "Cairn",
+    "Burial",
+    "Funerary",
+    "Barrow",
+    "Mound/tumulus",
+    "Tomb",
+    "Megalithic structures",
+    "Megalithic"
+   ]
+  },
+  "Q15149663": {
+   "label": "state of Mexico",
+   "kind": "container",
+   "types": []
+  },
+  "Q15217609": {
+   "label": "titular see",
+   "kind": "other",
+   "types": []
+  },
+  "Q15303838": {
+   "label": "municipality seat",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q15344922": {
+   "label": "oblast seat",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q15630849": {
+   "label": "village of Bulgaria",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q15642541": {
+   "label": "human-geographic territorial entity",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q15661340": {
+   "label": "ancient city",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q15727816": {
+   "label": "painting series",
+   "kind": "other",
+   "types": []
+  },
+  "Q16000417": {
+   "label": "National Trail",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q16124843": {
+   "label": "municipality of Libya",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q16685255": {
+   "label": "epithet",
+   "kind": "other",
+   "types": []
+  },
+  "Q16735822": {
+   "label": "history museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q16744570": {
+   "label": "tablet",
+   "kind": "other",
+   "types": []
+  },
+  "Q16748868": {
+   "label": "city walls",
+   "kind": "site",
+   "types": [
+    "Wall",
+    "Fortification",
+    "Megalithic walls",
+    "Military",
+    "Earthwork"
+   ]
+  },
+  "Q16887380": {
+   "label": "group",
+   "kind": "generic",
+   "types": []
+  },
+  "Q16942515": {
+   "label": "hut circle",
+   "kind": "site",
+   "types": [
+    "Settlement",
+    "Village",
+    "Residence/villa/farmhouse"
+   ]
+  },
+  "Q16962047": {
+   "label": "pillar tomb",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q17019545": {
+   "label": "pit alignment",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q17051044": {
+   "label": "mahalle",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q17156398": {
+   "label": "stone cross",
+   "kind": "site",
+   "types": [
+    "Stone cross",
+    "Monument",
+    "Memorial",
+    "Sculptured stone",
+    "Religious"
+   ]
+  },
+  "Q17334112": {
+   "label": "historical park of Thailand",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site",
+    "City",
+    "City/town/settlement",
+    "Temple complex",
+    "Temple"
+   ]
+  },
+  "Q17412974": {
+   "label": "unchambered long barrow",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork"
+   ]
+  },
+  "Q17431399": {
+   "label": "national museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q17645016": {
+   "label": "Iron Age settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q17715832": {
+   "label": "castle ruin",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort"
+   ]
+  },
+  "Q18247357": {
+   "label": "group of structures or buildings",
+   "kind": "generic",
+   "types": []
+  },
+  "Q18357400": {
+   "label": "Greek baths",
+   "kind": "site",
+   "types": [
+    "Bath"
+   ]
+  },
+  "Q18411786": {
+   "label": "visitor center",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q18412881": {
+   "label": "Q18412881",
+   "kind": "site",
+   "types": [
+    "Pyramid complex",
+    "City/town/settlement, Pyramid complex",
+    "Tomb",
+    "Temple",
+    "Temple complex",
+    "Monument",
+    "Necropolis/tombs complex",
+    "Funerary"
+   ]
+  },
+  "Q18466176": {
+   "label": "small city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q18511725": {
+   "label": "market town",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q18870689": {
+   "label": "aqueduct",
+   "kind": "site",
+   "types": [
+    "Aqueduct",
+    "Reservoir/aqueduct/canal",
+    "Infrastructure"
+   ]
+  },
+  "Q19730508": {
+   "label": "former municipality",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q19860854": {
+   "label": "destroyed building or structure",
+   "kind": "generic",
+   "types": [
+    "Ruin",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q20102367": {
+   "label": "talaiotic village",
+   "kind": "site",
+   "types": [
+    "Settlement",
+    "Village",
+    "Megalithic structures",
+    "Megalithic"
+   ]
+  },
+  "Q20202352": {
+   "label": "locality of Mexico",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q20588290": {
+   "label": "round cairn",
+   "kind": "site",
+   "types": [
+    "Cairn",
+    "Burial",
+    "Funerary",
+    "Barrow",
+    "Mound/tumulus",
+    "Tomb",
+    "Megalithic structures",
+    "Megalithic"
+   ]
+  },
+  "Q20616831": {
+   "label": "submerged settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Underwater structures"
+   ]
+  },
+  "Q21484471": {
+   "label": "Wikimedia article covering multiple topics",
+   "kind": "other",
+   "types": []
+  },
+  "Q21550989": {
+   "label": "signal tower",
+   "kind": "site",
+   "types": [
+    "Minaret/tower",
+    "Fortification",
+    "Fort",
+    "Military"
+   ]
+  },
+  "Q21573182": {
+   "label": "natural monument in Germany",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q21672098": {
+   "label": "village of Ukraine",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q21751582": {
+   "label": "deserted medieval village",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q21752084": {
+   "label": "Roman archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q22022298": {
+   "label": "rock relief",
+   "kind": "site",
+   "types": [
+    "Rock relief/carving",
+    "Sculptured stone",
+    "Monument",
+    "Inscription",
+    "Rock art"
+   ]
+  },
+  "Q22669139": {
+   "label": "fresco",
+   "kind": "other",
+   "types": []
+  },
+  "Q22674925": {
+   "label": "former settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q22674930": {
+   "label": "destroyed settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q22989102": {
+   "label": "Greek deity",
+   "kind": "other",
+   "types": []
+  },
+  "Q23011975": {
+   "label": "paved road outside of settlements",
+   "kind": "site",
+   "types": [
+    "Road",
+    "Road/avenue/trackway",
+    "Infrastructure"
+   ]
+  },
+  "Q23827464": {
+   "label": "centre of Saudi Arabia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q23828031": {
+   "label": "village in Jordan",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q23828039": {
+   "label": "village/town/city in Lebanon",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q23929671": {
+   "label": "national nature monument",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q24566025": {
+   "label": "Norse runestone",
+   "kind": "site",
+   "types": [
+    "Inscription",
+    "Sculptured stone",
+    "Monument",
+    "Rock relief/carving",
+    "Standing stone",
+    "Megalithic stones",
+    "Memorial"
+   ]
+  },
+  "Q24699794": {
+   "label": "museum building",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q24933318": {
+   "label": "Gallo-Roman amphitheatre",
+   "kind": "site",
+   "types": [
+    "Amphitheatre",
+    "Theatre",
+    "Theater",
+    "Stadium"
+   ]
+  },
+  "Q26201757": {
+   "label": "Civitas foederata",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q26211545": {
+   "label": "desa",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q27506396": {
+   "label": "magic item",
+   "kind": "other",
+   "types": []
+  },
+  "Q27608973": {
+   "label": "natural monument of Russia",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q27654220": {
+   "label": "abandoned hamlet",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q27916659": {
+   "label": "former place",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q28045079": {
+   "label": "contour fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q28328984": {
+   "label": "village in Armenia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q28415786": {
+   "label": "Three Greats",
+   "kind": "generic",
+   "types": []
+  },
+  "Q28777651": {
+   "label": "group of protected areas",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q28822032": {
+   "label": "cadastral municipality of Serbia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q28846085": {
+   "label": "city gate of London",
+   "kind": "site",
+   "types": [
+    "Gate",
+    "Gate/archway/bridge",
+    "Fortification",
+    "Monument"
+   ]
+  },
+  "Q28942368": {
+   "label": "nature reserve of New South Wales",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q29048715": {
+   "label": "archaeological site in Greece",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q29414133": {
+   "label": "community of Cyprus Republic",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q29556224": {
+   "label": "city in Cyprus",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q29702995": {
+   "label": "chalkotheke",
+   "kind": "site",
+   "types": [
+    "Religious",
+    "Sanctuary",
+    "Temple",
+    "Monument",
+    "Sacred site"
+   ]
+  },
+  "Q29828458": {
+   "label": "chahartaq",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q30304302": {
+   "label": "National Park System unit",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q30504598": {
+   "label": "Maya site in Belize‎",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "City",
+    "Settlement",
+    "City/town/settlement",
+    "City/town/settlement, Pyramid complex",
+    "Pyramid complex",
+    "Temple complex"
+   ]
+  },
+  "Q30504600": {
+   "label": "Maya site in Guatemala‎",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "City",
+    "Settlement",
+    "City/town/settlement",
+    "City/town/settlement, Pyramid complex",
+    "Pyramid complex",
+    "Temple complex"
+   ]
+  },
+  "Q30504601": {
+   "label": "Maya site in Honduras‎",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "City",
+    "Settlement",
+    "City/town/settlement",
+    "City/town/settlement, Pyramid complex",
+    "Pyramid complex",
+    "Temple complex"
+   ]
+  },
+  "Q30504603": {
+   "label": "Maya site in Mexico",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "City",
+    "Settlement",
+    "City/town/settlement",
+    "City/town/settlement, Pyramid complex",
+    "Pyramid complex",
+    "Temple complex"
+   ]
+  },
+  "Q30620203": {
+   "label": "abandoned entity",
+   "kind": "generic",
+   "types": [
+    "Ruin",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q31028314": {
+   "label": "partial contour fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q31028695": {
+   "label": "hillslope fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q31028835": {
+   "label": "level terrain fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q31028965": {
+   "label": "marsh fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q31029044": {
+   "label": "multiple enclosure hillfort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Earthwork",
+    "Settlement"
+   ]
+  },
+  "Q32164125": {
+   "label": "fortified manor house",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort",
+    "Residence/villa/farmhouse",
+    "Villa",
+    "Palace"
+   ]
+  },
+  "Q33146843": {
+   "label": "municipality of Catalonia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q34918903": {
+   "label": "National Park of the United States",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q35112127": {
+   "label": "historic building",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q36378334": {
+   "label": "christianized dolmen",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Church",
+    "Religious"
+   ]
+  },
+  "Q37800986": {
+   "label": "Serbian city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q37947353": {
+   "label": "Alaska state park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q38042688": {
+   "label": "ancient Roman structure",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q38048771": {
+   "label": "indigenous cultural heritage site",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site",
+    "Sacred site"
+   ]
+  },
+  "Q39535649": {
+   "label": "artillery fort",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q40006041": {
+   "label": "round cairn",
+   "kind": "site",
+   "types": [
+    "Cairn",
+    "Burial",
+    "Funerary",
+    "Barrow",
+    "Mound/tumulus",
+    "Tomb",
+    "Megalithic structures",
+    "Megalithic"
+   ]
+  },
+  "Q40364446": {
+   "label": "historic city",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q42661374": {
+   "label": "horse hill figure",
+   "kind": "site",
+   "types": [
+    "Geoglyphs",
+    "Rock art",
+    "Earthwork"
+   ]
+  },
+  "Q42744322": {
+   "label": "urban municipality in Germany",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q44097629": {
+   "label": "Roman archaeology",
+   "kind": "other",
+   "types": []
+  },
+  "Q48694540": {
+   "label": "Reserva Natural",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q48794661": {
+   "label": "zona arqueológica",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q51929311": {
+   "label": "largest city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q53336805": {
+   "label": "megalithic site",
+   "kind": "site",
+   "types": [
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Megalithic walls",
+    "Stone circle",
+    "Dolmen",
+    "Standing stone",
+    "Henge",
+    "Cairn",
+    "Mound/tumulus",
+    "Tomb"
+   ]
+  },
+  "Q53536964": {
+   "label": "royal palace",
+   "kind": "site",
+   "types": [
+    "Palace",
+    "Castle/palace",
+    "Residence/villa/farmhouse"
+   ]
+  },
+  "Q54935504": {
+   "label": "city of Switzerland",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q55075651": {
+   "label": "upland",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q55182671": {
+   "label": "undersea landform",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Underwater structures",
+    "Geological interest"
+   ]
+  },
+  "Q55635722": {
+   "label": "tholos",
+   "kind": "site",
+   "types": [
+    "Dolmen",
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Megalithic",
+    "Megalithic structures",
+    "Megalithic stones",
+    "Cairn",
+    "Barrow",
+    "Mound/tumulus",
+    "Necropolis/tombs complex",
+    "Temple",
+    "Sanctuary",
+    "Religious"
+   ]
+  },
+  "Q56242215": {
+   "label": "Catholic cathedral",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery"
+   ]
+  },
+  "Q56304522": {
+   "label": "ancient Greek necropolis",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q56320584": {
+   "label": "prehistoric archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q56436498": {
+   "label": "village in India",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q58621988": {
+   "label": "temple complex",
+   "kind": "site",
+   "types": [
+    "Temple",
+    "Temple complex",
+    "Sanctuary",
+    "Religious",
+    "Sacred site"
+   ]
+  },
+  "Q60748075": {
+   "label": "linear earthwork",
+   "kind": "site",
+   "types": [
+    "Earthwork",
+    "Fortification",
+    "Henge",
+    "Mound/tumulus",
+    "Geoglyphs",
+    "Wall"
+   ]
+  },
+  "Q64722124": {
+   "label": "Ancient Greek stadium",
+   "kind": "site",
+   "types": [
+    "Stadium",
+    "Amphitheatre"
+   ]
+  },
+  "Q64732764": {
+   "label": "cave church",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery",
+    "Cave Structures"
+   ]
+  },
+  "Q65007262": {
+   "label": "petroglyphic site",
+   "kind": "site",
+   "types": [
+    "Rock art",
+    "Petroglyphs",
+    "Rock relief/carving",
+    "Cave Structures, Rock art",
+    "Geoglyphs",
+    "Sculptured stone"
+   ]
+  },
+  "Q65064889": {
+   "label": "Bronze Age settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q66108498": {
+   "label": "Wonder of the Ancient World",
+   "kind": "generic",
+   "types": []
+  },
+  "Q66443867": {
+   "label": "cave system",
+   "kind": "site",
+   "types": [
+    "Cave",
+    "Cave Structures",
+    "Cave Structures, Rock art",
+    "Rock art",
+    "Natural feature",
+    "Geological interest"
+   ]
+  },
+  "Q66626342": {
+   "label": "urban ensemble",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q69391739": {
+   "label": "Greek colony",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q72022866": {
+   "label": "standing stones",
+   "kind": "site",
+   "types": [
+    "Megalithic",
+    "Megalithic stones",
+    "Megalithic structures",
+    "Megalithic statues",
+    "Megalithic walls",
+    "Stone circle",
+    "Dolmen",
+    "Standing stone"
+   ]
+  },
+  "Q74817647": {
+   "label": "aspect in a geographic region",
+   "kind": "other",
+   "types": []
+  },
+  "Q76163432": {
+   "label": "protected area of Costa Rica",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q80446812": {
+   "label": "motte",
+   "kind": "site",
+   "types": [
+    "Castle",
+    "Castle/palace",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Citadel",
+    "Fort",
+    "Earthwork",
+    "Mound/tumulus"
+   ]
+  },
+  "Q80838255": {
+   "label": "Roman temporary camp",
+   "kind": "site",
+   "types": [
+    "Fort",
+    "Fortress",
+    "Fortress/citadel",
+    "Fortification",
+    "Military",
+    "Citadel",
+    "Castle"
+   ]
+  },
+  "Q85631896": {
+   "label": "urban district of Bavaria",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q88778578": {
+   "label": "artificial cave",
+   "kind": "site",
+   "types": [
+    "Cave Structures",
+    "Cave",
+    "Tomb",
+    "Mine",
+    "Temple",
+    "Religious"
+   ]
+  },
+  "Q89487741": {
+   "label": "city in Bulgaria",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q92755865": {
+   "label": "religious museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q93342462": {
+   "label": "Ancient Greek archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q93429857": {
+   "label": "ancient Roman cistern",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q95463156": {
+   "label": "ancient Roman dam",
+   "kind": "site",
+   "types": [
+    "Reservoir/aqueduct/canal",
+    "Infrastructure",
+    "Well",
+    "Aqueduct"
+   ]
+  },
+  "Q96211395": {
+   "label": "heritage site in Sweden",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q96352513": {
+   "label": "religious building ruin",
+   "kind": "site",
+   "types": [
+    "Religious",
+    "Temple",
+    "Church",
+    "Church/cathedral",
+    "Monastery",
+    "Mosque",
+    "Sanctuary",
+    "Ruin"
+   ]
+  },
+  "Q96592721": {
+   "label": "protected area of Bolivia",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q97457858": {
+   "label": "ceramic factory",
+   "kind": "site",
+   "types": [
+    "Infrastructure"
+   ]
+  },
+  "Q97481554": {
+   "label": "Prehistoric Site, Kalvoi",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q98596750": {
+   "label": "minilith",
+   "kind": "site",
+   "types": [
+    "Megalithic stones",
+    "Standing stone",
+    "Sculptured stone",
+    "Natural feature",
+    "Inscription",
+    "Megalithic"
+   ]
+  },
+  "Q98929143": {
+   "label": "funerary stele",
+   "kind": "site",
+   "types": [
+    "Inscription",
+    "Sculptured stone",
+    "Monument",
+    "Rock relief/carving",
+    "Standing stone",
+    "Megalithic stones",
+    "Memorial",
+    "Funerary"
+   ]
+  },
+  "Q100268926": {
+   "label": "iberian settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Fort",
+    "Fortification",
+    "Fortress",
+    "Earthwork"
+   ]
+  },
+  "Q102202066": {
+   "label": "Samian Ware Discovery Site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q104419518": {
+   "label": "Romanian Orthodox church building",
+   "kind": "site",
+   "types": [
+    "Church",
+    "Church/cathedral",
+    "Religious",
+    "Monastery"
+   ]
+  },
+  "Q106435710": {
+   "label": "cave monastery",
+   "kind": "site",
+   "types": [
+    "Monastery",
+    "Religious",
+    "Church",
+    "Temple complex",
+    "Cave Structures"
+   ]
+  },
+  "Q106468588": {
+   "label": "Jewish settlement in the land of Israel",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q106491339": {
+   "label": "Neolithic settlement",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q107990777": {
+   "label": "Nature Reserve (Parcial)",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q108060568": {
+   "label": "national park",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q110390579": {
+   "label": "city of United Kingdom",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q110951231": {
+   "label": "Macedonian tomb",
+   "kind": "site",
+   "types": [
+    "Tomb",
+    "Burial",
+    "Funerary",
+    "Necropolis/tombs complex",
+    "Mound/tumulus",
+    "Barrow",
+    "Monument",
+    "Memorial"
+   ]
+  },
+  "Q111051469": {
+   "label": "submerged structure",
+   "kind": "site",
+   "types": [
+    "Underwater structures",
+    "Shipwreck",
+    "Harbor",
+    "Port"
+   ]
+  },
+  "Q112132522": {
+   "label": "historical civil building museum",
+   "kind": "container",
+   "types": [
+    "Museum",
+    "Archaeological site",
+    "Heritage site"
+   ]
+  },
+  "Q112132548": {
+   "label": "archaeological artifact museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q115154345": {
+   "label": "local authority museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q115154402": {
+   "label": "independent museum",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q115425710": {
+   "label": "group of rocks",
+   "kind": "site",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site",
+    "Rock art",
+    "Megalithic stones",
+    "Megalithic"
+   ]
+  },
+  "Q116457956": {
+   "label": "municipality without town privileges in Germany",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q116798230": {
+   "label": "celtiberian town",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement",
+    "Fort",
+    "Fortification",
+    "Fortress",
+    "Earthwork"
+   ]
+  },
+  "Q117025897": {
+   "label": "colonia augusta",
+   "kind": "site",
+   "types": [
+    "City",
+    "Town",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q119156350": {
+   "label": "municipal protected area",
+   "kind": "container",
+   "types": [
+    "Heritage site",
+    "Natural feature",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q119840097": {
+   "label": "Sabine deity",
+   "kind": "other",
+   "types": []
+  },
+  "Q120804029": {
+   "label": "tumuli group",
+   "kind": "site",
+   "types": [
+    "Barrow",
+    "Mound/tumulus",
+    "Burial",
+    "Funerary",
+    "Tomb",
+    "Cairn",
+    "Earthwork",
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex"
+   ]
+  },
+  "Q120964921": {
+   "label": "organized archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q123754112": {
+   "label": "municipality of the Valencian Community",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q124750618": {
+   "label": "library of an Italian territorial body",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q124830213": {
+   "label": "museum of a public entity",
+   "kind": "container",
+   "types": [
+    "Museum"
+   ]
+  },
+  "Q124830411": {
+   "label": "Museum of the Italian Ministry of Culture",
+   "kind": "container",
+   "types": [
+    "Museum",
+    "Archaeological site",
+    "Heritage site"
+   ]
+  },
+  "Q125366925": {
+   "label": "village in Egypt",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q125855764": {
+   "label": "Ancient Roman necropolis",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q125856556": {
+   "label": "Celtic archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q125857545": {
+   "label": "Carthaginian archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q125857579": {
+   "label": "Punic necropolis",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q125866682": {
+   "label": "Ancient Egyptian necropolis",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q125866985": {
+   "label": "prehistoric necropolis",
+   "kind": "site",
+   "types": [
+    "Cemetery",
+    "Necropolis",
+    "Necropolis/tombs complex",
+    "Burial",
+    "Funerary",
+    "Tomb"
+   ]
+  },
+  "Q126393491": {
+   "label": "mineral library",
+   "kind": "other",
+   "types": []
+  },
+  "Q127386657": {
+   "label": "nucleus of singular population entity",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q127388602": {
+   "label": "settlement formation in Bulgaria",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q129676344": {
+   "label": "large city",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q129725870": {
+   "label": "city of regional significance",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q130212458": {
+   "label": "village of Kazakhstan",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q130313562": {
+   "label": "first class bullring",
+   "kind": "site",
+   "types": [
+    "Amphitheatre",
+    "Theatre",
+    "Theater",
+    "Stadium"
+   ]
+  },
+  "Q131462987": {
+   "label": "Gallo-Roman archaeological site",
+   "kind": "generic",
+   "types": [
+    "Archaeological site",
+    "Site",
+    "Ruin",
+    "Heritage site",
+    "Scheduled monument"
+   ]
+  },
+  "Q132732274": {
+   "label": "rupestral complex",
+   "kind": "site",
+   "types": [
+    "Cave Structures",
+    "Rock relief/carving",
+    "Rock art",
+    "Cave",
+    "Monastery",
+    "Temple complex"
+   ]
+  },
+  "Q132775038": {
+   "label": "gothic bridge",
+   "kind": "site",
+   "types": [
+    "Bridge",
+    "Gate/archway/bridge",
+    "Infrastructure"
+   ]
+  },
+  "Q133444874": {
+   "label": "roman ruins",
+   "kind": "generic",
+   "types": [
+    "Ruin",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q134456340": {
+   "label": "cultural heritage of Sleman Regency",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
+  "Q134521441": {
+   "label": "local board in Osijek",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q134587884": {
+   "label": "town in Myanmar",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q136351774": {
+   "label": "Ancient Roman imperial palace",
+   "kind": "site",
+   "types": [
+    "Palace",
+    "Castle/palace",
+    "Residence/villa/farmhouse"
+   ]
+  },
+  "Q136706915": {
+   "label": "funeral complex",
+   "kind": "site",
+   "types": [
+    "Necropolis/tombs complex",
+    "Tomb",
+    "Funerary",
+    "Burial",
+    "Temple complex",
+    "Pyramid complex",
+    "Necropolis"
+   ]
+  },
+  "Q141223668": {
+   "label": "self-governing city of Georgia",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
+  "Q141267696": {
+   "label": "Q141267696",
+   "kind": "site",
+   "types": [
+    "Sculptured stone",
+    "Megalithic statues",
+    "Monument",
+    "Memorial",
+    "Rock relief/carving",
+    "Megalithic stones",
+    "Standing stone",
+    "Natural feature",
+    "Inscription",
+    "Megalithic"
+   ]
+  }
+ }
+}
