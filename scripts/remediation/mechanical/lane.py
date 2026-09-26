@@ -92,8 +92,12 @@ TARGET_KEYS = {"unified_sites": "id", "card_stats": "site_id"}
 
 #: The types a cell's planned text is cast to before it is compared with the stored value - the
 #: base types of the columns the cell lanes write (read from the catalog on production,
-#: 2026-09-23). Spliced into SQL as `::<type>`, so the set is closed.
-CELL_TYPES = frozenset({"integer", "jsonb", "text", "character varying"})
+#: 2026-09-23; `double precision` and `geometry` for `unified_sites.lat`/`lon`/`geom`, read
+#: 2026-09-26: `geometry(Point,4326)`, no trigger on the table). Spliced into SQL as `::<type>`,
+#: so the set is closed.
+CELL_TYPES = frozenset(
+    {"integer", "jsonb", "text", "character varying", "double precision", "geometry"}
+)
 
 
 @dataclass(frozen=True)
@@ -137,6 +141,9 @@ class Column:
     own type the way `apply_remediation_change()` makes it. `max_chars` is a declared width
     (`character varying(50)`), `None` for a type without one. `fills_null`: the stored value may be
     NULL - the lane fills an unassessed column (`scope_status`), and its reversal restores the NULL.
+    `clears`: the planned value may be NULL - the lane empties the column (owner decision O6 of
+    2026-09-26, "replace only with a sourced value, else empty the field"), and its reversal
+    restores the value it emptied. A NULL is no value a lane owns: guard 4 never reads it.
     """
 
     name: str
@@ -144,6 +151,7 @@ class Column:
     max_chars: int | None = None
     allowed_new_values: tuple[str, ...] = ()
     fills_null: bool = False
+    clears: bool = False
 
     def __post_init__(self) -> None:
         if not _IDENTIFIER.match(self.name):
@@ -159,6 +167,42 @@ class Column:
     def cast(self, expression: str) -> str:
         """`expression` compared in this column's type."""
         return f"{expression}::{self.sql_type}"
+
+
+#: What a site invariant's RAISE says after `<label>: <count> ` - spliced into the message literal,
+#: so the lane label's rule holds for it too, and it must name what is wrong.
+_SAYS = re.compile(r"^[A-Za-z0-9 _/,()-]+\Z")
+
+
+@dataclass(frozen=True)
+class SiteInvariant:
+    """A condition every planned site must satisfy once its cells are written - checked inside the
+    write's transaction, after the loop, so a violating plan is rolled back whole.
+
+    `predicate` is SQL over the written site `u` and its plan row `p` (`p.site_id`) that is TRUE for
+    a site that violates the invariant; `{plan}` stands for the plan's temp table, so a predicate
+    can ask which of the site's cells are planned. It runs on the write only: a reversal restores the
+    state before the write, which the invariant may never have held (one curated site carried a NULL
+    `geom` on 2026-09-26). `probe_column` and `probe_values` let `--probe-guards` prove it: the probe
+    writes the first probe value that is neither the cell's old nor its new value into the first
+    planned cell of that column.
+    """
+
+    says: str
+    predicate: str
+    probe_column: str
+    probe_values: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not _SAYS.match(self.says):
+            raise ValueError(f"{self.says!r} cannot be spliced into a RAISE message")
+        if not self.predicate.strip() or "$$" in self.predicate:
+            raise ValueError(f"{self.says}: the predicate is empty or would end the DO block")
+        if not _IDENTIFIER.match(self.probe_column) or len(self.probe_values) < 3:
+            raise ValueError(
+                f"{self.says}: a probe needs its column and three values (one differs from any "
+                "old and new value)"
+            )
 
 
 def typed_case(
@@ -212,6 +256,12 @@ def _check_cell_lane(lane: Lane) -> None:
     names = [cell.name for cell in lane.cells]
     if len(set(names)) != len(names):
         raise ValueError(f"{lane.name}: a column appears twice in `cells`")
+    for invariant in lane.site_invariants:
+        if not lane.target.is_site or invariant.probe_column not in names:
+            raise ValueError(
+                f"{lane.name}: a site invariant reads a unified_sites row and probes one of the "
+                f"lane's cells, not {invariant.probe_column!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -242,12 +292,16 @@ class Lane:
     target: Target = UNIFIED_SITES
     cells: tuple[Column, ...] = ()
     reverses_journal: bool = False
+    #: Conditions every planned site satisfies after the write (`SiteInvariant`); cell lanes only.
+    site_invariants: tuple[SiteInvariant, ...] = ()
 
     def __post_init__(self) -> None:
         """Every field that reaches SQL unquoted is checked here, once, instead of trusted."""
         if self.cells:
             _check_cell_lane(self)
         else:
+            if self.site_invariants:
+                raise ValueError(f"{self.name}: site invariants belong to a cell lane")
             _check_column_lane(self)
         if not _IDENTIFIER.match(self.plan_table) or not self.plan_table.startswith("_"):
             raise ValueError(f"{self.plan_table!r} is not a temp-table name of the form _name")
@@ -1226,9 +1280,123 @@ LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK
 #: twice" still holds, and its own directory.
 CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
 
+# ------------------------------------------------------------ the WD1 structured-field lane
+#: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
+#: period_start with its period_name, site_type and source_url of a step of at most 100 sites, one
+#: transaction per step. Each step is a lane of its own - `fields-wd1-<wave>-s<NNN>`, its own run
+#: stamp and directory - so "never apply a stamp twice" holds per step and each step is accepted
+#: before the next is planned (`fields/plan.py`).
+FIELDS_LANE = re.compile(r"^fields-wd1-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+FIELDS_ROOT = "fields/wd1/write"
+_BUCKETS = tuple(label for label, _lo, _hi in PERIOD_BUCKETS)
+
+#: A site's point is three cells: `lat` and `lon` (NOT NULL, corrected and never cleared -
+#: FIELD_CONTRACT 3) and `geom`, which every writer sets to their point
+#: (`bcases/coord_plan.py`; no trigger does it, read 2026-09-26). `geom` may start NULL (one curated
+#: site on 2026-09-26). The period pair and the other two fields may be emptied (owner decision O6),
+#: and each may start empty: an empty field is asked too and may get a sourced value (HUMAN_ONLY B3).
+FIELDS_CELLS = (
+    Column("lat", "double precision"),
+    Column("lon", "double precision"),
+    Column("geom", "geometry", fills_null=True),
+    Column("period_start", "integer", fills_null=True, clears=True),
+    Column(
+        "period_name",
+        "character varying",
+        max_chars=100,
+        allowed_new_values=_BUCKETS,
+        fills_null=True,
+        clears=True,
+    ),
+    Column(
+        "site_type",
+        "character varying",
+        max_chars=100,
+        allowed_new_values=tuple(CANONICAL_TYPES),
+        fills_null=True,
+        clears=True,
+    ),
+    Column("source_url", "text", fills_null=True, clears=True),
+)
+_POINT = "ST_SetSRID(ST_MakePoint(u.lon, u.lat), 4326)"
+FIELDS_INVARIANTS = (
+    SiteInvariant(
+        says="planned site(s) hold a geom that is not their point",
+        predicate=(
+            "EXISTS (SELECT 1 FROM {plan} q WHERE q.site_id = p.site_id "
+            f"AND q.column_name IN ('lat', 'lon', 'geom')) AND u.geom IS DISTINCT FROM {_POINT}"
+        ),
+        probe_column="geom",
+        probe_values=(
+            "SRID=4326;POINT(0 0)",
+            "SRID=4326;POINT(1 1)",
+            "SRID=4326;POINT(2 2)",
+        ),
+    ),
+    SiteInvariant(
+        says="planned site(s) hold a period_name that is not the bucket of their period_start",
+        predicate=(
+            "EXISTS (SELECT 1 FROM {plan} q WHERE q.site_id = p.site_id "
+            "AND q.column_name IN ('period_start', 'period_name')) AND u.period_name "
+            f"IS DISTINCT FROM {bucket_case('u.period_start')}"
+        ),
+        probe_column="period_name",
+        probe_values=_BUCKETS[:3],
+    ),
+)
+_GEOM_NOT_POINT = Residual(
+    "curated rows whose geom is not their point",
+    "geom IS DISTINCT FROM ST_SetSRID(ST_MakePoint(lon, lat), 4326)",
+)
+
+
+def fields_lane(wave: str, step: int) -> Lane:
+    """Step `step` of WD1 wave `wave` (a date label, `2026-09-27` or `2026-09-27b`)."""
+    name = f"fields-wd1-{wave}-s{step:03d}"
+    if FIELDS_LANE.match(name) is None or step < 1:
+        raise ValueError(f"{wave!r} step {step} is not a WD1 wave label and step number")
+    return Lane(
+        name=name,
+        key_prefix=name,
+        run_stamp=f"{wave}_fields-wd1-s{step:03d}",
+        test_id="WD1/structured-fields",
+        confidence="two_source",
+        label="WD1 field correction",
+        plan_table="_fields_wd1_plan",
+        out_dir_name=f"{FIELDS_ROOT}/{wave}/s{step:03d}",
+        post_commit_residual=_PERIOD_MISMATCH,
+        rehearsal_residual=_PERIOD_MISMATCH,
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        cells=FIELDS_CELLS,
+        site_invariants=FIELDS_INVARIANTS,
+    )
+
+
+def fields_readback(lane: Lane) -> str:
+    """The read-only verification of a WD1 step, before and after its write."""
+    stamp = sql_literal(lane.run_stamp)
+    return journal_readback(
+        lane,
+        [
+            *((r.metric, _CURATED_ROWS + r.predicate) for r in (_PERIOD_MISMATCH, _GEOM_NOT_POINT)),
+            ("curated rows with an empty period_start", _CURATED_ROWS + "period_start IS NULL"),
+            ("curated rows with an empty site_type", _CURATED_ROWS + "site_type IS NULL"),
+            (
+                "curated rows with an empty source_url",
+                _CURATED_ROWS + "(source_url IS NULL OR source_url = '')",
+            ),
+            (
+                "journal rows for this run that empty a column",
+                f"FROM remediation_change_log WHERE run_stamp = {stamp} AND new_value IS NULL",
+            ),
+        ],
+    )
+
 
 def resolve_lane(name: str) -> Lane:
-    """The lane called `name`: a registered one, or a card_stats wave. `KeyError` otherwise.
+    """The lane called `name`: a registered one, a WD1 fields step, or a card_stats wave.
+    `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
@@ -1236,6 +1404,9 @@ def resolve_lane(name: str) -> Lane:
     """
     if name in LANES:
         return LANES[name]
+    fields = FIELDS_LANE.match(name)
+    if fields is not None:
+        return fields_lane(fields.group(1), int(fields.group(2)))
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

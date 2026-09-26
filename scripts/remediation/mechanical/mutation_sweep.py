@@ -1291,7 +1291,7 @@ CASES: list[Case] = [
             ),
             (
                 "NULL where the lane never leaves one",
-                "    if values[filled_side] is None:",
+                "    if values[filled_side] is None and not cell.clears:",
                 "test_a_fill_may_start_from_null_but_never_end_in_it",
             ),
             (
@@ -4873,6 +4873,303 @@ AUDIT_FIX_CASES: list[Case] = [
     ),
 ]
 CASES += AUDIT_FIX_CASES
+
+
+# ------------------------------------------------------ the WD1 structured-field lane (2026-09-26)
+FIELDS = REPO / "scripts/remediation/fields"
+FIELDS_LANE_TESTS = "tests/remediation/test_mechanical_fields_lane.py"
+FIELDS_ANSWER_TESTS = "tests/remediation/test_fields_answers.py"
+FIELDS_CLASSIFY_TESTS = "tests/remediation/test_fields_classify.py"
+FIELDS_HANDOFF_TESTS = "tests/remediation/test_fields_handoff.py"
+FIELDS_PLAN_TESTS = "tests/remediation/test_fields_plan.py"
+
+#: What the mechanical writer gained for WD1 (a column a lane may empty, the coordinate types, site
+#: invariants) and WD1's own guards (the answer checks, the identity rule, the write plan's
+#: refusals, the step gate). Every label starts with "wd1:", so the list runs on its own:
+#: `mutation_sweep.py wd1:`.
+WD1_CASES: list[Case] = [
+    guard(
+        "wd1: plan-side NULL to NULL is no change",
+        APPLY,
+        "    if r.old_value is None and r.new_value is None:",
+        "test_null_to_null_is_no_change",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: plan-side an emptied cell owns no value",
+        APPLY,
+        "    if lane_value is None:",
+        "test_an_emptied_owned_cell_owns_no_value",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: plan-side a double is read as a number",
+        APPLY,
+        '    if cell.sql_type == "double precision":',
+        "test_a_double_is_compared_as_a_number",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: guard 2 refuses NULL where a column does not clear",
+        APPLY,
+        "        if not cell.clears:",
+        "test_guard_2_lets_a_clearing_column_end_in_null",
+        FIELDS_LANE_TESTS,
+    ),
+    Case(
+        "wd1: site invariants run on the write only",
+        APPLY,
+        "    for invariant in () if rollback else lane.site_invariants:",
+        "    for invariant in lane.site_invariants:",
+        "test_the_site_invariants_run_after_the_write_and_only_on_the_write",
+        FIELDS_LANE_TESTS,
+    ),
+    Case(
+        "wd1: site invariants are rendered",
+        APPLY,
+        "    for invariant in () if rollback else lane.site_invariants:",
+        "    for invariant in ():",
+        "test_the_site_invariants_run_after_the_write_and_only_on_the_write",
+        FIELDS_LANE_TESTS,
+    ),
+    Case(
+        "wd1: every invariant gets its probe",
+        APPLY,
+        "    for invariant in lane.site_invariants:\n        # the first planned cell",
+        "    for invariant in ():\n        # the first planned cell",
+        "test_each_invariant_gets_a_probe_that_breaks_it",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: a site invariant's message is checked",
+        LANE,
+        "        if not _SAYS.match(self.says):",
+        "test_a_site_invariant_is_checked_before_it_is_spliced",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: site invariants belong to a cell lane",
+        LANE,
+        "            if self.site_invariants:",
+        "test_a_site_invariant_is_checked_before_it_is_spliced",
+        FIELDS_LANE_TESTS,
+    ),
+    guard(
+        "wd1: answers rest on two families",
+        FIELDS / "answers.py",
+        "    if len(quotes) < 2 or len({source_family(q.url) for q in quotes}) < 2:",
+        "test_keep_and_replace_rest_on_two_families",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a replaced point moves more than a kilometre",
+        FIELDS / "answers.py",
+        "    if answer.decision == REPLACE and distance <= KEEP_KM:",
+        "test_replace_moves_more_than_a_kilometre",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a coarse coordinate quote cannot place a site",
+        FIELDS / "answers.py",
+        "    if step > MAX_GRID * (1 + 1e-9):",
+        "test_a_coarse_quote_is_read_within_its_own_digits",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a period quote carries a date",
+        FIELDS / "answers.py",
+        "        if not dated(quote):",
+        "test_every_quote_carries_a_date",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a type is quoted by its word",
+        FIELDS / "answers.py",
+        "    if not any(s in fold(q, keep_parentheses=True) for _, q in answer.quotes for s in stems):",
+        "test_a_type_that_is_not_canonical_or_not_quoted_is_refused",
+        FIELDS_ANSWER_TESTS,
+    ),
+    guard(
+        "wd1: a source_url is quoted from its own page",
+        FIELDS / "answers.py",
+        "    if not any(Q.canonical_url(url)[0] == Q.canonical_url(value)[0] for url, _ in answer.quotes):",
+        "test_what_a_source_url_value_may_not_be",
+        FIELDS_ANSWER_TESTS,
+    ),
+    Case(
+        "wd1: a container puts the item in doubt",
+        FIELDS / "classify.py",
+        "    return Identity(bool(containers) and not held, containers)",
+        "    return Identity(False, containers)",
+        "test_a_container_that_holds_no_stored_type_puts_the_item_in_doubt",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a specific class speaks before a generic one",
+        FIELDS / "classify.py",
+        "    if specific:\n        labels = ",
+        "test_a_generic_type_beside_a_specific_class_is_a_downgrade",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a section redirect is a conflict",
+        FIELDS / "classify.py",
+        '        if record["fragment"]:',
+        "test_what_makes_an_article_a_conflict",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: the harvest and the stored export are one state",
+        FIELDS / "classify.py",
+        "        if not _agrees(site, row):",
+        "test_a_harvest_and_an_export_of_different_states_are_refused",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a quote that is not found does not count",
+        FIELDS / "handoff.py",
+        "            if failed:",
+        "test_a_quote_not_on_its_page_is_asked_again",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: the import refuses an edited prompt",
+        FIELDS / "handoff.py",
+        '            if OH.prompt_sha256(prompt) != line["prompt_sha256"]:',
+        "test_an_edited_prompt_is_refused_at_import",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    Case(
+        "wd1: an exhausted point is held, not cleared",
+        FIELDS / "handoff.py",
+        '"decision": A.UNRESOLVED if field == "coordinates" else A.CLEAR,',
+        '"decision": A.CLEAR,',
+        "test_after_the_last_round_a_field_is_cleared_and_a_point_held",
+        FIELDS_HANDOFF_TESTS,
+    ),
+    guard(
+        "wd1: a point that crosses a border is held",
+        FIELDS / "plan.py",
+        '            if not country["agrees"]:',
+        "test_a_point_that_crosses_a_border_is_held",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a decision about another value is refused",
+        FIELDS / "plan.py",
+        "        if current_text != stored_text:",
+        "test_a_decision_about_another_value_is_refused",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a start after the end is refused",
+        FIELDS / "plan.py",
+        "            if new is not None and end is not None and int(end) != 0 and int(new) > int(end):",
+        "test_a_start_after_the_end_is_refused",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a label follows its start",
+        FIELDS / "plan.py",
+        '    if label != live["period_name"]:',
+        "test_a_label_follows_an_unchanged_start",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a step waits for the one before it",
+        FIELDS / "plan.py",
+        "    if not accepted.exists():",
+        "test_a_step_waits_for_the_one_before_it",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a deviation refuses the step",
+        FIELDS / "plan.py",
+        "    if found:",
+        "test_any_deviation_refuses_the_step",
+        FIELDS_PLAN_TESTS,
+    ),
+    guard(
+        "wd1: a stacked point is a conflict",
+        FIELDS / "classify.py",
+        "    if stacked:",
+        "test_a_stacked_point_is_a_conflict_whatever_the_witnesses",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    Case(
+        "wd1: a retired site stacks nothing",
+        FIELDS / "classify.py",
+        '        if row["scope_status"] != "retired"\n    )',
+        "    )",
+        "test_a_point_another_live_site_holds_is_stacked",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    Case(
+        "wd1: a flag asks its field",
+        FIELDS / "classify.py",
+        "        return self.status in ASKED or bool(self.flags)",
+        "        return self.status in ASKED",
+        "test_a_flag_asks_a_field_the_machine_confirms",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: the seeds file must exist",
+        FIELDS / "classify.py",
+        '    if not path.exists():\n        raise ClassifyError(f"{path} is missing - run `seeds.py',
+        "test_the_seeds_must_be_there_and_well_formed",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a seed names a WD1 field",
+        FIELDS / "classify.py",
+        '        if tuple(seed) != SEED_KEYS or seed["field"] not in FIELDS:',
+        "test_the_seeds_must_be_there_and_well_formed",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: an empty source_url is asked",
+        FIELDS / "classify.py",
+        "    if kind == H.URL_NONE:",
+        "test_no_url_is_asked_for_and_a_search_url_is_a_conflict",
+        FIELDS_CLASSIFY_TESTS,
+    ),
+    guard(
+        "wd1: a stale url record is refused",
+        FIELDS / "harvest.py",
+        '    if record["source_url"] != site["source_url"]:\n        raise HarvestError(',
+        "test_a_record_of_another_url_is_asked_again_and_never_read",
+        "tests/remediation/test_fields_harvest.py",
+    ),
+    guard(
+        "wd1: a stale url record is asked again",
+        FIELDS / "harvest.py",
+        '        if record["source_url"] != site["source_url"]:\n            return True',
+        "test_a_record_of_another_url_is_asked_again_and_never_read",
+        "tests/remediation/test_fields_harvest.py",
+    ),
+    guard(
+        "wd1: a canary is no seed",
+        FIELDS / "seeds.py",
+        '        if (str(row["site_id"]), str(row["field"])) in planted:',
+        "test_a_counted_wrong_verdict_on_a_wd1_field_is_a_seed",
+        "tests/remediation/test_fields_seeds.py",
+    ),
+    guard(
+        "wd1: B13 takes only its two reasons",
+        FIELDS / "seeds.py",
+        '        if row["reason"] not in WRONG_BOTH_REASONS:',
+        "test_only_the_two_open_reasons_are_seeds",
+        "tests/remediation/test_fields_seeds.py",
+    ),
+    guard(
+        "wd1: the prompt shows a flag",
+        FIELDS / "handoff.py",
+        '        if status["flags"]:',
+        "test_a_flag_and_an_empty_field_are_shown",
+        FIELDS_HANDOFF_TESTS,
+    ),
+]
+CASES += WD1_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

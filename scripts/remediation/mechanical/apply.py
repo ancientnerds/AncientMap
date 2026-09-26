@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import re
 import subprocess
 import sys
@@ -63,11 +64,13 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
+    FIELDS_LANE,
     LANE_READBACKS,
     LANES,
     T05,
     Column,
     Lane,
+    fields_readback,
     outside,
     resolve_lane,
     typed_case,
@@ -247,6 +250,16 @@ def typed_value(cell: Column, text: str) -> Any:
             return json.loads(text)
         except json.JSONDecodeError as exc:
             raise PlanError(f"{cell.name}: {text!r} is not JSON") from exc
+    if cell.sql_type == "double precision":
+        # compared as the number it is: '51.10' and '51.1' are one value, and the database's own
+        # print of a double (`lat::text`) is what a planned old value carries
+        try:
+            number = float(text)
+        except ValueError as exc:
+            raise PlanError(f"{cell.name}: {text!r} is not a number") from exc
+        if not math.isfinite(number):
+            raise PlanError(f"{cell.name}: {text!r} is not a finite number")
+        return number
     return text
 
 
@@ -254,12 +267,16 @@ def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
     """One record of a cell lane, in its column's type.
 
     NULL is allowed on one side only, and only for a column the lane fills: the old value of a
-    write, the new value of its reversal. Everything else is a column lane's rule, per column.
+    write, the new value of its reversal - or, for a column the lane empties (`Column.clears`), the
+    new value of a write and the old value of its reversal. Never on both sides: NULL to NULL is no
+    change. Everything else is a column lane's rule, per column.
     """
     cell = lane.cell(r.column)
     empty_side, filled_side = ("new", "old") if rollback else ("old", "new")
     values = {"old": r.old_value, "new": r.new_value}
-    if values[filled_side] is None:
+    if r.old_value is None and r.new_value is None:
+        raise PlanError(f"{r.site_id}/{cell.name}: old and new are both NULL - not a change")
+    if values[filled_side] is None and not cell.clears:
         raise PlanError(
             f"{r.site_id}/{cell.name}: no {filled_side} value - this lane never "
             + ("undoes a NULL" if rollback else "clears a column")
@@ -280,6 +297,9 @@ def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
             f"holds {cell.max_chars}"
         )
     lane_value = r.old_value if rollback else r.new_value
+    if lane_value is None:
+        # an emptied cell (`Column.clears`) holds no value, and no value is what a lane owns
+        return
     if cell.allowed_new_values and lane_value not in cell.allowed_new_values:
         raise PlanError(
             f"{r.site_id}: {lane_value!r} is not a value the {lane.name} lane owns in "
@@ -393,7 +413,8 @@ def _writable_case(lane: Lane, *, rollback: bool) -> str:
         empty, filled = (
             ("p.new_value", "p.old_value") if rollback else ("p.old_value", "p.new_value")
         )
-        refused.append(f"{filled} IS NULL")
+        if not cell.clears:
+            refused.append(f"{filled} IS NULL")
         if not cell.fills_null:
             refused.append(f"{empty} IS NULL")
         if cell.max_chars is not None:
@@ -722,6 +743,18 @@ def render_transaction(
     )
     add("    END IF;")
     add("")
+    for invariant in () if rollback else lane.site_invariants:
+        add(f"    -- site invariant: no planned site may be left with this - {invariant.says}")
+        add("    SELECT count(*) INTO bad")
+        add(
+            f"      FROM (SELECT DISTINCT site_id FROM {table}) p "
+            "JOIN unified_sites u ON u.id = p.site_id"
+        )
+        add(f"     WHERE {invariant.predicate.format(plan=table)};")
+        add("    IF bad > 0 THEN")
+        add(f"        RAISE EXCEPTION '{label}: % {invariant.says}', bad;")
+        add("    END IF;")
+        add("")
     if cells:
         add(
             f"    RAISE NOTICE '{label}: % of % planned cell(s) changed and journalled over "
@@ -1530,12 +1563,16 @@ NEVER_STORED = {
     "jsonb": '["probe: a value never stored"]',
     "text": "A value that was never there",
     "character varying": "A value that was never there",
+    "double precision": "-98.7654321",
+    "geometry": "SRID=4326;POINT(-179.987654 -89.987654)",
 }
 NOT_OWNED = {
     "integer": "987654321",
     "jsonb": '["probe: a value this lane does not own"]',
     "text": "A value this lane does not own",
     "character varying": "A value this lane does not own",
+    "double precision": "98.7654321",
+    "geometry": "SRID=4326;POINT(179.987654 89.987654)",
 }
 
 
@@ -1644,7 +1681,31 @@ def _cell_probe_cases(
                 refusal(GUARD6_SAYS),
             )
         )
+    for invariant in lane.site_invariants:
+        # the first planned cell of the invariant's column is given a value that breaks it; a plan
+        # without such a cell cannot probe it, and `cmd_probe_guards` names that
+        index = next((i for i, r in enumerate(records) if r.column == invariant.probe_column), None)
+        if index is None:
+            continue
+        chosen = records[index]
+        value = next(
+            v for v in invariant.probe_values if v not in (chosen.old_value, chosen.new_value)
+        )
+        probes.append(
+            (
+                f"invariant-{invariant.probe_column}",
+                f"site invariant - {invariant.says}",
+                corrupt(index, new_value=value),
+                refusal(invariant.says),
+            )
+        )
     return probes
+
+
+def unprobed_invariants(records: Sequence[ChangeRecord], lane: Lane) -> list[str]:
+    """The site invariants this plan cannot probe: it plans no cell of their probe column."""
+    columns = {r.column for r in records}
+    return [i.says for i in lane.site_invariants if i.probe_column not in columns]
 
 
 def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
@@ -1675,6 +1736,8 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
         raise PlanError("no non-curated row to probe the source guard with")
 
     failures = 0
+    for says in unprobed_invariants(records, lane):
+        print(f"[site invariant - {says}] not probed: the plan writes no cell it could corrupt")
     for suffix, name, mutated, expected in probe_cases(records, lane, foreign[0]):
         stamp = f"{lane.probe_run_stamp}-{suffix}"
         sql = render_transaction(
@@ -1707,9 +1770,12 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
 
 
 def readback_for(lane: Lane) -> str:
-    """The lane's read-only verification: `READBACKS`, or a card_stats wave's own."""
+    """The lane's read-only verification: `READBACKS`, a WD1 fields step's, or a card_stats
+    wave's own."""
     if lane.name in READBACKS:
         return READBACKS[lane.name]
+    if FIELDS_LANE.match(lane.name):
+        return fields_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
