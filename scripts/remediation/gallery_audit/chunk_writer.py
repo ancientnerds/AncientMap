@@ -26,7 +26,8 @@ The production steps, per chunk and in this order (owner rule 2026-09-21, PIECE6
     chunk_writer.py <chunk dir> --rehearse-rollback  ROLLBACK.sql with COMMIT -> ROLLBACK, run
                                                      against the post-apply state
 
-What the transaction proves before it commits: every planned site is curated, every planned image
+What the transaction proves before it commits: every planned site is curated (or, for the one
+key-only lane of another source, a site of that source - `Lane.source`), every planned image
 row lives on the site the plan names, every row still holds its planned old value; exactly the
 planned number of rows moved; each holds its new value; the journal and the plan agree row for row
 in both directions; at most one hero per touched site (`hero_repair.apply.one_hero_invariant_sql`,
@@ -68,6 +69,12 @@ from prod_write import pin_line  # noqa: E402
 from pipeline.lyra.site_key import site_key_sql  # noqa: E402  (repo root: mechanical.apply)
 
 CURATED_SOURCE = "ancient_nerds"
+#: The one other source a lane may write, and only its match keys (`KEY_ONLY_SOURCES`): the eleven
+#: Lyra alias keys HUMAN_ONLY Nr. 9 decided on 2026-09-26 under the owner's O9 ("reparieren"),
+#: planned row by row in `name_key/plan.py`. A chunk of any other lane names no source and is the
+#: curated source's, byte for byte as before.
+KEY_ONLY_SOURCES = frozenset({"lyra"})
+KEY_COLUMNS = frozenset({("unified_site_names", "name_normalized")})
 SITES_PER_CHUNK = 100
 KEY_COLUMN = "id"
 PLAN_TABLE = "_img_plan"
@@ -130,11 +137,19 @@ class Lane:
     stamp: str
     confidence: str
     label: str
+    #: The `source_id` guard 1 requires of every planned site: the curated source, or one of
+    #: `KEY_ONLY_SOURCES` for a lane that writes nothing but alias keys (`validate_lane_rows`).
+    source: str = CURATED_SOURCE
 
     def __post_init__(self) -> None:
         for what, value in (("name", self.name), ("stamp", self.stamp)):
             if not TOKEN_RE.fullmatch(value):
                 raise ChunkError(f"lane {what} {value!r} is not a lower-case token")
+        if self.source != CURATED_SOURCE and self.source not in KEY_ONLY_SOURCES:
+            raise ChunkError(
+                f"source {self.source!r}: a lane writes {CURATED_SOURCE!r}, or the alias keys of "
+                f"{sorted(KEY_ONLY_SOURCES)}"
+            )
         if self.confidence not in CONFIDENCES:
             raise ChunkError(f"confidence {self.confidence!r} is not one of {sorted(CONFIDENCES)}")
         if not LABEL_RE.fullmatch(self.label) or not LABEL_RE.fullmatch(self.test_id):
@@ -246,6 +261,19 @@ def validate_change(change: Change) -> None:
         raise ChunkError(f"{change.row_key}: a change without evidence pointers")
 
 
+def validate_lane_rows(lane: Lane, changes: Sequence[Change]) -> None:
+    """A lane of another source than the curated one writes alias keys and nothing else."""
+    if lane.source == CURATED_SOURCE:
+        return
+    other = sorted(
+        {f"{c.table}.{c.column}" for c in changes} - {f"{t}.{c}" for t, c in KEY_COLUMNS}
+    )
+    if other:
+        raise ChunkError(
+            f"lane {lane.name} writes {lane.source!r} rows: alias keys only, not {other}"
+        )
+
+
 # ------------------------------------------------------------------------------- the chunking
 def chunk_changes(
     lane: Lane,
@@ -262,6 +290,7 @@ def chunk_changes(
     """
     if not changes:
         raise ChunkError("refusing to chunk an empty plan")
+    validate_lane_rows(lane, changes)
     if not 1 <= sites_per_chunk <= SITES_PER_CHUNK:
         raise ChunkError(f"a chunk holds 1..{SITES_PER_CHUNK} sites, not {sites_per_chunk}")
     seen: set[tuple[str, str, str]] = set()
@@ -299,7 +328,9 @@ def ordered(chunk: Chunk) -> list[Change]:
 
 
 def header(chunk: Chunk) -> dict[str, Any]:
-    return {
+    """CHUNK.json. `source` is named only when it is not the curated source, so every chunk
+    delivered before 2026-09-26 keeps its header - and its digest - byte for byte."""
+    head = {
         "lane": chunk.lane.name,
         "test_id": chunk.lane.test_id,
         "stamp": chunk.lane.stamp,
@@ -312,6 +343,9 @@ def header(chunk: Chunk) -> dict[str, Any]:
         "rows": len(chunk.changes),
         "may_empty": sorted(chunk.may_empty),
     }
+    if chunk.lane.source != CURATED_SOURCE:
+        head["source"] = chunk.lane.source
+    return head
 
 
 def records(chunk: Chunk) -> list[dict[str, Any]]:
@@ -347,7 +381,11 @@ def load_chunk(directory: Path) -> Chunk:
         if not path.is_file():
             raise ChunkError(f"{path} does not exist - this is not an emitted chunk")
     head = json.loads(head_path.read_text(encoding="utf-8"))
-    lane = Lane(head["lane"], head["test_id"], head["stamp"], head["confidence"], head["label"])
+    # a header without `source` is the curated source's (`header`)
+    source = head["source"] if "source" in head else CURATED_SOURCE
+    lane = Lane(
+        head["lane"], head["test_id"], head["stamp"], head["confidence"], head["label"], source
+    )
     changes = []
     for lineno, line in enumerate(pv.jsonl_lines(plan_path.read_text(encoding="utf-8")), start=1):
         if not line.strip():
@@ -372,6 +410,7 @@ def load_chunk(directory: Path) -> Chunk:
     chunk = Chunk(lane, int(head["chunk"]), tuple(changes), frozenset(head["may_empty"]))
     for change in chunk.changes:
         validate_change(change)
+    validate_lane_rows(lane, chunk.changes)
     if header(chunk) != head:
         raise ChunkError(f"{head_path} does not describe the rows of {plan_path}")
     return chunk
@@ -507,6 +546,7 @@ def render_statement(chunk: Chunk, *, rollback: bool = False) -> str:
             f"{_value(old)}, {_value(new)}, {L(change_key(lane, c, rollback=rollback))}, "
             f"{L(reason)}, {L(json.dumps(evidence, ensure_ascii=False, sort_keys=True))}::jsonb)"
         )
+    whose = "curated" if lane.source == CURATED_SOURCE else lane.source
     may_empty = ", ".join(f"({L(s)}::uuid)" for s in sorted(chunk.may_empty))
     what = "reversal" if rollback else "write"
     values = ",\n".join(tuples)
@@ -528,7 +568,7 @@ def render_statement(chunk: Chunk, *, rollback: bool = False) -> str:
     return f"""-- Generated by scripts/remediation/gallery_audit/chunk_writer.py - do not edit by hand.
 {pin_line(digest)}
 -- The {what} of lane {lane.name!r}, chunk {chunk.number:03d}: {len(rows)} row(s) over {len(chunk.sites)} site(s);
--- scope source_id = '{CURATED_SOURCE}'; run stamp {stamp!r}; journal test id {lane.test_id!r}.
+-- scope source_id = '{lane.source}'; run stamp {stamp!r}; journal test id {lane.test_id!r}.
 -- Every row goes through apply_remediation_change() (migrations 0017/0018/0022): the conditional
 -- UPDATE and its journal row are one statement. This file holds no DELETE and no UPDATE.
 \\set ON_ERROR_STOP on
@@ -564,13 +604,13 @@ DECLARE
     expected integer := {len(rows)};
     r        RECORD;
 BEGIN
-    -- guard 1: every planned site is a curated site (the source is a RAISE argument, never
+    -- guard 1: every planned site is a {whose} site (the source is a RAISE argument, never
     -- part of the quoted message)
     SELECT count(*) INTO bad FROM (SELECT DISTINCT site_id FROM {PLAN_TABLE}) p
       LEFT JOIN unified_sites u ON u.id = p.site_id
-     WHERE u.id IS NULL OR u.source_id <> {L(CURATED_SOURCE)};
+     WHERE u.id IS NULL OR u.source_id <> {L(lane.source)};
     IF bad > 0 THEN
-        RAISE EXCEPTION '{label}: % planned site(s) are not % sites', bad, {L(CURATED_SOURCE)};
+        RAISE EXCEPTION '{label}: % planned site(s) are not % sites', bad, {L(lane.source)};
     END IF;
 
     -- guard 2: every planned image row exists and lives on the site the plan names
@@ -839,7 +879,7 @@ def readback(chunk: Chunk, *, rollback: bool = False) -> list[str]:
     after = pv.read_rows(
         AFTER_SQL.replace("{sites}", sites)
         .replace("{vocab}", ", ".join(L(k) for k in sorted(pv.VOCAB)))
-        .replace("{source}", L(CURATED_SOURCE))
+        .replace("{source}", L(chunk.lane.source))
     )
     if len(after) != 1:
         problems.append(f"the invariant read returned {len(after)} rows")

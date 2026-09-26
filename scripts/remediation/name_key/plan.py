@@ -26,6 +26,19 @@ using `unaccent`, not via `normalize_name()`.
   `ancient_nerds` rows only (guard 1), so the plan lists these 11 and plans nothing: whether the
   remediation's journal may write a `lyra` row is the owner's call.
 
+## The eleven Lyra alias keys (HUMAN_ONLY Nr. 9, decided 2026-09-26)
+
+Decided under the owner's O9 ("nach meiner Empfehlung entscheiden",
+`output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md`): "reparieren. Ohne den abgeleiteten
+Schluessel findet die exakte Suche die Sites nicht; es gibt kein DELETE" - a code change that admits
+`lyra` for exactly these rows, then the journalled lane with 11 cells `name_normalized`. Read again
+2026-09-26 (read-only): the same 11 rows differ, none collides. A directory named
+`name-key-lyra-<date>` plans with the lane `name-key-lyra` (source `lyra`, test id
+`P6/name-key-lyra`): exactly the alias rows of `LYRA_ALIAS_ROWS` whose key still differs, K1 as
+before; the chunk writer's guard 1 then requires every planned site to be a `lyra` site, and the
+lane writes alias keys and nothing else (`chunk_writer.validate_lane_rows`). Every other row of the
+read - another source, a site row, an alias row not decided - is listed, never planned.
+
 ## The rule (K1)
 
 `name_normalized := left(lower(unaccent(name)), 500)`, the value Postgres computed in the read
@@ -45,6 +58,9 @@ removing it is a DELETE - not this lane's).
         reads production read-only (two statements), keeps the read as READ.json and writes
         chunk-001/ (journal lane `name-key`, test id `P6/name-key`, run stamp
         `name-key-<date>-001`); exit 1 when nothing differs
+    plan.py chunk --out output/remediation/name_key/name-key-lyra-<date>
+        the same for the decided Lyra alias rows (lane `name-key-lyra`, run stamp
+        `name-key-lyra-<date>-001`)
     chunk_writer.py <out>/chunk-001 --check|--rehearse|--apply|--readback|--rehearse-rollback
 """
 
@@ -71,7 +87,25 @@ from pipeline.lyra.site_key import KEY_SQL_TEMPLATE, site_key_sql  # noqa: E402
 
 WRITER_SOURCE = CW.CURATED_SOURCE
 CURATED_SOURCES = ("ancient_nerds", "lyra", "ancient_nerds_community")
-OUT_RE = re.compile(r"name-key-(\d{4}-\d{2}-\d{2})")
+OUT_RE = re.compile(r"name-key-(lyra-)?(\d{4}-\d{2}-\d{2})")
+LYRA_SOURCE = "lyra"
+#: HUMAN_ONLY Nr. 9, decided 2026-09-26 (O9): the `unified_site_names` ids of the eleven Lyra alias
+#: rows whose key Lyra's alias writer computed in Python (Yap 4, Charnwood Forest 2, Doggerland 2,
+#: North Sentinel Island, Roopkund Lake, Cerutti Mastodon site). The lyra lane plans these and no
+#: other row.
+LYRA_ALIAS_ROWS: tuple[int, ...] = (
+    3616643,
+    3616936,
+    3616938,
+    3617031,
+    3617034,
+    3617035,
+    3617036,
+    3617283,
+    3617346,
+    3617349,
+    3617350,
+)
 RULE = "K1"
 KEY_SOURCE = "pipeline/lyra/site_key.py"
 
@@ -81,14 +115,26 @@ class NameKeyError(CW.ChunkError):
 
 
 def chunk_lane(out: Path) -> CW.Lane:
-    """The journal identity of a key chunk, stamped with its directory's date."""
+    """The journal identity of a key chunk, stamped with its directory's date; a
+    `name-key-lyra-<date>` directory is the decided Lyra alias rows' lane (source `lyra`)."""
     match = OUT_RE.fullmatch(out.name)
     if match is None:
-        raise NameKeyError(f"{out} is not a key directory (name-key-YYYY-MM-DD)")
+        raise NameKeyError(
+            f"{out} is not a key directory (name-key-YYYY-MM-DD or name-key-lyra-YYYY-MM-DD)"
+        )
+    if match.group(1):
+        return CW.Lane(
+            "name-key-lyra",
+            "P6/name-key-lyra",
+            f"name-key-lyra-{match.group(2)}",
+            "authoritative",
+            "lyra alias key recompute",
+            LYRA_SOURCE,
+        )
     return CW.Lane(
         "name-key",
         "P6/name-key",
-        f"name-key-{match.group(1)}",
+        f"name-key-{match.group(2)}",
         "authoritative",
         "name key recompute",
     )
@@ -131,7 +177,7 @@ def read_production() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------ the plan
 def _planned(
-    table: str, row: Mapping[str, Any], site_id: str, what: str
+    table: str, row: Mapping[str, Any], site_id: str, what: str, source: str
 ) -> tuple[CW.Change | None, dict[str, str] | None]:
     """One read row as a change, or as a listed row with its reason."""
     row_key = str(row["id"])
@@ -140,9 +186,13 @@ def _planned(
         raise NameKeyError(f"{table} {row_key}: the read carries no key from Postgres ({key!r})")
     if key == stored:
         raise NameKeyError(f"{table} {row_key}: already holds its key - the read is not the SELECT")
-    if row["source_id"] != WRITER_SOURCE:
+    if row["source_id"] != source:
         reason = f"source-{row['source_id']}-not-the-writer-s"
         return None, {"table": table, "row": row_key, "reason": reason}
+    if source == LYRA_SOURCE and (
+        table != "unified_site_names" or int(row_key) not in LYRA_ALIAS_ROWS
+    ):
+        return None, {"table": table, "row": row_key, "reason": "lyra-row-not-decided"}
     if row.get("collides_with") is not None:
         reason = f"key-held-by-row-{row['collides_with']}"
         return None, {"table": table, "row": row_key, "reason": reason}
@@ -165,9 +215,13 @@ def _planned(
 
 
 def plan_keys(
-    sites: Sequence[Mapping[str, Any]], names: Sequence[Mapping[str, Any]]
+    sites: Sequence[Mapping[str, Any]],
+    names: Sequence[Mapping[str, Any]],
+    *,
+    source: str = WRITER_SOURCE,
 ) -> tuple[list[CW.Change], list[dict[str, str]]]:
-    """`(changes, listed)`: K1 for every read row the writer can write; the rest listed. Pure."""
+    """`(changes, listed)`: K1 for every read row of `source` the lane may write - for `lyra`, the
+    decided alias rows only (`LYRA_ALIAS_ROWS`); the rest listed. Pure."""
     changes: list[CW.Change] = []
     listed: list[dict[str, str]] = []
     rows = [("unified_sites", r, str(r["id"]), "site") for r in sites]
@@ -176,7 +230,7 @@ def plan_keys(
         for r in names
     ]
     for table, row, site_id, what in rows:
-        change, entry = _planned(table, row, site_id, what)
+        change, entry = _planned(table, row, site_id, what, source)
         if change is not None:
             changes.append(change)
         if entry is not None:
@@ -189,7 +243,7 @@ def command_chunk(args: argparse.Namespace) -> int:
     out = Path(args.out)
     lane = chunk_lane(out)
     read = read_production()
-    changes, listed = plan_keys(read["sites"], read["names"])
+    changes, listed = plan_keys(read["sites"], read["names"], source=lane.source)
     for entry in listed:
         print(f"listed, not planned: {entry['table']} {entry['row']} ({entry['reason']})")
     if not changes:
