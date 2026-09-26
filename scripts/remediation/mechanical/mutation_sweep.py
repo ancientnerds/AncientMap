@@ -5318,13 +5318,13 @@ TEASER_CASES: list[Case] = [
                 "test_all_accepted_in_the_first_round",
             ),
             (
-                "a judge did not work on the card",
-                "            if answer.answered_by in writers[site_id]:",
-                "test_a_judge_who_worked_on_the_card_is_refused",
+                "a judge answered nothing else in the run",
+                "            if answer.answered_by in workers:",
+                "test_the_pilot_s_judge_is_no_verifier_of_the_run",
             ),
             (
                 "an unproven contradiction is counted",
-                '                if judged.verdict == "CONTRADICTED":',
+                '                if result["verdict"] == CONTRADICTED:',
                 "test_an_unproven_contradiction_fails_the_pilot",
             ),
         )
@@ -5376,9 +5376,191 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "a quote proves only when the page holds it",
-                "            proven = outcome == Q.FOUND",
-                "            proven = judged.url is not None",
+                "        proven = outcome == Q.FOUND",
+                "        proven = judged.url is not None",
                 "test_a_quote_the_page_does_not_hold_proves_nothing",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the web verification of every card (wip/wb2)
+    *(
+        guard(f"teaser: {label}", TEASER_RUN, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "verify: a contradiction is never VERIFIED",
+                '    if any(claim["verdict"] == CONTRADICTED for claim in claims):',
+                "test_a_contradiction_proven_or_not_is_contradicted",
+            ),
+            (
+                "verify: a VERIFIED card is accepted",
+                '    if first["verdict"] == VERIFIED:',
+                "test_all_accepted_in_the_first_round",
+            ),
+            (
+                "verify: a rewrite VERIFIED again is accepted",
+                '    if second["verdict"] == VERIFIED:',
+                "test_a_correction_rests_on_its_web_fact_and_the_fact_basis_records_it",
+            ),
+            (
+                "verify: a rewrite that fails the mechanical checks clears",
+                '    if rewritten["problems"]:',
+                "test_a_rewrite_that_fails_the_mechanical_checks_clears_the_site",
+            ),
+            (
+                "verify: a rewrite the checker fails clears",
+                '    if rechecked["verdict"] != A.PASSED:',
+                "test_a_rewrite_the_checker_fails_clears_the_site",
+            ),
+            (
+                "verify: a sentence repeated by no claim is no defect",
+                "            if repeat is None:",
+                "test_each_mapped_contradiction_is_a_description_defect_for_its_lane",
+            ),
+            (
+                "verify: the rewrite and its check see the web facts",
+                "    if stage in (VERIFY_REWRITE, VERIFY_CHECK):",
+                "test_a_contradicted_card_is_rewritten_with_the_pages_and_quotes",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER_RUN, old, new, test, TEASER_TESTS)
+        for label, old, new, test in (
+            (
+                "verify: at most one claim without a proving quote",
+                "    if len(unproven) > CP.MAX_UNPROVEN_CLAIMS or not proves(claims[0]):",
+                "    if not proves(claims[0]):",
+                "test_two_unproven_claims_are_too_many",
+            ),
+            (
+                "verify: never the central claim without one",
+                "    if len(unproven) > CP.MAX_UNPROVEN_CLAIMS or not proves(claims[0]):",
+                "    if len(unproven) > CP.MAX_UNPROVEN_CLAIMS:",
+                "test_the_central_claim_is_never_unproven",
+            ),
+            (
+                "verify: a claim is proven only by a found quote",
+                '    return claim["verdict"] == "SUPPORTED" and claim["proven"]',
+                '    return claim["verdict"] == "SUPPORTED"',
+                "test_a_quote_the_page_does_not_hold_proves_nothing",
+            ),
+            (
+                "verify: a web fact is a proven contradiction",
+                '        if claim["proven"] and url_problem(claim["url"]) is None',
+                '        if url_problem(claim["url"]) is None',
+                "test_the_web_facts_are_the_proven_contradictions_on_admitted_pages",
+            ),
+            (
+                "verify: a web fact's page passes lane WC's source rule",
+                '        if claim["proven"] and url_problem(claim["url"]) is None',
+                '        if claim["proven"]',
+                "test_the_web_facts_are_the_proven_contradictions_on_admitted_pages",
+            ),
+            (
+                "verify: a verifier never wrote or checked the card",
+                "        if stage in CHECKER_STAGES or stage in VERIFY_STAGES:",
+                "        if stage in CHECKER_STAGES:",
+                "test_a_verifier_who_wrote_or_checked_the_card_is_refused",
+            ),
+            (
+                "verify: the second verifier is a new one",
+                "        if stage in CHECKER_STAGES or stage in VERIFY_STAGES:",
+                "        if stage in CHECKER_STAGES:",
+                "test_the_second_verifier_is_a_new_one",
+            ),
+            (
+                "verify: still contradicted is its own reason",
+                '        CONTRADICTED_AFTER_VERIFY if second["verdict"] == CONTRADICTED else '
+                "UNPROVEN_AFTER_VERIFY",
+                "        UNPROVEN_AFTER_VERIFY",
+                "test_still_contradicted_after_the_rewrite_the_site_gets_no_card",
+            ),
+            (
+                "verify: five cards per verifier batch",
+                "        size = JUDGE_BATCH_SIZE if stage in VERIFY_STAGES else BATCH_SIZE",
+                "        size = BATCH_SIZE",
+                "test_every_accepted_card_is_asked_five_to_a_batch",
+            ),
+            (
+                "verify: check-answer takes a verifier's shape",
+                "    if stage == JUDGE_STAGE or stage in VERIFY_STAGES:",
+                "    if stage == JUDGE_STAGE:",
+                "test_check_answer_takes_a_verifier_s_shape_only",
+            ),
+        )
+    ),
+    *(
+        guard(f"teaser: {label}", TEASER_ANSWERS, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "verify: one repeats entry per contradicted claim",
+                "    if not isinstance(repeats, list) or len(repeats) != contradicted:",
+                "test_the_rewrite_names_the_sentence_each_contradicted_claim_repeats",
+            ),
+            (
+                "verify: a repeats entry is a description sentence",
+                "        if entry is not None and entry not in site.described_ids:",
+                "test_the_rewrite_names_the_sentence_each_contradicted_claim_repeats",
+            ),
+        )
+    ),
+    guard(
+        "teaser: verify: only a VERIFIED card is written",
+        TEASER,
+        '    if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:',
+        "test_an_accepted_card_that_is_not_verified_is_never_written",
+        TEASER_WRITE_TESTS,
+    ),
+    *(
+        Case(f"teaser: {label}", CARD_PROVENANCE, old, new, test, AI_ACT_TESTS)
+        for label, old, new, test in (
+            (
+                "verify: only VERIFIED is a teaser provenance",
+                '    _need(verify["verdict"] == VERIFIED,',
+                "    _need(True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: the verification follows the check's stage",
+                '        verify["stage"] == (SECOND_VERIFY if after_rewrite else FIRST_VERIFY),',
+                "        True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: the verifier is not the checker",
+                '    _need(verify["by"] != check["by"],',
+                "    _need(True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: at most one unproven claim in the provenance",
+                "0 <= unproven <= min(MAX_UNPROVEN_CLAIMS, claims - 1),",
+                "0 <= unproven <= claims - 1,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: never every claim unproven in the provenance",
+                "0 <= unproven <= min(MAX_UNPROVEN_CLAIMS, claims - 1),",
+                "0 <= unproven <= MAX_UNPROVEN_CLAIMS,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: the web facts are exactly the cited ones",
+                "        cited == set(ids),",
+                "        True,",
+                "test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it",
+            ),
+            (
+                "verify: web facts only after a failed verification",
+                "        not ids or stage == VERIFY_REWRITE_CHECK,",
+                "        True,",
+                "test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it",
+            ),
+            (
+                "verify: a web fact id once",
+                "    _need(len(set(ids)) == len(ids),",
+                "    _need(True,",
+                "test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it",
             ),
         )
     ),

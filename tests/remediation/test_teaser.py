@@ -729,6 +729,11 @@ class TestTheVerifiedRule:
         claims = [proven(), unproven(), unproven(), proven(), proven(), proven()]
         assert R.card_verification(claims) == R.UNPROVEN
 
+    def test_a_quote_the_page_does_not_hold_proves_nothing(self) -> None:
+        not_found = {**proven(), "proven": False}  # SUPPORTED, but the machine found no quote
+        assert R.card_verification([proven(), not_found, not_found]) == R.UNPROVEN
+        assert R.card_verification([not_found, proven()]) == R.UNPROVEN
+
     def test_a_contradiction_proven_or_not_is_contradicted(self) -> None:
         assert R.card_verification([proven(), proven("CONTRADICTED")]) == R.CONTRADICTED
         refused = {**proven("CONTRADICTED"), "proven": False}  # a 403 page, a mis-copied quote
