@@ -15,6 +15,7 @@ No model is called here. The orchestrator's cycle (run from the repository root;
                                                 decide: ATTEMPTS.jsonl, DECISIONS.jsonl, REASK.json
     $F export-reask --run $R --handoff $H-r1    the fields without a counted answer, to new agents
                                                 (at most `MAX_ROUND` times; answer, validate, import)
+    $F pilot-report --run $R                    a finished pilot's clears on exhaustion: PASS/STOP
     $F status --run $R
 
 **A question** is one site (`label` = its id) and exactly its flagged fields, rendered from
@@ -28,14 +29,28 @@ its page as fetched once by this run (`opus_audit/quotes.py`: NFC and whitespace
 source_url value - the value's page was served (2xx) at that URL, not redirected to another page,
 and, on Wikipedia, is an article of its own (not missing, not a redirect, not a disambiguation page:
 the wiki's API, `harvest.resolve_wiki_titles`). A field without a counted answer is asked again, of
-a new agent, at most `MAX_ROUND` times; then it is **exhausted**: a clearable field is cleared (owner
-decision O6: "replace only with a sourced value, else empty the field"), the coordinates stay and
-are held for the owner - a point cannot be cleared.
+a new agent, at most `MAX_ROUND` times - the re-ask shows why the last answer did not count; then it
+is **exhausted**: a clearable field is cleared (owner decision O6: "replace only with a sourced
+value, else empty the field"), the coordinates stay and are held for the owner - a point cannot be
+cleared - and a field whose last answer failed only on pages the checker could not read (no answer,
+401/403/406/429, a server error, content it cannot read) is **held** too: "the checker could not
+read the page" is not "no source exists" (the English registers refuse the checker).
+
+**A fetch that failed transiently is asked again.** Every import first forgets the kept fetch of
+each cited URL that failed for a reason that may pass (no answer, 429, a server error;
+`transient`), so one dropped connection does not fail every later quote from that page. An earlier
+round's answer can therefore count only at a later import; the latest counted answer decides. A
+refusal (401/403/406) is kept: it is the host's answer to the checker, not a moment's failure.
+
+**The pilot.** `pilot-report` measures a finished run's fields cleared on exhaustion, overall and
+per country, against `PILOT_MAX_RATE` / `PILOT_MAX_COUNTRY_RATE` (a chosen line): the runbook runs a
+pilot of about ten batches (`classify.py ... --pilot`) through all its rounds before a part's bulk.
 
 Files in `--run` (beside CLASSIFIED.jsonl): ROUNDS.jsonl (every exported round, its directory, its
-batches and each question's fields), ATTEMPTS.jsonl (every answer of every round as parsed, each
-field's quotes and their outcomes, whether it counted), DECISIONS.jsonl (one line per decided
-site and field - what `plan.py` writes from), REASK.json, PAGES.jsonl and `pages/`.
+batches, each question's fields and the notes its prompt showed), ATTEMPTS.jsonl (every answer of
+every round as parsed, each field's quotes and their outcomes, whether it counted, whether it failed
+only on unreadable pages), DECISIONS.jsonl (one line per decided site and field - what `plan.py`
+writes from), REASK.json, PAGES.jsonl, `pages/` and PILOT.json.
 """
 
 from __future__ import annotations
@@ -79,6 +94,18 @@ REASK_FILE = "REASK.json"
 PAGES_DIR = "pages"
 PAGES_INDEX = "PAGES.jsonl"
 COUNTED, EXHAUSTED = "counted", "exhausted"
+#: The exhausted field whose last answer failed only on pages the checker could not read: neither
+#: written nor cleared, listed for the owner (the wave's HELD.jsonl, WF's report).
+HELD = "held"
+#: The statuses by which a host refuses the checker itself (a bot challenge, a login, a refused
+#: agent, a rate limit): the page may hold the quote, the checker cannot tell.
+REFUSED_STATUS = frozenset({401, 403, 406, 429})
+#: The pilot's gate - a chosen line, not a measured one: the share of a finished pilot's asked
+#: fields cleared on exhaustion, overall and in each country with at least `PILOT_MIN_FIELDS`.
+PILOT_MAX_RATE = 0.10
+PILOT_MAX_COUNTRY_RATE = 0.20
+PILOT_MIN_FIELDS = 10
+PILOT_FILE = "PILOT.json"
 
 
 class HandoffStepError(ValueError):
@@ -193,14 +220,15 @@ FIELD_RULES = {
 KNOWN_FETCH_TROUBLE = (
     "## Pages the quote check cannot read\n"
     "\n"
-    "The checker fetches each page once with a plain GET and no browser. From this workstation it "
-    "has been refused by Historic England's list and the Heritage Gateway (403) and by the UNESCO "
-    "World Heritage Centre (whc.unesco.org answers it with a bot challenge, 403), the Megalithic "
-    "Portal (megalithic.co.uk) did not answer it (all 46 pages asked on 2026-09-26 timed out or "
-    "gave 503), and it cannot read scanned PDFs or pages that build their text with scripts. "
-    "Wikipedia (every language), Wikidata, Pleiades and most national registers and museum pages "
+    "The checker fetches each page with a plain GET and no browser. On 2026-09-26 it was refused "
+    "(403, most of them a bot challenge) by Historic England's list, the Heritage Gateway, the "
+    "UNESCO World Heritage Centre (whc.unesco.org), Atlas Obscura and Britannica, and it cannot "
+    "read scanned PDFs or pages that build their text with scripts. Wikipedia (every language), "
+    "Wikidata, Pleiades, the Megalithic Portal and most national registers and museum pages "
     "work. Prefer pages that show their text as plain HTML; a quote from a page the checker "
-    "cannot read does not count.\n"
+    "cannot read does not count. A field whose last answer failed only because the checker "
+    "could not read its pages is held for the owner, not cleared - but a readable source is "
+    "always better.\n"
 )
 
 ANSWER_FORMAT = (
@@ -259,8 +287,13 @@ def _evidence_lines(field: str, status: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-def render_prompt(line: Mapping[str, Any], fields: Sequence[str]) -> str:
-    """The exact question for one site and `fields` - a pure function of the classified line."""
+def render_prompt(
+    line: Mapping[str, Any], fields: Sequence[str], notes: Mapping[str, str] | None = None
+) -> str:
+    """The exact question for one site and `fields` - a pure function of the classified line and,
+    in a re-ask, of why each field's last answer did not count (`notes`, kept in the round's
+    record)."""
+    notes = notes or {}
     fields = [f for f in C.FIELDS if f in fields]
     if not fields:
         raise HandoffStepError(f"{line['site_id']}: a question needs at least one field")
@@ -307,6 +340,12 @@ def render_prompt(line: Mapping[str, Any], fields: Sequence[str]) -> str:
                 "The field is empty, so keep is no answer: replace with a sourced value, or clear "
                 "to leave it empty."
             )
+        if field in notes:
+            out.append(
+                f"An earlier answer to this field did not count: {notes[field]}. Answer it again "
+                "from sources the checker can read - or clear it (unresolved for coordinates) "
+                "when none can be quoted."
+            )
         out.append("")
         out.append(FIELD_RULES[field])
         vocabulary = definitions(field)
@@ -337,7 +376,11 @@ def batches(
 
 
 def _export_round(
-    run: Path, handoff: Path, round_no: int, fields_of: Mapping[str, Sequence[str]]
+    run: Path,
+    handoff: Path,
+    round_no: int,
+    fields_of: Mapping[str, Sequence[str]],
+    notes: Mapping[str, Mapping[str, str]],
 ) -> dict[str, Any]:
     rounds = read_rounds(run)
     if any(r["round"] == round_no for r in rounds):
@@ -355,13 +398,14 @@ def _export_round(
                 stage=STAGE,
                 label=label,
                 field="+".join(fields_of[label]),
-                prompt=render_prompt(classified[label], fields_of[label]),
+                prompt=render_prompt(classified[label], fields_of[label], notes.get(label)),
             )
     record = {
         "round": round_no,
         "handoff": _shown(handoff),
         "batches": dict(groups),
         "fields": {label: list(fields_of[label]) for label in sorted(fields_of)},
+        "notes": {label: dict(notes[label]) for label in sorted(notes)},
         "exported_at": H.now(),
     }
     _write_jsonl(run / ROUNDS_FILE, [*rounds, record])
@@ -380,7 +424,7 @@ def export(run: Path, handoff: Path) -> dict[str, Any]:
         raise HandoffStepError("round 0 is exported already - re-asks go through export-reask")
     classified = read_classified(run)
     fields_of = {sid: line["asked"] for sid, line in classified.items() if line["asked"]}
-    return _export_round(run, handoff, 0, fields_of)
+    return _export_round(run, handoff, 0, fields_of, {})
 
 
 def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
@@ -400,7 +444,21 @@ def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
         raise HandoffStepError(
             f"round {last} was the last: a field is asked at most {MAX_ROUND + 1} times"
         )
-    return _export_round(run, handoff, last + 1, reask["fields"])
+    attempts = _read_jsonl(run / ATTEMPTS_FILE)
+    counted = {(a["site_id"], a["field"]) for a in attempts if a["counted"]}
+    named = [(site, field) for site, fields in reask["fields"].items() for field in fields]
+    stale = sorted(f"{site}/{field}" for site, field in named if (site, field) in counted)
+    if stale:
+        raise HandoffStepError(
+            f"REASK.json names {len(stale)} field(s) with a counted answer ({stale[:3]}): import "
+            "again - a counted field is never asked again"
+        )
+    reasons = {(a["site_id"], a["field"]): a["reason"] for a in attempts if a["round"] == last}
+    notes = {
+        site: {field: str(reasons[(site, field)]) for field in fields}
+        for site, fields in reask["fields"].items()
+    }
+    return _export_round(run, handoff, last + 1, reask["fields"], notes)
 
 
 # ------------------------------------------------------------------------------ the agent's aids
@@ -471,30 +529,86 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
 
 
 # ------------------------------------------------------------------------------ import
-def _value_page_problem(value: str, pages: Path, net: Fetcher | None) -> str | None:
-    """Why a source_url value is not a served page of its own, or None."""
-    meta_path = pages / f"{Q.url_key(value)}.json"
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+def transient(meta: Mapping[str, Any]) -> bool:
+    """Whether a kept fetch failed for a reason that may pass: no answer, 429, a server error."""
+    status = meta["status"]
+    return status is None or int(status) == 429 or int(status) >= 500
+
+
+def unreadable(meta: Mapping[str, Any]) -> bool:
+    """Whether a kept fetch says nothing about the page: no answer, a refusal of the checker
+    (`REFUSED_STATUS`), a server error - as against a 404, which says the page is not there."""
+    status = meta["status"]
+    return status is None or int(status) in REFUSED_STATUS or int(status) >= 500
+
+
+def _page_meta(url: str, pages: Path) -> dict[str, Any]:
+    return json.loads((pages / f"{Q.url_key(url)}.json").read_text(encoding="utf-8"))
+
+
+def forget_transient(urls: Iterable[str], pages: Path) -> int:
+    """Remove the kept fetch of each URL whose fetch failed transiently, so `Q.collect` asks it
+    again; how many were removed. The record goes first, then its body (`Q.store_page` writes them
+    the other way round: a record always names a body)."""
+    forgotten = 0
+    for url in sorted({Q.canonical_url(u)[0] for u in urls}):
+        meta_path = pages / f"{Q.url_key(url)}.json"
+        if meta_path.exists() and transient(json.loads(meta_path.read_text(encoding="utf-8"))):
+            meta_path.unlink()
+            (pages / f"{Q.url_key(url)}.body").unlink()
+            forgotten += 1
+    return forgotten
+
+
+def _unreadable_quote(result: Mapping[str, Any], pages: Path) -> bool:
+    """Whether a failed quote failed only because the checker could not read its page."""
+    if result["outcome"] == Q.UNREADABLE:
+        return True
+    return result["outcome"] == Q.FETCH_FAILED and unreadable(_page_meta(result["source"], pages))
+
+
+def value_page(value: str, pages: Path, net: Fetcher | None) -> dict[str, Any]:
+    """Whether a source_url value is a served page of its own (`problem` is None, else why not,
+    and whether only the checker's reading failed) and, for a Wikipedia article, the item it names -
+    what a site_external_ids pass re-derives the site's ids from (`plan.py handoff`)."""
+    meta = _page_meta(value, pages)
+    out: dict[str, Any] = {
+        "problem": None,
+        "unreadable": False,
+        "lang": None,
+        "resolved_title": None,
+        "wikibase_item": None,
+    }
     if meta["status"] is None or not 200 <= int(meta["status"]) < 300:
-        return f"the value's page was not served: {meta['error'] or 'HTTP ' + str(meta['status'])}"
+        shown = meta["error"] or f"HTTP {meta['status']}"
+        return {
+            **out,
+            "problem": f"the value's page was not served: {shown}",
+            "unreadable": unreadable(meta),
+        }
     if not C.same_page(value, str(meta["final_url"])):
-        return f"the value's page redirects to {meta['final_url']}"
+        return {**out, "problem": f"the value's page redirects to {meta['final_url']}"}
     titled = wikipedia_title(value)
     if titled is None:
-        return None
+        return out
     if net is None:
         raise HandoffStepError("a Wikipedia value needs the API client to be resolved")
     lang, title = titled
     record = H.resolve_wiki_titles(net, lang, [title])[title]
+    out.update(
+        lang=lang, resolved_title=record["resolved_title"], wikibase_item=record["wikibase_item"]
+    )
     if record["missing"] or record["invalid"]:
-        return "the value's article does not exist"
+        return {**out, "problem": "the value's article does not exist"}
     if record["redirected"]:
-        return (
-            f"the value is a redirect to {record['resolved_title']!r}: give the article's own URL"
-        )
+        return {
+            **out,
+            "problem": f"the value is a redirect to {record['resolved_title']!r}: give the "
+            "article's own URL",
+        }
     if record["disambiguation"]:
-        return "the value is a disambiguation page"
-    return None
+        return {**out, "problem": "the value is a disambiguation page"}
+    return out
 
 
 def import_rounds(
@@ -525,7 +639,7 @@ def import_rounds(
             raise HandoffStepError(f"{record['handoff']}: the manifest is not the round's record")
         for (batch_id, label), line in sorted(manifest.items()):
             fields = record["fields"][label]
-            prompt = render_prompt(classified[label], fields)
+            prompt = render_prompt(classified[label], fields, record["notes"].get(label))
             if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
                 raise HandoffStepError(
                     f"{batch_id}/{label}: the exported prompt is not this question's"
@@ -552,8 +666,14 @@ def import_rounds(
                     }
                 )
 
+    counted_before = {
+        (a["round"], a["site_id"], a["field"])
+        for a in _read_jsonl(run / ATTEMPTS_FILE)
+        if a["counted"]
+    }
     pages = run / PAGES_DIR
     urls = sorted({q[0] for a in attempts if a["answer"] for q in a["answer"]["quotes"]})
+    refetched = forget_transient(urls, pages)
     if urls:
         if client is None:
             with H.open_client() as own:
@@ -570,7 +690,13 @@ def import_rounds(
         for attempt in attempts:
             answer = attempt["answer"]
             if answer is None:
-                attempt.update(counted=False, reason=attempt["problem"], quotes=[])
+                attempt.update(
+                    counted=False,
+                    reason=attempt["problem"],
+                    unreadable=False,
+                    quotes=[],
+                    value_page=None,
+                )
                 continue
             results = [
                 asdict(
@@ -583,17 +709,27 @@ def import_rounds(
                 for u, q in answer["quotes"]
             ]
             failed = [r for r in results if r["outcome"] != Q.FOUND]
-            reason = None
+            reason, blind, page = None, False, None
             if failed:
-                reason = f"quote {failed[0]['outcome']}: {failed[0]['source']}"
+                first = failed[0]
+                detail = f" ({first['detail']})" if first["detail"] else ""
+                reason = f"quote {first['outcome']}: {first['source']}{detail}"
+                blind = all(_unreadable_quote(r, pages) for r in failed)
             elif attempt["field"] == "source_url" and answer["decision"] in (A.KEEP, A.REPLACE):
-                reason = _value_page_problem(str(answer["value"]), pages, api)
-            attempt.update(counted=reason is None, reason=reason, quotes=results)
+                page = value_page(str(answer["value"]), pages, api)
+                reason, blind = page["problem"], page["unreadable"]
+            attempt.update(
+                counted=reason is None,
+                reason=reason,
+                unreadable=blind,
+                quotes=results,
+                value_page=page,
+            )
     finally:
         if own_net and api is not None:
             api.close()
 
-    decisions, waiting = _decide(rounds, attempts, classified)
+    decisions, waiting = _decide(attempts, classified, counted_before)
     _write_jsonl(run / ATTEMPTS_FILE, attempts)
     _write_jsonl(run / DECISIONS_FILE, decisions)
     _write_json(run / REASK_FILE, {"after_round": rounds[-1]["round"], "fields": waiting})
@@ -615,15 +751,20 @@ def import_rounds(
         "waiting_sites": len(waiting),
         "waiting_fields": sum(len(v) for v in waiting.values()),
         "urls": len(urls),
+        "refetched": refetched,
     }
 
 
 def _decide(
-    rounds: Sequence[Mapping[str, Any]],
     attempts: Sequence[Mapping[str, Any]],
     classified: Mapping[str, Mapping[str, Any]],
+    counted_before: Iterable[tuple[int, str, str]],
 ) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
-    """Each asked (site, field): its counted answer, or - after the last round - exhausted."""
+    """Each asked (site, field): its latest counted answer, or - after the last round - exhausted:
+    held when the last answer failed only on unreadable pages (and always for coordinates, which
+    cannot be cleared), else cleared. `counted_before`: the (round, site, field) that counted at
+    the last import - each must count still."""
+    before = set(counted_before)
     by_cell: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for attempt in attempts:
         by_cell.setdefault((attempt["site_id"], attempt["field"]), []).append(attempt)
@@ -633,9 +774,14 @@ def _decide(
         tries = sorted(tries, key=lambda a: a["round"])
         if [a["round"] for a in tries] != sorted({a["round"] for a in tries}):
             raise HandoffStepError(f"{site}/{field}: asked twice in one round")
+        for attempt in tries:
+            if (attempt["round"], site, field) in before and not attempt["counted"]:
+                raise HandoffStepError(
+                    f"{site}/{field}: round {attempt['round']}'s answer counted at the last import "
+                    f"and no longer counts ({attempt['reason']}) - the kept pages or the answers "
+                    "changed under the run"
+                )
         counted = [a for a in tries if a["counted"]]
-        if len(counted) > 1 or (counted and counted[0] is not tries[-1]):
-            raise HandoffStepError(f"{site}/{field}: asked again after a counted answer")
         line = classified[site]
         base = {
             "site_id": site,
@@ -646,36 +792,104 @@ def _decide(
             "asked": len(tries),
         }
         if counted:
-            answer = counted[0]["answer"]
+            chosen = counted[-1]
+            answer = chosen["answer"]
             decisions.append(
                 {
                     **base,
                     "decision": answer["decision"],
                     "value": answer["value"],
                     "via": COUNTED,
-                    "round": counted[0]["round"],
-                    "answered_by": counted[0]["answered_by"],
-                    "quotes": counted[0]["quotes"],
+                    "round": chosen["round"],
+                    "counted_rounds": [a["round"] for a in counted],
+                    "answered_by": chosen["answered_by"],
+                    "quotes": chosen["quotes"],
                     "reasoning": answer["reasoning"],
+                    "value_page": chosen["value_page"],
                 }
             )
         elif tries[-1]["round"] >= MAX_ROUND:
+            if field == "coordinates":
+                outcome = A.UNRESOLVED
+            elif tries[-1]["unreadable"]:
+                outcome = HELD
+            else:
+                outcome = A.CLEAR
             decisions.append(
                 {
                     **base,
-                    "decision": A.UNRESOLVED if field == "coordinates" else A.CLEAR,
+                    "decision": outcome,
                     "value": None,
                     "via": EXHAUSTED,
                     "round": tries[-1]["round"],
+                    "counted_rounds": [],
                     "answered_by": None,
                     "quotes": [],
                     "reasoning": f"no counted answer in {len(tries)} rounds: "
                     + "; ".join(str(a["reason"]) for a in tries),
+                    "value_page": None,
                 }
             )
         else:
             waiting.setdefault(site, []).append(field)
     return decisions, {site: sorted(f, key=C.FIELDS.index) for site, f in sorted(waiting.items())}
+
+
+def pilot_report(run: Path) -> dict[str, Any]:
+    """A finished run's fields cleared on exhaustion - overall and per country - against the
+    pilot's gate (`PILOT_MAX_RATE`, `PILOT_MAX_COUNTRY_RATE` for a country with at least
+    `PILOT_MIN_FIELDS` fields): PILOT.json with the verdict PASS or STOP."""
+    reask = json.loads((run / REASK_FILE).read_text(encoding="utf-8"))
+    if reask["fields"]:
+        waiting = sum(len(v) for v in reask["fields"].values())
+        raise HandoffStepError(
+            f"{waiting} field(s) still wait for a re-ask: a pilot is reported when every field is "
+            "decided"
+        )
+    classified = read_classified(run)
+    tallies: dict[str, Counter[str]] = {}
+    for d in _read_jsonl(run / DECISIONS_FILE):
+        tally = tallies.setdefault(str(classified[d["site_id"]]["country"]), Counter())
+        tally["fields"] += 1
+        if d["via"] == EXHAUSTED:
+            tally["exhausted_clear" if d["decision"] == A.CLEAR else "exhausted_held"] += 1
+
+    def row(tally: Counter[str]) -> dict[str, Any]:
+        return {
+            "fields": tally["fields"],
+            "exhausted_clear": tally["exhausted_clear"],
+            "exhausted_held": tally["exhausted_held"],
+            "clear_rate": round(tally["exhausted_clear"] / tally["fields"], 3),
+        }
+
+    overall = row(sum(tallies.values(), Counter()))
+    stopped_by = []
+    if overall["clear_rate"] > PILOT_MAX_RATE:
+        stopped_by.append(
+            f"overall: {overall['exhausted_clear']} of {overall['fields']} fields cleared on "
+            f"exhaustion ({overall['clear_rate']})"
+        )
+    countries = {country: row(tally) for country, tally in sorted(tallies.items())}
+    for country, figures in countries.items():
+        if figures["fields"] >= PILOT_MIN_FIELDS and figures["clear_rate"] > PILOT_MAX_COUNTRY_RATE:
+            stopped_by.append(
+                f"{country}: {figures['exhausted_clear']} of {figures['fields']} fields cleared on "
+                f"exhaustion ({figures['clear_rate']})"
+            )
+    report = {
+        "verdict": "STOP" if stopped_by else "PASS",
+        "stopped_by": stopped_by,
+        "overall": overall,
+        "countries": countries,
+        "gate": {
+            "max_rate": PILOT_MAX_RATE,
+            "max_country_rate": PILOT_MAX_COUNTRY_RATE,
+            "min_country_fields": PILOT_MIN_FIELDS,
+        },
+        "reported_at": H.now(),
+    }
+    _write_json(run / PILOT_FILE, report)
+    return report
 
 
 def status(run: Path) -> dict[str, Any]:
@@ -706,7 +920,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
     commands = {}
-    for name in ("export", "export-reask", "brief", "check-answer", "import", "status"):
+    for name in (
+        "export",
+        "export-reask",
+        "brief",
+        "check-answer",
+        "import",
+        "pilot-report",
+        "status",
+    ):
         commands[name] = sub.add_parser(name)
         commands[name].add_argument("--run", type=Path, default=C.DEFAULT_OUT)
     for name in ("export", "export-reask", "brief", "check-answer"):
@@ -733,6 +955,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["ok"] else 1
         elif args.command == "import":
             result = import_rounds(run, pace=args.pace)
+        elif args.command == "pilot-report":
+            result = pilot_report(run)
+            print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
+            return 0 if result["verdict"] == "PASS" else 1
         else:
             result = status(run)
     except (HandoffStepError, OH.HandoffError, Q.AuditError, H.HarvestError) as exc:

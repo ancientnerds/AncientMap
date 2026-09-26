@@ -84,6 +84,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import random
 import re
 import sys
 from collections import Counter
@@ -675,9 +676,37 @@ def in_conflict_part(line: Mapping[str, Any]) -> bool:
     return any(f["status"] == CONFLICT or f["flags"] for f in line["fields"].values())
 
 
+def pilot_lines(
+    lines: Sequence[Mapping[str, Any]], size: int, seed: int
+) -> list[Mapping[str, Any]]:
+    """A part's pilot: `size` of its asked sites drawn reproducibly (`random.Random(seed)` over the
+    ids in order), in id order. The draw is proportional, so the countries with the most questions
+    (England: about a fifth of them on 2026-09-26) are in it as they are in the part."""
+    asked = sorted((line for line in lines if line["asked"]), key=lambda line: line["site_id"])
+    if size > len(asked):
+        raise ClassifyError(f"a pilot of {size} from {len(asked)} asked sites")
+    chosen = set(random.Random(seed).sample([line["site_id"] for line in asked], size))  # noqa: S311
+    return [line for line in asked if line["site_id"] in chosen]
+
+
+def _pilot_sites(run: Path) -> set[str]:
+    path = run / CLASSIFIED_FILE
+    if not path.exists():
+        raise ClassifyError(f"{path} is missing - classify the pilot first (`--pilot`)")
+    return {json.loads(raw)["site_id"] for raw in path.read_text(encoding="utf-8").splitlines()}
+
+
 def classify_all(
-    root: Path, out: Path, *, table: Mapping[str, ClassEntry], part: str
+    root: Path,
+    out: Path,
+    *,
+    table: Mapping[str, ClassEntry],
+    part: str,
+    pilot: tuple[int, int] | None = None,
+    without: Path | None = None,
 ) -> dict[str, Any]:
+    """CLASSIFIED.jsonl and COUNTS.json of one part - or of its pilot (`pilot`: a sample of
+    `(size, seed)` of its asked sites), or of the part less a pilot run's sites (`without`)."""
     if part not in PARTS:
         raise ClassifyError(f"{part!r} is not one of {PARTS}")
     sites = H.read_sites(root)
@@ -725,11 +754,21 @@ def classify_all(
     classified = {line["site_id"] for line in lines}
     if part != "all":
         lines = [line for line in lines if in_conflict_part(line) == (part == "conflict")]
+    taken: set[str] = set()
+    if without is not None:
+        taken = _pilot_sites(without)
+        lines = [line for line in lines if line["site_id"] not in taken]
+    if pilot is not None:
+        lines = pilot_lines(lines, *pilot)
     out.mkdir(parents=True, exist_ok=True)
     text = "".join(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n" for line in lines)
     (out / CLASSIFIED_FILE).write_text(text, encoding="utf-8", newline="\n")
     counts = count(lines)
     counts["part"] = part
+    counts["pilot"] = None if pilot is None else {"size": pilot[0], "seed": pilot[1]}
+    counts["without"] = (
+        None if without is None else {"run": without.as_posix(), "sites": len(taken)}
+    )
     counts["retired_not_classified"] = retired
     counts["seeds"] = {
         "sites": len(seeds),
@@ -791,13 +830,26 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("export", help="STORED.jsonl from production (one read-only SELECT)")
     run = sub.add_parser("classify", help="CLASSIFIED.jsonl and COUNTS.json, from files only")
     run.add_argument("--part", choices=PARTS, required=True, help="every site or one part")
+    cut = run.add_mutually_exclusive_group()
+    cut.add_argument("--pilot", type=int, help="a pilot: this many of the part's asked sites")
+    cut.add_argument("--without", type=Path, help="the part less this pilot run's sites")
+    run.add_argument("--seed", type=int, help="the pilot's draw (with --pilot)")
     sub.add_parser("unmapped", help="the P31 classes the table lacks, with labels and counts")
     args = parser.parse_args(argv)
     try:
         if args.command == "export":
             print(json.dumps({"stored": export_stored(args.out, reader=psql_json_reader())}))
         elif args.command == "classify":
-            result = classify_all(args.root, args.out, table=load_table(), part=args.part)
+            if (args.pilot is None) != (args.seed is None):
+                parser.error("--pilot and --seed go together")
+            result = classify_all(
+                args.root,
+                args.out,
+                table=load_table(),
+                part=args.part,
+                pilot=None if args.pilot is None else (args.pilot, args.seed),
+                without=args.without,
+            )
             print(json.dumps(result, indent=1, sort_keys=True))
         else:
             sites = H.read_sites(args.root)

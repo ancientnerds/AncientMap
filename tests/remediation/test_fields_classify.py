@@ -480,6 +480,31 @@ class TestTheRun:
         with pytest.raises(C.ClassifyError, match="is not one of"):
             C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="some")
 
+    def test_a_pilot_is_a_seeded_sample_of_asked_sites(self) -> None:
+        lines = [
+            {"site_id": f"s{i}", "asked": ["period_start"] if i % 2 else []} for i in range(10)
+        ]
+        first = C.pilot_lines(lines, 3, seed=7)
+        assert first == C.pilot_lines(lines, 3, seed=7)
+        assert len(first) == 3 and all(line["asked"] for line in first)
+        assert [line["site_id"] for line in first] == sorted(line["site_id"] for line in first)
+        with pytest.raises(C.ClassifyError, match="a pilot of 6 from 5 asked"):
+            C.pilot_lines(lines, 6, seed=7)
+
+    def test_a_part_without_its_pilot_is_disjoint_from_it(self, tmp_path: Path) -> None:
+        self.write_harvest(tmp_path / "h")
+        self.stored(tmp_path / "o")
+        self.stored(tmp_path / "p")
+        pilot = C.classify_all(tmp_path / "h", tmp_path / "p", table=TABLE, part="rest",
+                               pilot=(1, 7))  # fmt: skip
+        assert pilot["sites"] == 1 and pilot["pilot"] == {"size": 1, "seed": 7}
+        rest = C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="rest",
+                              without=tmp_path / "p")  # fmt: skip
+        assert rest["sites"] == 0 and rest["without"]["sites"] == 1
+        with pytest.raises(C.ClassifyError, match="classify the pilot first"):
+            C.classify_all(tmp_path / "h", tmp_path / "o", table=TABLE, part="rest",
+                           without=tmp_path / "none")  # fmt: skip
+
     def test_the_seeds_must_be_there_and_well_formed(self, tmp_path: Path) -> None:
         self.write_harvest(tmp_path / "h")
         self.stored(tmp_path / "o")
