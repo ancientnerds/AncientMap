@@ -78,7 +78,6 @@ import json
 import sys
 import time
 import unicodedata
-import uuid
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -91,6 +90,7 @@ if __package__ in (None, ""):
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import ledger as L  # noqa: E402
 from phase3 import run as R  # noqa: E402
+from phase3 import snapshot_plan as SP  # noqa: E402 - the one reader of a site-id list
 from phase3 import write_stage as W  # noqa: E402
 
 from phase4 import legacy4 as L4  # noqa: E402 - lane L's own plan: its pass and numbering
@@ -530,23 +530,6 @@ def write_list_plan(
     return tail
 
 
-def read_excluded(path: Path) -> list[str]:
-    """`--exclude`: one site id per line (blank lines aside), each a UUID, each once."""
-    ids: list[str] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            uuid.UUID(text)
-        except ValueError:
-            raise R.InputError(f"{path}:{number}: {text!r} is not a site id") from None
-        if text in ids:
-            raise R.InputError(f"{path}:{number}: {text} is listed twice")
-        ids.append(text)
-    return ids
-
-
 def pilot_site_ids(path: Path) -> list[str]:
     """The pilot's site ids in its order: one JSON object per line of `PILOT.jsonl`, each with a
     `site_id` (`phase4/pilot4.py` writes it). A line without one is refused, never skipped."""
@@ -839,7 +822,7 @@ def _list_summary(
             f"the plan the deferring run was driven from ({uncarried[:3]})"
         )
     exclude_path = Path(args.exclude) if args.exclude else None
-    excluded = read_excluded(exclude_path) if exclude_path is not None else []
+    excluded = SP.read_site_ids(exclude_path, uuids=True) if exclude_path is not None else []
     tail = write_list_plan(
         out,
         sites,

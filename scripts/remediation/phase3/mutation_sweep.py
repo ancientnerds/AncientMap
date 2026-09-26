@@ -6316,8 +6316,8 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_gate4: the audited list takes anything",
         P4_WRITE_GATE,
-        "            uuid.UUID(text)\n",
-        "            pass  # mutant\n",
+        "        return frozenset(SP.read_site_ids(path, uuids=True))\n",
+        "        return frozenset(SP.read_site_ids(path))  # mutant\n",
         P4_WRITE_TEST,
         "test_the_audited_list_is_site_ids_only",
     ),
@@ -21189,6 +21189,7 @@ P4V3_WRITE = "scripts/remediation/phase4/write4.py"
 P4V3_GATE = "output/remediation/tools/write_gate4.py"
 P4V3_ACCEPT = "output/remediation/tools/verify_writes4.py"
 P4V3_HANDOFF = "scripts/remediation/phase4/handoff4.py"
+P4V3_IDS = "scripts/remediation/phase3/snapshot_plan.py"
 P4V3_TEST = "tests/remediation/test_phase4_v3.py"
 P4V3_SCOPE_TEST = "tests/remediation/test_phase4_scope.py"
 P4V3_ACCEPT_TEST = "tests/remediation/test_phase4_accept.py"
@@ -21217,6 +21218,8 @@ P4V3_RECORD = "test_record_writes_an_answer_only_through_its_shape_check"
 P4V3_READY_SHAPE = "test_ready_fails_on_a_recorded_answer_the_import_would_refuse"
 P4V3_READY_MOVED = "test_ready_names_an_answer_whose_batch_moved_since_the_export"
 P4V3_READY_REVIEW = "test_ready_reads_a_recorded_review_whole"
+P4V3_P5_CLOSED = "test_p5_rehearses_and_writes_nothing_for_any_run"
+P4V3_EXCLUDE_CLI = "test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest"
 
 P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── scope4: the March lists ───────────────────────────────────────────────────────────────
@@ -21376,20 +21379,46 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4V3_EXCLUDE,
     ),
     (
-        "p4 v3 plan4: an exclusion line that is no site id is read",
-        P4V3_PLAN,
-        "            uuid.UUID(text)\n",
-        "            text.strip()  # mutant\n",
+        "p4 v3 snapshot_plan: a site-id line that is no site id is read",
+        P4V3_IDS,
+        "        if uuids and not _canonical_uuid(site_id):\n",
+        "        if False:  # mutant\n",
         P4V3_TEST,
         P4V3_EXCLUDE_FILE,
     ),
     (
-        "p4 v3 plan4: an exclusion listed twice is read",
-        P4V3_PLAN,
-        "        if text in ids:\n",
+        "p4 v3 snapshot_plan: a site id in another spelling is read",
+        P4V3_IDS,
+        "        return str(uuid.UUID(text)) == text\n",
+        "        return bool(uuid.UUID(text))  # mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 snapshot_plan: a site-id list without the check checks it",
+        P4V3_IDS,
+        "        if uuids and not _canonical_uuid(site_id):\n",
+        "        if not _canonical_uuid(site_id):  # mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 snapshot_plan: a site id listed twice is read",
+        P4V3_IDS,
+        "        if site_id in seen:\n",
         "        if False:  # mutant\n",
         P4V3_TEST,
         P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 plan4: --exclude is read without the site-id check",
+        P4V3_PLAN,
+        "    excluded = SP.read_site_ids(exclude_path, uuids=True) if exclude_path is not None "
+        "else []\n",
+        "    excluded = SP.read_site_ids(exclude_path) if exclude_path is not None else []  "
+        "# mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_CLI,
     ),
     (
         "p4 v3 plan4: a plan numbered into lane L's block passes",
@@ -21800,6 +21829,31 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    return None  # mutant\n",
         P4V3_TEST,
         P4V3_READY_REVIEW,
+    ),
+    # ── the second review of 2026-09-26: P5 writes no card for any run (O2, O3)
+    (
+        "p4 v3 write_gate4: a run without the pass rehearses or writes P5",
+        P4V3_GATE,
+        "    if group is W4.Group.P5 and (args.rehearse or args.apply):\n        return P5_CLOSED\n",
+        "    if False:  # mutant\n        return P5_CLOSED\n",
+        P4V3_TEST,
+        P4V3_P5_CLOSED,
+    ),
+    (
+        "p4 v3 write_gate4: the P5 refusal is never asked",
+        P4V3_GATE,
+        "    problem = plan_source_problem(group, args) or closed_group_problem(group, args)\n",
+        "    problem = plan_source_problem(group, args)  # mutant\n",
+        P4V3_TEST,
+        P4V3_P5_CLOSED,
+    ),
+    (
+        "p4 v3 write_gate4: P5's dry run is refused too",
+        P4V3_GATE,
+        "    if group is W4.Group.P5 and (args.rehearse or args.apply):\n        return P5_CLOSED\n",
+        "    if group is W4.Group.P5:  # mutant\n        return P5_CLOSED\n",
+        P4V3_TEST,
+        P4V3_P5_CLOSED,
     ),
 ]
 MUTATIONS += P4_V3_MUTATIONS

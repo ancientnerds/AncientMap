@@ -43,6 +43,7 @@ import opus_handoff as OH  # noqa: E402
 import write_gate4 as G  # noqa: E402
 from phase3 import mass_run as MR  # noqa: E402
 from phase3 import run as R  # noqa: E402
+from phase3 import snapshot_plan as SP  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402
 from phase4 import handoff4 as H  # noqa: E402
 from phase4 import mass4 as M4  # noqa: E402
@@ -380,15 +381,27 @@ def test_an_excluded_site_is_left_out_and_accounted_for(tmp_path: Path) -> None:
 
 
 def test_an_exclude_file_is_read_strictly(tmp_path: Path) -> None:
+    """`--exclude` is read by the one reader of a site-id list, `snapshot_plan.read_site_ids`
+    (second review 2026-09-26: plan4's own reader duplicated it), with its site-id check: each line
+    one site id as production prints it (a lowercase, hyphenated UUID), no hole, no repeat."""
     path = tmp_path / "exclude.txt"
-    path.write_text(f"{uuid(2)}\n\n  {uuid(3)}  \n", encoding="utf-8")
-    assert P.read_excluded(path) == [uuid(2), uuid(3)]
-    path.write_text(f"{uuid(2)}\nTarxien\n", encoding="utf-8")
-    with pytest.raises(R.InputError, match="not a site id"):
-        P.read_excluded(path)
-    path.write_text(f"{uuid(2)}\n{uuid(2)}\n", encoding="utf-8")
-    with pytest.raises(R.InputError, match="twice"):
-        P.read_excluded(path)
+    path.write_text(f"{uuid(2)}\n  {uuid(3)}  \n", encoding="utf-8")
+    assert SP.read_site_ids(path, uuids=True) == [uuid(2), uuid(3)]
+    assert not hasattr(P, "read_excluded")
+    for text, match in (
+        (f"{uuid(2)}\nTarxien\n", r"exclude.txt:2: 'Tarxien' is not a site id"),
+        ("ABCDEF01-0000-4000-8000-000000000001\n", "is not a site id"),
+        (f"{uuid(2).replace('-', '')}\n", "is not a site id"),
+        (f"{{{uuid(2)}}}\n", "is not a site id"),
+        (f"{uuid(2)}\n{uuid(2)}\n", "appears twice"),
+        (f"{uuid(2)}\n\n{uuid(3)}\n", "empty line"),
+    ):
+        path.write_text(text, encoding="utf-8")
+        with pytest.raises(R.InputError, match=match):
+            SP.read_site_ids(path, uuids=True)
+    # Without the check the reader keeps its phase-3 meaning: any id, one per line.
+    path.write_text("site-a\n", encoding="utf-8")
+    assert SP.read_site_ids(path) == ["site-a"]
 
 
 def test_the_first_batch_lies_past_every_earlier_plan_and_outside_lane_ls_block(
@@ -469,6 +482,9 @@ def test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest(
     assert summary["lists"] == [MD, MC] and summary["pass"] == MARK
     assert (summary["listed"], summary["sites"], summary["last_batch"]) == (3, 2, "p4-2001")
     assert summary["lane_l_block"] == [1001, 1001]
+    exclude.write_text(f"{uuid(4)}\nTarxien Temples\n", encoding="utf-8")
+    with pytest.raises(R.InputError, match="'Tarxien Temples' is not a site id"):
+        P.main(argv)
 
 
 # ------------------------------------------------------------------- the deferred sites
@@ -788,6 +804,31 @@ def test_the_gate_names_the_descriptions_only_batches(
     plan = (tmp_path / "apply" / "p4-0002" / W4.PLAN_FILE).read_text(encoding="utf-8")
     raw = [json.loads(line) for line in plan.splitlines() if '"raw_data"' in line][0]
     assert json.loads(raw["new_value"])[M.PROVENANCE_KEY]["card"] is None
+
+
+def test_p5_rehearses_and_writes_nothing_for_any_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Second review of 2026-09-26: P5 refused only a descriptions-only batch's sites, so a run
+    without the pass (pilot 4, mass, D9) could write an extractive card again - `--apply --round 2`
+    after a revert4 of a P5 step. Every card is lane WB's (O2, O3): P5 still plans dry, and a
+    pending step can still be accepted or closed, but no run rehearses or writes a P5 row."""
+    from tests.remediation.test_phase4_write import _db, _gate_run
+
+    monkeypatch.setattr(G, "_defect_scope", lambda: FX.EVERY_SITE)
+    _gate_run(tmp_path, 1)
+    refused = tmp_path / "ALL_REFUSED.jsonl"
+    refused.write_text("", encoding="utf-8")
+    site = "00000001-0000-4000-8000-000000000001"
+    base = ["--group", "P5", "--run", "pilot", "--run-root", str(tmp_path / "runs"),
+            "--apply-root", str(tmp_path / "apply-p5"), "--phase3-refused", str(refused)]  # fmt: skip
+    for mode in (["--rehearse"], ["--apply"], ["--apply", "--round", "2"]):
+        assert G.main([*base, *mode], runner=_db(site)) == 1
+        err = capsys.readouterr().err
+        assert "group P5 writes no card since 2026-09-26" in err and "lane WB" in err, mode
+        assert not (tmp_path / "apply-p5").exists()
+    assert G.main(base, runner=_db(site)) == 0
+    assert "dry run, nothing is sent" in capsys.readouterr().out
 
 
 # ============================================================================ handoff4
