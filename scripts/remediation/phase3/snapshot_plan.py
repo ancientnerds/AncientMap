@@ -176,7 +176,9 @@ def read_site_ids(path: Path, *, uuids: bool = False) -> list[str]:
     With `uuids`, every line must be a site id as production prints it (`unified_sites.id::text`:
     a lowercase, hyphenated UUID), because the ids are compared with production's as text - an
     upper-case or braced id would match nothing and exclude nothing. The one reader of such a list:
-    Phase 4's `plan4.py build --exclude` and `write_gate4.py --audited` read through it.
+    Phase 4's `plan4.py build --exclude` and `write_gate4.py --audited` read through it with
+    `uuids`, `audit4.py`'s `--written`, `--exclude` and `--site-ids` without it (each id there must
+    be a reviewed site of the run).
     """
     if not path.exists():
         raise InputError(f"no site-id list at {path}")

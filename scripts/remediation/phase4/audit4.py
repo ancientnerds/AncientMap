@@ -62,6 +62,7 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from phase3 import snapshot_plan as SP  # noqa: E402 - the one reader of a site-id list
 from phase3.run import InputError  # noqa: E402
 
 from phase4 import assemble as A  # noqa: E402
@@ -167,11 +168,11 @@ def cmd_written(args: argparse.Namespace) -> int:
 
 
 def _ids(path: str | None) -> set[str]:
-    if not path:
-        return set()
-    return {
-        line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()
-    }
+    """A site-id list (`--written`, `--exclude`, `--site-ids`), read by the one reader of such a
+    list (`snapshot_plan.read_site_ids`: one id per line, no blank or repeated line, not empty); an
+    option not given reads as no ids. Without its site-id check: `draw` and `sheet` refuse an id
+    that is no reviewed site of the run, and the tests' runs name their sites `site-N`."""
+    return set(SP.read_site_ids(Path(path))) if path else set()
 
 
 def cmd_draw(args: argparse.Namespace) -> int:

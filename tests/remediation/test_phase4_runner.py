@@ -1287,6 +1287,34 @@ def test_a_draw_is_taken_from_the_written_sites_and_refuses_one_never_reviewed(
     assert capsys.readouterr().out.split() == ["site-1", "STAGE_EXIT=0"]
 
 
+def test_the_audits_site_id_lists_are_read_by_the_one_reader(tmp_path: Path) -> None:
+    """`--written`, `--exclude` and `--site-ids` are read by `snapshot_plan.read_site_ids` (second
+    review of lane WA, 2026-09-26: `audit4` had its own reader, which skipped a blank line and read
+    a repeated id once): a list with a hole, a repeated id or no id at all is refused, and so is a
+    list that is not there."""
+    run_dir = _reviewed(tmp_path, "site-1", "p4-0001").parent
+    _reviewed(tmp_path, "site-3", "p4-0003")
+    argv = ["draw", "--run-dir", str(run_dir), "--seed", "3", "--count", "5"]
+    written = _ids_file(tmp_path / "w.txt", "site-1", "site-3")
+    holed = tmp_path / "holed.txt"
+    holed.write_text("site-1\n\nsite-3\n", encoding="utf-8")
+    with pytest.raises(R3.InputError, match="empty line"):
+        AU.main([*argv, "--written", str(holed)])
+    twice = _ids_file(tmp_path / "twice.txt", "site-1", "site-3", "site-3")
+    with pytest.raises(R3.InputError, match="site-3 appears twice"):
+        AU.main([*argv, "--written", twice])
+    with pytest.raises(R3.InputError, match="no site-id list"):
+        AU.main([*argv, "--written", str(tmp_path / "absent.txt")])
+    with pytest.raises(R3.InputError, match="holds no site ids"):
+        AU.main([*argv, "--written", written, "--exclude", _ids_file(tmp_path / "none.txt")])
+    sampled = _ids_file(tmp_path / "sampled.txt", "site-1", "site-1")
+    with pytest.raises(R3.InputError, match="site-1 appears twice"):
+        AU.main([*argv, "--written", written, "--exclude", sampled])
+    sheet = ["sheet", "--run-dir", str(run_dir), "--out", str(tmp_path / "s.md")]
+    with pytest.raises(R3.InputError, match="empty line"):
+        AU.main([*sheet, "--site-ids", str(holed)])
+
+
 def test_a_site_assembled_in_two_batches_and_an_unknown_sheet_id_are_refused(
     tmp_path: Path,
 ) -> None:
