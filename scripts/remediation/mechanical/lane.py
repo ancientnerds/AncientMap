@@ -135,7 +135,9 @@ class Column:
     `sql_type` is the base type the plan's text is cast to in every comparison
     (`t.mystery IS DISTINCT FROM p.old_value::integer`), so a comparison is made in the column's
     own type the way `apply_remediation_change()` makes it. `max_chars` is a declared width
-    (`character varying(50)`), `None` for a type without one. `fills_null`: the stored value may be
+    (`character varying(50)`), `None` for a type without one. `clears`: the lane may write NULL
+    into the column - lane WB clears the card of a site that gets none - and the reversal of such
+    a clear starts from NULL (2026-09-26). `fills_null`: the stored value may be
     NULL - the lane fills an unassessed column (`scope_status`), and its reversal restores the NULL.
     """
 
@@ -144,6 +146,7 @@ class Column:
     max_chars: int | None = None
     allowed_new_values: tuple[str, ...] = ()
     fills_null: bool = False
+    clears: bool = False
 
     def __post_init__(self) -> None:
         if not _IDENTIFIER.match(self.name):
@@ -1225,6 +1228,9 @@ LANE_READBACKS[DANGLING_MARKERS.name] = DANGLING_MARKERS_READBACK
 #: (`card-stats-2026-09-23`, `card-stats-2026-09-24b`): its own run stamp, so "never apply a stamp
 #: twice" still holds, and its own directory.
 CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
+#: Lane WB writes each step of at most 100 sites as two lanes of its own (`mechanical/teaser.py`):
+#: `teaser-prov-sNNN` (the card provenance in raw_data) and `teaser-card-sNNN` (the card).
+TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 
 
 def resolve_lane(name: str) -> Lane:
@@ -1236,6 +1242,10 @@ def resolve_lane(name: str) -> Lane:
     """
     if name in LANES:
         return LANES[name]
+    if TEASER_LANE.match(name):
+        from mechanical.teaser import lane_of
+
+        return lane_of(name)
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

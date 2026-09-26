@@ -66,6 +66,7 @@ from mechanical.lane import (  # noqa: E402
     LANE_READBACKS,
     LANES,
     T05,
+    TEASER_LANE,
     Column,
     Lane,
     outside,
@@ -253,13 +254,17 @@ def typed_value(cell: Column, text: str) -> Any:
 def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
     """One record of a cell lane, in its column's type.
 
-    NULL is allowed on one side only, and only for a column the lane fills: the old value of a
-    write, the new value of its reversal. Everything else is a column lane's rule, per column.
+    NULL is allowed on one side only, and only for a column the lane fills (the old value of a
+    write, the new value of its reversal) or clears (the new value of a write, the old value of its
+    reversal; lane WB's card). NULL to NULL is never a change. Everything else is a column lane's
+    rule, per column.
     """
     cell = lane.cell(r.column)
     empty_side, filled_side = ("new", "old") if rollback else ("old", "new")
     values = {"old": r.old_value, "new": r.new_value}
-    if values[filled_side] is None:
+    if values["old"] is None and values["new"] is None:
+        raise PlanError(f"{r.site_id}/{cell.name}: NULL to NULL is not a change")
+    if values[filled_side] is None and not cell.clears:
         raise PlanError(
             f"{r.site_id}/{cell.name}: no {filled_side} value - this lane never "
             + ("undoes a NULL" if rollback else "clears a column")
@@ -393,7 +398,8 @@ def _writable_case(lane: Lane, *, rollback: bool) -> str:
         empty, filled = (
             ("p.new_value", "p.old_value") if rollback else ("p.old_value", "p.new_value")
         )
-        refused.append(f"{filled} IS NULL")
+        if not cell.clears:
+            refused.append(f"{filled} IS NULL")
         if not cell.fills_null:
             refused.append(f"{empty} IS NULL")
         if cell.max_chars is not None:
@@ -1710,6 +1716,10 @@ def readback_for(lane: Lane) -> str:
     """The lane's read-only verification: `READBACKS`, or a card_stats wave's own."""
     if lane.name in READBACKS:
         return READBACKS[lane.name]
+    if TEASER_LANE.match(lane.name):
+        from mechanical.teaser import teaser_readback
+
+        return teaser_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1722,7 +1732,8 @@ def _lane_argument(name: str) -> str:
         resolve_lane(name)
     except KeyError as exc:
         raise argparse.ArgumentTypeError(
-            f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, card-stats-<wave>)"
+            f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, card-stats-<wave>, "
+            "teaser-prov-sNNN, teaser-card-sNNN)"
         ) from exc
     return name
 
