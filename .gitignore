@@ -304,6 +304,8 @@ output/remediation/phase4_runner/S0_ROWS.jsonl
 output/remediation/phase4_runner/PLAN*.jsonl
 # Lane L's own read and plan (2026-09-25): the same bulk, rebuilt by `plan4.py read`/`legacy`.
 output/remediation/phase4_runner/LEGACY4*.jsonl
+# scope version 3's fresh plan reads (lane WA, v3 and v3d): the plans' old values, rebuilt by plan4.py read
+output/remediation/phase4_runner/V3*_ROWS.jsonl
 output/remediation/phase4_runner/runs/
 output/remediation/phase4_runner/plan_evidence/
 output/remediation/phase4_runner/LEDGER*.jsonl.lock

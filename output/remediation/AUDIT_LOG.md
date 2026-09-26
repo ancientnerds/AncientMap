@@ -12387,3 +12387,88 @@ re-draw before running it: `PROTOCOL.md` `f40fac87230a26e7b1a4818e9d50d16dedfcb6
 recorded with its commit 1f08d20). Seed 20260926, canaries 20260927, excluding draw-2026-09-25's
 60 and the Phase-4 audit samples (mid-run 45, 500-site 10, pilots 3 and 4), into
 `draw-2026-09-25b/`.
+
+## 2026-09-26 - Lane WA: scope version 3 (the March texts), descriptions only - built and measured, nothing written
+
+Owner decisions of 2026-09-26 (`FINISH_PLAN_2026-09-26.md`, O1-O11) over the design
+`REPAIR_TEXTS_2026-09-26.md`: every curated site still carrying 2026-03 text joins the defect scope
+and goes through the unchanged Phase-4 pipeline (selector `a0b422e7...`, reviewer `097c4589...`,
+lanes W and S). Changed from the design: **no Phase 5** for these plans (lane WB rewrites every
+card, O2/O3), **no group C** (lanes WC and WB take the held texts), **no acceptance exclusion** (O1).
+Contract: `docs/procedures/PHASE4_CONTRACTS.md` section 12; runbook:
+`docs/procedures/PHASE4_V3_RUNBOOK.md`. Branch `wip/wa` (worktree `.claude/worktrees/wa`).
+
+**The March read** (read-only; `plan4.py read-march`, the one SELECT `plan4.MARCH_SQL`): 5,004
+curated rows, `march-description` (live provenance lane `L`, not retired) **3,923**, `march-card` (a
+non-empty card without a live forward `phase5:` row - a row without its own reversal, revert4's
+reading) **3,822**, union **4,063** - the design's counts. `MARCH4_ROWS.jsonl` (committed) sha256
+`5a2949fb826fabb920ac3b8976afe21fcc8d13cf3e98c7a5197c274b03a6774b`, read first 2026-09-26 ~00:12
+UTC and again at 01:17 UTC: byte-identical. The journal's high-water mark is still 73911 (2026-09-25
+18:05:06 UTC): no journalled write since the design's measurement.
+
+**Scope version 3**: `phase4_runner/SCOPE4.v3.json`, **4,954 sites**, sha256
+`fb775d0e5563d9d441c7b7a33bd6e96016a5ac2f9db9524c566f10aeb84ad0ef` (pinned as `scope4.SCOPE_SHA256`).
+Rebuilt from the S0 export, `ALL_REFUSED.jsonl` (`7b4026d0...`), the D1 listing and the March read:
+version 1 (`19a57e9f...`, its pin) and version 2 (`7256a196...`, its pin) byte for byte from the
+same inputs, version 3 byte for byte **when the March read is named `MARCH4_ROWS.jsonl`** (the input's
+file name is part of the scope's `inputs`; a check file of another name hashes differently).
+
+**The plan, measured offline** from a fresh `plan4.py read` (5,004 rows, sha256 `55b2ece1...`,
+byte-identical at 00:12 and 01:18 UTC), `S0_ITEM_NAMES.json` (the 76 shared QIDs of the fresh read
+are exactly its 76), pilot 4 as `--pilot`, `--after PLAN4.scope.jsonl --after PLAN4.d9.jsonl`,
+`--first-batch 2001`: **3,238 sites in 216 batches, p4-2001 .. p4-2216**, every batch `pass:
+phase4-descriptions-only`, plan sha256 `4276f5d0...` (for that read; the run's plan is built from its
+own fresh read). Of the 4,063 listed sites 721 are carried by the mass and D9 plans and 104 are
+pilot 4's (825, the design's "already asked"); 8 planned sites carry a March card beside an unmarked
+description (D7). Flags: t03 535 (99 severe), shared-title 125, shared-qid 106, scope-pending 20,
+duplicate-pair 6.
+
+**The mass run's 19 `revision-too-fresh` sites** (latest batch holds, `mass4.deferred_sites`): due
+2026-09-26T21:30:14Z .. 21:40:06Z (48 h after the answers that held them); the run never re-queued
+one (no `REQUEUE4.jsonl`). They were held, not written, so they are not "new": the v3 plan leaves
+them to `PLAN4.scope.jsonl` (carried), and a follow-up plan of the same lists takes them over after
+21:40:06Z (`build --take-deferred runs/mass-2026-09-25 --after ... --after PLAN4.v3.jsonl
+--first-batch 2501`): simulated at 21:41Z, **19 sites in 2 batches, p4-2501 .. p4-2502**, run
+`runs/v3d-<date>`. `verify_writes4.index_runs` reads such a site from the run that assembled it.
+
+**Expected questions** (the census run `runs/census-2026-09-24`, S0 ids, searches off; S3's own
+`site_pool` over the census's pinned texts): the v3 plan's sites are census lane W 2,477, S 246, 0
+515 (search-stopped 442, revision-too-fresh 49, scope-pending 24). Selector questions: W 2,477 + the
+128 S sites whose article offers a naming sentence (118 get none, `no-source`) = **2,605**, up to
+**2,654** with the 49 held too fresh on 09-24. Review questions at the mass run's measured ratio
+(1,003 per 1,392 selector questions): **~1,877-1,912**. v3d: 10-18 selector, 7-13 review. Handoff
+batches: 216 select + <= 216 review (every v3 batch has 9-15 census W/S sites) + 2 + 2 for v3d.
+
+**`handoff4.py check-answer` on real answers** (read-only, `C:/tmp/wa2/check_real.py`): over the
+mass run's 1,392 recorded selector answers, 1,388 pass and the 4 it names are exactly the mass run's
+4 `selection-refused` holds (`span-not-offered`, p4-0031, p4-0034, p4-0059, p4-0113) - the check
+would have caught them before recording. D9: 6 of 6 selector and 6 of 6 review answers pass. The
+mass run's reviews can be checked only where the import left the batch as exported (650 pass); for
+the others the import moved the batch (308 prompts no longer rebuilt, 45 sites held after the
+review), which the check refuses by design - an agent checks before the import.
+
+**Tests, sweep, gates** (worktree `.claude/worktrees/wa`, main venv, 2026-09-26 ~01:30-01:55 UTC):
+
+* Full gate suite (`-q -rs --timeout 90 -m "not integration and not live_llm"`, `-p no:cacheprovider`):
+  **7,152 passed, 119 skipped, 57 deselected, 0 failed** (461 s). The skips are gitignored working
+  data this worktree does not hold (Natural Earth caches 76, the production snapshot 14, the
+  phase-3 worklist 4, card_stats export 3, T10 data 3, bcases caches 3, design file 2, brand fonts
+  and shorts 4, the S0 export and Phase 3's refusals 2, and others of the same kind) plus the known
+  three (two refactored-away article tests, the opt-in Shining Ones regen). The lane's two skipped
+  byte-rebuild tests (`test_the_committed_scope_is_rebuilt_byte_for_byte_from_its_inputs`,
+  `test_the_committed_version_3_rebuilds_from_the_committed_march_read`) were run with the p4-pilot
+  worktree's `S0_ROWS.jsonl` and `ALL_REFUSED.jsonl` copied in and then removed: 2 passed (versions
+  1, 2 and 3 byte for byte).
+* New and changed tests: `tests/remediation/test_phase4_v3.py` (44), `test_phase4_scope.py`,
+  `test_phase4_accept.py` (the deferred site read from the run that wrote it; WB's
+  `_card_provenance` on a descriptions-only site superseded under `wb-teaser-prov-%`),
+  `test_phase4_write.py`.
+* Sweep: `mutation_sweep.py "p4 v3" "p4 d9" "p4 scope4: the pin" "p4 write4: a held card" "p4
+  verify_writes4: a site two runs"` 86/87 - the miss was `p4 d9 scope: the audit log loses scope
+  version 2's digest`, because this entry first quoted the v2 pin in full a second time; the
+  entry now abbreviates the earlier pins, and `mutation_sweep.py "the audit log loses"` is **7/7
+  caught**. The tree came back byte-identical after both.
+* `ruff check` and `ruff format --check` clean on the 12 touched Python files (ruff 0.15.11);
+  `ruff check api/ pipeline/` clean; `lint-imports` 2 kept, 0 broken; `vulture api/ pipeline/
+  .vulture_whitelist.py --min-confidence 80` clean. Nothing under `api/`, `pipeline/` or
+  `ancient-nerds-map/` was touched: no Lyra import check, no frontend gate.
