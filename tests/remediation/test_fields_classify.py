@@ -66,7 +66,7 @@ NO_DOUBT = C.Identity(False, ())
 class TestTheTable:
     def test_the_table_is_the_pinned_one_and_every_type_is_canonical(self) -> None:
         assert C.table_sha256() == C.TABLE_SHA256
-        assert len(TABLE) == 766
+        assert len(TABLE) == 769
         assert TABLE["Q839954"].kind == "generic"
         assert TABLE["Q486972"].kind == "container"
         assert TABLE["Q5"].kind == "other" and TABLE["Q5"].types == ()

@@ -1,5 +1,5 @@
 {
- "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes); pinned by fields/classify.py TABLE_SHA256.",
+ "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes; 769 since the production harvest of 2026-09-26 17:00 UTC added Delphinion, hammam and flatiron); pinned by fields/classify.py TABLE_SHA256.",
  "classes": {
   "Q5": {
    "label": "human",
@@ -365,6 +365,13 @@
     "Rock art",
     "Natural feature",
     "Geological interest"
+   ]
+  },
+  "Q28077": {
+   "label": "hammam",
+   "kind": "site",
+   "types": [
+    "Bath"
    ]
   },
   "Q29553": {
@@ -4613,6 +4620,17 @@
     "Sacred site"
    ]
   },
+  "Q2677787": {
+   "label": "Delphinion",
+   "kind": "site",
+   "types": [
+    "Sanctuary",
+    "Sacred site",
+    "Temple",
+    "Temple complex",
+    "Religious"
+   ]
+  },
   "Q2734310": {
    "label": "territorial demarcation of Mexico City",
    "kind": "container",
@@ -5388,6 +5406,15 @@
     "Religious",
     "Sacred site",
     "Monastery"
+   ]
+  },
+  "Q5457907": {
+   "label": "flatiron",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
    ]
   },
   "Q5464137": {
