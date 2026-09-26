@@ -14,11 +14,12 @@ The quiet mistakes worth a test: a retired site, a live Phase-5 card or a P5 cle
 a March read of other sites than S0's; a version-3 plan that loses its descriptions-only mark (in a
 re-queue, too) and so writes a provenance naming a card that is never served, or lets P5 plan an
 extractive card; a plan numbered into lane L's block; an excluded site planned anyway; a deferred
-site taken over while the run could still re-queue it, re-queued by a plan without the pass
-although a descriptions-only list names it, or refused by the acceptance as "in two runs"; an
-agent's answer checked against another pool or prompt than its question's; a group of batches kept
-waiting by a batch that asked nothing. The mutation cases are `P4_V3_MUTATIONS` in
-`scripts/remediation/phase3/mutation_sweep.py`.
+site taken over while the run could still re-queue it, from another plan than the deferring run's,
+re-queued by a plan without the pass although a descriptions-only list names it, or refused by the
+acceptance as "in two runs"; a site planned again that a run or the P4 apply root carries; an
+agent's answer checked against another pool or prompt than its question's, or recorded without its
+shape check (and passed as ready); a group of batches kept waiting by a batch that asked nothing.
+The mutation cases are `P4_V3_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py`.
 """
 
 from __future__ import annotations
@@ -43,6 +44,8 @@ import opus_handoff as OH  # noqa: E402
 import write_gate4 as G  # noqa: E402
 from phase3 import mass_run as MR  # noqa: E402
 from phase3 import run as R  # noqa: E402
+from phase3 import snapshot_plan as SP  # noqa: E402
+from phase4 import audit4 as AU  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402
 from phase4 import handoff4 as H  # noqa: E402
 from phase4 import mass4 as M4  # noqa: E402
@@ -380,15 +383,27 @@ def test_an_excluded_site_is_left_out_and_accounted_for(tmp_path: Path) -> None:
 
 
 def test_an_exclude_file_is_read_strictly(tmp_path: Path) -> None:
+    """`--exclude` is read by the one reader of a site-id list, `snapshot_plan.read_site_ids`
+    (second review 2026-09-26: plan4's own reader duplicated it), with its site-id check: each line
+    one site id as production prints it (a lowercase, hyphenated UUID), no hole, no repeat."""
     path = tmp_path / "exclude.txt"
-    path.write_text(f"{uuid(2)}\n\n  {uuid(3)}  \n", encoding="utf-8")
-    assert P.read_excluded(path) == [uuid(2), uuid(3)]
-    path.write_text(f"{uuid(2)}\nTarxien\n", encoding="utf-8")
-    with pytest.raises(R.InputError, match="not a site id"):
-        P.read_excluded(path)
-    path.write_text(f"{uuid(2)}\n{uuid(2)}\n", encoding="utf-8")
-    with pytest.raises(R.InputError, match="twice"):
-        P.read_excluded(path)
+    path.write_text(f"{uuid(2)}\n  {uuid(3)}  \n", encoding="utf-8")
+    assert SP.read_site_ids(path, uuids=True) == [uuid(2), uuid(3)]
+    assert not hasattr(P, "read_excluded")
+    for text, match in (
+        (f"{uuid(2)}\nTarxien\n", r"exclude.txt:2: 'Tarxien' is not a site id"),
+        ("ABCDEF01-0000-4000-8000-000000000001\n", "is not a site id"),
+        (f"{uuid(2).replace('-', '')}\n", "is not a site id"),
+        (f"{{{uuid(2)}}}\n", "is not a site id"),
+        (f"{uuid(2)}\n{uuid(2)}\n", "appears twice"),
+        (f"{uuid(2)}\n\n{uuid(3)}\n", "empty line"),
+    ):
+        path.write_text(text, encoding="utf-8")
+        with pytest.raises(R.InputError, match=match):
+            SP.read_site_ids(path, uuids=True)
+    # Without the check the reader keeps its phase-3 meaning: any id, one per line.
+    path.write_text("site-a\n", encoding="utf-8")
+    assert SP.read_site_ids(path) == ["site-a"]
 
 
 def test_the_first_batch_lies_past_every_earlier_plan_and_outside_lane_ls_block(
@@ -446,6 +461,7 @@ def test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest(
 
     argv = [
         *argv,
+        *_roots(tmp_path),
         f"--pilot={pilot}",
         f"--scope-list={MD}",
         f"--scope-list={MC}",
@@ -469,12 +485,55 @@ def test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest(
     assert summary["lists"] == [MD, MC] and summary["pass"] == MARK
     assert (summary["listed"], summary["sites"], summary["last_batch"]) == (3, 2, "p4-2001")
     assert summary["lane_l_block"] == [1001, 1001]
+    exclude.write_text(f"{uuid(4)}\nTarxien Temples\n", encoding="utf-8")
+    with pytest.raises(R.InputError, match="'Tarxien Temples' is not a site id"):
+        P.main(argv)
 
 
 # ------------------------------------------------------------------- the deferred sites
 
 
 READY = datetime(2026, 9, 27, tzinfo=UTC)
+
+
+def _roots(tmp_path: Path) -> list[str]:
+    """The run root and the P4 apply root a list plan reads (`plan4.carried_by_runs`): empty unless
+    a test puts a run or a write batch there."""
+    (tmp_path / "runs").mkdir(exist_ok=True)
+    (tmp_path / "apply").mkdir(exist_ok=True)
+    return [f"--run-root={tmp_path / 'runs'}", f"--apply-root={tmp_path / 'apply'}"]
+
+
+def _take_over_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[list[str], Path, Path, Path]:
+    """The mass run's shape: `PLAN4.scope.jsonl` carries sites 1 and 4 in p4-0010, the run held
+    both `revision-too-fresh` there long ago; the pilot is site 5; the v3 lists name 1, 3 and 4.
+    Returns the build's argv (inputs and roots), the pilot, the earlier plan and the run."""
+    rows = _marker_rows()
+    argv = [*_build_inputs(tmp_path, rows), *_roots(tmp_path)]
+    pilot = tmp_path / "PILOT.jsonl"
+    pilot.write_text(json.dumps({"site_id": uuid(5)}) + "\n", encoding="utf-8")
+    earlier = tmp_path / "PLAN4.scope.jsonl"
+    carried = [X.plan_site(uuid(1)).to_dict(), X.plan_site(uuid(4)).to_dict()]
+    earlier.write_text(
+        json.dumps({"batch_id": "p4-0010", "ordinal": 10, "sites": carried}) + "\n",
+        encoding="utf-8",
+    )
+    run_dir = tmp_path / "runs" / "mass"
+    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0010", "--plan", str(earlier)])
+    B.append_holds(
+        run_dir / "p4-0010",
+        [
+            _fresh_hold(uuid(1), "2020-01-01T08:00:00Z"),
+            _fresh_hold(uuid(4), "2020-01-01T09:00:00Z"),
+        ],
+    )
+    data = S.render_scope(
+        S.scope_payload(rows, _cleared(), inputs=INPUTS_V3, version=3, march_rows=_march_rows(rows))
+    )
+    _pinned(monkeypatch, tmp_path, data)
+    return argv, pilot, earlier, run_dir
 
 
 def test_a_run_hands_over_its_deferred_sites_once_every_one_is_ready(tmp_path: Path) -> None:
@@ -511,29 +570,7 @@ def test_build_takes_over_the_deferred_sites_an_earlier_plan_carries(
 ) -> None:
     """HOLDS4 of the mass run: 19 sites held `revision-too-fresh`, due from 2026-09-26T21:30Z. They
     were held, not written, so the v3 plan takes them over from the plan that carries them."""
-    rows = _marker_rows()
-    argv = _build_inputs(tmp_path, rows)
-    pilot = tmp_path / "PILOT.jsonl"
-    pilot.write_text(json.dumps({"site_id": uuid(5)}) + "\n", encoding="utf-8")
-    earlier = tmp_path / "PLAN4.scope.jsonl"
-    carried = [X.plan_site(uuid(1)).to_dict(), X.plan_site(uuid(4)).to_dict()]
-    earlier.write_text(
-        json.dumps({"batch_id": "p4-0010", "ordinal": 10, "sites": carried}) + "\n",
-        encoding="utf-8",
-    )
-    run_dir = tmp_path / "runs" / "mass"
-    R4.main(["prepare", "--run-dir", str(run_dir), "--batch-id", "p4-0010", "--plan", str(earlier)])
-    B.append_holds(
-        run_dir / "p4-0010",
-        [
-            _fresh_hold(uuid(1), "2020-01-01T08:00:00Z"),
-            _fresh_hold(uuid(4), "2020-01-01T09:00:00Z"),
-        ],
-    )
-    data = S.render_scope(
-        S.scope_payload(rows, _cleared(), inputs=INPUTS_V3, version=3, march_rows=_march_rows(rows))
-    )
-    _pinned(monkeypatch, tmp_path, data)
+    argv, pilot, earlier, run_dir = _take_over_inputs(tmp_path, monkeypatch)
     capsys.readouterr()
     base = [*argv, f"--pilot={pilot}", f"--after={earlier}", "--first-batch=2001"]
 
@@ -547,6 +584,7 @@ def test_build_takes_over_the_deferred_sites_an_earlier_plan_carries(
     summary = json.loads(capsys.readouterr().out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
     assert summary["taken_over"] == {str(run_dir): {"deferred": 2, "planned": 2}}
     assert summary["carried_by_earlier_plans"] == []
+    assert summary["runs_read"] == ["mass"]
     with pytest.raises(R.InputError, match="no list of this plan names"):
         P.main([*base, f"--scope-list={MC}", f"--take-deferred={run_dir}"])
     # The deferring run's plan must be among --after: its other sites are that run's.
@@ -558,6 +596,95 @@ def test_build_takes_over_the_deferred_sites_an_earlier_plan_carries(
             [*argv, f"--pilot={pilot}", f"--after={other}", "--first-batch=2001",
              f"--scope-list={MD}", f"--scope-list={MC}", f"--take-deferred={run_dir}"]
         )  # fmt: skip
+
+
+def test_a_deferred_site_is_taken_over_only_from_the_deferring_runs_own_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Second review of 2026-09-26: `--take-deferred` checked only that some `--after` plan carries
+    each handed site. With v3d's own plan among `--after` (a follow-up plan, a rebuild) the 19
+    would be planned a third time. A handed site must be carried by exactly one `--after` plan, in
+    the batch the run deferred it in - the deferring run's own plan."""
+    argv, pilot, earlier, run_dir = _take_over_inputs(tmp_path, monkeypatch)
+    lists = [f"--scope-list={MD}", f"--scope-list={MC}", f"--take-deferred={run_dir}"]
+    v3d = tmp_path / "PLAN4.v3d.jsonl"
+    base = [*argv, f"--pilot={pilot}", f"--after={earlier}", *lists]
+    assert P.main([*base, "--first-batch=2501", f"--out={v3d}"]) == 0
+    with pytest.raises(
+        R.InputError, match=r"2 deferred site\(s\) to take over that 2 --after plans"
+    ):
+        P.main([*base, f"--after={v3d}", "--first-batch=2601"])
+    # One --after plan that carries them, but not where the run deferred them: another plan.
+    other = tmp_path / "PLAN4.other.jsonl"
+    line = {**R.read_jsonl(earlier)[0], "batch_id": "p4-0011", "ordinal": 11}
+    other.write_text(json.dumps(line) + "\n", encoding="utf-8")
+    with pytest.raises(
+        R.InputError, match=r"carries it in p4-0011; the run deferred it in p4-0010"
+    ):
+        P.main([*argv, f"--pilot={pilot}", f"--after={other}", *lists, "--first-batch=2601"])
+
+
+def test_a_list_plan_never_plans_a_site_a_run_carries_in_another_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Second review of 2026-09-26: v3d built without `--after PLAN4.v3.jsonl` would plan every v3
+    site again (3,257 sites in p4-2501 ..), and only the acceptance's "in two runs" stopped it -
+    after a second P4 write had replaced the first run's text. Every run directory that can write
+    is read: a site one of them carries in another batch is refused. A rebuild of the plan the run
+    was driven from passes (same batches), the run's own re-queue is its plan batch's
+    continuation, and the runs that never wrote (`plan4.UNWRITTEN_RUNS`) are not read."""
+    argv, pilot, earlier, _ = _take_over_inputs(tmp_path, monkeypatch)
+    v3 = tmp_path / "PLAN4.v3.jsonl"
+    base = [*argv, f"--pilot={pilot}", f"--after={earlier}", f"--scope-list={MD}",
+            f"--scope-list={MC}"]  # fmt: skip
+    assert P.main([*base, "--first-batch=2001", f"--out={v3}"]) == 0
+    (line,) = R.read_jsonl(v3)
+    assert [s["site_id"] for s in line["sites"]] == [uuid(3)]
+    run = tmp_path / "runs" / "v3"
+    R4.main(["prepare", "--run-dir", str(run), "--batch-id", "p4-2001", "--plan", str(v3)])
+    census, census_plan = tmp_path / "runs" / "census-2026-09-24", tmp_path / "PLAN4.census.jsonl"
+    census_plan.write_text(json.dumps({**line, "batch_id": "p4-0001", "ordinal": 1}) + "\n")
+    R4.main(
+        ["prepare", "--run-dir", str(census), "--batch-id", "p4-0001", "--plan", str(census_plan)]
+    )
+    requeue = run / M4.REQUEUE_FILE
+    requeue.write_text(json.dumps({**line, "batch_id": "p4-2002", "ordinal": 2002}) + "\n")
+    R4.main(["prepare", "--run-dir", str(run), "--batch-id", "p4-2002", "--plan", str(requeue)])
+    capsys.readouterr()
+
+    rebuilt = tmp_path / "PLAN4.v3.rebuilt.jsonl"
+    assert P.main([*base, "--first-batch=2001", f"--out={rebuilt}"]) == 0
+    assert rebuilt.read_bytes() == v3.read_bytes()
+    summary = json.loads(capsys.readouterr().out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
+    assert summary["runs_read"] == ["mass", "v3"]
+    with pytest.raises(R.InputError, match=f"{uuid(3)}: run v3 carries it in p4-2001; this plan "
+                       "would put it into p4-2501"):  # fmt: skip
+        P.main([*base, "--first-batch=2501", f"--out={tmp_path / 'PLAN4.v3d.jsonl'}"])
+    assert not (tmp_path / "PLAN4.v3d.jsonl").exists()
+
+
+def test_a_list_plan_never_plans_a_site_the_apply_root_wrote_from_a_run_it_cannot_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The P4 apply root is the write gate's record of every batch it planned: a site whose write
+    batch (its live `PLAN.jsonl` or a reverted round's kept one) no run directory carries was
+    written from a run the check cannot see, and is refused. So are missing roots."""
+    argv, pilot, earlier, _ = _take_over_inputs(tmp_path, monkeypatch)
+    base = [*argv, f"--pilot={pilot}", f"--after={earlier}", f"--scope-list={MD}",
+            f"--scope-list={MC}", "--first-batch=2001"]  # fmt: skip
+    for kept in ("p4-0050", "p4-0050/chunks/chunk-0001"):
+        written = tmp_path / "apply" / kept
+        written.mkdir(parents=True)
+        (written / W4.PLAN_FILE).write_text(json.dumps({"site_id": uuid(3)}) + "\n")
+        with pytest.raises(
+            R.InputError, match=f"{uuid(3)}: the P4 apply root plans it in p4-0050, which no run"
+        ):
+            P.main(base)
+        (written / W4.PLAN_FILE).unlink()
+    assert P.main(base) == 0
+    for flag, match in (("--run-root", "no run directory root"), ("--apply-root", "no P4 apply")):
+        with pytest.raises(R.InputError, match=match):
+            P.main([*base, f"{flag}={tmp_path / 'nowhere'}"])
 
 
 def _mark_plan(plan: Path) -> Path:
@@ -790,6 +917,91 @@ def test_the_gate_names_the_descriptions_only_batches(
     assert json.loads(raw["new_value"])[M.PROVENANCE_KEY]["card"] is None
 
 
+def test_p5_rehearses_and_writes_nothing_for_any_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Second review of 2026-09-26: P5 refused only a descriptions-only batch's sites, so a run
+    without the pass (pilot 4, mass, D9) could write an extractive card again - `--apply --round 2`
+    after a revert4 of a P5 step. Every card is lane WB's (O2, O3): P5 still plans dry, and a
+    pending step can still be accepted or closed, but no run rehearses or writes a P5 row."""
+    from tests.remediation.test_phase4_write import _db, _gate_run
+
+    monkeypatch.setattr(G, "_defect_scope", lambda: FX.EVERY_SITE)
+    _gate_run(tmp_path, 1)
+    refused = tmp_path / "ALL_REFUSED.jsonl"
+    refused.write_text("", encoding="utf-8")
+    site = "00000001-0000-4000-8000-000000000001"
+    base = ["--group", "P5", "--run", "pilot", "--run-root", str(tmp_path / "runs"),
+            "--apply-root", str(tmp_path / "apply-p5"), "--phase3-refused", str(refused)]  # fmt: skip
+    for mode in (["--rehearse"], ["--apply"], ["--apply", "--round", "2"]):
+        assert G.main([*base, *mode], runner=_db(site)) == 1
+        err = capsys.readouterr().err
+        assert "group P5 writes no card since 2026-09-26" in err and "lane WB" in err, mode
+        assert not (tmp_path / "apply-p5").exists()
+    assert G.main(base, runner=_db(site)) == 0
+    assert "dry run, nothing is sent" in capsys.readouterr().out
+
+
+# ============================================================================ the audit's draw
+
+
+def _written_batch(
+    run: Path, apply: Path, batch_id: str, *site_ids: str, applied: bool = True
+) -> Path:
+    """A reviewed batch of `run` and its P4 write batch in `apply` (`write4.write_plan_files`),
+    with `APPLIED.json` when the gate wrote it."""
+    batch_dir = FX.write_batch(
+        run,
+        sites=[FX.plan_site(site_id) for site_id in site_ids],
+        assemblies=[FX.assembly(site_id) for site_id in site_ids],
+        batch_id=batch_id,
+    )
+    plan = W4.plan_p4(
+        W4.load_batch(batch_dir),
+        scope=FX.EVERY_SITE,
+        open_lanes=frozenset({M.Lane.W, M.Lane.S}),
+        audited=frozenset(),
+        verify=FX.Verify(),
+        ledger=FX.ledger_rows(*site_ids, batch=batch_id),
+    )
+    assert {row.site_id for row in plan.rows} == set(site_ids)
+    W4.write_plan_files(apply / batch_id, plan, W4.chunk_for(plan, write_round=1))
+    if applied:
+        (apply / batch_id / W4.APPLIED_FILE).write_text("{}", encoding="utf-8")
+    return batch_dir
+
+
+def test_the_written_sites_of_a_run_are_its_own_live_write_batches_less_what_it_holds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Second review of 2026-09-26: the runbook's written list globbed every `p4-2*/PLAN.jsonl` of
+    the apply root, so v3d's batches (p4-25xx) and a site taken back after an audit hold made the
+    draw refuse ("written but not reviewed in this run") in the middle of the run. `audit4.py
+    written` lists only the run's own batches with a live `APPLIED.json`, less the sites the run
+    holds since, and refuses a write batch another run wrote under the same id."""
+    run = tmp_path / "runs" / "pilot-20260923"  # the fixtures' provenance names this run
+    apply = tmp_path / "apply"
+    _written_batch(run, apply, "p4-2001", FX.SITE_A, FX.SITE_B)
+    _written_batch(run, apply, "p4-2002", FX.SITE_C, applied=False)  # rendered, not written
+    _written_batch(tmp_path / "v3d" / "pilot-20260923", apply, "p4-2501", FX.SITE_C)
+    assert AU.written_sites(run, apply) == sorted([FX.SITE_A, FX.SITE_B])
+
+    hold = M.Hold(
+        site_id=FX.SITE_B, scope=M.HoldScope.SITE, reason=M.HoldReason.AUDIT_WRONG_SITE,
+        detail="AUDIT.json sha256 x: sentence 1 WRONG_SITE: another site",
+    )  # fmt: skip
+    B.append_holds(run / "p4-2001", [hold])
+    assert AU.written_sites(run, apply) == [FX.SITE_A]
+    assert AU.main(["written", "--run-dir", str(run), "--apply-root", str(apply)]) == 0
+    assert capsys.readouterr().out.split() == [FX.SITE_A, "STAGE_EXIT=0"]
+
+    # pilots 1-3 took the batch ids pilot 4 wrote: another run's write batch is never this run's
+    other = tmp_path / "runs" / "pilot3"
+    FX.write_batch(other, sites=[FX.plan_site()], assemblies=[FX.assembly()], batch_id="p4-2001")
+    with pytest.raises(R.InputError, match=r"p4-2001: written from run\(s\) \['pilot-20260923'\]"):
+        AU.written_sites(other, apply)
+
+
 # ============================================================================ handoff4
 
 
@@ -817,8 +1029,13 @@ def test_the_brief_names_the_batch_its_files_its_scratch_and_its_agent(
     assert f"{handoff.resolve().as_posix()}/p4-2001/MANIFEST.jsonl" in text
     scratch = (tmp_path / "handoff" / "p4-v3-select-scratch" / "p4-2001").resolve().as_posix()
     assert f"{scratch}/<site id>.txt" in text
-    assert f"--stage finder --label <label> --answered-by {agent}" in text
-    assert "check-answer --run-dir" in text and "no web page" in text
+    record = f"{H.HANDOFF4.as_posix()} record --run-dir {batch_dir.parent.resolve().as_posix()}"
+    assert record in text and f"under your name {agent}" in text
+    assert "--label <label> --text-file" in text and "no web page" in text
+    # The one way an answer is recorded is through its check: the brief never names the unchecked
+    # writer as a command to run.
+    assert f"{Path(OH.__file__).resolve().as_posix()} answer" not in text
+    assert "never record with opus_handoff.py" in text
     assert H.main(["brief", "--run-dir", str(batch_dir.parent), "--handoff", str(handoff),
                    "--batch-id", "p4-2001"]) == 0  # fmt: skip
     assert capsys.readouterr().out.strip() == text.strip()
@@ -904,7 +1121,7 @@ def test_ready_names_the_batches_whose_every_question_is_answered(tmp_path: Path
     result = H.ready(handoff, run, ["p4-2001"])
     assert not result["ok"] and result["ready"] == [] and result["named_not_ready"] == ["p4-2001"]
     assert result["not_ready"] == {
-        "p4-2001": {"answered": 0, "missing": 1, "stale": 0, "malformed": 0}
+        "p4-2001": {"answered": 0, "missing": 1, "stale": 0, "malformed": 0, "shape": 0}
     }
     _answer_select(handoff)
     result = H.ready(handoff, run, ["p4-2001"])
@@ -939,3 +1156,96 @@ def test_a_named_batch_that_asked_nothing_is_ready_and_a_stray_name_is_refused(
     ready = ["ready", "--run-dir", str(run), "--handoff", str(handoff)]
     assert H.main([*ready, "--batch", "p4-2001", "--batch", "p4-2002"]) == 0
     assert H.main([*ready, "--batch", "p4-2009"]) == 2
+
+
+def _record(run: Path, handoff: Path, label: str, text: str, tmp_path: Path) -> int:
+    draft = tmp_path / "draft.txt"
+    draft.write_bytes(text.encode("utf-8"))
+    return H.main(
+        ["record", "--run-dir", str(run), "--handoff", str(handoff), "--batch-id", "p4-2001",
+         "--label", label, "--text-file", str(draft)]
+    )  # fmt: skip
+
+
+def test_record_writes_an_answer_only_through_its_shape_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Review finding 2026-09-26 (major): the brief only asked for the check, and `opus_handoff.py
+    answer` records any text once - the live v3 run recorded two selections the import refuses
+    (`span-not-offered`), one second after writing the draft, and their corrected drafts could no
+    longer be recorded. `record` runs `check_answer` first and writes nothing on a problem."""
+    batch_dir, handoff = _select_export(tmp_path)
+    run = batch_dir.parent
+    answer = handoff / OH.answer_relpath("p4-2001", "finder", "site-1/select")
+
+    result = H.record(run, handoff, "p4-2001", "site-1/select", "DESC: W99\n")
+    assert result["ok"] is False and result["wrote"] is False
+    assert result["problem"].startswith("selection-refused") and not answer.exists()
+    assert _record(run, handoff, "site-1/select", "DESC: W99\n", tmp_path) == 1
+    assert not answer.exists()
+    assert '"ok": false' in capsys.readouterr().out
+
+    result = H.record(run, handoff, "p4-2001", "site-1/select", SELECT)
+    assert (result["ok"], result["wrote"], result["problem"]) == (True, True, None)
+    assert result["answer_path"] == OH.answer_relpath("p4-2001", "finder", "site-1/select")
+    stored = json.loads(answer.read_text(encoding="utf-8"))
+    assert (stored["text"], stored["answered_by"]) == (SELECT, H.agent_name(handoff, "p4-2001"))
+    assert OH.validate(handoff).ok
+    # The identical answer again writes nothing; another one is refused (an answer is written once).
+    assert _record(run, handoff, "site-1/select", SELECT, tmp_path) == 0
+    assert '"wrote": false' in capsys.readouterr().out
+    assert _record(run, handoff, "site-1/select", "ABSTAIN: no text\n", tmp_path) == 2
+    assert "already holds another answer" in capsys.readouterr().err
+    assert _record(run, handoff, "site-9/select", SELECT, tmp_path) == 2
+    assert json.loads(answer.read_text(encoding="utf-8"))["text"] == SELECT
+
+
+def test_ready_fails_on_a_recorded_answer_the_import_would_refuse(tmp_path: Path) -> None:
+    """An answer recorded by any other path (`opus_handoff.py answer`, a hand-written file) is read
+    through the stage's parser too: `opus_handoff.validate` checks only the digest, so the import
+    would turn such a selection into a `selection-refused` hold and read a missing review line as a
+    DROP. `ready` names it (`shape_problems`), keeps its batch out of `ready` and `ok` false."""
+    batch_dir, handoff = _select_export(tmp_path)
+    run = batch_dir.parent
+    OH.write_answer(
+        handoff, batch_id="p4-2001", stage="finder", label="site-1/select",
+        text="DESC: W99\n", answered_by="opus-elsewhere",
+    )  # fmt: skip
+    assert OH.validate(handoff).ok
+    for named in (["p4-2001"], []):
+        result = H.ready(handoff, run, named)
+        assert not result["ok"] and result["ready"] == []
+        (problem,) = result["shape_problems"]
+        assert (problem["batch_id"], problem["label"]) == ("p4-2001", "site-1/select")
+        assert problem["why"].startswith("selection-refused") and "W99" in problem["why"]
+        assert result["not_ready"]["p4-2001"] == {
+            "answered": 0, "missing": 0, "stale": 0, "malformed": 0, "shape": 1
+        }  # fmt: skip
+    assert H.ready(handoff, run, ["p4-2001"])["named_not_ready"] == ["p4-2001"]
+    ready = ["ready", "--run-dir", str(run), "--handoff", str(handoff), "--batch", "p4-2001"]
+    assert H.main(ready) == 1
+
+
+def test_ready_names_an_answer_whose_batch_moved_since_the_export(tmp_path: Path) -> None:
+    batch_dir, handoff = _select_export(tmp_path)
+    _answer_select(handoff)
+    assert H.ready(handoff, batch_dir.parent, ["p4-2001"])["ok"]
+    path = B.evidence_store(batch_dir).path_for("site-1", M.source_feature("W", "txt"))
+    path.write_bytes(path.read_bytes() + b" A later edit of the article.")
+    result = H.ready(handoff, batch_dir.parent, ["p4-2001"])
+    assert not result["ok"] and result["ready"] == []
+    (problem,) = result["shape_problems"]
+    assert problem["why"].startswith("refused:") and "no longer builds" in problem["why"]
+
+
+def test_ready_reads_a_recorded_review_whole(tmp_path: Path) -> None:
+    """A review answer without its R4 line: the import would read R4 as a DROP and say nothing."""
+    batch_dir, handoff = _review_export(tmp_path)
+    OH.write_answer(
+        handoff, batch_id="p4-0001", stage="reviewer", label="site-1/review",
+        text="R1: KEEP\nR2: KEEP\nR3: KEEP\nCARD: KEEP\n", answered_by="opus-elsewhere",
+    )  # fmt: skip
+    result = H.ready(handoff, batch_dir.parent, ["p4-0001"])
+    assert not result["ok"] and result["ready"] == []
+    (problem,) = result["shape_problems"]
+    assert "R1 .. R4, each once" in problem["why"]

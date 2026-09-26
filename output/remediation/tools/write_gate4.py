@@ -10,8 +10,11 @@ batch's statements, and runs them.
     write_gate4.py --group P4 --run pilot --open-lanes W,S --apply --step 100
     write_gate4.py --group P4 --run pilot --accept accept-step-1.log         # after verify_writes4
     write_gate4.py --group P5 --run mass --close-reverted                   # after revert4 of it
-    write_gate4.py --group P5 --run mass --apply --round 2                  # write it again
     write_gate4.py --group L --legacy-plan LEGACY4.jsonl --apply --step 100  # lane L's own plan
+
+**Group P5 writes no card since 2026-09-26** (owner decisions O2 and O3: lane WB writes every
+card): `--rehearse` and `--apply` are refused for every run, a first round and a round 2 after a
+revert4 alike (`closed_group_problem`); its dry run, `--accept` and `--close-reverted` remain.
 
 **Dry run by default**: nothing is sent to production except the read-only questions a group needs
 (L and P5: which sites carry a live Phase-4 provenance; P5: which have a card_stats row;
@@ -105,7 +108,6 @@ import json
 import pathlib
 import re
 import sys
-import uuid
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -115,14 +117,15 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import lanes  # noqa: E402 - the lane's paths, the JSON-lines reader and the database seam
 from phase3 import fetch_stage as F  # noqa: E402
+from phase3 import snapshot_plan as SP  # noqa: E402 - the one reader of a site-id list
 from phase3 import write_stage as W  # noqa: E402
-from phase3.run import read_jsonl  # noqa: E402
+from phase3.run import InputError, read_jsonl  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402 - the reversal read: what "reverted" means
 from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 from phase4 import write4 as W4  # noqa: E402
 
-APPLIED_FILE = "APPLIED.json"
+APPLIED_FILE = W4.APPLIED_FILE
 #: The owner's step (2026-09-21): after every hundred sites, a check - the most one step may write.
 STEP_MAX = W.DEFAULT_CHUNK_SIZE
 STOPPED_FILE = "STOPPED.json"
@@ -179,20 +182,14 @@ def batch_dirs(run_dir: pathlib.Path, wanted: Sequence[str]) -> list[pathlib.Pat
 
 
 def read_audited(path: pathlib.Path | None) -> frozenset[str]:
-    """The independent audit's cleared site ids (lanes T and R): one UUID per line."""
+    """The independent audit's cleared site ids (lanes T and R), read by the one reader of a
+    site-id list (`snapshot_plan.read_site_ids`, with its site-id check)."""
     if path is None:
         return frozenset()
-    ids: set[str] = set()
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            uuid.UUID(text)
-        except ValueError:
-            raise SystemExit(f"{path}:{number}: {text!r} is not a site id") from None
-        ids.add(text)
-    return frozenset(ids)
+    try:
+        return frozenset(SP.read_site_ids(path, uuids=True))
+    except InputError as exc:
+        raise SystemExit(str(exc)) from None
 
 
 def open_lanes(value: str) -> frozenset[M.Lane]:
@@ -287,6 +284,25 @@ def _defect_scope() -> S.DefectScope:
         return S.load_scope()
     except S.ScopeError as exc:
         raise SystemExit(str(exc)) from None
+
+
+#: The owner's decisions of 2026-09-26 (O2, O3, `FINISH_PLAN_2026-09-26.md`): every card is lane
+#: WB's teaser. Refused for every run, not only a descriptions-only plan's (second review of lane
+#: WA, 2026-09-26): after a revert4 of a P5 step, `--apply --round 2` of the mass run would write
+#: its extractive cards again.
+P5_CLOSED = (
+    "group P5 writes no card since 2026-09-26 (owner decisions O2 and O3: lane WB writes every "
+    "card): --rehearse and --apply are refused for every run; its dry run, --accept and "
+    "--close-reverted remain"
+)
+
+
+def closed_group_problem(group: W4.Group, args: argparse.Namespace) -> str | None:
+    """Why this invocation would rehearse or write a group that writes nothing any more, or
+    `None`: group P5 (`P5_CLOSED`)."""
+    if group is W4.Group.P5 and (args.rehearse or args.apply):
+        return P5_CLOSED
+    return None
 
 
 def plan_source_problem(group: W4.Group, args: argparse.Namespace) -> str | None:
@@ -905,7 +921,7 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     group = W4.Group(args.group)
     lane = lanes.lane(W4.GROUP_PREFIX[group])
     apply_root = pathlib.Path(args.apply_root) if args.apply_root else lane.apply_root
-    problem = plan_source_problem(group, args)
+    problem = plan_source_problem(group, args) or closed_group_problem(group, args)
     if problem is not None:
         raise SystemExit(problem)
     if not 1 <= args.step <= STEP_MAX:

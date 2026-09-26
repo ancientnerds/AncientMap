@@ -57,7 +57,12 @@ in the AUDIT_LOG sections of 2026-09-25):
 plan** (`docs/procedures/PHASE4_V3_RUNBOOK.md` section 8, HUMAN_ONLY_DECISIONS D6): built with
 `plan4.py build --take-deferred runs/mass-2026-09-25` once the last is due (21:40:06Z), from a fresh
 read, so no L row is reverted and no card is planned. **`runs/mass-2026-09-25` is never driven live
-again**; `mass4` refuses its live rounds once one of the 19 is ready (`descriptions_only_claims`);
+again**; `mass4` refuses its live rounds once one of the 19 is ready (`descriptions_only_claims`).
+**The v3 run's agents record with `handoff4.py record`, and `handoff4.py ready` runs before every
+import** (second review of lane WA, 2026-09-26): `opus_handoff.py answer` checks no shape, and the
+live run's agents recorded three selections the import refuses that way (p4-2006, p4-2011,
+p4-2061; their corrected drafts are in `handoff/p4-v3-select-scratch/`) - repair them before those
+batches' select import (runbook section 5, "A recorded answer the import would refuse");
 the owner items in `HUMAN_ONLY.md` (Ahin Posh coordinates, 21 wrong-both rows, Chiapa/Zoque,
 gallery eye labels, 11 lyra alias keys, 16 old shorts, deleted Commons files on the VPS, 876 vs 904);
 a final docs pass (this file's sections 2-7, CLAUDE.md's top paragraph) and a push of the docs.

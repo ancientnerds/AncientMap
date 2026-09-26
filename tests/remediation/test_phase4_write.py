@@ -2255,12 +2255,20 @@ def test_a_step_of_no_site_is_refused(tmp_path, monkeypatch, capsys) -> None:
 
 
 def test_the_audited_list_is_site_ids_only(tmp_path: Path) -> None:
+    """Read by the one reader of a site-id list (`snapshot_plan.read_site_ids`, with its site-id
+    check): no hole, no repeat, no name."""
     audited = tmp_path / "audited.txt"
-    audited.write_text(f"{FX.SITE_A}\n\n{FX.SITE_B}\n", encoding="utf-8")
+    audited.write_text(f"{FX.SITE_A}\n{FX.SITE_B}\n", encoding="utf-8")
     assert G.read_audited(audited) == frozenset({FX.SITE_A, FX.SITE_B})
-    audited.write_text(f"{FX.SITE_A}\nTarxien Temples\n", encoding="utf-8")
-    with pytest.raises(SystemExit, match=r"audited.txt:2: 'Tarxien Temples' is not a site id"):
-        G.read_audited(audited)
+    assert G.read_audited(None) == frozenset()
+    for text, match in (
+        (f"{FX.SITE_A}\nTarxien Temples\n", r"audited.txt:2: 'Tarxien Temples' is not a site id"),
+        (f"{FX.SITE_A}\n\n{FX.SITE_B}\n", "empty line"),
+        (f"{FX.SITE_A}\n{FX.SITE_A}\n", "appears twice"),
+    ):
+        audited.write_text(text, encoding="utf-8")
+        with pytest.raises(SystemExit, match=match):
+            G.read_audited(audited)
 
 
 def test_a_card_clear_is_evidenced_only_by_a_cleared_card_finding(tmp_path: Path) -> None:

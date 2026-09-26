@@ -6316,8 +6316,8 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_gate4: the audited list takes anything",
         P4_WRITE_GATE,
-        "            uuid.UUID(text)\n",
-        "            pass  # mutant\n",
+        "        return frozenset(SP.read_site_ids(path, uuids=True))\n",
+        "        return frozenset(SP.read_site_ids(path))  # mutant\n",
         P4_WRITE_TEST,
         "test_the_audited_list_is_site_ids_only",
     ),
@@ -21189,6 +21189,8 @@ P4V3_WRITE = "scripts/remediation/phase4/write4.py"
 P4V3_GATE = "output/remediation/tools/write_gate4.py"
 P4V3_ACCEPT = "output/remediation/tools/verify_writes4.py"
 P4V3_HANDOFF = "scripts/remediation/phase4/handoff4.py"
+P4V3_IDS = "scripts/remediation/phase3/snapshot_plan.py"
+P4V3_AUDIT = "scripts/remediation/phase4/audit4.py"
 P4V3_TEST = "tests/remediation/test_phase4_v3.py"
 P4V3_SCOPE_TEST = "tests/remediation/test_phase4_scope.py"
 P4V3_ACCEPT_TEST = "tests/remediation/test_phase4_accept.py"
@@ -21213,6 +21215,18 @@ P4V3_READY = "test_ready_names_the_batches_whose_every_question_is_answered"
 P4V3_BRIEF = "test_the_brief_names_the_batch_its_files_its_scratch_and_its_agent"
 P4V3_CLAIMS = "test_a_plan_without_the_pass_re_queues_no_site_a_descriptions_only_list_names"
 P4V3_ASKED_NOTHING = "test_a_named_batch_that_asked_nothing_is_ready_and_a_stray_name_is_refused"
+P4V3_RECORD = "test_record_writes_an_answer_only_through_its_shape_check"
+P4V3_READY_SHAPE = "test_ready_fails_on_a_recorded_answer_the_import_would_refuse"
+P4V3_READY_MOVED = "test_ready_names_an_answer_whose_batch_moved_since_the_export"
+P4V3_READY_REVIEW = "test_ready_reads_a_recorded_review_whole"
+P4V3_P5_CLOSED = "test_p5_rehearses_and_writes_nothing_for_any_run"
+P4V3_EXCLUDE_CLI = "test_build_with_two_lists_prints_the_exclusion_as_a_count_and_a_digest"
+P4V3_ONLY_DEFERRING = "test_a_deferred_site_is_taken_over_only_from_the_deferring_runs_own_plan"
+P4V3_RUN_CARRIES = "test_a_list_plan_never_plans_a_site_a_run_carries_in_another_batch"
+P4V3_APPLY_ROOT = (
+    "test_a_list_plan_never_plans_a_site_the_apply_root_wrote_from_a_run_it_cannot_read"
+)
+P4V3_WRITTEN = "test_the_written_sites_of_a_run_are_its_own_live_write_batches_less_what_it_holds"
 
 P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── scope4: the March lists ───────────────────────────────────────────────────────────────
@@ -21372,20 +21386,46 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4V3_EXCLUDE,
     ),
     (
-        "p4 v3 plan4: an exclusion line that is no site id is read",
-        P4V3_PLAN,
-        "            uuid.UUID(text)\n",
-        "            text.strip()  # mutant\n",
+        "p4 v3 snapshot_plan: a site-id line that is no site id is read",
+        P4V3_IDS,
+        "        if uuids and not _canonical_uuid(site_id):\n",
+        "        if False:  # mutant\n",
         P4V3_TEST,
         P4V3_EXCLUDE_FILE,
     ),
     (
-        "p4 v3 plan4: an exclusion listed twice is read",
-        P4V3_PLAN,
-        "        if text in ids:\n",
+        "p4 v3 snapshot_plan: a site id in another spelling is read",
+        P4V3_IDS,
+        "        return str(uuid.UUID(text)) == text\n",
+        "        return bool(uuid.UUID(text))  # mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 snapshot_plan: a site-id list without the check checks it",
+        P4V3_IDS,
+        "        if uuids and not _canonical_uuid(site_id):\n",
+        "        if not _canonical_uuid(site_id):  # mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 snapshot_plan: a site id listed twice is read",
+        P4V3_IDS,
+        "        if site_id in seen:\n",
         "        if False:  # mutant\n",
         P4V3_TEST,
         P4V3_EXCLUDE_FILE,
+    ),
+    (
+        "p4 v3 plan4: --exclude is read without the site-id check",
+        P4V3_PLAN,
+        "    excluded = SP.read_site_ids(exclude_path, uuids=True) if exclude_path is not None "
+        "else []\n",
+        "    excluded = SP.read_site_ids(exclude_path) if exclude_path is not None else []  "
+        "# mutant\n",
+        P4V3_TEST,
+        P4V3_EXCLUDE_CLI,
     ),
     (
         "p4 v3 plan4: a plan numbered into lane L's block passes",
@@ -21644,17 +21684,18 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 v3 handoff4: a batch with missing answers is ready",
         P4V3_HANDOFF,
-        '    done = sorted(b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] '
-        "== 0)\n",
-        "    done = sorted(per)  # mutant\n",
+        '        b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == '
+        'c["shape"] == 0\n',
+        "        b for b in per  # mutant\n",
         P4V3_TEST,
         P4V3_READY,
     ),
     (
         "p4 v3 handoff4: an orphan answer file passes",
         P4V3_HANDOFF,
-        '        "ok": not (result.stale or result.malformed or result.orphans or waiting),\n',
-        '        "ok": not (result.stale or result.malformed or waiting),  # mutant\n',
+        '        "ok": not (result.stale or result.malformed or result.orphans or problems or '
+        "waiting),\n",
+        '        "ok": not (result.stale or result.malformed or problems or waiting),  # mutant\n',
         P4V3_TEST,
         P4V3_READY,
     ),
@@ -21722,6 +21763,226 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n        raise HandoffCheckError(",
         P4V3_TEST,
         P4V3_ASKED_NOTHING,
+    ),
+    # ── the second review of 2026-09-26: an answer is recorded only through its shape check
+    (
+        "p4 v3 handoff4: record writes an answer the check refuses",
+        P4V3_HANDOFF,
+        '    if problem is not None:\n        return {"ok": False, "problem": problem, '
+        '"wrote": False}\n',
+        '    if False:  # mutant\n        return {"ok": False, "problem": problem, '
+        '"wrote": False}\n',
+        P4V3_TEST,
+        P4V3_RECORD,
+    ),
+    (
+        "p4 v3 handoff4: record writes under another name than the batch agent's",
+        P4V3_HANDOFF,
+        "        answered_by=agent_name(handoff, batch_id),\n",
+        '        answered_by="opus",  # mutant\n',
+        P4V3_TEST,
+        P4V3_RECORD,
+    ),
+    (
+        "p4 v3 handoff4: ready reads no recorded answer through the parser",
+        P4V3_HANDOFF,
+        "    problems = shape_problems(\n        run_dir, handoff, [entry for entry in "
+        'result.answered if entry["batch_id"] in judged]\n    )\n',
+        "    problems: list[dict[str, Any]] = []  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: a shape problem fails only a named batch",
+        P4V3_HANDOFF,
+        '        "ok": not (result.stale or result.malformed or result.orphans or problems or '
+        "waiting),\n",
+        '        "ok": not (result.stale or result.malformed or result.orphans or waiting),  '
+        "# mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: a batch with a shape problem is ready",
+        P4V3_HANDOFF,
+        '        b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == '
+        'c["shape"] == 0\n',
+        '        b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == 0  '
+        "# mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: without names ready judges no batch",
+        P4V3_HANDOFF,
+        '    judged = set(batches) or {entry["batch_id"] for _, entries in statuses for entry '
+        "in entries}\n",
+        "    judged = set(batches)  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: an answer to a moved batch passes ready",
+        P4V3_HANDOFF,
+        '        except HandoffCheckError as exc:\n            why = f"refused: {exc}"\n',
+        "        except HandoffCheckError:\n            why = None  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_MOVED,
+    ),
+    (
+        "p4 v3 handoff4: ready reads a recorded review without its line count",
+        P4V3_HANDOFF,
+        "    return review_lines_problem(verdict, sentences=len(built.sentences), card=card)\n",
+        "    return None  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_REVIEW,
+    ),
+    # ── the second review of 2026-09-26: a list plan plans no site another plan or run carries
+    (
+        "p4 v3 plan4: a handed site another --after plan carries is taken",
+        P4V3_PLAN,
+        "    many = sorted(i for i in handed_ids if len(carriers[i]) > 1)\n",
+        "    many: list[str] = []  # mutant\n",
+        P4V3_TEST,
+        P4V3_ONLY_DEFERRING,
+    ),
+    (
+        "p4 v3 plan4: a handed site is taken from a plan that did not defer it",
+        P4V3_PLAN,
+        "            if batch_id != held_in:\n",
+        "            if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_ONLY_DEFERRING,
+    ),
+    (
+        "p4 v3 plan4: a site a run carries in another batch is planned",
+        P4V3_PLAN,
+        "                if carrier == batch.batch_id or handed.get(site_id) == run_dir:\n",
+        "                if True:  # mutant\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: a rebuild of the run's own plan is refused",
+        P4V3_PLAN,
+        "                if carrier == batch.batch_id or handed.get(site_id) == run_dir:\n",
+        "                if handed.get(site_id) == run_dir:  # mutant\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: the deferring run refuses the site it hands over",
+        P4V3_PLAN,
+        "                if carrier == batch.batch_id or handed.get(site_id) == run_dir:\n",
+        "                if carrier == batch.batch_id:  # mutant\n",
+        P4V3_TEST,
+        P4V3_TAKE,
+    ),
+    (
+        "p4 v3 plan4: a run that never wrote is read",
+        P4V3_PLAN,
+        "        if run_dir.name in UNWRITTEN_RUNS:\n            continue\n",
+        "        if False:  # mutant\n            continue\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: a run's re-queue batch counts as another carrier",
+        P4V3_PLAN,
+        "                if line.batch_id not in again:\n",
+        "                if True:  # mutant\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: the carried sites are never refused",
+        P4V3_PLAN,
+        "    if problems:\n        raise R.InputError(\n",
+        "    if False:  # mutant\n        raise R.InputError(\n",
+        P4V3_TEST,
+        P4V3_RUN_CARRIES,
+    ),
+    (
+        "p4 v3 plan4: a site the apply root wrote from an unseen run is planned",
+        P4V3_PLAN,
+        "            if unseen:\n",
+        "            if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
+    ),
+    (
+        "p4 v3 plan4: the apply root's writes all count as seen",
+        P4V3_PLAN,
+        "                - carried.batches.get(site_id, frozenset())\n",
+        "                - carried.written.get(site_id, frozenset())  # mutant\n",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
+    ),
+    (
+        "p4 v3 plan4: a reverted round's kept plan is not read",
+        P4V3_PLAN,
+        '        *apply_root.glob(f"{BATCH_PREFIX}-*/{W4.CHUNKS_DIR}/*/{W4.PLAN_FILE}"),\n',
+        "",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
+    ),
+    (
+        "p4 v3 plan4: a missing run root reads nothing",
+        P4V3_PLAN,
+        "    if not run_root.is_dir():\n",
+        "    if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_APPLY_ROOT,
+    ),
+    # ── the second review of 2026-09-26: the audit's written list is the run's own
+    (
+        "p4 v3 audit4: a rendered write batch counts as written",
+        P4V3_AUDIT,
+        "        if not (out / W4.APPLIED_FILE).exists():\n            continue\n",
+        "        if False:  # mutant\n            continue\n",
+        P4V3_TEST,
+        P4V3_WRITTEN,
+    ),
+    (
+        "p4 v3 audit4: a site held after its write stays written",
+        P4V3_AUDIT,
+        "        found |= {row.site_id for row in rows} - B.site_held(B.read_holds(batch_dir))\n",
+        "        found |= {row.site_id for row in rows}  # mutant\n",
+        P4V3_TEST,
+        P4V3_WRITTEN,
+    ),
+    (
+        "p4 v3 audit4: another run's write batch of the same id is listed",
+        P4V3_AUDIT,
+        "        if runs:\n            raise InputError(",
+        "        if False:  # mutant\n            raise InputError(",
+        P4V3_TEST,
+        P4V3_WRITTEN,
+    ),
+    # ── the second review of 2026-09-26: P5 writes no card for any run (O2, O3)
+    (
+        "p4 v3 write_gate4: a run without the pass rehearses or writes P5",
+        P4V3_GATE,
+        "    if group is W4.Group.P5 and (args.rehearse or args.apply):\n        return P5_CLOSED\n",
+        "    if False:  # mutant\n        return P5_CLOSED\n",
+        P4V3_TEST,
+        P4V3_P5_CLOSED,
+    ),
+    (
+        "p4 v3 write_gate4: the P5 refusal is never asked",
+        P4V3_GATE,
+        "    problem = plan_source_problem(group, args) or closed_group_problem(group, args)\n",
+        "    problem = plan_source_problem(group, args)  # mutant\n",
+        P4V3_TEST,
+        P4V3_P5_CLOSED,
+    ),
+    (
+        "p4 v3 write_gate4: P5's dry run is refused too",
+        P4V3_GATE,
+        "    if group is W4.Group.P5 and (args.rehearse or args.apply):\n        return P5_CLOSED\n",
+        "    if group is W4.Group.P5:  # mutant\n        return P5_CLOSED\n",
+        P4V3_TEST,
+        P4V3_P5_CLOSED,
     ),
 ]
 MUTATIONS += P4_V3_MUTATIONS

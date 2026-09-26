@@ -12,7 +12,8 @@ O1-O11) over the design `output/remediation/REPAIR_TEXTS_2026-09-26.md`:
 - **No Phase 5.** Lane WB rewrites every card (O2, O3). Every batch of a v3 plan carries `pass:
   phase4-descriptions-only` (`scope4.DESCRIPTIONS_ONLY_MARK`): P4 writes the description with
   `provenance.card: null`, P5 refuses every site of such a batch (`descriptions-only-plan`), so the
-  P5 group of a v3 run is never run, nothing waits for it, and no extractive card is planned.
+  P5 group of a v3 run is never run, nothing waits for it, and no extractive card is planned. And
+  group P5 rehearses and writes nothing for any run any more (section 9.4).
 - **No clearing group C.** The held descriptions go to lane WC (sentence check and trim), the cards
   to lane WB.
 - **No acceptance exclusion** (O1). `plan4.py build --exclude FILE` stays a general tool.
@@ -35,10 +36,14 @@ O1-O11) over the design `output/remediation/REPAIR_TEXTS_2026-09-26.md`:
 | **review questions expected** | **~1,877 - 1,912** (v3d: 7 - 13) | the mass run's measured 1,003 reviews per 1,392 selector questions (0.72) |
 | descriptions expected written | ~1,810 - 1,850 | the mass run's rates: W 70.5 %, S 27 % |
 | agent batches | 216 select + <= 216 review; v3d 2 + 2; v3's re-queue a few | every v3 batch holds 9-15 census W/S sites |
+| **the v3 plan as built** (2026-09-26, from 6e448e3, L5 not yet applied) | **3,124 sites in 209 batches, p4-2001 .. p4-2209**, `PLAN4.v3.jsonl` `779021ad0b11785ab8010ce0192296bcd67320bdb7e86cbb202627d69b9ee143` | section 3's command with `--exclude V3_EXCLUDE_L5.txt` (167 ids, `ab493aa1...`, 153 of them listed); rebuilt offline byte for byte by the guarded `plan4.py` of the second review (runs read: d9, mass, pilot 4, v3) |
+| **selector questions of the live run** | **2,569** in all 209 batches (472 sites held before any question) | `opus_handoff.validate` over `handoff/p4-v3-select`, read at ~10:40 UTC: 731 answered, 1,838 missing, 0 stale or malformed; `handoff4.py ready` over all of them: 3 answers the import would refuse (section 5, "A recorded answer the import would refuse") |
+| **the v3d plan, simulated** (21:41Z, same `--exclude`) | 19 sites, p4-2501 .. p4-2502, `a5b1a0c2e4564c9d0918c105d2b854945ba20faffe7a6b184319a819f26a20b8` | `plan4._list_summary` offline with the real inputs; with `--after` v3d as well, or without `--after PLAN4.v3.jsonl`, it is refused (19 and 3,124 sites) |
 
 The census predates the 2026-09-23 id repairs for its rows (S0 of 2026-09-20), so a few lane-0 sites
 may reach W in the fresh run; the 48 h rule defers about 2 % of the fetched articles again (v3's
-own re-queue, p4-2217 on, section 9).
+own re-queue, p4-2217 on for the plan without `--exclude`, p4-2210 on for the plan as built;
+section 9).
 
 ## 0. Preconditions and the shell
 
@@ -49,7 +54,11 @@ own re-queue, p4-2217 on, section 9).
 
    `mass4` hashes `scripts/remediation/phase4/` before every batch of a round: never move that
    worktree while a round runs. Merge the other lanes that change `phase4/` (WC changes
-   `write4.py`) before the export if they are ready, else only between rounds.
+   `write4.py`) before the export if they are ready, else only between rounds. The second review's
+   fixes of 2026-09-26 (`handoff4.py record` and `ready`'s shape check, the plan guards,
+   `audit4.py written`, P5 closed) change `phase4/` too: merge them between import rounds, then
+   hand out new briefs (a brief printed before still names `opus_handoff.py answer`) and run the
+   new `ready` before every import - it names what an old brief let through.
 2. Nobody drives `runs/mass-2026-09-25` live again: every live `mass4` round of a run re-queues
    that run's ready deferred sites, and the mass run's 19 are v3d's (section 8). Code holds this
    too: a plan without a pass (the mass run's) re-queues no site a descriptions-only list names
@@ -136,10 +145,18 @@ AUDIT_LOG entry of step 3, as `S0_ITEM_NAMES.json` is, so the plan rebuilds from
 
 What it checks: the current scope file at its pin; every listed site is the pilot's, an earlier
 plan's, excluded or planned; the block p4-2001 .. lies past every `--after` ordinal (901) and outside
-lane L's block (p4-1001 .. p4-1334). Expected summary: `sites 3238`, `batches 216`, `first_batch
-p4-2001`, `last_batch p4-2216`, `pass phase4-descriptions-only`, `listed 4063`, `excluded null`,
-`taken_over {}`, `lane_l_block [1001, 1334]`, `STAGE_EXIT=0` (a later read may differ by the sites
-that moved since; with L5's list as `--exclude`, `excluded` names its count and digest). Record in
+lane L's block (p4-1001 .. p4-1334); `--exclude` is read by `snapshot_plan.read_site_ids(uuids=True)`
+(one lowercase UUID per line, no blank line, no repeat); and no planned site is carried already
+(`plan4.carried_problems`): no run directory under `--run-root` (default `phase4_runner/runs`, every
+run but `plan4.UNWRITTEN_RUNS` - the census and pilots 1-3, which never wrote) carries it in another
+batch, and no write batch of the P4 apply root (`--apply-root`, default `logs/_write_apply_p4`)
+plans it from a run that check cannot see. A rebuild of the plan a run was driven from passes (same
+batches). Nothing is written when it refuses. Expected summary: `sites 3238`, `batches 216`,
+`first_batch p4-2001`, `last_batch p4-2216`, `pass phase4-descriptions-only`, `listed 4063`,
+`excluded null`, `taken_over {}`, `runs_read [d9-2026-09-25, mass-2026-09-25, pilot4-2026-09-24]`,
+`lane_l_block [1001, 1334]`, `STAGE_EXIT=0` (a later read may differ by the sites that moved since;
+with L5's list as `--exclude`, `excluded` names its count and digest - as built on 2026-09-26: 3,124
+sites, 209 batches, see the table). Record in
 AUDIT_LOG, in one commit with `V3_ITEM_NAMES.json`: the plan's `sha256`, the sha256 of
 `V3_ROWS.jsonl` and `V3_ITEM_NAMES.json`, the commit whose `dates.py` fixed the flags (0.4), and
 whether L5 was applied before the read (0.3).
@@ -163,14 +180,21 @@ gets exactly this instruction (the orchestrator substitutes the batch, absolute 
 
 `brief` prints the whole instruction: read only the batch's manifest and prompt files, no web (each
 prompt holds its evidence), one draft per question in `$H-select-scratch/<B>/<site id>.txt` (its own
-folder: no two agents share a file), check it with `handoff4.py check-answer` (the selector's own
-parser `select_stage.parse_selection` over the batch's own candidate pool, after proving the batch
-still builds the exported prompt), then record it with `opus_handoff.py answer ... --stage finder
---answered-by opus-p4-v3-select-<B>` (write-once, carries the prompt's sha256 and the model). When
-an agent reports, the orchestrator starts the next batch in its place. The check matters here:
-the selector also names the card sentences, and a malformed CARD line refuses the whole selection
-(`selection-refused`: the site is held, its description lost) although v3 writes no card - the
-mass run lost 4 sites that way, all 4 of which `check-answer` names (AUDIT_LOG, "Lane WA").
+folder: no two agents share a file), and record it with `handoff4.py record --run-dir $RUN --handoff
+$H-select --batch-id <B> --label <label> --text-file <draft>`. `record` runs `check-answer` first -
+the selector's own parser `select_stage.parse_selection` over the batch's own candidate pool, after
+proving the batch still builds the exported prompt - and only an answer without a problem goes to
+`opus_handoff.write_answer` (write-once, the prompt's sha256, the model, the agent's name
+`opus-p4-v3-select-<B>`). A problem is printed (`"ok": false`, exit 1) and nothing is recorded, so
+the agent fixes its draft and records it again; an answer recorded already is refused (`REFUSED`,
+exit 2). No agent records with `opus_handoff.py answer`: it checks no shape, and the live run's
+agents recorded three selections the import refuses that way, each about a second after writing
+the draft (second review of 2026-09-26; see "A recorded answer the import would refuse" below).
+When an agent reports, the orchestrator starts the next batch in its place. The check matters
+here: the selector also names the card sentences, and a malformed CARD line refuses the whole
+selection (`selection-refused`: the site is held, its description lost) although v3 writes no
+card - the mass run lost 4 sites that way, all 4 of which `check-answer` names (AUDIT_LOG, "Lane
+WA").
 
 **Importing** - by the orchestrator, one `mass4` round at a time, for a set G of batches whose
 answers are complete (6-10 batches is one write step's worth):
@@ -183,9 +207,14 @@ answers are complete (6-10 batches is one write step's worth):
     $PY $P4/mass4.py $ROUNDS --live --only $G --stages translate,assemble,verify --handoff-import $H-translate
     $PY $P4/mass4.py $ROUNDS --live --only $G --stages review --handoff-export $H-review
 
-`ready` is `opus_handoff.validate` per batch: every question of the named batches answered in shape,
-and nowhere in the directory a stale or malformed answer or an answer file no question asks for.
-Name every batch of G, also those without a folder in the directory: such a batch asked no
+`ready` is `opus_handoff.validate` per batch plus every recorded answer of the named batches (of
+every batch when none is named) read again through `check-answer`: every question of the named
+batches answered in shape, no recorded answer the import would refuse (`shape_problems`, counted
+as `shape`; a batch that moved since its export is one too, `refused: ...`), and nowhere in the
+directory a stale or malformed answer or an answer file no question asks for. So an answer
+recorded by any path but `record` is caught before its import. It reads about 60 answers a second
+(all 731 of the live run's in 12 s). Name every batch of G, also those without a folder in the
+directory: such a batch asked no
 question (every site of it was held before the stage), `ready` lists it under
 `named_without_questions` and does not wait for it, and it is imported with the rest of G - its
 import asks nothing (had its export not run at all, its import stops at its first question, no
@@ -194,13 +223,28 @@ so a typo never passes as such a batch.
 Every round must print `STAGE_EXIT=0`; a non-zero line stops the run (`mass4`'s `stop_reason`).
 `opus_handoff.py validate --dir $H-select` shows the whole directory.
 
+**A recorded answer the import would refuse** (`ready` lists it under `shape_problems`; the
+orchestrator's repair, never a batch agent's, and only before the batch's import of that stage -
+for the selector while `$RUN/<B>/select.json` does not exist, for the reviewer while
+`$RUN/<B>/review4.json` does not): read the agent's corrected draft in `$H-select-scratch/<B>/`
+(the agents leave it beside the first as `<site id>.fixed.txt` or `.corrected.txt`), check it with
+`$PY $HF check-answer ... --label <label> --text-file <corrected draft>`, delete the recorded
+answer file `$H-select/<B>/finder/<escaped label>.answer.json` (the path `ready` prints), record
+the corrected draft with `$PY $HF record ... --label <label> --text-file <corrected draft>` (it
+carries the batch agent's name) and run `ready` again. No corrected draft: delete the answer file
+and hand the batch to a new agent, which answers only the missing question (`brief`). Record the
+repair in AUDIT_LOG (site, label, the problem, the draft's sha256). After the import the answer is
+the run's: the site stays held `selection-refused` (or its review line reads DROP) and goes to lane
+WC like any held site.
+
 ## 6. The review cycle
 
 The same with `$H-review` (stage `reviewer`, agent `opus-p4-v3-review-<B>`, the brief's command with
-`--handoff .../p4-v3-review`). `check-answer` runs `review4.parse_review` over the batch's own
-assembly and asks one line for every shown sentence and one CARD line when a card is shown: the
-card is shown and judged (the pinned reviewer question is unchanged) but never written. Then, per
-ready set G:
+`--handoff .../p4-v3-review`; the agents record with `handoff4.py record`). Its check runs
+`review4.parse_review` over the batch's own assembly and asks one line for every shown sentence and
+one CARD line when a card is shown: the import reads a missing line as a DROP and says nothing, so
+`record` refuses such an answer and `ready` lists one recorded by another path. The card is shown
+and judged (the pinned reviewer question is unchanged) but never written. Then, per ready set G:
 
     $PY $HF ready --run-dir $RUN --handoff $H-review --batch ...
     $PY $P4/mass4.py $ROUNDS --live --only $G --stages review --handoff-import $H-review
@@ -250,10 +294,20 @@ What each gate checks:
 **Audits** (design MASS RUN GATES): after every 500 written v3 sites, 10 of them drawn and judged by
 an independent Opus auditor (not a batch agent of the run) before the next step:
 
-    $PY -c "import glob, json, os; ids = sorted({json.loads(l)['site_id'] for p in glob.glob('$M/logs/_write_apply_p4/p4-2*/PLAN.jsonl') if os.path.exists(os.path.join(os.path.dirname(p), 'APPLIED.json')) for l in open(p, encoding='utf-8')}); print(*ids, sep=chr(10))" > $L/written.txt
+    $PY $P4/audit4.py written --run-dir $RUN --apply-root $M/logs/_write_apply_p4 > $L/written-<k>.out
+    grep -q '^STAGE_EXIT=0' $L/written-<k>.out && grep -v '^STAGE_EXIT=' $L/written-<k>.out > $L/written.txt
     $PY $P4/audit4.py draw  --run-dir $RUN --seed <20260927+k> --count 10 --written $L/written.txt --exclude <earlier samples> > $L/draw-<k>.out
     grep -q '^STAGE_EXIT=0' $L/draw-<k>.out && grep -v '^STAGE_EXIT=' $L/draw-<k>.out > $L/drawn-<k>.txt
     $PY $P4/audit4.py sheet --run-dir $RUN --site-ids $L/drawn-<k>.txt --out $L/AUDIT_<k>_SHEETS.md
+
+`written` lists the run's own written sites (second review of 2026-09-26: a glob over the apply
+root also listed v3d's p4-25xx batches and the sites taken back, and the draw refused them): every
+batch directory of `$RUN` whose write batch carries a live `APPLIED.json` (a round revert4 took back
+keeps its record under `chunks/` once the gate closed or re-opened it), the sites of that write
+batch's `PLAN.jsonl`, less the sites `$RUN` holds since (an audit hold, taken back with `revert4
+--site` before the next draw). A write batch of the same id that another run wrote is refused.
+Read-only on 2026-09-26: mass 958, pilot 4 26, D9 6, v3 0. For v3d the same with `--run-dir $RUN_D`
+and v3d's own draws.
 
 The verdict file is the shape `audit4.py hold` reads (per site `site_id`, `name`, every sentence's
 `n`, `verdict` `SUPPORTED | UNSUPPORTED | WRONG_SITE` and `note`; the card line is informational -
@@ -278,15 +332,22 @@ are taken over by a plan of the same two lists (descriptions only, fresh old val
       --pilot $R4/PILOT4.jsonl --scope-list march-description --scope-list march-card \
       --after $R4/PLAN4.scope.jsonl --after $R4/PLAN4.d9.jsonl --after $R4/PLAN4.v3.jsonl \
       --take-deferred $R4/runs/mass-2026-09-25 --first-batch 2501 --out $R4/PLAN4.v3d.jsonl
+    #   built before L5 (0.3): add --exclude $R4/V3_EXCLUDE_L5.txt, as the v3 plan was built
 
 Expected: `sites 19`, `batches 2`, `p4-2501 .. p4-2502`, `taken_over {runs/mass-2026-09-25:
-{deferred 19, planned 19}}`, `STAGE_EXIT=0`. Commit `V3D_ITEM_NAMES.json` with the AUDIT_LOG entry
-that records the plan's sha256 (as in step 3). What `--take-deferred` checks
-(`mass4.ready_to_hand_over`, `plan4._list_summary`): the sites the run held `revision-too-fresh` in
-their latest prepared batch; refused while one still waits for its 48 h (it names the time), once the
-run re-queued one itself (`REQUEUE4.jsonl`), when a list of the plan does not name one, or when no
-`--after` plan carries one (the deferring run's plan must be named, or its other sites would be
-planned twice). Block p4-2501: past v3's p4-2216 with room for v3's own re-queue (p4-2217 on). The
+{deferred 19, planned 19}}`, `runs_read [d9-2026-09-25, mass-2026-09-25, pilot4-2026-09-24,
+v3-2026-09-26]`, `STAGE_EXIT=0` (simulated offline at 21:41Z with the fresh read of the v3 plan and
+`--exclude`: `a5b1a0c2...`). Commit `V3D_ITEM_NAMES.json` with the AUDIT_LOG entry that records the
+plan's sha256 (as in step 3). What `--take-deferred` checks (`mass4.ready_to_hand_over`,
+`plan4._list_summary`): the sites the run held `revision-too-fresh` in their latest prepared batch;
+refused while one still waits for its 48 h (it names the time), once the run re-queued one itself
+(`REQUEUE4.jsonl`), when a list of the plan does not name one, when no `--after` plan carries one
+(the deferring run's plan must be named, or its other sites would be planned twice), and when
+another `--after` plan carries one too, or the one that carries it does not carry it in the batch
+the run deferred it in (only the deferring run's own plan may: with `--after PLAN4.v3d.jsonl` in a
+later build the 19 would be planned a third time). Section 3's carried check holds as well: a v3d
+build without `--after PLAN4.v3.jsonl` is refused, because the v3 run carries those 3,124 sites in
+p4-2001 .. p4-2209. Block p4-2501: past v3's p4-2209 with room for v3's own re-queue (p4-2210 on). The
 mass run cannot take them back: `mass4` refuses its live rounds once one of them is ready (0.2), so
 neither a re-queue p4-0116 nor a second assembly of a v3d site can arise.
 
@@ -295,15 +356,17 @@ Then sections 4-7 with `$ROUNDS_D`, `$HD-select`/`$HD-review` (agents `opus-p4-v
 `RUNS="$RUNS --run $RUN_D"` in every p4 acceptance. `verify_writes4.index_runs` reads such a site
 from the run that assembled it (`RunSite.deferred`): the mass run's batch only deferred it.
 
-If the v3 plan is built after 21:40:06Z anyway, `--take-deferred $R4/runs/mass-2026-09-25` may go
-into its build directly (one plan of 3,257 sites, 218 batches) and this section falls away.
+Had the v3 plan been built after 21:40:06Z, `--take-deferred $R4/runs/mass-2026-09-25` could have
+gone into its build directly (one plan of 3,257 sites, 218 batches). It was built on the morning of
+2026-09-26, so this section applies.
 
 ## 9. After the last step
 
 1. **v3's own re-queue.** Sites v3 held `revision-too-fresh` are due 48 h after the answer that held
    them (`run4.py holds`, reason `revision-too-fresh`). The first live `mass4` round after that
-   appends them to `$RUN/REQUEUE4.jsonl` as new batches (p4-2217 on, **with the plan's pass**) and
-   prints `re-queue ... re-queued now`; export their questions with `$PY $P4/mass4.py $ROUNDS --live
+   appends them to `$RUN/REQUEUE4.jsonl` as new batches (p4-2210 on for the plan as built, **with
+   the plan's pass**) and prints `re-queue ... re-queued now`; export their questions with
+   `$PY $P4/mass4.py $ROUNDS --live
    --only <the new batches> --stages prepare,sources,routes,select --handoff-export $H-select` and
    run sections 5-7 for them. Sites not due yet wait for a later round (the dry run prints how many
    wait and until when). The same holds for v3d.
@@ -317,7 +380,10 @@ into its build directly (one plan of 3,257 sites, 218 batches) and this section 
    reason but `revision-too-fresh` (that one comes back through the re-queue), or when it was
    written.
 4. `$PY $M/tools/write_gate4.py --group P5 --run $RUNNAME` is never needed; run dry it plans 0 rows
-   and refuses every site `descriptions-only-plan`.
+   and refuses every site `descriptions-only-plan`. Since the second review of 2026-09-26 group P5
+   rehearses and writes nothing for any run (`write_gate4.closed_group_problem`: `--rehearse` and
+   `--apply` refused, a round 2 after a revert4 of a P5 step included; the dry run, `--accept` and
+   `--close-reverted` remain): every card is lane WB's (O2, O3).
 5. Record in AUDIT_LOG: the plans' sha256, per step the acceptance's lane line and `output_sha256`,
    the audits, the holds by reason and lane, the question counts from the runs' `LEDGER.jsonl`.
 
@@ -354,7 +420,8 @@ into its build directly (one plan of 3,257 sites, 218 batches) and this section 
 ## The handoff directories
 
 All under `/c/PythonProjects/AncientMap/.claude/worktrees/p4-pilot/output/remediation/handoff/`:
-`p4-v3-select` (216 batch folders after the export), `p4-v3-review` (one folder per batch with at
+`p4-v3-select` (209 batch folders after the export of the plan as built; 216 for the plan without
+`--exclude`), `p4-v3-review` (one folder per batch with at
 least one review question), `p4-v3-translate` (expected never to exist), their agents' drafts in
 `p4-v3-select-scratch/<batch>/` and `p4-v3-review-scratch/<batch>/`; for the 19: `p4-v3d-select`,
 `p4-v3d-review` and their `-scratch` folders. The mass run's were `p4-mass-select` and

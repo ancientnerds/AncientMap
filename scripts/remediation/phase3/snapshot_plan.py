@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -164,13 +165,18 @@ def read_snapshot_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def read_site_ids(path: Path) -> list[str]:
+def read_site_ids(path: Path, *, uuids: bool = False) -> list[str]:
     """One site id per line, in file order. A blank or repeated line is refused.
 
     `output/remediation/gold_standard/truth_sites.txt` is such a file. A blank line is refused
     because a file that grew a hole is a file whose own count no longer means what it says, and a
     repeated id is refused because it would buy that site's calls twice while the batch says 15
     sites.
+
+    With `uuids`, every line must be a site id as production prints it (`unified_sites.id::text`:
+    a lowercase, hyphenated UUID), because the ids are compared with production's as text - an
+    upper-case or braced id would match nothing and exclude nothing. The one reader of such a list:
+    Phase 4's `plan4.py build --exclude` and `write_gate4.py --audited` read through it.
     """
     if not path.exists():
         raise InputError(f"no site-id list at {path}")
@@ -180,6 +186,8 @@ def read_site_ids(path: Path) -> list[str]:
         site_id = raw.strip()
         if not site_id:
             raise InputError(f"{path}:{number}: empty line; one site id per line, no holes")
+        if uuids and not _canonical_uuid(site_id):
+            raise InputError(f"{path}:{number}: {site_id!r} is not a site id")
         if site_id in seen:
             raise InputError(f"{path}:{number}: {site_id} appears twice")
         seen.add(site_id)
@@ -187,6 +195,14 @@ def read_site_ids(path: Path) -> list[str]:
     if not ids:
         raise InputError(f"{path}: holds no site ids")
     return ids
+
+
+def _canonical_uuid(text: str) -> bool:
+    """`text` is a UUID in its canonical form: lowercase, hyphenated, no braces."""
+    try:
+        return str(uuid.UUID(text)) == text
+    except ValueError:
+        return False
 
 
 def qids_by_site(rows: Iterable[Mapping[str, Any]], *, origin: str) -> dict[str, str]:
