@@ -946,7 +946,7 @@ $PY scripts/remediation/l5/run.py import --round r1     # fetches, checks, decid
 # held sites, at most twice more, each in a new directory:
 $PY scripts/remediation/l5/run.py export-reask --handoff output/remediation/l5/handoff-r2
 #   brief / validate / import --round r2 as above
-$PY scripts/remediation/l5/run.py plan                  # read-only; the steps and the name lane
+$PY scripts/remediation/l5/run.py plan                  # read-only; ONCE, after the last import
 $PY scripts/remediation/l5/run.py step check --step 1   # read-only: files = plan, old values hold
 $PY scripts/remediation/l5/run.py step rehearse --step 1
 $PY scripts/remediation/l5/run.py step probe-guards --step 1   # guards 1, 2, 3, 5 and invariant 4
@@ -962,6 +962,8 @@ $PY scripts/remediation/mechanical/apply.py --lane name-l5 --verify
 $PY scripts/remediation/mechanical/apply.py --lane name-l5 --rehearse-rollback
 ```
 
+`plan` runs once: a step directory that holds a plan is never replaced (its ROLLBACK.sql may be
+the only undo of a landed write), and a site written by step 1 reads as changed on a second plan.
 Exit codes of `step`: 0 OK, 1 REFUSED, 3 NOT COMMITTED, 4 COMMITTED (psql unclean, read-back
 confirmed), 5 OUTCOME UNKNOWN, 6 COMMITTED BUT NOT CONFIRMED, 7 a rehearsal or probe fell short. An
 outcome is settled from the journal (`run_stamp = '2026-09-26_l5-links-NNN'`), never by a retry.

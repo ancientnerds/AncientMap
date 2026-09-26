@@ -1437,7 +1437,8 @@ CASES: list[Case] = [
             ),
             (
                 "the foreign-column probe names an unowned column",
-                '            corrupt(0, column="name"),',
+                "            corrupt(0, column=next(c for c in FOREIGN_COLUMNS if c not in "
+                "lane.columns)),",
                 "            corrupt(0),",
                 "test_the_foreign_column_probe_names_a_column_the_lane_does_not_own",
             ),
@@ -2272,8 +2273,10 @@ CASES: list[Case] = [
             (
                 "the inverse probe restores another value from its own row",
                 APPLY,
-                "                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),",
-                "                corrupt(0, journal_id=0),",
+                '                "guard 6 - a cell that names its journal row but restores another '
+                'value",\n                corrupt(0, new_value=NEVER_STORED[first_cell.sql_type]),',
+                '                "guard 6 - a cell that names its journal row but restores another '
+                'value",\n                corrupt(0, journal_id=0),',
                 "test_the_inverse_probe_names_its_own_row_and_restores_another_value",
             ),
             (
@@ -2506,7 +2509,7 @@ IMAGE_CASES: list[Case] = [
     Case(
         "img chunk: the scope guard names the source",
         CHUNK,
-        "     WHERE u.id IS NULL OR u.source_id <> {L(CURATED_SOURCE)};",
+        "     WHERE u.id IS NULL OR u.source_id <> {L(lane.source)};",
         "     WHERE u.id IS NULL;",
         "test_the_scope_guard_refuses_every_site_outside_the_curated_source",
         CHUNK_TESTS,
@@ -4099,7 +4102,7 @@ PHASE6_CASES: list[Case] = [
             (
                 "only the writer's source is planned",
                 NAME_KEY,
-                '    if row["source_id"] != WRITER_SOURCE:',
+                '    if row["source_id"] != source:',
                 "test_a_row_of_another_source_is_listed_not_planned",
                 NAME_KEY_TESTS,
             ),
@@ -4873,6 +4876,124 @@ AUDIT_FIX_CASES: list[Case] = [
     ),
 ]
 CASES += AUDIT_FIX_CASES
+
+
+# ------------------------------------------ the WE lanes (HUMAN_ONLY decisions of 2026-09-26)
+#: The B2-L country lane, the lane invariant of the L5 name lane, the Lyra alias keys (Nr. 9) and
+#: L5's own checks (`scripts/remediation/l5/`).
+COUNTRY_B2 = MECHANICAL / "country_b2.py"
+COUNTRY_B2_TESTS = "tests/remediation/test_mechanical_country_b2.py"
+L5_DIR = REPO / "scripts/remediation/l5"
+L5_TESTS = "tests/remediation/test_l5.py"
+WE_CASES: list[Case] = [
+    *(
+        guard(f"we: {label}", path, needle, test, testfile)
+        for label, path, needle, test, testfile in (
+            (
+                "b2: a row that moved is written",
+                COUNTRY_B2,
+                "    if site.country != candidate.decided_old:",
+                "test_each_check_refuses_on_its_own",
+                COUNTRY_B2_TESTS,
+            ),
+            (
+                "b2: a point outside the new country is written",
+                COUNTRY_B2,
+                "    if not inside or geo is None:",
+                "test_each_check_refuses_on_its_own",
+                COUNTRY_B2_TESTS,
+            ),
+            (
+                "b2: an item's P625 elsewhere is ignored",
+                COUNTRY_B2,
+                "        if not agrees:",
+                "test_a_p625_in_another_country_refuses",
+                COUNTRY_B2_TESTS,
+            ),
+            (
+                "name lane: the lane invariant is not rendered",
+                APPLY,
+                "    if lane.write_invariant is not None:\n        add(",
+                "test_the_statements_refuse_a_key_that_is_not_the_name_s",
+                L5_TESTS,
+            ),
+            (
+                "lyra keys: a lyra lane writes any column",
+                CHUNK,
+                "    if other:",
+                "test_a_lyra_lane_writes_alias_keys_and_nothing_else",
+                NAME_KEY_TESTS,
+            ),
+            (
+                "l5: a duplicate candidate is asked",
+                L5_DIR / "population.py",
+                '    if str(row["site_id"]) in DUPLICATE_CANDIDATES:',
+                "test_who_is_not_asked",
+                L5_TESTS,
+            ),
+            (
+                "l5: a replacement far from the site is decided",
+                L5_DIR / "decide.py",
+                "            if not placed:",
+                "test_a_replacement_item_far_from_the_site_is_held",
+                L5_TESTS,
+            ),
+            (
+                "l5: an entity redirect is decided",
+                L5_DIR / "decide.py",
+                "    if qid not in entities:",
+                "test_an_entity_page_of_another_item_is_a_redirect_and_held",
+                L5_TESTS,
+            ),
+            (
+                "l5: an article of another item is decided",
+                L5_DIR / "decide.py",
+                '    if res["qid"] != item:',
+                "test_the_article_must_be_the_item_s_own",
+                L5_TESTS,
+            ),
+            (
+                "l5: a site changed since the question is written",
+                L5_DIR / "plan.py",
+                "        if changed is not None:",
+                "test_a_site_changed_since_the_question_is_skipped",
+                L5_TESTS,
+            ),
+            (
+                "l5: a replacement another site carries is written",
+                L5_DIR / "plan.py",
+                "            if others:",
+                "test_a_replacement_another_curated_site_carries_is_a_duplicate_not_a_link",
+                L5_TESTS,
+            ),
+            (
+                "l5: a step is applied twice",
+                L5_DIR / "links.py",
+                "    if already:",
+                "test_apply_verifies_what_landed",
+                L5_TESTS,
+            ),
+            (
+                "l5: a rename without its name in a quote parses",
+                L5_DIR / "questions.py",
+                '            if not name.quotes or not any(_normal(new) in _normal(q["quote"]) for q in name.quotes):',
+                "test_a_rename_quotes_its_new_name",
+                L5_TESTS,
+            ),
+        )
+    ),
+    Case(
+        "we: lyra keys: an undecided lyra row is planned",
+        NAME_KEY,
+        "    if source == LYRA_SOURCE and (\n"
+        '        table != "unified_site_names" or int(row_key) not in LYRA_ALIAS_ROWS\n'
+        "    ):\n",
+        "    if False:\n",
+        "test_the_lyra_lane_lists_every_other_row",
+        NAME_KEY_TESTS,
+    ),
+]
+CASES += WE_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation
