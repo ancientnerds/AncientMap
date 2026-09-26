@@ -626,18 +626,43 @@ SITE_TYPE_SHAPE_READBACK = journal_readback(
 
 
 # ------------------------------------------------------------------------ the scope lane (E4)
-def outside_e3_window(prefix: str = "") -> str:
+def in_oceania_sql(prefix: str = "") -> str:
+    """SQL: the row lies in Oceania - `pipeline.normalizers.dates.in_oceania`, rendered from the
+    same lists: its `lower(trim(country))` is one of `OCEANIA_COUNTRIES`, or it names a state of
+    `OCEANIA_PARTS` and its point lies in one of that state's Pacific boxes (edges included)."""
+    from pipeline.normalizers.dates import OCEANIA_COUNTRIES, OCEANIA_PARTS
+
+    p = prefix
+    country = f"lower(trim({p}country))"
+    listed = ", ".join(sql_literal(name) for name in sorted(OCEANIA_COUNTRIES))
+    parts = " OR ".join(
+        f"({country} = {sql_literal(state)} AND {p}lon BETWEEN {lon_min} AND {lon_max} "
+        f"AND {p}lat BETWEEN {lat_min} AND {lat_max})"
+        for state, boxes in sorted(OCEANIA_PARTS.items())
+        for lon_min, lat_min, lon_max, lat_max in boxes
+    )
+    return f"({country} IN ({listed}) OR {parts})"
+
+
+def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
     """SQL: the row's date lies past the E3 cutoff of its region - `passes_date_cutoff()` negated.
 
     Built from the project's own rule and constants (`pipeline/normalizers/dates.py`), never
     re-typed: the date is `period_end or period_start` (Python's `or`, so a 0 `period_end` falls
-    through too), the region is the longitude window, and a row without a date or a longitude is
-    never outside (the function includes it). `prefix` qualifies the columns (`u.`).
+    through too), the region is `e3_region`'s - Oceania (`in_oceania_sql`), then the longitude
+    window of the Americas, then the rest of the world - and a row without a date or a longitude
+    is never outside (the function includes it). `prefix` qualifies the columns (`u.`).
+
+    `before_o7=True` renders the rule as it stood until the owner's decision O7 (2026-09-26,
+    Oceania through 1500 AD): the longitude window alone. The scope-e4 lane was rehearsed and
+    applied on 2026-09-25 with that text in its residual, and its APPLY.sql and ROLLBACK.sql are
+    pinned to it (`tests/remediation/test_mechanical_scope.py`), so it keeps it.
     """
     from pipeline.normalizers.dates import (
         AMERICAS_LON_MAX,
         AMERICAS_LON_MIN,
         DATE_CUTOFF_AMERICAS,
+        DATE_CUTOFF_OCEANIA,
         DATE_CUTOFF_REST_OF_WORLD,
     )
 
@@ -646,8 +671,9 @@ def outside_e3_window(prefix: str = "") -> str:
         f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
         f"ELSE {p}period_start END)"
     )
+    oceania = "" if before_o7 else f"WHEN {in_oceania_sql(p)} THEN {DATE_CUTOFF_OCEANIA} "
     cutoff = (
-        f"(CASE WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
+        f"(CASE {oceania}WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
         f"THEN {DATE_CUTOFF_AMERICAS} ELSE {DATE_CUTOFF_REST_OF_WORLD} END)"
     )
     return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
@@ -655,7 +681,7 @@ def outside_e3_window(prefix: str = "") -> str:
 
 _UNDECIDED_OUT_OF_WINDOW = Residual(
     "curated rows outside the E3 window with no scope decision",
-    f"{outside_e3_window()} AND scope_status IS NULL",
+    f"{outside_e3_window(before_o7=True)} AND scope_status IS NULL",
 )
 
 #: E4 (owner decision 2026-09-19, migration 0020): flag an out-of-scope site AND hide it

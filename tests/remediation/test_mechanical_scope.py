@@ -650,6 +650,80 @@ class TestTheWindowPredicate:
         assert "period_end IS NOT NULL AND period_end <> 0 THEN period_end" in sql
         assert L.outside_e3_window("u.").startswith("(u.lon IS NOT NULL AND ")
 
+    def test_the_o7_window_is_passes_date_cutoff_negated_in_a_real_sql_engine(self) -> None:
+        """O7 (2026-09-26): Oceania through 1500 AD. The SQL is rendered from the same lists as the
+        Python rule; evaluated in SQLite over every kind of row the rule distinguishes, it must
+        answer exactly `not passes_date_cutoff` - a list or a box rendered wrong answers wrong."""
+        import sqlite3
+
+        from pipeline.normalizers.dates import OCEANIA_PARTS, passes_date_cutoff
+
+        rows = [
+            ("Australia", -37.21, 144.81),
+            (" NEW ZEALAND ", -41.29, 174.78),
+            ("Northern Mariana Islands", 14.97, 145.62),
+            ("Chile", -27.11, -109.39),
+            ("Chile", -33.45, -70.65),
+            ("France", -22.27, 166.45),
+            ("France", 48.85, 2.35),
+            ("USA", 13.44, 144.79),
+            ("United States", 34.05, -118.24),
+            ("Indonesia", -4.0, 138.0),
+            ("Japan", 24.44, 123.01),
+            (None, -37.21, 144.81),
+            ("Mexico", 20.0, -100.0),
+        ]
+        for state, boxes in OCEANIA_PARTS.items():
+            for lon_min, lat_min, lon_max, lat_max in boxes:
+                rows += [(state, lat_min, lon_min), (state, lat_max, lon_max)]
+                rows += [(state, lat_min - 0.5, lon_min), (state, lat_max, lon_max + 0.5)]
+        db = sqlite3.connect(":memory:")
+        db.execute(
+            "CREATE TABLE s (country TEXT, lat REAL, lon REAL, period_start INT, period_end INT)"
+        )
+        records = [
+            {"country": c, "lat": la, "lon": lo, "period_start": year, "period_end": None}
+            for c, la, lo in rows
+            for year in (499, 500, 501, 1200, 1500, 1501)
+        ]
+        db.executemany(
+            "INSERT INTO s VALUES (:country, :lat, :lon, :period_start, :period_end)", records
+        )
+        sql = f"SELECT country, lat, lon, period_start, {L.outside_e3_window()} FROM s"
+        got = {(c, la, lo, y): bool(out) for c, la, lo, y, out in db.execute(sql)}
+        want = {
+            (r["country"], r["lat"], r["lon"], r["period_start"]): not passes_date_cutoff(r)
+            for r in records
+        }
+        assert got == want
+        assert got[("France", -22.27, 166.45, 1200)] is False
+        assert got[("France", 48.85, 2.35, 1200)] is True
+
+    def test_before_o7_is_the_longitude_window_alone(self) -> None:
+        sql = L.outside_e3_window(before_o7=True)
+        assert "country" not in sql
+        assert "country" in L.outside_e3_window()
+        assert L.in_oceania_sql("u.") in L.outside_e3_window("u.")
+
+
+class TestTheAppliedLaneIsFrozen:
+    def test_scope_e4_still_renders_the_statements_it_was_applied_with(self) -> None:
+        """scope-e4 was rehearsed and applied on 2026-09-25 (218 cells). O7 changed the E3 rule
+        after that; the lane keeps the rule it ran with (`before_o7=True` in its residual), so its
+        committed APPLY.sql and ROLLBACK.sql are still, byte for byte, what its plan renders - the
+        rollback stays runnable (`apply.py --lane scope-e4 --rehearse-rollback` sends it only when
+        this holds)."""
+        out = REPO / "output" / "remediation" / "mechanical_scope"
+        plan = out / "PLAN.jsonl"
+        records = A.load_records(plan)
+        assert len(records) == 218
+        A.verify_pinned(
+            out / "APPLY.sql", plan_path=plan, expected=A.apply_statement(records, L.SCOPE)
+        )
+        A.verify_pinned(
+            out / "ROLLBACK.sql", plan_path=plan, expected=A.rollback_statement(records, L.SCOPE)
+        )
+
 
 class TestTheCells:
     def test_every_decision_fills_both_columns_from_null(self) -> None:

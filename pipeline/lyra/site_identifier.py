@@ -2334,7 +2334,9 @@ def _maybe_promote(
     record = {
         "period_start": contribution.period_start,
         "period_end": contribution.period_end,
+        "lat": contribution.lat,
         "lon": contribution.lon,
+        "country": contribution.country,
     }
     if not passes_date_cutoff(record):
         logger.info(f"Skipping promotion for '{contribution.name}' — outside date cutoff")
