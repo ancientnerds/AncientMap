@@ -188,6 +188,15 @@ class _CapturedQuery:
         rows = self._record()
         return rows[0] if rows else None
 
+    def one(self) -> Any:
+        # Strict like Query.one(): exactly one row, else the error SQLAlchemy raises.
+        rows = self._record()
+        if not rows:
+            raise NoResultFound("one() on 0 rows")
+        if len(rows) > 1:
+            raise MultipleResultsFound(f"one() on {len(rows)} rows")
+        return rows[0]
+
     def count(self) -> int:
         return len(self._record())
 

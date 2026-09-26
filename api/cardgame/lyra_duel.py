@@ -163,7 +163,7 @@ def resolve_lyra_duel(
         .filter(DiscordUser.id == user.id)
         .populate_existing()
         .with_for_update()
-        .first()
+        .one()
     )
 
     # Get player's deck

@@ -2584,7 +2584,7 @@ def claim_achievement_reward(
         .filter(DiscordUser.id == user.id)
         .populate_existing()
         .with_for_update()
-        .first()
+        .one()
     )
 
     # Guarded claim: only one concurrent request can flip claimed False -> True
