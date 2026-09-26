@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest'
 import { AuthProvider } from '../../contexts/AuthContext'
 import ArticlesPage from '../../pages/ArticlesPage'
 import type { AnRoute } from '../../types/anRoute'
+import { renderHead, siteMeta } from '../meta'
 import { SeoRoute } from '../registry'
 import { RouteProvider } from '../RouteContext'
 import { FIXTURES, pyrefRoute } from './fixtures'
@@ -346,6 +347,29 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
   it('der Body trägt das BreadcrumbList — aus <Breadcrumbs>, Markup und Schema aus einer Liste', () => {
     const html = renderRoute(FIXTURES.site)
     expect(html.match(/"@type":\s*"BreadcrumbList"/g)).toHaveLength(1)
+  })
+
+  it('a description the sentence check cleared (null) leaves the page, without text, notice or tag', () => {
+    // Lane WC (owner decision O5, 2026-09-26) clears a March description none of whose
+    // sentences a source supports: description and raw_data NULL, so the payload carries
+    // neither a text, nor citations, nor a disclosure. The page stays - name, type, map,
+    // image - and claims nothing about a text it no longer has.
+    const cleared = {
+      ...FIXTURES.site,
+      description: null,
+      description_citations: null,
+      description_ai: null,
+      description_attribution: null,
+    }
+    const page = renderRoute(cleared)
+    expect(page.match(/<h1/g)).toHaveLength(1)
+    expect(page).toContain('Göbekli Tepe')
+    expect(page).not.toContain('data-ai-generated')
+    expect(page).not.toContain('data-description-attribution')
+    expect(page).not.toContain('popup-citation-sup')
+    const head = renderHead(siteMeta(cleared))
+    expect(head).not.toContain('name="description"')
+    expect(siteMeta(cleared).schema ?? '').not.toContain('"description"')
   })
 })
 
