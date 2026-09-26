@@ -5,7 +5,9 @@ One rule per outcome (O6: "Belegt ersetzen, sonst leeren"), each site decided on
 * **confirmed** - the vision check called the served image `depicts` (or, with `--population
   unconfirmed`, the pre-check confirmed it): the page keeps it. `wd2-align`: the site's
   `thumbnail_url` becomes the served row's local file when it names anything else, so the globe
-  shows the confirmed image too (`gallery_audit/decide.py` rule T1).
+  shows the confirmed image too (`gallery_audit/decide.py` rule T1). A served thumbnail that was
+  checked through its file because its own address serves no picture (`vision.file_behind`) gets
+  the file's own URL (`wd2-thumb`).
 * **replaced** - the replacement stage picked a gallery row (`G`) it called `depicts`: `wd2-hero`
   moves the hero flag onto it (and off the row that held it), `wd2-align` points the thumbnail at it.
 * **cleared** - nothing the lane can serve depicts the site: `wd2-exclude` excludes every live row
@@ -171,7 +173,16 @@ def decide_site(
     else:
         return _not_depicting(site, live, pre, check, rep)
     if served["kind"] != ST.GALLERY:
-        return SitePlan(sid, CONFIRMED, None, thumb)
+        repair = check["repair"] if check is not None else None
+        if repair is None:
+            return SitePlan(sid, CONFIRMED, None, thumb)
+        reason = (
+            f"the served thumbnail's file depicts the site, but its address serves no picture "
+            f"({repair['error']}): the thumbnail becomes the file's own URL"
+        )
+        evidence = [*evidence, {"source": "served_image/CHECK.jsonl", "repair": dict(repair)}]
+        new = repair["file_url"]
+        return SitePlan(sid, CONFIRMED, None, new, _thumb(site, new, RULE_THUMB, reason, evidence))
     row = next(r for r in live if int(r["id"]) == served["image_id"])
     target = local_path(sid, str(row["filename"]))
     reason = f"the served image {row['id']} depicts the site; the globe shows it too"

@@ -76,6 +76,13 @@ SITES_SQL = """SELECT row_to_json(t) FROM (
    ORDER BY u.id
 ) t;"""
 
+#: The retired curated sites: a harvest of every curated site (WD1's) lists them too.
+RETIRED_SQL = """SELECT row_to_json(t) FROM (
+  SELECT u.id::text AS id FROM unified_sites u
+   WHERE u.source_id = 'ancient_nerds' AND u.scope_status = 'retired'
+   ORDER BY u.id
+) t;"""
+
 #: Every image row of those sites, excluded ones included (a thumbnail may name one).
 IMAGES_SQL = """SELECT row_to_json(t) FROM (
   SELECT w.id, w.site_id::text AS site_id, w.filename, w.title, w.commons_page_url,
@@ -91,11 +98,13 @@ def _now() -> str:
 
 
 def read_production() -> dict[str, Any]:
-    """The sites and their image rows, two read-only statements (`persist_verdicts.read_rows`)."""
+    """The shown sites, their image rows and the retired sites' ids - three read-only
+    statements (`persist_verdicts.read_rows`)."""
     return {
         "read_at": _now(),
         "sites": CW.pv.read_rows(SITES_SQL),
         "images": CW.pv.read_rows(IMAGES_SQL),
+        "retired": [row["id"] for row in CW.pv.read_rows(RETIRED_SQL)],
     }
 
 
@@ -120,11 +129,12 @@ def file_sha256(path: Path) -> str:
 
 @dataclass(frozen=True)
 class State:
-    """The read: the sites in id order and every image row of each."""
+    """The read: the sites in id order, every image row of each, and the retired sites' ids."""
 
     read_at: str
     sites: Mapping[str, Mapping[str, Any]]
     rows: Mapping[str, tuple[Mapping[str, Any], ...]]
+    retired: frozenset[str]
     sha256: str
 
     def site_ids(self) -> list[str]:
@@ -145,10 +155,14 @@ def load_read(path: Path) -> State:
         if sid not in sites:
             raise StateError(f"image {row['id']} belongs to {sid}, which the read does not hold")
         rows.setdefault(sid, []).append(row)
+    retired = frozenset(str(sid) for sid in data["retired"])
+    if retired & set(sites):
+        raise StateError(f"{path} names a site both shown and retired")
     return State(
         read_at=str(data["read_at"]),
         sites=sites,
         rows={sid: tuple(rs) for sid, rs in rows.items()},
+        retired=retired,
         sha256=file_sha256(path),
     )
 

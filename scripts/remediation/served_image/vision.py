@@ -23,7 +23,11 @@ an explicit choice.
 **The image bytes** are the ones production serves: a gallery row's file from the offsite copy of
 the image tree (`gallery_audit.vision.Images`, the exact-case lookup the gallery audit uses),
 accepted only when its size is the row's `file_size_bytes` (all 1,994 live rows of the sample
-matched); a thumbnail or a Commons candidate by its URL (`commons.Commons.download`). Every image is
+matched); a thumbnail or a Commons candidate by its URL (`commons.Commons.download`). A thumbnail
+whose address serves no picture but names a Commons file Commons still holds is shown through that
+file's own rendering, and the question records the repair (`file_behind`): read on 2026-09-26, all
+262 Commons `/thumb/` thumbnails ask a width Commons no longer renders (HTTP 400), while the file
+behind them stands - 10 of them are the only image their site serves. Every image is
 handed over as `pipeline.video.shorts_select.vlm_bytes` (RGB, longest side 1280, JPEG q85), like
 the gallery audit's. A file that cannot be found or read stops the export - never a skip.
 
@@ -207,6 +211,8 @@ class CheckQuestion:
     source: str
     image: str
     jpeg_sha256: str
+    #: A thumbnail shown through its file's own rendering: `{"file_url", "stored_url", "error"}`.
+    repair: Mapping[str, str] | None = None
 
     def prompt(self) -> str:
         return CHECK_PROMPT.format(
@@ -223,6 +229,7 @@ class CheckQuestion:
     def as_json(self) -> dict[str, Any]:
         out = asdict(self)
         out["served"] = dict(self.served)
+        out["repair"] = None if self.repair is None else dict(self.repair)
         return out
 
 
@@ -368,6 +375,21 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 # ------------------------------------------------------------------------------ export: check
+def file_behind(
+    pictures: Pictures, served: Mapping[str, Any], stored_url: str, error: Unfetchable
+) -> tuple[dict[str, str], bytes] | None:
+    """A served thumbnail whose address serves no picture: the Commons file it names, when Commons
+    still holds it - its own URL (the repair) and a rendering of it - else None (no picture). A
+    rendering Commons names but does not serve stops the export, like every other missing file."""
+    if served["file"] is None:
+        return None
+    info = pictures.commons.imageinfo([served["file"]])[served["file"]]
+    if info["status"] != OK:
+        return None
+    data = pictures.url(info["render_url"])
+    return {"file_url": info["url"], "stored_url": stored_url, "error": str(error)}, data
+
+
 def export_check(
     run: Path,
     handoff: Path,
@@ -396,6 +418,7 @@ def export_check(
         n = len(questions)
         site, check = state.sites[sid], prechecks[sid]
         served = check["served"]
+        repair: dict[str, str] | None = None
         if served["image_id"] is not None:
             row = next(r for r in state.rows[sid] if int(r["id"]) == served["image_id"])
             data = pictures.gallery(sid, row)
@@ -408,8 +431,12 @@ def export_check(
             try:
                 data = pictures.url(source)
             except Unfetchable as exc:
-                unfetchable.append({"site_id": sid, "url": source, "error": str(exc)})
-                continue
+                behind = file_behind(pictures, served, source, exc)
+                if behind is None:
+                    unfetchable.append({"site_id": sid, "url": source, "error": str(exc)})
+                    continue
+                repair, data = behind
+                source = repair["file_url"]
         image, digest = _image_ref(f"check-{sid}", data)
         question = CheckQuestion(
             batch_id=f"check-{n // per_batch + 1:03d}",
@@ -419,6 +446,7 @@ def export_check(
             source=source,
             image=image,
             jpeg_sha256=digest,
+            repair=repair,
         )
         OH.export(
             handoff,
@@ -724,7 +752,9 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
             "model": OH.OPUS_MODEL,
             "served": dict(question.served),
         }
-        if stage == STAGE_REPLACE:
+        if stage == STAGE_CHECK:
+            base["repair"] = None if question.repair is None else dict(question.repair)
+        else:
             base["candidates_shown"] = [asdict(c) for c in question.candidates]
         out.append(base | parsed)
     if problems:
@@ -747,6 +777,7 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
                     "answered_at": None,
                     "model": None,
                     "served": dict(served[gone["site_id"]]),
+                    "repair": None,
                     "verdict": UNFETCHABLE,
                     "shows": f"no picture: {gone['error']}",
                     "basis": f"{gone['url']} serves no picture ({gone['error']})",

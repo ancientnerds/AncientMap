@@ -188,10 +188,12 @@ class Result:
 def run_precheck(
     state: State, harvest: Harvest, commons: Commons, *, subset: bool = False
 ) -> Result:
-    """The pre-check of every site of the read. A site the harvest does not list is refused,
-    unless `subset` - a measured sample - names the harvest's sites as the population."""
+    """The pre-check of every site of the read. A shown site the harvest does not list is
+    refused, unless `subset` - a measured sample - names the harvest's sites as the population; a
+    harvest site the read neither shows nor knows as retired (WD1's harvest lists every curated
+    site, the retired ones too) is refused as well."""
     missing = [sid for sid in state.site_ids() if sid not in harvest.qids]
-    stray = [sid for sid in harvest.qids if sid not in state.sites]
+    stray = [sid for sid in harvest.qids if sid not in state.sites and sid not in state.retired]
     if missing and not subset:
         raise HarvestError(
             f"{len(missing)} site(s) of the read are not in the harvest (first {missing[0]}) - "
@@ -199,8 +201,8 @@ def run_precheck(
         )
     if stray and not subset:
         raise HarvestError(
-            f"the harvest lists {len(stray)} site(s) the read does not show (first {stray[0]}): "
-            "retired since the harvest, or not curated"
+            f"the harvest lists {len(stray)} site(s) the read neither shows nor knows as retired "
+            f"(first {stray[0]}): not curated, or curated since the harvest"
         )
     population = [sid for sid in state.site_ids() if sid in harvest.qids]
     served = {sid: served_of(state.sites[sid], state.rows.get(sid, ())) for sid in population}

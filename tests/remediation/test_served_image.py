@@ -37,6 +37,17 @@ HABU = "0088c7e5-4a78-4b89-945d-3d5c787818e5"
 BARE = "5b36f014-cb4a-4c2f-84b3-80996c503702"
 HOTLINK = "026dfe16-5509-47f2-bede-504b006d704d"
 NOTHING = "2dab79e8-1ece-4f9b-beb3-a91573d545c3"
+RETIRED_SITE = "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded"
+BROKEN_THUMB = (
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Rag-i_Bibi_relief.jpg/"
+    "400px-Rag-i_Bibi_relief.jpg"
+)
+BIBI_INFO = {
+    "status": "ok",
+    "title": "Rag-i Bibi relief.jpg",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/4/48/Rag-i_Bibi_relief.jpg",
+    "render_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Rag-i_Bibi_relief.jpg/1280px-Rag-i_Bibi_relief.jpg",
+}
 
 
 def _commons(name: str) -> dict[str, str]:
@@ -106,6 +117,7 @@ def read_fixture() -> dict[str, Any]:
             row(11, HABU, "Habu court.jpg", order=1),
             row(20, BARE, "Informacni panel.jpg", hero=True, lead=True),
         ],
+        "retired": [RETIRED_SITE],
     }
 
 
@@ -273,7 +285,14 @@ class TestTheServedImage:
         with pytest.raises(ST.StateError, match="does not hold"):
             ST.load_read(tmp_path / "READ.json")
 
+    def test_a_site_both_shown_and_retired_is_refused(self, tmp_path: Path) -> None:
+        data = read_fixture()
+        data["retired"] = [THASOS]
+        with pytest.raises(ST.StateError, match="both shown and retired"):
+            write_read(tmp_path / "run", data)
+
     def test_the_read_selects_the_shown_curated_sites_and_every_row(self) -> None:
+        assert "u.scope_status = 'retired'" in ST.RETIRED_SQL
         assert "u.scope_status IS DISTINCT FROM 'retired'" in ST.SITES_SQL
         assert "u.source_id = 'ancient_nerds'" in ST.IMAGES_SQL
         assert "w.file_size_bytes" in ST.IMAGES_SQL
@@ -382,6 +401,28 @@ class TestThePrecheck:
         )
         assert [c.site_id for c in result.checks] == [HABU]
         assert result.counts()[PC.CONFIRMED_P18] == 1 and result.counts()["not_in_harvest"] == 4
+
+    def test_a_harvest_of_every_curated_site_lists_the_retired_ones_too(
+        self, tmp_path: Path
+    ) -> None:
+        """WD1's harvest covers all 5,004 curated sites; the read shows 4,926. The 78 retired
+        are known to the read and pass; a site it does not know at all is refused."""
+        state = write_read(tmp_path / "run")
+        qids = dict(HARVEST_QIDS)
+        write_harvest(tmp_path / "h", qids | {RETIRED_SITE: None}, HARVEST_ENTITIES)
+        commons = FakeCommons(
+            {
+                "Medinet Habu on West Bank in Luxor Egypt.jpg": [],
+                "Thasos.jpg": [],
+                "Informacni panel.jpg": [],
+            }
+        )
+        result = PC.run_precheck(state, PC.load_harvest(tmp_path / "h"), commons)
+        assert len(result.checks) == 5 and result.counts()["not_in_harvest"] == 0
+        stranger = "11111111-1111-4111-8111-111111111111"
+        write_harvest(tmp_path / "h2", qids | {stranger: None}, HARVEST_ENTITIES)
+        with pytest.raises(PC.HarvestError, match="neither shows nor knows as retired"):
+            PC.run_precheck(state, PC.load_harvest(tmp_path / "h2"), commons)
 
 
 # ================================================================================ Commons
@@ -562,9 +603,15 @@ REPLACE_PIN = "65e0c88b131f8f4ffbdaae491fc0d7209dcce13d4ec127d22edcf8718a9079b7"
 
 
 # ================================================================================ the stages
-def _setup(tmp_path: Path, *, gone: dict[str, str] | None = None) -> tuple[Path, Path, Any]:
+def _setup(
+    tmp_path: Path,
+    *,
+    gone: dict[str, str] | None = None,
+    read: dict[str, Any] | None = None,
+    info: dict[str, dict[str, Any]] | None = None,
+) -> tuple[Path, Path, Any]:
     run = tmp_path / "served-image-2026-09-26"
-    state = write_read(run)
+    state = write_read(run, read)
     write_harvest(tmp_path / "harvest", HARVEST_QIDS, HARVEST_ENTITIES)
     fake = FakeCommons(
         cats={
@@ -579,7 +626,8 @@ def _setup(tmp_path: Path, *, gone: dict[str, str] | None = None) -> tuple[Path,
                 "title": "Thasos gate.jpg",
                 "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Thasos_gate.jpg",
                 "render_url": "https://thumb.wikimedia.org/1280px-Thasos_gate.jpg",
-            }
+            },
+            **(info or {}),
         },
     )
     result = PC.run_precheck(state, PC.load_harvest(tmp_path / "harvest"), fake)
@@ -657,6 +705,64 @@ class TestTheStages:
         assert got[THASOS]["verdict"] == V.REGION_OR_TYPE
         assert got[THASOS]["answered_by"] == "check-001"
         assert got[HOTLINK]["verdict"] == V.UNFETCHABLE and "404" in got[HOTLINK]["basis"]
+
+    def _broken_thumbnail(self, tmp_path: Path, *, file_known: bool) -> tuple[Path, Path, Any]:
+        """Rag-i Bibi serves only its thumbnail, a Commons rendering at a width Commons no longer
+        renders (HTTP 400, as all 262 such thumbnails on 2026-09-26)."""
+        read = read_fixture()
+        read["sites"][0]["thumbnail_url"] = BROKEN_THUMB
+        info = {"Rag-i Bibi relief.jpg": BIBI_INFO} if file_known else {}
+        return _setup(tmp_path, read=read, gone={BROKEN_THUMB: "HTTP 400"}, info=info)
+
+    def test_a_thumbnail_whose_address_is_broken_is_checked_through_its_file(
+        self, tmp_path: Path
+    ) -> None:
+        run, handoff, pictures = self._broken_thumbnail(tmp_path, file_known=True)
+        state = ST.load_read(run / "READ.json")
+        got = V.export_check(
+            run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures
+        )
+        assert got["unfetchable"] == 0 and got["questions"] == 4
+        assert ("url", BIBI_INFO["render_url"]) in pictures.asked
+        [question] = [q for q in V.read_jsonl(run / V.QUESTIONS_CHECK) if q["site_id"] == HOTLINK]
+        assert question["repair"] == {
+            "file_url": BIBI_INFO["url"],
+            "stored_url": BROKEN_THUMB,
+            "error": "HTTP 400",
+        }
+        assert question["source"] == BIBI_INFO["url"]
+
+    def test_a_broken_thumbnail_whose_file_is_gone_has_no_picture(self, tmp_path: Path) -> None:
+        run, handoff, pictures = self._broken_thumbnail(tmp_path, file_known=False)
+        state = ST.load_read(run / "READ.json")
+        got = V.export_check(
+            run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures
+        )
+        assert got["unfetchable"] == 1 and got["questions"] == 3
+
+    def test_a_depicting_file_behind_a_broken_thumbnail_repairs_the_address(
+        self, tmp_path: Path
+    ) -> None:
+        run, handoff, pictures = self._broken_thumbnail(tmp_path, file_known=True)
+        state = ST.load_read(run / "READ.json")
+        V.export_check(run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures)
+        _answer_all(handoff, V.STAGE_CHECK, {sid: _check(V.DEPICTS) for sid in state.sites})
+        V.import_stage(run, V.STAGE_CHECK)
+        checks = {r["site_id"]: r for r in V.read_jsonl(run / V.CHECK)}
+        plan = PL.decide_site(
+            state.sites[HOTLINK], (), PC.load_prechecks(run / "PRECHECK.jsonl")[HOTLINK],
+            checks[HOTLINK], None, population=V.ALL,
+        )  # fmt: skip
+        assert (plan.outcome, plan.thumbnail_url) == (PL.CONFIRMED, BIBI_INFO["url"])
+        [change] = plan.changes
+        assert (change.column, change.old_value, change.new_value, change.rule) == (
+            "thumbnail_url",
+            BROKEN_THUMB,
+            BIBI_INFO["url"],
+            PL.RULE_THUMB,
+        )
+        assert "HTTP 400" in change.reason
+        CW.validate_change(change)
 
     def test_the_import_refuses_an_unanswered_handoff(self, tmp_path: Path) -> None:
         run, handoff, pictures = _setup(tmp_path)
@@ -789,6 +895,7 @@ def _checked(sid: str, verdict: str, served: ST.Served) -> dict[str, Any]:
         "answered_by": "check-001",
         "prompt_sha256": "0" * 64,
         "served": served.as_json(),
+        "repair": None,
     }
 
 
