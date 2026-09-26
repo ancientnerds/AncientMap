@@ -83,13 +83,24 @@ and `country_key_sql` equals `country_key`), `tests/remediation/test_t11.py`.
 
 **The decision** is Opus's, per site, with sources - never a pattern. The agent answers `site` or
 `not_a_site` with a kind (`natural_formation`, `modern`, `object`, `legend_or_hoax`), one sentence
-and verbatim quotes. A `not_a_site` **counts** only when its quotes found word for word on the
-fetched pages (`opus_audit/quotes.py`) come from at least two websites (every Wikimedia project -
-Wikipedia, Wikidata, Commons - counts as one; production is never fetched). A counted `not_a_site`
-becomes `scope_status = 'retired'`, `scope_reason = 'E3: not an archaeological site (<kind>):
-<sentence>'`; the found quotes and the agent are the journal row's evidence. A `site` writes
-nothing. An uncounted `not_a_site` is asked again of a new agent, the same prompt (rounds 1 and 2,
-as the acceptance judges re-ask); after round 2 it stays as it is and is listed.
+and verbatim quotes (prompt `scope-nonsite-v2`). A `not_a_site` **counts** only when its quotes
+found word for word on the fetched pages (`opus_audit/quotes.py`) come from at least two websites
+(every Wikimedia project - Wikipedia, Wikidata, Commons - and the known copies of Wikipedia -
+Wikiwand, DBpedia, WikiZero, Alchetron, en-academic, ... - count as one; production is never
+fetched). A counted `not_a_site` becomes `scope_status = 'retired'`, `scope_reason = 'E3: not an
+archaeological site (<kind>): <sentence>'`; the found quotes and the agent are the journal row's
+evidence. A `site` carries no quotes (`"quotes": []`; `check-answer` refuses one that does) and
+writes nothing.
+
+**Rounds.** Round 0 asks the funnel's candidates. Round N (every earlier round imported) asks
+again, from the current export and of new agents: every site whose latest answer is an uncounted
+`not_a_site` - the same prompt, as the acceptance judges re-ask, at most three asks at one premise
+- and every site whose latest answer is a counted `not_a_site` about an entry that has moved since
+(WD1 corrects name, type, point, country and dates in parallel; an answer about the old entry says
+nothing about the new one). A round with nothing to ask is refused before it writes any file
+("round N asks nothing"). The latest answer of a site decides: a moved entry answered `site` in a
+later round is not retired. A `not_a_site` still uncounted after three asks stays as it is and is
+listed in its `NONSITE_R<n>.jsonl`.
 
 **Who is asked** (the funnel chooses questions, never answers): a shown curated site whose type is
 one of `NON_SITE_TYPES` (Natural feature, Geological interest, Magnetic anomaly, Underwater
@@ -99,8 +110,9 @@ Wikidata item in WD1's harvest, or that is `pending`. Measured read-only in sect
 
 **Guards of the plan** (`build_plan`): a site retired since the question is skipped
 (`already-retired`); a site whose premise - name, type, point, country, dates - moved since the
-answer (WD1 corrects them in parallel) is skipped (`premise-moved`) and must be asked again; the
-premise is also the write's guard 5, so the transaction refuses a row that moved after the plan.
+answer (WD1 corrects them in parallel) is skipped (`premise-moved`), and the next round asks it
+again (runbook step 8); the premise is also the write's guard 5, so the transaction refuses a row
+that moved after the plan.
 The description is not in the premise: WA/WC rewrite it in parallel, and a new text of the same
 entry does not move its scope. Each round renders its prompts from its own snapshot
 (`SNAPSHOT_R<n>.jsonl`), so a refreshed export never makes an answered round stale.
@@ -115,14 +127,16 @@ was planned from - after a wave lands, export again and the written sites are no
 
 Prerequisites: WD1's harvest at `output/remediation/fields/harvest/` (SITES.jsonl covering every
 curated site, `entities/<QID>.json`); the WE link pass (L5: generic or wrong Wikidata items) run
-first, so the `wikidata`/`no-item` signals read the corrected items.
+first, so the `wikidata`/`no-item` signals read the corrected items. Run it **after WD1's field
+writes** where the order allows: an entry WD1 moves after its answer is asked again (step 8), which
+costs a round.
 
 ```bash
 PY=./.venv/Scripts/python.exe
 SR=scripts/remediation/mechanical/scope_review.py
 H=output/remediation/handoff/scope-review-2026-09-26
 
-# 1. read production (read-only, one repeatable-read snapshot)
+# 1. read production (read-only, one repeatable-read snapshot) -> export/export.jsonl
 $PY $SR export
 # 2. round 0: every funnel candidate, 12 per batch, into a new handoff
 $PY $SR export-round --round 0 --handoff $H-r0
@@ -132,16 +146,27 @@ $PY $SR brief --round 0 --batch-id B          # the agent's full instruction; it
 # 4. every answer recorded, nothing stale or malformed:
 $PY scripts/remediation/opus_handoff.py validate --dir $H-r0
 # 5. import: fetch every cited page once, check every quote -> NONSITE_R0.jsonl
+#    (an answer out of shape stops it, all named, nothing written: delete those answer files
+#    from the handoff, have them answered again, validate, import)
 $PY $SR import-round --round 0
-# 6. re-ask what did not count (at most twice), each round into its own handoff:
-$PY $SR export-round --round 1 --handoff $H-r1   # then 3-5 with --round 1; same for --round 2
-# 7. the first wave (<= 100 sites): PLAN.jsonl, SKIPPED.jsonl, PLAN.md, ROLLBACK.sql, SOURCE.json
+# 6. the next round N = 1, 2, ...: a fresh export, then the round into its own handoff. It
+#    refuses "round N asks nothing" (exit 1, no file written) when no answer is left to ask
+#    again - then go to step 7. Otherwise steps 3-5 with --round N, and step 6 with N + 1.
+$PY $SR export
+$PY $SR export-round --round 1 --handoff $H-r1
+# 7. the next wave (<= 100 sites), from a fresh export:
+#    PLAN.jsonl, SKIPPED.jsonl, PLAN.md, ROLLBACK.sql, SOURCE.json
+$PY $SR export
 $PY $SR write --wave 2026-09-26
+# 8. after the wave's gates below: if its SKIPPED.jsonl lists `premise-moved` sites, step 6
+#    (next round number) asks them again before the next wave; then step 7 with the next label
+#    (2026-09-26b, ...) until `write` says "nothing to write".
 ```
 
-Then the wave goes through the mechanical lane's gates, in this order (`L=scope-review-2026-09-26`):
+Then the wave goes through the mechanical lane's gates, in this order:
 
 ```bash
+L=scope-review-2026-09-26               # the wave's lane: scope-review-<the --wave label>
 A=scripts/remediation/mechanical/apply.py
 $PY $A --lane $L --check-primitive      # the journal primitive and the columns are as expected
 $PY $A --lane $L --verify               # read-only read-back before (keep the output)
@@ -160,8 +185,7 @@ planned number of rows, each with its journal row; the read-back compares plan, 
 both ways and prints the scope counts, the O7 residual (curated rows outside the window with no
 decision), the retirements as no archaeological site, the Oceania rows retired for their date and
 rows with a status but no reason. A wave is accepted when `--apply` reports the read-back clean and
-the after-read shows exactly the planned deltas (0 deviations). Then `export` again and
-`write --wave 2026-09-26b` for the next wave, until `write` says nothing is left.
+the after-read shows exactly the planned deltas (0 deviations). Then step 8.
 
 **Undo** of a landed wave (after its `--rehearse-rollback` passed): send its pinned `ROLLBACK.sql`
 through the project transport, then read back:
@@ -184,7 +208,9 @@ $PY $A --lane scope-review-2026-09-26 --verify
 The reversal journals under `<stamp>-rollback` and refuses rows that moved since the write.
 
 After the waves: the retired sites leave the static export, sitemap, Qdrant and card draws with the
-next WF export (`public_sites.not_retired()`); IndexNow and a push as in WF.
+next WF export (`public_sites.not_retired()`); IndexNow and a push as in WF. The scope waves need
+**no card_stats recompute**: they write only `scope_status` and `scope_reason`, and neither is an
+input of a card (`mechanical/card_stats.py`, `INPUT_COLUMNS`).
 
 ---
 
@@ -220,6 +246,13 @@ check** (`export-check --population all`, the default). `--population unconfirme
 design, kept as an explicit choice only. The pre-check's status travels with each decision as
 evidence.
 
+**This departs from the specification, which sends only the images the pre-check does not
+confirm, and needs the orchestrator's (or the owner's) sign-off before the run**, recorded in
+AUDIT_LOG: `all` checks about 4,084 served images (about 341 check batches of 12), `unconfirmed`
+about 1,184 (about 99 batches) - measured populations of section 5. Without the sign-off, run
+`export-check --population unconfirmed`: the plan then keeps a pre-check CONFIRMED image unchecked
+(`plan.py`, `decide_site`).
+
 ### 3.3 The two Opus stages
 
 * **served-check** (12 images per batch agent): `depicts` (the site itself, its remains, a drawing
@@ -229,23 +262,31 @@ evidence.
   the file production serves: a gallery row from the offsite copy of the image tree
   (`C:/PythonProjects/AncientMap-Offsite`, accepted only at the row's `file_size_bytes`; read on
   2026-09-26: no VPS image is newer than the copy), a thumbnail by its URL. A thumbnail whose
-  address serves no picture but names a Commons file Commons still holds is shown through that
-  file's rendering and carries a repair (all 262 Commons `/thumb/` thumbnails ask a width Commons
-  no longer renders - HTTP 400; 10 are the only image of their site). One whose file is gone is
-  recorded `unfetchable` and goes to replacement.
+  address serves no picture but names a Commons file Commons still holds as a still picture is
+  shown through that file's 1280 px rendering and carries a repair - that rendering's URL (all 262
+  Commons `/thumb/` thumbnails ask a width Commons no longer renders - HTTP 400; 10 are the only
+  image of their site). One whose file is gone, or is no still picture, is recorded `unfetchable`
+  and goes to replacement.
 * **served-replace** (candidates packed to at most 36 pictures per agent, a site never split): for
   every image the check did not call `depicts`, every other live gallery row (`G1`, ...) and the
   item's P18 and first 12 P373 files the gallery does not hold (`W1`, ...), each shown as a file.
   The agent gives each a verdict and picks the best one it called `depicts` - a `G` whenever one
-  depicts the site - or none.
+  depicts the site - or none. A `W` file is shown - and stored when picked - as its 1280 px Commons
+  rendering, and only when it is a still picture (`commons.picture_url`: JPEG, PNG, GIF, WebP,
+  TIFF, SVG). `cmtype=file` lists every file of a category; measured on 2026-09-26, a PDF, a WebM
+  and a DjVu answer a JPEG page or frame as their rendering and an MP3 or FLAC Commons' file-type
+  icon, so the MIME type decides. A file that is no still picture, or whose rendering is not
+  served, is listed under `unavailable` in `EXPORT_REPLACE.json` and never stops the export. The
+  original is never stored: the first 12 originals of Category:Casa Grande Ruins National Monument
+  are 9.0-20.1 MB each (measured 2026-09-26), a TIFF original no `<img>` can show.
 
 ### 3.4 The plan (`plan.py`) - one rule per outcome
 
 | outcome | when | rows (rule) |
 |---|---|---|
-| confirmed | the check says `depicts` | `thumbnail_url` := the served row's local file if it names anything else (`wd2-align`); a repaired thumbnail := the file's own URL (`wd2-thumb`) |
-| replaced | a `G` pick | hero flag off the old hero, onto the pick (`wd2-hero`); thumbnail := the pick's local file (`wd2-align`) |
-| cleared | no `G` depicts | every live row (each judged: the served one by the check, the rest as candidates) excluded and unheroed (`wd2-exclude`); thumbnail := the confirmed `W` file's URL, else NULL (`wd2-thumb`) |
+| confirmed | the check says `depicts` | `thumbnail_url` := the served row's local file if it names anything else (`wd2-align`); a repaired thumbnail := the rendering of its file the check was shown (`wd2-thumb`) |
+| replaced | a `G` pick | hero flag off the old hero, onto the pick (`wd2-hero`); thumbnail := the pick's local file (`wd2-align`); every live row judged `other_site` - the served one by the check, a `G` by the replacement stage - excluded (`wd2-exclude`); a `region_or_type` row stays in the gallery |
+| cleared | no `G` depicts | every live row (each judged: the served one by the check, the rest as candidates) excluded and unheroed (`wd2-exclude`); thumbnail := the confirmed `W` file's rendering the agent was shown, else NULL (`wd2-thumb`) |
 | no image | the site serves nothing | nothing |
 
 A live row nobody judged is never excluded (the plan refuses). Chunks of at most 100 sites; a
@@ -254,6 +295,8 @@ cleared site is named in its chunk as one that may lose its last live image.
 ### 3.5 Runbook
 
 Order: after the scope review's waves (a retired site is not read), after L5 and WD1's harvest.
+Before `export-check`: the orchestrator's sign-off on `--population all` (section 3.2), recorded in
+AUDIT_LOG.
 
 ```bash
 PY=./.venv/Scripts/python.exe
@@ -262,19 +305,26 @@ R=output/remediation/served_image/served-image-2026-09-27     # the date names t
 H=output/remediation/handoff/served-image-2026-09-27
 
 $PY $S read --run-dir $R                        # production, read-only -> READ.json (written once)
-$PY $S precheck --run-dir $R                    # WD1's harvest; refuses a shown site it lacks
-$PY $S export-check --run-dir $R --handoff $H-check
+$PY $S precheck --run-dir $R                    # WD1's harvest; refuses a shown site it lacks;
+                                                # PRECHECK.jsonl/.json written once (a new harvest
+                                                # is a new run directory, from `read` on)
+$PY $S export-check --run-dir $R --handoff $H-check  # pins READ.json's and PRECHECK.jsonl's sha256
 #   per batch B (check-001, ...; up to 16 agents at once):
 $PY $S brief --run-dir $R --handoff $H-check --batch-id B    # the agent's full instruction
 #   (the agent opens each picture with its Read tool, answers, runs check-answer, records with
 #    opus_handoff.py answer)
 $PY scripts/remediation/opus_handoff.py validate --dir $H-check
 $PY $S import-check --run-dir $R                # -> CHECK.jsonl (unfetchable thumbnails included)
-$PY $S export-replace --run-dir $R --handoff $H-replace
-#   per batch: brief / check-answer / answer as above, then validate --dir $H-replace
+$PY $S export-replace --run-dir $R --handoff $H-replace   # prints "questions": N
+#   only when N > 0 (with N = 0 no handoff exists; import-replace says so and `plan` goes on):
+#   per batch: brief / check-answer / answer as above, then validate --dir $H-replace, and
 $PY $S import-replace --run-dir $R              # -> REPLACE.jsonl
 $PY $S plan --run-dir $R                        # -> chunks/chunk-NNN, EXPECTED.jsonl, PLAN_SUMMARY.json
 ```
+
+`EXPORT_REPLACE.json` names, per site, every Wikidata file that was not shown (`unavailable`:
+`missing`, `not a picture` with its MIME type, or `unfetchable` with the refusal) and every failed
+image without a candidate (`without_candidates`) - those sites are cleared.
 
 Per chunk, in order, each accepted with 0 deviations before the next:
 
@@ -311,6 +361,26 @@ print(CW.readback(chunk, rollback=True))     # [] = every row is back at its old
 EOF
 ```
 
+**After the last accepted chunk - the card_stats recompute.** The chunks change a card input:
+`has_thumbnail = bool(thumbnail_url)` (`api/cardgame/generator.py`, `site_card_stats`) turns false
+for a site cleared to NULL and true for a site that had none and gets a `W` pick; `thumbnail_url`
+is one of the card inputs (`mechanical/card_stats.py`, `INPUT_COLUMNS`). The image rows count as
+before - an exclusion deletes no row, and the card counts every row. So a card_stats wave of its
+own follows, through the mechanical lane like every card_stats wave (`card-stats-<label>`, a new
+label):
+
+```bash
+CS=scripts/remediation/mechanical/card_stats.py
+W=2026-09-27                               # a card_stats wave label no earlier wave used
+$PY $CS --wave $W --export                  # production, read-only -> mechanical_card_stats/$W/export/
+$PY $CS --wave $W --write                   # PLAN.jsonl, PLAN.md, SKIPPED.jsonl, BASIS.json, ROLLBACK.sql
+L=card-stats-$W
+```
+
+then the gates of section 2.1 with this `L`, in the same order (`--check-primitive` ... `--rehearse-rollback`),
+accepted with 0 deviations. `BASIS.json` and `ROLLBACK.sql` are the applied plan's only when they
+come from the `--write` run that is applied (`card_stats.py`'s docstring).
+
 After the chunks: the globe reads the static export, so the new thumbnails show with the next WF
 export; the page and the hub read the database at once.
 
@@ -318,15 +388,22 @@ export; the page and the hub read the database at once.
 
 ## 4. Tests and the mutation sweep
 
-* `tests/remediation/test_served_image.py` - the read, the pre-check, Commons, both stages, the
-  thumbnail repair, the plan, the acceptance.
-* `tests/remediation/test_scope_review.py` - the funnel, the answers, the rounds and their quote
-  check, the plan's guards, the waves, the wave lane and its read-back.
+* `tests/remediation/test_served_image.py` - the read, the pre-check (written once, pinned by the
+  check export), Commons (what a picture is, no rendering taken for the original), both stages,
+  the thumbnail repair, the candidates (still pictures, unserved renderings listed), the plan
+  (other sites out of a replaced gallery), the acceptance.
+* `tests/remediation/test_scope_review.py` - the funnel, the answers (a site carries no quotes,
+  the copies of Wikipedia), the rounds (in order, never empty, three asks at one premise, a moved
+  entry asked again) and their quote check, the plan's guards (the latest answer decides), the
+  waves, the wave lane and its read-back.
+* `tests/remediation/test_t11.py` - T11's quotes of `dates.py` stand in `dates.py`.
 * `tests/remediation/test_mechanical.py` - the scope-review wave runs through every generic lane
   test (`ALL_LANES`: apply, commit states, read-back, probes, identity) with a fabricated plan.
 * `tests/pipeline/test_e3_oceania.py`, `tests/remediation/test_mechanical_scope.py` - section 1.
 * `scripts/remediation/mechanical/mutation_sweep.py wd2` - every WD2 guard removed one at a time
-  must turn its named test red (the group `WD2_CASES`).
+  must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
+  `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source
+  files in place and restores them: run it on an otherwise idle worktree.
 
 ---
 
