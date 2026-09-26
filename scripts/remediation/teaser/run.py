@@ -69,6 +69,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
         sys.path.insert(0, str(_path))
 
 import opus_handoff as OH  # noqa: E402
+import research_web  # noqa: E402
 from mechanical.plan import (  # noqa: E402
     PlanError,
     parse_tagged_export,
@@ -109,8 +110,10 @@ CHECKER_STAGES = ("check", "check1", "check2")
 ROUNDS = tuple(zip(WRITER_STAGES, CHECKER_STAGES, strict=True))
 STAGES = tuple(stage for pair in ROUNDS for stage in pair)
 JUDGE_STAGE = "judge"
-#: The web requests of the pilot judge's import: no personal data (owner rule for this work).
-USER_AGENT = "AncientMapRemediation/1.0 (research)"
+#: The web requests of the pilot judge's import: the lanes' one User-Agent, no personal data. The
+#: bare `AncientMapRemediation/1.0 (research)` drew 403 from Wikimedia through httpx on every page of
+#: pilot wb-pilot-2026-09-26 (its robot policy wants a contact; the project URL is one).
+USER_AGENT = research_web.USER_AGENT
 #: The pilot gate (sealed with the runbook): no claim CONTRADICTED - with a proving quote or
 #: without one - and at most this share of all claims left without a proving quote (UNVERIFIABLE,
 #: or a quote the machine did not find).

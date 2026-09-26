@@ -21,6 +21,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+import research_web  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 from wc import answers as A  # noqa: E402
 from wc import cli as C  # noqa: E402
@@ -704,7 +705,7 @@ def test_a_found_quote_whose_title_the_page_does_not_carry_does_not_count(tmp_pa
 def test_the_fetcher_speaks_with_the_projects_user_agent_and_no_personal_data() -> None:
     client = A.Client()
     try:
-        assert client.session.headers["User-Agent"] == "AncientMapRemediation/1.0 (research)"
+        assert client.session.headers["User-Agent"] == research_web.USER_AGENT
     finally:
         client.close()
     assert "@" not in A.USER_AGENT

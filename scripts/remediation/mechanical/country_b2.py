@@ -55,6 +55,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+import research_web  # noqa: E402
 from census.tests.t05_country_values import _is_canonical, _iso, _vocabulary  # noqa: E402
 
 from mechanical import plan as P  # noqa: E402
@@ -69,8 +70,8 @@ DEFAULT_CACHE = REPO / "output" / "remediation" / "cache"
 WITNESS_FILE = "mechanical_country_b2_witnesses.json"
 DECISION_SOURCE = "output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md"
 RULE = "b2-decided-country"
-#: Every web request of the WE lanes names itself so, and carries nothing personal.
-USER_AGENT = "AncientMapRemediation/1.0 (research)"
+#: Every web request of the WE lanes names itself with the lanes' one User-Agent, nothing personal.
+USER_AGENT = research_web.USER_AGENT
 
 #: `(country, lat, lon) -> (inside, note, evidence)`: `plan._geography` over Natural Earth,
 #: injected so the decision is testable without the geo stack the CI job does not install.

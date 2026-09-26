@@ -22,6 +22,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
+import research_web  # noqa: E402
 from teaser import answers as A  # noqa: E402
 from teaser import contract as C  # noqa: E402
 from teaser import prompts as P  # noqa: E402
@@ -746,6 +747,6 @@ class TestThePilotJudge:
         with R.judge_client() as client:
             agent = client.headers["User-Agent"]
             timeout = client.timeout
-        assert agent == "AncientMapRemediation/1.0 (research)" and "@" not in agent
+        assert agent == research_web.USER_AGENT and "@" not in agent
         with R.Q.http_client() as audit:
             assert audit.timeout == timeout and audit.follow_redirects

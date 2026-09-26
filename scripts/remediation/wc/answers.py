@@ -48,14 +48,15 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+import research_web  # noqa: E402
 from acceptance.answers import AnswerError, Quote, check_quotes, load_object  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 from phase4 import licences, wc4  # noqa: E402 - Phase 4's deny list and mirror rule; lane WC
 
 __all__ = ["AnswerError"]
 
-#: The User-Agent of every WC request: the project's, and no personal data (task of 2026-09-26).
-USER_AGENT = "AncientMapRemediation/1.0 (research)"
+#: The User-Agent of every WC request: the lanes' one (`research_web`), no personal data.
+USER_AGENT = research_web.USER_AGENT
 #: What the fetcher was chosen on (2026-09-26, one GET each with the User-Agent above): httpx 0.28.1
 #: vs requests 2.32.5. Only requests passes where it matters; neither passes the 403 hosts, which the
 #: question names so the agents quote elsewhere.
