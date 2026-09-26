@@ -12,11 +12,12 @@ one `mass4.py --only <ready batches> --handoff-import` round at a time.
 
     handoff4.py brief        --run-dir R --handoff H --batch-id B
     handoff4.py check-answer --run-dir R --handoff H --batch-id B --label L --text-file F
+    handoff4.py record       --run-dir R --handoff H --batch-id B --label L --text-file F
     handoff4.py ready        --run-dir R --handoff H [--batch B ...]
 
 * `brief` prints the whole instruction of the agent that answers batch B: which files it may read,
-  where it writes its drafts (`<handoff>-scratch/<batch>/`), how it checks and records each answer,
-  and its own `--answered-by` name (`opus-<handoff directory name>-<batch>`).
+  where it writes its drafts (`<handoff>-scratch/<batch>/`), and how it records each answer - with
+  `record`, under its own name (`opus-<handoff directory name>-<batch>`).
 * `check-answer` reads one draft through the stage's own parser - `select_stage.parse_selection`
   over the batch's own candidate pool, `review4.parse_review` over the batch's own assembly - so an
   answer the import would refuse (`selection-refused`, `review-unparseable`) is named before it is
@@ -26,16 +27,25 @@ one `mass4.py --only <ready batches> --handoff-import` round at a time.
   CARD line when a card is shown - the import reads a missing line as a DROP, which is its
   fail-closed reading, never a shape an agent should give. It judges no content: the finding is the
   agent's.
-* `ready` reads `opus_handoff.validate` per batch: the batches whose every question is answered in
-  shape (0 missing, stale, malformed) can be imported alone; stale or malformed answers anywhere, or
-  answer files no question asks for, fail it. A named batch of the run without a folder in the
-  directory asked nothing (every site held before the stage) and is imported with the others
-  (`named_without_questions`); a name that is no batch of the run is refused.
+* `record` is the one way an agent records an answer: `check-answer` first, and only an answer
+  without a problem goes to `opus_handoff.write_answer` (write-once, the prompt's sha256, the
+  model, the batch agent's name). A problem is printed and nothing is written, so the corrected
+  draft can still be recorded (review finding 2026-09-26: the live v3 run recorded two selections
+  the import refuses through `opus_handoff.py answer`, which checks no shape, one second after
+  writing them; the corrected drafts could no longer be recorded).
+* `ready` reads `opus_handoff.validate` per batch and every recorded answer of the batches it
+  judges (the named ones, else all) through `check-answer` again, so an answer recorded by any
+  other path is caught before its import: the batches whose every question is answered in shape
+  (0 missing, stale, malformed, shape problems) can be imported alone; stale or malformed answers
+  anywhere, a shape problem (`shape_problems`), or answer files no question asks for, fail it. A
+  named batch of the run without a folder in the directory asked nothing (every site held before
+  the stage) and is imported with the others (`named_without_questions`); a name that is no batch
+  of the run is refused.
 
 Only lanes W and S are open (the translate and restricted stages ask nothing while T and R stay
 closed), so only the selector's and the reviewer's questions have a brief. Nothing here calls a
-model, opens a socket or writes a file: the agent writes its drafts, and `opus_handoff.py answer`
-records them.
+model or opens a socket; the one file written is an answer `record` checked (the agent writes its
+own drafts).
 """
 
 from __future__ import annotations
@@ -59,7 +69,6 @@ from phase4 import model4 as M  # noqa: E402
 from phase4 import review4 as RV  # noqa: E402
 from phase4 import select_stage as SEL  # noqa: E402
 
-OPUS_HANDOFF = Path(OH.__file__).resolve()
 HANDOFF4 = Path(__file__).resolve()
 
 
@@ -72,14 +81,12 @@ class Kind:
     """One model stage whose questions have a brief: its label field and what it asks."""
 
     field: str
-    stage: str
     role: str
     task: str
 
 
 SELECT = Kind(
     field=B.SELECT_FIELD,
-    stage="finder",
     role="the selector (S3)",
     task=(
         "pick, by id, the sentences of the pinned Wikipedia text (and the spans to drop) that "
@@ -88,7 +95,6 @@ SELECT = Kind(
 )
 REVIEW = Kind(
     field=B.REVIEW_FIELD,
-    stage="reviewer",
     role="the reviewer (S6)",
     task=(
         "KEEP or DROP each published sentence and the card, exactly as the question says; the "
@@ -152,14 +158,15 @@ For each line of the manifest:
    for, in its order, nothing else: no preamble, no explanation, no markdown fences.
 3. Write the answer text to a new UTF-8 file of your own: {scratch}/<site id>.txt, where <site id> is
    the label's part before "/" (create the directory).
-4. Check its shape (the stage's own parser; nothing is judged):
-   {python} {handoff4} check-answer --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --text-file {scratch}/<site id>.txt
-   It prints {{"ok": true}} or the problem. Fix the shape, never the finding. If it says REFUSED,
-   stop and report it: the question is not the one you were given.
-5. Record it - an answer is written once:
-   {python} {opus_handoff} answer --dir {handoff} --batch-id {batch} --stage {stage} --label <label> --answered-by {agent} --text-file {scratch}/<site id>.txt
-   It must print "wrote": true. If it refuses, read why and fix your file; never delete or edit an
-   answer file, a prompt or a manifest.
+4. Record it through its shape check (the stage's own parser; nothing is judged). An answer is
+   written once, under your name {agent}:
+   {python} {handoff4} record --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --text-file {scratch}/<site id>.txt
+   It prints {{"ok": true, "wrote": true, ...}} when the answer is recorded. It prints
+   {{"ok": false, "problem": ...}} and records nothing when the shape is wrong: fix the shape in
+   your file, never the finding, and run the same command again. If it says REFUSED, stop and
+   report it: the question is not the one you were given, or an answer is recorded already. You
+   never record with opus_handoff.py: it checks no shape. Never delete or edit an answer file, a
+   prompt or a manifest.
 
 Change no other file. When every question of the batch is recorded, report one line per manifest
 line: <label> - answered | failed (<reason>).
@@ -186,9 +193,7 @@ def brief(run_dir: Path, handoff: Path, batch_id: str) -> str:
         scratch=scratch_dir(handoff, batch_id).as_posix(),
         python=Path(sys.executable).resolve().as_posix(),
         handoff4=HANDOFF4.as_posix(),
-        opus_handoff=OPUS_HANDOFF.as_posix(),
         run_dir=run_dir.resolve().as_posix(),
-        stage=kind.stage,
     )
 
 
@@ -286,14 +291,67 @@ def check_answer(run_dir: Path, handoff: Path, batch_id: str, label: str, text: 
     return check_review(batch_dir, line, site_id, text)
 
 
+# ------------------------------------------------------------------------------------ the record
+
+
+def record(run_dir: Path, handoff: Path, batch_id: str, label: str, text: str) -> dict[str, Any]:
+    """Record one answer through its shape check. A shape problem (`check_answer`) is returned and
+    nothing is written: the agent fixes its draft and records it again. Without one, the answer
+    goes to `opus_handoff.write_answer` under the batch agent's name (`agent_name`) - write-once,
+    so the identical answer again writes nothing (`wrote: false`) and another one is refused
+    (`opus_handoff.HandoffError`), as is a question `check_answer` refuses."""
+    problem = check_answer(run_dir, handoff, batch_id, label, text)
+    if problem is not None:
+        return {"ok": False, "problem": problem, "wrote": False}
+    line = _question(handoff, batch_id, label)
+    wrote = OH.write_answer(
+        handoff,
+        batch_id=batch_id,
+        stage=line["stage"],
+        label=label,
+        text=text,
+        answered_by=agent_name(handoff, batch_id),
+    )
+    return {"ok": True, "problem": None, "wrote": wrote, "answer_path": line["answer_path"]}
+
+
 # ------------------------------------------------------------------------------------ ready
 
 
+def shape_problems(
+    run_dir: Path, handoff: Path, answered: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """The recorded answers of `answered` (`opus_handoff.validate` entries) that `check_answer`
+    finds a problem in, each with its `why`. A question it refuses (the batch moved since the
+    export) is one too, `why` starting with `refused:` - its import would find no answer to the
+    prompt it builds. `validate` checks only the digest and the shape of the file, so an answer
+    recorded by any path but `record` is read here before its import."""
+    found: list[dict[str, Any]] = []
+    for entry in answered:
+        prompt = (handoff / entry["prompt_path"]).read_bytes().decode("utf-8")
+        answer = OH.read_answer(
+            handoff,
+            batch_id=entry["batch_id"],
+            stage=entry["stage"],
+            label=entry["label"],
+            prompt=prompt,
+        )
+        try:
+            why = check_answer(run_dir, handoff, entry["batch_id"], entry["label"], answer.text)
+        except HandoffCheckError as exc:
+            why = f"refused: {exc}"
+        if why is not None:
+            found.append({**entry, "why": why})
+    return found
+
+
 def ready(handoff: Path, run_dir: Path, batches: Sequence[str] = ()) -> dict[str, Any]:
-    """Per batch of the directory: its questions and what `opus_handoff.validate` says of them. A
-    batch is ready when every question is answered in shape; `ok` is false while any answer is
-    stale or malformed, an answer file no question asks for lies there, or a named batch is not
-    ready.
+    """Per batch the directory holds and this call judges - the named ones, else every one: its
+    questions, what `opus_handoff.validate` says of them, and every recorded answer read again
+    through `check_answer` (`shape_problems`). A batch is ready when every question is answered in
+    shape and no answer has a shape problem; `ok` is false while any answer anywhere is stale or
+    malformed, an answer file no question asks for lies there, a judged answer has a shape
+    problem, or a named batch is not ready.
 
     Every named batch must be a batch of the run (`<run>/<batch>/input.json`), else refused. A named
     batch with no folder in the directory asked no question - every site of it was held before the
@@ -304,27 +362,40 @@ def ready(handoff: Path, run_dir: Path, batches: Sequence[str] = ()) -> dict[str
     if strays:
         raise HandoffCheckError(f"{run_dir}: no batch of the run: {strays}")
     result = OH.validate(handoff)
-    per: dict[str, dict[str, int]] = {}
-    for status, entries in (
+    statuses = (
         ("answered", result.answered),
         ("missing", result.missing),
         ("stale", result.stale),
         ("malformed", result.malformed),
-    ):
+    )
+    judged = set(batches) or {entry["batch_id"] for _, entries in statuses for entry in entries}
+    problems = shape_problems(
+        run_dir, handoff, [entry for entry in result.answered if entry["batch_id"] in judged]
+    )
+    shaped = {(entry["batch_id"], entry["label"]) for entry in problems}
+    per: dict[str, dict[str, int]] = {}
+    for status, entries in statuses:
         for entry in entries:
+            if entry["batch_id"] not in judged:
+                continue
             counts = per.setdefault(
-                entry["batch_id"], {"answered": 0, "missing": 0, "stale": 0, "malformed": 0}
+                entry["batch_id"],
+                {"answered": 0, "missing": 0, "stale": 0, "malformed": 0, "shape": 0},
             )
-            counts[status] += 1
-    done = sorted(b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == 0)
+            bad = status == "answered" and (entry["batch_id"], entry["label"]) in shaped
+            counts["shape" if bad else status] += 1
+    done = sorted(
+        b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == c["shape"] == 0
+    )
     without = sorted(set(batches) - set(per))
     waiting = sorted(set(batches) - set(done) - set(without))
     return {
-        "ok": not (result.stale or result.malformed or result.orphans or waiting),
+        "ok": not (result.stale or result.malformed or result.orphans or problems or waiting),
         "ready": done,
         "not_ready": {b: c for b, c in sorted(per.items()) if b not in done},
         "named_not_ready": waiting,
         "named_without_questions": without,
+        "shape_problems": problems,
         "stale": result.stale,
         "malformed": result.malformed,
         "orphans": result.orphans,
@@ -344,13 +415,15 @@ def build_parser() -> argparse.ArgumentParser:
     for name, text in (
         ("brief", "the whole instruction of one batch's Opus agent"),
         ("check-answer", "the shape of one answer text, before it is recorded"),
+        ("record", "record one answer text, only when its shape is right"),
     ):
         command = sub.add_parser(name, help=text)
         command.add_argument("--run-dir", required=True, type=Path)
         command.add_argument("--handoff", required=True, type=Path)
         command.add_argument("--batch-id", required=True)
-    sub.choices["check-answer"].add_argument("--label", required=True)
-    sub.choices["check-answer"].add_argument("--text-file", required=True, type=Path)
+    for name in ("check-answer", "record"):
+        sub.choices[name].add_argument("--label", required=True)
+        sub.choices[name].add_argument("--text-file", required=True, type=Path)
     batches = sub.add_parser("ready", help="the batches whose every question is answered in shape")
     batches.add_argument("--run-dir", required=True, type=Path)
     batches.add_argument("--handoff", required=True, type=Path)
@@ -359,8 +432,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """0: the brief, a clean answer, every named batch ready. 1: a shape problem or a batch not
-    ready. 2: refused (`REFUSED:` on stderr) - the question cannot be checked here."""
+    """0: the brief, a clean answer (recorded, for `record`), every named batch ready. 1: a shape
+    problem (nothing recorded) or a batch not ready. 2: refused (`REFUSED:` on stderr) - the
+    question cannot be checked here, or another answer is recorded already."""
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
@@ -375,6 +449,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             problem = check_answer(args.run_dir, args.handoff, args.batch_id, args.label, text)
             _print({"ok": problem is None, "problem": problem})
             return 0 if problem is None else 1
+        if args.command == "record":
+            text = args.text_file.read_bytes().decode("utf-8")
+            outcome = record(args.run_dir, args.handoff, args.batch_id, args.label, text)
+            _print(outcome)
+            return 0 if outcome["ok"] else 1
         payload = ready(args.handoff, args.run_dir, args.batch)
         _print(payload)
         return 0 if payload["ok"] else 1

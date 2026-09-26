@@ -21213,6 +21213,10 @@ P4V3_READY = "test_ready_names_the_batches_whose_every_question_is_answered"
 P4V3_BRIEF = "test_the_brief_names_the_batch_its_files_its_scratch_and_its_agent"
 P4V3_CLAIMS = "test_a_plan_without_the_pass_re_queues_no_site_a_descriptions_only_list_names"
 P4V3_ASKED_NOTHING = "test_a_named_batch_that_asked_nothing_is_ready_and_a_stray_name_is_refused"
+P4V3_RECORD = "test_record_writes_an_answer_only_through_its_shape_check"
+P4V3_READY_SHAPE = "test_ready_fails_on_a_recorded_answer_the_import_would_refuse"
+P4V3_READY_MOVED = "test_ready_names_an_answer_whose_batch_moved_since_the_export"
+P4V3_READY_REVIEW = "test_ready_reads_a_recorded_review_whole"
 
 P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── scope4: the March lists ───────────────────────────────────────────────────────────────
@@ -21644,17 +21648,18 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 v3 handoff4: a batch with missing answers is ready",
         P4V3_HANDOFF,
-        '    done = sorted(b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] '
-        "== 0)\n",
-        "    done = sorted(per)  # mutant\n",
+        '        b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == '
+        'c["shape"] == 0\n',
+        "        b for b in per  # mutant\n",
         P4V3_TEST,
         P4V3_READY,
     ),
     (
         "p4 v3 handoff4: an orphan answer file passes",
         P4V3_HANDOFF,
-        '        "ok": not (result.stale or result.malformed or result.orphans or waiting),\n',
-        '        "ok": not (result.stale or result.malformed or waiting),  # mutant\n',
+        '        "ok": not (result.stale or result.malformed or result.orphans or problems or '
+        "waiting),\n",
+        '        "ok": not (result.stale or result.malformed or problems or waiting),  # mutant\n',
         P4V3_TEST,
         P4V3_READY,
     ),
@@ -21722,6 +21727,79 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n        raise HandoffCheckError(",
         P4V3_TEST,
         P4V3_ASKED_NOTHING,
+    ),
+    # ── the second review of 2026-09-26: an answer is recorded only through its shape check
+    (
+        "p4 v3 handoff4: record writes an answer the check refuses",
+        P4V3_HANDOFF,
+        '    if problem is not None:\n        return {"ok": False, "problem": problem, '
+        '"wrote": False}\n',
+        '    if False:  # mutant\n        return {"ok": False, "problem": problem, '
+        '"wrote": False}\n',
+        P4V3_TEST,
+        P4V3_RECORD,
+    ),
+    (
+        "p4 v3 handoff4: record writes under another name than the batch agent's",
+        P4V3_HANDOFF,
+        "        answered_by=agent_name(handoff, batch_id),\n",
+        '        answered_by="opus",  # mutant\n',
+        P4V3_TEST,
+        P4V3_RECORD,
+    ),
+    (
+        "p4 v3 handoff4: ready reads no recorded answer through the parser",
+        P4V3_HANDOFF,
+        "    problems = shape_problems(\n        run_dir, handoff, [entry for entry in "
+        'result.answered if entry["batch_id"] in judged]\n    )\n',
+        "    problems: list[dict[str, Any]] = []  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: a shape problem fails only a named batch",
+        P4V3_HANDOFF,
+        '        "ok": not (result.stale or result.malformed or result.orphans or problems or '
+        "waiting),\n",
+        '        "ok": not (result.stale or result.malformed or result.orphans or waiting),  '
+        "# mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: a batch with a shape problem is ready",
+        P4V3_HANDOFF,
+        '        b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == '
+        'c["shape"] == 0\n',
+        '        b for b, c in per.items() if c["missing"] == c["stale"] == c["malformed"] == 0  '
+        "# mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: without names ready judges no batch",
+        P4V3_HANDOFF,
+        '    judged = set(batches) or {entry["batch_id"] for _, entries in statuses for entry '
+        "in entries}\n",
+        "    judged = set(batches)  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_SHAPE,
+    ),
+    (
+        "p4 v3 handoff4: an answer to a moved batch passes ready",
+        P4V3_HANDOFF,
+        '        except HandoffCheckError as exc:\n            why = f"refused: {exc}"\n',
+        "        except HandoffCheckError:\n            why = None  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_MOVED,
+    ),
+    (
+        "p4 v3 handoff4: ready reads a recorded review without its line count",
+        P4V3_HANDOFF,
+        "    return review_lines_problem(verdict, sentences=len(built.sentences), card=card)\n",
+        "    return None  # mutant\n",
+        P4V3_TEST,
+        P4V3_READY_REVIEW,
     ),
 ]
 MUTATIONS += P4_V3_MUTATIONS
