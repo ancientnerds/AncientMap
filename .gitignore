@@ -354,6 +354,23 @@ output/remediation/mechanical_citations/export/
 !output/remediation/mechanical_dangling_markers/
 output/remediation/mechanical_dangling_markers/REHEARSAL.sql
 output/remediation/mechanical_dangling_markers/export/
+# The WD1 structured-field lane (2026-09-26, `scripts/remediation/fields/`, runbook
+# docs/procedures/FIELDS_WD1.md): every write step is versioned like the cell lanes (plan, refusals,
+# statement, undo, rollback rehearsal, acceptance), with its wave, the seeds and the counts of both
+# parts (wd1 = conflict, wd1-rest = rest; both parts' steps live under wd1/write/). The shared
+# harvest, the stored-field export, the classification, the decisions (quotes and reasoning of every
+# answer, bulk: archived with the handoff answers) and the fetched pages stay local.
+!output/remediation/fields/
+output/remediation/fields/*
+!output/remediation/fields/wd1/
+output/remediation/fields/wd1/*
+!output/remediation/fields/wd1/COUNTS.json
+!output/remediation/fields/wd1/SEEDS.jsonl
+!output/remediation/fields/wd1/write/
+output/remediation/fields/wd1/write/*/*/REHEARSAL.sql
+!output/remediation/fields/wd1-rest/
+output/remediation/fields/wd1-rest/*
+!output/remediation/fields/wd1-rest/COUNTS.json
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
 # nothing and is rendered again by `qid_repair.py render`.
