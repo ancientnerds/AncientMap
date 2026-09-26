@@ -12916,3 +12916,17 @@ journalled 20 rows) and left `STOPPED.json`, so nothing was written twice. The s
 and kept as `p4-2085/STOPPED.read-2026-09-26-duplicate-loop.json`; a fresh read-only acceptance over
 pilot 4, mass, D9 and v3 then reported 1,753 written sites re-verified with V1-V15, **0 deviations**.
 From here the loop runs only as a tracked background task, one instance.
+
+## 2026-09-26 - WA v3 mid-run audits 1 and 2 (after 572 and 1,147 written sites)
+
+Each: `audit4.py written` over the v3 run's own written batches, `audit4.py draw --count 10` (seeds
+20260928 and 20260929; audit 2 excludes audit 1's sample), `audit4.py sheet`, and one independent
+Opus auditor (no agent of the run) judging every published sentence against its pinned passage and
+the site's identity. Audit 1: 65 of 65 sentences SUPPORTED (verdicts `logs/p4_v3/AUDIT_1_VERDICTS.json`
+in the p4-pilot worktree). Audit 2: 56 of 56 SUPPORTED (`AUDIT_2_VERDICTS.json`). No UNSUPPORTED, no
+WRONG_SITE, no hold. Informational `gold_error` notes (the Wikipedia passage itself looks wrong - the
+selection is faithful; listed for the description repair): Idomenae n4 (springs of the Vardar),
+Castell Henllys n2 (digging began 1981), Tarragona n2 (colony under Caesar/Augustus), El Brujo n1
+(Ascope Province), Marcahuamachuco n2 (AD 400 is not the Middle Horizon) and n3 (Inca conquest in the
+15th century). Two records whose scope is in question go to WD2's scope review: Richat Structure
+(a natural formation) and Hadrian's Wall Path (a footpath opened 2003).
