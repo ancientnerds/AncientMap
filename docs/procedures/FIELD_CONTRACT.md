@@ -286,6 +286,8 @@ is either truncated silently or rejected — so the census must not propose one.
 | unified_sites | `description` / `source_url` / `thumbnail_url` | text | — | yes |
 | unified_sites | `edited_by` | varchar | **20** | no |
 | unified_sites | `raw_data` | jsonb | — | yes |
+| unified_sites | `scope_status` | text, CHECK `unified_sites_scope_status_vocab`: NULL, `in_scope`, `retired`, `pending` (migration 0020; read 2026-09-26) | — | yes |
+| unified_sites | `scope_reason` | text (free text; the lanes write `E3: ...` or `duplicate_of:<id>`) | — | yes |
 | card_stats | `card_description` | varchar | **200** | yes |
 | card_stats | `civilization` | varchar | **100** | yes |
 | card_stats | `rarity_tier` | integer | — | **no** |
