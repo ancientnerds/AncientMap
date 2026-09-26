@@ -193,7 +193,7 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
         .filter(CardPlayerStats.user_id == user.id)
         .populate_existing()
         .with_for_update()
-        .first()
+        .one()
     )
     if has_claimed_starter(session, user.id):
         raise AlreadyHasStarterError("You already claimed your starter deck")

@@ -195,7 +195,7 @@ def build_marker_injection_messages(
     context_prompt: str,
 ) -> list:
     """Build messages for Pass 2 marker injection."""
-    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
     human_content = (
         f"## Entities Catalogue\n{entities_json}\n\n"
@@ -204,7 +204,7 @@ def build_marker_injection_messages(
         "Annotate the prose above. Return full LYRA_RESPONSE_SCHEMA JSON with "
         'the annotated text in "text" and all entity arrays populated.'
     )
-    msgs = [SystemMessage(content=MARKER_INJECTION_PROMPT)]
+    msgs: list[BaseMessage] = [SystemMessage(content=MARKER_INJECTION_PROMPT)]
     if context_prompt:
         msgs.append(SystemMessage(content=context_prompt))
     msgs.append(HumanMessage(content=human_content))

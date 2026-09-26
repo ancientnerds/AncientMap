@@ -23,7 +23,7 @@ from api.services.theo_config import (
     THEO_PARALLEL_SLOTS,
     THEO_RESEARCH_COST,
 )
-from pipeline.database import get_session
+from pipeline.database import affected_rows, get_session
 from pipeline.indexnow import page_url as indexnow_url
 from pipeline.indexnow import submit as indexnow_submit
 
@@ -367,7 +367,7 @@ async def _process_request(
             {"id": request_id},
         )
         session.commit()
-    if claimed.rowcount == 0:
+    if affected_rows(claimed) == 0:
         _drop_live_events(request_id)
         logger.info(
             "[THEO] Request %s no longer claimable (cancelled or picked up elsewhere) — skipping.",
@@ -545,7 +545,7 @@ async def _process_request(
                         },
                     )
                     session.commit()
-                    if completed.rowcount == 0:
+                    if affected_rows(completed) == 0:
                         logger.warning(
                             "[THEO] Request %s was no longer 'running' at completion "
                             "(cancelled mid-run?) — result not written.",
@@ -1510,8 +1510,9 @@ async def start_worker() -> None:
                 text("UPDATE research_requests SET status = 'queued' WHERE status = 'running'")
             )
             session.commit()
-            if result.rowcount:
-                logger.info(f"[THEO] Recovered {result.rowcount} orphaned running request(s)")
+            recovered = affected_rows(result)
+            if recovered:
+                logger.info(f"[THEO] Recovered {recovered} orphaned running request(s)")
     except Exception as e:
         logger.warning(f"[THEO] Recovery check failed: {e}")
 

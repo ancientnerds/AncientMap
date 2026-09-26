@@ -329,6 +329,14 @@ class LyraBot(discord.Client):
         # Dedup set: prevents double-processing the same message on gateway reconnects
         self._processed_ids: set[int] = set()
 
+    @property
+    def own_id(self) -> int:
+        """The bot's own user id. discord.py sets the user at login, before the READY event
+        that every handler reading this runs after."""
+        if self.user is None:
+            raise RuntimeError("the Discord bot is not logged in")
+        return self.user.id
+
     async def setup_hook(self):
         """Register slash commands on startup."""
         guild = discord.Object(id=int(DISCORD_GUILD_ID))
@@ -337,7 +345,7 @@ class LyraBot(discord.Client):
         print(f"[DISCORD] Slash commands synced to guild {DISCORD_GUILD_ID}", flush=True)
 
     async def on_ready(self):
-        print(f"[DISCORD] Bot ready as {self.user} (ID: {self.user.id})", flush=True)
+        print(f"[DISCORD] Bot ready as {self.user} (ID: {self.own_id})", flush=True)
         import asyncio
 
         asyncio.create_task(self._purge_all_signin_errors())
@@ -350,14 +358,14 @@ class LyraBot(discord.Client):
         count = 0
         # Active threads
         for thread in guild.threads:
-            if thread.owner_id == self.user.id:
+            if thread.owner_id == self.own_id:
                 await _purge_signin_errors(thread)
                 count += 1
         # Archived threads in every text channel
         for channel in guild.text_channels:
             try:
                 async for thread in channel.archived_threads(limit=None):
-                    if thread.owner_id == self.user.id:
+                    if thread.owner_id == self.own_id:
                         await _purge_signin_errors(thread)
                         count += 1
             except (discord.Forbidden, discord.HTTPException):
@@ -386,7 +394,7 @@ class LyraBot(discord.Client):
 
         # --- Thread follow-ups (threads created by /ask) ---
         if isinstance(message.channel, discord.Thread):
-            if message.channel.owner_id != self.user.id:
+            if message.channel.owner_id != self.own_id:
                 return
             await self._handle_thread_message(message)
             return
@@ -493,23 +501,31 @@ def _get_bot() -> LyraBot:
         await interaction.response.defer(thinking=True)
 
         try:
-            text, sites = await _handle_ask(discord_id, question, member=interaction.user)
+            # Outside the guild the user is a plain discord.User, without the roles a
+            # new player's registration reads: _handle_ask then gets no member, as in a DM.
+            member = interaction.user if isinstance(interaction.user, discord.Member) else None
+            text, sites = await _handle_ask(discord_id, question, member=member)
 
-            # Try to create a thread for the conversation
             display_name = interaction.user.display_name
             followup_msg = await interaction.followup.send(
                 f"**{display_name}** asked: {question[:200]}",
                 wait=True,
             )
-            try:
-                thread_name = f"Lyra | {question[:90]}"
-                thread = await interaction.channel.create_thread(
-                    name=thread_name,
-                    message=discord.Object(id=followup_msg.id),
-                )
-                await _send_response(thread, text, sites)
-            except discord.Forbidden:
-                # No thread permission — send response directly in channel
+            # The answer goes to a thread on the question when there can be one: only a
+            # text channel's message carries a thread. In a thread, a voice channel's chat
+            # or a DM - and without the thread permission - it goes to the channel itself.
+            answered_in_thread = False
+            if isinstance(interaction.channel, discord.TextChannel):
+                try:
+                    thread = await interaction.channel.create_thread(
+                        name=f"Lyra | {question[:90]}",
+                        message=discord.Object(id=followup_msg.id),
+                    )
+                    await _send_response(thread, text, sites)
+                    answered_in_thread = True
+                except discord.Forbidden:
+                    pass
+            if not answered_in_thread:
                 for chunk in _split_response(text):
                     await interaction.followup.send(chunk)
                 if sites:

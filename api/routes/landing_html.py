@@ -76,8 +76,9 @@ _CACHE_TTL = 300.0
 # Content-Encoding into the very raw_headers list a Response carries, so a
 # cached object comes back on the next hit already labelled gzip and the
 # middleware then passes the uncompressed body through untouched —
-# ERR_CONTENT_DECODING_FAILED in the browser.
-_cache: dict[str, tuple[float, bytes]] = {}
+# ERR_CONTENT_DECODING_FAILED in the browser. The body is kept as Starlette holds it
+# (Response.body is bytes | memoryview).
+_cache: dict[str, tuple[float, bytes | memoryview]] = {}
 _cache_lock = threading.Lock()
 
 

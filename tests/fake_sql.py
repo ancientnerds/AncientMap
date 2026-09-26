@@ -53,6 +53,10 @@ class FakeResult:
             return row[0]
         return row
 
+    def tuples(self) -> FakeResult:
+        # Result.tuples() is a typing filter: the same rows, the same object.
+        return self
+
     def mappings(self) -> FakeResult:
         return FakeResult([dict(vars(r)) if hasattr(r, "__dict__") else r for r in self._rows])
 
@@ -187,6 +191,15 @@ class _CapturedQuery:
     def first(self) -> Any:
         rows = self._record()
         return rows[0] if rows else None
+
+    def one(self) -> Any:
+        # Strict like Query.one(): exactly one row, else the error SQLAlchemy raises.
+        rows = self._record()
+        if not rows:
+            raise NoResultFound("one() on 0 rows")
+        if len(rows) > 1:
+            raise MultipleResultsFound(f"one() on {len(rows)} rows")
+        return rows[0]
 
     def count(self) -> int:
         return len(self._record())
