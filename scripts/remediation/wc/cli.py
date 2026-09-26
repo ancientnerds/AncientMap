@@ -786,6 +786,7 @@ def outcome_of(
         "run": run_name,
         "checker": M.AI_SYSTEM,
         "checked": site.description,
+        "marking": wc4.marking_record(site),
         "description": composed.description,
         "kept": sum(d.kept for d in decisions),
         "of": len(decisions),
@@ -818,7 +819,9 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
         if label not in results:
             raise WcRunError(f"{label} was never answered")
         outcome, decisions = outcome_of(entry, results[label], attempts[label], run_name=run.name)
-        problems = wc4.wc_problems(outcome.description, outcome.raw_data)
+        problems = wc4.wc_problems(outcome.description, outcome.raw_data) + wc4.evidence_problems(
+            outcome.evidence, outcome.description, outcome.raw_data
+        )
         if problems:
             raise WcRunError(f"{label}: the outcome breaks the lane's invariants: {problems}")
         outcomes.append(outcome)

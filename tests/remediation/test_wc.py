@@ -107,7 +107,7 @@ def test_a_leading_piece_restores_the_capital() -> None:
     [
         ("and they were built by giants", "dangling punctuation"),
         ("built by giants", "space before punctuation"),
-        (" giants.", "not a complete sentence"),
+        (" giants.", "does not end with"),
         ("xyz", "occurs 0 times"),
         ("e", "occurs"),
         (SENTENCE, "whole sentence"),
@@ -139,11 +139,131 @@ def test_a_trimmed_sentence_under_25_characters_is_refused() -> None:
          ", dated to approximately 10,000 BC,", "The shelter lies near Limassol in Cyprus."),
         ("It was excavated by Sykes in 1798, but no records of his work remain.",
          ", but no records of his work remain", "It was excavated by Sykes in 1798."),
+        ("The mound, probably a tomb, stands on the hill above the river.",
+         ", probably a tomb,", "The mound stands on the hill above the river."),
+        # a reporting hedge goes with the number it reports, inside the sentence
+        ("The shelter, believed to date to about 10,000 BC, lies near Limassol in Cyprus.",
+         ", believed to date to about 10,000 BC,", "The shelter lies near Limassol in Cyprus."),
+        ("The mound, thought to have been raised in 3000 BC, stands on the hill.",
+         ", thought to have been raised in 3000 BC,", "The mound stands on the hill."),
+        ("The mound, reportedly raised in 3000 BC, stands on the hill above the river.",
+         ", reportedly raised in 3000 BC,", "The mound stands on the hill above the river."),
+        # a negation goes with the whole of its clause
+        ("The mound, not a tomb, stands on the hill above the river.",
+         ", not a tomb,", "The mound stands on the hill above the river."),
+        # a negation that stays, in another clause than the piece
+        ("The temple is not in Gozo, and it was built by giants in 3000 BC.",
+         " by giants", "The temple is not in Gozo, and it was built in 3000 BC."),
     ],
 )  # fmt: skip
 def test_a_trim_may_cut_a_whole_clause_with_its_own_hedge(sentence, remove, rest) -> None:
     """The March texts' commonest invention is a hedged number: the clause goes with its hedge."""
     assert WC4.trim(sentence, remove) == rest
+
+
+@pytest.mark.parametrize(
+    ("sentence", "remove"),
+    [
+        # the review's probes of 2026-09-26: each passed every sentence check and read as new text
+        ("The first temple on the hill was built c. 3000 BCE.", " c. 3000 BC"),
+        ("The great mound was erected in the 3rd millennium BC by farmers.",
+         " in the 3rd millennium B"),
+        ("It is the largest megalithic tomb in northern Europe and a landmark.",
+         " megalithic tomb in northern Europ"),
+        ("The temple was built around 3500 BC by the farmers of the island.", "5"),
+        ("The temple was built around 3500 BC by the farmers of the island.", "un"),
+        # a number with its separators is one token too
+        ("The temple was built around 3,500 BC by the farmers of the island.", ",500"),
+        ("The temple was built around 3,500 BC by the farmers of the island.", "3,"),
+        ("The capstone weighs about 2.5 tonnes and rests on three uprights.", ".5"),
+        # a word joined by a hyphen or an apostrophe is one token as well
+        ("The Hal-Saflieni Hypogeum is an underground complex in Paola.", " Hal-"),
+        ("Zammit's excavations at the temples began in the year 1915.", "'s"),
+    ],
+)  # fmt: skip
+def test_a_trim_never_cuts_inside_a_word_or_a_number(sentence: str, remove: str) -> None:
+    """A piece copied one character short (` BC` of ` BCE`) or cut from inside a number leaves a
+    token no source ever wrote (`builtE`, `300 BC`): its edges must fall between words."""
+    with pytest.raises(WC4.WcError, match="cuts a word or number"):
+        WC4.trim(sentence, remove)
+    assert not WC4.cuts_token(sentence, 0) and not WC4.cuts_token(sentence, len(sentence))
+
+
+@pytest.mark.parametrize(
+    ("sentence", "remove"),
+    [
+        # the review's probes of 2026-09-26: a hedged claim that the trim would state as fact
+        ("According to legend, the temple was built by giants in one night.",
+         "According to legend, "),
+        ("It is believed that the temple was built by the Phoenicians.", "It is believed that "),
+        # the same frames elsewhere in the sentence, and the hedges V4's reporting words lack
+        ("The temple was built, it is said, by giants in a single night.", ", it is said,"),
+        ("It is likely that the temple was built by the Phoenicians.", "It is likely that "),
+        ("The temple, according to Maltese folklore, was built by giants.",
+         ", according to Maltese folklore,"),
+        ("According to Maltese folklore, the temple was built by giants.",
+         "According to Maltese folklore, "),
+        ("The temple is said to be the oldest free-standing building in Malta.", " said to be"),
+        # a reporting hedge that opens the sentence reports the rest, its number or not
+        ("Legend dates it to 3000 BC, and giants built the temple in one night.",
+         "Legend dates it to 3000 BC, and "),
+        ("Believed to date to 3000 BC, the temple stands on a hill above the sea.",
+         "Believed to date to 3000 BC, "),
+        # a frame of the words V4 lacks: whether, as, think, consider
+        ("It is uncertain whether the temple was built by the Phoenicians.",
+         "It is uncertain whether "),
+        ("As many scholars think, the temple was built by the Phoenicians.",
+         "As many scholars think, "),
+        ("It is considered the oldest free-standing building in all of Malta.",
+         "It is considered "),
+    ],
+)  # fmt: skip
+def test_a_hedge_frame_or_a_reporting_hedge_is_never_cut_off_its_claim(sentence, remove) -> None:
+    with pytest.raises(WC4.WcError, match="hedge"):
+        WC4.trim(sentence, remove)
+
+
+@pytest.mark.parametrize(
+    ("sentence", "remove"),
+    [
+        # the reporting word reports the rest, not a figure of its own clause
+        ("The temple was, as Evans believed in 1920, built by giants in one night.",
+         ", as Evans believed in 1920,"),
+        ("The temple was built by giants, as was reported in 1990.", ", as was reported in 1990"),
+        ("The temple, believed to be the oldest in Malta, stands on a hill.",
+         ", believed to be the oldest in Malta,"),
+        # a word that puts the whole sentence under a telling or into doubt, wherever it stands
+        ("The temple, in Maltese tradition dated to 3000 BC, was built by giants.",
+         ", in Maltese tradition dated to 3000 BC,"),
+        ("The temple, whose date of 3000 BC is disputed, was built by the farmers.",
+         ", whose date of 3000 BC is disputed,"),
+        ("The temple was built by giants, a myth first recorded in 1850.",
+         ", a myth first recorded in 1850"),
+    ],
+)  # fmt: skip
+def test_a_reporting_or_doubting_word_goes_only_with_the_figure_it_reports(
+    sentence, remove
+) -> None:
+    """A reporting word may go only as the inner clause of its own figure (`, believed to date to
+    about 10,000 BC,`); a telling or a doubt of the whole sentence never goes."""
+    with pytest.raises(WC4.WcError, match="hedge"):
+        WC4.trim(sentence, remove)
+
+
+@pytest.mark.parametrize(
+    ("sentence", "remove"),
+    [
+        # the review's probes of 2026-09-26: a cut inside a negation's clause widens or inverts it
+        ("The site is not a burial mound but a natural hill in the valley.", " a burial mound but"),
+        ("The site was never excavated by Evans or anyone after him.", " by Evans or anyone after him"),
+        ("No excavation has taken place at the site since the year 1920.", " since the year 1920"),
+        # a negation that goes, while the rest of its clause stays
+        ("The temple was not built by giants in the year 3000 BC.", " not built by giants"),
+    ],
+)  # fmt: skip
+def test_a_trim_never_cuts_inside_the_clause_of_a_negation(sentence, remove) -> None:
+    with pytest.raises(WC4.WcError, match="negation"):
+        WC4.trim(sentence, remove)
 
 
 @pytest.mark.parametrize(
@@ -165,6 +285,23 @@ def test_a_trim_may_keep_a_stored_oddity_but_never_adds_one() -> None:
     )
     with pytest.raises(WC4.WcError, match="double space"):
         WC4.trim(sentence, "built by giants,")
+
+
+def test_a_sentence_without_its_opening_still_keeps_its_end() -> None:
+    """The review's probe of 2026-09-26: the opening and the end are asked apart, so a sentence
+    that already lacks an ASCII capital cannot lose its final mark to a trim."""
+    sentence = "Židovar is a hill fort on the bank of the Danube in Serbia."
+    with pytest.raises(WC4.WcError, match="does not end with"):
+        WC4.trim(sentence, " the bank of the Danube in Serbia.")
+
+
+def test_a_piece_never_takes_the_end_of_a_sentence_stored_without_its_final_mark() -> None:
+    """4 of the 15,133 sentences end without . ! or ? (2026-09-26): the stored end stays, so the
+    trimmed sentence cannot end on a fragment the markers then close with a full stop."""
+    sentence = "The site was built in 3000 BC by the farmers of the island"
+    assert WC4.trim(sentence, " in 3000 BC") == "The site was built by the farmers of the island"
+    with pytest.raises(WC4.WcError, match="final mark"):
+        WC4.trim(sentence, " by the farmers of the island")
 
 
 # ------------------------------------------------------------------------------ the decisions
@@ -351,6 +488,49 @@ def test_a_kept_text_equal_to_the_pre_march_one_loses_the_march_claim() -> None:
                  reason="unsupported")]  # fmt: skip
     _, composed, _, new = _outcome(site_row, decisions, {1: _quotes()[1]})
     assert composed.description == kept and M.PROVENANCE_KEY not in new
+
+
+def test_the_disclosure_a_written_text_needs_follows_its_old_marking() -> None:
+    """The review of 2026-09-26: the AI footnote (EU AI Act) is required, not only checked when
+    present. A kept March text carries lane L's provenance hashing it; a text that claims no March
+    origin - unclaimed (D7), or kept as the pre-March text - and a cleared site carry none."""
+    text = "The Tarxien Temples are in Malta [1]."
+    legacy = {M.PROVENANCE_KEY: M.LegacyProvenance(desc_sha256=M.text_sha256(text)).to_dict()}
+    march = WC4.marking_record(FX.plan_site(FX.row(FX.SITE_A, FX.TEXT_A,
+                                                   raw_data=FX.legacy_raw(FX.TEXT_A))))  # fmt: skip
+    assert march == {
+        "old": "L", "in_snapshot": True, "snapshot_sha256": M.text_sha256("The pre-March text.")
+    }  # fmt: skip
+    assert WC4.disclosure_problems(march, text, legacy) == []
+    (missing,) = WC4.disclosure_problems(march, text, {})
+    assert "AI disclosure" in missing
+    stale = {M.PROVENANCE_KEY: M.LegacyProvenance(desc_sha256=M.text_sha256("other")).to_dict()}
+    assert WC4.disclosure_problems(march, text, stale)
+    assert WC4.disclosure_problems({**march, "old": "march-unmarked"}, text, {})
+    unclaimed = {**march, "old": "unclaimed"}
+    assert WC4.disclosure_problems(unclaimed, text, {}) == []
+    assert WC4.disclosure_problems(unclaimed, text, legacy)  # claims what nothing proves
+    pre_march = {**march, "snapshot_sha256": M.text_sha256(text)}
+    assert WC4.disclosure_problems(pre_march, text, {}) == []
+    assert WC4.disclosure_problems(march, None, None) == []
+    assert WC4.disclosure_problems(march, None, legacy)
+
+
+def test_the_recorded_marking_is_the_one_the_checked_pair_carries() -> None:
+    """The writer re-derives the old marking from the row's own old raw_data and the evidence's
+    snapshot hash, so a recorded marking cannot excuse a missing footnote."""
+    marked = FX.plan_site(FX.row(FX.SITE_A, FX.TEXT_A, raw_data=FX.legacy_raw(FX.TEXT_A)))
+    record = WC4.marking_record(marked)
+    assert WC4.old_marking_problems(record, FX.TEXT_A, marked.raw_data) == []
+    assert WC4.old_marking_problems({**record, "old": "unclaimed"}, FX.TEXT_A, marked.raw_data)
+    assert WC4.old_marking_problems(record, FX.TEXT_A, None)
+    unmarked = FX.plan_site(FX.row(FX.SITE_A, FX.TEXT_A, raw_data=None))
+    assert WC4.marking_record(unmarked)["old"] == "march-unmarked"
+    assert WC4.old_marking_problems(WC4.marking_record(unmarked), FX.TEXT_A, None) == []
+    same = FX.plan_site(FX.row(FX.SITE_A, FX.TEXT_A, raw_data=None, snapshot=FX.TEXT_A))
+    assert WC4.marking_record(same)["old"] == "unclaimed"
+    assert WC4.old_marking_problems({**WC4.marking_record(same), "old": "march-unmarked"},
+                                    FX.TEXT_A, None)  # fmt: skip
 
 
 def test_a_cleared_site_keeps_no_wc_key_and_its_raw_data_is_null_when_nothing_is_left() -> None:
@@ -551,9 +731,11 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 
 # ------------------------------------------------------------------------------ the frozen texts
 #: The byte hashes of the frozen texts. A changed text makes every exported answer stale: re-pin
-#: it here with the reason, and export a new round.
+#: it here with the reason, and export a new round. CHECK_QUESTION re-pinned 2026-09-26 (the
+#: review's fix round): rule 5 names the trim's new refusals - a cut inside a word or number,
+#: the final mark, a telling or doubt of the sentence, a report of it, a negation's clause.
 PINS = {
-    "CHECK_QUESTION": "b65d436a389a796c86f489b67c90036ff1b8deb745b70897872ef7eee640d7d9",
+    "CHECK_QUESTION": "19dc88e3c078231e003eda41d22d82cf3e0c5fab17c50edfa54557763c0c81b9",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
     "CHECK_BRIEF": "5844ec9957fc97e651c2d1aead3edc08204e7a2eda981c0f02cfb1098d5291e5",
     "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
@@ -881,6 +1063,14 @@ def test_the_evidence_recheck_goes_red_on_a_moved_text(tmp_path: Path) -> None:
     assert WC4.evidence_problems(outcome.evidence, moved, outcome.raw_data)
     other = {**outcome.raw_data, WC4.CHECK_KEY: {**outcome.raw_data[WC4.CHECK_KEY], "run": "x"}}
     assert WC4.evidence_problems(outcome.evidence, outcome.description, other)
+    # a March text that lost its AI footnote holds every invariant, and the evidence says so
+    assert outcome.evidence["marking"]["old"] == "L"
+    unmarked = {k: v for k, v in outcome.raw_data.items() if k != M.PROVENANCE_KEY}
+    assert WC4.wc_problems(outcome.description, unmarked) == []
+    assert any(
+        "AI disclosure" in problem
+        for problem in WC4.evidence_problems(outcome.evidence, outcome.description, unmarked)
+    )
 
 
 # ------------------------------------------------------------------------------ the judge

@@ -19,11 +19,14 @@ research CLI, the writer and the acceptance so the three cannot read a checked t
   on an abbreviation the splitter does not know (`JOIN_AFTER`: "Rev.", "Col.", ...) joined to the
   next; the text between two sentences must be whitespace, or the split lost words and the site is
   not asked.
-* **A trim** (`trim`): exactly one exact substring removed, never one that is nothing but protected
-  tokens (a bare hedge, negation or restriction - `bare_modifier` over the V4 list), the capital
-  restored when the piece opened the sentence (Phase 4's edit 4), and the rest must not have a
-  problem of `sentence_problems` the sentence did not have. Code repairs nothing else: a piece that
-  leaves a double space or a dangling comma is refused and the agent names a cleaner one.
+* **A trim** (`trim`): exactly one exact substring removed, whose edges fall between words
+  (`cuts_token`); never one that is nothing but protected tokens or a hedge frame (a bare hedge,
+  negation or restriction, "It is likely that " - `bare_modifier`), nor one that takes a qualifier
+  off what stays (`qualifier_problem`: a telling or doubt of the sentence, a report of it outside
+  its own figure, a cut into a negation's clause); the capital restored when the piece opened the
+  sentence (Phase 4's edit 4), and the rest must not have a problem of `sentence_problems` the
+  sentence did not have, its opening and its end asked apart. Code repairs nothing else: a piece
+  that leaves a double space or a dangling comma is refused and the agent names a cleaner one.
 * **The pronoun rule** (`follow_drops`): a kept sentence that leans on the sentence before it
   (`sentences.leans_on_predecessor`, Phase 4's own reading of V6) goes when that sentence goes.
 * **The text** (`compose`): the kept sentences in their order, each followed by one marker per
@@ -40,7 +43,9 @@ research CLI, the writer and the acceptance so the three cannot read a checked t
   and `raw_data` is NULL when nothing else remains, so D1 and D4 hold on the NULL description too.
 * **The invariants** (`wc_problems`) the writer's plan, its read-back and the acceptance ask of a
   written site, and **the journal evidence** (`evidence_problems`): production must be exactly
-  what the evidence's decisions compose.
+  what the evidence's decisions compose, with the AI disclosure its recorded marking requires
+  (`marking_record`, `disclosure_problems`; the writer re-derives the marking from the row's old
+  value, `old_marking_problems`).
 
 The check record is public (`/api/sites/{id}` serves `raw_data` whole; the leading underscore keeps
 it out of the popup's field panel). It therefore carries each quote's sha256 and never its words:
@@ -69,7 +74,7 @@ from phase4 import assemble as A  # noqa: E402 - the marker edit and the citatio
 from phase4 import legacy4  # noqa: E402 - lane L's claim, one spelling
 from phase4 import model4 as M  # noqa: E402
 from phase4 import sentences as S  # noqa: E402 - the splitter, the protected tokens, the pronouns
-from pipeline.lyra.text_sentences import is_complete_sentence  # noqa: E402
+from pipeline.lyra.text_sentences import ends_like_a_sentence, opens_like_a_sentence  # noqa: E402
 
 #: The `raw_data` key of the check record. The leading underscore keeps it out of the popup's
 #: generic field panel (`ancient-nerds-map/src/config/sourceFields.ts`), as for the provenance.
@@ -95,6 +100,44 @@ MIN_TRIMMED_CHARS = S.MIN_SENTENCE_CHARS
 _SPACE_BEFORE_PUNCTUATION = re.compile(r"\s[.,;:!?)]")
 _DANGLING_PUNCTUATION = re.compile(r"[,;:(]\s*[.,;:!?)]")
 _EMPTY_PARENTHESES = re.compile(r"\(\s*\)")
+#: A word or a number as the trim reads it: letters and digits, joined by a hyphen, an apostrophe or
+#: a number's group or decimal separator (`3,500`, `2.5`, `Hal-Saflieni`, `Zammit's`). A cut never
+#: falls inside one (`cuts_token`): what is left would be a token no source wrote.
+_TOKEN = re.compile(r"[^\W_]+(?:[-'’.,][^\W_]+)*")
+#: Words that report what stands beside them as someone's belief, telling or supposition: V4's
+#: reporting hedges (`model4.PROTECTED_TOKENS`: believed, thought, claimed, alleged*, reportedly,
+#: suggest*, suppos*, reputed*, purported*, presum*, assum*) and their forms V4 does not list
+#: (believe, belief, think, say, said, says, considered, regarded, report*, argu*). Such a word may go
+#: only as the inner clause of the figure it reports (`reports_its_own_figure`).
+_REPORTING = re.compile(
+    r"\b(?:believ\w*|belief\w*|thought|think\w*|claim\w*|alleg\w*|report\w*|suggest\w*|suppos\w*|"
+    r"reputed\w*|purport\w*|presum\w*|assum\w*|said|says|say|considered|regarded|argu\w*)\b",
+    re.IGNORECASE,
+)
+#: Words that put the whole sentence under a source's telling, wherever they stand: "according
+#: to", legend, tradition (V4's), myth, folklore (the review of 2026-09-26). A piece with one never
+#: goes: what stays would be stated as fact.
+_SENTENCE_FRAME = re.compile(r"\b(?:according|legend\w*|tradition\w*|myth\w*|folklor\w*)\b", re.I)
+#: V4's refutation words (disputed, uncertain, unknown, attributed, theor*, ...): a piece with one
+#: never goes either - the doubt may be about what stays.
+_REFUTATION = S.protected_pattern("refutation")
+#: V4's negations (not, no, never, neither, nor, without, cannot, *n't): a cut inside a negation's
+#: clause widens or inverts what it says ("never excavated by Evans" -> "never excavated").
+_NEGATION = S.protected_pattern("negations")
+#: What closes a clause: a comma, a semicolon, a colon, a bracket or a dash.
+_CLAUSE_BREAK = re.compile(r"[,;:()\[\]–—]")
+#: The words a hedge frame is built of around the claim that stays ("It is likely that ",
+#: ", it seems,", "It has been suggested that ", "It is uncertain whether "): pronouns,
+#: auxiliaries, articles, the linking words and the frame's reporting nouns and verbs. A piece of
+#: nothing but these, V4's words and `_REPORTING`'s hedges what stays and carries no claim of its
+#: own (`bare_modifier`).
+_FRAME_WORDS = re.compile(
+    r"\b(?:it|its|this|there|is|was|are|were|be|been|being|has|have|had|that|which|who|whether|"
+    r"if|to|the|a|an|by|as|of|so|told|tells|held|holds|widely|generally|commonly|often|long|many|"
+    r"most|scholars|historians|archaeologists|researchers|experts|locals|people|sources|accounts|"
+    r"myths?|folklore|lore|stor(?:y|ies)|tales?|local|popular|folk|oral)\b",
+    re.IGNORECASE,
+)
 #: Abbreviations the shared splitter (`pipeline.lyra.text_sentences`, through Phase 4's
 #: `sentences.split_source`) does not protect, so it ends a sentence after them. Measured on the
 #: population of 2026-09-26 (3,937 texts, 15,141 pieces): 8 such breaks in 7 sites - "Rev." (2),
@@ -200,8 +243,12 @@ def sentence_problems(sentence: str) -> list[str]:
         problems.append("it has leading or trailing whitespace")
     if len(sentence) < MIN_TRIMMED_CHARS:
         problems.append(f"it is {len(sentence)} characters, under {MIN_TRIMMED_CHARS}")
-    if not is_complete_sentence(sentence):
-        problems.append("it is not a complete sentence (capital or digit first, . ! or ? last)")
+    # The two halves of `is_complete_sentence`, apart: a stored sentence that lacks one (a capital
+    # outside ASCII) must still keep the other through a trim (the review of 2026-09-26).
+    if not opens_like_a_sentence(sentence):
+        problems.append("it does not open with a capital or a digit")
+    if not ends_like_a_sentence(sentence):
+        problems.append("it does not end with . ! or ? (a sentence end, not an abbreviation)")
     if S.garbled(sentence):
         problems.append("it is garbled (a full stop before a lower-case word, or 'of,')")
     if "  " in sentence:
@@ -215,28 +262,116 @@ def sentence_problems(sentence: str) -> list[str]:
     return problems
 
 
+def cuts_token(sentence: str, at: int) -> bool:
+    """Does a cut at offset `at` fall inside a word or a number (`_TOKEN`: letters and digits, and
+    the hyphen, apostrophe or separator that joins them - `3,500`, `2.5`, `Hal-Saflieni`)? A piece
+    copied one character short (` c. 3000 BC` of ` c. 3000 BCE.`) or cut from inside a number (`5`
+    of `3500`) leaves a token no source wrote (`builtE`, `300 BC`), and no sentence check sees it."""
+    return any(token.start() < at < token.end() for token in _TOKEN.finditer(sentence))
+
+
 def bare_modifier(piece: str) -> bool:
-    """Is the piece nothing but hedge, negation, contrast or restriction words (Phase 4's V4 list,
-    `sentences.PROTECTED`) and punctuation? Cutting such a piece strips the modifier off a claim
-    that stays (`probably `, ` not`, `only `, `approximately `). A piece that takes a whole clause
-    with its own modifier (` (c. 3000 BC)`, `, probably a tomb,`) leaves nothing the modifier bore:
-    it may go. Phase 4 refuses every span with such a word, since its spans cut Wikipedia sentences
-    a reader trusts; here the cut is the check's answer to an unsupported clause, and 2,476 of the
-    population's 15,133 sentences (16.4 %, measured 2026-09-26) carry a hedged number - the March
-    texts' commonest invention (`draw-2026-09-25b`) - which the stricter rule could only DROP whole.
+    """Is the piece nothing but hedge, negation, contrast, refutation or restriction words (Phase
+    4's V4 list, `sentences.PROTECTED`), reporting words (`_REPORTING`), the words of a hedge frame
+    (`_FRAME_WORDS`) and punctuation? Cutting such a piece strips the modifier off a claim that
+    stays (`probably `, ` not`, `only `, `approximately `, `It is likely that `, `, it seems,`). A
+    piece that takes a whole clause with its own modifier (` (c. 3000 BC)`, `, probably a tomb,`)
+    leaves nothing the modifier bore: it may go. Phase 4 refuses every span with such a word, since
+    its spans cut Wikipedia sentences a reader trusts; here the cut is the check's answer to an
+    unsupported clause, and 2,476 of the population's 15,133 sentences (16.4 %, measured
+    2026-09-26) carry a hedged number - the March texts' commonest invention (`draw-2026-09-25b`) -
+    which the stricter rule could only DROP whole.
     """
-    if not S.carries_protected_token(piece):
+    if not (S.carries_protected_token(piece) or _REPORTING.search(piece)):
         return False
-    return not any(character.isalnum() for character in S.PROTECTED.sub("", piece))
+    rest = _FRAME_WORDS.sub("", _REPORTING.sub("", S.PROTECTED.sub("", piece)))
+    return not any(character.isalnum() for character in rest)
+
+
+def reports_its_own_figure(sentence: str, at: int, end: int) -> bool:
+    """May the piece `sentence[at:end]`, which carries a reporting word (`_REPORTING`), go? Only as
+    the inner clause of the figure it reports (`, believed to date to about 10,000 BC,`): it neither
+    opens nor closes the sentence - an opening or closing report is a frame of what stays
+    ("Believed to date to 3000 BC, ...", "..., as was reported in 1990.") - and every reporting word
+    in it is followed, inside the piece, by the infinitive of its claim (`believed to`, `said to`)
+    or is an adverb before its claim (`reportedly raised`), with a number or date after it in the
+    piece. ", as Evans believed in 1920," reports the rest and stays; so does ", believed to be the
+    oldest in Malta,", which reports no figure - code cannot tell what else a report covers."""
+    if at == 0 or not sentence[end:].strip(CLOSERS + A.TERMINAL + " "):
+        return False
+    piece = sentence[at:end]
+    for word in _REPORTING.finditer(piece):
+        after = piece[word.end() :]
+        joined = re.match(r"\s+to\s+\w", after) or (
+            word.group().lower().endswith("ly") and re.match(r"\s+\w", after)
+        )
+        if not joined or not any(character.isdigit() for character in after):
+            return False
+    return True
+
+
+def ends_a_clause(sentence: str, end: int) -> bool:
+    """Does a piece that ends at `end` end its clause - its own last character, or the next one
+    after the space, a clause break (`_CLAUSE_BREAK`), or nothing but the final mark after it?"""
+    piece_end = sentence[:end].rstrip()[-1:]
+    after = sentence[end:].lstrip()
+    return (
+        bool(_CLAUSE_BREAK.match(piece_end))
+        or bool(_CLAUSE_BREAK.match(after[:1]))
+        or not after.strip(CLOSERS + A.TERMINAL)
+    )
+
+
+def qualifier_problem(sentence: str, at: int, end: int) -> str | None:
+    """Why the piece `sentence[at:end]` would take a qualifier off what stays, or `None` (the review
+    of 2026-09-26: the mass run has no judge, so code is the guard against a trim that states a
+    report, a doubt or a negated claim as plain fact).
+
+    * a telling or doubt of the whole sentence (`_SENTENCE_FRAME`, `_REFUTATION`) never goes;
+    * a reporting word goes only as the inner clause of its own figure (`reports_its_own_figure`);
+    * a negation in the piece goes only with the rest of its clause (`ends_a_clause`), and the piece
+      may not stand inside the clause of a negation that stays before it ("The site was never
+      excavated by Evans" - " by Evans" widens the "never")."""
+    piece = sentence[at:end]
+    if _SENTENCE_FRAME.search(piece) or _REFUTATION.search(piece):
+        return (
+            "the piece carries a sentence hedge - a telling or a doubt (according to, legend, "
+            "tradition, myth, folklore, disputed, uncertain, unknown, attributed, ...): what stays "
+            "would be stated as fact - DROP the sentence instead"
+        )
+    if _REPORTING.search(piece) and not reports_its_own_figure(sentence, at, end):
+        return (
+            "the piece carries a reporting hedge (believed, thought, said, claimed, reportedly, "
+            "considered, ...) that is not the inner clause of the number or date it reports "
+            "(', believed to date to about 3000 BC,'): removing it would state as fact what a "
+            "source only reports - DROP the sentence, or cut that whole inner clause"
+        )
+    if _NEGATION.search(piece) and not ends_a_clause(sentence, end):
+        return (
+            "the piece carries a negation whose clause goes on after it: what stays would say "
+            "something else - cut the negation with the whole of its clause, or DROP the sentence"
+        )
+    before = sentence[:at]
+    negations = list(_NEGATION.finditer(before))
+    if negations and not _CLAUSE_BREAK.search(before[negations[-1].end() :]):
+        return (
+            f"the piece stands in the clause of the negation {negations[-1].group()!r}, which "
+            "stays: removing it widens or inverts what the negation says ('never excavated by "
+            "Evans' -> 'never excavated') - DROP the sentence instead"
+        )
+    return None
 
 
 def trim(sentence: str, remove: str) -> str:
     """`sentence` without the one exact substring `remove`, or `WcError` naming why not.
 
-    The rest must not have a problem (`sentence_problems`) the sentence did not have: a trim may
-    leave a stored oddity as it was - a name that opens with a capital outside ASCII (`Židovar`,
-    which `is_complete_sentence` does not know as a capital), a closing initial (`Mrauk U.`) - but
-    never add one."""
+    The piece's edges fall between words (`cuts_token`); it is no bare modifier or hedge frame
+    (`bare_modifier`) and takes no qualifier off what stays (`qualifier_problem`: a telling or doubt
+    of the sentence, a report of it, a negation's clause); it takes no end of a sentence stored
+    without its final mark. The rest must not have a problem (`sentence_problems`) the sentence did
+    not have - the opening and the end asked apart: a trim may leave a stored oddity as it was - a
+    name that opens with a capital outside ASCII (`Židovar`, which `opens_like_a_sentence` does not
+    know as a capital), a closing initial (`Mrauk U.`) - but never add one."""
     if not remove.strip():
         raise WcError("the piece to remove is empty")
     if sentence.count(remove) != 1:
@@ -246,13 +381,28 @@ def trim(sentence: str, remove: str) -> str:
         )
     if remove.strip() == sentence.strip():
         raise WcError("the piece to remove is the whole sentence: that is a DROP")
+    at = sentence.index(remove)
+    end = at + len(remove)
+    if cuts_token(sentence, at) or cuts_token(sentence, end):
+        raise WcError(
+            f"the piece {remove!r} cuts a word or number: it must begin and end between words "
+            "(copy the whole word or number, e.g. ' c. 3000 BCE', not ' c. 3000 BC')"
+        )
     if bare_modifier(remove):
         raise WcError(
-            "the piece is only a hedge, negation, contrast or restriction word (the V4 list): "
-            "removing it would change what the rest says - DROP the sentence instead"
+            "the piece is only a hedge, negation, contrast or restriction word (the V4 list), or a "
+            "hedge frame around the rest ('It is likely that ', ', it is said,'): removing it "
+            "would change what the rest says - DROP the sentence instead"
         )
-    at = sentence.index(remove)
-    rest = sentence[:at] + sentence[at + len(remove) :]
+    why = qualifier_problem(sentence, at, end)
+    if why is not None:
+        raise WcError(why)
+    if end == len(sentence) and not ends_like_a_sentence(sentence):
+        raise WcError(
+            "the sentence is stored without its final mark (. ! or ?): a piece may not take its "
+            "end, or what stays ends on a fragment"
+        )
+    rest = sentence[:at] + sentence[end:]
     if at == 0:
         rest = rest[:1].upper() + rest[1:]
     stored = sentence_problems(sentence)
@@ -569,6 +719,75 @@ def old_marking(site: M.PlanSite) -> Marking:
     return Marking.UNCLAIMED if legacy4.legacy_provenance(site) is None else Marking.MARCH
 
 
+def marking_record(site: M.PlanSite) -> dict[str, Any]:
+    """The journal evidence's `marking`: how the checked text was marked (`old_marking`) and what
+    lane L's claim rests on - whether the site is in the pre-March snapshot and the sha256 of its
+    text there (`None` when it holds none) - so the disclosure a written text needs can be asked
+    of the database alone (`disclosure_problems`)."""
+    snapshot = site.snapshot_description
+    return {
+        "old": old_marking(site).value,
+        "in_snapshot": site.in_snapshot,
+        "snapshot_sha256": None if snapshot is None else M.text_sha256(snapshot),
+    }
+
+
+def old_marking_problems(
+    marking: Mapping[str, Any], checked: str, old_raw: Mapping[str, Any] | None
+) -> list[str]:
+    """Is the recorded old marking the one the checked pair carries? Lane L's provenance in the
+    old `raw_data` is `L`; without one, lane L's rule on the snapshot record decides - the checked
+    text differs from the pre-March one: `march-unmarked`, else `unclaimed`. The writer asks this
+    of the row's own old value, so a recorded marking cannot excuse a missing footnote."""
+    stored = (old_raw or {}).get(M.PROVENANCE_KEY)
+    if stored is not None:
+        try:
+            provenance = M.provenance_from_dict(stored)
+        except ValueError as exc:
+            return [f"the checked text's provenance does not read: {exc}"]
+        if not isinstance(provenance, M.LegacyProvenance):
+            return ["the checked text carries a Phase-4 provenance: it is not WC's"]
+        derived = Marking.L
+    elif marking["in_snapshot"] and M.text_sha256(checked) != marking["snapshot_sha256"]:
+        derived = Marking.MARCH
+    else:
+        derived = Marking.UNCLAIMED
+    if marking["old"] != derived.value:
+        return [f"the recorded marking {marking['old']!r} is not the pair's {derived.value!r}"]
+    return []
+
+
+def disclosure_problems(
+    marking: Mapping[str, Any], description: str | None, raw_data: Mapping[str, Any] | None
+) -> list[str]:
+    """The AI disclosure (EU AI Act) a written pair must carry, required and not only checked where
+    present (the review of 2026-09-26): a kept text of a March text (`L`, `march-unmarked`) carries
+    lane L's provenance hashing it - unless the kept text is the pre-March one, which lane L's rule
+    never claims (`legacy4.legacy_provenance`); every other pair - an unclaimed text (HUMAN_ONLY D7),
+    a cleared site - carries none."""
+    claims = (
+        description is not None
+        and marking["old"] in (Marking.L.value, Marking.MARCH.value)
+        and marking["in_snapshot"]
+        and M.text_sha256(description) != marking["snapshot_sha256"]
+    )
+    stored = (raw_data or {}).get(M.PROVENANCE_KEY)
+    if not claims and stored is not None:
+        return ["a provenance beside a text that claims no March AI origin"]
+    if not claims:
+        return []
+    if stored is None:
+        return ["the AI disclosure is missing: a checked March text carries lane L's provenance"]
+    try:
+        provenance = M.provenance_from_dict(stored)
+    except ValueError as exc:
+        return [f"the AI disclosure does not read: {exc}"]
+    digest = M.text_sha256(str(description))
+    if not isinstance(provenance, M.LegacyProvenance) or provenance.desc_sha256 != digest:
+        return ["the AI disclosure is not lane L's provenance of the written text"]
+    return []
+
+
 def provenance_after(site: M.PlanSite, description: str) -> M.LegacyProvenance | None:
     """The provenance the kept text carries: lane L's, hashing the kept text, for a March text -
     marked by lane L, or one lane L's rule claims and no marking carries yet (`Marking.MARCH`: the
@@ -666,9 +885,10 @@ def wc_problems(description: str | None, raw_data: Mapping[str, Any] | None) -> 
 
 # ------------------------------------------------------------------------------ the evidence
 #: The journal evidence's keys (one dict for both rows of a site, like Phase 4's p_evidence): the
-#: stored text that was asked (`checked`), the description the decisions compose (`description`,
-#: `None` for a clear), every sentence's decision with the agent's quotes and what the check said
-#: of each (`sentences`), and the answers they came from.
+#: stored text that was asked (`checked`) and how it was marked (`marking`, `marking_record`), the
+#: description the decisions compose (`description`, `None` for a clear), every sentence's decision
+#: with the agent's quotes and what the check said of each (`sentences`), and the answers they came
+#: from.
 EVIDENCE_KEYS = frozenset(
     {
         "group",
@@ -676,6 +896,7 @@ EVIDENCE_KEYS = frozenset(
         "run",
         "checker",
         "checked",
+        "marking",
         "description",
         "kept",
         "of",
@@ -755,14 +976,16 @@ def evidence_problems(
     evidence: Mapping[str, Any], description: str | None, raw_data: Mapping[str, Any] | None
 ) -> list[str]:
     """Is production exactly what the journal's evidence composes? The description from the
-    evidence's decisions and verified quotes, its citations, and the check record's verdicts, cites
-    and quote digests - so the database alone re-checks every published sentence."""
+    evidence's decisions and verified quotes, its citations, the check record's verdicts, cites and
+    quote digests, and the AI disclosure its recorded marking requires (`disclosure_problems`) - so
+    the database alone re-checks every published sentence and its footnote."""
     try:
         decisions, verified = decisions_of(evidence)
         composed = compose(decisions, verified)
+        disclosure = disclosure_problems(evidence["marking"], description, raw_data)
     except (KeyError, TypeError, ValueError) as exc:
         return [f"the journal evidence does not compose: {exc}"]
-    problems: list[str] = []
+    problems: list[str] = list(disclosure)
     if composed.description != description:
         problems.append("the description is not what the journal evidence composes")
     if description is None:

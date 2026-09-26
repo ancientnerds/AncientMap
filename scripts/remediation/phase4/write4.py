@@ -670,7 +670,14 @@ def _validate_wc_sites(rows: Sequence[Row4]) -> None:
             )
         new = None if raw.new_value is None else M.parse_json(raw.new_value)
         old = None if raw.old_value is None else M.parse_json(raw.old_value)
-        problems = wc4.wc_problems(left, new)
+        # the invariants, the recorded marking re-derived from the row's own old value, and the AI
+        # disclosure that marking requires (the review of 2026-09-26: required, not only checked)
+        marking = raw.evidence["marking"]
+        problems = (
+            wc4.wc_problems(left, new)
+            + wc4.old_marking_problems(marking, raw.evidence["checked"], old)
+            + wc4.disclosure_problems(marking, left, new)
+        )
         if problems:
             raise W.WriteRefused(f"{site_id}: " + "; ".join(problems))
         kept = {key: value for key, value in (new or {}).items() if key not in wc4.WC_KEYS}

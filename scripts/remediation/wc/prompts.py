@@ -60,15 +60,26 @@ is published in the site's list of sources, so code checks that the page's text 
 passage of one page. Several quotes may come from one page.
 5. "remove" (KEEP_TRIMMED only) is one exact piece of the sentence, copied character for \
 character, including the comma or space that must go with it (", built by Khufu," or " in 1200 \
-BC"), so that what stays reads as a complete sentence. Code removes it only if it occurs exactly \
-once and what stays is a clean sentence (no double space, no dangling comma, at least 25 \
-characters, a capital or digit first and . ! or ? last); code capitalises the first letter when \
-the piece opened the sentence. Never remove just a word that negates, hedges or restricts (not, \
-no, never, possibly, probably, about, c., only, partly, ...) from a claim that stays: that changes \
-what the rest says, code refuses a piece that is nothing but such words, and the sentence is a \
-DROP instead. Such a word may go together with the whole claim it belongs to (" (c. 3000 BC)", \
-", probably a tomb,"). A piece must not leave the rest saying more than the sources support (" by \
-Evans" out of "never excavated by Evans" widens the "never").
+BC"), so that what stays reads as a complete sentence. The piece begins and ends between words - \
+never inside a word or a number (" c. 3000 BCE", not " c. 3000 BC"; never "5" out of "3500") - \
+and never takes the sentence's final . ! or ?. Code removes it only if it occurs exactly once, \
+cuts no word or number, and what stays is a clean sentence (no double space, no dangling comma, at \
+least 25 characters, a capital or digit first and . ! or ? last); code capitalises the first letter \
+when the piece opened the sentence. A trim never takes a qualifier off what stays; code refuses \
+such a piece, and the sentence is a DROP instead:
+   - never just a word that negates, hedges or restricts (not, no, never, possibly, probably, \
+about, c., only, partly, ...), nor a frame that hedges or reports what stays ("According to \
+legend, ", "It is believed that ", "It is likely that ", ", it is said,");
+   - never a piece with a word that puts the sentence under a telling or into doubt (according \
+to, legend, tradition, myth, folklore, disputed, uncertain, unknown, attributed, ...);
+   - a reporting word (believed, thought, said, claimed, reportedly, considered, ...) only inside \
+the sentence, as the inner clause of the number or date it reports (", believed to date to about \
+3000 BC,");
+   - a negation only together with the whole rest of its clause (", not a tomb,"), and never a \
+piece inside the clause of a negation that stays (" by Evans" out of "never excavated by Evans" \
+widens the "never").
+   A hedge or restriction word may go together with the whole claim it belongs to (" (c. 3000 \
+BC)", ", probably a tomb,"). A piece must not leave the rest saying more than the sources support.
 6. A sentence that opens with a pronoun (It, Its, This, These, They, ...) is removed by code when \
 the sentence before it is removed; judge each sentence on its own claims.
 7. Answer from what the sources say, never from memory alone, and never keep a sentence because it \

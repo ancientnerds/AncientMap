@@ -165,6 +165,11 @@ def _full_provenance() -> dict[str, Any]:
     return dataclasses.replace(provenance, desc_sha256=M.text_sha256(TEXT_E)).to_dict()
 
 
+def _unmarked(raw_json: str) -> str:
+    """A raw_data value without its `_description_provenance`."""
+    return json.dumps({k: v for k, v in json.loads(raw_json).items() if k != M.PROVENANCE_KEY})
+
+
 def _remade(row: W4.Row4, **change: Any) -> W4.Row4:
     data = {**row.to_dict(), **change}
     data["change_key"] = W4.W.change_key(
@@ -208,6 +213,16 @@ def _remade(row: W4.Row4, **change: Any) -> W4.Row4:
         (lambda rows: [_remade(r, test_id=W4.TEST_CARD_CLEAR) if r.column == "description"
                        and r.site_id == FX.SITE_C else r for r in rows],
          "is not a WC row"),
+        # a March text's AI footnote dropped: every invariant holds, its disclosure does not (the
+        # review of 2026-09-26)
+        (lambda rows: [_remade(r, new_value=_unmarked(r.new_value))
+                       if r.site_id == FX.SITE_A and r.column == "raw_data" else r for r in rows],
+         "AI disclosure"),
+        # ... nor does an evidence that records the March text as unclaimed to excuse it
+        (lambda rows: [_remade(r, new_value=_unmarked(r.new_value), evidence={
+                           **r.evidence, "marking": {**r.evidence["marking"], "old": "unclaimed"}})
+                       if r.site_id == FX.SITE_A and r.column == "raw_data" else r for r in rows],
+         "recorded marking"),
     ],
 )  # fmt: skip
 def test_every_wc_plan_rule_refuses_a_broken_plan(tmp_path: Path, mutate, message) -> None:
