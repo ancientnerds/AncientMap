@@ -37,7 +37,8 @@ O1-O11) over the design `output/remediation/REPAIR_TEXTS_2026-09-26.md`:
 | descriptions expected written | ~1,810 - 1,850 | the mass run's rates: W 70.5 %, S 27 % |
 | agent batches | 216 select + <= 216 review; v3d 2 + 2; v3's re-queue a few | every v3 batch holds 9-15 census W/S sites |
 | **the v3 plan as built** (2026-09-26, from 6e448e3, L5 not yet applied) | **3,124 sites in 209 batches, p4-2001 .. p4-2209**, `PLAN4.v3.jsonl` `779021ad0b11785ab8010ce0192296bcd67320bdb7e86cbb202627d69b9ee143` | section 3's command with `--exclude V3_EXCLUDE_L5.txt` (167 ids, `ab493aa1...`, 153 of them listed); rebuilt offline byte for byte by the guarded `plan4.py` of the second review (runs read: d9, mass, pilot 4, v3) |
-| **selector questions of the live run** | **2,569** in all 209 batches (472 sites held before any question) | `opus_handoff.validate` over `handoff/p4-v3-select`, read at ~10:40 UTC: 731 answered, 1,838 missing, 0 stale or malformed; `handoff4.py ready` over all of them: 3 answers the import would refuse (section 5, "A recorded answer the import would refuse") |
+| **selector questions of the live run** | **2,569** in all 209 batches (472 sites held before any question) | `opus_handoff.validate` over `handoff/p4-v3-select`, read at ~10:40 UTC: 731 answered, 1,838 missing, 0 stale or malformed; read again at 12:54 UTC with this branch's `handoff4.py ready` (all batches, 127 s): all 2,569 answered, 206 batches ready, 3 answers the import would refuse (p4-2006, p4-2011, p4-2061; section 5, "A recorded answer the import would refuse") - p4-2006 and p4-2011 were imported at 09:41 and 09:45 UTC before the repair (the p4-pilot worktree still ran 6e448e3's `ready`), so both sites are held `selection-refused`; p4-2061 was repaired before its import (12:58 UTC, `ready` then 0 shape problems) |
+| **review questions of the live run** | **747 so far, ~1,770 expected** | read-only at ~13:10 UTC: the 88 batches whose select import ran have 1,083 selector questions and 747 review questions in `handoff/p4-v3-review` (0.690 per selector question; the mass run's 0.72); 0.690 x 2,569 = 1,772 |
 | **the v3d plan, simulated** (21:41Z, same `--exclude`) | 19 sites, p4-2501 .. p4-2502, `a5b1a0c2e4564c9d0918c105d2b854945ba20faffe7a6b184319a819f26a20b8` | `plan4._list_summary` offline with the real inputs; with `--after` v3d as well, or without `--after PLAN4.v3.jsonl`, it is refused (19 and 3,124 sites) |
 
 The census predates the 2026-09-23 id repairs for its rows (S0 of 2026-09-20), so a few lane-0 sites
@@ -296,9 +297,16 @@ an independent Opus auditor (not a batch agent of the run) before the next step:
 
     $PY $P4/audit4.py written --run-dir $RUN --apply-root $M/logs/_write_apply_p4 > $L/written-<k>.out
     grep -q '^STAGE_EXIT=0' $L/written-<k>.out && grep -v '^STAGE_EXIT=' $L/written-<k>.out > $L/written.txt
-    $PY $P4/audit4.py draw  --run-dir $RUN --seed <20260927+k> --count 10 --written $L/written.txt --exclude <earlier samples> > $L/draw-<k>.out
+    EX=; [ <k> -gt 1 ] && cat $L/drawn-*.txt > $L/sampled-<k>.txt && EX="--exclude $L/sampled-<k>.txt"   # k=1: no earlier sample
+    $PY $P4/audit4.py draw  --run-dir $RUN --seed <20260927+k> --count 10 --written $L/written.txt $EX > $L/draw-<k>.out
     grep -q '^STAGE_EXIT=0' $L/draw-<k>.out && grep -v '^STAGE_EXIT=' $L/draw-<k>.out > $L/drawn-<k>.txt
     $PY $P4/audit4.py sheet --run-dir $RUN --site-ids $L/drawn-<k>.txt --out $L/AUDIT_<k>_SHEETS.md
+
+The three lists (`--written`, `--exclude`, `--site-ids`) are read by the one reader of a site-id
+list (`snapshot_plan.read_site_ids`, second review of 2026-09-26): one id per line, and a blank
+line, a repeated id, an empty file or a missing one is refused. So at k=1 no `--exclude` is given
+(an empty file is refused), and from k=2 on the earlier draws are concatenated into one file,
+which never repeats an id (each draw excludes the earlier ones).
 
 `written` lists the run's own written sites (second review of 2026-09-26: a glob over the apply
 root also listed v3d's p4-25xx batches and the sites taken back, and the draw refused them): every

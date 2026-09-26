@@ -19064,8 +19064,12 @@ P4_SCOPE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 scope4: a scope site id need not be a UUID",
         P4S_SCOPE,
-        "            uuid.UUID(site_id)\n",
-        "            pass  # mutant\n",
+        # Anchored on the scope reader's own message: lane WA's `march_lists` (2026-09-26) put a
+        # second `uuid.UUID(site_id)` above it, and the bare line mutated that one instead.
+        "            uuid.UUID(site_id)\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"{site_id!r} is not a site id") from None\n',
+        "            pass  # mutant\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"{site_id!r} is not a site id") from None\n',
         P4S_SCOPE_TEST,
         P4S_MALFORMED,
     ),
@@ -21227,6 +21231,8 @@ P4V3_APPLY_ROOT = (
     "test_a_list_plan_never_plans_a_site_the_apply_root_wrote_from_a_run_it_cannot_read"
 )
 P4V3_WRITTEN = "test_the_written_sites_of_a_run_are_its_own_live_write_batches_less_what_it_holds"
+P4V3_RUNNER_TEST = "tests/remediation/test_phase4_runner.py"
+P4V3_AUDIT_LISTS = "test_the_audits_site_id_lists_are_read_by_the_one_reader"
 
 P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── scope4: the March lists ───────────────────────────────────────────────────────────────
@@ -21251,6 +21257,16 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4V3_SCOPE,
         "        if set(row) != MARCH_ROW_KEYS:\n",
         "        if False:  # mutant\n",
+        P4V3_TEST,
+        P4V3_SHAPE,
+    ),
+    (
+        "p4 v3 scope4: a March row's id need not be a UUID",
+        P4V3_SCOPE,
+        "            uuid.UUID(site_id)\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"March row {number}: {site_id!r} is not a site id") from None\n',
+        "            pass  # mutant\n        except (ValueError, AttributeError, TypeError):\n"
+        '            raise ScopeError(f"March row {number}: {site_id!r} is not a site id") from None\n',
         P4V3_TEST,
         P4V3_SHAPE,
     ),
@@ -21983,6 +21999,34 @@ P4_V3_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if group is W4.Group.P5:  # mutant\n        return P5_CLOSED\n",
         P4V3_TEST,
         P4V3_P5_CLOSED,
+    ),
+    # ── the second review of 2026-09-26: audit4's lists through the one site-id reader
+    (
+        "p4 v3 audit4: the lists are read by a reader of their own again",
+        P4V3_AUDIT,
+        "    return set(SP.read_site_ids(Path(path))) if path else set()\n",
+        '    return {line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines() '
+        "if line.strip()} if path else set()  # mutant\n",
+        P4V3_RUNNER_TEST,
+        P4V3_AUDIT_LISTS,
+    ),
+    (
+        "p4 v3 audit4: the draw's exclusion skips the reader",
+        P4V3_AUDIT,
+        "    exclude = _ids(args.exclude)\n",
+        '    exclude = set(Path(args.exclude).read_text(encoding="utf-8").split()) if args.exclude '
+        "else set()  # mutant\n",
+        P4V3_RUNNER_TEST,
+        P4V3_AUDIT_LISTS,
+    ),
+    (
+        "p4 v3 audit4: the sheet's ids skip the reader",
+        P4V3_AUDIT,
+        "    wanted = sorted(_ids(args.site_ids))\n",
+        '    wanted = sorted(set(Path(args.site_ids).read_text(encoding="utf-8").split()))  '
+        "# mutant\n",
+        P4V3_RUNNER_TEST,
+        P4V3_AUDIT_LISTS,
     ),
 ]
 MUTATIONS += P4_V3_MUTATIONS
