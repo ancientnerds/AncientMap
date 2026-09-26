@@ -106,6 +106,10 @@ exists only in the database (`95b33efa-d5eb-4cb8-ab61-746b3822762a`).
   new value NULL) and its key is removed from the file. The Phase-3 finding - the refusal record,
   the finder's answer and the reviewer's verdict - is the journal evidence. Known-wrong narration
   becomes absent.
+- A **descriptions-only plan** (scope version 3's March lists, owner decisions 2026-09-26, O2 and
+  O3) writes no card at all: P4 writes the description with `provenance.card: null` and P5 refuses
+  every site of it (`descriptions-only-plan`). Those cards are rewritten by lane WB
+  (`PHASE4_CONTRACTS.md` section 12, `PHASE4_V3_RUNBOOK.md`).
 
 ## Licence and disclosure
 

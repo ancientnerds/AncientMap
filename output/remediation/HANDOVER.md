@@ -36,7 +36,9 @@ in the AUDIT_LOG sections of 2026-09-25):
    card_description-02 skips those labels). Then: `opus_handoff.py validate`, `judge.py import-stage1`,
    re-asks (`export-reask`, at most twice), stage 2 / stage 3, `judge.py result`; commands in the
    AUDIT_LOG section of the acceptance tooling. **No remediation write may touch a drawn site
-   before the result (V3)** - that includes the 19 re-queued `revision-too-fresh` sites below.
+   before the result (V3)** - that includes the 19 `revision-too-fresh` sites below.
+   (Superseded 2026-09-26: the owner ended the acceptance as a measurement and lifted V3, O1 of
+   `FINISH_PLAN_2026-09-26.md`.)
 2. **Code audit** (docs/procedures/CODE_AUDIT.md, backend mode on the remediation's api/pipeline
    changes + the production-writing tooling): steps 0.5-5 done, **no fix made yet**; report
    `output/remediation/CODE_AUDIT_2026-09-25.md` (6e5d028). The 14 changed api/pipeline files check
@@ -51,8 +53,11 @@ in the AUDIT_LOG sections of 2026-09-25):
    `mechanical/lane`). A stray `%TEMP%/gettext.py` (an agent's page fetcher of 2026-09-23 that
    shadowed the stdlib module) was renamed to `fetch_page_text_2026-09-23.py`.
 
-**Still open after that:** the 19 `revision-too-fresh` sites (re-queued by mass4 from
-2026-09-26T21:30Z; lane-L-first order as in the D9 run; only after the acceptance result);
+**Still open after that:** the 19 `revision-too-fresh` sites - since 2026-09-26 lane WA's **v3d
+plan** (`docs/procedures/PHASE4_V3_RUNBOOK.md` section 8, HUMAN_ONLY_DECISIONS D6): built with
+`plan4.py build --take-deferred runs/mass-2026-09-25` once the last is due (21:40:06Z), from a fresh
+read, so no L row is reverted and no card is planned. **`runs/mass-2026-09-25` is never driven live
+again**; `mass4` refuses its live rounds once one of the 19 is ready (`descriptions_only_claims`);
 the owner items in `HUMAN_ONLY.md` (Ahin Posh coordinates, 21 wrong-both rows, Chiapa/Zoque,
 gallery eye labels, 11 lyra alias keys, 16 old shorts, deleted Commons files on the VPS, 876 vs 904);
 a final docs pass (this file's sections 2-7, CLAUDE.md's top paragraph) and a push of the docs.
@@ -149,10 +154,12 @@ It ends with `verify_writes4.py --lane p4l --plan logs/_write_apply_p4l/LANE_PLA
    IndexNow catch-up; (7) the checks, both acceptances; (8) the acceptance draw and its judging
    (`acceptance/PROTOCOL.md`, sealed; the draw excludes the mass run's audit samples
    `logs/p4_mass/midrun_sample.txt` and `audit500_sample.txt`).
-2. **The 19 `revision-too-fresh` sites** of the mass run: `mass4.py` re-queues them itself 48 h after
-   their hold, the first at 2026-09-26T21:30:14Z. Any P4 write they bring must land **before the
-   draw** (PROTOCOL: the acceptance is VOID when a write touches a drawn site after the draw); a
-   description written after the card_stats wave is the next card_stats wave's work.
+2. **The 19 `revision-too-fresh` sites** of the mass run, due 2026-09-26T21:30:14Z .. 21:40:06Z:
+   since 2026-09-26 they are lane WA's **v3d plan** (`docs/procedures/PHASE4_V3_RUNBOOK.md` section
+   8; HUMAN_ONLY_DECISIONS D6), descriptions only, from a fresh read. `runs/mass-2026-09-25` is
+   never driven live again: its re-queue (p4-0116) would give them S0's old values and an
+   extractive P5 card, and `mass4` refuses such a live round (`descriptions_only_claims`). The
+   earlier rule "write before the acceptance draw" is gone with the acceptance (O1).
 
 ### 2.5 Phase 3's own numbers (measured 2026-09-22)
 
@@ -294,7 +301,8 @@ every batch, which is why nothing there may be edited while a run is in flight.
 ## 6. Open work
 
 - **Lane L** to its end, then the **merge** of `wip/p4-pilot` and the **Phase-6 runbook** (2.4).
-- **The 19 `revision-too-fresh` sites** (2.4, item 2).
+- **The 19 `revision-too-fresh` sites** (2.4, item 2): lane WA's v3d plan
+  (`docs/procedures/PHASE4_V3_RUNBOOK.md` section 8); the mass run is never driven live again.
 - **Owner items** (`HUMAN_ONLY.md`, each with its evidence file): Ahin Posh Tape's point (no second
   independent witness; every source puts it about 95 km from the stored point, near Jalalabad); the
   21 wrong-both rows for a human (of 29 listed); Chiapa de Corzo / Zoque Culture Archaeological Zone;

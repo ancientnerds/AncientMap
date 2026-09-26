@@ -42,6 +42,13 @@ none** (owner decision 2026-09-24, "Alle kennzeichnen"): it writes no text, only
 shows the existing AI footnote, and it marks every March-AI text Phase 4 did not write, inside the
 scope or not.
 
+**A descriptions-only plan writes no card** (owner decisions 2026-09-26, O2 and O3: lane WB rewrites
+every card; `scope4.DESCRIPTIONS_ONLY_LISTS`). Its batches carry `scope4.DESCRIPTIONS_ONLY_MARK` as
+their `pass`, which `run4 prepare` copies into input.json and `load_batch` reads: P4 writes such a
+site's description with `card: null` (`without_card`, as for a card-scope hold, so no provenance
+claims a card that is not live - acceptance D4), and P5 refuses every site of such a batch
+(`descriptions-only-plan`), right after the scope: no extractive card is planned from it.
+
 ## The transaction (render_apply)
 
 `\\set ON_ERROR_STOP on`, `BEGIN`, the temp plan table `ON COMMIT DROP`; guards before the loop -
@@ -186,6 +193,9 @@ RULE_MARKED = "provenance-present"
 #: The owner's decision of 2026-09-23: a site outside the defect scope is never written (P4, P5;
 #: lane L marks every March-AI text since the decision of 2026-09-24).
 RULE_OUT_OF_SCOPE = "outside-defect-scope"
+#: The owner's decisions of 2026-09-26 (O2, O3): a descriptions-only plan's card is lane WB's, so P5
+#: plans none of its sites - no card and no clear.
+RULE_DESCRIPTIONS_ONLY = "descriptions-only-plan"
 
 _PLAN_BATCH = re.compile(r"p4-(?P<number>[0-9]{4,})")
 
@@ -615,6 +625,8 @@ class BatchInputs:
     lanes: Mapping[str, M.LaneAssignment]
     assemblies: Mapping[str, M.Assembly]
     holds: Mapping[str, tuple[M.Hold, ...]]
+    #: The plan batch carries `scope4.DESCRIPTIONS_ONLY_MARK`: P4 writes no card, P5 plans nothing.
+    descriptions_only: bool
 
     @property
     def evidence(self) -> F.EvidenceStore:
@@ -636,6 +648,12 @@ def load_batch(batch_dir: Path) -> BatchInputs:
     if batch_id != batch_dir.name:
         raise PlanInputError(f"{batch_dir}: input.json names batch {batch_id!r}")
     group_batch_id(batch_id, Group.P4)
+    mark = raw.get("pass")
+    if mark is not None and mark != S.DESCRIPTIONS_ONLY_MARK:
+        raise PlanInputError(
+            f"{batch_id}: input.json carries pass {mark!r}; a run's plan batch carries none or "
+            f"{S.DESCRIPTIONS_ONLY_MARK!r}"
+        )
     for name in (M.LANES_FILE, M.ASSEMBLY_FILE, M.HOLDS_FILE):
         if not (batch_dir / name).exists():
             raise PlanInputError(
@@ -682,6 +700,7 @@ def load_batch(batch_dir: Path) -> BatchInputs:
         lanes=lanes,
         assemblies=assemblies,
         holds={site_id: tuple(found) for site_id, found in holds.items()},
+        descriptions_only=mark == S.DESCRIPTIONS_ONLY_MARK,
     )
 
 
@@ -715,7 +734,13 @@ def load_legacy_plan(path: Path) -> list[BatchInputs]:
             seen.add(site.site_id)
         batches.append(
             BatchInputs(
-                root=path, batch_id=batch_id, sites=sites, lanes={}, assemblies={}, holds={}
+                root=path,
+                batch_id=batch_id,
+                sites=sites,
+                lanes={},
+                assemblies={},
+                holds={},
+                descriptions_only=False,
             )
         )
     return batches
@@ -834,7 +859,7 @@ def _p4_site(
             f"lane {lane.value} is written only after the independent audit found 0 UNSUPPORTED",
         )
     card_held = batch.site_holds(site_id, M.HoldScope.CARD)
-    if card_held:
+    if card_held or batch.descriptions_only:
         assembly = without_card(assembly)
 
     source_ids = [source.id for source in assembly.provenance.sources]
@@ -874,6 +899,11 @@ def _p4_site(
     )
     if card_held:
         evidence["card_holds"] = _holds_json(card_held)
+    if batch.descriptions_only:
+        evidence["card_withheld"] = (
+            f"not written: a descriptions-only plan ({S.DESCRIPTIONS_ONLY_MARK}); lane WB writes "
+            "the card (owner decisions 2026-09-26, O2 and O3)"
+        )
     return [
         make_row(
             group=Group.P4,
@@ -997,9 +1027,10 @@ def plan_cards(
 
     `card_findings` are the Phase-3 reviewer-cleared card defects (the 709) by site: the evidence
     of a clear (card_texts, HELD CARDS: "known-wrong narration becomes absent"). A site outside the
-    defect scope is refused first: no card and no clear. `card_rows` are the sites production holds
-    a card_stats row for; any other site is refused next (audit 2026-09-25 m21), so it no longer
-    blocks its whole batch at the chunk's preflight.
+    defect scope is refused first: no card and no clear. A site of a descriptions-only plan batch
+    is refused next (`RULE_DESCRIPTIONS_ONLY`, owner decisions 2026-09-26): its card is lane WB's.
+    `card_rows` are the sites production holds a card_stats row for; any other site is refused next
+    (audit 2026-09-25 m21), so it no longer blocks its whole batch at the chunk's preflight.
     """
     plan = WritePlan4(group=Group.P5, batch_id=group_batch_id(batch.batch_id, Group.P5))
     for site in batch.sites:
@@ -1008,6 +1039,14 @@ def plan_cards(
         decided: Row4 | W.Refusal
         if outside is not None:
             decided = outside
+        elif batch.descriptions_only:
+            decided = W.Refusal(
+                site.site_id,
+                "card_description",
+                RULE_DESCRIPTIONS_ONLY,
+                f"the plan batch writes descriptions only ({S.DESCRIPTIONS_ONLY_MARK}): lane WB "
+                "writes the card (owner decisions 2026-09-26, O2 and O3)",
+            )
         elif site.site_id not in card_rows:
             decided = W.Refusal(
                 site.site_id,

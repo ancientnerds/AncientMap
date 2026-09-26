@@ -35,7 +35,20 @@ stage process with its bounded spawn retry (`StageRunner.call`). What is Phase 4
   (`p4-NNNN`, after the last ordinal of the plan and of earlier re-queues, 15 sites a batch), so
   `run4 prepare` copies it like a plan line. The re-queued batches run after the plan's; a site not
   ready yet is re-queued by a later invocation. Its latest batch is then the one that counts
-  (`run4.aggregate_holds` drops the holds of the batches it left).
+  (`run4.aggregate_holds` drops the holds of the batches it left). A re-queued batch keeps its
+  plan's `pass` (`scope4.DESCRIPTIONS_ONLY_MARK`: a plan of scope version 3's lists writes
+  descriptions only), so the writer treats it as the plan's. **A later plan may take the deferred
+  sites over instead** (`plan4.py build --take-deferred RUN_DIR`, `ready_to_hand_over`): once every
+  one of them is ready and the run never re-queued one itself; from then on that run is not driven
+  live again (its re-queue would ask them twice). **A plan without a pass re-queues no site a
+  descriptions-only list names** (`descriptions_only_claims`): such a plan's batch would write it
+  over S0's old values and let P5 plan its extractive card, while every card is lane WB's (owner
+  decisions 2026-09-26) - a live round with such a ready site is refused before `REQUEUE4.jsonl`
+  is written, and the dry run names it. This is what keeps the mass run's 19 `revision-too-fresh`
+  sites for the v3d plan.
+* **A plan's batches carry one `pass`**: none (the plans of scope versions 1 and 2) or
+  `scope4.DESCRIPTIONS_ONLY_MARK`; lane L's plan (`legacy4.PLAN_MARK`) and anything else is
+  refused - lane L asks no model question.
 
 **No model question for a site outside the owner's defect scope** (decision 2026-09-23,
 `phase4/scope4.py`): Phases 4/5 write only the scope's sites, so a live round that holds a model
@@ -62,6 +75,14 @@ rounds, each followed by the answering and `opus_handoff.py validate` where it h
     mass4.py --run-dir R --live --stages translate,assemble,verify --handoff-import H/translate
     mass4.py --run-dir R --live --stages review --handoff-export H/review
     mass4.py --run-dir R --live --stages review --handoff-import H/review
+
+**The answering side of a round** is `phase4/handoff4.py`: `brief` prints the whole instruction of
+the Opus agent that answers one batch of a stage's handoff directory (the selector's or the
+reviewer's questions), `check-answer` checks one answer's shape with the stage's own parser against
+the batch's own pool or assembly before it is recorded, and `ready` names the batches of a handoff
+directory whose every question is answered in shape, so each can be imported alone (`--only`).
+Batches are independent: many agents answer different batches of one directory at once, each into
+its own scratch directory; the rounds of this driver run one at a time.
 """
 
 from __future__ import annotations
@@ -71,17 +92,18 @@ import json
 import re
 import sys
 import threading
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from phase3 import mass_run as MR  # noqa: E402
 from phase3 import run as R3  # noqa: E402
-from phase3.run import InputError, read_jsonl  # noqa: E402
+from phase3.run import InputError, _single_batch, read_jsonl  # noqa: E402
 
 from phase4 import batch4 as B  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
@@ -126,6 +148,8 @@ class PlanLine:
     batch_id: str
     ordinal: int
     sites: tuple[M.PlanSite, ...]
+    #: The plan's `pass` (`line_pass`): none, or a descriptions-only plan's mark.
+    pass_name: str | None = None
 
     def planned(self) -> MR.PlannedBatch:
         return MR.PlannedBatch(batch_id=self.batch_id, ordinal=self.ordinal, sites=len(self.sites))
@@ -133,7 +157,22 @@ class PlanLine:
     def to_json(self) -> str:
         """The plan's own line shape (`phase3.run.Batch`), which `run4 prepare` copies."""
         sites = tuple(site.to_dict() for site in self.sites)
-        return R3.Batch(batch_id=self.batch_id, ordinal=self.ordinal, sites=sites).to_json()
+        return R3.Batch(
+            batch_id=self.batch_id, ordinal=self.ordinal, sites=sites, pass_name=self.pass_name
+        ).to_json()
+
+
+def line_pass(row: Mapping[str, Any], where: str) -> str | None:
+    """A plan line's `pass`: none (the plans of scope versions 1 and 2), or the mark of a plan that
+    writes descriptions only (scope version 3's lists, owner decisions 2026-09-26). Lane L's plan
+    and anything else is refused."""
+    found = row.get("pass")
+    if found is not None and found != S.DESCRIPTIONS_ONLY_MARK:
+        raise MR.PlanError(
+            f"{where}: pass {found!r} is no Phase-4 plan's (known: none, "
+            f"{S.DESCRIPTIONS_ONLY_MARK!r}); lane L's plan asks no model question"
+        )
+    return found
 
 
 def read_plan4_lines(path: Path) -> list[PlanLine]:
@@ -152,9 +191,14 @@ def read_plan4_lines(path: Path) -> list[PlanLine]:
             if plan_site.site_id in site_ids:
                 raise MR.PlanError(f"{path}:{number}: {plan_site.site_id} is planned twice")
             site_ids.add(plan_site.site_id)
-        lines.append(PlanLine(batch_id=batch_id, ordinal=ordinal, sites=tuple(sites)))
+        mark = line_pass(row, f"{path}:{number}")
+        lines.append(
+            PlanLine(batch_id=batch_id, ordinal=ordinal, sites=tuple(sites), pass_name=mark)
+        )
     if not lines:
         raise MR.PlanError(f"{path}: no batches")
+    if len({line.pass_name for line in lines}) != 1:
+        raise MR.PlanError(f"{path}: the batches carry different passes; a plan carries one")
     if len({line.batch_id for line in lines}) != len(lines):
         raise MR.PlanError(f"{path}: a batch id appears twice; the progress file keys on it")
     return lines
@@ -176,6 +220,7 @@ def read_requeue(run_dir: Path, plan: Sequence[PlanLine]) -> list[PlanLine]:
     planned = {site.site_id for line in plan for site in line.sites}
     taken = {line.batch_id for line in plan}
     last = max(line.ordinal for line in plan)
+    (mark,) = {line.pass_name for line in plan}
     lines: list[PlanLine] = []
     for number, row in enumerate(read_jsonl(path), start=1):
         where = f"{path}:{number}"
@@ -189,9 +234,13 @@ def read_requeue(run_dir: Path, plan: Sequence[PlanLine]) -> list[PlanLine]:
         ids = [site.site_id for site in sites]
         if len(set(ids)) != len(ids) or not set(ids) <= planned:
             raise MR.PlanError(f"{where}: a re-queued batch carries planned sites, each once")
+        if line_pass(row, where) != mark:
+            raise MR.PlanError(f"{where}: a re-queued batch carries another pass than its plan")
         taken.add(batch_id)
         last = ordinal
-        lines.append(PlanLine(batch_id=batch_id, ordinal=ordinal, sites=tuple(sites)))
+        lines.append(
+            PlanLine(batch_id=batch_id, ordinal=ordinal, sites=tuple(sites), pass_name=mark)
+        )
     return lines
 
 
@@ -230,16 +279,79 @@ def requeue_lines(
     lines: Sequence[PlanLine], deferred: Sequence[Deferred], *, now: datetime
 ) -> list[PlanLine]:
     """The deferred sites whose 48 h have passed, in new batches of `plan4.BATCH_SIZE` numbered
-    after every line of the plan and of earlier re-queues."""
+    after every line of the plan and of earlier re-queues, each with the plan's `pass`."""
     ready = [item.site for item in deferred if item.ready_at <= now]
     first = max(line.ordinal for line in lines) + 1
+    (mark,) = {line.pass_name for line in lines}
     return [
         PlanLine(
             batch_id=f"{P4.BATCH_PREFIX}-{first + k:04d}",
             ordinal=first + k,
             sites=tuple(ready[start : start + P4.BATCH_SIZE]),
+            pass_name=mark,
         )
         for k, start in enumerate(range(0, len(ready), P4.BATCH_SIZE))
+    ]
+
+
+def prepared_lines(run_dir: Path) -> list[PlanLine]:
+    """The run's batches as `run4 prepare` copied them (`<batch>/input.json`: the plan's or the
+    re-queue's line, verbatim), in ordinal order: the record of what the run asked, whatever plan
+    file it was driven from."""
+    lines: list[PlanLine] = []
+    for batch_dir in sorted(p for p in run_dir.iterdir() if (p / M.INPUT_FILE).exists()):
+        where = str(batch_dir / M.INPUT_FILE)
+        row = _single_batch(batch_dir / M.INPUT_FILE, batch_dir.name)
+        ordinal = row.get("ordinal")
+        if not isinstance(ordinal, int) or isinstance(ordinal, bool):
+            raise MR.PlanError(f"{where}: {batch_dir.name} carries no integer ordinal")
+        sites = R4.plan_line_sites(row, where)
+        mark = line_pass(row, where)
+        lines.append(PlanLine(batch_dir.name, ordinal, tuple(sites), pass_name=mark))
+    return sorted(lines, key=lambda line: line.ordinal)
+
+
+def ready_to_hand_over(run_dir: Path, *, now: datetime) -> list[Deferred]:
+    """The sites a run deferred `revision-too-fresh` (`deferred_sites` over its prepared batches),
+    handed over to a later plan (`plan4.py build --take-deferred`): refused while one of them still
+    waits for its 48 h, and once the run re-queued one itself (its `REQUEUE4.jsonl`) - such a site
+    is the run's again. The run held them and wrote nothing of them."""
+    deferred = deferred_sites(run_dir, prepared_lines(run_dir))
+    waiting = sorted(item.ready_at for item in deferred if item.ready_at > now)
+    if waiting:
+        raise MR.PlanError(
+            f"{run_dir}: {len(waiting)} of its {len(deferred)} deferred site(s) are not ready; the "
+            f"last is ready at {S1.iso_utc(waiting[-1])}"
+        )
+    requeue = run_dir / REQUEUE_FILE
+    if requeue.exists():
+        again = {
+            site.site_id
+            for number, row in enumerate(read_jsonl(requeue), start=1)
+            for site in R4.plan_line_sites(row, f"{requeue}:{number}")
+        }
+        mine = sorted(again & {item.site.site_id for item in deferred})
+        if mine:
+            raise MR.PlanError(
+                f"{run_dir}: re-queued {len(mine)} of its deferred sites itself (first {mine[0]}): "
+                "they are that run's"
+            )
+    return deferred
+
+
+def descriptions_only_claims(lines: Sequence[PlanLine], scope: S.DefectScope) -> list[str]:
+    """The sites of `lines` from a plan without a pass (scope versions 1 and 2) that a
+    descriptions-only list of `scope` names (`scope4.DESCRIPTIONS_ONLY_LISTS`). Re-queued by such a
+    plan, a site would be written with S0's old values and P5 would plan its extractive card, while
+    every card is lane WB's (owner decisions 2026-09-26, O2 and O3): a descriptions-only plan takes
+    it over instead (`plan4.py build --take-deferred`, `ready_to_hand_over`)."""
+    wanted = set(S.DESCRIPTIONS_ONLY_LISTS)
+    return [
+        site.site_id
+        for line in lines
+        if line.pass_name is None
+        for site in line.sites
+        if wanted & set(scope.sites.get(site.site_id, ()))
     ]
 
 
@@ -507,6 +619,17 @@ def drive(args: argparse.Namespace) -> int:
     now = datetime.now(UTC)
     new = requeue_lines([*planned, *requeued], deferred, now=now)
     waiting = sorted(item.ready_at for item in deferred if item.ready_at > now)
+    scope = S.load_scope()
+    claimed = descriptions_only_claims(new, scope)
+    if args.live and claimed:
+        raise MR.PlanError(
+            f"{len(claimed)} ready deferred site(s) of this plan (first {claimed[0]}) are named by "
+            f"a descriptions-only list of {scope.label}: this plan carries no pass, so a re-queue "
+            "would write them over S0's old values and P5 would plan their extractive card, while "
+            "every card is lane WB's (owner decisions 2026-09-26). A descriptions-only plan takes "
+            f"them over (plan4.py build --take-deferred {run_dir}); this run is not driven live "
+            "again."
+        )
     if args.live and new:
         append_requeue(run_dir, new)
         requeued += new
@@ -522,7 +645,6 @@ def drive(args: argparse.Namespace) -> int:
     if args.jobs < 1 or args.failures_before_stop < 1:
         raise MR.PlanError("--jobs and --failures-before-stop are at least 1")
     chosen = {b.batch_id for b in batches}
-    scope = S.load_scope()
     outside = outside_scope(
         [line for line in [*planned, *requeued] if line.batch_id in chosen], scope, run_dir=run_dir
     )
@@ -556,6 +678,11 @@ def drive(args: argparse.Namespace) -> int:
         f"{'re-queued now' if args.live else '(written by a live run)'}, {len(waiting)} waiting"
         + (f" (the first until {S1.iso_utc(waiting[0])})" if waiting else "")
     )
+    if claimed:  # only a dry run gets here: a live one was refused above
+        print(
+            f"hand over     {len(claimed)} ready site(s) a descriptions-only list names: a live "
+            f"run refuses; plan4.py build --take-deferred {run_dir}"
+        )
     print(f"budget        {budget.as_text()}")
     print(f"defect scope  {scope.label}: {len(outside)} site(s) of the open batches outside it")
     if args.searches_off:
@@ -563,8 +690,13 @@ def drive(args: argparse.Namespace) -> int:
     print(f"already spent {spend.calls} calls, ${spend.cost_usd:.6f}, {spend.searches} searches")
     print(f"sources       phase4 {digest[:16]}")
     if not args.live:
-        done = sum(1 for b in batches if batch_done(run_dir, b.batch_id)[0])
-        print(f"dry run       {done} of {len(batches)} batches already done; nothing was bought")
+        done = [b.batch_id for b in batches if batch_done(run_dir, b.batch_id)[0]]
+        print(
+            f"dry run       {len(done)} of {len(batches)} batches already done; nothing was bought"
+        )
+        # The batches whose review is imported, in plan order: what the write gate may plan
+        # (`write_gate4 --batch`), comma-separated like `--only`.
+        print(f"done          {','.join(done) if done else '-'}")
         return 0
     progress_path = Path(args.progress) if args.progress else log_dir / "progress.json"
     progress = MR.Progress(

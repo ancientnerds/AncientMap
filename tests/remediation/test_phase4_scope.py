@@ -206,7 +206,7 @@ def _resealed(payload: dict[str, Any]) -> bytes:
 @pytest.mark.parametrize(
     ("tamper", "match"),
     [
-        (lambda p: p.update(version=3), "version"),
+        (lambda p: p.update(version=4), "version"),
         (lambda p: p.pop("unclaimed"), "keys"),
         (lambda p: p["sites"].reverse(), "sorted"),
         (lambda p: p["sites"].append(dict(p["sites"][-1])), "sorted"),
@@ -255,11 +255,12 @@ def test_a_site_list_that_is_not_its_digest_is_refused() -> None:
 
 
 def _pinned(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, data: bytes, *, version: int = 2
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, data: bytes, *, version: int = S.SCOPE_VERSION
 ) -> Path:
-    """`data` put in place of the pinned file of `version` (the current one, or version 1)."""
+    """`data` put in place of the pinned file of `version` (the current one, or an earlier one)."""
     names = {
         1: ("SCOPE_V1_FILE", "SCOPE_V1_SHA256"),
+        2: ("SCOPE_V2_FILE", "SCOPE_V2_SHA256"),
         S.SCOPE_VERSION: ("SCOPE_FILE", "SCOPE_SHA256"),
     }
     file_name, pin_name = names[version]
@@ -272,10 +273,10 @@ def _pinned(
 
 def test_the_scope_is_read_only_from_the_pinned_file(monkeypatch, tmp_path: Path) -> None:
     """A new scope is a new version and a new pin in code, never an edit of the file."""
-    data = S.render_scope(S.scope_payload(_rows(), _cleared(), inputs=INPUTS, version=2))
+    data = S.render_scope(_v3_payload())
     path = _pinned(monkeypatch, tmp_path, data)
     assert set(S.load_scope().sites) == {uuid(1), uuid(2), uuid(3), uuid(4)}
-    path.write_bytes(data.replace(b'"version": 2', b'"version":  2'))
+    path.write_bytes(data.replace(b'"version": 3', b'"version":  3'))
     with pytest.raises(S.ScopeError, match="is not the pinned scope"):
         S.load_scope()
 
@@ -283,23 +284,29 @@ def test_the_scope_is_read_only_from_the_pinned_file(monkeypatch, tmp_path: Path
 def test_each_version_is_read_from_its_own_pinned_file_and_is_that_version(
     monkeypatch, tmp_path: Path
 ) -> None:
-    """Version 1 stays readable at its own pin (the mass run's plan is rebuilt from it); the writers
-    read the current version. A file of one version at the other's pin is refused, as is a version
-    no file is pinned for."""
+    """Versions 1 and 2 stay readable at their own pins (the mass run's plan is rebuilt from version
+    1, version 3 is checked against version 2); the writers read the current version. A file of one
+    version at another's pin is refused, as is a version no file is pinned for."""
     one = S.render_scope(_payload())
     two = S.render_scope(S.scope_payload(_rows(), _cleared(), inputs=INPUTS, version=2))
+    three = S.render_scope(_v3_payload())
     _pinned(monkeypatch, tmp_path, one, version=1)
-    _pinned(monkeypatch, tmp_path, two)
-    assert (S.load_scope(1).version, S.load_scope().version) == (1, 2)
+    _pinned(monkeypatch, tmp_path, two, version=2)
+    _pinned(monkeypatch, tmp_path, three)
+    assert (S.load_scope(1).version, S.load_scope(2).version, S.load_scope().version) == (1, 2, 3)
     assert S.load_scope(1).label == f"SCOPE4.v1.json v1 {hashlib.sha256(one).hexdigest()[:16]}"
-    assert S.load_scope().label == f"SCOPE4.v2.json v2 {hashlib.sha256(two).hexdigest()[:16]}"
+    assert S.load_scope(2).label == f"SCOPE4.v2.json v2 {hashlib.sha256(two).hexdigest()[:16]}"
+    assert S.load_scope().label == f"SCOPE4.v3.json v3 {hashlib.sha256(three).hexdigest()[:16]}"
     swapped = tmp_path / "swapped"
     swapped.mkdir()
-    _pinned(monkeypatch, swapped, one)  # version 1's bytes at the current version's pin
-    with pytest.raises(S.ScopeError, match="pinned as version 2"):
+    _pinned(monkeypatch, swapped, two)  # version 2's bytes at the current version's pin
+    with pytest.raises(S.ScopeError, match="pinned as version 3"):
         S.load_scope()
-    with pytest.raises(S.ScopeError, match="no pinned scope of version 3"):
-        S.load_scope(3)
+    _pinned(monkeypatch, swapped, three, version=2)  # version 3's bytes at version 2's pin
+    with pytest.raises(S.ScopeError, match="pinned as version 2"):
+        S.load_scope(2)
+    with pytest.raises(S.ScopeError, match="no pinned scope of version 4"):
+        S.load_scope(4)
 
 
 # ===================================================================== the committed artefact
@@ -323,14 +330,15 @@ KILLA_MACHAY = "867f08af-8934-4ec0-bbcc-2c730bb2a93a"
 D1 = S.D1_MARKER_WITHOUT_ENTRY
 
 
-def test_the_committed_scope_is_the_pinned_one_with_the_recorded_counts() -> None:
+def test_the_committed_version_2_is_pinned_with_the_recorded_counts() -> None:
     """`SCOPE4.v2.json`, version 2 (owner order 2026-09-25, HUMAN_ONLY D9 (c)): version 1's 322 + 709
     cleared defects and 876 ungrounded cards, and the 9 sites whose description sets a marker
     without an entry - 1,631 sites, Killa Mach'ay (a cleared card) in two lists. Plan section 5.1's
     three named examples are ungrounded, Baalshamin is not claimed."""
-    scope = S.load_scope()
-    payload = json.loads(S.SCOPE_FILE.read_text(encoding="utf-8"))
-    assert (scope.version, S.SCOPE_FILE.name) == (2, "SCOPE4.v2.json")
+    scope = S.load_scope(2)
+    payload = json.loads(S.SCOPE_V2_FILE.read_text(encoding="utf-8"))
+    assert (scope.version, S.SCOPE_V2_FILE.name) == (2, "SCOPE4.v2.json")
+    assert scope.sha256 == "7256a1962ffe1b2449c7028e1174fe623d7de19fdddde2083f560790f7003173"
     assert payload["lists"] == {
         S.CLEARED_DESCRIPTION: 322,
         S.CLEARED_CARD: 709,
@@ -359,7 +367,7 @@ def test_version_1_is_kept_at_its_pin_and_version_2_refuses_nothing_it_allowed()
     is a version-2 site whose lists begin with its version-1 lists, so the gate refuses nothing
     version 1 allowed; version 2 adds the 8 listed sites version 1 did not hold, each in the new
     list alone."""
-    one, two = S.load_scope(1), S.load_scope()
+    one, two = S.load_scope(1), S.load_scope(2)
     assert (one.version, S.SCOPE_V1_FILE.name, len(one.sites)) == (1, "SCOPE4.json", 1623)
     assert one.sha256 == "19a57e9fd17f53601fecdd5424d3ea3e085c2690e8250cb72b004f010f833d6a"
     for site_id, lists in one.sites.items():
@@ -370,9 +378,10 @@ def test_version_1_is_kept_at_its_pin_and_version_2_refuses_nothing_it_allowed()
 
 
 def test_the_audit_log_records_the_pinned_scope() -> None:
-    """Both pins: version 1's, which the mass run was planned and written under, and the current."""
+    """Every pin: version 1's, which the mass run was planned and written under, version 2's (the
+    D9 run's) and the current."""
     log = (MAIN_OUTPUT / "AUDIT_LOG.md").read_text(encoding="utf-8")
-    for pin in (S.SCOPE_V1_SHA256, S.SCOPE_SHA256):
+    for pin in (S.SCOPE_V1_SHA256, S.SCOPE_V2_SHA256, S.SCOPE_SHA256):
         assert f"`{pin}`" in log
 
 
@@ -385,18 +394,22 @@ needs_inputs = pytest.mark.skipif(
 
 @needs_inputs
 def test_the_committed_scope_is_rebuilt_byte_for_byte_from_its_inputs(tmp_path: Path) -> None:
-    """Both versions from their inputs: version 1 from the S0 rows and Phase 3's refusals, the
-    current one from those and the orphan-citations lane's committed listing (the default)."""
+    """Every version from its inputs: version 1 from the S0 rows and Phase 3's refusals, version 2
+    from those and the orphan-citations lane's committed listing, the current one from those and the
+    committed March read (both the defaults)."""
     inputs = [
         "scope",
         f"--rows={RUNNER / 'S0_ROWS.jsonl'}",
         f"--refused={MAIN_OUTPUT / 'logs' / '_write_dry' / 'ALL_REFUSED.jsonl'}",
     ]
     one, two = tmp_path / "SCOPE4.json", tmp_path / "SCOPE4.v2.json"
+    three = tmp_path / "SCOPE4.v3.json"
     assert P.main([*inputs, "--version=1", f"--out={one}"]) == 0
-    assert P.main([*inputs, f"--out={two}"]) == 0
+    assert P.main([*inputs, "--version=2", f"--out={two}"]) == 0
+    assert P.main([*inputs, f"--out={three}"]) == 0
     assert one.read_bytes() == S.SCOPE_V1_FILE.read_bytes()
-    assert two.read_bytes() == S.SCOPE_FILE.read_bytes()
+    assert two.read_bytes() == S.SCOPE_V2_FILE.read_bytes()
+    assert three.read_bytes() == S.SCOPE_FILE.read_bytes()
 
 
 # ================================================= version 2: a marker without an entry (D9)
@@ -405,6 +418,42 @@ CITED = {"description_citations": [{"n": 1, "url": "https://example.org/one"}]}
 #: Postgres' own digest of `raw_data::text` stands in the read; any hex digest does here.
 CITED_SHA = "d" * 64
 INPUTS_V2 = {**INPUTS, "SKIPPED.jsonl": "c" * 64}
+INPUTS_V3 = {**INPUTS_V2, "MARCH4_ROWS.jsonl": "f" * 64}
+#: The D9 plan's own shape of the list plan (`plan4.py build --scope-list d1-marker-without-entry
+#: --first-batch 901`).
+D9 = {"scope_lists": [S.D1_MARKER_WITHOUT_ENTRY], "first_batch": 901, "excluded": set()}
+
+
+def march_row(n: int, **over: Any) -> dict[str, Any]:
+    """One row in the exact shape `plan4.MARCH_SQL` returns (measured on production 2026-09-26)."""
+    return {
+        "id": uuid(n),
+        "scope_status": None,
+        "lane": None,
+        "card": False,
+        "live_p5": False,
+        **over,
+    }
+
+
+def _march_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The March read of `rows`' sites: 1 March text and card, 3 a March card beside an unmarked
+    description, 4 a March description without a card, 5 marked but retired, 2 a live Phase-5
+    card, every other site neither."""
+    special = {
+        1: {"lane": "L", "card": True},
+        2: {"lane": "W", "card": True, "live_p5": True},
+        3: {"card": True},
+        4: {"lane": "L"},
+        5: {"lane": "L", "card": True, "scope_status": "retired"},
+    }
+    return [march_row(int(r["id"][-12:]), **special.get(int(r["id"][-12:]), {})) for r in rows]
+
+
+def _v3_payload() -> dict[str, Any]:
+    return S.scope_payload(
+        _rows(), _cleared(), inputs=INPUTS_V3, version=3, march_rows=_march_rows(_rows())
+    )
 
 
 def _marker_rows() -> list[dict[str, Any]]:
@@ -443,7 +492,7 @@ def test_version_2_is_version_1_and_the_list_of_markers_without_an_entry() -> No
     later = {site["site_id"]: site["lists"] for site in two["sites"]}
     assert all(later[site][: len(lists)] == lists for site, lists in earlier.items())
     assert (one["decision"], two["decision"]) == (S.DECISION, f"{S.DECISION} {S.ORDER_2026_09_25}")
-    assert (set(one["methods"]), set(two["methods"])) == (set(S.LISTS[:3]), set(S.LISTS))
+    assert (set(one["methods"]), set(two["methods"])) == (set(S.LISTS[:3]), set(S.LISTS[:4]))
     assert S.parse_scope(S.render_scope(two)).sites[uuid(1)] == (S.CLEARED_DESCRIPTION, D1)
 
 
@@ -460,8 +509,8 @@ def test_a_listed_site_must_fail_d1_on_its_own_row() -> None:
 def test_version_1_takes_no_marker_list_and_no_other_version_is_built() -> None:
     with pytest.raises(S.ScopeError, match="version 1 carries no list"):
         S.scope_payload(_marker_rows(), _cleared(), inputs=INPUTS, version=1, markers=[uuid(7)])
-    with pytest.raises(S.ScopeError, match="no scope version 3"):
-        S.scope_payload(_marker_rows(), _cleared(), inputs=INPUTS, version=3)
+    with pytest.raises(S.ScopeError, match="no scope version 4"):
+        S.scope_payload(_marker_rows(), _cleared(), inputs=INPUTS, version=4)
 
 
 def test_a_marker_without_an_entry_is_read_as_d1_reads_it() -> None:
@@ -538,8 +587,8 @@ def test_plan4_scope_writes_the_scope_file_from_the_rows_and_the_refusals(
 def test_plan4_scope_writes_version_2_with_the_d1_listing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The current version by default: version 1's lists and the listing's sites, each checked
-    against its row; the listing's digest joins the inputs."""
+    """Version 1's lists and the listing's sites, each checked against its row; the listing's
+    digest joins the inputs."""
     argv = _scope_inputs(tmp_path, _marker_rows())
     listing = tmp_path / "SKIPPED.jsonl"
     skipped = [
@@ -549,7 +598,7 @@ def test_plan4_scope_writes_version_2_with_the_d1_listing(
     listing.write_text("".join(json.dumps(r) + "\n" for r in skipped), encoding="utf-8")
     out = tmp_path / "SCOPE4.v2.json"
 
-    assert P.main([*argv, f"--markers={listing}", f"--out={out}"]) == 0
+    assert P.main([*argv, "--version=2", f"--markers={listing}", f"--out={out}"]) == 0
 
     scope = S.parse_scope(out.read_bytes())
     assert scope.version == 2
@@ -625,7 +674,12 @@ def test_build_with_the_defect_scope_writes_the_mass_runs_plan(
     data = S.render_scope(S.scope_payload(_rows(), _cleared(), inputs=INPUTS, version=1))
     _pinned(monkeypatch, tmp_path, data, version=1)  # uuid 1-4 in scope, uuid 5 the pilot
     later = S.scope_payload(
-        _marker_rows(), _cleared(), inputs=INPUTS_V2, version=2, markers=[uuid(7)]
+        _marker_rows(),
+        _cleared(),
+        inputs=INPUTS_V3,
+        version=3,
+        markers=[uuid(7)],
+        march_rows=_march_rows(_marker_rows()),
     )
     _pinned(monkeypatch, tmp_path, S.render_scope(later))  # the current version adds uuid 7
 
@@ -680,9 +734,7 @@ def test_the_list_plan_is_the_lists_sites_after_the_pilot_less_every_earlier_pla
     )
     path = tmp_path / "PLAN4.d9.jsonl"
 
-    tail = P.write_list_plan(
-        path, sites, pilot=3, scope=scope, scope_list=D1, earlier={uuid(5)}, taken=115
-    )
+    tail = P.write_list_plan(path, sites, pilot=3, scope=scope, earlier={uuid(5)}, taken=115, **D9)
 
     assert [site.site_id for site in tail] == [uuid(31), uuid(6), uuid(32)]
     (batch,) = R.read_jsonl(path)
@@ -695,13 +747,13 @@ def test_the_list_plan_is_numbered_in_its_own_block_past_the_mass_runs_re_queue(
 ) -> None:
     """A journal stamp names its batch (`phase4:p4-NNNN:chunk-NNNN`) and every run writes into the
     one P4 apply root. The mass run's plan ends at p4-0115 and `mass4.requeue_lines` numbers its
-    re-queued sites on from p4-0116 (19 `revision-too-fresh` sites wait), so a list plan starts at
-    p4-0901, and refuses to where an earlier plan numbers that far already."""
+    re-queued sites on from p4-0116, so the D9 plan starts at p4-0901 (`--first-batch 901`), and a
+    plan refuses to start where an earlier plan numbers that far already."""
     sites = build([row(n) for n in range(1, 25)], gold=[uuid(1)])
     scope = _listing_scope(dict.fromkeys([uuid(n) for n in range(2, 22)], (D1,)))
     path = tmp_path / "PLAN4.d9.jsonl"
 
-    P.write_list_plan(path, sites, pilot=1, scope=scope, scope_list=D1, earlier=set(), taken=115)
+    P.write_list_plan(path, sites, pilot=1, scope=scope, earlier=set(), taken=115, **D9)
 
     batches = R.read_jsonl(path)
     assert [(b["batch_id"], b["ordinal"], len(b["sites"])) for b in batches] == [
@@ -709,9 +761,7 @@ def test_the_list_plan_is_numbered_in_its_own_block_past_the_mass_runs_re_queue(
     ]  # fmt: skip
     again = tmp_path / "again.jsonl"
     with pytest.raises(R.InputError, match="p4-0901"):
-        P.write_list_plan(
-            again, sites, pilot=1, scope=scope, scope_list=D1, earlier=set(), taken=901
-        )
+        P.write_list_plan(again, sites, pilot=1, scope=scope, earlier=set(), taken=901, **D9)
     assert not again.exists()
 
 
@@ -725,19 +775,13 @@ def test_every_listed_site_is_accounted_for_and_the_list_plan_is_never_empty(
     path = tmp_path / "PLAN4.d9.jsonl"
     stray = _listing_scope({uuid(2): (D1,), uuid(9): (D1,)})
     with pytest.raises(R.InputError, match="no plan accounts for"):
-        P.write_list_plan(
-            path, sites, pilot=1, scope=stray, scope_list=D1, earlier=set(), taken=115
-        )
+        P.write_list_plan(path, sites, pilot=1, scope=stray, earlier=set(), taken=115, **D9)
     carried = _listing_scope({uuid(2): (D1,)})
-    with pytest.raises(R.InputError, match="no site of the list"):
-        P.write_list_plan(
-            path, sites, pilot=1, scope=carried, scope_list=D1, earlier={uuid(2)}, taken=115
-        )
+    with pytest.raises(R.InputError, match="no site of d1-marker-without-entry"):
+        P.write_list_plan(path, sites, pilot=1, scope=carried, earlier={uuid(2)}, taken=115, **D9)
     older = _listing_scope({uuid(2): (S.CLEARED_CARD,)}, version=1)
     with pytest.raises(R.InputError, match="version 1 carries no list"):
-        P.write_list_plan(
-            path, sites, pilot=1, scope=older, scope_list=D1, earlier=set(), taken=115
-        )
+        P.write_list_plan(path, sites, pilot=1, scope=older, earlier=set(), taken=115, **D9)
     assert not path.exists()
 
 
@@ -753,18 +797,30 @@ def test_build_with_a_scope_list_writes_the_lists_plan_after_the_earlier_plans(
     line = {"batch_id": "p4-0010", "ordinal": 10, "sites": [X.plan_site(uuid(1)).to_dict()]}
     earlier.write_text(json.dumps(line) + "\n", encoding="utf-8")
     scope = S.scope_payload(
-        _marker_rows(), _cleared(), inputs=INPUTS_V2, version=2, markers=[uuid(1), uuid(7)]
+        _marker_rows(),
+        _cleared(),
+        inputs=INPUTS_V3,
+        version=3,
+        markers=[uuid(1), uuid(7)],
+        march_rows=_march_rows(_marker_rows()),
     )
     data = S.render_scope(scope)
     _pinned(monkeypatch, tmp_path, data)
 
-    argv = [*argv, f"--pilot={pilot}", f"--scope-list={D1}", f"--after={earlier}"]
+    argv = [
+        *argv,
+        f"--pilot={pilot}",
+        f"--scope-list={D1}",
+        f"--after={earlier}",
+        "--first-batch=901",
+    ]
     assert P.main(argv) == 0
 
     (batch,) = R.read_jsonl(tmp_path / "PLAN4.jsonl")
     assert (batch["batch_id"], [s["site_id"] for s in batch["sites"]]) == ("p4-0901", [uuid(7)])
+    assert "pass" not in batch  # the D9 plan writes cards: its bytes are the ones it was run from
     summary = json.loads(capsys.readouterr().out.rstrip().rsplit("STAGE_EXIT=", 1)[0])
-    assert summary["list"] == D1 and summary["listed"] == 2
+    assert summary["lists"] == [D1] and summary["listed"] == 2 and summary["pass"] is None
     assert summary["carried_by_earlier_plans"] == [uuid(1)]
     assert (summary["sites"], summary["first_batch"]) == (1, "p4-0901")
     assert summary["scope"] == S.parse_scope(data).label
@@ -774,13 +830,18 @@ def test_build_with_a_scope_list_needs_the_pilot_and_the_earlier_plans(tmp_path:
     argv = _build_inputs_of(tmp_path)
     pilot = tmp_path / "PILOT.jsonl"
     pilot.write_text(json.dumps({"site_id": uuid(1)}) + "\n", encoding="utf-8")
-    listed = f"--scope-list={D1}"
+    listed = [f"--scope-list={D1}", "--first-batch=901"]
     with pytest.raises(R.InputError, match="--after"):
-        P.main([*argv, f"--pilot={pilot}", listed])
+        P.main([*argv, f"--pilot={pilot}", *listed])
     with pytest.raises(R.InputError, match="--pilot"):
-        P.main([*argv, listed, f"--after={pilot}"])
+        P.main([*argv, *listed, f"--after={pilot}"])
     with pytest.raises(R.InputError, match="--defect-scope"):
-        P.main([*argv, f"--pilot={pilot}", listed, f"--after={pilot}", "--defect-scope"])
+        P.main([*argv, f"--pilot={pilot}", *listed, f"--after={pilot}", "--defect-scope"])
+    with pytest.raises(R.InputError, match="--first-batch"):
+        P.main([*argv, f"--pilot={pilot}", f"--scope-list={D1}", f"--after={pilot}"])
+    for flag in ("--first-batch=901", f"--exclude={pilot}", f"--take-deferred={tmp_path}"):
+        with pytest.raises(R.InputError, match="name the lists"):
+            P.main([*argv, f"--pilot={pilot}", f"--after={pilot}", flag])
     assert not (tmp_path / "PLAN4.jsonl").exists()
 
 

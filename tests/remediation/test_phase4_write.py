@@ -1063,7 +1063,7 @@ def test_the_gate_refuses_every_site_outside_the_pinned_scope_and_counts_it(
     assert G.main(_gate_args(tmp_path), runner=_db(first, second)) == 0
     out = capsys.readouterr().out
     assert "rows planned: 2 | refused by rule: {'outside-defect-scope': 1}" in out
-    assert "defect scope: SCOPE4.json v2 " in out  # the current version, read from the pinned file
+    assert "defect scope: SCOPE4.json v3 " in out  # the current version, read from the pinned file
     refused = (tmp_path / "apply" / "p4-0002" / W4.REFUSED_FILE).read_text(encoding="utf-8")
     assert json.loads(refused)["rule"] == "outside-defect-scope"
 
@@ -1840,7 +1840,7 @@ def test_a_third_run_is_written_into_the_apply_root_two_runs_wrote(
     tmp_path, monkeypatch, capsys
 ) -> None:
     """The D9 run (owner order 2026-09-25) writes into the P4 apply root pilot 4 and the mass run
-    wrote. Its batch id is its own (`plan4.LIST_PLAN_FIRST_BATCH`, p4-0901), so the gate renders it
+    wrote. Its batch id is its own (`plan4.py build --first-batch 901`, p4-0901), so the gate renders it
     beside theirs and leaves their record byte for byte, asks its step's acceptance like any other,
     and the lane plan the acceptance reads carries every run's rows."""
     monkeypatch.setattr(G, "_verifier", lambda: FX.Verify())
