@@ -1,4 +1,5 @@
-"""Lane WB's questions: the writer's, the rewriter's, the checker's and the pilot judge's prompts.
+"""Lane WB's questions: the writer's, the rewriter's, the checker's, the web judge's (every card's
+verifier and the pilot's judge) and the rewrite after a failed verification.
 
 Every prompt is a pure function of the site's fact basis (`contract.Basis`) and, for a rewrite or a
 check, of the card and findings before it - so an import can rebuild the exact prompt an answer was
@@ -255,8 +256,28 @@ DONT: tuple[str, ...] = (
 )
 
 
+#: The sources a web fact may come from to count as a fact - lane WC's source rule
+#: (`wc/prompts.CHECK_QUESTION`, rule 2; its refusals by code: `wc.answers.url_problem`).
+REPUTABLE = (
+    "Wikipedia (the article itself, any language), UNESCO, a national heritage register, a museum, "
+    "a university, an excavation report, a scholarly publication or an established reference work"
+)
+
+
 def _sentences(site: C.Basis) -> str:
     return "\n".join(f"{sentence.id} {sentence.text}" for sentence in site.sentences)
+
+
+def _web_block(site: C.Basis) -> str:
+    """The web facts of a rewrite after a failed verification; nothing for any other question."""
+    if not site.web:
+        return ""
+    facts = "\n".join(f'{fact.id} "{fact.quote}" - {fact.url}' for fact in site.web)
+    return (
+        "\n\nWEB FACTS - quotes an independent web check found on the pages named, each "
+        "contradicting a claim of an earlier card of this site. A web fact counts as a fact only "
+        f"where its page is a reputable source: {REPUTABLE}.\n{facts}"
+    )
 
 
 def _site_block(site: C.Basis) -> str:
@@ -265,7 +286,7 @@ def _site_block(site: C.Basis) -> str:
         f"Name: {site.name}\nCountry: {site.country}\n"
         f"NAME FORMS (the card must contain one of these, exactly): {forms}\n\n"
         "THE FACT BASIS - the site's published description, sentence by sentence:\n"
-        f"{_sentences(site)}"
+        f"{_sentences(site)}{_web_block(site)}"
     )
 
 
@@ -327,6 +348,69 @@ def rewrite_prompt(site: C.Basis, findings: Sequence[Finding]) -> str:
     )
 
 
+VERIFY_WRITER_FORMAT = (
+    'Answer with ONLY this JSON object, nothing before or after it:\n{"card": "<the card>", '
+    '"basis": ["S1", "W1"], "repeats": ["S3"]}\n"basis" lists the ids of the sentences and web '
+    'facts your card\'s facts come from. "repeats" has one entry per CONTRADICTED claim above, in '
+    "its order: the id of the sentence of the description that states that claim, or null when no "
+    "sentence does ([] when none is listed)."
+)
+
+
+def _contradicted(claims: Sequence[Mapping[str, Any]]) -> str:
+    if not claims:
+        return "(none)"
+    blocks = []
+    for n, claim in enumerate(claims, start=1):
+        found = (
+            "the machine found this quote on the page"
+            if claim["proven"]
+            else f"the machine could not confirm this quote on the page: {claim['quote_outcome']}"
+        )
+        blocks.append(
+            f'{n}. {claim["claim"]}\n   page: {claim["url"]}\n   quote: "{claim["quote"]}" '
+            f"({found})"
+        )
+    return "\n".join(blocks)
+
+
+def verify_rewrite_prompt(
+    site: C.Basis,
+    card: str,
+    contradicted: Sequence[Mapping[str, Any]],
+    unproven: Sequence[Mapping[str, Any]],
+) -> str:
+    """The one rewrite after a failed web verification: the writer's rules, the card, every claim
+    the verifier found contradicted (page, quote, whether the machine found the quote) or could not
+    prove, and the web facts (`site.web`) a contradicted claim may be corrected with."""
+    not_proven = "\n".join(f"- {claim['claim']}" for claim in unproven) or "(none)"
+    return (
+        f"{PURPOSE}\n\nThe card below was accepted by a checker - every claim of it is in the "
+        "site's description - but an independent check against pages on the web did not verify "
+        "it. A card read aloud must not repeat a claim the web contradicts. Write a new card: it is "
+        "checked again, by another checker, and verified again on the web, by another verifier. "
+        "There is no further round: if the new card fails, the site gets no card.\n\n"
+        f"THE SITE\n{_site_block(site)}\n\n"
+        f"THE CARD THE WEB CHECK DID NOT VERIFY ({len(card)} characters)\n{card}\n\n"
+        f"CONTRADICTED - a page says otherwise:\n{_contradicted(contradicted)}\n\n"
+        f"NOT PROVEN - the web check found no page that proves these:\n{not_proven}\n\n"
+        "WHAT THE NEW CARD MUST DO\n"
+        "1. Drop every contradicted claim, or correct it. Correct a claim only with a fact that a "
+        "sentence of the description or a WEB FACT states, its numbers written as that sentence "
+        "or web fact writes them - nothing else, not your own knowledge. A web fact may be used "
+        f"only if its page is a reputable source: {REPUTABLE}. When in doubt, drop the claim. "
+        "(Rule 3 below extends to the web facts in this round only.)\n"
+        "2. At most one claim of the new card may be one the web check could not prove, and never "
+        "the claim that says what the site is. Prefer the facts the web check proved.\n"
+        "3. For each contradicted claim above, in its order, name the sentence of the description "
+        "that states it, or null if no sentence does: this lists the description's own errors for "
+        "their repair.\n\n"
+        f"THE RULES\n{_numbered(RULES)}\n\nNEVER, for example:\n{_numbered(DONT)}\n\n"
+        f"GOOD CARDS (other sites, each true to its own description):\n\n{_examples()}\n\n"
+        f"{VERIFY_WRITER_FORMAT}\n"
+    )
+
+
 CHECKER_FORMAT = (
     "Answer with ONLY this JSON object, nothing before or after it:\n"
     '{"claims": [{"claim": "<one claim, in your words>", "support": ["S2"]}], '
@@ -357,8 +441,20 @@ def _worked_check() -> str:
     )
 
 
+def _web_rule(site: C.Basis) -> str:
+    """How a checker counts a web fact - only in the check of a rewrite that has some."""
+    if not site.web:
+        return ""
+    return (
+        "   A claim may also rest on a WEB FACT (its id, W1, ...) - but only if that fact's page is "
+        f"a reputable source ({REPUTABLE}); a claim that rests only on a web fact from any other "
+        "page has support [].\n"
+    )
+
+
 def checker_prompt(site: C.Basis, card: str) -> str:
-    """The checker's question: every claim of `card` against the site's sentences."""
+    """The checker's question: every claim of `card` against the site's sentences (and, checking a
+    rewrite after a failed web verification, its web facts)."""
     return (
         "You are the independent checker of a teaser card for Ancient Nerds, a globe of ancient "
         "sites with a card game and narrated short videos. The card was written by someone else "
@@ -374,6 +470,7 @@ def checker_prompt(site: C.Basis, card: str) -> str:
         "supported; an embellishment, a sharpened hedge, a computed number or an inference the "
         "sentences do not make is not. Use only the sentences above - not your own knowledge, "
         "even where you know the claim is true.\n"
+        f"{_web_rule(site)}"
         f"3. tone_ok: the card follows these rules:\n{_numbered(TONE_RULES)}\n"
         "4. this_site: the card is about this site - not a namesake, a neighbouring town, the "
         "region, a museum or an object kept elsewhere.\n\n"
@@ -394,7 +491,9 @@ JUDGE_FORMAT = (
 
 
 def judge_prompt(name: str, country: str, card: str) -> str:
-    """The pilot judge's question: every claim of a card against sources on the web."""
+    """A web judge's question - the verifier of every card (stages `verify`, `verify2`) and the
+    pilot's judge: every claim of a card against sources on the web, the central claim first (the
+    VERIFIED rule never lets it go unproven: `run.card_verification`)."""
     return (
         "You are an independent fact checker. Below is a short teaser text about an archaeological "
         "site, written for a website and its narrated short videos. Check it against sources on "
@@ -402,9 +501,11 @@ def judge_prompt(name: str, country: str, card: str) -> str:
         "verdict rests on a page you open and quote.\n\n"
         f"Site: {name}\nCountry: {country}\nText: {card}\n\n"
         "YOUR TASK\n"
-        "1. List every claim of the text: each fact, number, date, name, place, material, size, "
-        "function, superlative, and every statement or implication that something is unknown or "
-        "mysterious.\n"
+        "1. List every claim of the text, the central claim first: what kind of place the site is "
+        "(a fort, a tomb, a settlement, a temple, ...), with where it is if the text says so - the "
+        "claim without which the text would be about another place. Then each fact, number, date, "
+        "name, place, material, size, function, superlative, and every statement or implication "
+        "that something is unknown or mysterious.\n"
         "2. For each, search the web and decide SUPPORTED, CONTRADICTED or UNVERIFIABLE.\n"
         "3. Prefer pages that can be quoted: Wikipedia, national heritage registers, museum and "
         "university pages, published papers. Some sites refuse automated readers (Historic "
@@ -416,10 +517,19 @@ def judge_prompt(name: str, country: str, card: str) -> str:
 
 
 def findings_of(record: Mapping[str, Any]) -> tuple[str, ...]:
-    """The reasons an attempt failed, as the rewrite prompt shows them: the mechanical problems of
-    a writer's record, or the checker's unsupported claims, tone, site and reasons."""
+    """The reasons an attempt failed, as the rewrite prompt and the outcomes show them: the
+    mechanical problems of a writer's record, the checker's unsupported claims, tone, site and
+    reasons, or the web verifier's contradicted and unproven claims."""
     if record["kind"] == "write":
         return tuple(record["problems"])
+    if record["kind"] == "verify":
+        return tuple(
+            f'The web check contradicts: {claim["claim"]} ({claim["url"]}: "{claim["quote"]}")'
+            if claim["verdict"] == "CONTRADICTED"
+            else f"The web check could not prove: {claim['claim']}"
+            for claim in record["claims"]
+            if not claim["proven"] or claim["verdict"] != "SUPPORTED"
+        )
     reasons = [
         f"No sentence of the description supports the claim: {claim['claim']}"
         for claim in record["claims"]

@@ -1,4 +1,5 @@
-"""Lane WB's answer shapes: the strict JSON a writer, a checker and the pilot judge return.
+"""Lane WB's answer shapes: the strict JSON a writer, a checker and a web judge (the verifier of
+every card, and the pilot's judge) return.
 
 `check-answer` (run.py) runs these parsers on an answer before the agent records it, and the import
 runs them again: an answer is either exactly its shape or refused with the reason - nothing is
@@ -54,21 +55,50 @@ def _ids(value: Any, site: C.Basis, what: str) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Written:
-    """A writer's answer: the text as written, the final card, and the sentences it rests on."""
+    """A writer's answer: the text as written, the final card, and the sentences it rests on - and
+    after a failed web verification, for each contradicted claim the description sentence that
+    states it (`repeats`, `None` where none does)."""
 
     text: str
     card: str
     basis: tuple[str, ...]
+    repeats: tuple[str | None, ...] = ()
 
 
-def parse_writer(text: str, site: C.Basis) -> Written:
-    """`{"card": str, "basis": [sentence ids, at least one]}`; the card is made final here."""
-    data = _object(text, frozenset({"card", "basis"}))
+def _written(data: dict[str, Any], site: C.Basis) -> Written:
     written = _string(data["card"], "card")
     basis = _ids(data["basis"], site, "basis")
     if not basis:
         raise AnswerError("basis names no sentence - every card rests on at least one")
     return Written(text=written, card=C.final_card(written), basis=basis)
+
+
+def parse_writer(text: str, site: C.Basis) -> Written:
+    """`{"card": str, "basis": [sentence ids, at least one]}`; the card is made final here."""
+    return _written(_object(text, frozenset({"card", "basis"})), site)
+
+
+def parse_verify_writer(text: str, site: C.Basis, contradicted: int) -> Written:
+    """The rewrite after a failed web verification: `{"card", "basis", "repeats"}`. `basis` may name
+    the web facts (`W1`) beside the sentences; `repeats` has one entry per contradicted claim the
+    prompt lists, in its order: the id of the description sentence that states the claim, or null
+    when no sentence does (the card departed from its description). A web fact is never an entry: it
+    is the page that contradicts, not the text that said it."""
+    data = _object(text, frozenset({"card", "basis", "repeats"}))
+    written = _written(data, site)
+    repeats = data["repeats"]
+    if not isinstance(repeats, list) or len(repeats) != contradicted:
+        found = len(repeats) if isinstance(repeats, list) else type(repeats).__name__
+        raise AnswerError(
+            f"repeats has {found} entries: it has one per contradicted claim, {contradicted}"
+        )
+    for number, entry in enumerate(repeats, start=1):
+        if entry is not None and entry not in site.described_ids:
+            raise AnswerError(
+                f"repeats entry {number} ({entry!r}) is neither null nor the id of a sentence of "
+                "the description"
+            )
+    return Written(written.text, written.card, written.basis, tuple(repeats))
 
 
 @dataclass(frozen=True)
@@ -142,7 +172,8 @@ def parse_checker(text: str, site: C.Basis) -> Checked:
 
 @dataclass(frozen=True)
 class Judged:
-    """One claim of the pilot judge: its verdict and, unless UNVERIFIABLE, the page and quote."""
+    """One claim of a web judge (a verifier or the pilot's judge): its verdict and, unless
+    UNVERIFIABLE, the page and quote."""
 
     claim: str
     verdict: str

@@ -16,11 +16,12 @@ write is `scripts/remediation/mechanical/teaser.py` (plan) and `mechanical/apply
         `opus_handoff.py answer --answered-by teaser-B`)
     opus_handoff.py validate --dir $H-write                every answer in, in shape, by Opus
     $T import --run R --stage write                        parse, mechanical checks: STAGE-write
-    ... the same for check, rewrite1, check1, rewrite2, check2 (a stage nobody is due for is
-        skipped: `export` says so)
+    ... the same for check, rewrite1, check1, rewrite2, check2, verify, rewrite-v, check-v, verify2
+        (a stage nobody is due for is skipped: `export` says so; the import of a verify stage
+        fetches every cited page once and checks every quote by machine)
     $T status --run R                                      who is due where, accepted, cleared
-    $T outcomes --run R                                    OUTCOMES.jsonl, once every site settled
-    $T judge-export --run R --handoff $H-judge             pilot: an independent web judge
+    $T outcomes --run R                                    OUTCOMES.jsonl, DESCRIPTION_DEFECTS.jsonl
+    $T judge-export --run R --handoff $H-judge             pilot gate: a fresh independent web judge
     $T judge-import --run R                                quotes fetched and checked: JUDGE.md
 
 ## The stages
@@ -28,22 +29,36 @@ write is `scripts/remediation/mechanical/teaser.py` (plan) and `mechanical/apply
 `write` asks every candidate; `check` asks a different agent about every card that passed the
 mechanical checks (`contract.problems`), one checker per writer batch; a card that failed either goes
 to `rewrite1` with its findings and is checked by a new checker in `check1`; once more in `rewrite2`
-and `check2`; after that the site gets no card (cleared). Each stage's round is exported once, into a
-handoff directory of its own; the import rebuilds every prompt from the run's files and refuses an
-answer to any other.
+and `check2`; after that the site gets no card (cleared, `failed-after-two-rewrites`).
+
+Every card a checker accepted is then **verified** on the web (`verify`, owner O2: "natuerlich
+muessen sie inhaltlich stimmen"): an independent web judge - the pilot judge's prompt, answer shape
+and machine quote check - decides each claim SUPPORTED / CONTRADICTED / UNVERIFIABLE against a page
+it quotes, 5 cards per batch. The card is VERIFIED when no claim is contradicted (proven or not), at
+most `CP.MAX_UNPROVEN_CLAIMS` claim lacks a proving quote and the central claim (the verifier's
+first) has one; CONTRADICTED when any claim is contradicted; else UNPROVEN (`card_verification`).
+A card not VERIFIED gets one rewrite (`rewrite-v`: the writer sees the contradicted claims with their
+pages and quotes, and may correct one only from the description or a web fact - a contradicting
+quote the machine found on a page lane WC's source rule admits), the ordinary check (`check-v`) and
+a new verifier (`verify2`); a card still not VERIFIED clears the site (`contradicted-after-verify`,
+`unproven-after-verify`; a rewrite that fails the mechanical checks or `check-v`:
+`failed-after-verify-rewrite`). Each stage's round is exported once, into a handoff directory of its
+own; the import rebuilds every prompt from the run's files and refuses an answer to any other.
 
 **Independence is a process rule, kept by the orchestrator**: every batch of every stage (and of the
 judge) is answered by a new agent, and the brief tells an agent that answered another batch of lane
 WB to stop. The import cannot see an agent - `answered_by` is the batch's name, `teaser-<batch_id>`,
-and batch ids carry their stage - so its refusal of a checker (or judge) whose name wrote or checked
-the site before catches a reused or mistyped name, never one agent reused under two batch names.
+and batch ids carry their stage - so its refusal of a checker or verifier whose name wrote, checked
+or verified the site before (and of a pilot judge whose name answered anything in the run) catches a
+reused or mistyped name, never one agent reused under two batch names.
 
 ## The run's files (`output/remediation/teaser/runs/<run>/`, gitignored: they hold description text)
 
 `EXPORT.jsonl` (the read-only production export `select` read), `RUN.json` (the selection, pinned by
 sha256), `SITES.jsonl` (each candidate's fact basis inputs), `LISTED.jsonl` (every curated site that
-is not a candidate, and why), `ROUNDS.jsonl`, `STAGE-<stage>.jsonl`, `OUTCOMES.jsonl` and
-`OUTCOMES.md`; for the pilot `JUDGE.jsonl`, `JUDGE.md` and `pages/` (each cited page, fetched once).
+is not a candidate, and why), `ROUNDS.jsonl`, `STAGE-<stage>.jsonl`, `pages/` (each page a verifier
+or judge cited, fetched once), `OUTCOMES.jsonl`, `OUTCOMES.md` and `DESCRIPTION_DEFECTS.jsonl`; for
+the pilot `JUDGE.jsonl` and `JUDGE.md`.
 """
 
 from __future__ import annotations
@@ -80,6 +95,7 @@ from opus_audit import quotes as Q  # noqa: E402
 from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
 from phase4 import model4 as M  # noqa: E402 - AI_SYSTEM, the disclosure's model string
 from phase4 import verify4 as V  # noqa: E402 - card_fit, V10's font measurement
+from wc.answers import url_problem  # noqa: E402 - lane WC's source rule, by code
 
 from pipeline.utils import card_provenance as CP  # noqa: E402
 from teaser import answers as A  # noqa: E402
@@ -104,19 +120,46 @@ SENTENCE_CHECKED = "WC"
 #: What `select --basis` may restrict a run to.
 BASES = tuple(sorted(BASIS_LANES | {SENTENCE_CHECKED}))
 BATCH_SIZE = 15
+#: Cards per web judge batch: a verifier's (stages verify, verify2) and the pilot judge's.
 JUDGE_BATCH_SIZE = 5
-WRITER_STAGES = ("write", "rewrite1", "rewrite2")
-CHECKER_STAGES = ("check", "check1", "check2")
-ROUNDS = tuple(zip(WRITER_STAGES, CHECKER_STAGES, strict=True))
-STAGES = tuple(stage for pair in ROUNDS for stage in pair)
+#: The checker rounds: a writer stage, then its checker stage.
+CHECK_ROUNDS = (("write", "check"), ("rewrite1", "check1"), ("rewrite2", "check2"))
+#: The web verification of every accepted card, and its one rewrite round.
+FIRST_VERIFY, SECOND_VERIFY = CP.FIRST_VERIFY, CP.SECOND_VERIFY
+VERIFY_REWRITE, VERIFY_CHECK = "rewrite-v", CP.VERIFY_REWRITE_CHECK
+WRITER_STAGES = (*(writer for writer, _ in CHECK_ROUNDS), VERIFY_REWRITE)
+CHECKER_STAGES = (*(checker for _, checker in CHECK_ROUNDS), VERIFY_CHECK)
+VERIFY_STAGES = (FIRST_VERIFY, SECOND_VERIFY)
+STAGES = (
+    *(stage for pair in CHECK_ROUNDS for stage in pair),
+    FIRST_VERIFY,
+    VERIFY_REWRITE,
+    VERIFY_CHECK,
+    SECOND_VERIFY,
+)
 JUDGE_STAGE = "judge"
-#: The web requests of the pilot judge's import: the lanes' one User-Agent, no personal data. The
-#: bare `AncientMapRemediation/1.0 (research)` drew 403 from Wikimedia through httpx on every page of
-#: pilot wb-pilot-2026-09-26 (its robot policy wants a contact; the project URL is one).
+#: A card's verification (`card_verification`): VERIFIED is the provenance's; the other two send
+#: the card to the one rewrite round, or clear the site after it.
+VERIFIED = CP.VERIFIED
+CONTRADICTED = "CONTRADICTED"
+UNPROVEN = "UNPROVEN"
+#: Why a site the run asked is cleared (OUTCOMES.jsonl "reason").
+FAILED_REWRITES = "failed-after-two-rewrites"
+FAILED_VERIFY_REWRITE = "failed-after-verify-rewrite"
+CONTRADICTED_AFTER_VERIFY = "contradicted-after-verify"
+UNPROVEN_AFTER_VERIFY = "unproven-after-verify"
+#: Whose text a contradicted description sentence is (DESCRIPTION_DEFECTS.jsonl "owner_lane"): a
+#: Phase-4 text is lane WA's (Phase 4, scope v3), a sentence-checked March text lane WC's.
+OWNER_LANE = {**dict.fromkeys(sorted(BASIS_LANES), "WA"), SENTENCE_CHECKED: "WC"}
+#: The web requests of the verify imports and of the pilot judge's: the lanes' one User-Agent, no
+#: personal data. The bare `AncientMapRemediation/1.0 (research)` drew 403 from Wikimedia through
+#: httpx on every page of pilot wb-pilot-2026-09-26 (its robot policy wants a contact; the project
+#: URL is one).
 USER_AGENT = research_web.USER_AGENT
-#: The pilot gate (sealed with the runbook): no claim CONTRADICTED - with a proving quote or
-#: without one - and at most this share of all claims left without a proving quote (UNVERIFIABLE,
-#: or a quote the machine did not find).
+#: The pilot gate (sealed with the runbook), on the pilot's final (VERIFIED) cards, by a fresh judge
+#: who is no verifier of the run: no claim CONTRADICTED - with a proving quote or without one - and
+#: at most this share of all claims left without a proving quote (UNVERIFIABLE, or a quote the
+#: machine did not find).
 PILOT_MAX_UNPROVEN_SHARE = 0.10
 
 #: Why a curated site is not a candidate (LISTED.jsonl).
@@ -360,7 +403,11 @@ def select(
         "pilot": None if pilot is None else {"n": pilot[0], "seed": pilot[1]},
         "sites_file": None if sites_file is None else _shown(sites_file),
         "excluded_runs": [_shown(path) for path in exclude],
-        "contract": {"min_chars": C.MIN_CHARS, "max_chars": C.MAX_CHARS},
+        "contract": {
+            "min_chars": C.MIN_CHARS,
+            "max_chars": C.MAX_CHARS,
+            "max_unproven_claims": CP.MAX_UNPROVEN_CLAIMS,
+        },
     }
     write_json(run / "RUN.json", record)
     return record
@@ -422,17 +469,26 @@ def stage_records(run: Path, before: str | None = None) -> dict[str, dict[str, d
 
 @dataclass(frozen=True)
 class Progress:
-    """Where one site stands: due at a stage, accepted, or cleared - with its failed cards."""
+    """Where one site stands: due at a stage, accepted, or cleared - with its failed cards. `writer`
+    and `check` are the records of the card at hand, `verified` the site's verifications so far (the
+    first one's claims drive the rewrite after it), `reason` why a cleared site is cleared."""
 
     status: str
     stage: str | None
     findings: tuple[P.Finding, ...] = ()
     writer: Mapping[str, Any] | None = None
     check: Mapping[str, Any] | None = None
+    verified: tuple[Mapping[str, Any], ...] = ()
+    reason: str | None = None
 
     @property
     def card(self) -> str | None:
         return None if self.writer is None else self.writer["card"]
+
+    @property
+    def verify(self) -> Mapping[str, Any] | None:
+        """The last verification of the site."""
+        return self.verified[-1] if self.verified else None
 
 
 DUE = "due"
@@ -443,7 +499,7 @@ CLEARED = "cleared"
 def progress(site_id: str, records: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> Progress:
     """The site's state, derived from the imported records alone (module doc, "The stages")."""
     findings: list[P.Finding] = []
-    for writer_stage, checker_stage in ROUNDS:
+    for writer_stage, checker_stage in CHECK_ROUNDS:
         written = records[writer_stage].get(site_id)
         if written is None:
             return Progress(DUE, writer_stage, tuple(findings))
@@ -454,9 +510,51 @@ def progress(site_id: str, records: Mapping[str, Mapping[str, Mapping[str, Any]]
         if checked is None:
             return Progress(DUE, checker_stage, tuple(findings), writer=written)
         if checked["verdict"] == A.PASSED:
-            return Progress(ACCEPTED, checker_stage, tuple(findings), written, checked)
+            return verification_progress(site_id, records, findings, written, checked)
         findings.append(P.Finding(written["card"], P.findings_of(checked)))
-    return Progress(CLEARED, None, tuple(findings))
+    return Progress(CLEARED, None, tuple(findings), reason=FAILED_REWRITES)
+
+
+def verification_progress(
+    site_id: str,
+    records: Mapping[str, Mapping[str, Mapping[str, Any]]],
+    findings: list[P.Finding],
+    written: Mapping[str, Any],
+    checked: Mapping[str, Any],
+) -> Progress:
+    """A card the checker accepted: verified on the web; a card not VERIFIED gets one rewrite
+    (`rewrite-v`), its check (`check-v`) and a new verifier (`verify2`), else the site is cleared."""
+    first = records[FIRST_VERIFY].get(site_id)
+    if first is None:
+        return Progress(DUE, FIRST_VERIFY, tuple(findings), written, checked)
+    if first["verdict"] == VERIFIED:
+        return Progress(ACCEPTED, FIRST_VERIFY, tuple(findings), written, checked, (first,))
+    findings = [*findings, P.Finding(written["card"], P.findings_of(first))]
+    rewritten = records[VERIFY_REWRITE].get(site_id)
+    if rewritten is None:
+        return Progress(DUE, VERIFY_REWRITE, tuple(findings), written, checked, (first,))
+    cleared = {"verified": (first,), "reason": FAILED_VERIFY_REWRITE}
+    if rewritten["problems"]:
+        findings.append(P.Finding(rewritten["card"], P.findings_of(rewritten)))
+        return Progress(CLEARED, None, tuple(findings), **cleared)
+    rechecked = records[VERIFY_CHECK].get(site_id)
+    if rechecked is None:
+        return Progress(DUE, VERIFY_CHECK, tuple(findings), rewritten, None, (first,))
+    if rechecked["verdict"] != A.PASSED:
+        findings.append(P.Finding(rewritten["card"], P.findings_of(rechecked)))
+        return Progress(CLEARED, None, tuple(findings), **cleared)
+    second = records[SECOND_VERIFY].get(site_id)
+    if second is None:
+        return Progress(DUE, SECOND_VERIFY, tuple(findings), rewritten, rechecked, (first,))
+    if second["verdict"] == VERIFIED:
+        return Progress(
+            ACCEPTED, SECOND_VERIFY, tuple(findings), rewritten, rechecked, (first, second)
+        )
+    findings.append(P.Finding(rewritten["card"], P.findings_of(second)))
+    reason = (
+        CONTRADICTED_AFTER_VERIFY if second["verdict"] == CONTRADICTED else UNPROVEN_AFTER_VERIFY
+    )
+    return Progress(CLEARED, None, tuple(findings), verified=(first, second), reason=reason)
 
 
 def states(run: Path) -> dict[str, Progress]:
@@ -464,23 +562,97 @@ def states(run: Path) -> dict[str, Progress]:
     return {site_id: progress(site_id, records) for site_id in bases(run)}
 
 
+# ------------------------------------------------------------------------------ the verification
+def proves(claim: Mapping[str, Any]) -> bool:
+    """Whether a judged claim is proven: SUPPORTED, with a quote the machine found on its page."""
+    return claim["verdict"] == "SUPPORTED" and claim["proven"]
+
+
+def card_verification(claims: Sequence[Mapping[str, Any]]) -> str:
+    """A card's verification from its judged claims (CARD_DESCRIPTIONS.md, section 2.1):
+    CONTRADICTED when any claim is contradicted - with a proving quote or without one (a page that
+    refused the machine, a PDF, a quote mis-copied): a contradiction is never waved through as
+    merely unproven; else VERIFIED when at most `CP.MAX_UNPROVEN_CLAIMS` claim lacks a proving quote
+    and the central claim - the judge's first, what the site is (`prompts.judge_prompt`) - has one;
+    else UNPROVEN."""
+    if any(claim["verdict"] == CONTRADICTED for claim in claims):
+        return CONTRADICTED
+    unproven = [claim for claim in claims if not proves(claim)]
+    if len(unproven) > CP.MAX_UNPROVEN_CLAIMS or not proves(claims[0]):
+        return UNPROVEN
+    return VERIFIED
+
+
+def contradicted_claims(verified: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The claims a verifier found contradicted, proven or not, in its order."""
+    return [claim for claim in verified["claims"] if claim["verdict"] == CONTRADICTED]
+
+
+def unproven_claims(verified: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The claims a verifier neither proved nor contradicted (UNVERIFIABLE, or SUPPORTED with a
+    quote the machine did not find), in its order."""
+    return [
+        claim
+        for claim in verified["claims"]
+        if claim["verdict"] != CONTRADICTED and not proves(claim)
+    ]
+
+
+def web_facts(verified: Mapping[str, Any]) -> tuple[C.WebFact, ...]:
+    """What the rewrite after a failed verification may correct a claim with, beside the
+    description: each quote of a CONTRADICTED claim that the machine found on its page, from a page
+    lane WC's source rule admits (`wc.answers.url_problem`: not this project's site, an AI
+    aggregator, a Wikipedia mirror, a blocked domain or a URL with utm_ tracking), numbered `W1`,
+    `W2`, ... in the verifier's order. Whether the page is reputable beyond that list is the
+    checker's decision (`prompts.REPUTABLE`); a web fact the checker's claims cite is recorded in
+    the provenance (`web_facts`)."""
+    usable = [
+        claim
+        for claim in contradicted_claims(verified)
+        if claim["proven"] and url_problem(claim["url"]) is None
+    ]
+    return tuple(
+        C.WebFact(f"W{number}", claim["url"], claim["quote"])
+        for number, claim in enumerate(usable, start=1)
+    )
+
+
+def basis_at(stage: str, site: C.Basis, state: Progress) -> C.Basis:
+    """The fact basis a stage's question shows: with the first verification's web facts in the
+    rewrite after it and in that rewrite's check, the description alone everywhere else."""
+    if stage in (VERIFY_REWRITE, VERIFY_CHECK):
+        return site.with_web(web_facts(state.verified[0]))
+    return site
+
+
 def prompt_for(stage: str, site: C.Basis, state: Progress) -> str:
     """The exact question of one site at one stage."""
+    shown = basis_at(stage, site, state)
     if stage == "write":
         return P.writer_prompt(site)
+    if stage == VERIFY_REWRITE:
+        assert state.card is not None
+        first = state.verified[0]
+        return P.verify_rewrite_prompt(
+            shown, state.card, contradicted_claims(first), unproven_claims(first)
+        )
     if stage in WRITER_STAGES:
         return P.rewrite_prompt(site, state.findings)
     assert state.card is not None
-    return P.checker_prompt(site, state.card)
+    if stage in VERIFY_STAGES:
+        return P.judge_prompt(site.name, site.country, state.card)
+    return P.checker_prompt(shown, state.card)
 
 
 # ------------------------------------------------------------------------------ export
 def _batches(stage: str, due: Mapping[str, Progress]) -> list[tuple[str, list[str]]]:
-    """Batches of one stage: writer stages by site id in chunks; a checker stage keeps each writer
-    batch together, so one checker checks one writer's cards."""
-    if stage in WRITER_STAGES:
+    """Batches of one stage: writer stages by site id in chunks of 15, verify stages in chunks of 5
+    (each card researched on the web); a checker stage keeps each writer batch together, so one
+    checker checks one writer's cards."""
+    if stage in WRITER_STAGES or stage in VERIFY_STAGES:
+        size = JUDGE_BATCH_SIZE if stage in VERIFY_STAGES else BATCH_SIZE
         ordered = sorted(due)
-        groups = [ordered[i : i + BATCH_SIZE] for i in range(0, len(ordered), BATCH_SIZE)]
+        groups = [ordered[i : i + size] for i in range(0, len(ordered), size)]
     else:
         by_writer: dict[str, list[str]] = {}
         for site_id in sorted(due):
@@ -550,8 +722,8 @@ def agent_name(batch_id: str) -> str:
 def _earlier_agents(
     site_id: str, stage: str, records: Mapping[str, Mapping[str, Mapping[str, Any]]]
 ) -> set[str]:
-    """Every name that wrote or checked the site before `stage` (a reused or mistyped name is
-    refused by it; one agent under two batch names is not visible here)."""
+    """Every name that wrote, checked or verified the site before `stage` (a reused or mistyped
+    name is refused by it; one agent under two batch names is not visible here)."""
     return {
         records[earlier][site_id]["answered_by"]
         for earlier in STAGES[: STAGES.index(stage)]
@@ -562,23 +734,88 @@ def _earlier_agents(
 def parse_answer(
     stage: str, site: C.Basis, state: Progress, text: str, *, fit: C.Fit
 ) -> dict[str, Any]:
-    """The record of one answer: a writer's card and its mechanical problems, or a check."""
+    """The record of one answer: a writer's card and its mechanical problems (after a failed
+    verification also the description sentences its contradicted claims repeat), or a check. A
+    verifier's answer needs its pages: `import_stage` records it (`verify_record`)."""
+    shown = basis_at(stage, site, state)
     if stage in WRITER_STAGES:
-        written = A.parse_writer(text, site)
-        return {
+        if stage == VERIFY_REWRITE:
+            contradicted = len(contradicted_claims(state.verified[0]))
+            written = A.parse_verify_writer(text, shown, contradicted)
+        else:
+            written = A.parse_writer(text, shown)
+        record = {
             "kind": "write",
             "written": written.text,
             "card": written.card,
             "basis": list(written.basis),
-            "problems": C.problems(written.card, site, fit=fit),
+            "problems": C.problems(written.card, shown, fit=fit),
         }
-    checked = A.parse_checker(text, site)
+        if stage == VERIFY_REWRITE:
+            record["repeats"] = list(written.repeats)
+        return record
+    checked = A.parse_checker(text, shown)
     assert state.writer is not None
     return {"kind": "check", "card": state.card, **checked.to_dict()}
 
 
-def import_stage(run: Path, stage: str, *, fit: C.Fit = V.card_fit) -> dict[str, Any]:
-    """Every answer of one stage's round: validated, prompt-matched, parsed, recorded."""
+def prove_claims(
+    site_id: str, claims: Sequence[A.Judged], library: Q.Library
+) -> list[dict[str, Any]]:
+    """Each claim of a web judge with its quote checked by machine on the page it cites (the Opus
+    re-verification's check, `opus_audit/quotes.py`): `proven` only when the page holds the quote."""
+    results = []
+    for judged in claims:
+        outcome = None
+        if judged.url is not None:
+            outcome = Q.check_quote(
+                {"source": judged.url, "quote": judged.quote},
+                {"change_key": site_id, "evidence_files": []},
+                library,
+            ).outcome
+        proven = outcome == Q.FOUND
+        results.append({**asdict(judged), "quote_outcome": outcome, "proven": proven})
+    return results
+
+
+def fetch_pages(
+    run: Path, urls: Iterable[str], client: httpx.Client | None, pace: float
+) -> Q.Library:
+    """Every cited page fetched once into `pages/` (a page kept already is not fetched again), and
+    the library the quote check reads them from."""
+    pages = run / "pages"
+    own = client is None
+    http = judge_client() if client is None else client
+    try:
+        Q.collect(urls, pages, http, now=_now, pace=pace)
+    finally:
+        if own:
+            http.close()
+    return Q.Library(ROOT, pages)
+
+
+def verify_record(card: str, claims: list[dict[str, Any]]) -> dict[str, Any]:
+    """The record of one verification: the card, each claim proven or not, and the verdict."""
+    return {
+        "kind": "verify",
+        "card": card,
+        "claims": claims,
+        "verdict": card_verification(claims),
+        "unproven": sum(1 for claim in claims if not proves(claim)),
+    }
+
+
+def import_stage(
+    run: Path,
+    stage: str,
+    *,
+    fit: C.Fit = V.card_fit,
+    client: httpx.Client | None = None,
+    pace: float = Q.PACE_SECONDS,
+) -> dict[str, Any]:
+    """Every answer of one stage's round: validated, prompt-matched, parsed, recorded. A verify
+    stage's import fetches every cited page once (`client`, the lanes' User-Agent) and checks every
+    quote by machine."""
     record = _round(run, stage)
     if record is None:
         raise RunError(f"stage {stage} was never exported")
@@ -598,6 +835,7 @@ def import_stage(run: Path, stage: str, *, fit: C.Fit = V.card_fit) -> dict[str,
     records = stage_records(run, before=stage)
     current = {site: progress(site, records) for site in sites}
     rows: list[dict[str, Any]] = []
+    judged: dict[str, tuple[A.Judged, ...]] = {}
     for (batch_id, site_id), line in sorted(manifest.items(), key=lambda kv: kv[0][1]):
         state = current[site_id]
         if state.status != DUE or state.stage != stage:
@@ -607,16 +845,20 @@ def import_stage(run: Path, stage: str, *, fit: C.Fit = V.card_fit) -> dict[str,
             raise RunError(f"{batch_id}/{site_id}: the exported prompt is not this question's")
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=site_id,
                                 prompt=prompt)  # fmt: skip
-        if stage in CHECKER_STAGES:
+        if stage in CHECKER_STAGES or stage in VERIFY_STAGES:
             others = _earlier_agents(site_id, stage, records)
             if answer.answered_by in others:
                 raise RunError(
                     f"{batch_id}/{site_id}: {answer.answered_by} wrote or checked this site before "
-                    "- a check is an independent agent's; have the batch answered again under its "
-                    "own name"
+                    "- a check or verification is an independent agent's; have the batch answered "
+                    "again under its own name"
                 )
         try:
-            parsed = parse_answer(stage, sites[site_id], state, answer.text, fit=fit)
+            if stage in VERIFY_STAGES:
+                judged[site_id] = A.parse_judge(answer.text)
+                parsed: dict[str, Any] = {}
+            else:
+                parsed = parse_answer(stage, sites[site_id], state, answer.text, fit=fit)
         except A.AnswerError as exc:
             raise RunError(
                 f"{batch_id}/{site_id}: malformed answer ({exc}) - `check-answer` refuses it; "
@@ -634,6 +876,14 @@ def import_stage(run: Path, stage: str, *, fit: C.Fit = V.card_fit) -> dict[str,
                 **parsed,
             }
         )
+    if stage in VERIFY_STAGES:
+        urls = sorted({j.url for claims in judged.values() for j in claims if j.url})
+        library = fetch_pages(run, urls, client, pace)
+        for row in rows:
+            site_id = row["site_id"]
+            card = current[site_id].card
+            assert card is not None
+            row.update(verify_record(card, prove_claims(site_id, judged[site_id], library)))
     write_jsonl(run / f"STAGE-{stage}.jsonl", rows)
     if stage in WRITER_STAGES:
         failed = sum(1 for row in rows if row["problems"])
@@ -651,7 +901,7 @@ def check_answer(
     stage = record["stage"]
     if label not in record["batches"].get(batch_id, []):
         raise RunError(f"{batch_id}/{label} is no question of {handoff}")
-    if stage == JUDGE_STAGE:
+    if stage == JUDGE_STAGE or stage in VERIFY_STAGES:
         try:
             A.parse_judge(text)
         except A.AnswerError as exc:
@@ -684,6 +934,11 @@ _BRIEF_HEAD = {
         "by another agent, each for another site. Check each one on its own, only against the "
         "sentences in its prompt - not against what you know about the site."
     ),
+    "verifier": (
+        "You are Opus verifier {batch} of lane WB (teaser cards). You check {count} card(s) "
+        "written and checked by other agents against sources on the web, each on its own. Every "
+        "verdict rests on a page you opened and quote."
+    ),
     "judge": (
         "You are Opus judge {batch} of the lane-WB pilot. You check {count} card(s) against "
         "sources on the web, each on its own. Every verdict rests on a page you opened and quote."
@@ -692,8 +947,9 @@ _BRIEF_HEAD = {
 
 BRIEF = """{head}
 
-This batch needs an agent that has answered no other batch of lane WB (no card written, checked \
-or judged): if you have, stop now and say so - the independence of every check rests on it.
+This batch needs an agent that has answered no other batch of lane WB (no card written, checked, \
+verified or judged): if you have, stop now and say so - the independence of every check rests on \
+it.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" and its "prompt_path" (relative to {handoff}). Open no other file of the \
@@ -721,6 +977,7 @@ When every question of the batch is recorded, report how many answers you record
 _BRIEF_TASK = {
     "writer": "Write the card exactly as the prompt asks.",
     "checker": "List the card's claims and decide, exactly as the prompt asks.",
+    "verifier": "Research on the web and decide each claim, exactly as the prompt asks.",
     "judge": "Research on the web and decide each claim, exactly as the prompt asks.",
 }
 _BRIEF_FIX = {
@@ -733,8 +990,18 @@ _BRIEF_FIX = {
         "It prints the shape problem, if any: fix the shape (for example a PASS with an "
         "unsupported claim is a FAIL), never your finding."
     ),
+    "verifier": "It prints the shape problem, if any: fix the shape, never the finding.",
     "judge": "It prints the shape problem, if any: fix the shape, never the finding.",
 }
+
+
+def _kind(stage: str) -> str:
+    """Which agent a stage's batch needs: its brief's head, task and fix."""
+    if stage == JUDGE_STAGE:
+        return "judge"
+    if stage in VERIFY_STAGES:
+        return "verifier"
+    return "writer" if stage in WRITER_STAGES else "checker"
 
 
 def brief(run: Path, handoff: Path, batch_id: str) -> str:
@@ -743,7 +1010,7 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
     if batch_id not in record["batches"]:
         raise RunError(f"{batch_id} is no batch of {handoff}")
     stage = record["stage"]
-    kind = "judge" if stage == JUDGE_STAGE else ("writer" if stage in WRITER_STAGES else "checker")
+    kind = _kind(stage)
     shown = _shown(handoff)
     return BRIEF.format(
         head=_BRIEF_HEAD[kind].format(batch=batch_id, count=len(record["batches"][batch_id])),
@@ -772,9 +1039,51 @@ def status(run: Path) -> dict[str, Any]:
     }
 
 
+_VERIFICATION_KEYS = (
+    "stage",
+    "batch_id",
+    "answered_by",
+    "answered_at",
+    "card",
+    "verdict",
+    "unproven",
+    "claims",
+)
+
+
+def _provenance(run: Path, site: C.Basis, state: Progress, ai_system: str) -> dict[str, Any]:
+    """The provenance of an accepted card: its accepting check, its VERIFIED verification and the
+    web facts its check's claims cite (a rewrite after a failed verification only)."""
+    writer, check, verify = state.writer, state.check, state.verify
+    assert writer is not None and check is not None and verify is not None
+    cited = {s for claim in check["claims"] for s in claim["support"] if s.startswith("W")}
+    offered = web_facts(state.verified[0]) if check["stage"] == VERIFY_CHECK else ()
+    return CP.build(
+        run=run.name,
+        ai_system=ai_system,
+        card=writer["card"],
+        description=site.description,
+        stage=check["stage"],
+        checker=check["answered_by"],
+        checked_at=check["answered_at"],
+        claims=check["claims"],
+        verify={
+            "verdict": verify["verdict"],
+            "stage": verify["stage"],
+            "by": verify["answered_by"],
+            "at": verify["answered_at"],
+            "claims": len(verify["claims"]),
+            "unproven": verify["unproven"],
+        },
+        web_facts=[asdict(fact) for fact in offered if fact.id in cited],
+    )
+
+
 def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, Any]]:
-    """The final result of every site of the run: an accepted card with its provenance, or a
-    clear - a failed site, or a listed site without a description whose card is to be cleared."""
+    """The final result of every site of the run: an accepted - checked and VERIFIED - card with
+    its provenance, or a clear - a failed site, or a listed site without a description whose card
+    is to be cleared. Each row carries its verification state (`verification`: the last
+    verification's verdict, `None` for a card never verified) and every verification in full."""
     sites = bases(run)
     current = states(run)
     due = sorted(site for site, p in current.items() if p.status == DUE)
@@ -789,10 +1098,14 @@ def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, A
             "desc_sha256": site.desc_sha256,
             "attempts": len(state.findings) + (1 if state.status == ACCEPTED else 0),
             "findings": [{"card": f.card, "reasons": list(f.reasons)} for f in state.findings],
+            "verification": None if state.verify is None else state.verify["verdict"],
+            "verifications": [
+                {key: verified[key] for key in _VERIFICATION_KEYS} for verified in state.verified
+            ],
         }
         if state.status == ACCEPTED:
-            writer, check = state.writer, state.check
-            assert writer is not None and check is not None
+            writer = state.writer
+            assert writer is not None
             rows.append(
                 {
                     **common,
@@ -800,16 +1113,7 @@ def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, A
                     "reason": None,
                     "card": writer["card"],
                     "writer": {k: writer[k] for k in ("stage", "answered_by", "answered_at")},
-                    "provenance": CP.build(
-                        run=run.name,
-                        ai_system=ai_system,
-                        card=writer["card"],
-                        description=site.description,
-                        stage=check["stage"],
-                        checker=check["answered_by"],
-                        checked_at=check["answered_at"],
-                        claims=check["claims"],
-                    ),
+                    "provenance": _provenance(run, site, state, ai_system),
                 }
             )
         else:
@@ -817,7 +1121,7 @@ def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, A
                 {
                     **common,
                     "status": CLEARED,
-                    "reason": "failed-after-two-rewrites",
+                    "reason": state.reason,
                     "card": None,
                     "writer": None,
                     "provenance": None,
@@ -832,6 +1136,8 @@ def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, A
                     "desc_sha256": listed["desc_sha256"],
                     "attempts": 0,
                     "findings": [],
+                    "verification": None,
+                    "verifications": [],
                     "status": CLEARED,
                     "reason": NO_DESCRIPTION,
                     "card": None,
@@ -842,39 +1148,120 @@ def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, A
     return sorted(rows, key=lambda r: r["site_id"])
 
 
-def outcomes_markdown(run: Path, rows: Sequence[Mapping[str, Any]]) -> str:
+def description_defects(run: Path) -> list[dict[str, Any]]:
+    """Every claim the first verifier found CONTRADICTED (proven or not) that the rewrite's writer
+    mapped to a sentence of the site's description (`repeats`): a sentence the web contradicts, the
+    input of a later description repair by the lane whose text it is (`owner_lane`). A claim mapped
+    to no sentence is the card's own departure (a lane-WB fault, in OUTCOMES), not the text's; the
+    second verifier's contradictions clear the site and stay in OUTCOMES (no writer maps them)."""
+    sites = bases(run)
+    basis = {
+        row["site_id"]: row["basis"] for row in _pinned_jsonl(run, "SITES.jsonl", "sites_sha256")
+    }
+    records = stage_records(run)
+    rows: list[dict[str, Any]] = []
+    for site_id, rewritten in sorted(records[VERIFY_REWRITE].items()):
+        first = records[FIRST_VERIFY][site_id]
+        sentences = {sentence.id: sentence.text for sentence in sites[site_id].sentences}
+        for claim, repeat in zip(contradicted_claims(first), rewritten["repeats"], strict=True):
+            if repeat is None:
+                continue
+            rows.append(
+                {
+                    "run": run.name,
+                    "site_id": site_id,
+                    "name": sites[site_id].name,
+                    "basis": basis[site_id],
+                    "owner_lane": OWNER_LANE[basis[site_id]],
+                    "desc_sha256": sites[site_id].desc_sha256,
+                    "sentence": int(repeat[1:]),
+                    "sentence_text": sentences[repeat],
+                    "claim": claim["claim"],
+                    "url": claim["url"],
+                    "quote": claim["quote"],
+                    "quote_outcome": claim["quote_outcome"],
+                    "proven": claim["proven"],
+                    "verifier": first["answered_by"],
+                    "mapped_by": rewritten["answered_by"],
+                }
+            )
+    return rows
+
+
+def outcomes_markdown(
+    run: Path, rows: Sequence[Mapping[str, Any]], defects: Sequence[Mapping[str, Any]]
+) -> str:
     accepted = [r for r in rows if r["status"] == ACCEPTED]
     lengths = [len(r["card"]) for r in accepted]
     attempts = Counter(r["attempts"] for r in accepted)
     reasons = Counter(r["reason"] for r in rows if r["status"] == CLEARED)
+    at_stage = Counter(r["provenance"]["verify"]["stage"] for r in accepted)
+    finals = [r["verifications"][-1] for r in accepted]
+    claims = sum(len(v["claims"]) for v in finals)
+    unproven = sum(v["unproven"] for v in finals)
     lines = [
         f"# Lane WB run `{run.name}` - outcomes",
         "",
-        f"Written {_now()} by `scripts/remediation/teaser/run.py outcomes`.",
+        f"Written {_now()} by `scripts/remediation/teaser/run.py outcomes`. Only an accepted card "
+        "is written: checked against its description and VERIFIED on the web (no claim "
+        f"contradicted, at most {CP.MAX_UNPROVEN_CLAIMS} without a proving quote and never the "
+        "central one).",
         "",
         f"- sites: {len(rows)}; **accepted {len(accepted)}**, cleared "
         f"{len(rows) - len(accepted)} ({dict(sorted(reasons.items()))})",
-        f"- accepted at attempt 1/2/3: {attempts.get(1, 0)}/{attempts.get(2, 0)}/"
-        f"{attempts.get(3, 0)}",
+        f"- accepted at attempt 1/2/3/4: {attempts.get(1, 0)}/{attempts.get(2, 0)}/"
+        f"{attempts.get(3, 0)}/{attempts.get(4, 0)}",
+        f"- VERIFIED at the first verification {at_stage.get(FIRST_VERIFY, 0)}, after the rewrite "
+        f"{at_stage.get(SECOND_VERIFY, 0)}; the accepted cards' final verifications: {claims} "
+        f"claims, {unproven} without a proving quote "
+        f"({unproven / claims if claims else 0:.1%})",
+        f"- description sentences the web contradicts: {len(defects)} "
+        "(`DESCRIPTION_DEFECTS.jsonl`, for the lane whose text it is)",
     ]
     if lengths:
         lines.append(
             f"- card length: min {min(lengths)}, median {statistics.median(lengths)}, max "
             f"{max(lengths)} characters"
         )
-    lines += ["", "| site | status | card |", "|---|---|---|"]
+    lines += ["", "## Every contradiction the verifiers found", ""]
+    contradictions = [
+        (r, v, claim)
+        for r in rows
+        for v in r["verifications"]
+        for claim in v["claims"]
+        if claim["verdict"] == CONTRADICTED
+    ]
+    for r, v, claim in contradictions:
+        mark = "CONTRADICTED" if claim["proven"] else "CONTRADICTED (not proven)"
+        lines.append(
+            f"- {r['name']} (`{r['site_id'][:8]}`, {v['stage']}, now {r['status']}) {mark}: "
+            f"{claim['claim']} - {claim['url']} ({claim['quote_outcome']})"
+        )
+    if not contradictions:
+        lines.append("None.")
+    lines += ["", "| site | status | verification | card |", "|---|---|---|---|"]
     for r in rows:
         card = (r["card"] or "").replace("|", "\\|")
-        lines.append(f"| {r['name']} (`{r['site_id'][:8]}`) | {r['status']} | {card} |")
+        state = r["verification"] or "-"
+        lines.append(f"| {r['name']} (`{r['site_id'][:8]}`) | {r['status']} | {state} | {card} |")
     return "\n".join(lines) + "\n"
 
 
 def outcomes(run: Path) -> dict[str, Any]:
     rows = outcome_rows(run)
+    defects = description_defects(run)
     digest = write_jsonl(run / "OUTCOMES.jsonl", rows)
-    (run / "OUTCOMES.md").write_text(outcomes_markdown(run, rows), encoding="utf-8", newline="\n")
+    write_jsonl(run / "DESCRIPTION_DEFECTS.jsonl", defects)
+    (run / "OUTCOMES.md").write_text(
+        outcomes_markdown(run, rows, defects), encoding="utf-8", newline="\n"
+    )
     counts = Counter(f"{r['status']} {r['reason']}" if r["reason"] else r["status"] for r in rows)
-    return {"outcomes": len(rows), "sha256": digest, "counts": dict(sorted(counts.items()))}
+    return {
+        "outcomes": len(rows),
+        "sha256": digest,
+        "counts": dict(sorted(counts.items())),
+        "description_defects": len(defects),
+    }
 
 
 def read_outcomes(run: Path) -> list[dict[str, Any]]:
@@ -886,7 +1273,8 @@ def read_outcomes(run: Path) -> list[dict[str, Any]]:
 
 # ------------------------------------------------------------------------------ the pilot judge
 def export_judge(run: Path, handoff: Path) -> dict[str, Any]:
-    """Every accepted card of the run to independent web judges (the pilot's measurement)."""
+    """Every accepted card of the run - its final, VERIFIED card, the one to be written - to fresh
+    independent web judges (the pilot gate, runbook 5.2)."""
     if _round(run, JUDGE_STAGE) is not None:
         raise RunError("the judge round is exported already")
     target = _resolve(handoff)
@@ -922,8 +1310,8 @@ def export_judge(run: Path, handoff: Path) -> dict[str, Any]:
 
 
 def judge_client() -> httpx.Client:
-    """The pilot import's HTTP client: the audit's (`quotes.http_client`) under lane WB's own
-    User-Agent, no personal data."""
+    """The HTTP client of the verify imports and the pilot judge's: the audit's
+    (`quotes.http_client`) under the lanes' one User-Agent, no personal data."""
     return Q.http_client(USER_AGENT)
 
 
@@ -954,7 +1342,9 @@ class JudgeTally:
 def import_judge(
     run: Path, *, client: httpx.Client | None = None, pace: float = Q.PACE_SECONDS
 ) -> dict[str, Any]:
-    """Every judge answer: parsed, each cited page fetched once, each quote checked by machine."""
+    """Every judge answer: parsed, each cited page fetched once, each quote checked by machine. The
+    pilot's judge is fresh: a name that answered any question of the run - a writer, a checker or a
+    verifier of any card - is refused."""
     record = _round(run, JUDGE_STAGE)
     if record is None:
         raise RunError("the judge round was never exported")
@@ -964,10 +1354,7 @@ def import_judge(
         raise RunError(f"{record['handoff']}: not every judge answer is in, in shape, by Opus")
     sites = bases(run)
     cards = {r["site_id"]: r["card"] for r in read_outcomes(run) if r["status"] == ACCEPTED}
-    writers = {site: set() for site in sites}  # every agent that wrote or checked the card
-    for rows in stage_records(run).values():
-        for site_id, row in rows.items():
-            writers[site_id].add(row["answered_by"])
+    workers = {row["answered_by"] for rows in stage_records(run).values() for row in rows.values()}
     parsed: dict[str, tuple[Any, tuple[A.Judged, ...]]] = {}
     for batch_id, members in record["batches"].items():
         for site_id in members:
@@ -975,50 +1362,36 @@ def import_judge(
             prompt = P.judge_prompt(site.name, site.country, cards[site_id])
             answer = OH.read_answer(handoff, batch_id=batch_id, stage=JUDGE_STAGE, label=site_id,
                                     prompt=prompt)  # fmt: skip
-            if answer.answered_by in writers[site_id]:  # a reused name; the agent: module doc
-                raise RunError(f"{site_id}: the judge {answer.answered_by} worked on this card")
+            if answer.answered_by in workers:  # a reused name; the agent: module doc
+                raise RunError(
+                    f"{site_id}: the judge {answer.answered_by} answered a question of this run "
+                    "(a writer, checker or verifier) - the pilot's judge is fresh"
+                )
             try:
                 parsed[site_id] = (answer, A.parse_judge(answer.text))
             except A.AnswerError as exc:
                 raise RunError(f"{batch_id}/{site_id}: malformed judge answer ({exc})") from exc
-    pages = run / "pages"
     urls = sorted({j.url for _, claims in parsed.values() for j in claims if j.url})
-    own = client is None
-    http = judge_client() if client is None else client
-    try:
-        Q.collect(urls, pages, http, now=_now, pace=pace)
-    finally:
-        if own:
-            http.close()
-    library = Q.Library(ROOT, pages)
+    library = fetch_pages(run, urls, client, pace)
     tally = JudgeTally()
     rows = []
     for site_id in sorted(parsed):
         answer, claims = parsed[site_id]
-        results = []
-        for judged in claims:
+        results = prove_claims(site_id, claims, library)
+        for result in results:
             tally.claims += 1
-            outcome = None
-            if judged.url is not None:
-                outcome = Q.check_quote(
-                    {"source": judged.url, "quote": judged.quote},
-                    {"change_key": site_id, "evidence_files": []},
-                    library,
-                ).outcome
-            proven = outcome == Q.FOUND
-            if judged.verdict == "SUPPORTED" and proven:
+            if proves(result):
                 tally.supported += 1
-            elif judged.verdict == "CONTRADICTED" and proven:
+            elif result["verdict"] == CONTRADICTED and result["proven"]:
                 tally.contradicted += 1
                 if site_id not in tally.wrong_cards:
                     tally.wrong_cards.append(site_id)
             else:
                 tally.unproven += 1
-                if judged.verdict == "CONTRADICTED":
+                if result["verdict"] == CONTRADICTED:
                     tally.contradicted_unproven += 1
                     if site_id not in tally.disputed_cards:
                         tally.disputed_cards.append(site_id)
-            results.append({**asdict(judged), "quote_outcome": outcome, "proven": proven})
         rows.append(
             {
                 "site_id": site_id,
@@ -1051,7 +1424,8 @@ def judge_markdown(run: Path, rows: Sequence[Mapping[str, Any]], summary: Mappin
     lines = [
         f"# Lane WB pilot `{run.name}` - the independent web judge",
         "",
-        f"Written {_now()} by `run.py judge-import`. Gate: no claim CONTRADICTED - with a proving "
+        f"Written {_now()} by `run.py judge-import`, on the pilot's final (VERIFIED) cards, by a "
+        "judge who answered nothing else in the run. Gate: no claim CONTRADICTED - with a proving "
         "quote or without one (a page that refused the machine, a PDF, a quote not found) - and "
         f"at most {PILOT_MAX_UNPROVEN_SHARE:.0%} of all claims without a proving quote.",
         "",
@@ -1108,12 +1482,12 @@ def main(argv: list[str] | None = None) -> int:
     for name, helps in (
         ("select", "read production (read-only) and fix the run's candidates"),
         ("export", "one stage's questions into a new handoff directory"),
-        ("import", "validate, parse and record one stage's answers"),
+        ("import", "validate, parse and record one stage's answers (verify: pages, quotes)"),
         ("check-answer", "the shape (and a card's mechanical checks) of one answer"),
         ("brief", "the instruction of one batch's Opus agent"),
         ("status", "where every site of the run stands"),
-        ("outcomes", "OUTCOMES.jsonl and OUTCOMES.md, once every site is settled"),
-        ("judge-export", "the pilot's cards to independent web judges"),
+        ("outcomes", "OUTCOMES.jsonl/.md and DESCRIPTION_DEFECTS.jsonl, every site settled"),
+        ("judge-export", "the pilot gate: its final cards to a fresh web judge"),
         ("judge-import", "the judges' answers, quotes fetched and checked: JUDGE.md"),
     ):
         commands[name] = sub.add_parser(name, help=helps)

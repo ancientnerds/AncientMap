@@ -192,8 +192,19 @@ def checker_answer(
     )
 
 
+#: The web verification of a card the checker accepted at the first round.
+VERIFIED = {
+    "verdict": "VERIFIED",
+    "stage": "verify",
+    "by": "teaser-verify-001",
+    "at": "2026-09-26T13:00:00+00:00",
+    "claims": 1,
+    "unproven": 0,
+}
+
+
 def teaser(site_id: str, card: str | None = None, description: str | None = None) -> dict:
-    """A lane-WB provenance of the site's good card."""
+    """A lane-WB provenance of the site's good card, checked and verified."""
     return CP.build(
         run="wb-test",
         ai_system="Claude Opus (Anthropic): test",
@@ -203,4 +214,20 @@ def teaser(site_id: str, card: str | None = None, description: str | None = None
         checker="teaser-check-001",
         checked_at="2026-09-26T12:00:00+00:00",
         claims=[{"claim": "the site's main facts", "support": ["S1"]}],
+        verify=VERIFIED,
+        web_facts=[],
     )
+
+
+def judged_claim(
+    verdict: str = "SUPPORTED",
+    quote: str | None = "occupied from roughly 3180 BC to around 2500 BC",
+    url: str | None = "https://example.org/skara-brae",
+    claim: str = "lived in from roughly 3180 BC",
+) -> dict[str, Any]:
+    """One claim of a web judge's answer (a verifier's or the pilot judge's)."""
+    return {"claim": claim, "verdict": verdict, "url": url, "quote": quote}
+
+
+def judge_answer(*claims: dict[str, Any]) -> str:
+    return json.dumps({"claims": list(claims) or [judged_claim()]}, ensure_ascii=False)
