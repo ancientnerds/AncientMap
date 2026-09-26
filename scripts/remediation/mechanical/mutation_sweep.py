@@ -5226,24 +5226,24 @@ WD1_CASES: list[Case] = [
     Case(
         "wd1: a name without a distinctive word is read whole",
         FIELDS / "classify.py",
-        "    elif _has_phrase(fold(name), hay):",
-        "    elif False:",
+        "    return any(_has_phrase(phrase, hay) for phrase in name_phrases(name))",
+        "    return False",
         "test_names_it_reads_a_name_without_a_distinctive_word_whole",
         FIELDS_CLASSIFY_TESTS,
     ),
-    Case(
-        "wd1: the item's label and aliases name the site",
+    guard(
+        "wd1: a name's generic frame is dropped",
         FIELDS / "classify.py",
-        "    return any(_has_phrase(fold(other), hay) for other in also)",
-        "    return False",
-        "test_names_it_reads_the_item_s_own_label_and_aliases_as_phrases",
+        "    if len(core) >= 2 and core != words:",
+        "test_names_it_reads_a_name_without_its_generic_frame",
         FIELDS_CLASSIFY_TESTS,
     ),
-    guard(
-        "wd1: a doubted item's label names nothing",
+    Case(
+        "wd1: a one-word core names nothing",
         FIELDS / "classify.py",
-        "    if entity is None or who.doubt:\n        return []",
-        "test_names_it_reads_the_item_s_own_label_and_aliases_as_phrases",
+        "    if len(core) >= 2 and core != words:",
+        "    if core != words:",
+        "test_names_it_reads_a_name_without_its_generic_frame",
         FIELDS_CLASSIFY_TESTS,
     ),
     Case(

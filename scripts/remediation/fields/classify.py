@@ -67,7 +67,7 @@ re-pinned first, so no class is ever read as silent.
 a section link (the URL's own `#fragment`) - CONFLICT, whatever the page. A Wikipedia article:
 missing, invalid, a disambiguation page, a redirect into a section, another item's article, or a
 redirect whose target title does not name the site (`names_it`: a distinctive word of the name,
-the whole name when it has none, or the item's English label or an alias) - CONFLICT; the item's
+or the whole name - or its core without a generic frame - when it has none) - CONFLICT; the item's
 own article (the sitelink of that wiki, or the page whose item is the site's) - CONFIRMED. Another
 page: 404/410 - CONFLICT; redirected to another page - CONFLICT; served, with a <title> that names
 the site - CONFIRMED; otherwise (403, 5xx, a network error, a title that names nothing) - MISSING.
@@ -102,7 +102,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from bcases.classify import fold  # noqa: E402 - the name folding of the owner-case classifier
+from bcases.classify import GENERIC, fold  # noqa: E402 - the owner-case classifier's folding
 from bcases.collect import claims_record  # noqa: E402 - the truthy P625, never copied
 from bcases.web_witness import distinctive_words  # noqa: E402 - the words that say which place
 from census.tests.t01_wikidata_claims import METRES_PER_DEGREE, TOLERANCE_M  # noqa: E402
@@ -219,36 +219,39 @@ def _has_phrase(phrase: str, hay: str) -> bool:
     return bool(phrase) and re.search(r"(?<!\S)" + re.escape(phrase) + r"(?!\S)", hay) is not None
 
 
-def names_it(name: str, text: str | None, also: Sequence[str] = ()) -> bool:
-    """Whether `text` names the site, everything folded the owner-case classifier's way
+def name_phrases(name: str) -> list[str]:
+    """How a text names a site whose name has no distinctive word: the whole folded name, and its
+    core - the name without its generic frame, the leading and trailing generic words
+    (`bcases.classify.GENERIC`: "Archaeological Site of the Tombs of the Kings" -> "tombs of the
+    kings") - when that core keeps at least two words ("Rock City" is not read as "rock")."""
+    words = fold(name).split()
+    core = list(words)
+    while len(core) > 1 and core[0] in GENERIC:
+        core = core[1:]
+    while len(core) > 1 and core[-1] in GENERIC:
+        core = core[:-1]
+    phrases = [" ".join(words)]
+    if len(core) >= 2 and core != words:
+        phrases.append(" ".join(core))
+    return phrases
+
+
+def names_it(name: str, text: str | None) -> bool:
+    """Whether `text` names the site, both folded the owner-case classifier's way
     (`bcases.classify.fold`): it holds a distinctive word of the stored name as a whole word, or -
     when the name has none (every word generic or a type word: "Huaca del Sol", "Seven Barrows",
-    169 live sites on 2026-09-26) - the whole name as a phrase; or it holds one of `also` (the
-    item's own English label and aliases, `item_names`) as a phrase."""
+    169 live sites on 2026-09-26) - one of its `name_phrases` as a phrase.
+
+    The item's labels are not read: the item was derived from the stored source_url, so its label
+    always names the page that URL leads to - "Ramesses III Temple" (a shrine at Karnak) is
+    stored on an article that redirects to Medinet Habu, and Medinet Habu is its item's label."""
     if not text:
         return False
     hay = fold(text, keep_parentheses=True)
     words = distinctive_words(name)
     if words:
-        if any(_has_phrase(word, hay) for word in words):
-            return True
-    elif _has_phrase(fold(name), hay):
-        return True
-    return any(_has_phrase(fold(other), hay) for other in also)
-
-
-def item_names(entity: Mapping[str, Any] | None, who: Identity) -> list[str]:
-    """The item's English label and aliases, in Wikidata's order - none when there is no item or
-    it is in doubt (the island's label names the island)."""
-    if entity is None or who.doubt:
-        return []
-    label = ((entity.get("labels") or {}).get("en") or {}).get("value")
-    aliases = [a.get("value") for a in (entity.get("aliases") or {}).get("en") or ()]
-    out: list[str] = []
-    for value in (label, *aliases):
-        if isinstance(value, str) and value.strip() and value not in out:
-            out.append(value)
-    return out
+        return any(_has_phrase(word, hay) for word in words)
+    return any(_has_phrase(phrase, hay) for phrase in name_phrases(name))
 
 
 def bucket(year: int) -> str:
@@ -499,7 +502,6 @@ def classify_source_url(
 ) -> Status:
     url, kind = record["source_url"], record["kind"]
     name, qid = str(site["name"]), site["qid"]
-    also = item_names(entity, who)
     evidence = {k: v for k, v in record.items() if k not in ("site_id", "source_url")}
 
     def status(value: str, reason: str) -> Status:
@@ -526,7 +528,7 @@ def classify_source_url(
         page_item = record["wikibase_item"]
         if qid is not None and page_item is not None and page_item != qid:
             return status(CONFLICT, f"another item's article ({page_item}, the site's is {qid})")
-        if record["redirected"] and not names_it(name, record["resolved_title"], also):
+        if record["redirected"] and not names_it(name, record["resolved_title"]):
             return status(CONFLICT, f"redirects to another article: {record['resolved_title']}")
         if who.doubt:
             return status(CONFLICT, f"identity: the article is the {', '.join(who.containers)}'s")
@@ -546,7 +548,7 @@ def classify_source_url(
         return status(MISSING, f"not readable by machine: {record.get('error') or f'HTTP {code}'}")
     if not same_page(url, str(record["final_url"])):
         return status(CONFLICT, f"redirects to another page: {record['final_url']}")
-    if names_it(name, record.get("page_title"), also):
+    if names_it(name, record.get("page_title")):
         return status(CONFIRMED, "a page whose title names the site")
     return status(MISSING, "a page whose title names nothing of the site")
 
@@ -592,7 +594,6 @@ def classify_site(
         "enwiki": None if entity is None else H.enwiki_sitelink(entity),
         "scope_status": stored["scope_status"],
         "identity": {"doubt": who.doubt, "containers": list(who.containers)},
-        "item_names": item_names(entity, who),
         "period_name": {
             "stored": stored["period_name"],
             "bucket_of_stored_start": None if start is None else bucket(int(start)),

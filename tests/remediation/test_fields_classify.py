@@ -322,12 +322,22 @@ class TestSourceUrl:
                 "page_title": "Huaca del Sol - Moche"}  # fmt: skip
         assert C.classify_source_url(site, page, item, NO_DOUBT).status == C.CONFIRMED
 
-    def test_the_item_s_label_names_the_site(self) -> None:
-        site = {"name": "Archaeological Site of the Tombs of the Kings", "qid": "Q1"}
-        item = {**entity(sitelinks={"enwiki": "Tombs of the Kings (Paphos)"}),
-                "labels": {"en": {"value": "Tombs of the Kings"}}}  # fmt: skip
-        redirect = self.record(redirected=True, resolved_title="Tombs of the Kings (Paphos)")
-        assert C.classify_source_url(site, redirect, item, NO_DOUBT).status == C.CONFIRMED
+    def test_the_item_s_label_does_not_vouch_for_a_redirect(self) -> None:
+        # a seed of the acceptance: "Ramesses III Temple" (a shrine at Karnak) is stored on the
+        # article that redirects to Medinet Habu; its item was derived from that URL, so the item's
+        # label is Medinet Habu's - it must not confirm the redirect
+        site = {"name": "Ramesses III Temple", "qid": "Q1"}
+        item = {**entity(sitelinks={"enwiki": "Medinet Habu"}),
+                "labels": {"en": {"value": "Medinet Habu"}},
+                "aliases": {"en": [{"value": "Mortuary Temple of Ramesses III"}]}}  # fmt: skip
+        redirect = self.record(title="Mortuary Temple of Ramesses III", redirected=True,
+                               resolved_title="Medinet Habu")  # fmt: skip
+        status = C.classify_source_url(site, redirect, item, NO_DOUBT)
+        assert status.status == C.CONFLICT and "another article" in status.reason
+        framed = {"name": "Archaeological Site of the Tombs of the Kings", "qid": "Q1"}
+        paphos = entity(sitelinks={"enwiki": "Tombs of the Kings (Paphos)"})
+        moved = self.record(redirected=True, resolved_title="Tombs of the Kings (Paphos)")
+        assert C.classify_source_url(framed, moved, paphos, NO_DOUBT).status == C.CONFIRMED
 
     def test_the_island_s_article_is_a_conflict(self) -> None:
         status = self.status(self.record(), who=C.Identity(True, ("island",)))
@@ -561,16 +571,13 @@ class TestTheRun:
         assert not C.names_it("Huaca del Sol", "the sol above the huaca")
         assert not C.names_it("Huaca del Sol", "Huacas del Sol y de la Luna")
 
-    def test_names_it_reads_the_item_s_own_label_and_aliases_as_phrases(self) -> None:
+    def test_names_it_reads_a_name_without_its_generic_frame(self) -> None:
         name = "Archaeological Site of the Tombs of the Kings"
-        assert not C.names_it(name, "Tombs of the Kings (Paphos)")
-        assert C.names_it(name, "Tombs of the Kings (Paphos)", also=["Tombs of the Kings"])
-        item = {
-            **entity(),
-            "labels": {"en": {"value": "Tombs of the Kings"}, "fr": {"value": "Tombeaux"}},
-            "aliases": {"en": [{"value": "Royal Tombs"}, {"value": "Tombs of the Kings"}]},
-        }
-        assert C.item_names(item, NO_DOUBT) == ["Tombs of the Kings", "Royal Tombs"]
-        # the island's label names the island, not the site
-        assert C.item_names(item, C.Identity(True, ("island",))) == []
-        assert C.item_names(None, NO_DOUBT) == []
+        assert C.name_phrases(name) == [
+            "archaeological site of the tombs of the kings",
+            "tombs of the kings",
+        ]
+        assert C.names_it(name, "Tombs of the Kings (Paphos)")
+        # a core of one word is too weak to name a place: "Rock City" is not "rock"
+        assert C.name_phrases("Rock City") == ["rock city"]
+        assert not C.names_it("Rock City", "Rock art of the Sahara")

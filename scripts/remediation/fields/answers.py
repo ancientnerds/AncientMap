@@ -36,7 +36,7 @@ Per field, beyond the shape (every rule here needs no page - `check_shape`):
   (`harvest.url_kind`), without a `#fragment` (a section link), written as httpx sends it
   (`classify.url_form`: percent-encoded, the host in lower case). keep: the stored URL; replace: another. At least one quote is from the
   value's page itself, and at least one quote names the site (`classify.names_it`: a distinctive
-  word of the name, the whole name when it has none, or the item's English label or an alias).
+  word of the name, or the whole name - or its core without a generic frame - when it has none).
 
 What needs the pages - every quote found verbatim (`opus_audit/quotes.py`), and the value page of a
 source_url served and not redirected elsewhere - is `handoff.import_rounds`.
@@ -353,7 +353,7 @@ def _check_source_url(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
         raise AnswerError("source_url: replace, but the value is the stored URL - that is keep")
     if not any(_page_of(url) == value for url, _ in answer.quotes):
         raise AnswerError("source_url: no quote is from the value's own page")
-    if not any(C.names_it(str(line["name"]), q, line["item_names"]) for _, q in answer.quotes):
+    if not any(C.names_it(str(line["name"]), q) for _, q in answer.quotes):
         raise AnswerError(f"source_url: no quote names the site ({line['name']!r})")
 
 

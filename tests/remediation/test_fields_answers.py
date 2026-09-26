@@ -31,7 +31,6 @@ def line(**fields: Any) -> dict[str, Any]:
     return {
         "site_id": "0025b0ba-fd74-4c08-96e3-acc17956aa44",
         "name": "Temple of Hephaestus",
-        "item_names": ["Temple of Hephaestus", "Hephaisteion"],
         "fields": {name: {"stored": value} for name, value in stored.items()},
     }
 
@@ -249,7 +248,10 @@ class TestSourceUrl:
     def test_a_quote_on_the_value_s_page_may_spell_its_url_either_way(self) -> None:
         encoded = "https://de.wikipedia.org/wiki/Hephaisteion_%C3%84"
         quotes = [
-            ("https://de.wikipedia.org/wiki/Hephaisteion_Ä", "Das Hephaisteion"),
+            (
+                "https://de.wikipedia.org/wiki/Hephaisteion_Ä",
+                "Das Hephaisteion, der Tempel des Hephaestus",
+            ),
             (REGISTER, "the Hephaisteion"),
         ]
         assert checked("source_url", block("replace", encoded, quotes)).decision == "replace"
@@ -261,10 +263,14 @@ class TestSourceUrl:
             (wiki, "The Huaca del Sol is an adobe brick temple"),
             ("https://www.britannica.com/place/Huaca-del-Sol", "Huaca del Sol, a Moche pyramid"),
         ]
-        site = {**line(source_url=wiki), "name": "Huaca del Sol", "item_names": []}
+        site = {**line(source_url=wiki), "name": "Huaca del Sol"}
         answer = text(source_url=block("keep", wiki, quotes))
         assert A.check_shape(answer, ["source_url"], site)["source_url"].decision == "keep"
 
-    def test_the_item_s_label_names_the_site(self) -> None:
+    def test_another_name_of_the_site_does_not_name_it(self) -> None:
+        # the item's labels are not read (they come from the item the stored URL gave): a quote
+        # names the site by its stored name
         quotes = [(REGISTER, "the Hephaisteion"), (WIKI, "The Hephaisteion stands on a hill")]
-        assert checked("source_url", block("replace", REGISTER, quotes)).decision == "replace"
+        assert "no quote names the site" in checked(
+            "source_url", block("replace", REGISTER, quotes)
+        )
