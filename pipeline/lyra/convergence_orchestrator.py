@@ -16,8 +16,9 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.research_events import (
@@ -59,6 +60,125 @@ def _empty_paper_error(paper_text: str | None) -> str | None:
         "quota exhaustion (429) or max_tokens truncation. Failing the run instead "
         "of publishing an empty paper."
     )
+
+
+# Wall time between two ticks of the watch loop (_drive_cascade): progress log,
+# DB flush, external-cancellation check and the SSE progress snapshot.
+_TICK_S = 30.0
+
+# After the done signal the cascade only unwinds (StatePersist's last passenger
+# writes run on the way back up). It gets this long before it is cancelled.
+_UNWIND_GRACE_S = 120.0
+
+_NO_DOSSIER_ERROR = (
+    "Research ended without a dossier: the event cascade finished but DossierReady never fired"
+)
+
+
+async def _drive_cascade(
+    state: ResearchState,
+    cascade_coro: Coroutine[Any, Any, None],
+    done_event: asyncio.Event,
+    deadline_handler: Any,
+    *,
+    request_id: str,
+    emit: Callable[[dict], None],
+    t0: float,
+) -> None:
+    """Run the event cascade as a task and watch it until the run is done.
+
+    The whole run executes inside the cascade (EventBus.emit awaits every
+    handler inline), so the watch loop must run beside it, not after it: only
+    then do the deadline check, the 30 s DB flush and the external-cancellation
+    check actually run. Returns when the done signal fired, when state.error is
+    set, or when the cascade finished (without the done signal that is an
+    error). Raises _CancelledByUser and whatever the cascade raised (quota
+    errors included). The cascade never outlives this call.
+    """
+    cascade = asyncio.create_task(cascade_coro)
+    try:
+        while not done_event.is_set():
+            forced = await deadline_handler.check_deadline()
+            if forced and state.phase == ResearchPhase.DONE:
+                break
+            done_wait = asyncio.create_task(done_event.wait())
+            try:
+                await asyncio.wait(
+                    {cascade, done_wait}, timeout=_TICK_S, return_when=asyncio.FIRST_COMPLETED
+                )
+            finally:
+                done_wait.cancel()
+            if cascade.done():
+                cascade.result()
+                if not done_event.is_set() and not state.error:
+                    state.error = _NO_DOSSIER_ERROR
+                break
+            if done_event.is_set() or state.error:
+                break
+            _tick(state, request_id, emit, t0)
+    finally:
+        await _settle_cascade(state, cascade, done_event, request_id)
+
+
+def _tick(state: ResearchState, request_id: str, emit: Callable[[dict], None], t0: float) -> None:
+    """One watch-loop tick: progress log, DB flush, external cancellation, live snapshot."""
+    saturated = sum(1 for a in state.angles if a.saturated)
+    total = len(state.angles)
+    elapsed = int(time.monotonic() - t0)
+    progress_msg = (
+        f"Progress: {saturated}/{total} angles saturated, "
+        f"phase={state.phase.value}, elapsed={elapsed}s, "
+        f"llm_calls={state.llm_call_count}, "
+        f"sources={len(state.registry.sources)}"
+    )
+    state.log("orchestrator", progress_msg)
+    # Promote to logger so docker logs are no longer blind; the rest of the
+    # pipeline emits via SSE only.
+    logger.info("[THEO] %s %s", request_id, progress_msg)
+    # Counters + recent debug_log to the DB, so the run is diagnosable from psql.
+    _flush_progress_to_db(state, request_id)
+    # Ghost-task guard (2026-06-29): the DB row's status is the source of truth.
+    # If the user cancelled via the API (or the watchdog deferred the run), this
+    # raises _CancelledByUser and _drive_cascade cancels the cascade. Live since
+    # the cascade runs as a task (2026-09-26); before, it never ran.
+    _check_external_cancellation(request_id)
+    spec_count = len({f.get("specialist_id", "unknown") for a in state.angles for f in a.findings})
+    emit(
+        {
+            "type": "progress",
+            "stage": "orchestrator",
+            "meta": {
+                "phase": state.phase.value,
+                "elapsed_s": elapsed,
+                "angles_saturated": saturated,
+                "angles_total": total,
+                "llm_calls": state.llm_call_count,
+                "sources_found": len(state.registry.sources),
+                "tools_used": spec_count,
+                "total_tokens": state.total_tokens,
+            },
+        }
+    )
+
+
+async def _settle_cascade(
+    state: ResearchState, cascade: asyncio.Task, done_event: asyncio.Event, request_id: str
+) -> None:
+    """Let a finished run's cascade unwind for a grace period, cancel everything else."""
+    if not cascade.done() and done_event.is_set() and not state.error:
+        await asyncio.wait({cascade}, timeout=_UNWIND_GRACE_S)
+    if not cascade.done():
+        cascade.cancel()
+    (outcome,) = await asyncio.gather(cascade, return_exceptions=True)
+    if (
+        done_event.is_set()
+        and isinstance(outcome, BaseException)
+        and not isinstance(outcome, asyncio.CancelledError)
+    ):
+        # The dossier is complete; an error while unwinding does not undo it,
+        # but it must be visible.
+        state.log("orchestrator", f"Cascade raised after the run was done: {outcome!r}")
+        logger.error("[THEO] %s cascade raised after the run was done: %r", request_id, outcome)
 
 
 class ConvergenceOrchestrator:
@@ -183,8 +303,8 @@ class ConvergenceOrchestrator:
         # learns continuously; no per-task reset.
 
         # Set up event bus and handlers. Pass state so the bus can surface
-        # handler exceptions into state.error (which the deadline loop below
-        # already watches at line ~238) — see research_events.py:EventBus.emit.
+        # handler exceptions into state.error (which the watch loop in
+        # _drive_cascade checks every tick) — see research_events.py:EventBus.emit.
         bus = EventBus(state=state)
         semaphore = asyncio.Semaphore(config.max_concurrent_llm_calls)
 
@@ -313,90 +433,15 @@ class ConvergenceOrchestrator:
         t0 = time.monotonic()
 
         try:
-            # Phase 1: Decompose question into angles
-            await decomposition.decompose()
-            if state.error:
-                return state
-
-            # Phase 2+: Event-driven --- handlers react to events
-            # The decomposition emits AngleCreated events which trigger:
-            # AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited
-            # -> content_fetch -> ContentFetched -> specialist
-            # -> FindingsProduced -> convergence check -> (loop or saturate)
-            # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
-            # -> DebateComplete -> moderator -> ModeratorComplete -> paper
-            # -> PaperReady -> probative_images -> ProbativeImagesReady -> fact_check
-            # -> FactCheckComplete -> presentation -> PresentationChecked
-            # -> image_gen -> ImageGenComplete -> judge -> QualityPassed
-
-            # Wait for completion with deadline checks
-            while not done_event.is_set():
-                # Check deadline periodically
-                forced = await deadline_handler.check_deadline()
-                if forced and state.phase == ResearchPhase.DONE:
-                    break
-
-                # Wait a bit for events to process
-                try:
-                    await asyncio.wait_for(done_event.wait(), timeout=30)
-                except TimeoutError:
-                    # Check if we're stuck
-                    if state.error:
-                        break
-                    # Log progress
-                    saturated = sum(1 for a in state.angles if a.saturated)
-                    total = len(state.angles)
-                    elapsed = int(time.monotonic() - t0)
-                    progress_msg = (
-                        f"Progress: {saturated}/{total} angles saturated, "
-                        f"phase={state.phase.value}, elapsed={elapsed}s, "
-                        f"llm_calls={state.llm_call_count}, "
-                        f"sources={len(state.registry.sources)}"
-                    )
-                    state.log("orchestrator", progress_msg)
-                    # Promote to logger so docker logs are no longer blind —
-                    # the rest of the pipeline emits via SSE only.
-                    logger.info("[THEO] %s %s", request_id, progress_msg)
-                    # Flush counters + recent debug_log to DB so the run is
-                    # diagnosable from psql alone (previously these stayed at
-                    # 0 / NULL until completion, making stalls indistinguishable
-                    # from healthy long-running stages).
-                    _flush_progress_to_db(state, request_id)
-                    # Ghost-task guard (2026-06-29). The DB row's status is the
-                    # source of truth: if the user cancelled via the API (or
-                    # the watchdog marked deferred), the DB says so within
-                    # milliseconds, but the in-flight asyncio task has no
-                    # direct signal. Without this check, a manually-cancelled
-                    # task kept burning tokens for up to the 45min stall
-                    # guard — observed when the stuck DMT task burned ~25min
-                    # of MiniMax calls after I cancelled it via DB update.
-                    _check_external_cancellation(request_id)
-                    # Also emit a progress SSE so the live frontend panel
-                    # sees fresh counters every ~30s without waiting for
-                    # paper_assembly (which only fires ~3h in).
-                    spec_count = len(
-                        {
-                            f.get("specialist_id", "unknown")
-                            for a in state.angles
-                            for f in a.findings
-                        }
-                    )
-                    emit(
-                        {
-                            "type": "progress",
-                            "stage": "orchestrator",
-                            "meta": {
-                                "phase": state.phase.value,
-                                "elapsed_s": elapsed,
-                                "angles_saturated": saturated,
-                                "angles_total": total,
-                                "llm_calls": state.llm_call_count,
-                                "sources_found": len(state.registry.sources),
-                                "tools_used": spec_count,
-                                "total_tokens": state.total_tokens,
-                            },
-                        }
-                    )
+            await _drive_cascade(
+                state,
+                decomposition.decompose(),
+                done_event,
+                deadline_handler,
+                request_id=request_id,
+                emit=emit,
+                t0=t0,
+            )
 
         except _CancelledByUser as exc:
             # User-cancellation (DB status changed to 'cancelled' or 'deferred').
