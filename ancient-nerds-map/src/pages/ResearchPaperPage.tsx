@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import PaperArticle from '../components/theo/PaperArticle'
+import { useEvidenceHashScroll } from '../components/theo/useEvidenceHashScroll'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
@@ -40,6 +41,9 @@ export default function ResearchPaperPage() {
   const [audioProgress, setAudioProgress] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // #ev-NN deep links from video descriptions land after the images settle.
+  useEvidenceHashScroll()
 
   const route = useRoute()
   const paper = route?.type === 'research' ? route : null
