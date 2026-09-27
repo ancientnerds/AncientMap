@@ -1,30 +1,22 @@
-"""Cross-section coherence pass for Theo research papers.
+"""Deterministic coherence checks for Theo research papers.
 
-Reads the full assembled paper with an LLM and returns:
-  - Contradictions: same entity treated with opposite stances in different
-    sections without being framed as opposing viewpoints.
-  - Title-term definitions: every multi-word phrase in the title must
-    appear in the body.
+  - Title-term definitions: every multi-word phrase in the title must appear
+    in the body (extract_title_terms / check_title_terms_in_body).
+  - Numeric claims: every measurement with its section and sentence
+    (extract_numeric_claims), the input for a numeric-conflict review.
 
-If any contradictions or missing title terms surface, the caller can send
-the paper back to the writer for a repair pass. This module only produces
-the report; wiring and repair live in handlers/paper.py.
+The LLM coherence pass (run_coherence_pass) was removed with Theo's M3 writing
+chain on 2026-09-26; the dataclasses stay as the result shapes of those reviews.
 """
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Literal
 
-from pipeline.lyra.minimax_shared import parse_fenced_json
 from pipeline.lyra.text_sentences import split_sentences
 
-logger = logging.getLogger(__name__)
-
-_PROMPTS = Path(__file__).resolve().parent / "prompts"
 # Connector words inside a title fragment — splitting on these turns
 # "Luminous Beings in Ancient Mythology" into the matchable phrases
 # ["Luminous Beings", "Ancient Mythology"] rather than one fused string.
@@ -197,86 +189,3 @@ def check_title_terms_in_body(terms: list[str], body: str) -> dict[str, bool]:
     """Case-insensitive substring check for each term."""
     body_lc = body.lower()
     return {t: (t.lower() in body_lc) for t in terms}
-
-
-def _format_numeric_claims_for_prompt(claims: list[NumericClaim]) -> str:
-    """Render extracted claims as a compact bullet list the LLM can scan."""
-    if not claims:
-        return "(none extracted)"
-    lines = []
-    for c in claims[:80]:  # cap to keep prompt manageable
-        lines.append(f"- [{c.section}] {c.value_text} — “{c.surrounding_sentence}”")
-    if len(claims) > 80:
-        lines.append(f"... and {len(claims) - 80} more")
-    return "\n".join(lines)
-
-
-async def run_coherence_pass(
-    title: str,
-    body: str,
-    llm_call,
-    settings,
-) -> CoherenceResult:
-    """Run LLM coherence check. Safe on LLM failure — returns local-only
-    title-term check + extracted numeric claims with empty conflicts so the
-    paper still ships."""
-    title_terms = extract_title_terms(title)
-    local_defs = check_title_terms_in_body(title_terms, body)
-    numeric_claims = extract_numeric_claims(body)
-
-    prompt_template = (_PROMPTS / "coherence_pass.txt").read_text(encoding="utf-8")
-    prompt_filled = (
-        prompt_template.replace("{title}", title)
-        .replace("{body}", body[:8000])
-        .replace("{numeric_claims}", _format_numeric_claims_for_prompt(numeric_claims))
-    )
-
-    try:
-        raw = await llm_call(prompt_filled, "", 2048, settings, 0.2)
-        data = parse_fenced_json(raw)
-    except Exception as exc:
-        logger.warning("coherence_pass LLM failure: %s", exc)
-        return CoherenceResult(
-            contradictions=[],
-            title_terms=title_terms,
-            title_terms_defined_in_body=local_defs,
-            numeric_claims=numeric_claims,
-            numeric_conflicts=[],
-        )
-
-    contradictions = [
-        Contradiction(
-            entity=c.get("entity", ""),
-            stance_a=c.get("stance_a", ""),
-            section_a=c.get("section_a", ""),
-            stance_b=c.get("stance_b", ""),
-            section_b=c.get("section_b", ""),
-            severity=c.get("severity", "low"),
-        )
-        for c in data.get("contradictions", [])
-        if c.get("entity")
-    ]
-    numeric_conflicts = [
-        NumericConflict(
-            entity=c.get("entity", ""),
-            section_a=c.get("section_a", ""),
-            value_a=c.get("value_a", ""),
-            section_b=c.get("section_b", ""),
-            value_b=c.get("value_b", ""),
-            suggested_resolution=c.get("suggested_resolution", ""),
-            severity=c.get("severity", "low"),
-        )
-        for c in data.get("numeric_conflicts", [])
-        if c.get("entity") and c.get("value_a") and c.get("value_b")
-    ]
-    # Local substring check is authoritative for title-term definitions.
-    # The LLM may claim a term is defined based on paraphrase; we require the
-    # exact phrase from the title to appear.
-    defs = {t: bool(local_defs.get(t, False)) for t in title_terms}
-    return CoherenceResult(
-        contradictions=contradictions,
-        title_terms=title_terms,
-        title_terms_defined_in_body=defs,
-        numeric_claims=numeric_claims,
-        numeric_conflicts=numeric_conflicts,
-    )
