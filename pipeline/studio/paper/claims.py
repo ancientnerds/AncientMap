@@ -5,14 +5,18 @@ Tasks (claims_check/tasks.jsonl, see handoff.py for the seam):
   kind "paragraph"  one per cited prose paragraph: every factual statement in it
   kind "coherence"  one per paper when it has two or more measurements: do they contradict?
 
-A task row carries {task_id, kind, ref, section, paragraph, claim, cited: [{source_id, url,
-title, text_path, text_status}], prompt_path, prompt_sha256}. text_path is relative to the
+A task row carries {task_id, kind, ref, section, paragraph, claim, cited: [{source_id, n, url,
+title, text_path, text_status}], prompt_path, prompt_sha256}. `paragraph` is the numbered
+paragraph and `n` the reference number its marker `[n]` shows for that source: every statement
+counts as supported only by the source its own marker names. text_path is relative to the
 paper workspace (texts/<id>.txt) or null when the archive holds no text.
 
 A TDM-reserved source is cited like any source and read live (owner decision 2026-09-26):
 the export ships no text for it, so the verifier fetches its `url` and saves the exact text it
 read to claims_check/live/<source_id>.txt (`URL: <url>`, `Fetched: <ISO-8601 UTC>`, an empty
-line, the text). The file stays local: it is never uploaded or archived.
+line, the text). The file stays local: it is never uploaded or archived. Every evidence or
+paragraph answer except `source_missing` needs that file for every cited TDM-reserved source,
+whichever source it quotes (gates 4 and 6 read it through source_texts).
 
 The workflow (.claude/workflows/theo-claim-check.js) answers pending.jsonl with one verifier
 and, for every `supported`, an adversarial skeptic; it writes claims_check/verdicts.jsonl:
@@ -41,7 +45,7 @@ from pipeline.studio.paper.evidence import evidence_problems, quote_in_text
 from pipeline.studio.paper.numbering import BuiltPaper, build_paper
 from pipeline.studio.paper.workspace import Dossier, PaperWorkspace, load_dossier, read_json
 
-INSTRUCTIONS_VERSION = "claim-check-2"
+INSTRUCTIONS_VERSION = "claim-check-3"
 LIVE_DIR = "live"
 VERDICTS = frozenset({"supported", "partly", "unsupported", "source_missing"})
 ANSWER_SPEC = handoff.AnswerSpec(
@@ -66,7 +70,15 @@ A source with text_status "tdm_reserved" has no archived text (its publisher res
 and data mining, so the automatic archive skipped it) but is cited like any other: read its
 `url` live and save the exact text you read to `claims_check/live/<source_id>.txt`: first line
 `URL: <url>`, second line `Fetched: <the UTC time, ISO 8601>`, an empty line, then the text.
+Every verdict except source_missing needs that file for every cited "tdm_reserved" source,
+whichever source you quote: without it the answer is refused.
 A source with text_status "missing" has no text at all.
+
+The paragraph is numbered: `cited[].n` is the number that source's marker `[n]` shows. A
+statement is supported only by the source its own marker names (the `[n]`, or the adjacent
+`[n] [m]`, that follows it in the paragraph), never by another cited source: a statement that
+only a different source states is a wrong citation and is not supported; name the marker it
+needs in `fix_suggestion`.
 
 Verdicts:
 - supported: a cited source states the claim (for kind "paragraph": every factual statement
@@ -106,7 +118,10 @@ class ClaimStatus:
         return not self.missing and not self.not_supported
 
 
-def _cited(ws: PaperWorkspace, dossier: Dossier, source_ids: list[str]) -> list[dict[str, Any]]:
+def _cited(
+    ws: PaperWorkspace, dossier: Dossier, built: BuiltPaper, source_ids: list[str]
+) -> list[dict[str, Any]]:
+    """The task's sources, each with `n`, the number its marker shows in the paragraph."""
     rows = []
     for sid in source_ids:
         s = dossier.sources[sid]
@@ -114,6 +129,7 @@ def _cited(ws: PaperWorkspace, dossier: Dossier, source_ids: list[str]) -> list[
         rows.append(
             {
                 "source_id": sid,
+                "n": built.registry.reference_numbers[sid],
                 "url": s["url"],
                 "title": s.get("title") or "",
                 "text_path": ws.text_path(sid).relative_to(ws.root).as_posix()
@@ -152,7 +168,7 @@ def build_tasks(
                     "section": para.section,
                     "paragraph": para.text,
                     "claim": entry["claim"],
-                    "cited": _cited(ws, dossier, entry["source_ids"]),
+                    "cited": _cited(ws, dossier, built, entry["source_ids"]),
                 },
             )
         )
@@ -169,7 +185,7 @@ def build_tasks(
                     "section": para.section,
                     "paragraph": para.text,
                     "claim": "Every factual statement in this paragraph.",
-                    "cited": _cited(ws, dossier, sids),
+                    "cited": _cited(ws, dossier, built, sids),
                 },
             )
         )
@@ -266,30 +282,46 @@ def source_texts(ws: PaperWorkspace, dossier: Dossier) -> dict[str, str]:
 
 
 def quote_check(ws: PaperWorkspace, dossier: Dossier):
-    """The machine check a `supported` evidence/paragraph answer must pass."""
+    """The machine check an evidence/paragraph answer must pass.
+
+    Every verdict but `source_missing` says the verifier read every cited source, so each
+    cited TDM-reserved source without an archived text needs its saved live text, whichever
+    source the answer quotes: gates 4 and 6 read it (source_texts). A `supported` answer also
+    needs the skeptic and a quote that occurs verbatim in the text of the source it names.
+    """
 
     def check(answer: dict[str, Any], task: dict[str, Any]) -> list[str]:
-        if answer["verdict"] != "supported" or task["kind"] == "coherence":
+        if task["kind"] == "coherence":
             return []
+        cited = [c["source_id"] for c in task["cited"]]
+        problems: list[str] = []
+        live: dict[str, str] = {}
+        if answer["verdict"] != "source_missing":
+            for sid in cited:
+                if sid in dossier.texts or dossier.text_status(sid) != "tdm_reserved":
+                    continue
+                try:
+                    live[sid] = live_text(ws, dossier.sources[sid])
+                except StudioError as exc:
+                    problems.append(str(exc))
+        if answer["verdict"] != "supported":
+            return problems
         if not answer["skeptic_by"].strip():
-            return ["supported needs the skeptic's confirmation (skeptic_by is empty)"]
-        cited = {c["source_id"] for c in task["cited"]}
+            return [*problems, "supported needs the skeptic's confirmation (skeptic_by is empty)"]
         qsid = answer["quote_source_id"]
         if qsid not in cited:
-            return [f"quote_source_id {qsid!r} is not one of the task's cited sources"]
+            return [*problems, f"quote_source_id {qsid!r} is not one of the task's cited sources"]
         if qsid in dossier.texts:
             text, where = dossier.texts[qsid], f"texts/{qsid}.txt"
+        elif qsid in live:
+            text, where = live[qsid], live_rel(ws, qsid)
         elif dossier.text_status(qsid) == "tdm_reserved":
-            try:
-                text = live_text(ws, dossier.sources[qsid])
-            except StudioError as exc:
-                return [str(exc)]
-            where = live_rel(ws, qsid)
+            return problems  # its unreadable live file is reported above
         else:
-            return [f"{qsid} has no archived text; a supported verdict needs a quote"]
+            return [*problems, f"{qsid} has no archived text; a supported verdict needs a quote"]
         if not quote_in_text(answer["quote"], text):
-            return [f"quote does not occur verbatim in {where}"]
-        return []
+            problems.append(f"quote does not occur verbatim in {where}")
+        return problems
 
     return check
 

@@ -5,6 +5,7 @@ import pytest
 from pipeline.studio import handoff
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper import claims, numbering
+from pipeline.studio.paper.evidence import evidence_problems
 from pipeline.studio.paper.workspace import parse_dossier, write_json
 from tests.pipeline.studio import fixtures as fx
 
@@ -30,6 +31,7 @@ def test_export_builds_evidence_paragraph_and_coherence_tasks(tmp_path):
     assert ev["cited"] == [
         {
             "source_id": fx.S1,
+            "n": 1,
             "url": "https://www.dainst.org/baalbek-report",
             "title": "Baalbek quarry excavation report",
             "text_path": f"texts/{fx.S1}.txt",
@@ -39,6 +41,21 @@ def test_export_builds_evidence_paragraph_and_coherence_tasks(tmp_path):
     prompt = (ws.claims_dir / ev["prompt_path"]).read_text(encoding="utf-8")
     assert prompt.startswith("IMPORTANT:")
     assert '"claim": "The Stone of the Pregnant Woman weighs about 1000 tons."' in prompt
+    assert "supported only by the source its own marker names" in prompt
+
+
+def test_each_cited_source_carries_the_number_its_marker_shows(tmp_path):
+    """The paragraph is numbered ([n]); `cited[].n` tells the verifier which source is which."""
+    draft = fx.build_draft().replace(
+        "share the same stone [S:aaaaaaaaaaa1] [S:bbbbbbbbbbb2].",
+        "share the same stone [S:bbbbbbbbbbb2] [S:aaaaaaaaaaa1].",
+    )
+    ws = fx.make_workspace(tmp_path, draft=draft)
+    claims.export_claims(ws)
+    rows = handoff.read_jsonl(ws.claims_dir / "tasks.jsonl")
+    dots = next(r for r in rows if r["paragraph"].startswith("The podium blocks and the quarry"))
+    assert dots["paragraph"].endswith("share the same stone [2] [1].")
+    assert [(c["n"], c["source_id"]) for c in dots["cited"]] == [(2, fx.S2), (1, fx.S1)]
 
 
 def test_export_refuses_invalid_evidence(tmp_path):
@@ -141,6 +158,7 @@ def test_a_tdm_reserved_source_is_read_live_and_its_quote_machine_checked(tmp_pa
     assert [c for c in row["cited"] if c["source_id"] == fx.S4] == [
         {
             "source_id": fx.S4,
+            "n": 3,
             "url": TDM_URL,
             "title": "Paywalled monograph",
             "text_path": None,
@@ -167,6 +185,57 @@ def test_a_tdm_reserved_source_is_read_live_and_its_quote_machine_checked(tmp_pa
     with pytest.raises(StudioError, match="claim tasks have no accepted answer"):
         claims.import_claims(ws)
     assert row["task_id"] in handoff.load_accepted(ws.claims_dir)
+
+
+EV_03 = {
+    "id": "ev-03",
+    "anchor_text": "It is likely that Roman engineers moved the blocks",
+    "claim": "Roman engineers moved the blocks.",
+    "source_ids": [fx.S1, fx.S4],
+    "quote": LIVE_QUOTE,
+    "quote_source_id": fx.S4,
+    "verdict": "supported",
+}
+
+
+def test_every_cited_tdm_reserved_source_is_read_live_whatever_the_quote(tmp_path):
+    """ev-03 quotes the TDM-reserved S4; answers that quote S1 still need S4's live text.
+
+    Without it gate 6 would ask for the claim check while claims-export has nothing pending.
+    """
+    ws, _row = _tdm_workspace(tmp_path)
+    write_json(ws.evidence, [*fx.EVIDENCE, EV_03])
+    claims.export_claims(ws)
+    rows = handoff.read_jsonl(ws.claims_dir / "tasks.jsonl")
+    ev03 = next(r for r in rows if r["ref"] == "ev-03")
+    assert [c["source_id"] for c in ev03["cited"]] == [fx.S1, fx.S4]
+    verdicts = ws.claims_dir / "verdicts.jsonl"
+    unread = f"claims_check/live/{fx.S4}.txt does not exist"
+    answers = fx.claim_answers(rows)  # every supported answer quotes its cited[0], never S4
+    assert fx.S4 not in {a["quote_source_id"] for a in answers}
+    handoff.write_jsonl(verdicts, answers)
+    with pytest.raises(handoff.HandoffError, match=unread) as refused:
+        claims.import_claims(ws)
+    assert str(refused.value).count(unread) == 2  # ev-03 and the paragraph task it sits in
+    for verdict in ("partly", "unsupported"):
+        handoff.write_jsonl(verdicts, [_answer(ev03, verdict=verdict)])
+        with pytest.raises(handoff.HandoffError, match=unread):
+            claims.import_claims(ws)
+    handoff.write_jsonl(verdicts, [_answer(ev03, verdict="source_missing")])
+    with pytest.raises(StudioError, match="claim tasks have no accepted answer"):
+        claims.import_claims(ws)  # an unreachable page is source_missing: nothing to save
+    _live(ws)
+    handoff.write_jsonl(verdicts, answers)
+    assert claims.import_claims(ws) == {"accepted": len(rows)}
+    built = numbering.build_paper(ws)
+    dossier = parse_dossier(fx.dossier_gz_bytes())
+    texts = claims.source_texts(ws, dossier)
+    evidence = [*fx.EVIDENCE, EV_03]
+    title, cited = fx.META["title"], set(built.registry.sources)
+    found = evidence_problems(
+        evidence, built.markdown, title, dossier, cited, texts, after_claim_check=True
+    )
+    assert found == []
 
 
 def test_source_texts_add_the_live_text_of_a_tdm_reserved_source(tmp_path):
