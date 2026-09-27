@@ -37,6 +37,21 @@ from pipeline.studio import spoken
         ("one, two, three", "1, 2, 3"),
         ("In two thousand, three thousand people lived there", "In 2000, 3,000 people lived there"),
         ("fifteen hundred, two hundred men", "1500, 200 men"),
+        # clause punctuation after a number word ends that number
+        ("Of the forty, six were never found.", "Of the 40, 6 were never found."),
+        ("groups of ten, twelve or fifteen", "groups of 10, 12 or 15"),
+        ("In AD seventy, twenty thousand people fled.", "In AD 70, 20,000 people fled."),
+        ("a hundred thousand, two hundred thousand", "100,000, 200,000"),
+        ("They found forty. Six were lost.", "They found 40. 6 were lost."),
+        ("nineteen sixty, six stones", "1960, 6 stones"),
+        ("It fell in nineteen oh, five fell later", "It fell in 19 oh, 5 fell later"),
+        # what follows the punctuation never decides whether the number before it goes on
+        ("two thousand and five, thousand more", "2005, thousand more"),
+        ("two thousand three, thousand more", "2003, thousand more"),
+        ("two point five, six people", "2.5, 6 people"),
+        ("forty — six", "40 6"),
+        ("forty - six", "40 6"),
+        ('he said "forty," six times', 'he said "40," 6 times'),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -60,6 +75,30 @@ def test_equivalent_spellings(said, shown):
         ("one, two, three", "6", "token 0: spoken '1' vs display '6'"),
         ("nineteen five", "24", "token 0: spoken '19' vs display '24'"),
         ("two thousand three thousand", "5,000", "token 0: spoken '2000' vs display '5000'"),
+        # nor their sum or concatenation across a comma or a sentence end
+        (
+            "Of the forty, six were never found.",
+            "Of the 46 were never found.",
+            "token 2: spoken '40' vs display '46'",
+        ),
+        (
+            "groups of ten, twelve or fifteen",
+            "groups of 1012 or 15",
+            "token 2: spoken '10' vs display '1012'",
+        ),
+        (
+            "In AD seventy, twenty thousand people fled.",
+            "In AD 7020 thousand people fled.",
+            "token 2: spoken '70' vs display '7020'",
+        ),
+        (
+            "a hundred thousand, two hundred thousand",
+            "100200 thousand",
+            "token 0: spoken '100000' vs display '100200'",
+        ),
+        ("They found forty. Six", "They found 46", "token 2: spoken '40' vs display '46'"),
+        # and a number spoken whole stays whole
+        ("forty-six", "40, 6", "token 0: spoken '46' vs display '40'"),
     ],
 )
 def test_real_differences_are_reported(said, shown, where):
