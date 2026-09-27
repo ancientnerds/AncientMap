@@ -22,7 +22,6 @@ import ipaddress
 import json
 import logging
 import os
-import re
 import socket
 import uuid
 from datetime import UTC, datetime
@@ -56,6 +55,12 @@ from pipeline.database import (
 )
 from pipeline.indexnow import page_url as indexnow_url
 from pipeline.indexnow import submit as indexnow_submit
+from pipeline.lyra.theo_publishing import (
+    check_evidence_anchors,
+    check_page,
+    pick_slug,
+    run_publish_side_effects,
+)
 
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
@@ -120,12 +125,9 @@ def _estimate_minutes(queue_position: int) -> int:
     return 30 * max(queue_position, 1)
 
 
-def _make_slug(title: str) -> str:
-    """Generate a URL-friendly slug from a paper title."""
-    slug = title.lower().strip()
-    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
-    slug = re.sub(r"[\s-]+", "-", slug).strip("-")
-    return slug[:250]
+# Statuses after which a run emits no more live events. 'researched' is the
+# research-only end of a run: the dossier waits for the Claude write (spec 2.5).
+_STREAM_TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "researched"})
 
 
 def _validate_web_urls(web_urls: list[str]) -> None:
@@ -1073,8 +1075,8 @@ async def stream_research(request_id: str, req: Request):
     if row.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not your request")
 
-    # If already completed, return a single done event
-    if row.status in ("completed", "failed", "cancelled"):
+    # A finished run returns a single done event
+    if row.status in _STREAM_TERMINAL_STATUSES:
 
         async def _done_gen():
             yield f"event: done\ndata: {json.dumps({'type': 'done', 'status': row.status})}\n\n"
@@ -1419,13 +1421,34 @@ async def publish_research(
         result["audit"] = artifact_report
 
         paper_title = result.get("title", row.question)
-        slug = _make_slug(paper_title)
-        existing = session.execute(
-            text("SELECT id FROM research_requests WHERE slug = :slug AND id != :id"),
-            {"slug": slug, "id": request_id},
-        ).fetchone()
-        if existing:
-            slug = f"{slug}-{request_id[:8]}"
+        # A founder publishing here reviewed the paper (every block decided, or
+        # approved_by): a Claude-written paper's disclosure line must say so
+        # (contract C7; the page knows 'manual' and human_review). An M3 paper
+        # has no writer record and gets none.
+        if isinstance(result.get("writer"), dict):
+            result["writer"] = {**result["writer"], "published": "manual", "human_review": True}
+        # The paper page's own validators and anchor check, as in the Claude
+        # publish CLI's page and evidence gates (contract C9): a Claude-written
+        # paper unpublished, edited (PATCH /research/{id}, /section) and
+        # re-approved here must still render, or /research/{slug} and
+        # /api/v1/research/{slug} answer HTTP 500. ?override=1 cannot bypass it.
+        # check_page validates the evidence entries' shape (parse_evidence), which
+        # the anchor check needs, so the anchors run only once it passed.
+        page = check_page(request_id, result)
+        anchor_issues: list[str] = []
+        if result.get("evidence") and page["passed"]:
+            _resolved, anchor_issues = check_evidence_anchors(
+                assembled["published_report"], paper_title, result["evidence"]
+            )
+        if page["issues"] or anchor_issues:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "the paper page would not render",
+                    "issues": page["issues"] + anchor_issues,
+                },
+            )
+        slug = pick_slug(session, paper_title, request_id)
 
         if dry_run:
             return {
@@ -1461,10 +1484,6 @@ async def publish_research(
         )
         session.commit()
 
-        # Bing (ChatGPT search, Copilot) learns about the paper now, not at
-        # the next crawl. Fail-soft: a rejected ping is logged, never raised.
-        indexnow_submit([indexnow_url(f"/research/{slug}"), indexnow_url("/research/")])
-
         try:
             from api.cardgame.achievements import check_achievements
 
@@ -1473,25 +1492,22 @@ async def publish_research(
             # Non-critical — achievements must never break publishing.
             logger.warning("check_achievements failed", exc_info=True)
 
-    # Index the assembled publication (not the raw report) so search results
-    # don't return rejected content.
-    paper_text = assembled["published_report"] or result.get("report", "")
-    if paper_text:
-        try:
-            from pipeline.lyra.theo_research_index import index_paper
-
-            indexed = index_paper(
-                paper_id=request_id,
-                paper_text=paper_text,
-                paper_title=paper_title,
-                paper_slug=slug,
-                author_username=user.username,
-                author_discord_id=user.discord_id,
-                published_at=datetime.now(UTC).isoformat(),
-            )
-            logger.info("Published %s: %d sections indexed", request_id, indexed)
-        except Exception as exc:
-            logger.error("Qdrant indexing failed for %s: %s", request_id, exc)
+    # IndexNow + Qdrant: the same sequence the Claude publish CLI runs
+    # (pipeline/lyra/theo_publishing.py). Indexes the assembled publication, not
+    # the raw report, so search results don't return rejected content. Failures
+    # are returned, logged here, and never undo the publish.
+    effects = run_publish_side_effects(
+        request_id=request_id,
+        slug=slug,
+        title=paper_title,
+        paper_text=assembled["published_report"],
+        author_username=user.username,
+        author_discord_id=user.discord_id,
+        published_at=datetime.now(UTC).isoformat(),
+        reindex=False,
+    )
+    if not all(effect["ok"] for effect in effects.values()):
+        logger.error("Publish side effects incomplete for %s: %s", request_id, effects)
 
     return {"status": "published", "slug": slug}
 
