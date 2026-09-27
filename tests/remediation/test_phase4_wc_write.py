@@ -241,6 +241,19 @@ def _unmarked(raw_json: str) -> str:
     return json.dumps({k: v for k, v in json.loads(raw_json).items() if k != M.PROVENANCE_KEY})
 
 
+def _verification_edited(rows: list[W4.Row4], site_id: str, change) -> list[W4.Row4]:
+    """Both rows of a site with one evidence whose verification record `change` edited."""
+    out = []
+    for row in rows:
+        if row.site_id != site_id:
+            out.append(row)
+            continue
+        evidence = json.loads(json.dumps(row.evidence))
+        change(evidence[WC4.VERIFICATION_KEY])
+        out.append(_remade(row, evidence=evidence))
+    return out
+
+
 def _remade(row: W4.Row4, **change: Any) -> W4.Row4:
     data = {**row.to_dict(), **change}
     data["change_key"] = W4.W.change_key(
@@ -299,6 +312,16 @@ def _remade(row: W4.Row4, **change: Any) -> W4.Row4:
         (lambda rows: [_remade(r, evidence={**r.evidence, "run": "another run"})
                        if r.site_id == FX.SITE_A and r.column == "raw_data" else r for r in rows],
          "not the evidence's transition"),
+        # the verification (2026-09-27): a verifier that checked the site, a record that does not
+        # hold, none at all - the pair holds every other invariant, and the plan refuses it
+        (lambda rows: _verification_edited(rows, FX.SITE_A, lambda v: v["rounds"][0].update(
+            answered_by="opus-check-wc-0001")), "checked this site"),
+        (lambda rows: _verification_edited(rows, FX.SITE_A, lambda v: v.update(
+            status="cleared")), "not what its rounds give"),
+        (lambda rows: _verification_edited(rows, UNCHANGED, lambda v: v.update(rounds=[])),
+         "not finished"),
+        (lambda rows: _verification_edited(rows, FX.SITE_B, lambda v: v.clear()),
+         "no verification record"),
     ],
 )  # fmt: skip
 def test_every_wc_plan_rule_refuses_a_broken_plan(tmp_path: Path, mutate, message) -> None:
@@ -331,9 +354,11 @@ def test_a_wc_plan_is_read_strictly(tmp_path: Path) -> None:
 
 # ------------------------------------------------------------------------------ the statement
 #: The WC parts of the rendered transaction, pinned: guard 3's clear tests and invariants 5-6.
+#: Invariants re-pinned 2026-09-27: invariant 5 also holds the check record's verified_sha256 (the
+#: text the verifier confirmed) to the description's sha256.
 WC_SQL_PINS = {
     "null_tests": "b9ac358501af4a6f50a803ac6d8f24565c5c1ebb85d4403bfdfc4975c8048ea3",
-    "invariants": "db09b168b395b04dad3bffe326511f0bb239931a5f2914b0592493e5a1b6a73d",
+    "invariants": "9f03d8c25f660446d086891430362ed0b135add9e1ef91137716ae4ea863ec18",
 }
 
 
@@ -372,6 +397,35 @@ def test_a_wc_chunk_is_written_read_back_and_its_inverse_proven(tmp_path: Path) 
         assert (site.description, site.raw_data) == (result.description, result.raw_data)
         assert WC4.wc_problems(site.description, site.raw_data) == []
     assert {entry["run_stamp"] for entry in db.journal} == {"phase4wc:p4wc-4001:chunk-0001"}
+
+
+def test_the_transaction_refuses_a_check_record_that_names_another_verified_text(
+    tmp_path: Path,
+) -> None:
+    """2026-09-27: invariant 5 holds the check record's verified_sha256 to the description's too.
+    The plan refuses such a row first (and `render_apply` asks the plan's rules again); the
+    transaction refuses it even so - here, a rendered statement edited after its rendering."""
+    rows = _rows_of(tmp_path)
+
+    def unverified(row: W4.Row4) -> W4.Row4:
+        raw = json.loads(row.new_value)
+        raw[WC4.CHECK_KEY]["verified_sha256"] = "a" * 64
+        return _remade(row, new_value=json.dumps(raw))
+
+    edited = [unverified(r) if r.site_id == FX.SITE_A and r.column == "raw_data" else r
+              for r in rows]  # fmt: skip
+    with pytest.raises(W4.W.WriteRefused, match="not the one its verifier confirmed"):
+        W4.validate_rows(W4.Group.WC, edited)
+    batch, outcomes = _loaded(tmp_path / "again")
+    chunk = W4.chunk_for(W4.plan_wc(batch, outcomes=outcomes, live=_live(_db())))
+    sql = W4.render_apply(chunk, rehearse=True)
+    verified = outcomes[batch.batch_id][FX.SITE_A].raw_data[WC4.CHECK_KEY]["verified_sha256"]
+    marker = f'"verified_sha256": "{verified}"'
+    assert sql.count(marker) == 1
+    db = _db()
+    with pytest.raises(PFX.PsqlError, match="invariant 5"):
+        db(sql.replace(marker, '"verified_sha256": "' + "a" * 64 + '"'), host="test")
+    assert db.sites[FX.SITE_A].description == FX.TEXT_A and not db.journal
 
 
 def test_the_read_back_holds_a_wc_site_to_the_lanes_invariants(tmp_path: Path) -> None:
@@ -483,6 +537,26 @@ def test_the_acceptance_refuses_a_text_that_is_not_what_the_evidence_composes(
     assert "ACCEPT_EXIT=1" in output
 
 
+def test_the_acceptance_refuses_a_journal_evidence_whose_verification_does_not_hold(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """2026-09-27: the acceptance re-checks the verification from the journal alone - here a
+    verifier that checked the site, recorded in both rows' evidence."""
+    plan = _plan(tmp_path)
+    db = _db()
+    assert G.main(_args(tmp_path, plan, "--apply"), runner=db) == 0
+    capsys.readouterr()
+    production = _production(db, tmp_path / "apply" / G.LANE_PLAN_FILE)
+    for entry in production.journal:
+        if entry["row_pk"] == FX.SITE_A:
+            evidence = json.loads(json.dumps(entry["evidence"]))
+            evidence[WC4.VERIFICATION_KEY]["rounds"][0]["answered_by"] = "opus-check-wc-0001"
+            entry["evidence"] = evidence
+    output = _accept_output(tmp_path, capsys, monkeypatch, production)
+    assert f"EVIDENCE {FX.SITE_A}: the verifier opus-check-wc-0001 checked this site" in output
+    assert "ACCEPT_EXIT=1" in output
+
+
 def test_the_acceptance_holds_a_written_site_to_the_wc_invariants(tmp_path, monkeypatch) -> None:
     plan = _plan(tmp_path)
     db = _db()
@@ -533,6 +607,47 @@ def test_the_gate_writes_no_wc_plan_before_a_passed_pilot_heads_the_named_plans(
     assert G.main(_args(tmp_path, pilot), runner=_db()) == 0
     assert "pilot passed: " in capsys.readouterr().out
     assert not (tmp_path / "apply" / "p4wc-4002").exists()
+
+
+def test_the_gate_refuses_a_plan_whose_sites_lack_a_passed_verification(tmp_path, capsys) -> None:
+    """2026-09-27: every site's text is verified before the build. A plan built before the verify
+    stage (no verification in its evidence) and a plan whose verification record does not hold
+    (here: a verifier that checked the site) are refused whole, before anything is planned."""
+    path = _plan(tmp_path)
+    (record,) = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    unverified = json.loads(json.dumps(record))
+    del unverified["outcomes"][0]["evidence"][WC4.VERIFICATION_KEY]
+    path.write_text(json.dumps(unverified) + "\n", encoding="utf-8")
+    with pytest.raises(W4.PlanInputError, match="carries no verification"):
+        W4.load_wc_plan([path])
+    dependent = json.loads(json.dumps(record))
+    rounds = dependent["outcomes"][0]["evidence"][WC4.VERIFICATION_KEY]["rounds"]
+    rounds[0]["answered_by"] = "opus-check-wc-0001"
+    path.write_text(json.dumps(dependent) + "\n", encoding="utf-8")
+    with pytest.raises(W4.PlanInputError, match="did not pass its verification.*checked this site"):
+        W4.load_wc_plan([path])
+    run = path.parent  # the judge judged the plan as built; rewrite its tie to reach the loader
+    result = json.loads((run / "judge" / "RESULT.json").read_text(encoding="utf-8"))
+    result["plan_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    (run / "judge" / "RESULT.json").write_text(json.dumps(result), encoding="utf-8")
+    assert G.main(_args(tmp_path, path), runner=_db()) == 1
+    assert "did not pass its verification" in capsys.readouterr().err
+    assert not (tmp_path / "apply" / "p4wc-4001").exists()
+
+
+def test_the_gate_writes_a_pilot_plan_only_as_its_judge_judged_it(tmp_path, capsys) -> None:
+    """The judge measures the text after the verification; its RESULT.json names the plan it
+    judged (`plan_sha256`). A plan built again afterwards - other answers, another verification -
+    is not the judged one, and the gate plans nothing."""
+    run, plan = FX.build_run(tmp_path / "pilot", _rows(), _answers(), name="wc-pilot")
+    result = json.loads((run / "judge" / "RESULT.json").read_text(encoding="utf-8"))
+    assert result["plan_sha256"] == hashlib.sha256(plan.read_bytes()).hexdigest()
+    original = plan.read_bytes()
+    plan.write_bytes(original + b"\n")
+    assert G.main(_args(tmp_path, plan), runner=_db()) == 1
+    assert "not the plan the pilot's judge judged" in capsys.readouterr().err
+    plan.write_bytes(original)
+    assert G.main(_args(tmp_path, plan), runner=_db()) == 0
 
 
 def test_wc_refuses_an_apply_root_holding_batches_of_a_plan_not_named(tmp_path, capsys) -> None:

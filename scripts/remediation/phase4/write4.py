@@ -661,7 +661,9 @@ def _validate_wc_sites(rows: Sequence[Row4]) -> None:
     """A WC site is written site-atomic - its description and raw_data rows together (both
     kept-text rows or both clear rows), or its raw_data alone when the kept text is the stored one
     byte for byte - and the pair it leaves holds lane WC's invariants (`wc4.wc_problems`: the check
-    record's and lane L's hashes, the citations D1 needs; a clear carries none of the three keys).
+    record's and lane L's hashes, the citations D1 needs; a clear carries none of the three keys)
+    after a passed verification (`wc4.verification_problems`: a kept text is the one its verifier
+    confirmed, and no verifier checked the site).
     The description it leaves is the evidence's (`wc4.EVIDENCE_DESCRIPTION`), which the description
     row, where there is one, writes. Every raw_data key outside the three stays as it was."""
     by_site: dict[str, dict[str, Row4]] = {}
@@ -702,6 +704,7 @@ def _validate_wc_sites(rows: Sequence[Row4]) -> None:
             wc4.wc_problems(left, new)
             + wc4.old_marking_problems(marking, evidence["checked"], old)
             + wc4.disclosure_problems(marking, left, new)
+            + wc4.verification_problems(evidence, left)
         )
         if problems:
             raise W.WriteRefused(f"{site_id}: " + "; ".join(problems))
@@ -900,7 +903,9 @@ def load_wc_plan(
     """Lane WC's gate plans (`wc/cli.py build`, one per run - the pilot's, then each chunk's), read
     strictly and together: every batch carries `wc4.PLAN_MARK` and a plan batch id; no batch id
     occurs twice across the plans, and no site twice within one plan; every site has exactly one
-    outcome (`wc4.WcOutcome`) and every outcome a site. The outcomes come back by plan batch, in
+    outcome (`wc4.WcOutcome`) and every outcome a site; and every site passed its verification
+    (`wc4.verification_problems`, 2026-09-27: a plan built before the verify stage, or whose
+    verification record does not hold, is refused whole). The outcomes come back by plan batch, in
     plan order: a site a later plan asks again - its earlier batch refused it, or never wrote it -
     is that later plan's (`plan_wc`, `RULE_TAKEN_OVER`). A WC batch has no directory and no stage
     outcome: `root` is its plan file, and lanes, assemblies and holds are empty."""
@@ -920,9 +925,19 @@ def load_wc_plan(
             if batch_id in outcomes:
                 raise PlanInputError(f"{where}: batch {batch_id} twice")
             sites = tuple(M.PlanSite.from_dict(site) for site in record["sites"])
-            own = [wc4.WcOutcome.from_dict(outcome) for outcome in record["outcomes"]]
+            try:
+                own = [wc4.WcOutcome.from_dict(outcome) for outcome in record["outcomes"]]
+            except ValueError as exc:
+                raise PlanInputError(f"{where}: {exc}") from None
             if [o.site_id for o in own] != [s.site_id for s in sites]:
                 raise PlanInputError(f"{where}: the outcomes are not the batch's sites, in order")
+            for outcome in own:
+                unverified = wc4.verification_problems(outcome.evidence, outcome.description)
+                if unverified:
+                    raise PlanInputError(
+                        f"{where}: {outcome.site_id} did not pass its verification: "
+                        + "; ".join(unverified)
+                    )
             outcomes[batch_id] = {}
             for site, outcome in zip(sites, own, strict=True):
                 if site.site_id in in_plan:
@@ -1692,18 +1707,21 @@ def _null_tests_sql(group: Group) -> str:
 def _wc_invariants(label: str) -> list[str]:
     """WC's in-database invariants, in place of invariant 3 (a checked text that was unmarked
     carries no provenance, so invariant 3's premise does not hold for it): the check record hashes
-    the description it describes, and lane L's provenance, where present, is lane L's and hashes it
-    too; a cleared description (NULL) leaves none of the three WC keys in raw_data. NULL on both
-    sides of `IS DISTINCT FROM` is a cleared site's, and not distinct."""
+    the description it describes and names it as the text its verifier confirmed
+    (`verified_sha256`), and lane L's provenance, where present, is lane L's and hashes it too; a
+    cleared description (NULL) leaves none of the three WC keys in raw_data. NULL on both sides of
+    `IS DISTINCT FROM` is a cleared site's, and not distinct."""
     keys = ", ".join(W._sql_text(key) for key in sorted(wc4.WC_KEYS))
     digest = "encode(sha256(convert_to(u.description, 'UTF8')), 'hex')"
+    check = W._sql_text(wc4.CHECK_KEY)
     return [
-        "    -- invariant 5 (WC): the check record's desc_sha256 is the sha256 of the description",
+        "    -- invariant 5 (WC): the check record's desc_sha256 and verified_sha256 are the sha256",
+        "    -- of the description",
         "    SELECT count(*) INTO bad",
         f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id",
         "     WHERE p.column_name = 'raw_data'",
-        f"       AND (u.raw_data -> {W._sql_text(wc4.CHECK_KEY)} ->> 'desc_sha256')",
-        f"           IS DISTINCT FROM {digest};",
+        f"       AND ((u.raw_data -> {check} ->> 'desc_sha256') IS DISTINCT FROM {digest}",
+        f"            OR (u.raw_data -> {check} ->> 'verified_sha256') IS DISTINCT FROM {digest});",
         *_raise_if(f"{label}: % site(s) break the check record sha256 invariant"),
         "",
         "    -- invariant 6 (WC): a provenance beside a checked text is lane L's and hashes it; a",
