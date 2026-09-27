@@ -30,6 +30,11 @@ except FileNotFoundError:
 from sqlalchemy import text  # noqa: E402
 
 from pipeline.database import get_session  # noqa: E402
+from pipeline.lyra.theo_publishing import (  # noqa: E402
+    JOURNALLED_PAPER_SQL,
+    JournalledPaperError,
+    refuse_journalled_paper,
+)
 
 
 def main() -> int:
@@ -40,10 +45,15 @@ def main() -> int:
     args = parser.parse_args()
 
     with get_session() as session:
+        # A journalled paper changes only through theo_publish (Task 21b): it is
+        # neither the paper that keeps its URL nor the content moved under it (a
+        # rewrite that keeps a public paper's URL is a full republish, C5).
+        refuse_journalled_paper(session, args.old)
+        refuse_journalled_paper(session, args.new)
         new_row = session.execute(
             text(
                 "SELECT id::text, result_json, published_at, slug "
-                "FROM research_requests WHERE id = :id"
+                f"FROM research_requests WHERE id = :id AND NOT ({JOURNALLED_PAPER_SQL})"
             ),
             {"id": args.new},
         ).fetchone()
@@ -52,7 +62,10 @@ def main() -> int:
             return 2
 
         old_row = session.execute(
-            text("SELECT id::text, slug, is_public FROM research_requests WHERE id = :id"),
+            text(
+                "SELECT id::text, slug, is_public FROM research_requests "
+                f"WHERE id = :id AND NOT ({JOURNALLED_PAPER_SQL})"
+            ),
             {"id": args.old},
         ).fetchone()
         if not old_row:
@@ -68,13 +81,13 @@ def main() -> int:
             return 0
 
         # Move content: old keeps its id, slug, url; takes new's result_json and published_at.
-        session.execute(
+        moved = session.execute(
             text(
-                """
+                f"""
                 UPDATE research_requests
                 SET result_json = :result,
                     published_at = :pub
-                WHERE id = :id
+                WHERE id = :id AND NOT ({JOURNALLED_PAPER_SQL})
                 """
             ),
             {
@@ -83,6 +96,11 @@ def main() -> int:
                 "pub": new_row.published_at,
             },
         )
+        if moved.rowcount != 1:
+            session.rollback()
+            raise JournalledPaperError(
+                f"{args.old}: journalled or deleted since it was read; nothing written"
+            )
         # Mark new row as superseded so it doesn't keep serving under its slug.
         session.execute(
             text(

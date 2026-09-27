@@ -186,3 +186,38 @@ def test_a_founder_publish_records_the_review_in_the_disclosure(client, monkeypa
     }
     (call,) = effects
     assert call["author_username"] == "QuetzalcoatlCat"
+
+
+def test_a_public_paper_is_not_approved_again(client, monkeypatch):
+    # Approval precedes publishing. A public paper changes only through the
+    # guarded, journalled correction path (theo_publish --correct, Task 21b): an
+    # approval written here would rewrite result_json unguarded and could undo a
+    # correction committed in between.
+    async def fresh_roles(user):
+        return []
+
+    monkeypatch.setattr(theo_routes, "_require_fresh_researcher", fresh_roles)
+    client.app.dependency_overrides[theo_routes.get_current_user] = lambda: SimpleNamespace(
+        id=1, discord_id="owner-1", username="QuetzalcoatlCat"
+    )
+    select = "SELECT user_id, status, is_public, result_json FROM research_requests"
+
+    public = SimpleNamespace(
+        user_id="owner-1", status="completed", is_public=True, result_json="{}"
+    )
+    session = RecordingSession({select: [public]})
+    monkeypatch.setattr(theo_routes, "get_session", lambda: session)
+    response = client.post(f"/research/{REQ}/approve")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Cannot approve a published paper — unpublish first"
+    assert not [sql for sql in session.statements() if "UPDATE research_requests" in sql]
+
+    draft = SimpleNamespace(
+        user_id="owner-1", status="completed", is_public=False, result_json="{}"
+    )
+    session = RecordingSession({select: [draft]})
+    monkeypatch.setattr(theo_routes, "get_session", lambda: session)
+    response = client.post(f"/research/{REQ}/approve")
+    assert response.status_code == 200
+    assert response.json()["approved_by"] == "QuetzalcoatlCat"
+    assert len([sql for sql in session.statements() if "UPDATE research_requests" in sql]) == 1

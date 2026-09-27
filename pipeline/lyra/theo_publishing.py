@@ -1349,3 +1349,62 @@ def register_video(
     }
     _record_side_effects(session, outcome.journal_id, outcome.side_effects)
     return outcome
+
+
+# ---------------------------------------------------------------------------
+# Maintenance tools (Task 21b). A journalled paper changes only through this module.
+# ---------------------------------------------------------------------------
+
+#: SQL condition on a research_requests row (unqualified column, no alias): its
+#: result_json carries one of the four keys only this module writes and the
+#: paper page validates (stream B's PAPER_EXTRAS_COLUMNS). Such a paper changes
+#: only through theo_publish, where every write passes the page's own
+#: validators and is journalled (C7). The maintenance tools that rewrite
+#: result_json (the image backfills and cleaners in pipeline/lyra, the citation
+#: repair, the payload swap and the gallery script in scripts/) put
+#: `AND NOT (JOURNALLED_PAPER_SQL)` into their row SELECT and their UPDATE.
+#: A NULL result_json satisfies neither the condition nor its NOT (SQL NULL),
+#: so those statements never reach a row without a payload. The one definition.
+JOURNALLED_PAPER_SQL = "result_json::jsonb ?| array['evidence','videos','corrections','writer']"
+
+_NAMED_JOURNALLED_SQL = text(
+    "SELECT 1 FROM research_requests "
+    f"WHERE (slug = :name OR id::text = :name) AND {JOURNALLED_PAPER_SQL}"
+)
+_UNJOURNALLED_UPDATE_SQL = text(
+    "UPDATE research_requests SET result_json = :json "
+    f"WHERE id = :id AND NOT ({JOURNALLED_PAPER_SQL})"
+)
+
+
+class JournalledPaperError(RuntimeError):
+    """A maintenance tool reached a paper that changes only through theo_publish."""
+
+
+def refuse_journalled_paper(conn: Any, name: str) -> None:
+    """Raise when the paper a maintenance tool names (slug or request id) is journalled.
+
+    The tools' own SELECT skips a journalled row, so without this a run that
+    names one would print "No papers found" instead of saying why.
+    """
+    if conn.execute(_NAMED_JOURNALLED_SQL, {"name": name}).fetchone() is not None:
+        raise JournalledPaperError(
+            f"{name}: a journalled paper changes only through theo_publish --correct"
+        )
+
+
+def write_unjournalled_result(conn: Any, request_id: str, result: dict) -> None:
+    """A maintenance tool's write of result_json, never onto a journalled paper.
+
+    The tools read first and write later (the image backfill spends minutes of
+    LLM calls on each paper): a paper theo_publish wrote in between is
+    journalled by then, and this UPDATE matches no row instead of overwriting
+    it. The caller commits.
+    """
+    written = conn.execute(_UNJOURNALLED_UPDATE_SQL, {"id": request_id, "json": json.dumps(result)})
+    if written.rowcount != 1:
+        conn.rollback()
+        raise JournalledPaperError(
+            f"{request_id}: journalled or deleted since it was read; nothing written "
+            "(a journalled paper changes only through theo_publish --correct)"
+        )

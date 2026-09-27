@@ -1234,7 +1234,10 @@ async def approve_research(
 
     with get_session() as session:
         row = session.execute(
-            text("SELECT user_id, status, result_json FROM research_requests WHERE id = :id"),
+            text(
+                "SELECT user_id, status, is_public, result_json "
+                "FROM research_requests WHERE id = :id"
+            ),
             {"id": request_id},
         ).fetchone()
 
@@ -1244,6 +1247,14 @@ async def approve_research(
             raise HTTPException(status_code=403, detail="Not your request")
         if row.status != "completed":
             raise HTTPException(status_code=409, detail="Only completed research can be approved")
+        if row.is_public:
+            # Approval precedes publishing. A public paper changes only through a
+            # guarded, journalled path (theo_publish --correct, contract C5): an
+            # approval written here would rewrite result_json unguarded and could
+            # undo a correction committed in between.
+            raise HTTPException(
+                status_code=409, detail="Cannot approve a published paper — unpublish first"
+            )
 
         try:
             result = json.loads(row.result_json) if row.result_json else {}

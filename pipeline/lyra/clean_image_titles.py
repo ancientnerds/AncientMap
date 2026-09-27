@@ -33,6 +33,11 @@ from sqlalchemy import text
 from pipeline.database import engine
 from pipeline.lyra.theo_citations import contains_non_latin_script
 from pipeline.lyra.theo_image_captions import _clean_title
+from pipeline.lyra.theo_publishing import (
+    JOURNALLED_PAPER_SQL,
+    refuse_journalled_paper,
+    write_unjournalled_result,
+)
 from pipeline.research_html_renderer import _ATTRIBUTION_SPLIT_RE
 
 logger = logging.getLogger(__name__)
@@ -153,22 +158,28 @@ def _clean_probative_entries(entries: list[dict]) -> tuple[list[dict], int]:
 
 
 def _fetch_papers(slug: str | None, request_id: str | None) -> list[dict]:
+    # A journalled paper changes only through theo_publish (Task 21b): --all
+    # skips it, --id and --slug refuse it.
     with engine.connect() as conn:
         if request_id:
+            refuse_journalled_paper(conn, request_id)
             # Accept raw UUID; don't require is_public so unpublished drafts
             # can be cleaned up before publish.
             rows = conn.execute(
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
-                    "WHERE id::text = :rid AND status = 'completed'"
+                    "WHERE id::text = :rid AND status = 'completed' "
+                    f"AND NOT ({JOURNALLED_PAPER_SQL})"
                 ),
                 {"rid": request_id},
             ).fetchall()
         elif slug:
+            refuse_journalled_paper(conn, slug)
             rows = conn.execute(
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
-                    "WHERE slug = :slug AND status = 'completed'"
+                    "WHERE slug = :slug AND status = 'completed' "
+                    f"AND NOT ({JOURNALLED_PAPER_SQL})"
                 ),
                 {"slug": slug},
             ).fetchall()
@@ -177,6 +188,7 @@ def _fetch_papers(slug: str | None, request_id: str | None) -> list[dict]:
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
                     "WHERE is_public = TRUE AND status = 'completed' "
+                    f"AND NOT ({JOURNALLED_PAPER_SQL}) "
                     "ORDER BY published_at DESC"
                 )
             ).fetchall()
@@ -213,10 +225,7 @@ def _process(paper: dict, apply: bool) -> tuple[str, int, str]:
     if entry_changes:
         result["probative_images"] = cleaned_entries
     with engine.connect() as conn:
-        conn.execute(
-            text("UPDATE research_requests SET result_json = :json WHERE id = :id"),
-            {"json": json.dumps(result), "id": paper["id"]},
-        )
+        write_unjournalled_result(conn, paper["id"], result)
         conn.commit()
     return (
         slug,
