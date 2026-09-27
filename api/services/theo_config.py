@@ -22,9 +22,9 @@ THEO_RESEARCH_COST = 600
 
 # The permanent researcher (feeder) enqueues frontier topics under this
 # account. The row owner stays the operator so owner-gated endpoints keep
-# working; auto-published papers carry published_by='Theo' for attribution.
+# working; a paper the Claude write publishes first carries published_by='Theo'
+# (pipeline/lyra/theo_publishing.py PUBLISH_AUTHOR).
 THEO_FEEDER_USER_ID = os.getenv("THEO_FEEDER_USER_ID", "442000112756064260")
-THEO_AUTO_PUBLISH_AUTHOR = "Theo"
 
 # --- Quota watchdog (2026-06-28 plan, layer "active supervision") -----------
 # 5h-rolling % thresholds for the quota watchdog tier classification.
