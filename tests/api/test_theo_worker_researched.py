@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from api.services import theo_worker as tw
 from tests.fake_sql import RecordingSession
 
@@ -136,3 +138,51 @@ async def test_a_run_cancelled_mid_flight_is_not_announced(monkeypatch):
 def test_the_auto_publish_path_is_gone():
     assert not hasattr(tw, "_auto_publish")
     assert not hasattr(tw, "_paper_artifact")
+
+
+# --- pacing and feeder (spec 2.4) ---------------------------------------------
+
+
+def test_run_pacing_constants():
+    from api.services import theo_config
+
+    assert theo_config.THEO_RUN_COST_PCT == 9.0
+    assert theo_config.THEO_RUN_EST_HOURS == 11.0
+    assert theo_config.THEO_MAX_UNWRITTEN_DOSSIERS == 6
+    assert not hasattr(theo_config, "THEO_PAPER_COST_PCT")
+    assert not hasattr(theo_config, "THEO_PAPER_EST_HOURS")
+
+
+def test_average_run_hours_come_from_research_only_rows(monkeypatch):
+    session = RecordingSession({"AVG(duration_ms)": [(36_000_000,)]})
+    monkeypatch.setattr(tw, "get_session", lambda: session)
+    monkeypatch.setattr(tw, "_avg_run_cache", None)
+    assert tw._avg_batch_run_hours() == 10.0
+    sql = session.statements()[0]
+    assert "status IN ('completed', 'researched')" in sql
+    assert "result_json::jsonb -> 'dossier' IS NOT NULL" in sql
+
+
+def test_average_run_hours_fall_back_to_the_estimate_without_history(monkeypatch):
+    monkeypatch.setattr(tw, "get_session", lambda: RecordingSession({}))
+    monkeypatch.setattr(tw, "_avg_run_cache", None)
+    assert tw._avg_batch_run_hours() == 11.0
+
+
+def test_feeder_backlog_counts_pending_batch_rows_and_unwritten_dossiers(monkeypatch):
+    session = RecordingSession(
+        {"FROM research_requests": [SimpleNamespace(pending=0, unwritten=6)]}
+    )
+    monkeypatch.setattr(tw, "get_session", lambda: session)
+    assert tw._read_feeder_backlog() == (0, 6)
+    sql = session.statements()[0]
+    assert "status = 'researched'" in sql
+    assert "status IN ('queued', 'running', 'deferred')" in sql
+
+
+@pytest.mark.parametrize(
+    ("pending", "unwritten", "expected"),
+    [(0, 0, True), (0, 5, True), (0, 6, False), (1, 0, False)],
+)
+def test_the_feeder_enqueues_only_into_an_empty_queue_below_the_cap(pending, unwritten, expected):
+    assert tw._feeder_may_enqueue(pending, unwritten, 6) is expected

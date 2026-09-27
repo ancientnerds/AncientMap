@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 from api.cache import get_redis_client, mark_redis_lost
 from api.services.theo_config import (
+    THEO_MAX_UNWRITTEN_DOSSIERS,
     THEO_MIN_TASK_INTERVAL_S,
     THEO_PARALLEL_SLOTS,
     THEO_RESEARCH_COST,
@@ -829,24 +830,28 @@ _avg_run_cache: tuple[float, float] | None = None
 
 
 def _avg_batch_run_hours() -> float:
-    """Measured wall-clock hours of one batch paper: average of the last 5
-    completed batch runs (duration_ms includes crawl-lane pacing and quota
-    sleeps). Falls back to THEO_PAPER_EST_HOURS without history."""
+    """Measured wall-clock hours of one research-only batch run: the average of
+    the last 5 batch rows that ended with a dossier (status 'researched', or
+    'completed' after the Claude publish, which keeps result_json['dossier']).
+    duration_ms includes crawl-lane pacing and quota sleeps. Full-pipeline runs
+    (no 'dossier' key) are excluded: their 4h of M3 writing no longer happens.
+    Falls back to THEO_RUN_EST_HOURS without history."""
     global _avg_run_cache
-    from api.services.theo_config import THEO_PAPER_EST_HOURS
+    from api.services.theo_config import THEO_RUN_EST_HOURS
 
     now = time.monotonic()
     if _avg_run_cache and now - _avg_run_cache[1] < 600:
         return _avg_run_cache[0]
-    hours = THEO_PAPER_EST_HOURS
+    hours = THEO_RUN_EST_HOURS
     try:
         with get_session() as session:
             avg_ms = session.execute(
                 text("""
                     SELECT AVG(duration_ms) FROM (
                         SELECT duration_ms FROM research_requests
-                        WHERE is_batch = TRUE AND status = 'completed'
+                        WHERE is_batch = TRUE AND status IN ('completed', 'researched')
                           AND duration_ms IS NOT NULL
+                          AND result_json::jsonb -> 'dossier' IS NOT NULL
                         ORDER BY completed_at DESC LIMIT 5
                     ) recent
                 """)
@@ -875,9 +880,9 @@ def _batch_claim_allowed(
 
     1. Window: at most THEO_BATCH_MAX_DAYS_TO_RESET days before the reset
        (default 3 = Friday 00:00 UTC) — surplus is use-it-or-lose-it there.
-    2. Budget: the weekly remaining must cover the share of one paper that
-       burns BEFORE the reset (uniform burn at the measured pace of recent
-       batch papers) plus the Lyra reserve for every remaining day. The
+    2. Budget: the weekly remaining must cover the share of one research run
+       that burns BEFORE the reset (uniform burn at the measured pace of recent
+       research-only batch runs) plus the Lyra reserve for every remaining day. The
        weekend's LAST run may cross the reset — it finishes on Monday's
        fresh budget, and the window condition keeps Monday itself free of
        NEW starts. What must never happen is the weekly hitting 0%
@@ -891,7 +896,7 @@ def _batch_claim_allowed(
     from api.services.theo_config import (
         THEO_BATCH_MAX_DAYS_TO_RESET,
         THEO_LYRA_DAILY_RESERVE_PCT,
-        THEO_PAPER_COST_PCT,
+        THEO_RUN_COST_PCT,
     )
 
     if not gate_open or tier != "HEALTHY":
@@ -904,7 +909,7 @@ def _batch_claim_allowed(
         return False
     run_hours = max(avg_run_hours if avg_run_hours is not None else _avg_batch_run_hours(), 0.1)
     pre_reset_share = min(1.0, hours_left / run_hours)
-    required = pre_reset_share * THEO_PAPER_COST_PCT + days_left * THEO_LYRA_DAILY_RESERVE_PCT
+    required = pre_reset_share * THEO_RUN_COST_PCT + days_left * THEO_LYRA_DAILY_RESERVE_PCT
     return weekly_pct >= required
 
 
@@ -1113,11 +1118,34 @@ async def _maybe_run_thinking_pass() -> None:
         await asyncio.to_thread(run_curator_pass)
 
 
+_FEEDER_BACKLOG_SQL = text("""
+    SELECT
+        COUNT(*) FILTER (WHERE is_batch = TRUE
+                           AND status IN ('queued', 'running', 'deferred')) AS pending,
+        COUNT(*) FILTER (WHERE status = 'researched') AS unwritten
+    FROM research_requests
+""")
+
+
+def _read_feeder_backlog() -> tuple[int, int]:
+    """(batch rows queued/running/deferred, dossiers awaiting the Claude write)."""
+    with get_session() as session:
+        row = session.execute(_FEEDER_BACKLOG_SQL).fetchone()
+    return int(row.pending), int(row.unwritten)
+
+
+def _feeder_may_enqueue(pending: int, unwritten: int, cap: int) -> bool:
+    """The feeder adds a frontier topic only to an empty batch queue, and only while
+    fewer than `cap` researched dossiers wait for a write (spec 2.4)."""
+    return pending == 0 and unwritten < cap
+
+
 async def _feeder_loop() -> None:
     """Keep the batch queue fed from the knowledge-graph frontier.
 
-    Every 10 min: when no batch row is queued/running/deferred and the batch
-    gate inputs allow a start, promote the best frontier node to a queued
+    Every 10 min: when no batch row is queued/running/deferred, fewer than
+    THEO_MAX_UNWRITTEN_DOSSIERS dossiers wait for the Claude write, and the
+    batch gate inputs allow a start, promote the best frontier node to a queued
     research_request. Source injectors run hourly from the same loop (cheap
     SQL only). Pre-existing batch rows always drain first — the feeder only
     acts on an EMPTY batch queue.
@@ -1147,16 +1175,14 @@ async def _feeder_loop() -> None:
             # last_pass comes from thinking_log so restarts don't double-run.
             await _maybe_run_thinking_pass()
 
-            with get_session() as session:
-                pending = session.execute(
-                    text("""
-                        SELECT COUNT(*) FROM research_requests
-                        WHERE is_batch = TRUE
-                          AND status IN ('queued', 'running', 'deferred')
-                    """)
-                ).scalar()
-
-            if not pending:
+            pending, unwritten = _read_feeder_backlog()
+            if unwritten >= THEO_MAX_UNWRITTEN_DOSSIERS:
+                logger.info(
+                    "[THEO] Feeder paused: %d dossiers await the Claude write (cap %d)",
+                    unwritten,
+                    THEO_MAX_UNWRITTEN_DOSSIERS,
+                )
+            if _feeder_may_enqueue(pending, unwritten, THEO_MAX_UNWRITTEN_DOSSIERS):
                 # Mirror the claim-side gating so we never enqueue into a
                 # quota wall — the row would only sit and count against the
                 # pacing clock.
