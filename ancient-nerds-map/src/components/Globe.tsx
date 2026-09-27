@@ -21,6 +21,7 @@ import { useUIState, useLabelVisibility, usePaleoshoreline, useGeologicalLayers,
 import { useConnectorStatus } from '../hooks/useConnectorStatus'
 import ConnectorStatusModal from './ConnectorStatusModal'
 import { isDemoMode, registerGlobeDemoApi } from '../utils/demoApi'
+import { globeScreenPoint, viewportPoint } from '../utils/screenPoint'
 import { parseVideoMode } from '../utils/videoMode'
 import { createFrontLineMaterial } from '../shaders/globe'
 import { calculateSiteTooltipPosition } from './Globe/rendering/highlightedSitesRenderer'
@@ -591,6 +592,15 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       mapboxServiceRef,
       mapboxStateRef,
       requestMapbox: () => { background.promote('mapbox') },
+      screenPoint: (lat, lng) => {
+        if (showMapboxRef.current) {
+          const map = mapboxServiceRef.current?.getMap()
+          if (!map) throw new Error('screenPoint: Mapbox is shown but has no map')
+          return viewportPoint(map.project([lng, lat]), window.innerWidth, window.innerHeight)
+        }
+        if (!sceneRef.current) return null
+        return globeScreenPoint(sceneRef.current.camera, lat, lng, window.innerWidth, window.innerHeight)
+      },
     })
   }, [])
 

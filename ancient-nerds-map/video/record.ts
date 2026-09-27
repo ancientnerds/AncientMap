@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url'
 import { mkdirSync, readFileSync, unlinkSync } from 'fs'
 import puppeteer, { type Browser, type Page } from 'puppeteer'
 import type { CameraState, DemoAPI } from '../src/utils/demoApi'
+import type { ScreenPoint } from '../src/utils/screenPoint'
 
 // Scene imports
 import { heroScene } from './scenes/hero.js'
@@ -272,6 +273,7 @@ function createDemoProxy(page: Page): DemoAPI {
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),
     showUI: () => evalDemo(`window.__DEMO.showUI()`),
     getCameraState: () => page.evaluate('window.__DEMO.getCameraState()') as Promise<CameraState>,
+    screenPoint: (lat, lng) => page.evaluate(`window.__DEMO.screenPoint(${lat}, ${lng})`) as Promise<ScreenPoint | null>,
     isReady: () => { throw new Error('Use page.evaluate for isReady') },
     waitUntilReady: () => evalDemo(`window.__DEMO.waitUntilReady()`),
   }

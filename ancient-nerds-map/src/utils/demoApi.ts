@@ -11,6 +11,7 @@
 import type { FilterMode } from '../App'
 import { withSiteDetails, type SiteData } from '../data/sites'
 import type { MapboxLoadState } from '../services/mapboxLoader'
+import type { ScreenPoint } from './screenPoint'
 
 export interface CameraState {
   distance: number
@@ -96,6 +97,12 @@ export interface DemoAPI {
   // Status
   /** Camera distance from the globe centre and the surface point under it (scene debugging). */
   getCameraState(): CameraState | Promise<CameraState>
+  /**
+   * Viewport pixel of a place in the current view (Mapbox when it is shown, the
+   * globe camera otherwise); null when the place is hidden or off screen. The
+   * studio captures mark and click places with it (utils/screenPoint.ts).
+   */
+  screenPoint(lat: number, lng: number): ScreenPoint | null | Promise<ScreenPoint | null>
   isReady(): boolean
   waitUntilReady(): Promise<void>
 }
@@ -211,6 +218,8 @@ export interface GlobeDemoRefs {
   mapboxStateRef: React.MutableRefObject<MapboxLoadState>
   /** Moves the Mapbox task to the front of the globe's background queue. */
   requestMapbox: () => void
+  /** Viewport pixel of a place in the current view (DemoAPI.screenPoint). */
+  screenPoint: (lat: number, lng: number) => ScreenPoint | null
 }
 
 type Vec3 = [number, number, number]
@@ -530,6 +539,7 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
         map.once('idle', () => { clearTimeout(timer); resolve() })
       })
     },
+    screenPoint: (lat, lng) => refs.screenPoint(lat, lng),
     getCameraState: () => {
       const scene = refs.sceneRef.current
       if (!scene) return { distance: 0, lat: 0, lng: 0, animating: false }
