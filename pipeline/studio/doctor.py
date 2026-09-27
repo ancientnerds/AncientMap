@@ -77,6 +77,13 @@ def _ssh() -> Probe:
     )
 
 
+def _node_modules() -> Probe:
+    path = VIDEO_DIR / "node_modules"
+    if not path.is_dir():
+        return Probe("video/node_modules", False, "missing: run `npm ci` in video/")
+    return Probe("video/node_modules", True, str(path))
+
+
 def _site_export() -> Probe:
     """The repo-root site export the distribution dots resolve from (owner decision 15) and
     its age: I13 downloads the current one read-only from production (Q4) with
@@ -180,9 +187,7 @@ def probes() -> list[Probe]:
             shutil.which("node") is not None,
             shutil.which("node") or "Node 22 is not on PATH",
         ),
-        Probe(
-            "video/node_modules", (VIDEO_DIR / "node_modules").is_dir(), "run `npm ci` in video/"
-        ),
+        _node_modules(),
         _registry(),
         Probe("site fonts", bool(fonts), f"{len(fonts)} woff2 in {FONTS_DIR}"),
         _module("faster_whisper"),

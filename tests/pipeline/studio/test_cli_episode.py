@@ -265,6 +265,17 @@ def test_doctor_reports_the_site_export_and_its_age(monkeypatch, tmp_path):
     assert probe.ok and re.search(r"from \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC", probe.detail)
 
 
+def test_doctor_names_the_node_modules_or_the_install_command(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor, "VIDEO_DIR", tmp_path)
+    assert doctor._node_modules() == doctor.Probe(
+        "video/node_modules", False, "missing: run `npm ci` in video/"
+    )
+    (tmp_path / "node_modules").mkdir()
+    assert doctor._node_modules() == doctor.Probe(
+        "video/node_modules", True, str(tmp_path / "node_modules")
+    )
+
+
 def test_doctor_reports_each_probe_and_fails_on_any(monkeypatch, capsys):
     monkeypatch.setattr(
         doctor,
