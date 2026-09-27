@@ -12971,3 +12971,21 @@ The held sites (final ones) go to lane WC; the 50 re-queued ones return through 
   (.gitleaks.toml) and **14ef1f9** deployed: both API containers restarted after the push
   (01:14:50Z / 01:14:57Z), 0 `Card description overwritten` lines, `card_json.py --check` and
   `teaser.py accept --step 1` again 0 deviations.
+
+## 2026-09-27 - Lane WC pilots 1 and 2 FAILED the sealed judge gate; WC gets a per-site verification
+
+- Pilot `pilot-2026-09-27` (20 sites, 76 sentences): 59 kept (39 whole, 20 trimmed), 17 dropped
+  (11 unsupported, 6 contradicted), 2 sites cleared; judge: 1 kept sentence WRONG with a found quote
+  (Cloghanmore court tomb: "passage tomb-style" carvings and "the only court tomb with carvings",
+  disputed by G. Robin's thesis and a 2026 article), 0 unsupported, 0 incoherent. Fix: rule 1 of the
+  check question names superlative, uniqueness and style claims and asks for disputing sources
+  (re-pinned, eae4f88).
+- Pilot `pilot-2026-09-27b` (20 sites, 73 sentences, the fixed prompt): 51 kept, 22 dropped (10
+  contradicted, 10 unsupported, 2 dependent), 2 cleared; judge: 1 kept sentence WRONG, 1 site
+  incoherent (Nyons: trimming sentence 1 left sentence 2's "the ancient name" pointing at another
+  referent), unsupported 1.96 % (under 5 %), 2 wrong drops (reported, not gating).
+- Neither pilot's outcomes are written (the gate plans nothing without a passed pilot). A single
+  checking pass lets about one error per 50-60 kept sentences through; the gate allows none. As in
+  lane WB, every site's kept text now gets an independent verifier before build (`wip/wc2`, being
+  built): WRONG/UNSUPPORTED sentences dropped, incoherence repaired by dropping the named sentence or
+  the site cleared; then a new pilot with a fresh judge.
