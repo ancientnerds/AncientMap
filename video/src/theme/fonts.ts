@@ -9,7 +9,9 @@
  * latin files, plus the latin-ext files of JetBrains Mono (both weights share the
  * 400 file, as on the site) and Cormorant Garamond. Orbitron ships latin only, so
  * HEADING names JetBrains Mono second: a latin-ext character of a heading is drawn
- * by the JetBrains Mono latin-ext face, never by a system font.
+ * by the JetBrains Mono latin-ext face when that file maps it. glyphs.ts DRAWABLE
+ * admits only the characters the loaded files map, so no drawn string reaches a
+ * system font.
  */
 import { loadFont } from '@remotion/fonts'
 import { staticFile } from 'remotion'
