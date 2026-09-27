@@ -6,7 +6,7 @@ import argparse
 import logging
 import sys
 
-from pipeline.studio import cli_paper, config
+from pipeline.studio import cli_episode, cli_paper, config, doctor
 from pipeline.studio.errors import StudioError
 
 
@@ -14,6 +14,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python -m pipeline.studio")
     sub = ap.add_subparsers(dest="area", required=True)
     cli_paper.register(sub)
+    cli_episode.register(sub)
+    doctor.register(sub)
     return ap
 
 
