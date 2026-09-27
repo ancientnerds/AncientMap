@@ -399,7 +399,9 @@ def _outcome(site_row: dict, decisions=None, quotes=None):
     quotes = _quotes() if quotes is None else quotes
     kept = WC4.kept_numbers(decisions)
     decisions, verification = WC4.apply_verification(
-        decisions, quotes, [FX.passed_round(kept)] if kept else []
+        decisions,
+        quotes,
+        [FX.passed_round(kept, text=FX.shown_text(decisions, quotes, kept))] if kept else [],
     )
     composed = WC4.compose(decisions, quotes)
     check = (

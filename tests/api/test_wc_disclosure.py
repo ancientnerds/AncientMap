@@ -26,7 +26,7 @@ if str(REMEDIATION) not in sys.path:
 from phase4 import model4 as M  # noqa: E402
 from phase4 import wc4 as WC4  # noqa: E402
 
-from tests.remediation.wc_fixtures import passed_round  # noqa: E402
+from tests.remediation.wc_fixtures import passed_round, shown_text  # noqa: E402
 
 SITE_ID = "4a5a324f-0000-4000-8000-000000000001"
 MARCH = (
@@ -62,7 +62,9 @@ def _checked(
     ]
     quotes = {1: [WC4.Quote(WIKI, "Tarxien Temples - Wikipedia", "an archaeological complex")]}
     decisions, verification = WC4.apply_verification(
-        decisions, quotes, [passed_round([1])] if keep else []
+        decisions,
+        quotes,
+        [passed_round([1], text=shown_text(decisions, quotes, [1]))] if keep else [],
     )
     composed = WC4.compose(decisions, quotes if keep else {})
     check = (

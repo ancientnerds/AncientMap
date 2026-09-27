@@ -50,7 +50,8 @@ is fetched once per run, so a page that failed in round 1 stays failed in the re
 counts only when every quote it gives is found (and none is on a copy of our text); a DROP counts
 as given. A sentence that does not count - or every asked sentence of an answer that is not in
 shape - is re-asked once (`export-reask`, round 2, with what failed); after that round it is dropped
-(`unverified`). `build` refuses while a re-ask is due or unimported.
+(`unverified`). `build` refuses while a re-ask is due or unimported. A round is imported once, and
+no check round once a verification round is exported: the verifiers were shown the text it gives.
 
 **The verification** (`verify-*`, owner decisions O5 and O2; the pilots of 2026-09-27 let one error
 in 50-60 kept sentences through a single check): after the check rounds, every site whose check kept
@@ -64,6 +65,10 @@ cleared; then the pronoun rule. A text a drop changed goes to a new verifier onc
 batches `verify2-NNNN`): coherent and every sentence SUPPORTED keeps it, anything else clears it
 (`wc4.run_verification`). The import refuses a verifier whose name checked the site or verified it
 in round 1; it fetches every quoted page once into `<run>/verify/pages/`. Nothing is added back.
+Each round is tied to what its question showed (the review of 2026-09-27): the import records the
+sha256 of the text as published (`text_sha256`), which every reader of the record holds to what the
+check composes (`wc4.run_verification`), and `build` asks every round's question again against its
+`prompt_sha256` - a check that moved after a verifier answered is never built.
 
 **The build** (`build`): refused while a check or verification round is due. Per site, each
 sentence's decision from the last round that asked it, the pronoun rule (`wc4.follow_drops`), the
@@ -608,9 +613,22 @@ def _round_dir(run: Path, number: int) -> Path:
 def cmd_import(
     run: Path, handoff: Path, *, client: A.Client | None = None, pace: float = Q.PACE_SECONDS
 ) -> dict[str, Any]:
-    """One round: validated, every prompt rebuilt, every answer parsed and its quotes checked."""
+    """One round, once: validated, every prompt rebuilt, every answer parsed and its quotes
+    checked. Refused when the round was imported (its `ANSWERS.jsonl` is there) or a verification
+    round was exported: a verifier was shown the text the check rounds give, and an import run
+    again would put a text no verifier saw under its verdict (the review of 2026-09-27)."""
     record = round_of(run, handoff)
     number = record["round"]
+    if (_round_dir(run, number) / "ANSWERS.jsonl").exists():
+        raise WcRunError(
+            f"{run}: round {number} was imported; a round is imported once - a check answered "
+            "again is a new run's"
+        )
+    if _verify_rounds(run):
+        raise WcRunError(
+            f"{run}: the verification was exported - the check rounds are final once a verifier "
+            "was shown their text; a check answered again is a new run's"
+        )
     check = OH.validate(handoff)
     if not check.ok:
         raise WcRunError(
@@ -926,6 +944,7 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
                 f"({VERIFY_STAGES[len(derived)]}) is due - verify-export, answer, validate and "
                 "verify-import it first: nothing is built from an unverified text"
             )
+        _asked_again(label, site, inputs.get(label, []))
     finals: list[dict[str, Any]] = []
     outcomes: list[wc4.WcOutcome] = []
     reasons: Counter[str] = Counter()
@@ -1077,6 +1096,23 @@ def verify_prompt(
     )
 
 
+def _asked_again(label: str, site: Checked, rounds: Sequence[Mapping[str, Any]]) -> None:
+    """Every recorded verification round of a site asked the question the site's state at that
+    round gives now (`verify_prompt`, byte for byte against the round's `prompt_sha256`): a check
+    or a quote that moved under a round - even one that leaves the text as it was, which
+    `wc4.run_verification` holds to the round's `text_sha256` - is refused, never built (the
+    review of 2026-09-27)."""
+    for index, given in enumerate(rounds):
+        state, _, _ = wc4.run_verification(site.decisions, site.quotes, rounds[:index])
+        asked = OH.prompt_sha256(verify_prompt(site.entry, state, site.quotes))
+        if asked != given["prompt_sha256"]:
+            raise WcRunError(
+                f"{label}: verification round {index + 1} ({given['stage']}) asked another "
+                "question than the site's state gives: its check moved after the verifier "
+                "answered - nothing is built from a text no verifier was shown"
+            )
+
+
 def cmd_verify_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, Any]:
     """The next verification round: `verify` asks every site whose check kept a sentence, once
     every check round is imported; `verify2` - after `verify` is imported - every site whose kept
@@ -1187,8 +1223,9 @@ def cmd_verify_import(
     round and compared byte for byte; a verifier whose name checked the site - or verified it in an
     earlier round - refused; every answer parsed (`answers.parse_verify`); every quoted page fetched
     once into `<run>/verify/pages/` and every quote checked (`answers.check_quotes`, recorded: a
-    WRONG drops its sentence whether its quote was found or not); every site's round read by
-    `wc4.run_verification` before `VERIFIED.jsonl` is written."""
+    WRONG drops its sentence whether its quote was found or not); the sha256 of the text each
+    question showed recorded (`text_sha256`, the text as published, markers included); every
+    site's round read by `wc4.run_verification` before `VERIFIED.jsonl` is written."""
     record = _verify_round_of(run, handoff)
     number, stage = record["round"], record["stage"]
     out = _verify_dir(run, number) / "VERIFIED.jsonl"
@@ -1209,7 +1246,7 @@ def cmd_verify_import(
         raise WcRunError(f"{handoff}: the manifest is not the verification round's record")
     sites = checked_sites(run)
     earlier = _verification_inputs(run, before=number)
-    parsed: dict[str, tuple[str, dict[str, Any], OH.Answer, A.VerifyAnswer]] = {}
+    parsed: dict[str, tuple[str, dict[str, Any], OH.Answer, A.VerifyAnswer, str]] = {}
     urls: set[str] = set()
     for (batch_id, label), line in sorted(manifest.items()):
         site = sites[label]
@@ -1238,7 +1275,8 @@ def cmd_verify_import(
                 f"{batch_id}/{label}: malformed answer ({exc}) - verify-check-answer refuses it; "
                 "delete the answer file and have the batch agent answer it again"
             ) from exc
-        parsed[label] = (batch_id, line, answer, verdict)
+        text = str(wc4.compose(current, site.quotes).description)
+        parsed[label] = (batch_id, line, answer, verdict, text)
         urls.update(q.url for item in verdict.kept for q in item.quotes)
     pages = run / VERIFY_DIR / PAGES_DIR
     fetch(urls, pages, client=client, pace=pace)
@@ -1246,7 +1284,7 @@ def cmd_verify_import(
     rows: list[dict[str, Any]] = []
     states: Counter[str] = Counter()
     verdicts: Counter[str] = Counter()
-    for label, (batch_id, line, answer, verdict) in sorted(parsed.items()):
+    for label, (batch_id, line, answer, verdict, text) in sorted(parsed.items()):
         shown = record["shown"][label]
         given: dict[str, Any] = {
             "round": number,
@@ -1257,6 +1295,7 @@ def cmd_verify_import(
             "prompt_sha256": line["prompt_sha256"],
             "answer_sha256": M.text_sha256(answer.text),
             "shown": shown,
+            "text_sha256": M.text_sha256(text),
             "verdicts": [],
             "coherent": verdict.coherent,
             "broken": list(verdict.broken),

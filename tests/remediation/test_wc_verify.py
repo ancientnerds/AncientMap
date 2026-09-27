@@ -105,10 +105,13 @@ def _quotes() -> dict[int, list[WC4.Quote]]:
     return {1: [page], 2: [page], 3: [page]}
 
 
+def _round(shown: list[int], **change) -> dict:
+    """A recorded round over the pure tests' decisions: the text it showed keeps `shown`."""
+    return FX.passed_round(shown, text=FX.shown_text(_decisions(), _quotes(), shown), **change)
+
+
 def test_a_text_every_sentence_of_which_the_verifier_confirms_is_verified_as_it_stands() -> None:
-    decisions, record = WC4.apply_verification(
-        _decisions(), _quotes(), [FX.passed_round([1, 2, 3])]
-    )
+    decisions, record = WC4.apply_verification(_decisions(), _quotes(), [_round([1, 2, 3])])
     assert decisions == _decisions()
     assert (record["status"], record["before"], record["kept"]) == (
         "verified",
@@ -129,14 +132,14 @@ def test_a_text_every_sentence_of_which_the_verifier_confirms_is_verified_as_it_
 def test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_is_due_again(
     verdicts, reason
 ) -> None:
-    round_1 = FX.passed_round([1, 2, 3], verdicts=verdicts)
+    round_1 = _round([1, 2, 3], verdicts=verdicts)
     decisions, rounds, status = WC4.run_verification(_decisions(), _quotes(), [round_1])
     assert status is None  # verify2 is due: a drop can break what stays
     assert [(d.verdict.value, d.reason) for d in decisions][2] == ("DROP", reason)
     assert rounds[0]["drops"] == {"3": reason} and not rounds[0]["passed"]
     with pytest.raises(WC4.WcError, match=r"round 2 \(verify2\) is due"):
         WC4.apply_verification(_decisions(), _quotes(), [round_1])
-    round_2 = FX.passed_round([1, 2], number=2, answered_by="opus-wc-verify2-0001")
+    round_2 = _round([1, 2], number=2, answered_by="opus-wc-verify2-0001")
     final, record = WC4.apply_verification(_decisions(), _quotes(), [round_1, round_2])
     assert (record["status"], record["kept"]) == ("verified", [1, 2])
     assert WC4.compose(final, _quotes()).description == (
@@ -145,24 +148,24 @@ def test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_is_due_
 
 
 def test_a_sentence_that_leans_on_a_dropped_one_goes_with_it() -> None:
-    round_1 = FX.passed_round([1, 2, 3], verdicts=["UNSUPPORTED", "SUPPORTED", "SUPPORTED"])
+    round_1 = _round([1, 2, 3], verdicts=["UNSUPPORTED", "SUPPORTED", "SUPPORTED"])
     decisions, _, status = WC4.run_verification(_decisions(), _quotes(), [round_1])
     assert [d.reason for d in decisions] == ["verify-unsupported", "leans-on-dropped", None]
     assert status is None and WC4.kept_numbers(decisions) == [3]
 
 
 def test_an_incoherent_text_drops_the_named_sentence_and_one_with_none_named_is_cleared() -> None:
-    named = FX.passed_round([1, 2, 3], coherent=False, broken=[3])
+    named = _round([1, 2, 3], coherent=False, broken=[3])
     decisions, _, status = WC4.run_verification(_decisions(), _quotes(), [named])
     assert [d.reason for d in decisions] == [None, None, "verify-incoherent"] and status is None
-    unnamed = FX.passed_round([1, 2, 3], coherent=False)
+    unnamed = _round([1, 2, 3], coherent=False)
     decisions, record = WC4.apply_verification(_decisions(), _quotes(), [unnamed])
     assert record["status"] == "cleared" and record["rounds"][0]["cleared"]
     assert {d.reason for d in decisions} == {WC4.DropReason.VERIFY_CLEARED}
 
 
 def test_a_drop_that_leaves_nothing_clears_the_site_without_a_second_round() -> None:
-    every = FX.passed_round([1, 2, 3], verdicts=["WRONG", "SUPPORTED", "UNSUPPORTED"])
+    every = _round([1, 2, 3], verdicts=["WRONG", "SUPPORTED", "UNSUPPORTED"])
     decisions, record = WC4.apply_verification(_decisions(), _quotes(), [every])
     assert record["status"] == "cleared" and record["kept"] == []
     assert WC4.compose(decisions, _quotes()).description is None
@@ -170,13 +173,13 @@ def test_a_drop_that_leaves_nothing_clears_the_site_without_a_second_round() -> 
 
 @pytest.mark.parametrize(
     "round_2",
-    [FX.passed_round([1, 2], number=2, verdicts=["SUPPORTED", "UNSUPPORTED"]),
-     FX.passed_round([1, 2], number=2, coherent=False, broken=[2]),
-     FX.passed_round([1, 2], number=2, coherent=False)],
+    [_round([1, 2], number=2, verdicts=["SUPPORTED", "UNSUPPORTED"]),
+     _round([1, 2], number=2, coherent=False, broken=[2]),
+     _round([1, 2], number=2, coherent=False)],
     ids=["unsupported", "incoherent-named", "incoherent"],
 )  # fmt: skip
 def test_a_second_verification_that_does_not_confirm_the_text_clears_the_site(round_2) -> None:
-    round_1 = FX.passed_round([1, 2, 3], verdicts=["SUPPORTED", "SUPPORTED", "WRONG"])
+    round_1 = _round([1, 2, 3], verdicts=["SUPPORTED", "SUPPORTED", "WRONG"])
     decisions, record = WC4.apply_verification(_decisions(), _quotes(), [round_1, round_2])
     assert record["status"] == "cleared" and record["kept"] == []
     assert [d.reason for d in decisions] == ["verify-cleared", "verify-cleared", "verify-wrong"]
@@ -186,28 +189,56 @@ def test_nothing_the_check_kept_is_nothing_to_verify() -> None:
     dropped = [WC4.Decision(1, "A temple.", WC4.Verdict.DROP, None, WC4.DropReason.UNSUPPORTED)]
     assert WC4.apply_verification(dropped, {}, [])[1]["status"] == "nothing-kept"
     with pytest.raises(WC4.WcError, match="had ended"):
-        WC4.run_verification(dropped, {}, [FX.passed_round([])])
+        WC4.run_verification(dropped, {}, [_round([])])
 
 
 @pytest.mark.parametrize(
     ("rounds", "message"),
     [
-        ([FX.passed_round([1, 2])], "showed sentences"),
-        ([FX.passed_round([1, 2, 3], number=2)], "recorded as round 2"),
-        ([{**FX.passed_round([1, 2, 3]), "extra": 1}], "carries"),
-        ([FX.passed_round([1, 2, 3], broken=[1])], "names no broken sentence"),
-        ([FX.passed_round([1, 2, 3], coherent=False, broken=[4])], "ascending K numbers"),
-        ([FX.passed_round([1, 2, 3], coherent=False, broken=[2, 1])], "ascending K numbers"),
-        ([FX.passed_round([1, 2, 3], verdicts=["SUPPORTED", "FINE", "SUPPORTED"])], "not one of"),
-        ([FX.passed_round([1, 2, 3]), FX.passed_round([1, 2, 3], number=2)], "had ended"),
-        ([FX.passed_round([1, 2, 3], verdicts=["SUPPORTED", "SUPPORTED", "WRONG"]),
-          FX.passed_round([1, 2], number=2, verdicts=["SUPPORTED", "WRONG"]),
-          FX.passed_round([1], number=3)], "had ended"),
+        ([_round([1, 2])], "showed sentences"),
+        ([_round([1, 2, 3], number=2)], "recorded as round 2"),
+        ([{**_round([1, 2, 3]), "extra": 1}], "carries"),
+        ([_round([1, 2, 3], broken=[1])], "names no broken sentence"),
+        ([_round([1, 2, 3], coherent=False, broken=[4])], "ascending K numbers"),
+        ([_round([1, 2, 3], coherent=False, broken=[2, 1])], "ascending K numbers"),
+        ([_round([1, 2, 3], verdicts=["SUPPORTED", "FINE", "SUPPORTED"])], "not one of"),
+        ([_round([1, 2, 3]), _round([1, 2, 3], number=2)], "had ended"),
+        # the review of 2026-09-27: a round is tied to the text it showed, not only to its numbers
+        ([{**_round([1, 2, 3]), "text_sha256": "c" * 64}], "the check moved after"),
+        ([{k: v for k, v in _round([1, 2, 3]).items() if k != "text_sha256"}], "carries"),
+        ([_round([1, 2, 3], verdicts=["SUPPORTED", "SUPPORTED", "WRONG"]),
+          _round([1, 2], number=2, verdicts=["SUPPORTED", "WRONG"]),
+          _round([1], number=3)], "had ended"),
     ],
 )  # fmt: skip
 def test_a_recorded_round_is_read_strictly(rounds, message) -> None:
     with pytest.raises(WC4.WcError, match=message):
         WC4.run_verification(_decisions(), _quotes(), rounds)
+
+
+def test_a_round_is_tied_to_the_text_it_showed_not_only_to_its_sentence_numbers() -> None:
+    """The review of 2026-09-27: a round recorded over one text is never read over another text of
+    the same sentence numbers - a trim that moved after the verifier answered. `verified_sha256`
+    is the recorded text's sha256, not one recomputed from whatever the check composes now."""
+    trimmed = [
+        *_decisions()[:2],
+        WC4.Decision(
+            3,
+            "The site was excavated in 1915 by Zammit.",
+            WC4.Verdict.KEEP_TRIMMED,
+            " in 1915",
+            None,
+        ),
+    ]
+    with pytest.raises(WC4.WcError, match="the check moved after the verifier answered"):
+        WC4.run_verification(trimmed, _quotes(), [_round([1, 2, 3])])
+    shown = FX.shown_text(trimmed, _quotes(), [1, 2, 3])
+    assert shown.endswith("The site was excavated by Zammit [1].")
+    final, record = WC4.apply_verification(
+        trimmed, _quotes(), [FX.passed_round([1, 2, 3], text=shown)]
+    )
+    assert record["status"] == "verified" and final == trimmed
+    assert record["rounds"][0]["text_sha256"] == WC4.M.text_sha256(shown)
 
 
 # ------------------------------------------------------------------------------ the answers
@@ -497,6 +528,155 @@ def test_a_malformed_verifier_answer_stops_the_import(tmp_path: Path) -> None:
         C.cmd_verify_import(run, _hv(tmp_path), client=FX.FakeClient(), pace=0.0)
 
 
+def _both_answers() -> dict[str, str]:
+    return {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED"] * 3),
+        FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
+    }
+
+
+def _edit_check(run: Path, label: str, n: int, change) -> None:
+    """Change a site's recorded check result of sentence `n` (round 1) by hand: the import is
+    write-once, so this is what a check that moved under a verification looks like."""
+    path = run / "round-1" / "ANSWERS.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    for row in rows:
+        if row["label"] == label:
+            change(row["results"][str(n)])
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+
+def _drop(result: dict) -> None:
+    result["answer"].update(verdict="DROP", remove=None, reason="unsupported")
+
+
+def _untrim(result: dict) -> None:
+    result["answer"].update(verdict="KEEP", remove=None)
+
+
+def test_a_check_round_is_imported_once_and_never_after_the_verification_is_exported(
+    tmp_path: Path,
+) -> None:
+    """The review of 2026-09-27: an import run again overwrote `round-<n>/ANSWERS.jsonl`, so a
+    text no verifier saw could reach the build. A check round is imported once, and no check round
+    after a verifier was shown its text."""
+    run = _checked(tmp_path)
+    handoff = tmp_path / "handoff" / "wc-v-r1"
+    answers = run / "round-1" / "ANSWERS.jsonl"
+    before = answers.read_bytes()
+    with pytest.raises(C.WcRunError, match="round 1 was imported; a round is imported once"):
+        C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    assert answers.read_bytes() == before
+    C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
+    answers.unlink()  # taken away by hand, to import the round again
+    with pytest.raises(C.WcRunError, match="the verification was exported"):
+        C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    assert not answers.exists()
+
+
+@pytest.mark.parametrize(
+    ("label", "n", "change", "message"),
+    [
+        (FX.SITE_A, 3, _drop, "the kept text is not the one verify showed"),
+        # site B's second sentence leans on its first: dropping S1 leaves nothing to verify
+        (FX.SITE_B, 1, _drop, "is not due at verify"),
+        (FX.SITE_A, 2, _untrim, "the exported prompt is not this question's"),
+    ],
+    ids=["another-kept-set", "nothing-kept", "another-trim"],
+)
+def test_a_check_that_moved_between_verify_export_and_import_is_refused(
+    tmp_path: Path, label, n, change, message
+) -> None:
+    run = _checked(tmp_path)
+    C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
+    FX.record_answers(_hv(tmp_path), _both_answers(), by="opus-verify")
+    _edit_check(run, label, n, change)
+    with pytest.raises(C.WcRunError, match=message):
+        C.cmd_verify_import(run, _hv(tmp_path), client=FX.FakeClient(), pace=0.0)
+    assert not (run / "verify" / "round-1" / "VERIFIED.jsonl").exists()
+
+
+def test_a_check_that_moved_after_the_verification_is_never_built(tmp_path: Path) -> None:
+    """The review of 2026-09-27: `verify-import` records the sha256 of the text each question
+    showed; a check that composes another text afterwards is refused by the build (and wherever the
+    record is read), so a text no verifier saw never gets a record saying `verified`."""
+    run = _checked(tmp_path)
+    FX.verify_all(run, _hv(tmp_path))
+    rows = {
+        row["site_id"]: row
+        for row in (
+            json.loads(line)
+            for line in (run / "verify" / "round-1" / "VERIFIED.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+    }
+    assert rows[FX.SITE_A]["text_sha256"] == WC4.M.text_sha256(
+        "The Tarxien Temples are an archaeological complex in Tarxien, Malta [1]. "
+        "They date to approximately 3150 BC [1]. "
+        "The site was excavated by Themistocles Zammit in 1915 [2]."
+    )
+    _edit_check(run, FX.SITE_A, 2, _untrim)  # the trim taken back after the verifier answered
+    with pytest.raises(WC4.WcError, match="the check moved after the verifier answered"):
+        C.cmd_build(run, first_batch=4001)
+    assert not (run / C.PLAN_FILE).exists()
+
+
+def test_a_verified_round_whose_question_the_check_no_longer_gives_is_never_built(
+    tmp_path: Path,
+) -> None:
+    """The recorded `prompt_sha256` is asked again at build: a check that moved under a round
+    without changing the text (a quote the verifier was shown, replaced) is refused too."""
+    run = _checked(tmp_path)
+    FX.verify_all(run, _hv(tmp_path))
+    _edit_check(
+        run, FX.SITE_A, 1, lambda r: r["quotes"][0].update(quote="Another quote of that page.")
+    )
+    with pytest.raises(C.WcRunError, match="asked another question than the site's state gives"):
+        C.cmd_build(run, first_batch=4001)
+    assert not (run / C.PLAN_FILE).exists()
+
+
+def test_each_verification_round_takes_a_new_empty_handoff_and_names_only_its_own(
+    tmp_path: Path,
+) -> None:
+    run = _checked(tmp_path)
+    C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
+    _verify(run, _hv(tmp_path), {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED", "SUPPORTED", "WRONG"]),
+        FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
+    })  # fmt: skip
+    with pytest.raises(C.WcRunError, match="is already a verification round"):
+        C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
+    stray = _hv(tmp_path, "verify2") / "notes.txt"
+    stray.parent.mkdir(parents=True)
+    stray.write_text("an earlier attempt", encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="is not empty"):
+        C.cmd_verify_export(run, _hv(tmp_path, "verify2"), batch_size=5)
+    assert not (run / "verify" / "round-2").exists()
+    nowhere = tmp_path / "handoff" / "wc-v-nowhere"
+    for call in (
+        lambda: C.verify_brief(run, nowhere, "verify-0001"),
+        lambda: C.verify_check_answer(run, nowhere, "verify-0001", FX.SITE_A, "{}"),
+        lambda: C.cmd_verify_import(run, nowhere, client=FX.FakeClient(), pace=0.0),
+    ):
+        with pytest.raises(C.WcRunError, match="is no verification round"):
+            call()
+
+
+def test_a_manifest_that_is_not_the_verification_rounds_record_is_refused(tmp_path: Path) -> None:
+    run = _checked(tmp_path)
+    C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
+    FX.record_answers(_hv(tmp_path), _both_answers(), by="opus-verify")
+    path = run / "verify" / "round-1" / "ROUND.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["batches"]["verify-0001"].remove(FX.SITE_B)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="the manifest is not the verification round's record"):
+        C.cmd_verify_import(run, _hv(tmp_path), client=FX.FakeClient(), pace=0.0)
+    assert not (run / "verify" / "round-1" / "VERIFIED.jsonl").exists()
+
+
 def test_verify_check_answer_reads_the_shape_only(tmp_path: Path) -> None:
     run = _checked(tmp_path)
     C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
@@ -562,6 +742,11 @@ def _edit(evidence: dict, change) -> dict:
          "decisions are not the verified ones"),
         (lambda e: e["sentences"][2]["checked"].update(reason="verify-wrong", verdict="DROP"),
          "the verification's"),
+        # the review of 2026-09-27: the trim taken back under the recorded rounds - the evidence
+        # composes the whole sentence, the verifiers saw the trimmed one
+        (lambda e: (e["sentences"][1]["checked"].update(verdict="KEEP", remove=None),
+                    e["sentences"][1].update(verdict="KEEP", remove=None)),
+         "the check moved after"),
     ],
 )  # fmt: skip
 def test_the_verification_the_evidence_records_is_asked_again_from_its_rounds(
@@ -581,7 +766,8 @@ def test_a_kept_text_is_published_only_as_its_last_verifier_confirmed_it(tmp_pat
     evidence = final["evidence"]
     # a record whose second verifier did not confirm the text, beside the text it did not confirm
     round_1 = {k: evidence["verification"]["rounds"][0][k] for k in WC4.ROUND_KEYS}
-    refused = FX.passed_round([1, 2], number=2, verdicts=["SUPPORTED", "WRONG"])
+    text = FX.shown_text(*WC4.checked_of(evidence), [1, 2])
+    refused = FX.passed_round([1, 2], text=text, number=2, verdicts=["SUPPORTED", "WRONG"])
     _, cleared = WC4.apply_verification(*WC4.checked_of(evidence), [round_1, refused])
     problems = WC4.verification_problems(
         {**evidence, "verification": cleared}, final["description"]
@@ -594,7 +780,7 @@ def test_a_kept_text_is_published_only_as_its_last_verifier_confirmed_it(tmp_pat
 
 
 def test_a_check_record_is_made_only_for_a_verified_text() -> None:
-    round_1 = FX.passed_round([1, 2, 3], verdicts=["WRONG", "UNSUPPORTED", "WRONG"])
+    round_1 = _round([1, 2, 3], verdicts=["WRONG", "UNSUPPORTED", "WRONG"])
     _, cleared = WC4.apply_verification(_decisions(), _quotes(), [round_1])
     composed = WC4.compose(_decisions(), _quotes())
     with pytest.raises(WC4.WcError, match="published only verified, not 'cleared'"):

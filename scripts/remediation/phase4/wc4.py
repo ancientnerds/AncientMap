@@ -39,8 +39,11 @@ research CLI, the writer and the acceptance so the three cannot read a checked t
   verifier names as the one whose reference or meaning broke; an incoherent text with none named
   is cleared; a text a drop changed goes to a new agent (`verify2`), which keeps it only when every
   sentence is SUPPORTED and the text coherent, and clears it otherwise. Nothing is ever added back.
-  The record (`VERIFICATION_KEY`) is in the journal evidence; the check record names the verifiers
-  and the sha256 of the text they confirmed (`verified_sha256`, held to the served text's).
+  Each round records the sha256 of the text its question showed (`text_sha256`, the review of
+  2026-09-27): a round is read only over the text it showed, so a check that moved after a
+  verifier answered is refused wherever the record is read. The record (`VERIFICATION_KEY`) is in
+  the journal evidence; the check record names the verifiers and the recorded sha256 of the text
+  the last one confirmed (`verified_sha256`, held to the served text's).
 * **The raw_data** (`written_raw_data`): the old object without `description_citations`,
   `_description_provenance` and `_description_check`, then - for a kept text - the new citations,
   the check record (`DescriptionCheck`, key `_description_check`) and, for a March text, lane L's
@@ -580,7 +583,9 @@ class VerifyStatus(StrEnum):
 
 
 #: One verification round as `cli.py verify-import` records it: which agent answered which
-#: question, the sentence numbers the question showed as K1..Km (`shown`), each kept sentence's
+#: question, the sentence numbers the question showed as K1..Km (`shown`), the sha256 of the text
+#: those sentences composed (`text_sha256`: the text as published, markers included - the review
+#: of 2026-09-27 tied a round to its text, not only to its sentence numbers), each kept sentence's
 #: verdict (`VERDICT_KEYS`, with what code's quote check found), `coherent` and the K numbers the
 #: verifier named as broken.
 ROUND_KEYS = frozenset(
@@ -593,6 +598,7 @@ ROUND_KEYS = frozenset(
         "prompt_sha256",
         "answer_sha256",
         "shown",
+        "text_sha256",
         "verdicts",
         "coherent",
         "broken",
@@ -608,10 +614,13 @@ def kept_numbers(decisions: Sequence[Decision]) -> list[int]:
     return [decision.n for decision in decisions if decision.kept]
 
 
-def _read_round(index: int, given: Any, shown: Sequence[int]) -> tuple[list[str], bool, list[int]]:
+def _read_round(
+    index: int, given: Any, shown: Sequence[int], text: str
+) -> tuple[list[str], bool, list[int]]:
     """One recorded round, strictly: its number and stage, the sentences it showed (the kept ones
-    of the text at that round), one verdict per shown sentence, and `broken` - K numbers in 1..m,
-    ascending, none when the text is coherent. Returns the verdicts, `coherent` and `broken`."""
+    of the text at that round) and the text they composed (`text`, whose sha256 the round
+    recorded), one verdict per shown sentence, and `broken` - K numbers in 1..m, ascending, none
+    when the text is coherent. Returns the verdicts, `coherent` and `broken`."""
     if not isinstance(given, Mapping) or set(given) != ROUND_KEYS:
         keys = sorted(given) if isinstance(given, Mapping) else given
         raise WcError(f"verification round {index} carries {keys!r}, not {sorted(ROUND_KEYS)}")
@@ -627,6 +636,12 @@ def _read_round(index: int, given: Any, shown: Sequence[int]) -> tuple[list[str]
         raise WcError(
             f"verification round {index} showed sentences {given['shown']}, the text it verified "
             f"holds {list(shown)}"
+        )
+    if given["text_sha256"] != M.text_sha256(text):
+        raise WcError(
+            f"verification round {index} verified the text of sha256 {given['text_sha256']!r}, "
+            f"the kept text now composes {M.text_sha256(text)!r}: the check moved after the "
+            "verifier answered - a text is published only as a verifier was shown it"
         )
     verdicts = given["verdicts"]
     if not isinstance(verdicts, list) or any(
@@ -660,9 +675,10 @@ def run_verification(
     rounds: Sequence[Mapping[str, Any]],
 ) -> tuple[list[Decision], list[dict[str, Any]], VerifyStatus | None]:
     """The decisions after the recorded verification rounds, each round with what code derives
-    from it - `text_sha256` (the description its shown sentences compose: the text the verifier
-    judged, markers included), `passed`, `drops` (sentence number -> why) and `cleared` - and
-    where the verification stands: `None` while a round is due.
+    from it - `passed`, `drops` (sentence number -> why) and `cleared` - and where the
+    verification stands: `None` while a round is due. A round is read only over the text it
+    showed: its `shown` sentence numbers and its `text_sha256` must be what the decisions give at
+    that round (`_read_round`), so a check that moved after a verifier answered is refused.
 
     `decisions` are the check's (every round, the pronoun rule), `quotes` the verified quotes of
     each sentence the check kept. Per round, on the kept sentences of the text as it stands:
@@ -683,9 +699,10 @@ def run_verification(
         if status is not None:
             raise WcError(f"verification round {index}: the verification had ended ({status})")
         shown = kept_numbers(current)
-        verdicts, coherent, broken = _read_round(index, given, shown)
+        verdicts, coherent, broken = _read_round(
+            index, given, shown, str(compose(current, quotes).description)
+        )
         passed = coherent and all(verdict == SUPPORTED for verdict in verdicts)
-        text = compose(current, quotes).description
         drops: dict[int, DropReason] = {}
         cleared = not passed and (index == len(VERIFY_STAGES) or not (coherent or broken))
         if cleared:
@@ -709,7 +726,6 @@ def run_verification(
         derived.append(
             {
                 **given,
-                "text_sha256": M.text_sha256(str(text)),
                 "passed": passed,
                 "drops": {str(n): reason.value for n, reason in sorted(drops.items())},
                 "cleared": cleared,
@@ -822,8 +838,9 @@ class CheckedSentence:
 class DescriptionCheck:
     """`raw_data._description_check` v2: that the served text was checked sentence by sentence,
     by whom, what stayed, the text it describes (`desc_sha256`, like the provenance's), and who
-    verified it (`verifiers`, one agent per verification round) and which text they confirmed
-    (`verified_sha256`, which `wc_problems` holds to the served text's)."""
+    verified it (`verifiers`, one agent per verification round) and which text the last one was
+    shown and confirmed (`verified_sha256`: the round's recorded `text_sha256`, which
+    `run_verification` holds to what the check composes and `wc_problems` to the served text's)."""
 
     run: str
     checker: str
@@ -834,7 +851,7 @@ class DescriptionCheck:
     sentences: tuple[CheckedSentence, ...]
     desc_sha256: str
     verifiers: tuple[str, ...]  #: the agents that verified the text, one per round, in order
-    verified_sha256: str  #: the sha256 of the text the last verifier confirmed
+    verified_sha256: str  #: the recorded sha256 of the text the last verifier confirmed
     v: int = CHECK_VERSION
 
     def __post_init__(self) -> None:
@@ -918,7 +935,8 @@ def check_record(
     """The public record of a kept text: every sentence's verdict, the numbers its markers carry
     and the sha256 of each verified quote; `checked` is the stored text that was asked, and
     `verification` the site's verification record (`apply_verification`), whose verifiers and the
-    text the last one confirmed the record names - a kept text is published only verified."""
+    recorded sha256 of the text the last one was shown (its round's `text_sha256`) the record
+    names - a kept text is published only verified."""
     if composed.description is None:
         raise WcError("a cleared site has no check record")
     if verification["status"] != VerifyStatus.VERIFIED.value:
@@ -1269,7 +1287,8 @@ def checked_of(evidence: Mapping[str, Any]) -> tuple[list[Decision], dict[int, l
 
 def verification_problems(evidence: Mapping[str, Any], description: str | None) -> list[str]:
     """Did the site pass its verification, as the journal evidence records it? The record is there
-    and is exactly what its rounds give from the check's decisions (`apply_verification`); the
+    and is exactly what its rounds give from the check's decisions (`apply_verification`: every
+    round read over the text it recorded, so a check that moved under it is refused); the
     evidence's final decisions are the verified ones; a kept text is the one the last verifier
     confirmed (`text_sha256`) and a cleared site's verification ended cleared or had nothing to
     verify; and no verifier is an agent that checked the site, none verified it twice. The writer's

@@ -8,6 +8,7 @@ database: the pages are served from a dict, the database is a scripted runner.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -245,9 +246,29 @@ def verification(
     })  # fmt: skip
 
 
+def shown_text(
+    decisions: Sequence[WC4.Decision],
+    quotes: Mapping[int, Sequence[WC4.Quote]],
+    shown: Sequence[int],
+) -> str:
+    """The text a verification round showed: the sentences numbered in `shown` as the check left
+    them (trims applied), every other one dropped, composed with its markers (`wc4.compose`) - the
+    text whose sha256 `cli.py verify-import` records as the round's `text_sha256`."""
+    current = [
+        d
+        if d.n in shown
+        else dataclasses.replace(
+            d, verdict=WC4.Verdict.DROP, remove=None, reason=WC4.DropReason.VERIFY_WRONG
+        )
+        for d in decisions
+    ]
+    return str(WC4.compose(current, quotes).description)
+
+
 def passed_round(
     shown: Sequence[int],
     *,
+    text: str,
     number: int = 1,
     verdicts: Sequence[str] | None = None,
     coherent: bool = True,
@@ -255,7 +276,8 @@ def passed_round(
     answered_by: str | None = None,
 ) -> dict[str, Any]:
     """One verification round as `cli.py verify-import` records it (`wc4.ROUND_KEYS`), for the
-    pure tests: by default every shown sentence SUPPORTED and the text coherent."""
+    pure tests: by default every shown sentence SUPPORTED and the text coherent. `text` is the text
+    the round showed (`shown_text`), whose sha256 the round records."""
     stages = WC4.VERIFY_STAGES
     stage = stages[number - 1] if number <= len(stages) else f"verify{number}"  # a round too many
     chosen = list(verdicts or ["SUPPORTED"] * len(shown))
@@ -268,6 +290,7 @@ def passed_round(
         "prompt_sha256": "a" * 64,
         "answer_sha256": "b" * 64,
         "shown": list(shown),
+        "text_sha256": M.text_sha256(text),
         "verdicts": [
             {"k": k, "n": n, "verdict": v, "quotes": [], "note": "verified",
              "quotes_found": True, "quote_results": []}
