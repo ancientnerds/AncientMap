@@ -18,8 +18,11 @@ here, and the Lyra image (no markdown, no nh3) must be able to import it.
 from __future__ import annotations
 
 import html
+import json
 import re
 import unicodedata
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -539,3 +542,374 @@ def check_page(request_id: str, stored: dict) -> dict:
     except PaperPageError as exc:
         return _gate([str(exc)])
     return _gate([])
+
+
+# ---------------------------------------------------------------------------
+# Outcome, errors, row access, journal
+# ---------------------------------------------------------------------------
+
+
+class PublishInputError(ValueError):
+    """The input or its target row cannot be processed at all (CLI exit 2)."""
+
+
+class PublishConflictError(RuntimeError):
+    """The row changed between read and write; nothing was committed (CLI exit 3)."""
+
+
+class PublishVerificationError(RuntimeError):
+    """Committed, but the re-read row differs from what was written (CLI exit 4)."""
+
+
+@dataclass
+class PublishOutcome:
+    """What every theo_publish mode prints (contract C8)."""
+
+    ok: bool
+    action: str
+    request_id: str
+    dry_run: bool
+    slug: str | None = None
+    url: str | None = None
+    gates: dict[str, dict] = field(default_factory=dict)
+    side_effects: dict[str, dict] = field(default_factory=dict)
+    journal_id: int | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+_ROW_SQL = text("""
+    SELECT id::text AS id, status, is_public, slug, question, user_id,
+           published_by, published_at, result_json
+    FROM research_requests
+    WHERE id = :id
+""")
+_VERIFY_SQL = text(
+    "SELECT status, is_public, slug, published_by, result_json FROM research_requests WHERE id = :id"
+)
+_JOURNAL_SQL = text("""
+    INSERT INTO theo_paper_publications
+        (request_id, action, slug, writer, bundle_sha256, gates, side_effects)
+    VALUES (CAST(:request_id AS uuid), :action, :slug, CAST(:writer AS jsonb),
+            :bundle_sha256, CAST(:gates AS jsonb), NULL)
+    RETURNING id
+""")
+_SIDE_EFFECTS_SQL = text(
+    "UPDATE theo_paper_publications SET side_effects = CAST(:side_effects AS jsonb) WHERE id = :id"
+)
+_PUBLISH_SQL = text("""
+    UPDATE research_requests
+    SET status = 'completed',
+        completed_at = NOW(),
+        result_json = :result,
+        is_public = TRUE,
+        published_at = NOW(),
+        published_by = :author,
+        slug = :slug
+    WHERE id = :id AND status IN ('researched', 'completed') AND is_public = FALSE
+""")
+
+
+def _read_row(session: Any, request_id: str) -> Any:
+    row = session.execute(_ROW_SQL, {"id": request_id}).fetchone()
+    if row is None:
+        raise PublishInputError(f"research request {request_id} does not exist")
+    return row
+
+
+def _stored_result(row: Any) -> dict:
+    return json.loads(row.result_json) if row.result_json else {}
+
+
+def _journal(
+    session: Any,
+    *,
+    request_id: str,
+    action: str,
+    slug: str | None,
+    writer: dict,
+    bundle_sha256: str,
+    gates: dict,
+) -> int:
+    journal_id = session.execute(
+        _JOURNAL_SQL,
+        {
+            "request_id": request_id,
+            "action": action,
+            "slug": slug,
+            "writer": json.dumps(writer),
+            "bundle_sha256": bundle_sha256,
+            "gates": json.dumps(gates),
+        },
+    ).scalar_one()
+    return int(journal_id)
+
+
+def _verify(
+    session: Any,
+    request_id: str,
+    *,
+    result: dict,
+    slug: str | None,
+    published_by: str | None = None,
+) -> None:
+    """Re-read the committed row; raise when it is not what was written.
+
+    published_by is checked when the write set it (a publish, a full republish).
+    """
+    row = session.execute(_VERIFY_SQL, {"id": request_id}).fetchone()
+    if row is None:
+        raise PublishVerificationError(f"{request_id} vanished after the commit")
+    problems = []
+    if row.status != "completed":
+        problems.append(f"status is {row.status!r}")
+    if row.is_public is not True:
+        problems.append("is_public is not true")
+    if row.slug != slug:
+        problems.append(f"slug is {row.slug!r}, expected {slug!r}")
+    if published_by is not None and row.published_by != published_by:
+        problems.append(f"published_by is {row.published_by!r}, expected {published_by!r}")
+    if json.loads(row.result_json or "null") != result:
+        problems.append("result_json differs from what was written")
+    if problems:
+        raise PublishVerificationError(
+            f"{request_id} was committed but the re-read row differs: " + "; ".join(problems)
+        )
+
+
+def _record_side_effects(session: Any, journal_id: int, effects: dict) -> None:
+    session.execute(_SIDE_EFFECTS_SQL, {"id": journal_id, "side_effects": json.dumps(effects)})
+    session.commit()
+
+
+def run_publish_side_effects(
+    *,
+    request_id: str,
+    slug: str,
+    title: str,
+    paper_text: str,
+    author_username: str,
+    author_discord_id: str,
+    published_at: str,
+    reindex: bool,
+) -> dict[str, dict]:
+    """IndexNow ping and Qdrant index after the commit (spec 2.6.5); also used by the founder route.
+
+    Failures are returned, not raised: they are journalled and never undo a
+    publish. The nightly 03:00 UTC reindex (vector_sync) is the backstop for
+    Qdrant; Lyra's submit_recent re-announces papers published in the last 2 h.
+    `reindex` deletes the paper's old sections first (a correction may have fewer).
+    """
+    from pipeline.indexnow import page_url
+    from pipeline.indexnow import submit as indexnow_submit
+    from pipeline.lyra.theo_research_index import delete_paper, index_paper
+
+    effects: dict[str, dict] = {
+        "indexnow": {"ok": indexnow_submit([page_url(f"/research/{slug}"), page_url("/research/")])}
+    }
+    try:
+        if reindex:
+            delete_paper(request_id)
+        sections = index_paper(
+            paper_id=request_id,
+            paper_text=paper_text,
+            paper_title=title,
+            paper_slug=slug,
+            author_username=author_username,
+            author_discord_id=author_discord_id,
+            published_at=published_at,
+        )
+    except Exception as exc:  # noqa: BLE001 — journalled in side_effects, never undoes the publish (spec 2.6.5)
+        effects["qdrant"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    else:
+        effects["qdrant"] = {"ok": sections > 0, "sections": sections}
+    return effects
+
+
+def notify_published(
+    request_id: str, title: str, slug: str, url: str, journal_id: int, writer: dict
+) -> dict[str, bool]:
+    """Tell the owner that Claude published a paper (spec 0: automatic publish, owner notified).
+
+    The thinking_log run_event is always written (log_thinking logs its own
+    failure). The Discord embed goes out only while DISCORD_WEBHOOK_URL is set:
+    send_discord_webhook returns False otherwise, and owner decision 5 keeps it
+    unset for now. The sender is pipeline.utils.notify (api.services.notify only
+    re-exports it): pipeline must not import api.
+    """
+    from pipeline.lyra.thinking_log import log_thinking
+    from pipeline.utils.notify import send_discord_webhook
+
+    log_thinking(
+        "run_event",
+        f"Paper published: {title[:200]}",
+        {
+            "request_id": request_id,
+            "event": "paper_published",
+            "slug": slug,
+            "url": url,
+            "journal_id": journal_id,
+            "writer_model": writer["model"],
+        },
+    )
+    sent = send_discord_webhook(
+        {
+            "embeds": [
+                {
+                    "title": "Theo paper published (written by Claude)",
+                    "description": f"`{request_id}`\n**{title[:200]}**\n{url}",
+                    "color": 0x2ECC71,
+                }
+            ]
+        }
+    )
+    return {"discord": sent}
+
+
+# ---------------------------------------------------------------------------
+# Publish (spec 2.6)
+# ---------------------------------------------------------------------------
+
+
+def check_evidence_retention(
+    old_evidence: list, new_evidence: list, old_corrections: list, appended: list
+) -> dict:
+    """Published evidence ids stay: an id is retired only by a correction naming it.
+
+    A retired id is never reused and never named again, so the correction that
+    retired it stays the last entry naming it: the page anchors a retired id
+    on that entry (stream B's parse_corrections). Used by publish_paper (a
+    paper the founder route unpublished keeps its ids; appended is [] there)
+    and by correct_paper.
+    """
+    old_ids = {entry["id"] for entry in old_evidence}
+    new_ids = {entry["id"] for entry in new_evidence if isinstance(entry, dict) and "id" in entry}
+    named = {entry["evidence_id"] for entry in appended if entry.get("evidence_id")}
+    previously_retired = {
+        entry["evidence_id"] for entry in old_corrections if entry.get("evidence_id")
+    } - old_ids
+    issues = [
+        f"{ev} removed without a correction entry naming it"
+        for ev in sorted(old_ids - new_ids - named)
+    ]
+    issues += [
+        f"{ev} was retired earlier and may not be reused"
+        for ev in sorted(new_ids & previously_retired)
+    ]
+    issues += [
+        f"{ev} was retired earlier; a retired id cannot be named again"
+        for ev in sorted(named & previously_retired)
+    ]
+    issues += [
+        f"a correction names {ev}, which this paper never had"
+        for ev in sorted(named - old_ids - new_ids - previously_retired)
+    ]
+    return _gate(issues)
+
+
+def publish_paper(
+    session: Any,
+    request_id: str,
+    result: dict,
+    *,
+    author: str = PUBLISH_AUTHOR,
+    writer: dict,
+    dry_run: bool,
+    bundle_sha256: str,
+    images_root: Path = RESEARCH_IMAGES_DIR,
+) -> PublishOutcome:
+    """Gate, then publish a Claude-written paper in one guarded transaction with its journal row.
+
+    Order: every gate (no repair; the last one runs the page's own validators
+    on exactly the result_json about to be stored) -> slug with collision
+    handling -> UPDATE guarded on status IN ('researched','completed') AND
+    is_public = FALSE plus the journal INSERT, one commit -> re-read and verify
+    -> IndexNow + Qdrant -> owner notice; the side effects are recorded in the
+    journal row. A dry run stops after the slug. result_json keeps the row's
+    `dossier` summary and, for a paper the founder route unpublished, its public
+    record: the `corrections` log, the `videos` and every evidence id it had
+    (the retention gate, spec 2.7). result.corrections itself must be [].
+    """
+    row = _read_row(session, request_id)
+    previous = _stored_result(row)
+    gates: dict[str, dict] = {
+        "status": check_publish_status(row.status, row.is_public, dry_run=dry_run),
+        "shape": check_publish_shape(result, writer),
+    }
+    stored: dict = {}
+    if gates["shape"]["passed"]:
+        gates["snapshot"] = check_snapshot(result)
+        gates["artifact"], audit = check_artifact(result["report"])
+        gates["quality"] = check_quality(result["quality_score"], audit, require_stored_passed=True)
+        gates["evidence"] = check_evidence(result["report"], result["title"], result["evidence"])
+        gates["retention"] = check_evidence_retention(
+            previous.get("evidence", []), result["evidence"], previous.get("corrections", []), []
+        )
+        gates["images"] = check_images(
+            request_id,
+            result["report"],
+            result["probative_images"],
+            result["hero_image"],
+            images_root=images_root,
+        )
+        stored = {**result, "audit": audit, "writer": writer}
+        for key in ("dossier", "corrections", "videos"):
+            if key in previous:
+                stored[key] = previous[key]
+        gates["page"] = check_page(request_id, stored)
+    outcome = PublishOutcome(
+        ok=all(gate["passed"] for gate in gates.values()),
+        action="publish",
+        request_id=request_id,
+        dry_run=dry_run,
+        gates=gates,
+    )
+    if not gates["shape"]["passed"]:
+        return outcome
+
+    from pipeline.indexnow import page_url
+
+    slug = pick_slug(session, result["title"], request_id)
+    outcome.slug = slug
+    outcome.url = page_url(f"/research/{slug}")
+    if dry_run or not outcome.ok:
+        return outcome
+
+    updated = session.execute(
+        _PUBLISH_SQL,
+        {"id": request_id, "result": json.dumps(stored), "author": author, "slug": slug},
+    )
+    if updated.rowcount != 1:
+        session.rollback()
+        raise PublishConflictError(
+            f"{request_id} changed between read and write (status or is_public); nothing committed"
+        )
+    outcome.journal_id = _journal(
+        session,
+        request_id=request_id,
+        action="publish",
+        slug=slug,
+        writer=writer,
+        bundle_sha256=bundle_sha256,
+        gates=gates,
+    )
+    session.commit()
+    _verify(session, request_id, result=stored, slug=slug, published_by=author)
+    outcome.side_effects = {
+        **run_publish_side_effects(
+            request_id=request_id,
+            slug=slug,
+            title=result["title"],
+            paper_text=stored["published_report"],
+            author_username=author,
+            author_discord_id=row.user_id,
+            published_at=datetime.now(UTC).isoformat(),
+            reindex=False,
+        ),
+        "notify": notify_published(
+            request_id, result["title"], slug, outcome.url, outcome.journal_id, writer
+        ),
+    }
+    _record_side_effects(session, outcome.journal_id, outcome.side_effects)
+    return outcome
