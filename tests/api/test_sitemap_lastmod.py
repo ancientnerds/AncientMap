@@ -209,3 +209,37 @@ def test_the_route_exposes_a_date_and_nothing_of_the_journal():
     assert [child.tag for child in url] == [f"{NS}loc", f"{NS}lastmod"]
     assert url.findtext(f"{NS}lastmod") == "2026-10-02"
     assert not re.search(r"phase4|raw_data|description", body)
+
+
+# ── Research papers: a correction changes the served paper (studio spec 2026-09-26 §2.7) ──
+
+PAPER_LASTMOD = (
+    "GREATEST( COALESCE(published_at, created_at), "
+    "(SELECT MAX((c->>'date')::date)::timestamp "
+    "FROM jsonb_array_elements( COALESCE(result_json::jsonb->'corrections', '[]'::jsonb) ) c) "
+    ") AS lastmod"
+)
+
+
+def test_a_paper_correction_advances_its_research_page():
+    """`theo_publish --correct` appends to result_json.corrections and changes the page (its text
+    and the corrections log) without touching published_at, so the paper's lastmod is the later of
+    its publication and its newest correction day. jsonb_array_elements has no SQLite stand-in, so
+    the clause is pinned as a string (whitespace folded); checked read-only against the 31
+    production papers on 2026-09-26."""
+    assert PAPER_LASTMOD in " ".join(str(sm._RESEARCH_SQL).split())
+
+
+def test_the_research_part_reads_the_paper_lastmod():
+    db = MagicMock()
+    db.execute.return_value.fetchall.return_value = [
+        SimpleNamespace(slug="obsidian-trade-networks-anatolia", lastmod=datetime(2026, 10, 4))
+    ]
+    body = asyncio.run(sm.sitemap_research(db=db)).body.decode("utf-8")
+    assert db.execute.call_args[0][0] is sm._RESEARCH_SQL
+    urls = ET.fromstring(body).findall(f"{NS}url")
+    assert [url.findtext(f"{NS}loc") for url in urls] == [
+        "https://ancientnerds.com/research/",
+        "https://ancientnerds.com/research/obsidian-trade-networks-anatolia",
+    ]
+    assert [url.findtext(f"{NS}lastmod") for url in urls] == ["2026-10-04", "2026-10-04"]
