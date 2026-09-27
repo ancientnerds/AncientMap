@@ -909,9 +909,9 @@ def verification_summary(record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) -> dict[str, Any]:
-    """Every site's outcome (`FINAL.jsonl`), the counts (`SUMMARY.json`) and the gate plan; refused
-    while a check round or a verification round is due - nothing is built from an unverified
-    text."""
+    """Every site's outcome (`FINAL.jsonl`), the counts and each site's verification record
+    (`SUMMARY.json`) and the gate plan; refused while a check round or a verification round is
+    due - nothing is built from an unverified text."""
     if first_batch < wc4.FIRST_BATCH:
         raise WcRunError(f"--first-batch {first_batch}: the WC block starts at {wc4.FIRST_BATCH}")
     checked = checked_sites(run)
@@ -1003,6 +1003,8 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
                 stage: sum(not r["coherent"] for r in rounds if r["stage"] == stage)
                 for stage in VERIFY_STAGES
             },
+            #: per site, as FINAL.jsonl shows it: where it ended, the verifiers and their verdicts
+            "sites": {label: verification_summary(record) for label, record in records.items()},
         },
         "plan": {
             "path": _shown(run / PLAN_FILE),

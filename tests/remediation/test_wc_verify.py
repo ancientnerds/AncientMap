@@ -392,6 +392,19 @@ def test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verifie
     assert built["verification"]["verdicts"]["verify"] == {
         "SUPPORTED": 3, "UNSUPPORTED": 1, "WRONG": 1
     }  # fmt: skip
+    # the summary carries each site's verification record, as FINAL.jsonl shows it
+    by_site = built["verification"]["sites"]
+    assert by_site == {label: final["verification"] for label, final in finals.items()}
+    assert by_site[FX.SITE_A]["verifiers"] == [
+        "opus-verify-verify-0001", "opus-verify2-verify2-0001"
+    ]  # fmt: skip
+    assert [r["verdicts"] for r in by_site[FX.SITE_A]["rounds"]] == [
+        {"1": "SUPPORTED", "2": "SUPPORTED", "3": "WRONG"}, {"1": "SUPPORTED", "2": "SUPPORTED"}
+    ]  # fmt: skip
+    assert by_site[FX.SITE_C] == {
+        "status": "nothing-kept", "verifiers": [], "before": [], "kept": [], "rounds": []
+    }  # fmt: skip
+    assert json.loads((run / C.SUMMARY_FILE).read_text("utf-8")) == built
 
 
 def test_the_nyons_case_drops_the_sentence_whose_reference_broke(tmp_path: Path) -> None:

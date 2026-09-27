@@ -247,9 +247,11 @@ nothing; a cleared site is a page without a description, notice or `meta name="d
   **`pages/`** (the import's own page store), `verify/round-<n>/ROUND.json` (the export: handoff,
   batches, the sentences each question showed) and `VERIFIED.jsonl` (the import, per site),
   `verify/pages/` (the pages the verifiers quoted, fetched by code), `FINAL.jsonl` (with each site's
-  `verification`), `SUMMARY.json` (with the verification's counts), `WC4.jsonl` (the gate plan),
-  `judge/` (the pilot's measurement, with its own `pages/`; `ROUND.json` and `RESULT.json` name the
-  judged plan's sha256).
+  `verification`: status, verifiers, each round's verdicts, coherence, broken sentences and drops),
+  `SUMMARY.json` (the verification's counts, and the same record per site under
+  `verification.sites`), `WC4.jsonl` (the gate plan: each outcome's journal evidence carries the
+  whole verification record), `judge/` (the pilot's measurement, with its own `pages/`;
+  `ROUND.json` and `RESULT.json` name the judged plan's sha256).
 - Handoff: `output/remediation/handoff/wc-<run>-r<round>/<batch>/` (`MANIFEST.jsonl`, the prompts,
   the answers), the agent's page store `<batch>/pages/` (filled by `check-answer`), and its scratch
   `output/remediation/handoff/wc-<run>-r<round>-scratch/<batch>/`; the verification's
@@ -489,11 +491,13 @@ WC cases in one run **86/86 caught**, and the 340 older cases on every file the 
 119 skipped, 57 deselected (116 skips are gitignored data absent from a worktree, 3 the older opt-in
 or retired tests above); ruff check `api/ pipeline/` clean, ruff check and format clean on the 12
 touched Python files; lint-imports 2 contracts kept; vulture clean; nothing under `pipeline/` or the
-frontend changed (no Lyra import check, no vitest run needed). Mutation sweep: the 30 verification
-cases (`"wc verify"`) **30/30 caught**, and the whole WC set (`"wc "`, the 86 earlier cases with the
-re-anchored judge case and the 30 new ones) **116/116 caught**, the tree byte-identical after each
-run. The verification's tests: `tests/remediation/test_wc_verify.py` (55), plus the gate's refusal,
-the pilot plan's tie, the acceptance's re-check and invariant 5 in `test_phase4_wc_write.py`.
+frontend changed (no Lyra import check, no vitest run needed). Mutation sweep: the 31 verification
+cases (`"wc verify"`) **31/31 caught**, and the whole WC set (`"wc "`, the 86 earlier cases with the
+re-anchored judge case and the 31 new ones) **117/117 caught**, the tree byte-identical after each
+run. (Re-measured the same day after `SUMMARY.json` gained each site's verification record,
+`verification.sites`, and its mutation case: the counts above.) The verification's tests:
+`tests/remediation/test_wc_verify.py` (55), plus the gate's refusal, the pilot plan's tie, the
+acceptance's re-check and invariant 5 in `test_phase4_wc_write.py`.
 
 End-to-end smoke on live data (Duggleby Howe, one site; a machinery test, never written): export,
 brief, `check-answer` against the live Wikipedia page (the circa-date trim applied, the rejoined

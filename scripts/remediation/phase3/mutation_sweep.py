@@ -23248,6 +23248,14 @@ WC_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_the_judge_sees_the_text_after_the_verification_and_no_verifier_judges",
     ),
     (
+        "wc verify cli: SUMMARY loses each site's verification record",
+        WC_CLI,
+        '            "sites": {label: verification_summary(record) for label, record in records.items()},\n',
+        '            "sites": {},  # mutant\n',
+        WC_VERIFY_TEST,
+        "test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verified_again",
+    ),
+    (
         "wc verify cli: a plan built again passes as the judged one",
         WC_CLI,
         '        if result.get("plan_sha256") != _sha256(plan):\n',
