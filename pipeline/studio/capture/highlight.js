@@ -8,12 +8,12 @@
 //     sits on an empty span.theo-evidence-anchor (the second and later evidence ids of a
 //     paragraph, plan B), the p.theo-evidence around it. Returns the highlight box in page
 //     CSS pixels {x, y, w, h}, or null when nothing matches, a piece of the quote has no
-//     box (sources.py then advises a QuoteCard), or the anchor has no visible box. Before
-//     measuring, every ancestor of the highlight that clips its overflowing content is let
-//     out (unclip), so the document itself scrolls: our paper page keeps html, body and
-//     #root at 100% with overflow hidden and scrolls .theo-page instead (index.css,
-//     theo.css), and the capture window is scrolled with window.scrollTo on a page as tall
-//     as its content.
+//     box, or a box around the highlight cuts part of it off from the reader (a truncated
+//     paywall body, a "read more" clamp): sources.py then advises a QuoteCard. Before
+//     measuring, the scrollers around the highlight are let out (unclip), so the document
+//     itself scrolls: our paper page keeps html, body and #root at 100% with overflow
+//     hidden and scrolls .theo-page instead (index.css, theo.css), and the capture window
+//     is scrolled with window.scrollTo on a page as tall as its content.
 //   box(): the current page box of the last highlight (after the viewport changed).
 (() => {
   const NORMAL = { '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', ' ': ' ' }
@@ -50,15 +50,53 @@
     while (getComputedStyle(el).display === 'contents') el = el.parentElement
     return el.checkVisibility()
   }
+  const overflows = (node) => node.scrollHeight > node.clientHeight
+  const letOut = (node) => {
+    node.style.setProperty('overflow', 'visible', 'important')
+    node.style.setProperty('height', 'auto', 'important')
+    node.style.setProperty('max-height', 'none', 'important')
+  }
+  // Lets the document scroll to the highlight. A box the reader scrolls (overflow-y auto or
+  // scroll) is let out when its content overflows it. A box that clips (hidden, clip) is let
+  // out only when it fitted its content in the page's own layout and overflows because a
+  // scroller below it was let out: our paper page's #root around .theo-page (both 100% of
+  // the viewport, border-box in index.css). A clipper that already overflowed hides that
+  // part from its readers (a truncated paywall body, a "read more" clamp, a closed
+  // accordion) and stays as it is; clipped() then finds the highlight cut off.
   const unclip = (el) => {
+    const ancestors = []
+    for (let node = el.parentElement; node; node = node.parentElement) ancestors.push(node)
+    const overflowed = ancestors.map(overflows)
+    ancestors.forEach((node, i) => {
+      // read after the boxes below were let out: their overflow now shows here
+      if (!overflows(node)) return
+      const y = getComputedStyle(node).overflowY
+      const scroller = y === 'auto' || y === 'scroll'
+      const clipper = y === 'hidden' || y === 'clip'
+      if (scroller || (clipper && !overflowed[i])) letOut(node)
+    })
+  }
+  // True when a box around the element cuts part of it off: on an axis where an ancestor
+  // clips its overflow, the element reaches past that ancestor's client box (1 px of slack:
+  // clientWidth and clientHeight are whole pixels). Overflow does not apply to inline and
+  // display:contents elements, so they clip nothing.
+  const clipped = (el) => {
+    const rects = [...el.getClientRects()]
     for (let node = el.parentElement; node; node = node.parentElement) {
-      // read after the child below was let out: its overflow now shows here
-      if (getComputedStyle(node).overflowY !== 'visible' && node.scrollHeight > node.clientHeight) {
-        node.style.setProperty('overflow', 'visible', 'important')
-        node.style.setProperty('height', 'auto', 'important')
-        node.style.setProperty('max-height', 'none', 'important')
+      const style = getComputedStyle(node)
+      if (style.display === 'inline' || style.display === 'contents') continue
+      const clipX = style.overflowX !== 'visible'
+      const clipY = style.overflowY !== 'visible'
+      if (!clipX && !clipY) continue
+      const outer = node.getBoundingClientRect()
+      const left = outer.left + node.clientLeft
+      const top = outer.top + node.clientTop
+      for (const r of rects) {
+        if (clipX && (r.left < left - 1 || r.right > left + node.clientWidth + 1)) return true
+        if (clipY && (r.top < top - 1 || r.bottom > top + node.clientHeight + 1)) return true
       }
     }
+    return false
   }
   const unionBox = (rects) => {
     const xs = rects.flatMap((r) => [r.left, r.right])
@@ -84,6 +122,7 @@
         const el = hit.classList.contains('theo-evidence-anchor') ? hit.closest('p.theo-evidence') : hit
         if (!el) return null
         unclip(el)
+        if (clipped(el)) return null
         const box = unionBox([el.getBoundingClientRect()])
         if (box.w < 1 || box.h < 1) return null
         el.style.setProperty('outline', '4px solid #00cc66')
@@ -146,6 +185,7 @@
       // <text>): that part of the quote is not on the page; collapsed white space may lack one
       if (marks.some((m) => m.textContent.trim() !== '' && m.getClientRects().length === 0)) return null
       for (const mark of marks) unclip(mark)
+      if (marks.some(clipped)) return null
       highlighted = marks
       return unionBox(marks.flatMap((m) => [...m.getClientRects()]))
     },

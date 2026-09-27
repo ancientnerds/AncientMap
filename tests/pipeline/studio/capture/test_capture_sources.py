@@ -126,8 +126,10 @@ TURKISH_PAGE = """<!doctype html><html><head><title>Turkish sites</title></head>
 
 # Our paper page's shell (ancient-nerds-map/src/styles/index.css and theo.css): html,
 # body and #root are 100% tall with overflow hidden, and .theo-page is the 100vh scroller
-# with a sticky header, so the document itself does not scroll.
+# with a sticky header, so the document itself does not scroll. Every box is border-box
+# (index.css), so .theo-page with its padding fits #root exactly.
 PAPER_PAGE = """<!doctype html><html><head><title>Paper</title><style>
+* { margin: 0; padding: 0; box-sizing: border-box }
 html, body { overflow: hidden; width: 100%; height: 100%; margin: 0 }
 #root { width: 100%; height: 100%; overflow: hidden }
 .theo-page { height: 100vh; height: 100dvh; overflow-y: auto; padding-bottom: 60px }
@@ -151,6 +153,12 @@ def _page(body):
 
 WEIGHT = "The block is estimated to weigh 1,650 tonnes."
 SHOWN = f'<p style="margin-top:1500px">{WEIGHT}</p>'
+# A CSS-truncated article body (max-height with overflow hidden): the teaser shows, the
+# rest is cut off from its readers.
+TRUNCATED_PAGE = _page(
+    '<div style="max-height:60px;overflow:hidden"><p>The teaser paragraph of the article.</p>'
+    f'<p style="margin-top:1500px">{WEIGHT}</p></div><p>After the article.</p>'
+)
 
 
 def _run_highlight(tmp_path, mode, needle, html=PAGE, fragment=""):
@@ -260,16 +268,39 @@ def test_text_in_a_display_contents_element_is_read(tmp_path):
         # (the line break between them is page text: it joins the two into the quote)
         '<p style="margin-top:1500px">The block is estimated</p>\n'
         '<p style="display:none">to weigh 1,650 tonnes.</p>',
+        # a closed accordion
+        f'<div style="max-height:0;overflow:hidden"><p>{WEIGHT}</p></div>',
         # the text of a form field is read by the search but drawn by no box of the page
         f"<textarea>{WEIGHT}</textarea>",
         # the page's content in a fixed scroller, which hideOverlays hides with the banners
         f'<div style="position:fixed;inset:0;overflow-y:auto">{SHOWN}</div>',
     ],
-    ids=["hidden-continuation", "textarea", "fixed-scroller"],
+    ids=["hidden-continuation", "closed-accordion", "textarea", "fixed-scroller"],
 )
 def test_a_quote_the_reader_cannot_see_whole_is_not_found(tmp_path, body):
     # sources.py turns None into the advice to use a QuoteCard
     box, _ = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(body))
+    assert box is None
+
+
+def test_a_truncated_body_shows_its_teaser_and_keeps_the_rest_hidden(tmp_path):
+    teaser, state = _run_highlight(
+        tmp_path, "quote", "the teaser paragraph of the article", html=TRUNCATED_PAGE
+    )
+    assert teaser is not None
+    assert state["marks"] == "The teaser paragraph of the article"
+    # the quote lies in the part the page cuts off: letting it out would show readers'
+    # hidden text as if it were on the page
+    hidden, _ = _run_highlight(tmp_path, "quote", WEIGHT, html=TRUNCATED_PAGE)
+    assert hidden is None
+
+
+def test_an_evidence_paragraph_cut_off_by_its_box_is_not_visible(tmp_path):
+    html = _page(
+        '<div style="max-height:0;overflow:hidden">'
+        '<p id="ev-09" class="theo-evidence">Collapsed evidence.</p></div>'
+    )
+    box, _ = _run_highlight(tmp_path, "anchor", "ev-09", html=html)
     assert box is None
 
 
