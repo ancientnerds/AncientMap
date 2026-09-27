@@ -22,9 +22,18 @@ CAMERA_MIN_DISTANCE = 1.02
 CAMERA_MAX_DISTANCE = 2.44
 FOV_AT_MAX_DEG = 60.0
 FOV_RANGE_DEG = 58.5
-# Studio globe takes stay at or above this distance: well outside
-# CAMERA_EXTENDED.MAPBOX_ENABLE_DISTANCE (1.12), so no Mapbox tile is drawn.
-GLOBE_MIN_DISTANCE = 1.2
+# Studio globe takes stay at or above this distance so the page never leaves our vector
+# globe. The frontend hands over to Mapbox by zoom state, not by
+# CAMERA_EXTENDED.MAPBOX_ENABLE_DISTANCE: the animation loop (Globe/rendering/
+# animationLoop.ts) sets the zoom state to round(min(66, ((2.44 - d) / 1.42 * 100) / 80 * 66))
+# (THREEJS_CAMERA_MAX 80 of globeConstants.ts), and createAutoSwitchEffect
+# (Globe/rendering/mapboxEffects.ts) turns on Mapbox mode at TRANSITION_POINT 66 once Mapbox
+# is ready, which the background queue makes it during a take. Zoom state 66 holds for every
+# d <= ~1.3126; before Mapbox is ready, orbitMinDistance clamps the orbit at
+# MAPBOX_SWITCH_DISTANCE (1.304, globeConstants.ts), so a closer pose is silently drawn from
+# there. 1.32 is the closest 0.02 step whose zoom state rounds to 65
+# (tests/pipeline/studio/capture/test_capture_projection.py recomputes it from the sources).
+GLOBE_MIN_DISTANCE = 1.32
 GLOBE_MAX_DISTANCE = CAMERA_MAX_DISTANCE
 # Where a lit place may sit in a 1920x1080 globe shot, as fractions (x0, y0, x1, y1): the
 # renderer's GlobeShot draws each label to the right of its pin, and labels must stay in

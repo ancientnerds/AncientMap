@@ -1,11 +1,16 @@
 """Pure projection math of pipeline/studio/capture/projection.py."""
 
 import math
+import re
+from pathlib import Path
 
 import pytest
 
 from pipeline.studio.capture.projection import (
+    CAMERA_MAX_DISTANCE,
+    CAMERA_MIN_DISTANCE,
     GLOBE_MAX_DISTANCE,
+    GLOBE_MIN_DISTANCE,
     PLACES_BAND,
     fit_globe_distance,
     globe_fov_deg,
@@ -117,3 +122,44 @@ def test_fit_centres_a_single_place():
     lat, lng, _ = fit_globe_distance([(34.0, 36.2)], width=1920, height=1080)
     assert lat == pytest.approx(34.0) and lng == pytest.approx(36.2)
     assert math.isfinite(lat)
+
+
+_GLOBE_SRC = Path(__file__).resolve().parents[4] / "ancient-nerds-map" / "src"
+
+
+def _ts_number(path: Path, pattern: str) -> float:
+    match = re.search(pattern, path.read_text(encoding="utf-8"))
+    assert match, f"{pattern!r} not found in {path.name}"
+    return float(match.group(1))
+
+
+def test_globe_takes_stay_below_the_frontends_mapbox_switch():
+    """GLOBE_MIN_DISTANCE keeps the page's zoom state under TRANSITION_POINT, read from the sources."""
+    constants = _GLOBE_SRC / "config" / "globeConstants.ts"
+    rendering = _GLOBE_SRC / "components" / "Globe" / "rendering"
+    camera_block = r"export const CAMERA = \{[^}]*?"
+    min_dist = _ts_number(constants, camera_block + r"\bMIN_DISTANCE:\s*([\d.]+)")
+    max_dist = _ts_number(constants, camera_block + r"\bMAX_DISTANCE:\s*([\d.]+)")
+    threejs_camera_max = _ts_number(constants, r"export const THREEJS_CAMERA_MAX = ([\d.]+)")
+    transition = _ts_number(
+        rendering / "mapboxEffects.ts", r"export const TRANSITION_POINT = ([\d.]+)"
+    )
+    assert (min_dist, max_dist) == (CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE)
+    scene_init = (rendering / "sceneInit.ts").read_text(encoding="utf-8")
+    assert "const minDist = CAMERA.MIN_DISTANCE" in scene_init
+    assert "const maxDist = CAMERA.MAX_DISTANCE" in scene_init
+    loop = (rendering / "animationLoop.ts").read_text(encoding="utf-8")
+    assert (
+        "const scaledZoom = ((maxDist - cameraDist) / (maxDist - minDist)) * 100" in loop
+        and "Math.min(66, (scaledZoom / THREEJS_CAMERA_MAX) * 66)" in loop
+        and "ctx.setZoom(Math.round(zoomPct))" in loop
+    ), "the animation loop's zoom sync changed; recompute GLOBE_MIN_DISTANCE"
+
+    def zoom_state(distance: float) -> int:
+        scaled = (max_dist - distance) / (max_dist - min_dist) * 100
+        return math.floor(max(0.0, min(66.0, scaled / threejs_camera_max * 66)) + 0.5)
+
+    switch_distance = max_dist - threejs_camera_max / 100 * (max_dist - min_dist)
+    assert GLOBE_MIN_DISTANCE > switch_distance  # above the orbitMinDistance clamp
+    assert zoom_state(GLOBE_MIN_DISTANCE) < transition
+    assert zoom_state(round(GLOBE_MIN_DISTANCE - 0.02, 2)) >= transition  # the closest step
