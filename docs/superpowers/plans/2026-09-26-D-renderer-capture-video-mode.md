@@ -163,7 +163,7 @@ The public dir holds every timeline `src` under its relative path plus the seven
 
 ## Where this plan and plan C meet (for the reconcile)
 
-- **Cue rules (resolved in the reconcile).** D1's local cue column, the `BLOCKS` table of `video/src/blocks/index.ts`, is the single definition of which local verbs a block takes and which ids it shows (infographic element ids included: ScaleDrawing objects, UnitGrid groups, BarChart bars, Timeline events, Diagram elements, ListCard items, ScaleZoom's `small.id` and `large.id`). Plan C's `script.py` mirrors it as `LOCAL_CUES`, evaluated on each beat's resolved props, and adds the global rules `checkBlocks` applies (`introduce` needs a ClaimBoard of the episode listing the claim, a `meter` cue needs a Meter beat, cue keys `{frame, do, target, value?}` with `value` only on `status`/`meter`, meter values integers 0..100 summing to 100), so a script that passes `episode check` passes lint.ts's cue rules. `episode check` covers the cue, props-schema, reference and brand-glyph rules: plan C applies D1's brand-font rule (latin and latin-ext, its copy of the two ranges of `video/src/theme/glyphs.ts` tested against that file) to exactly D1's drawn strings before voice and capture: each beat block's `drawn` paths, read from `registry.json` (its `glyphs.drawn_strings`; no Python copy of the lists), the drawn strings of every `$capture` prop (its credits and `place`/`pin` labels; a `page` event's title is a record and never drawn), the hook caption tokens, the chapter titles, the credits (`visual.credit`, `Photo: <attribution> (<license>)`) and the thumbnail teasers (owner decision 32). The renderer's per-block semantic checks (the `check` functions of `video/src/blocks/index.ts`; plan C mirrors only clip length, map credits, marker boxes and the meter start) run in lint.ts's `loadTimeline`, which fails within seconds before bundling; fixing props never makes the voice stale. GlobeShot's `show` targets are the targets of the capture's labelled `place` events (`arrive` carries no label any more). GlobeShot takes a globe take of scene `flyto`, `places` or `distribution` (no credits) and MapboxFlyover one of scene `mapbox_flyin` or `mapbox_orbit` (the Mapbox credit): the renderer tells them apart by the capture's credits (`globe.CREDITS` is keyed by scene), plan C by the bound spec's `scene` at `episode check`. The former cross-stream request 8 is superseded and dropped.
+- **Cue rules (resolved in the reconcile).** D1's local cue column, the `BLOCKS` table of `video/src/blocks/index.ts`, is the single definition of which local verbs a block takes and which ids it shows (infographic element ids included: ScaleDrawing objects, UnitGrid groups, BarChart bars, Timeline events, Diagram elements, ListCard items, ScaleZoom's `small.id` and `large.id`). Plan C's `script.py` mirrors it as `LOCAL_CUES`, evaluated on each beat's resolved props, and adds the global rules `checkBlocks` applies (`introduce` needs a ClaimBoard of the episode listing the claim, a `meter` cue needs a Meter beat, cue keys `{frame, do, target, value?}` with `value` only on `status`/`meter`, meter values integers 0..100 summing to 100), so a script that passes `episode check` passes lint.ts's cue rules. `episode check` covers the cue, props-schema, reference and brand-glyph rules: plan C applies D1's brand-font rule (the code points the loaded latin and latin-ext files map: its verbatim copy of `DRAWABLE` of `video/src/theme/glyphs.ts`, tested against that file) to exactly D1's drawn strings before voice and capture: each beat block's `drawn` paths, read from `registry.json` (its `glyphs.drawn_strings`; no Python copy of the lists), the drawn strings of every `$capture` prop (its credits and `place`/`pin` labels; a `page` event's title is a record and never drawn), the hook caption tokens, the chapter titles, the credits (`visual.credit`, `Photo: <attribution> (<license>)`) and the thumbnail teasers (owner decision 32). The renderer's per-block semantic checks (the `check` functions of `video/src/blocks/index.ts`; plan C mirrors only clip length, map credits, marker boxes and the meter start) run in lint.ts's `loadTimeline`, which fails within seconds before bundling; fixing props never makes the voice stale. GlobeShot's `show` targets are the targets of the capture's labelled `place` events (`arrive` carries no label any more). GlobeShot takes a globe take of scene `flyto`, `places` or `distribution` (no credits) and MapboxFlyover one of scene `mapbox_flyin` or `mapbox_orbit` (the Mapbox credit): the renderer tells them apart by the capture's credits (`globe.CREDITS` is keyed by scene), plan C by the bound spec's `scene` at `episode check`. The former cross-stream request 8 is superseded and dropped.
 - **Hook line budget, the end card and upper case (the same rule on both sides).** `video/src/captions.ts` exports the line budget on a line of its own, `export const HOOK_LINE_MAX_CHARS = 24`, and `captionLines` starts a new hook line before a word that would make the line longer than that (Task 10). Plan C's `script.py` mirrors the constant; its Task 27 reads this line with a regex, as it reads the glyph ranges. At `episode check`, before voice, `script.py` refuses a hook display token whose upper-case form, punctuation included, is longer than 24 characters: that is the one line no break can shorten. A ShareCard may only be the last scene (`checkBlocks`, Task 17), and plan C's `script.py` refuses a ShareCard on any beat but the last, in full episodes and slices alike. The brand-font rule covers every code point of a character's full upper-case mapping: `unsupportedChar` here and plan C's `glyphs.unsupported_char` with `str.upper()`. JavaScript and Python give the same mappings, e.g. `µ` to U+039C.
 - **GPU (spec 4.11) is plan C's on its side.** Plan C's `doctor.py` (Task 26) probes the GPU with this plan's `pipeline.studio.capture.gpu` (`nvenc_problem()`, `remotion_browser(REPO / "video")`, `gpu_preference(exe)`, `chrome_renderer()` + `require_nvidia`) plus `nvidia-smi`, and `doctor --fix-gpu` calls `set_gpu_preference(exe)`; plan C's `voice.py` runs faster-whisper on `device="cuda", device_index=0` (float16) through `pipeline/video/shorts_captions.py`, which plan C owns; plan C's `render.py` stores the renderer string in the render ledger from the `gpu: <WebGL renderer>` lines render.ts prints to stdout, one per browser (that line format is the contract). The former cross-stream requests 5-7 now live in plan C.
 - **Manifest events.** Spec 4.11 wants the renderer string in the capture manifest; C7 fixes the manifest keys, so it is the first event, `gpu`. Globe `place` events carry `track`. C's `manifest_problems` accepts both (events are `{t, name, ...}`), and refuses a manifest whose drawn strings (its `credits` and the `label` of `place`/`pin` events) fall outside D1's glyph rule, naming the capture; event names, targets, URLs, a `page` event's `title` (the page's own `<title>`, kept as a record) and the `gpu` label are not drawn and not checked (owner decision 32), so a source page with a non-latin title passes (plan C's `glyphs.DRAWN_EVENT_FIELDS` is `{"place": "label", "pin": "label"}`).
@@ -188,7 +188,7 @@ Created (all owned by this plan):
 | `video/src/timeline.ts`, `video/src/schema.ts` | timeline.json parsing (D3, with the three thumbnail candidates); the JSON-schema subset validator of the registry. |
 | `video/src/state.ts`, `video/src/cues.ts`, `video/src/context.ts`, `video/src/media.ts` | Episode-wide claim and meter state; scene cue helpers; the episode context; audio length and image size measurement. |
 | `video/src/audio.ts`, `video/src/captions.ts`, `video/src/format.ts` | Narration spans and music ducking; hook caption lines, ticker and credit merging; distance, year, number and probability formatting. |
-| `video/src/theme/colors.ts`, `fonts.ts`, `glyphs.ts`, `type.ts` | NERV palette (mirror of the site tokens and the brand red, checked against the site files), brand fonts from the public dir (latin and latin-ext), the code points they cover, text styles. |
+| `video/src/theme/colors.ts`, `fonts.ts`, `glyphs.ts`, `type.ts` | NERV palette (mirror of the site tokens and the brand red, checked against the site files), brand fonts from the public dir (latin and latin-ext), the code points their files map (`DRAWABLE`, generated), text styles. |
 | `video/src/motion/index.ts` | Frame-driven NERV motion (crtOpen, bootIn, borderTrace, typeOn, digitRoll, stampSlam, ringPulse, sweep); no flicker. |
 | `video/src/layout/zones.ts`, `geometry.ts`, `transform.ts` | Screen zones (safe area, YouTube controls); the pure overlap checker; image-to-screen math for moving markers. |
 | `video/src/layout/LayoutBox.tsx`, `LayoutGuard.tsx` | Box registration in lint mode; the reporter that prints one JSON line per violation. |
@@ -196,6 +196,7 @@ Created (all owned by this plan):
 | `video/src/blocks/*.tsx` (27 files besides `icons.tsx`) | Panel, Stamp, LowerThird, CreditLine, ChapterTag, Ticker, HookCaptions, Footage, ImageLayer and the 18 scene blocks of D1. |
 | `video/src/fixtures/demo-timeline.json`, `demo.ts` | The graphics-only demo timeline (all 12 graphics blocks, a BarChart range, the three thumbnail candidates): default props for `npm run studio`, the test fixture and Task 22's demo render. |
 | `video/scripts/args.ts`, `cli.ts`, `registry.ts`, `lint.ts`, `render.ts`, `still.ts` | Script helpers (flags, chunks, violation lines, GPU rules, the bundle dir), shared plumbing (bundling next to the public dir and removing it), the registry writer and the three C9 scripts. |
+| `video/scripts/fontCoverage.ts`, `glyphs.ts` | The brand font files' cmaps (a WOFF2 reader on Node's brotli) and the drawable set computed from them; the printer of `glyphs.ts` `DRAWABLE`. |
 | `video/test/*.test.ts` (25 files), `video/test/fixtures/smoke-timeline.json` | vitest suites and the 10-second smoke timeline; `contract.test.ts` (Task 37) parses plan C's committed golden `tests/pipeline/studio/golden_timeline.json`. |
 | `pipeline/studio/capture/__init__.py` | The four C7 functions. |
 | `pipeline/studio/capture/manifest.py` | Manifest shape and validation, events (tracks included), credits, `CaptureError`, typed spec values, failed-tool messages. |
@@ -380,10 +381,10 @@ git commit -m "Replace the never-rendered weekly Remotion project with the studi
 ### Task 2: NERV theme and frame-driven motion
 
 **Files:**
-- Create: `video/src/theme/colors.ts`, `video/src/theme/fonts.ts`, `video/src/theme/glyphs.ts`, `video/src/theme/type.ts`, `video/src/motion/index.ts`
+- Create: `video/src/theme/colors.ts`, `video/src/theme/fonts.ts`, `video/src/theme/glyphs.ts`, `video/src/theme/type.ts`, `video/src/motion/index.ts`, `video/scripts/fontCoverage.ts`, `video/scripts/glyphs.ts`
 - Test: `video/test/motion.test.ts`, `video/test/colors.test.ts`, `video/test/glyphs.test.ts`
 
-The motion is the renderer's port of `ancient-nerds-map/src/styles/nerv-animations.css`: crt-open, boot-in, border-trace, type-on, digit-roll, the stamp slam, ring-pulse and sweep, each a pure function of the frame. Flicker, glitch and every alert/emergency flash are left out on purpose (owner rule: no flicker). The palette mirrors `ancient-nerds-map/src/styles/tokens.css` and the brand red `UI_COLORS.primary` of `src/constants/colors.ts` (spec 4.8); `colors.test.ts` reads both site files and fails when a mirrored value drifts. The fonts are the site's own woff2 files, loaded from the per-render public dir through `@remotion/fonts` (which holds the render with `delayRender` until each file loaded and cancels it when one is missing): the latin files plus the latin-ext files of JetBrains Mono and Cormorant Garamond, each with the `unicode-range` of `ancient-nerds-map/public/fonts/fonts.css`, so transliterations (Vinča, Enūma Eliš, Mahābhārata) draw in the brand fonts. `glyphs.ts` holds those two ranges; Task 17's `checkBlocks` refuses any other character, because the browser would draw it in a Windows system font without an error. `heading()` and `hud()` set `textTransform: 'uppercase'`, and the browser then draws the full Unicode upper-case mapping. So a character counts as drawable only when it and every code point of its upper case lie in the two ranges. Examples: `µ` (U+00B5, latin) draws as Greek `Μ` (U+039C); `ǰ` draws as `J` plus U+030C; `ẖ` draws as `H` plus U+0331. The error names the written character and what it turns into. Plan C's `glyphs.unsupported_char` applies the same rule with `str.upper()`, which gives the same mappings. Orbitron ships latin only (`ancient-nerds-map/public/fonts/` has no Orbitron latin-ext file), so `HEADING` names JetBrains Mono second: a latin-ext letter in a heading (Şanlıurfa, Ḫattuša, Enūma Eliš) is drawn, per character, by the loaded JetBrains Mono latin-ext face and never by a system font, and the glyph rule stays the one set, latin plus latin-ext.
+The motion is the renderer's port of `ancient-nerds-map/src/styles/nerv-animations.css`: crt-open, boot-in, border-trace, type-on, digit-roll, the stamp slam, ring-pulse and sweep, each a pure function of the frame. Flicker, glitch and every alert/emergency flash are left out on purpose (owner rule: no flicker). The palette mirrors `ancient-nerds-map/src/styles/tokens.css` and the brand red `UI_COLORS.primary` of `src/constants/colors.ts` (spec 4.8); `colors.test.ts` reads both site files and fails when a mirrored value drifts. The fonts are the site's own woff2 files, loaded from the per-render public dir through `@remotion/fonts` (which holds the render with `delayRender` until each file loaded and cancels it when one is missing): the latin files plus the latin-ext files of JetBrains Mono and Cormorant Garamond, each with the `unicode-range` of `ancient-nerds-map/public/fonts/fonts.css`, so transliterations (Vinča, Enūma Eliš, Mahābhārata) draw in the brand fonts. `glyphs.ts` holds those two ranges for `fonts.ts`, but a range only decides which face Chrome tries for a character, not whether that face has it: Google's subset files leave gaps in their declared range, and Chrome draws such a character in a Windows system font without an error (review fix 2026-09-27, measured in Remotion's chrome-headless-shell with CDP `CSS.getPlatformFontsForNode`: `Ḫattuša` drew its `Ḫ` in Arial in a heading and in Courier New in body text). JetBrains Mono latin-ext maps, of U+1E00-1EFF, only `ẀẁẂẃẄẅẞỲỳỴỵỶỷỸỹ`: no `Ḫ Ḥ Ṣ Ṭ Ṛ Ṃ Ṇ Ḍ Ṯ Ḏ Ẓ`, no `ʾ ʿ`; its latin file has no U+2010-2012, U+2015, U+2021, `‰` or `‼`. So the rule's set is `DRAWABLE`, generated from the files themselves by `scripts/fontCoverage.ts` (each loaded face's cmap, read with Node's own brotli, within the face's unicode-range; the part common to the three stacks of `type.ts`, heading, body/hud and serif, which is JetBrains Mono's and Cormorant Garamond's common part; plus tab, line feed and carriage return, which CSS lays out as white space). `glyphs.test.ts` recomputes it from `ancient-nerds-map/public/fonts` and fails on drift; `npx tsx scripts/glyphs.ts` prints the new constant. Task 17's `checkBlocks` refuses any character outside `DRAWABLE`. `heading()` and `hud()` set `textTransform: 'uppercase'`, and the browser then draws the full Unicode upper-case mapping. So a character counts as drawable only when it and every code point of its upper case lie in `DRAWABLE`. Example: `ƒ` (U+0192, drawable) draws as `Ƒ` (U+0191), which no loaded file maps; the error names the written character and what it turns into. `µ`, `ǰ` and `ẖ` are refused as written (no loaded file maps them). Plan C's `glyphs.unsupported_char` applies the same rule with `str.upper()`, which gives the same mappings, on its verbatim copy of `DRAWABLE`. Orbitron ships latin only (`ancient-nerds-map/public/fonts/` has no Orbitron latin-ext file), so `HEADING` names JetBrains Mono second: a latin-ext letter in a heading (Şanlıurfa, Enūma Eliš) is drawn, per character, by the loaded JetBrains Mono latin-ext face. Hittite, Egyptian, Sanskrit and Semitic transliterations (`Ḫattuša`, `Ḥatḥor`, `Kṛṣṇa`, `Baʿal`) are refused until the owner decides on a font that has them (owner question Q14).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -475,27 +476,65 @@ describe('the NERV palette mirrors the site (spec 4.8)', () => {
 **`video/test/glyphs.test.ts`** (complete file):
 
 ```ts
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
+import { SITE_PUBLIC_DIR, drawableRange, formatUnicodeRange, woff2Cmap } from '../scripts/fontCoverage'
 import { FONTS, FONT_FILES, HEADING } from '../src/theme/fonts'
-import { LATIN_EXT_RANGE, LATIN_RANGE, glyphReason, parseUnicodeRange, unsupportedChar } from '../src/theme/glyphs'
+import { DRAWABLE, LATIN_EXT_RANGE, LATIN_RANGE, glyphReason, parseUnicodeRange, unsupportedChar } from '../src/theme/glyphs'
 
-describe('the brand fonts cover latin and latin-ext (fonts.css unicode-range)', () => {
-  it('parses a CSS unicode-range', () => {
+const cmap = (file: string) => woff2Cmap(join(SITE_PUBLIC_DIR, 'fonts', file))
+
+describe('the brand fonts draw only the code points their files map (DRAWABLE)', () => {
+  it('parses and formats a CSS unicode-range', () => {
     expect(parseUnicodeRange('U+0000-00FF, U+0131, U+A720-A7FF')).toEqual([
       [0x0, 0xff],
       [0x131, 0x131],
       [0xa720, 0xa7ff],
     ])
+    expect(formatUnicodeRange([0x131, 0x20, 0x21, 0x22, 0xa0])).toBe('U+0020-0022, U+00A0, U+0131')
   })
-  it('accepts the transliterations of type-D topics, refuses other scripts and letters whose upper case leaves the fonts', () => {
-    for (const text of ['Vinča', 'Enūma Eliš', 'Mahābhārata', 'Çatalhöyük', 'Ḫattuša', 'ÿ ß ſ ŉ', '1,000–1,650 t × 2 — “quoted” …']) expect(unsupportedChar(text), text).toBeNull()
+  it('reads each woff2 cmap as fontTools 4.65 does (glyph counts measured 2026-09-27)', () => {
+    const counts = Object.fromEntries(FONT_FILES.map((file) => [file, cmap(file.slice('fonts/'.length)).size]))
+    expect(counts).toEqual({
+      'fonts/orbitron-600.woff2': 183,
+      'fonts/orbitron-700.woff2': 183,
+      'fonts/jetbrains-mono-400.woff2': 229,
+      'fonts/jetbrains-mono-400-latin-ext.woff2': 190,
+      'fonts/jetbrains-mono-500.woff2': 229,
+      'fonts/cormorant-garamond-400-latin.woff2': 229,
+      'fonts/cormorant-garamond-400-latin-ext.woff2': 306,
+    })
+    // the gaps Google's subsets leave in their declared range: ẞ is there, Ḫ and the non-breaking hyphen are not
+    expect(cmap('jetbrains-mono-400-latin-ext.woff2').has(0x1e9e)).toBe(true)
+    expect(cmap('jetbrains-mono-400-latin-ext.woff2').has(0x1e2a)).toBe(false)
+    expect(cmap('jetbrains-mono-400.woff2').has(0x2011)).toBe(false)
+    expect(cmap('cormorant-garamond-400-latin-ext.woff2').has(0x1e2a)).toBe(true)
+  })
+  it('DRAWABLE is what the loaded files map, recomputed from ancient-nerds-map/public/fonts (npx tsx scripts/glyphs.ts prints it)', () => {
+    expect(DRAWABLE).toBe(drawableRange())
+  })
+  it('accepts the transliterations the files map and layout white space', () => {
+    for (const text of ['Vinča', 'Enūma Eliš', 'Mahābhārata', 'Çatalhöyük', 'Şanlıurfa', 'Ħal Saflieni', 'ÿ ß ſ ŉ', '1,000–1,650 t × 2 — “quoted” …', 'one\ntwo\tthree'])
+      expect(unsupportedChar(text), text).toBeNull()
+  })
+  it('refuses other scripts, the gaps of the subsets and letters whose upper case leaves the fonts', () => {
     expect(unsupportedChar('Κνωσός')).toBe('Κ')
     expect(unsupportedChar('Baalbek → Rome')).toBe('→')
-    // heading() and hud() draw upper case: "µ" becomes Greek "Μ", "ẖ" becomes "H" + U+0331
+    // inside the declared latin-ext and latin ranges, but in no loaded file: a system font would draw them
+    expect(unsupportedChar('Ḫattuša')).toBe('Ḫ')
+    expect(unsupportedChar('Kṛṣṇa')).toBe('ṛ')
+    expect(unsupportedChar('Ḥatḥor')).toBe('Ḥ')
+    expect(unsupportedChar('Baʿal')).toBe('ʿ')
+    expect(unsupportedChar('non‑breaking')).toBe('‑')
+    expect(unsupportedChar('5‰')).toBe('‰')
     expect(unsupportedChar('Smaller than 1 µm?')).toBe('µ')
     expect(unsupportedChar('ẖ')).toBe('ẖ')
-    expect(glyphReason('µ')).toBe('"µ" (U+00B5) draws as "Μ" (U+039C) in upper case, which has no glyph in the brand fonts (latin and latin-ext only)')
+    // heading() and hud() draw upper case: "ƒ" becomes "Ƒ", which no loaded file maps
+    expect(unsupportedChar('ƒ')).toBe('ƒ')
+    expect(glyphReason('ƒ')).toBe('"ƒ" (U+0192) draws as "Ƒ" (U+0191) in upper case, which has no glyph in the brand fonts (latin and latin-ext only)')
+    expect(glyphReason('Ḫ')).toBe('"Ḫ" (U+1E2A) has no glyph in the brand fonts (latin and latin-ext only)')
     expect(glyphReason('Κ')).toBe('"Κ" (U+039A) has no glyph in the brand fonts (latin and latin-ext only)')
   })
   it('loads a latin-ext file next to the latin files of JetBrains Mono and Cormorant Garamond', () => {
@@ -506,7 +545,7 @@ describe('the brand fonts cover latin and latin-ext (fonts.css unicode-range)', 
     expect(faces(LATIN_EXT_RANGE)).toEqual(['Cormorant Garamond 400', 'JetBrains Mono 400', 'JetBrains Mono 500'])
     expect(faces(LATIN_RANGE)).toEqual(['Cormorant Garamond 400', 'JetBrains Mono 400', 'JetBrains Mono 500', 'Orbitron 600', 'Orbitron 700'])
     expect(FONT_FILES).toHaveLength(7)
-    // Orbitron has no latin-ext file: headings fall back per character to JetBrains Mono's latin-ext face, never to a system font
+    // Orbitron has no latin-ext file: a heading falls back per character to JetBrains Mono, whose files DRAWABLE reflects
     expect(HEADING.split(',')[1].trim()).toBe("'JetBrains Mono'")
   })
 })
@@ -606,7 +645,9 @@ export const statusColor: Record<ClaimStatus, string> = {
  * latin files, plus the latin-ext files of JetBrains Mono (both weights share the
  * 400 file, as on the site) and Cormorant Garamond. Orbitron ships latin only, so
  * HEADING names JetBrains Mono second: a latin-ext character of a heading is drawn
- * by the JetBrains Mono latin-ext face, never by a system font.
+ * by the JetBrains Mono latin-ext face when that file maps it. glyphs.ts DRAWABLE
+ * admits only the characters the loaded files map, so no drawn string reaches a
+ * system font.
  */
 import { loadFont } from '@remotion/fonts'
 import { staticFile } from 'remotion'
@@ -643,19 +684,29 @@ export function loadBrandFonts(): void {
 
 ```ts
 /**
- * The code points the brand fonts draw: the unicode-range of the latin and
- * latin-ext files fonts.ts loads, copied from ancient-nerds-map/public/fonts/fonts.css.
- * Any other character (Greek, Cyrillic, an arrow, an emoji) would render in a
- * Windows system font without an error, so blocks/index.ts checkBlocks refuses
- * every timeline string that holds one, naming the scene, the prop path and
- * the character. heading() and hud() draw upper case (text-transform), which
- * the browser applies with the full Unicode mapping, so a character is drawable
- * only when its upper case is covered too ("µ" U+00B5 turns into Greek "Μ").
+ * The code points the brand fonts draw. LATIN_RANGE and LATIN_EXT_RANGE are the
+ * unicode-range of the latin and latin-ext files fonts.ts loads, copied from
+ * ancient-nerds-map/public/fonts/fonts.css. They decide which face Chrome tries for a
+ * character, not whether that face has it: Google's subset files leave gaps in their
+ * declared range (JetBrains Mono latin-ext has no Ḫ, Ḥ, Ṣ or Ṭ, its latin file no U+2011
+ * or ‰), and Chrome draws such a character in a Windows system font without an error.
+ *
+ * DRAWABLE is therefore generated from the files themselves (scripts/fontCoverage.ts):
+ * each loaded face's cmap within its unicode-range, the part common to the three stacks
+ * of type.ts (heading, body/hud, serif), plus tab, line feed and carriage return, which
+ * CSS lays out as white space. test/glyphs.test.ts recomputes it and fails on drift;
+ * `npx tsx scripts/glyphs.ts` prints the new constant. blocks/index.ts checkBlocks refuses
+ * every drawn timeline string with a character outside it, naming the scene, the prop
+ * path and the character. heading() and hud() draw upper case (text-transform), which the
+ * browser applies with the full Unicode mapping, so a character is drawable only when its
+ * upper case is covered too ("ƒ" U+0192 turns into "Ƒ" U+0191, which no brand face maps).
  */
 export const LATIN_RANGE =
   'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD'
 export const LATIN_EXT_RANGE =
   'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF'
+export const DRAWABLE =
+  'U+0009-000A, U+000D, U+0020-007E, U+00A0-00B4, U+00B6-0131, U+0134-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01CD-01CE, U+01E6-01E7, U+01EA-01EB, U+01FC-01FF, U+0218-021B, U+0232-0233, U+0237, U+0259, U+02BC, U+02C6-02C7, U+02DA, U+02DC-02DD, U+0304, U+0308, U+1E80-1E85, U+1E9E, U+1EF2-1EF9, U+2013-2014, U+2018-201A, U+201C-201E, U+2020, U+2022, U+2026, U+2032-2033, U+2039-203A, U+2044, U+20AB-20AC, U+20AE, U+20BD, U+2113, U+2122, U+2191, U+2193, U+2212, U+FEFF'
 
 /** A CSS unicode-range ("U+0000-00FF, U+0131") as inclusive [first, last] code point pairs. */
 export function parseUnicodeRange(css: string): [number, number][] {
@@ -667,7 +718,7 @@ export function parseUnicodeRange(css: string): [number, number][] {
   })
 }
 
-const COVERED = [...parseUnicodeRange(LATIN_RANGE), ...parseUnicodeRange(LATIN_EXT_RANGE)]
+const COVERED = parseUnicodeRange(DRAWABLE)
 
 /** Whether the brand fonts draw every code point of `text` as written. */
 function covered(text: string): boolean {
@@ -696,6 +747,219 @@ export function glyphReason(ch: string): string {
   const turns = covered(ch) ? ` draws as "${upper}" (${codes(upper)}) in upper case, which` : ''
   return `"${ch}" (${codes(ch)})${turns} has no glyph in the brand fonts (latin and latin-ext only)`
 }
+```
+
+**`video/scripts/fontCoverage.ts`** (complete file):
+
+```ts
+/**
+ * Which code points the brand fonts really draw. Google's subset files do not cover
+ * their whole declared unicode-range: JetBrains Mono latin-ext maps no Ḫ, Ḥ, Ṣ or Ṭ,
+ * its latin file no U+2011 or ‰. Chrome draws a character the matching face lacks in the
+ * next family of the stack and at last in a Windows system font, without an error. So
+ * src/theme/glyphs.ts DRAWABLE comes from the woff2 files fonts.ts loads (each file's
+ * cmap, read with Node's own brotli), never from their unicode-range alone:
+ * test/glyphs.test.ts recomputes it and fails on drift, `npx tsx scripts/glyphs.ts`
+ * (cwd video/) prints the constant.
+ */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { brotliDecompressSync } from 'node:zlib'
+
+import { BODY, FONTS, HEADING, SERIF } from '../src/theme/fonts'
+import { parseUnicodeRange } from '../src/theme/glyphs'
+
+/** The site's public dir: `npm run studio` serves it, plan C's render step links its fonts/*.woff2. */
+export const SITE_PUBLIC_DIR = fileURLToPath(new URL('../../ancient-nerds-map/public/', import.meta.url))
+
+/** Tab, line feed and carriage return: CSS lays them out as white space or a line break, never as a glyph. */
+const LAYOUT_WHITESPACE = [0x09, 0x0a, 0x0d]
+
+// Indices in the WOFF2 known-table-tag list (WOFF2 spec 5.1); 63 means a four-byte tag follows.
+const KNOWN_CMAP = 0
+const KNOWN_GLYF = 10
+const KNOWN_LOCA = 11
+const ARBITRARY_TAG = 63
+
+/** A WOFF2 UIntBase128 at `at.pos` (WOFF2 spec 4.1), advancing `at.pos`. */
+function uintBase128(data: Buffer, at: { pos: number }): number {
+  let value = 0
+  for (let i = 0; i < 5; i++) {
+    const byte = data[at.pos++]
+    if (i === 0 && byte === 0x80) throw new Error('WOFF2 UIntBase128 with a leading zero byte')
+    if (value > 0x1ffffff) throw new Error('WOFF2 UIntBase128 exceeds 32 bits')
+    value = value * 128 + (byte & 0x7f)
+    if ((byte & 0x80) === 0) return value
+  }
+  throw new Error('WOFF2 UIntBase128 longer than five bytes')
+}
+
+/**
+ * The cmap table of a WOFF2 file: the table directory lists every table with its length,
+ * then one brotli stream holds the tables in directory order without padding (WOFF2 spec 5).
+ * glyf and loca are transformed unless their version is 3, any other table when its version
+ * is not 0; cmap never is.
+ */
+function woff2CmapTable(path: string): Buffer {
+  const file = readFileSync(path)
+  if (file.toString('latin1', 0, 4) !== 'wOF2') throw new Error(`${path}: not a WOFF2 file`)
+  if (file.toString('latin1', 4, 8) === 'ttcf') throw new Error(`${path}: a font collection, not a single font`)
+  const numTables = file.readUInt16BE(12)
+  const compressedLength = file.readUInt32BE(20)
+  const at = { pos: 48 }
+  let offset = 0
+  let cmap: { offset: number; length: number } | undefined
+  for (let i = 0; i < numTables; i++) {
+    const flags = file[at.pos++]
+    const known = flags & 0x3f
+    const version = flags >> 6
+    let tag = ''
+    if (known === ARBITRARY_TAG) {
+      tag = file.toString('latin1', at.pos, at.pos + 4)
+      at.pos += 4
+    }
+    const origLength = uintBase128(file, at)
+    const glyfOrLoca = known === KNOWN_GLYF || known === KNOWN_LOCA || tag === 'glyf' || tag === 'loca'
+    const transformed = glyfOrLoca ? version !== 3 : version !== 0
+    const length = transformed ? uintBase128(file, at) : origLength
+    if (known === KNOWN_CMAP || tag === 'cmap') {
+      if (transformed) throw new Error(`${path}: a transformed cmap table (version ${version})`)
+      cmap = { offset, length }
+    }
+    offset += length
+  }
+  if (cmap === undefined) throw new Error(`${path}: no cmap table`)
+  const tables = brotliDecompressSync(file.subarray(at.pos, at.pos + compressedLength))
+  return tables.subarray(cmap.offset, cmap.offset + cmap.length)
+}
+
+/** Unicode cmap subtables (platform/encoding) in the order fontTools' getBestCmap prefers them. */
+const UNICODE_SUBTABLES = ['3/10', '0/4', '3/1', '0/3']
+
+/** Every code point a woff2 font file maps to a glyph other than .notdef (cmap formats 4 and 12). */
+export function woff2Cmap(path: string): Set<number> {
+  const cmap = woff2CmapTable(path)
+  const records = new Map<string, number>()
+  for (let i = 0; i < cmap.readUInt16BE(2); i++) {
+    const rec = 4 + i * 8
+    records.set(`${cmap.readUInt16BE(rec)}/${cmap.readUInt16BE(rec + 2)}`, cmap.readUInt32BE(rec + 4))
+  }
+  const key = UNICODE_SUBTABLES.find((k) => records.has(k))
+  if (key === undefined) throw new Error(`${path}: no Unicode cmap subtable (${[...records.keys()].join(', ')})`)
+  const at = records.get(key) as number
+  const format = cmap.readUInt16BE(at)
+  const points = new Set<number>()
+  if (format === 4) {
+    const segX2 = cmap.readUInt16BE(at + 6)
+    const ends = at + 14
+    const starts = ends + segX2 + 2
+    const deltas = starts + segX2
+    const rangeOffsets = deltas + segX2
+    for (let s = 0; s < segX2; s += 2) {
+      const start = cmap.readUInt16BE(starts + s)
+      const end = cmap.readUInt16BE(ends + s)
+      const delta = cmap.readUInt16BE(deltas + s)
+      const rangeOffset = cmap.readUInt16BE(rangeOffsets + s)
+      // U+FFFF only closes the segment list, it is never a character of the font
+      for (let c = start; c <= end && c !== 0xffff; c++) {
+        const indexed = rangeOffset === 0 ? c : cmap.readUInt16BE(rangeOffsets + s + rangeOffset + 2 * (c - start))
+        const glyph = rangeOffset !== 0 && indexed === 0 ? 0 : (indexed + delta) & 0xffff
+        if (glyph !== 0) points.add(c)
+      }
+    }
+  } else if (format === 12) {
+    const groups = cmap.readUInt32BE(at + 12)
+    for (let g = 0; g < groups; g++) {
+      const rec = at + 16 + g * 12
+      const start = cmap.readUInt32BE(rec)
+      const startGlyph = cmap.readUInt32BE(rec + 8)
+      for (let c = start; c <= cmap.readUInt32BE(rec + 4); c++) if (startGlyph + c - start !== 0) points.add(c)
+    }
+  } else {
+    throw new Error(`${path}: cmap subtable ${key} has format ${format}, only formats 4 and 12 are read`)
+  }
+  return points
+}
+
+function intersect(sets: Set<number>[]): Set<number> {
+  const [first, ...rest] = sets
+  return new Set([...first].filter((cp) => rest.every((set) => set.has(cp))))
+}
+
+/** The families a CSS font stack names, in order; the generic family at its end is the system font the glyph rule keeps text out of. */
+function stackFamilies(stack: string): string[] {
+  return stack
+    .split(',')
+    .map((family) => family.trim())
+    .filter((family) => family.startsWith("'"))
+    .map((family) => family.slice(1, -1))
+}
+
+/**
+ * What one family draws at every weight fonts.ts loads for it: per weight, the union of its
+ * faces' cmaps, each limited to the face's unicode-range (Chrome tries a face only for a
+ * character inside its range); across weights, the common part.
+ */
+function familyCodePoints(family: string): Set<number> {
+  const faces = FONTS.filter((face) => face.family === family)
+  if (faces.length === 0) throw new Error(`fonts.ts FONTS loads no face of '${family}'`)
+  const weights = [...new Set(faces.map((face) => face.weight))]
+  return intersect(
+    weights.map((weight) => {
+      const points = new Set<number>()
+      for (const face of faces.filter((f) => f.weight === weight)) {
+        const ranges = parseUnicodeRange(face.unicodeRange)
+        for (const cp of woff2Cmap(join(SITE_PUBLIC_DIR, face.file))) {
+          if (ranges.some(([first, last]) => cp >= first && cp <= last)) points.add(cp)
+        }
+      }
+      return points
+    }),
+  )
+}
+
+/**
+ * The code points every stack of type.ts (HEADING for heading(), BODY for body() and hud(),
+ * SERIF for serif()) draws with a loaded brand face, plus the layout white space.
+ */
+export function drawableCodePoints(): Set<number> {
+  const stacks = [HEADING, BODY, SERIF].map((stack) => {
+    const points = new Set<number>()
+    for (const family of stackFamilies(stack)) for (const cp of familyCodePoints(family)) points.add(cp)
+    return points
+  })
+  return new Set([...intersect(stacks), ...LAYOUT_WHITESPACE])
+}
+
+const hex = (cp: number) => cp.toString(16).toUpperCase().padStart(4, '0')
+
+/** Code points as a CSS unicode-range ("U+0020-007E, U+00A0"), ascending, consecutive ones merged. */
+export function formatUnicodeRange(points: Iterable<number>): string {
+  const runs: [number, number][] = []
+  for (const cp of [...new Set(points)].sort((a, b) => a - b)) {
+    const last = runs[runs.length - 1]
+    if (last !== undefined && last[1] === cp - 1) last[1] = cp
+    else runs.push([cp, cp])
+  }
+  return runs.map(([first, last]) => (first === last ? `U+${hex(first)}` : `U+${hex(first)}-${hex(last)}`)).join(', ')
+}
+
+/** DRAWABLE of src/theme/glyphs.ts as the brand font files define it today. */
+export const drawableRange = (): string => formatUnicodeRange(drawableCodePoints())
+```
+
+**`video/scripts/glyphs.ts`** (complete file):
+
+```ts
+/**
+ * Prints src/theme/glyphs.ts DRAWABLE recomputed from the brand font files
+ * (scripts/fontCoverage.ts): `npx tsx scripts/glyphs.ts`, cwd video/. Paste the
+ * output over the constant when test/glyphs.test.ts reports drift.
+ */
+import { drawableRange } from './fontCoverage'
+
+console.log(`export const DRAWABLE =\n  '${drawableRange()}'`)
 ```
 
 **`video/src/theme/type.ts`** (complete file):
@@ -839,12 +1103,12 @@ export function sweep(frame: number, start: number, duration: number): number {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/motion.test.ts test/colors.test.ts test/glyphs.test.ts`
-Expected: `Tests  26 passed (26)` (9 motion, 14 palette mirror, 3 glyphs)
+Expected: `Tests  29 passed (29)` (9 motion, 14 palette mirror, 6 glyphs). Then `npx tsx scripts/glyphs.ts` prints exactly the `DRAWABLE` constant of `glyphs.ts`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add video/src/theme/colors.ts video/src/theme/fonts.ts video/src/theme/glyphs.ts video/src/theme/type.ts video/src/motion/index.ts video/test/motion.test.ts video/test/colors.test.ts video/test/glyphs.test.ts
+git add video/src/theme/colors.ts video/src/theme/fonts.ts video/src/theme/glyphs.ts video/src/theme/type.ts video/src/motion/index.ts video/scripts/fontCoverage.ts video/scripts/glyphs.ts video/test/motion.test.ts video/test/colors.test.ts video/test/glyphs.test.ts
 git commit -m "Add the renderer's NERV palette mirrored from the site, brand fonts with latin-ext, and frame-driven motion without flicker" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -6777,7 +7041,7 @@ git commit -m "Add the infographic blocks: to-scale drawing, unit grid, linear b
 - Create: `video/src/blocks/index.ts`
 - Test: `video/test/blocks.test.ts`
 
-`BLOCKS` maps each registry name to its component, its semantic check, the local cue verbs it takes with their valid targets, and the images `calculateMetadata` must measure. Its cue table is the single definition of which local verbs each block takes and which ids it shows; plan C's script check mirrors it (its `LOCAL_CUES` must cover exactly the blocks of `registry.json`). `checkBlocks` runs all of it over a parsed timeline (contract D3): a local verb must name a target the block shows, `introduce` needs a ClaimBoard listing the claim, a `meter` cue needs a Meter in the episode, a ShareCard may only be the last scene (owner rule for platform moments: never an advert, the link only on the end card and in the description; in a full episode and a slice alike), and every string the video draws must be drawable by the brand fonts (latin and latin-ext, `theme/glyphs.ts`), because the browser would silently draw any other character in a system font. That includes the character's upper case: `heading()` and `hud()` draw upper case, so a teaser 'Smaller than 1 µm?' is refused for `µ` (drawn as Greek `Μ`); `micrometre` is the drawable spelling. Only drawn strings are checked (owner decision 32, D1): `drawnStrings` walks the block's `drawn` paths from `schemas.ts`, `captureStrings` the drawn strings of every capture prop (its credits and `place`/`pin` labels), and the captions, credits, chapter titles and thumbnail teasers are checked as before. A `page` event's `title` (the source page's own `<title>`) is a record that nothing draws, so it is not checked. So an original quote shown only inside a captured page (SourceViewer), the page's non-latin title and a non-latin URL path pass, while a claim label or a credit the fonts cannot draw is refused.
+`BLOCKS` maps each registry name to its component, its semantic check, the local cue verbs it takes with their valid targets, and the images `calculateMetadata` must measure. Its cue table is the single definition of which local verbs each block takes and which ids it shows; plan C's script check mirrors it (its `LOCAL_CUES` must cover exactly the blocks of `registry.json`). `checkBlocks` runs all of it over a parsed timeline (contract D3): a local verb must name a target the block shows, `introduce` needs a ClaimBoard listing the claim, a `meter` cue needs a Meter in the episode, a ShareCard may only be the last scene (owner rule for platform moments: never an advert, the link only on the end card and in the description; in a full episode and a slice alike), and every string the video draws must be drawable by the brand fonts (`DRAWABLE` of `theme/glyphs.ts`: the code points the loaded latin and latin-ext files map, Task 2), because the browser would silently draw any other character in a system font; that holds for a character inside a face's declared unicode-range that the file lacks, too (`Ḫ` of 'Ḫattuša', the non-breaking hyphen U+2011, `‰`). That includes the character's upper case: `heading()` and `hud()` draw upper case, so a teaser 'Set ƒ/8?' is refused for `ƒ` (drawn as `Ƒ`, which no loaded file maps). A teaser 'Smaller than 1 µm?' is refused for `µ` as written; `micrometre` is the drawable spelling. Only drawn strings are checked (owner decision 32, D1): `drawnStrings` walks the block's `drawn` paths from `schemas.ts`, `captureStrings` the drawn strings of every capture prop (its credits and `place`/`pin` labels), and the captions, credits, chapter titles and thumbnail teasers are checked as before. A `page` event's `title` (the source page's own `<title>`) is a record that nothing draws, so it is not checked. So an original quote shown only inside a captured page (SourceViewer), the page's non-latin title and a non-latin URL path pass, while a claim label or a credit the fonts cannot draw is refused.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -6899,6 +7163,9 @@ describe('checkBlocks', () => {
     expect(() => checkBlocks(parseTimeline(t))).not.toThrow()
     t.scenes[4].props.objects[1].label = 'Κνωσός'
     expect(() => checkBlocks(parseTimeline(t))).toThrow(/scene b05 \(ScaleDrawing\): props\.objects\[1\]\.label: "Κ" \(U\+039A\) has no glyph in the brand fonts/)
+    // inside the declared latin-ext range, but the loaded JetBrains Mono file has no Ḫ
+    t.scenes[4].props.objects[1].label = 'Ḫattuša'
+    expect(() => checkBlocks(parseTimeline(t))).toThrow(/scene b05 \(ScaleDrawing\): props\.objects\[1\]\.label: "Ḫ" \(U\+1E2A\) has no glyph in the brand fonts/)
     t.scenes[4].props.objects[1].label = 'Person'
     t.credits = [{ sceneId: 'b01', text: 'Photo → Commons' }]
     expect(() => checkBlocks(parseTimeline(t))).toThrow(/timeline: credits\[0\]\.text \(scene b01\): "→" \(U\+2192\)/)
@@ -6908,9 +7175,9 @@ describe('checkBlocks', () => {
   })
   it('refuses a character whose upper case the brand fonts cannot draw (heading and hud draw upper case)', () => {
     const t: Json = JSON.parse(JSON.stringify(DEMO_TIMELINE))
-    t.thumbnails[0].text = 'Smaller than 1 µm?'
+    t.thumbnails[0].text = 'Set ƒ/8?'
     expect(() => checkBlocks(parseTimeline(t))).toThrow(
-      /timeline: thumbnails\[0\]\.text: "µ" \(U\+00B5\) draws as "Μ" \(U\+039C\) in upper case, which has no glyph in the brand fonts/,
+      /timeline: thumbnails\[0\]\.text: "ƒ" \(U\+0192\) draws as "Ƒ" \(U\+0191\) in upper case, which has no glyph in the brand fonts/,
     )
   })
   it('refuses a ShareCard before the last scene: the link appears only on the end card', () => {
@@ -8763,7 +9030,7 @@ Expected: FAIL with `ENOENT: no such file or directory, open '...\video\test\fix
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/smoke.test.ts && npx vitest run && npx tsc --noEmit`
-Expected: `Tests  2 passed (2)`, then the whole suite `Test Files  24 passed (24)` / `Tests  200 passed (200)`, then no tsc output. (Task 37 adds `contract.test.ts` later: 25 files, 201 tests.)
+Expected: `Tests  2 passed (2)`, then the whole suite `Test Files  24 passed (24)` / `Tests  203 passed (203)`, then no tsc output. (Task 37 adds `contract.test.ts` later: 25 files, 204 tests. Task 2's glyph review fix of 2026-09-27 added 3 tests to the 200 measured before.)
 
 - [ ] **Step 5: Commit**
 
@@ -15043,7 +15310,7 @@ git commit -m "Check that the renderer reads plan C's compiled golden timeline a
 cd video && npx tsc --noEmit && npx vitest run
 ```
 
-Expected: no tsc output; `Test Files  25 passed (25)`, `Tests  201 passed (201)` (Task 21's 24 files and 200 tests plus the contract test).
+Expected: no tsc output; `Test Files  25 passed (25)`, `Tests  204 passed (204)` (Task 21's 24 files and 203 tests plus the contract test).
 
 - [ ] **Step 5: Captures and the backend suite**
 
@@ -15101,9 +15368,9 @@ No further commit (Steps 4-7 change nothing). Report the counts and any gate tha
 
 Every request below is an item of the orchestrator's integration list, whose files no plan's tasks touch; this plan cites the items by name. Requests 1-4 are the items "CI lint-video", ".githooks/pre-push", "docs/procedures/STUDIO.md" with the Studio part of the "CLAUDE.md" item, and "docs/video-pipeline.md". The same list carries the ".gitignore" item (after merging origin/main into `feat/studio`, the line `.claude/` becomes `.claude/*` with `!.claude/skills/`, `!.claude/skills/**`, `!.claude/workflows/`, `!.claude/workflows/**` below it: git never re-includes a file under an excluded directory, so negations after `.claude/` would track nothing; `git check-ignore .claude/skills/theo-write/SKILL.md` must print nothing and exit 1, while `git check-ignore -v .claude/settings.local.json` must print the pattern `.claude/*`; with `-v` the skills file prints the negated pattern `!.claude/skills/**`, which also means "not ignored", measured 2026-09-26 in a scratch repository), the "skills and workflows" item of plan C's C2/C11, the rest of the "CLAUDE.md" item, the "docs/TRAINING_DATA_POLICY.md" item, the "commits" item (the spec, the four plans and `2026-09-26-owner-questions.md` committed with an explicit pathspec before any implementer task, this plan included, and every later plan fix the same way), the "merges" item and the "final acceptance" item.
 
-1. **CI lint-video (`.github/workflows/ci.yml`, spec 7):** the `changes` job gains the output `video: ${{ steps.filter.outputs.video }}` and the filter `video` with `video/**`, `tests/pipeline/studio/golden_timeline.json` (Task 37's contract test reads it, so a plan-C compiler change that regenerates it must run the renderer's suite), `ancient-nerds-map/src/styles/tokens.css` and `ancient-nerds-map/src/constants/colors.ts` (`test/colors.test.ts` reads them, so a palette change on the site must run the mirror test). The existing `backend` filter gains `video/src/blocks/registry.json` and `video/src/theme/glyphs.ts`: plan C's Python tests and `blocks.py` read both files, so a renderer-only commit that changes a block schema, a `drawn` list or the glyph ranges must run plan C's contract tests too. A job `lint-video` with `needs: [changes]`, `if: needs.changes.outputs.video == 'true'`, Node 22 and `working-directory: video` runs `npm ci`, `npx tsc --noEmit` and `npx vitest run`; no `npx remotion browser ensure`. `deploy.needs` gains `lint-video` and deploy's `if` gains `contains(fromJSON('["success", "skipped"]'), needs.lint-video.result) &&`, like the other path-filtered jobs: a push without video changes skips the job and still deploys, a red `lint-video` blocks the deploy. CLAUDE.md's "All six gates" becomes seven. The job runs on Linux: nothing in `video/test` needs a GPU or a browser (`test/scripts.test.ts` spawns `node --import tsx` only; `test/colors.test.ts` reads `ancient-nerds-map/src` and `test/contract.test.ts` reads `tests/pipeline/studio/`, both in the checkout).
+1. **CI lint-video (`.github/workflows/ci.yml`, spec 7):** the `changes` job gains the output `video: ${{ steps.filter.outputs.video }}` and the filter `video` with `video/**`, `tests/pipeline/studio/golden_timeline.json` (Task 37's contract test reads it, so a plan-C compiler change that regenerates it must run the renderer's suite), `ancient-nerds-map/src/styles/tokens.css` and `ancient-nerds-map/src/constants/colors.ts` (`test/colors.test.ts` reads them, so a palette change on the site must run the mirror test), and `ancient-nerds-map/public/fonts/**` (`test/glyphs.test.ts` recomputes `DRAWABLE` from the woff2 files, so a font change on the site must run it). The existing `backend` filter gains `video/src/blocks/registry.json` and `video/src/theme/glyphs.ts`: plan C's Python tests and `blocks.py` read both files, so a renderer-only commit that changes a block schema, a `drawn` list or the glyph set `DRAWABLE` must run plan C's contract tests too. A job `lint-video` with `needs: [changes]`, `if: needs.changes.outputs.video == 'true'`, Node 22 and `working-directory: video` runs `npm ci`, `npx tsc --noEmit` and `npx vitest run`; no `npx remotion browser ensure`. `deploy.needs` gains `lint-video` and deploy's `if` gains `contains(fromJSON('["success", "skipped"]'), needs.lint-video.result) &&`, like the other path-filtered jobs: a push without video changes skips the job and still deploys, a red `lint-video` blocks the deploy. CLAUDE.md's "All six gates" becomes seven. The job runs on Linux: nothing in `video/test` needs a GPU or a browser (`test/scripts.test.ts` spawns `node --import tsx` only; `test/colors.test.ts` reads `ancient-nerds-map/src` and `test/contract.test.ts` reads `tests/pipeline/studio/`, both in the checkout).
 2. **.githooks/pre-push:** for a `main` push whose diff touches a path of the `video` filter above, block with "run npm ci in video/" unless `video/node_modules/.bin/tsc` exists (the hook is fail-closed), then `run_gate` `npx tsc --noEmit` and `npx vitest run` in `video/`. Stage the hook with `git add --chmod=+x .githooks/pre-push` (`core.filemode` is false on this checkout).
-3. **docs/procedures/STUDIO.md (and the Studio section of CLAUDE.md):** the renderer (`cd video && npm ci && npx remotion browser ensure`; `npm run studio` previews the demo timeline with `--public-dir ../ancient-nerds-map/public`); the scripts run as `node --import tsx scripts/<name>.ts` in `video/` and bundle into the transient `render/bundle/`; the GPU rule's proofs (`gpu:` lines, the manifest's `gpu` event); captures need an awake display (headed Chrome), which the captures hold awake but cannot wake, and Playwright in the venv (`pip install playwright`, then `playwright install chrome`); a Mapbox fly-in takes up to 20 minutes; captures are HEVC because `h264_nvenc` clips stall Remotion's decoder (Task 25); text the video draws must stay within latin and latin-ext (the brand fonts): only drawn strings are checked (owner decision 32: the block props listed in `registry.json`'s `drawn`, the credits and `place`/`pin` labels of captures, captions, chapter titles, thumbnail teasers), so an original quote shown inside a captured source page, the page's own non-latin title (recorded, never drawn: SourceViewer and the credit show only the ASCII hostname) and a non-latin URL path are fine; `episode check` refuses any other drawn character; a QuoteCard's quote is drawn and must be latin; a drawn character is checked in upper case too (`µ` draws as Greek `Μ` and is refused: write `micrometre`); a hook word may have at most 24 characters (`HOOK_LINE_MAX_CHARS`, one caption row); a ShareCard, the only place the link appears in the picture, may only be the last beat; platform takes never toggle the `Satellite` base map (owner correction 2026-09-26; satellite shows in the details page or a Mapbox take); a Mapbox take's `country` must be the site export's country of its place and a name the site knows; the smoke render (Task 22) and real captures (Task 36) as the local checks.
+3. **docs/procedures/STUDIO.md (and the Studio section of CLAUDE.md):** the renderer (`cd video && npm ci && npx remotion browser ensure`; `npm run studio` previews the demo timeline with `--public-dir ../ancient-nerds-map/public`); the scripts run as `node --import tsx scripts/<name>.ts` in `video/` and bundle into the transient `render/bundle/`; the GPU rule's proofs (`gpu:` lines, the manifest's `gpu` event); captures need an awake display (headed Chrome), which the captures hold awake but cannot wake, and Playwright in the venv (`pip install playwright`, then `playwright install chrome`); a Mapbox fly-in takes up to 20 minutes; captures are HEVC because `h264_nvenc` clips stall Remotion's decoder (Task 25); text the video draws must stay within the code points the brand font files map (`DRAWABLE` of `video/src/theme/glyphs.ts`: latin and most of latin-ext, but no `Ḫ Ḥ Ṣ Ṭ Ṛ Ṇ Ḍ ʾ ʿ`, no U+2010-2012 hyphens, no `‰`; owner question Q14): only drawn strings are checked (owner decision 32: the block props listed in `registry.json`'s `drawn`, the credits and `place`/`pin` labels of captures, captions, chapter titles, thumbnail teasers), so an original quote shown inside a captured source page, the page's own non-latin title (recorded, never drawn: SourceViewer and the credit show only the ASCII hostname) and a non-latin URL path are fine; `episode check` refuses any other drawn character; a QuoteCard's quote is drawn and must be latin; a drawn character is checked in upper case too (`ƒ` draws as `Ƒ` and is refused; `µ` is refused as written: write `micrometre`); a hook word may have at most 24 characters (`HOOK_LINE_MAX_CHARS`, one caption row); a ShareCard, the only place the link appears in the picture, may only be the last beat; platform takes never toggle the `Satellite` base map (owner correction 2026-09-26; satellite shows in the details page or a Mapbox take); a Mapbox take's `country` must be the site export's country of its place and a name the site knows; the smoke render (Task 22) and real captures (Task 36) as the local checks.
 4. **docs/video-pipeline.md:** it still describes the weekly Remotion composition this plan deletes (`WeeklyVideo`); replace that section with a pointer to the studio renderer in `video/` (`pipeline/video/timeline_builder.py` stays, described as having no renderer).
 
 The final-acceptance item runs after the push and covers spec 8.4(c) for this plan: the Baalbek claim-5 slice rendered end to end through the `studio-video` skill (plan C's `episode init` ... `package` with this plan's captures and renderer; no upload). This plan's Tasks 22, 36 and 37 are its local preconditions, not the acceptance.
@@ -15232,3 +15499,16 @@ Verified on a minimal scratch built by script from the plan text. It held the 95
 - **After:** `npm run registry` writes 18 blocks (2236 lines, unchanged), `tsc --noEmit` is clean, and vitest reports `Test Files 25 passed (25)`, `Tests 201 passed (201)`. Probes: 6.6e-7 prints `0.00000066 m`, 1e21 prints `1,000,000,000,000,000,000,000 m`, 12742 prints `12,742 m`, and 1e-101 throws `RangeError: maximumFractionDigits value is out of range.`
 - **On the RTX 3080** (every browser printed `gpu: ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`): the demo timeline with two credits on scene b01. For candidate 1 (frame 108, b01), `still.ts` draws `Photo: Smoke Test (CC BY-SA 4.0) · © Mapbox © Maxar` left aligned at the bottom left, clear of the teaser. For candidate 2 (frame 200, b02, no credits) it draws none. `lint.ts` prints `lint clean: 373 frames checked`.
 - **Not run in this pass:** Task 22 on the smoke fixture (its HEVC clips), Task 36, and the capture and frontend suites (none of their files changed). Scratch copies were deleted afterwards (junctions removed first).
+
+### Task 2 review fix (2026-09-27, glyph rule from the files' cmap)
+
+An adversarial review of Task 2's commit e48172e found the glyph rule unsound: it trusted the declared `unicode-range` of fonts.css, but Google's subset files do not map their whole range. Measured with fontTools 4.65 and confirmed in Remotion's own chrome-headless-shell (CDP `CSS.getPlatformFontsForNode`, the exact faces of `fonts.ts`): `Ḫattuša`, `Kṛṣṇa`, `Ḥatḥor`, `Baʿal`, `non‑breaking` (U+2011) and `5‰` passed the old rule and drew those characters in Arial, Courier New or Times New Roman. The old plan text ("a latin-ext letter in a heading (… Ḫattuša …) is drawn … never by a system font") was wrong.
+
+Changed (implemented in the follow-up commit to e48172e, on `feat/studio`):
+
+- `glyphs.ts` keeps `LATIN_RANGE` and `LATIN_EXT_RANGE` for `fonts.ts` and adds `DRAWABLE` (single-quoted, one line, like the two ranges): the code points the loaded files map, each face's cmap within its unicode-range, common to the heading, body/hud and serif stacks (JetBrains Mono ∩ Cormorant Garamond, 389 code points in 43 runs), plus tab, line feed and carriage return. `unsupportedChar` and `glyphReason` keep their signatures and message text and test against `DRAWABLE`.
+- New `video/scripts/fontCoverage.ts` (a WOFF2 cmap reader on Node's `zlib.brotliDecompressSync`, no new dependency; the drawable set from `FONTS`, `HEADING`, `BODY`, `SERIF`) and `video/scripts/glyphs.ts` (prints the constant). The reader matched fontTools' `getBestCmap()` exactly on all 40 woff2 files of `ancient-nerds-map/public/fonts`.
+- `glyphs.test.ts`: 6 tests instead of 3; the drift test recomputes `DRAWABLE` from the site's fonts; `Ḫattuša` is now a refusal case, with `Kṛṣṇa`, `Ḥatḥor`, `Baʿal`, U+2011 and `‰`; the upper-case example is `ƒ` → `Ƒ` (`µ`, `ǰ`, `ẖ` are refused as written now: no loaded file maps them).
+- Browser proof: every character `unsupportedChar` accepts drew only in Orbitron, JetBrains Mono or Cormorant Garamond in all four styles (heading, body, hud, serif), line feed and tab included (white-space normal and pre-wrap); every refusal case above drew a system font.
+- Texts: Task 2's intro and blocks, Task 17's intro and its two glyph tests (`Ḫattuša` refused; `Set ƒ/8?` for the upper-case message, count unchanged), "Where this plan and plan C meet", the File Structure rows, cross-stream request 1 (the `video` filter gains `ancient-nerds-map/public/fonts/**`) and request 3 (STUDIO.md wording), the suite totals (203 before Task 37, 204 with it).
+- Plan C (Task 17's `glyphs.py` mirrors `DRAWABLE` instead of the two ranges; its glyph tests; Task 27's contract regex), the build index's contract row and I4 filter, and owner question Q14 (a font for dot-below and breve-below transliterations) were revised in the same pass.
