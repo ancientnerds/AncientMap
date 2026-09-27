@@ -24,7 +24,9 @@ Two rules hold everywhere in here:
    document, modelled on ``source_records``. A reservation is not
    reconstructable later, which is why it is captured on the spot.
 
-Nothing in the system reads these tables back for control flow.
+The dossier export (pipeline/lyra/theo_dossier.py) reads them back to hand the
+Claude writer its source texts; archive completion reads which sources already
+have a full text. Nothing else reads them for control flow.
 """
 
 from __future__ import annotations
@@ -39,6 +41,8 @@ from typing import Any
 from urllib import robotparser
 
 from sqlalchemy import text
+
+from pipeline.lyra.dossier_manifest import moderated_source_ids
 
 logger = logging.getLogger(__name__)
 
@@ -354,30 +358,44 @@ def html_reserves_tdm(html: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def save_artifact(request_id: str | None, kind: str, payload: Any, ref: str = "") -> None:
-    """Store one intermediate reasoning artifact.
+_DELETE_ARTIFACT_SQL = text("""
+    DELETE FROM research_artifacts
+    WHERE request_id = :request_id AND kind = :kind AND ref = :ref
+""")
+_INSERT_ARTIFACT_SQL = text("""
+    INSERT INTO research_artifacts (request_id, kind, ref, payload)
+    VALUES (:request_id, :kind, :ref, CAST(:payload AS jsonb))
+    RETURNING id
+""")
+
+
+def save_artifact(
+    request_id: str | None, kind: str, payload: Any, ref: str = "", *, replace: bool = False
+) -> int:
+    """Store one intermediate reasoning artifact; returns its research_artifacts.id.
 
     ``request_id`` is None for passes that belong to no research run (curator,
     miner). ``ref`` scopes the kind — an angle id, or the pass date.
+    ``replace=True`` keeps exactly one current row per (request_id, kind, ref):
+    the old rows are deleted and the new one inserted in the same transaction.
+    It needs a request_id; a standalone pass has no run identity to replace in.
     """
+    if replace and not request_id:
+        raise ValueError(f"save_artifact(replace=True) needs a request_id (kind={kind!r})")
+    key = {"request_id": request_id or None, "kind": kind, "ref": _strip_nul(ref)[:200]}
     with _session_factory() as session:
-        session.execute(
-            text("""
-                INSERT INTO research_artifacts (request_id, kind, ref, payload)
-                VALUES (:request_id, :kind, :ref, CAST(:payload AS jsonb))
-            """),
-            {
-                "request_id": request_id or None,
-                "kind": kind,
-                "ref": _strip_nul(ref)[:200],
-                "payload": json.dumps(_strip_nul(payload), default=_json_default),
-            },
-        )
+        if replace:
+            session.execute(_DELETE_ARTIFACT_SQL, key)
+        artifact_id = session.execute(
+            _INSERT_ARTIFACT_SQL,
+            {**key, "payload": json.dumps(_strip_nul(payload), default=_json_default)},
+        ).scalar_one()
         session.commit()
+    return int(artifact_id)
 
 
-def _registry_payload(registry: Any) -> dict:
-    """Registry structure without the snippet bodies.
+def registry_payload(registry: Any) -> dict:
+    """Registry structure without the snippet bodies (the dossier's citation_registry kind).
 
     The snippets are the *capped* texts the LLM actually saw. Storing them
     here as well would duplicate megabytes per run, so the bodies live in
@@ -397,8 +415,86 @@ def _registry_payload(registry: Any) -> dict:
     }
 
 
+def classify_archive_row(row: dict | None) -> str:
+    """full_text | tdm_reserved | abstract_only | missing, for one best_archive_rows entry."""
+    if row is None:
+        return "missing"
+    if row["tdm_opt_out"]:
+        return "tdm_reserved"
+    if not row["text_chars"]:
+        return "missing"
+    return "abstract_only" if row["content_type"] == SNIPPET_CONTENT_TYPE else "full_text"
+
+
+# The best archived row per source: a fetched full text beats a TDM reservation,
+# which beats an adapter abstract; the newest row wins inside each class.
+_BEST_ROWS_ORDER = """
+    ORDER BY source_id,
+             CASE WHEN NOT tdm_opt_out AND content_type <> :snippet AND text_chars > 0 THEN 0
+                  WHEN tdm_opt_out THEN 1
+                  ELSE 2 END,
+             fetched_at DESC
+"""
+_BEST_ROWS_TEXT_SQL = text(
+    """
+    SELECT DISTINCT ON (source_id)
+           source_id, url, content_type, text_chars, fetched_at, tdm_opt_out, full_text
+    FROM theo_source_archive
+    WHERE source_id = ANY(:ids)
+    """
+    + _BEST_ROWS_ORDER
+)
+_BEST_ROWS_META_SQL = text(
+    """
+    SELECT DISTINCT ON (source_id)
+           source_id, url, content_type, text_chars, fetched_at, tdm_opt_out,
+           NULL::text AS full_text
+    FROM theo_source_archive
+    WHERE source_id = ANY(:ids)
+    """
+    + _BEST_ROWS_ORDER
+)
+
+
+def best_archive_rows_in(
+    session: Any, source_ids: list[str], *, with_text: bool
+) -> dict[str, dict]:
+    """The best archived row for each source id, in the caller's session.
+
+    Keys: source_id, url, content_type, text_chars, fetched_at, tdm_opt_out and
+    full_text (None unless with_text). Sources with no row are absent.
+    """
+    ids = list(dict.fromkeys(source_ids))
+    if not ids:
+        return {}
+    sql = _BEST_ROWS_TEXT_SQL if with_text else _BEST_ROWS_META_SQL
+    rows = session.execute(sql, {"ids": ids, "snippet": SNIPPET_CONTENT_TYPE}).fetchall()
+    return {
+        row.source_id: {
+            "source_id": row.source_id,
+            "url": row.url,
+            "content_type": row.content_type,
+            "text_chars": row.text_chars,
+            "fetched_at": row.fetched_at,
+            "tdm_opt_out": row.tdm_opt_out,
+            "full_text": row.full_text,
+        }
+        for row in rows
+    }
+
+
+def best_archive_rows(source_ids: list[str], *, with_text: bool) -> dict[str, dict]:
+    """best_archive_rows_in with its own session (for asyncio.to_thread callers)."""
+    with _session_factory() as session:
+        return best_archive_rows_in(session, source_ids, with_text=with_text)
+
+
 def record_run_links(request_id: str, links: list[dict]) -> int:
-    """Store which sources a run saw, under which query, and which it cited."""
+    """Store which sources a run saw, under which query, and which it cited.
+
+    A link that is already cited stays cited: archive completion records the
+    cited links before the run close-out writes every link.
+    """
     if not links:
         return 0
     with _session_factory() as session:
@@ -410,7 +506,7 @@ def record_run_links(request_id: str, links: list[dict]) -> int:
                 ON CONFLICT (request_id, source_id) DO UPDATE
                     SET angle_id = EXCLUDED.angle_id,
                         search_query = EXCLUDED.search_query,
-                        cited = EXCLUDED.cited
+                        cited = theo_source_archive_runs.cited OR EXCLUDED.cited
             """),
             [{"request_id": request_id, **_strip_nul(link)} for link in links],
         )
@@ -419,11 +515,12 @@ def record_run_links(request_id: str, links: list[dict]) -> int:
 
 
 def persist_run_corpus(state: Any, request_id: str) -> dict:
-    """Close out a run: archive un-fetched source texts, link them, store the registry.
+    """Close out a run: archive un-fetched source texts and link every source to the run.
 
-    Runs at the very end of a run — successful or failed — which is the only
-    point where the citation state is final (reference pruning happens during
-    presentation) and every source the run touched is known.
+    Runs at the very end of a run, successful or failed, when every source the
+    run touched is known. 'cited' means cited by a moderated claim (research-only
+    runs assign no reference numbers). The citation registry is written by the
+    DossierHandler (handlers/dossier.py), not here.
     """
     registry = getattr(state, "registry", None)
     if registry is None or not registry.sources:
@@ -457,7 +554,7 @@ def persist_run_corpus(state: Any, request_id: str) -> dict:
     # their documents are archived, but they contribute no run linkage.
     linked = 0
     if request_id:
-        cited = set(registry.reference_numbers)
+        cited = set(moderated_source_ids(state.moderated_result))
         linked = record_run_links(
             request_id,
             [
@@ -470,8 +567,6 @@ def persist_run_corpus(state: Any, request_id: str) -> dict:
                 for sid in registry.sources
             ],
         )
-
-    save_artifact(request_id, "citation_registry", _registry_payload(registry))
     return {"documents": written, "links": linked}
 
 

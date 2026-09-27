@@ -2,8 +2,8 @@
 
 Covers the parts that decide what a future training export may legally and
 usefully contain: which licence a document carries, whether the host reserved
-its text against text-and-data-mining, and whether the run close-out records
-the citation state AFTER the presentation stage has pruned references.
+its text against text-and-data-mining, and whether the run close-out links
+every source and marks the ones a moderated claim cites.
 """
 
 from types import SimpleNamespace
@@ -134,7 +134,7 @@ def test_registry_payload_drops_snippet_bodies():
     registry.add_claim("A claim", [sid])
     registry.assign_reference_number(sid)
 
-    payload = tc._registry_payload(registry)
+    payload = tc.registry_payload(registry)
 
     source = payload["sources"][0]
     assert "snippet" not in source
@@ -177,12 +177,12 @@ def recorder(monkeypatch):
     return rec
 
 
-def _state_with(registry, angle_sources):
+def _state_with(registry, angle_sources, moderated=None):
     angle = SimpleNamespace(id="a1", source_ids=list(angle_sources))
-    return SimpleNamespace(registry=registry, angles=[angle])
+    return SimpleNamespace(registry=registry, angles=[angle], moderated_result=moderated or {})
 
 
-def test_run_close_out_records_query_and_citation_state(recorder):
+def test_run_close_out_marks_sources_of_moderated_claims_as_cited(recorder):
     registry = CitationRegistry()
     cited = registry.register_source(
         url="https://x.example/cited", title="C", snippet="abstract", search_query="ur ziggurat"
@@ -190,10 +190,11 @@ def test_run_close_out_records_query_and_citation_state(recorder):
     seen = registry.register_source(
         url="https://x.example/seen", title="S", snippet="abstract", search_query="ur pottery"
     )
-    # Only the first source survived into the finished paper.
-    registry.assign_reference_number(cited)
+    # Research-only runs assign no reference numbers: 'cited' means cited by a
+    # moderated claim.
+    moderated = {"final_claims": [{"claim": "The ziggurat is Ur-III.", "source_ids": [cited]}]}
 
-    stats = tc.persist_run_corpus(_state_with(registry, [cited, seen]), "req-1")
+    stats = tc.persist_run_corpus(_state_with(registry, [cited, seen], moderated), "req-1")
 
     assert stats == {"documents": 2, "links": 2}
     by_id = {link["source_id"]: link for link in recorder.links}
@@ -201,7 +202,8 @@ def test_run_close_out_records_query_and_citation_state(recorder):
     assert by_id[cited]["search_query"] == "ur ziggurat"
     assert by_id[seen]["cited"] is False
     assert by_id[seen]["angle_id"] == "a1"
-    assert [kind for kind, _ in recorder.artifacts] == ["citation_registry"]
+    # The registry is the DossierHandler's artifact now (handlers/dossier.py).
+    assert recorder.artifacts == []
 
 
 def test_already_archived_sources_are_not_re_stored(recorder, monkeypatch):
