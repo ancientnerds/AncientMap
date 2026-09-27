@@ -12989,3 +12989,15 @@ The held sites (final ones) go to lane WC; the 50 re-queued ones return through 
   lane WB, every site's kept text now gets an independent verifier before build (`wip/wc2`, being
   built): WRONG/UNSUPPORTED sentences dropped, incoherence repaired by dropping the named sentence or
   the site cleared; then a new pilot with a fresh judge.
+
+## 2026-09-27 - Lane WC pilot 3 PASS (with the per-site verification) and written
+
+Pilot `pilot-2026-09-27c` (20 sites, 78 sentences, seed 20260929): check round KEEP 43 /
+KEEP_TRIMMED 20 / DROP 15; verification round 1 over the 63 kept sentences: 58 SUPPORTED, 3
+UNSUPPORTED, 2 WRONG (dropped), 0 incoherent; verification round 2 over the 4 changed texts: 9
+SUPPORTED, 1 WRONG (that site cleared). Result: 55 sentences kept (36 whole, 19 trimmed), 19 sites
+keep a verified text, 1 cleared. The fresh judge (no checker or verifier of the run): **JUDGE_EXIT=0,
+passed** (RESULT.json `dc0d1f65...`; 3 wrong drops reported, not gating). Written in its own step:
+write group WC over `WC4.jsonl` `799c408a...` (batch p4wc-4003, 40 rows): dry, rehearsal, apply,
+`verify_writes4 --lane p4wc` 0 deviations, accepted. The mass run follows in chunks of 500
+(`mass-2026-09-27-NN`), each through check, re-ask, verification and build before its writes.
