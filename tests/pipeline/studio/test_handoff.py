@@ -51,6 +51,29 @@ def test_export_writes_tasks_pending_and_prompts(tmp_path):
         assert b"\r" not in (tmp_path / name).read_bytes()
 
 
+#: Line separators that str.splitlines() breaks on but json.dumps(ensure_ascii=False) and a
+#: node workflow's JSON.stringify leave raw inside a string (U+0085 is a mis-decoded cp1252
+#: ellipsis in scraped text).
+RAW_SEPARATORS = "a\N{LINE SEPARATOR}b\N{PARAGRAPH SEPARATOR}c\x85d"
+
+
+def test_raw_line_separators_inside_strings_survive_the_round_trip(tmp_path):
+    task = handoff.Task(
+        "image", f"Check the image.\n{RAW_SEPARATORS}", {"description": RAW_SEPARATORS}
+    )
+    handoff.export_tasks(tmp_path, [task])
+    for name in ("tasks.jsonl", "pending.jsonl"):
+        assert "\N{LINE SEPARATOR}".encode() in (tmp_path / name).read_bytes()  # raw, unescaped
+        (row,) = handoff.read_jsonl(tmp_path / name)
+        assert row["description"] == RAW_SEPARATORS
+    answer = _answer(row, explanation=f"caption says {RAW_SEPARATORS}")
+    (tmp_path / "verdicts.jsonl").write_bytes(
+        (json.dumps(answer, ensure_ascii=False) + "\r\n").encode("utf-8")
+    )
+    accepted = handoff.import_answers(tmp_path, SPEC)
+    assert accepted[row["task_id"]]["explanation"] == f"caption says {RAW_SEPARATORS}"
+
+
 def test_duplicate_prompts_are_refused(tmp_path):
     same = handoff.Task("paragraph", "same", {})
     with pytest.raises(handoff.HandoffError, match="share a prompt"):

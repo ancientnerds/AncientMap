@@ -77,8 +77,14 @@ class AnswerSpec:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """One JSON object per '\\n'-terminated line; blank lines are skipped.
+
+    Split on '\\n' only: str.splitlines() also breaks on U+2028, U+2029 and U+0085, which
+    json.dumps(ensure_ascii=False) and JSON.stringify leave raw inside strings. A CRLF line
+    end reaches the split as '\\n' (read_text reads with universal newlines).
+    """
     rows: list[dict[str, Any]] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").split("\n"), start=1):
         if not line.strip():
             continue
         try:
