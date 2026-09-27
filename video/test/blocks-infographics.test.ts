@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { type BarChartProps, barAxis, barFraction, basisLine as barBasis, checkBarChart, valueText } from '../src/blocks/BarChart'
-import { checkDiagram, fitDiagram } from '../src/blocks/Diagram'
+import { type BarChartProps, barAxis, barFraction, basisLine as barBasis, checkBarChart, settledAt as barsSettled, valueText } from '../src/blocks/BarChart'
+import { type DiagramProps, checkDiagram, fitDiagram, settledAt as diagramSettled } from '../src/blocks/Diagram'
 import { basisLine as scaleBasis, checkScaleDrawing, dimensionLabel, fitScale } from '../src/blocks/ScaleDrawing'
 import { DOT, FILL, MIN_FRAMES, type ScaleZoomProps, checkScaleZoom, pullWindow, basisLine as zoomBasis, zoomScale } from '../src/blocks/ScaleZoom'
-import { checkTimeline, labelAnchor } from '../src/blocks/Timeline'
-import { checkUnitGrid, basisLine as gridBasis, gridLayout, groupStarts } from '../src/blocks/UnitGrid'
+import { type TimelineProps, checkTimeline, labelAnchor, settledAt as eventsSettled } from '../src/blocks/Timeline'
+import { type UnitGridProps, checkUnitGrid, basisLine as gridBasis, gridLayout, groupStarts, settledAt as groupsSettled } from '../src/blocks/UnitGrid'
+
+/** A scene long enough for every default reveal schedule below (10 s). */
+const LONG = { fps: 60, durationInFrames: 600 }
+const noCues = () => null
 
 describe('ScaleDrawing', () => {
   const objects = [
@@ -38,17 +42,39 @@ describe('UnitGrid', () => {
     expect(gridLayout(80, { x: 0, y: 0, w: 1100, h: 500 }, 20).columns).toBe(20)
   })
   it('holds at most 400 cells', () => {
-    expect(checkUnitGrid({ title: 't', basis: 'b', unitLabel: 'u', groups: [{ id: 'a', count: 401, label: 'a', tone: 'accent' }] })).toEqual(['401 cells; the grid holds at most 400'])
+    expect(checkUnitGrid({ title: 't', basis: 'b', unitLabel: 'u', groups: [{ id: 'a', count: 401, label: 'a', tone: 'accent' }] }, LONG)).toEqual(['401 cells; the grid holds at most 400'])
+  })
+  it('refuses a scene too short for its groups to fill', () => {
+    // 4 groups of 100 start at 12, 68, 124, 180 and the last has filled (its number rolled to 100) at 230
+    const p: UnitGridProps = { title: 't', basis: 'b', unitLabel: 'u', groups: ['a', 'b', 'c', 'd'].map((id) => ({ id, count: 100, label: id, tone: 'accent' as const })) }
+    expect(groupStarts(p.groups, noCues)).toEqual([12, 68, 124, 180])
+    expect(groupsSettled(p.groups, noCues)).toBe(230)
+    expect(checkUnitGrid(p, { fps: 60, durationInFrames: 231 })).toEqual([])
+    expect(checkUnitGrid(p, { fps: 60, durationInFrames: 180 })).toEqual(['a UnitGrid scene needs at least 231 frames (its groups fill one after the other until frame 230), got 180'])
+    // a small group settles when its legend has booted in (12 frames), not when its cell is lit
+    expect(groupsSettled([{ id: 'a', count: 1, label: 'a', tone: 'accent' }], noCues)).toBe(24)
+    // a late show cue moves the end: the check cannot see cues, the schedule function can
+    expect(groupsSettled(p.groups, (id) => (id === 'd' ? 300 : null))).toBe(350)
   })
 })
 
 describe('BarChart', () => {
   it('needs something to compare', () => {
-    expect(checkBarChart({ title: 't', unit: 't', basis: 'b', bars: [{ id: 'x', label: 'x', value: 0 }, { id: 'y', label: 'y', value: 0 }] })).toEqual(['every bar is 0: nothing to compare'])
+    expect(checkBarChart({ title: 't', unit: 't', basis: 'b', bars: [{ id: 'x', label: 'x', value: 0 }, { id: 'y', label: 'y', value: 0 }] }, LONG)).toEqual(['every bar is 0: nothing to compare'])
+  })
+  it('refuses a scene too short for its bars to grow and their values to roll', () => {
+    // 8 bars start at 12, 24, ..., 96; the last has grown (its value rolled to 1,250) at 126
+    const p: BarChartProps = { title: 't', unit: 't', basis: 'b', bars: Array.from({ length: 8 }, (_, i) => ({ id: `b${i}`, label: `b${i}`, value: 1250 })) }
+    expect(barsSettled(p.bars, noCues)).toBe(126)
+    expect(checkBarChart(p, { fps: 60, durationInFrames: 127 })).toEqual([])
+    expect(checkBarChart(p, { fps: 60, durationInFrames: 120 })).toEqual(['a BarChart scene needs at least 127 frames (its bars grow in one after the other until frame 126), got 120'])
+    // a range's label boots in once its bar has grown: 12 frames more
+    const ranged: BarChartProps = { ...p, bars: [...p.bars.slice(0, 7), { id: 'b7', label: 'b7', value: [1000, 1650] }] }
+    expect(barsSettled(ranged.bars, noCues)).toBe(138)
   })
   it('shows a range where sources differ and refuses an empty range', () => {
     const p: BarChartProps = { title: 't', unit: 't', basis: 'b', bars: [{ id: 'x', label: 'x', value: [1000, 1650] }, { id: 'y', label: 'y', value: 500 }] }
-    expect(checkBarChart(p)).toEqual([])
+    expect(checkBarChart(p, LONG)).toEqual([])
     const axis = barAxis(p)
     expect(axis).toEqual({ lo: 0, hi: 1650 })
     expect(barFraction(axis, 1000)).toBeCloseTo(1000 / 1650)
@@ -57,7 +83,7 @@ describe('BarChart', () => {
     // a bar bound to a case-file quantity shows exactly its value: 1.75 stays 1.75, not 1.8
     expect(valueText(1.75, 'm')).toBe('1.75 m')
     const empty: BarChartProps = { ...p, bars: [{ id: 'x', label: 'x', value: [1650, 1000] }, p.bars[1]] }
-    expect(checkBarChart(empty)).toEqual(['bar x: range [1650, 1000] needs low < high'])
+    expect(checkBarChart(empty, LONG)).toEqual(['bar x: range [1650, 1000] needs low < high'])
   })
   it('prints small values exactly, exponent form included, never rounded to another number', () => {
     expect(valueText(1.5e-7, 'm')).toBe('0.00000015 m')
@@ -118,9 +144,18 @@ describe('Timeline', () => {
     expect(labelAnchor(0.95).textAlign).toBe('right')
   })
   it('refuses an empty range, events outside it and year 0', () => {
-    expect(checkTimeline({ title: 't', from: 100, to: 100, events: [] })).toEqual(['timeline range 100..100 is empty'])
-    expect(checkTimeline({ title: 't', from: -100, to: 100, events: [{ id: 'e', year: 0, label: 'x', tone: 'muted' }] })).toEqual(['event e: year 0 does not exist'])
-    expect(checkTimeline({ title: 't', from: -100, to: 100, events: [{ id: 'e', year: 300, label: 'x', tone: 'muted' }] })).toEqual(['event e (300) lies outside -100..100'])
+    expect(checkTimeline({ title: 't', from: 100, to: 100, events: [] }, LONG)).toEqual(['timeline range 100..100 is empty'])
+    expect(checkTimeline({ title: 't', from: -100, to: 100, events: [{ id: 'e', year: 0, label: 'x', tone: 'muted' }] }, LONG)).toEqual(['event e: year 0 does not exist'])
+    expect(checkTimeline({ title: 't', from: -100, to: 100, events: [{ id: 'e', year: 300, label: 'x', tone: 'muted' }] }, LONG)).toEqual(['event e (300) lies outside -100..100'])
+  })
+  it('refuses a scene too short for its events to enter', () => {
+    // 10 events (the schema maximum) enter at 30, 44, ..., 156 in year order; the last label is in at 172
+    const p: TimelineProps = { title: 't', from: -1000, to: 1000, events: Array.from({ length: 10 }, (_, i) => ({ id: `e${i}`, year: 950 - i * 100, label: `e${i}`, tone: 'muted' as const })) }
+    expect(eventsSettled(p.events, noCues)).toBe(172)
+    expect(checkTimeline(p, { fps: 60, durationInFrames: 173 })).toEqual([])
+    expect(checkTimeline(p, { fps: 60, durationInFrames: 150 })).toEqual(['a Timeline scene needs at least 173 frames (its events enter one after the other until frame 172), got 150'])
+    // the stagger follows the year order: a cue on the earliest event (e9) moves only its entry
+    expect(eventsSettled(p.events, (id) => (id === 'e9' ? 200 : null))).toBe(216)
   })
 })
 
@@ -129,6 +164,16 @@ describe('Diagram', () => {
     expect(fitDiagram(100, 50, { x: 0, y: 0, w: 1000, h: 1000 })).toEqual({ s: 10, ox: 0, oy: 250 })
   })
   it('needs the geometry of each element type', () => {
-    expect(checkDiagram({ title: 't', width: 10, height: 10, elements: [{ id: 'd2', type: 'circle', tone: 'accent', cx: 1, cy: 1 }] })).toEqual(['element d2 (circle) needs "r"'])
+    expect(checkDiagram({ title: 't', width: 10, height: 10, elements: [{ id: 'd2', type: 'circle', tone: 'accent', cx: 1, cy: 1 }] }, LONG)).toEqual(['element d2 (circle) needs "r"'])
+  })
+  it('refuses a scene too short for its elements to trace in', () => {
+    // 16 elements (the schema maximum) appear at 10, 18, ..., 130; the last has traced in at 150
+    const p: DiagramProps = { title: 't', width: 100, height: 100, elements: Array.from({ length: 16 }, (_, i) => ({ id: `d${i}`, type: 'circle' as const, tone: 'accent' as const, cx: 50, cy: 50, r: i + 1 })) }
+    expect(diagramSettled(p.elements, noCues)).toBe(150)
+    expect(checkDiagram(p, { fps: 60, durationInFrames: 151 })).toEqual([])
+    expect(checkDiagram(p, { fps: 60, durationInFrames: 140 })).toEqual(['a Diagram scene needs at least 151 frames (its elements trace in one after the other until frame 150), got 140'])
+    // a label element has no trace: its text is in 8 + 10 frames after it appears
+    const labelled: DiagramProps = { ...p, elements: [...p.elements.slice(0, 15), { id: 'd15', type: 'label', tone: 'muted', x: 5, y: 5, text: 'x' }] }
+    expect(diagramSettled(labelled.elements, noCues)).toBe(148)
   })
 })

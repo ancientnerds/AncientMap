@@ -3,7 +3,9 @@
  * height user space, scaled uniformly into the stage: circle, line, arrow,
  * curve (polyline through points), orbit (a body on an ellipse, one revolution
  * per `period` seconds) and label. Elements trace in on their show <id> cues,
- * staggered otherwise. Schematic: the basis line says what it simplifies.
+ * staggered otherwise. Schematic: the basis line says what it simplifies. A
+ * scene too short for the staggered elements is refused (checkDiagram): the
+ * last element would never be drawn.
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion'
@@ -14,7 +16,7 @@ import { LayoutBox } from '../layout/LayoutBox'
 import { bootIn, progress } from '../motion'
 import { type Tone, colors, toneColor } from '../theme/colors'
 import { body, heading, hud } from '../theme/type'
-import type { BlockProps } from './types'
+import type { BlockProps, CheckContext } from './types'
 
 export type DiagramElement = {
   id: string
@@ -40,6 +42,13 @@ export type DiagramElement = {
 export type DiagramProps = { title: string; width: number; height: number; basis?: string; elements: DiagramElement[] }
 
 const BASIS_H = 56
+/** Frame the first element appears without a show cue, and the stagger of the next ones. */
+const FIRST_ELEMENT = 10
+const ELEMENT_STAGGER = 8
+/** A shape traces in over TRACE_FRAMES; its label starts LABEL_DELAY frames after it appears and takes LABEL_FADE. */
+const TRACE_FRAMES = 20
+const LABEL_DELAY = 8
+const LABEL_FADE = 10
 
 const REQUIRED: Record<DiagramElement['type'], (keyof DiagramElement)[]> = {
   circle: ['cx', 'cy', 'r'],
@@ -50,12 +59,33 @@ const REQUIRED: Record<DiagramElement['type'], (keyof DiagramElement)[]> = {
   label: ['x', 'y', 'text'],
 }
 
-export function checkDiagram(p: DiagramProps): string[] {
+export function checkDiagram(p: DiagramProps, ctx: CheckContext): string[] {
   const errors: string[] = []
   for (const e of p.elements) {
     for (const key of REQUIRED[e.type]) if (e[key] === undefined) errors.push(`element ${e.id} (${e.type}) needs "${key}"`)
   }
+  const settled = settledAt(p.elements, () => null)
+  if (ctx.durationInFrames <= settled) {
+    errors.push(`a Diagram scene needs at least ${settled + 1} frames (its elements trace in one after the other until frame ${settled}), got ${ctx.durationInFrames}`)
+  }
   return errors
+}
+
+/** First frame of each element: its show cue, else staggered from FIRST_ELEMENT. */
+function elementStarts(elements: readonly DiagramElement[], cueFrame: (id: string) => number | null): number[] {
+  return elements.map((e, i) => cueFrame(e.id) ?? FIRST_ELEMENT + i * ELEMENT_STAGGER)
+}
+
+/**
+ * The first frame on which every shape has traced in and every label is in (a
+ * label element has no trace, only its text), for elements appearing as
+ * elementStarts places them. An orbit's body keeps moving; its ellipse settles.
+ * checkDiagram passes no cues: it sees the default schedule only.
+ */
+export function settledAt(elements: readonly DiagramElement[], cueFrame: (id: string) => number | null): number {
+  const starts = elementStarts(elements, cueFrame)
+  const label = LABEL_DELAY + LABEL_FADE
+  return elements.reduce((done, e, i) => Math.max(done, starts[i] + (e.type === 'label' ? label : Math.max(TRACE_FRAMES, label))), 0)
 }
 
 /** Uniform scale and offset placing the user space in the drawing area, centred. */
@@ -72,10 +102,11 @@ export const Diagram: React.FC<BlockProps<DiagramProps>> = ({ props: p, cues, sc
   const X = (v: number) => ox + v * s
   const Y = (v: number) => oy + v * s
   const labels: React.ReactNode[] = []
+  const starts = elementStarts(p.elements, (id) => firstCue(cues, 'show', id))
   const shapes = p.elements.map((e, i) => {
-    const appear = firstCue(cues, 'show', e.id) ?? 10 + i * 8
+    const appear = starts[i]
     if (frame < appear) return null
-    const k = progress(frame, appear, 20)
+    const k = progress(frame, appear, TRACE_FRAMES)
     const color = toneColor[e.tone]
     const common = { stroke: color, strokeWidth: 3, fill: 'none', strokeDasharray: e.dashed ? '10 8' : undefined }
     let anchor: { x: number; y: number } | null = null
@@ -132,7 +163,7 @@ export const Diagram: React.FC<BlockProps<DiagramProps>> = ({ props: p, cues, sc
     const text = e.type === 'label' ? e.text : e.label
     if (text && anchor) {
       labels.push(
-        <LayoutBox key={e.id} id={`${sceneId}:el:${e.id}`} kind="text" style={{ position: 'absolute', left: anchor.x, top: anchor.y, whiteSpace: 'nowrap', ...hud(26, color), ...bootIn(frame, appear + 8, 10) }}>
+        <LayoutBox key={e.id} id={`${sceneId}:el:${e.id}`} kind="text" style={{ position: 'absolute', left: anchor.x, top: anchor.y, whiteSpace: 'nowrap', ...hud(26, color), ...bootIn(frame, appear + LABEL_DELAY, LABEL_FADE) }}>
           {text}
         </LayoutBox>,
       )

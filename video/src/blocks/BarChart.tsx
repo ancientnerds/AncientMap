@@ -6,7 +6,8 @@
  * low and outlined on to high, labelled "low–high unit" (spec 4.2: a quantity
  * with a range shows the range). Bars grow in on their show <id> cues,
  * staggered otherwise; a single value rolls with its bar; the basis is always
- * on screen.
+ * on screen. A scene too short for the staggered bars is refused (checkBarChart):
+ * the last bar would never appear, or its value would stop short of the true one.
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame } from 'remotion'
@@ -17,7 +18,7 @@ import { LayoutBox } from '../layout/LayoutBox'
 import { bootIn, progress } from '../motion'
 import { type Tone, colors, toneColor } from '../theme/colors'
 import { body, heading, hud } from '../theme/type'
-import type { BlockProps } from './types'
+import type { BlockProps, CheckContext } from './types'
 
 export type BarValue = number | [number, number]
 export type Bar = { id: string; label: string; value: BarValue; tone?: Tone }
@@ -29,6 +30,11 @@ const LABEL_W = 580
 const VALUE_W = 360
 const BASIS_H = 56
 const GROW_FRAMES = 30
+/** Frame the first bar starts without a show cue, and the stagger of the next ones. */
+const FIRST_BAR = 12
+const BAR_STAGGER = 12
+/** Frames a bar's label, and a range's value once its bar has grown, take to boot in. */
+const TEXT_FADE = 12
 
 const lowOf = (v: BarValue): number => (Array.isArray(v) ? v[0] : v)
 const highOf = (v: BarValue): number => (Array.isArray(v) ? v[1] : v)
@@ -42,13 +48,33 @@ const decimalsOf = (x: number): number => {
   return Math.max(0, (mantissa.split('.')[1] ?? '').length - Number(exp))
 }
 
-export function checkBarChart(p: BarChartProps): string[] {
+export function checkBarChart(p: BarChartProps, ctx: CheckContext): string[] {
   const errors: string[] = []
   for (const b of p.bars) {
     if (Array.isArray(b.value) && !(b.value[0] < b.value[1])) errors.push(`bar ${b.id}: range [${b.value[0]}, ${b.value[1]}] needs low < high`)
   }
   if (!p.bars.some((b) => highOf(b.value) > 0)) errors.push('every bar is 0: nothing to compare')
+  const settled = settledAt(p.bars, () => null)
+  if (ctx.durationInFrames <= settled) {
+    errors.push(`a BarChart scene needs at least ${settled + 1} frames (its bars grow in one after the other until frame ${settled}), got ${ctx.durationInFrames}`)
+  }
   return errors
+}
+
+/** First frame of each bar: its show cue, else staggered from FIRST_BAR. */
+function barStarts(bars: readonly Bar[], cueFrame: (id: string) => number | null): number[] {
+  return bars.map((b, i) => cueFrame(b.id) ?? FIRST_BAR + i * BAR_STAGGER)
+}
+
+/**
+ * The first frame on which every bar has grown, every single value has rolled to
+ * its value and every range's label (it boots in once its bar has grown) is in,
+ * for bars starting as barStarts places them. checkBarChart passes no cues: it
+ * sees the default schedule only.
+ */
+export function settledAt(bars: readonly Bar[], cueFrame: (id: string) => number | null): number {
+  const starts = barStarts(bars, cueFrame)
+  return bars.reduce((done, b, i) => Math.max(done, starts[i] + GROW_FRAMES + (Array.isArray(b.value) ? TEXT_FADE : 0)), 0)
 }
 
 /** The axis of the chart: 0 up to the largest (high) value. */
@@ -81,13 +107,14 @@ export const BarChart: React.FC<BlockProps<BarChartProps>> = ({ props: p, cues, 
   const top = areaTop + Math.floor((areaH - rowH * p.bars.length) / 2)
   const barX = stage.x + LABEL_W
   const barMax = stage.w - LABEL_W - VALUE_W - 40
+  const starts = barStarts(p.bars, (id) => firstCue(cues, 'show', id))
   return (
     <AbsoluteFill style={{ backgroundColor: colors.bg }}>
       <LayoutBox id={`${sceneId}:title`} kind="text" style={{ position: 'absolute', left: stage.x, top: stage.y, width: stage.w, height: 60, overflow: 'hidden', ...heading(48), ...bootIn(frame, 0) }}>
         {p.title}
       </LayoutBox>
       {p.bars.map((b, i) => {
-        const appear = firstCue(cues, 'show', b.id) ?? 12 + i * 12
+        const appear = starts[i]
         if (frame < appear) return null
         const grow = progress(frame, appear, GROW_FRAMES)
         const y = top + i * rowH
@@ -99,7 +126,7 @@ export const BarChart: React.FC<BlockProps<BarChartProps>> = ({ props: p, cues, 
         const rolls = !range
         return (
           <React.Fragment key={b.id}>
-            <LayoutBox id={`${sceneId}:bar:${b.id}`} kind="text" style={{ position: 'absolute', left: stage.x, top: y, width: LABEL_W - 20, height: rowH - 16, overflow: 'hidden', textAlign: 'right', ...body(28, colors.text), lineHeight: `${rowH - 16}px`, whiteSpace: 'nowrap', ...bootIn(frame, appear, 12) }}>
+            <LayoutBox id={`${sceneId}:bar:${b.id}`} kind="text" style={{ position: 'absolute', left: stage.x, top: y, width: LABEL_W - 20, height: rowH - 16, overflow: 'hidden', textAlign: 'right', ...body(28, colors.text), lineHeight: `${rowH - 16}px`, whiteSpace: 'nowrap', ...bootIn(frame, appear, TEXT_FADE) }}>
               {b.label}
             </LayoutBox>
             <div style={{ position: 'absolute', left: barX, top: y + 6, width: solid, height: rowH - 28, background: color }} />
@@ -107,7 +134,7 @@ export const BarChart: React.FC<BlockProps<BarChartProps>> = ({ props: p, cues, 
             <LayoutBox
               id={`${sceneId}:value:${b.id}`}
               kind="text"
-              style={{ position: 'absolute', left: barX + end + 16, top: y, width: VALUE_W, height: rowH - 16, overflow: 'hidden', whiteSpace: 'nowrap', ...hud(range ? 30 : 34, colors.white), lineHeight: `${rowH - 16}px`, ...(rolls ? {} : bootIn(frame, appear + GROW_FRAMES, 12)) }}
+              style={{ position: 'absolute', left: barX + end + 16, top: y, width: VALUE_W, height: rowH - 16, overflow: 'hidden', whiteSpace: 'nowrap', ...hud(range ? 30 : 34, colors.white), lineHeight: `${rowH - 16}px`, ...(rolls ? {} : bootIn(frame, appear + GROW_FRAMES, TEXT_FADE)) }}
             >
               {rolls ? `${formatNumber(lowOf(b.value) * grow, decimalsOf(lowOf(b.value)))} ${p.unit}` : valueText(b.value, p.unit)}
             </LayoutBox>

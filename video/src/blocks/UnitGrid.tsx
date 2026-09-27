@@ -3,7 +3,9 @@
  * cells, as large as the stage allows (ratios beyond 1:400 are a ScaleZoom,
  * linear too: owner decision 31). Groups light up one after the
  * other (a group starts on its show <id> cue, otherwise when the previous one
- * has filled) while their numbers roll; the basis is always on screen.
+ * has filled) while their numbers roll; the basis is always on screen. A scene
+ * too short for the groups to fill is refused (checkUnitGrid): the last group
+ * would never appear, or its number would stop short of its count.
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame } from 'remotion'
@@ -14,7 +16,7 @@ import { LayoutBox } from '../layout/LayoutBox'
 import { bootIn, digitRoll } from '../motion'
 import { type Tone, colors, toneColor } from '../theme/colors'
 import { body, heading, hud } from '../theme/type'
-import type { BlockProps } from './types'
+import type { BlockProps, CheckContext } from './types'
 
 export type UnitGroup = { id: string; count: number; label: string; tone: Tone }
 export type UnitGridProps = { title: string; basis: string; unitLabel: string; columns?: number; groups: UnitGroup[] }
@@ -22,12 +24,27 @@ export type UnitGridProps = { title: string; basis: string; unitLabel: string; c
 const MAX_CELLS = 400
 /** Cells lit per frame while a group fills. */
 const FILL_RATE = 2
+/** Frame the first group starts without a show cue. */
+const FIRST_GROUP = 12
+/** Frames between a group having filled and the next one starting without a show cue. */
+const GROUP_GAP = 6
+/** Frames a group's legend entry takes to boot in. */
+const LEGEND_FADE = 12
 const LEGEND_W = 480
 const BASIS_H = 56
 
-export function checkUnitGrid(p: UnitGridProps): string[] {
+/** Frames a group of `count` cells takes to fill; its number rolls as long. */
+const fillFrames = (count: number): number => Math.ceil(count / FILL_RATE)
+
+export function checkUnitGrid(p: UnitGridProps, ctx: CheckContext): string[] {
+  const errors: string[] = []
   const total = p.groups.reduce((n, g) => n + g.count, 0)
-  return total > MAX_CELLS ? [`${total} cells; the grid holds at most ${MAX_CELLS}`] : []
+  if (total > MAX_CELLS) errors.push(`${total} cells; the grid holds at most ${MAX_CELLS}`)
+  const settled = settledAt(p.groups, () => null)
+  if (ctx.durationInFrames <= settled) {
+    errors.push(`a UnitGrid scene needs at least ${settled + 1} frames (its groups fill one after the other until frame ${settled}), got ${ctx.durationInFrames}`)
+  }
+  return errors
 }
 
 /** The on-screen basis line (owner rule: comparisons state their basis). */
@@ -36,13 +53,23 @@ export function basisLine(p: UnitGridProps): string {
 }
 
 /** First frame of each group: its show cue, else when the previous group has filled. */
-export function groupStarts(groups: readonly UnitGroup[], cueFrame: (id: string) => number | null, first = 12): number[] {
+export function groupStarts(groups: readonly UnitGroup[], cueFrame: (id: string) => number | null, first = FIRST_GROUP): number[] {
   const starts: number[] = []
   groups.forEach((g, i) => {
-    const prevEnd = i === 0 ? first : starts[i - 1] + Math.ceil(groups[i - 1].count / FILL_RATE) + 6
+    const prevEnd = i === 0 ? first : starts[i - 1] + fillFrames(groups[i - 1].count) + GROUP_GAP
     starts.push(cueFrame(g.id) ?? prevEnd)
   })
   return starts
+}
+
+/**
+ * The first frame on which every group has filled, its number has rolled to its
+ * count and its legend entry has booted in, for groups starting as groupStarts
+ * places them. checkUnitGrid passes no cues: it sees the default schedule only.
+ */
+export function settledAt(groups: readonly UnitGroup[], cueFrame: (id: string) => number | null): number {
+  const starts = groupStarts(groups, cueFrame)
+  return groups.reduce((done, g, i) => Math.max(done, starts[i] + Math.max(fillFrames(g.count), LEGEND_FADE)), 0)
 }
 
 /** Grid geometry: columns (given, or the count that makes the cells largest) and the cell size. */
@@ -96,8 +123,8 @@ export const UnitGrid: React.FC<BlockProps<UnitGridProps>> = ({ props: p, cues, 
         {p.groups.map((g, gi) => {
           if (frame < starts[gi]) return null
           return (
-            <LayoutBox key={g.id} id={`${sceneId}:group:${g.id}`} kind="text" style={{ marginBottom: 32, ...bootIn(frame, starts[gi], 12) }}>
-              <div style={{ ...hud(72, toneColor[g.tone]), letterSpacing: '0.02em' }}>{digitRoll(0, g.count, frame, starts[gi], Math.ceil(g.count / FILL_RATE))}</div>
+            <LayoutBox key={g.id} id={`${sceneId}:group:${g.id}`} kind="text" style={{ marginBottom: 32, ...bootIn(frame, starts[gi], LEGEND_FADE) }}>
+              <div style={{ ...hud(72, toneColor[g.tone]), letterSpacing: '0.02em' }}>{digitRoll(0, g.count, frame, starts[gi], fillFrames(g.count))}</div>
               <div style={body(30, colors.text)}>{g.label}</div>
             </LayoutBox>
           )
