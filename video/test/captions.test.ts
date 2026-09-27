@@ -19,6 +19,26 @@ describe('captionLines', () => {
     const lines = captionLines([w('ARCHAEOLOGISTS', 0, 20), w('FOUND', 20, 30), w('SOMETHING', 30, 45), w('IMPOSSIBLE', 45, 60)])
     expect(texts(lines)).toEqual(['ARCHAEOLOGISTS FOUND', 'SOMETHING IMPOSSIBLE'])
   })
+  // The cases below isolate one break rule each: no punctuation, no pause and
+  // well under the 24-character budget unless the case is about that rule.
+  it('breaks after the fourth word even when the line has room and no pause or punctuation follows', () => {
+    const lines = captionLines([w('ONE', 0, 5), w('TWO', 5, 10), w('SIX', 10, 15), w('TEN', 15, 20), w('FIVE', 20, 25)])
+    expect(texts(lines)).toEqual(['ONE TWO SIX TEN', 'FIVE'])
+  })
+  it('breaks after a word that ends in punctuation', () => {
+    const lines = captionLines([w('YES,', 0, 5), w('NO', 5, 10), w('MAYBE?', 10, 15), w('NEVER', 15, 20)])
+    expect(texts(lines)).toEqual(['YES,', 'NO MAYBE?', 'NEVER'])
+  })
+  it('breaks at a pause longer than 12 frames and keeps a pause of exactly 12 frames on one line', () => {
+    expect(texts(captionLines([w('NOBODY', 0, 10), w('MOVED', 23, 30)]))).toEqual(['NOBODY', 'MOVED'])
+    expect(texts(captionLines([w('NOBODY', 0, 10), w('MOVED', 22, 30)]))).toEqual(['NOBODY MOVED'])
+  })
+  it('puts a single word longer than 24 characters on a line of its own', () => {
+    const long = 'ANTIDISESTABLISHMENTARIANISM'
+    expect(long.length).toBeGreaterThan(24)
+    const lines = captionLines([w('THE', 0, 5), w(long, 5, 20), w('AGAIN', 20, 30)])
+    expect(texts(lines)).toEqual(['THE', long, 'AGAIN'])
+  })
 })
 
 describe('lineAt', () => {
