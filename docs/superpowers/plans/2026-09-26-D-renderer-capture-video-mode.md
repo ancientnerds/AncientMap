@@ -180,7 +180,7 @@ Created (all owned by this plan):
 
 | File | Responsibility |
 |---|---|
-| `video/package.json`, `video/package-lock.json` | The renderer package: Remotion 4.0.529 and every other dependency pinned exactly; scripts `registry`, `typecheck`, `test`, `studio`, `lint:layout`, `render`, `still`. |
+| `video/package.json`, `video/package-lock.json` | The renderer package: Remotion 4.0.529 and every other dependency pinned exactly; scripts `registry`, `typecheck`, `test`, `test:gpu`, `studio`, `lint:layout`, `render`, `still`. |
 | `video/tsconfig.json`, `video/vitest.config.ts`, `video/remotion.config.ts` | Strict TypeScript over src, scripts and tests; vitest in node; settings for `npm run studio` only. |
 | `video/src/index.ts`, `video/src/Root.tsx` | Registers the Episode and Thumbnail compositions; calculateMetadata validates the timeline, measures audio and images and proves the GPU. |
 | `video/src/Episode.tsx`, `video/src/SceneView.tsx`, `video/src/Thumbnail.tsx` | One Sequence per scene, the overlays, narration clips and the ducked music; lint mode; a thumbnail candidate's frame with its teaser and its scene's credit line. |
@@ -188,16 +188,17 @@ Created (all owned by this plan):
 | `video/src/timeline.ts`, `video/src/schema.ts` | timeline.json parsing (D3, with the three thumbnail candidates); the JSON-schema subset validator of the registry. |
 | `video/src/state.ts`, `video/src/cues.ts`, `video/src/context.ts`, `video/src/media.ts` | Episode-wide claim and meter state; scene cue helpers; the episode context; audio length and image size measurement. |
 | `video/src/audio.ts`, `video/src/captions.ts`, `video/src/format.ts` | Narration spans and music ducking; hook caption lines, ticker and credit merging; distance, year, number and probability formatting. |
-| `video/src/theme/colors.ts`, `fonts.ts`, `glyphs.ts`, `type.ts` | NERV palette (mirror of the site tokens and the brand red, checked against the site files), brand fonts from the public dir (latin and latin-ext), the code points their files map (`DRAWABLE`, generated), text styles. |
+| `video/src/theme/colors.ts`, `fonts.ts`, `glyphs.ts`, `type.ts` | NERV palette (mirror of the site tokens and the brand red, checked against the site files), brand fonts from the public dir (latin and latin-ext; `brandFontsReady()` resolves once every face is in), the code points their files map (`DRAWABLE`, generated), text styles. |
 | `video/src/motion/index.ts` | Frame-driven NERV motion (crtOpen, bootIn, borderTrace, typeOn, digitRoll, stampSlam, ringPulse, sweep); no flicker. |
 | `video/src/layout/zones.ts`, `geometry.ts`, `transform.ts` | Screen zones (safe area, YouTube controls); the pure overlap checker; image-to-screen math for moving markers. |
-| `video/src/layout/LayoutBox.tsx`, `LayoutGuard.tsx` | Box registration in lint mode; the reporter that prints one JSON line per violation. |
+| `video/src/layout/LayoutBox.tsx`, `LayoutGuard.tsx` | Box registration in lint mode, measured only once the brand fonts are in (the lint-mode provider holds the frame with `delayRender` until then); the reporter that prints one JSON line per violation. |
 | `video/src/blocks/types.ts`, `icons.tsx`, `schemas.ts`, `registry.json`, `index.ts`, `clips.ts` | Block props types (C6), ClaimBoard icons, the registry source with each block's drawn prop paths and its generated JSON (C5), the block table, cue rules and the drawn-string glyph check, clip rules. |
 | `video/src/blocks/*.tsx` (27 files besides `icons.tsx`) | Panel, Stamp, LowerThird, CreditLine, ChapterTag, Ticker, HookCaptions, Footage, ImageLayer and the 18 scene blocks of D1. |
 | `video/src/fixtures/demo-timeline.json`, `demo.ts` | The graphics-only demo timeline (all 12 graphics blocks, a BarChart range, the three thumbnail candidates): default props for `npm run studio`, the test fixture and Task 22's demo render. |
 | `video/scripts/args.ts`, `cli.ts`, `registry.ts`, `lint.ts`, `render.ts`, `still.ts` | Script helpers (flags, chunks, violation lines, GPU rules, the bundle dir), shared plumbing (bundling next to the public dir and removing it), the registry writer and the three C9 scripts. |
 | `video/scripts/fontCoverage.ts`, `glyphs.ts` | The brand font files' cmaps (a WOFF2 reader on Node's brotli) and the drawable set computed from them; the printer of `glyphs.ts` `DRAWABLE`. |
 | `video/test/*.test.ts` (25 files), `video/test/fixtures/smoke-timeline.json` | vitest suites and the 10-second smoke timeline; `contract.test.ts` (Task 37) parses plan C's committed golden `tests/pipeline/studio/golden_timeline.json`. |
+| `video/test/gpu/vitest.config.ts`, `guard.gpu.ts`, `guardFixture.tsx` | The real-browser layout-lint check (Task 11), workstation only: `npm run test:gpu` renders planted violations in Remotion's Chrome on the RTX 3080 with the brand fonts arriving late. `npm test` collects only `*.test.ts`, so CI never runs it. |
 | `pipeline/studio/capture/__init__.py` | The four C7 functions. |
 | `pipeline/studio/capture/manifest.py` | Manifest shape and validation, events (tracks included), credits, `CaptureError`, typed spec values, failed-tool messages. |
 | `pipeline/studio/capture/gpu.py` | NVIDIA proof, Chrome GPU flags, NVENC availability, the Remotion browser's Windows GPU preference, the doctor's Chrome renderer probe. |
@@ -285,6 +286,7 @@ Expected: FAIL — the old `package.json` declares `@remotion/cli`, `@remotion/t
     "registry": "tsx scripts/registry.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:gpu": "vitest run --config test/gpu/vitest.config.ts",
     "lint:layout": "tsx scripts/lint.ts",
     "render": "tsx scripts/render.ts",
     "still": "tsx scripts/still.ts"
@@ -308,6 +310,8 @@ Expected: FAIL — the old `package.json` declares `@remotion/cli`, `@remotion/t
   }
 }
 ```
+
+`test` runs the suites every machine can run (`test/**/*.test.ts`, the CI job `lint-video`). `test:gpu` runs the real-browser checks under `test/gpu/` (`*.gpu.ts`, own config, added by Task 11), which render in Remotion's Chrome on the RTX 3080 and so run on the workstation only.
 
 **`video/tsconfig.json`** (complete file):
 
@@ -384,7 +388,7 @@ git commit -m "Replace the never-rendered weekly Remotion project with the studi
 - Create: `video/src/theme/colors.ts`, `video/src/theme/fonts.ts`, `video/src/theme/glyphs.ts`, `video/src/theme/type.ts`, `video/src/motion/index.ts`, `video/scripts/fontCoverage.ts`, `video/scripts/glyphs.ts`
 - Test: `video/test/motion.test.ts`, `video/test/colors.test.ts`, `video/test/glyphs.test.ts`
 
-The motion is the renderer's port of `ancient-nerds-map/src/styles/nerv-animations.css`: crt-open, boot-in, border-trace, type-on, digit-roll, the stamp slam, ring-pulse and sweep, each a pure function of the frame. Flicker, glitch and every alert/emergency flash are left out on purpose (owner rule: no flicker). The palette mirrors `ancient-nerds-map/src/styles/tokens.css` and the brand red `UI_COLORS.primary` of `src/constants/colors.ts` (spec 4.8); `colors.test.ts` reads both site files and fails when a mirrored value drifts. The fonts are the site's own woff2 files, loaded from the per-render public dir through `@remotion/fonts` (which holds the render with `delayRender` until each file loaded and cancels it when one is missing): the latin files plus the latin-ext files of JetBrains Mono and Cormorant Garamond, each with the `unicode-range` of `ancient-nerds-map/public/fonts/fonts.css`, so transliterations (Vinča, Enūma Eliš, Mahābhārata) draw in the brand fonts. `glyphs.ts` holds those two ranges for `fonts.ts`, but a range only decides which face Chrome tries for a character, not whether that face has it: Google's subset files leave gaps in their declared range, and Chrome draws such a character in a Windows system font without an error (review fix 2026-09-27, measured in Remotion's chrome-headless-shell with CDP `CSS.getPlatformFontsForNode`: `Ḫattuša` drew its `Ḫ` in Arial in a heading and in Courier New in body text). JetBrains Mono latin-ext maps, of U+1E00-1EFF, only `ẀẁẂẃẄẅẞỲỳỴỵỶỷỸỹ`: no `Ḫ Ḥ Ṣ Ṭ Ṛ Ṃ Ṇ Ḍ Ṯ Ḏ Ẓ`, no `ʾ ʿ`; its latin file has no U+2010-2012, U+2015, U+2021, `‰` or `‼`. So the rule's set is `DRAWABLE`, generated from the files themselves by `scripts/fontCoverage.ts` (each loaded face's cmap, read with Node's own brotli, within the face's unicode-range; the part common to the three stacks of `type.ts`, heading, body/hud and serif, which is JetBrains Mono's and Cormorant Garamond's common part; plus tab, line feed and carriage return, which CSS lays out as white space). `glyphs.test.ts` recomputes it from `ancient-nerds-map/public/fonts` and fails on drift; `npx tsx scripts/glyphs.ts` prints the new constant. Task 17's `checkBlocks` refuses any character outside `DRAWABLE`. `heading()` and `hud()` set `textTransform: 'uppercase'`, and the browser then draws the full Unicode upper-case mapping. So a character counts as drawable only when it and every code point of its upper case lie in `DRAWABLE`. Example: `ƒ` (U+0192, drawable) draws as `Ƒ` (U+0191), which no loaded file maps; the error names the written character and what it turns into. `µ`, `ǰ` and `ẖ` are refused as written (no loaded file maps them). Plan C's `glyphs.unsupported_char` applies the same rule with `str.upper()`, which gives the same mappings, on its verbatim copy of `DRAWABLE`. Orbitron ships latin only (`ancient-nerds-map/public/fonts/` has no Orbitron latin-ext file), so `HEADING` names JetBrains Mono second: a latin-ext letter in a heading (Şanlıurfa, Enūma Eliš) is drawn, per character, by the loaded JetBrains Mono latin-ext face. Hittite, Egyptian, Sanskrit and Semitic transliterations (`Ḫattuša`, `Ḥatḥor`, `Kṛṣṇa`, `Baʿal`) are refused until the owner decides on a font that has them (owner question Q14).
+The motion is the renderer's port of `ancient-nerds-map/src/styles/nerv-animations.css`: crt-open, boot-in, border-trace, type-on, digit-roll, the stamp slam, ring-pulse and sweep, each a pure function of the frame. Flicker, glitch and every alert/emergency flash are left out on purpose (owner rule: no flicker). The palette mirrors `ancient-nerds-map/src/styles/tokens.css` and the brand red `UI_COLORS.primary` of `src/constants/colors.ts` (spec 4.8); `colors.test.ts` reads both site files and fails when a mirrored value drifts. The fonts are the site's own woff2 files, loaded from the per-render public dir through `@remotion/fonts` (which holds the render with `delayRender` until each file loaded and cancels it when one is missing; that hold does not stop Remotion from mounting the composition, and so laying out its first frame, before the files arrive, so `loadBrandFonts()` keeps the promise of all eight faces and `brandFontsReady()` returns it, for Task 11's lint mode, which measures text only in the brand fonts): the latin files plus the latin-ext files of JetBrains Mono and Cormorant Garamond, each with the `unicode-range` of `ancient-nerds-map/public/fonts/fonts.css`, so transliterations (Vinča, Enūma Eliš, Mahābhārata) draw in the brand fonts. `glyphs.ts` holds those two ranges for `fonts.ts`, but a range only decides which face Chrome tries for a character, not whether that face has it: Google's subset files leave gaps in their declared range, and Chrome draws such a character in a Windows system font without an error (review fix 2026-09-27, measured in Remotion's chrome-headless-shell with CDP `CSS.getPlatformFontsForNode`: `Ḫattuša` drew its `Ḫ` in Arial in a heading and in Courier New in body text). JetBrains Mono latin-ext maps, of U+1E00-1EFF, only `ẀẁẂẃẄẅẞỲỳỴỵỶỷỸỹ`: no `Ḫ Ḥ Ṣ Ṭ Ṛ Ṃ Ṇ Ḍ Ṯ Ḏ Ẓ`, no `ʾ ʿ`; its latin file has no U+2010-2012, U+2015, U+2021, `‰` or `‼`. So the rule's set is `DRAWABLE`, generated from the files themselves by `scripts/fontCoverage.ts` (each loaded face's cmap, read with Node's own brotli, within the face's unicode-range; the part common to the three stacks of `type.ts`, heading, body/hud and serif, which is JetBrains Mono's and Cormorant Garamond's common part; plus tab, line feed and carriage return, which CSS lays out as white space). `glyphs.test.ts` recomputes it from `ancient-nerds-map/public/fonts` and fails on drift; `npx tsx scripts/glyphs.ts` prints the new constant. Task 17's `checkBlocks` refuses any character outside `DRAWABLE`. `heading()` and `hud()` set `textTransform: 'uppercase'`, and the browser then draws the full Unicode upper-case mapping. So a character counts as drawable only when it and every code point of its upper case lie in `DRAWABLE`. Example: `ƒ` (U+0192, drawable) draws as `Ƒ` (U+0191), which no loaded file maps; the error names the written character and what it turns into. `µ`, `ǰ` and `ẖ` are refused as written (no loaded file maps them). Plan C's `glyphs.unsupported_char` applies the same rule with `str.upper()`, which gives the same mappings, on its verbatim copy of `DRAWABLE`. Orbitron ships latin only (`ancient-nerds-map/public/fonts/` has no Orbitron latin-ext file), so `HEADING` names JetBrains Mono second: a latin-ext letter in a heading (Şanlıurfa, Enūma Eliš) is drawn, per character, by the loaded JetBrains Mono latin-ext face. Hittite, Egyptian, Sanskrit and Semitic transliterations (`Ḫattuša`, `Ḥatḥor`, `Kṛṣṇa`, `Baʿal`) are refused until the owner decides on a font that has them (owner question Q14).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -673,10 +677,24 @@ export const BODY = "'JetBrains Mono', monospace"
 /** Verbatim passages of old texts (QuoteCard), the site's serif. */
 export const SERIF = "'Cormorant Garamond', serif"
 
+/** The loading started by loadBrandFonts(): resolves once every face is in document.fonts. */
+let brandFonts: Promise<void> | null = null
+
 export function loadBrandFonts(): void {
-  for (const font of FONTS) {
-    void loadFont({ family: font.family, url: staticFile(font.file), weight: font.weight, unicodeRange: font.unicodeRange })
-  }
+  brandFonts = Promise.all(
+    FONTS.map((font) => loadFont({ family: font.family, url: staticFile(font.file), weight: font.weight, unicodeRange: font.unicodeRange })),
+  ).then(() => undefined)
+}
+
+/**
+ * Resolves once every brand face is in document.fonts. Until then text is laid
+ * out in a fallback font with other metrics, so the lint-mode LayoutProvider
+ * measures nothing before it. A file that fails to load has already cancelled
+ * the render (loadFont calls cancelRender).
+ */
+export function brandFontsReady(): Promise<void> {
+  if (!brandFonts) throw new Error('the brand fonts were never requested: src/Root.tsx calls loadBrandFonts() when it loads')
+  return brandFonts
 }
 ```
 
@@ -3797,10 +3815,14 @@ git commit -m "Duck the music under narration and group the hook captions into s
 ### Task 11: Episode context, measurements, the GPU probe and the lint-mode layout guard
 
 **Files:**
-- Create: `video/src/context.ts`, `video/src/media.ts`, `video/src/gpu.ts`, `video/src/layout/LayoutBox.tsx`, `video/src/layout/LayoutGuard.tsx`
-- Test: `video/test/guard.test.ts`
+- Create: `video/src/context.ts`, `video/src/media.ts`, `video/src/gpu.ts`, `video/src/layout/LayoutBox.tsx`, `video/src/layout/LayoutGuard.tsx`, `video/test/gpu/vitest.config.ts`, `video/test/gpu/guardFixture.tsx`
+- Test: `video/test/guard.test.ts`; `video/test/gpu/guard.gpu.ts` (real browser on the RTX 3080, workstation only: `npm run test:gpu`)
 
 `LayoutBox` measures its element after each frame's render (a layout effect, so before Remotion takes the screenshot) and registers the box only in lint mode; `LayoutGuard`, rendered last, runs `findViolations` over the frame's boxes and prints each violation as one JSON line with `console.error`, which `lint.ts` collects (spec 4.8). `gpu.ts` reads the render browser's WebGL renderer for the GPU proof (spec 4.11); `media.ts` measures narration lengths and image sizes before the first frame.
+
+Lint mode measures only in the brand fonts (review fix 2026-09-27). Remotion 4.0.529 mounts the composition (`remotion_setBundleMode`, `make-page.js`) without waiting for delayRender handles, and `remotion_setFrame` to the frame a tab already shows returns the same state (`TimelineContext.js`), so nothing renders again. `loadFont` adds a face to `document.fonts` only after its fetch and `load()`. A measurement at mount would therefore judge the first frame of every render tab (its `initialFrame`), and so the whole one-frame Thumbnail lint, in whatever fonts had arrived. Measured in chrome-headless-shell with the Thumbnail's teaser box (1368x332, `heading(104)`): `WHO ENGINEERED BAALBEK MONOLITHS?` takes two lines in the fallback font and three in Orbitron. So a lint-mode `LayoutProvider` holds a `delayRender` handle from mount until `brandFontsReady()` (Task 2) resolves. It then renders again with `fontsReady`, so every `LayoutBox` measures and `LayoutGuard` reports in that commit, and it releases the handle in its own layout effect, which runs after its children's. The context is `{registry, fontsReady}`, read with `useLayoutState()`. `Registry.set` refuses a box on a disabled registry, and `LayoutGuard` refuses to render under one.
+
+The vitest suite covers only the pure helpers, so Step 5 proves in a real browser that the gate fires. `test/gpu/guard.gpu.ts` bundles `guardFixture.tsx` with the seven font files and holds the font files back 2.5 s. It opens every browser with `gl: 'angle'` and requires the NVIDIA renderer string, then renders the way `lint.ts` does (`renderFrames`, scale 0.5, violations from `onBrowserLog`). It requires exactly the planted lines, as `violationLine` builds them, on all 6 frames with concurrency 2: `teaser` overflow, `edge` outside-safe and `captions`/`lt` overlap, plus `drop` in the controls from frame 3. It requires no lines outside lint mode. On a Thumbnail-like one-frame composition it requires exactly the teaser's overflow: the scene under a disabled registry is not reported, and a fitting two-line teaser gives nothing. It needs Tasks 2 (`type.ts`, `fontCoverage.ts`) and 4 (`zones.ts`, `geometry.ts`), both earlier.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3825,8 +3847,12 @@ describe('LayoutBox registry (lint mode)', () => {
     registry.remove('b01:quote')
     expect(registry.boxes.has('b01:quote') || registry.overflow.has('b01:quote')).toBe(false)
   })
-  it('measures only in lint mode', () => {
-    expect(new Registry(false).enabled).toBe(false)
+  it('refuses a box outside lint mode and keeps nothing', () => {
+    const registry = new Registry(false)
+    expect(() => registry.set({ id: 'b01:title', kind: 'text', rect: { x: 0, y: 0, w: 10, h: 10 }, allow: [] }, true)).toThrow(
+      'LayoutBox b01:title was measured outside lint mode',
+    )
+    expect(registry.boxes.size + registry.overflow.size).toBe(0)
   })
 })
 
@@ -3965,11 +3991,21 @@ export function webglRenderer(): string {
  * before Remotion takes the screenshot) and stores its box in the Registry;
  * LayoutGuard then checks all boxes of the frame. Outside lint mode nothing
  * is measured.
+ *
+ * Lint mode measures only in the brand fonts. Remotion mounts the composition
+ * without waiting for the fonts, and seeking a tab to the frame it already
+ * shows (its first one) does not render again, so a measurement at mount
+ * would judge that frame in a fallback font. The lint-mode LayoutProvider
+ * therefore holds the render (delayRender) until brandFontsReady() resolves,
+ * then renders once more with `fontsReady`, which makes every LayoutBox
+ * measure and LayoutGuard report, and only then lets the frame go
+ * (test/gpu/guard.gpu.ts proves it with fonts that arrive late).
  */
-import React, { createContext, useContext, useLayoutEffect, useRef } from 'react'
+import React, { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { useCurrentFrame, useCurrentScale } from 'remotion'
+import { useCurrentFrame, useCurrentScale, useDelayRender } from 'remotion'
 
+import { brandFontsReady } from '../theme/fonts'
 import type { Box, BoxKind } from './geometry'
 
 export class Registry {
@@ -3982,6 +4018,7 @@ export class Registry {
   }
 
   set(box: Box, overflowing: boolean): void {
+    if (!this.enabled) throw new Error(`LayoutBox ${box.id} was measured outside lint mode`)
     this.boxes.set(box.id, box)
     if (overflowing) this.overflow.add(box.id)
     else this.overflow.delete(box.id)
@@ -3993,34 +4030,54 @@ export class Registry {
   }
 }
 
-const LayoutContext = createContext<Registry | null>(null)
+/** The provider's registry and whether the brand fonts are in (always false outside lint mode). */
+export type LayoutState = { registry: Registry; fontsReady: boolean }
+
+const LayoutContext = createContext<LayoutState | null>(null)
 
 /** Boxes are measured relative to this element (found with closest(), which works during layout effects). */
 const ROOT_ATTR = 'data-layout-root'
 
-export const LayoutProvider: React.FC<{ registry: Registry; children: ReactNode }> = ({ registry, children }) => (
-  <LayoutContext.Provider value={registry}>
-    <div {...{ [ROOT_ATTR]: '' }} style={{ position: 'absolute', inset: 0 }}>
-      {children}
-    </div>
-  </LayoutContext.Provider>
-)
+export const LayoutProvider: React.FC<{ registry: Registry; children: ReactNode }> = ({ registry, children }) => {
+  // The lint registry whose fonts are in, with the delayRender handle that held its render until then.
+  const [ready, setReady] = useState<{ registry: Registry; handle: number } | null>(null)
+  const { delayRender, continueRender, cancelRender } = useDelayRender()
+  useLayoutEffect(() => {
+    if (!registry.enabled) return
+    const handle = delayRender('layout lint: waiting for the brand fonts before measuring')
+    brandFontsReady().then(() => setReady({ registry, handle }), cancelRender)
+  }, [registry, delayRender, cancelRender])
+  // A parent's layout effects run after its children's: in the commit that made `ready`, every
+  // LayoutBox has measured in the brand fonts and LayoutGuard has reported, so the frame may go.
+  useLayoutEffect(() => {
+    if (ready) continueRender(ready.handle)
+  }, [ready, continueRender])
+  const fontsReady = ready?.registry === registry
+  const state = useMemo(() => ({ registry, fontsReady }), [registry, fontsReady])
+  return (
+    <LayoutContext.Provider value={state}>
+      <div {...{ [ROOT_ATTR]: '' }} style={{ position: 'absolute', inset: 0 }}>
+        {children}
+      </div>
+    </LayoutContext.Provider>
+  )
+}
 
-export function useRegistry(): Registry {
-  const registry = useContext(LayoutContext)
-  if (!registry) throw new Error('LayoutBox used outside LayoutProvider')
-  return registry
+export function useLayoutState(): LayoutState {
+  const state = useContext(LayoutContext)
+  if (!state) throw new Error('LayoutBox used outside LayoutProvider')
+  return state
 }
 
 /** Measure the element behind the returned ref every frame and register it as `id`. */
 export function useLayoutBox<T extends HTMLElement>(id: string, kind: BoxKind, allow: readonly string[] = []): React.RefObject<T> {
   const ref = useRef<T>(null)
-  const registry = useRegistry()
+  const { registry, fontsReady } = useLayoutState()
   const frame = useCurrentFrame()
   const scale = useCurrentScale()
   const allowKey = allow.join('|')
   useLayoutEffect(() => {
-    if (!registry.enabled) return
+    if (!registry.enabled || !fontsReady) return
     const el = ref.current
     const root = el?.closest(`[${ROOT_ATTR}]`)
     if (!el || !root) throw new Error(`LayoutBox ${id}: element not mounted inside the LayoutProvider`)
@@ -4032,7 +4089,7 @@ export function useLayoutBox<T extends HTMLElement>(id: string, kind: BoxKind, a
     const overflowing = kind === 'text' && clips && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)
     registry.set({ id, kind, rect, allow: allowKey ? allowKey.split('|') : [] }, overflowing)
     return () => registry.remove(id)
-  }, [registry, id, kind, allowKey, frame, scale])
+  }, [registry, fontsReady, id, kind, allowKey, frame, scale])
   return ref
 }
 
@@ -4058,16 +4115,17 @@ export const LayoutBox: React.FC<{
 /**
  * Lint-mode reporter. Rendered as the LAST child of the LayoutProvider, so its
  * layout effect runs after every LayoutBox of the frame has registered (React
- * runs layout effects subtree by subtree in sibling order). Each violation is
- * one console.error line of JSON, which scripts/lint.ts collects through
- * onBrowserLog:
+ * runs layout effects subtree by subtree in sibling order). It reports once
+ * the brand fonts are in (LayoutBox.tsx) and then on every frame. Each
+ * violation is one console.error line of JSON, which scripts/lint.ts collects
+ * through onBrowserLog (test/gpu/guard.gpu.ts proves it in a real browser):
  *   {"type":"layout-violation","frame":123,"a":"captions","b":"b01:lt","reason":"overlap"}
  */
 import React, { useLayoutEffect } from 'react'
 import { useCurrentFrame } from 'remotion'
 
 import { type Violation, findViolations } from './geometry'
-import { useRegistry } from './LayoutBox'
+import { useLayoutState } from './LayoutBox'
 
 export const VIOLATION_TYPE = 'layout-violation'
 
@@ -4078,10 +4136,13 @@ export function violationLine(frame: number, v: Violation): string {
 
 export const LayoutGuard: React.FC = () => {
   const frame = useCurrentFrame()
-  const registry = useRegistry()
+  const { registry, fontsReady } = useLayoutState()
   useLayoutEffect(() => {
+    // Before the brand fonts are in, nothing is measured (LayoutBox.tsx) and there is nothing to report.
+    if (!fontsReady) return
     for (const v of findViolations([...registry.boxes.values()], [...registry.overflow])) console.error(violationLine(frame, v))
-  }, [frame, registry])
+  }, [frame, registry, fontsReady])
+  if (!registry.enabled) throw new Error('LayoutGuard needs a lint-mode Registry (new Registry(true)): this one measures nothing')
   return null
 }
 ```
@@ -4091,11 +4152,288 @@ export const LayoutGuard: React.FC = () => {
 Run: `cd video && npx vitest run test/guard.test.ts`
 Expected: `Tests  4 passed (4)`
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Prove the gate in a real browser (workstation only)**
+
+**`video/test/gpu/vitest.config.ts`** (complete file):
+
+```ts
+/**
+ * The real-browser checks under test/gpu (`npm run test:gpu`, cwd video/). They
+ * render in Remotion's Chrome on the RTX 3080 (spec 4.11), so they run on the
+ * workstation only. The CI job lint-video runs `npm test`, whose config
+ * (video/vitest.config.ts) collects only files named *.test.ts, never these
+ * *.gpu.ts files.
+ */
+import { fileURLToPath } from 'node:url'
+
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  root: fileURLToPath(new URL('../..', import.meta.url)),
+  test: {
+    include: ['test/gpu/**/*.gpu.ts'],
+    environment: 'node',
+    fileParallelism: false,
+  },
+})
+```
+
+**`video/test/gpu/guardFixture.tsx`** (complete file):
+
+```tsx
+/**
+ * Remotion entry of the real-browser lint check (guard.gpu.ts): compositions
+ * with planted layout violations, drawn through the real LayoutProvider,
+ * LayoutBox and LayoutGuard in Remotion's Chrome.
+ *
+ * The brand font files arrive SLOW_FONTS_MS late (fetch is held back here, as
+ * a slow disk or a cold cache would), so every composition mounts, and every
+ * render tab reaches its first frame, while Orbitron is still missing and the
+ * text is laid out in a fallback font. OVERFLOWING_TEASER takes two lines in
+ * that fallback and three in Orbitron (measured 2026-09-27 in Remotion's
+ * chrome-headless-shell), so a lint that measured before the fonts arrived
+ * would pass it.
+ */
+import React, { useMemo } from 'react'
+import type { CSSProperties } from 'react'
+import { AbsoluteFill, type CalculateMetadataFunction, Composition, registerRoot, useCurrentFrame } from 'remotion'
+
+import { webglRenderer } from '../../src/gpu'
+import type { Rect } from '../../src/layout/geometry'
+import { LayoutBox, LayoutProvider, Registry } from '../../src/layout/LayoutBox'
+import { LayoutGuard } from '../../src/layout/LayoutGuard'
+import { ZONES } from '../../src/layout/zones'
+import { loadBrandFonts } from '../../src/theme/fonts'
+import { body, heading } from '../../src/theme/type'
+
+const SLOW_FONTS_MS = 2500
+
+/** Four words: two lines in the fallback font, three in Orbitron 700 at 104 px (the teaser box holds two). */
+const OVERFLOWING_TEASER = 'WHO ENGINEERED BAALBEK MONOLITHS?'
+/** Two lines in both fonts: fits. */
+const FITTING_TEASER = 'WHICH CIVILISATION QUARRIED THESE?'
+
+const fetchNow = window.fetch.bind(window)
+window.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
+  String(input).includes('/fonts/') ? new Promise<void>((resolve) => setTimeout(resolve, SLOW_FONTS_MS)).then(() => fetchNow(input, init)) : fetchNow(input, init)
+loadBrandFonts()
+
+type LintProps = { lint: boolean; gpu: string }
+
+const place = (r: Rect): CSSProperties => ({ position: 'absolute', left: r.x, top: r.y, width: r.w, height: r.h, overflow: 'hidden', ...body(30) })
+
+/** The Thumbnail's teaser (plan D Task 18): TEASER_ZONE {96, 72, 1440, 380}, upper-case Orbitron 104 px, two lines at most. */
+const Teaser: React.FC<{ id: string; text: string }> = ({ id, text }) => (
+  <LayoutBox id={id} kind="text" style={{ position: 'absolute', left: 140, top: 96, width: 1368, height: 332, overflow: 'hidden', display: 'flex', alignItems: 'center', ...heading(104) }}>
+    {text}
+  </LayoutBox>
+)
+
+/**
+ * Six frames. Every frame: the teaser overflows, `edge` leaves the title-safe
+ * area, `lt` covers `captions`. From frame 3 on `drop` sits in the YouTube
+ * controls. `fits` never breaks a rule. Rendered at scale 0.5, so a box
+ * measured in device pixels instead of composition pixels would move `edge`
+ * back inside the safe area and `drop` out of the controls.
+ */
+const Planted: React.FC<LintProps> = ({ lint }) => {
+  const frame = useCurrentFrame()
+  const registry = useMemo(() => new Registry(lint), [lint])
+  return (
+    <AbsoluteFill style={{ backgroundColor: '#000' }}>
+      <LayoutProvider registry={registry}>
+        <Teaser id="teaser" text={OVERFLOWING_TEASER} />
+        <LayoutBox id="captions" kind="text" style={place(ZONES.caption)}>
+          A HOOK CAPTION
+        </LayoutBox>
+        <LayoutBox id="lt" kind="text" style={place({ x: 96, y: 780, w: 760, h: 96 })}>
+          A LOWER THIRD
+        </LayoutBox>
+        <LayoutBox id="edge" kind="text" style={place({ x: 1800, y: 500, w: 100, h: 48 })}>
+          EDGE
+        </LayoutBox>
+        <LayoutBox id="drop" kind="text" style={place({ x: 1200, y: frame < 3 ? 846 : 970, w: 300, h: 48 })}>
+          DROP
+        </LayoutBox>
+        <LayoutBox id="fits" kind="text" style={place({ x: 1560, y: 300, w: 240, h: 64 })}>
+          3 / 7
+        </LayoutBox>
+        {lint ? <LayoutGuard /> : null}
+      </LayoutProvider>
+    </AbsoluteFill>
+  )
+}
+
+/**
+ * One frame, built like the Thumbnail: the scene under a registry that never
+ * measures (its overlapping pair must not be reported), the teaser under the
+ * lint registry. `candidate` 1 carries the overflowing teaser, 2 the fitting one.
+ */
+const TeaserOnly: React.FC<LintProps & { candidate: number }> = ({ lint, candidate }) => {
+  const scenes = useMemo(() => new Registry(false), [])
+  const teaser = useMemo(() => new Registry(lint), [lint])
+  return (
+    <AbsoluteFill style={{ backgroundColor: '#000' }}>
+      <LayoutProvider registry={scenes}>
+        <LayoutBox id="scene:a" kind="text" style={place(ZONES.caption)}>
+          SCENE TEXT
+        </LayoutBox>
+        <LayoutBox id="scene:b" kind="text" style={place({ x: 96, y: 780, w: 760, h: 96 })}>
+          SCENE TEXT
+        </LayoutBox>
+      </LayoutProvider>
+      <LayoutProvider registry={teaser}>
+        <Teaser id={`thumbnail${candidate}:teaser`} text={candidate === 1 ? OVERFLOWING_TEASER : FITTING_TEASER} />
+        {lint ? <LayoutGuard /> : null}
+      </LayoutProvider>
+    </AbsoluteFill>
+  )
+}
+
+const withGpu: CalculateMetadataFunction<LintProps> = async ({ props }) => ({ props: { ...props, gpu: webglRenderer() } })
+const withGpuTeaser: CalculateMetadataFunction<LintProps & { candidate: number }> = async ({ props }) => ({ props: { ...props, gpu: webglRenderer() } })
+
+const Root: React.FC = () => (
+  <>
+    <Composition id="Planted" component={Planted} defaultProps={{ lint: false, gpu: '' }} calculateMetadata={withGpu} durationInFrames={6} fps={60} width={1920} height={1080} />
+    <Composition
+      id="TeaserOnly"
+      component={TeaserOnly}
+      defaultProps={{ lint: false, gpu: '', candidate: 1 }}
+      calculateMetadata={withGpuTeaser}
+      durationInFrames={1}
+      fps={60}
+      width={1920}
+      height={1080}
+    />
+  </>
+)
+
+registerRoot(Root)
+```
+
+**`video/test/gpu/guard.gpu.ts`** (complete file):
+
+```ts
+/**
+ * The layout lint fires in a real browser (workstation only, not CI: it needs
+ * the RTX 3080, spec 4.11). Run from video/: `npm run test:gpu`.
+ *
+ * guardFixture.tsx plants violations and delays the brand fonts; these tests
+ * render it the way scripts/lint.ts does (renderFrames at scale 0.5, the
+ * violations read from onBrowserLog) and require exactly the planted lines:
+ * the overflow of a teaser that needs three lines in Orbitron (on every tab's
+ * first frame too), text outside the title-safe area, text in the YouTube
+ * controls, and an overlap; and nothing from a render outside lint mode or
+ * from a registry that does not measure.
+ */
+import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { bundle } from '@remotion/bundler'
+import { openBrowser, renderFrames, selectComposition } from '@remotion/renderer'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+
+import { SITE_PUBLIC_DIR } from '../../scripts/fontCoverage'
+import type { Violation } from '../../src/layout/geometry'
+import { VIOLATION_TYPE, violationLine } from '../../src/layout/LayoutGuard'
+import { FONT_FILES } from '../../src/theme/fonts'
+
+const NVIDIA = /^ANGLE \(NVIDIA, NVIDIA GeForce RTX 3080/
+const SLOW = 180_000
+
+let work = ''
+let serveUrl = ''
+
+beforeAll(async () => {
+  work = mkdtempSync(path.join(os.tmpdir(), 'studio-guard-'))
+  const publicDir = path.join(work, 'public')
+  for (const file of FONT_FILES) {
+    mkdirSync(path.dirname(path.join(publicDir, file)), { recursive: true })
+    cpSync(path.join(SITE_PUBLIC_DIR, file), path.join(publicDir, file))
+  }
+  serveUrl = await bundle({ entryPoint: fileURLToPath(new URL('./guardFixture.tsx', import.meta.url)), publicDir, outDir: path.join(work, 'bundle') })
+}, SLOW)
+
+afterAll(() => {
+  rmSync(work, { recursive: true, force: true })
+})
+
+/** Render every frame of `id` in a browser on the NVIDIA and return its renderer and its layout-violation console lines, sorted. */
+async function lint(id: string, props: Record<string, unknown>, concurrency: number): Promise<{ gpu: string; lines: string[] }> {
+  const browser = await openBrowser('chrome', { chromiumOptions: { gl: 'angle' } })
+  try {
+    const inputProps = { gpu: '', ...props }
+    const composition = await selectComposition({ serveUrl, id, inputProps, puppeteerInstance: browser })
+    const lines: string[] = []
+    await renderFrames({
+      composition,
+      serveUrl,
+      inputProps,
+      puppeteerInstance: browser,
+      imageFormat: 'jpeg',
+      jpegQuality: 50,
+      muted: true,
+      outputDir: null,
+      onFrameBuffer: () => undefined,
+      onStart: () => undefined,
+      onFrameUpdate: () => undefined,
+      scale: 0.5,
+      concurrency,
+      timeoutInMilliseconds: 60_000,
+      logLevel: 'error',
+      onBrowserLog: (log) => {
+        if (log.text.startsWith(`{"type":"${VIOLATION_TYPE}"`)) lines.push(log.text)
+      },
+    })
+    return { gpu: String(composition.props.gpu), lines: lines.sort() }
+  } finally {
+    await browser.close({ silent: true })
+  }
+}
+
+const expected = (entries: [number, Violation][]) => entries.map(([frame, v]) => violationLine(frame, v)).sort()
+
+describe('LayoutGuard in a real browser (fonts arriving after the first frame)', () => {
+  it('reports exactly the planted violations of every frame, each tab`s first frame included', async () => {
+    const { gpu, lines } = await lint('Planted', { lint: true }, 2)
+    expect(gpu).toMatch(NVIDIA)
+    const want: [number, Violation][] = []
+    for (let frame = 0; frame < 6; frame++) {
+      want.push([frame, { a: 'teaser', b: null, reason: 'overflow' }])
+      want.push([frame, { a: 'edge', b: null, reason: 'outside-safe' }])
+      want.push([frame, { a: 'captions', b: 'lt', reason: 'overlap' }])
+      if (frame >= 3) want.push([frame, { a: 'drop', b: null, reason: 'controls' }])
+    }
+    expect(lines).toEqual(expected(want))
+  }, SLOW)
+
+  it('measures nothing outside lint mode', async () => {
+    const { gpu, lines } = await lint('Planted', { lint: false }, 2)
+    expect(gpu).toMatch(NVIDIA)
+    expect(lines).toEqual([])
+  }, SLOW)
+
+  it('checks a one-frame thumbnail teaser, and only the teaser', async () => {
+    const overflowing = await lint('TeaserOnly', { lint: true, candidate: 1 }, 1)
+    expect(overflowing.gpu).toMatch(NVIDIA)
+    expect(overflowing.lines).toEqual(expected([[0, { a: 'thumbnail1:teaser', b: null, reason: 'overflow' }]]))
+    const fitting = await lint('TeaserOnly', { lint: true, candidate: 2 }, 1)
+    expect(fitting.lines).toEqual([])
+  }, SLOW)
+})
+```
+
+Run: `cd video && npx tsc --noEmit && npm run test:gpu`
+Expected: no tsc output, then `Test Files  1 passed (1)` and `Tests  3 passed (3)` in about 35 s (measured 2026-09-27 on the RTX 3080). The violation lines of the lint-mode renders also appear on stderr, each after `Tab N, src/layout/LayoutGuard.tsx:<line>`. Without the font hold the check fails. Measured 2026-09-27 with `LayoutBox.tsx`, `LayoutGuard.tsx` and `fonts.ts` as Task 11 first committed them (2d44956: the provider only passes the registry on, and nothing waits for `fontsReady`): `Tests  2 failed | 1 passed (3)`. The first test receives 19 lines instead of 21, without the teaser overflows of the two tabs' first frames, and the one-frame teaser gives `[]`. On any other GPU every test fails on the renderer string.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add video/src/context.ts video/src/media.ts video/src/gpu.ts video/src/layout/LayoutBox.tsx video/src/layout/LayoutGuard.tsx video/test/guard.test.ts
-git commit -m "Register layout boxes in lint mode and report each violation as a JSON console line" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git add video/src/context.ts video/src/media.ts video/src/gpu.ts video/src/layout/LayoutBox.tsx video/src/layout/LayoutGuard.tsx video/test/guard.test.ts video/test/gpu/vitest.config.ts video/test/gpu/guardFixture.tsx video/test/gpu/guard.gpu.ts
+git commit -m "Register layout boxes in lint mode once the brand fonts are in, report each violation as a JSON console line, and prove it in Remotion's Chrome on the NVIDIA" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 
@@ -9041,7 +9379,7 @@ git commit -m "Add the 10-second smoke timeline with every footage block" -m "Co
 
 ### Task 22: Local smoke render on the workstation (not CI)
 
-No new files. This proves the whole renderer on the RTX 3080: HEVC NVENC clips decode, the layout lint is clean (the thumbnail teasers included), the chunked NVENC render joins frame-exactly, the three thumbnail candidates meet their limits, and every graphics block draws in a real Chrome: the smoke fixture carries the footage blocks, the demo timeline of Task 8 the twelve graphics blocks (ClaimBoard, EvidenceCard, Meter, QuoteCard, ScaleDrawing, UnitGrid, BarChart with a range bar, Timeline, Diagram, ListCard, ScaleZoom, ShareCard), which no other step renders before a real episode. It needs the workstation (NVIDIA driver, ffmpeg with `hevc_nvenc` on PATH); it writes only to `$TMP/studio-smoke`. The demo needs nothing in the public dir beyond the seven fonts. Tasks 22 and 36 are re-run on the finished code before the release (I8 step 1 of the build index), whatever ran earlier.
+No new files. This proves the whole renderer on the RTX 3080: the layout lint reports exactly the violations planted in Task 11's real-browser check (`npm run test:gpu`), HEVC NVENC clips decode, the layout lint is clean on the fixtures (the thumbnail teasers included), the chunked NVENC render joins frame-exactly, the three thumbnail candidates meet their limits, and every graphics block draws in a real Chrome: the smoke fixture carries the footage blocks, the demo timeline of Task 8 the twelve graphics blocks (ClaimBoard, EvidenceCard, Meter, QuoteCard, ScaleDrawing, UnitGrid, BarChart with a range bar, Timeline, Diagram, ListCard, ScaleZoom, ShareCard), which no other step renders before a real episode. It needs the workstation (NVIDIA driver, ffmpeg with `hevc_nvenc` on PATH); it writes only to `$TMP/studio-smoke`. The demo needs nothing in the public dir beyond the seven fonts. Tasks 22 and 36 are re-run on the finished code before the release (I8 step 1 of the build index), whatever ran earlier.
 
 - [ ] **Step 1: Generate the fixture's assets** (the clips use the capture encoder settings of Task 25: `hevc_nvenc` on GPU 0, BT.709 limited range, `hvc1`)
 
@@ -9062,12 +9400,13 @@ echo "$S"
 
 Expected: no ffmpeg output, then the smoke directory (e.g. `C:/Users/<you>/AppData/Local/Temp/studio-smoke`).
 
-- [ ] **Step 2: Lint, render (two chunks, to exercise the join) and the three thumbnails of the smoke fixture; lint and render the demo timeline**
+- [ ] **Step 2: The real-browser lint check; then lint, render (two chunks, to exercise the join) and the three thumbnails of the smoke fixture; lint and render the demo timeline**
 
 ```bash
 set -o pipefail
 S="$(cygpath -m "$TMP")/studio-smoke" && T="$(pwd -W)/video/test/fixtures/smoke-timeline.json"
-cd video && node --import tsx scripts/lint.ts --timeline "$T" --public-dir "$S/public" --report "$S/out/lint.json" 2>&1 | grep -v '^bundle'
+cd video && npm run test:gpu
+node --import tsx scripts/lint.ts --timeline "$T" --public-dir "$S/public" --report "$S/out/lint.json" 2>&1 | grep -v '^bundle'
 node --import tsx scripts/render.ts --timeline "$T" --public-dir "$S/public" --out "$S/out/smoke.mp4" --chunk-frames 300 2>&1 | grep -v -e '^bundle' -e '%$'
 for k in 1 2 3; do node --import tsx scripts/still.ts --timeline "$T" --public-dir "$S/public" --out-dir "$S/out" --candidate $k 2>&1 | grep -v '^bundle'; done
 D="$(pwd -W)/src/fixtures/demo-timeline.json"
@@ -9076,7 +9415,7 @@ node --import tsx scripts/render.ts --timeline "$D" --public-dir "$S/public" --o
 ls "$S"
 ```
 
-Expected (measured 2026-09-26: about 90 s, 90 s, 3 x 20 s, 40 s and 140 s): every browser prints `gpu: ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`. The smoke lint prints `lint: 100 frames (every 6, scale 0.5)`, then `lint: thumbnail 1 (frame 90)`, `lint: thumbnail 2 (frame 330)` and `lint: thumbnail 3 (frame 440)`, each after its own `gpu:` line, and `lint clean: 103 frames checked`; the render two `gpu:` lines (one per part) and the path of `smoke.mp4`; each still `candidate K, frame F` (90, 330, 440) and its two thumbnail paths. The demo lint prints `lint: 370 frames (every 6, scale 0.5)`, the three thumbnail lines (frames 108, 200 and 300) and `lint clean: 373 frames checked`; the demo render one `gpu:` line and the path of `demo.mp4`. Every command exits 0 (`pipefail` makes a failing node step fail the pipe). Each script bundled into `$S/bundle` (next to `$S/public`) and removed it again, so `ls` lists only `out` and `public`; nothing new is left in `%TEMP%` under `remotion-webpack-bundle-*`.
+Expected: `npm run test:gpu` ends with `Test Files  1 passed (1)` and `Tests  3 passed (3)` (about 35 s, measured 2026-09-27; Task 11 Step 5). In Remotion's Chrome on the NVIDIA, with the brand fonts arriving late, the layout lint reports exactly the planted overflow, safe-area, control-zone and overlap lines, the one-frame teaser's overflow included, and nothing outside lint mode. So the `lint clean` lines below come from a gate that is shown to fire. Then (measured 2026-09-26: about 90 s, 90 s, 3 x 20 s, 40 s and 140 s) every browser of the node scripts prints `gpu: ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`. The smoke lint prints `lint: 100 frames (every 6, scale 0.5)`, then `lint: thumbnail 1 (frame 90)`, `lint: thumbnail 2 (frame 330)` and `lint: thumbnail 3 (frame 440)`, each after its own `gpu:` line, and `lint clean: 103 frames checked`; the render two `gpu:` lines (one per part) and the path of `smoke.mp4`; each still `candidate K, frame F` (90, 330, 440) and its two thumbnail paths. The demo lint prints `lint: 370 frames (every 6, scale 0.5)`, the three thumbnail lines (frames 108, 200 and 300) and `lint clean: 373 frames checked`; the demo render one `gpu:` line and the path of `demo.mp4`. Every command exits 0 (`pipefail` makes a failing node step fail the pipe). Each script bundled into `$S/bundle` (next to `$S/public`) and removed it again, so `ls` lists only `out` and `public`; nothing new is left in `%TEMP%` under `remotion-webpack-bundle-*`.
 
 - [ ] **Step 3: Check the outputs**
 
@@ -15355,22 +15694,22 @@ No further commit (Steps 4-7 change nothing). Report the counts and any gate tha
 | 4.8 theme (colors mirror of the tokens and `src/constants/colors`, checked by a test; fonts via @remotion/fonts from local woff2, latin and latin-ext) | Task 2 (headings fall back to JetBrains Mono's latin-ext face), 17 (glyph rule on drawn strings only, owner decision 32) |
 | 4.8 motion: crtOpen, bootIn, borderTrace, typeOn, digitRoll, stampSlam, ringPulse, sweep; no flicker | Task 2 |
 | 4.8 blocks: PhotoPlate, ScaleDrawing, UnitGrid, EvidenceCard, SourceViewer, Meter, ClaimBoard, PlatformClip, GlobeShot, ShareCard, LowerThird, HookCaptions, Ticker, Stamp, QuoteCard, Timeline, Diagram, registry.json | Tasks 7, 12-17 (plus MapboxTopdown, MapboxFlyover, BarChart, ListCard, ScaleZoom); `registry.json` carries each block's `drawn` prop paths (owner decision 32) |
-| 4.8 layout: zones, LayoutBox registration, pure overlap checker, LayoutGuard console.error JSON | Tasks 4, 11 |
+| 4.8 layout: zones, LayoutBox registration, pure overlap checker, LayoutGuard console.error JSON | Tasks 4, 11 (measured only in the brand fonts; `npm run test:gpu` proves in a real browser that the gate fires, re-run in Task 22) |
 | 4.8 render.ts (bundle, selectComposition, renderMedia, chunked by frameRange, concat), lint.ts (every 6th frame at 0.5, onBrowserLog, exit != 0; plus each thumbnail teaser), still.ts per thumbnail candidate `--candidate K [--frame N]` (3840x2160 + 1280x720 < 2 MB) | Tasks 19, 20 |
 | 4.8 per-render public dir, no absolute paths in props; in-frame map credits | Tasks 8 (asset paths), 12 (CreditLine), 18 (the thumbnail's credit line), 20 (asset check) |
 | 4.8 vitest: overlap geometry, marker transform, timeline helpers; smoke render of a 10-s fixture, local | Tasks 4, 5, 8, 21, 22 (the smoke fixture and the graphics-only demo timeline, every block drawn by a real Chrome on the NVIDIA); Task 37 reads plan C's golden timeline |
 | 4.9 thumbnails (owner decisions 24-25): three candidates for YouTube's A/B test, `thumbnails: [{frame, text}]` in timeline.json, a 2-4 word teaser in the NERV heading type clear of the duration badge, the scene's in-frame credit line, `--frame N` for a re-render | Tasks 8 (parse), 18 (Thumbnail by candidate, teaser zone, the scene's credit line in `THUMBNAIL_CREDIT_ZONE`), 20 (`still.ts --candidate K [--frame N]`, lint of the teasers), 22 |
 | 4.10 topic types A-D through the block library (type B world distribution: the globe `distribution` take or PlatformClip with filters and layers; type C orders of magnitude: UnitGrid up to 1:400, ScaleZoom beyond, linear only, owner decision 31) | Tasks 13-16 (table D1), 30, 31 |
-| 4.11 every Chromium on the NVIDIA with proof (captures, recorder, Remotion); NVENC `-gpu 0`, no `'if-possible'`; renderer recorded | Tasks 19, 20, 24, 25, 29-31, 35; doctor (with `gpu.chrome_renderer()`), `--fix-gpu`, whisper on CUDA and the ledger's renderer: plan C (see "Where this plan and plan C meet") |
+| 4.11 every Chromium on the NVIDIA with proof (captures, recorder, Remotion); NVENC `-gpu 0`, no `'if-possible'`; renderer recorded | Tasks 11 (the real-browser lint check requires the NVIDIA renderer string), 19, 20, 24, 25, 29-31, 35; doctor (with `gpu.chrome_renderer()`), `--fix-gpu`, whisper on CUDA and the ledger's renderer: plan C (see "Where this plan and plan C meet") |
 | Owner picture rules: captions only in the hook; markers in their image's layer (globe: projected per frame); crop-checked markers only (the case file); no measuring lines on photos; comparisons state their basis (tested through `basisLine`); full-bleed, nothing in the YouTube control zone (text and markers); fast cursor (tested against a deadline); no agents, no title card (`chapterTagIndex` tested); platform moments via PlatformClip only; no satellite toggle in globe sections (owner correction 2026-09-26, refused by `validate_actions`, tested); the link only on the end card (a ShareCard only as the last scene, refused by `checkBlocks`, tested); a hook caption line fits one row (`HOOK_LINE_MAX_CHARS`, tested); drawn text in the brand fonts, upper case included (tested) | Tasks 10, 12, 5/13/14/35, 13, 7/16, 4, 30, 7/12, 30, 17, 10, 2/17 |
 
 ## Cross-stream requests (changes outside this stream's files)
 
 Every request below is an item of the orchestrator's integration list, whose files no plan's tasks touch; this plan cites the items by name. Requests 1-4 are the items "CI lint-video", ".githooks/pre-push", "docs/procedures/STUDIO.md" with the Studio part of the "CLAUDE.md" item, and "docs/video-pipeline.md". The same list carries the ".gitignore" item (after merging origin/main into `feat/studio`, the line `.claude/` becomes `.claude/*` with `!.claude/skills/`, `!.claude/skills/**`, `!.claude/workflows/`, `!.claude/workflows/**` below it: git never re-includes a file under an excluded directory, so negations after `.claude/` would track nothing; `git check-ignore .claude/skills/theo-write/SKILL.md` must print nothing and exit 1, while `git check-ignore -v .claude/settings.local.json` must print the pattern `.claude/*`; with `-v` the skills file prints the negated pattern `!.claude/skills/**`, which also means "not ignored", measured 2026-09-26 in a scratch repository), the "skills and workflows" item of plan C's C2/C11, the rest of the "CLAUDE.md" item, the "docs/TRAINING_DATA_POLICY.md" item, the "commits" item (the spec, the four plans and `2026-09-26-owner-questions.md` committed with an explicit pathspec before any implementer task, this plan included, and every later plan fix the same way), the "merges" item and the "final acceptance" item.
 
-1. **CI lint-video (`.github/workflows/ci.yml`, spec 7):** the `changes` job gains the output `video: ${{ steps.filter.outputs.video }}` and the filter `video` with `video/**`, `tests/pipeline/studio/golden_timeline.json` (Task 37's contract test reads it, so a plan-C compiler change that regenerates it must run the renderer's suite), `ancient-nerds-map/src/styles/tokens.css` and `ancient-nerds-map/src/constants/colors.ts` (`test/colors.test.ts` reads them, so a palette change on the site must run the mirror test), and `ancient-nerds-map/public/fonts/**` (`test/glyphs.test.ts` recomputes `DRAWABLE` from the woff2 files, so a font change on the site must run it). The existing `backend` filter gains `video/src/blocks/registry.json` and `video/src/theme/glyphs.ts`: plan C's Python tests and `blocks.py` read both files, so a renderer-only commit that changes a block schema, a `drawn` list or the glyph set `DRAWABLE` must run plan C's contract tests too. A job `lint-video` with `needs: [changes]`, `if: needs.changes.outputs.video == 'true'`, Node 22 and `working-directory: video` runs `npm ci`, `npx tsc --noEmit` and `npx vitest run`; no `npx remotion browser ensure`. `deploy.needs` gains `lint-video` and deploy's `if` gains `contains(fromJSON('["success", "skipped"]'), needs.lint-video.result) &&`, like the other path-filtered jobs: a push without video changes skips the job and still deploys, a red `lint-video` blocks the deploy. CLAUDE.md's "All six gates" becomes seven. The job runs on Linux: nothing in `video/test` needs a GPU or a browser (`test/scripts.test.ts` spawns `node --import tsx` only; `test/colors.test.ts` reads `ancient-nerds-map/src` and `test/contract.test.ts` reads `tests/pipeline/studio/`, both in the checkout).
+1. **CI lint-video (`.github/workflows/ci.yml`, spec 7):** the `changes` job gains the output `video: ${{ steps.filter.outputs.video }}` and the filter `video` with `video/**`, `tests/pipeline/studio/golden_timeline.json` (Task 37's contract test reads it, so a plan-C compiler change that regenerates it must run the renderer's suite), `ancient-nerds-map/src/styles/tokens.css` and `ancient-nerds-map/src/constants/colors.ts` (`test/colors.test.ts` reads them, so a palette change on the site must run the mirror test), and `ancient-nerds-map/public/fonts/**` (`test/glyphs.test.ts` recomputes `DRAWABLE` from the woff2 files, so a font change on the site must run it). The existing `backend` filter gains `video/src/blocks/registry.json` and `video/src/theme/glyphs.ts`: plan C's Python tests and `blocks.py` read both files, so a renderer-only commit that changes a block schema, a `drawn` list or the glyph set `DRAWABLE` must run plan C's contract tests too. A job `lint-video` with `needs: [changes]`, `if: needs.changes.outputs.video == 'true'`, Node 22 and `working-directory: video` runs `npm ci`, `npx tsc --noEmit` and `npx vitest run`; no `npx remotion browser ensure`. `deploy.needs` gains `lint-video` and deploy's `if` gains `contains(fromJSON('["success", "skipped"]'), needs.lint-video.result) &&`, like the other path-filtered jobs: a push without video changes skips the job and still deploys, a red `lint-video` blocks the deploy. CLAUDE.md's "All six gates" becomes seven. The job runs on Linux: nothing `npx vitest run` collects (`test/**/*.test.ts`) needs a GPU or a browser; the real-browser checks under `video/test/gpu/` (`*.gpu.ts`, `npm run test:gpu`, Task 11) are workstation only, and CI only type-checks them through `tsc` (`test/scripts.test.ts` spawns `node --import tsx` only; `test/colors.test.ts` reads `ancient-nerds-map/src` and `test/contract.test.ts` reads `tests/pipeline/studio/`, both in the checkout).
 2. **.githooks/pre-push:** for a `main` push whose diff touches a path of the `video` filter above, block with "run npm ci in video/" unless `video/node_modules/.bin/tsc` exists (the hook is fail-closed), then `run_gate` `npx tsc --noEmit` and `npx vitest run` in `video/`. Stage the hook with `git add --chmod=+x .githooks/pre-push` (`core.filemode` is false on this checkout).
-3. **docs/procedures/STUDIO.md (and the Studio section of CLAUDE.md):** the renderer (`cd video && npm ci && npx remotion browser ensure`; `npm run studio` previews the demo timeline with `--public-dir ../ancient-nerds-map/public`); the scripts run as `node --import tsx scripts/<name>.ts` in `video/` and bundle into the transient `render/bundle/`; the GPU rule's proofs (`gpu:` lines, the manifest's `gpu` event); captures need an awake display (headed Chrome), which the captures hold awake but cannot wake, and Playwright in the venv (`pip install playwright`, then `playwright install chrome`); a Mapbox fly-in takes up to 20 minutes; captures are HEVC because `h264_nvenc` clips stall Remotion's decoder (Task 25); text the video draws must stay within the code points the brand font files map (`DRAWABLE` of `video/src/theme/glyphs.ts`: latin and most of latin-ext, but no `Ḫ Ḥ Ṣ Ṭ Ṛ Ṇ Ḍ ʾ ʿ`, no U+2010-2012 hyphens, no `‰`; owner question Q14): only drawn strings are checked (owner decision 32: the block props listed in `registry.json`'s `drawn`, the credits and `place`/`pin` labels of captures, captions, chapter titles, thumbnail teasers), so an original quote shown inside a captured source page, the page's own non-latin title (recorded, never drawn: SourceViewer and the credit show only the ASCII hostname) and a non-latin URL path are fine; `episode check` refuses any other drawn character; a QuoteCard's quote is drawn and must be latin; a drawn character is checked in upper case too (`ƒ` draws as `Ƒ` and is refused; `µ` is refused as written: write `micrometre`); a hook word may have at most 24 characters (`HOOK_LINE_MAX_CHARS`, one caption row); a ShareCard, the only place the link appears in the picture, may only be the last beat; platform takes never toggle the `Satellite` base map (owner correction 2026-09-26; satellite shows in the details page or a Mapbox take); a Mapbox take's `country` must be the site export's country of its place and a name the site knows; the smoke render (Task 22) and real captures (Task 36) as the local checks.
+3. **docs/procedures/STUDIO.md (and the Studio section of CLAUDE.md):** the renderer (`cd video && npm ci && npx remotion browser ensure`; `npm run studio` previews the demo timeline with `--public-dir ../ancient-nerds-map/public`); the scripts run as `node --import tsx scripts/<name>.ts` in `video/` and bundle into the transient `render/bundle/`; the GPU rule's proofs (`gpu:` lines, the manifest's `gpu` event); captures need an awake display (headed Chrome), which the captures hold awake but cannot wake, and Playwright in the venv (`pip install playwright`, then `playwright install chrome`); a Mapbox fly-in takes up to 20 minutes; captures are HEVC because `h264_nvenc` clips stall Remotion's decoder (Task 25); text the video draws must stay within the code points the brand font files map (`DRAWABLE` of `video/src/theme/glyphs.ts`: latin and most of latin-ext, but no `Ḫ Ḥ Ṣ Ṭ Ṛ Ṇ Ḍ ʾ ʿ`, no U+2010-2012 hyphens, no `‰`; owner question Q14): only drawn strings are checked (owner decision 32: the block props listed in `registry.json`'s `drawn`, the credits and `place`/`pin` labels of captures, captions, chapter titles, thumbnail teasers), so an original quote shown inside a captured source page, the page's own non-latin title (recorded, never drawn: SourceViewer and the credit show only the ASCII hostname) and a non-latin URL path are fine; `episode check` refuses any other drawn character; a QuoteCard's quote is drawn and must be latin; a drawn character is checked in upper case too (`ƒ` draws as `Ƒ` and is refused; `µ` is refused as written: write `micrometre`); a hook word may have at most 24 characters (`HOOK_LINE_MAX_CHARS`, one caption row); a ShareCard, the only place the link appears in the picture, may only be the last beat; platform takes never toggle the `Satellite` base map (owner correction 2026-09-26; satellite shows in the details page or a Mapbox take); a Mapbox take's `country` must be the site export's country of its place and a name the site knows; the real-browser layout-lint check (`npm run test:gpu` in `video/`, Task 11), the smoke render (Task 22) and real captures (Task 36) as the local checks.
 4. **docs/video-pipeline.md:** it still describes the weekly Remotion composition this plan deletes (`WeeklyVideo`); replace that section with a pointer to the studio renderer in `video/` (`pipeline/video/timeline_builder.py` stays, described as having no renderer).
 
 The final-acceptance item runs after the push and covers spec 8.4(c) for this plan: the Baalbek claim-5 slice rendered end to end through the `studio-video` skill (plan C's `episode init` ... `package` with this plan's captures and renderer; no upload). This plan's Tasks 22, 36 and 37 are its local preconditions, not the acceptance.
@@ -15527,4 +15866,12 @@ Changed (commits 4bcfafd and 86e306e on `feat/studio`):
 - `layout/LayoutGuard.tsx`: it reports only once `fontsReady` is set, and throws when it is rendered under a registry that does not measure.
 - `test/guard.test.ts`: the tautological `measures only in lint mode` test is replaced by `refuses a box outside lint mode and keeps nothing` (still 4 tests).
 - New real-browser check `video/test/gpu/` (`guard.gpu.ts`, `guardFixture.tsx`, `vitest.config.ts`), run with `npm run test:gpu` (new script in `video/package.json`). It is workstation only: `npm test` collects only `*.test.ts`, so CI's `lint-video` never sees it. It bundles the fixture with the seven font files, opens every browser with `gl: 'angle'` and requires the NVIDIA renderer string. Then it renders the way `lint.ts` does (`renderFrames`, scale 0.5, violations from `onBrowserLog`), with the font files held back 2.5 s. It requires exactly these lines, as built by `violationLine`, on all 6 frames with concurrency 2: `teaser` overflow, `edge` outside-safe and `captions`/`lt` overlap, plus `drop` in the controls from frame 3. It also requires no lines outside lint mode, and on a Thumbnail-like one-frame composition exactly the teaser's overflow. The scene there, under a disabled registry, is not reported, and a fitting two-line teaser gives nothing. Measured 2026-09-27: 3 passed in about 36 s. Against 2d44956 the same check fails, missing the two first-frame overflows and the one-frame teaser overflow.
-- Follow-ups for other tasks, which this fix does not implement: Task 22 Step 2 should also run `npm run test:gpu` (expected `3 passed`). Once Task 20's `lint.ts` exists, a planted timeline run through `lint.ts` should show exit code 1 with exactly its violation lines, next to the `lint clean` runs.
+- Texts (rewritten in place by a follow-up commit, as Task 2's review fix and the I14 pass rewrote their tasks; e32b57e had only appended this section, which left the task blocks describing the old code):
+  - Task 11: its Files list, its intro (the font race and the real-browser check), its `guard.test.ts`, `LayoutBox.tsx` and `LayoutGuard.tsx` blocks (now the committed files), and a new Step 5 with the three `video/test/gpu/` files as complete-file blocks. Step 5 runs `npx tsc --noEmit && npm run test:gpu` (expected `Tests  3 passed (3)`) and records the measured failure without the font hold. The commit step became Step 6 and adds the three files.
+  - Task 2: the intro says why `brandFontsReady()` exists, and the `fonts.ts` block carries `brandFonts` and `brandFontsReady()`.
+  - Task 1: the `package.json` block has the `test:gpu` script, with a sentence on `test` against `test:gpu`.
+  - Task 22: the intro and Step 2 run `npm run test:gpu` before the lints, and Step 2's Expected names its result.
+  - The File Structure rows of `package.json`, `fonts.ts` and `LayoutBox.tsx`/`LayoutGuard.tsx`, and a new row for `video/test/gpu/`.
+  - The Spec coverage rows 4.8 layout and 4.11, cross-stream request 1 (CI collects only `*.test.ts`; `test/gpu` is type-checked, never run) and request 3 (STUDIO.md names `npm run test:gpu` among the local checks).
+- Checked 2026-09-27: each complete-file block of `video/package.json`, `video/src/theme/fonts.ts`, `video/src/layout/LayoutBox.tsx`, `video/src/layout/LayoutGuard.tsx`, `video/test/guard.test.ts` and the three `video/test/gpu/` files occurs once in this plan and is byte-identical to the committed file (a script extracted the blocks and compared them). `npm run test:gpu` then gave `Tests  3 passed (3)` (34.5 s). On a scratch copy with the 2d44956 `LayoutBox.tsx`, `LayoutGuard.tsx` and `fonts.ts` it gave `Tests  2 failed | 1 passed (3)`: 19 lines instead of 21, and `[]` for the one-frame teaser.
+- Still open, for Task 20 or 22 and not done here: once Task 20's `lint.ts` exists, a planted timeline run through `lint.ts` should show exit code 1 with exactly its violation lines, next to the `lint clean` runs.
