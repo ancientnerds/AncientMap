@@ -201,11 +201,30 @@ class TestInjectEvidenceAnchors:
             inject_evidence_anchors(rendered(), [NOWHERE])
 
 
-# nh3 (html5ever) leaves '<' and '>' raw inside a double-quoted attribute value,
-# so a writer's alt text or link title can carry this as inert text.
+# nh3 up to 0.3.6 (html5ever) leaves '<' and '>' raw inside a double-quoted
+# attribute value, so a writer's alt text or link title can carry this as inert
+# text; 0.3.7 escapes them. The scanner must handle the raw worst case whichever
+# nh3 is installed, so these fixtures are literal HTML in the shape 0.3.6 emits
+# for the markdown quoted above each one, not markdown_to_html output.
 PAYLOAD = "</p><img src=x onerror=alert(1)>"
 STONE = {"id": "ev-01", "anchor_text": "The Stone of the Pregnant Woman weighs"}
 ROMAN = {"id": "ev-02", "anchor_text": "Roman engineers moved the blocks"}
+# The Stone of the Pregnant Woman weighs roughly 1,000 tonnes ![x PAYLOAD](https://example.org/i.jpg)
+# and [a map](https://ancientnerds.com/x "x PAYLOAD") [1].
+PAYLOAD_IN_ALT_AND_TITLE = (
+    "<p>The Stone of the Pregnant Woman weighs roughly 1,000 tonnes "
+    f'<img alt="x {PAYLOAD}" src="https://example.org/i.jpg"> and '
+    f'<a href="https://ancientnerds.com/x" title="x {PAYLOAD}" rel="noopener noreferrer">'
+    "a map</a> [1].</p>"
+)
+# ![fig </p><p>The Stone of the Pregnant Woman weighs roughly</p>](https://example.org/i.jpg)
+#
+# Roman engineers moved the blocks with capstans [1].
+PARAGRAPH_IN_ALT = (
+    '<p><img alt="fig </p><p>The Stone of the Pregnant Woman weighs roughly</p>" '
+    'src="https://example.org/i.jpg"></p>\n'
+    "<p>Roman engineers moved the blocks with capstans [1].</p>"
+)
 
 
 def start_tags(html: str) -> list[tuple[str, list[tuple[str, str | None]]]]:
@@ -227,15 +246,9 @@ def start_tags(html: str) -> list[tuple[str, list[tuple[str, str | None]]]]:
 
 class TestMarkupInsideAttributesStaysInert:
     def test_a_closing_p_in_an_alt_or_a_title_is_not_the_paragraph_end(self):
-        html = markdown_to_html(
-            "The Stone of the Pregnant Woman weighs roughly 1,000 tonnes "
-            f"![x {PAYLOAD}](https://example.org/i.jpg) and "
-            f'[a map](https://ancientnerds.com/x "x {PAYLOAD}") [1].',
-            toc=False,
-        )
-        # The precondition: one paragraph, both payloads raw inside attributes.
-        assert html.startswith("<p>") and html.endswith("</p>")
-        assert html.count(PAYLOAD) == 2
+        html = PAYLOAD_IN_ALT_AND_TITLE
+        # The precondition: an HTML parser reads one paragraph holding an img and
+        # an a, the payloads being inert attribute text.
         before = start_tags(html)
         assert [tag for tag, _attrs in before] == ["p", "img", "a"]
 
@@ -261,13 +274,10 @@ class TestMarkupInsideAttributesStaysInert:
         assert all(name != "onerror" for _tag, attrs in after for name, _value in attrs)
 
     def test_a_paragraph_inside_an_alt_is_not_a_paragraph(self):
-        html = markdown_to_html(
-            "![fig </p><p>The Stone of the Pregnant Woman weighs roughly</p>]"
-            "(https://example.org/i.jpg)\n\n"
-            "Roman engineers moved the blocks with capstans [1].",
-            toc=False,
-        )
-        assert '<img alt="fig </p><p>The Stone' in html  # the precondition
+        html = PARAGRAPH_IN_ALT
+        # The precondition: an HTML parser sees two paragraphs, the first holding
+        # only the img whose alt quotes the Stone sentence.
+        assert [tag for tag, _attrs in start_tags(html)] == ["p", "img", "p"]
         with pytest.raises(PaperPageError, match="ev-01 matches 0 paragraphs"):
             resolve_evidence_anchors(html, [STONE])
         # <p> order: the image-only paragraph, then the prose one.
@@ -277,9 +287,8 @@ class TestMarkupInsideAttributesStaysInert:
         )
 
     def test_a_gt_inside_an_attribute_does_not_end_the_tag(self):
-        html = markdown_to_html("A ![a > b](https://example.org/i.jpg) c [1].", toc=False)
-        inner = html.removeprefix("<p>").removesuffix("</p>")
-        assert inner == 'A <img alt="a > b" src="https://example.org/i.jpg"> c [1].'
+        # nh3 0.3.6's rendering of: A ![a > b](https://example.org/i.jpg) c [1].
+        inner = 'A <img alt="a > b" src="https://example.org/i.jpg"> c [1].'
         assert _paragraph_text(inner) == "A  c [1]."
 
     def test_a_br_inside_an_attribute_is_not_a_line_break(self):
