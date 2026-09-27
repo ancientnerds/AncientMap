@@ -83,3 +83,55 @@ WA mass run -> WC -> WB (per site after its description is final) -> WD conflict
 - 2026-09-26 ~19:00-21:30 UTC: **03359e8 live** (CI green; api/api2 on 03359e86; 0 card overwrites at boot). On the way: dec81b8 reached main outside this orchestrator's push (an agent; CI failed on test_e3_oceania - countries.geojson is an LFS pointer on the runner - so nothing deployed); CI now pulls that LFS object (3ec8986); the WC User-Agent sweep case re-anchored. WB pilots 1 and 2 FAILED by the gate (pilot 1: Wikimedia refused the bare User-Agent - fixed, one constant `research_web.USER_AGENT`; pilot 2: 120/122 claims proven, 2 contradicted, both faithful to wrong Wikipedia sentences, like Concangis in pilot 1) -> lane WB gets a per-card web verification before any write (`wip/wb2`, building). WA writes: step 1 (96 sites) accepted after the loop's acceptance capture was fixed (stdout only, `^ACCEPTED`); steps continue, a 10-site Opus audit after every 500 written sites.
 - 2026-09-26 ~21:45 UTC: WA writes past 2,200 sites (every step 0 deviations; audits 1 and 2: 121/121 sentences supported; one duplicate-loop race recorded, no double write). **v3d** built after the 48 h window (`PLAN4.v3d.jsonl` `7a147b7f...`): 133 sites in 9 batches p4-2501..p4-2509 (the mass run's 19 deferred + the L5 population's March sites, now that L5 landed); exported (72 held before any question); workflow `wa-v3d-handoff` answers it. WD1: both pilots PASS and written (waves 2026-09-26a: 63 sites/158 cells; 2026-09-26c: 46 sites/89 cells); the bulk parts run (`wd1` 1,243 sites, `wd1-rest` 3,359). WB: `wip/wb2` (per-card web verification, verified-text hash in the provenance) merged (f5df945); pilot 3 running with the full stage chain.
 - 2026-09-27 ~10:50 UTC: after two usage-limit pauses (the workflows waited and resumed; 56 WD1 part-1 batches and the WD1 imports failed at the limit and were resumed from cache): **WA complete** (1,769 sites, AUDIT_LOG). **WB**: pilot 3 PASS; card sittings 1 (19 cards, 14ef1f9) and 2 (chunk 03: 446 cards, 4 clears, steps 2-6, **5b9fc5b live**; 0 boot overwrites, card file = DB, steps re-accepted); chunks 01/02/04/05/06 continue (`wb-continue`). **WC**: pilots 1 and 2 failed the judge on single items -> `wip/wc2` (independent per-site verification, text-bound, write-once import) merged (590d2d2); pilot 3 running. **WD1**: part 2 r0 fully answered (3,359), import and re-asks running; part 1 r0 823/1,243, the rest re-running.
+
+## 5. RESUME POINT - stopped cleanly on the owner's word, 2026-09-27 ~14:30 UTC ("stop so dass wir später weitermachen können")
+
+**Production, nothing in flight** (every write journalled and accepted; no step pending in any apply root):
+- live main **5b9fc5b** (API on it; card file = DB). `integrate/wave1` is ahead with docs, the WC
+  verification merge (590d2d2, scripts only) and the records below - push them with the next sitting
+  (by fixed SHA: `git push origin $(git rev-parse HEAD):refs/heads/main`, never commit during a push).
+- **WA done**: 1,769 sourced descriptions (v3 1,750 + v3d 19). Re-queues due: v3 48 sites from
+  2026-09-28T07:57Z, v3d 2 from 2026-09-28T21:42Z (PHASE4_V3_RUNBOOK section 9.1, from the p4-pilot
+  worktree; then write with `orchestration/p4v3_write_loop.sh` / `p4v3d_write_loop.sh`).
+- **L5 done** (76 link sites, 2 renames). **WD1 pilots written** (waves 2026-09-26a, 2026-09-26c).
+- **WB**: 465 teaser cards live (steps 1-6: pilot 19 + chunk 03 446, 5 clears).
+- **WC**: pilot 3 written (p4wc-4003, 20 sites).
+
+**Stopped mid-run - resume in this order** (Workflow `resumeFromRunId` replays finished agents from
+cache; the scripts are also kept in `output/remediation/orchestration/`):
+1. **WB caption fix** (`wip/wb3`, worktree `.claude/worktrees/wb3`: 1 commit 884f185 + the builder's
+   uncommitted edits - it was stopped mid-build): resume workflow `wf_fedd4fb6-478` (script
+   `.../workflows/scripts/wb3-build-wf_fedd4fb6-478.js`), or finish by hand: long caption words are
+   drawn at their own smaller size, the contract refuses only words beyond the floor. Merge, then
+   resume the WB chunks with `orchestration/wb-continue.js` (args `{"runs": ["wb-ws-2026-09-27-04",
+   "wb-ws-2026-09-27-02", "wb-ws-2026-09-27-01", "wb-ws-2026-09-27-05", "wb-ws-2026-09-27-06"],
+   "width": 5}`): the stuck write labels are exactly the too-wide-word sites (Sammallahdenmaeki,
+   Hohlenstein-Stadel, Saint-Pierre-aux-Nonnains, Sainte-Colombe-sur-Seine, Strubben-Kniphorstbos,
+   a card naming Mecklenburg-Vorpommern; chunk 05 rewrite1-001 one label). Chunk states: 01/02/04/06
+   write exported (01: 446/450 answered, 02: 447, 04: 449, 06 write not imported), 05 at rewrite1
+   (5/6) with 444 due verify. Then per finished chunk: a card sitting (`orchestration/wb_step.sh RUN N`
+   per step, drill first, `teaser.py card-file --steps A-B`, `card_json.py --check`, commit, push at
+   once, after-deploy checks) - CARD_DESCRIPTIONS.md 5.4-5.5.
+2. **WD1 part 2** (`output/remediation/fields/wd1-rest`): r0 (3,359) and r1 (161) imported, r2
+   exported 11 questions, 9 answered: resume `wf_4368c592-77b` (script `C:/tmp/wd1-handoff-pool.js`
+   = `orchestration/wd1-handoff-pool.js`, args `{"run": "output/remediation/fields/wd1-rest", "ho":
+   "output/remediation/handoff/fields-wd1-rest", "pilot": false, "width": 7}`). Then write wave
+   **2026-09-26d** with `orchestration/wd1_wave.sh 2026-09-26d output/remediation/fields/wd1-rest`.
+3. **WD1 part 1** (`output/remediation/fields/wd1`): r0 1,003 of 1,243 answered: resume
+   `wf_9bc72d57-5d4` (same script, args `{"run": "output/remediation/fields/wd1", "ho":
+   "output/remediation/handoff/fields-wd1", "pilot": false, "width": 5}`), then wave **2026-09-26b**.
+   After both parts: the card_stats wave and the site_external_ids follow-up from each wave's
+   HANDOFF.json (FIELDS_WD1.md 3.4 step 15).
+4. **WC mass**: chunk `mass-2026-09-27-01` exported (500 sites, 36 answered); `mass-2026-09-27-02`
+   has READ.json but no export. Resume `wf_710ea3ca-153` (`orchestration/wc-mass.js`, args
+   `{"prefix": "mass-2026-09-27", "chunks": 6, "limit": 500, "firstBatchBase": 4100, "width": 4}`) -
+   note: its export op for chunk 02 will be re-run and `read` refuses a second read of that run dir
+   (written once): run chunk 02's `export` (with `--after` chunk 01) by hand or use fresh run names
+   for chunks 02+. Write each built chunk with `orchestration/wc_write.sh <pilot-c WC4> <chunk WC4 ...>`
+   (every WC plan named, the passed pilot first).
+5. Then, in order: WB over the WC texts (a pilot with `--basis WC` first), WD2 (scope review of
+   non-sites incl. Richat Structure / Hadrian's Wall Path / Baltic Sea Anomaly, Oceania; then the
+   served image), the Chiapa de Corzo hide + rename, the description-defect list (AUDIT_LOG: the WA
+   audits' gold errors, WB DESCRIPTION_DEFECTS.jsonl), WF (static export, Qdrant, IndexNow, final
+   measurement of error rates per field, HANDOVER/CLAUDE.md/memory).
+Owner-only, unchanged: A4 (Discord webhook URL for backup alerts), A5 third backup location.
