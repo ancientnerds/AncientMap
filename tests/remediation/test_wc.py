@@ -393,14 +393,26 @@ def test_nothing_kept_composes_no_text_and_no_citation() -> None:
 
 # ------------------------------------------------------------------------------ the record
 def _outcome(site_row: dict, decisions=None, quotes=None):
+    """A site's outcome after a passed verification (every kept sentence SUPPORTED, coherent)."""
     site = FX.plan_site(site_row)
     decisions = _three() if decisions is None else decisions
     quotes = _quotes() if quotes is None else quotes
+    kept = WC4.kept_numbers(decisions)
+    decisions, verification = WC4.apply_verification(
+        decisions, quotes, [FX.passed_round(kept)] if kept else []
+    )
     composed = WC4.compose(decisions, quotes)
     check = (
         None
         if composed.description is None
-        else WC4.check_record(decisions, composed, quotes, run="wc-test", checked=site.description)
+        else WC4.check_record(
+            decisions,
+            composed,
+            quotes,
+            run="wc-test",
+            checked=site.description,
+            verification=verification,
+        )
     )
     return site, composed, check, WC4.written_raw_data(site, composed, check)
 
@@ -411,8 +423,10 @@ def test_the_check_record_reads_back_strictly_and_counts_what_its_sentences_say(
     )
     assert WC4.DescriptionCheck.from_dict(check.to_dict()) == check
     assert (check.kept, check.of, check.trimmed) == (3, 3, 1)
-    assert check.checker == M.AI_SYSTEM
+    assert check.checker == M.AI_SYSTEM and check.v == 2
     assert check.desc_sha256 == M.text_sha256(composed.description)
+    assert check.verified_sha256 == check.desc_sha256
+    assert check.verifiers == ("opus-wc-verify-0001",)
     assert check.sentences[1].quote_sha256 == (
         M.text_sha256("the quote two"),
         M.text_sha256("the quote three"),
@@ -423,6 +437,12 @@ def test_the_check_record_reads_back_strictly_and_counts_what_its_sentences_say(
         ({**data, "kept": 2}, "is not what its sentences say"),
         ({**data, "checker": "someone"}, "is not"),
         ({**data, "desc_sha256": "x"}, "sha256"),
+        ({**data, "verified_sha256": "x"}, "verified_sha256"),
+        ({**data, "verifiers": []}, "published only verified"),
+        ({**data, "verifiers": ["a", "a"]}, "one distinct agent"),
+        ({**data, "verifiers": ["a", "b", "c"]}, "one distinct agent"),
+        ({k: v for k, v in data.items() if k != "verifiers"}, "missing"),
+        ({**data, "v": 1}, "version 2"),
     ):
         with pytest.raises(ValueError, match=message):
             WC4.DescriptionCheck.from_dict(broken)
@@ -435,7 +455,8 @@ def test_a_record_never_describes_a_cleared_text() -> None:
     with pytest.raises(ValueError, match="nothing kept is a clear"):
         WC4.DescriptionCheck(
             run="r", checker=M.AI_SYSTEM, checked_sha256="a" * 64, kept=0, of=1, trimmed=0,
-            sentences=(sentence,), desc_sha256="b" * 64,
+            sentences=(sentence,), desc_sha256="b" * 64, verifiers=("v",),
+            verified_sha256="b" * 64,
         )  # fmt: skip
 
 
@@ -574,6 +595,8 @@ def _pair() -> tuple[str, dict]:
          "carries"),
         (lambda d, r: (d, {k: v for k, v in r.items() if k != WC4.CHECK_KEY}), "does not read"),
         (lambda d, r: (None, r), "cleared description beside"),
+        (lambda d, r: (d, {**r, WC4.CHECK_KEY: {**r[WC4.CHECK_KEY], "verified_sha256": "a" * 64}}),
+         "not the one its verifier confirmed"),
     ],
 )  # fmt: skip
 def test_every_wc_invariant_goes_red_when_it_breaks(break_it, message) -> None:
@@ -738,12 +761,17 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: Re-pinned again 2026-09-27 after pilot pilot-2026-09-27 failed its judge on one kept sentence
 #: (Cloghanmore: "passage tomb-style" carvings and "the only court tomb" disputed by a scholarly
 #: source): rule 1 names superlative, uniqueness and style claims and asks for disputing sources.
+#: 2026-09-27, after pilot pilot-2026-09-27b failed on one WRONG kept sentence and one incoherent
+#: site (Nyons): VERIFY_QUESTION and VERIFY_BRIEF added (the per-site verification before build);
+#: JUDGE_BRIEF re-pinned - the pilot's judge is fresh, no checker or verifier of the run.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
     "CHECK_BRIEF": "5844ec9957fc97e651c2d1aead3edc08204e7a2eda981c0f02cfb1098d5291e5",
+    "VERIFY_QUESTION": "56991ce8eb31b8b3fdfa58b0daf1da1dd2a8b7ca4ce71b0be3322637ad321c00",
+    "VERIFY_BRIEF": "142bac74c54bdad6632c7d6876c5aba59312897172b8e517b4b11aa892979290",
     "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
-    "JUDGE_BRIEF": "69add49e539ba7df7ec4a2ed26d16fbb97c2f88d7f13c418fadf136a6db38a6a",
+    "JUDGE_BRIEF": "853b93c107c3721c2298b88ea85fef9bbc361b9c945380a1a2039f091b703060",
 }
 
 
@@ -969,6 +997,7 @@ def test_a_sentence_whose_quote_fails_is_reasked_once_then_dropped(tmp_path: Pat
     with pytest.raises(C.WcRunError, match="once"):
         C.cmd_export_reask(run, tmp_path / "handoff" / "wc-test-r3", batch_size=5)
 
+    FX.verify_all(run, tmp_path / "handoff" / "wc-test-verify")
     summary = C.cmd_build(run, first_batch=4001)
     assert summary["sites"] == 3 and summary["cleared"] == 2
     finals = C._finals(run)
@@ -997,6 +1026,7 @@ def test_a_sentence_still_failing_after_the_reask_round_is_dropped_unverified(
     (line,) = OH.manifest(second)
     assert "status 403" in (second / line["prompt_path"]).read_text(encoding="utf-8")
     _import(run, second, {FX.SITE_A: FX.answer(FX.SITE_A, [FX.keep(3, FX.Q_ZAMMIT)])})
+    FX.verify_all(run, tmp_path / "handoff" / "wc-test-verify")
     C.cmd_build(run, first_batch=4001)
     decisions = C._finals(run)[FX.SITE_A]["decisions"]
     assert (decisions[2]["verdict"], decisions[2]["reason"]) == ("DROP", "unverified")
@@ -1044,6 +1074,7 @@ def _built(tmp_path: Path) -> Path:
         FX.keep(3, FX.Q_ZAMMIT, FX.Q_ZAMMIT_WIKI),
     ])  # fmt: skip
     _import(run, handoff, answers)
+    FX.verify_all(run, tmp_path / "handoff" / "wc-test-verify")
     C.cmd_build(run, first_batch=4001)
     return run
 
@@ -1167,7 +1198,7 @@ def test_a_wrong_an_unsupported_share_or_an_incoherent_text_fails_the_pilot(
     assert not result["passed"] and any(failure in f for f in result["failures"])
 
 
-def test_a_judge_who_checked_the_site_is_not_independent(tmp_path: Path) -> None:
+def test_a_judge_who_checked_a_site_of_the_run_is_not_independent(tmp_path: Path) -> None:
     run, handoff = _judge_run(tmp_path)
     answers = {
         label: _judgement(label, ["SUPPORTED"] * 3, []) if label == FX.SITE_A
@@ -1182,7 +1213,9 @@ def test_a_judge_who_checked_the_site_is_not_independent(tmp_path: Path) -> None
         (handoff / line["answer_path"]).write_text(json.dumps(stored), encoding="utf-8")
     result = C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)
     assert not result["passed"]
-    assert any("judged by one of their checkers" in f for f in result["failures"])
+    assert any("judged by a checker or verifier of the run" in f for f in result["failures"])
+    # every judged site counts as dependent: a judge's name is checked against the whole run
+    assert result["measured"]["independent"] == 0
 
 
 def test_judge_check_answer_reads_the_shape_only(tmp_path: Path) -> None:

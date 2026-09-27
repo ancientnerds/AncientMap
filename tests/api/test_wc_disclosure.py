@@ -26,6 +26,8 @@ if str(REMEDIATION) not in sys.path:
 from phase4 import model4 as M  # noqa: E402
 from phase4 import wc4 as WC4  # noqa: E402
 
+from tests.remediation.wc_fixtures import passed_round  # noqa: E402
+
 SITE_ID = "4a5a324f-0000-4000-8000-000000000001"
 MARCH = (
     "The Tarxien Temples are an archaeological complex in Tarxien, Malta [1]. They were built "
@@ -48,8 +50,8 @@ def _site(raw_data: dict | None, *, snapshot: str = "The pre-March text.") -> M.
 def _checked(
     raw_data: dict | None, *, keep: bool, snapshot: str = "The pre-March text."
 ) -> tuple[str | None, dict | None]:
-    """What the lane writes for this site: the first sentence kept on a quote, the second dropped
-    - or both dropped (`keep=False`)."""
+    """What the lane writes for this site: the first sentence kept on a quote and verified, the
+    second dropped - or both dropped (`keep=False`)."""
     site = _site(raw_data, snapshot=snapshot)
     first, second = WC4.checked_sentences(MARCH)
     decisions = [
@@ -59,9 +61,16 @@ def _checked(
         WC4.Decision(2, second, WC4.Verdict.DROP, None, WC4.DropReason.CONTRADICTED),
     ]
     quotes = {1: [WC4.Quote(WIKI, "Tarxien Temples - Wikipedia", "an archaeological complex")]}
+    decisions, verification = WC4.apply_verification(
+        decisions, quotes, [passed_round([1])] if keep else []
+    )
     composed = WC4.compose(decisions, quotes if keep else {})
     check = (
-        WC4.check_record(decisions, composed, quotes, run="wc-api", checked=MARCH) if keep else None
+        WC4.check_record(
+            decisions, composed, quotes, run="wc-api", checked=MARCH, verification=verification
+        )
+        if keep
+        else None
     )
     return composed.description, WC4.written_raw_data(site, composed, check)
 

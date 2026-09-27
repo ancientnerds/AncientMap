@@ -11,6 +11,11 @@ order, is `docs/procedures/SENTENCE_CHECK.md`.
     $C check-answer       --run-dir R --handoff H --batch-id B --label SITE --text-file F
     $C import             --run-dir R --handoff H        # after opus_handoff.py validate
     $C export-reask       --run-dir R --handoff H2       # the sentences whose quotes failed, once
+    $C verify-export      --run-dir R --handoff HV       # verify: every site that kept a sentence
+    $C verify-brief       --run-dir R --handoff HV --batch-id B
+    $C verify-check-answer --run-dir R --handoff HV --batch-id B --label SITE --text-file F
+    $C verify-import      --run-dir R --handoff HV       # after opus_handoff.py validate
+    $C verify-export      --run-dir R --handoff HV2      # verify2: the texts a drop changed, once
     $C build              --run-dir R --first-batch N    # FINAL, SUMMARY, WC4.jsonl (the gate plan)
     $C judge-export       --run-dir R --handoff HJ       # the pilot's independent judge
     $C judge-brief        --run-dir R --handoff HJ --batch-id B
@@ -47,22 +52,39 @@ as given. A sentence that does not count - or every asked sentence of an answer 
 shape - is re-asked once (`export-reask`, round 2, with what failed); after that round it is dropped
 (`unverified`). `build` refuses while a re-ask is due or unimported.
 
-**The build** (`build`): per site, each sentence's decision from the last round that asked it, the
-pronoun rule (`wc4.follow_drops`), the composed text and citations (`wc4.compose`), the check record
-and the raw_data (`wc4.check_record`, `wc4.written_raw_data`), the journal evidence (every decision
-with the agent's quotes and what the check said of each, every answer's sha256), then the gate plan
-`WC4.jsonl` - batches of `wc4.BATCH_SIZE` sites from `--first-batch`, marked `wc4.PLAN_MARK` - which
-`write_gate4.py --group WC --wc-plan` writes in steps.
+**The verification** (`verify-*`, owner decisions O5 and O2; the pilots of 2026-09-27 let one error
+in 50-60 kept sentences through a single check): after the check rounds, every site whose check kept
+a sentence goes to an independent Opus verifier (stage `verify`, batches `verify-NNNN` of
+`--batch-size` sites) - the judge's question, answer shape and machine quote check
+(`prompts.VERIFY_QUESTION`, `answers.parse_verify`, `answers.check_quotes`) applied to the kept text
+as it will be published: the trims applied, in order, the dropped sentences shown as context. Every
+kept sentence is SUPPORTED (stays), UNSUPPORTED or WRONG (dropped - a WRONG whether code found its
+quote or not); an incoherent text names its broken sentences (dropped), and one with none named is
+cleared; then the pronoun rule. A text a drop changed goes to a new verifier once (`verify2`,
+batches `verify2-NNNN`): coherent and every sentence SUPPORTED keeps it, anything else clears it
+(`wc4.run_verification`). The import refuses a verifier whose name checked the site or verified it
+in round 1; it fetches every quoted page once into `<run>/verify/pages/`. Nothing is added back.
+
+**The build** (`build`): refused while a check or verification round is due. Per site, each
+sentence's decision from the last round that asked it, the pronoun rule (`wc4.follow_drops`), the
+verification (`wc4.apply_verification`), the composed text and citations (`wc4.compose`), the check
+record naming the verifiers and the verified text's sha256, and the raw_data (`wc4.check_record`,
+`wc4.written_raw_data`), the journal evidence (every decision with its decision before the
+verification, the agent's quotes and what the check said of each, every answer's sha256, the
+verification record), then the gate plan `WC4.jsonl` - batches of `wc4.BATCH_SIZE` sites from
+`--first-batch`, marked `wc4.PLAN_MARK` - which `write_gate4.py --group WC --wc-plan` writes in
+steps.
 
 **Chunks** (`export --limit N`): the first N sites of the population in site-id order, the next
 chunk naming every earlier chunk not yet written in `--after`; each chunk is its own run, imported,
 built and written on its own, so the writes start while later chunks are still being answered.
 
 **The pilot** (`export --pilot 20 --seed S`): a seeded draw of the population, run end to end; its
-result is measured by an independent Opus judge (`judge-*`: every kept sentence SUPPORTED,
-UNSUPPORTED or WRONG, every dropped one DROP_OK or DROP_WRONG, the kept text coherent or not;
-quotes machine-checked; a judge who answered a check question of the site does not count) against
-the thresholds `J_THRESHOLDS`, before the mass run: `judge-import` prints `JUDGE_EXIT=0` for a pass.
+post-verification result is measured by a fresh Opus judge (`judge-*`: every kept sentence
+SUPPORTED, UNSUPPORTED or WRONG, every dropped one DROP_OK or DROP_WRONG, the kept text coherent or
+not; quotes machine-checked; a judge who checked or verified any site of the run does not count)
+against the thresholds `J_THRESHOLDS`, before the mass run: `judge-import` prints `JUDGE_EXIT=0` for
+a pass. The judged plan is tied to the plan the gate writes (`plan_sha256`, `pilot_approval`).
 """
 
 from __future__ import annotations
@@ -109,6 +131,11 @@ FINAL_FILE = "FINAL.jsonl"
 SUMMARY_FILE = "SUMMARY.json"
 PLAN_FILE = "WC4.jsonl"
 JUDGE_DIR = "judge"
+#: The verification's directory under the run: `round-<n>/ROUND.json` (the export's record: its
+#: handoff, batches and the sentences each question showed), `round-<n>/VERIFIED.jsonl` (the
+#: import's record per site) and `pages/` (the pages the verifiers quoted, fetched by code).
+VERIFY_DIR = "verify"
+VERIFY_STAGES = wc4.VERIFY_STAGES
 #: The lanes whose provenance is a full Phase-4 one: their text is Phase 4's, never WC's.
 FULL_LANES = frozenset(lane.value for lane in M.LANE_CHANGES)
 #: The pilot's pass mark, sealed with the lane (docs/procedures/SENTENCE_CHECK.md): no kept
@@ -698,6 +725,44 @@ def cmd_export_reask(run: Path, handoff: Path, *, batch_size: int) -> dict[str, 
     return _export_round(run, handoff, number=last + 1, questions=questions, batch_size=batch_size)
 
 
+# ------------------------------------------------------------------------------------ the views
+def _view(
+    decisions: Sequence[wc4.Decision], quotes: Mapping[int, Sequence[wc4.Quote]]
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """A site's kept sentences as they will be published (trimmed where they are, with the verified
+    quotes their markers cite and the old sentence a piece was cut from) and its dropped sentences,
+    in order - what a verifier and the pilot's judge are shown."""
+    kept: list[dict[str, Any]] = []
+    dropped: list[str] = []
+    for decision in decisions:
+        text = decision.text
+        if text is None:
+            dropped.append(decision.sentence)
+            continue
+        kept.append(
+            {
+                "text": text,
+                "quotes": [{"url": q.url, "quote": q.quote} for q in quotes.get(decision.n, ())],
+                "trimmed_from": decision.sentence if text != decision.sentence else None,
+            }
+        )
+    return kept, dropped
+
+
+def _kept_lines(kept: Sequence[Mapping[str, Any]]) -> str:
+    lines = []
+    for k, item in enumerate(kept, start=1):
+        lines.append(f"K{k}: {item['text']}")
+        if item["trimmed_from"] is not None:
+            lines.append(f'    trimmed from: "{item["trimmed_from"]}"')
+        lines.extend(f'    quote: "{q["quote"]}" - {q["url"]}' for q in item["quotes"])
+    return "\n".join(lines) if lines else "(none - the description is cleared)"
+
+
+def _dropped_lines(dropped: Sequence[str]) -> str:
+    return "\n".join(f"D{d}: {text}" for d, text in enumerate(dropped, start=1)) or "(none)"
+
+
 # ------------------------------------------------------------------------------------ the build
 def _results(run: Path) -> tuple[dict[str, dict[int, dict[str, Any]]], dict[str, list[dict]]]:
     """Per site, each sentence's result from the last round that asked it, and every attempt."""
@@ -722,28 +787,62 @@ def _results(run: Path) -> tuple[dict[str, dict[int, dict[str, Any]]], dict[str,
     return results, attempts
 
 
+@dataclasses.dataclass(frozen=True)
+class Checked:
+    """One asked site after the check rounds: its entry, its decisions (every round, the pronoun
+    rule), the verified quotes of each kept sentence, and every check attempt - what the
+    verification starts from."""
+
+    entry: dict[str, Any]
+    results: dict[int, dict[str, Any]]
+    attempts: list[dict[str, Any]]
+    decisions: list[wc4.Decision]
+    quotes: dict[int, list[wc4.Quote]]
+
+    @property
+    def checkers(self) -> set[str]:
+        return {attempt["answered_by"] for attempt in self.attempts}
+
+
+def checked_sites(run: Path) -> dict[str, Checked]:
+    """Every asked site of the run, in the run's order, after the check rounds; refused while a
+    check round is due or a site was never answered."""
+    results, attempts = _results(run)
+    out: dict[str, Checked] = {}
+    for entry in read_jsonl(run / SITES_FILE):
+        label = entry["site_id"]
+        if label not in results:
+            raise WcRunError(f"{label} was never answered")
+        decisions, quotes = _decisions(entry, results[label])
+        out[label] = Checked(entry, results[label], attempts[label], decisions, quotes)
+    return out
+
+
 def outcome_of(
-    entry: Mapping[str, Any],
-    results: Mapping[int, Mapping[str, Any]],
-    attempts: Sequence[Mapping[str, Any]],
-    *,
-    run_name: str,
-) -> tuple[wc4.WcOutcome, list[wc4.Decision]]:
-    """One site's outcome: its decisions, the composed text, the record, the raw_data, the
-    journal evidence."""
+    checked: Checked, rounds: Sequence[Mapping[str, Any]], *, run_name: str
+) -> tuple[wc4.WcOutcome, list[wc4.Decision], dict[str, Any]]:
+    """One site's outcome: its check decisions, the verification (`rounds`, the site's verification
+    rounds as imported), the verified decisions, the composed text, the record, the raw_data and
+    the journal evidence; and the verification record."""
+    entry, results = checked.entry, checked.results
     site = M.PlanSite.from_dict(entry["plan_site"])
-    decisions, verified = _decisions(entry, results)
-    composed = wc4.compose(decisions, verified)
+    decisions, verification = wc4.apply_verification(checked.decisions, checked.quotes, rounds)
+    composed = wc4.compose(decisions, checked.quotes)
     check = (
         None
         if composed.description is None
         else wc4.check_record(
-            decisions, composed, verified, run=run_name, checked=str(site.description)
+            decisions,
+            composed,
+            checked.quotes,
+            run=run_name,
+            checked=str(site.description),
+            verification=verification,
         )
     )
     raw = wc4.written_raw_data(site, composed, check)
     sentences = []
-    for decision in decisions:
+    for before, decision in zip(checked.decisions, decisions, strict=True):
         result = results.get(decision.n)
         answer = result["answer"] if result else None
         sentences.append(
@@ -753,6 +852,11 @@ def outcome_of(
                 "verdict": decision.verdict.value,
                 "remove": decision.remove,
                 "reason": None if decision.reason is None else decision.reason.value,
+                "checked": {
+                    "verdict": before.verdict.value,
+                    "remove": before.remove,
+                    "reason": None if before.reason is None else before.reason.value,
+                },
                 "answered": None if answer is None else answer["verdict"],
                 "note": None if answer is None else answer["note"],
                 "round": None if result is None else result["round"],
@@ -770,34 +874,67 @@ def outcome_of(
         "kept": sum(d.kept for d in decisions),
         "of": len(decisions),
         "sentences": sentences,
-        "answers": list(attempts),
+        "answers": list(checked.attempts),
+        wc4.VERIFICATION_KEY: verification,
     }
-    return (
-        wc4.WcOutcome(
-            site_id=site.site_id,
-            description=composed.description,
-            raw_data=raw,
-            evidence=evidence,
-        ),
-        decisions,
+    outcome = wc4.WcOutcome(
+        site_id=site.site_id, description=composed.description, raw_data=raw, evidence=evidence
     )
+    return outcome, decisions, verification
+
+
+def verification_summary(record: Mapping[str, Any]) -> dict[str, Any]:
+    """A site's verification as FINAL.jsonl shows it: where it ended, the verifiers, and per round
+    each shown sentence's verdict, the coherence, what it dropped and why."""
+    return {
+        "status": record["status"],
+        "verifiers": [r["answered_by"] for r in record["rounds"]],
+        "before": record["before"],
+        "kept": record["kept"],
+        "rounds": [
+            {
+                "stage": r["stage"],
+                "answered_by": r["answered_by"],
+                "verdicts": {str(v["n"]): v["verdict"] for v in r["verdicts"]},
+                "coherent": r["coherent"],
+                "broken": r["broken"],
+                "passed": r["passed"],
+                "drops": r["drops"],
+                "cleared": r["cleared"],
+                "text_sha256": r["text_sha256"],
+            }
+            for r in record["rounds"]
+        ],
+    }
 
 
 def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) -> dict[str, Any]:
-    """Every site's outcome (`FINAL.jsonl`), the counts (`SUMMARY.json`) and the gate plan."""
+    """Every site's outcome (`FINAL.jsonl`), the counts (`SUMMARY.json`) and the gate plan; refused
+    while a check round or a verification round is due - nothing is built from an unverified
+    text."""
     if first_batch < wc4.FIRST_BATCH:
         raise WcRunError(f"--first-batch {first_batch}: the WC block starts at {wc4.FIRST_BATCH}")
-    results, attempts = _results(run)
-    sites = read_jsonl(run / SITES_FILE)
+    checked = checked_sites(run)
+    inputs = _verification_inputs(run)
+    for label, site in checked.items():
+        _, derived, status = wc4.run_verification(
+            site.decisions, site.quotes, inputs.get(label, [])
+        )
+        if status is None:
+            raise WcRunError(
+                f"{label}: verification round {len(derived) + 1} "
+                f"({VERIFY_STAGES[len(derived)]}) is due - verify-export, answer, validate and "
+                "verify-import it first: nothing is built from an unverified text"
+            )
     finals: list[dict[str, Any]] = []
     outcomes: list[wc4.WcOutcome] = []
     reasons: Counter[str] = Counter()
     verdicts: Counter[str] = Counter()
-    for entry in sites:
-        label = entry["site_id"]
-        if label not in results:
-            raise WcRunError(f"{label} was never answered")
-        outcome, decisions = outcome_of(entry, results[label], attempts[label], run_name=run.name)
+    records: dict[str, dict[str, Any]] = {}
+    for label, site in checked.items():
+        entry = site.entry
+        outcome, decisions, record = outcome_of(site, inputs.get(label, []), run_name=run.name)
+        records[label] = record
         problems = wc4.wc_problems(outcome.description, outcome.raw_data) + wc4.evidence_problems(
             outcome.evidence, outcome.description, outcome.raw_data
         )
@@ -816,25 +953,26 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
                 "cleared": outcome.description is None,
                 "description": outcome.description,
                 "decisions": [{**dataclasses.asdict(d), "text": d.text} for d in decisions],
+                "verification": verification_summary(record),
                 "evidence": outcome.evidence,
             }
         )
     RF.write_jsonl(run / FINAL_FILE, finals)
-    by_site = {entry["site_id"]: entry for entry in sites}
-    records = []
+    plan_batches = []
     for start in range(0, len(outcomes), batch_size):
         chunk = outcomes[start : start + batch_size]
         ordinal = first_batch + start // batch_size
-        records.append(
+        plan_batches.append(
             {
                 "batch_id": f"p4-{ordinal:04d}",
                 "ordinal": ordinal,
                 "pass": wc4.PLAN_MARK,
-                "sites": [by_site[o.site_id]["plan_site"] for o in chunk],
+                "sites": [checked[o.site_id].entry["plan_site"] for o in chunk],
                 "outcomes": [o.to_dict() for o in chunk],
             }
         )
-    RF.write_jsonl(run / PLAN_FILE, records)
+    RF.write_jsonl(run / PLAN_FILE, plan_batches)
+    rounds = [r for record in records.values() for r in record["rounds"]]
     summary = {
         "sites": len(finals),
         "cleared": sum(f["cleared"] for f in finals),
@@ -843,46 +981,332 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
         "sentences_kept": sum(f["kept"] for f in finals),
         "verdicts": dict(sorted(verdicts.items())),
         "drop_reasons": dict(sorted(reasons.items())),
+        "verification": {
+            "by_status": dict(sorted(Counter(r["status"] for r in records.values()).items())),
+            "verify2_sites": sum(len(r["rounds"]) == len(VERIFY_STAGES) for r in records.values()),
+            "sentences_before": sum(len(r["before"]) for r in records.values()),
+            "sentences_after": sum(len(r["kept"]) for r in records.values()),
+            "verdicts": {
+                stage: dict(
+                    sorted(
+                        Counter(
+                            v["verdict"]
+                            for r in rounds
+                            if r["stage"] == stage
+                            for v in r["verdicts"]
+                        ).items()
+                    )
+                )
+                for stage in VERIFY_STAGES
+            },
+            "incoherent": {
+                stage: sum(not r["coherent"] for r in rounds if r["stage"] == stage)
+                for stage in VERIFY_STAGES
+            },
+        },
         "plan": {
             "path": _shown(run / PLAN_FILE),
             "sha256": _sha256(run / PLAN_FILE),
-            "batches": len(records),
-            "first": records[0]["batch_id"] if records else None,
-            "last": records[-1]["batch_id"] if records else None,
+            "batches": len(plan_batches),
+            "first": plan_batches[0]["batch_id"] if plan_batches else None,
+            "last": plan_batches[-1]["batch_id"] if plan_batches else None,
         },
     }
     RF.write_json(run / SUMMARY_FILE, summary)
     return summary
 
 
+# ------------------------------------------------------------------------------------ the verification
+def _verify_dir(run: Path, number: int) -> Path:
+    return run / VERIFY_DIR / f"round-{number}"
+
+
+def _verify_rounds(run: Path) -> list[dict[str, Any]]:
+    """Every verification round exported for the run, in order (`round-<n>/ROUND.json`)."""
+    rounds: list[dict[str, Any]] = []
+    for number in range(1, len(VERIFY_STAGES) + 1):
+        path = _verify_dir(run, number) / "ROUND.json"
+        if not path.exists():
+            break
+        rounds.append(json.loads(path.read_text(encoding="utf-8")))
+    return rounds
+
+
+def _verify_round_of(run: Path, handoff: Path) -> dict[str, Any]:
+    for record in _verify_rounds(run):
+        if Path(record["handoff"]).resolve() == handoff.resolve():
+            return record
+    raise WcRunError(f"{handoff} is no verification round of {run}")
+
+
+def _verification_inputs(run: Path, *, before: int | None = None) -> dict[str, list[dict]]:
+    """Per site, its record of every imported verification round (below round `before`, when
+    given), in round order - what `wc4.run_verification` reads. A round exported and not imported
+    stops the command."""
+    inputs: dict[str, list[dict]] = {}
+    for record in _verify_rounds(run):
+        if before is not None and record["round"] >= before:
+            break
+        path = _verify_dir(run, record["round"]) / "VERIFIED.jsonl"
+        if not path.exists():
+            raise WcRunError(
+                f"{run}: verification round {record['round']} ({record['stage']}) is exported and "
+                "not imported"
+            )
+        for row in read_jsonl(path):
+            given = {key: value for key, value in row.items() if key != "site_id"}
+            inputs.setdefault(row["site_id"], []).append(given)
+    return inputs
+
+
+def verify_prompt(
+    entry: Mapping[str, Any],
+    decisions: Sequence[wc4.Decision],
+    quotes: Mapping[int, Sequence[wc4.Quote]],
+) -> str:
+    """The exact question about one site's kept text, as it stands at its verification round."""
+    kept, dropped = _view(decisions, quotes)
+    return P.VERIFY_QUESTION.format(
+        site=site_block(M.PlanSite.from_dict(entry["plan_site"])),
+        kept=_kept_lines(kept),
+        dropped=_dropped_lines(dropped),
+        site_id=entry["site_id"],
+        kept_count=len(kept),
+    )
+
+
+def cmd_verify_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, Any]:
+    """The next verification round: `verify` asks every site whose check kept a sentence, once
+    every check round is imported; `verify2` - after `verify` is imported - every site whose kept
+    text a drop of `verify` changed and that still keeps a sentence. One question per site, the
+    kept text as it will be published (`verify_prompt`), in batches `<stage>-NNNN`."""
+    rounds = _verify_rounds(run)
+    inputs = _verification_inputs(run)
+    number = len(rounds) + 1
+    if number > len(VERIFY_STAGES):
+        raise WcRunError(
+            f"{run}: both verification rounds were exported - a text a drop changed is verified "
+            "once more, never twice"
+        )
+    if any(Path(r["handoff"]).resolve() == handoff.resolve() for r in rounds):
+        raise WcRunError(f"{handoff} is already a verification round of {run}")
+    if handoff.exists() and any(handoff.iterdir()):
+        raise WcRunError(f"{handoff} is not empty: a round takes a new handoff directory")
+    stage = VERIFY_STAGES[number - 1]
+    due: list[tuple[str, Checked, list[wc4.Decision]]] = []
+    for label, site in checked_sites(run).items():
+        current, derived, status = wc4.run_verification(
+            site.decisions, site.quotes, inputs.get(label, [])
+        )
+        if status is not None:
+            continue
+        if len(derived) != number - 1:
+            raise WcRunError(
+                f"{label} is due at verification round {len(derived) + 1}, not {number}: the "
+                "check rounds moved after an earlier verification round was exported"
+            )
+        due.append((label, site, current))
+    if not due:
+        what = "no site's check kept a sentence" if number == 1 else "no kept text changed"
+        raise WcRunError(f"{run}: nothing to verify at {stage} - {what}; build")
+    batches: dict[str, list[str]] = {}
+    shown: dict[str, list[int]] = {}
+    for start in range(0, len(due), batch_size):
+        batch_id = f"{stage}-{start // batch_size + 1:04d}"
+        for label, site, current in due[start : start + batch_size]:
+            OH.export(
+                handoff,
+                batch_id=batch_id,
+                stage=stage,
+                label=label,
+                field="description",
+                prompt=verify_prompt(site.entry, current, site.quotes),
+            )
+            batches.setdefault(batch_id, []).append(label)
+            shown[label] = wc4.kept_numbers(current)
+    RF.write_json(
+        _verify_dir(run, number) / "ROUND.json",
+        {
+            "round": number,
+            "stage": stage,
+            "handoff": _shown(handoff),
+            "exported_at": RF.now(),
+            "batches": batches,
+            "shown": shown,
+        },
+    )
+    return {
+        "round": number,
+        "stage": stage,
+        "questions": len(due),
+        "batches": len(batches),
+        "sentences": sum(len(numbers) for numbers in shown.values()),
+    }
+
+
+def verify_brief(run: Path, handoff: Path, batch_id: str) -> str:
+    """The instruction of the Opus agent that verifies one batch of one verification round."""
+    record = _verify_round_of(run, handoff)
+    if batch_id not in record["batches"]:
+        raise WcRunError(f"{batch_id} is no batch of {handoff}")
+    shown = _shown(handoff)
+    return P.VERIFY_BRIEF.format(
+        batch=batch_id,
+        round=record["round"],
+        stage=record["stage"],
+        count=len(record["batches"][batch_id]),
+        handoff=shown,
+        scratch=f"{shown}-scratch/{batch_id}",
+        run=_shown(run),
+        python=Path(sys.executable).as_posix(),
+        repo=REPO.as_posix(),
+        batch_agent=f"opus-wc-{batch_id}",
+    )
+
+
+def verify_check_answer(
+    run: Path, handoff: Path, batch_id: str, label: str, text: str
+) -> str | None:
+    """The verifier's aid: the answer's shape only (nothing is fetched, no verdict is judged)."""
+    record = _verify_round_of(run, handoff)
+    if label not in record["batches"].get(batch_id, []):
+        raise WcRunError(f"{batch_id}/{label} is no question of {handoff}")
+    try:
+        A.parse_verify(text, site_id=label, kept=len(record["shown"][label]))
+    except A.AnswerError as exc:
+        return str(exc)
+    return None
+
+
+def cmd_verify_import(
+    run: Path, handoff: Path, *, client: A.Client | None = None, pace: float = Q.PACE_SECONDS
+) -> dict[str, Any]:
+    """One verification round, once: validated; every prompt rebuilt from the site's state at this
+    round and compared byte for byte; a verifier whose name checked the site - or verified it in an
+    earlier round - refused; every answer parsed (`answers.parse_verify`); every quoted page fetched
+    once into `<run>/verify/pages/` and every quote checked (`answers.check_quotes`, recorded: a
+    WRONG drops its sentence whether its quote was found or not); every site's round read by
+    `wc4.run_verification` before `VERIFIED.jsonl` is written."""
+    record = _verify_round_of(run, handoff)
+    number, stage = record["round"], record["stage"]
+    out = _verify_dir(run, number) / "VERIFIED.jsonl"
+    if out.exists():
+        raise WcRunError(
+            f"{run}: verification round {number} was imported; a round is imported once"
+        )
+    check = OH.validate(handoff)
+    if not check.ok:
+        raise WcRunError(
+            f"{handoff}: {len(check.missing)} missing, {len(check.stale)} stale, "
+            f"{len(check.malformed)} malformed, {len(check.orphans)} orphan answer(s) - every "
+            "answer is validated before anything is imported"
+        )
+    manifest = {(line["batch_id"], line["label"]): line for line in OH.manifest(handoff)}
+    asked = {(b, label) for b, labels in record["batches"].items() for label in labels}
+    if set(manifest) != asked:
+        raise WcRunError(f"{handoff}: the manifest is not the verification round's record")
+    sites = checked_sites(run)
+    earlier = _verification_inputs(run, before=number)
+    parsed: dict[str, tuple[str, dict[str, Any], OH.Answer, A.VerifyAnswer]] = {}
+    urls: set[str] = set()
+    for (batch_id, label), line in sorted(manifest.items()):
+        site = sites[label]
+        current, derived, status = wc4.run_verification(
+            site.decisions, site.quotes, earlier.get(label, [])
+        )
+        if status is not None or len(derived) != number - 1:
+            raise WcRunError(f"{label} is not due at {stage}: its check or verification moved")
+        if wc4.kept_numbers(current) != record["shown"][label]:
+            raise WcRunError(f"{label}: the kept text is not the one {stage} showed")
+        prompt = verify_prompt(site.entry, current, site.quotes)
+        if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
+            raise WcRunError(f"{batch_id}/{label}: the exported prompt is not this question's")
+        answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
+        others = site.checkers | {given["answered_by"] for given in earlier.get(label, [])}
+        if answer.answered_by in others:
+            raise WcRunError(
+                f"{batch_id}/{label}: {answer.answered_by} checked or verified this site before - "
+                "a verification is an independent agent's; have the batch answered again by a new "
+                "agent under its own name"
+            )
+        try:
+            verdict = A.parse_verify(answer.text, site_id=label, kept=len(record["shown"][label]))
+        except A.AnswerError as exc:
+            raise WcRunError(
+                f"{batch_id}/{label}: malformed answer ({exc}) - verify-check-answer refuses it; "
+                "delete the answer file and have the batch agent answer it again"
+            ) from exc
+        parsed[label] = (batch_id, line, answer, verdict)
+        urls.update(q.url for item in verdict.kept for q in item.quotes)
+    pages = run / VERIFY_DIR / PAGES_DIR
+    fetch(urls, pages, client=client, pace=pace)
+    library = Q.Library(REPO, pages)
+    rows: list[dict[str, Any]] = []
+    states: Counter[str] = Counter()
+    verdicts: Counter[str] = Counter()
+    for label, (batch_id, line, answer, verdict) in sorted(parsed.items()):
+        shown = record["shown"][label]
+        given: dict[str, Any] = {
+            "round": number,
+            "stage": stage,
+            "batch_id": batch_id,
+            "answered_by": answer.answered_by,
+            "answered_at": answer.answered_at,
+            "prompt_sha256": line["prompt_sha256"],
+            "answer_sha256": M.text_sha256(answer.text),
+            "shown": shown,
+            "verdicts": [],
+            "coherent": verdict.coherent,
+            "broken": list(verdict.broken),
+            "note": verdict.note,
+        }
+        for item in verdict.kept:
+            quote_check = A.check_quotes(label, item.quotes, library)
+            given["verdicts"].append(
+                {
+                    "k": item.number,
+                    "n": shown[item.number - 1],
+                    "verdict": item.verdict,
+                    "quotes": [{"url": q.url, "quote": q.quote} for q in item.quotes],
+                    "note": item.note,
+                    "quotes_found": quote_check.counted,
+                    "quote_results": list(quote_check.results),
+                }
+            )
+            verdicts[item.verdict] += 1
+        site = sites[label]
+        _, _, status = wc4.run_verification(
+            site.decisions, site.quotes, [*earlier.get(label, []), given]
+        )
+        states["due for verify2" if status is None else status.value] += 1
+        rows.append({"site_id": label, **given})
+    RF.write_jsonl(out, rows)
+    return {
+        "round": number,
+        "stage": stage,
+        "sites": len(rows),
+        "verdicts": dict(sorted(verdicts.items())),
+        "incoherent": sum(not row["coherent"] for row in rows),
+        "outcomes": dict(sorted(states.items())),
+        "to_verify2": states["due for verify2"],
+        "urls": len(urls),
+    }
+
+
 # ------------------------------------------------------------------------------------ the judge
 def _judge_view(final: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
-    """A final site's kept sentences (the published text, with the verified quotes its markers
-    cite) and its dropped sentences, in order."""
-    kept, dropped = [], []
-    for entry in final["evidence"]["sentences"]:
-        decision = next(d for d in final["decisions"] if d["n"] == entry["n"])
-        if decision["text"] is None:
-            dropped.append(entry["sentence"])
-        else:
-            quotes = [q for q in entry["quotes"] if q["verified"]]
-            trimmed = entry["sentence"] if decision["text"] != entry["sentence"] else None
-            kept.append({"text": decision["text"], "quotes": quotes, "trimmed_from": trimmed})
-    return kept, dropped
+    """A final site's kept sentences (the published text after the verification, with the verified
+    quotes its markers cite) and its dropped sentences, in order (`_view`)."""
+    decisions, quotes = wc4.decisions_of(final["evidence"])
+    return _view(decisions, quotes)
 
 
 def judge_prompt(final: Mapping[str, Any], site: M.PlanSite) -> str:
     kept, dropped = _judge_view(final)
-    kept_lines = []
-    for k, item in enumerate(kept, start=1):
-        kept_lines.append(f"K{k}: {item['text']}")
-        if item["trimmed_from"] is not None:
-            kept_lines.append(f'    trimmed from: "{item["trimmed_from"]}"')
-        kept_lines.extend(f'    quote: "{q["quote"]}" - {q["url"]}' for q in item["quotes"])
     return P.JUDGE_QUESTION.format(
         site=site_block(site),
-        kept="\n".join(kept_lines) if kept_lines else "(none - the description is cleared)",
-        dropped="\n".join(f"D{d}: {text}" for d, text in enumerate(dropped, start=1)) or "(none)",
+        kept=_kept_lines(kept),
+        dropped=_dropped_lines(dropped),
         site_id=final["site_id"],
         kept_count=len(kept),
         dropped_count=len(dropped),
@@ -904,7 +1328,9 @@ def _judge_round(run: Path, handoff: Path) -> dict[str, Any]:
 
 
 def cmd_judge_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, Any]:
-    """The pilot's measurement: one judge question per built site."""
+    """The pilot's measurement: one judge question per built site, on its text after the
+    verification. The round records the sha256 of the gate plan it judges (`plan_sha256`): the
+    gate writes a pilot's plan only as it was judged (`pilot_approval`)."""
     if (run / JUDGE_DIR / "ROUND.json").exists():
         raise WcRunError(f"{run}: the judge round was exported")
     finals = _finals(run)
@@ -926,7 +1352,12 @@ def cmd_judge_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, 
             batches.setdefault(batch_id, []).append(label)
     RF.write_json(
         run / JUDGE_DIR / "ROUND.json",
-        {"handoff": _shown(handoff), "exported_at": RF.now(), "batches": batches},
+        {
+            "handoff": _shown(handoff),
+            "exported_at": RF.now(),
+            "batches": batches,
+            "plan_sha256": _sha256(run / PLAN_FILE),
+        },
     )
     return {"questions": len(labels), "batches": len(batches)}
 
@@ -971,16 +1402,22 @@ def judge_check_answer(
 def cmd_judge_import(
     run: Path, handoff: Path, *, client: A.Client | None = None, pace: float = Q.PACE_SECONDS
 ) -> dict[str, Any]:
-    """The judge's answers: validated, parsed, quote-checked; the measurement and its verdict."""
+    """The judge's answers: validated, parsed, quote-checked; the measurement and its verdict. The
+    judge is fresh: a name that checked or verified any site of the run does not count."""
     record = _judge_round(run, handoff)
     check = OH.validate(handoff)
     if not check.ok:
         raise WcRunError(f"{handoff}: the judge round does not validate: {check.to_dict()}")
     finals = _finals(run)
     sites = read_sites(run)
-    checkers = {
-        label: {attempt["answered_by"] for attempt in final["evidence"]["answers"]}
-        for label, final in finals.items()
+    workers = {
+        attempt["answered_by"]
+        for final in finals.values()
+        for attempt in final["evidence"]["answers"]
+    } | {
+        r["answered_by"]
+        for final in finals.values()
+        for r in final["evidence"][wc4.VERIFICATION_KEY]["rounds"]
     }
     judged: list[dict[str, Any]] = []
     for line in OH.manifest(handoff):
@@ -1013,7 +1450,7 @@ def cmd_judge_import(
                 "site_id": label,
                 "batch_id": batch_id,
                 "answered_by": answer.answered_by,
-                "independent": answer.answered_by not in checkers[label],
+                "independent": answer.answered_by not in workers,
                 "coherent": parsed.coherent,
                 "note": parsed.note,
                 "items": rows,
@@ -1024,14 +1461,14 @@ def cmd_judge_import(
     }:
         raise WcRunError(f"{handoff}: the manifest is not the judge round's record")
     RF.write_jsonl(run / JUDGE_DIR / "JUDGED.jsonl", judged)
-    result = judge_result(judged)
+    result = {**judge_result(judged), "plan_sha256": record["plan_sha256"]}
     RF.write_json(run / JUDGE_DIR / "RESULT.json", result)
     return result
 
 
 def judge_result(judged: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The pilot's measurement and its verdict against `J_THRESHOLDS`. A judge who answered a
-    check question of the site is not independent: such a site does not count, and the pilot
+    """The pilot's measurement and its verdict against `J_THRESHOLDS`. A judge who checked or
+    verified a site of the run is not independent: such a site does not count, and the pilot
     cannot pass while one does not."""
     counted = [row for row in judged if row["independent"]]
     kept = [item for row in counted for item in row["items"] if item["kind"] == "kept"]
@@ -1062,7 +1499,9 @@ def judge_result(judged: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
     failures = []
     if len(counted) != len(judged):
-        failures.append(f"{len(judged) - len(counted)} site(s) judged by one of their checkers")
+        failures.append(
+            f"{len(judged) - len(counted)} site(s) judged by a checker or verifier of the run"
+        )
     if wrong > J_THRESHOLDS["wrong"]:
         failures.append(f"{wrong} kept sentence(s) WRONG with a found quote")
     if share > J_THRESHOLDS["unsupported_share"]:
@@ -1081,7 +1520,8 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
     """The pilot verdict every WC plan the gate writes rests on (`write_gate4.wc_batches`; the review
     of 2026-09-26: nothing tied a mass plan to a passed pilot). Each plan is `<run>/WC4.jsonl`. The
     first plan named is a pilot run's (`export --pilot`), and every pilot run named was judged and
-    passed (`judge/RESULT.json`, `passed: true`): a failed pilot's outcomes are never written, and
+    passed (`judge/RESULT.json`, `passed: true`) on exactly this plan (`plan_sha256`: a plan built
+    again after its judge is not the judged one): a failed pilot's outcomes are never written, and
     no chunk is written before a passed pilot. Returns each pilot run with its result's sha256."""
     if not plans:
         raise WcRunError("no WC plan named")
@@ -1105,6 +1545,11 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
                 f"{run}: the pilot's judge did not pass ({result['failures']}): its outcomes are "
                 "never written - fix the cause and run a new pilot"
             )
+        if result.get("plan_sha256") != _sha256(plan):
+            raise WcRunError(
+                f"{plan}: not the plan the pilot's judge judged (RESULT.json plan_sha256 "
+                f"{result.get('plan_sha256')!r}): a plan is written only as it was judged"
+            )
         approvals.append({"run": _shown(run), "result_sha256": _sha256(path)})
     return approvals
 
@@ -1124,6 +1569,10 @@ def build_parser() -> argparse.ArgumentParser:
         ("check-answer", "one answer's shape, quotes and the text it leaves"),
         ("import", "one round: validate, parse, fetch, check"),
         ("export-reask", "round 2: the sentences that did not count, once"),
+        ("verify-export", "the next verification round: verify, then verify2 once"),
+        ("verify-brief", "the instruction of one verification batch's Opus agent"),
+        ("verify-check-answer", "one verifier answer's shape"),
+        ("verify-import", "one verification round: validate, parse, fetch, check"),
         ("build", "the outcomes, the summary and the gate plan"),
         ("judge-export", "the pilot's independent judge questions"),
         ("judge-brief", "the instruction of one judge batch's Opus agent"),
@@ -1134,12 +1583,19 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--run-dir", required=True, type=Path)
         if name not in ("read", "build"):
             command.add_argument("--handoff", required=True, type=Path)
-        if name in ("brief", "check-answer", "judge-brief", "judge-check-answer"):
+        if name in (
+            "brief",
+            "check-answer",
+            "verify-brief",
+            "verify-check-answer",
+            "judge-brief",
+            "judge-check-answer",
+        ):
             command.add_argument("--batch-id", required=True)
-        if name in ("check-answer", "judge-check-answer"):
+        if name in ("check-answer", "verify-check-answer", "judge-check-answer"):
             command.add_argument("--label", required=True)
             command.add_argument("--text-file", required=True, type=Path)
-        if name in ("export", "export-reask", "judge-export"):
+        if name in ("export", "export-reask", "verify-export", "judge-export"):
             command.add_argument("--batch-size", type=int, default=BATCH_SIZE)
         if name == "read":
             command.add_argument("--host", default=W.SSH_HOST)
@@ -1188,6 +1644,17 @@ def run_command(args: argparse.Namespace) -> int:
         _print(cmd_import(run, args.handoff))
     elif command == "export-reask":
         _print(cmd_export_reask(run, args.handoff, batch_size=args.batch_size))
+    elif command == "verify-export":
+        _print(cmd_verify_export(run, args.handoff, batch_size=args.batch_size))
+    elif command == "verify-brief":
+        print(verify_brief(run, args.handoff, args.batch_id))
+    elif command == "verify-check-answer":
+        text = args.text_file.read_bytes().decode("utf-8")
+        problem = verify_check_answer(run, args.handoff, args.batch_id, args.label, text)
+        print(problem or "in shape")
+        return 1 if problem else 0
+    elif command == "verify-import":
+        _print(cmd_verify_import(run, args.handoff))
     elif command == "build":
         _print(cmd_build(run, first_batch=args.first_batch))
     elif command == "judge-export":

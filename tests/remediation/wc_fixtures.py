@@ -224,6 +224,83 @@ class ReadRunner:
         return "".join(json.dumps(r) + "\n" for r in self.rows)
 
 
+def verification(
+    site_id: str,
+    verdicts: Sequence[str],
+    *,
+    coherent: bool = True,
+    broken: Sequence[int] = (),
+    quote: Mapping[str, str] | None = None,
+) -> str:
+    """A verifier's answer: one verdict per kept sentence (a WRONG carries `quote`, by default a
+    quote the museum page does not hold), `coherent` and `broken`."""
+    wrong = dict(quote or {"url": MUSEUM, "quote": "The temples were raised in a later age."})
+    return json.dumps({
+        "site_id": site_id,
+        "kept": [{"k": k, "verdict": v, "quotes": [wrong] if v == "WRONG" else [],
+                  "note": "verified"} for k, v in enumerate(verdicts, start=1)],
+        "coherent": coherent,
+        "broken": list(broken),
+        "note": "verified",
+    })  # fmt: skip
+
+
+def passed_round(
+    shown: Sequence[int],
+    *,
+    number: int = 1,
+    verdicts: Sequence[str] | None = None,
+    coherent: bool = True,
+    broken: Sequence[int] = (),
+    answered_by: str | None = None,
+) -> dict[str, Any]:
+    """One verification round as `cli.py verify-import` records it (`wc4.ROUND_KEYS`), for the
+    pure tests: by default every shown sentence SUPPORTED and the text coherent."""
+    stages = WC4.VERIFY_STAGES
+    stage = stages[number - 1] if number <= len(stages) else f"verify{number}"  # a round too many
+    chosen = list(verdicts or ["SUPPORTED"] * len(shown))
+    return {
+        "round": number,
+        "stage": stage,
+        "batch_id": f"{stage}-0001",
+        "answered_by": answered_by or f"opus-wc-{stage}-0001",
+        "answered_at": "2026-09-27T12:00:00+00:00",
+        "prompt_sha256": "a" * 64,
+        "answer_sha256": "b" * 64,
+        "shown": list(shown),
+        "verdicts": [
+            {"k": k, "n": n, "verdict": v, "quotes": [], "note": "verified",
+             "quotes_found": True, "quote_results": []}
+            for k, (n, v) in enumerate(zip(shown, chosen, strict=True), start=1)
+        ],
+        "coherent": coherent,
+        "broken": list(broken),
+        "note": "verified",
+    }  # fmt: skip
+
+
+def verify_all(run: Path, handoff: Path) -> dict[str, Any] | None:
+    """The verification round, answered by a verifier that checked nothing: every kept sentence
+    SUPPORTED, every text coherent - nothing is dropped, no `verify2` is due. `None` when the check
+    kept no sentence anywhere (nothing to verify)."""
+    from wc import cli
+
+    rounds = cli._verify_rounds(run)
+    try:
+        cli.cmd_verify_export(run, handoff, batch_size=5)
+    except cli.WcRunError as exc:
+        if "nothing to verify" not in str(exc) or rounds:
+            raise
+        return None
+    record = cli._verify_round_of(run, handoff)
+    answers = {
+        label: verification(label, ["SUPPORTED"] * len(shown))
+        for label, shown in record["shown"].items()
+    }
+    record_answers(handoff, answers, by="opus-verify")
+    return cli.cmd_verify_import(run, handoff, client=FakeClient(), pace=0.0)
+
+
 def judge_all(run: Path, handoff: Path) -> dict[str, Any]:
     """The pilot's judge round, answered by a judge that checked nothing: every kept sentence
     SUPPORTED, every drop DROP_OK, every text coherent - `judge/RESULT.json` passes."""
@@ -257,10 +334,10 @@ def build_run(
     judged: bool = True,
 ) -> tuple[Path, Path]:
     """A WC run end to end with every answer counted in round 1: read, export - a pilot that draws
-    the whole population, or with `pilot=False` a chunk - answer, import, build; a pilot is then
-    judged and passes (`judge_all`) unless `judged` is false. The gate writes no WC plan before a
-    passed pilot heads the named plans (`cli.pilot_approval`). Returns the run directory and its
-    gate plan (`WC4.jsonl`)."""
+    the whole population, or with `pilot=False` a chunk - answer, import, verify (every kept
+    sentence SUPPORTED, `verify_all`), build; a pilot is then judged and passes (`judge_all`) unless
+    `judged` is false. The gate writes no WC plan before a passed pilot heads the named plans
+    (`cli.pilot_approval`). Returns the run directory and its gate plan (`WC4.jsonl`)."""
     from phase3.run import read_jsonl
     from wc import cli
 
@@ -272,6 +349,7 @@ def build_run(
     cli.cmd_export(run, handoff, batch_size=5, exclude=None, after=[], **draw)
     record_answers(handoff, answers)
     cli.cmd_import(run, handoff, client=FakeClient(), pace=0.0)
+    verify_all(run, root / "handoff" / f"{name}-verify")
     cli.cmd_build(run, first_batch=first_batch)
     if pilot and judged:
         judge_all(run, root / "handoff" / f"{name}-judge")
