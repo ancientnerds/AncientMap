@@ -9,6 +9,7 @@ ignored. Any other difference is a script error.
 
 from __future__ import annotations
 
+import math
 import re
 
 ONES = {
@@ -84,9 +85,26 @@ def _joins_after_and(words: list[str], i: int) -> bool:
     return nxt >= len(words) or (words[nxt] != "hundred" and words[nxt] not in MAGNITUDES)
 
 
+def _small_continues(words: list[str], nxt: int, prev: str, last_magnitude: float) -> bool:
+    """Whether a 0-99 ending before words[nxt] continues the run after `prev` (the last word
+    kind the run consumed) instead of starting a new number. A 0-99 follows only "hundred",
+    a magnitude or a joining "and": "between two and three", "two three-tonne" and "fifteen
+    hundred two hundred" are two numbers each. After a magnitude it may open the next group
+    ("one thousand five hundred") or a smaller magnitude ("one million two thousand"), never
+    an equal or larger one ("two thousand three thousand" is two numbers)."""
+    if prev == "":
+        return True
+    if prev == "small":
+        return False
+    if nxt < len(words) and words[nxt] == "hundred":
+        return prev == "magnitude"
+    if nxt < len(words) and words[nxt] in MAGNITUDES:
+        return MAGNITUDES[words[nxt]] < last_magnitude
+    return True
+
+
 def _number_run(words: list[str], i: int) -> tuple[str, int] | None:
     """Parse the number-word run starting at words[i]; (canonical digits, next index)."""
-    start = i
     if (
         words[i] in ("a", "an")
         and i + 1 < len(words)
@@ -105,21 +123,25 @@ def _number_run(words: list[str], i: int) -> tuple[str, int] | None:
         if second is not None and second[0] >= 10:
             return str(a * 100 + second[0]), second[1]
     total, current = 0, 0
+    prev = ""  # what the run consumed last: "", "small", "hundred", "magnitude" or "and"
+    last_magnitude: float = math.inf  # the first magnitude may be any, later ones only smaller
     while i < len(words):
         w = words[i]
         small = _small(words, i)
         if small is not None:
+            if not _small_continues(words, small[1], prev, last_magnitude):
+                break
             current += small[0]
-            i = small[1]
-        elif w == "hundred":
-            current = max(current, 1) * 100
-            i += 1
-        elif w in MAGNITUDES:
-            total += max(current, 1) * MAGNITUDES[w]
-            current = 0
-            i += 1
-        elif w == "and" and i > start and _joins_after_and(words, i + 1):
-            i += 1
+            i, prev = small[1], "small"
+        elif w == "hundred" and prev == "small":
+            current *= 100
+            i, prev = i + 1, "hundred"
+        elif w in MAGNITUDES and prev in ("small", "hundred") and MAGNITUDES[w] < last_magnitude:
+            total += current * MAGNITUDES[w]
+            current, last_magnitude = 0, MAGNITUDES[w]
+            i, prev = i + 1, "magnitude"
+        elif w == "and" and prev in ("hundred", "magnitude") and _joins_after_and(words, i + 1):
+            i, prev = i + 1, "and"
         else:
             break
     value: float = total + current
