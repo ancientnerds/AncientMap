@@ -148,7 +148,7 @@ Run with `node --import tsx scripts/<name>.ts`, cwd `<repo>/video` (the form `te
 
 - `lint.ts --timeline <p> --public-dir <d> [--every 6] [--scale 0.5] [--report <json>] [--concurrency N]`: renders every 6th frame at half scale with `inputProps.lint = true` (no audio, clips not decoded), then each thumbnail candidate's teaser (the Thumbnail composition in lint mode, one frame each; its violations carry the candidate's episode frame and the id `thumbnail<K>:teaser`), prints each violation `{"type":"layout-violation","frame","a","b","reason"}` to stderr, exits 1 when there is at least one; `lint clean: N frames checked` otherwise (N = the episode frames plus the 3 thumbnails).
 - `render.ts --timeline <p> --public-dir <d> --out <mp4> [--chunk-frames 3600] [--concurrency N]`: H.264 (`h264_nvenc`, GPU 0, 16 Mbit/s, no B-frames) + AAC 320k 48 kHz, BT.709, 60 fps; chunks of at most 3600 frames, each in a fresh browser, each writing its video (no B-frames) and its audio as a separate 16-bit PCM WAV (a 60 fps frame is exactly 800 samples at 48 kHz); the parts join by the ffmpeg concat demuxer, frame- and sample-exact; the joined audio is encoded to AAC 320k once here, and `pipeline/studio/render.py` re-encodes it once at 320k after the loudness gain; the frame count must equal the timeline's `durationInFrames`.
-- `still.ts --timeline <p> --public-dir <d> --out-dir <dir> --candidate K [--frame N]` (owner decision 24; K is 1, 2 or 3): `thumbnail_<K>_3840.png` (3840x2160) and `thumbnail_<K>_1280.jpg` (1280x720, < 2 MB) of the Thumbnail composition for candidate K: the episode frame without captions, ticker, chapter tag or credits at the candidate's `frame` from `timeline.thumbnails`, or at `--frame N` (plan C's `episode thumbnail SLUG --candidate K --frame N`), with the candidate's teaser in the NERV heading type on its own dark glass, top left inside the title-safe area and clear of the bottom-right corner where YouTube lays its duration badge (owner decision 25). One call renders one candidate; plan C calls it once per candidate.
+- `still.ts --timeline <p> --public-dir <d> --out-dir <dir> --candidate K [--frame N]` (owner decision 24; K is 1, 2 or 3): `thumbnail_<K>_3840.png` (3840x2160) and `thumbnail_<K>_1280.jpg` (1280x720, < 2 MB) of the Thumbnail composition for candidate K: the episode frame without captions, ticker or chapter tag; with the scene's in-frame credit line (spec 4.8), at the candidate's `frame` from `timeline.thumbnails`, or at `--frame N` (plan C's `episode thumbnail SLUG --candidate K --frame N`), with the candidate's teaser in the NERV heading type on its own dark glass, top left inside the title-safe area and clear of the bottom-right corner where YouTube lays its duration badge (owner decision 25). The credit line is that of the scene that shows the frame, bottom left in `THUMBNAIL_CREDIT_ZONE` (the episode's credit zone lies under the duration badge); a scene without credits gets none. One call renders one candidate; plan C calls it once per candidate.
 - Each prints `gpu: <WebGL renderer>` for every browser it opens (the render log carries the proof).
 
 The public dir holds every timeline `src` under its relative path plus the seven brand-font files `fonts/orbitron-600.woff2`, `fonts/orbitron-700.woff2`, `fonts/jetbrains-mono-400.woff2`, `fonts/jetbrains-mono-500.woff2`, `fonts/jetbrains-mono-400-latin-ext.woff2`, `fonts/cormorant-garamond-400-latin.woff2`, `fonts/cormorant-garamond-400-latin-ext.woff2` (plan C's render step links every `ancient-nerds-map/public/fonts/*.woff2`).
@@ -167,7 +167,7 @@ The public dir holds every timeline `src` under its relative path plus the seven
 - **Hook line budget, the end card and upper case (the same rule on both sides).** `video/src/captions.ts` exports the line budget on a line of its own, `export const HOOK_LINE_MAX_CHARS = 24`, and `captionLines` starts a new hook line before a word that would make the line longer than that (Task 10). Plan C's `script.py` mirrors the constant; its Task 27 reads this line with a regex, as it reads the glyph ranges. At `episode check`, before voice, `script.py` refuses a hook display token whose upper-case form, punctuation included, is longer than 24 characters: that is the one line no break can shorten. A ShareCard may only be the last scene (`checkBlocks`, Task 17), and plan C's `script.py` refuses a ShareCard on any beat but the last, in full episodes and slices alike. The brand-font rule covers every code point of a character's full upper-case mapping: `unsupportedChar` here and plan C's `glyphs.unsupported_char` with `str.upper()`. JavaScript and Python give the same mappings, e.g. `µ` to U+039C.
 - **GPU (spec 4.11) is plan C's on its side.** Plan C's `doctor.py` (Task 26) probes the GPU with this plan's `pipeline.studio.capture.gpu` (`nvenc_problem()`, `remotion_browser(REPO / "video")`, `gpu_preference(exe)`, `chrome_renderer()` + `require_nvidia`) plus `nvidia-smi`, and `doctor --fix-gpu` calls `set_gpu_preference(exe)`; plan C's `voice.py` runs faster-whisper on `device="cuda", device_index=0` (float16) through `pipeline/video/shorts_captions.py`, which plan C owns; plan C's `render.py` stores the renderer string in the render ledger from the `gpu: <WebGL renderer>` lines render.ts prints to stdout, one per browser (that line format is the contract). The former cross-stream requests 5-7 now live in plan C.
 - **Manifest events.** Spec 4.11 wants the renderer string in the capture manifest; C7 fixes the manifest keys, so it is the first event, `gpu`. Globe `place` events carry `track`. C's `manifest_problems` accepts both (events are `{t, name, ...}`), and refuses a manifest whose drawn strings (its `credits` and the `label` of `place`/`pin` events) fall outside D1's glyph rule, naming the capture; event names, targets, URLs, a `page` event's `title` (the page's own `<title>`, kept as a record) and the `gpu` label are not drawn and not checked (owner decision 32), so a source page with a non-latin title passes (plan C's `glyphs.DRAWN_EVENT_FIELDS` is `{"place": "label", "pin": "label"}`).
-- **Thumbnails (owner decisions 24-25).** `timeline.json` carries `thumbnails: [{frame, text}]`, exactly 3: plan C compiles them from the script's `thumbnails: [{beat, at, text}]` and alone decides which frames may be used (never inside a twist, verdict or "what would change our mind" beat, never after the first verdict status or meter move) and which words (2-4, no verdict word). `still.ts --candidate K [--frame N]` renders one candidate as `thumbnail_<K>_3840.png` and `thumbnail_<K>_1280.jpg`; plan C calls it three times in `episode render` and once in `episode thumbnail SLUG --candidate K --frame N`, and packages the three JPEGs. `lint.ts` lints each teaser's layout.
+- **Thumbnails (owner decisions 24-25).** `timeline.json` carries `thumbnails: [{frame, text}]`, exactly 3: plan C compiles them from the script's `thumbnails: [{beat, at, text}]` and alone decides which frames may be used (never inside a twist, verdict or "what would change our mind" beat, never after the first verdict status or meter move) and which words (2-4, no verdict word). `still.ts --candidate K [--frame N]` renders one candidate as `thumbnail_<K>_3840.png` and `thumbnail_<K>_1280.jpg`; plan C calls it three times in `episode render` and once in `episode thumbnail SLUG --candidate K --frame N`, and packages the three JPEGs. `lint.ts` lints each teaser's layout. Each candidate carries the in-frame credit line of the scene that shows its frame (spec 4.8; the same JPEG is the paper page's poster), bottom left in `THUMBNAIL_CREDIT_ZONE`, so a thumbnail taken in a map or photo scene keeps its Mapbox/Maxar or photo credit; plan C's frame rule needs nothing extra for it.
 - **The compiled timeline (C8 = D3), tested on both sides.** Plan C Task 21 commits `tests/pipeline/studio/golden_timeline.json`, its compiler's output for its fixture episode, and keeps it current; this plan's Task 37 parses that same file (`video/test/contract.test.ts`: `parseTimeline`, `checkBlocks`, 60 fps, upper-case hook captions), so a drift on either side fails a suite before the first real render.
 - **Contract C9.** `render.ts` writes H.264 + AAC 320k, BT.709 limited range (`color_range=tv`: black decodes to Y 16, the NERV background to Y 28), so plan C's `normalize_loudness` (`-c:v copy`, re-encoding the audio once at 320k) and `render_audit` (1920x1080, 60 fps, exact frame count, the black-frame threshold on the limited range) work on it. The renderer animates entrances and cues only, so cards, stills and infographics are static by design: plan C's frozen-frame audit covers clip scenes only (a capture with a non-null `fps`), and a clip that holds one picture for more than 4 s is refused by it, so the script cuts to a card instead. The node scripts run as `node --import tsx scripts/<name>.ts` with cwd `video/`; `render/bundle/` is transient (created and removed by each script).
 - **Props bound to the case file (plan C's checks; D's BarChart prints exact values).** D's schemas describe resolved values (C6); plan C refuses inline entities in the script (`image`, `evidence` and `claims[]` must be `{"$ref"}`, `clip`, `map` and `page` must be `{"$capture"}`), binds every capture spec to the verified case file (place ids, names and coordinates, including the labelled `places` of a globe `distribution` take, whose dots are site ids plan C resolves from the repo-root `public/data/sites/` export, owner decision 15; the `measure` and `proximity` points of a platform take; the verified quote or `paper_anchor`; a Mapbox take's optional `country`, which must equal the site export's `c` of the case-file place at its `lat`/`lng`, a place with a `site_id`), applies the one quantity rule (a BarChart bar or a ScaleZoom quantity, `small` or `large`, whose `id` is a case-file quantity id shows that quantity: its `value` equals the quantity's value, a range as `[low, high]` in a BarChart only, and the chart's `unit` equals the quantity's `unit`; no other props element may use a quantity id; BarChart draws a range as a range and both blocks print every value with its own decimals, `decimalsOf`), and validates each claim's icon against the ClaimBoard icon enum of `registry.json`. A claim's resolved `status` is what the board shows before its first `status` cue (normally `pending`); verdicts come only from `status` cues. Place and quantity stay resolvable (`resolved()`) because their ids are cue and pin targets, but no scene block takes them as a prop value.
@@ -183,7 +183,7 @@ Created (all owned by this plan):
 | `video/package.json`, `video/package-lock.json` | The renderer package: Remotion 4.0.529 and every other dependency pinned exactly; scripts `registry`, `typecheck`, `test`, `studio`, `lint:layout`, `render`, `still`. |
 | `video/tsconfig.json`, `video/vitest.config.ts`, `video/remotion.config.ts` | Strict TypeScript over src, scripts and tests; vitest in node; settings for `npm run studio` only. |
 | `video/src/index.ts`, `video/src/Root.tsx` | Registers the Episode and Thumbnail compositions; calculateMetadata validates the timeline, measures audio and images and proves the GPU. |
-| `video/src/Episode.tsx`, `video/src/SceneView.tsx`, `video/src/Thumbnail.tsx` | One Sequence per scene, the overlays, narration clips and the ducked music; lint mode; a thumbnail candidate's frame with its teaser. |
+| `video/src/Episode.tsx`, `video/src/SceneView.tsx`, `video/src/Thumbnail.tsx` | One Sequence per scene, the overlays, narration clips and the ducked music; lint mode; a thumbnail candidate's frame with its teaser and its scene's credit line. |
 | `video/src/gpu.ts` | The render browser's WebGL renderer string. |
 | `video/src/timeline.ts`, `video/src/schema.ts` | timeline.json parsing (D3, with the three thumbnail candidates); the JSON-schema subset validator of the registry. |
 | `video/src/state.ts`, `video/src/cues.ts`, `video/src/context.ts`, `video/src/media.ts` | Episode-wide claim and meter state; scene cue helpers; the episode context; audio length and image size measurement. |
@@ -3841,7 +3841,7 @@ git commit -m "Register layout boxes in lint mode and report each violation as a
 - Create: `video/src/blocks/types.ts`, `video/src/blocks/clips.ts`, `video/src/blocks/Panel.tsx`, `video/src/blocks/Stamp.tsx`, `video/src/blocks/LowerThird.tsx`, `video/src/blocks/CreditLine.tsx`, `video/src/blocks/ChapterTag.tsx`, `video/src/blocks/Ticker.tsx`, `video/src/blocks/HookCaptions.tsx`, `video/src/blocks/Footage.tsx`, `video/src/blocks/ImageLayer.tsx`
 - Test: `video/test/clips.test.ts`
 
-The pieces the scene blocks share. `Footage` plays a captured clip through `@remotion/media` `<Video>` with `disallowFallbackToOffthreadVideo` (a clip it cannot decode fails the render; in lint mode no clip is decoded). `ImageLayer` draws an image with its markers, pins and distance lines in one transformed layer and places the labels in screen space through the same view (owner rule: markers move with their image). The overlays follow the owner's picture rules: no title card (the chapter tag skips 0:00), the evidence counter without series branding, captions only where the timeline has them (the hook), credits drawn in-frame above the player controls.
+The pieces the scene blocks share. `Footage` plays a captured clip through `@remotion/media` `<Video>` with `disallowFallbackToOffthreadVideo` (a clip it cannot decode fails the render; in lint mode no clip is decoded). `ImageLayer` draws an image with its markers, pins and distance lines in one transformed layer and places the labels in screen space through the same view (owner rule: markers move with their image). The overlays follow the owner's picture rules: no title card (the chapter tag skips 0:00), the evidence counter without series branding, captions only where the timeline has them (the hook), credits drawn in-frame above the player controls. `CreditLine` takes an optional `zone` (default `ZONES.credit`): the Thumbnail (Task 18) draws its scene's credit line bottom left, clear of YouTube's duration badge.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -4160,16 +4160,18 @@ export const LowerThird: React.FC<{ id: string; label: Label; start?: number }> 
 /**
  * The scene's in-frame credit (timeline.credits: photo licences, source pages,
  * Mapbox/OpenStreetMap/Maxar for map content), merged into one line. Visible for
- * the whole scene, right aligned in the credit zone above the YouTube controls.
+ * the whole scene, by default right aligned in the credit zone above the YouTube
+ * controls. `zone` puts it elsewhere (the Thumbnail's THUMBNAIL_CREDIT_ZONE,
+ * bottom left); the line is aligned to the frame edge its zone is nearer to.
  */
 import React from 'react'
 
+import type { Rect } from '../layout/geometry'
 import { LayoutBox } from '../layout/LayoutBox'
-import { ZONES } from '../layout/zones'
+import { FRAME, ZONES } from '../layout/zones'
 import { body, overFootage } from '../theme/type'
 
-export const CreditLine: React.FC<{ id: string; text: string }> = ({ id, text }) => {
-  const z = ZONES.credit
+export const CreditLine: React.FC<{ id: string; text: string; zone?: Rect }> = ({ id, text, zone: z = ZONES.credit }) => {
   return (
     <LayoutBox
       id={id}
@@ -4181,7 +4183,7 @@ export const CreditLine: React.FC<{ id: string; text: string }> = ({ id, text })
         width: z.w,
         height: z.h,
         overflow: 'hidden',
-        textAlign: 'right',
+        textAlign: z.x + z.w / 2 > FRAME.w / 2 ? 'right' : 'left',
         whiteSpace: 'nowrap',
         ...body(18, 'rgba(255, 255, 255, 0.85)'),
         lineHeight: `${z.h}px`,
@@ -5839,7 +5841,7 @@ git commit -m "Add the case-file cards: evidence, quote, source page, claim boar
 - Create: `video/src/blocks/ScaleDrawing.tsx`, `video/src/blocks/UnitGrid.tsx`, `video/src/blocks/BarChart.tsx`, `video/src/blocks/ScaleZoom.tsx`, `video/src/blocks/Timeline.tsx`, `video/src/blocks/Diagram.tsx`
 - Test: `video/test/blocks-infographics.test.ts`
 
-Spec 4.10: type A (single site) uses ScaleDrawing (a to-scale side view: the answer to "no measuring lines on oblique photos"), UnitGrid and Timeline of phases; type B (many places) BarChart and Timeline, and the world distribution on the globe (GlobeShot over a `distribution` take, Task 31) or on the platform (PlatformClip with the `filter` and `toggle_layer` actions, Task 30); type C (science) Diagram (NERV wireframe primitives, orbits animated by the frame) and orders of magnitude as a UnitGrid up to 1:400 (it holds at most 400 cells) and a ScaleZoom beyond; type D (texts) Timeline of transmission. Every infographic is linear, never logarithmic (owner decision 31: a log scale is not pictorial and nobody reads it): BarChart has no `scale` prop, and ScaleZoom is the Powers-of-Ten idea without a log axis. It draws the two quantities as bars on one linear scale from the same left edge; the small one first fills 80 % of the bar area, then from 25 % of the scene the camera pulls back linearly (the visible extent grows linearly from the small value to the large one, eased at both ends) until, one second before the scene ends, the large one fills 80 %, and the small one shrinks to a dot that keeps its label and value. Every frame is a pure function of the frame number, and in every frame the two bars stand in the ratio of their values (tested). A linear pull on a large ratio shrinks the small bar to a dot within the first frames of the pull-back (measured on the demo render, 1:6,000): the readable phase is the time before the pull-back, the dot and its label keep the small quantity visible afterwards. This is recorded as owner question Q6 (`2026-09-26-owner-questions.md`, "Open", and the build index's section 8); until the owner answers, the build keeps the linear pull-back exactly as decision 31 words it (`zoomScale` unchanged). A BarChart value is a number or `[low, high]`: spec 4.2 wants a quantity with a range to show the range, so the bar is solid to `low`, outlined on to `high` and labelled `low–high unit`. Every value is printed with the decimals it is written with (`decimalsOf`: 1.75 stays 1.75, never 1.8), because a bar whose id is a case-file quantity id must show exactly that quantity (plan C checks its value and the chart's `unit`). Every comparison block prints its basis on screen through its exported `basisLine(props)`.
+Spec 4.10: type A (single site) uses ScaleDrawing (a to-scale side view: the answer to "no measuring lines on oblique photos"), UnitGrid and Timeline of phases; type B (many places) BarChart and Timeline, and the world distribution on the globe (GlobeShot over a `distribution` take, Task 31) or on the platform (PlatformClip with the `filter` and `toggle_layer` actions, Task 30); type C (science) Diagram (NERV wireframe primitives, orbits animated by the frame) and orders of magnitude as a UnitGrid up to 1:400 (it holds at most 400 cells) and a ScaleZoom beyond; type D (texts) Timeline of transmission. Every infographic is linear, never logarithmic (owner decision 31: a log scale is not pictorial and nobody reads it): BarChart has no `scale` prop, and ScaleZoom is the Powers-of-Ten idea without a log axis. It draws the two quantities as bars on one linear scale from the same left edge; the small one first fills 80 % of the bar area, then from 25 % of the scene the camera pulls back linearly (the visible extent grows linearly from the small value to the large one, eased at both ends) until, one second before the scene ends, the large one fills 80 %, and the small one shrinks to a dot that keeps its label and value. Every frame is a pure function of the frame number, and in every frame the two bars stand in the ratio of their values (tested). A linear pull on a large ratio shrinks the small bar to a dot within the first frames of the pull-back (measured on the demo render, 1:6,000): the readable phase is the time before the pull-back, the dot and its label keep the small quantity visible afterwards. This is recorded as owner question Q6 (`2026-09-26-owner-questions.md`, "Open", and the build index's section 8); until the owner answers, the build keeps the linear pull-back exactly as decision 31 words it (`zoomScale` unchanged). A BarChart value is a number or `[low, high]`: spec 4.2 wants a quantity with a range to show the range, so the bar is solid to `low`, outlined on to `high` and labelled `low–high unit`. Every value is printed with the decimals it is written with (`decimalsOf` counts the exact decimals of the number's shortest form, exponent form included, with no cap: 1.75 stays 1.75, never 1.8, and 1.5e-7 prints 0.00000015, never 0), because a bar or ScaleZoom quantity whose id is a case-file quantity id must show exactly that quantity (plan C checks its value and the chart's `unit`). A value too long for its box then fails the layout lint as `overflow`; it is never printed as another number. Every comparison block prints its basis on screen through its exported `basisLine(props)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -5906,6 +5908,11 @@ describe('BarChart', () => {
     expect(valueText(1.75, 'm')).toBe('1.75 m')
     const empty: BarChartProps = { ...p, bars: [{ id: 'x', label: 'x', value: [1650, 1000] }, p.bars[1]] }
     expect(checkBarChart(empty)).toEqual(['bar x: range [1650, 1000] needs low < high'])
+  })
+  it('prints small values exactly, exponent form included, never rounded to another number', () => {
+    expect(valueText(1.5e-7, 'm')).toBe('0.00000015 m')
+    expect(valueText(0.0000015, 'm')).toBe('0.0000015 m')
+    expect(valueText(1e-10, 'm')).toBe('0.0000000001 m')
   })
 })
 
@@ -6277,8 +6284,15 @@ const GROW_FRAMES = 30
 
 const lowOf = (v: BarValue): number => (Array.isArray(v) ? v[0] : v)
 const highOf = (v: BarValue): number => (Array.isArray(v) ? v[1] : v)
-/** The decimals `x` is written with (1.75 -> 2), so a bar bound to a case-file quantity shows exactly its value. */
-const decimalsOf = (x: number) => Math.min(6, (String(x).split('.')[1] ?? '').length)
+/**
+ * The exact decimals of `x`'s shortest form, exponent form included, with no cap (1.75 -> 2,
+ * 1.5e-7 -> 8, 1e21 -> 0), so a value bound to a case-file quantity prints exactly that value;
+ * one too long for its box fails the layout lint as `overflow`, never prints as another number.
+ */
+const decimalsOf = (x: number): number => {
+  const [mantissa, exp = '0'] = String(x).split('e')
+  return Math.max(0, (mantissa.split('.')[1] ?? '').length - Number(exp))
+}
 
 export function checkBarChart(p: BarChartProps): string[] {
   const errors: string[] = []
@@ -6747,7 +6761,7 @@ export const Diagram: React.FC<BlockProps<DiagramProps>> = ({ props: p, cues, sc
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/blocks-infographics.test.ts`
-Expected: `Tests  16 passed (16)`
+Expected: `Tests  17 passed (17)`
 
 - [ ] **Step 5: Commit**
 
@@ -7139,7 +7153,7 @@ git commit -m "Tie every registry block to its component, checks and cue targets
 - Create: `video/src/SceneView.tsx`, `video/src/Episode.tsx`, `video/src/Thumbnail.tsx`, `video/src/Root.tsx`, `video/src/index.ts`
 - Test: `video/test/rules.test.ts`
 
-Both compositions take the timeline as an input prop. `calculateMetadata` runs once per render in the browser: it parses and checks the timeline, measures every narration clip and image, sets duration, fps and size from the timeline, and puts the browser's WebGL renderer into the props as `gpu` (the scripts refuse anything but the NVIDIA). Episode mounts one `<Sequence>` per scene, the overlays, one `<Audio>` per narration clip and the looping music bed with its duck curve; in lint mode it mounts `LayoutGuard` instead of the audio. Thumbnail shows candidate K of the timeline's three thumbnail candidates (owner decisions 24-25): one episode frame without captions, ticker, chapter tag or credits, with the candidate's teaser in the NERV heading type (Orbitron, upper case, 104 px, at most two lines) on its own dark glass in `TEASER_ZONE`, inside the title-safe area and clear of the bottom-right 25 % x 20 % of the frame, where YouTube lays its duration badge. The teaser is the only box the Thumbnail measures in lint mode (`lint.ts` renders each candidate once; an overflowing teaser is an `overflow` violation); the scene under it is linted with the episode and covered on purpose. `test/rules.test.ts` enforces the Remotion rules over all of `src/` and pins the teaser zone.
+Both compositions take the timeline as an input prop. `calculateMetadata` runs once per render in the browser: it parses and checks the timeline, measures every narration clip and image, sets duration, fps and size from the timeline, and puts the browser's WebGL renderer into the props as `gpu` (the scripts refuse anything but the NVIDIA). Episode mounts one `<Sequence>` per scene, the overlays, one `<Audio>` per narration clip and the looping music bed with its duck curve; in lint mode it mounts `LayoutGuard` instead of the audio. Thumbnail shows candidate K of the timeline's three thumbnail candidates (owner decisions 24-25): one episode frame without captions, ticker or chapter tag; with the scene's in-frame credit line (spec 4.8), with the candidate's teaser in the NERV heading type (Orbitron, upper case, 104 px, at most two lines) on its own dark glass in `TEASER_ZONE`, inside the title-safe area and clear of the bottom-right 25 % x 20 % of the frame, where YouTube lays its duration badge. The credit line is that of the scene that shows the frame (`creditsAt`: the `timeline.credits` texts of the scene with `from <= frame < from + durationInFrames`), merged as in the episode and drawn bottom left in `THUMBNAIL_CREDIT_ZONE` (the size of `ZONES.credit`, inside the title-safe area, clear of the teaser, the duration badge and the lower third; the episode's credit zone lies under the badge, so `EpisodeVisuals` keeps `credits={false}`); a scene without credits gets none. A thumbnail taken in a PhotoPlate, PlatformClip, MapboxTopdown or MapboxFlyover scene thus keeps its photo or Mapbox/Maxar attribution in the picture, which the Mapbox terms require and which the same JPEG needs as the paper page's poster. The teaser is the only box the Thumbnail measures in lint mode (`lint.ts` renders each candidate once; an overflowing teaser is an `overflow` violation); the scene under it is linted with the episode and covered on purpose, and the credit line is the scene's own (same text, same box size), which the episode lint measures; it sits where the episode's player controls would be, and a thumbnail has none. `test/rules.test.ts` enforces the Remotion rules over all of `src/` and pins the teaser zone, the credit zone and the credit selection.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -7155,9 +7169,9 @@ import { describe, expect, it } from 'vitest'
 import { Episode, EpisodeVisuals } from '../src/Episode'
 import { DEMO_TIMELINE } from '../src/fixtures/demo'
 import { contains, overlapArea } from '../src/layout/geometry'
-import { SAFE } from '../src/layout/zones'
+import { SAFE, ZONES } from '../src/layout/zones'
 import { SceneView } from '../src/SceneView'
-import { DURATION_BADGE, TEASER_ZONE, Thumbnail, teaserOf } from '../src/Thumbnail'
+import { DURATION_BADGE, TEASER_ZONE, THUMBNAIL_CREDIT_ZONE, Thumbnail, creditsAt, teaserOf } from '../src/Thumbnail'
 
 const SRC = fileURLToPath(new URL('../src', import.meta.url))
 
@@ -7206,14 +7220,30 @@ describe('compositions', () => {
   })
 })
 
-describe('thumbnail teaser (owner decisions 24-25)', () => {
-  it('sits inside the title-safe area and clear of the duration badge YouTube lays over a thumbnail', () => {
+describe('thumbnail teaser and credit line (owner decisions 24-25, spec 4.8)', () => {
+  it('sit inside the title-safe area and clear of the duration badge YouTube lays over a thumbnail', () => {
     expect(contains(SAFE, TEASER_ZONE)).toBe(true)
     expect(overlapArea(TEASER_ZONE, DURATION_BADGE)).toBe(0)
+    // the scene's credit line: bottom left, the size of the episode's credit zone, clear of teaser, badge and lower third
+    expect(contains(SAFE, THUMBNAIL_CREDIT_ZONE)).toBe(true)
+    for (const other of [TEASER_ZONE, DURATION_BADGE, ZONES.lowerThird]) expect(overlapArea(THUMBNAIL_CREDIT_ZONE, other)).toBe(0)
+    expect([THUMBNAIL_CREDIT_ZONE.w, THUMBNAIL_CREDIT_ZONE.h]).toEqual([ZONES.credit.w, ZONES.credit.h])
   })
   it('draws the teaser of the chosen candidate and refuses one the timeline does not have', () => {
     expect(teaserOf(DEMO_TIMELINE, 2)).toBe('Eighty buses heavy?')
     expect(() => teaserOf(DEMO_TIMELINE, 4)).toThrow(/thumbnail candidate 4 does not exist \(1\.\.3\)/)
+  })
+  it('takes the credit line of the scene that shows the frame, and none from a scene without credits', () => {
+    const scene = DEMO_TIMELINE.scenes[1]
+    const credits = [
+      { sceneId: scene.id, text: 'Photo: Jane Doe (CC BY-SA 4.0)' },
+      { sceneId: scene.id, text: '© Mapbox © Maxar' },
+    ]
+    const timeline = { ...DEMO_TIMELINE, credits }
+    expect(creditsAt(timeline, scene.from)).toEqual(['Photo: Jane Doe (CC BY-SA 4.0)', '© Mapbox © Maxar'])
+    expect(creditsAt(timeline, scene.from + scene.durationInFrames - 1)).toEqual(['Photo: Jane Doe (CC BY-SA 4.0)', '© Mapbox © Maxar'])
+    expect(creditsAt(timeline, scene.from - 1)).toEqual([])
+    expect(creditsAt(timeline, scene.from + scene.durationInFrames)).toEqual([])
   })
 })
 ```
@@ -7357,20 +7387,30 @@ export const Episode: React.FC<EpisodeProps> = ({ timeline, lint, narrationSpans
 ```tsx
 /**
  * The Thumbnail composition (owner decisions 24-25): episode frame `frame`
- * without captions, ticker, chapter tag or credit line, with the teaser of
- * thumbnail candidate `candidate` (timeline.thumbnails: 2-4 words, a question
- * or riddle that never gives the answer; plan C picks the frames and the
- * words) in the NERV heading type on its own dark glass. The composition is
- * one frame long and shifts every scene by `frame`, so its only frame shows
- * that moment (scene motion included). The teaser sits in TEASER_ZONE: inside
- * the title-safe area and clear of the bottom-right corner, where YouTube lays
- * its duration badge over a thumbnail. In lint mode (scripts/lint.ts) only the
- * teaser is measured: the scene under it is linted with the episode, and the
- * teaser covers it on purpose. scripts/still.ts renders it at scale 2
- * (3840x2160 master) and as a 1280x720 JPEG under 2 MB.
+ * without captions, ticker or chapter tag; with the scene's in-frame credit
+ * line (spec 4.8), with the teaser of thumbnail candidate `candidate`
+ * (timeline.thumbnails: 2-4 words, a question or riddle that never gives the
+ * answer; plan C picks the frames and the words) in the NERV heading type on
+ * its own dark glass. The composition is one frame long and shifts every scene
+ * by `frame`, so its only frame shows that moment (scene motion included). The
+ * teaser sits in TEASER_ZONE: inside the title-safe area and clear of the
+ * bottom-right corner, where YouTube lays its duration badge over a thumbnail.
+ * The credit line of the scene that shows the frame (photo licence, source
+ * page, Mapbox/Maxar: the Mapbox terms want the attribution in the picture, and
+ * the JPEG is also the paper page's poster) sits bottom left in
+ * THUMBNAIL_CREDIT_ZONE, because the episode's credit zone lies under the
+ * badge; a scene without credits gets none. In lint mode (scripts/lint.ts)
+ * only the teaser is measured: the scene under it is linted with the episode,
+ * and the teaser covers it on purpose; the credit line is the scene's own (same
+ * text, same box size), which the episode lint measures, and it sits where the
+ * episode's player controls would be, which a thumbnail does not have.
+ * scripts/still.ts renders it at scale 2 (3840x2160 master) and as a 1280x720
+ * JPEG under 2 MB.
  */
 import React, { useMemo } from 'react'
 
+import { CreditLine } from './blocks/CreditLine'
+import { mergeCredits } from './captions'
 import type { ImageSizes } from './context'
 import { EpisodeContext } from './context'
 import { EpisodeVisuals } from './Episode'
@@ -7388,6 +7428,11 @@ export type ThumbnailProps = { timeline: Timeline; candidate: number; frame: num
 export const TEASER_ZONE: Rect = { x: 96, y: 72, w: 1440, h: 380 }
 /** YouTube lays its duration badge over the bottom-right corner of a thumbnail (25 % x 20 % of the frame). */
 export const DURATION_BADGE: Rect = { x: 1440, y: 864, w: 480, h: 216 }
+/**
+ * Where the credit line of the frame's scene goes: bottom left inside the title-safe area,
+ * the size of ZONES.credit, clear of TEASER_ZONE, DURATION_BADGE and ZONES.lowerThird.
+ */
+export const THUMBNAIL_CREDIT_ZONE: Rect = { x: 96, y: 984, w: 800, h: 32 }
 
 /** The teaser of candidate `candidate` (1-based, like still.ts --candidate). */
 export function teaserOf(timeline: Pick<Timeline, 'thumbnails'>, candidate: number): string {
@@ -7396,15 +7441,24 @@ export function teaserOf(timeline: Pick<Timeline, 'thumbnails'>, candidate: numb
   return c.text
 }
 
+/** The timeline.credits texts of the scene that shows episode frame `frame`, in timeline order ([] for a scene without credits). */
+export function creditsAt(timeline: Pick<Timeline, 'scenes' | 'credits'>, frame: number): string[] {
+  const scene = timeline.scenes.find((s) => s.from <= frame && frame < s.from + s.durationInFrames)
+  if (!scene) throw new Error(`no scene shows episode frame ${frame}`)
+  return timeline.credits.filter((c) => c.sceneId === scene.id).map((c) => c.text)
+}
+
 export const Thumbnail: React.FC<ThumbnailProps> = ({ timeline, candidate, frame, lint, imageSizes }) => {
   const scenes = useMemo(() => new Registry(false), [])
   const teaser = useMemo(() => new Registry(lint), [lint])
   const data = useMemo(() => ({ state: buildState(timeline.scenes), imageSizes, lint }), [timeline, imageSizes, lint])
+  const credits = creditsAt(timeline, frame)
   const z = TEASER_ZONE
   return (
     <EpisodeContext.Provider value={data}>
       <LayoutProvider registry={scenes}>
         <EpisodeVisuals timeline={timeline} overlays={false} credits={false} shift={frame} />
+        {credits.length > 0 ? <CreditLine id={`thumbnail${candidate}:credit`} text={mergeCredits(credits)} zone={THUMBNAIL_CREDIT_ZONE} /> : null}
       </LayoutProvider>
       <LayoutProvider registry={teaser}>
         <div style={{ position: 'absolute', left: z.x, top: z.y, width: z.w, height: z.h, background: colors.bgPanel }} />
@@ -7512,7 +7566,7 @@ registerRoot(RemotionRoot)
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/rules.test.ts && npx tsc --noEmit`
-Expected: `Tests  14 passed (14)`, then no tsc output.
+Expected: `Tests  15 passed (15)`, then no tsc output.
 
 - [ ] **Step 5: Commit**
 
@@ -8163,8 +8217,9 @@ run(async () => {
  *   node --import tsx scripts/still.ts --timeline <timeline.json> --public-dir <dir> --out-dir <dir>
  *        --candidate K [--frame N]
  * Renders candidate K (1-3) of timeline.thumbnails: the Thumbnail composition
- * (the episode frame without captions, ticker, chapter tag or credits, with the
- * candidate's teaser) at the candidate's frame, or at --frame N (plan C's
+ * (the episode frame without captions, ticker or chapter tag; with the scene's
+ * in-frame credit line (spec 4.8), bottom left, and the candidate's teaser) at
+ * the candidate's frame, or at --frame N (plan C's
  * `episode thumbnail SLUG --candidate K --frame N`), as thumbnail_<K>_3840.png
  * (scale 2, 3840x2160 master) and thumbnail_<K>_1280.jpg (1280x720; quality
  * steps down from 92 until the file is under 2 MB, YouTube's limit), in a
@@ -8708,7 +8763,7 @@ Expected: FAIL with `ENOENT: no such file or directory, open '...\video\test\fix
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/smoke.test.ts && npx vitest run && npx tsc --noEmit`
-Expected: `Tests  2 passed (2)`, then the whole suite `Test Files  24 passed (24)` / `Tests  198 passed (198)`, then no tsc output. (Task 37 adds `contract.test.ts` later: 25 files, 199 tests.)
+Expected: `Tests  2 passed (2)`, then the whole suite `Test Files  24 passed (24)` / `Tests  200 passed (200)`, then no tsc output. (Task 37 adds `contract.test.ts` later: 25 files, 201 tests.)
 
 - [ ] **Step 5: Commit**
 
@@ -8768,7 +8823,7 @@ ffprobe -v error -show_entries stream=codec_name,nb_frames -of compact "$S/demo.
 ffmpeg -hide_banner -loglevel error -y -i "$S/demo.mp4" -vf "select='eq(n\,150)+eq(n\,330)+eq(n\,510)+eq(n\,690)+eq(n\,870)+eq(n\,1050)+eq(n\,1230)+eq(n\,1410)+eq(n\,1590)+eq(n\,1770)+eq(n\,1830)+eq(n\,1900)+eq(n\,1950)+eq(n\,2020)+eq(n\,2190)',scale=640:-1,tile=5x3" -frames:v 1 -fps_mode vfr "$S/demo_sheet.jpg"
 ```
 
-Expected: `stream|codec_name=h264|width=1920|height=1080|has_b_frames=0|color_range=tv|color_space=bt709|r_frame_rate=60/1|nb_frames=600` and `stream|codec_name=aac|sample_rate=48000|...`; six thumbnail files, `3840,2160` and `1280,720` for each candidate, every JPEG well under 2 MB (about 90 KB); `demo.mp4` `h264` with `nb_frames=2220` and its AAC stream. Open the sheets and look. `sheet.jpg`: the plate with its `1 PERSON` marker and hook caption, the platform clip with the credit line, the globe clip with the `BAALBEK` pin (drifting along its track) and lower third, the top-down frame with `QUARRY`/`TEMPLE` pins and their line, the source page with the glowing highlight, the evidence card with the typed quote and the `VERIFIED` stamp. `thumbs.jpg`: each candidate's frame with its teaser (`WHO MOVED IT?`, `WHERE IS BAALBEK?`, `HOW FAR APART?`) in upper case on dark glass at the top left, nothing in the bottom-right corner. `demo_sheet.jpg`, one frame per scene: the claim board, the evidence card with its stamps, the meter at 80/20, the quote card, the scale drawing, the unit grid of 80 buses, the bar chart with the Stone of the Pregnant Woman as a solid bar to 1,000 and an outline on to 1,650 labelled `1,000–1,650 T`, the timeline, the diagram, the list card, then four ScaleZoom frames (the small bar readable before the pull-back; then the small one a dot with its label while the Great Pyramid's bar still runs past the right edge; at the end the large bar fitted at 80 % of the width) and the share card.
+Expected: `stream|codec_name=h264|width=1920|height=1080|has_b_frames=0|color_range=tv|color_space=bt709|r_frame_rate=60/1|nb_frames=600` and `stream|codec_name=aac|sample_rate=48000|...`; six thumbnail files, `3840,2160` and `1280,720` for each candidate, every JPEG well under 2 MB (about 90 KB); `demo.mp4` `h264` with `nb_frames=2220` and its AAC stream. Open the sheets and look. `sheet.jpg`: the plate with its `1 PERSON` marker and hook caption, the platform clip with the credit line, the globe clip with the `BAALBEK` pin (drifting along its track) and lower third, the top-down frame with `QUARRY`/`TEMPLE` pins and their line, the source page with the glowing highlight, the evidence card with the typed quote and the `VERIFIED` stamp. `thumbs.jpg`: each candidate's frame with its teaser (`WHO MOVED IT?`, `WHERE IS BAALBEK?`, `HOW FAR APART?`) in upper case on dark glass at the top left, nothing in the bottom-right corner; the scene's credit line at the bottom left, left aligned: `Photo: Smoke Test (CC BY-SA 4.0)` on candidate 1 (the plate, scene s1) and `© Mapbox © Maxar` on candidate 3 (the top-down frame, scene s4); none on candidate 2 (the globe take, scene s3, which has no credits). `demo_sheet.jpg`, one frame per scene: the claim board, the evidence card with its stamps, the meter at 80/20, the quote card, the scale drawing, the unit grid of 80 buses, the bar chart with the Stone of the Pregnant Woman as a solid bar to 1,000 and an outline on to 1,650 labelled `1,000–1,650 T`, the timeline, the diagram, the list card, then four ScaleZoom frames (the small bar readable before the pull-back; then the small one a dot with its label while the Great Pyramid's bar still runs past the right edge; at the end the large bar fitted at 80 % of the width) and the share card.
 
 - [ ] **Step 4: Clean up**
 
@@ -14988,7 +15043,7 @@ git commit -m "Check that the renderer reads plan C's compiled golden timeline a
 cd video && npx tsc --noEmit && npx vitest run
 ```
 
-Expected: no tsc output; `Test Files  25 passed (25)`, `Tests  199 passed (199)` (Task 21's 24 files and 198 tests plus the contract test).
+Expected: no tsc output; `Test Files  25 passed (25)`, `Tests  201 passed (201)` (Task 21's 24 files and 200 tests plus the contract test).
 
 - [ ] **Step 5: Captures and the backend suite**
 
@@ -15035,9 +15090,9 @@ No further commit (Steps 4-7 change nothing). Report the counts and any gate tha
 | 4.8 blocks: PhotoPlate, ScaleDrawing, UnitGrid, EvidenceCard, SourceViewer, Meter, ClaimBoard, PlatformClip, GlobeShot, ShareCard, LowerThird, HookCaptions, Ticker, Stamp, QuoteCard, Timeline, Diagram, registry.json | Tasks 7, 12-17 (plus MapboxTopdown, MapboxFlyover, BarChart, ListCard, ScaleZoom); `registry.json` carries each block's `drawn` prop paths (owner decision 32) |
 | 4.8 layout: zones, LayoutBox registration, pure overlap checker, LayoutGuard console.error JSON | Tasks 4, 11 |
 | 4.8 render.ts (bundle, selectComposition, renderMedia, chunked by frameRange, concat), lint.ts (every 6th frame at 0.5, onBrowserLog, exit != 0; plus each thumbnail teaser), still.ts per thumbnail candidate `--candidate K [--frame N]` (3840x2160 + 1280x720 < 2 MB) | Tasks 19, 20 |
-| 4.8 per-render public dir, no absolute paths in props; in-frame map credits | Tasks 8 (asset paths), 12 (CreditLine), 20 (asset check) |
+| 4.8 per-render public dir, no absolute paths in props; in-frame map credits | Tasks 8 (asset paths), 12 (CreditLine), 18 (the thumbnail's credit line), 20 (asset check) |
 | 4.8 vitest: overlap geometry, marker transform, timeline helpers; smoke render of a 10-s fixture, local | Tasks 4, 5, 8, 21, 22 (the smoke fixture and the graphics-only demo timeline, every block drawn by a real Chrome on the NVIDIA); Task 37 reads plan C's golden timeline |
-| 4.9 thumbnails (owner decisions 24-25): three candidates for YouTube's A/B test, `thumbnails: [{frame, text}]` in timeline.json, a 2-4 word teaser in the NERV heading type clear of the duration badge, `--frame N` for a re-render | Tasks 8 (parse), 18 (Thumbnail by candidate, teaser zone), 20 (`still.ts --candidate K [--frame N]`, lint of the teasers), 22 |
+| 4.9 thumbnails (owner decisions 24-25): three candidates for YouTube's A/B test, `thumbnails: [{frame, text}]` in timeline.json, a 2-4 word teaser in the NERV heading type clear of the duration badge, the scene's in-frame credit line, `--frame N` for a re-render | Tasks 8 (parse), 18 (Thumbnail by candidate, teaser zone, the scene's credit line in `THUMBNAIL_CREDIT_ZONE`), 20 (`still.ts --candidate K [--frame N]`, lint of the teasers), 22 |
 | 4.10 topic types A-D through the block library (type B world distribution: the globe `distribution` take or PlatformClip with filters and layers; type C orders of magnitude: UnitGrid up to 1:400, ScaleZoom beyond, linear only, owner decision 31) | Tasks 13-16 (table D1), 30, 31 |
 | 4.11 every Chromium on the NVIDIA with proof (captures, recorder, Remotion); NVENC `-gpu 0`, no `'if-possible'`; renderer recorded | Tasks 19, 20, 24, 25, 29-31, 35; doctor (with `gpu.chrome_renderer()`), `--fix-gpu`, whisper on CUDA and the ledger's renderer: plan C (see "Where this plan and plan C meet") |
 | Owner picture rules: captions only in the hook; markers in their image's layer (globe: projected per frame); crop-checked markers only (the case file); no measuring lines on photos; comparisons state their basis (tested through `basisLine`); full-bleed, nothing in the YouTube control zone (text and markers); fast cursor (tested against a deadline); no agents, no title card (`chapterTagIndex` tested); platform moments via PlatformClip only; no satellite toggle in globe sections (owner correction 2026-09-26, refused by `validate_actions`, tested); the link only on the end card (a ShareCard only as the last scene, refused by `checkBlocks`, tested); a hook caption line fits one row (`HOOK_LINE_MAX_CHARS`, tested); drawn text in the brand fonts, upper case included (tested) | Tasks 10, 12, 5/13/14/35, 13, 7/16, 4, 30, 7/12, 30, 17, 10, 2/17 |
@@ -15155,3 +15210,25 @@ Verified on a minimal scratch built by script from the plan text: every complete
 - **Captures:** `142 passed, 1 skipped`. With the NVIDIA driver and Playwright hidden, as in CI, `129 passed, 14 skipped`, each skip with its reason. ruff 0.15.11 check, ruff format --check, vulture at 80 and mypy over `pipeline/studio/capture` are clean. With the mean-latitude pose put back, both new globe tests fail: 41.17 instead of 10.45, and the refusal test reaches the recorder.
 - **Probes:** 499 dots near 45°N plus a labelled Machu Picchu give `cam_lat` 16.42 in 5 ms. The mean-latitude pose would sit at 44.88, where Machu Picchu never enters the band. Task 36's `g4` spec gives 20.14 (its midpoint). A fontTools re-run on `orbitron-700.woff2` confirmed Task 10's numbers: an average capital of 56 px, 1126 and 2046 px, 5 of 18 four-word lines over 1440 px, a widest 24-character line of 1220 px, and 24 × `M` at 1518 px.
 - **Not run in this pass:** Tasks 22 and 36 (NVENC renders and real captures; the distribution pose changes which latitude the `g4` take is filmed from), the frontend suites (no frontend file changed), the backend suite, `lint-imports` (no new import), plan C's mirrors of the three shared rules, and the build index's cross-plan re-verification. Scratch copies were deleted afterwards.
+
+### I14 pass (2026-09-27, build index item I14, round-3 review)
+
+Changed, each with its tests (the ids are those of the round-3 review):
+
+- **Small values print exactly (registry-decimalsof-misprints-small-values).** BarChart's `decimalsOf` counts the exact decimals of the number's shortest form, exponent form included, with no cap: `String(x)` split at `e`, the mantissa's decimals minus the exponent, at least 0. Before, it read the decimals of `String(x)` and capped them at 6, so 1.5e-7, 6.6e-7 and 1e-10 printed `0 m` and 0.0000015 printed `0.000002 m`. No check caught it: `0 m` is short, and plan C compares values only. +1 test in `blocks-infographics.test.ts` with the three `valueText` cases (17 tests). ScaleZoom prints through the same `valueText`. A value too long for its box fails the layout lint as `overflow`. A value beyond 100 decimals (below 1e-100) makes `toLocaleString` throw a `RangeError`, so the render fails instead of printing another number. Task 16's intro states the rule. Plan C and `registry.json` are unchanged.
+- **The thumbnail keeps its scene's credit (timeline-thumbnail-drops-map-and-photo-credits, render-thumbnail-drops-map-credit).**
+  - `CreditLine` (Task 12) takes an optional `zone: Rect` (default `ZONES.credit`). It aligns its line to the frame edge the zone is nearer to: right in the episode, as before, and left in the thumbnail's bottom-left zone. The alignment rule is not in the index text and is recorded here.
+  - `Thumbnail.tsx` exports `THUMBNAIL_CREDIT_ZONE = {x: 96, y: 984, w: 800, h: 32}` and `creditsAt(timeline, frame)`: the `timeline.credits` texts of the scene with `from <= frame < from + durationInFrames`.
+  - After `EpisodeVisuals` (which keeps `credits={false}`), it draws `` <CreditLine id={`thumbnail${candidate}:credit`} text={mergeCredits(credits)} zone={THUMBNAIL_CREDIT_ZONE} /> `` inside the scenes' registry. It draws nothing for a scene without credits.
+  - The line is not measured in lint mode. It is the scene's own line (same text, same box size), which the episode lint measures. In the teaser's registry, the lint's player-controls rule would refuse it: y 984 lies in the episode's control band, which a thumbnail does not have.
+  - `rules.test.ts`: the teaser-zone test also asserts `contains(SAFE, THUMBNAIL_CREDIT_ZONE)`, zero overlap with `TEASER_ZONE`, `DURATION_BADGE` and `ZONES.lowerThird`, and the width and height of `ZONES.credit`. +1 test for `creditsAt` (15 tests).
+  - Texts: D4, the thumbnails bullet of "Where this plan and plan C meet", the File Structure row, the intros of Tasks 12 and 18, and the Thumbnail and `still.ts` docstrings now read "without captions, ticker or chapter tag; with the scene's in-frame credit line (spec 4.8)". Task 22 Step 3 expects the photo credit on candidate 1, `© Mapbox © Maxar` on candidate 3 and no credit on candidate 2. The Spec coverage rows 4.8 and 4.9 name the thumbnail's credit line.
+- **Counts:** renderer 24 files and 200 tests before Task 37, 25 files and 201 tests with it.
+- **Not changed here:** plan C's C9 text and spec 4.9. These are the orchestrator's I14 text edits, as are the other spec items at the end of the index's section 3.
+
+Verified on a minimal scratch built by script from the plan text. It held the 95 complete-file blocks of `video/`, `registry.json` from `npm run registry`, the site's `tokens.css` and `constants/colors.ts`, and a stand-in golden file (a copy of the smoke timeline). The worktree's Remotion 4.0.529 `node_modules` was mounted as a junction.
+
+- **Before the changes:** `tsc --noEmit` clean, `Test Files 25 passed (25)`, `Tests 199 passed (199)`. The new tests fail against the old code: `valueText(1.5e-7, 'm')` returns `0 m`, and the two thumbnail tests fail on the missing `THUMBNAIL_CREDIT_ZONE` and `creditsAt`.
+- **After:** `npm run registry` writes 18 blocks (2236 lines, unchanged), `tsc --noEmit` is clean, and vitest reports `Test Files 25 passed (25)`, `Tests 201 passed (201)`. Probes: 6.6e-7 prints `0.00000066 m`, 1e21 prints `1,000,000,000,000,000,000,000 m`, 12742 prints `12,742 m`, and 1e-101 throws `RangeError: maximumFractionDigits value is out of range.`
+- **On the RTX 3080** (every browser printed `gpu: ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`): the demo timeline with two credits on scene b01. For candidate 1 (frame 108, b01), `still.ts` draws `Photo: Smoke Test (CC BY-SA 4.0) · © Mapbox © Maxar` left aligned at the bottom left, clear of the teaser. For candidate 2 (frame 200, b02, no credits) it draws none. `lint.ts` prints `lint clean: 373 frames checked`.
+- **Not run in this pass:** Task 22 on the smoke fixture (its HEVC clips), Task 36, and the capture and frontend suites (none of their files changed). Scratch copies were deleted afterwards (junctions removed first).
