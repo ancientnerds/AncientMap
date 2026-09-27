@@ -42,7 +42,7 @@ run(async () => {
   const violations: LintViolation[] = []
   let frames = 0
   // The frames themselves are thrown away: only LayoutGuard's console output matters.
-  // chromiumOptions: a crash-replacement browser must draw on the NVIDIA too (cli.ts RENDER_CHROMIUM).
+  // chromiumOptions: a crash-replacement browser opens with them before onNvidia's cancel lands (cli.ts RENDER_CHROMIUM).
   const discard = {
     imageFormat: 'jpeg',
     jpegQuality: 50,
@@ -53,13 +53,14 @@ run(async () => {
     chromiumOptions: RENDER_CHROMIUM,
   } as const
   await withBundle(publicDir, async (serveUrl) => {
-    await onNvidia(serveUrl, 'Episode', inputProps, (browser, composition) =>
+    await onNvidia(serveUrl, 'Episode', inputProps, (browser, composition, cancelSignal) =>
       renderFrames({
         ...discard,
         composition,
         serveUrl,
         inputProps,
         puppeteerInstance: browser,
+        cancelSignal,
         everyNthFrame: every,
         scale,
         concurrency: (flags.concurrency as number | undefined) ?? null,
@@ -75,13 +76,14 @@ run(async () => {
     )
     for (const [i, thumb] of timeline.thumbnails.entries()) {
       const thumbProps = { timeline, candidate: i + 1, frame: thumb.frame, lint: true, imageSizes: {}, gpu: '' }
-      await onNvidia(serveUrl, 'Thumbnail', thumbProps, (browser, composition) =>
+      await onNvidia(serveUrl, 'Thumbnail', thumbProps, (browser, composition, cancelSignal) =>
         renderFrames({
           ...discard,
           composition,
           serveUrl,
           inputProps: thumbProps,
           puppeteerInstance: browser,
+          cancelSignal,
           scale,
           concurrency: 1,
           onStart: () => console.log(`lint: thumbnail ${i + 1} (frame ${thumb.frame})`),

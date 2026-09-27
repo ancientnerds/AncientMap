@@ -5,7 +5,9 @@
  * H.264 (NVENC) + AAC 320k, 1920x1080 at the timeline's 60 fps, BT.709.
  *
  * GPU rule (spec 4.11): every chunk renders in a fresh browser whose WebGL
- * renderer is proved to be the NVIDIA (cli.ts onNvidia), and encodes with
+ * renderer is proved to be the NVIDIA (cli.ts onNvidia; a chunk in which
+ * Remotion replaces that browser after a crash is cancelled and fails the
+ * run), and encodes with
  * hardwareAcceleration 'required' (no software fallback) plus nvencOverride,
  * which pins h264_nvenc to GPU 0 and fails on any other encoder.
  *
@@ -57,13 +59,14 @@ run(async () => {
     for (const [i, range] of ranges.entries()) {
       const name = path.join(parts, `part-${String(i).padStart(3, '0')}`)
       const report = progressPrinter(`part ${i + 1}/${ranges.length}`, 25)
-      await onNvidia(serveUrl, 'Episode', inputProps, (browser, composition) =>
+      await onNvidia(serveUrl, 'Episode', inputProps, (browser, composition, cancelSignal) =>
         renderMedia({
           composition,
           serveUrl,
           inputProps,
           puppeteerInstance: browser,
           chromiumOptions: RENDER_CHROMIUM,
+          cancelSignal,
           codec: 'h264',
           frameRange: range,
           outputLocation: `${name}.mp4`,
