@@ -32,16 +32,23 @@ Spec: `docs/superpowers/specs/2026-09-26-studio-and-claude-write-design.md` sect
 | Tasks | Need | Check before starting |
 |---|---|---|
 | 1-22 (renderer) | nothing from other streams | none |
-| 23-32 (captures) | plan C Task 1: `pipeline/studio/errors.py` with `StudioError` | check C1 |
+| 23-32 (captures) | plan C Task 1: `pipeline/studio/errors.py` with `StudioError` and its `config.py` with `CAPTURE_ID_RE` and `CAPTURE_KINDS` (the one definition of C7's capture ids and kinds, which Task 23 imports), `REPO` (Task 27) and `check_slug` (Task 29) | check C1 |
+| 29 (source pages) and 32 (package exports, imports `sources.py`) | also plan A Task 2: `pipeline/lyra/theo_publishing.py` with `EVIDENCE_ID_RE`, the one definition of the evidence-id format (contract C9), which Task 29 imports (Task 32's `__init__.py` imports Task 29's `sources.py`, so every `import pipeline.studio.capture.<module>` needs it from then on) | check A2 |
 | 33-34 (frontend) | nothing | none |
 | 35 (studio scenes) | Tasks 33-34 | both committed |
 | 36 (real captures, local) | Tasks 23-35, `VITE_MAPBOX_ACCESS_TOKEN` in the main checkout's `.env`, an awake, unlocked Windows display | none |
 | 37 (whole-stream verification) | everything above; plan C Task 21: its golden `tests/pipeline/studio/golden_timeline.json`, which Task 37's contract test reads | check C21 |
 
-Check C1 (prints one line when plan C's Task 1 has landed):
+Check C1 (prints five lines when plan C's Task 1 has landed):
 
 ```bash
-grep -n "class StudioError" pipeline/studio/errors.py
+grep -n "class StudioError" pipeline/studio/errors.py && grep -n "^REPO\|^CAPTURE_ID_RE\|^CAPTURE_KINDS\|^def check_slug" pipeline/studio/config.py
+```
+
+Check A2 (prints one line when plan A's Task 2 has landed):
+
+```bash
+grep -n "^EVIDENCE_ID_RE" pipeline/lyra/theo_publishing.py
 ```
 
 Check C21 (prints the path when plan C's Task 21 has landed its golden timeline):
@@ -50,7 +57,7 @@ Check C21 (prints the path when plan C's Task 21 has landed its golden timeline)
 ls tests/pipeline/studio/golden_timeline.json
 ```
 
-Recommended order: 1-22, then 33-35 (the frontend, independent of the captures), then 23-32 as soon as check C1 prints its line, then 36 and 37. If a capture test fails with `ModuleNotFoundError: No module named 'pipeline.studio.errors'`, plan C's Task 1 has not landed: switch to the renderer or frontend tasks. Never stub `errors.py`: plan C owns it. Likewise Task 37 starts only when check C21 prints the path; never write `golden_timeline.json` by hand, plan C's compiler writes it.
+Recommended order: 1-22, then 33-35 (the frontend, independent of the captures), then 23-32 as soon as check C1 prints its line (Task 29 also waits for check A2; do Tasks 30 and 31 first if it prints nothing; Task 32 comes after Task 29), then 36 and 37. If a capture test fails with `ModuleNotFoundError: No module named 'pipeline.studio.errors'` or `ImportError: cannot import name 'CAPTURE_ID_RE' from 'pipeline.studio.config'`, plan C's (amended) Task 1 has not landed: switch to the renderer or frontend tasks. Never stub `errors.py`, `config.py` or `theo_publishing.py`: plans C and A own them. Likewise Task 37 starts only when check C21 prints the path; never write `golden_timeline.json` by hand, plan C's compiler writes it.
 
 ---
 
@@ -58,7 +65,7 @@ Recommended order: 1-22, then 33-35 (the frontend, independent of the captures),
 
 ### D1. Block registry `video/src/blocks/registry.json` (implements C5)
 
-Written by `cd video && npm run registry` from `video/src/blocks/schemas.ts`; `test/registry.test.ts` fails when the committed file differs. Shape `{"blocks": {"<Block>": {"props": <schema of type "object">, "map": bool, "platform": bool}}}`, keywords only from C5's subset. The 17 scene blocks (props arrive resolved per C6; a capture is the manifest with `path` renamed `src`):
+Written by `cd video && npm run registry` from `video/src/blocks/schemas.ts`; `test/registry.test.ts` fails when the committed file differs. Shape `{"blocks": {"<Block>": {"map": bool, "platform": bool, "drawn": [str], "props": <schema of type "object">}}}` (exactly these four keys), keywords only from C5's subset. `drawn` (owner decision 32) lists the prop paths whose strings the block's component draws: keys separated by `.`, a key suffixed with `[]` means every element of that array (`claims[].label`); `test/registry.test.ts` proves each pattern points at a string prop. It is the single definition of the drawn prop strings: plan C reads it from `registry.json` and keeps no copy. The 18 scene blocks (props arrive resolved per C6; a capture is the manifest with `path` renamed `src`):
 
 | Block | map | platform | Props (required in bold) | Local cue targets (`show`/`hide`/`highlight`/`stamp`) |
 |---|---|---|---|---|
@@ -74,15 +81,16 @@ Written by `cd video && npm run registry` from `video/src/blocks/schemas.ts`; `t
 | Meter | no | no | **hypotheses** [a, b], **start** [a, b] summing to 100, title, note | none (global `meter` cues move it) |
 | ScaleDrawing | no | no | **title**, **unit** `cm\|m\|km`, **basis**, **objects** (2-5 `{id, label, shape, width, height, x}`) | show: object ids |
 | UnitGrid | no | no | **title**, **basis**, **unitLabel**, columns, **groups** (1-4 `{id, count, label, tone}`, at most 400 cells) | show: group ids |
-| BarChart | no | no | **title**, **unit**, **basis**, scale `linear\|log10` (orders of magnitude, type C), **bars** (2-8 `{id, label, value, tone?}`; value a number or `[low, high]` when sources differ, drawn as a range; log10 needs values > 0) | show: bar ids |
+| BarChart | no | no | **title**, **unit**, **basis**, **bars** (2-8 `{id, label, value, tone?}`; value a number or `[low, high]` when sources differ, drawn as a range), on a linear axis only (owner decision 31: no `scale` prop, so a script's `scale` is refused as `props.scale: not allowed`) | show: bar ids |
 | Timeline | no | no | **title**, **from**, **to** (years, negative = BCE, no year 0), basis, **events** (1-10 `{id, year, label, tone}`) | show: event ids |
 | Diagram | no | no | **title**, **width**, **height**, basis, **elements** (1-16 `{id, type, tone, ...geometry}`) | show: element ids |
 | ListCard | no | no | **title**, **items** (1-5 `{id, text}`), note | show: item ids |
-| ShareCard | no | no | **headline**, **url**, **lines** (0-3) | none |
+| ShareCard | no | no | **headline**, **url**, **lines** (0-3); the end card, the one place the link appears in the picture: only the last scene may use it (owner rule, full episodes and slices alike) | none |
+| ScaleZoom | no | no | **title**, **unit**, **basis**, **small** and **large** (`{id, label, value}`, 0 < small < large): a linear zoom-out (owner decision 31), the small quantity drawn readable, then the camera pulls back linearly until the large one fits, the small one shrinking to a dot; the scene lasts at least 240 frames | show: `small.id`, `large.id` |
 
-Spec 4.10's topic types map onto these blocks as Task 16 describes; type B's world distribution is a GlobeShot of a globe `distribution` take (D2) or a PlatformClip whose take uses the `filter` and `toggle_layer` actions, and type C's orders of magnitude are a BarChart with `scale: "log10"`.
+Spec 4.10's topic types map onto these blocks as Task 16 describes; type B's world distribution is a GlobeShot of a globe `distribution` take (D2: labelled case-file places plus unlabelled dots that plan C resolves from site ids, owner decision 15) or a PlatformClip whose take uses the `filter` and `toggle_layer` actions; type C's orders of magnitude are a UnitGrid up to 1:400 and a ScaleZoom beyond, linear only, never a log axis (owner decision 31).
 
-Global cue verbs (any scene): `introduce <claim>` (a ClaimBoard of the episode must list the claim), `status <claim>` with `value` in `pending|supported|weakened|refuted|open`, `meter` (target `"meter"`, `value` [a, b] = 100; the episode needs a Meter scene). A claim introduced or re-statused in one scene shows so on every later ClaimBoard and EvidenceCard; the Meter picks up the last split; a claim's resolved `status` is what the board shows before the first `status` cue for it. Without a cue, elements appear on a staggered default schedule, so no block needs cues. The local cue column above is the single definition of the local cue rules: it is the `BLOCKS` table of `video/src/blocks/index.ts` (Task 17), and plan C's `script.py` mirrors it (its `LOCAL_CUES`, asserted to cover exactly the blocks of this registry) so a script is refused at `episode check`, before voice and capture, for the same cue reasons `lint.ts` would refuse its timeline. Every string in the props, captions, credits and chapter titles must be drawable by the brand fonts (latin and latin-ext; `checkBlocks` refuses anything else, e.g. Greek or an arrow; plan C's `episode check` applies the same rule to the script's strings before voice and capture, and plan C's capture step to every string of a returned manifest, such as a source page's title and URL). Overlays that are not scene blocks: HookCaptions (the timeline's `captions`, hook only), Ticker (evidence counter), ChapterTag (3 s after each chapter start, none at 0:00), CreditLine (the scene's `credits`), LowerThird, Stamp, Panel.
+Global cue verbs (any scene): `introduce <claim>` (a ClaimBoard of the episode must list the claim), `status <claim>` with `value` in `pending|supported|weakened|refuted|open`, `meter` (target `"meter"`, `value` [a, b] = 100; the episode needs a Meter scene). A claim introduced or re-statused in one scene shows so on every later ClaimBoard and EvidenceCard; the Meter picks up the last split; a claim's resolved `status` is what the board shows before the first `status` cue for it. Without a cue, elements appear on a staggered default schedule, so no block needs cues. The local cue column above is the single definition of the local cue rules: it is the `BLOCKS` table of `video/src/blocks/index.ts` (Task 17), and plan C's `script.py` mirrors it (its `LOCAL_CUES`, asserted to cover exactly the blocks of this registry) so a script is refused at `episode check`, before voice and capture, for the same cue reasons `lint.ts` would refuse its timeline. Every string the video draws must be drawable by the brand fonts (latin and latin-ext; `checkBlocks` refuses anything else, e.g. Greek or an arrow). A character must also be drawable in upper case: every code point of its full Unicode upper-case mapping must lie in the two ranges, because `heading()` and `hud()` draw upper case. So `µ` (drawn as Greek `Μ`) is refused. Only drawn strings are checked (owner decision 32): (1) a block's `drawn` prop paths; (2) of every capture prop (`clip`, `map`, `page`), exactly the capture's `credits` and the `label` of its `place` and `pin` events (never an event's `name` or `target`, a `url`, whose only drawn part is the ASCII hostname, the `title` of a `page` event, which records the page's own `<title>` and is drawn nowhere, or the `gpu` event's renderer); (3) the hook captions, chapter titles, timeline credits and thumbnail teasers. An original quote inside a captured source page (SourceViewer's `evidence.source.quote`), the page's own non-latin `<title>` and a non-latin URL path therefore pass, so a Greek, Hebrew or Chinese source page is shown as captured; a QuoteCard's quote is drawn and checked. Plan C's `episode check` applies the same definition (read from `registry.json`) to the script before voice and capture, and plan C's capture step checks (2) on every returned manifest, naming the capture (a source capture's only credit is `Source page: <ASCII hostname>`, so the check never refuses it for its page). Overlays that are not scene blocks: HookCaptions (the timeline's `captions`, hook only), Ticker (evidence counter), ChapterTag (3 s after each chapter start, none at 0:00), CreditLine (the scene's `credits`), LowerThird, Stamp, Panel.
 
 ### D2. Captures (implements C7) — `pipeline/studio/capture/__init__.py`
 
@@ -93,7 +101,7 @@ capture_source(episode_dir: Path, spec: dict) -> dict    # kind "source"
 mapbox_topdown(episode_dir: Path, spec: dict) -> dict    # kind "mapbox_topdown"
 ```
 
-Each writes `captures/<id>.<ext>` and returns exactly `{"id", "kind", "path", "fps", "duration_s", "width", "height", "events", "credits"}` (a still has `fps` and `duration_s` null; `width`/`height` are the size of the written file). Clips are HEVC (`hevc_nvenc`, GPU 0, BT.709 limited range, `hvc1`, constant 60 fps, a keyframe per second, no B-frames). The first event of every browser capture is `{"t": 0, "name": "gpu", "label": "<WebGL renderer>"}`: the proof that it drew on the NVIDIA (spec 4.11 wants the renderer recorded; C7 has no other free field). Every failure is a `CaptureError` (a `StudioError`: plan C's CLI exits 2 with the message), raised before any side effect for a bad spec (unknown keys, a missing or non-numeric value, a value out of range) or a venv without Playwright, and carrying the cause for a failed ffmpeg/ffprobe run (tool, exit code, stderr tail), a refused Mapbox request (never the token) or a Playwright failure; a page that never gets ready names the likely cause, and a screencast without frames fails with its own message. Plan C's capture step (`captures.py`) refuses a returned manifest with an event or credit string outside D1's glyph rule (a source page's title or URL), naming the capture. The Playwright captures block the site's Umami tracker (`/pulse.js`), so no take counts as a visit. Spec shapes:
+Each writes `captures/<id>.<ext>` and returns exactly `{"id", "kind", "path", "fps", "duration_s", "width", "height", "events", "credits"}` (a still has `fps` and `duration_s` null; `width`/`height` are the size of the written file). Clips are HEVC (`hevc_nvenc`, GPU 0, BT.709 limited range, `hvc1`, constant 60 fps, a keyframe per second, no B-frames). The first event of every browser capture is `{"t": 0, "name": "gpu", "label": "<WebGL renderer>"}`: the proof that it drew on the NVIDIA (spec 4.11 wants the renderer recorded; C7 has no other free field). Every failure is a `CaptureError` (a `StudioError`: plan C's CLI exits 2 with the message), raised before any side effect for a bad spec (unknown keys, a missing or non-numeric value, a value out of range) or a venv without Playwright, and carrying the cause for a failed ffmpeg/ffprobe run (tool, exit code, stderr tail), a refused Mapbox request (never the token) or a Playwright failure; a page that never gets ready names the likely cause, and a screencast without frames fails with its own message. Plan C's capture step (`captures.py`) refuses a returned manifest whose drawn strings fall outside D1's glyph rule, naming the capture: exactly its `credits` and the `label` of `place` and `pin` events. A source page's own `<title>` stays in its `page` event as a record and is never drawn (owner decision 32): SourceViewer's address bar and the credit `Source page: <host>` show only the ASCII (IDNA) hostname, so a non-latin page title or URL path never refuses a capture. The Playwright captures block the site's Umami tracker (`/pulse.js`), so no take counts as a visit. Spec shapes:
 
 ```json
 {"id": "platform-01", "kind": "platform", "target": "local|production", "hud": 1.3,
@@ -113,7 +121,8 @@ Each writes `captures/<id>.<ext>` and returns exactly `{"id", "kind", "path", "f
 {"id": "g3", "kind": "globe", "scene": "places", "lead_s": 0.5, "interval_s": 1.0, "duration_s": 8,
  "sweep_lng_deg": 150, "cam_lat": 35, "cam_lng_from": -30, "distance": 2.2, "places": [...]}
 {"id": "g4", "kind": "globe", "scene": "distribution", "duration_s": 16,
- "places": [{"id": "w1", "lat": 29.9792, "lng": 31.1342, "label": "Giza"}, {"id": "w4", "lat": 37.2231, "lng": 38.9224}]}
+ "places": [{"id": "w1", "lat": 29.9792, "lng": 31.1342, "label": "Giza"},
+            {"id": "be81c1a6-5d0c-4f7e-9a51-3c2d7e8f9a10", "lat": 37.2231, "lng": 38.9224}]}
 {"id": "m1", "kind": "globe", "scene": "mapbox_flyin", "name": "Baalbek", "lat": 34.0067, "lng": 36.2033,
  "country": "Lebanon", "orbit_zoom": 15.5, "duration_s": 8}
 {"id": "m2", "kind": "globe", "scene": "mapbox_orbit", "name": "Baalbek", "lat": 34.0067, "lng": 36.2033,
@@ -125,21 +134,21 @@ Each writes `captures/<id>.<ext>` and returns exactly `{"id", "kind", "path", "f
  "pins": [{"id": "p2", "label": "Quarry", "lat": 33.99917, "lng": 36.20028}]}
 ```
 
-Platform actions: `zoom` scrolls the wheel at the flown-to site until the zoom slider reads `to` percent (the app switches to Mapbox on its own); `measure` refuses two points less than 60 CSS px apart on screen ("zoom in first"); `proximity` clicks the Proximity tab, "set on globe" and the place; `filter` clicks a Filter panel mode (`country`, `category`, `source`; `age` is a slider without entries) and then the legend entry `label` (a click toggles it); `open_details` returns to the Search tab first; `hud` lies in 0.5..2. Globe scenes: `flyto` (an `empire` must be a key of `EMPIRE_METADATA`); `places` (1-12 labelled places; a fixed pose fitted to the band, or a sweep of the camera longitude from `cam_lng_from` by `sweep_lng_deg` at `cam_lat` and `distance`); `distribution` (1-500 places, labels optional: one full turn of the whole globe, spec 4.10's world distribution); the Mapbox fly-in and orbit. Every scene refuses keys it does not know.
+Platform actions: `zoom` scrolls the wheel at the flown-to site until the zoom slider reads `to` percent (the app switches to Mapbox on its own); `measure` refuses two points less than 60 CSS px apart on screen ("zoom in first"); `proximity` clicks the Proximity tab, "set on globe" and the place; the `measure` and `proximity` points are case-file place coordinates (plan C checks each against the verified case file); `filter` clicks a Filter panel mode (`country`, `category`, `source`; `age` is a slider without entries) and then the legend entry `label` (a click toggles it); `open_details` returns to the Search tab first; `toggle_layer` never takes the `Satellite` base map (any case: owner correction 2026-09-26, no satellite toggle in globe sections; satellite shows in the details page or a Mapbox take), refused before any side effect; `hud` lies in 0.5..2. Globe scenes: `flyto` (an `empire` must be a key of `EMPIRE_METADATA`); `places` (1-12 labelled places; a fixed pose fitted to the band, or a sweep of the camera longitude from `cam_lng_from` by `sweep_lng_deg` at `cam_lat` and `distance`); `distribution` (1-500 places, labels optional: one full turn of the whole globe, spec 4.10's world distribution, at a camera latitude from which one turn can show every place (a labelled place inside `PLACES_BAND`, a dot within the horizon less 5°); a set no latitude can show is refused before the take with `places [...] cannot face the camera in one turn of the globe; split the distribution`; the labelled places are case-file places drawn as pins, the unlabelled ones are the dots: plan C resolves the script's `site_ids` from the repo-root `public/data/sites/` export into `{id: <site id>, lat, lng}` and hands them over as unlabelled places, owner decision 15); the Mapbox fly-in and orbit. A Mapbox take's optional `country` is shown data (the recorder highlights that country's outline): plan C binds it to the site export's country of the case-file place at the take's `lat`/`lng`, and the recorder refuses a name the site's country table (`getCountryCode`) does not know with `unknown country <x>` before it prepares the map, so a take never silently lacks its highlight. Every scene refuses keys it does not know.
 
-Events per kind: platform `pause_rotation`, `search`, `click_result`, `fly_wait`, `zoom`, `open_details`, `measure`, `measure_a`, `measure_b`, `toggle_layer`, `expand_layers`, `proximity`, `proximity_center`, `filter_mode`, `filter`, `wait` (clicks carry `x`/`y` in media pixels); globe `rotate`, `zoom`, `arrive` (`x`/`y` of the frame centre), `place` (`target`, `label` unless a distribution dot, `x`, `y` of its first frame, and `track`: its pixel `[x, y]` in every frame from the event to the end of the take, null while hidden or, for a labelled place, outside `PLACES_BAND`; the owner's rule is to project globe markers per frame, so pins follow the camera), `space`, `orbit`; source `page` (`url`, `title`), `highlight` (`box` [x, y, w, h] image pixels, `target`); mapbox_topdown `pin` (`target`, `label`, `x`, `y`, `lat`, `lng`). Credits: platform and Mapbox takes `© Mapbox © OpenStreetMap © Maxar`; top-down `© Mapbox © Maxar` (satellite-v9) or the streets credit; our vector globe none; a source page `Source page: <title> (<domain>)`, our paper page none (its anchor is `ev-` and two or more digits; a second id of a paragraph, an empty `span.theo-evidence-anchor` in plan B's HTML, outlines its paragraph). Place ids in specs are case-file place ids; plan C checks each capture spec against the verified case file (places and their coordinates, the verified quote or `paper_anchor`). A top-down pin must fall in x 10-90 %, y 15-80 % of its frame and a labelled globe place in `PLACES_BAND` (x 12-78 %, y 15-74 %) at its event frame, so every label stays readable; the capture refuses anything else.
+Events per kind: platform `pause_rotation`, `search`, `click_result`, `fly_wait`, `zoom`, `open_details`, `measure`, `measure_a`, `measure_b`, `toggle_layer`, `expand_layers`, `proximity`, `proximity_center`, `filter_mode`, `filter`, `wait` (clicks carry `x`/`y` in media pixels); globe `rotate`, `zoom`, `arrive` (`x`/`y` of the frame centre), `place` (`target`, `label` unless a distribution dot, `x`, `y` of its first frame, and `track`: its pixel `[x, y]` in every frame from the event to the end of the take, null while hidden or, for a labelled place, outside `PLACES_BAND`; the owner's rule is to project globe markers per frame, so pins follow the camera), `space`, `orbit`; source `page` (`url`, `title`: the page's own `<title>`, a record that nothing draws), `highlight` (`box` [x, y, w, h] image pixels, `target`); mapbox_topdown `pin` (`target`, `label`, `x`, `y`, `lat`, `lng`). Credits: platform and Mapbox takes `© Mapbox © OpenStreetMap © Maxar`; top-down `© Mapbox © Maxar` (satellite-v9) or the streets credit; our vector globe none; a source page `Source page: <host>` (the ASCII hostname SourceViewer draws, as `domainOf` does: IDNA, without `www.`), our paper page none (its anchor is `ev-` and two or more digits; a second id of a paragraph, an empty `span.theo-evidence-anchor` in plan B's HTML, outlines its paragraph). Place ids in specs are case-file place ids (a distribution's dots excepted: their ids are site ids, never cue targets), and a place or pin `label` is the case-file place's name; plan C checks each capture spec against the verified case file (place ids, names and coordinates, the `measure` and `proximity` points, the verified quote or `paper_anchor`) and a Mapbox take's `country` against the site export's country of its place. A top-down pin must fall in x 10-90 %, y 15-80 % of its frame and a labelled globe place in `PLACES_BAND` (x 12-78 %, y 15-74 %) at its event frame, so every label stays readable; the capture refuses anything else.
 
 ### D3. timeline.json as the renderer reads it (implements C8)
 
-`parseTimeline` (`video/src/timeline.ts`) refuses, with the JSON path of the first defect: any unknown or missing key; `version` other than 1; `fps` other than 60; odd `width`/`height`; scenes that do not follow each other from frame 0 without gaps up to `durationInFrames`; an unknown `block`; props failing the block's registry schema; a cue outside its scene or with an unknown verb, a `status` value outside the claim statuses, a `meter` cue not targeting `"meter"` with two integers summing to 100, a `value` on any other verb; captions with an empty span, beyond the end or overlapping; ticker frames or counts that decrease; a first chapter not at frame 0 or chapters out of order; a credit for an unknown scene; a positive `gainDb`/`underNarrationDb`; any `src` not a clean relative path under `voice/`, `captures/`, `media/` or `music/`. All frame numbers are absolute; blocks receive scene-relative cues. `checkBlocks` then applies D1's cue-target rules, the brand-font rule (every string in props, captions, credits and chapter titles within latin and latin-ext) and each block's own checks (a clip long enough for its scene, markers inside their image, pins inside the frame, a platform zoom within the capture's pixels, globe tracks to the end of the take, meter start = 100, bar ranges with low < high and positive values on a log10 axis, diagram geometry, timeline years). Which local verbs a block takes, which ids it shows, and that `introduce` needs a ClaimBoard listing the claim and `meter` needs a Meter scene are the renderer's `checkBlocks` rules; `lint.ts` enforces them through `loadTimeline` before bundling (the first render step), and plan C's `script.py` checks the same rules from the same table before voice and capture (its `LOCAL_CUES`), plus the brand-font rule, besides the case-file and props rules of C6/C8. The blocks' own checks run first in `loadTimeline` (plan C mirrors only clip length, map credits, marker boxes and the meter start); a failure there is fixed in the script props, without new voice or captures.
+`parseTimeline` (`video/src/timeline.ts`) refuses, with the JSON path of the first defect: any unknown or missing key; `version` other than 1; `fps` other than 60; odd `width`/`height`; scenes that do not follow each other from frame 0 without gaps up to `durationInFrames`; an unknown `block`; props failing the block's registry schema; a cue outside its scene or with an unknown verb, a `status` value outside the claim statuses, a `meter` cue not targeting `"meter"` with two integers summing to 100, a `value` on any other verb; captions with an empty span, beyond the end or overlapping; ticker frames or counts that decrease; a first chapter not at frame 0 or chapters out of order; a credit for an unknown scene; `thumbnails` (owner decisions 24-25) other than exactly 3 entries `{frame, text}` with `frame` an integer inside the episode and `text` a teaser of 2-4 whitespace-separated words; a positive `gainDb`/`underNarrationDb`; any `src` not a clean relative path under `voice/`, `captures/`, `media/` or `music/`. All frame numbers are absolute; blocks receive scene-relative cues. `checkBlocks` then applies D1's cue-target rules, the end-card rule (a ShareCard only as the last scene), the brand-font rule (upper case included) to exactly D1's drawn strings (the blocks' `drawn` paths, the drawn strings of every capture prop, captions, credits, chapter titles and thumbnail teasers; owner decision 32) and each block's own checks (a clip long enough for its scene, markers inside their image, pins inside the frame, a platform zoom within the capture's pixels, globe tracks to the end of the take, meter start = 100, bar ranges with low < high, a ScaleZoom's 0 < small < large in a scene of at least 240 frames, diagram geometry, timeline years). Which frames make the three thumbnails and that they never show the answer is plan C's rule (its script validator); the renderer draws what `thumbnails` names. Which local verbs a block takes, which ids it shows, and that `introduce` needs a ClaimBoard listing the claim and `meter` needs a Meter scene are the renderer's `checkBlocks` rules; `lint.ts` enforces them through `loadTimeline` before bundling (the first render step), and plan C's `script.py` checks the same rules from the same table before voice and capture (its `LOCAL_CUES`), plus the brand-font rule, besides the case-file and props rules of C6/C8. The blocks' own checks run first in `loadTimeline` (plan C mirrors only clip length, map credits, marker boxes and the meter start); a failure there is fixed in the script props, without new voice or captures.
 
 ### D4. Node scripts (implements C9)
 
 Run with `node --import tsx scripts/<name>.ts`, cwd `<repo>/video` (the form `test/scripts.test.ts` uses; plan C's `render.py` calls node directly, not the `npx.CMD` wrapper); every path flag is made absolute; unknown or missing flags, a missing timeline, a public dir lacking any referenced file or brand font, a failed block check, a render browser not on the NVIDIA, or any render error exit 1 with the message on stderr. Each script bundles into `bundle/` next to the public dir (`<episode>/render/bundle`, transient) and deletes it when it ends, on success and on failure: Remotion's `bundle()` copies the whole public dir into its output, and its default output, a fresh `%TEMP%` directory, is never deleted.
 
-- `lint.ts --timeline <p> --public-dir <d> [--every 6] [--scale 0.5] [--report <json>] [--concurrency N]`: renders every 6th frame at half scale with `inputProps.lint = true` (no audio, clips not decoded), prints each violation `{"type":"layout-violation","frame","a","b","reason"}` to stderr, exits 1 when there is at least one; `lint clean: N frames checked` otherwise.
+- `lint.ts --timeline <p> --public-dir <d> [--every 6] [--scale 0.5] [--report <json>] [--concurrency N]`: renders every 6th frame at half scale with `inputProps.lint = true` (no audio, clips not decoded), then each thumbnail candidate's teaser (the Thumbnail composition in lint mode, one frame each; its violations carry the candidate's episode frame and the id `thumbnail<K>:teaser`), prints each violation `{"type":"layout-violation","frame","a","b","reason"}` to stderr, exits 1 when there is at least one; `lint clean: N frames checked` otherwise (N = the episode frames plus the 3 thumbnails).
 - `render.ts --timeline <p> --public-dir <d> --out <mp4> [--chunk-frames 3600] [--concurrency N]`: H.264 (`h264_nvenc`, GPU 0, 16 Mbit/s, no B-frames) + AAC 320k 48 kHz, BT.709, 60 fps; chunks of at most 3600 frames, each in a fresh browser, each writing its video (no B-frames) and its audio as a separate 16-bit PCM WAV (a 60 fps frame is exactly 800 samples at 48 kHz); the parts join by the ffmpeg concat demuxer, frame- and sample-exact; the joined audio is encoded to AAC 320k once here, and `pipeline/studio/render.py` re-encodes it once at 320k after the loudness gain; the frame count must equal the timeline's `durationInFrames`.
-- `still.ts --timeline <p> --public-dir <d> --out-dir <dir> [--frame N]`: `thumbnail_3840.png` (3840x2160) and `thumbnail_1280.jpg` (1280x720, < 2 MB) of the Thumbnail composition (the frame without captions, ticker, chapter tag or credits; default 60 % into the first scene).
+- `still.ts --timeline <p> --public-dir <d> --out-dir <dir> --candidate K [--frame N]` (owner decision 24; K is 1, 2 or 3): `thumbnail_<K>_3840.png` (3840x2160) and `thumbnail_<K>_1280.jpg` (1280x720, < 2 MB) of the Thumbnail composition for candidate K: the episode frame without captions, ticker, chapter tag or credits at the candidate's `frame` from `timeline.thumbnails`, or at `--frame N` (plan C's `episode thumbnail SLUG --candidate K --frame N`), with the candidate's teaser in the NERV heading type on its own dark glass, top left inside the title-safe area and clear of the bottom-right corner where YouTube lays its duration badge (owner decision 25). One call renders one candidate; plan C calls it once per candidate.
 - Each prints `gpu: <WebGL renderer>` for every browser it opens (the render log carries the proof).
 
 The public dir holds every timeline `src` under its relative path plus the seven brand-font files `fonts/orbitron-600.woff2`, `fonts/orbitron-700.woff2`, `fonts/jetbrains-mono-400.woff2`, `fonts/jetbrains-mono-500.woff2`, `fonts/jetbrains-mono-400-latin-ext.woff2`, `fonts/cormorant-garamond-400-latin.woff2`, `fonts/cormorant-garamond-400-latin-ext.woff2` (plan C's render step links every `ancient-nerds-map/public/fonts/*.woff2`).
@@ -154,12 +163,14 @@ The public dir holds every timeline `src` under its relative path plus the seven
 
 ## Where this plan and plan C meet (for the reconcile)
 
-- **Cue rules (resolved in the reconcile).** D1's local cue column, the `BLOCKS` table of `video/src/blocks/index.ts`, is the single definition of which local verbs a block takes and which ids it shows (infographic element ids included: ScaleDrawing objects, UnitGrid groups, BarChart bars, Timeline events, Diagram elements, ListCard items). Plan C's `script.py` mirrors it as `LOCAL_CUES`, evaluated on each beat's resolved props, and adds the global rules `checkBlocks` applies (`introduce` needs a ClaimBoard of the episode listing the claim, a `meter` cue needs a Meter beat, cue keys `{frame, do, target, value?}` with `value` only on `status`/`meter`, meter values integers 0..100 summing to 100), so a script that passes `episode check` passes lint.ts's cue rules. `episode check` covers the cue, props-schema, reference and brand-glyph rules: plan C applies D1's brand-font rule (latin and latin-ext, its copy of the two ranges of `video/src/theme/glyphs.ts` tested against that file) to every string of the resolved props, the hook caption tokens, the chapter titles and the credits before voice and capture. The renderer's per-block semantic checks (the `check` functions of `video/src/blocks/index.ts`; plan C mirrors only clip length, map credits, marker boxes and the meter start) run in lint.ts's `loadTimeline`, which fails within seconds before bundling; fixing props never makes the voice stale. GlobeShot's `show` targets are the targets of the capture's labelled `place` events (`arrive` carries no label any more). GlobeShot takes a globe take of scene `flyto`, `places` or `distribution` (no credits) and MapboxFlyover one of scene `mapbox_flyin` or `mapbox_orbit` (the Mapbox credit): the renderer tells them apart by the capture's credits (`globe.CREDITS` is keyed by scene), plan C by the bound spec's `scene` at `episode check`. The former cross-stream request 8 is superseded and dropped.
+- **Cue rules (resolved in the reconcile).** D1's local cue column, the `BLOCKS` table of `video/src/blocks/index.ts`, is the single definition of which local verbs a block takes and which ids it shows (infographic element ids included: ScaleDrawing objects, UnitGrid groups, BarChart bars, Timeline events, Diagram elements, ListCard items, ScaleZoom's `small.id` and `large.id`). Plan C's `script.py` mirrors it as `LOCAL_CUES`, evaluated on each beat's resolved props, and adds the global rules `checkBlocks` applies (`introduce` needs a ClaimBoard of the episode listing the claim, a `meter` cue needs a Meter beat, cue keys `{frame, do, target, value?}` with `value` only on `status`/`meter`, meter values integers 0..100 summing to 100), so a script that passes `episode check` passes lint.ts's cue rules. `episode check` covers the cue, props-schema, reference and brand-glyph rules: plan C applies D1's brand-font rule (latin and latin-ext, its copy of the two ranges of `video/src/theme/glyphs.ts` tested against that file) to exactly D1's drawn strings before voice and capture: each beat block's `drawn` paths, read from `registry.json` (its `glyphs.drawn_strings`; no Python copy of the lists), the drawn strings of every `$capture` prop (its credits and `place`/`pin` labels; a `page` event's title is a record and never drawn), the hook caption tokens, the chapter titles, the credits (`visual.credit`, `Photo: <attribution> (<license>)`) and the thumbnail teasers (owner decision 32). The renderer's per-block semantic checks (the `check` functions of `video/src/blocks/index.ts`; plan C mirrors only clip length, map credits, marker boxes and the meter start) run in lint.ts's `loadTimeline`, which fails within seconds before bundling; fixing props never makes the voice stale. GlobeShot's `show` targets are the targets of the capture's labelled `place` events (`arrive` carries no label any more). GlobeShot takes a globe take of scene `flyto`, `places` or `distribution` (no credits) and MapboxFlyover one of scene `mapbox_flyin` or `mapbox_orbit` (the Mapbox credit): the renderer tells them apart by the capture's credits (`globe.CREDITS` is keyed by scene), plan C by the bound spec's `scene` at `episode check`. The former cross-stream request 8 is superseded and dropped.
+- **Hook line budget, the end card and upper case (the same rule on both sides).** `video/src/captions.ts` exports the line budget on a line of its own, `export const HOOK_LINE_MAX_CHARS = 24`, and `captionLines` starts a new hook line before a word that would make the line longer than that (Task 10). Plan C's `script.py` mirrors the constant; its Task 27 reads this line with a regex, as it reads the glyph ranges. At `episode check`, before voice, `script.py` refuses a hook display token whose upper-case form, punctuation included, is longer than 24 characters: that is the one line no break can shorten. A ShareCard may only be the last scene (`checkBlocks`, Task 17), and plan C's `script.py` refuses a ShareCard on any beat but the last, in full episodes and slices alike. The brand-font rule covers every code point of a character's full upper-case mapping: `unsupportedChar` here and plan C's `glyphs.unsupported_char` with `str.upper()`. JavaScript and Python give the same mappings, e.g. `µ` to U+039C.
 - **GPU (spec 4.11) is plan C's on its side.** Plan C's `doctor.py` (Task 26) probes the GPU with this plan's `pipeline.studio.capture.gpu` (`nvenc_problem()`, `remotion_browser(REPO / "video")`, `gpu_preference(exe)`, `chrome_renderer()` + `require_nvidia`) plus `nvidia-smi`, and `doctor --fix-gpu` calls `set_gpu_preference(exe)`; plan C's `voice.py` runs faster-whisper on `device="cuda", device_index=0` (float16) through `pipeline/video/shorts_captions.py`, which plan C owns; plan C's `render.py` stores the renderer string in the render ledger from the `gpu: <WebGL renderer>` lines render.ts prints to stdout, one per browser (that line format is the contract). The former cross-stream requests 5-7 now live in plan C.
-- **Manifest events.** Spec 4.11 wants the renderer string in the capture manifest; C7 fixes the manifest keys, so it is the first event, `gpu`. Globe `place` events carry `track`. C's `manifest_problems` accepts both (events are `{t, name, ...}`), and refuses a manifest with an event or credit string outside D1's glyph rule (for example a source page's non-latin title), naming the capture.
+- **Manifest events.** Spec 4.11 wants the renderer string in the capture manifest; C7 fixes the manifest keys, so it is the first event, `gpu`. Globe `place` events carry `track`. C's `manifest_problems` accepts both (events are `{t, name, ...}`), and refuses a manifest whose drawn strings (its `credits` and the `label` of `place`/`pin` events) fall outside D1's glyph rule, naming the capture; event names, targets, URLs, a `page` event's `title` (the page's own `<title>`, kept as a record) and the `gpu` label are not drawn and not checked (owner decision 32), so a source page with a non-latin title passes (plan C's `glyphs.DRAWN_EVENT_FIELDS` is `{"place": "label", "pin": "label"}`).
+- **Thumbnails (owner decisions 24-25).** `timeline.json` carries `thumbnails: [{frame, text}]`, exactly 3: plan C compiles them from the script's `thumbnails: [{beat, at, text}]` and alone decides which frames may be used (never inside a twist, verdict or "what would change our mind" beat, never after the first verdict status or meter move) and which words (2-4, no verdict word). `still.ts --candidate K [--frame N]` renders one candidate as `thumbnail_<K>_3840.png` and `thumbnail_<K>_1280.jpg`; plan C calls it three times in `episode render` and once in `episode thumbnail SLUG --candidate K --frame N`, and packages the three JPEGs. `lint.ts` lints each teaser's layout.
 - **The compiled timeline (C8 = D3), tested on both sides.** Plan C Task 21 commits `tests/pipeline/studio/golden_timeline.json`, its compiler's output for its fixture episode, and keeps it current; this plan's Task 37 parses that same file (`video/test/contract.test.ts`: `parseTimeline`, `checkBlocks`, 60 fps, upper-case hook captions), so a drift on either side fails a suite before the first real render.
 - **Contract C9.** `render.ts` writes H.264 + AAC 320k, BT.709 limited range (`color_range=tv`: black decodes to Y 16, the NERV background to Y 28), so plan C's `normalize_loudness` (`-c:v copy`, re-encoding the audio once at 320k) and `render_audit` (1920x1080, 60 fps, exact frame count, the black-frame threshold on the limited range) work on it. The renderer animates entrances and cues only, so cards, stills and infographics are static by design: plan C's frozen-frame audit covers clip scenes only (a capture with a non-null `fps`), and a clip that holds one picture for more than 4 s is refused by it, so the script cuts to a card instead. The node scripts run as `node --import tsx scripts/<name>.ts` with cwd `video/`; `render/bundle/` is transient (created and removed by each script).
-- **Props bound to the case file (plan C's checks; D's BarChart prints exact values).** D's schemas describe resolved values (C6); plan C refuses inline entities in the script (`image`, `evidence` and `claims[]` must be `{"$ref"}`, `clip`, `map` and `page` must be `{"$capture"}`), binds every capture spec to the verified case file (place ids and coordinates, including the `places` of a globe `distribution` take, the verified quote or `paper_anchor`), applies the one quantity rule (a BarChart bar whose `id` is a case-file quantity id shows that quantity: its `value` equals the quantity's value, a range as `[low, high]`, and the chart's `unit` equals the quantity's `unit`; no other props element may use a quantity id; BarChart draws a range as a range and prints every value with its own decimals, `decimalsOf`), and validates each claim's icon against the ClaimBoard icon enum of `registry.json`. A claim's resolved `status` is what the board shows before its first `status` cue (normally `pending`); verdicts come only from `status` cues. Place and quantity stay resolvable (`resolved()`) because their ids are cue and pin targets, but no scene block takes them as a prop value.
+- **Props bound to the case file (plan C's checks; D's BarChart prints exact values).** D's schemas describe resolved values (C6); plan C refuses inline entities in the script (`image`, `evidence` and `claims[]` must be `{"$ref"}`, `clip`, `map` and `page` must be `{"$capture"}`), binds every capture spec to the verified case file (place ids, names and coordinates, including the labelled `places` of a globe `distribution` take, whose dots are site ids plan C resolves from the repo-root `public/data/sites/` export, owner decision 15; the `measure` and `proximity` points of a platform take; the verified quote or `paper_anchor`; a Mapbox take's optional `country`, which must equal the site export's `c` of the case-file place at its `lat`/`lng`, a place with a `site_id`), applies the one quantity rule (a BarChart bar or a ScaleZoom quantity, `small` or `large`, whose `id` is a case-file quantity id shows that quantity: its `value` equals the quantity's value, a range as `[low, high]` in a BarChart only, and the chart's `unit` equals the quantity's `unit`; no other props element may use a quantity id; BarChart draws a range as a range and both blocks print every value with its own decimals, `decimalsOf`), and validates each claim's icon against the ClaimBoard icon enum of `registry.json`. A claim's resolved `status` is what the board shows before its first `status` cue (normally `pending`); verdicts come only from `status` cues. Place and quantity stay resolvable (`resolved()`) because their ids are cue and pin targets, but no scene block takes them as a prop value.
 
 ---
 
@@ -172,18 +183,18 @@ Created (all owned by this plan):
 | `video/package.json`, `video/package-lock.json` | The renderer package: Remotion 4.0.529 and every other dependency pinned exactly; scripts `registry`, `typecheck`, `test`, `studio`, `lint:layout`, `render`, `still`. |
 | `video/tsconfig.json`, `video/vitest.config.ts`, `video/remotion.config.ts` | Strict TypeScript over src, scripts and tests; vitest in node; settings for `npm run studio` only. |
 | `video/src/index.ts`, `video/src/Root.tsx` | Registers the Episode and Thumbnail compositions; calculateMetadata validates the timeline, measures audio and images and proves the GPU. |
-| `video/src/Episode.tsx`, `video/src/SceneView.tsx`, `video/src/Thumbnail.tsx` | One Sequence per scene, the overlays, narration clips and the ducked music; lint mode; the thumbnail frame. |
+| `video/src/Episode.tsx`, `video/src/SceneView.tsx`, `video/src/Thumbnail.tsx` | One Sequence per scene, the overlays, narration clips and the ducked music; lint mode; a thumbnail candidate's frame with its teaser. |
 | `video/src/gpu.ts` | The render browser's WebGL renderer string. |
-| `video/src/timeline.ts`, `video/src/schema.ts` | timeline.json parsing (D3); the JSON-schema subset validator of the registry. |
+| `video/src/timeline.ts`, `video/src/schema.ts` | timeline.json parsing (D3, with the three thumbnail candidates); the JSON-schema subset validator of the registry. |
 | `video/src/state.ts`, `video/src/cues.ts`, `video/src/context.ts`, `video/src/media.ts` | Episode-wide claim and meter state; scene cue helpers; the episode context; audio length and image size measurement. |
 | `video/src/audio.ts`, `video/src/captions.ts`, `video/src/format.ts` | Narration spans and music ducking; hook caption lines, ticker and credit merging; distance, year, number and probability formatting. |
 | `video/src/theme/colors.ts`, `fonts.ts`, `glyphs.ts`, `type.ts` | NERV palette (mirror of the site tokens and the brand red, checked against the site files), brand fonts from the public dir (latin and latin-ext), the code points they cover, text styles. |
 | `video/src/motion/index.ts` | Frame-driven NERV motion (crtOpen, bootIn, borderTrace, typeOn, digitRoll, stampSlam, ringPulse, sweep); no flicker. |
 | `video/src/layout/zones.ts`, `geometry.ts`, `transform.ts` | Screen zones (safe area, YouTube controls); the pure overlap checker; image-to-screen math for moving markers. |
 | `video/src/layout/LayoutBox.tsx`, `LayoutGuard.tsx` | Box registration in lint mode; the reporter that prints one JSON line per violation. |
-| `video/src/blocks/types.ts`, `icons.tsx`, `schemas.ts`, `registry.json`, `index.ts`, `clips.ts` | Block props types (C6), ClaimBoard icons, the registry source and its generated JSON (C5), the block table and cue rules, clip rules. |
-| `video/src/blocks/*.tsx` (26 files besides `icons.tsx`) | Panel, Stamp, LowerThird, CreditLine, ChapterTag, Ticker, HookCaptions, Footage, ImageLayer and the 17 scene blocks of D1. |
-| `video/src/fixtures/demo-timeline.json`, `demo.ts` | The graphics-only demo timeline: default props for `npm run studio` and the test fixture. |
+| `video/src/blocks/types.ts`, `icons.tsx`, `schemas.ts`, `registry.json`, `index.ts`, `clips.ts` | Block props types (C6), ClaimBoard icons, the registry source with each block's drawn prop paths and its generated JSON (C5), the block table, cue rules and the drawn-string glyph check, clip rules. |
+| `video/src/blocks/*.tsx` (27 files besides `icons.tsx`) | Panel, Stamp, LowerThird, CreditLine, ChapterTag, Ticker, HookCaptions, Footage, ImageLayer and the 18 scene blocks of D1. |
+| `video/src/fixtures/demo-timeline.json`, `demo.ts` | The graphics-only demo timeline (all 12 graphics blocks, a BarChart range, the three thumbnail candidates): default props for `npm run studio`, the test fixture and Task 22's demo render. |
 | `video/scripts/args.ts`, `cli.ts`, `registry.ts`, `lint.ts`, `render.ts`, `still.ts` | Script helpers (flags, chunks, violation lines, GPU rules, the bundle dir), shared plumbing (bundling next to the public dir and removing it), the registry writer and the three C9 scripts. |
 | `video/test/*.test.ts` (25 files), `video/test/fixtures/smoke-timeline.json` | vitest suites and the 10-second smoke timeline; `contract.test.ts` (Task 37) parses plan C's committed golden `tests/pipeline/studio/golden_timeline.json`. |
 | `pipeline/studio/capture/__init__.py` | The four C7 functions. |
@@ -193,7 +204,7 @@ Created (all owned by this plan):
 | `pipeline/studio/capture/projection.py` | Web-Mercator and globe-camera projection (pure). |
 | `pipeline/studio/capture/vite.py` | Token, tools, the awake display, the local Vite server, the analytics tracker the captures block. |
 | `pipeline/studio/capture/mapbox.py` | Mapbox Static top-down frames with projected pins. |
-| `pipeline/studio/capture/sources.py`, `highlight.js` | Source-page and paper-page captures with the quote highlighted. |
+| `pipeline/studio/capture/sources.py`, `highlight.js` | Source-page and paper-page captures with the quote highlighted (slug and evidence-id checks imported from plans C and A). |
 | `pipeline/studio/capture/platform.py`, `nerv_cursor.js` | Platform takes of the real site with the fast NERV cursor. |
 | `pipeline/studio/capture/globe.py` | Globe and Mapbox takes through the recorder (fly-to, places with a fixed pose or a sweep, the world distribution), per-frame place tracks. |
 | `tests/pipeline/studio/capture/__init__.py`, `test_capture_*.py` (10 files) | Capture tests. |
@@ -372,7 +383,7 @@ git commit -m "Replace the never-rendered weekly Remotion project with the studi
 - Create: `video/src/theme/colors.ts`, `video/src/theme/fonts.ts`, `video/src/theme/glyphs.ts`, `video/src/theme/type.ts`, `video/src/motion/index.ts`
 - Test: `video/test/motion.test.ts`, `video/test/colors.test.ts`, `video/test/glyphs.test.ts`
 
-The motion is the renderer's port of `ancient-nerds-map/src/styles/nerv-animations.css`: crt-open, boot-in, border-trace, type-on, digit-roll, the stamp slam, ring-pulse and sweep, each a pure function of the frame. Flicker, glitch and every alert/emergency flash are left out on purpose (owner rule: no flicker). The palette mirrors `ancient-nerds-map/src/styles/tokens.css` and the brand red `UI_COLORS.primary` of `src/constants/colors.ts` (spec 4.8); `colors.test.ts` reads both site files and fails when a mirrored value drifts. The fonts are the site's own woff2 files, loaded from the per-render public dir through `@remotion/fonts` (which holds the render with `delayRender` until each file loaded and cancels it when one is missing): the latin files plus the latin-ext files of JetBrains Mono and Cormorant Garamond, each with the `unicode-range` of `ancient-nerds-map/public/fonts/fonts.css`, so transliterations (Vinča, Enūma Eliš, Mahābhārata) draw in the brand fonts. `glyphs.ts` holds those two ranges; Task 17's `checkBlocks` refuses any other character, because the browser would draw it in a Windows system font without an error. Orbitron ships latin only (`ancient-nerds-map/public/fonts/` has no Orbitron latin-ext file), so `HEADING` names JetBrains Mono second: a latin-ext letter in a heading (Şanlıurfa, Ḫattuša, Enūma Eliš) is drawn, per character, by the loaded JetBrains Mono latin-ext face and never by a system font, and the glyph rule stays the one set, latin plus latin-ext.
+The motion is the renderer's port of `ancient-nerds-map/src/styles/nerv-animations.css`: crt-open, boot-in, border-trace, type-on, digit-roll, the stamp slam, ring-pulse and sweep, each a pure function of the frame. Flicker, glitch and every alert/emergency flash are left out on purpose (owner rule: no flicker). The palette mirrors `ancient-nerds-map/src/styles/tokens.css` and the brand red `UI_COLORS.primary` of `src/constants/colors.ts` (spec 4.8); `colors.test.ts` reads both site files and fails when a mirrored value drifts. The fonts are the site's own woff2 files, loaded from the per-render public dir through `@remotion/fonts` (which holds the render with `delayRender` until each file loaded and cancels it when one is missing): the latin files plus the latin-ext files of JetBrains Mono and Cormorant Garamond, each with the `unicode-range` of `ancient-nerds-map/public/fonts/fonts.css`, so transliterations (Vinča, Enūma Eliš, Mahābhārata) draw in the brand fonts. `glyphs.ts` holds those two ranges; Task 17's `checkBlocks` refuses any other character, because the browser would draw it in a Windows system font without an error. `heading()` and `hud()` set `textTransform: 'uppercase'`, and the browser then draws the full Unicode upper-case mapping. So a character counts as drawable only when it and every code point of its upper case lie in the two ranges. Examples: `µ` (U+00B5, latin) draws as Greek `Μ` (U+039C); `ǰ` draws as `J` plus U+030C; `ẖ` draws as `H` plus U+0331. The error names the written character and what it turns into. Plan C's `glyphs.unsupported_char` applies the same rule with `str.upper()`, which gives the same mappings. Orbitron ships latin only (`ancient-nerds-map/public/fonts/` has no Orbitron latin-ext file), so `HEADING` names JetBrains Mono second: a latin-ext letter in a heading (Şanlıurfa, Ḫattuša, Enūma Eliš) is drawn, per character, by the loaded JetBrains Mono latin-ext face and never by a system font, and the glyph rule stays the one set, latin plus latin-ext.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -467,7 +478,7 @@ describe('the NERV palette mirrors the site (spec 4.8)', () => {
 import { describe, expect, it } from 'vitest'
 
 import { FONTS, FONT_FILES, HEADING } from '../src/theme/fonts'
-import { LATIN_EXT_RANGE, LATIN_RANGE, parseUnicodeRange, unsupportedChar } from '../src/theme/glyphs'
+import { LATIN_EXT_RANGE, LATIN_RANGE, glyphReason, parseUnicodeRange, unsupportedChar } from '../src/theme/glyphs'
 
 describe('the brand fonts cover latin and latin-ext (fonts.css unicode-range)', () => {
   it('parses a CSS unicode-range', () => {
@@ -477,10 +488,15 @@ describe('the brand fonts cover latin and latin-ext (fonts.css unicode-range)', 
       [0xa720, 0xa7ff],
     ])
   })
-  it('accepts the transliterations of type-D topics and refuses other scripts', () => {
-    for (const text of ['Vinča', 'Enūma Eliš', 'Mahābhārata', 'Çatalhöyük', 'Ḫattuša', '1,000–1,650 t × 2 — “quoted” …']) expect(unsupportedChar(text), text).toBeNull()
+  it('accepts the transliterations of type-D topics, refuses other scripts and letters whose upper case leaves the fonts', () => {
+    for (const text of ['Vinča', 'Enūma Eliš', 'Mahābhārata', 'Çatalhöyük', 'Ḫattuša', 'ÿ ß ſ ŉ', '1,000–1,650 t × 2 — “quoted” …']) expect(unsupportedChar(text), text).toBeNull()
     expect(unsupportedChar('Κνωσός')).toBe('Κ')
     expect(unsupportedChar('Baalbek → Rome')).toBe('→')
+    // heading() and hud() draw upper case: "µ" becomes Greek "Μ", "ẖ" becomes "H" + U+0331
+    expect(unsupportedChar('Smaller than 1 µm?')).toBe('µ')
+    expect(unsupportedChar('ẖ')).toBe('ẖ')
+    expect(glyphReason('µ')).toBe('"µ" (U+00B5) draws as "Μ" (U+039C) in upper case, which has no glyph in the brand fonts (latin and latin-ext only)')
+    expect(glyphReason('Κ')).toBe('"Κ" (U+039A) has no glyph in the brand fonts (latin and latin-ext only)')
   })
   it('loads a latin-ext file next to the latin files of JetBrains Mono and Cormorant Garamond', () => {
     const faces = (range: string) =>
@@ -632,7 +648,9 @@ export function loadBrandFonts(): void {
  * Any other character (Greek, Cyrillic, an arrow, an emoji) would render in a
  * Windows system font without an error, so blocks/index.ts checkBlocks refuses
  * every timeline string that holds one, naming the scene, the prop path and
- * the character.
+ * the character. heading() and hud() draw upper case (text-transform), which
+ * the browser applies with the full Unicode mapping, so a character is drawable
+ * only when its upper case is covered too ("µ" U+00B5 turns into Greek "Μ").
  */
 export const LATIN_RANGE =
   'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD'
@@ -651,13 +669,32 @@ export function parseUnicodeRange(css: string): [number, number][] {
 
 const COVERED = [...parseUnicodeRange(LATIN_RANGE), ...parseUnicodeRange(LATIN_EXT_RANGE)]
 
-/** The first character of `text` the brand fonts cannot draw, or null when they draw all of it. */
+/** Whether the brand fonts draw every code point of `text` as written. */
+function covered(text: string): boolean {
+  return [...text].every((ch) => {
+    const cp = ch.codePointAt(0) as number
+    return COVERED.some(([first, last]) => cp >= first && cp <= last)
+  })
+}
+
+/**
+ * The first character of `text` the brand fonts cannot draw, as written or in upper
+ * case (every code point of its full upper-case mapping), or null when they draw all of it.
+ */
 export function unsupportedChar(text: string): string | null {
   for (const ch of text) {
-    const cp = ch.codePointAt(0) as number
-    if (!COVERED.some(([first, last]) => cp >= first && cp <= last)) return ch
+    if (!covered(ch) || !covered(ch.toUpperCase())) return ch
   }
   return null
+}
+
+const codes = (text: string) => [...text].map((ch) => `U+${(ch.codePointAt(0) as number).toString(16).toUpperCase().padStart(4, '0')}`).join(' ')
+
+/** Why the brand fonts cannot draw `ch` (a character unsupportedChar returned): the written character or its upper case. */
+export function glyphReason(ch: string): string {
+  const upper = ch.toUpperCase()
+  const turns = covered(ch) ? ` draws as "${upper}" (${codes(upper)}) in upper case, which` : ''
+  return `"${ch}" (${codes(ch)})${turns} has no glyph in the brand fonts (latin and latin-ext only)`
 }
 ```
 
@@ -1526,14 +1563,14 @@ git commit -m "Format distances, years, numbers and probability words for the bl
 ```
 
 
-### Task 7: The block registry: props schemas of the 17 scene blocks and registry.json
+### Task 7: The block registry: props schemas of the 18 scene blocks and registry.json
 
 **Files:**
 - Create: `video/src/blocks/icons.tsx`, `video/src/blocks/schemas.ts`, `video/scripts/registry.ts`
 - Generate: `video/src/blocks/registry.json` (by `npm run registry`, committed)
 - Test: `video/test/registry.test.ts`
 
-`schemas.ts` is the single source of the registry (contract C5, table D1): each block's props describe what it receives after plan C resolves `{"$ref"}`/`{"$capture"}` (contract C6). Length limits sit where the text must fit; the rules a schema cannot express live in each block's `check()` (Tasks 13-16). Comparison blocks require their `basis` (owner rule: comparisons state their basis).
+`schemas.ts` is the single source of the registry (contract C5, table D1): each block's props describe what it receives after plan C resolves `{"$ref"}`/`{"$capture"}` (contract C6). Length limits sit where the text must fit; the rules a schema cannot express live in each block's `check()` (Tasks 13-16). Comparison blocks require their `basis` (owner rule: comparisons state their basis). Every entry also lists its `drawn` prop paths (owner decision 32: the glyph rule covers only drawn text; Task 17's `checkBlocks` and plan C's `episode check` read them), and no block has a `scale` prop (owner decision 31: linear only; ratios beyond a UnitGrid are the ScaleZoom block of Task 16). Each `drawn` list was confirmed against its component (Tasks 13-16): the enum and id values a card also draws (EvidenceCard's `paper_anchor`, ClaimBoard's `status`, ScaleDrawing's `unit`) are ASCII by their schema enum or plan C's id rule and are not listed; URLs other than ShareCard's are drawn only as their ASCII hostname.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1545,23 +1582,42 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { REGISTRY_BLOCKS, registryJson } from '../src/blocks/schemas'
-import { unsupportedKeywords } from '../src/schema'
+import { CAPTURE_PROPS, REGISTRY_BLOCKS, registryJson } from '../src/blocks/schemas'
+import { type Schema, unsupportedKeywords } from '../src/schema'
 
 const REGISTRY_FILE = fileURLToPath(new URL('../src/blocks/registry.json', import.meta.url))
+
+/** The schema a `drawn` pattern points at ('claims[].label': the label of every claim), or null. */
+function schemaAt(schema: Schema, pattern: string): Schema | null {
+  let at: Schema | undefined = schema
+  for (const part of pattern.split('.')) {
+    const key = part.endsWith('[]') ? part.slice(0, -2) : part
+    at = at?.properties?.[key]
+    if (at && part.endsWith('[]')) at = at.type === 'array' ? at.items : undefined
+  }
+  return at ?? null
+}
+
+/** Every property name anywhere in a schema. */
+function propertyNames(schema: Schema): string[] {
+  const own = Object.entries(schema.properties ?? {}).flatMap(([k, v]) => [k, ...propertyNames(v)])
+  return schema.items ? [...own, ...propertyNames(schema.items)] : own
+}
 
 describe('blocks/registry.json (plan C contract C5)', () => {
   it('is exactly what `npm run registry` writes from schemas.ts', () => {
     expect(readFileSync(REGISTRY_FILE, 'utf-8').replace(/\r\n/g, '\n')).toBe(registryJson())
   })
-  it('is {"blocks": {name: {props, map, platform}}} and nothing else', () => {
+  it('is {"blocks": {name: {map, platform, drawn, props}}} and nothing else', () => {
     const data = JSON.parse(readFileSync(REGISTRY_FILE, 'utf-8'))
     expect(Object.keys(data)).toEqual(['blocks'])
     for (const [name, entry] of Object.entries(data.blocks as Record<string, Record<string, unknown>>)) {
-      expect(Object.keys(entry).sort(), name).toEqual(['map', 'platform', 'props'])
+      expect(Object.keys(entry).sort(), name).toEqual(['drawn', 'map', 'platform', 'props'])
       expect(typeof entry.map, name).toBe('boolean')
       expect(typeof entry.platform, name).toBe('boolean')
       expect((entry.props as { type: string }).type, name).toBe('object')
+      expect(Array.isArray(entry.drawn), name).toBe(true)
+      for (const pattern of entry.drawn as unknown[]) expect(typeof pattern === 'string' && pattern.length > 0, name).toBe(true)
     }
   })
   it('lists the scene blocks of the four topic types', () => {
@@ -1579,6 +1635,7 @@ describe('blocks/registry.json (plan C contract C5)', () => {
       'PlatformClip',
       'QuoteCard',
       'ScaleDrawing',
+      'ScaleZoom',
       'ShareCard',
       'SourceViewer',
       'Timeline',
@@ -1601,7 +1658,26 @@ describe('blocks/registry.json (plan C contract C5)', () => {
     for (const [name, entry] of Object.entries(REGISTRY_BLOCKS)) expect(unsupportedKeywords(entry.props), name).toEqual([])
   })
   it('makes every comparison block state its basis (owner rule)', () => {
-    for (const name of ['ScaleDrawing', 'UnitGrid', 'BarChart']) expect(REGISTRY_BLOCKS[name].props.required, name).toContain('basis')
+    for (const name of ['ScaleDrawing', 'UnitGrid', 'BarChart', 'ScaleZoom']) expect(REGISTRY_BLOCKS[name].props.required, name).toContain('basis')
+  })
+  it('draws linear scales only: no block has a scale prop or a log axis (owner decision 31)', () => {
+    for (const [name, entry] of Object.entries(REGISTRY_BLOCKS)) expect(propertyNames(entry.props), name).not.toContain('scale')
+    expect(registryJson()).not.toMatch(/log10|logarithm/i)
+  })
+  it('points every drawn pattern at a string prop, never into a capture (owner decision 32)', () => {
+    for (const [name, entry] of Object.entries(REGISTRY_BLOCKS)) {
+      for (const pattern of entry.drawn) {
+        expect(schemaAt(entry.props, pattern)?.type, `${name}: ${pattern}`).toBe('string')
+        expect((CAPTURE_PROPS as readonly string[]).includes(pattern.split('.')[0]), `${name}: ${pattern}`).toBe(false)
+      }
+    }
+    // blocks/index.ts captureStrings() walks the capture props: they are exactly the props with a capture schema
+    const captures = Object.values(REGISTRY_BLOCKS).flatMap((e) =>
+      Object.entries(e.props.properties ?? {})
+        .filter(([, s]) => s.properties?.events !== undefined)
+        .map(([k]) => k),
+    )
+    expect([...new Set(captures)].sort()).toEqual([...CAPTURE_PROPS].sort())
   })
 })
 ```
@@ -1657,12 +1733,25 @@ export const Icon: React.FC<{ name: IconName; color: string; size: number }> = (
  * Only the keywords of src/schema.ts SUPPORTED appear here; the semantic rules a
  * schema cannot express (a box inside its image, meter values summing to 100,
  * the clip long enough for its scene) live in the blocks' check() functions.
+ *
+ * `drawn` lists the prop paths whose strings the block's component draws
+ * (owner decision 32: the glyph rule covers only drawn text). Keys are
+ * separated by '.', a key suffixed with '[]' means every element of that
+ * array. Ids, src paths and URLs are not drawn (the cards draw only a URL's
+ * ASCII hostname; ShareCard's url is its own drawn prop), nor is
+ * SourceViewer's evidence quote: the original sits in the captured page
+ * image. A capture prop (CAPTURE_PROPS) is never listed: blocks/index.ts
+ * captureStrings() names the drawn strings of every capture. Plan C's
+ * pipeline/studio reads `drawn` from registry.json and keeps no copy of it.
  */
 import { CLAIM_STATUSES, TONES } from '../theme/colors'
 import type { Schema } from '../schema'
 import { ICONS } from './icons'
 
-export type RegistryEntry = { props: Schema; map: boolean; platform: boolean }
+export type RegistryEntry = { map: boolean; platform: boolean; drawn: string[]; props: Schema }
+
+/** The props that hold a resolved capture (C6: a script's {"$capture": id}). */
+export const CAPTURE_PROPS = ['clip', 'map', 'page'] as const
 
 const str = (minLength = 1, maxLength?: number): Schema =>
   maxLength === undefined ? { type: 'string', minLength } : { type: 'string', minLength, maxLength }
@@ -1779,10 +1868,17 @@ export function captureSchema(kind: 'platform' | 'globe' | 'source' | 'mapbox_to
 
 const CLIP_START: Schema = { ...num(0), description: 'Seconds into the clip where the scene starts (default 0)' }
 
+/** One side of a ScaleZoom: a quantity drawn to the one linear scale of the frame. */
+const ZOOM_QUANTITY = obj({ id: ID, label: str(1, 32), value: { ...num(0), description: 'Greater than 0, in the chart unit' } })
+
+/** The drawn strings of a block whose only drawn prop is its lower third. */
+const LABEL_DRAWN = ['label.title', 'label.subtitle']
+
 export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   PhotoPlate: {
     map: false,
     platform: false,
+    drawn: [...LABEL_DRAWN, 'caption', 'image.markers[].label'],
     props: obj(
       {
         image: MEDIA,
@@ -1797,6 +1893,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   MapboxTopdown: {
     map: true,
     platform: false,
+    drawn: LABEL_DRAWN,
     props: obj(
       {
         map: captureSchema('mapbox_topdown', true),
@@ -1810,6 +1907,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   PlatformClip: {
     map: true,
     platform: true,
+    drawn: LABEL_DRAWN,
     props: obj(
       {
         clip: captureSchema('platform', false),
@@ -1828,6 +1926,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   GlobeShot: {
     map: false,
     platform: false,
+    drawn: LABEL_DRAWN,
     props: obj(
       { clip: captureSchema('globe', false), start_s: CLIP_START, label: LABEL },
       ['clip'],
@@ -1837,11 +1936,13 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   MapboxFlyover: {
     map: true,
     platform: false,
+    drawn: LABEL_DRAWN,
     props: obj({ clip: captureSchema('globe', false), start_s: CLIP_START, label: LABEL }, ['clip'], 'A Mapbox fly-in or orbit take'),
   },
   SourceViewer: {
     map: false,
     platform: false,
+    drawn: [],
     props: obj(
       { page: captureSchema('source', true), evidence: evidenceSchema({ statement: 160 }) },
       ['page', 'evidence'],
@@ -1851,6 +1952,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   EvidenceCard: {
     map: false,
     platform: false,
+    drawn: ['evidence.kind', 'evidence.statement', 'evidence.source.quote', 'evidence.source.title', 'evidence.source.locator'],
     props: obj(
       { evidence: evidenceSchema({ statement: 160, quote: 260 }), image: MEDIA },
       ['evidence'],
@@ -1860,6 +1962,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   QuoteCard: {
     map: false,
     platform: false,
+    drawn: ['evidence.source.quote', 'evidence.source.title', 'evidence.source.locator', 'attribution'],
     props: obj(
       { evidence: evidenceSchema({ statement: 160, quote: 320 }), attribution: str(1, 60) },
       ['evidence'],
@@ -1869,6 +1972,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   ClaimBoard: {
     map: false,
     platform: false,
+    drawn: ['title', 'claims[].label', 'claims[].by'],
     props: obj(
       { claims: arr(CLAIM, 1, 6), title: TITLE },
       ['claims'],
@@ -1878,6 +1982,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   Meter: {
     map: false,
     platform: false,
+    drawn: ['title', 'hypotheses[]', 'note'],
     props: obj(
       {
         hypotheses: arr(str(1, 40), 2, 2),
@@ -1892,6 +1997,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   ScaleDrawing: {
     map: false,
     platform: false,
+    drawn: ['title', 'basis', 'objects[].label'],
     props: obj(
       {
         title: TITLE,
@@ -1917,6 +2023,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   UnitGrid: {
     map: false,
     platform: false,
+    drawn: ['title', 'unitLabel', 'basis', 'groups[].label'],
     props: obj(
       {
         title: TITLE,
@@ -1932,12 +2039,12 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   BarChart: {
     map: false,
     platform: false,
+    drawn: ['title', 'unit', 'basis', 'bars[].label'],
     props: obj(
       {
         title: TITLE,
         unit: str(1, 16),
         basis: BASIS,
-        scale: { ...oneOf(['linear', 'log10']), description: 'log10 for orders of magnitude (default linear)' },
         bars: arr(
           obj(
             {
@@ -1960,12 +2067,13 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
         ),
       },
       ['title', 'unit', 'basis', 'bars'],
-      'Horizontal bars (frequencies, sizes, orders of magnitude on a log10 axis); a [low, high] value is drawn as a range; cue show <bar id>',
+      'Horizontal bars on a linear axis (frequencies, sizes); a [low, high] value is drawn as a range; cue show <bar id>',
     ),
   },
   Timeline: {
     map: false,
     platform: false,
+    drawn: ['title', 'basis', 'events[].label'],
     props: obj(
       {
         title: TITLE,
@@ -1981,6 +2089,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   Diagram: {
     map: false,
     platform: false,
+    drawn: ['title', 'basis', 'elements[].label', 'elements[].text'],
     props: obj(
       {
         title: TITLE,
@@ -2023,6 +2132,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   ListCard: {
     map: false,
     platform: false,
+    drawn: ['title', 'items[].text', 'note'],
     props: obj(
       { title: TITLE, items: arr(obj({ id: ID, text: str(1, 90) }), 1, 5), note: str(1, 110) },
       ['title', 'items'],
@@ -2032,10 +2142,21 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
   ShareCard: {
     map: false,
     platform: false,
+    drawn: ['headline', 'url', 'lines[]'],
     props: obj(
       { headline: str(1, 60), url: str(1, 60), lines: arr(str(1, 80), 0, 3) },
       ['headline', 'url', 'lines'],
       'The end card: the one place the link appears in the picture',
+    ),
+  },
+  ScaleZoom: {
+    map: false,
+    platform: false,
+    drawn: ['title', 'unit', 'basis', 'small.label', 'large.label'],
+    props: obj(
+      { title: TITLE, unit: str(1, 16), basis: BASIS, small: ZOOM_QUANTITY, large: ZOOM_QUANTITY },
+      ['title', 'unit', 'basis', 'small', 'large'],
+      'A linear zoom-out for ratios beyond a UnitGrid (1:400), never a log axis: the small quantity drawn readable, then the camera pulls back linearly until the large one fits, the small one shrinking to a dot; cue show <small id> or show <large id> (the quantity appears)',
     ),
   },
 }
@@ -2076,12 +2197,12 @@ Generate the registry:
 cd video && npm run registry
 ```
 
-Expected: `...\video\src\blocks\registry.json: 17 blocks` (a 2067-line JSON file; never edit it by hand).
+Expected: `...\video\src\blocks\registry.json: 18 blocks` (a 2236-line JSON file; never edit it by hand).
 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/registry.test.ts`
-Expected: `Tests  7 passed (7)`
+Expected: `Tests  9 passed (9)`
 
 - [ ] **Step 5: Commit**
 
@@ -2096,7 +2217,7 @@ git commit -m "Write the renderer's block registry for plan C from one schema so
 - Create: `video/src/timeline.ts`, `video/src/cues.ts`, `video/src/fixtures/demo-timeline.json`, `video/src/fixtures/demo.ts`
 - Test: `video/test/timeline.test.ts`
 
-`parseTimeline` implements contract D3 (plan C's C8) and trusts nothing: every key, every frame, every `src` and each scene's props against its block schema; it throws with the JSON path of the first defect. The demo timeline (11 graphics-only scenes, no media) is the default props of both compositions for `npm run studio` and the fixture of the block tests.
+`parseTimeline` implements contract D3 (plan C's C8) and trusts nothing: every key, every frame, every `src` and each scene's props against its block schema; it throws with the JSON path of the first defect. It also reads the three thumbnail candidates `thumbnails: [{frame, text}]` (owner decisions 24-25: exactly 3, each an episode frame and a teaser of 2-4 words; plan C decides which frames and words may be used). The demo timeline (12 graphics-only scenes, one per block that needs no media, among them a BarChart range bar and a ScaleZoom; no media; three thumbnail candidates at frames 108, 200 and 300, all before its first verdict cue, the `status` cue at frame 330, so the committed model obeys plan C's rule that a thumbnail never shows the answer, owner decision 24) is the default props of both compositions for `npm run studio`, the fixture of the block tests and the graphics render of Task 22.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2108,7 +2229,7 @@ import { describe, expect, it } from 'vitest'
 import { REGISTRY_BLOCKS } from '../src/blocks/schemas'
 import { DEMO_TIMELINE } from '../src/fixtures/demo'
 import { validate } from '../src/schema'
-import { assetProblem, collectSrcs, parseTimeline, sceneHasCaptions, thumbnailFrame } from '../src/timeline'
+import { assetProblem, collectSrcs, parseTimeline, sceneHasCaptions } from '../src/timeline'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = Record<string, any>
@@ -2127,7 +2248,7 @@ describe('parseTimeline (plan C contract C8)', () => {
     ['another frame rate', (t: Json) => { t.fps = 30 }, /\$\.fps: expected 60/],
     ['an unknown top-level key', (t: Json) => { t.intro = true }, /unknown key\(s\) intro/],
     ['a gap between scenes', (t: Json) => { t.scenes[1].from = 190 }, /\$\.scenes\[1\]\.from: expected 180/],
-    ['scenes ending early', (t: Json) => { t.durationInFrames = 2000 }, /the scenes end at 1980, the episode at 2000/],
+    ['scenes ending early', (t: Json) => { t.durationInFrames = 2300 }, /the scenes end at 2220, the episode at 2300/],
     ['an unknown block', (t: Json) => { t.scenes[0].block = 'TitleCard' }, /unknown block "TitleCard"/],
     ['invalid props', (t: Json) => { t.scenes[0].props.claims[0].icon = 'robot' }, /icon: "robot" is not one of/],
     ['an unknown prop', (t: Json) => { t.scenes[0].props.colour = 'red' }, /\.colour: not allowed/],
@@ -2143,6 +2264,9 @@ describe('parseTimeline (plan C contract C8)', () => {
     ['a positive music gain', (t: Json) => { t.audio.music = { src: 'music/bed.wav', gainDb: 3, duck: { underNarrationDb: -12, attackFrames: 6, releaseFrames: 24 } } }, /gainDb: must be <= 0/],
     ['an absolute narration path', (t: Json) => { t.audio.narration = [{ src: 'C:/voice/b01.mp3', from: 0 }] }, /must lie under voice\//],
     ['a parent-dir path', (t: Json) => { t.audio.narration = [{ src: 'voice/../b01.mp3', from: 0 }] }, /is not a clean relative path/],
+    ['two thumbnail candidates', (t: Json) => { t.thumbnails.pop() }, /expected exactly 3 thumbnail candidates, got 2/],
+    ['a thumbnail past the end', (t: Json) => { t.thumbnails[0].frame = 2220 }, /\$\.thumbnails\[0\]\.frame: frame 2220 is past the end \(2220\)/],
+    ['a one-word teaser', (t: Json) => { t.thumbnails[1].text = 'Buses?' }, /\$\.thumbnails\[1\]\.text: "Buses\?" has 1 word\(s\); a thumbnail teaser has 2-4/],
   ])('rejects %s', (_name, mutate, message) => {
     const t = clone()
     mutate(t)
@@ -2163,8 +2287,12 @@ describe('asset paths', () => {
 })
 
 describe('frames', () => {
-  it('picks the thumbnail 60 % into the first scene', () => {
-    expect(thumbnailFrame(DEMO_TIMELINE)).toBe(108)
+  it('reads the three thumbnail candidates (owner decisions 24-25) as episode frames with their teasers', () => {
+    expect(DEMO_TIMELINE.thumbnails).toEqual([
+      { frame: 108, text: 'Who moved it?' },
+      { frame: 200, text: 'Eighty buses heavy?' },
+      { frame: 300, text: 'Heavier than Giza?' },
+    ])
   })
   it('knows which scenes carry hook captions', () => {
     expect(sceneHasCaptions(DEMO_TIMELINE, DEMO_TIMELINE.scenes[0])).toBe(true)
@@ -2193,8 +2321,8 @@ Expected: FAIL with `Cannot find module '../src/fixtures/demo'`.
  * node scripts both run the two, so a bad timeline fails before a frame renders.
  *
  * Frame convention: every frame number in the file is ABSOLUTE (a frame of the
- * whole episode): scenes[].from, cues[].frame, captions, ticker, chapters and
- * narration clips. SceneView hands blocks scene-relative cue frames.
+ * whole episode): scenes[].from, cues[].frame, captions, ticker, chapters,
+ * thumbnails and narration clips. SceneView hands blocks scene-relative cue frames.
  */
 import { REGISTRY_BLOCKS } from './blocks/schemas'
 import { validate } from './schema'
@@ -2226,6 +2354,8 @@ export type Caption = { text: string; from: number; to: number }
 export type TickerStep = { frame: number; n: number }
 export type Chapter = { title: string; frame: number }
 export type Credit = { sceneId: string; text: string }
+/** A thumbnail candidate (owner decisions 24-25): an episode frame and its 2-4 word teaser. */
+export type ThumbnailCandidate = { frame: number; text: string }
 export type Timeline = {
   version: 1
   fps: number
@@ -2238,7 +2368,11 @@ export type Timeline = {
   ticker: { evidence: TickerStep[] }
   chapters: Chapter[]
   credits: Credit[]
+  thumbnails: ThumbnailCandidate[]
 }
+
+/** YouTube's thumbnail A/B test takes three candidates (owner decision 24). */
+export const THUMBNAIL_CANDIDATES = 3
 
 class TimelineError extends Error {
   constructor(path: string, message: string) {
@@ -2336,7 +2470,7 @@ function parseScene(raw: unknown, path: string): Scene {
 }
 
 export function parseTimeline(raw: unknown): Timeline {
-  const t = obj(raw, '$', ['version', 'fps', 'width', 'height', 'durationInFrames', 'audio', 'scenes', 'captions', 'ticker', 'chapters', 'credits'])
+  const t = obj(raw, '$', ['version', 'fps', 'width', 'height', 'durationInFrames', 'audio', 'scenes', 'captions', 'ticker', 'chapters', 'credits', 'thumbnails'])
   if (t.version !== 1) throw new TimelineError('$.version', 'expected 1')
   if (t.fps !== FPS) throw new TimelineError('$.fps', `expected ${FPS} (the NERV motion is timed in frames at ${FPS} fps)`)
   const width = int(t.width, '$.width', 2)
@@ -2427,18 +2561,22 @@ export function parseTimeline(raw: unknown): Timeline {
     return { sceneId, text: str(cr.text, `${p}.text`) }
   })
 
-  const timeline: Timeline = { version: 1, fps: FPS, width, height, durationInFrames, audio: { narration, music }, scenes, captions, ticker: { evidence }, chapters, credits }
+  const thumbnails = arr(t.thumbnails, '$.thumbnails').map((c, i) => {
+    const p = `$.thumbnails[${i}]`
+    const th = obj(c, p, ['frame', 'text'])
+    const text = str(th.text, `${p}.text`)
+    const words = text.trim().split(/\s+/).length
+    if (words < 2 || words > 4) throw new TimelineError(`${p}.text`, `"${text}" has ${words} word(s); a thumbnail teaser has 2-4`)
+    return { frame: inside(int(th.frame, `${p}.frame`), `${p}.frame`), text }
+  })
+  if (thumbnails.length !== THUMBNAIL_CANDIDATES) throw new TimelineError('$.thumbnails', `expected exactly ${THUMBNAIL_CANDIDATES} thumbnail candidates, got ${thumbnails.length}`)
+
+  const timeline: Timeline = { version: 1, fps: FPS, width, height, durationInFrames, audio: { narration, music }, scenes, captions, ticker: { evidence }, chapters, credits, thumbnails }
   for (const src of collectSrcs([timeline.audio, timeline.scenes])) {
     const problem = assetProblem(src)
     if (problem) throw new TimelineError('src', problem)
   }
   return timeline
-}
-
-/** Default thumbnail frame: 60 % into the first scene, where the hook's markers are up. */
-export function thumbnailFrame(timeline: Timeline): number {
-  const first = timeline.scenes[0]
-  return first.from + Math.floor(first.durationInFrames * 0.6)
 }
 
 /** True when a hook caption is on screen during part of `scene` (its block then keeps above the captions). */
@@ -2501,7 +2639,7 @@ export function latestCue(cues: readonly SceneCue[], verb: string, target: strin
   "fps": 60,
   "width": 1920,
   "height": 1080,
-  "durationInFrames": 1980,
+  "durationInFrames": 2220,
   "audio": {
     "narration": [],
     "music": null
@@ -2730,7 +2868,10 @@ export function latestCue(cues: readonly SceneCue[], verb: string, target: strin
           {
             "id": "q4",
             "label": "Stone of the Pregnant Woman",
-            "value": 1000,
+            "value": [
+              1000,
+              1650
+            ],
             "tone": "warn"
           },
           {
@@ -2843,6 +2984,34 @@ export function latestCue(cues: readonly SceneCue[], verb: string, target: strin
     {
       "id": "b11",
       "from": 1800,
+      "durationInFrames": 240,
+      "block": "ScaleZoom",
+      "props": {
+        "title": "One block, one pyramid",
+        "unit": "t",
+        "basis": "block about 1,000 t; Great Pyramid about 6 million t (common estimate)",
+        "small": {
+          "id": "q9",
+          "label": "Stone of the Pregnant Woman",
+          "value": 1000
+        },
+        "large": {
+          "id": "q10",
+          "label": "Great Pyramid of Giza",
+          "value": 6000000
+        }
+      },
+      "cues": [
+        {
+          "frame": 1850,
+          "do": "show",
+          "target": "q10"
+        }
+      ]
+    },
+    {
+      "id": "b12",
+      "from": 2040,
       "durationInFrames": 180,
       "block": "ShareCard",
       "props": {
@@ -2913,7 +3082,21 @@ export function latestCue(cues: readonly SceneCue[], verb: string, target: strin
       "frame": 1620
     }
   ],
-  "credits": []
+  "credits": [],
+  "thumbnails": [
+    {
+      "frame": 108,
+      "text": "Who moved it?"
+    },
+    {
+      "frame": 200,
+      "text": "Eighty buses heavy?"
+    },
+    {
+      "frame": 300,
+      "text": "Heavier than Giza?"
+    }
+  ]
 }
 ```
 
@@ -2935,7 +3118,7 @@ export const DEMO_TIMELINE = parseTimeline(demo)
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/timeline.test.ts`
-Expected: `Tests  27 passed (27)`
+Expected: `Tests  30 passed (30)`
 
 - [ ] **Step 5: Commit**
 
@@ -3089,7 +3272,7 @@ git commit -m "Derive claim statuses and the probability meter from the episode'
 - Create: `video/src/audio.ts`, `video/src/captions.ts`
 - Test: `video/test/audio.test.ts`, `video/test/captions.test.ts`
 
-Remotion has no built-in ducking: the music bed gets a per-frame volume callback that drops by `underNarrationDb` under every narration span with linear attack and release ramps. Hook captions (owner rule: burned in only during the hook) come as one entry per display word; they are grouped into lines of at most four words, broken at punctuation and at pauses.
+Remotion has no built-in ducking: the music bed gets a per-frame volume callback that drops by `underNarrationDb` under every narration span with linear attack and release ramps. Hook captions (owner rule: burned in only during the hook) come as one entry per display word; they are grouped into lines of at most four words and at most `HOOK_LINE_MAX_CHARS` (24) characters, broken at punctuation and at pauses. The character budget exists because HookCaptions draws a line on one row (`nowrap`) in the 1440-px caption zone in `heading(64)`: Orbitron 700, upper case, 0.06em spacing. Measured with fontTools on `ancient-nerds-map/public/fonts/orbitron-700.woff2` at 64 px plus 0.06em per character (2026-09-27): a capital averages 56 px, so about 26 capitals fit. 'THIS STONE WEIGHS ABOUT' is 1126 px and 'ARCHAEOLOGISTS FOUND SOMETHING IMPOSSIBLE' is 2046 px. Over six realistic hook sentences, 5 of the 18 lines that four-word grouping builds are wider than 1440 px; with the 24-character budget the widest line is 1220 px. Four words alone would let ordinary hook lines overflow, and lint.ts would then refuse the render only after voice, capture and timeline had run. A run of wide capitals can still exceed the zone (24 × `M` is 1518 px), and lint.ts reports that as an `overflow`. A single word longer than 24 characters is the one line no break can shorten: plan C's script check refuses such a hook word before voice (it reads this constant). lint.ts remains the final guard for unusually wide letter runs.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3137,9 +3320,10 @@ describe('ducking', () => {
 ```ts
 import { describe, expect, it } from 'vitest'
 
-import { captionLines, lineAt, mergeCredits, tickerAt } from '../src/captions'
+import { HOOK_LINE_MAX_CHARS, captionLines, lineAt, mergeCredits, tickerAt } from '../src/captions'
 
 const w = (text: string, from: number, to: number) => ({ text, from, to })
+const texts = (lines: ReturnType<typeof captionLines>) => lines.map((l) => l.words.map((x) => x.text).join(' '))
 
 describe('captionLines', () => {
   it('breaks after four words, after punctuation and at long pauses', () => {
@@ -3147,8 +3331,13 @@ describe('captionLines', () => {
       w('THIS', 0, 10), w('STONE', 10, 20), w('WEIGHS', 20, 30), w('ABOUT', 30, 40), w('1,000', 40, 55), w('TONNES.', 55, 70),
       w('NOBODY', 100, 110), w('MOVED', 110, 120),
     ])
-    expect(lines.map((l) => l.words.map((x) => x.text).join(' '))).toEqual(['THIS STONE WEIGHS ABOUT', '1,000 TONNES.', 'NOBODY MOVED'])
+    expect(texts(lines)).toEqual(['THIS STONE WEIGHS ABOUT', '1,000 TONNES.', 'NOBODY MOVED'])
     expect(lines[1]).toMatchObject({ from: 40, to: 70 })
+  })
+  it('breaks before a word that would make the line longer than 24 characters (one row of the caption zone)', () => {
+    expect(HOOK_LINE_MAX_CHARS).toBe(24)
+    const lines = captionLines([w('ARCHAEOLOGISTS', 0, 20), w('FOUND', 20, 30), w('SOMETHING', 30, 45), w('IMPOSSIBLE', 45, 60)])
+    expect(texts(lines)).toEqual(['ARCHAEOLOGISTS FOUND', 'SOMETHING IMPOSSIBLE'])
   })
 })
 
@@ -3248,12 +3437,23 @@ import type { Caption, TickerStep } from './timeline'
 
 export type CaptionLine = { words: Caption[]; from: number; to: number }
 
+/**
+ * The longest hook caption line in characters, its words joined by single spaces.
+ * HookCaptions draws a line on one row (nowrap) in ZONES.caption, 1440 px wide, in
+ * heading(64): Orbitron 700, upper case, 0.06em spacing, about 56 px per capital.
+ * Plan C's script check reads this line with a regex and refuses a hook word longer
+ * than this, the one line no break can shorten; lint.ts stays the final guard.
+ */
+export const HOOK_LINE_MAX_CHARS = 24
 const MAX_WORDS = 4
 /** A pause longer than this between two words starts a new line. */
 const GAP_FRAMES = 12
 const HOLD_FRAMES = 10
 
-export function captionLines(captions: readonly Caption[], maxWords = MAX_WORDS): CaptionLine[] {
+/** Characters of a line: its words joined by single spaces. */
+const lineChars = (words: readonly Caption[]) => words.map((w) => w.text).join(' ').length
+
+export function captionLines(captions: readonly Caption[], maxWords = MAX_WORDS, maxChars = HOOK_LINE_MAX_CHARS): CaptionLine[] {
   const lines: CaptionLine[] = []
   let current: Caption[] = []
   const flush = () => {
@@ -3262,7 +3462,8 @@ export function captionLines(captions: readonly Caption[], maxWords = MAX_WORDS)
   }
   captions.forEach((c, i) => {
     const prev = captions[i - 1]
-    if (current.length && (current.length >= maxWords || c.from - prev.to > GAP_FRAMES)) flush()
+    const full = current.length >= maxWords || lineChars([...current, c]) > maxChars
+    if (current.length && (full || c.from - prev.to > GAP_FRAMES)) flush()
     current.push(c)
     if (/[.!?,;:]$/.test(c.text)) flush()
   })
@@ -3320,7 +3521,7 @@ export function mergeCredits(texts: readonly string[]): string {
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd video && npx vitest run test/audio.test.ts test/captions.test.ts`
-Expected: `Tests  8 passed (8)`
+Expected: `Tests  9 passed (9)`
 
 - [ ] **Step 5: Commit**
 
@@ -4078,7 +4279,9 @@ export const Ticker: React.FC<{ steps: readonly TickerStep[] }> = ({ steps }) =>
 /**
  * Burned-in captions, for the hook only (owner rule: afterwards viewers use
  * YouTube's captions from the exact SRT). timeline.captions is empty after the
- * hook; the spoken word is green, the rest of the line white.
+ * hook; the spoken word is green, the rest of the line white. A line is one row
+ * of at most HOOK_LINE_MAX_CHARS characters (captions.ts), which fits the zone for
+ * ordinary words; lint.ts reports a wider run of capitals as an overflow.
  */
 import React, { useMemo } from 'react'
 import { useCurrentFrame } from 'remotion'
@@ -4119,7 +4322,7 @@ export const HookCaptions: React.FC<{ captions: readonly Caption[] }> = ({ capti
 
 ```tsx
 /**
- * A captured clip (pipeline/studio/capture: libx264, constant 60 fps) through
+ * A captured clip (pipeline/studio/capture: HEVC from hevc_nvenc on GPU 0, constant 60 fps) through
  * @remotion/media <Video>, which extracts exact frames. There is no fallback
  * to OffthreadVideo: a clip Mediabunny cannot decode fails the render. In lint
  * mode the clip is not decoded at all (the lint checks layout only), a flat
@@ -4936,7 +5139,7 @@ git commit -m "Add the clip blocks: platform moments with a virtual camera, glob
 - Create: `video/src/blocks/EvidenceCard.tsx`, `video/src/blocks/QuoteCard.tsx`, `video/src/blocks/SourceViewer.tsx`, `video/src/blocks/ClaimBoard.tsx`, `video/src/blocks/Meter.tsx`, `video/src/blocks/ListCard.tsx`, `video/src/blocks/ShareCard.tsx`
 - Test: `video/test/blocks-cards.test.ts`
 
-The Case File spine: an EvidenceCard types its verbatim quote on and stamps VERIFIED (only verified evidence reaches a script); a status cue for its claim slams the new status on the card. SourceViewer scrolls the captured source page until the highlighted quote sits a third from the top. ClaimBoard and Meter read the episode-wide state (Task 9). ListCard carries "what would change our mind"; ShareCard is the one place the link appears in the picture (owner rule).
+The Case File spine: an EvidenceCard types its verbatim quote on and stamps VERIFIED (only verified evidence reaches a script); a status cue for its claim slams the new status on the card. SourceViewer scrolls the captured source page until the highlighted quote sits a third from the top. ClaimBoard and Meter read the episode-wide state (Task 9). ListCard carries "what would change our mind"; ShareCard is the one place the link appears in the picture and is allowed only as the last scene (owner rule; Task 17's `checkBlocks` enforces it).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -4993,8 +5196,8 @@ describe('QuoteCard', () => {
 })
 
 describe('SourceViewer', () => {
-  it('reads url, title and the highlight box from the capture events', () => {
-    expect(pageInfo(page)).toEqual({ url: 'https://en.wikipedia.org/wiki/Baalbek', title: 'Baalbek - Wikipedia', box: [528, 1800, 1489, 86] })
+  it('reads the url and the highlight box from the capture events; the page title stays a record', () => {
+    expect(pageInfo(page)).toEqual({ url: 'https://en.wikipedia.org/wiki/Baalbek', box: [528, 1800, 1489, 86] })
     expect(checkSourceViewer({ page, evidence })).toEqual([])
     expect(checkSourceViewer({ page: { ...page, events: [] }, evidence })).toEqual(['capture src1 has no page event with a url', 'capture src1 has no highlight event with a box'])
   })
@@ -5213,8 +5416,10 @@ export const QuoteCard: React.FC<BlockProps<QuoteCardProps>> = ({ props: p, cues
  * banners removed) inside a browser frame filling the stage. The page scrolls
  * from the quote low in the window up to 35 % from the top; an outline glows
  * around the highlighted quote from its highlight <evidence id> cue (default
- * 40 % into the scene). The capture's "page" event carries URL and title, its
- * "highlight" event the quote's box in image pixels.
+ * 40 % into the scene). The capture's "page" event carries the URL, whose ASCII
+ * hostname is all the address bar draws (the page's own <title> in that event is
+ * a record only, never drawn: owner decision 32, so a Greek or Chinese source page
+ * shows as captured), its "highlight" event the quote's box in image pixels.
  */
 import React from 'react'
 import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion'
@@ -5238,12 +5443,12 @@ export function windowRect(stage: Rect): Rect {
   return { x: stage.x + 40, y: stage.y, w: stage.w - 80, h: stage.h - CAPTION_H - 20 }
 }
 
-/** The page's url/title and the highlight box from the capture events. */
-export function pageInfo(page: Capture): { url: string; title: string; box: [number, number, number, number] } {
+/** The page's url and the highlight box from the capture events. */
+export function pageInfo(page: Capture): { url: string; box: [number, number, number, number] } {
   const meta = page.events.find((e) => e.name === 'page')
   const hl = page.events.find((e) => e.name === 'highlight')
   if (!meta?.url || !hl?.box) throw new Error(`capture ${page.id} lacks its page or highlight event`)
-  return { url: meta.url, title: meta.title ?? '', box: hl.box }
+  return { url: meta.url, box: hl.box }
 }
 
 export function checkSourceViewer(p: SourceViewerProps): string[] {
@@ -5282,7 +5487,7 @@ export function scrollAt(keys: readonly ScrollKey[], t: number): number {
 export const SourceViewer: React.FC<BlockProps<SourceViewerProps>> = ({ props: p, cues, durationInFrames, sceneId, stage }) => {
   const frame = useCurrentFrame()
   const win = windowRect(stage)
-  const { url, title, box } = pageInfo(p.page)
+  const { url, box } = pageInfo(p.page)
   const scale = win.w / p.page.width
   const y = scrollAt(defaultScroll(p.page.width, p.page.height, box[1], win), durationInFrames > 1 ? frame / (durationInFrames - 1) : 0)
   const glowAt = firstCue(cues, 'highlight', p.evidence.id) ?? Math.round(durationInFrames * 0.4)
@@ -5296,7 +5501,7 @@ export const SourceViewer: React.FC<BlockProps<SourceViewerProps>> = ({ props: p
             <div key={c} style={{ width: 12, height: 12, borderRadius: 6, background: c }} />
           ))}
           <LayoutBox id={`${sceneId}:url`} kind="text" style={{ marginLeft: 20, width: win.w - 180, height: 32, overflow: 'hidden', whiteSpace: 'nowrap', ...body(22, colors.crt300), lineHeight: '32px' }}>
-            {`${domainOf(url)}${title ? `  —  ${title}` : ''}`}
+            {domainOf(url)}
           </LayoutBox>
         </div>
         <div style={{ position: 'absolute', left: 0, top: BAR, width: win.w, height: win.h - BAR, overflow: 'hidden' }}>
@@ -5578,7 +5783,8 @@ export const ListCard: React.FC<BlockProps<ListCardProps>> = ({ props: p, cues, 
 /**
  * ShareCard: the end card, the one place the link appears in the picture
  * (owner rule: platform moments are never adverts; the link is on the end
- * card and in the description only).
+ * card and in the description only). checkBlocks (index.ts) refuses it on any
+ * scene but the last.
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame } from 'remotion'
@@ -5630,10 +5836,10 @@ git commit -m "Add the case-file cards: evidence, quote, source page, claim boar
 ### Task 16: Infographics for all four topic types
 
 **Files:**
-- Create: `video/src/blocks/ScaleDrawing.tsx`, `video/src/blocks/UnitGrid.tsx`, `video/src/blocks/BarChart.tsx`, `video/src/blocks/Timeline.tsx`, `video/src/blocks/Diagram.tsx`
+- Create: `video/src/blocks/ScaleDrawing.tsx`, `video/src/blocks/UnitGrid.tsx`, `video/src/blocks/BarChart.tsx`, `video/src/blocks/ScaleZoom.tsx`, `video/src/blocks/Timeline.tsx`, `video/src/blocks/Diagram.tsx`
 - Test: `video/test/blocks-infographics.test.ts`
 
-Spec 4.10: type A (single site) uses ScaleDrawing (a to-scale side view: the answer to "no measuring lines on oblique photos"), UnitGrid and Timeline of phases; type B (many places) BarChart and Timeline, and the world distribution on the globe (GlobeShot over a `distribution` take, Task 31) or on the platform (PlatformClip with the `filter` and `toggle_layer` actions, Task 30); type C (science) Diagram (NERV wireframe primitives, orbits animated by the frame) and orders of magnitude as a BarChart on a log10 axis (a UnitGrid holds at most 400 cells, so it covers at most a 1:400 ratio); type D (texts) Timeline of transmission. A BarChart value is a number or `[low, high]`: spec 4.2 wants a quantity with a range to show the range, so the bar is solid to `low`, outlined on to `high` and labelled `low–high unit`. Every value is printed with the decimals it is written with (`decimalsOf`: 1.75 stays 1.75, never 1.8), because a bar whose id is a case-file quantity id must show exactly that quantity (plan C checks its value and the chart's `unit`). Every comparison block prints its basis on screen through its exported `basisLine(props)`.
+Spec 4.10: type A (single site) uses ScaleDrawing (a to-scale side view: the answer to "no measuring lines on oblique photos"), UnitGrid and Timeline of phases; type B (many places) BarChart and Timeline, and the world distribution on the globe (GlobeShot over a `distribution` take, Task 31) or on the platform (PlatformClip with the `filter` and `toggle_layer` actions, Task 30); type C (science) Diagram (NERV wireframe primitives, orbits animated by the frame) and orders of magnitude as a UnitGrid up to 1:400 (it holds at most 400 cells) and a ScaleZoom beyond; type D (texts) Timeline of transmission. Every infographic is linear, never logarithmic (owner decision 31: a log scale is not pictorial and nobody reads it): BarChart has no `scale` prop, and ScaleZoom is the Powers-of-Ten idea without a log axis. It draws the two quantities as bars on one linear scale from the same left edge; the small one first fills 80 % of the bar area, then from 25 % of the scene the camera pulls back linearly (the visible extent grows linearly from the small value to the large one, eased at both ends) until, one second before the scene ends, the large one fills 80 %, and the small one shrinks to a dot that keeps its label and value. Every frame is a pure function of the frame number, and in every frame the two bars stand in the ratio of their values (tested). A linear pull on a large ratio shrinks the small bar to a dot within the first frames of the pull-back (measured on the demo render, 1:6,000): the readable phase is the time before the pull-back, the dot and its label keep the small quantity visible afterwards. This is recorded as owner question Q6 (`2026-09-26-owner-questions.md`, "Open", and the build index's section 8); until the owner answers, the build keeps the linear pull-back exactly as decision 31 words it (`zoomScale` unchanged). A BarChart value is a number or `[low, high]`: spec 4.2 wants a quantity with a range to show the range, so the bar is solid to `low`, outlined on to `high` and labelled `low–high unit`. Every value is printed with the decimals it is written with (`decimalsOf`: 1.75 stays 1.75, never 1.8), because a bar whose id is a case-file quantity id must show exactly that quantity (plan C checks its value and the chart's `unit`). Every comparison block prints its basis on screen through its exported `basisLine(props)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -5645,6 +5851,7 @@ import { describe, expect, it } from 'vitest'
 import { type BarChartProps, barAxis, barFraction, basisLine as barBasis, checkBarChart, valueText } from '../src/blocks/BarChart'
 import { checkDiagram, fitDiagram } from '../src/blocks/Diagram'
 import { basisLine as scaleBasis, checkScaleDrawing, dimensionLabel, fitScale } from '../src/blocks/ScaleDrawing'
+import { DOT, FILL, MIN_FRAMES, type ScaleZoomProps, checkScaleZoom, pullWindow, basisLine as zoomBasis, zoomScale } from '../src/blocks/ScaleZoom'
 import { checkTimeline, labelAnchor } from '../src/blocks/Timeline'
 import { checkUnitGrid, basisLine as gridBasis, gridLayout, groupStarts } from '../src/blocks/UnitGrid'
 
@@ -5691,7 +5898,7 @@ describe('BarChart', () => {
     const p: BarChartProps = { title: 't', unit: 't', basis: 'b', bars: [{ id: 'x', label: 'x', value: [1000, 1650] }, { id: 'y', label: 'y', value: 500 }] }
     expect(checkBarChart(p)).toEqual([])
     const axis = barAxis(p)
-    expect(axis).toEqual({ scale: 'linear', lo: 0, hi: 1650 })
+    expect(axis).toEqual({ lo: 0, hi: 1650 })
     expect(barFraction(axis, 1000)).toBeCloseTo(1000 / 1650)
     expect(valueText([1000, 1650], 't')).toBe('1,000–1,650 t')
     expect(valueText(12.5, 't')).toBe('12.5 t')
@@ -5700,13 +5907,39 @@ describe('BarChart', () => {
     const empty: BarChartProps = { ...p, bars: [{ id: 'x', label: 'x', value: [1650, 1000] }, p.bars[1]] }
     expect(checkBarChart(empty)).toEqual(['bar x: range [1650, 1000] needs low < high'])
   })
-  it('puts orders of magnitude on a log10 axis and refuses a value it cannot place', () => {
-    const p: BarChartProps = { title: 't', unit: 'm', basis: 'b', scale: 'log10', bars: [{ id: 'a', label: 'a', value: 1000 }, { id: 'b', label: 'b', value: 10 }] }
-    const axis = barAxis(p)
-    expect(axis).toEqual({ scale: 'log10', lo: 0, hi: 3 })
-    expect(barFraction(axis, 1000) / barFraction(axis, 10)).toBeCloseTo(3)
-    const zero: BarChartProps = { ...p, bars: [p.bars[0], { id: 'z', label: 'z', value: 0 }] }
-    expect(checkBarChart(zero)).toEqual(['bar z: log10 needs a positive value'])
+})
+
+describe('ScaleZoom (owner decision 31: linear, never a log axis)', () => {
+  const p: ScaleZoomProps = {
+    title: 't',
+    unit: 'km',
+    basis: 'b',
+    small: { id: 'q1', label: 'Earth', value: 12742 },
+    large: { id: 'q2', label: 'Sun', value: 1392700 },
+  }
+  it('pulls back from the small quantity to the large one over the middle of the scene', () => {
+    expect(pullWindow(300)).toEqual({ start: 75, end: 240 })
+    expect(p.small.value * zoomScale(p, 1600, 0, 300)).toBeCloseTo(FILL * 1600)
+    expect(p.large.value * zoomScale(p, 1600, 299, 300)).toBeCloseTo(FILL * 1600)
+    // the small one ends as a dot: far below DOT pixels on the fitted scale
+    expect(p.small.value * zoomScale(p, 1600, 299, 300)).toBeLessThan(DOT)
+  })
+  it('draws both quantities on one linear scale in every frame', () => {
+    for (const frame of [0, 80, 120, 160, 200, 240, 299]) {
+      const s = zoomScale(p, 1600, frame, 300)
+      expect((p.small.value * s) / (p.large.value * s)).toBeCloseTo(p.small.value / p.large.value, 12)
+    }
+    // the visible extent grows linearly between the eased ends: halfway through the pull it is halfway between the two values
+    const { start, end } = pullWindow(300)
+    expect((FILL * 1600) / zoomScale(p, 1600, (start + end) / 2, 300)).toBeCloseTo((p.small.value + p.large.value) / 2, 3)
+  })
+  it('refuses a small value of 0, a large value not above it and a scene too short for the pull-back', () => {
+    expect(checkScaleZoom(p, { fps: 60, durationInFrames: MIN_FRAMES })).toEqual([])
+    expect(checkScaleZoom({ ...p, small: { ...p.small, value: 0 } }, { fps: 60, durationInFrames: 300 })).toEqual(['q1: the small value must be greater than 0'])
+    expect(checkScaleZoom({ ...p, large: { ...p.large, value: 12742 } }, { fps: 60, durationInFrames: 300 })).toEqual(['q2: the large value 12742 must be greater than the small value 12742'])
+    expect(checkScaleZoom(p, { fps: 60, durationInFrames: 180 })).toEqual([
+      'a ScaleZoom scene needs at least 240 frames (the small quantity, the pull-back, a 1 s hold), got 180',
+    ])
   })
 })
 
@@ -5716,7 +5949,8 @@ describe('basis lines (owner rule: comparisons state their basis)', () => {
     expect(scaleBasis({ title: 't', unit: 'm', basis, objects: [] })).toBe(`To scale. Basis: ${basis}`)
     expect(gridBasis({ title: 't', basis, unitLabel: 'one city bus', groups: [] })).toBe(`1 square = one city bus. Basis: ${basis}`)
     expect(barBasis({ title: 't', unit: 't', basis, bars: [] })).toBe(`Basis: ${basis}`)
-    expect(barBasis({ title: 't', unit: 't', basis, scale: 'log10', bars: [] })).toBe(`Log scale, each step ×10. Basis: ${basis}`)
+    const q = { id: 'q', label: 'q', value: 1 }
+    expect(zoomBasis({ title: 't', unit: 'km', basis, small: q, large: { ...q, id: 'r', value: 1000 } })).toBe(`To scale, linear. Basis: ${basis}`)
   })
 })
 
@@ -5895,8 +6129,8 @@ export const ScaleDrawing: React.FC<BlockProps<ScaleDrawingProps>> = ({ props: p
 ```tsx
 /**
  * UnitGrid: counts as unit squares ("one block = 80 city buses"), at most 400
- * cells, as large as the stage allows (orders of magnitude beyond 1:400 are a
- * log10 BarChart). Groups light up one after the
+ * cells, as large as the stage allows (ratios beyond 1:400 are a ScaleZoom,
+ * linear too: owner decision 31). Groups light up one after the
  * other (a group starts on its show <id> cue, otherwise when the previous one
  * has filled) while their numbers roll; the basis is always on screen.
  */
@@ -6010,13 +6244,14 @@ export const UnitGrid: React.FC<BlockProps<UnitGridProps>> = ({ props: p, cues, 
 
 ```tsx
 /**
- * BarChart: horizontal bars for frequencies and sizes (type B: how many sites
- * per region, per period) and, on a log10 axis with decade ticks, orders of
- * magnitude (type C). A value is a number, or [low, high] when sources differ:
- * the bar is solid to low and outlined on to high, labelled "low–high unit"
- * (spec 4.2: a quantity with a range shows the range). Bars grow in on their
- * show <id> cues, staggered otherwise; a single linear value rolls with its
- * bar; the basis is always on screen.
+ * BarChart: horizontal bars on a linear axis for frequencies and sizes (type B:
+ * how many sites per region, per period). Linear only (owner decision 31: a
+ * log axis is not pictorial; ratios beyond a UnitGrid's 1:400 are a ScaleZoom).
+ * A value is a number, or [low, high] when sources differ: the bar is solid to
+ * low and outlined on to high, labelled "low–high unit" (spec 4.2: a quantity
+ * with a range shows the range). Bars grow in on their show <id> cues,
+ * staggered otherwise; a single value rolls with its bar; the basis is always
+ * on screen.
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame } from 'remotion'
@@ -6031,16 +6266,14 @@ import type { BlockProps } from './types'
 
 export type BarValue = number | [number, number]
 export type Bar = { id: string; label: string; value: BarValue; tone?: Tone }
-export type BarScale = 'linear' | 'log10'
-export type BarChartProps = { title: string; unit: string; basis: string; scale?: BarScale; bars: Bar[] }
-/** The value axis: 0..hi (linear), or the whole decades 10^lo..10^hi (log10). */
-export type BarAxis = { scale: BarScale; lo: number; hi: number }
+export type BarChartProps = { title: string; unit: string; basis: string; bars: Bar[] }
+/** The linear value axis 0..hi. */
+export type BarAxis = { lo: 0; hi: number }
 
 const LABEL_W = 580
 const VALUE_W = 360
 const BASIS_H = 56
 const GROW_FRAMES = 30
-const TICKS_H = 34
 
 const lowOf = (v: BarValue): number => (Array.isArray(v) ? v[0] : v)
 const highOf = (v: BarValue): number => (Array.isArray(v) ? v[1] : v)
@@ -6051,24 +6284,19 @@ export function checkBarChart(p: BarChartProps): string[] {
   const errors: string[] = []
   for (const b of p.bars) {
     if (Array.isArray(b.value) && !(b.value[0] < b.value[1])) errors.push(`bar ${b.id}: range [${b.value[0]}, ${b.value[1]}] needs low < high`)
-    if (p.scale === 'log10' && lowOf(b.value) <= 0) errors.push(`bar ${b.id}: log10 needs a positive value`)
   }
   if (!p.bars.some((b) => highOf(b.value) > 0)) errors.push('every bar is 0: nothing to compare')
   return errors
 }
 
-/** The axis of the chart: the largest (high) value for linear, whole decades around every value for log10. */
+/** The axis of the chart: 0 up to the largest (high) value. */
 export function barAxis(p: BarChartProps): BarAxis {
-  const top = Math.max(...p.bars.map((b) => highOf(b.value)))
-  if (p.scale !== 'log10') return { scale: 'linear', lo: 0, hi: top }
-  const lo = Math.min(0, Math.floor(Math.log10(Math.min(...p.bars.map((b) => lowOf(b.value))))))
-  return { scale: 'log10', lo, hi: Math.max(lo + 1, Math.ceil(Math.log10(top))) }
+  return { lo: 0, hi: Math.max(...p.bars.map((b) => highOf(b.value))) }
 }
 
-/** Where `value` lies along the bar area, 0..1. */
+/** Where `value` lies along the bar area, 0..1 (linear). */
 export function barFraction(axis: BarAxis, value: number): number {
-  if (axis.scale === 'linear') return value / axis.hi
-  return (Math.log10(value) - axis.lo) / (axis.hi - axis.lo)
+  return value / axis.hi
 }
 
 /** "1,250 t", "1.75 m", or "1,000–1,650 t" for a range; every value keeps its own decimals. */
@@ -6077,38 +6305,25 @@ export function valueText(v: BarValue, unit: string): string {
   return `${Array.isArray(v) ? `${n(v[0])}–${n(v[1])}` : n(v)} ${unit}`
 }
 
-/** The on-screen basis line (owner rule: comparisons state their basis); a log axis says how to read it. */
+/** The on-screen basis line (owner rule: comparisons state their basis). */
 export function basisLine(p: BarChartProps): string {
-  return p.scale === 'log10' ? `Log scale, each step ×10. Basis: ${p.basis}` : `Basis: ${p.basis}`
+  return `Basis: ${p.basis}`
 }
 
 export const BarChart: React.FC<BlockProps<BarChartProps>> = ({ props: p, cues, sceneId, stage }) => {
   const frame = useCurrentFrame()
   const axis = barAxis(p)
-  const log = axis.scale === 'log10'
   const areaTop = stage.y + 100
-  const areaH = stage.h - 100 - BASIS_H - 30 - (log ? TICKS_H : 0)
+  const areaH = stage.h - 100 - BASIS_H - 30
   const rowH = Math.min(130, Math.floor(areaH / p.bars.length))
   const top = areaTop + Math.floor((areaH - rowH * p.bars.length) / 2)
   const barX = stage.x + LABEL_W
   const barMax = stage.w - LABEL_W - VALUE_W - 40
-  const decades = log ? Array.from({ length: axis.hi - axis.lo + 1 }, (_, i) => axis.lo + i) : []
   return (
     <AbsoluteFill style={{ backgroundColor: colors.bg }}>
       <LayoutBox id={`${sceneId}:title`} kind="text" style={{ position: 'absolute', left: stage.x, top: stage.y, width: stage.w, height: 60, overflow: 'hidden', ...heading(48), ...bootIn(frame, 0) }}>
         {p.title}
       </LayoutBox>
-      {decades.map((k) => {
-        const x = barX + barMax * barFraction(axis, 10 ** k)
-        return (
-          <React.Fragment key={k}>
-            <div style={{ position: 'absolute', left: x, top, width: 1, height: rowH * p.bars.length, background: colors.greenDim }} />
-            <div style={{ position: 'absolute', left: x, top: top + rowH * p.bars.length + 6, transform: 'translateX(-50%)', ...hud(18, colors.crt400), whiteSpace: 'nowrap' }}>
-              10<sup>{k}</sup>
-            </div>
-          </React.Fragment>
-        )
-      })}
       {p.bars.map((b, i) => {
         const appear = firstCue(cues, 'show', b.id) ?? 12 + i * 12
         if (frame < appear) return null
@@ -6118,8 +6333,8 @@ export const BarChart: React.FC<BlockProps<BarChartProps>> = ({ props: p, cues, 
         const range = Array.isArray(b.value)
         const solid = barMax * barFraction(axis, lowOf(b.value)) * grow
         const end = barMax * barFraction(axis, highOf(b.value)) * grow
-        // A single linear value rolls with its bar; a range or a log value appears once the bar has grown.
-        const rolls = !range && !log
+        // A single value rolls with its bar; a range appears once the bar has grown.
+        const rolls = !range
         return (
           <React.Fragment key={b.id}>
             <LayoutBox id={`${sceneId}:bar:${b.id}`} kind="text" style={{ position: 'absolute', left: stage.x, top: y, width: LABEL_W - 20, height: rowH - 16, overflow: 'hidden', textAlign: 'right', ...body(28, colors.text), lineHeight: `${rowH - 16}px`, whiteSpace: 'nowrap', ...bootIn(frame, appear, 12) }}>
@@ -6137,6 +6352,135 @@ export const BarChart: React.FC<BlockProps<BarChartProps>> = ({ props: p, cues, 
           </React.Fragment>
         )
       })}
+      <LayoutBox id={`${sceneId}:basis`} kind="text" style={{ position: 'absolute', left: stage.x, top: stage.y + stage.h - BASIS_H, width: stage.w, height: BASIS_H, overflow: 'hidden', ...body(24, colors.crt400) }}>
+        {basisLine(p)}
+      </LayoutBox>
+    </AbsoluteFill>
+  )
+}
+```
+
+**`video/src/blocks/ScaleZoom.tsx`** (complete file):
+
+```tsx
+/**
+ * ScaleZoom (type C, owner decision 31): the Powers-of-Ten zoom-out without a
+ * log axis, for ratios a UnitGrid cannot hold (beyond 1:400). The two
+ * quantities are bars on one linear scale, both starting at the same left
+ * edge: first the small one fills most of the bar area (readable), then the
+ * camera pulls back linearly (the visible extent grows linearly from the small
+ * value to the large one, eased at both ends) until the large one fits, and
+ * the small one shrinks to a dot that keeps its label. Every frame is one
+ * linear scale, so the two bars always stand in the ratio of their values.
+ * The pull-back runs from 25 % of the scene to one second before its end,
+ * frame by frame; show <small id> and show <large id> let a quantity appear
+ * (default: the small at frame 12, the large when the pull-back starts). The
+ * basis is always on screen.
+ */
+import React from 'react'
+import { AbsoluteFill, Easing, useCurrentFrame } from 'remotion'
+
+import { firstCue } from '../cues'
+import type { Rect } from '../layout/geometry'
+import { LayoutBox } from '../layout/LayoutBox'
+import { bootIn, progress } from '../motion'
+import { colors } from '../theme/colors'
+import { body, heading, hud } from '../theme/type'
+import { valueText } from './BarChart'
+import type { BlockProps, CheckContext } from './types'
+
+export type ZoomQuantity = { id: string; label: string; value: number }
+export type ScaleZoomProps = { title: string; unit: string; basis: string; small: ZoomQuantity; large: ZoomQuantity }
+
+/** The fitted quantity spans this share of the bar area's width. */
+export const FILL = 0.8
+/** A bar shorter than this is drawn as a dot of this diameter. */
+export const DOT = 14
+/** The fitted final view holds for one second at 60 fps. */
+const HOLD_FRAMES = 60
+/** Frames the scene needs: the small quantity, the pull-back and the hold (4 s). */
+export const MIN_FRAMES = 240
+const BASIS_H = 56
+const LABEL_H = 48
+const BAR_H = 72
+const ROW_H = 170
+
+export function checkScaleZoom(p: ScaleZoomProps, ctx: CheckContext): string[] {
+  const errors: string[] = []
+  if (p.small.id === p.large.id) errors.push(`small and large need different ids (both ${p.small.id})`)
+  if (!(p.small.value > 0)) errors.push(`${p.small.id}: the small value must be greater than 0`)
+  if (!(p.large.value > p.small.value)) errors.push(`${p.large.id}: the large value ${p.large.value} must be greater than the small value ${p.small.value}`)
+  if (ctx.durationInFrames < MIN_FRAMES) {
+    errors.push(`a ScaleZoom scene needs at least ${MIN_FRAMES} frames (the small quantity, the pull-back, a 1 s hold), got ${ctx.durationInFrames}`)
+  }
+  return errors
+}
+
+/** The frames of the pull-back: from 25 % of the scene to one second before its end. */
+export function pullWindow(durationInFrames: number): { start: number; end: number } {
+  return { start: Math.round(durationInFrames * 0.25), end: durationInFrames - HOLD_FRAMES }
+}
+
+/**
+ * Pixels per unit at scene frame `frame` for a bar area `width` px wide: the
+ * visible extent (the value that spans FILL of the width) runs linearly from
+ * the small value to the large one over the pull-back, eased at both ends.
+ */
+export function zoomScale(p: ScaleZoomProps, width: number, frame: number, durationInFrames: number): number {
+  const { start, end } = pullWindow(durationInFrames)
+  const u = progress(frame, start, end - start, Easing.inOut(Easing.quad))
+  const extent = p.small.value + (p.large.value - p.small.value) * u
+  return (FILL * width) / extent
+}
+
+/** The on-screen basis line (owner rule: comparisons state their basis). */
+export function basisLine(p: ScaleZoomProps): string {
+  return `To scale, linear. Basis: ${p.basis}`
+}
+
+function barArea(stage: Rect): Rect {
+  return { x: stage.x + 20, y: stage.y + 100, w: stage.w - 40, h: 2 * ROW_H }
+}
+
+export const ScaleZoom: React.FC<BlockProps<ScaleZoomProps>> = ({ props: p, cues, durationInFrames, sceneId, stage }) => {
+  const frame = useCurrentFrame()
+  const area = barArea(stage)
+  const s = zoomScale(p, area.w, frame, durationInFrames)
+  const rows = [
+    { q: p.small, appear: firstCue(cues, 'show', p.small.id) ?? 12, color: colors.amber },
+    { q: p.large, appear: firstCue(cues, 'show', p.large.id) ?? pullWindow(durationInFrames).start, color: colors.green },
+  ]
+  return (
+    <AbsoluteFill style={{ backgroundColor: colors.bg }}>
+      <LayoutBox id={`${sceneId}:title`} kind="text" style={{ position: 'absolute', left: stage.x, top: stage.y, width: stage.w, height: 60, overflow: 'hidden', ...heading(48), ...bootIn(frame, 0) }}>
+        {p.title}
+      </LayoutBox>
+      <div style={{ position: 'absolute', left: area.x, top: area.y, width: area.w, height: area.h, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, width: 2, height: area.h, background: colors.greenDim }} />
+        {rows.map(({ q, appear, color }, i) => {
+          if (frame < appear) return null
+          const length = q.value * s
+          const top = i * ROW_H + LABEL_H + 12
+          return length >= DOT ? (
+            <div key={q.id} style={{ position: 'absolute', left: 0, top, width: length, height: BAR_H, background: color, opacity: progress(frame, appear, 12) }} />
+          ) : (
+            <div key={q.id} style={{ position: 'absolute', left: 0, top: top + (BAR_H - DOT) / 2, width: DOT, height: DOT, borderRadius: DOT / 2, background: color, boxShadow: `0 0 10px ${color}` }} />
+          )
+        })}
+      </div>
+      {rows.map(({ q, appear, color }, i) =>
+        frame < appear ? null : (
+          <LayoutBox
+            key={q.id}
+            id={`${sceneId}:q:${q.id}`}
+            kind="text"
+            style={{ position: 'absolute', left: area.x, top: area.y + i * ROW_H, width: area.w, height: LABEL_H, overflow: 'hidden', whiteSpace: 'nowrap', display: 'flex', alignItems: 'baseline', gap: 24, ...bootIn(frame, appear, 12) }}
+          >
+            <span style={body(32, colors.white)}>{q.label}</span>
+            <span style={hud(30, color)}>{valueText(q.value, p.unit)}</span>
+          </LayoutBox>
+        ),
+      )}
       <LayoutBox id={`${sceneId}:basis`} kind="text" style={{ position: 'absolute', left: stage.x, top: stage.y + stage.h - BASIS_H, width: stage.w, height: BASIS_H, overflow: 'hidden', ...body(24, colors.crt400) }}>
         {basisLine(p)}
       </LayoutBox>
@@ -6403,13 +6747,13 @@ export const Diagram: React.FC<BlockProps<DiagramProps>> = ({ props: p, cues, sc
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/blocks-infographics.test.ts`
-Expected: `Tests  14 passed (14)`
+Expected: `Tests  16 passed (16)`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add video/src/blocks/ScaleDrawing.tsx video/src/blocks/UnitGrid.tsx video/src/blocks/BarChart.tsx video/src/blocks/Timeline.tsx video/src/blocks/Diagram.tsx video/test/blocks-infographics.test.ts
-git commit -m "Add the infographic blocks: to-scale drawing, unit grid, bar chart, timeline and diagram" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git add video/src/blocks/ScaleDrawing.tsx video/src/blocks/UnitGrid.tsx video/src/blocks/BarChart.tsx video/src/blocks/ScaleZoom.tsx video/src/blocks/Timeline.tsx video/src/blocks/Diagram.tsx video/test/blocks-infographics.test.ts
+git commit -m "Add the infographic blocks: to-scale drawing, unit grid, linear bar chart, scale zoom, timeline and diagram" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 
@@ -6419,7 +6763,7 @@ git commit -m "Add the infographic blocks: to-scale drawing, unit grid, bar char
 - Create: `video/src/blocks/index.ts`
 - Test: `video/test/blocks.test.ts`
 
-`BLOCKS` maps each registry name to its component, its semantic check, the local cue verbs it takes with their valid targets, and the images `calculateMetadata` must measure. Its cue table is the single definition of which local verbs each block takes and which ids it shows; plan C's script check mirrors it (its `LOCAL_CUES` must cover exactly the blocks of `registry.json`). `checkBlocks` runs all of it over a parsed timeline (contract D3): a local verb must name a target the block shows, `introduce` needs a ClaimBoard listing the claim, a `meter` cue needs a Meter in the episode, and every string of the props, captions, credits and chapter titles must be drawable by the brand fonts (latin and latin-ext, `theme/glyphs.ts`), because the browser would silently draw any other character in a system font.
+`BLOCKS` maps each registry name to its component, its semantic check, the local cue verbs it takes with their valid targets, and the images `calculateMetadata` must measure. Its cue table is the single definition of which local verbs each block takes and which ids it shows; plan C's script check mirrors it (its `LOCAL_CUES` must cover exactly the blocks of `registry.json`). `checkBlocks` runs all of it over a parsed timeline (contract D3): a local verb must name a target the block shows, `introduce` needs a ClaimBoard listing the claim, a `meter` cue needs a Meter in the episode, a ShareCard may only be the last scene (owner rule for platform moments: never an advert, the link only on the end card and in the description; in a full episode and a slice alike), and every string the video draws must be drawable by the brand fonts (latin and latin-ext, `theme/glyphs.ts`), because the browser would silently draw any other character in a system font. That includes the character's upper case: `heading()` and `hud()` draw upper case, so a teaser 'Smaller than 1 µm?' is refused for `µ` (drawn as Greek `Μ`); `micrometre` is the drawable spelling. Only drawn strings are checked (owner decision 32, D1): `drawnStrings` walks the block's `drawn` paths from `schemas.ts`, `captureStrings` the drawn strings of every capture prop (its credits and `place`/`pin` labels), and the captions, credits, chapter titles and thumbnail teasers are checked as before. A `page` event's `title` (the source page's own `<title>`) is a record that nothing draws, so it is not checked. So an original quote shown only inside a captured page (SourceViewer), the page's non-latin title and a non-latin URL path pass, while a claim label or a credit the fonts cannot draw is refused.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -6449,11 +6793,36 @@ const clip: Capture = {
   credits: ['© Mapbox © OpenStreetMap © Maxar'],
 }
 
-/** The demo timeline with scene b11 replaced by `block`/`props` (180 frames = 3 s). */
+/** The demo timeline with its last scene, b12, replaced by `block`/`props` (180 frames = 3 s). */
 function withScene(block: string, props: Json, cues: Json[] = []): Timeline {
   const t: Json = JSON.parse(JSON.stringify(DEMO_TIMELINE))
-  t.scenes[10] = { id: 'b11', from: 1800, durationInFrames: 180, block, props, cues }
+  t.scenes[11] = { id: 'b12', from: 2040, durationInFrames: 180, block, props, cues }
   return parseTimeline(t)
+}
+
+/**
+ * A source-page capture of the real Greek Wikipedia page: its URL path and its own
+ * <title> are Greek; SourceViewer and the credit draw only the ASCII hostname.
+ */
+const page: Capture = {
+  id: 'src1',
+  kind: 'source',
+  src: 'captures/src1.png',
+  fps: null,
+  duration_s: null,
+  width: 2560,
+  height: 3000,
+  events: [
+    { t: 0, name: 'gpu', label: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU)' },
+    { t: 0, name: 'page', url: 'https://el.wikipedia.org/wiki/Κνωσός', title: 'Κνωσός - Βικιπαίδεια' },
+    { t: 0, name: 'highlight', box: [200, 1500, 1800, 120], target: 'quote' },
+  ],
+  credits: ['Source page: el.wikipedia.org'],
+}
+/** Evidence whose verbatim quote is the Greek original: it sits in the page image, SourceViewer never draws it. */
+const greekQuote: Json = {
+  ...JSON.parse(JSON.stringify(DEMO_TIMELINE.scenes[1].props.evidence)),
+  source: { url: 'https://el.wikipedia.org/wiki/Κνωσός', title: 'Knossos', tier: 2, license: '', quote: 'ἐν δὲ Κνωσός, μεγάλη πόλις', locator: 'lead' },
 }
 
 describe('the block library', () => {
@@ -6519,6 +6888,34 @@ describe('checkBlocks', () => {
     t.scenes[4].props.objects[1].label = 'Person'
     t.credits = [{ sceneId: 'b01', text: 'Photo → Commons' }]
     expect(() => checkBlocks(parseTimeline(t))).toThrow(/timeline: credits\[0\]\.text \(scene b01\): "→" \(U\+2192\)/)
+    t.credits = []
+    t.thumbnails[0].text = 'Who → it?'
+    expect(() => checkBlocks(parseTimeline(t))).toThrow(/timeline: thumbnails\[0\]\.text: "→" \(U\+2192\)/)
+  })
+  it('refuses a character whose upper case the brand fonts cannot draw (heading and hud draw upper case)', () => {
+    const t: Json = JSON.parse(JSON.stringify(DEMO_TIMELINE))
+    t.thumbnails[0].text = 'Smaller than 1 µm?'
+    expect(() => checkBlocks(parseTimeline(t))).toThrow(
+      /timeline: thumbnails\[0\]\.text: "µ" \(U\+00B5\) draws as "Μ" \(U\+039C\) in upper case, which has no glyph in the brand fonts/,
+    )
+  })
+  it('refuses a ShareCard before the last scene: the link appears only on the end card', () => {
+    const t: Json = JSON.parse(JSON.stringify(DEMO_TIMELINE))
+    t.scenes[9] = { ...t.scenes[11], id: 'b10', from: 1620 }
+    // the only error, so the last scene's ShareCard (b12) passes
+    expect(() => checkBlocks(parseTimeline(t))).toThrow(/:\n {2}scene b10 \(ShareCard\): ShareCard is the end card; only the last scene may use it$/)
+  })
+  it('checks only the strings the video draws: a page title, an original quote in a page image and a URL path pass (owner decision 32)', () => {
+    expect(() => checkBlocks(withScene('SourceViewer', { page, evidence: greekQuote }))).not.toThrow()
+  })
+  it('refuses a drawn string outside the brand fonts: a claim label, a capture credit', () => {
+    const t: Json = JSON.parse(JSON.stringify(DEMO_TIMELINE))
+    t.scenes[0].props.claims[0].label = 'Κνωσός'
+    expect(() => checkBlocks(parseTimeline(t))).toThrow(/scene b01 \(ClaimBoard\): props\.claims\[0\]\.label: "Κ" \(U\+039A\)/)
+    const greekCredit = { ...page, credits: ['Source page: Βικιπαίδεια'] }
+    expect(() => checkBlocks(withScene('SourceViewer', { page: greekCredit, evidence: greekQuote }))).toThrow(
+      /scene b12 \(SourceViewer\): props\.page\.credits\[0\]: "Β" \(U\+0392\)/,
+    )
   })
 })
 ```
@@ -6544,12 +6941,16 @@ Expected: FAIL with `Cannot find module '../src/blocks'`.
  * a Meter in the episode; status cues may target any claim (EvidenceCard and
  * ClaimBoard show them). The cue table below is the single definition of the
  * local cue rules: plan C's script check mirrors it before voice and capture.
- * Every string of the props, captions, credits and chapter titles must be
- * drawable by the brand fonts (theme/glyphs.ts).
+ * A ShareCard, the end card and the one place the link appears in the picture,
+ * may only be the last scene (owner rule). Every string the video draws must be
+ * drawable by the brand fonts, in upper case too (theme/glyphs.ts; owner
+ * decision 32: only drawn strings are checked): the block's `drawn` prop paths
+ * (schemas.ts), the drawn strings of its capture props (captureStrings), the
+ * captions, credits, chapter titles and the thumbnail teasers.
  */
 import type React from 'react'
 
-import { unsupportedChar } from '../theme/glyphs'
+import { glyphReason, unsupportedChar } from '../theme/glyphs'
 import type { LocalVerb, Timeline } from '../timeline'
 import { BarChart, type BarChartProps, checkBarChart } from './BarChart'
 import { ClaimBoard, type ClaimBoardProps } from './ClaimBoard'
@@ -6565,9 +6966,11 @@ import { PlatformClip, checkPlatformClip } from './PlatformClip'
 import { QuoteCard, type QuoteCardProps, checkQuoteCard } from './QuoteCard'
 import { ScaleDrawing, type ScaleDrawingProps, checkScaleDrawing } from './ScaleDrawing'
 import { ShareCard } from './ShareCard'
+import { ScaleZoom, type ScaleZoomProps, checkScaleZoom } from './ScaleZoom'
+import { CAPTURE_PROPS, REGISTRY_BLOCKS } from './schemas'
 import { SourceViewer, type SourceViewerProps, checkSourceViewer } from './SourceViewer'
 import { Timeline as TimelineBlock, type TimelineProps, checkTimeline } from './Timeline'
-import type { BlockProps, CheckContext } from './types'
+import type { BlockProps, Capture, CheckContext } from './types'
 import { UnitGrid, type UnitGridProps, checkUnitGrid } from './UnitGrid'
 
 type Targets<P> = (props: P) => string[]
@@ -6615,6 +7018,7 @@ export const BLOCKS: Record<string, BlockDef> = {
   Diagram: block(Diagram, { check: checkDiagram, cues: { show: (p: DiagramProps) => ids(p.elements) } }),
   ListCard: block(ListCard, { cues: { show: (p: ListCardProps) => ids(p.items) } }),
   ShareCard: block(ShareCard),
+  ScaleZoom: block(ScaleZoom, { check: checkScaleZoom, cues: { show: (p: ScaleZoomProps) => [p.small.id, p.large.id] } }),
 }
 
 export function blockDef(name: string): BlockDef {
@@ -6623,20 +7027,49 @@ export function blockDef(name: string): BlockDef {
   return def
 }
 
-/** Every string anywhere in `value`, with its path below `at` ("props.items[0].text"). */
-function strings(value: unknown, at: string): [string, string][] {
-  if (typeof value === 'string') return [[at, value]]
-  if (Array.isArray(value)) return value.flatMap((v, i) => strings(v, `${at}[${i}]`))
-  if (typeof value === 'object' && value !== null) return Object.entries(value).flatMap(([k, v]) => strings(v, `${at}.${k}`))
-  return []
+/**
+ * The strings a `drawn` pattern reaches in `value`, with their paths below `at`
+ * ("props.claims[0].label"). Keys are separated by '.', a key suffixed with
+ * '[]' walks every element of that array; an absent optional prop yields nothing.
+ */
+export function drawnStrings(value: unknown, patterns: readonly string[], at: string): [string, string][] {
+  const walk = (v: unknown, parts: readonly string[], path: string): [string, string][] => {
+    if (parts.length === 0) return typeof v === 'string' ? [[path, v]] : []
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return []
+    const [part, ...rest] = parts
+    const key = part.endsWith('[]') ? part.slice(0, -2) : part
+    const next = (v as Record<string, unknown>)[key]
+    if (!part.endsWith('[]')) return walk(next, rest, `${path}.${key}`)
+    return Array.isArray(next) ? next.flatMap((item, i) => walk(item, rest, `${path}.${key}[${i}]`)) : []
+  }
+  return patterns.flatMap((pattern) => walk(value, pattern.split('.'), at))
 }
 
-/** The error for a character of `text` the brand fonts cannot draw, or null. */
+/**
+ * The strings a capture puts on screen: its credits and the label of a globe
+ * `place` or top-down `pin` event. Event names, targets, URLs (SourceViewer and
+ * the cards draw only the ASCII hostname), a source `page` event's title (the
+ * page's own <title>, kept as a record; owner decision 32) and the `gpu` event's
+ * renderer are never drawn.
+ */
+export function captureStrings(capture: Pick<Capture, 'events' | 'credits'>, at: string): [string, string][] {
+  const out: [string, string][] = capture.credits.map((c, i): [string, string] => [`${at}.credits[${i}]`, c])
+  capture.events.forEach((e, i) => {
+    if ((e.name === 'place' || e.name === 'pin') && e.label !== undefined) out.push([`${at}.events[${i}].label`, e.label])
+  })
+  return out
+}
+
+/** Every drawn string of a scene's props: the block's `drawn` paths and its capture props' drawn strings. */
+function sceneStrings(block: string, props: Record<string, unknown>): [string, string][] {
+  const captures = CAPTURE_PROPS.filter((k) => k in props).flatMap((k) => captureStrings(props[k] as Capture, `props.${k}`))
+  return [...drawnStrings(props, REGISTRY_BLOCKS[block].drawn, 'props'), ...captures]
+}
+
+/** The error for a character of `text` the brand fonts cannot draw, as written or in upper case, or null. */
 function glyphProblem(where: string, at: string, text: string): string | null {
   const ch = unsupportedChar(text)
-  if (ch === null) return null
-  const code = (ch.codePointAt(0) as number).toString(16).toUpperCase().padStart(4, '0')
-  return `${where}: ${at}: "${ch}" (U+${code}) has no glyph in the brand fonts (latin and latin-ext only)`
+  return ch === null ? null : `${where}: ${at}: ${glyphReason(ch)}`
 }
 
 /** Throws with every semantic defect, every bad cue and every undrawable character of the timeline. */
@@ -6650,16 +7083,20 @@ export function checkBlocks(timeline: Timeline): void {
     ...timeline.captions.map((c, i): [string, string] => [`captions[${i}].text`, c.text]),
     ...timeline.credits.map((c, i): [string, string] => [`credits[${i}].text (scene ${c.sceneId})`, c.text]),
     ...timeline.chapters.map((c, i): [string, string] => [`chapters[${i}].title`, c.title]),
+    ...timeline.thumbnails.map((c, i): [string, string] => [`thumbnails[${i}].text`, c.text]),
   ]
   for (const [at, text] of texts) {
     const problem = glyphProblem('timeline', at, text)
     if (problem) errors.push(problem)
   }
+  const last = timeline.scenes[timeline.scenes.length - 1]
   for (const scene of timeline.scenes) {
     const def = blockDef(scene.block)
     const where = `scene ${scene.id} (${scene.block})`
+    // owner rule: the link appears only on the end card (and in the description)
+    if (scene.block === 'ShareCard' && scene !== last) errors.push(`${where}: ShareCard is the end card; only the last scene may use it`)
     for (const e of def.check(scene.props, { fps: timeline.fps, durationInFrames: scene.durationInFrames })) errors.push(`${where}: ${e}`)
-    for (const [at, text] of strings(scene.props, 'props')) {
+    for (const [at, text] of sceneStrings(scene.block, scene.props)) {
       const problem = glyphProblem(where, at, text)
       if (problem) errors.push(problem)
     }
@@ -6687,7 +7124,7 @@ export function imagesToMeasure(timeline: Timeline): string[] {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/blocks.test.ts`
-Expected: `Tests  9 passed (9)`
+Expected: `Tests  13 passed (13)`
 
 - [ ] **Step 5: Commit**
 
@@ -6702,7 +7139,7 @@ git commit -m "Tie every registry block to its component, checks and cue targets
 - Create: `video/src/SceneView.tsx`, `video/src/Episode.tsx`, `video/src/Thumbnail.tsx`, `video/src/Root.tsx`, `video/src/index.ts`
 - Test: `video/test/rules.test.ts`
 
-Both compositions take the timeline as an input prop. `calculateMetadata` runs once per render in the browser: it parses and checks the timeline, measures every narration clip and image, sets duration, fps and size from the timeline, and puts the browser's WebGL renderer into the props as `gpu` (the scripts refuse anything but the NVIDIA). Episode mounts one `<Sequence>` per scene, the overlays, one `<Audio>` per narration clip and the looping music bed with its duck curve; in lint mode it mounts `LayoutGuard` instead of the audio. Thumbnail shows one episode frame without captions, ticker, chapter tag or credits. `test/rules.test.ts` enforces the Remotion rules over all of `src/`.
+Both compositions take the timeline as an input prop. `calculateMetadata` runs once per render in the browser: it parses and checks the timeline, measures every narration clip and image, sets duration, fps and size from the timeline, and puts the browser's WebGL renderer into the props as `gpu` (the scripts refuse anything but the NVIDIA). Episode mounts one `<Sequence>` per scene, the overlays, one `<Audio>` per narration clip and the looping music bed with its duck curve; in lint mode it mounts `LayoutGuard` instead of the audio. Thumbnail shows candidate K of the timeline's three thumbnail candidates (owner decisions 24-25): one episode frame without captions, ticker, chapter tag or credits, with the candidate's teaser in the NERV heading type (Orbitron, upper case, 104 px, at most two lines) on its own dark glass in `TEASER_ZONE`, inside the title-safe area and clear of the bottom-right 25 % x 20 % of the frame, where YouTube lays its duration badge. The teaser is the only box the Thumbnail measures in lint mode (`lint.ts` renders each candidate once; an overflowing teaser is an `overflow` violation); the scene under it is linted with the episode and covered on purpose. `test/rules.test.ts` enforces the Remotion rules over all of `src/` and pins the teaser zone.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -6716,8 +7153,11 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { Episode, EpisodeVisuals } from '../src/Episode'
+import { DEMO_TIMELINE } from '../src/fixtures/demo'
+import { contains, overlapArea } from '../src/layout/geometry'
+import { SAFE } from '../src/layout/zones'
 import { SceneView } from '../src/SceneView'
-import { Thumbnail } from '../src/Thumbnail'
+import { DURATION_BADGE, TEASER_ZONE, Thumbnail, teaserOf } from '../src/Thumbnail'
 
 const SRC = fileURLToPath(new URL('../src', import.meta.url))
 
@@ -6763,6 +7203,17 @@ describe('compositions', () => {
     expect(root).toContain('id="Thumbnail"')
     expect(root.match(/calculateMetadata=\{/g)).toHaveLength(2)
     expect(root).toContain('gpu: webglRenderer()')
+  })
+})
+
+describe('thumbnail teaser (owner decisions 24-25)', () => {
+  it('sits inside the title-safe area and clear of the duration badge YouTube lays over a thumbnail', () => {
+    expect(contains(SAFE, TEASER_ZONE)).toBe(true)
+    expect(overlapArea(TEASER_ZONE, DURATION_BADGE)).toBe(0)
+  })
+  it('draws the teaser of the chosen candidate and refuses one the timeline does not have', () => {
+    expect(teaserOf(DEMO_TIMELINE, 2)).toBe('Eighty buses heavy?')
+    expect(() => teaserOf(DEMO_TIMELINE, 4)).toThrow(/thumbnail candidate 4 does not exist \(1\.\.3\)/)
   })
 })
 ```
@@ -6905,30 +7356,67 @@ export const Episode: React.FC<EpisodeProps> = ({ timeline, lint, narrationSpans
 
 ```tsx
 /**
- * The Thumbnail composition: episode frame `frame` without captions, ticker,
- * chapter tag or credit line. The composition is one frame long and shifts
- * every scene by `frame`, so its only frame shows that moment (scene motion
- * included). scripts/still.ts renders it at scale 2 (3840x2160 master) and as a
- * 1280x720 JPEG under 2 MB.
+ * The Thumbnail composition (owner decisions 24-25): episode frame `frame`
+ * without captions, ticker, chapter tag or credit line, with the teaser of
+ * thumbnail candidate `candidate` (timeline.thumbnails: 2-4 words, a question
+ * or riddle that never gives the answer; plan C picks the frames and the
+ * words) in the NERV heading type on its own dark glass. The composition is
+ * one frame long and shifts every scene by `frame`, so its only frame shows
+ * that moment (scene motion included). The teaser sits in TEASER_ZONE: inside
+ * the title-safe area and clear of the bottom-right corner, where YouTube lays
+ * its duration badge over a thumbnail. In lint mode (scripts/lint.ts) only the
+ * teaser is measured: the scene under it is linted with the episode, and the
+ * teaser covers it on purpose. scripts/still.ts renders it at scale 2
+ * (3840x2160 master) and as a 1280x720 JPEG under 2 MB.
  */
 import React, { useMemo } from 'react'
 
 import type { ImageSizes } from './context'
 import { EpisodeContext } from './context'
 import { EpisodeVisuals } from './Episode'
-import { LayoutProvider, Registry } from './layout/LayoutBox'
+import type { Rect } from './layout/geometry'
+import { LayoutBox, LayoutProvider, Registry } from './layout/LayoutBox'
+import { LayoutGuard } from './layout/LayoutGuard'
 import { buildState } from './state'
+import { colors } from './theme/colors'
+import { heading } from './theme/type'
 import type { Timeline } from './timeline'
 
-export type ThumbnailProps = { timeline: Timeline; frame: number; imageSizes: ImageSizes; gpu: string }
+export type ThumbnailProps = { timeline: Timeline; candidate: number; frame: number; lint: boolean; imageSizes: ImageSizes; gpu: string }
 
-export const Thumbnail: React.FC<ThumbnailProps> = ({ timeline, frame, imageSizes }) => {
-  const registry = useMemo(() => new Registry(false), [])
-  const data = useMemo(() => ({ state: buildState(timeline.scenes), imageSizes, lint: false }), [timeline, imageSizes])
+/** Where the teaser goes: the top of the frame, inside the title-safe area. */
+export const TEASER_ZONE: Rect = { x: 96, y: 72, w: 1440, h: 380 }
+/** YouTube lays its duration badge over the bottom-right corner of a thumbnail (25 % x 20 % of the frame). */
+export const DURATION_BADGE: Rect = { x: 1440, y: 864, w: 480, h: 216 }
+
+/** The teaser of candidate `candidate` (1-based, like still.ts --candidate). */
+export function teaserOf(timeline: Pick<Timeline, 'thumbnails'>, candidate: number): string {
+  const c = Number.isInteger(candidate) ? timeline.thumbnails[candidate - 1] : undefined
+  if (!c) throw new Error(`thumbnail candidate ${candidate} does not exist (1..${timeline.thumbnails.length})`)
+  return c.text
+}
+
+export const Thumbnail: React.FC<ThumbnailProps> = ({ timeline, candidate, frame, lint, imageSizes }) => {
+  const scenes = useMemo(() => new Registry(false), [])
+  const teaser = useMemo(() => new Registry(lint), [lint])
+  const data = useMemo(() => ({ state: buildState(timeline.scenes), imageSizes, lint }), [timeline, imageSizes, lint])
+  const z = TEASER_ZONE
   return (
     <EpisodeContext.Provider value={data}>
-      <LayoutProvider registry={registry}>
+      <LayoutProvider registry={scenes}>
         <EpisodeVisuals timeline={timeline} overlays={false} credits={false} shift={frame} />
+      </LayoutProvider>
+      <LayoutProvider registry={teaser}>
+        <div style={{ position: 'absolute', left: z.x, top: z.y, width: z.w, height: z.h, background: colors.bgPanel }} />
+        <div style={{ position: 'absolute', left: z.x, top: z.y, width: 10, height: z.h, background: colors.green }} />
+        <LayoutBox
+          id={`thumbnail${candidate}:teaser`}
+          kind="text"
+          style={{ position: 'absolute', left: z.x + 44, top: z.y + 24, width: z.w - 72, height: z.h - 48, overflow: 'hidden', display: 'flex', alignItems: 'center', ...heading(104) }}
+        >
+          {teaserOf(timeline, candidate)}
+        </LayoutBox>
+        {lint ? <LayoutGuard /> : null}
       </LayoutProvider>
     </EpisodeContext.Provider>
   )
@@ -6955,7 +7443,7 @@ import { DEMO_TIMELINE } from './fixtures/demo'
 import { webglRenderer } from './gpu'
 import { audioSeconds, measureImages } from './media'
 import { loadBrandFonts } from './theme/fonts'
-import { Thumbnail, type ThumbnailProps } from './Thumbnail'
+import { Thumbnail, type ThumbnailProps, teaserOf } from './Thumbnail'
 import { parseTimeline } from './timeline'
 
 loadBrandFonts()
@@ -6977,6 +7465,7 @@ const episodeMetadata: CalculateMetadataFunction<EpisodeProps> = async ({ props 
 const thumbnailMetadata: CalculateMetadataFunction<ThumbnailProps> = async ({ props }) => {
   const timeline = parseTimeline(props.timeline)
   checkBlocks(timeline)
+  teaserOf(timeline, props.candidate)
   if (!Number.isInteger(props.frame) || props.frame < 0 || props.frame >= timeline.durationInFrames) {
     throw new Error(`Thumbnail frame ${props.frame} is outside the episode (0..${timeline.durationInFrames - 1})`)
   }
@@ -6999,7 +7488,7 @@ export const RemotionRoot: React.FC = () => (
     <Composition
       id="Thumbnail"
       component={Thumbnail}
-      defaultProps={{ timeline: DEMO_TIMELINE, frame: 0, imageSizes: {}, gpu: '' }}
+      defaultProps={{ timeline: DEMO_TIMELINE, candidate: 1, frame: DEMO_TIMELINE.thumbnails[0].frame, lint: false, imageSizes: {}, gpu: '' }}
       calculateMetadata={thumbnailMetadata}
       durationInFrames={1}
       fps={60}
@@ -7023,7 +7512,7 @@ registerRoot(RemotionRoot)
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/rules.test.ts && npx tsc --noEmit`
-Expected: `Tests  12 passed (12)`, then no tsc output.
+Expected: `Tests  14 passed (14)`, then no tsc output.
 
 - [ ] **Step 5: Commit**
 
@@ -7292,7 +7781,7 @@ git commit -m "Add the render scripts' helpers: strict flags, chunk ranges, lint
 - Create: `video/scripts/cli.ts`, `video/scripts/lint.ts`, `video/scripts/render.ts`, `video/scripts/still.ts`
 - Test: `video/test/scripts.test.ts`
 
-Contract D4 (plan C's C9). `cli.ts` loads and checks the timeline, checks that the public dir holds every referenced file and the brand fonts before Chrome starts, bundles with that public dir into `bundle/` next to it (`withBundle`: Remotion's `bundle()` copies the whole public dir, byte for byte on Windows, into its output, by default a fresh `%TEMP%` directory it never deletes; the per-render public dir holds voice, music and every HEVC capture, so three scripts per render would leave three copies of it on C:. `withBundle` removes its bundle when the work ends, on success and on failure, so at most one copy exists, on the episode's own drive, while one script runs), and opens every browser through `onNvidia`: `openBrowser('chrome', {chromiumOptions: {gl: 'angle'}})`, resolve the composition in it, refuse unless its `gpu` prop names the NVIDIA, print `gpu: <renderer>`. `render.ts` renders the episode in chunks of at most 3600 frames, each in a fresh browser (the angle backend leaks memory on long renders): `h264` with `hardwareAcceleration: 'required'`, `nvencOverride`, 16 Mbit/s and `colorSpace: 'bt709'`, the chunk's audio to a separate PCM WAV (`separateAudioTo`, `enforceAudioTrack` so a silent chunk still has its samples). At 48 kHz and 60 fps a frame is exactly 800 samples, so the WAV parts join sample-exactly and the video parts frame-exactly with the ffmpeg concat demuxer; the joined audio is encoded to AAC 320k once here (plan C's `render.py` re-encodes it once more at 320k after its loudness gain) and the frame count is checked against the timeline. (A single audio-only pass over the whole episode was tried first: Remotion still renders every frame for it, clips included, and it ran longer than the video itself.)
+Contract D4 (plan C's C9). `cli.ts` loads and checks the timeline, checks that the public dir holds every referenced file and the brand fonts before Chrome starts, bundles with that public dir into `bundle/` next to it (`withBundle`: Remotion's `bundle()` copies the whole public dir, byte for byte on Windows, into its output, by default a fresh `%TEMP%` directory it never deletes; the per-render public dir holds voice, music and every HEVC capture, so three scripts per render would leave three copies of it on C:. `withBundle` removes its bundle when the work ends, on success and on failure, so at most one copy exists, on the episode's own drive, while one script runs), and opens every browser through `onNvidia`: `openBrowser('chrome', {chromiumOptions: {gl: 'angle'}})`, resolve the composition in it, refuse unless its `gpu` prop names the NVIDIA, print `gpu: <renderer>`. `render.ts` renders the episode in chunks of at most 3600 frames, each in a fresh browser (the angle backend leaks memory on long renders): `h264` with `hardwareAcceleration: 'required'`, `nvencOverride`, 16 Mbit/s and `colorSpace: 'bt709'`, the chunk's audio to a separate PCM WAV (`separateAudioTo`, `enforceAudioTrack` so a silent chunk still has its samples). At 48 kHz and 60 fps a frame is exactly 800 samples, so the WAV parts join sample-exactly and the video parts frame-exactly with the ffmpeg concat demuxer; the joined audio is encoded to AAC 320k once here (plan C's `render.py` re-encodes it once more at 320k after its loudness gain) and the frame count is checked against the timeline. (A single audio-only pass over the whole episode was tried first: Remotion still renders every frame for it, clips included, and it ran longer than the video itself.) `lint.ts` lints the episode frames and then each thumbnail candidate's teaser (the Thumbnail composition in lint mode, one frame per candidate, each in its own browser proved on the NVIDIA). `still.ts --candidate K [--frame N]` renders one of the three candidates (owner decision 24) as `thumbnail_<K>_3840.png` and `thumbnail_<K>_1280.jpg`, at the candidate's frame or at `--frame N`; plan C calls it once per candidate.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -7317,7 +7806,7 @@ describe('the node scripts fail with exit code 1 and a precise message (plan C c
   it.each([
     ['lint.ts', []],
     ['render.ts', ['--out', 'out.mp4']],
-    ['still.ts', ['--out-dir', 'out']],
+    ['still.ts', ['--out-dir', 'out', '--candidate', '1']],
   ])('%s refuses a timeline that does not exist', (script, extra) => {
     const result = run(script, ['--timeline', 'no-such-timeline.json', '--public-dir', '.', ...extra])
     expect(result.status).toBe(1)
@@ -7331,13 +7820,21 @@ describe('the node scripts fail with exit code 1 and a precise message (plan C c
     expect(missing.status).toBe(1)
     expect(missing.stderr).toMatch(/missing required flag --out-dir/)
   }, SLOW)
+  it('still.ts renders one of the three thumbnail candidates (owner decision 24)', () => {
+    const noCandidate = run('still.ts', ['--timeline', 't.json', '--public-dir', '.', '--out-dir', 'o'])
+    expect(noCandidate.status).toBe(1)
+    expect(noCandidate.stderr).toMatch(/missing required flag --candidate/)
+    const fourth = run('still.ts', ['--timeline', 't.json', '--public-dir', '.', '--out-dir', 'o', '--candidate', '4'])
+    expect(fourth.status).toBe(1)
+    expect(fourth.stderr).toMatch(/--candidate must be 1\.\.3, got 4/)
+  }, SLOW)
 })
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `cd video && npx vitest run test/scripts.test.ts`
-Expected: FAIL — 4 failed: the scripts do not exist, so node exits with `ERR_MODULE_NOT_FOUND` instead of the messages.
+Expected: FAIL — 5 failed: the scripts do not exist, so node exits with `ERR_MODULE_NOT_FOUND` instead of the messages.
 
 - [ ] **Step 3: Implement**
 
@@ -7461,10 +7958,13 @@ export function run(main: () => Promise<void>): void {
  *        [--every 6] [--scale 0.5] [--report <lint.json>] [--concurrency N]
  * Renders every Nth frame at reduced scale with inputProps.lint = true (no
  * audio, clips not decoded); LayoutGuard logs each violation as a
- * console.error JSON line, collected here through onBrowserLog. The browser
- * is proved to draw on the NVIDIA first (cli.ts onNvidia, spec 4.11). Every
- * violation is printed to stderr as that JSON line; the exit code is 1 when
- * there is at least one. --report also writes {frames, every, scale, violations}.
+ * console.error JSON line, collected here through onBrowserLog. Then the
+ * teaser of each thumbnail candidate (the Thumbnail composition in lint mode,
+ * one frame each; its violations carry the candidate's episode frame). Every
+ * browser is proved to draw on the NVIDIA first (cli.ts onNvidia, spec 4.11).
+ * Every violation is printed to stderr as that JSON line; the exit code is 1
+ * when there is at least one. --report also writes {frames, every, scale,
+ * violations}; frames counts the episode frames and the thumbnails checked.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -7495,23 +7995,19 @@ run(async () => {
   const inputProps = { timeline, lint: true, narrationSpans: [], imageSizes: {}, gpu: '' }
   const violations: LintViolation[] = []
   let frames = 0
-  await withBundle(publicDir, (serveUrl) =>
-    onNvidia(serveUrl, 'Episode', inputProps, (browser, composition) =>
+  // The frames themselves are thrown away: only LayoutGuard's console output matters.
+  const discard = { imageFormat: 'jpeg', jpegQuality: 50, muted: true, outputDir: null, onFrameBuffer: () => undefined, timeoutInMilliseconds: 120_000 } as const
+  await withBundle(publicDir, async (serveUrl) => {
+    await onNvidia(serveUrl, 'Episode', inputProps, (browser, composition) =>
       renderFrames({
+        ...discard,
         composition,
         serveUrl,
         inputProps,
         puppeteerInstance: browser,
         everyNthFrame: every,
         scale,
-        imageFormat: 'jpeg',
-        jpegQuality: 50,
-        muted: true,
-        // The frames themselves are thrown away: only LayoutGuard's console output matters.
-        outputDir: null,
-        onFrameBuffer: () => undefined,
         concurrency: (flags.concurrency as number | undefined) ?? null,
-        timeoutInMilliseconds: 120_000,
         onStart: ({ frameCount }) => console.log(`lint: ${frameCount} frames (every ${every}, scale ${scale})`),
         onFrameUpdate: (rendered) => {
           frames = rendered
@@ -7521,8 +8017,29 @@ run(async () => {
           if (v) violations.push(v)
         },
       }),
-    ),
-  )
+    )
+    for (const [i, thumb] of timeline.thumbnails.entries()) {
+      const thumbProps = { timeline, candidate: i + 1, frame: thumb.frame, lint: true, imageSizes: {}, gpu: '' }
+      await onNvidia(serveUrl, 'Thumbnail', thumbProps, (browser, composition) =>
+        renderFrames({
+          ...discard,
+          composition,
+          serveUrl,
+          inputProps: thumbProps,
+          puppeteerInstance: browser,
+          scale,
+          concurrency: 1,
+          onStart: () => console.log(`lint: thumbnail ${i + 1} (frame ${thumb.frame})`),
+          onFrameUpdate: () => undefined,
+          onBrowserLog: (log) => {
+            const v = parseViolation(log.text)
+            if (v) violations.push({ ...v, frame: thumb.frame })
+          },
+        }),
+      )
+      frames += 1
+    }
+  })
   if (flags.report) {
     const report = flags.report as string
     mkdirSync(path.dirname(report), { recursive: true })
@@ -7642,26 +8159,29 @@ run(async () => {
 
 ```ts
 /**
- * Thumbnails (plan C contract C9), cwd video/:
- *   node --import tsx scripts/still.ts --timeline <timeline.json> --public-dir <dir> --out-dir <dir> [--frame N]
- * Renders the Thumbnail composition (the episode frame without captions, ticker,
- * chapter tag or credits; by default 60 % into the first scene, see
- * thumbnailFrame()) as thumbnail_3840.png (scale 2, 3840x2160 master) and
- * thumbnail_1280.jpg (1280x720; quality steps down from 92 until the file is
- * under 2 MB, YouTube's mobile limit), in a browser proved to draw on the
- * NVIDIA (cli.ts onNvidia, spec 4.11).
+ * Thumbnail candidates (plan C contract C9; owner decisions 24-25), cwd video/:
+ *   node --import tsx scripts/still.ts --timeline <timeline.json> --public-dir <dir> --out-dir <dir>
+ *        --candidate K [--frame N]
+ * Renders candidate K (1-3) of timeline.thumbnails: the Thumbnail composition
+ * (the episode frame without captions, ticker, chapter tag or credits, with the
+ * candidate's teaser) at the candidate's frame, or at --frame N (plan C's
+ * `episode thumbnail SLUG --candidate K --frame N`), as thumbnail_<K>_3840.png
+ * (scale 2, 3840x2160 master) and thumbnail_<K>_1280.jpg (1280x720; quality
+ * steps down from 92 until the file is under 2 MB, YouTube's limit), in a
+ * browser proved to draw on the NVIDIA (cli.ts onNvidia, spec 4.11). lint.ts
+ * checks each teaser's layout; the teaser does not depend on the frame.
  */
 import { mkdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 import { renderStill } from '@remotion/renderer'
 
-import { thumbnailFrame } from '../src/timeline'
+import { THUMBNAIL_CANDIDATES } from '../src/timeline'
 import { parseFlags } from './args'
 import { assertAssets, loadTimeline, onNvidia, run, withBundle } from './cli'
 
-export const MASTER = 'thumbnail_3840.png'
-export const JPEG = 'thumbnail_1280.jpg'
+export const masterName = (candidate: number) => `thumbnail_${candidate}_3840.png`
+export const jpegName = (candidate: number) => `thumbnail_${candidate}_1280.jpg`
 export const MAX_JPEG_BYTES = 2 * 1024 * 1024
 export const JPEG_QUALITIES = [92, 88, 84, 80, 76, 72, 68] as const
 
@@ -7670,17 +8190,20 @@ run(async () => {
     timeline: { required: true, kind: 'path' },
     'public-dir': { required: true, kind: 'path' },
     'out-dir': { required: true, kind: 'path' },
+    candidate: { required: true, kind: 'int' },
     frame: { required: false, kind: 'int' },
   })
+  const candidate = flags.candidate as number
+  if (candidate < 1 || candidate > THUMBNAIL_CANDIDATES) throw new Error(`--candidate must be 1..${THUMBNAIL_CANDIDATES}, got ${candidate}`)
   const timeline = loadTimeline(flags.timeline as string)
   const publicDir = flags['public-dir'] as string
   assertAssets(timeline, publicDir)
   const outDir = flags['out-dir'] as string
-  const frame = (flags.frame as number | undefined) ?? thumbnailFrame(timeline)
-  const inputProps = { timeline, frame, imageSizes: {}, gpu: '' }
+  const frame = (flags.frame as number | undefined) ?? timeline.thumbnails[candidate - 1].frame
+  const inputProps = { timeline, candidate, frame, lint: false, imageSizes: {}, gpu: '' }
   mkdirSync(outDir, { recursive: true })
-  const master = path.join(outDir, MASTER)
-  const jpeg = path.join(outDir, JPEG)
+  const master = path.join(outDir, masterName(candidate))
+  const jpeg = path.join(outDir, jpegName(candidate))
   const fitted = await withBundle(publicDir, (serveUrl) =>
     onNvidia(serveUrl, 'Thumbnail', inputProps, async (browser, composition) => {
       await renderStill({ composition, serveUrl, inputProps, output: master, imageFormat: 'png', scale: 3840 / composition.width, puppeteerInstance: browser })
@@ -7692,14 +8215,14 @@ run(async () => {
     }),
   )
   if (!fitted) throw new Error(`${jpeg} stays above 2 MB even at quality ${JPEG_QUALITIES[JPEG_QUALITIES.length - 1]}`)
-  console.log(`frame ${frame}\n${master}\n${jpeg}`)
+  console.log(`candidate ${candidate}, frame ${frame}\n${master}\n${jpeg}`)
 })
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/scripts.test.ts && npx tsc --noEmit`
-Expected: `Tests  4 passed (4)`, then no tsc output.
+Expected: `Tests  5 passed (5)`, then no tsc output.
 
 - [ ] **Step 5: Commit**
 
@@ -7714,7 +8237,7 @@ git commit -m "Add the layout lint, the chunked NVENC render and the thumbnail s
 - Create: `video/test/fixtures/smoke-timeline.json`
 - Test: `video/test/smoke.test.ts`
 
-A 10-second, 600-frame timeline with every footage block (PhotoPlate, PlatformClip, GlobeShot, MapboxTopdown, SourceViewer, EvidenceCard), narration, a ducked music bed, hook captions, ticker, chapters and credits. Task 22 renders it locally; the test keeps it valid and pins the assets Task 22 generates.
+A 10-second, 600-frame timeline with every footage block (PhotoPlate, PlatformClip, GlobeShot, MapboxTopdown, SourceViewer, EvidenceCard), narration, a ducked music bed, hook captions, ticker, chapters, credits and three thumbnail candidates. Task 22 renders it locally, together with the graphics-only demo timeline of Task 8 (every other block); the test keeps it valid and pins the assets Task 22 generates.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -8003,7 +8526,7 @@ Expected: FAIL with `ENOENT: no such file or directory, open '...\video\test\fix
             }
           ],
           "credits": [
-            "Source page: Baalbek report (dainst.org)"
+            "Source page: dainst.org"
           ]
         },
         "evidence": {
@@ -8158,11 +8681,25 @@ Expected: FAIL with `ENOENT: no such file or directory, open '...\video\test\fix
     },
     {
       "sceneId": "s5",
-      "text": "Source page: Baalbek report (dainst.org)"
+      "text": "Source page: dainst.org"
     },
     {
       "sceneId": "s6",
       "text": "Photo: Smoke Test (CC BY-SA 4.0)"
+    }
+  ],
+  "thumbnails": [
+    {
+      "frame": 90,
+      "text": "Who moved it?"
+    },
+    {
+      "frame": 330,
+      "text": "Where is Baalbek?"
+    },
+    {
+      "frame": 440,
+      "text": "How far apart?"
     }
   ]
 }
@@ -8171,7 +8708,7 @@ Expected: FAIL with `ENOENT: no such file or directory, open '...\video\test\fix
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd video && npx vitest run test/smoke.test.ts && npx vitest run && npx tsc --noEmit`
-Expected: `Tests  2 passed (2)`, then the whole suite `Test Files  24 passed (24)` / `Tests  183 passed (183)`, then no tsc output. (Task 37 adds `contract.test.ts` later: 25 files, 184 tests.)
+Expected: `Tests  2 passed (2)`, then the whole suite `Test Files  24 passed (24)` / `Tests  198 passed (198)`, then no tsc output. (Task 37 adds `contract.test.ts` later: 25 files, 199 tests.)
 
 - [ ] **Step 5: Commit**
 
@@ -8182,7 +8719,7 @@ git commit -m "Add the 10-second smoke timeline with every footage block" -m "Co
 
 ### Task 22: Local smoke render on the workstation (not CI)
 
-No new files. This proves the whole renderer on the RTX 3080: HEVC NVENC clips decode, the layout lint is clean, the chunked NVENC render joins frame-exactly, the thumbnails meet their limits. It needs the workstation (NVIDIA driver, ffmpeg with `hevc_nvenc` on PATH); it writes only to `$TMP/studio-smoke`.
+No new files. This proves the whole renderer on the RTX 3080: HEVC NVENC clips decode, the layout lint is clean (the thumbnail teasers included), the chunked NVENC render joins frame-exactly, the three thumbnail candidates meet their limits, and every graphics block draws in a real Chrome: the smoke fixture carries the footage blocks, the demo timeline of Task 8 the twelve graphics blocks (ClaimBoard, EvidenceCard, Meter, QuoteCard, ScaleDrawing, UnitGrid, BarChart with a range bar, Timeline, Diagram, ListCard, ScaleZoom, ShareCard), which no other step renders before a real episode. It needs the workstation (NVIDIA driver, ffmpeg with `hevc_nvenc` on PATH); it writes only to `$TMP/studio-smoke`. The demo needs nothing in the public dir beyond the seven fonts. Tasks 22 and 36 are re-run on the finished code before the release (I8 step 1 of the build index), whatever ran earlier.
 
 - [ ] **Step 1: Generate the fixture's assets** (the clips use the capture encoder settings of Task 25: `hevc_nvenc` on GPU 0, BT.709 limited range, `hvc1`)
 
@@ -8203,28 +8740,35 @@ echo "$S"
 
 Expected: no ffmpeg output, then the smoke directory (e.g. `C:/Users/<you>/AppData/Local/Temp/studio-smoke`).
 
-- [ ] **Step 2: Lint, render (two chunks, to exercise the join) and thumbnails**
+- [ ] **Step 2: Lint, render (two chunks, to exercise the join) and the three thumbnails of the smoke fixture; lint and render the demo timeline**
 
 ```bash
+set -o pipefail
 S="$(cygpath -m "$TMP")/studio-smoke" && T="$(pwd -W)/video/test/fixtures/smoke-timeline.json"
 cd video && node --import tsx scripts/lint.ts --timeline "$T" --public-dir "$S/public" --report "$S/out/lint.json" 2>&1 | grep -v '^bundle'
 node --import tsx scripts/render.ts --timeline "$T" --public-dir "$S/public" --out "$S/out/smoke.mp4" --chunk-frames 300 2>&1 | grep -v -e '^bundle' -e '%$'
-node --import tsx scripts/still.ts --timeline "$T" --public-dir "$S/public" --out-dir "$S/out" 2>&1 | grep -v '^bundle'
+for k in 1 2 3; do node --import tsx scripts/still.ts --timeline "$T" --public-dir "$S/public" --out-dir "$S/out" --candidate $k 2>&1 | grep -v '^bundle'; done
+D="$(pwd -W)/src/fixtures/demo-timeline.json"
+node --import tsx scripts/lint.ts --timeline "$D" --public-dir "$S/public" 2>&1 | grep -v '^bundle'
+node --import tsx scripts/render.ts --timeline "$D" --public-dir "$S/public" --out "$S/out/demo.mp4" 2>&1 | grep -v -e '^bundle' -e '%$'
 ls "$S"
 ```
 
-Expected (about 30 s, 75 s and 30 s): `gpu: ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`, `lint: 100 frames (every 6, scale 0.5)`, `lint clean: 100 frames checked`; two more `gpu:` lines (one per part) and the path of `smoke.mp4`; one `gpu:` line, `frame 90` and the two thumbnail paths. Every command exits 0. Each script bundled into `$S/bundle` (next to `$S/public`) and removed it again, so `ls` lists only `out` and `public`; nothing new is left in `%TEMP%` under `remotion-webpack-bundle-*`.
+Expected (measured 2026-09-26: about 90 s, 90 s, 3 x 20 s, 40 s and 140 s): every browser prints `gpu: ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`. The smoke lint prints `lint: 100 frames (every 6, scale 0.5)`, then `lint: thumbnail 1 (frame 90)`, `lint: thumbnail 2 (frame 330)` and `lint: thumbnail 3 (frame 440)`, each after its own `gpu:` line, and `lint clean: 103 frames checked`; the render two `gpu:` lines (one per part) and the path of `smoke.mp4`; each still `candidate K, frame F` (90, 330, 440) and its two thumbnail paths. The demo lint prints `lint: 370 frames (every 6, scale 0.5)`, the three thumbnail lines (frames 108, 200 and 300) and `lint clean: 373 frames checked`; the demo render one `gpu:` line and the path of `demo.mp4`. Every command exits 0 (`pipefail` makes a failing node step fail the pipe). Each script bundled into `$S/bundle` (next to `$S/public`) and removed it again, so `ls` lists only `out` and `public`; nothing new is left in `%TEMP%` under `remotion-webpack-bundle-*`.
 
 - [ ] **Step 3: Check the outputs**
 
 ```bash
 S="$(cygpath -m "$TMP")/studio-smoke/out"
 ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate,nb_frames,has_b_frames,color_space,color_range,sample_rate -of compact "$S/smoke.mp4"
-ls -l "$S/thumbnail_3840.png" "$S/thumbnail_1280.jpg" && for f in thumbnail_3840.png thumbnail_1280.jpg; do ffprobe -v error -show_entries stream=width,height -of csv=p=0 "$S/$f"; done
+ls -l "$S"/thumbnail_*.png "$S"/thumbnail_*.jpg && for k in 1 2 3; do for f in thumbnail_${k}_3840.png thumbnail_${k}_1280.jpg; do ffprobe -v error -show_entries stream=width,height -of csv=p=0 "$S/$f"; done; done
 ffmpeg -hide_banner -loglevel error -y -i "$S/smoke.mp4" -vf "select='eq(n\,90)+eq(n\,200)+eq(n\,330)+eq(n\,440)+eq(n\,520)+eq(n\,580)',scale=640:-1,tile=3x2" -frames:v 1 -fps_mode vfr "$S/sheet.jpg"
+ffmpeg -hide_banner -loglevel error -y -i "$S/thumbnail_1_1280.jpg" -i "$S/thumbnail_2_1280.jpg" -i "$S/thumbnail_3_1280.jpg" -filter_complex "[0][1][2]hstack=3,scale=1920:-1" "$S/thumbs.jpg"
+ffprobe -v error -show_entries stream=codec_name,nb_frames -of compact "$S/demo.mp4"
+ffmpeg -hide_banner -loglevel error -y -i "$S/demo.mp4" -vf "select='eq(n\,150)+eq(n\,330)+eq(n\,510)+eq(n\,690)+eq(n\,870)+eq(n\,1050)+eq(n\,1230)+eq(n\,1410)+eq(n\,1590)+eq(n\,1770)+eq(n\,1830)+eq(n\,1900)+eq(n\,1950)+eq(n\,2020)+eq(n\,2190)',scale=640:-1,tile=5x3" -frames:v 1 -fps_mode vfr "$S/demo_sheet.jpg"
 ```
 
-Expected: `stream|codec_name=h264|width=1920|height=1080|has_b_frames=0|color_range=tv|color_space=bt709|r_frame_rate=60/1|nb_frames=600` and `stream|codec_name=aac|sample_rate=48000|...`; thumbnails `3840,2160` and `1280,720`, the JPEG well under 2 MB. Open `sheet.jpg` and look: the plate with its `1 PERSON` marker and hook caption, the platform clip with the credit line, the globe clip with the `BAALBEK` pin (drifting along its track) and lower third, the top-down frame with `QUARRY`/`TEMPLE` pins and their line, the source page with the glowing highlight, the evidence card with the typed quote and the `VERIFIED` stamp.
+Expected: `stream|codec_name=h264|width=1920|height=1080|has_b_frames=0|color_range=tv|color_space=bt709|r_frame_rate=60/1|nb_frames=600` and `stream|codec_name=aac|sample_rate=48000|...`; six thumbnail files, `3840,2160` and `1280,720` for each candidate, every JPEG well under 2 MB (about 90 KB); `demo.mp4` `h264` with `nb_frames=2220` and its AAC stream. Open the sheets and look. `sheet.jpg`: the plate with its `1 PERSON` marker and hook caption, the platform clip with the credit line, the globe clip with the `BAALBEK` pin (drifting along its track) and lower third, the top-down frame with `QUARRY`/`TEMPLE` pins and their line, the source page with the glowing highlight, the evidence card with the typed quote and the `VERIFIED` stamp. `thumbs.jpg`: each candidate's frame with its teaser (`WHO MOVED IT?`, `WHERE IS BAALBEK?`, `HOW FAR APART?`) in upper case on dark glass at the top left, nothing in the bottom-right corner. `demo_sheet.jpg`, one frame per scene: the claim board, the evidence card with its stamps, the meter at 80/20, the quote card, the scale drawing, the unit grid of 80 buses, the bar chart with the Stone of the Pregnant Woman as a solid bar to 1,000 and an outline on to 1,650 labelled `1,000–1,650 T`, the timeline, the diagram, the list card, then four ScaleZoom frames (the small bar readable before the pull-back; then the small one a dot with its label while the Great Pyramid's bar still runs past the right edge; at the end the large bar fitted at 80 % of the width) and the share card.
 
 - [ ] **Step 4: Clean up**
 
@@ -8242,7 +8786,7 @@ No commit.
 - Create: `tests/pipeline/studio/capture/__init__.py` (empty file)
 - Test: `tests/pipeline/studio/capture/test_capture_manifest.py`
 
-Check C1 (plan C's `pipeline/studio/errors.py`) must print its line first. Every capture function returns the manifest `build_manifest` validates (contract D2 = plan C's C7); `CaptureError` is a `StudioError`, so plan C's CLI turns it into exit 2 with the message.
+Check C1 (plan C's `pipeline/studio/errors.py` and `config.py`) must print its five lines first. The capture-id pattern and the four capture kinds are imported from `pipeline.studio.config` (`CAPTURE_ID_RE`, `CAPTURE_KINDS`), their one definition, which plan C's `script.py` imports too (owner rule: never duplicate a utility). Every capture function returns the manifest `build_manifest` validates (contract D2 = plan C's C7); `CaptureError` is a `StudioError`, so plan C's CLI turns it into exit 2 with the message.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -8433,7 +8977,9 @@ Expected: FAIL at collection with `ModuleNotFoundError: No module named 'pipelin
     {"id", "kind", "path", "fps", "duration_s", "width", "height",
      "events": [{"t", "name", ...}], "credits": [...]}
 
-``kind`` is the spec's kind (platform | globe | source | mapbox_topdown). ``path`` is
+``kind`` is the spec's kind (platform | globe | source | mapbox_topdown). Capture ids and
+kinds come from pipeline.studio.config (CAPTURE_ID_RE, CAPTURE_KINDS: plan C's script check
+uses the same two, so the patterns exist once). ``path`` is
 POSIX, relative to the episode directory and directly under ``captures/`` (the render
 step links it into the Remotion public dir under the same relative path). ``fps`` and
 ``duration_s`` are both numbers for a clip and both null for a still. ``events`` are in
@@ -8451,17 +8997,15 @@ is a CaptureError too, and tool_failure turns a failed ffmpeg/ffprobe run into o
 from __future__ import annotations
 
 import math
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
+from pipeline.studio.config import CAPTURE_ID_RE, CAPTURE_KINDS
 from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_render import MAPBOX_CREDIT
 
 CAPTURES_DIR = "captures"
-KINDS = ("platform", "globe", "source", "mapbox_topdown")
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 EVENT_EXTRAS = frozenset(
     {"x", "y", "box", "target", "label", "url", "title", "lat", "lng", "track"}
 )
@@ -8504,8 +9048,8 @@ def tool_failure(cid: str, exc: subprocess.CalledProcessError) -> CaptureError:
 def capture_id(spec: dict[str, Any]) -> str:
     """The spec's id; it names the media file, so it must be a safe slug."""
     cid = spec.get("id")
-    if not isinstance(cid, str) or not ID_RE.fullmatch(cid):
-        raise CaptureError(f"capture id {cid!r} must match {ID_RE.pattern}")
+    if not isinstance(cid, str) or not CAPTURE_ID_RE.fullmatch(cid):
+        raise CaptureError(f"capture id {cid!r} must match {CAPTURE_ID_RE.pattern}")
     return cid
 
 
@@ -8567,7 +9111,7 @@ def build_manifest(
     credits: list[str],
 ) -> dict[str, Any]:
     """Validate and assemble a manifest; raises CaptureError on any defect."""
-    if kind not in KINDS:
+    if kind not in CAPTURE_KINDS:
         raise CaptureError(f"unknown capture kind {kind!r}")
     captures = (episode_dir / CAPTURES_DIR).resolve()
     resolved = path.resolve()
@@ -9639,6 +10183,7 @@ git commit -m "Project places onto top-down frames and choose globe poses that f
 **Files:**
 - Create: `pipeline/studio/capture/vite.py`
 - Test: `tests/pipeline/studio/capture/test_capture_vite.py`
+- Needs: check C1 (`config.REPO`); the base URL is `pipeline.utils.slugs.BASE_URL` (in the repo)
 
 Root cause of the first failed Mapbox fly-in (2026-09-26, 11:41): the Windows display slept during the take, headed Chrome stopped producing animation frames and the first frame grab sat until Puppeteer's 15-minute protocol timeout. A re-run on an awake display completed. `display_awake()` holds the display on for a take (`SetThreadExecutionState`, as video players do); the recorder scenes bound every wait for an animation frame to 30 s (Task 35), so a display that stops drawing fails the take with that reason instead of hanging for 15 minutes. The local site is `npm run dev` with production data (`VITE_DEV_API_TARGET`) and `VIDEO_RECORD=1` (no hot reload mid-take).
 
@@ -9745,10 +10290,13 @@ from pathlib import Path
 import httpx
 
 from pipeline.studio.capture.manifest import CaptureError
+from pipeline.studio.config import REPO
+from pipeline.utils.slugs import BASE_URL
 
-REPO = Path(__file__).resolve().parents[3]
 FRONTEND_DIR = REPO / "ancient-nerds-map"
-PRODUCTION_URL = "https://ancientnerds.com"
+# The production site (target "production" of a platform take, our paper pages, the dev
+# server's data and API): the repo's one definition of the public base URL.
+PRODUCTION_URL = BASE_URL
 # The Umami tracker script on any host (production or the local dev server).
 ANALYTICS_URL_RE = re.compile(r"^https?://[^/]+/pulse\.js(\?.*)?$")
 LOCAL_PORT = 5198
@@ -10053,8 +10601,9 @@ projection.mercator_to_pixel for the same centre, zoom and bearing, so they sit 
 object whatever the renderer's camera does (the owner verified such pins to within
 metres, 2026-09-26). The token is the frontend's public VITE_MAPBOX_ACCESS_TOKEN (the
 Static API answers without a Referer, checked 2026-09-26). Pin ids are case-file place
-ids; each pin event also carries its label and coordinates, from which the renderer
-computes distance lines. Unknown spec keys, missing or non-numeric values and a refused
+ids and a pin's label is the case-file place's name (plan C binds both to the verified
+case file); each pin event also carries its label and coordinates, from which the
+renderer computes distance lines. Unknown spec keys, missing or non-numeric values and a refused
 or failed request are CaptureErrors; no message carries the token.
 
 Spec::
@@ -10250,8 +10799,9 @@ git commit -m "Fetch exact top-down satellite frames with pins projected onto th
 **Files:**
 - Create: `pipeline/studio/capture/sources.py`, `pipeline/studio/capture/highlight.js`
 - Test: `tests/pipeline/studio/capture/test_capture_sources.py`
+- Needs: check A2 (`EVIDENCE_ID_RE`) and check C1 (plan C Task 1's `config.check_slug`)
 
-Playwright (Chrome channel, headless, with the NVIDIA flags and the renderer proof) loads the page at 1280 CSS px and device scale 2, hides fixed and sticky layers, wraps the quote in `<mark>` pieces across inline elements (a DOM Range) and shoots a window of 900 CSS px around it. The window is the viewport, resized and scrolled there, not a full-page screenshot: a full-page shot rasterises the whole page, and the 35,000 px Wikipedia article on Baalbek took 37 s on the GPU, past Playwright's 30 s timeout (measured 2026-09-26; the viewport shot takes 0.8 s). The highlight box is measured again after the resize. A page without the quote (paywall, login) fails with the advice to use a QuoteCard. On our own paper page (plan B's HTML contract) the first evidence id of a paragraph is the `<p id="ev-NN" class="theo-evidence">` itself, and every further id of that paragraph is an empty `<span class="theo-evidence-anchor" id="ev-NN">` (display block, height 0) inside it: the anchor mode outlines the paragraph for such a span, and a zero-size box is "no visible paragraph" rather than a green line. Anchors follow A, B and C: `ev-` and two or more digits. The manifest's width and height are read from the written PNG, never computed from the fractional CSS window. The page's Umami tracker is blocked, and a browser failure (a navigation timeout, a crashed page) is a `CaptureError` that carries Playwright's message; a venv without Playwright is a `CaptureError` before anything is written. The page's title, URL and domain end up on screen (the `page` event SourceViewer draws, the credit `Source page: <title> (<domain>)`); plan C's capture step (its Task 20 `captures.py`) refuses a returned manifest with an event or credit string outside the brand fonts' glyphs (D1's glyph rule, its `glyphs.py`), naming the capture, so such a page fails at `episode capture` and never at the render: show its quote in a QuoteCard. The highlight tests drive a local HTML file and, like the tests that fake the browser step, skip without Playwright (CI).
+Playwright (Chrome channel, headless, with the NVIDIA flags and the renderer proof) loads the page at 1280 CSS px and device scale 2, hides fixed and sticky layers, wraps the quote in `<mark>` pieces across inline elements (a DOM Range) and shoots a window of 900 CSS px around it. The window is the viewport, resized and scrolled there, not a full-page screenshot: a full-page shot rasterises the whole page, and the 35,000 px Wikipedia article on Baalbek took 37 s on the GPU, past Playwright's 30 s timeout (measured 2026-09-26; the viewport shot takes 0.8 s). The highlight box is measured again after the resize. A page without the quote (paywall, login) fails with the advice to use a QuoteCard. On our own paper page (plan B's HTML contract) the first evidence id of a paragraph is the `<p id="ev-NN" class="theo-evidence">` itself, and every further id of that paragraph is an empty `<span class="theo-evidence-anchor" id="ev-NN">` (display block, height 0) inside it: the anchor mode outlines the paragraph for such a span, and a zero-size box is "no visible paragraph" rather than a green line. Anchors follow A, B and C: `ev-` and two or more digits, checked with plan A's `pipeline.lyra.theo_publishing.EVIDENCE_ID_RE` (contract C9: the one Python definition of the evidence-id format, applied with `fullmatch`), and the paper slug with plan C's `pipeline.studio.config.check_slug`; the module keeps no copy of either pattern (owner rule: never duplicate a utility, import it). A slug `check_slug` refuses becomes a `CaptureError` naming the capture. The manifest's width and height are read from the written PNG, never computed from the fractional CSS window. The page's Umami tracker is blocked, and a browser failure (a navigation timeout, a crashed page) is a `CaptureError` that carries Playwright's message; a venv without Playwright is a `CaptureError` before anything is written. The page's own `<title>` is recorded in the `page` event and drawn nowhere; its URL goes on screen only as the ASCII (IDNA) hostname without `www.` (`ascii_host`, the string `domainOf` draws in SourceViewer's address bar), in the credit `Source page: <host>`; and the highlighted quote only as pixels of the page image (owner decision 32: original quotes inside source screenshots are allowed). Plan C's capture step (its Task 20 `captures.py`) glyph-checks exactly the manifest's drawn strings (its credits and `place`/`pin` labels; D1), naming the capture, so a Greek, Hebrew or Chinese source page (a non-latin title, URL path or quote) passes. The highlight tests drive a local HTML file and, like the tests that fake the browser step, skip without Playwright (CI).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -10270,6 +10820,7 @@ from pipeline.studio.capture.manifest import CaptureError
 from pipeline.studio.capture.sources import (
     CONTEXT_PX,
     HIGHLIGHT_JS,
+    ascii_host,
     capture_source,
     clip_window,
     image_box,
@@ -10313,9 +10864,11 @@ def test_source_target_for_a_source_and_for_our_paper():
         ({"id": "s1", "kind": "source", "url": "https://x.org/a", "quote": "short"}, "at least 12"),
         (
             {"id": "p1", "kind": "source", "paper": "Bad Slug", "anchor": "ev-07"},
-            "not a paper slug",
+            "p1: paper 'Bad Slug' is not a slug",
         ),
         ({"id": "p1", "kind": "source", "paper": "ok", "anchor": "ref-3"}, "evidence anchor"),
+        # EVIDENCE_ID_RE is applied with fullmatch: a trailing newline is no evidence id
+        ({"id": "p1", "kind": "source", "paper": "ok", "anchor": "ev-07\n"}, "evidence anchor"),
         (
             {"id": "x", "kind": "source", "url": "https://x.org/a"},
             "either url \\+ quote or paper \\+ anchor",
@@ -10354,6 +10907,13 @@ def test_clip_window_keeps_context_and_stays_on_the_page():
 
 def test_image_box_is_in_captured_pixels():
     assert image_box({"x": 100, "y": 1000, "w": 300, "h": 40}, top=100) == [200, 1800, 600, 80]
+
+
+def test_the_credit_names_the_ascii_host_that_sourceviewer_draws():
+    # the same string as video/src/format.ts domainOf: IDNA (ASCII), without "www."
+    assert ascii_host("https://www.dainst.org/baalbek?x=1") == "dainst.org"
+    assert ascii_host("https://el.wikipedia.org/wiki/Κνωσός") == "el.wikipedia.org"
+    assert ascii_host("https://bücher.example/x") == "xn--bcher-kva.example"
 
 
 PAGE = """<!doctype html><html><head><title>Test source</title></head><body style="margin:0">
@@ -10422,12 +10982,15 @@ def test_the_manifest_size_is_the_size_of_the_written_png(tmp_path, monkeypatch)
         # 906.3 CSS px at scale 2 is 1812.6; Chromium wrote a 1812 px tall PNG
         Image.new("RGB", (2560, 1812), "white").save(out)
         box = {"x": 100, "y": 1000, "w": 300, "h": 40}
-        return {"box": box, "top": 100, "height": 906.3, "title": "Test source", "renderer": NVIDIA}
+        title = "Κνωσός - Βικιπαίδεια"
+        return {"box": box, "top": 100, "height": 906.3, "title": title, "renderer": NVIDIA}
 
     monkeypatch.setattr(sources, "_capture", shot)
     manifest = capture_source(tmp_path, QUOTE_SPEC)
     assert (manifest["width"], manifest["height"]) == (2560, 1812)
-    assert manifest["credits"] == ["Source page: Test source (x.org)"]
+    # the page's own <title> is a record in the page event; the drawn credit is the ASCII host
+    assert manifest["credits"] == ["Source page: x.org"]
+    assert manifest["events"][1]["title"] == "Κνωσός - Βικιπαίδεια"
 
 
 def test_a_browser_failure_is_a_capture_error_with_its_cause(tmp_path, monkeypatch):
@@ -10583,11 +11146,15 @@ there: a full-page screenshot rasterises the whole page, and a 35,000 px Wikiped
 article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). Paywalled or login pages do not contain the quote, so the capture
 fails with the advice to use a QuoteCard. The same code captures our own paper page
 with its #ev-NN paragraph outlined (a second id of a paragraph is an empty span inside
-it, plan B; highlight.js outlines the paragraph). The site's analytics tracker is
-blocked (vite.ANALYTICS_URL_RE); a Playwright failure becomes a CaptureError with its
-message, and the manifest's size is the size of the PNG Chromium wrote. The page's title
-and URL go on screen (the page event, the credit): plan C's capture step refuses a
-manifest whose strings the brand fonts cannot draw (its glyphs.py).
+it, plan B; highlight.js outlines the paragraph). The paper slug and the evidence id are
+checked with the one definition of each (pipeline.studio.config.check_slug, plan C;
+pipeline.lyra.theo_publishing.EVIDENCE_ID_RE, plan A's contract C9). The site's analytics
+tracker is blocked (vite.ANALYTICS_URL_RE); a Playwright failure becomes a CaptureError
+with its message, and the manifest's size is the size of the PNG Chromium wrote. The
+page's own <title> is kept in the "page" event as a record and drawn nowhere (owner
+decision 32); of the URL only the ASCII hostname is drawn (ascii_host: SourceViewer's
+address bar and the credit "Source page: <host>"), so a Greek or Chinese source page
+passes plan C's glyph check of the manifest's drawn strings (its glyphs.py).
 
 Specs (kind "source")::
 
@@ -10604,11 +11171,11 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import math
-import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from pipeline.lyra.theo_publishing import EVIDENCE_ID_RE
 from pipeline.studio.capture.gpu import CHROMIUM_GPU_ARGS, RENDERER_JS, gpu_event, require_nvidia
 from pipeline.studio.capture.manifest import (
     CaptureError,
@@ -10618,6 +11185,8 @@ from pipeline.studio.capture.manifest import (
     require_kind,
 )
 from pipeline.studio.capture.vite import ANALYTICS_URL_RE, PRODUCTION_URL
+from pipeline.studio.config import check_slug
+from pipeline.studio.errors import StudioError
 
 VIEWPORT = (1280, 800)
 DEVICE_SCALE = 2
@@ -10625,9 +11194,6 @@ CONTEXT_PX = 900
 SETTLE_MS = 1500
 NAV_TIMEOUT_MS = 45_000
 MIN_QUOTE_CHARS = 12
-SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-# Evidence ids of plans A, B and C: "ev-" and two or more digits.
-ANCHOR_RE = re.compile(r"^ev-\d{2,}$")
 HIGHLIGHT_JS = Path(__file__).with_name("highlight.js")
 # A desktop Chrome user agent: some sources serve bots a different page.
 USER_AGENT = (
@@ -10653,9 +11219,13 @@ def source_target(spec: dict[str, Any]) -> tuple[str, str, str]:
         return url, "quote", quote
     if keys == {"paper", "anchor"}:
         slug, anchor = spec["paper"], spec["anchor"]
-        if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug):
-            raise CaptureError(f"{cid}: paper {slug!r} is not a paper slug")
-        if not isinstance(anchor, str) or not ANCHOR_RE.fullmatch(anchor):
+        if not isinstance(slug, str):
+            raise CaptureError(f"{cid}: paper {slug!r} is not a slug")
+        try:
+            check_slug(slug)
+        except StudioError as exc:
+            raise CaptureError(f"{cid}: paper {exc}") from exc
+        if not isinstance(anchor, str) or not EVIDENCE_ID_RE.fullmatch(anchor):
             raise CaptureError(f"{cid}: anchor {anchor!r} is not an evidence anchor like ev-07")
         return f"{PRODUCTION_URL}/research/{slug}#{anchor}", "anchor", anchor
     raise CaptureError(
@@ -10670,6 +11240,13 @@ def clip_window(box: dict[str, float], page_height: float) -> tuple[float, float
     if bottom <= top:
         raise CaptureError(f"empty capture window for box {box} on a {page_height}px page")
     return top, bottom - top
+
+
+def ascii_host(url: str) -> str:
+    """The hostname the video draws for a source page: ASCII (IDNA) without "www.", the
+    same string as SourceViewer's address bar (video/src/format.ts domainOf)."""
+    host = urlparse(url).hostname or ""
+    return host.encode("idna").decode("ascii").removeprefix("www.")
 
 
 def image_box(box: dict[str, float], top: float) -> list[float]:
@@ -10749,12 +11326,10 @@ def capture_source(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
     # Chromium rounds the fractional CSS window to whole pixels its own way: measure the PNG.
     with Image.open(out) as img:
         width, height = img.size
-    domain = urlparse(url).netloc
     title = shot["title"].strip()
-    # Our own paper page needs no credit; a page without <title> is credited by its domain.
-    credits = (
-        [f"Source page: {f'{title} ({domain})' if title else domain}"] if mode == "quote" else []
-    )
+    # Our own paper page needs no credit. A source is credited by its ASCII host only: the
+    # page's own <title> (often Greek, Hebrew, Chinese) stays a record in the page event.
+    credits = [f"Source page: {ascii_host(url)}"] if mode == "quote" else []
     return build_manifest(
         episode_dir=episode_dir,
         cid=cid,
@@ -10781,7 +11356,7 @@ def capture_source(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/capture/test_capture_sources.py -m "not integration and not live_llm" -q -rs`
-Expected on the workstation (Playwright and Chrome installed): `15 passed`. Without Playwright (CI): `10 passed, 5 skipped`.
+Expected on the workstation (Playwright and Chrome installed): `17 passed`. Without Playwright (CI): `12 passed, 5 skipped`.
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -10798,7 +11373,7 @@ git commit -m "Capture source pages and our paper page with the quote highlighte
 - Create: `pipeline/studio/capture/platform.py`, `pipeline/studio/capture/nerv_cursor.js`
 - Test: `tests/pipeline/studio/capture/test_capture_platform.py`
 
-Playwright drives headed Chrome at 1920x1080 CSS px with device scale 2 on `globe.html?demo=1&video=1&hud=<scale>` (Task 33's capture mode) and records a CDP screencast (up to the display's pixel size: 2880x1620 on the workstation, 60 fps, measured 2026-09-26). The declarative actions are the spec's (`search`, `click_result`, `pause_rotation`, `fly_wait`, `open_details`, `measure`, `toggle_layer`, `wait`) plus the three the owner's platform moments need: `zoom` (the site's own zoom into Mapbox: clicking a search result only rotates the globe, `useFlyToAnimation.ts`, so the Measure moment needs it; the take scrolls the mouse wheel at the flown-to site until the zoom slider reads the percent), `proximity` (the Proximity tab: "set on globe", then a click on the place) and `filter` (spec 4.10 type B: a Filter panel mode, then a legend entry; `age` is a range slider without entries, so it is not a filter mode). The cursor is fast (0.25 s moves, paced against a deadline so slow CDP round trips never stretch a move; 45 ms keystrokes; owner rule: retention first) and drawn by the injected NERV cursor, because a screencast never contains the OS cursor. Measure and proximity points are clicked where the page draws them (`window.__DEMO.screenPoint`); two measure points less than 60 CSS px apart on screen refuse the take (the measurement would be noise: zoom in first). `hud` must lie in 0.5..2 (the page throws outside it and would never get ready). A page that is not ready within 120 s fails with the likely cause (production without the `?video=1` frontend), every other Playwright or ffmpeg failure becomes a `CaptureError` carrying its message, and the site's analytics tracker is blocked so a take of production is no visit. A take whose screencast delivers fewer than 24 frames per second while the cursor moves would stutter and fails; a screencast that delivered no frame at all (possible for a take without cursor moves, where the frame-rate check has nothing to measure) and a venv without Playwright are `CaptureError`s too, never a traceback. Frames and timestamps become a 60 fps HEVC clip; every action start is an event the renderer's virtual camera can follow.
+Playwright drives headed Chrome at 1920x1080 CSS px with device scale 2 on `globe.html?demo=1&video=1&hud=<scale>` (Task 33's capture mode) and records a CDP screencast (up to the display's pixel size: 2880x1620 on the workstation, 60 fps, measured 2026-09-26). The declarative actions are the spec's (`search`, `click_result`, `pause_rotation`, `fly_wait`, `open_details`, `measure`, `toggle_layer`, `wait`) plus the three the owner's platform moments need: `zoom` (the site's own zoom into Mapbox: clicking a search result only rotates the globe, `useFlyToAnimation.ts`, so the Measure moment needs it; the take scrolls the mouse wheel at the flown-to site until the zoom slider reads the percent), `proximity` (the Proximity tab: "set on globe", then a click on the place) and `filter` (spec 4.10 type B: a Filter panel mode, then a legend entry; `age` is a range slider without entries, so it is not a filter mode). `toggle_layer` refuses the Layers panel's `Satellite` base-map toggle in any case before anything starts (owner correction 2026-09-26: no satellite toggle in globe sections; satellite shows in the details page or a Mapbox take). The cursor is fast (0.25 s moves, paced against a deadline so slow CDP round trips never stretch a move; 45 ms keystrokes; owner rule: retention first) and drawn by the injected NERV cursor, because a screencast never contains the OS cursor. Measure and proximity points are clicked where the page draws them (`window.__DEMO.screenPoint`); two measure points less than 60 CSS px apart on screen refuse the take (the measurement would be noise: zoom in first). `hud` must lie in 0.5..2 (the page throws outside it and would never get ready). A page that is not ready within 120 s fails with the likely cause (production without the `?video=1` frontend), every other Playwright or ffmpeg failure becomes a `CaptureError` carrying its message, and the site's analytics tracker is blocked so a take of production is no visit. A take whose screencast delivers fewer than 24 frames per second while the cursor moves would stutter and fails; a screencast that delivered no frame at all (possible for a take without cursor moves, where the frame-rate check has nothing to measure) and a venv without Playwright are `CaptureError`s too, never a traceback. Frames and timestamps become a 60 fps HEVC clip; every action start is an event the renderer's virtual camera can follow.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -10878,6 +11453,11 @@ def test_validate_accepts_the_declarative_vocabulary():
         ([{"do": "zoom", "to": 50.5}], r"actions\[0\]\.to must be an integer"),
         ([{"do": "proximity", "at": {"lat": 34.0}}], "must be"),
         ([{"do": "filter", "mode": "age", "label": "x"}], "mode must be one of"),
+        # owner correction 2026-09-26: no satellite toggle in globe sections
+        (
+            [{"do": "toggle_layer", "label": " satellite "}],
+            r"actions\[0\]: no satellite toggle in globe sections",
+        ),
     ],
 )
 def test_validate_rejects_bad_actions(actions, message):
@@ -10970,6 +11550,9 @@ def test_record_platform_validates_before_starting_anything(tmp_path):
         record_platform(tmp_path, {**base, "target": "local", "hud": 3})
     with pytest.raises(CaptureError, match="hud must be a number"):
         record_platform(tmp_path, {**base, "target": "local", "hud": "1.3"})
+    satellite = [{"do": "toggle_layer", "label": "Satellite"}]
+    with pytest.raises(CaptureError, match="satellite shows in the details page or a Mapbox take"):
+        record_platform(tmp_path, {**base, "target": "local", "actions": satellite})
     assert not (tmp_path / "captures").exists()
 
 
@@ -11147,7 +11730,9 @@ where the page itself draws them (window.__DEMO.screenPoint), on the globe or on
 Mapbox; measure points closer than MIN_MEASURE_GAP_PX on screen refuse the take.
 "open_details" returns to the Search tab first (the result list shows only there).
 "filter" clicks the Filter panel's mode button, then the legend entry named "label" (a
-click toggles it). Playwright is a local-only dependency (in no requirements file); it
+click toggles it). "toggle_layer" never takes the Satellite base map, in any case (owner
+correction 2026-09-26: no satellite toggle in globe sections; satellite shows in the
+details page or a Mapbox take): validate_actions refuses it before anything starts. Playwright is a local-only dependency (in no requirements file); it
 is imported inside the take, after the spec is validated, and a venv without it is a
 CaptureError.
 """
@@ -11222,6 +11807,9 @@ CHROME_ARGS = [
 CREDITS = [CREDIT_MAPBOX_STREETS]
 # Filter panel modes with legend entries (FilterPanel.tsx; "age" is a range slider).
 FILTER_BUTTONS = {"country": "Country", "category": "Category", "source": "Source"}
+# The Layers panel's base-map toggle (MapLayersPanel.tsx) a take must never click: owner
+# correction 2026-09-26, no satellite toggle in globe sections.
+SATELLITE_LAYER = "satellite"
 
 # action -> required keys (besides "do")
 ACTIONS: dict[str, frozenset[str]] = {
@@ -11270,6 +11858,11 @@ def validate_actions(actions: Any) -> list[dict[str, Any]]:
                 if not isinstance(action[key], str) or not action[key].strip():
                     raise CaptureError(f"{where}.{key} must be a non-empty string")
                 clean[key] = action[key]
+        if do == "toggle_layer" and action["label"].strip().casefold() == SATELLITE_LAYER:
+            raise CaptureError(
+                f"{where}: no satellite toggle in globe sections (owner 2026-09-26): "
+                "satellite shows in the details page or a Mapbox take"
+            )
         if "s" in keys:
             s = as_number(action["s"], f"{where}.s")
             if not 0 < s <= 10:
@@ -11660,7 +12253,7 @@ def record_platform(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/capture/test_capture_platform.py -m "not integration and not live_llm" -q -rs`
-Expected on the workstation: `29 passed`. Without Playwright (CI): `26 passed, 3 skipped` (the readiness, browser-failure and frameless-screencast tests).
+Expected on the workstation: `30 passed`. Without Playwright (CI): `27 passed, 3 skipped` (the readiness, browser-failure and frameless-screencast tests).
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -11677,7 +12270,7 @@ git commit -m "Record platform moments of the real site with the fast NERV curso
 - Create: `pipeline/studio/capture/globe.py`
 - Test: `tests/pipeline/studio/capture/test_capture_globe.py`
 
-`record_globe` validates the spec before any side effect (unknown keys per scene, every number typed and in range, `empire` a key of `EMPIRE_METADATA` because the frontend silently loads nothing for an unknown id, the places' `lead_s`/`interval_s` and their last light-up inside the take), writes the scene input to `captures/<id>.rec/input.json`, runs `npm run video:record -- <studio scene> --fps 60 --input ... --out ...` in the frontend with the display held awake, then checks what the scene wrote (Task 35): `renderer.json` must name the NVIDIA, the frame count must be exactly `floor(duration_s * 60 + 0.5)` (JS `Math.round`, as the scene counts; Python's `round()` rounds 304.5 to 304) and is checked before the encode, and `points.json` must hold one pixel (or null) per frame for every place. Places are projected per frame (owner rule): the scene reads `screenPoint` after every grabbed frame, and each `place` event starts at the first frame from its light-up time on where the page draws the place inside `PLACES_BAND` (the layout lint refused the Giza label of the first real places take, drawn at y 946 over the player controls) and carries its `track` to the end of the take, null where the place is hidden or leaves the band. A fixed pose is still fitted to the band (`sweep_lng_deg` 0); with a sweep the camera longitude runs from `cam_lng_from` by `sweep_lng_deg` over the take. The `distribution` scene is spec 4.10's world distribution: up to 500 places, labels optional, the whole globe in frame (distance 2.44) turning once (a sweep of 360 degrees from opposite the places' mean longitude, at their mean latitude within 45 degrees); every place gets its event the first time it faces the camera, and unlabelled places, which GlobeShot draws as dots without labels, are exempt from the band. A fly-to with a `place` tracks its target the same way and adds the target's `place` event at the arrival; `arrive` itself carries only the frame centre. Root cause of the recorder failure the first studio capture hit (`EBML header parsing failed`, 2026-09-26): the recorder's MediaRecorder stream drops frames when its VP8 encoder falls behind (22, 66 and 0 of 300 frames in three takes); the 0-frame take is an empty WebM. The studio scenes therefore grab every frame themselves and this module encodes the numbered JPEGs (Task 25). A Mapbox fly-in waits for its tiles on every frame (5 s took 17 min), hence the 90-minute limit. A failed encode is a `CaptureError` naming ffmpeg and its stderr. The recorder is faked in the tests.
+`record_globe` validates the spec before any side effect (unknown keys per scene, every number typed and in range, `empire` a key of `EMPIRE_METADATA` because the frontend silently loads nothing for an unknown id, the places' `lead_s`/`interval_s` and their last light-up inside the take), writes the scene input to `captures/<id>.rec/input.json`, runs `npm run video:record -- <studio scene> --fps 60 --input ... --out ...` in the frontend with the display held awake, then checks what the scene wrote (Task 35): `renderer.json` must name the NVIDIA, the frame count must be exactly `floor(duration_s * 60 + 0.5)` (JS `Math.round`, as the scene counts; Python's `round()` rounds 304.5 to 304) and is checked before the encode, and `points.json` must hold one pixel (or null) per frame for every place. Places are projected per frame (owner rule): the scene reads `screenPoint` after every grabbed frame, and each `place` event starts at the first frame from its light-up time on where the page draws the place inside `PLACES_BAND` (the layout lint refused the Giza label of the first real places take, drawn at y 946 over the player controls) and carries its `track` to the end of the take, null where the place is hidden or leaves the band. A fixed pose is still fitted to the band (`sweep_lng_deg` 0); with a sweep the camera longitude runs from `cam_lng_from` by `sweep_lng_deg` over the take. The `distribution` scene is spec 4.10's world distribution: up to 500 places, labels optional, the whole globe in frame (distance 2.44) turning once (a sweep of 360 degrees from opposite the places' mean longitude). Every place gets its event the first time it faces the camera, and unlabelled places, which GlobeShot draws as dots without labels, are exempt from the band. The camera latitude is chosen before the take so that one turn can show every place: `distribution_pose` takes the latitude nearest the midpoint of the places' lowest and highest latitude (the midpoint itself or a whole degree within ±45) at which every place is admissible. A dot is admissible when it lies within the horizon less 5° (`|lat - cam_lat| <= acos(1/2.44) - 5`, 60.8°). A labelled place is admissible when projection.py's globe camera, the model `fit_globe_distance` uses, draws it inside `PLACES_BAND` at some camera longitude of the turn. The mean latitude used before let the dots dominate. Ten dots near 48°N and one on Rapa Nui (-27.1°) gave a mean of 41.2, which leaves the Rapa Nui dot 68.3° away, beyond the 65.8° horizon for the whole turn. `take_events` would refuse that only after a take of many minutes. When no latitude admits every place, `scene_input` refuses the spec before any side effect: split the distribution. The page's own pixels still decide in `take_events`. The dots come from our database by site id (owner decision 15): plan C's `captures.py` resolves the script's `site_ids` from the repo-root `public/data/sites/` export and hands them to `record_globe` as unlabelled places `{id: <site id>, lat, lng}`, so this module needs no change for them; a test pins that a dot keeps its site id as the event's `target` and carries no label. A fly-to with a `place` tracks its target the same way and adds the target's `place` event at the arrival; `arrive` itself carries only the frame centre. Root cause of the recorder failure the first studio capture hit (`EBML header parsing failed`, 2026-09-26): the recorder's MediaRecorder stream drops frames when its VP8 encoder falls behind (22, 66 and 0 of 300 frames in three takes); the 0-frame take is an empty WebM. The studio scenes therefore grab every frame themselves and this module encodes the numbered JPEGs (Task 25). A Mapbox fly-in waits for its tiles on every frame (5 s took 17 min), hence the 90-minute limit. A failed encode is a `CaptureError` naming ffmpeg and its stderr. The recorder is faked in the tests.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -11921,7 +12514,8 @@ def test_a_world_distribution_turns_the_whole_globe_once():
         {"id": "p1", "lat": 34.0, "lng": 36.2},
         {"id": "d1", "lat": -13.16, "lng": -72.55},
     ]
-    # the camera starts opposite the places' mean longitude, at their mean latitude
+    # the camera starts opposite the places' mean longitude, at the midpoint of their
+    # lowest and highest latitude, where one turn shows both
     assert inp["cam_lat"] == pytest.approx(10.42)
     assert inp["cam_lng"] == pytest.approx(161.82, abs=0.01)
     frames = globe.expected_frames(12)
@@ -11939,6 +12533,64 @@ def test_a_world_distribution_turns_the_whole_globe_once():
         globe.scene_input({**DISTRIBUTION, "places": []}, WORK)
     with pytest.raises(CaptureError, match="place ids must be unique"):
         globe.scene_input({**DISTRIBUTION, "places": DISTRIBUTION["places"][:1] * 2}, WORK)
+
+
+def test_a_distribution_dot_is_a_site_id_without_a_label():
+    # owner decision 15: plan C resolves a distribution's site_ids from the site export
+    # into unlabelled places {id, lat, lng}; each becomes a dot, its site id the target
+    site = "be81c1a6-5d0c-4f7e-9a51-3c2d7e8f9a10"
+    spec = {
+        **DISTRIBUTION,
+        "places": [DISTRIBUTION["places"][0], {"id": site, "lat": 37.2231, "lng": 38.9224}],
+    }
+    inp = globe.scene_input(spec, WORK)
+    assert inp["places"][1] == {"id": site, "lat": 37.2231, "lng": 38.9224}
+    frames = globe.expected_frames(12)
+    seen = [None] * 200 + [[700.0, 400.0]] * (frames - 200)
+    pin, dot = globe.take_events(spec, inp, {site: seen, "p1": [[960.0, 500.0]] * frames})
+    assert pin["target"] == "p1" and pin["label"] == "Baalbek"
+    assert (dot["name"], dot["target"], dot["t"], dot["x"], dot["y"]) == (
+        "place",
+        site,
+        round(200 / 60, 3),
+        700.0,
+        400.0,
+    )
+    assert "label" not in dot and len(dot["track"]) == frames - 200
+
+
+def test_the_distribution_camera_shows_the_outlying_places_too():
+    # ten dots near 48 N and one on Rapa Nui: their mean latitude (41.2) would keep the
+    # Rapa Nui dot 68.3 degrees away, beyond the horizon (65.8) for the whole turn
+    north = [{"id": f"n{i}", "lat": 48.0, "lng": -10.0 + 5 * i} for i in range(10)]
+    rapa_nui = {"id": "s1", "lat": -27.1, "lng": -109.35}
+    inp = globe.scene_input({**DISTRIBUTION, "places": [*north, rapa_nui]}, WORK)
+    assert inp["cam_lat"] == pytest.approx(10.45)
+    for place in inp["places"]:
+        assert abs(place["lat"] - inp["cam_lat"]) <= globe.DISTRIBUTION_DOT_REACH_DEG
+    # a labelled place far south of the dots: the midpoint (2.5) would draw its pin below
+    # the label band, so the camera moves south to the nearest latitude that shows it there
+    dots = [{**n, "lat": 45.0} for n in north]
+    pin = {"id": "p9", "label": "Far south", "lat": -40.0, "lng": -72.55}
+    inp = globe.scene_input({**DISTRIBUTION, "places": [*dots, pin]}, WORK)
+    assert inp["cam_lat"] == -14.0
+
+
+def test_a_distribution_one_turn_cannot_show_is_refused_before_the_take(tmp_path):
+    spec = {
+        **DISTRIBUTION,
+        "places": [
+            {"id": "n1", "lat": 70.0, "lng": 20.0},
+            {"id": "s1", "lat": -66.0, "lng": 140.0},
+        ],
+    }
+    with pytest.raises(
+        CaptureError,
+        match=r"g3: places \['n1', 's1'\] cannot face the camera in one turn of the globe; "
+        "split the distribution",
+    ):
+        globe.record_globe(tmp_path, spec)
+    assert not (tmp_path / "captures").exists()
 
 
 def test_mapbox_inputs():
@@ -12124,7 +12776,7 @@ Specs (kind "globe"; duration_s is the length of the take, at most 30 s)::
      "cam_lng_from": 0, "distance": 2.2}                            (the camera sweeps east)
     {"id": "g3", "kind": "globe", "scene": "distribution", "duration_s": 20,
      "places": [{"id": "p1", "lat": .., "lng": .., "label": "Baalbek"},
-                {"id": "p2", "lat": .., "lng": ..}, ...]}            (1-500, label optional)
+                {"id": "<site id>", "lat": .., "lng": ..}, ...]}     (1-500, label optional)
     {"id": "m1", "kind": "globe", "scene": "mapbox_flyin", "name": "Baalbek", "lat": ..,
      "lng": .., "country": "Lebanon", "orbit_zoom": 15.5, "duration_s": 8}
     {"id": "m2", "kind": "globe", "scene": "mapbox_orbit", "name": "Baalbek", "lat": ..,
@@ -12134,12 +12786,20 @@ Specs (kind "globe"; duration_s is the length of the take, at most 30 s)::
 Events: flyto "rotate", "zoom", "arrive" (the frame centre) and, with a place, the
 place's "place" event; places one "place" event per place at the first frame from
 lead_s + i * interval_s on where the page draws it inside PLACES_BAND; a distribution
-(one full turn of the globe, the whole globe in frame) one "place" event per place at
-the first frame the place faces the camera, where unlabelled places are dots the band
-does not apply to; a "place" event carries x/y of its frame and ``track``, the pixel in
+(one full turn of the globe, the whole globe in frame, at a camera latitude from which
+one turn can show every place: distribution_pose) one "place" event per place at the
+first frame the place faces the camera, where unlabelled places are dots the band does
+not apply to; a "place" event carries x/y of its frame and ``track``, the pixel in
 every frame from there to the end of the take (null while hidden or, for a labelled
-place, outside PLACES_BAND). Place ids are case-file place ids: the renderer's GlobeShot
-pins and their show cues use them.
+place, outside PLACES_BAND). Place ids are case-file place ids and a label is the
+case-file place's name (plan C binds both to the verified case file before a take): the
+renderer's GlobeShot pins and their show cues use them. The unlabelled places of a
+distribution are its dots: plan C resolves the script's `site_ids` from the repo-root
+public/data/sites export into {id: <site id>, lat, lng} (owner decision 15), so their ids
+are site ids and never cue targets. A Mapbox take's optional "country" is the country the
+take highlights: plan C binds it to the site export's country of its place, and the
+recorder refuses a name the site's country table does not know (studio-mapbox.ts
+checkCountry), so the recorder exits 1 and the take is a CaptureError.
 """
 
 from __future__ import annotations
@@ -12149,6 +12809,7 @@ import math
 import os
 import shutil
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -12170,6 +12831,7 @@ from pipeline.studio.capture.projection import (
     GLOBE_MIN_DISTANCE,
     PLACES_BAND,
     fit_globe_distance,
+    globe_to_pixel,
 )
 from pipeline.studio.capture.vite import (
     FRONTEND_DIR,
@@ -12215,7 +12877,15 @@ MAX_DISTRIBUTION_PLACES = 500
 # A world distribution: the whole globe in frame, one full turn over the take.
 DISTRIBUTION_DISTANCE = GLOBE_MAX_DISTANCE
 DISTRIBUTION_SWEEP_DEG = 360.0
-DISTRIBUTION_MAX_LAT = 45.0
+DISTRIBUTION_MAX_LAT = 45
+# A dot faces the camera of the turn when it lies within the horizon, acos(1 / distance)
+# from the point under the camera (65.8 degrees at 2.44), less this margin at the limb.
+DISTRIBUTION_HORIZON_MARGIN_DEG = 5.0
+DISTRIBUTION_DOT_REACH_DEG = (
+    math.degrees(math.acos(1 / DISTRIBUTION_DISTANCE)) - DISTRIBUTION_HORIZON_MARGIN_DEG
+)
+# Camera longitudes of one full turn relative to a place, in whole degrees, nearest first.
+TURN_DELTAS_DEG = sorted(range(-180, 180), key=abs)
 # Mirrors of ancient-nerds-map/video/scenes/studio-mapbox.ts (the path timing the events describe).
 FLYIN_ROTATE_S = 1.2
 FLYIN_ZOOM_S = 2.4
@@ -12280,20 +12950,55 @@ def _places(spec: dict[str, Any], most: int, label_required: bool) -> list[dict[
     return out
 
 
-def distribution_pose(points: list[tuple[float, float]]) -> tuple[float, float]:
+def _faces_camera(place: dict[str, Any], cam_lat: float) -> bool:
+    """Whether one turn of the distribution camera at `cam_lat` can show the place.
+
+    A dot must lie within the horizon less a margin; a labelled place must be drawn inside
+    PLACES_BAND at some camera longitude of the turn, by projection.py's globe camera (the
+    model fit_globe_distance uses; the page's own pixels decide later, in take_events).
+    """
+    if "label" not in place:
+        return abs(place["lat"] - cam_lat) <= DISTRIBUTION_DOT_REACH_DEG
+    for delta in TURN_DELTAS_DEG:
+        px = globe_to_pixel(
+            place["lat"],
+            place["lng"],
+            cam_lat=cam_lat,
+            cam_lng=place["lng"] + delta,
+            distance=DISTRIBUTION_DISTANCE,
+            width=WIDTH,
+            height=HEIGHT,
+        )
+        if px is not None and _in_band(px):
+            return True
+    return False
+
+
+def distribution_pose(cid: str, places: list[dict[str, Any]]) -> tuple[float, float]:
     """(cam_lat, cam_lng_from) of a world distribution.
 
-    The camera sits at the places' mean latitude (within +-45 degrees) and starts opposite
-    their mean longitude, so the densest region turns into view in the middle of the take.
+    The camera starts opposite the places' mean longitude, so the densest region turns
+    into view in the middle of the take. Its latitude is the midpoint of the places'
+    lowest and highest latitude, or else the whole degree nearest it, within +-45, at
+    which one turn can show every place (_faces_camera); the mean latitude would follow
+    the dots and lose an outlying place. Raises before any side effect when no latitude
+    shows them all.
     """
-    lat = sum(p[0] for p in points) / len(points)
-    x = sum(math.cos(math.radians(p[1])) for p in points)
-    y = sum(math.sin(math.radians(p[1])) for p in points)
+    lats = [p["lat"] for p in places]
+    mid = max(-DISTRIBUTION_MAX_LAT, min(DISTRIBUTION_MAX_LAT, (min(lats) + max(lats)) / 2))
+    whole = range(-DISTRIBUTION_MAX_LAT, DISTRIBUTION_MAX_LAT + 1)
+    candidates = sorted([mid, *(float(c) for c in whole)], key=lambda c: abs(c - mid))
+    cam_lat = next((c for c in candidates if all(_faces_camera(p, c) for p in places)), None)
+    if cam_lat is None:
+        ids = [p["id"] for p in places if not _faces_camera(p, mid)]
+        raise CaptureError(
+            f"{cid}: places {ids} cannot face the camera in one turn of the globe; "
+            "split the distribution"
+        )
+    x = sum(math.cos(math.radians(p["lng"])) for p in places)
+    y = sum(math.sin(math.radians(p["lng"])) for p in places)
     start = math.degrees(math.atan2(y, x)) - 180.0
-    return (
-        max(-DISTRIBUTION_MAX_LAT, min(DISTRIBUTION_MAX_LAT, lat)),
-        start + 360.0 if start < -180.0 else start,
-    )
+    return cam_lat, start + 360.0 if start < -180.0 else start
 
 
 def scene_input(spec: dict[str, Any], work: Path) -> dict[str, Any]:
@@ -12379,7 +13084,7 @@ def scene_input(spec: dict[str, Any], work: Path) -> dict[str, Any]:
         }
     if scene == "distribution":
         places = _places(spec, MAX_DISTRIBUTION_PLACES, label_required=False)
-        cam_lat, cam_lng = distribution_pose([(p["lat"], p["lng"]) for p in places])
+        cam_lat, cam_lng = distribution_pose(str(cid), places)
         return {
             **base,
             "cam_lat": cam_lat,
@@ -12421,7 +13126,7 @@ def first_frame(t: float) -> int:
     return math.ceil(t * FPS - 1e-9)
 
 
-def _in_band(point: list[float]) -> bool:
+def _in_band(point: Sequence[float]) -> bool:
     fx, fy = point[0] / WIDTH, point[1] / HEIGHT
     return PLACES_BAND[0] <= fx <= PLACES_BAND[2] and PLACES_BAND[1] <= fy <= PLACES_BAND[3]
 
@@ -12617,7 +13322,7 @@ def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/capture/test_capture_globe.py -m "not integration and not live_llm" -q -rs`
-Expected on the workstation: `25 passed`. Without NVENC (CI): `24 passed, 1 skipped` (the frame-count check now runs before the encode, so only the full take needs NVENC).
+Expected on the workstation: `28 passed`. Without NVENC (CI): `27 passed, 1 skipped` (the frame-count check now runs before the encode, so only the full take needs NVENC).
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -12634,7 +13339,7 @@ git commit -m "Record globe and Mapbox takes frame by frame through the recorder
 - Modify: `pipeline/studio/capture/__init__.py` (replace the Task 23 docstring stub)
 - Test: `tests/pipeline/studio/capture/test_capture_package.py`
 
-Plan C's `captures.py` imports `record_platform`, `record_globe`, `capture_source` and `mapbox_topdown` from the package itself (`default_recorders`).
+Plan C's `captures.py` imports `record_platform`, `record_globe`, `capture_source` and `mapbox_topdown` from the package itself (`default_recorders`). The package now imports `sources.py` whenever any of its modules is imported, so this task starts only after Task 29 (and therefore check A2) has landed.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -12700,7 +13405,7 @@ __all__ = ["capture_source", "mapbox_topdown", "record_globe", "record_platform"
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/capture -m "not integration and not live_llm" -q -rs`
-Expected on the workstation: `136 passed, 1 skipped` (the non-Windows refusal test). Without the NVIDIA driver and Playwright (CI): `123 passed, 14 skipped`, each skip with its reason.
+Expected on the workstation: `142 passed, 1 skipped` (the non-Windows refusal test). Without the NVIDIA driver and Playwright (CI): `129 passed, 14 skipped`, each skip with its reason.
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -13279,7 +13984,7 @@ git commit -m "Expose where the page draws a place, on the globe or on Mapbox, t
 - Modify: `ancient-nerds-map/video/scenes/site-short.ts` (exports only), `ancient-nerds-map/video/record.ts` (registration)
 - Test: `ancient-nerds-map/video/scenes/__tests__/studio-scenes.test.ts`
 
-Contract D6. The studio scenes grab every frame themselves (`FrameGrabber`): tick the synthetic clock, wait two animation frames (bounded at 30 s: a display that stopped drawing fails the take with that reason instead of hanging), wait for Mapbox tiles when needed, read the canvas as JPEG. They first write the page's WebGL renderer to `renderer.json` for `globe.py` (spec 4.11; the recorder launches Chrome with the NVIDIA flags). Places are projected per frame (owner rule): after every grabbed frame a `PointTracker` reads `window.__DEMO.screenPoint` for every place in one page call, and `points.json` holds one `[x, y]` or null per frame and place; a places take with `sweep_lng_deg` sets the camera longitude before every frame (`sweepLng`), so its pins move with the globe, and a `distribution` take is such a sweep of 360 degrees. The globe scenes stay at distance 1.2 or more, outside the Mapbox hand-off (1.12), so they show only our vector globe. The Mapbox scenes reuse the site shorts' look and tile warm-up (`prepareMapbox`, `warmPath`, now exported from `site-short.ts` without a behaviour change); in landscape the space pose uses zoom 2.4, which fills about 80 % of the frame height (the portrait value 2.2 left the globe small, 2026-09-26). `record.ts` registers the four scenes, exposes the scene input as `STUDIO_SCENE_INPUT`, skips its MediaRecorder stop and encode for scenes that grab their own frames, and starts Vite with `--strictPort`: during planning a dev server orphaned by an interrupted take kept port 5199 for hours, the next recorder's Vite silently moved to another port and the takes were served by the orphan's (older) checkout.
+Contract D6. The studio scenes grab every frame themselves (`FrameGrabber`): tick the synthetic clock, wait two animation frames (bounded at 30 s: a display that stopped drawing fails the take with that reason instead of hanging), wait for Mapbox tiles when needed, read the canvas as JPEG. They first write the page's WebGL renderer to `renderer.json` for `globe.py` (spec 4.11; the recorder launches Chrome with the NVIDIA flags). Places are projected per frame (owner rule): after every grabbed frame a `PointTracker` reads `window.__DEMO.screenPoint` for every place in one page call, and `points.json` holds one `[x, y]` or null per frame and place; a places take with `sweep_lng_deg` sets the camera longitude before every frame (`sweepLng`), so its pins move with the globe, and a `distribution` take is such a sweep of 360 degrees. The globe scenes stay at distance 1.2 or more, outside the Mapbox hand-off (1.12), so they show only our vector globe. The Mapbox scenes reuse the site shorts' look and tile warm-up (`prepareMapbox`, `warmPath`, now exported from `site-short.ts` without a behaviour change); in landscape the space pose uses zoom 2.4, which fills about 80 % of the frame height (the portrait value 2.2 left the globe small, 2026-09-26). A Mapbox take's `country` is shown data (its outline is highlighted): `prepareMapbox` only logs "no highlight" for a name `getCountryCode` does not know, which suits the Shorts, so the studio scenes refuse such a name first (`checkCountry`: `unknown country <x>`; the recorder exits 1 and `globe.py` raises its `CaptureError`), and plan C binds the value to the site export. `record.ts` registers the four scenes, exposes the scene input as `STUDIO_SCENE_INPUT`, skips its MediaRecorder stop and encode for scenes that grab their own frames, and starts Vite with `--strictPort`: during planning a dev server orphaned by an interrupted take kept port 5199 for hours, the next recorder's Vite silently moved to another port and the takes were served by the orphan's (older) checkout.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -13302,7 +14007,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { FrameGrabber, NO_FRAME_MS, PointTracker, frameCount, frameName } from '../studio-frames'
 import { type PlacesInput, START_LNG_OFFSET, flytoStart, readStudioInput, sweepLng } from '../studio-globe'
-import { ORBIT_BEARING_TO, ROTATE_S, SPACE_ZOOM, ZOOM_S, flyinPath, orbitPath } from '../studio-mapbox'
+import { ORBIT_BEARING_TO, ROTATE_S, SPACE_ZOOM, ZOOM_S, checkCountry, flyinPath, orbitPath } from '../studio-mapbox'
 
 const saved = process.env.STUDIO_SCENE_INPUT
 
@@ -13389,6 +14094,14 @@ describe('studio-mapbox-flyin', () => {
   })
   it('refuses a take too short for rotate + zoom + a second of orbit', () => {
     expect(() => flyinPath({ ...input, duration_s: 4 })).toThrow(/needs at least 4.6 s/)
+  })
+})
+
+describe('Mapbox country highlight', () => {
+  it('refuses a country the site cannot highlight instead of recording the take without it', () => {
+    expect(() => checkCountry(undefined)).not.toThrow()
+    expect(() => checkCountry('Lebanon')).not.toThrow()
+    expect(() => checkCountry('Atlantis')).toThrow(/unknown country "Atlantis"/)
   })
 })
 
@@ -13848,6 +14561,7 @@ export const studioGlobeScenes: SceneDefinition[] = [
  * Map content: the capture manifest credits "© Mapbox © OpenStreetMap © Maxar".
  */
 
+import { getCountryCode } from '../../src/utils/countryFlags'
 import type { MapboxKeyframe } from '../../src/utils/demoApi'
 import type { SceneContext, SceneDefinition } from '../record'
 import { TERRAIN_EXAGGERATION, prepareMapbox, warmPath } from './site-short.js'
@@ -13909,7 +14623,18 @@ export function orbitPath(input: Pick<OrbitInput, 'lat' | 'lng' | 'zoom' | 'pitc
   ]
 }
 
+/**
+ * A studio take's `country` is shown data (plan C binds it to the site export): a
+ * name the site's country table does not know would make prepareMapbox log "no
+ * highlight" and record the take without it, so it is refused before anything
+ * is recorded. The site Shorts keep prepareMapbox's own behaviour.
+ */
+export function checkCountry(country: string | undefined): void {
+  if (country !== undefined && getCountryCode(country) === null) throw new Error(`unknown country ${JSON.stringify(country)}: getCountryCode has no code for it, the take would lack its highlight`)
+}
+
 async function flyPath(ctx: SceneContext, input: FlyinInput | OrbitInput, path: MapboxKeyframe[]): Promise<void> {
+  checkCountry(input.country)
   const grabber = new FrameGrabber(input.frames_dir, MAPBOX_CANVAS, true)
   await writeRenderer(ctx.page, input.renderer_path)
   await prepareMapbox(ctx, input)
@@ -14060,7 +14785,7 @@ with:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd ancient-nerds-map && npx vitest run video/scenes/__tests__/studio-scenes.test.ts && npx tsc -p video/tsconfig.json --noEmit`
-Expected: `Tests  11 passed (11)`, then no tsc output.
+Expected: `Tests  12 passed (12)`, then no tsc output.
 
 - [ ] **Step 5: Commit**
 
@@ -14148,6 +14873,7 @@ SPECS = {
                          {"id": "s3", "label": "Mohenjo-daro", "lat": 27.3294, "lng": 68.1386},
                          {"id": "s4", "label": "Terracotta Army", "lat": 34.3853, "lng": 109.2785}]},
     # a world distribution: one turn of the whole globe, three places labelled, the rest dots
+    # (in an episode, plan C resolves the dots from site ids into unlabelled places like these)
     "distribution": {"id": "g4", "kind": "globe", "scene": "distribution", "duration_s": 16,
                      "places": [{"id": "w1", "label": "Giza", "lat": 29.9792, "lng": 31.1342},
                                 {"id": "w2", "label": "Stonehenge", "lat": 51.1789, "lng": -1.8262},
@@ -14262,7 +14988,7 @@ git commit -m "Check that the renderer reads plan C's compiled golden timeline a
 cd video && npx tsc --noEmit && npx vitest run
 ```
 
-Expected: no tsc output; `Test Files  25 passed (25)`, `Tests  184 passed (184)` (Task 21's 24 files and 183 tests plus the contract test).
+Expected: no tsc output; `Test Files  25 passed (25)`, `Tests  199 passed (199)` (Task 21's 24 files and 198 tests plus the contract test).
 
 - [ ] **Step 5: Captures and the backend suite**
 
@@ -14274,7 +15000,7 @@ Expected: no tsc output; `Test Files  25 passed (25)`, `Tests  184 passed (184)`
 ./.venv/Scripts/python.exe -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
 ```
 
-Expected: `136 passed, 1 skipped` for the capture suite on the workstation; ruff and vulture clean; `Contracts: 2 kept, 0 broken.`; the backend suite green with the capture tests included (compare with the count before Task 23: +137 collected).
+Expected: `142 passed, 1 skipped` for the capture suite on the workstation; ruff and vulture clean; `Contracts: 2 kept, 0 broken.`; the backend suite green with the capture tests included (compare with the count before Task 23: +143 collected).
 
 - [ ] **Step 6: Frontend and recorder**
 
@@ -14297,31 +15023,32 @@ No further commit (Steps 4-7 change nothing). Report the counts and any gate tha
 | Spec | Where |
 |---|---|
 | 4.5 platform takes: Playwright Chrome, CDP screencast 1920x1080 at device scale 2, local or production, declarative actions (plus `zoom`, `proximity`, `filter` for the owner's moments), fast cursor (0.25 s against a deadline, 45 ms), NERV cursor via `?video=1`, CFR 60 fps, action times as events, no analytics visit | Task 30 (+ Tasks 25, 27, 33); every moment taken for real in Task 36 |
-| 4.5 globe takes: `studio-globe-flyto` (rotate, zoom, empire), `studio-globe-places` (fixed pose or sweep, the world distribution), `studio-mapbox-flyin`, `studio-mapbox-orbit` in landscape, places projected per frame; exact top-down frames with projected pins | Tasks 31, 35, 28, 26, 14 (GlobeShot tracks) |
-| 4.5 source pages: scroll to the quote, DOM Range highlight, banners hidden, paywall = QuoteCard; our paper page at `#ev-NN` (a second id of a paragraph outlines the paragraph) | Task 29 |
+| 4.5 globe takes: `studio-globe-flyto` (rotate, zoom, empire), `studio-globe-places` (fixed pose or sweep, the world distribution: labelled case-file places plus dots by site id, resolved by plan C, owner decision 15, filmed from a camera latitude at which one turn shows every place, a set no latitude shows refused before the take), `studio-mapbox-flyin`, `studio-mapbox-orbit` in landscape, places projected per frame; exact top-down frames with projected pins | Tasks 31, 35, 28, 26, 14 (GlobeShot tracks) |
+| 4.5 source pages: scroll to the quote, DOM Range highlight, banners hidden, paywall = QuoteCard; our paper page at `#ev-NN` (a second id of a paragraph outlines the paragraph; `EVIDENCE_ID_RE` and `check_slug` imported from plans A and C) | Task 29 |
 | 4.5 projection math (512-px Web Mercator with bearing, the site's perspective globe camera; the spec's word "orthographic" is to be read as that camera) | Task 26 |
 | 4.6 `?video=1`: hidden panels and hover tooltips (the selected site's label stays), `--hud-scale` from `?hud=`, `window.__VIDEO`, no browser storage | Task 33 |
 | 4.8 Remotion 4.0.529, every `@remotion/*` pinned | Task 1 |
 | 4.8 Root with Episode + Thumbnail, calculateMetadata from timeline.json | Task 18 |
 | 4.8 Episode: Sequence per scene, narration Audio per beat, music with duck callback | Tasks 10, 18 |
-| 4.8 theme (colors mirror of the tokens and `src/constants/colors`, checked by a test; fonts via @remotion/fonts from local woff2, latin and latin-ext) | Task 2 (headings fall back to JetBrains Mono's latin-ext face), 17 (glyph rule) |
+| 4.8 theme (colors mirror of the tokens and `src/constants/colors`, checked by a test; fonts via @remotion/fonts from local woff2, latin and latin-ext) | Task 2 (headings fall back to JetBrains Mono's latin-ext face), 17 (glyph rule on drawn strings only, owner decision 32) |
 | 4.8 motion: crtOpen, bootIn, borderTrace, typeOn, digitRoll, stampSlam, ringPulse, sweep; no flicker | Task 2 |
-| 4.8 blocks: PhotoPlate, ScaleDrawing, UnitGrid, EvidenceCard, SourceViewer, Meter, ClaimBoard, PlatformClip, GlobeShot, ShareCard, LowerThird, HookCaptions, Ticker, Stamp, QuoteCard, Timeline, Diagram, registry.json | Tasks 7, 12-17 (plus MapboxTopdown, MapboxFlyover, BarChart, ListCard) |
+| 4.8 blocks: PhotoPlate, ScaleDrawing, UnitGrid, EvidenceCard, SourceViewer, Meter, ClaimBoard, PlatformClip, GlobeShot, ShareCard, LowerThird, HookCaptions, Ticker, Stamp, QuoteCard, Timeline, Diagram, registry.json | Tasks 7, 12-17 (plus MapboxTopdown, MapboxFlyover, BarChart, ListCard, ScaleZoom); `registry.json` carries each block's `drawn` prop paths (owner decision 32) |
 | 4.8 layout: zones, LayoutBox registration, pure overlap checker, LayoutGuard console.error JSON | Tasks 4, 11 |
-| 4.8 render.ts (bundle, selectComposition, renderMedia, chunked by frameRange, concat), lint.ts (every 6th frame at 0.5, onBrowserLog, exit != 0), still.ts (3840x2160 + 1280x720 < 2 MB) | Tasks 19, 20 |
+| 4.8 render.ts (bundle, selectComposition, renderMedia, chunked by frameRange, concat), lint.ts (every 6th frame at 0.5, onBrowserLog, exit != 0; plus each thumbnail teaser), still.ts per thumbnail candidate `--candidate K [--frame N]` (3840x2160 + 1280x720 < 2 MB) | Tasks 19, 20 |
 | 4.8 per-render public dir, no absolute paths in props; in-frame map credits | Tasks 8 (asset paths), 12 (CreditLine), 20 (asset check) |
-| 4.8 vitest: overlap geometry, marker transform, timeline helpers; smoke render of a 10-s fixture, local | Tasks 4, 5, 8, 21, 22; Task 37 reads plan C's golden timeline |
-| 4.10 topic types A-D through the block library (type B world distribution: the globe `distribution` take or PlatformClip with filters and layers; type C orders of magnitude: BarChart on a log10 axis) | Tasks 13-16 (table D1), 30, 31 |
+| 4.8 vitest: overlap geometry, marker transform, timeline helpers; smoke render of a 10-s fixture, local | Tasks 4, 5, 8, 21, 22 (the smoke fixture and the graphics-only demo timeline, every block drawn by a real Chrome on the NVIDIA); Task 37 reads plan C's golden timeline |
+| 4.9 thumbnails (owner decisions 24-25): three candidates for YouTube's A/B test, `thumbnails: [{frame, text}]` in timeline.json, a 2-4 word teaser in the NERV heading type clear of the duration badge, `--frame N` for a re-render | Tasks 8 (parse), 18 (Thumbnail by candidate, teaser zone), 20 (`still.ts --candidate K [--frame N]`, lint of the teasers), 22 |
+| 4.10 topic types A-D through the block library (type B world distribution: the globe `distribution` take or PlatformClip with filters and layers; type C orders of magnitude: UnitGrid up to 1:400, ScaleZoom beyond, linear only, owner decision 31) | Tasks 13-16 (table D1), 30, 31 |
 | 4.11 every Chromium on the NVIDIA with proof (captures, recorder, Remotion); NVENC `-gpu 0`, no `'if-possible'`; renderer recorded | Tasks 19, 20, 24, 25, 29-31, 35; doctor (with `gpu.chrome_renderer()`), `--fix-gpu`, whisper on CUDA and the ledger's renderer: plan C (see "Where this plan and plan C meet") |
-| Owner picture rules: captions only in the hook; markers in their image's layer (globe: projected per frame); crop-checked markers only (the case file); no measuring lines on photos; comparisons state their basis (tested through `basisLine`); full-bleed, nothing in the YouTube control zone (text and markers); fast cursor (tested against a deadline); no agents, no title card (`chapterTagIndex` tested); platform moments via PlatformClip only | Tasks 10, 12, 5/13/14/35, 13, 7/16, 4, 30, 7/12 |
+| Owner picture rules: captions only in the hook; markers in their image's layer (globe: projected per frame); crop-checked markers only (the case file); no measuring lines on photos; comparisons state their basis (tested through `basisLine`); full-bleed, nothing in the YouTube control zone (text and markers); fast cursor (tested against a deadline); no agents, no title card (`chapterTagIndex` tested); platform moments via PlatformClip only; no satellite toggle in globe sections (owner correction 2026-09-26, refused by `validate_actions`, tested); the link only on the end card (a ShareCard only as the last scene, refused by `checkBlocks`, tested); a hook caption line fits one row (`HOOK_LINE_MAX_CHARS`, tested); drawn text in the brand fonts, upper case included (tested) | Tasks 10, 12, 5/13/14/35, 13, 7/16, 4, 30, 7/12, 30, 17, 10, 2/17 |
 
 ## Cross-stream requests (changes outside this stream's files)
 
 Every request below is an item of the orchestrator's integration list, whose files no plan's tasks touch; this plan cites the items by name. Requests 1-4 are the items "CI lint-video", ".githooks/pre-push", "docs/procedures/STUDIO.md" with the Studio part of the "CLAUDE.md" item, and "docs/video-pipeline.md". The same list carries the ".gitignore" item (after merging origin/main into `feat/studio`, the line `.claude/` becomes `.claude/*` with `!.claude/skills/`, `!.claude/skills/**`, `!.claude/workflows/`, `!.claude/workflows/**` below it: git never re-includes a file under an excluded directory, so negations after `.claude/` would track nothing; `git check-ignore .claude/skills/theo-write/SKILL.md` must print nothing and exit 1, while `git check-ignore -v .claude/settings.local.json` must print the pattern `.claude/*`; with `-v` the skills file prints the negated pattern `!.claude/skills/**`, which also means "not ignored", measured 2026-09-26 in a scratch repository), the "skills and workflows" item of plan C's C2/C11, the rest of the "CLAUDE.md" item, the "docs/TRAINING_DATA_POLICY.md" item, the "commits" item (the spec, the four plans and `2026-09-26-owner-questions.md` committed with an explicit pathspec before any implementer task, this plan included, and every later plan fix the same way), the "merges" item and the "final acceptance" item.
 
-1. **CI lint-video (`.github/workflows/ci.yml`, spec 7):** the `changes` job gains the output `video: ${{ steps.filter.outputs.video }}` and the filter `video` with `video/**`, `tests/pipeline/studio/golden_timeline.json` (Task 37's contract test reads it, so a plan-C compiler change that regenerates it must run the renderer's suite), `ancient-nerds-map/src/styles/tokens.css` and `ancient-nerds-map/src/constants/colors.ts` (`test/colors.test.ts` reads them, so a palette change on the site must run the mirror test). A job `lint-video` with `needs: [changes]`, `if: needs.changes.outputs.video == 'true'`, Node 22 and `working-directory: video` runs `npm ci`, `npx tsc --noEmit` and `npx vitest run`; no `npx remotion browser ensure`. `deploy.needs` gains `lint-video` and deploy's `if` gains `contains(fromJSON('["success", "skipped"]'), needs.lint-video.result) &&`, like the other path-filtered jobs: a push without video changes skips the job and still deploys, a red `lint-video` blocks the deploy. CLAUDE.md's "All six gates" becomes seven. The job runs on Linux: nothing in `video/test` needs a GPU or a browser (`test/scripts.test.ts` spawns `node --import tsx` only; `test/colors.test.ts` reads `ancient-nerds-map/src` and `test/contract.test.ts` reads `tests/pipeline/studio/`, both in the checkout).
+1. **CI lint-video (`.github/workflows/ci.yml`, spec 7):** the `changes` job gains the output `video: ${{ steps.filter.outputs.video }}` and the filter `video` with `video/**`, `tests/pipeline/studio/golden_timeline.json` (Task 37's contract test reads it, so a plan-C compiler change that regenerates it must run the renderer's suite), `ancient-nerds-map/src/styles/tokens.css` and `ancient-nerds-map/src/constants/colors.ts` (`test/colors.test.ts` reads them, so a palette change on the site must run the mirror test). The existing `backend` filter gains `video/src/blocks/registry.json` and `video/src/theme/glyphs.ts`: plan C's Python tests and `blocks.py` read both files, so a renderer-only commit that changes a block schema, a `drawn` list or the glyph ranges must run plan C's contract tests too. A job `lint-video` with `needs: [changes]`, `if: needs.changes.outputs.video == 'true'`, Node 22 and `working-directory: video` runs `npm ci`, `npx tsc --noEmit` and `npx vitest run`; no `npx remotion browser ensure`. `deploy.needs` gains `lint-video` and deploy's `if` gains `contains(fromJSON('["success", "skipped"]'), needs.lint-video.result) &&`, like the other path-filtered jobs: a push without video changes skips the job and still deploys, a red `lint-video` blocks the deploy. CLAUDE.md's "All six gates" becomes seven. The job runs on Linux: nothing in `video/test` needs a GPU or a browser (`test/scripts.test.ts` spawns `node --import tsx` only; `test/colors.test.ts` reads `ancient-nerds-map/src` and `test/contract.test.ts` reads `tests/pipeline/studio/`, both in the checkout).
 2. **.githooks/pre-push:** for a `main` push whose diff touches a path of the `video` filter above, block with "run npm ci in video/" unless `video/node_modules/.bin/tsc` exists (the hook is fail-closed), then `run_gate` `npx tsc --noEmit` and `npx vitest run` in `video/`. Stage the hook with `git add --chmod=+x .githooks/pre-push` (`core.filemode` is false on this checkout).
-3. **docs/procedures/STUDIO.md (and the Studio section of CLAUDE.md):** the renderer (`cd video && npm ci && npx remotion browser ensure`; `npm run studio` previews the demo timeline with `--public-dir ../ancient-nerds-map/public`); the scripts run as `node --import tsx scripts/<name>.ts` in `video/` and bundle into the transient `render/bundle/`; the GPU rule's proofs (`gpu:` lines, the manifest's `gpu` event); captures need an awake display (headed Chrome), which the captures hold awake but cannot wake, and Playwright in the venv (`pip install playwright`, then `playwright install chrome`); a Mapbox fly-in takes up to 20 minutes; captures are HEVC because `h264_nvenc` clips stall Remotion's decoder (Task 25); timeline text must stay within latin and latin-ext (the brand fonts; `episode check` refuses anything else, and `episode capture` refuses a source page whose title or URL uses other characters: show its quote in a QuoteCard); the smoke render (Task 22) and real captures (Task 36) as the local checks.
+3. **docs/procedures/STUDIO.md (and the Studio section of CLAUDE.md):** the renderer (`cd video && npm ci && npx remotion browser ensure`; `npm run studio` previews the demo timeline with `--public-dir ../ancient-nerds-map/public`); the scripts run as `node --import tsx scripts/<name>.ts` in `video/` and bundle into the transient `render/bundle/`; the GPU rule's proofs (`gpu:` lines, the manifest's `gpu` event); captures need an awake display (headed Chrome), which the captures hold awake but cannot wake, and Playwright in the venv (`pip install playwright`, then `playwright install chrome`); a Mapbox fly-in takes up to 20 minutes; captures are HEVC because `h264_nvenc` clips stall Remotion's decoder (Task 25); text the video draws must stay within latin and latin-ext (the brand fonts): only drawn strings are checked (owner decision 32: the block props listed in `registry.json`'s `drawn`, the credits and `place`/`pin` labels of captures, captions, chapter titles, thumbnail teasers), so an original quote shown inside a captured source page, the page's own non-latin title (recorded, never drawn: SourceViewer and the credit show only the ASCII hostname) and a non-latin URL path are fine; `episode check` refuses any other drawn character; a QuoteCard's quote is drawn and must be latin; a drawn character is checked in upper case too (`µ` draws as Greek `Μ` and is refused: write `micrometre`); a hook word may have at most 24 characters (`HOOK_LINE_MAX_CHARS`, one caption row); a ShareCard, the only place the link appears in the picture, may only be the last beat; platform takes never toggle the `Satellite` base map (owner correction 2026-09-26; satellite shows in the details page or a Mapbox take); a Mapbox take's `country` must be the site export's country of its place and a name the site knows; the smoke render (Task 22) and real captures (Task 36) as the local checks.
 4. **docs/video-pipeline.md:** it still describes the weekly Remotion composition this plan deletes (`WeeklyVideo`); replace that section with a pointer to the studio renderer in `video/` (`pipeline/video/timeline_builder.py` stays, described as having no renderer).
 
 The final-acceptance item runs after the push and covers spec 8.4(c) for this plan: the Baalbek claim-5 slice rendered end to end through the `studio-video` skill (plan C's `episode init` ... `package` with this plan's captures and renderer; no upload). This plan's Tasks 22, 36 and 37 are its local preconditions, not the acceptance.
@@ -14371,3 +15098,60 @@ Every changed code block was re-applied script-driven to a minimal scratch (the 
 - **Captures:** `136 passed, 1 skipped`; with Playwright hidden from the interpreter, as in CI: `test_capture_manifest.py` `16 passed`, `test_capture_sources.py` `10 passed, 5 skipped`, `test_capture_platform.py` `26 passed, 3 skipped`; ruff check, ruff format --check, vulture at 80 and mypy clean.
 - **Renderer:** `registry.json` regenerated to 2067 lines; vitest `Test Files 25`, `Tests 184`, all passed except `project.test.ts`'s lockfile test (no `npm install` in the scratch), with `contract.test.ts` reading a stand-in golden file (a copy of the smoke timeline: plan C's real file does not exist before its Task 21 runs); the contract test failed as intended on a lower-case caption and on an arrow in a chapter title; the two new assertions (`valueText(1.75, 'm')`, the `HEADING` fallback) failed against the previous code and pass now; `tsc --noEmit` showed only the two known stub errors.
 - **Not run in this pass:** the contract test against plan C's real golden file, Task 22 and Task 36.
+
+### Owner-decision pass I0 (2026-09-26, owner decisions #13-#32 of the build index, section 3)
+
+Changed, each with its tests:
+
+- **#31, linear only.** BarChart lost `scale` (and `BarScale`, the decade ticks, the log basis line and the log check): its axis is `{lo: 0, hi}`, and a script's `scale` is refused by the schema (`props.scale: not allowed`). New scene block `ScaleZoom` (`title`, `unit`, `basis`, `small` and `large` `{id, label, value}`, 0 < small < large, at least 240 frames; cue `show <small id>` / `show <large id>`): the two quantities are bars on one linear scale, the camera pulls back linearly from the small one to the large one. `registry.json` has 18 blocks (2236 lines); `registry.test.ts` proves that no block has a `scale` prop or a log axis.
+- **#32, glyph check on drawn strings only.** Every registry entry carries `drawn` (exactly `{map, platform, drawn, props}`); `checkBlocks` walks the `drawn` paths (`drawnStrings`), the drawn strings of every capture prop (`captureStrings`: credits, `place`/`pin` labels, the `page` title) and the captions, credits, chapter titles and thumbnail teasers. Tested: a SourceViewer with a Greek original quote and a Greek URL path passes; a Greek claim label and a Greek page title are refused; `registry.test.ts` proves every `drawn` pattern points at a string prop and never into a capture. The lists are those of the build index's resolution; each was checked against its component (the enum and id values a card also draws are ASCII by schema or by plan C's id rule and are not listed).
+- **#24/#25, thumbnails.** `timeline.json` carries `thumbnails: [{frame, text}]`, exactly 3 (`parseTimeline`: frame inside the episode, a 2-4 word teaser); `thumbnailFrame()` (60 % into the first scene) is gone. The Thumbnail composition draws candidate K's teaser (NERV heading type, `TEASER_ZONE` inside the title-safe area and clear of YouTube's duration badge; `rules.test.ts` pins both); `still.ts --candidate K [--frame N]` writes `thumbnail_<K>_3840.png` and `thumbnail_<K>_1280.jpg`; `lint.ts` also lints each teaser (an overflowing teaser is an `overflow` violation at the candidate's frame).
+- **#15, distribution dots by site id.** No code change in `globe.py` (plan C resolves `site_ids`); a new globe test pins a dot whose id is a site id: an unlabelled `place` event with that target. D2, the g4 example and the docstrings say where the dots come from.
+- **D Task 29 utility duplication (build index; evidence-6).** `sources.py` imports `EVIDENCE_ID_RE` (plan A Task 2) and `config.check_slug` (plan C Task 1) and keeps neither pattern; the Dependencies table gains check A2.
+- **Texts:** capture-4 (labels are the case-file place names, plan C checks), capture-5 (measure and proximity points are case-file coordinates, plan C checks), ownership-9 (cross-stream request 1: the `backend` filter gains `video/src/blocks/registry.json` and `video/src/theme/glyphs.ts`), cross-stream request 3 and D1/D2/D3/Task 29 reworded to the drawn-strings definition, the demo timeline now carries every graphics block (a ScaleZoom scene and a BarChart range bar) and Task 22 lints and renders it.
+
+Verified on a minimal scratch (the plan's complete-file blocks written by script; for the captures the worktree's `pipeline/` plus plan C Task 1's `__init__.py`, `errors.py` and `config.py` and plan A Task 2's `theo_publishing.py`, each taken from its plan's current code block; no stand-ins for them):
+
+- **Renderer, with a real `npm install` of Task 1's `package.json`** (the pinned Remotion 4.0.529 set, 294 packages, a fresh `package-lock.json`; no stubs, not the main checkout's 4.0.424). Before the changes: `tsc --noEmit` clean, vitest `Test Files 25 passed`, `Tests 184 passed`, `project.test.ts`'s lockfile test included. After them, rebuilt from the plan text alone: `npm run registry` writes 18 blocks (2236 lines), `tsc --noEmit` clean, vitest `Test Files 25 passed (25)`, `Tests 196 passed (196)` (24 files and 195 tests without Task 37's contract test). `contract.test.ts` read a stand-in golden file (a copy of the smoke timeline): it failed with `missing thumbnails` against the old copy and passes on the new one. Plan C's real `golden_timeline.json` does not exist yet.
+- **Renders on the workstation's RTX 3080** (Task 22's commands with the scratch paths; every browser printed `gpu: ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`): smoke lint `lint clean: 103 frames checked` (92 s); a teaser of three long words failed as intended with `{"type":"layout-violation","frame":90,"a":"thumbnail1:teaser","b":null,"reason":"overflow"}`; smoke render in two parts (91 s) `h264` 1920x1080, `has_b_frames=0`, `bt709`/`tv`, `60/1`, `nb_frames=600`, AAC 48 kHz; the three candidates 3840x2160 PNG and 1280x720 JPEG (79-93 KB), each teaser upper case on its glass at the top left. Demo lint `lint clean: 373 frames checked` (37 s), demo render 2220 frames (140 s); its contact sheet shows every graphics block drawn by the real Chrome, the BarChart range bar labelled `1,000–1,650 T` and the ScaleZoom pull-back. Measured there: a linear pull on 1:6,000 turns the small bar into a dot within the first frames of the pull-back, as the arithmetic says (recorded as owner question Q6 in `2026-09-26-owner-questions.md` and the build index's section 8; the build keeps the linear pull-back as decision 31 words it).
+- **Captures:** `138 passed, 1 skipped` (the non-Windows refusal test); ruff check, ruff format --check, vulture at 80 and mypy on `sources.py` clean. The new import `pipeline.studio.capture.sources -> pipeline.lyra.theo_publishing` crosses no import-linter contract (pipeline to pipeline).
+- **Cross-plan, partial:** plan C's current `script_fixtures.REGISTRY` (11 blocks, as its fixer has written it so far) equals the generated `registry.json` entry for entry (compared in Python).
+- **Not run in this pass:** the build index's cross-plan re-verification (after all I0 fixers: C Task 27 against this `registry.json`, the contract test against C's regenerated golden file, the republish handshake), Task 36 (real captures), the frontend suites (no frontend file changed), the backend suite and `lint-imports`. Tasks 22 and 36 run again on the finished code before I8. Scratch copies were deleted afterwards.
+
+### Confirm-round fix pass (2026-09-26, after the I0 confirm review)
+
+Changed, each with its tests (the ids are those of the confirm review):
+
+- **Page titles are data, never drawn (registry-page-title, decisions-32-page-title; owner decision 32).** A source page's own `<title>` stays in the capture's `page` event as a record and is drawn nowhere, so it is not glyph-checked: SourceViewer's address bar draws only `domainOf(url)` (`pageInfo` returns `{url, box}`), `capture_source` credits `Source page: <host>` with the new `ascii_host(url)` (IDNA, without `www.`, the string `domainOf` draws; the paper page keeps no credit), and `captureStrings` walks only the credits and the `place`/`pin` labels. `blocks.test.ts` now uses the real el.wikipedia title `Κνωσός - Βικιπαίδεια` and passes it, and refuses a Greek capture credit instead (`props.page.credits[0]: "Β" (U+0392)`); `test_capture_sources.py` pins the ASCII-host credit and the Greek title kept in the event (+1 test, `ascii_host`); the smoke fixture's source credit reads `Source page: dainst.org`. D1, D2, "Where this plan and plan C meet", Tasks 17 and 29 and cross-stream request 3 no longer name page titles as drawn and drop the "show its quote in a QuoteCard" advice. Plan C's side of the same seam: `glyphs.DRAWN_EVENT_FIELDS = {"place": "label", "pin": "label"}` (plan C's fixer). Not taken from decisions-32-page-title: drawing the case file's `evidence.source.title` in the address bar. For the type-D sources decision 32 is about, that title is often in the original script too, so SourceViewer would be refused again. SourceViewer's `drawn` stays `[]`, so `registry.json` is unchanged (18 blocks, 2236 lines) and plan C's `script_fixtures.REGISTRY` entry for SourceViewer stays `[]`.
+- **Demo thumbnails before the answer (demo-thumbnails-show-the-answer).** The demo timeline's candidates sit at frames 108, 200 and 300, all before its first verdict cue (`status` at 330), as plan C's `thumbnail_problem` demands (owner decision 24); `timeline.test.ts` pins them, Task 22's demo lint names them, `teaserOf(DEMO_TIMELINE, 2)` and the 373 linted demo frames are unchanged.
+- **One definition of capture ids, kinds, repo root and base URL (capture-dup-1, own-4, own-8).** `manifest.py` imports `CAPTURE_ID_RE` and `CAPTURE_KINDS` from `pipeline.studio.config` (plan C Task 1, their one home) and drops `ID_RE`/`KINDS` and its `re` import; `vite.py` imports `REPO` from `pipeline.studio.config` and `BASE_URL` from `pipeline.utils.slugs`, and keeps `PRODUCTION_URL = BASE_URL` because `sources.py`, `platform.py` and `globe.py` import that name. Check C1 now prints five lines (errors.py plus `REPO`, `CAPTURE_ID_RE`, `CAPTURE_KINDS`, `check_slug`); error messages are unchanged.
+- **A Mapbox take's `country` (capture-country-3).** `studio-mapbox.ts` `checkCountry` throws `unknown country <x>` before `prepareMapbox` when the site's `getCountryCode` knows no code, so the recorder exits 1 and `record_globe` raises its `CaptureError` (+1 test in `studio-scenes.test.ts`); `prepareMapbox` is unchanged for the Shorts. D2 and the globe docstring state the rule; plan C binds `country` to the site export.
+- **No satellite toggle (decisions-no-satellite-toggle, owner correction 2026-09-26).** `validate_actions` refuses `toggle_layer` with the label `Satellite` in any case, before any side effect (+1 parametrized case; `test_record_platform_validates_before_starting_anything` also proves it through `record_platform`, with no `captures/` written).
+- **Texts:** the Footage docstring names HEVC from `hevc_nvenc` on GPU 0 (decisions-gpu-stale-text); Task 16 and the I0 record name the 1:6,000 ScaleZoom question as owner question Q6 (registry-scalezoom-question-unrecorded).
+- **Not taken here:** capture-doc-2 (it would keep the page title drawn and checked, against owner decision 32 and the two major issues above; spec 4.3 and index row #32 stay as written). The spec, index and owner-questions edits of registry-spec-block-text-stale, render-3, decisions-gpu-stale-text (spec part), registry-scalezoom-question-unrecorded (the Q6 row), own-1, own-2, own-6 and own-9 are the orchestrator's; this plan's text already matches them.
+
+Verified on a minimal scratch built by script from the plan text (every complete-file block and all 26 frontend replacements matched once; the worktree's `pipeline/` and `ancient-nerds-map/` without `public/` and `node_modules`, the frontend's `node_modules` as a junction; plan C Task 1's `__init__.py`, `errors.py` and current `config.py` with `CAPTURE_ID_RE`/`CAPTURE_KINDS`, and plan A Task 2's `theo_publishing.py`, each from its plan's current code block):
+
+- **Renderer, with a real `npm install` of Task 1's `package.json`** (Remotion 4.0.529, 294 packages): `npm run registry` writes 18 blocks (2236 lines), `tsc --noEmit` clean, vitest `Test Files 25 passed (25)`, `Tests 196 passed (196)` (`contract.test.ts` on a stand-in golden file, a copy of the smoke timeline). With the old `page` line put back into `captureStrings`, the Greek-title test fails as intended.
+- **Captures:** `140 passed, 1 skipped` over the ten capture test files (`test_capture_sources.py` 17, `test_capture_platform.py` 30); ruff check, ruff format --check, vulture at 80 and mypy clean. `test_the_cursor_is_fast_even_when_each_move_takes_time` (unchanged by this pass) failed in 2 of 5 runs while parallel agents loaded the workstation (0.35 s against its 0.267 s limit) and passed on every quiet re-run.
+- **Frontend:** `studio-scenes.test.ts` `Tests 12 passed (12)` (with `videoMode` and `screenPoint`: 29), the recorder's `tsc -p video/tsconfig.json` and the app's `tsc --noEmit` clean.
+- **Not run in this pass:** Tasks 22 and 36 (NVENC renders and real captures), the backend suite, `lint-imports` (the new imports are pipeline to pipeline), the whole-frontend vitest and knip, plan C's glyph tests with the narrowed `DRAWN_EVENT_FIELDS`, and the build index's cross-plan re-verification. Scratch copies were deleted afterwards (junction removed first).
+
+### Second confirm-round fix pass (2026-09-27, after the second confirm review)
+
+Changed, each with its tests (the ids are those of the review):
+
+- **Hook caption lines fit one row (timeline-hook-caption-width).** `video/src/captions.ts` exports `HOOK_LINE_MAX_CHARS = 24` on a line of its own, and `captionLines(captions, maxWords = 4, maxChars = HOOK_LINE_MAX_CHARS)` also starts a new line before a word that would make the line (its words joined by single spaces, punctuation included) longer than 24 characters; the four-word, punctuation and pause breaks stay. +1 test (`ARCHAEOLOGISTS FOUND SOMETHING IMPOSSIBLE` gives `ARCHAEOLOGISTS FOUND` / `SOMETHING IMPOSSIBLE`; the existing expectations are unchanged). Task 10's intro records the fontTools measurement and the HookCaptions docstring the limit. Plan C mirrors the constant and refuses a hook word longer than 24 characters before voice (its fixer; its Task 27 reads the line with a regex).
+- **Upper case in the glyph rule (timeline-glyph-rule-ignores-css-uppercase).** `unsupportedChar` also tests every code point of `ch.toUpperCase()`, and `glyphReason` names what the character turns into (`"µ" (U+00B5) draws as "Μ" (U+039C) in upper case, which has no glyph in the brand fonts (latin and latin-ext only)`). `glyphs.test.ts` covers `µ` and `ẖ`, and a new blocks test refuses the teaser `Smaller than 1 µm?` at `thumbnails[0].text`. Within the two brand ranges exactly five characters change verdict: U+00B5 `µ`, U+01F0 `ǰ`, U+1E96 `ẖ`, U+1E98 `ẘ` and U+1E99 `ẙ`. Node 22.17 and Python 3.13.5 (Unicode 15.1) give the same list, so plan C's `str.upper()` mirror agrees.
+- **ShareCard only as the last scene (decisions-sharecard-end-card).** `checkBlocks` reports `scene <id> (ShareCard): ShareCard is the end card; only the last scene may use it` for a ShareCard on any scene but the last. +1 blocks test: a ShareCard at b10 of the demo timeline is the only error, so the last scene's ShareCard passes. The D1 row, D3, the ShareCard docstring and Task 17's intro state the rule. The demo timeline keeps its ShareCard last; the smoke fixture has none.
+- **The distribution camera shows every place (capture-distribution-pose).** `distribution_pose` no longer takes the places' mean latitude. It takes the latitude nearest the midpoint of their lowest and highest latitude (the midpoint itself, or a whole degree within ±45) at which every place is admissible (`_faces_camera`). A dot is admissible within the horizon less 5° (`DISTRIBUTION_DOT_REACH_DEG`, 60.8° at 2.44). A labelled place is admissible when projection.py's globe camera draws it inside `PLACES_BAND` at some camera longitude of the turn. When no latitude admits them all, `scene_input` raises before any side effect with `<id>: places [...] cannot face the camera in one turn of the globe; split the distribution`. The camera longitude is unchanged. +2 tests: the Rapa Nui case gives 10.45, a labelled place at -40° among dots at 45° gives -14.0, and 70°N with -66° is refused through `record_globe`, with no `captures/` written. The existing test keeps 10.42 and 161.82. D2, Task 31's intro and the module docstring describe the rule.
+- **Task 32 after Task 29 (capture-task32-order).** Row 29 of the Dependencies table now reads "29 (source pages) and 32 (package exports, imports `sources.py`)" with check A2. The recommended order reads "do Tasks 30 and 31 first if it prints nothing; Task 32 comes after Task 29". Task 32's intro says why.
+- **Counts:** renderer 24 files and 198 tests before Task 37 (+3), 25 and 199 with it; `test_capture_globe.py` 28 (CI 27 + 1 skip); the capture suite `142 passed, 1 skipped` (CI `129 passed, 14 skipped`). The Spec coverage table names the end-card, caption-row and upper-case rules and the distribution pose.
+- **Not taken here (no plan-D change; the orchestrator's or another plan's):** registry-q6-still-unrecorded, own-r2-q6-unrecorded and decisions-31-q6-unrecorded, which cover the Q6 row in the owner-questions file and index section 8 plus the #22/#23 marks. Task 16 and the I0 record already point at Q6 and keep the linear pull-back. Also registry-spec-4.3-4.8-stale and render-spec-stale-nvenc-text (spec edits), and own-r2-ci-backend-filter (index I4; cross-stream request 1 already asks for the `backend` filter lines). Then own-r2-i2-i6-skill-content (index I2/I6; cross-stream request 3 already carries the D-side rules: hook word length, upper case, end card, no satellite toggle, the Mapbox `country`), own-r2-d7-heading (index row D7; this plan's heading already says 18) and own-r2-i0-gate-list (index 4.2/4.4). Plan C's halves of the caption, upper-case and end-card items belong to plan C's fixer.
+
+Verified on a minimal scratch built by script from the plan text: every complete-file block of `video/`, `pipeline/studio/capture/` and its tests; the worktree's `pipeline/`; plan C Task 1's `__init__.py`, `errors.py` and `config.py`, and plan A Task 2's `theo_publishing.py`, each from its plan's current block; the frontend's `package.json`, `video/record.ts`, `tokens.css` and `constants/colors.ts`. The renderer ran on the Remotion 4.0.529 install of the previous pass, made from the same `package.json` and lockfile.
+
+- **Renderer:** `npm run registry` writes 18 blocks (2236 lines, unchanged). `tsc --noEmit` is clean. vitest gives `Test Files 25 passed (25)` and `Tests 199 passed (199)`; `contract.test.ts` read a stand-in golden file (a copy of the smoke timeline), and `project.test.ts`'s lockfile test is included. Each new test failed against the code without its fix: without the character budget, `captionLines` gives one line; without the upper-case test, `µ` passes; without the end-card rule, a b10 ShareCard passes.
+- **Captures:** `142 passed, 1 skipped`. With the NVIDIA driver and Playwright hidden, as in CI, `129 passed, 14 skipped`, each skip with its reason. ruff 0.15.11 check, ruff format --check, vulture at 80 and mypy over `pipeline/studio/capture` are clean. With the mean-latitude pose put back, both new globe tests fail: 41.17 instead of 10.45, and the refusal test reaches the recorder.
+- **Probes:** 499 dots near 45°N plus a labelled Machu Picchu give `cam_lat` 16.42 in 5 ms. The mean-latitude pose would sit at 44.88, where Machu Picchu never enters the band. Task 36's `g4` spec gives 20.14 (its midpoint). A fontTools re-run on `orbitron-700.woff2` confirmed Task 10's numbers: an average capital of 56 px, 1126 and 2046 px, 5 of 18 four-word lines over 1440 px, a widest 24-character line of 1220 px, and 24 × `M` at 1518 px.
+- **Not run in this pass:** Tasks 22 and 36 (NVENC renders and real captures; the distribution pose changes which latitude the `g4` take is filmed from), the frontend suites (no frontend file changed), the backend suite, `lint-imports` (no new import), plan C's mirrors of the three shared rules, and the build index's cross-plan re-verification. Scratch copies were deleted afterwards.
