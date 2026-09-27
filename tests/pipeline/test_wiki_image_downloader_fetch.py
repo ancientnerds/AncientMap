@@ -279,11 +279,7 @@ def test_a_run_with_failures_exits_non_zero_and_lists_them(monkeypatch):
 # --------------------------------------------------------------------------------------
 
 SITE = "abcdef12-0000-4000-8000-000000000001"
-SITE_ROW = {
-    "id": SITE,
-    "name": "Temple of Test",
-    "source_url": "https://en.wikipedia.org/wiki/Temple_of_Test",
-}
+SITE_ROW = {"id": SITE, "name": "Temple of Test", "source_url": "https://en.wikipedia.org/wiki/Temple_of_Test"}
 GATE = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Temple_gate.jpg"
 GATE_TITLE = "File:Temple_gate.jpg"  # the media-list spelling: underscores
 UTM = "?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=original"
@@ -344,9 +340,7 @@ def _wikipedia(monkeypatch) -> list[httpx.Request]:
             return httpx.Response(200, json=_media_list())
         assert (url.host, url.path) == ("en.wikipedia.org", "/w/api.php"), f"not asked: {url}"
         if url.params["prop"] == "pageprops":
-            return httpx.Response(
-                200, json={"query": {"pages": {"7": {"title": "Temple of Test"}}}}
-            )
+            return httpx.Response(200, json={"query": {"pages": {"7": {"title": "Temple of Test"}}}})
         assert url.params["prop"] == "imageinfo", f"not asked: {url}"
         return httpx.Response(200, json=_imageinfo(url.params["titles"].split("|")))
 
@@ -405,16 +399,10 @@ class FakeSession:
                 raise IntegrityError(
                     "INSERT INTO wiki_images",
                     {},
-                    Exception(
-                        'duplicate key value violates unique constraint "uq_wiki_image_site_url"'
-                    ),
+                    Exception('duplicate key value violates unique constraint "uq_wiki_image_site_url"'),
                 )
             self.db.rows.append(
-                {
-                    "site_id": item.site_id,
-                    "original_url": item.original_url,
-                    "filename": item.filename,
-                }
+                {"site_id": item.site_id, "original_url": item.original_url, "filename": item.filename}
             )
             self.db.inserted.append(item)
 

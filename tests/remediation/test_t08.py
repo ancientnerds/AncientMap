@@ -45,16 +45,12 @@ def _ctx(sites: list[dict]) -> SimpleNamespace:
     return SimpleNamespace(sites=sites)
 
 
-def _site(
-    sid: str, description: str | None = None, citations: list[dict] | None = None
-) -> dict[str, Any]:
+def _site(sid: str, description: str | None = None,
+          citations: list[dict] | None = None) -> dict[str, Any]:
     raw = {"description_citations": citations} if citations is not None else None
     return {
-        "id": sid,
-        "source_id": "ancient_nerds",
-        "name": f"Site {sid}",
-        "description": description,
-        "raw_data": raw,
+        "id": sid, "source_id": "ancient_nerds", "name": f"Site {sid}",
+        "description": description, "raw_data": raw,
     }
 
 
@@ -137,9 +133,7 @@ class TestT08FailureModes:
         site = _site("a", "A hill [3].", [_entry(1), _entry(2)])
         got = sorted(t08.run(_ctx([site])), key=lambda f: f.test_id)
         assert [f.test_id for f in got] == [
-            "T08/entry-never-cited",
-            "T08/marker-without-entry",
-            "T08/numbering-gap",
+            "T08/entry-never-cited", "T08/marker-without-entry", "T08/numbering-gap",
         ]
 
 
