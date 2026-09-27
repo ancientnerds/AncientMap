@@ -57,6 +57,26 @@ from pipeline.studio import spoken
         ("A.D. seventy", "AD 70"),
         ("three hundred B.C.E.", "300 BCE"),
         ("in seventy C.E.", "in 70 CE"),
+        # a hundred-group after a magnitude never opens an equal or larger magnitude
+        ("two hundred thousand three hundred thousand", "200,000 300,000"),
+        ("three hundred thousand four hundred thousand people", "300,000 400,000 people"),
+        ("a million two hundred million", "1,000,000 200,000,000"),
+        ("a hundred thousand two hundred", "100,200"),
+        ("a hundred thousand two hundred, thousand more", "100,200, thousand more"),
+        # nor does a year take a group that a hundred or a magnitude multiplies
+        ("eighteen twelve thousand men died", "18 12,000 men died"),
+        ("nineteen sixty-six thousand", "19 66,000"),
+        ("nineteen oh five thousand", "19 oh 5,000"),
+        ("In eighteen twelve, thousands died", "In 1812, thousands died"),
+        ("nineteen, sixty stones", "19, 60 stones"),
+        # decimals keep every digit, and only trailing zeros are spelling
+        (
+            "one thousand two hundred thirty-four point five six seven",
+            "1,234.567",
+        ),
+        ("two point five zero metres", "2.50 m"),
+        ("2.50 m", "two point five metres"),
+        ("two point zero metres", "2 m"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -104,6 +124,38 @@ def test_equivalent_spellings(said, shown):
         ("They found forty. Six", "They found 46", "token 2: spoken '40' vs display '46'"),
         # and a number spoken whole stays whole
         ("forty-six", "40, 6", "token 0: spoken '46' vs display '40'"),
+        # nor a concatenation when no comma separates the two numbers
+        (
+            "a hundred thousand two hundred thousand",
+            "100200 thousand",
+            "token 0: spoken '100000' vs display '100200'",
+        ),
+        (
+            "eighteen twelve thousand men died",
+            "1812 thousand men died",
+            "token 0: spoken '18' vs display '1812'",
+        ),
+        # two numbers that differ in any digit never share a token
+        (
+            "one thousand two hundred thirty-four point five six seven",
+            "1,234.568",
+            "token 0: spoken '1234.567' vs display '1234.568'",
+        ),
+        (
+            "twelve thousand three hundred forty-five point six seven",
+            "12,345.66",
+            "token 0: spoken '12345.67' vs display '12345.66'",
+        ),
+        (
+            "1234567.5 tonnes",
+            "1234571.2 tonnes",
+            "token 0: spoken '1234567.5' vs display '1234571.2'",
+        ),
+        (
+            "12345678901234567 stones",
+            "12345678901234568 stones",
+            "token 0: spoken '12345678901234567' vs display '12345678901234568'",
+        ),
     ],
 )
 def test_real_differences_are_reported(said, shown, where):

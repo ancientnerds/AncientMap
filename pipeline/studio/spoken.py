@@ -49,8 +49,12 @@ _DIGITS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$")
 _ORDINAL_DIGITS_RE = re.compile(r"^\d+(?:st|nd|rd|th)$")
 
 
-def _format(value: float) -> str:
-    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+def _format(integer: int, fraction: str = "") -> str:
+    """The canonical digits of `integer`.`fraction`, exact at any length: two numbers that
+    differ in any digit get different tokens. Only trailing zeros of the fraction are spelling
+    ("2.50" is "2.5", "2.0" is "2"); no float is involved, since one would round them away."""
+    fraction = fraction.rstrip("0")
+    return f"{integer}.{fraction}" if fraction else str(integer)
 
 
 def _words(text: str) -> tuple[list[str], set[int]]:
@@ -91,6 +95,16 @@ def _small(words: list[str], stops: set[int], i: int) -> tuple[int, int] | None:
     return None
 
 
+def _multiplied(words: list[str], stops: set[int], nxt: int) -> bool:
+    """Whether the group ending before words[nxt] is multiplied by a "hundred" or a magnitude
+    that follows it. A group that closes a clause is final whatever follows it."""
+    return (
+        nxt < len(words)
+        and nxt - 1 not in stops
+        and (words[nxt] == "hundred" or words[nxt] in MAGNITUDES)
+    )
+
+
 def _joins_after_and(words: list[str], stops: set[int], i: int) -> bool:
     """ "and" continues a number only before a final 0-99 ("two thousand and fourteen"),
     never before a new hundred/thousand ("five hundred and one thousand" is two numbers). A
@@ -100,12 +114,7 @@ def _joins_after_and(words: list[str], stops: set[int], i: int) -> bool:
     small = _small(words, stops, i)
     if small is None:
         return False
-    nxt = small[1]
-    return (
-        nxt >= len(words)
-        or nxt - 1 in stops
-        or (words[nxt] != "hundred" and words[nxt] not in MAGNITUDES)
-    )
+    return not _multiplied(words, stops, small[1])
 
 
 def _small_continues(
@@ -116,8 +125,10 @@ def _small_continues(
     a magnitude or a joining "and": "between two and three", "two three-tonne" and "fifteen
     hundred two hundred" are two numbers each. After a magnitude it may open the next group
     ("one thousand five hundred") or a smaller magnitude ("one million two thousand"), never
-    an equal or larger one ("two thousand three thousand" is two numbers). A 0-99 that closes
-    a clause is the run's last group, so the word after it decides nothing."""
+    an equal or larger one ("two thousand three thousand" is two numbers). The same holds
+    past a hundred-group: "one million two hundred thousand" goes on, "a hundred thousand two
+    hundred thousand" is two numbers. A 0-99 or a hundred that closes a clause is the run's
+    last group, so the word after it decides nothing."""
     if prev == "":
         return True
     if prev == "small":
@@ -125,7 +136,13 @@ def _small_continues(
     if nxt - 1 in stops:
         return True
     if nxt < len(words) and words[nxt] == "hundred":
-        return prev == "magnitude"
+        after = nxt + 1
+        return prev == "magnitude" and (
+            nxt in stops
+            or after >= len(words)
+            or words[after] not in MAGNITUDES
+            or MAGNITUDES[words[after]] < last_magnitude
+        )
     if nxt < len(words) and words[nxt] in MAGNITUDES:
         return MAGNITUDES[words[nxt]] < last_magnitude
     return True
@@ -144,7 +161,9 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
     first = _small(words, stops, i)
     if first is None:
         return None
-    # year pattern: "nineteen sixty six", "twenty fourteen", "nineteen oh five"
+    # year pattern: "nineteen sixty six", "twenty fourteen", "nineteen oh five"; never when a
+    # hundred or a magnitude multiplies the second group ("eighteen twelve thousand" is 18 and
+    # 12000, not 1812 and a stray "thousand")
     a, j = first
     if (
         10 <= a <= 99
@@ -152,10 +171,16 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
         and j < len(words)
         and words[j] not in ("hundred", *MAGNITUDES)
     ):
-        if words[j] == "oh" and j not in stops and j + 1 < len(words) and words[j + 1] in ONES:
+        if (
+            words[j] == "oh"
+            and j not in stops
+            and j + 1 < len(words)
+            and words[j + 1] in ONES
+            and not _multiplied(words, stops, j + 2)
+        ):
             return str(a * 100 + ONES[words[j + 1]]), j + 2
         second = _small(words, stops, j)
-        if second is not None and second[0] >= 10:
+        if second is not None and second[0] >= 10 and not _multiplied(words, stops, second[1]):
             return str(a * 100 + second[0]), second[1]
     total, current = 0, 0
     prev = ""  # what the run consumed last: "", "small", "hundred", "magnitude" or "and"
@@ -186,7 +211,7 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
             break
         if i - 1 in stops:
             break
-    value: float = total + current
+    digits = ""
     if (
         i - 1 not in stops
         and i not in stops
@@ -194,15 +219,13 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
         and words[i] == "point"
         and words[i + 1] in ONES
     ):
-        digits = ""
         i += 1
         while i < len(words) and words[i] in ONES and ONES[words[i]] < 10:
             digits += str(ONES[words[i]])
             i += 1
             if i - 1 in stops:
                 break
-        value = float(f"{int(value)}.{digits}")
-    return _format(value), i
+    return _format(total + current, digits), i
 
 
 def normalize_tokens(text: str) -> list[str]:
@@ -217,7 +240,8 @@ def normalize_tokens(text: str) -> list[str]:
             i = run[1]
             continue
         if _DIGITS_RE.match(w):
-            out.append(_format(float(w.replace(",", ""))))
+            whole, _, fraction = w.replace(",", "").partition(".")
+            out.append(_format(int(whole), fraction))
         elif _ORDINAL_DIGITS_RE.match(w):
             out.append(w)
         elif w in ORDINALS:
