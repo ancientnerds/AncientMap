@@ -4,19 +4,27 @@ No model is called from here. A step exports one task per question:
 
     <dir>/tasks.jsonl            every current task (payload + task_id + prompt_path + prompt_sha256)
     <dir>/pending.jsonl          the tasks without an accepted answer (what the workflow answers)
-    <dir>/prompts/<task_id>.txt  the exact prompt text, UTF-8
+    <dir>/prompts/<task_id>.txt  the exact prompt: its UTF-8 bytes, newlines untranslated, so
+                                 the file's sha256 is the task's prompt_sha256 on every platform
 
 A workflow (.claude/workflows/theo-claim-check.js, theo-image-check.js) reads pending.jsonl,
-answers each task by reading its prompt file, and writes `<dir>/verdicts.jsonl`, one JSON
-object per line, echoing `task_id` and `prompt_sha256`. `import_answers` validates the whole
-file (shape, enums, known task ids, prompt hashes, answered_by) and merges it into
+answers each task by reading its prompt file, and writes or appends to `<dir>/verdicts.jsonl`,
+one JSON object per line, echoing `task_id` and `prompt_sha256`. `import_answers` validates the
+whole file (shape, enums, known task ids, prompt hashes, answered_by) and merges it into
 `<dir>/accepted.json`. A task id is derived from its prompt hash, so a task whose paragraph,
 sources or instructions changed is a new task, and an old answer can never vouch for it.
+
+verdicts.jsonl holds one round of answers. A successful import rewrites pending.jsonl to the
+tasks still without an accepted answer and moves the file aside to
+`verdicts.imported-<NNNN>.jsonl` (the next free round number), so the next round starts from
+no file, whether its workflow appends or writes. A refused file stays in place, to be
+corrected or replaced; nothing of it is merged.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +41,7 @@ TASKS_FILE = "tasks.jsonl"
 PENDING_FILE = "pending.jsonl"
 VERDICTS_FILE = "verdicts.jsonl"
 ACCEPTED_FILE = "accepted.json"
+IMPORTED_VERDICTS_RE = re.compile(r"verdicts\.imported-(\d{4,})\.jsonl")
 
 
 class HandoffError(StudioError):
@@ -81,6 +90,7 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text(
         "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in rows),
         encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -119,7 +129,7 @@ def export_tasks(out_dir: Path, tasks: list[Task]) -> dict[str, int]:
         if stale.name not in wanted:
             stale.unlink()
     for task in tasks:
-        (prompts / f"{task.task_id}.txt").write_text(task.prompt, encoding="utf-8")
+        (prompts / f"{task.task_id}.txt").write_bytes(task.prompt.encode("utf-8"))
     rows = task_rows(tasks)
     accepted = load_accepted(out_dir)
     pending = [r for r in rows if r["task_id"] not in accepted]
@@ -181,15 +191,34 @@ def validate_answers(
 def import_answers(
     out_dir: Path, spec: AnswerSpec, extra_check: ExtraCheck | None = None
 ) -> dict[str, dict[str, Any]]:
-    """Validate verdicts.jsonl against tasks.jsonl and merge it into accepted.json."""
+    """Validate verdicts.jsonl against tasks.jsonl and merge it into accepted.json.
+
+    Then pending.jsonl lists only the tasks still unanswered, and the imported file moves to
+    the next `verdicts.imported-<NNNN>.jsonl`. A refused file is left in place, unmerged.
+    """
     verdicts = out_dir / VERDICTS_FILE
     if not verdicts.exists():
         raise HandoffError(f"{verdicts} does not exist: run the workflow on pending.jsonl first")
-    tasks = {r["task_id"]: r for r in read_jsonl(out_dir / TASKS_FILE)}
+    rows = read_jsonl(out_dir / TASKS_FILE)
+    tasks = {r["task_id"]: r for r in rows}
     valid = validate_answers(read_jsonl(verdicts), tasks, spec, extra_check)
     accepted = {k: v for k, v in load_accepted(out_dir).items() if k in tasks}
     accepted.update(valid)
     (out_dir / ACCEPTED_FILE).write_text(
-        json.dumps(accepted, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+        json.dumps(accepted, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+        newline="\n",
     )
+    write_jsonl(out_dir / PENDING_FILE, [r for r in rows if r["task_id"] not in accepted])
+    verdicts.rename(_next_imported_path(out_dir))
     return accepted
+
+
+def _next_imported_path(out_dir: Path) -> Path:
+    """`verdicts.imported-<NNNN>.jsonl` with the round number after the highest one present."""
+    rounds = [
+        int(m.group(1))
+        for p in out_dir.glob("verdicts.imported-*.jsonl")
+        if (m := IMPORTED_VERDICTS_RE.fullmatch(p.name))
+    ]
+    return out_dir / f"verdicts.imported-{max(rounds, default=0) + 1:04d}.jsonl"
