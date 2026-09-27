@@ -20,6 +20,7 @@ inside the functions that use it.
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
+from html import escape, unescape
 from typing import Any, NamedTuple
 
 from pipeline.lyra.theo_image_captions import _META_VOICE_RE
@@ -462,3 +463,121 @@ def page_extras_payload(extras: PaperExtras) -> dict[str, Any]:
     if extras.writer is not None:
         payload["writer"] = extras.writer
     return payload
+
+
+# ── Evidence anchors in the rendered body ────────────────────────────────────
+# nh3 drops every id attribute (article_html_renderer._sanitize_html), so the
+# anchors are added to the finished HTML, like _heading_anchors does for h2/h3.
+# Only research pages call this; journals and the Medium copy never see it.
+# The additions are built from regex-validated ids, a regex-validated YouTube
+# id, integer seconds and an html-escaped title, never from raw input.
+
+_PARAGRAPH_RE = re.compile(r"<p>(.*?)</p>", re.DOTALL)
+_BR_RE = re.compile(r"<br\s*/?>")
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _paragraph_text(inner_html: str) -> str:
+    """The visible text of a paragraph's inner HTML: tags dropped, entities decoded."""
+    return unescape(_TAG_RE.sub("", _BR_RE.sub(" ", inner_html)))
+
+
+def resolve_evidence_anchors(html: str, evidence: list[dict[str, Any]]) -> dict[str, int]:
+    """ev id -> index of the one plain <p> of `html` whose text opens with its anchor_text.
+
+    The rule is contract C9 of the publish gate (pipeline/lyra/theo_publishing):
+    both sides go through normalize_anchor_text, which maps the markdown a
+    writer copies an anchor from and the smartypants-rendered paragraph text
+    to the same key; the normalised anchor must be at least MIN_ANCHOR_CHARS
+    long, and exactly one paragraph's normalised text may START WITH it.
+    Several entries may open the same paragraph. Raises PaperPageError naming
+    every entry that is too short or matches zero or several paragraphs.
+    """
+    # Imported here, not at module level: the light importers of this module
+    # (static_exporter, the landing route) never need the publish module, and
+    # theo_publishing's gates import this module back.
+    from pipeline.lyra.theo_publishing import MIN_ANCHOR_CHARS, normalize_anchor_text
+
+    texts = [
+        normalize_anchor_text(_paragraph_text(match.group(1)))
+        for match in _PARAGRAPH_RE.finditer(html)
+    ]
+    found: dict[str, int] = {}
+    problems: list[str] = []
+    for entry in evidence:
+        ev_id = entry["id"]
+        key = normalize_anchor_text(entry["anchor_text"])
+        if len(key) < MIN_ANCHOR_CHARS:
+            problems.append(
+                f"{ev_id}: anchor_text shorter than {MIN_ANCHOR_CHARS} characters after normalisation"
+            )
+            continue
+        hits = [index for index, text in enumerate(texts) if text.startswith(key)]
+        if len(hits) == 1:
+            found[ev_id] = hits[0]
+        else:
+            problems.append(f"{ev_id} matches {len(hits)} paragraphs")
+    if problems:
+        raise PaperPageError(
+            "evidence anchors do not resolve to exactly one paragraph: " + "; ".join(problems)
+        )
+    return found
+
+
+def _clock(seconds: int) -> str:
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def _video_link(moment: VideoMoment) -> str:
+    url = f"https://www.youtube.com/watch?v={moment.youtube_id}&amp;t={moment.seconds}s"
+    title = escape(f"Watch this passage in the video: {moment.title}", quote=True)
+    return (
+        f' <a class="theo-evidence-video" href="{url}" target="_blank" '
+        f'rel="noopener noreferrer" title="{title}">Video at {_clock(moment.seconds)}</a>'
+    )
+
+
+def inject_evidence_anchors(
+    html: str,
+    evidence: list[dict[str, Any]],
+    moments: dict[str, list[VideoMoment]] | None = None,
+) -> str:
+    """Give each evidence paragraph its id="ev-NN" (and a video link per moment).
+
+    The first evidence id of a paragraph becomes the <p>'s id; further ids of
+    the same paragraph get an empty <span class="theo-evidence-anchor"> at its
+    start (an element carries one id). The class theo-evidence is the CSS hook
+    for scroll-margin-top and :target (paper-extras.css). A paper without
+    evidence gets `html` back unchanged.
+    """
+    if not evidence:
+        return html
+    where = resolve_evidence_anchors(html, evidence)
+    by_id = moments or {}
+    ids_at: dict[int, list[str]] = {}
+    for entry in evidence:
+        ids_at.setdefault(where[entry["id"]], []).append(entry["id"])
+    parts: list[str] = []
+    pos = 0
+    for index, match in enumerate(_PARAGRAPH_RE.finditer(html)):
+        ids = ids_at.get(index)
+        if ids is None:
+            continue
+        first, *extra = ids
+        spans = "".join(f'<span class="theo-evidence-anchor" id="{ev}"></span>' for ev in extra)
+        links: list[str] = []
+        seen: set[tuple[str, int]] = set()
+        for ev_id in ids:
+            for moment in by_id.get(ev_id, ()):
+                if (moment.youtube_id, moment.seconds) not in seen:
+                    seen.add((moment.youtube_id, moment.seconds))
+                    links.append(_video_link(moment))
+        parts.append(html[pos : match.start()])
+        parts.append(
+            f'<p id="{first}" class="theo-evidence">{spans}{match.group(1)}{"".join(links)}</p>'
+        )
+        pos = match.end()
+    parts.append(html[pos:])
+    return "".join(parts)
