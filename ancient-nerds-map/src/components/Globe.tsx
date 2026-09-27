@@ -21,6 +21,7 @@ import { useUIState, useLabelVisibility, usePaleoshoreline, useGeologicalLayers,
 import { useConnectorStatus } from '../hooks/useConnectorStatus'
 import ConnectorStatusModal from './ConnectorStatusModal'
 import { isDemoMode, registerGlobeDemoApi } from '../utils/demoApi'
+import { parseVideoMode } from '../utils/videoMode'
 import { createFrontLineMaterial } from '../shaders/globe'
 import { calculateSiteTooltipPosition } from './Globe/rendering/highlightedSitesRenderer'
 import {
@@ -235,7 +236,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const reportStartError = useStartErrorBridge(isGlobeReady, refs.layersReadyCalled)
 
   // Custom Hooks
-  const ui = useUIState({ initialShowCoordinates: true })
+  // ?video=1&hud=1.3: the studio capture's HUD scale (utils/videoMode.ts); otherwise the HUD default
+  const [videoHudScale] = useState(() => parseVideoMode(window.location.search).hudScale)
+  const ui = useUIState({ initialShowCoordinates: true, ...(videoHudScale === null ? {} : { initialHudScale: videoHudScale }) })
   const { showTooltips, showCoordinates, showScale, hudScale, hudScalePreview, hudVisible, dotSize } = ui
 
   const labels = useLabelVisibility({ initialGeoLabelsVisible: false })
