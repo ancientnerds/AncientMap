@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import threading
 
 import httpx
 import pytest
@@ -315,3 +316,164 @@ async def test_time_budget_is_enforced_and_recorded(seams, monkeypatch):
             "reason": "archive completion time budget exhausted",
         }
     ]
+
+
+# --- per-source failures and bounds -----------------------------------------------
+
+
+def _mock_client(handler):
+    return lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+def _unusable_url_handler(request: httpx.Request) -> httpx.Response:
+    url = str(request.url)
+    if url == "https://site.example/page":
+        return httpx.Response(
+            200, html="<html><body><p>Baalbek quarry blocks weigh 1,000 tonnes.</p></body></html>"
+        )
+    if url == "https://redirect.example/r":
+        return httpx.Response(302, headers={"location": "https://xn--a.com/"})
+    raise AssertionError(f"unexpected fetch {url}")
+
+
+async def test_an_unusable_url_fails_its_source_only(seams, monkeypatch):
+    """URLs is_public_http_url and the registry accept but httpx cannot request.
+
+    They used to escape _fetch_all and fail the whole run (review of 32b69ad).
+    """
+    monkeypatch.setattr(ac, "_client", _mock_client(_unusable_url_handler))
+    monkeypatch.setattr(ac, "best_archive_rows", lambda source_ids, *, with_text: {})
+    registry = CitationRegistry()
+    ids = {
+        "good": registry.register_source(url="https://site.example/page", title="Page", snippet=""),
+        # IDNA-invalid host: idna's InvalidCodepoint (a ValueError); no abstract, so missing.
+        "idna": registry.register_source(url="https://xn--a.com/paper", title="Host", snippet=""),
+        # A 302 to such a host; the abstract is archived instead.
+        "redirect": registry.register_source(
+            url="https://redirect.example/r", title="Redirect", snippet="An abstract."
+        ),
+        # httpx.InvalidURL: a host IDNA cannot encode.
+        "invalid": registry.register_source(
+            url="https://exämple⁄.com/", title="Invalid", snippet=""
+        ),
+    }
+    moderated = {"final_claims": [{"claim": "c", "source_ids": list(ids.values())}]}
+
+    stats = await ac.complete_archive(REQ, registry, moderated, [], max_seconds=30, concurrency=2)
+
+    assert (stats.cited_sources, stats.full_text, stats.abstract_only, stats.missing) == (
+        4,
+        1,
+        1,
+        2,
+    )
+    reasons = {failure["source_id"]: failure["reason"] for failure in stats.failures}
+    assert set(reasons) == {ids["idna"], ids["redirect"], ids["invalid"]}
+    assert reasons[ids["idna"]].startswith(
+        "unusable URL fetching 'https://xn--a.com/paper': InvalidCodepoint"
+    )
+    assert reasons[ids["redirect"]].startswith(
+        "unusable URL fetching 'https://redirect.example/r': InvalidCodepoint"
+    )
+    assert reasons[ids["invalid"]].startswith("unusable URL fetching")
+    assert "InvalidURL" in reasons[ids["invalid"]]
+    documents = {doc.source_id: doc for doc in seams.documents}
+    assert set(documents) == {ids["good"], ids["redirect"]}
+    assert documents[ids["good"]].full_text == "Baalbek quarry blocks weigh 1,000 tonnes."
+    assert documents[ids["redirect"]].content_type == SNIPPET_CONTENT_TYPE
+
+
+async def test_an_oversized_pdf_is_refused_with_a_recorded_reason(seams, monkeypatch):
+    monkeypatch.setattr(ac, "_MAX_PDF_BYTES", 1000)
+    served = {"chunks": 0}
+
+    async def endless_pdf():
+        for _ in range(10_000):
+            served["chunks"] += 1
+            yield b"0" * 600
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/declared.pdf":
+            # httpx sets Content-Length: 5000 for bytes content.
+            return httpx.Response(
+                200, content=b"%PDF" + b"0" * 4996, headers={"content-type": "application/pdf"}
+            )
+        if request.url.path == "/streamed.pdf":
+            # No Content-Length (chunked): the reader has to stop on its own.
+            return httpx.Response(
+                200, content=endless_pdf(), headers={"content-type": "application/pdf"}
+            )
+        raise AssertionError(f"unexpected fetch {request.url}")
+
+    monkeypatch.setattr(ac, "_client", _mock_client(handler))
+    monkeypatch.setattr(ac, "best_archive_rows", lambda source_ids, *, with_text: {})
+    registry = CitationRegistry()
+    declared = registry.register_source(
+        url="https://big.example/declared.pdf", title="Thesis", snippet="Thesis abstract."
+    )
+    streamed = registry.register_source(
+        url="https://big.example/streamed.pdf", title="Report", snippet=""
+    )
+    moderated = {"final_claims": [{"claim": "c", "source_ids": [declared, streamed]}]}
+
+    stats = await ac.complete_archive(REQ, registry, moderated, [], max_seconds=30, concurrency=2)
+
+    reasons = {failure["source_id"]: failure["reason"] for failure in stats.failures}
+    assert reasons == {
+        declared: "PDF larger than 1000 bytes (Content-Length 5000) from "
+        "https://big.example/declared.pdf",
+        streamed: "PDF larger than 1000 bytes from https://big.example/streamed.pdf",
+    }
+    assert served["chunks"] == 2  # 1200 bytes read, then the stream is closed
+    assert (stats.full_text, stats.abstract_only, stats.missing) == (0, 1, 1)
+
+
+async def test_html_is_read_only_up_to_max_html_chars(monkeypatch):
+    monkeypatch.setattr(ac, "MAX_HTML_CHARS", 250)
+    served = {"chunks": 0}
+
+    async def endless_page():
+        yield b"<html><body><p>"
+        for _ in range(10_000):
+            served["chunks"] += 1
+            yield b"Baalbek " * 12  # 96 bytes
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=endless_page(), headers={"content-type": "text/html"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        page = await ac.fetch_document(client, "https://long.example/page")
+
+    assert len(page.html) == 250
+    assert page.text.startswith("Baalbek Baalbek")
+    assert served["chunks"] == 3  # 15 + 3 * 96 = 303 characters >= 250, then the stream closes
+
+
+async def test_pdf_parsing_leaves_the_time_budget_able_to_fire(seams, monkeypatch):
+    """pypdf runs in a worker thread: a slow parse cannot hold the event loop past the budget."""
+    release = threading.Event()
+
+    def stuck_pdf_text(data: bytes) -> str:
+        release.wait(10)
+        return "late"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"%PDF-1.4", headers={"content-type": "application/pdf"})
+
+    monkeypatch.setattr(ac, "pdf_text", stuck_pdf_text)
+    monkeypatch.setattr(ac, "_client", _mock_client(handler))
+    monkeypatch.setattr(ac, "best_archive_rows", lambda source_ids, *, with_text: {})
+    registry = CitationRegistry()
+    sid = registry.register_source(url="https://slow.example/p.pdf", title="Slow", snippet="")
+    moderated = {"final_claims": [{"claim": "c", "source_ids": [sid]}]}
+
+    try:
+        stats = await ac.complete_archive(
+            REQ, registry, moderated, [], max_seconds=0.3, concurrency=1
+        )
+    finally:
+        release.set()
+
+    assert stats.timed_out is True
+    assert stats.duration_s < 2
+    assert stats.failures[0]["reason"] == "archive completion time budget exhausted"

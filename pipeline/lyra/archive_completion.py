@@ -17,8 +17,11 @@ completion skips such a source (the EU TDM opt-out covers automated full-text
 fetching): the paper cites it like any source, and the local claim check
 reads it live (owner decision 16, spec 3.5). The step is bounded in
 time and concurrency (THEO_ARCHIVE_COMPLETION_MAX_S, at most
-MAX_ARCHIVE_COMPLETION_S; THEO_ARCHIVE_COMPLETION_CONCURRENCY), and every
-per-source failure is recorded in the manifest, never dropped.
+MAX_ARCHIVE_COMPLETION_S; THEO_ARCHIVE_COMPLETION_CONCURRENCY) and in memory
+per document: bodies are streamed, a PDF above _MAX_PDF_BYTES is refused, an
+HTML page is read only up to MAX_HTML_CHARS characters, and pypdf parses in a
+worker thread so the time budget can fire meanwhile. Every per-source failure,
+an unusable URL included, is recorded in the manifest, never dropped.
 """
 
 from __future__ import annotations
@@ -154,11 +157,12 @@ def resolve_fetch_url(url: str) -> tuple[str, str]:
 
 
 def pdf_text(data: bytes) -> str:
-    """Text of a PDF (pypdf, imported here: API image only)."""
+    """Text of a PDF (pypdf, imported here: API image only).
+
+    CPU-bound on untrusted bytes: fetch_document runs it in a worker thread.
+    """
     from pypdf import PdfReader
 
-    if len(data) > _MAX_PDF_BYTES:
-        raise ArchiveFetchError(f"PDF larger than {_MAX_PDF_BYTES} bytes")
     try:
         reader = PdfReader(io.BytesIO(data))
         pages = [page.extract_text() or "" for page in reader.pages]
@@ -171,23 +175,74 @@ def pdf_text(data: bytes) -> str:
 
 
 async def fetch_document(client: httpx.AsyncClient, url: str) -> FetchedDocument:
-    """Fetch one URL and extract its text (HTML or PDF). Raises ArchiveFetchError."""
-    resp = await client.get(url)
+    """Fetch one URL and extract its text (HTML or PDF). Raises ArchiveFetchError.
+
+    httpx refuses some URLs that is_public_http_url and the citation registry
+    accept, in the URL itself or in a redirect's Location: an IDNA-invalid
+    xn-- host raises idna's InvalidCodepoint (a ValueError), a host IDNA cannot
+    encode raises httpx.InvalidURL. Both fail this source only, not the run.
+    The body is streamed; _read_document bounds it.
+    """
+    try:
+        resp = await client.send(client.build_request("GET", url), stream=True)
+    except (httpx.InvalidURL, ValueError) as exc:
+        raise ArchiveFetchError(
+            f"unusable URL fetching {url!r}: {type(exc).__name__}: {exc}"
+        ) from exc
+    try:
+        return await _read_document(resp)
+    finally:
+        await resp.aclose()
+
+
+async def _read_pdf_bytes(resp: httpx.Response, final_url: str) -> bytes:
+    """The streamed PDF body, refused above _MAX_PDF_BYTES (a cut PDF cannot be parsed)."""
+    declared = resp.headers.get("content-length")
+    if declared is not None and int(declared) > _MAX_PDF_BYTES:
+        raise ArchiveFetchError(
+            f"PDF larger than {_MAX_PDF_BYTES} bytes (Content-Length {declared}) from {final_url}"
+        )
+    data = bytearray()
+    async for chunk in resp.aiter_bytes():
+        data += chunk
+        if len(data) > _MAX_PDF_BYTES:
+            raise ArchiveFetchError(f"PDF larger than {_MAX_PDF_BYTES} bytes from {final_url}")
+    return bytes(data)
+
+
+async def _read_html(resp: httpx.Response) -> str:
+    """The first MAX_HTML_CHARS characters of the body; the rest is never downloaded.
+
+    The same cut every archive row applies (training_corpus.MAX_HTML_CHARS).
+    """
+    parts: list[str] = []
+    chars = 0
+    async for chunk in resp.aiter_text():
+        parts.append(chunk)
+        chars += len(chunk)
+        if chars >= MAX_HTML_CHARS:
+            break
+    return "".join(parts)[:MAX_HTML_CHARS]
+
+
+async def _read_document(resp: httpx.Response) -> FetchedDocument:
+    """Text of a streamed response; the headers decide PDF or HTML before the body is read."""
     final_url = str(resp.url)
     if resp.status_code != 200:
         raise ArchiveFetchError(f"HTTP {resp.status_code} from {final_url}")
     content_type = resp.headers.get("content-type", "")
     lowered = content_type.lower()
     if "pdf" in lowered or urllib.parse.urlparse(final_url).path.lower().endswith(".pdf"):
+        data = await _read_pdf_bytes(resp, final_url)
         return FetchedDocument(
-            text=pdf_text(resp.content),
+            text=await asyncio.to_thread(pdf_text, data),
             html="",
             status=resp.status_code,
             content_type=content_type or "application/pdf",
             final_url=final_url,
         )
     if "html" in lowered or not content_type:
-        html = resp.text[:MAX_HTML_CHARS]
+        html = await _read_html(resp)
         body = extract_text_from_html(html)
         if not body:
             raise ArchiveFetchError(f"page yielded no text: {final_url}")
