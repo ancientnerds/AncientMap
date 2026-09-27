@@ -12952,3 +12952,22 @@ Castell Henllys n2 (digging began 1981), Tarragona n2 (colony under Caesar/Augus
   read-back line (line 4462 not JSON); the re-run over the same data read 0 deviations and was
   accepted - a transport hiccup, not data.
 The held sites (final ones) go to lane WC; the 50 re-queued ones return through v3/v3d's re-queue.
+
+## 2026-09-27 - Lane WB: pilot 3 PASS, the first card sitting (step 1) live
+
+- Pilot `wb-pilot-2026-09-26c` (20 W sites, with the per-card web verification of `wip/wb2`):
+  18 VERIFIED at once, 2 CONTRADICTED -> one rewrite each -> 1 VERIFIED, 1 cleared
+  (`contradicted-after-verify`); the pilot judge (a fresh agent) on the 19 final cards: **122 of 122
+  claims supported with a machine-found quote, 0 contradicted, 0 unproven - PASS**; 4 description
+  defects listed (`DESCRIPTION_DEFECTS.jsonl`).
+- The sitting: backup drill on the VPS (`VERDICT: dump is restorable and matches production
+  row-for-row`, dump `backups/2026-09-27_remediation/`); API StartedAt noted (22:51:47Z / 22:51:54Z);
+  step 1 = lanes `teaser-prov-s001` (19 provenances) and `teaser-card-s001` (19 cards, 1 clear):
+  emit, rehearse, probe-guards, apply, verify, rollback rehearsals card then prov, `accept` 0
+  deviations; `card-file --steps 1-1`, `card_json.py --check` 0 deviations; commit 5c7d52f, pushed by
+  fixed SHA. The first push attempt stopped at a flaky frontend test (MapSection lazy-error, passes
+  alone); CI of 5c7d52f failed on gitleaks (38 sha256 premises in the step's SQL read as API keys) -
+  no deploy, no API restart, verified; the step SQL paths were allowlisted with their reason
+  (.gitleaks.toml) and **14ef1f9** deployed: both API containers restarted after the push
+  (01:14:50Z / 01:14:57Z), 0 `Card description overwritten` lines, `card_json.py --check` and
+  `teaser.py accept --step 1` again 0 deviations.
