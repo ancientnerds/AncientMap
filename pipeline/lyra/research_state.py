@@ -2,9 +2,10 @@
 
 Replaces the fixed-tier model with dynamic angles that saturate
 independently.  ResearchState carries everything the pipeline needs
-from decomposition through final paper delivery and is compatible
-with the worker contract (paper_text, audit_result, quality_score,
-error, total_tokens, llm_call_count, debug_log, etc.).
+from decomposition through the dossier (Theo researches only since
+2026-09-26; the paper is written in a Claude session) and is compatible
+with the worker contract (dossier_summary, error, total_tokens,
+llm_call_count, debug_log, etc.).
 """
 
 from __future__ import annotations
@@ -148,34 +149,11 @@ class ResearchState:
     dossier_ref: int | None = None
     dossier_summary: dict = field(default_factory=dict)
 
-    # Paper
-    paper_text: str = ""
-    paper_title: str = ""
-    card_description: str = ""
-    audit_result: dict = field(default_factory=dict)
-    quality_score: dict = field(default_factory=dict)
-
-    # Probative-image stage output — list of dicts, each with keys:
-    # {claim_index, claim_text, image_path, source_url, title, artist,
-    #  license, license_url, rationale, section_heading}
-    probative_images: list[dict] = field(default_factory=list)
-
-    # Hero banner pick from probative_images. Shape:
-    # {src, title, caption, sourceUrl, web_path, source_name, rationale}.
-    # Populated by the hero picker after presentation. None if no probative
-    # images were embedded.
-    hero_image: dict | None = None
-
     # Image research pool — populated by AngleImageResearchHandler in parallel
     # with angle_search. Keyed by angle.id, values are serialized ImageCandidate
     # dicts (dataclass round-trip via asdict). Persisted in the dossier
     # (image_candidate_pool kind); the Claude image check picks from it.
     image_candidate_pool: dict[str, list[dict]] = field(default_factory=dict)
-
-    # Diversity scores computed after probative-image selection completes.
-    # Keys: source_diversity (float 0-1), artifact_type_diversity (float 0-1),
-    # source_count (int), license_count (int).
-    probative_images_diversity: dict = field(default_factory=dict)
 
     # Metadata
     total_tokens: int = 0

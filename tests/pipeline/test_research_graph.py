@@ -42,7 +42,6 @@ class FakeAngle:
 class FakeState:
     def __init__(self):
         self.question = "How do cyclical world ages appear across mythologies?"
-        self.paper_title = "Cyclical World Ages"
         self.angles = [
             FakeAngle("a1", "Canonical sources", rabbit_holes=["Lurianic Kabbalah"]),
             # Spawned angle: its topic was a rabbit hole that WAS explored.
@@ -74,7 +73,8 @@ def test_builder_emits_paper_node():
     nodes, _edges = build_graph_from_state(FakeState(), "req-123")
     papers = [n for n in nodes if n["kind"] == "paper"]
     assert len(papers) == 1
-    assert papers[0]["label"] == "Cyclical World Ages"
+    # A run ends at the dossier: the paper node carries the question.
+    assert papers[0]["label"] == "How do cyclical world ages appear across mythologies?"
     assert papers[0]["status"] == "explored"
 
 

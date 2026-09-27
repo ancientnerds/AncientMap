@@ -255,9 +255,9 @@ def _failure_snapshot(ctx, status: str) -> dict:
     """Everything a dying run still holds in memory.
 
     Quota deaths are the common terminal state, and until now they discarded
-    hours of completed research — angles, findings and any partial paper were
-    only ever in RAM. Unlike the success path, paper_text belongs in here:
-    nothing else stores it.
+    hours of completed research — angles and findings were only ever in RAM.
+    A run ends at the dossier (research only since 2026-09-26), so there is
+    no partial paper to keep.
     """
     from dataclasses import asdict
 
@@ -271,7 +271,6 @@ def _failure_snapshot(ctx, status: str) -> dict:
         "cross_angle_connections": getattr(ctx, "cross_angle_connections", []),
         "debate_result": getattr(ctx, "debate_result", {}),
         "moderated_result": getattr(ctx, "moderated_result", {}),
-        "paper_text": getattr(ctx, "paper_text", ""),
     }
 
 
