@@ -38,7 +38,11 @@ RULES
 relation ("near", "part of", "the largest", "the oldest") and every stated fact. A number or date \
 that no source gives is unsupported. An approximate figure is supported only by a source that \
 gives the same figure or range. A sentence that states as fact what the sources call uncertain is \
-not supported; a hedge the sources share ("probably", "is thought to") is fine.
+not supported; a hedge the sources share ("probably", "is thought to") is fine. A \
+superlative or uniqueness claim ("the only", "the first", "the largest", "unique") and a \
+style or cultural attribution ("passage tomb-style", "Roman-style", "Phoenician") stays only \
+when a source states exactly that; search for a source that disputes or qualifies it too, and \
+if you find one, remove that piece (KEEP_TRIMMED) or DROP the sentence as contradicted.
 2. A source is reputable and independent: Wikipedia (the article itself, any language), \
 UNESCO, national heritage registers, museums, universities, excavation reports, scholarly \
 publications, established reference works. Never: ancientnerds.com; AI-generated aggregators \

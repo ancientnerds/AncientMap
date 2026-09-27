@@ -735,8 +735,11 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: it here with the reason, and export a new round. CHECK_QUESTION re-pinned 2026-09-26 (the
 #: review's fix round): rule 5 names the trim's new refusals - a cut inside a word or number,
 #: the final mark, a telling or doubt of the sentence, a report of it, a negation's clause.
+#: Re-pinned again 2026-09-27 after pilot pilot-2026-09-27 failed its judge on one kept sentence
+#: (Cloghanmore: "passage tomb-style" carvings and "the only court tomb" disputed by a scholarly
+#: source): rule 1 names superlative, uniqueness and style claims and asks for disputing sources.
 PINS = {
-    "CHECK_QUESTION": "19dc88e3c078231e003eda41d22d82cf3e0c5fab17c50edfa54557763c0c81b9",
+    "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
     "CHECK_BRIEF": "5844ec9957fc97e651c2d1aead3edc08204e7a2eda981c0f02cfb1098d5291e5",
     "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
