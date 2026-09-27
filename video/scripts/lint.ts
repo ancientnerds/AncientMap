@@ -18,7 +18,7 @@ import path from 'node:path'
 import { renderFrames } from '@remotion/renderer'
 
 import { type LintViolation, parseFlags, parseViolation } from './args'
-import { assertAssets, loadTimeline, onNvidia, run, withBundle } from './cli'
+import { RENDER_CHROMIUM, assertAssets, loadTimeline, onNvidia, run, withBundle } from './cli'
 
 export const DEFAULT_EVERY = 6
 export const DEFAULT_SCALE = 0.5
@@ -42,7 +42,16 @@ run(async () => {
   const violations: LintViolation[] = []
   let frames = 0
   // The frames themselves are thrown away: only LayoutGuard's console output matters.
-  const discard = { imageFormat: 'jpeg', jpegQuality: 50, muted: true, outputDir: null, onFrameBuffer: () => undefined, timeoutInMilliseconds: 120_000 } as const
+  // chromiumOptions: a crash-replacement browser must draw on the NVIDIA too (cli.ts RENDER_CHROMIUM).
+  const discard = {
+    imageFormat: 'jpeg',
+    jpegQuality: 50,
+    muted: true,
+    outputDir: null,
+    onFrameBuffer: () => undefined,
+    timeoutInMilliseconds: 120_000,
+    chromiumOptions: RENDER_CHROMIUM,
+  } as const
   await withBundle(publicDir, async (serveUrl) => {
     await onNvidia(serveUrl, 'Episode', inputProps, (browser, composition) =>
       renderFrames({

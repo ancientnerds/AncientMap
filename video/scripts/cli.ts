@@ -12,7 +12,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { bundle } from '@remotion/bundler'
-import { type HeadlessBrowser, openBrowser, selectComposition } from '@remotion/renderer'
+import { type ChromiumOptions, type HeadlessBrowser, openBrowser, selectComposition } from '@remotion/renderer'
 
 import { checkBlocks } from '../src/blocks'
 import { FONT_FILES } from '../src/theme/fonts'
@@ -59,10 +59,24 @@ export async function withBundle<T>(publicDir: string, work: (serveUrl: string) 
 type Composition = Awaited<ReturnType<typeof selectComposition>>
 
 /**
- * Open a render browser with the ANGLE/D3D11 backend (Remotion's default picks
- * SwiftShader), resolve the composition in it and prove from its WebGL renderer
- * (the `gpu` prop calculateMetadata sets) that it draws on the NVIDIA. The
- * browser is closed when `work` ends, successfully or not.
+ * The render browser's options: the ANGLE/D3D11 backend, which draws on the
+ * NVIDIA (Remotion's default gl, null, puts the headless shell on SwiftShader).
+ * onNvidia opens its browser with them, and every renderMedia, renderFrames and
+ * renderStill call must pass them as its chromiumOptions too: when a frame fails
+ * with Target closed (a browser or GPU-process crash), Remotion 4.0.529 replaces
+ * the browser with one built from the render call's own chromiumOptions
+ * (render-frames.js makeBrowser; one retry per frame), and without them that
+ * replacement would finish the chunk on SwiftShader.
+ */
+export const RENDER_CHROMIUM: ChromiumOptions = { gl: 'angle' }
+
+/**
+ * Open a render browser with RENDER_CHROMIUM, resolve the composition in it and
+ * prove from its WebGL renderer (the `gpu` prop calculateMetadata sets) that it
+ * draws on the NVIDIA. The browser is closed when `work` ends, successfully or
+ * not. A replacement browser Remotion opens after a crash (see RENDER_CHROMIUM)
+ * uses the same options and executable but is neither re-proved nor closed here;
+ * Remotion logs "The browser crashed while rendering frame N" when that happens.
  */
 export async function onNvidia<T>(
   serveUrl: string,
@@ -70,7 +84,7 @@ export async function onNvidia<T>(
   inputProps: Record<string, unknown>,
   work: (browser: HeadlessBrowser, composition: Composition) => Promise<T>,
 ): Promise<T> {
-  const browser = await openBrowser('chrome', { chromiumOptions: { gl: 'angle' } })
+  const browser = await openBrowser('chrome', { chromiumOptions: RENDER_CHROMIUM })
   try {
     const composition = await selectComposition({ serveUrl, id, inputProps, puppeteerInstance: browser })
     const problem = nvidiaProblem(String(composition.props.gpu ?? ''))

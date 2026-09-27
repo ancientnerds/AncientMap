@@ -26,7 +26,7 @@ import path from 'node:path'
 import { renderMedia } from '@remotion/renderer'
 
 import { chunkRanges, concatList, nvencOverride, parseFlags, progressPrinter } from './args'
-import { assertAssets, countFrames, ffmpeg, loadTimeline, onNvidia, run, withBundle } from './cli'
+import { RENDER_CHROMIUM, assertAssets, countFrames, ffmpeg, loadTimeline, onNvidia, run, withBundle } from './cli'
 
 export const VIDEO_BITRATE = '16M'
 export const AUDIO_BITRATE = '320k'
@@ -63,6 +63,7 @@ run(async () => {
           serveUrl,
           inputProps,
           puppeteerInstance: browser,
+          chromiumOptions: RENDER_CHROMIUM,
           codec: 'h264',
           frameRange: range,
           outputLocation: `${name}.mp4`,

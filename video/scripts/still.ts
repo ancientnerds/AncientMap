@@ -19,7 +19,7 @@ import { renderStill } from '@remotion/renderer'
 
 import { THUMBNAIL_CANDIDATES } from '../src/timeline'
 import { parseFlags } from './args'
-import { assertAssets, loadTimeline, onNvidia, run, withBundle } from './cli'
+import { RENDER_CHROMIUM, assertAssets, loadTimeline, onNvidia, run, withBundle } from './cli'
 
 export const masterName = (candidate: number) => `thumbnail_${candidate}_3840.png`
 export const jpegName = (candidate: number) => `thumbnail_${candidate}_1280.jpg`
@@ -47,9 +47,10 @@ run(async () => {
   const jpeg = path.join(outDir, jpegName(candidate))
   const fitted = await withBundle(publicDir, (serveUrl) =>
     onNvidia(serveUrl, 'Thumbnail', inputProps, async (browser, composition) => {
-      await renderStill({ composition, serveUrl, inputProps, output: master, imageFormat: 'png', scale: 3840 / composition.width, puppeteerInstance: browser })
+      const onBrowser = { serveUrl, inputProps, puppeteerInstance: browser, chromiumOptions: RENDER_CHROMIUM }
+      await renderStill({ ...onBrowser, composition, output: master, imageFormat: 'png', scale: 3840 / composition.width })
       for (const quality of JPEG_QUALITIES) {
-        await renderStill({ composition, serveUrl, inputProps, output: jpeg, imageFormat: 'jpeg', jpegQuality: quality, scale: 1280 / composition.width, puppeteerInstance: browser })
+        await renderStill({ ...onBrowser, composition, output: jpeg, imageFormat: 'jpeg', jpegQuality: quality, scale: 1280 / composition.width })
         if (statSync(jpeg).size < MAX_JPEG_BYTES) return true
       }
       return false
