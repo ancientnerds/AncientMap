@@ -9,6 +9,7 @@
     "registry": "tsx scripts/registry.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:gpu": "vitest run --config test/gpu/vitest.config.ts",
     "lint:layout": "tsx scripts/lint.ts",
     "render": "tsx scripts/render.ts",
     "still": "tsx scripts/still.ts"
