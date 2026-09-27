@@ -52,6 +52,11 @@ from pipeline.studio import spoken
         ("forty — six", "40 6"),
         ("forty - six", "40 6"),
         ('he said "forty," six times', 'he said "40," 6 times'),
+        # era abbreviations, dotted or not
+        ("five hundred B.C.", "500 BC"),
+        ("A.D. seventy", "AD 70"),
+        ("three hundred B.C.E.", "300 BCE"),
+        ("in seventy C.E.", "in 70 CE"),
     ],
 )
 def test_equivalent_spellings(said, shown):

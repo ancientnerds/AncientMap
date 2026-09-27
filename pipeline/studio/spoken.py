@@ -39,7 +39,9 @@ UNITS = {
     "kg": "kg", "kilogram": "kg", "kilograms": "kg",
     "ft": "ft", "foot": "ft", "feet": "ft",
     "%": "percent", "percent": "percent",
-    "bc": "bc", "bce": "bc", "b.c.": "bc", "ad": "ad", "ce": "ad", "a.d.": "ad",
+    # dotted forms without their last full stop: _words strips it as edge punctuation
+    "bc": "bc", "bce": "bc", "b.c": "bc", "b.c.e": "bc",
+    "ad": "ad", "ce": "ad", "a.d": "ad", "c.e": "ad",
 }  # fmt: skip
 EDGE = ".,;:!?\"'()[]…—–“”‘’"
 STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
