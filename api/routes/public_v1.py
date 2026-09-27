@@ -13,6 +13,7 @@ for the Knowledge-Graph read endpoints (/graph, /knowledge/activity,
 import logging
 import uuid
 from datetime import UTC
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,7 +66,9 @@ from api.services.description_provenance import description_disclosure
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import get_db
+from pipeline.research_html_renderer import PAPER_EXTRAS_COLUMNS, PaperExtras, paper_extras
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
+from pipeline.utils.slugs import BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +133,42 @@ def paper_summary_kwargs(row) -> dict:
         "license": RESEARCH_LICENSE,
         "attribution": attribution,
     }
+
+
+def paper_detail_extras(extras: PaperExtras, slug: str) -> dict:
+    """The optional parts of a Claude-written paper for GET /research/{slug}.
+
+    Studio spec 2026-09-26 §2.7/§3.7. An older paper gets empty lists and no
+    writer. A writer record also names both AI systems in ai_system (Art. 50(2)
+    machine-readable marking); without one the schema default stays.
+    """
+    page = f"{BASE_URL}/research/{quote(slug)}"
+    fields: dict = {
+        "evidence": [
+            {"id": e["id"], "claim": e["claim"], "url": f"{page}#{e['id']}"}
+            for e in extras.evidence
+        ],
+        "videos": [
+            {
+                "youtube_id": v["youtube_id"],
+                "title": v["title"],
+                "published_at": v["published_at"],
+                "url": f"https://www.youtube.com/watch?v={v['youtube_id']}",
+                "evidence_timestamps": v["evidence_timestamps"],
+                "poster": v["poster"],
+            }
+            for v in extras.videos
+        ],
+        "corrections": [
+            {"date": c["date"], "text": c["text"], "evidence_id": c["evidence_id"]}
+            for c in extras.corrections
+        ],
+        "writer": extras.writer,
+    }
+    if extras.writer is not None:
+        w = extras.writer
+        fields["ai_system"] = f"theo-research ({w['research_model']}) + {w['model']} ({w['tool']})"
+    return fields
 
 
 # E4 scope (migration 0020): the public API serves no retired site. Spelled once.
@@ -1659,6 +1698,13 @@ def create_public_api() -> FastAPI:
         description=(
             "Full research paper as Markdown, including numbered citations and the "
             "complete reference list.\n\n"
+            "Papers written by Claude from a Theo research dossier also carry "
+            "`evidence` (checkable claims with deep links to `#ev-NN` on the paper "
+            "page), `videos` (YouTube videos made from the paper, with the second "
+            "each evidence item is shown at and the web path of our own poster "
+            "image, or null), `corrections` (the public log) and "
+            "`writer` (the AI disclosure record). Older papers return empty lists "
+            "and `writer: null`.\n\n"
             f"**License: {RESEARCH_LICENSE}** — reuse freely; attribution to "
             "**Ancient Nerds** (https://ancientnerds.com) is the only requirement."
         ),
@@ -1683,7 +1729,8 @@ def create_public_api() -> FastAPI:
             text(f"""
                 SELECT {PAPER_SUMMARY_COLUMNS},
                        r.result_json::jsonb->>'published_report' AS published_report,
-                       r.result_json::jsonb->>'report' AS report
+                       r.result_json::jsonb->>'report' AS report,
+                       {PAPER_EXTRAS_COLUMNS}
                 FROM research_requests r
                 WHERE r.slug = :slug AND r.is_public = TRUE AND r.status = 'completed'
             """),
@@ -1696,7 +1743,11 @@ def create_public_api() -> FastAPI:
         # is what external consumers should see — same rule as the website.
         content = row.published_report or row.report or ""
 
-        response = ResearchPaperDetail(**paper_summary_kwargs(row), content=content)
+        response = ResearchPaperDetail(
+            **paper_summary_kwargs(row),
+            content=content,
+            **paper_detail_extras(paper_extras(row), row.slug),
+        )
         cache_set(cache_key, response.model_dump(), ttl=600)
         return response
 
