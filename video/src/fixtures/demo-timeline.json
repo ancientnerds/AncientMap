@@ -1,0 +1,464 @@
+{
+  "version": 1,
+  "fps": 60,
+  "width": 1920,
+  "height": 1080,
+  "durationInFrames": 2220,
+  "audio": {
+    "narration": [],
+    "music": null
+  },
+  "scenes": [
+    {
+      "id": "b01",
+      "from": 0,
+      "durationInFrames": 180,
+      "block": "ClaimBoard",
+      "props": {
+        "claims": [
+          {
+            "id": "c1",
+            "label": "No one could move 800 t without machines",
+            "by": "core claim",
+            "icon": "weight",
+            "status": "pending"
+          },
+          {
+            "id": "c2",
+            "label": "The blocks predate the Roman temple",
+            "by": "popular theory",
+            "icon": "clock",
+            "status": "pending"
+          }
+        ]
+      },
+      "cues": [
+        {
+          "frame": 20,
+          "do": "introduce",
+          "target": "c1"
+        },
+        {
+          "frame": 60,
+          "do": "introduce",
+          "target": "c2"
+        },
+        {
+          "frame": 110,
+          "do": "highlight",
+          "target": "c1"
+        }
+      ]
+    },
+    {
+      "id": "b02",
+      "from": 180,
+      "durationInFrames": 180,
+      "block": "EvidenceCard",
+      "props": {
+        "evidence": {
+          "id": "e1",
+          "claim_id": "c1",
+          "kind": "quantity",
+          "statement": "The Stone of the Pregnant Woman weighs about 1,000 tonnes.",
+          "source": {
+            "url": "https://www.dainst.org/baalbek-report",
+            "title": "Baalbek: the largest stone blocks of antiquity",
+            "tier": 1,
+            "license": "",
+            "quote": "the block, measuring 19.6 m in length, is estimated to weigh 1,650 tonnes",
+            "locator": "section 2"
+          },
+          "paper_anchor": "ev-01"
+        }
+      },
+      "cues": [
+        {
+          "frame": 200,
+          "do": "highlight",
+          "target": "e1"
+        },
+        {
+          "frame": 300,
+          "do": "stamp",
+          "target": "e1"
+        },
+        {
+          "frame": 330,
+          "do": "status",
+          "target": "c1",
+          "value": "weakened"
+        }
+      ]
+    },
+    {
+      "id": "b03",
+      "from": 360,
+      "durationInFrames": 180,
+      "block": "Meter",
+      "props": {
+        "hypotheses": [
+          "Roman engineers",
+          "A lost older civilization"
+        ],
+        "start": [
+          50,
+          50
+        ],
+        "note": "Roman tool marks and unfinished blocks in the quarry"
+      },
+      "cues": [
+        {
+          "frame": 420,
+          "do": "meter",
+          "target": "meter",
+          "value": [
+            80,
+            20
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b04",
+      "from": 540,
+      "durationInFrames": 180,
+      "block": "QuoteCard",
+      "props": {
+        "evidence": {
+          "id": "e2",
+          "claim_id": "c1",
+          "kind": "quote",
+          "statement": "The Stone of the Pregnant Woman weighs about 1,000 tonnes.",
+          "source": {
+            "url": "https://www.dainst.org/baalbek-report",
+            "title": "Baalbek: the largest stone blocks of antiquity",
+            "tier": 1,
+            "license": "",
+            "quote": "the block, measuring 19.6 m in length, is estimated to weigh 1,650 tonnes",
+            "locator": "section 2"
+          },
+          "paper_anchor": "ev-01"
+        },
+        "attribution": "German Archaeological Institute"
+      },
+      "cues": [
+        {
+          "frame": 550,
+          "do": "highlight",
+          "target": "e2"
+        }
+      ]
+    },
+    {
+      "id": "b05",
+      "from": 720,
+      "durationInFrames": 180,
+      "block": "ScaleDrawing",
+      "props": {
+        "title": "How big is the stone?",
+        "unit": "m",
+        "basis": "block 20.5 m x 4 m, DAI 2014; person 1.75 m; city bus 12 m",
+        "objects": [
+          {
+            "id": "q1",
+            "label": "The block",
+            "shape": "block",
+            "width": 20.5,
+            "height": 4,
+            "x": 0
+          },
+          {
+            "id": "o2",
+            "label": "Person",
+            "shape": "person",
+            "width": 0.5,
+            "height": 1.75,
+            "x": 21.5
+          },
+          {
+            "id": "o3",
+            "label": "City bus",
+            "shape": "bus",
+            "width": 12,
+            "height": 3.2,
+            "x": 23.5
+          }
+        ]
+      },
+      "cues": [
+        {
+          "frame": 750,
+          "do": "show",
+          "target": "q1"
+        }
+      ]
+    },
+    {
+      "id": "b06",
+      "from": 900,
+      "durationInFrames": 180,
+      "block": "UnitGrid",
+      "props": {
+        "title": "How heavy is 1,000 tonnes?",
+        "basis": "city bus about 12.5 t (MAN Lion’s City)",
+        "unitLabel": "one city bus",
+        "groups": [
+          {
+            "id": "q2",
+            "count": 80,
+            "label": "city buses",
+            "tone": "accent"
+          }
+        ]
+      },
+      "cues": []
+    },
+    {
+      "id": "b07",
+      "from": 1080,
+      "durationInFrames": 180,
+      "block": "BarChart",
+      "props": {
+        "title": "The heaviest moved stones",
+        "unit": "t",
+        "basis": "published weight estimates",
+        "bars": [
+          {
+            "id": "q3",
+            "label": "Thunder Stone",
+            "value": 1250
+          },
+          {
+            "id": "q4",
+            "label": "Stone of the Pregnant Woman",
+            "value": [
+              1000,
+              1650
+            ],
+            "tone": "warn"
+          },
+          {
+            "id": "q5",
+            "label": "Western Wall stone",
+            "value": 570,
+            "tone": "info"
+          }
+        ]
+      },
+      "cues": []
+    },
+    {
+      "id": "b08",
+      "from": 1260,
+      "durationInFrames": 180,
+      "block": "Timeline",
+      "props": {
+        "title": "Building phases",
+        "from": -3000,
+        "to": 300,
+        "basis": "excavation reports, DAI 2004-2014",
+        "events": [
+          {
+            "id": "q6",
+            "year": -2900,
+            "label": "first settlement",
+            "tone": "muted"
+          },
+          {
+            "id": "q7",
+            "year": -15,
+            "label": "Jupiter temple begun",
+            "tone": "accent"
+          },
+          {
+            "id": "q8",
+            "year": 60,
+            "label": "podium finished",
+            "tone": "warn"
+          }
+        ]
+      },
+      "cues": []
+    },
+    {
+      "id": "b09",
+      "from": 1440,
+      "durationInFrames": 180,
+      "block": "Diagram",
+      "props": {
+        "title": "Lever and ramp",
+        "width": 100,
+        "height": 50,
+        "basis": "forces not to scale",
+        "elements": [
+          {
+            "id": "d1",
+            "type": "line",
+            "tone": "muted",
+            "x1": 5,
+            "y1": 45,
+            "x2": 95,
+            "y2": 45
+          },
+          {
+            "id": "d2",
+            "type": "circle",
+            "tone": "accent",
+            "cx": 30,
+            "cy": 35,
+            "r": 10,
+            "label": "block"
+          },
+          {
+            "id": "d3",
+            "type": "arrow",
+            "tone": "warn",
+            "x1": 60,
+            "y1": 20,
+            "x2": 42,
+            "y2": 30,
+            "label": "pull"
+          }
+        ]
+      },
+      "cues": []
+    },
+    {
+      "id": "b10",
+      "from": 1620,
+      "durationInFrames": 180,
+      "block": "ListCard",
+      "props": {
+        "title": "What would change our mind",
+        "items": [
+          {
+            "id": "i1",
+            "text": "A quarry mark older than the Roman phase"
+          },
+          {
+            "id": "i2",
+            "text": "A transport route no Roman sled could take"
+          }
+        ],
+        "note": "Neither has been found in forty years of excavation."
+      },
+      "cues": []
+    },
+    {
+      "id": "b11",
+      "from": 1800,
+      "durationInFrames": 240,
+      "block": "ScaleZoom",
+      "props": {
+        "title": "One block, one pyramid",
+        "unit": "t",
+        "basis": "block about 1,000 t; Great Pyramid about 6 million t (common estimate)",
+        "small": {
+          "id": "q9",
+          "label": "Stone of the Pregnant Woman",
+          "value": 1000
+        },
+        "large": {
+          "id": "q10",
+          "label": "Great Pyramid of Giza",
+          "value": 6000000
+        }
+      },
+      "cues": [
+        {
+          "frame": 1850,
+          "do": "show",
+          "target": "q10"
+        }
+      ]
+    },
+    {
+      "id": "b12",
+      "from": 2040,
+      "durationInFrames": 180,
+      "block": "ShareCard",
+      "props": {
+        "headline": "The full case file",
+        "url": "ancientnerds.com",
+        "lines": [
+          "Every source, every claim, checked"
+        ]
+      },
+      "cues": []
+    }
+  ],
+  "captions": [
+    {
+      "text": "THIS",
+      "from": 12,
+      "to": 24
+    },
+    {
+      "text": "STONE",
+      "from": 24,
+      "to": 40
+    },
+    {
+      "text": "WEIGHS",
+      "from": 40,
+      "to": 56
+    },
+    {
+      "text": "ABOUT",
+      "from": 56,
+      "to": 70
+    },
+    {
+      "text": "1,000",
+      "from": 70,
+      "to": 90
+    },
+    {
+      "text": "TONNES.",
+      "from": 90,
+      "to": 110
+    }
+  ],
+  "ticker": {
+    "evidence": [
+      {
+        "frame": 0,
+        "n": 0
+      },
+      {
+        "frame": 180,
+        "n": 1
+      }
+    ]
+  },
+  "chapters": [
+    {
+      "title": "The stone",
+      "frame": 0
+    },
+    {
+      "title": "The evidence",
+      "frame": 180
+    },
+    {
+      "title": "The verdict",
+      "frame": 1620
+    }
+  ],
+  "credits": [],
+  "thumbnails": [
+    {
+      "frame": 108,
+      "text": "Who moved it?"
+    },
+    {
+      "frame": 200,
+      "text": "Eighty buses heavy?"
+    },
+    {
+      "frame": 300,
+      "text": "Heavier than Giza?"
+    }
+  ]
+}
