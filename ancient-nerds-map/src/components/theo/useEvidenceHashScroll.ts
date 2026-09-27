@@ -5,9 +5,14 @@
  * jumps to the anchor while parsing the server HTML, but the hero and the
  * body images have no reserved height, so every image that loads above the
  * target pushes it down again (Chrome's scroll anchoring may compensate,
- * Safari has none). This effect waits until the images that are still
- * loading have settled and scrolls once more. Effects never run during
- * server rendering, so the SSR markup is untouched.
+ * Safari has none). This effect waits until the images above the target that
+ * are still loading have settled and scrolls once more. Effects never run
+ * during server rendering, so the SSR markup is untouched.
+ *
+ * The re-scroll belongs to the link, never to the reader: it is dropped once
+ * the reader scrolls, touches, clicks or types, when the hash changes (an
+ * in-page link such as "Corrected …" or a reference), and on a reload or a
+ * history step, where the browser restores the reader's own position.
  */
 
 import { useEffect } from 'react'
@@ -20,32 +25,64 @@ import { useEffect } from 'react'
  */
 const PAPER_HASH_RE = /^#(ev-\d{2,}|corrections)$/
 
+/**
+ * Every way a reader takes over the page: the wheel, a touch, a pointer press
+ * (which includes dragging the scrollbar), a key (arrows, Page Down, Space,
+ * Tab), and a hash change from an in-page link.
+ */
+const READER_INTENT_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'hashchange'] as const
+
 export function useEvidenceHashScroll(): void {
   useEffect(() => {
     const match = PAPER_HASH_RE.exec(window.location.hash)
     if (!match) return
-    const targetId = match[1]
-    // A lazy image off-screen never loads, so waiting for it would never end.
+    // A reload or a back/forward step restores the reader's own scroll
+    // position; the link's landing already happened on the first visit.
+    // Safari before 15 (inside Vite 5's default build target) has no
+    // navigation entry, so its navigation type is unknown and it re-scrolls
+    // as on a fresh visit.
+    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    if (navigation !== undefined && (navigation.type === 'reload' || navigation.type === 'back_forward')) return
+    // The hash comes from the address bar: an id the paper does not have is
+    // a stale link, not an error — the browser's own jump did nothing either.
+    const target = document.getElementById(match[1])
+    if (target === null) return
+    // Only an image before the target in document order can push it down, and
+    // a lazy image off-screen never loads, so waiting for it would never end.
     const pending = Array.from(document.querySelectorAll<HTMLImageElement>('.theo-page img')).filter(
-      img => !img.complete && img.getAttribute('loading') !== 'lazy',
+      img =>
+        !img.complete &&
+        img.getAttribute('loading') !== 'lazy' &&
+        (img.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
     )
     let cancelled = false
+    const detachImages: Array<() => void> = []
+    const stop = () => {
+      cancelled = true
+      for (const type of READER_INTENT_EVENTS) window.removeEventListener(type, stop, true)
+      for (const detach of detachImages) detach()
+    }
+    for (const type of READER_INTENT_EVENTS) {
+      window.addEventListener(type, stop, { capture: true, passive: true })
+    }
     void Promise.all(
       pending.map(
         img =>
           new Promise<void>(resolve => {
-            img.addEventListener('load', () => resolve(), { once: true })
-            img.addEventListener('error', () => resolve(), { once: true })
+            const settle = () => resolve()
+            img.addEventListener('load', settle, { once: true })
+            img.addEventListener('error', settle, { once: true })
+            detachImages.push(() => {
+              img.removeEventListener('load', settle)
+              img.removeEventListener('error', settle)
+            })
           }),
       ),
     ).then(() => {
       if (cancelled) return
-      // The hash comes from the address bar: an id the paper does not have is
-      // a stale link, not an error — the browser's own jump did nothing either.
-      document.getElementById(targetId)?.scrollIntoView({ block: 'start' })
+      stop()
+      target.scrollIntoView({ block: 'start' })
     })
-    return () => {
-      cancelled = true
-    }
+    return stop
   }, [])
 }
