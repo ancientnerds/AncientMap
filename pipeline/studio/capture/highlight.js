@@ -1,20 +1,22 @@
 // Page-side helpers of pipeline/studio/capture/sources.py, installed as window.__studio.
 //   hideOverlays(): hide fixed/sticky layers (cookie bars, banners, sticky headers)
-//   highlight(mode, needle): mode 'quote' finds the text (whitespace, quotes and
-//     dashes normalised, case-insensitive, across inline elements) and wraps each
-//     covered text piece in <mark class="__studio-hl">; mode 'anchor' outlines the
-//     element with that id (our paper page's #ev-NN), or, when the id sits on an
-//     empty span.theo-evidence-anchor (the second and later evidence ids of a
-//     paragraph, plan B), the p.theo-evidence around it. Returns the highlight box
-//     in page CSS pixels {x, y, w, h}, or null when nothing matches or the anchor
-//     has no visible box. Before measuring, every ancestor of the highlight that clips
-//     its overflowing content is let out (unclip), so the document itself scrolls:
-//     our paper page keeps html, body and #root at 100% with overflow hidden and
-//     scrolls .theo-page instead (index.css, theo.css), and the capture window is
-//     scrolled with window.scrollTo on a page as tall as its content.
+//   highlight(mode, needle): mode 'quote' finds the text among the text the page shows
+//     its readers (whitespace, quotes and dashes normalised, case-insensitive, across
+//     inline elements; <script>, <style>, hidden elements and the hidden overlays do not
+//     count) and wraps each covered text piece in <mark class="__studio-hl">; mode
+//     'anchor' outlines the element with that id (our paper page's #ev-NN), or, when the id
+//     sits on an empty span.theo-evidence-anchor (the second and later evidence ids of a
+//     paragraph, plan B), the p.theo-evidence around it. Returns the highlight box in page
+//     CSS pixels {x, y, w, h}, or null when nothing matches, a piece of the quote has no
+//     box (sources.py then advises a QuoteCard), or the anchor has no visible box. Before
+//     measuring, every ancestor of the highlight that clips its overflowing content is let
+//     out (unclip), so the document itself scrolls: our paper page keeps html, body and
+//     #root at 100% with overflow hidden and scrolls .theo-page instead (index.css,
+//     theo.css), and the capture window is scrolled with window.scrollTo on a page as tall
+//     as its content.
 //   box(): the current page box of the last highlight (after the viewport changed).
 (() => {
-  const NORMAL = { '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', ' ': ' ' }
+  const NORMAL = { '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', ' ': ' ' }
   // One character (code point) folded for matching: ' ' for whitespace, else plain
   // quotes and dashes, lower-cased. The result can be longer than the character: 'İ'
   // (U+0130) lower-cases to 'i' plus a combining dot above, two UTF-16 units.
@@ -36,6 +38,17 @@
       }
     }
     return out.trim()
+  }
+  // A text node the reader sees: its element has a box and is not visibility:hidden. That
+  // leaves out <script> (a JSON-LD articleBody), <style>, <noscript>, display:none subtrees
+  // (a paywall's full text kept in the DOM) and the overlays hideOverlays() hid. An element
+  // with display:contents has no box of its own (checkVisibility() is false for it): its
+  // text is laid out in the nearest ancestor that has one.
+  const readable = (text) => {
+    let el = text.parentElement
+    if (getComputedStyle(el).visibility !== 'visible') return false
+    while (getComputedStyle(el).display === 'contents') el = el.parentElement
+    return el.checkVisibility()
   }
   const unclip = (el) => {
     for (let node = el.parentElement; node; node = node.parentElement) {
@@ -88,6 +101,7 @@
       const map = []
       let space = true
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!readable(node)) continue
         const s = node.textContent
         let start = 0
         for (const ch of s) {
@@ -109,10 +123,11 @@
       const range = document.createRange()
       range.setStart(startNode, startOffset)
       range.setEnd(endNode, endOffset)
+      // the covered text nodes the search read (a hidden node inside the range is not quoted)
       const pieces = []
       const inRange = document.createTreeWalker(range.commonAncestorContainer.nodeType === 3 ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer, NodeFilter.SHOW_TEXT)
       for (let node = inRange.nextNode(); node; node = inRange.nextNode()) {
-        if (range.intersectsNode(node)) pieces.push(node)
+        if (range.intersectsNode(node) && readable(node)) pieces.push(node)
       }
       const marks = []
       for (const node of pieces) {
@@ -127,6 +142,9 @@
         mark.appendChild(middle)
         marks.push(mark)
       }
+      // a piece the search read can still have no box (the text of a <textarea>, of an SVG
+      // <text>): that part of the quote is not on the page; collapsed white space may lack one
+      if (marks.some((m) => m.textContent.trim() !== '' && m.getClientRects().length === 0)) return null
       for (const mark of marks) unclip(mark)
       highlighted = marks
       return unionBox(marks.flatMap((m) => [...m.getClientRects()]))

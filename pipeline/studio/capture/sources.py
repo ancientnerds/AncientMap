@@ -9,7 +9,8 @@ article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). The s
 only reaches the window when the document scrolls, so highlight.js lets out every
 ancestor of the highlight that clips it: our paper page scrolls .theo-page inside a
 100%-tall html, body and #root with overflow hidden, and without that the window stayed
-the 800 px viewport. Paywalled or login pages do not contain the quote, so the capture
+the 800 px viewport. Only text the page shows its readers counts: a quote that is absent
+or hidden (display:none, a script's JSON-LD, a paywall's continuation kept in the DOM)
 fails with the advice to use a QuoteCard. The same code captures our own paper page
 with its #ev-NN paragraph outlined (a second id of a paragraph is an empty span inside
 it, plan B; highlight.js outlines the paragraph). The paper slug and the evidence id are
@@ -148,7 +149,8 @@ async def _capture(url: str, mode: str, needle: str, out: Path) -> dict[str, Any
         )
         if box is None and mode == "quote":
             raise CaptureError(
-                f"quote not found on {url}; paywalled or login pages cannot be captured, use a QuoteCard"
+                f"quote not found whole in the text {url} shows its readers (absent or "
+                "hidden); paywalled or login pages cannot be captured, use a QuoteCard"
             )
         if box is None:
             raise CaptureError(f"#{needle} has no visible paragraph on {url}")

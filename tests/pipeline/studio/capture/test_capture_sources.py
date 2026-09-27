@@ -140,6 +140,19 @@ html, body { overflow: hidden; width: 100%; height: 100%; margin: 0 }
 </div></div></body></html>"""
 
 
+def _page(body):
+    """A test page with a fixed overlay (hideOverlays hides it) above the given body."""
+    return (
+        '<!doctype html><html><head><title>t</title></head><body style="margin:0">'
+        '<div style="position:fixed;top:0;left:0;right:0;height:40px" id="overlay">Menu</div>'
+        f"{body}</body></html>"
+    )
+
+
+WEIGHT = "The block is estimated to weigh 1,650 tonnes."
+SHOWN = f'<p style="margin-top:1500px">{WEIGHT}</p>'
+
+
 def _run_highlight(tmp_path, mode, needle, html=PAGE, fragment=""):
     pytest.importorskip("playwright")
     from playwright.async_api import async_playwright
@@ -214,6 +227,50 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
     paragraph, _ = _run_highlight(tmp_path, "anchor", "ev-02")
     assert span is not None and span["h"] > 10 and span["w"] > 0
     assert span == paragraph
+
+
+@pytest.mark.parametrize(
+    "unseen",
+    [
+        f'<div style="display:none">{WEIGHT}</div>',
+        f'<script type="application/ld+json">{{"articleBody": "{WEIGHT}"}}</script>',
+        f'<p style="visibility:hidden">{WEIGHT}</p>',
+    ],
+    ids=["display-none", "json-ld", "visibility-hidden"],
+)
+def test_a_copy_the_reader_does_not_see_is_passed_over(tmp_path, unseen):
+    # the first copy in the DOM has no visible box; the one the reader sees is highlighted
+    box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(unseen + SHOWN))
+    assert box is not None and box["y"] >= 1500 and box["w"] > 100
+    assert state["marks"] == WEIGHT
+
+
+def test_text_in_a_display_contents_element_is_read(tmp_path):
+    # display:contents has no box of its own; its text is laid out in the paragraph
+    html = _page(f'<p style="margin-top:1500px"><span style="display:contents">{WEIGHT}</span></p>')
+    box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=html)
+    assert box is not None and box["y"] >= 1500
+    assert state["marks"] == WEIGHT
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # a teaser the reader sees, its continuation kept in the DOM behind the paywall
+        # (the line break between them is page text: it joins the two into the quote)
+        '<p style="margin-top:1500px">The block is estimated</p>\n'
+        '<p style="display:none">to weigh 1,650 tonnes.</p>',
+        # the text of a form field is read by the search but drawn by no box of the page
+        f"<textarea>{WEIGHT}</textarea>",
+        # the page's content in a fixed scroller, which hideOverlays hides with the banners
+        f'<div style="position:fixed;inset:0;overflow-y:auto">{SHOWN}</div>',
+    ],
+    ids=["hidden-continuation", "textarea", "fixed-scroller"],
+)
+def test_a_quote_the_reader_cannot_see_whole_is_not_found(tmp_path, body):
+    # sources.py turns None into the advice to use a QuoteCard
+    box, _ = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(body))
+    assert box is None
 
 
 @pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
