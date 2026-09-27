@@ -4,11 +4,21 @@
  * before Remotion takes the screenshot) and stores its box in the Registry;
  * LayoutGuard then checks all boxes of the frame. Outside lint mode nothing
  * is measured.
+ *
+ * Lint mode measures only in the brand fonts. Remotion mounts the composition
+ * without waiting for the fonts, and seeking a tab to the frame it already
+ * shows (its first one) does not render again, so a measurement at mount
+ * would judge that frame in a fallback font. The lint-mode LayoutProvider
+ * therefore holds the render (delayRender) until brandFontsReady() resolves,
+ * then renders once more with `fontsReady`, which makes every LayoutBox
+ * measure and LayoutGuard report, and only then lets the frame go
+ * (test/gpu/guard.gpu.ts proves it with fonts that arrive late).
  */
-import React, { createContext, useContext, useLayoutEffect, useRef } from 'react'
+import React, { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { useCurrentFrame, useCurrentScale } from 'remotion'
+import { useCurrentFrame, useCurrentScale, useDelayRender } from 'remotion'
 
+import { brandFontsReady } from '../theme/fonts'
 import type { Box, BoxKind } from './geometry'
 
 export class Registry {
@@ -21,6 +31,7 @@ export class Registry {
   }
 
   set(box: Box, overflowing: boolean): void {
+    if (!this.enabled) throw new Error(`LayoutBox ${box.id} was measured outside lint mode`)
     this.boxes.set(box.id, box)
     if (overflowing) this.overflow.add(box.id)
     else this.overflow.delete(box.id)
@@ -32,34 +43,54 @@ export class Registry {
   }
 }
 
-const LayoutContext = createContext<Registry | null>(null)
+/** The provider's registry and whether the brand fonts are in (always false outside lint mode). */
+export type LayoutState = { registry: Registry; fontsReady: boolean }
+
+const LayoutContext = createContext<LayoutState | null>(null)
 
 /** Boxes are measured relative to this element (found with closest(), which works during layout effects). */
 const ROOT_ATTR = 'data-layout-root'
 
-export const LayoutProvider: React.FC<{ registry: Registry; children: ReactNode }> = ({ registry, children }) => (
-  <LayoutContext.Provider value={registry}>
-    <div {...{ [ROOT_ATTR]: '' }} style={{ position: 'absolute', inset: 0 }}>
-      {children}
-    </div>
-  </LayoutContext.Provider>
-)
+export const LayoutProvider: React.FC<{ registry: Registry; children: ReactNode }> = ({ registry, children }) => {
+  // The lint registry whose fonts are in, with the delayRender handle that held its render until then.
+  const [ready, setReady] = useState<{ registry: Registry; handle: number } | null>(null)
+  const { delayRender, continueRender, cancelRender } = useDelayRender()
+  useLayoutEffect(() => {
+    if (!registry.enabled) return
+    const handle = delayRender('layout lint: waiting for the brand fonts before measuring')
+    brandFontsReady().then(() => setReady({ registry, handle }), cancelRender)
+  }, [registry, delayRender, cancelRender])
+  // A parent's layout effects run after its children's: in the commit that made `ready`, every
+  // LayoutBox has measured in the brand fonts and LayoutGuard has reported, so the frame may go.
+  useLayoutEffect(() => {
+    if (ready) continueRender(ready.handle)
+  }, [ready, continueRender])
+  const fontsReady = ready?.registry === registry
+  const state = useMemo(() => ({ registry, fontsReady }), [registry, fontsReady])
+  return (
+    <LayoutContext.Provider value={state}>
+      <div {...{ [ROOT_ATTR]: '' }} style={{ position: 'absolute', inset: 0 }}>
+        {children}
+      </div>
+    </LayoutContext.Provider>
+  )
+}
 
-export function useRegistry(): Registry {
-  const registry = useContext(LayoutContext)
-  if (!registry) throw new Error('LayoutBox used outside LayoutProvider')
-  return registry
+export function useLayoutState(): LayoutState {
+  const state = useContext(LayoutContext)
+  if (!state) throw new Error('LayoutBox used outside LayoutProvider')
+  return state
 }
 
 /** Measure the element behind the returned ref every frame and register it as `id`. */
 export function useLayoutBox<T extends HTMLElement>(id: string, kind: BoxKind, allow: readonly string[] = []): React.RefObject<T> {
   const ref = useRef<T>(null)
-  const registry = useRegistry()
+  const { registry, fontsReady } = useLayoutState()
   const frame = useCurrentFrame()
   const scale = useCurrentScale()
   const allowKey = allow.join('|')
   useLayoutEffect(() => {
-    if (!registry.enabled) return
+    if (!registry.enabled || !fontsReady) return
     const el = ref.current
     const root = el?.closest(`[${ROOT_ATTR}]`)
     if (!el || !root) throw new Error(`LayoutBox ${id}: element not mounted inside the LayoutProvider`)
@@ -71,7 +102,7 @@ export function useLayoutBox<T extends HTMLElement>(id: string, kind: BoxKind, a
     const overflowing = kind === 'text' && clips && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)
     registry.set({ id, kind, rect, allow: allowKey ? allowKey.split('|') : [] }, overflowing)
     return () => registry.remove(id)
-  }, [registry, id, kind, allowKey, frame, scale])
+  }, [registry, fontsReady, id, kind, allowKey, frame, scale])
   return ref
 }
 

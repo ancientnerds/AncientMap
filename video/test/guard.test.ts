@@ -16,8 +16,12 @@ describe('LayoutBox registry (lint mode)', () => {
     registry.remove('b01:quote')
     expect(registry.boxes.has('b01:quote') || registry.overflow.has('b01:quote')).toBe(false)
   })
-  it('measures only in lint mode', () => {
-    expect(new Registry(false).enabled).toBe(false)
+  it('refuses a box outside lint mode and keeps nothing', () => {
+    const registry = new Registry(false)
+    expect(() => registry.set({ id: 'b01:title', kind: 'text', rect: { x: 0, y: 0, w: 10, h: 10 }, allow: [] }, true)).toThrow(
+      'LayoutBox b01:title was measured outside lint mode',
+    )
+    expect(registry.boxes.size + registry.overflow.size).toBe(0)
   })
 })
 

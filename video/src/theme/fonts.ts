@@ -37,8 +37,22 @@ export const BODY = "'JetBrains Mono', monospace"
 /** Verbatim passages of old texts (QuoteCard), the site's serif. */
 export const SERIF = "'Cormorant Garamond', serif"
 
+/** The loading started by loadBrandFonts(): resolves once every face is in document.fonts. */
+let brandFonts: Promise<void> | null = null
+
 export function loadBrandFonts(): void {
-  for (const font of FONTS) {
-    void loadFont({ family: font.family, url: staticFile(font.file), weight: font.weight, unicodeRange: font.unicodeRange })
-  }
+  brandFonts = Promise.all(
+    FONTS.map((font) => loadFont({ family: font.family, url: staticFile(font.file), weight: font.weight, unicodeRange: font.unicodeRange })),
+  ).then(() => undefined)
+}
+
+/**
+ * Resolves once every brand face is in document.fonts. Until then text is laid
+ * out in a fallback font with other metrics, so the lint-mode LayoutProvider
+ * measures nothing before it. A file that fails to load has already cancelled
+ * the render (loadFont calls cancelRender).
+ */
+export function brandFontsReady(): Promise<void> {
+  if (!brandFonts) throw new Error('the brand fonts were never requested: src/Root.tsx calls loadBrandFonts() when it loads')
+  return brandFonts
 }
