@@ -67,6 +67,28 @@ _DOMAIN_LICENSES: tuple[tuple[str, str], ...] = (
 SNIPPET_CONTENT_TYPE = "adapter/snippet"
 
 
+def _strip_nul(value: Any) -> Any:
+    """Remove NUL characters from every string in value, recursively through dicts and lists.
+
+    PostgreSQL rejects U+0000 in TEXT and in JSONB (json.dumps writes it as
+    \\u0000, which jsonb refuses). One NUL in one fetched page killed a whole
+    content_fetch wave and the run close-out of 2 of 5 production runs
+    (aae36b9c, 23336ade). Tuples come back as lists, which JSON treats the same.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {_strip_nul(key): _strip_nul(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_strip_nul(item) for item in value]
+    return value
+
+
+def _json_default(value: Any) -> str:
+    """json.dumps fallback for non-JSON values (datetimes, enums): their str(), NUL-free."""
+    return _strip_nul(str(value))
+
+
 # Lazy + wrapped, mirroring thinking_log: keeps pipeline.database out of the
 # import graph at module load and gives tests a seam.
 def _session_factory():
@@ -182,7 +204,8 @@ def archive_documents(documents: list[ArchiveDocument]) -> int:
         return 0
 
     params: list[dict[str, Any]] = []
-    for doc in documents:
+    for original in documents:
+        doc = ArchiveDocument(**_strip_nul(asdict(original)))
         body = doc.full_text[:MAX_TEXT_CHARS]
         # A reservation row records that we looked and were told not to keep
         # the text — the finding itself is the point, so it is stored without
@@ -346,8 +369,8 @@ def save_artifact(request_id: str | None, kind: str, payload: Any, ref: str = ""
             {
                 "request_id": request_id or None,
                 "kind": kind,
-                "ref": ref[:200],
-                "payload": json.dumps(payload, default=str),
+                "ref": _strip_nul(ref)[:200],
+                "payload": json.dumps(_strip_nul(payload), default=_json_default),
             },
         )
         session.commit()
@@ -389,7 +412,7 @@ def record_run_links(request_id: str, links: list[dict]) -> int:
                         search_query = EXCLUDED.search_query,
                         cited = EXCLUDED.cited
             """),
-            [{"request_id": request_id, **link} for link in links],
+            [{"request_id": request_id, **_strip_nul(link)} for link in links],
         )
         session.commit()
     return result.rowcount if result.rowcount and result.rowcount > 0 else 0
