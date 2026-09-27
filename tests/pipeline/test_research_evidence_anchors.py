@@ -13,6 +13,8 @@ markdown paragraph and its rendered text normalise to the same key.
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
+
 import pytest
 
 from pipeline.article_html_renderer import markdown_to_html
@@ -197,3 +199,95 @@ class TestInjectEvidenceAnchors:
     def test_unresolvable_evidence_raises_instead_of_dropping_the_anchor(self):
         with pytest.raises(PaperPageError, match="ev-07 matches 0 paragraphs"):
             inject_evidence_anchors(rendered(), [NOWHERE])
+
+
+# nh3 (html5ever) leaves '<' and '>' raw inside a double-quoted attribute value,
+# so a writer's alt text or link title can carry this as inert text.
+PAYLOAD = "</p><img src=x onerror=alert(1)>"
+STONE = {"id": "ev-01", "anchor_text": "The Stone of the Pregnant Woman weighs"}
+ROMAN = {"id": "ev-02", "anchor_text": "Roman engineers moved the blocks"}
+
+
+def start_tags(html: str) -> list[tuple[str, list[tuple[str, str | None]]]]:
+    """(tag, attributes) of every start tag, as an HTML parser reads `html`."""
+
+    class Collector(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.tags: list[tuple[str, list[tuple[str, str | None]]]] = []
+
+        def handle_starttag(self, tag, attrs):
+            self.tags.append((tag, attrs))
+
+    collector = Collector()
+    collector.feed(html)
+    collector.close()
+    return collector.tags
+
+
+class TestMarkupInsideAttributesStaysInert:
+    def test_a_closing_p_in_an_alt_or_a_title_is_not_the_paragraph_end(self):
+        html = markdown_to_html(
+            "The Stone of the Pregnant Woman weighs roughly 1,000 tonnes "
+            f"![x {PAYLOAD}](https://example.org/i.jpg) and "
+            f'[a map](https://ancientnerds.com/x "x {PAYLOAD}") [1].',
+            toc=False,
+        )
+        # The precondition: one paragraph, both payloads raw inside attributes.
+        assert html.startswith("<p>") and html.endswith("</p>")
+        assert html.count(PAYLOAD) == 2
+        before = start_tags(html)
+        assert [tag for tag, _attrs in before] == ["p", "img", "a"]
+
+        out = inject_evidence_anchors(
+            html, [STONE], {"ev-01": [VideoMoment("dQw4w9WgXcQ", 5, "V")]}
+        )
+
+        link = (
+            ' <a class="theo-evidence-video" '
+            'href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=5s" target="_blank" '
+            'rel="noopener noreferrer" title="Watch this passage in the video: V">'
+            "Video at 0:05</a>"
+        )
+        # Only the opening <p> changed; the links sit before the real </p>.
+        assert out == (
+            '<p id="ev-01" class="theo-evidence">'
+            + html.removeprefix("<p>").removesuffix("</p>")
+            + link
+            + "</p>"
+        )
+        after = start_tags(out)
+        assert after[1:3] == before[1:3]  # the img and a keep their alt and title intact
+        assert all(name != "onerror" for _tag, attrs in after for name, _value in attrs)
+
+    def test_a_paragraph_inside_an_alt_is_not_a_paragraph(self):
+        html = markdown_to_html(
+            "![fig </p><p>The Stone of the Pregnant Woman weighs roughly</p>]"
+            "(https://example.org/i.jpg)\n\n"
+            "Roman engineers moved the blocks with capstans [1].",
+            toc=False,
+        )
+        assert '<img alt="fig </p><p>The Stone' in html  # the precondition
+        with pytest.raises(PaperPageError, match="ev-01 matches 0 paragraphs"):
+            resolve_evidence_anchors(html, [STONE])
+        # <p> order: the image-only paragraph, then the prose one.
+        assert resolve_evidence_anchors(html, [ROMAN]) == {"ev-02": 1}
+        assert inject_evidence_anchors(html, [ROMAN]) == html.replace(
+            "<p>Roman", '<p id="ev-02" class="theo-evidence">Roman'
+        )
+
+    def test_a_gt_inside_an_attribute_does_not_end_the_tag(self):
+        html = markdown_to_html("A ![a > b](https://example.org/i.jpg) c [1].", toc=False)
+        inner = html.removeprefix("<p>").removesuffix("</p>")
+        assert inner == 'A <img alt="a > b" src="https://example.org/i.jpg"> c [1].'
+        assert _paragraph_text(inner) == "A  c [1]."
+
+    def test_a_br_inside_an_attribute_is_not_a_line_break(self):
+        assert _paragraph_text('a<img alt="x<br>y" src="i.jpg">b<br>c') == "ab c"
+
+    def test_html_that_is_not_sanitiser_output_raises(self):
+        # An unbalanced quote leaves a '<' that opens no complete tag.
+        with pytest.raises(PaperPageError, match="not sanitised HTML: '<' at offset 11"):
+            resolve_evidence_anchors(
+                '<p>A claim <a title="x>Roman engineers moved the blocks</p>', [ROMAN]
+            )

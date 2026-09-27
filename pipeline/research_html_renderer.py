@@ -471,36 +471,95 @@ def page_extras_payload(extras: PaperExtras) -> dict[str, Any]:
 # Only research pages call this; journals and the Medium copy never see it.
 # The additions are built from regex-validated ids, a regex-validated YouTube
 # id, integer seconds and an html-escaped title, never from raw input.
+#
+# Where they go matters as much as what they are. nh3 (html5ever) writes every
+# attribute value in double quotes, escapes '"' inside it as &quot; and leaves
+# '<' and '>' raw there, so an alt or a link title can hold "</p><img ...>" as
+# inert text; in text content it escapes '<' as &lt;. A regex over "<p>...</p>"
+# would end inside such an attribute and put the video links (whose quotes
+# close it) or the new "<p id=...>" there, turning that text into live markup.
+# So the HTML is read as tokens, one per tag including its quoted attribute
+# values and one per run of text, and only real <p> and </p> tags delimit a
+# paragraph. Resolving and injecting share this one scanner (_paragraphs).
 
-_PARAGRAPH_RE = re.compile(r"<p>(.*?)</p>", re.DOTALL)
+# A tag (each quoted attribute value consumed whole, so its '>' ends nothing),
+# or a run of text.
+_TOKEN_RE = re.compile(r'<(?:[^>"]|"[^"]*")*>|[^<]+')
 _BR_RE = re.compile(r"<br\s*/?>")
-_TAG_RE = re.compile(r"<[^>]+>")
+_P_OPEN = "<p>"
+_P_CLOSE = "</p>"
+
+
+class _Paragraph(NamedTuple):
+    """Offsets of one plain <p> element: its "<p>" tag and its inner HTML (up to "</p>")."""
+
+    start: int
+    inner_start: int
+    inner_end: int
+
+
+def _tokens(html: str) -> list[re.Match[str]]:
+    """Every tag and every text run of sanitised HTML, in order and without gaps.
+
+    A '<' that opens no complete tag cannot come out of nh3; meeting one means
+    the HTML is not what the sanitiser wrote, so it raises rather than guess.
+    """
+    tokens: list[re.Match[str]] = []
+    pos = 0
+    while pos < len(html):
+        token = _TOKEN_RE.match(html, pos)
+        if token is None:
+            raise PaperPageError(
+                f"the paper body is not sanitised HTML: '<' at offset {pos} opens no complete tag"
+            )
+        tokens.append(token)
+        pos = token.end()
+    return tokens
+
+
+def _paragraphs(html: str) -> list[_Paragraph]:
+    """The plain <p> elements of sanitised HTML, in document order.
+
+    A "<p>" or "</p>" inside an attribute value is part of its tag's token and
+    never delimits a paragraph. html5ever never nests a <p> in a <p>, so each
+    "<p>" tag is closed by the next "</p>" tag.
+    """
+    found: list[_Paragraph] = []
+    opened: re.Match[str] | None = None
+    for token in _tokens(html):
+        if token.group() == _P_OPEN:
+            opened = token
+        elif token.group() == _P_CLOSE and opened is not None:
+            found.append(_Paragraph(opened.start(), opened.end(), token.start()))
+            opened = None
+    return found
 
 
 def _paragraph_text(inner_html: str) -> str:
-    """The visible text of a paragraph's inner HTML: tags dropped, entities decoded."""
-    return unescape(_TAG_RE.sub("", _BR_RE.sub(" ", inner_html)))
+    """The visible text of a paragraph's inner HTML: tags dropped, <br> read as a space,
+    entities decoded. Attribute values (an alt, a title) are not text."""
+    text: list[str] = []
+    for token in _tokens(inner_html):
+        value = token.group()
+        if not value.startswith("<"):
+            text.append(value)
+        elif _BR_RE.fullmatch(value):
+            text.append(" ")
+    return unescape("".join(text))
 
 
-def resolve_evidence_anchors(html: str, evidence: list[dict[str, Any]]) -> dict[str, int]:
-    """ev id -> index of the one plain <p> of `html` whose text opens with its anchor_text.
-
-    The rule is contract C9 of the publish gate (pipeline/lyra/theo_publishing):
-    both sides go through normalize_anchor_text, which maps the markdown a
-    writer copies an anchor from and the smartypants-rendered paragraph text
-    to the same key; the normalised anchor must be at least MIN_ANCHOR_CHARS
-    long, and exactly one paragraph's normalised text may START WITH it.
-    Several entries may open the same paragraph. Raises PaperPageError naming
-    every entry that is too short or matches zero or several paragraphs.
-    """
+def _anchor_paragraphs(
+    html: str, paragraphs: list[_Paragraph], evidence: list[dict[str, Any]]
+) -> dict[str, int]:
+    """resolve_evidence_anchors on paragraphs already scanned out of `html`."""
     # Imported here, not at module level: the light importers of this module
     # (static_exporter, the landing route) never need the publish module, and
     # theo_publishing's gates import this module back.
     from pipeline.lyra.theo_publishing import MIN_ANCHOR_CHARS, normalize_anchor_text
 
     texts = [
-        normalize_anchor_text(_paragraph_text(match.group(1)))
-        for match in _PARAGRAPH_RE.finditer(html)
+        normalize_anchor_text(_paragraph_text(html[p.inner_start : p.inner_end]))
+        for p in paragraphs
     ]
     found: dict[str, int] = {}
     problems: list[str] = []
@@ -522,6 +581,23 @@ def resolve_evidence_anchors(html: str, evidence: list[dict[str, Any]]) -> dict[
             "evidence anchors do not resolve to exactly one paragraph: " + "; ".join(problems)
         )
     return found
+
+
+def resolve_evidence_anchors(html: str, evidence: list[dict[str, Any]]) -> dict[str, int]:
+    """ev id -> index of the one plain <p> of `html` whose text opens with its anchor_text.
+
+    The rule is contract C9 of the publish gate (pipeline/lyra/theo_publishing):
+    both sides go through normalize_anchor_text, which maps the markdown a
+    writer copies an anchor from and the smartypants-rendered paragraph text
+    to the same key; the normalised anchor must be at least MIN_ANCHOR_CHARS
+    long, and exactly one paragraph's normalised text may START WITH it.
+    Several entries may open the same paragraph. Raises PaperPageError naming
+    every entry that is too short or matches zero or several paragraphs, and
+    for HTML that is not sanitiser output (_tokens). The paragraphs are the
+    real <p> elements only: markup quoted inside an attribute value is text of
+    that attribute (_paragraphs).
+    """
+    return _anchor_paragraphs(html, _paragraphs(html), evidence)
 
 
 def _clock(seconds: int) -> str:
@@ -551,17 +627,21 @@ def inject_evidence_anchors(
     start (an element carries one id). The class theo-evidence is the CSS hook
     for scroll-margin-top and :target (paper-extras.css). A paper without
     evidence gets `html` back unchanged.
+
+    Only the paragraph's own "<p>" tag is replaced and the links go right
+    before its own "</p>" tag; every other character of `html` stays as it is.
     """
     if not evidence:
         return html
-    where = resolve_evidence_anchors(html, evidence)
+    paragraphs = _paragraphs(html)
+    where = _anchor_paragraphs(html, paragraphs, evidence)
     by_id = moments or {}
     ids_at: dict[int, list[str]] = {}
     for entry in evidence:
         ids_at.setdefault(where[entry["id"]], []).append(entry["id"])
     parts: list[str] = []
     pos = 0
-    for index, match in enumerate(_PARAGRAPH_RE.finditer(html)):
+    for index, paragraph in enumerate(paragraphs):
         ids = ids_at.get(index)
         if ids is None:
             continue
@@ -574,10 +654,11 @@ def inject_evidence_anchors(
                 if (moment.youtube_id, moment.seconds) not in seen:
                     seen.add((moment.youtube_id, moment.seconds))
                     links.append(_video_link(moment))
-        parts.append(html[pos : match.start()])
-        parts.append(
-            f'<p id="{first}" class="theo-evidence">{spans}{match.group(1)}{"".join(links)}</p>'
-        )
-        pos = match.end()
+        parts.append(html[pos : paragraph.start])
+        parts.append(f'<p id="{first}" class="theo-evidence">{spans}')
+        parts.append(html[paragraph.inner_start : paragraph.inner_end])
+        parts.append("".join(links))
+        # The paragraph's own "</p>" follows from `html` with the next part.
+        pos = paragraph.inner_end
     parts.append(html[pos:])
     return "".join(parts)
