@@ -22,7 +22,7 @@ import json
 import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -910,6 +910,442 @@ def publish_paper(
         "notify": notify_published(
             request_id, result["title"], slug, outcome.url, outcome.journal_id, writer
         ),
+    }
+    _record_side_effects(session, outcome.journal_id, outcome.side_effects)
+    return outcome
+
+
+# ---------------------------------------------------------------------------
+# Corrections and videos (spec 2.7). Only a completed, public paper changes here.
+# ---------------------------------------------------------------------------
+
+_CORRECTION_ENTRY_KEYS = frozenset({"date", "text", "evidence_id"})
+#: Every change to a public paper rewrites result_json only: slug, published_at
+#: and published_by stay (a full republish included, owner decision 19).
+_UPDATE_RESULT_SQL = text("""
+    UPDATE research_requests
+    SET result_json = :result
+    WHERE id = :id AND status = 'completed' AND is_public = TRUE AND result_json = :previous
+""")
+#: The fresh Theo run a full republish was written from (C5 dossier_request_id)
+#: leaves 'researched' in the republish's own transaction.
+_CLOSE_DOSSIER_RUN_SQL = text("""
+    UPDATE research_requests
+    SET status = 'cancelled', error_message = :reason
+    WHERE id = :id AND status = 'researched'
+""")
+
+
+def check_live_status(status: str, is_public: bool) -> dict:
+    """Corrections and videos apply to a completed, public paper only."""
+    issues = []
+    if not (status == "completed" and is_public is True):
+        issues.append(
+            f"the paper must be completed and public (status={status!r}, is_public={is_public})"
+        )
+    return _gate(issues, status=status, is_public=bool(is_public))
+
+
+def _correction_entry_issues(entries: Any, *, earliest: date | None, latest: date) -> list[str]:
+    """Issues with corrections_append. Dates lie in [earliest, latest]: the page
+    turns the newest one into JSON-LD dateModified. earliest is None only while
+    the row is not public (the status gate reports that)."""
+    if not isinstance(entries, list) or not entries:
+        return ["corrections_append must be a non-empty list: every change is logged on the page"]
+    issues = []
+    for index, entry in enumerate(entries):
+        label = f"corrections_append[{index}]"
+        if not isinstance(entry, dict):
+            issues.append(f"{label} must be an object")
+            continue
+        unknown = sorted(set(entry) - _CORRECTION_ENTRY_KEYS)
+        if unknown:
+            issues.append(f"{label} has unknown keys {unknown}")
+        day = entry.get("date")
+        try:
+            parsed = date.fromisoformat(day) if isinstance(day, str) else None
+        except ValueError:
+            parsed = None
+        if parsed is None or parsed.isoformat() != day:
+            issues.append(f"{label}.date must be YYYY-MM-DD")
+        elif (earliest is not None and parsed < earliest) or parsed > latest:
+            issues.append(f"{label}.date must lie between the publication day and today")
+        if not (isinstance(entry.get("text"), str) and entry["text"].strip()):
+            issues.append(f"{label}.text must be a non-empty string")
+        if "evidence_id" in entry and not (
+            isinstance(entry["evidence_id"], str) and EVIDENCE_ID_RE.fullmatch(entry["evidence_id"])
+        ):
+            issues.append(f"{label}.evidence_id must look like ev-NN")
+    return issues
+
+
+def check_correction_shape(correction: dict, *, published_on: date | None, today: date) -> dict:
+    """Value types of a correction input (the CLI checked the keys, contract C5).
+
+    A full republish (`result`) is checked like a first publish: result.corrections
+    must be [] there too, because the stored log is kept and grows only through
+    corrections_append.
+    """
+    issues = check_writer(correction.get("writer"))
+    if "report" in correction and not (
+        isinstance(correction["report"], str) and correction["report"].strip()
+    ):
+        issues.append("report must be a non-empty string when given")
+    if "evidence" in correction and not isinstance(correction["evidence"], list):
+        issues.append("evidence must be a list when given")
+    if "result" in correction:
+        issues.extend(
+            _result_issues(correction["result"], correction.get("writer"), republish=True)
+        )
+    issues.extend(
+        _correction_entry_issues(
+            correction.get("corrections_append"), earliest=published_on, latest=today
+        )
+    )
+    return _gate(issues)
+
+
+def _update_result(session: Any, row: Any, stored: dict) -> None:
+    """Guarded write of a public paper's result_json (nothing else of the row changes)."""
+    updated = session.execute(
+        _UPDATE_RESULT_SQL,
+        {"id": row.id, "result": json.dumps(stored), "previous": row.result_json},
+    )
+    if updated.rowcount != 1:
+        session.rollback()
+        raise PublishConflictError(f"{row.id} changed between read and write; nothing committed")
+
+
+def check_dossier_source(session: Any, request_id: str, run_id: str) -> tuple[dict, dict | None]:
+    """The fresh Theo run a full republish was written from (C5 `dossier_request_id`).
+
+    Owner decisions 17 and 18: a legacy paper rewritten from a new Theo run on
+    its question keeps its slug and published_at, so the rewrite republishes the
+    public paper and takes the run's dossier. The run must exist, be
+    'researched' and not be the paper itself. Returns (gate, the run's C2
+    dossier summary when the gate passes, else None); the gate records the
+    run's id and status, so the journal row names both runs.
+    """
+    run = None if run_id == request_id else session.execute(_ROW_SQL, {"id": run_id}).fetchone()
+    status = run.status if run is not None else None
+    if run_id == request_id:
+        issues = ["dossier_request_id names the paper being republished"]
+    elif run is None:
+        issues = [f"research request {run_id} does not exist"]
+    elif status != "researched":
+        issues = [f"research request {run_id} is {status!r}, not 'researched'"]
+    else:
+        issues = []
+    gate = _gate(issues, request_id=run_id, status=status)
+    return gate, (None if issues else _stored_result(run)["dossier"])
+
+
+def _close_dossier_run(session: Any, run_id: str, request_id: str) -> None:
+    """Close the run whose dossier a republish used, in the republish's transaction.
+
+    It leaves `theo_dossier list` and the feeder's unwritten-dossier count
+    (Task 14); a run that is no longer 'researched' aborts the republish.
+    """
+    closed = session.execute(
+        _CLOSE_DOSSIER_RUN_SQL,
+        {"id": run_id, "reason": f"dossier used by the republish of {request_id}"},
+    )
+    if closed.rowcount != 1:
+        session.rollback()
+        raise PublishConflictError(f"{run_id} is no longer 'researched'; nothing committed")
+
+
+def correct_paper(
+    session: Any,
+    request_id: str,
+    correction: dict,
+    *,
+    bundle_sha256: str,
+    dry_run: bool,
+    images_root: Path = RESEARCH_IMAGES_DIR,
+) -> PublishOutcome:
+    """Re-gate and apply a correction to a public paper (contract C5).
+
+    Three kinds: a log entry only (report and published_report stay exactly as
+    stored, and the gates run on the text the page serves); a text correction
+    (report and published_report change together, title, card, images, hero,
+    quality_score and writer stay, except that `rewrite: true` stores this
+    correction's writer); or, with `result`, a full republish that replaces the
+    paper wholesale (a Claude rewrite of a legacy M3 paper, spec 2.6 step 4),
+    gated like a first publish. A full republish and a `rewrite: true` text
+    correction (owner decision 18's rewrite from the stored text) are announced
+    with the same owner notice as a first publish (owner decision 21); a small
+    fix and a log entry send none. The corrections log grows in every case,
+    every evidence id is kept unless a correction names it, and slug,
+    published_at and published_by never change (owner decision 19: a founder
+    who published the legacy paper stays its publisher; the writer record says
+    who wrote the rewrite). A full
+    republish written from a fresh Theo run names it in `dossier_request_id`
+    (owner decisions 17 and 18): the `dossier_source` gate checks the run, the
+    stored `dossier` becomes the run's summary, and the run is closed in the
+    same transaction. The CLI refuses `result` together with `report` or
+    `evidence`, a `rewrite` that is not true, comes without `report` or with
+    `evidence`, and a `dossier_request_id` without `result` (exit 2).
+    """
+    from pipeline.indexnow import page_url
+
+    row = _read_row(session, request_id)
+    current = _stored_result(row)
+    stored_corrections = current.get("corrections", [])
+    republish = "result" in correction
+    # Claude's text replaces the public one wholesale: a full republish, or a
+    # legacy paper rewritten from its stored text (C5 `rewrite`, owner decision
+    # 18). Either stores this correction's writer and notifies the owner.
+    claude_rewrite = republish or correction.get("rewrite") is True
+    dossier_run = correction.get("dossier_request_id")
+    dossier = None
+    gates: dict[str, dict] = {
+        "status": check_live_status(row.status, row.is_public),
+        # published_at is `timestamp without time zone`, written as NOW() by the
+        # UTC database: its date is the UTC publication day.
+        "shape": check_correction_shape(
+            correction,
+            published_on=row.published_at.date() if row.published_at is not None else None,
+            today=datetime.now(UTC).date(),
+        ),
+    }
+    stored: dict = {}
+    served = ""
+    if gates["status"]["passed"] and gates["shape"]["passed"]:
+        if republish:
+            paper = correction["result"]
+            gates["snapshot"] = check_snapshot(paper)
+            if dossier_run is not None:
+                gates["dossier_source"], dossier = check_dossier_source(
+                    session, request_id, dossier_run
+                )
+            served = paper["report"]
+            quality_score, require_stored_passed = paper["quality_score"], True
+        else:
+            paper = {**current, "evidence": correction.get("evidence", current.get("evidence", []))}
+            # The page serves published_report (report only on a legacy row
+            # without one). The founder block workflow assembles published_report
+            # from the approved blocks, so it can differ from report: a
+            # correction without `report` keeps both as stored and is gated on
+            # the served text, never on the draft.
+            if "report" in correction:
+                served = correction["report"]
+            else:
+                served = current.get("published_report") or current.get("report", "")
+            quality_score, require_stored_passed = current.get("quality_score") or {}, False
+        gates["retention"] = check_evidence_retention(
+            current.get("evidence", []),
+            paper["evidence"],
+            stored_corrections,
+            correction["corrections_append"],
+        )
+        gates["artifact"], audit = check_artifact(served)
+        gates["quality"] = check_quality(
+            quality_score, audit, require_stored_passed=require_stored_passed
+        )
+        gates["evidence"] = check_evidence(served, paper["title"], paper["evidence"])
+        gates["images"] = check_images(
+            request_id,
+            served,
+            paper.get("probative_images") or [],
+            paper.get("hero_image"),
+            images_root=images_root,
+        )
+        stored = {
+            **current,
+            **paper,
+            "corrections": [*stored_corrections, *correction["corrections_append"]],
+            "audit": audit,
+        }
+        if republish or "report" in correction:
+            stored["report"] = stored["published_report"] = served
+        if claude_rewrite:
+            stored["writer"] = correction["writer"]
+        if dossier is not None:
+            # The rewrite's research basis (C7): the fresh run's dossier summary.
+            stored["dossier"] = dossier
+        gates["page"] = check_page(request_id, stored)
+    outcome = PublishOutcome(
+        ok=all(gate["passed"] for gate in gates.values()),
+        action="correct",
+        request_id=request_id,
+        dry_run=dry_run,
+        slug=row.slug,
+        url=page_url(f"/research/{row.slug}") if row.slug else None,
+        gates=gates,
+    )
+    if dry_run or not outcome.ok:
+        return outcome
+
+    _update_result(session, row, stored)
+    if dossier_run is not None:
+        _close_dossier_run(session, dossier_run, request_id)
+    outcome.journal_id = _journal(
+        session,
+        request_id=request_id,
+        action="correct",
+        slug=row.slug,
+        writer=correction["writer"],
+        bundle_sha256=bundle_sha256,
+        gates=gates,
+    )
+    session.commit()
+    _verify(session, request_id, result=stored, slug=row.slug)
+    outcome.side_effects = run_publish_side_effects(
+        request_id=request_id,
+        slug=row.slug,
+        title=stored["title"],
+        paper_text=served,
+        author_username=row.published_by,
+        author_discord_id=row.user_id,
+        published_at=row.published_at.isoformat(),
+        reindex=True,
+    )
+    if claude_rewrite:
+        # The same paper_published notice as a first publish (owner decision 21,
+        # spec 0: Claude publishes automatically and the owner is notified).
+        outcome.side_effects = {
+            **outcome.side_effects,
+            "notify": notify_published(
+                request_id,
+                stored["title"],
+                row.slug,
+                outcome.url,
+                outcome.journal_id,
+                correction["writer"],
+            ),
+        }
+    _record_side_effects(session, outcome.journal_id, outcome.side_effects)
+    return outcome
+
+
+def check_video_shape(video: dict) -> dict:
+    """Value types of a video registration (the CLI checked the keys, contract C6).
+
+    An optional `poster` must be exactly poster_web_path(request_id,
+    youtube_id): our own studio thumbnail in the paper's folder (owner decision
+    13). Whether the file exists is the images gate's business.
+    """
+    issues = check_writer(video.get("writer"))
+    if not (
+        isinstance(video.get("youtube_id"), str) and YOUTUBE_ID_RE.fullmatch(video["youtube_id"])
+    ):
+        issues.append("youtube_id must be an 11-character YouTube id")
+    if "poster" in video and video["poster"] != poster_web_path(
+        video["request_id"], video["youtube_id"]
+    ):
+        issues.append("poster must be /data/research-images/<request_id>/video_<youtube_id>.jpg")
+    if not (isinstance(video.get("title"), str) and video["title"].strip()):
+        issues.append("title must be a non-empty string")
+    published_at = video.get("published_at")
+    try:
+        valid_time = (
+            isinstance(published_at, str)
+            and datetime.fromisoformat(published_at).tzinfo is not None
+        )
+    except ValueError:
+        valid_time = False
+    if not valid_time:
+        issues.append("published_at must be an ISO 8601 date-time with a UTC offset")
+    stamps = video.get("evidence_timestamps")
+    if not isinstance(stamps, dict):
+        issues.append("evidence_timestamps must be an object")
+    else:
+        for ev, seconds in stamps.items():
+            if not (isinstance(seconds, int) and not isinstance(seconds, bool) and seconds >= 0):
+                issues.append(f"evidence_timestamps[{ev!r}] must be a whole number of seconds >= 0")
+    return _gate(issues)
+
+
+def register_video(
+    session: Any,
+    request_id: str,
+    video: dict,
+    *,
+    bundle_sha256: str,
+    dry_run: bool,
+    images_root: Path = RESEARCH_IMAGES_DIR,
+) -> PublishOutcome:
+    """Append a YouTube video to result_json.videos of a public paper (C6) and ping IndexNow.
+
+    A `poster` (owner decision 13) is stored with the video only when the
+    registration sends one, and only once its file exists in the paper's
+    folder: the images gate runs check_images on it. Without a poster the
+    images gate checks nothing and the page keeps its posterless player.
+    """
+    from pipeline.indexnow import page_url
+    from pipeline.indexnow import submit as indexnow_submit
+
+    row = _read_row(session, request_id)
+    gates: dict[str, dict] = {
+        "status": check_live_status(row.status, row.is_public),
+        "shape": check_video_shape(video),
+    }
+    current = _stored_result(row)
+    stored: dict = {}
+    if gates["status"]["passed"] and gates["shape"]["passed"]:
+        # A timestamp may name a current evidence id or one a correction retired
+        # (a video made before the correction keeps it): the page's anchor_ids.
+        current_ids = {entry["id"] for entry in current.get("evidence", [])}
+        retired = {
+            entry["evidence_id"]
+            for entry in current.get("corrections", [])
+            if entry.get("evidence_id")
+        } - current_ids
+        gates["evidence_refs"] = _gate(
+            [
+                f"{ev} is neither an evidence id of this paper nor retired by a correction"
+                for ev in sorted(set(video["evidence_timestamps"]) - current_ids - retired)
+            ]
+        )
+        already = any(v.get("youtube_id") == video["youtube_id"] for v in current.get("videos", []))
+        gates["duplicate"] = _gate(
+            [f"video {video['youtube_id']} is already registered"] if already else []
+        )
+        gates["images"] = check_images(
+            request_id,
+            "",
+            [{"web_path": video["poster"]}] if "poster" in video else [],
+            None,
+            images_root=images_root,
+        )
+        entry = {
+            "youtube_id": video["youtube_id"],
+            "title": video["title"],
+            "published_at": video["published_at"],
+            "evidence_timestamps": video["evidence_timestamps"],
+            "registered_at": datetime.now(UTC).isoformat(),
+        }
+        if "poster" in video:
+            entry["poster"] = video["poster"]
+        stored = {**current, "videos": [*current.get("videos", []), entry]}
+        gates["page"] = check_page(request_id, stored)
+    outcome = PublishOutcome(
+        ok=all(gate["passed"] for gate in gates.values()),
+        action="register_video",
+        request_id=request_id,
+        dry_run=dry_run,
+        slug=row.slug,
+        url=page_url(f"/research/{row.slug}") if row.slug else None,
+        gates=gates,
+    )
+    if dry_run or not outcome.ok:
+        return outcome
+
+    _update_result(session, row, stored)
+    outcome.journal_id = _journal(
+        session,
+        request_id=request_id,
+        action="register_video",
+        slug=row.slug,
+        writer=video["writer"],
+        bundle_sha256=bundle_sha256,
+        gates=gates,
+    )
+    session.commit()
+    _verify(session, request_id, result=stored, slug=row.slug)
+    outcome.side_effects = {
+        "indexnow": {"ok": indexnow_submit([page_url(f"/research/{row.slug}")])}
     }
     _record_side_effects(session, outcome.journal_id, outcome.side_effects)
     return outcome
