@@ -194,3 +194,32 @@ def mutated(**changes) -> dict:
         last = keys[-1]
         target[int(last) if last.isdigit() else last] = value
     return data
+
+
+def ready_episode(tmp_path: Path, monkeypatch):
+    """An episode with voice, captures, media, music and fonts in place (no render yet)."""
+    from pipeline.studio import config, episode, render
+    from tests.pipeline.studio import script_fixtures as sf
+
+    monkeypatch.setattr(episode, "load_registry", lambda: sf.REGISTRY)
+    ws = episode.EpisodeWorkspace(tmp_path / "episodes" / "baalbek-c5", "baalbek-c5")
+    music = episode.music_config("bed.wav", "Music: X")
+    episode.init_episode(ws, paper=PAPER, topic_type="A", fmt="full", music=music)
+    ready_workspace(ws.root)
+    ws.script.write_text(json.dumps(sf.script()), encoding="utf-8")
+    ws.words.write_text(json.dumps(sf.words_for(sf.script())), encoding="utf-8")
+    (ws.voice_dir / "manifest.json").write_text(json.dumps(sf.voice_manifest()), encoding="utf-8")
+    for cid, manifest in sf.stored_manifests().items():
+        (ws.captures_dir / f"{cid}.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (ws.root / manifest["path"]).write_bytes(b"mp4")
+    for b in sf.script()["beats"]:
+        (ws.voice_dir / f"{b['id']}.mp3").write_bytes(b"mp3")
+    assets = tmp_path / "video-assets"
+    (assets / "music").mkdir(parents=True)
+    (assets / "music" / "bed.wav").write_bytes(b"wav")
+    monkeypatch.setattr(config, "video_assets", lambda: assets)
+    fonts = tmp_path / "fonts"
+    fonts.mkdir()
+    (fonts / "orbitron-700.woff2").write_bytes(b"font")
+    monkeypatch.setattr(render, "FONTS_DIR", fonts)
+    return ws
