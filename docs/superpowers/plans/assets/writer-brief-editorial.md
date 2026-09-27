@@ -14,6 +14,8 @@ What changed against the M3 prompts, and only this:
 - The JSON outline step is gone. The outline rules below are the plan you follow before writing.
 - The "hallucination gate will delete your sentence" warnings became checks: every specific you write
   must be findable in the cited source's archived text, and the claim-by-claim fact check reads that text.
+  A TDM-reserved source ships no archived text; it is cited like any source, and the claim check reads
+  its page live and saves that text (`claims_check/live/<id>.txt`), which then counts as its text.
 
 ## 1. Voice
 
@@ -212,7 +214,8 @@ hard. That's not gullibility. That's hope."
   state facts. Group several: "...dates to 3000 BC [S:1a2b3c4d5e6f] [S:0f9e8d7c6b5a]." Place citations
   before the period.
 - A citation points to a source that actually supports that specific sentence, not merely a topically
-  related one. The claim-by-claim fact check reads the cited source's archived text and rejects mismatches.
+  related one. The claim-by-claim fact check reads the cited source's archived text (a TDM-reserved
+  source: its page, read live) and rejects mismatches.
 - `[self]` or any other bracket token that is not a citation marker, a footnote `[^n]` or a markdown link
   never appears in prose (the artifact gate holds the paper on any non-numeric bracket token).
 - If a sentence cannot be backed by a dossier source, delete the sentence. Fewer fully cited paragraphs beat
@@ -224,8 +227,9 @@ hard. That's not gullibility. That's hope."
   texts. Do not use your own knowledge for facts.
 - Never invent a person name, book title, specific year, specific measurement, institution name or quoted
   phrase without a cited source that contains it. The deterministic gate extracts every number, date and
-  proper-noun specific from the paper and looks for it in the cited sources' archived texts; an unmatched
-  specific in a cited paragraph blocks the publish.
+  proper-noun specific from the paper and looks for it in the cited sources' archived or live texts (the
+  live text the claim check saved for a TDM-reserved source); an unmatched specific in a cited paragraph
+  blocks the publish.
 - Do not include "common knowledge" claims that no cited source states.
 - If the dossier is thin on a point, write less about it. Short and honest beats long and fabricated.
 
@@ -255,5 +259,6 @@ Every factual paragraph that carries a checkable claim gets an entry in `evidenc
 `{id: "ev-NN", anchor_text, claim, source_ids, quote, quote_source_id, verdict}`. `anchor_text` is the
 paragraph's opening, copied verbatim from its first word, at least 20 characters after normalisation and
 opening no other paragraph; if it runs past a citation marker, copy the marker too (`[S:<id>]` and `[N]`
-are ignored by the matcher, but leaving one out shifts the punctuation). `quote` is copied verbatim from
-the archived text of `quote_source_id`. Evidence ids are never renumbered or reused once published.
+are ignored by the matcher, but leaving one out shifts the punctuation). `quote` occurs verbatim in the
+archived text of `quote_source_id` or, for a TDM-reserved source, in the live text the claim check saved
+(`claims_check/live/<id>.txt`). Evidence ids are never renumbered or reused once published.

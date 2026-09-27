@@ -64,3 +64,15 @@ Notes after the second round:
 | Q3 | 2026-09-26 (index) | #20 was overtaken by A's server-side corrections carry-over. Keep A's rule? | Kept; the studio does not fill `result.corrections`. |
 | Q4 | 2026-09-26 (index) | The local site export (`public/data/sites/`) is from 2026-03-26, before the sites remediation; the worktree has none. Download the current export read-only from production for captures and the #15 dots? | Download read-only into the worktree's gitignored `public/data/sites/`; `doctor` reports its age. |
 | Q5 | 2026-09-26 (index) | Acceptance (a)'s dry run uploads the rewritten 95fa3798 paper's images to production `research-images/95fa3798…/` (content-hash names, unlinked, gitignored). Leave them? | Left in place (a later real rewrite reuses them). |
+| Q6 | 2026-09-27 (converge) | #31 ScaleZoom: a strictly linear camera pull-back shrinks the small quantity to a dot within ~15 frames at 1:6,000. Alternative: a Powers-of-Ten pull at constant zoom speed (every frame still one linear scale, no log axis). | Strictly linear pull, as decided. |
+| Q7 | 2026-09-27 (converge) | A founder publishing a Claude-written paper via the founder route: `writer.published='manual'`, `human_review=true`, so the disclosure says an editor reviewed and published it. Keep? | Kept. |
+| Q8 | 2026-09-27 (converge) | Legacy rewrites via `--report-file`: only with an explicit `--rewrite` flag is the Claude writer stored, the disclosure shown and the notice sent; a small fix (Roswell) goes without it. | Explicit flag. |
+| Q9 | 2026-09-27 (converge) | #16: may an evidence quote on the paper page come from a TDM-reserved source's live text (kept local)? | Yes (otherwise such paragraphs get no `#ev-NN` anchor). |
+| Q10 | 2026-09-27 (converge) | A research-only run whose dossier was used to republish a legacy paper ends as `cancelled` ("dossier used by the republish of …"), leaving the list and the cap. Alternative: completed, not public. | Cancelled. |
+| Q11 | 2026-09-27 (converge) | #15: distribution dots only from curated `ancient_nerds` sites, or any exported id (~1.9 M)? | Curated only. |
+| Q12 | 2026-09-27 (converge) | #32: non-Latin source pages: the page title is recorded but not drawn; the credit shows only the ASCII hostname. | Hostname-only credit. |
+| Q13 | 2026-09-27 (converge) | #25 layout: teaser top left on dark glass (1440x380 at y 72, green edge bar), upper-case Orbitron 104 px, max two lines; credit line bottom left. | This layout; the owner sees it in the final package review. |
+| Q2+ | 2026-09-27 (converge) | `register-youtube` always requires `--poster K`, even without a linked paper. | Required for uniformity. |
+| Q4+ | 2026-09-27 (converge) | After the merge the studio would resolve dots from the main checkout's stale export; the runbook refreshes it read-only (`curl -sfR … https://ancientnerds.com/data/sites/index.json`) before the first distribution capture. | Runbook refresh; `doctor` reports the age. |
+
+Applied since the second round: #22 (host scripts retired, plan A Task 10/13b) and #23 (no disclosure in the Medium copy, plan B Task 3 assertion).

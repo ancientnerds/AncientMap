@@ -97,6 +97,10 @@ files, which the code validates against schemas and rules.
   coherence_pass, hero_picker, theo_image_captions, image_fetcher, image_gates, the
   probative_images helper functions used by backfill (`embed_probative_images`, `_claim_image_content`,
   `_limit_tagged`), and illustration_specialist / citation_verifier (journal pipeline).
+- Retire the four Theo host scripts (owner 2026-09-26): `scripts/entitaet_research_host.py`,
+  `smoke_theo_host.py`, `theo_ab_compare.py`, `theo_test_run.py`, with their test and doc references.
+  They run the orchestrator without a `research_requests` row, which the DossierHandler refuses. The
+  `ResearchState` paper fields (`paper_text`, `paper_title`, …) go too once nothing reads them.
 - New `DossierHandler` (handlers/dossier.py), registered **first** on `ModeratorComplete`:
   1. Builds the dossier (see 2.2) and persists it. It must be idempotent, because the forced-deadline
      path can make the moderator fire twice.
@@ -155,7 +159,8 @@ before a TDM reservation before an adapter abstract, newest within each) is miss
    with `cited=true` (meaning "cited by a moderated claim").
 
 Respect `tdm_opt_out`: store metadata without the body, and mark the source as
-`tdm_reserved` in the manifest. The local fact check treats them as source_missing (3.5). The step is bounded
+`tdm_reserved` in the manifest. Only this automatic completion skips them: the paper cites them like
+any source, and the claim check reads a TDM-reserved source live (3.5). The step is bounded
 (`THEO_ARCHIVE_COMPLETION_MAX_S`, default 1800 s; `THEO_ARCHIVE_COMPLETION_CONCURRENCY` 4).
 Coverage numbers go into the manifest. Failures per source are recorded, never silent.
 
@@ -175,7 +180,8 @@ Coverage numbers go into the manifest. Failures per source are recorded, never s
 - Feeder backlog cap: `_feeder_loop` does not enqueue while the count of `status='researched'`
   rows is at least `THEO_MAX_UNWRITTEN_DOSSIERS` (default 6).
 - Notification: `send_discord_webhook` when `DISCORD_WEBHOOK_URL` is set; the `thinking_log` event
-  is always written. (DISCORD_WEBHOOK_URL is currently unset, and setting it is an owner action.)
+  is always written. (DISCORD_WEBHOOK_URL stays unset by owner decision 2026-09-26, so notices go to
+  `thinking_log` only for now; nothing else is built.)
 
 ### 2.5 API and UI adjustments for `'researched'`
 
@@ -214,9 +220,10 @@ def publish_paper(session, request_id: str, result: dict, *, author: str = "Theo
    published_at=NOW(), published_by=author, slug WHERE id=:id AND status IN ('researched','completed')
    AND is_public = FALSE (a republish of a public paper goes through `correct_paper`, 2.7), plus an
    INSERT into `theo_paper_publications` (journal).
-5. After commit: re-reads and verifies the row, then runs IndexNow (`/research/{slug}`, `/research/`)
-   and `index_paper` (Qdrant). Their failures are recorded in the journal row (`side_effects` jsonb)
-   and do not undo the publish. The nightly reindex is the documented backstop.
+5. After commit: re-reads and verifies the row, then runs IndexNow (`/research/{slug}`, `/research/`),
+   `index_paper` (Qdrant) and the `paper_published` notice (`thinking_log`; Discord only while
+   `DISCORD_WEBHOOK_URL` is set, 2.4). Their failures are recorded in the journal row
+   (`side_effects` jsonb) and do not undo the publish. The nightly reindex is the documented backstop.
 
 `PublishOutcome` = `{ok, slug, url, gates: {...}, side_effects: {...}, journal_id}`.
 
@@ -225,13 +232,26 @@ prints `PublishOutcome` JSON. Exit code ≠ 0 on any failed gate.
 
 ### 2.7 Corrections and video registration (same CLI module)
 
-- `python -m pipeline.lyra.theo_publish --correct < correction.json`: `{request_id, report?,
-  evidence?, corrections_append: [{date, text, evidence_id?}]}`. It re-runs the gates and keeps
-  every existing evidence id: an id may only be retired by a correction entry that names it. It then
-  updates report and published_report together, and journals the change.
-- `python -m pipeline.lyra.theo_publish --register-video < video.json`: `{request_id, youtube_id,
-  title, published_at, evidence_timestamps: {"ev-03": 312, ...}}`. Appends to
-  `result_json.videos`.
+`writer` is the 3.7 writer object in every input; `--dry-run` runs the gates without writing.
+
+- `python -m pipeline.lyra.theo_publish --correct [--dry-run] < correction.json`: `{version: 1,
+  request_id, writer, corrections_append: [{date, text, evidence_id?}], report?, evidence?,
+  result?}`. Three kinds: a log entry only (`corrections_append` alone); a text correction (`report`,
+  optionally `evidence`: report and published_report are replaced together, everything else stays);
+  a full republish (`result`, the complete publish `result` of 2.6, never together with `report` or
+  `evidence`), which replaces a public paper wholesale (e.g. a Claude rewrite of a legacy paper). A
+  full republish runs the gates of a first publish, keeps slug, `published_at` and `published_by`
+  (3.7), keeps the stored corrections log (`result.corrections` must be `[]`; the log grows only
+  through `corrections_append`), and sends the same `paper_published` notice as a first publish
+  (2.6 step 5). Every correction re-runs the gates and keeps every existing evidence id: an id may
+  only be retired by a correction entry that names it. Every correction is journalled.
+- `python -m pipeline.lyra.theo_publish --register-video [--dry-run] < video.json`: `{version: 1,
+  request_id, writer, youtube_id, title, published_at, evidence_timestamps: {"ev-03": 312, ...},
+  poster?}`. Appends to `result_json.videos`. `poster` is our own studio thumbnail,
+  `/data/research-images/<request_id>/video_<youtube_id>.jpg`; the file must exist under
+  `/app/public/data/research-images/<request_id>/` (uploaded by scp before the dry run, 4.9). The
+  paper page draws it inside the click-to-play link, so the page makes no YouTube request before
+  the click. A video registered without a poster keeps the posterless player.
 
 ### 2.8 Dossier export CLI (API image)
 
@@ -348,9 +368,15 @@ one verifier plus an adversarial skeptic for anything judged `supported`, and wr
 `claims_check/verdicts.jsonl`: `{task_id, verdict: supported|partly|unsupported|source_missing,
 quote, quote_source_id, explanation, fix_suggestion, answered_by, prompt_sha256}`.
 
+A TDM-reserved source is cited like any source, and the claim check reads it live: its task carries
+the `url` and no text path, the verifier fetches the page and saves the exact text it read to
+`claims_check/live/<source_id>.txt` (header: URL, UTC time; local only, never uploaded or archived),
+and `claims-import` runs the same verbatim quote check against that file.
+
 `claims-import` validates shape, coverage and prompt hashes. `partly` and `unsupported` block the
-publish until the paper is fixed and re-checked. `source_missing` (a TDM-reserved or unfetchable
-source) requires the claim to be re-sourced or removed.
+publish until the paper is fixed and re-checked. `source_missing` (an unfetchable source, or a
+TDM-reserved source only when the live page is unreachable or lacks the passage) requires the claim
+to be re-sourced or removed.
 
 ### 3.6 Image check and replacement (handoff)
 
@@ -367,7 +393,10 @@ caption, answered_by}`. `images-import` embeds with `theo_image_captions.image_m
 
 ### 3.7 Disclosure
 
-- `published_by` stays `'Theo'`, which keeps the Organization in JSON-LD and the "AI research agent" label.
+- A first publish sets `published_by = 'Theo'`, which keeps the Organization in JSON-LD and the "AI
+  research agent" label. A full republish (2.7) leaves `published_by` unchanged: a founder-published
+  paper keeps its founder as publisher (owner 2026-09-26), and the side effects re-index under the
+  stored publisher.
 - `result_json.writer = {model: "claude-opus-5-5", tool: "claude-code", research_model:
   "MiniMax-M3", published: "automatic", human_review: false}`.
 - The paper page renders a visible disclosure line from `writer`: "Researched by Theo (AI research
@@ -386,7 +415,7 @@ casefile.json  (Claude-authored, validated)   script.json (Claude-authored, vali
 review.html    (owner-facing script table)    voice/ (beat mp3s, words.json)
 captures/      (platform/globe/source clips + manifests)   media/ (stills, checked)
 timeline.json  (compiled, frame-exact)        render/ (Remotion out, lint report)
-package/       (mp4, srt, description.txt, titles.txt, thumbnail_3840.png, thumbnail_1280.jpg, youtube.json)
+package/       (mp4, srt, description.txt, titles.txt, thumbnail_{1,2,3}.jpg + 3840 masters, youtube.json)
 ```
 
 ### 4.2 Case file (`pipeline/studio/casefile.py`)
@@ -444,9 +473,16 @@ Validator rules (errors block the voice/render steps):
   evidence beat and a status beat.
 - Chapters: the first starts at 0:00, there are at least 3 for a full episode, and each lasts at least 10 s (checked after voice).
 - Every `visual.block` exists in the renderer's block registry (`video/src/blocks/registry.json`).
+- Glyphs (owner 2026-09-26): every string that is actually drawn (block text the renderer draws,
+  a QuoteCard's quote, hook captions, chapter titles, credits, thumbnail text, drawn place labels)
+  uses only the brand fonts' glyphs (latin, latin-ext). Strings that are not drawn (ids, paths,
+  URLs, a capture event's page title) and original quotes inside captured source pages
+  (SourceViewer) are not checked. The renderer's lint checks the same drawn strings.
 
 `python -m pipeline.studio episode review <slug>` renders `review.html`. This is the owner's
-script table: time, spoken, picture block, evidence plus source, and check status.
+script table: time, spoken, picture block, evidence plus source, and check status. It is not a
+release gate: the owner reviews only the final package (4.9), and the studio-video run does not stop
+for a script approval (owner 2026-09-26).
 
 ### 4.4 Voice (`pipeline/studio/voice.py`)
 
@@ -475,6 +511,12 @@ script table: time, spoken, picture block, evidence plus source, and check statu
   places lighting up, for type B topics), plus the existing Mapbox fly-in scenes in landscape
   (`studio-mapbox-flyin`: space → site → orbit; `studio-mapbox-orbit`), and exact Mapbox Static
   top-down frames with pins projected by `projection.py`.
+  Distribution dots come from our database by `site_id` (owner 2026-09-26): a distribution capture
+  spec takes labelled case-file `places` plus unlabelled `site_ids` (at most 500 in total). Each
+  `site_id` resolves to `{id, lat, lng}` from the repo-root `public/data/sites/` export (the curated
+  coordinates the globe shows; no network, no DB) and is recorded as an unlabelled dot. The resolved
+  coordinates are part of the hashed spec, so a changed export records the take again; an unknown
+  id is an error, and `doctor` reports the export's age.
 - **`sources.py`** captures source pages with Playwright: it scrolls to the quote, highlights it
   (a DOM Range wrap), hides banners and cookie bars, and captures the page with the highlight.
   Paywalled or login pages cannot be captured (technical limit), so use a QuoteCard. It also
@@ -534,7 +576,7 @@ video/scripts/render.ts     bundle → selectComposition → renderMedia (h264, 
                             chunked by frameRange, concat)
 video/scripts/lint.ts       renderFrames every Nth frame (default every 6th frame, scale 0.5) with LINT=1;
                             collects violations from onBrowserLog; exit ≠ 0 on any violation
-video/scripts/still.ts      thumbnail master 3840×2160 (scale 2) + 1280×720 JPEG < 2 MB
+video/scripts/still.ts      per thumbnail candidate (--candidate K [--frame N]): master 3840×2160 (scale 2) + 1280×720 JPEG < 2 MB
 video/test/                 vitest: layout overlap geometry, marker transform math, timeline→frames helpers
 ```
 
@@ -558,11 +600,21 @@ video/test/                 vitest: layout overlap geometry, marker transform ma
     image and map credits, the music credit, and the AI disclosure ("Narration: AI-generated voice
     (MiniMax speech-2.8-hd). Research: Theo (AI). Script: Claude (AI).");
   - `titles.txt` (candidates the owner picks from);
-  - the thumbnails;
+  - three thumbnail candidates for YouTube's A/B test (owner 2026-09-26): `thumbnail_{1,2,3}.jpg`
+    (1280×720, < 2 MB) plus their 3840×2160 masters, listed in `youtube.json`. The script names them
+    (`thumbnails: [{beat, at, text}]`, exactly 3), compiled into `timeline.json` as
+    `thumbnails: [{frame, text}]`. A thumbnail never shows the answer: the validator refuses a frame
+    inside a twist, verdict or "what would change our mind" beat, or after the first claim status
+    other than `pending` or the first meter move. Its `text` is a short teaser of 2–4 words (a
+    question or riddle, NERV style) that passes the glyph rule (4.3) and contains no verdict word
+    (SUPPORTED, REFUTED, WEAKENED, CONFIRMED, DEBUNKED, PROVEN, TRUE, FALSE).
+    `episode thumbnail <slug> --candidate K --frame N` re-renders one candidate from another frame;
   - `youtube.json` `{title, description, tags, categoryId: 27, containsSyntheticMedia: false,
     madeForKids: false, chapters, captions: "…srt"}`. `containsSyntheticMedia` becomes true
     automatically if any photorealistic AI-generated imagery is used, which the case file forbids
     by default.
+- The final package is the owner's only release gate (owner 2026-09-26): the owner reviews it before
+  the manual upload.
 - Upload stays **off**: `distributor.py` is not wired, and there is no OAuth token.
 - Ledger `studio_episodes` (migration 0026): id, slug, paper_request_id uuid NULL FK SET NULL,
   topic_type, casefile_sha256, script_sha256, voice_id, pipeline_commit, video_sha256 UNIQUE,
@@ -570,19 +622,28 @@ video/test/                 vitest: layout overlap geometry, marker transform ma
   rendered_at, published_at. It is written through `ssh ancientnerds docker exec -i ancient_nerds_api
   python -m pipeline.studio.ledger_cli --record < row.json`. The module is stdlib + SQLAlchemy
   only and ships in the image. `episode register-youtube` sets the youtube_id after a manual upload
-  and calls `theo_publish --register-video`.
+  and calls `theo_publish --register-video`. Its required `--poster K` names the thumbnail candidate
+  used on YouTube (or the A/B winner); it scp's `thumbnail_<K>.jpg` to
+  `research-images/<request_id>/video_<youtube_id>.jpg`, verifies it and sends it as `poster` (2.7).
 
 ### 4.10 Topic types → blocks
 
 | type | place blocks | main infographics |
 |---|---|---|
 | A single site | PlatformClip (search → fly → details, Measure tool), GlobeShot flyto, PhotoPlate markers | ScaleDrawing, UnitGrid, Timeline of phases |
-| B many places | GlobeShot places / PlatformClip with filters and layers | world distribution, frequency bars, Timeline |
-| C science/space | GlobeShot only where places matter; SourceViewer of our paper page | Diagram (orbits, field lines, curves), orders-of-magnitude UnitGrid |
+| B many places | GlobeShot places / PlatformClip with filters and layers | world distribution (globe take: case-file places as labelled pins, further sites as dots by `site_id`, 4.5), frequency bars, Timeline |
+| C science/space | GlobeShot only where places matter; SourceViewer of our paper page | Diagram (orbits, field lines, curves), orders of magnitude: UnitGrid up to 1:400, ScaleZoom beyond |
 | D texts/traditions | GlobeShot places of origin, SourceViewer (text passage highlighted) | Timeline of transmission, QuoteCard |
 
 Common to all: hook, ClaimBoard + Meter, EvidenceCard/SourceViewer, twist, ShareCard, verdict,
 "what would change our mind".
+
+Infographics are linear only, never logarithmic (owner 2026-09-26): no block has a log scale, and
+the block registry refuses a `scale` prop (BarChart is linear). UnitGrid shows ratios up to 1:400.
+Beyond that the `ScaleZoom` block (title, unit, basis, `small` and `large` as `{id, label, value}`,
+both > 0) draws the small quantity readable, then pulls the camera back linearly until the large
+one fits, the small one shrinking to a dot (Powers-of-Ten style, frame-driven). A ScaleZoom value
+bound to a case-file quantity equals it.
 
 ### 4.11 GPU: always the NVIDIA RTX 3080, never the integrated AMD (binding, owner 2026-09-26)
 
@@ -619,8 +680,10 @@ used, and a run that would land on it (or on software rendering) must fail loudl
 
 - The `.gitignore` gains exceptions `!.claude/skills/`, `!.claude/skills/**`, `!.claude/workflows/`,
   `!.claude/workflows/**`.
-- Skills: `.claude/skills/theo-write/SKILL.md` (the weekly paper session end to end),
-  `.claude/skills/studio-video/SKILL.md` (case file → script → … → package), and
+- Skills: `.claude/skills/theo-write/SKILL.md` (the weekly paper session end to end; the owner starts
+  it by hand with `/theo-write`, no scheduler is built),
+  `.claude/skills/studio-video/SKILL.md` (case file → script → … → package, without an owner stop
+  before the final package), and
   `.claude/skills/studio-casefile/SKILL.md` (how to build and verify a case file from a paper,
   including crop checks for markers).
 - Workflows: `.claude/workflows/theo-claim-check.js`, `theo-image-check.js`,
@@ -648,7 +711,8 @@ used, and a run that would land on it (or on software rendering) must fail loudl
   (fixture result_json, anchor resolution, image existence with tmp dirs), dossier export shape.
   Heavy deps are imported lazily and tests use `importorskip`. No test touches video-assets.
 - **Frontend**: SSR render test for the paper page with evidence anchors, video embed, corrections
-  and disclosure; pyref fixtures updated; no browser storage.
+  and disclosure; a handwritten `RESEARCH_WITH_EXTRAS` SSR fixture (the frozen `pyref/*` files stay
+  unchanged); no browser storage.
 - **Renderer**: `tsc`, vitest (layout, markers, timeline helpers), and a smoke render of a
   10-second fixture timeline in CI-less local verification.
 - **CI**: new job `lint-video` (path filter `video/**`: npm ci, tsc, vitest). The pre-push hook
@@ -658,9 +722,8 @@ used, and a run that would land on it (or on software rendering) must fail loudl
 
 1. Build on branch `feat/studio` (worktree `C:/PythonProjects/AncientMap-studio`), all gates green, adversarial review.
 2. Push to main. The deploy applies 0025/0026 before the image rebuild. The api/lyra/ssr/frontend
-   rebuild; theo-worker swaps only when idle. The run b26f8c69 finishes on the old code and
-   auto-publishes. After the swap (`scripts/swap_theo_worker_when_idle.sh` if needed), queued runs
-   produce dossiers.
+   rebuild. Theo is stopped by the owner (2026-09-26); the deploy swaps the idle worker. Queued runs
+   produce dossiers once Theo runs again.
 3. Verify: the running API commit equals HEAD, the migrations are applied, a researched row appears
    after the next batch run, and the dossier artifacts are complete.
 4. Acceptance:
@@ -669,7 +732,10 @@ used, and a run that would land on it (or on software rendering) must fail loudl
    - (b) the first new dossier after the swap is written, checked and published by Claude per
      `theo-write`;
    - (c) the Baalbek claim-5 slice is rendered end to end through the studio (Claude case file and
-     script with a web-sourced fact check, because the old run has no archived texts).
+     script with a web-sourced fact check, because the old run has no archived texts);
+   - (d) the first real `theo_publish --correct` (owner 2026-09-26): the published UFO/UAP paper
+     gives 7 July 1947 for the Roswell press release, its own source gives 8 July. `paper correct`
+     fixes the text with a corrections-log entry, dry run then apply; the log shows on the page.
 
 ## 9. Out of scope (recorded, not built)
 
@@ -679,5 +745,5 @@ used, and a run that would land on it (or on software rendering) must fail loudl
 - Compliance items the owner will handle later (not enforced by code now): Mapbox video rights
   (§1.7/§2.8.1 of the Product Terms), quotation rules for copyrighted source pages, music licence
   provenance, and the Remotion licence headcount check before hiring.
-- Setting DISCORD_WEBHOOK_URL (owner action).
+- Setting DISCORD_WEBHOOK_URL (owner decision 2026-09-26: not for now; notices stay in `thinking_log`).
 - Music: the current bed (`video-assets/music/MA_JonathanCarlile_…wav`) is used, with the credit in the description.
