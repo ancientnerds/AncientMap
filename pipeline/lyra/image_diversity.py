@@ -1,6 +1,6 @@
 """Diversity scoring for the probative-image selection.
 
-Computed after ProbativeImagesHandler finishes embedding images. Used to surface
+Computed after embed_probative_images() finishes embedding images. Used to surface
 "are we drawing from a wide spectrum of sources?" telemetry rather than silently
 accepting a paper with 8 images all from Wikimedia.
 

@@ -104,54 +104,6 @@ class DossierReady(ResearchEvent):
 
 
 @dataclass
-class PaperReady(ResearchEvent):
-    pass
-
-
-@dataclass
-class ProbativeImagesReady(ResearchEvent):
-    """Emitted after probative images are fetched, gated, and inserted.
-
-    Payload: count of images successfully embedded. The paper text on
-    state.paper_text has already been mutated by the handler.
-    """
-
-    embedded_count: int = 0
-
-
-@dataclass
-class FactCheckComplete(ResearchEvent):
-    """Fact-checking stage has verified citations in the paper."""
-
-    pass
-
-
-@dataclass
-class PresentationChecked(ResearchEvent):
-    """Presentation assessor has reviewed and corrected the paper."""
-
-    pass
-
-
-@dataclass
-class ImageGenComplete(ResearchEvent):
-    """Cover image generation is complete (or skipped)."""
-
-    pass
-
-
-@dataclass
-class QualityPassed(ResearchEvent):
-    score: int
-
-
-@dataclass
-class QualityFailed(ResearchEvent):
-    score: int
-    weak_areas: list[str]
-
-
-@dataclass
 class NewAngleDiscovered(ResearchEvent):
     topic: str
     description: str

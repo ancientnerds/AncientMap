@@ -1,10 +1,9 @@
-"""Handler: fetches probative images for qualifying claims and embeds them.
+"""Probative-image embedding for research papers.
 
-Runs between PaperReady and FactCheckComplete. Produces a high-density image
-gallery per section with multiple images per paragraph for YouTube video use.
-
-The embed logic is exposed as the module-level `embed_probative_images()`
-coroutine so it can be reused from a backfill CLI without the event bus.
+`embed_probative_images()` fetches, gates and embeds images into a paper. The
+live pipeline no longer calls it (Theo researches only since 2026-09-26); the
+backfill CLI (pipeline/lyra/backfill_probative_images.py) does, and the Claude
+image check reuses the dedup helpers `_claim_image_content` and `_limit_tagged`.
 """
 
 from __future__ import annotations
@@ -22,7 +21,6 @@ from typing import Any
 from PIL import Image
 
 from pipeline.lyra.config import _get_settings
-from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.illustration_specialist import select_opportunities_with_metrics
 from pipeline.lyra.image_fetcher import download_candidate, fetch_candidates
 from pipeline.lyra.image_gates import (
@@ -34,8 +32,6 @@ from pipeline.lyra.image_gates import (
     verdict_is_safe,
 )
 from pipeline.lyra.minimax_shared import create_minimax_client, minimax_vlm
-from pipeline.lyra.research_events import PaperReady, ProbativeImagesReady
-from pipeline.lyra.research_state import ResearchPhase
 from pipeline.lyra.theo_image_captions import (
     find_section_for_claim,
     find_section_for_claim_with_registry,
@@ -383,9 +379,7 @@ async def embed_probative_images(
 ) -> tuple[str, list[dict], dict, dict[str, int]]:
     """Embed probative images into a research paper.
 
-    Reusable from both the live pipeline handler and the backfill CLI. Does
-    all the work that used to live inside `ProbativeImagesHandler._on_paper_ready`
-    except for event-bus emissions and state-machine transitions.
+    Used by the backfill CLI.
 
     Parameters
     ----------
@@ -549,47 +543,6 @@ async def embed_probative_images(
         dict(ctx.strategy_counts),
         skip_reasons,
     )
-
-
-class ProbativeImagesHandler(BaseHandler):
-    """Thin event-bus wrapper around `embed_probative_images`."""
-
-    def register(self):
-        self.bus.on(PaperReady, self._on_paper_ready)
-
-    async def _on_paper_ready(self, event: PaperReady):
-        self.state.phase = ResearchPhase.IMAGE_CURATION
-
-        (
-            new_paper_text,
-            embedded,
-            diversity,
-            strategy_counts,
-            skip_reasons,
-        ) = await embed_probative_images(
-            paper_id=str(self.state.request_id),
-            paper_text=self.state.paper_text or "",
-            question=getattr(self.state, "question", "") or "",
-            angles=self.state.angles,
-            registry=self.state.registry,
-            image_candidate_pool=getattr(self.state, "image_candidate_pool", {}) or {},
-            emit=self.emit_sse,
-        )
-
-        self.state.paper_text = new_paper_text
-        self.state.probative_images = embedded
-        self.state.probative_images_diversity = diversity
-        # Stash strategy counts so the judge handler can surface them on
-        # quality_score.meta as embed_*. Lets us see in production how often
-        # each anchor-matching path fires (or how often the section-end
-        # fallback is rescuing us).
-        self.state.embed_strategy_counts = strategy_counts
-        # Per-reason skip counts. Lets us see why opportunities die at scale
-        # without scraping container logs (Run 11: 124 opps, 1 embed, no
-        # surfaced reason).
-        self.state.embed_skip_reasons = skip_reasons
-
-        await self.bus.emit(ProbativeImagesReady(embedded_count=len(embedded)))
 
 
 async def _process_one_opportunity(

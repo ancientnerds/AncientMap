@@ -30,9 +30,6 @@ class ResearchPhase(enum.Enum):
     SYNTHESIZING = "synthesizing"
     DEBATING = "debating"
     MODERATING = "moderating"
-    WRITING = "writing"
-    IMAGE_CURATION = "image_curation"
-    JUDGING = "judging"
     DONE = "done"
 
 
@@ -171,9 +168,8 @@ class ResearchState:
 
     # Image research pool — populated by AngleImageResearchHandler in parallel
     # with angle_search. Keyed by angle.id, values are serialized ImageCandidate
-    # dicts (dataclass round-trip via asdict). ProbativeImagesHandler selects
-    # from this pool at embed time; if empty (feature disabled or race), PIH
-    # falls back to on-demand fetch.
+    # dicts (dataclass round-trip via asdict). Persisted in the dossier
+    # (image_candidate_pool kind); the Claude image check picks from it.
     image_candidate_pool: dict[str, list[dict]] = field(default_factory=dict)
 
     # Diversity scores computed after probative-image selection completes.

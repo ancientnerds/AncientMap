@@ -1,13 +1,17 @@
-"""Convergence-based research orchestrator.
+"""Convergence-based research orchestrator: one Theo research run, research only.
 
-Event-driven state machine driving Theo's research runs. Questions are
-decomposed into research angles that converge independently via specialist
-consensus, then synthesized into a Why Files narrative paper.
+Event-driven state machine. The question is decomposed into angles that
+converge independently via specialist consensus; synthesis, debate and
+moderation follow, and the run ends when the DossierHandler has persisted the
+dossier and emitted DossierReady (spec
+docs/superpowers/specs/2026-09-26-studio-and-claude-write-design.md, 2.1). The
+paper is written afterwards in a Claude session, not here.
 
 Usage (from theo_worker.py):
     orchestrator = ConvergenceOrchestrator()
     state = await orchestrator.run(question, emit, ...)
-    # state has: paper_text, paper_title, audit_result, quality_score, etc.
+    # state has: dossier_ref, dossier_summary, error, quota_exhausted,
+    # total_tokens, llm_call_count, debug_log, registry, specialist_analyses
 """
 
 from __future__ import annotations
@@ -18,55 +22,29 @@ import logging
 import time
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, NamedTuple
 
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.research_events import (
     AngleCreated,
     CrossPollinationComplete,
+    DossierReady,
     EventBus,
-    QualityPassed,
 )
 from pipeline.lyra.research_state import (
     ResearchConfig,
     ResearchPhase,
     ResearchState,
+    findings_by_specialist,
 )
 
 logger = logging.getLogger(__name__)
-
-# Fail the run if the assembled paper is below this — no real Theo paper is this
-# short (healthy runs are 10k–40k chars). A near-empty paper means the writing
-# stages returned blank, almost always MiniMax Token-Plan exhaustion (429 ->
-# empty) or output truncation. We surface that as a failure rather than publish
-# an empty "completed" paper (CLAUDE.md: no silent-empty / graceful degradation).
-_MIN_PUBLISHABLE_PAPER_CHARS = 2000
-
-
-def _empty_paper_error(paper_text: str | None) -> str | None:
-    """Return a failure reason if `paper_text` is too short to publish, else None.
-
-    Guards against the 2026-06-16 incident where an 89-char paper was saved as
-    "completed" at quality 73 because the writing stages returned empty output
-    under MiniMax Token-Plan exhaustion (429) / max_tokens truncation.
-    """
-    paper_len = len((paper_text or "").strip())
-    if paper_len >= _MIN_PUBLISHABLE_PAPER_CHARS:
-        return None
-    return (
-        f"Paper assembly produced only {paper_len} chars "
-        f"(< {_MIN_PUBLISHABLE_PAPER_CHARS} minimum). The writing/synthesis stages "
-        "returned empty or truncated output — almost always MiniMax Token-Plan "
-        "quota exhaustion (429) or max_tokens truncation. Failing the run instead "
-        "of publishing an empty paper."
-    )
-
 
 # Wall time between two ticks of the watch loop (_drive_cascade): progress log,
 # DB flush, external-cancellation check and the SSE progress snapshot.
 _TICK_S = 30.0
 
-# After the done signal the cascade only unwinds (StatePersist's last passenger
+# After DossierReady the cascade only unwinds (StatePersist's last passenger
 # writes run on the way back up). It gets this long before it is cancelled.
 _UNWIND_GRACE_S = 120.0
 
@@ -74,111 +52,102 @@ _NO_DOSSIER_ERROR = (
     "Research ended without a dossier: the event cascade finished but DossierReady never fired"
 )
 
+_DOSSIER_GUARD_ERROR = (
+    "Research finished without a persisted dossier: no DossierReady with at least one "
+    "moderated final claim was recorded"
+)
 
-async def _drive_cascade(
-    state: ResearchState,
-    cascade_coro: Coroutine[Any, Any, None],
-    done_event: asyncio.Event,
-    deadline_handler: Any,
-    *,
-    request_id: str,
-    emit: Callable[[dict], None],
-    t0: float,
-) -> None:
-    """Run the event cascade as a task and watch it until the run is done.
 
-    The whole run executes inside the cascade (EventBus.emit awaits every
-    handler inline), so the watch loop must run beside it, not after it: only
-    then do the deadline check, the 30 s DB flush and the external-cancellation
-    check actually run. Returns when the done signal fired, when state.error is
-    set, or when the cascade finished (without the done signal that is an
-    error). Raises _CancelledByUser and whatever the cascade raised (quota
-    errors included). The cascade never outlives this call.
+class _Wiring(NamedTuple):
+    """The handlers of one run in bus registration order, plus the two the loop drives."""
+
+    handlers: list
+    decomposition: Any
+    deadline: Any
+
+
+def _build_handlers(state: ResearchState, bus: EventBus, semaphore: asyncio.Semaphore) -> _Wiring:
+    """Instantiate and register every handler of a research-only run.
+
+    Event flow:
+    AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited
+                \\-> angle_image_research -> (pool populated, no blocking event)
+    -> content_fetch -> ContentFetched -> specialist -> FindingsProduced
+    -> convergence check -> (loop or saturate)
+    AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
+    -> DebateComplete -> moderator -> ModeratorComplete -> dossier -> DossierReady
+
+    Registration order is dispatch order per event: the DossierHandler is the
+    only listener on ModeratorComplete; StatePersist, registered last, writes
+    its passenger artifacts after the stage handlers of the same event.
     """
-    cascade = asyncio.create_task(cascade_coro)
-    try:
-        while not done_event.is_set():
-            forced = await deadline_handler.check_deadline()
-            if forced and state.phase == ResearchPhase.DONE:
-                break
-            done_wait = asyncio.create_task(done_event.wait())
-            try:
-                await asyncio.wait(
-                    {cascade, done_wait}, timeout=_TICK_S, return_when=asyncio.FIRST_COMPLETED
-                )
-            finally:
-                done_wait.cancel()
-            if cascade.done():
-                cascade.result()
-                if not done_event.is_set() and not state.error:
-                    state.error = _NO_DOSSIER_ERROR
-                break
-            if done_event.is_set() or state.error:
-                break
-            _tick(state, request_id, emit, t0)
-    finally:
-        await _settle_cascade(state, cascade, done_event, request_id)
+    # Lazy imports to avoid circular dependencies
+    from pipeline.lyra.handlers.angle_audit import AuditHandler
+    from pipeline.lyra.handlers.angle_image_research import AngleImageResearchHandler
+    from pipeline.lyra.handlers.angle_search import SearchHandler
+    from pipeline.lyra.handlers.angle_specialist import SpecialistHandler
+    from pipeline.lyra.handlers.content_fetch import ContentFetchHandler
+    from pipeline.lyra.handlers.convergence_checker import ConvergenceChecker
+    from pipeline.lyra.handlers.cross_pollination import CrossPollinationHandler
+    from pipeline.lyra.handlers.deadline import DeadlineHandler
+    from pipeline.lyra.handlers.debate import DebateHandler
+    from pipeline.lyra.handlers.decomposition import DecompositionHandler
+    from pipeline.lyra.handlers.dossier import DossierHandler
+    from pipeline.lyra.handlers.moderator import ModeratorHandler
+    from pipeline.lyra.handlers.state_persist import StatePersistHandler
+    from pipeline.lyra.handlers.synthesis import SynthesisHandler
+
+    decomposition = DecompositionHandler(state, bus, semaphore)
+    deadline = DeadlineHandler(state, bus, semaphore)
+    handlers = [
+        decomposition,
+        SearchHandler(state, bus, semaphore),
+        AngleImageResearchHandler(state, bus, semaphore),
+        AuditHandler(state, bus, semaphore),
+        ContentFetchHandler(state, bus, semaphore),
+        SpecialistHandler(state, bus, semaphore),
+        ConvergenceChecker(state, bus, semaphore),
+        CrossPollinationHandler(state, bus, semaphore),
+        SynthesisHandler(state, bus, semaphore),
+        DebateHandler(state, bus, semaphore),
+        ModeratorHandler(state, bus, semaphore),
+        DossierHandler(state, bus, semaphore),
+        deadline,
+        StatePersistHandler(state, bus, semaphore),
+    ]
+    for handler in handlers:
+        handler.register()
+        # angle_specialist looks the SearchHandler up by class (bus.get_handler).
+        bus.register_instance(handler)
+    return _Wiring(handlers=handlers, decomposition=decomposition, deadline=deadline)
 
 
-def _tick(state: ResearchState, request_id: str, emit: Callable[[dict], None], t0: float) -> None:
-    """One watch-loop tick: progress log, DB flush, external cancellation, live snapshot."""
-    saturated = sum(1 for a in state.angles if a.saturated)
-    total = len(state.angles)
-    elapsed = int(time.monotonic() - t0)
-    progress_msg = (
-        f"Progress: {saturated}/{total} angles saturated, "
-        f"phase={state.phase.value}, elapsed={elapsed}s, "
-        f"llm_calls={state.llm_call_count}, "
-        f"sources={len(state.registry.sources)}"
-    )
-    state.log("orchestrator", progress_msg)
-    # Promote to logger so docker logs are no longer blind; the rest of the
-    # pipeline emits via SSE only.
-    logger.info("[THEO] %s %s", request_id, progress_msg)
-    # Counters + recent debug_log to the DB, so the run is diagnosable from psql.
-    _flush_progress_to_db(state, request_id)
-    # Ghost-task guard (2026-06-29): the DB row's status is the source of truth.
-    # If the user cancelled via the API (or the watchdog deferred the run), this
-    # raises _CancelledByUser and _drive_cascade cancels the cascade. Live since
-    # the cascade runs as a task (2026-09-26); before, it never ran.
-    _check_external_cancellation(request_id)
-    spec_count = len({f.get("specialist_id", "unknown") for a in state.angles for f in a.findings})
-    emit(
-        {
-            "type": "progress",
-            "stage": "orchestrator",
-            "meta": {
-                "phase": state.phase.value,
-                "elapsed_s": elapsed,
-                "angles_saturated": saturated,
-                "angles_total": total,
-                "llm_calls": state.llm_call_count,
-                "sources_found": len(state.registry.sources),
-                "tools_used": spec_count,
-                "total_tokens": state.total_tokens,
-            },
-        }
-    )
+def _wire_done_signal(
+    bus: EventBus, state: ResearchState, emit: Callable[[dict], None]
+) -> asyncio.Event:
+    """DossierReady ends the run (it replaced QualityPassed with the research-only split)."""
+    done_event = asyncio.Event()
+
+    async def _on_dossier_ready(event: DossierReady):
+        state.log("orchestrator", f"Dossier ready for {event.request_id}")
+        emit(
+            {
+                "type": "status",
+                "content": "Dossier ready: research complete, the paper is written next",
+            }
+        )
+        done_event.set()
+
+    bus.on(DossierReady, _on_dossier_ready)
+    return done_event
 
 
-async def _settle_cascade(
-    state: ResearchState, cascade: asyncio.Task, done_event: asyncio.Event, request_id: str
-) -> None:
-    """Let a finished run's cascade unwind for a grace period, cancel everything else."""
-    if not cascade.done() and done_event.is_set() and not state.error:
-        await asyncio.wait({cascade}, timeout=_UNWIND_GRACE_S)
-    if not cascade.done():
-        cascade.cancel()
-    (outcome,) = await asyncio.gather(cascade, return_exceptions=True)
-    if (
-        done_event.is_set()
-        and isinstance(outcome, BaseException)
-        and not isinstance(outcome, asyncio.CancelledError)
-    ):
-        # The dossier is complete; an error while unwinding does not undo it,
-        # but it must be visible.
-        state.log("orchestrator", f"Cascade raised after the run was done: {outcome!r}")
-        logger.error("[THEO] %s cascade raised after the run was done: %r", request_id, outcome)
+def _dossier_guard(state: ResearchState) -> None:
+    """Spec 2.1: a run succeeds only with a persisted dossier (replaces the empty-paper guard)."""
+    if state.error or state.dossier_ref is not None:
+        return
+    state.error = _DOSSIER_GUARD_ERROR
+    logger.error("[THEO] dossier guard tripped, failing the run: %s", _DOSSIER_GUARD_ERROR)
 
 
 class ConvergenceOrchestrator:
@@ -200,12 +169,11 @@ class ConvergenceOrchestrator:
         disabled_adapters: list[str] | None = None,
         low_priority: bool = True,
     ) -> ResearchState:
-        """Run the full convergence research pipeline.
+        """Run one research-only convergence pipeline.
 
-        Returns a ResearchState compatible with the worker contract:
-        paper_text, paper_title, card_description, audit_result,
-        quality_score, error, total_tokens, llm_call_count, debug_log,
-        registry (CitationRegistry).
+        Returns the ResearchState the worker reads: dossier_ref and
+        dossier_summary on success, error / quota_exhausted otherwise, plus
+        total_tokens, llm_call_count, debug_log, registry and specialist_analyses.
         """
         config = ResearchConfig()
         state = ResearchState(
@@ -302,89 +270,11 @@ class ConvergenceOrchestrator:
         # cause of the 82%-rate-limited 52-prompt batch. The limiter now
         # learns continuously; no per-task reset.
 
-        # Set up event bus and handlers. Pass state so the bus can surface
-        # handler exceptions into state.error (which the watch loop in
-        # _drive_cascade checks every tick) — see research_events.py:EventBus.emit.
+        # Event bus and handlers. The bus surfaces handler exceptions into
+        # state.error, which the watch loop (_drive_cascade) reads.
         bus = EventBus(state=state)
         semaphore = asyncio.Semaphore(config.max_concurrent_llm_calls)
-
-        # Lazy imports to avoid circular dependencies
-        from pipeline.lyra.handlers.angle_audit import AuditHandler
-        from pipeline.lyra.handlers.angle_image_research import AngleImageResearchHandler
-        from pipeline.lyra.handlers.angle_search import SearchHandler
-        from pipeline.lyra.handlers.angle_specialist import SpecialistHandler
-        from pipeline.lyra.handlers.content_fetch import ContentFetchHandler
-        from pipeline.lyra.handlers.convergence_checker import ConvergenceChecker
-        from pipeline.lyra.handlers.cross_pollination import CrossPollinationHandler
-        from pipeline.lyra.handlers.deadline import DeadlineHandler
-        from pipeline.lyra.handlers.debate import DebateHandler
-        from pipeline.lyra.handlers.decomposition import DecompositionHandler
-        from pipeline.lyra.handlers.fact_check import FactCheckHandler
-        from pipeline.lyra.handlers.image_generation import ImageGenerationHandler
-        from pipeline.lyra.handlers.judge import JudgeHandler
-        from pipeline.lyra.handlers.moderator import ModeratorHandler
-        from pipeline.lyra.handlers.paper import PaperHandler
-        from pipeline.lyra.handlers.presentation import PresentationHandler
-        from pipeline.lyra.handlers.probative_images import ProbativeImagesHandler
-        from pipeline.lyra.handlers.state_persist import StatePersistHandler
-        from pipeline.lyra.handlers.synthesis import SynthesisHandler
-
-        # Instantiate handlers
-        decomposition = DecompositionHandler(state, bus, semaphore)
-        search = SearchHandler(state, bus, semaphore)
-        angle_image_research = AngleImageResearchHandler(state, bus, semaphore)
-        audit = AuditHandler(state, bus, semaphore)
-        content_fetch = ContentFetchHandler(state, bus, semaphore)
-        specialist = SpecialistHandler(state, bus, semaphore)
-        convergence = ConvergenceChecker(state, bus, semaphore)
-        cross_poll = CrossPollinationHandler(state, bus, semaphore)
-        synthesis = SynthesisHandler(state, bus, semaphore)
-        debate = DebateHandler(state, bus, semaphore)
-        moderator = ModeratorHandler(state, bus, semaphore)
-        paper = PaperHandler(state, bus, semaphore)
-        probative_images = ProbativeImagesHandler(state, bus, semaphore)
-        fact_check = FactCheckHandler(state, bus, semaphore)
-        presentation = PresentationHandler(state, bus, semaphore)
-        image_gen = ImageGenerationHandler(state, bus, semaphore)
-        judge = JudgeHandler(state, bus, semaphore)
-        deadline_handler = DeadlineHandler(state, bus, semaphore)
-        state_persist = StatePersistHandler(state, bus, semaphore)
-
-        # Register all handlers on the bus
-        # Event flow:
-        # AngleCreated -> search -> SourcesFound -> audit -> SourcesAudited
-        #             \\-> angle_image_research -> (pool populated, no blocking event)
-        # -> content_fetch -> ContentFetched -> specialist -> FindingsProduced
-        # -> convergence check -> (loop or saturate)
-        # AllAnglesSaturated -> synthesis -> SynthesisReady -> debate
-        # -> DebateComplete -> moderator -> ModeratorComplete -> paper
-        # -> PaperReady -> probative_images -> ProbativeImagesReady -> fact_check
-        # -> FactCheckComplete -> presentation -> PresentationChecked
-        # -> image_gen -> ImageGenComplete -> judge -> QualityPassed
-        all_handlers = [
-            decomposition,
-            search,
-            angle_image_research,
-            audit,
-            content_fetch,
-            specialist,
-            convergence,
-            cross_poll,
-            synthesis,
-            debate,
-            moderator,
-            paper,
-            probative_images,
-            fact_check,
-            presentation,
-            image_gen,
-            judge,
-            deadline_handler,
-            state_persist,
-        ]
-        for handler in all_handlers:
-            handler.register()
-            bus.register_instance(handler)
+        wiring = _build_handlers(state, bus, semaphore)
 
         # Wire cross-pollination complete -> trigger round 2 via AngleCreated events.
         # This naturally flows: AngleCreated -> search -> audit -> content_fetch -> specialist.
@@ -405,15 +295,7 @@ class ConvergenceOrchestrator:
 
         bus.on(CrossPollinationComplete, _on_cross_pollination_complete)
 
-        # Wire quality passed -> done
-        done_event = asyncio.Event()
-
-        async def _on_quality_passed(event: QualityPassed):
-            state.log("orchestrator", f"Quality passed (score={event.score})")
-            emit({"type": "status", "content": f"Quality check passed (score {event.score})"})
-            done_event.set()
-
-        bus.on(QualityPassed, _on_quality_passed)
+        done_event = _wire_done_signal(bus, state, emit)
 
         # Register seed URLs as sources
         for url in state.seed_urls:
@@ -435,14 +317,13 @@ class ConvergenceOrchestrator:
         try:
             await _drive_cascade(
                 state,
-                decomposition.decompose(),
+                wiring.decomposition.decompose(),
                 done_event,
-                deadline_handler,
+                wiring.deadline,
                 request_id=request_id,
                 emit=emit,
                 t0=t0,
             )
-
         except _CancelledByUser as exc:
             # User-cancellation (DB status changed to 'cancelled' or 'deferred').
             # Set a clean state.error so the worker's `"cancelled" in ctx.error`
@@ -479,27 +360,14 @@ class ConvergenceOrchestrator:
             "orchestrator", f"Pipeline finished in {duration_ms}ms, phase={state.phase.value}"
         )
 
-        # Build specialist_analyses dict for backward compat (worker uses len() for tools_used)
-        for angle in state.angles:
-            for finding in angle.findings:
-                spec_id = finding.get("specialist_id", "unknown")
-                if spec_id not in state.specialist_analyses:
-                    state.specialist_analyses[spec_id] = []
-                state.specialist_analyses[spec_id].append(finding)
+        # The worker reports len(specialist_analyses) as tools_used.
+        state.specialist_analyses = findings_by_specialist(state.angles)
 
-        # Empty-paper guard: never let the worker publish a near-empty paper as
-        # "completed" (the 2026-06-16 incident saved an 89-char paper at quality
-        # 73). If the run otherwise succeeded but produced no real paper, convert
-        # it to a failure with an actionable reason so credits are released and
-        # the user sees WHY rather than an empty page.
-        if not state.error:
-            empty_reason = _empty_paper_error(state.paper_text)
-            if empty_reason:
-                state.error = empty_reason
-                logger.error("[THEO] empty-paper guard tripped — failing run: %s", empty_reason)
+        _dossier_guard(state)
 
         # Persist the run's knowledge-graph contribution (angle tree + open
-        # rabbit holes as frontier). Best-effort inside — never fails the run.
+        # rabbit holes as frontier). The paper node is labelled with the
+        # question (there is no paper title at research end). Best-effort inside.
         if request_id and not state.error:
             from pipeline.lyra.research_graph import persist_state_graph
 
@@ -508,14 +376,119 @@ class ConvergenceOrchestrator:
         return state
 
 
+async def _drive_cascade(
+    state: ResearchState,
+    cascade_coro: Coroutine[Any, Any, None],
+    done_event: asyncio.Event,
+    deadline_handler: Any,
+    *,
+    request_id: str,
+    emit: Callable[[dict], None],
+    t0: float,
+) -> None:
+    """Run the event cascade as a task and watch it until the run is done.
+
+    The whole run executes inside the cascade (EventBus.emit awaits every
+    handler inline), so the watch loop must run beside it, not after it: only
+    then do the deadline check, the 30 s DB flush and the external-cancellation
+    check actually run. Returns when DossierReady fired, when state.error is
+    set, or when the cascade finished (without DossierReady that is an error).
+    Raises _CancelledByUser and whatever the cascade raised (quota errors
+    included). The cascade never outlives this call.
+    """
+    cascade = asyncio.create_task(cascade_coro)
+    try:
+        while not done_event.is_set():
+            forced = await deadline_handler.check_deadline()
+            if forced and state.phase == ResearchPhase.DONE:
+                break
+            done_wait = asyncio.create_task(done_event.wait())
+            try:
+                await asyncio.wait(
+                    {cascade, done_wait}, timeout=_TICK_S, return_when=asyncio.FIRST_COMPLETED
+                )
+            finally:
+                done_wait.cancel()
+            if cascade.done():
+                cascade.result()
+                if not done_event.is_set() and not state.error:
+                    state.error = _NO_DOSSIER_ERROR
+                break
+            if done_event.is_set() or state.error:
+                break
+            _tick(state, request_id, emit, t0)
+    finally:
+        await _settle_cascade(state, cascade, done_event, request_id)
+
+
+def _tick(state: ResearchState, request_id: str, emit: Callable[[dict], None], t0: float) -> None:
+    """One watch-loop tick: progress log, DB flush, external cancellation, live snapshot."""
+    saturated = sum(1 for a in state.angles if a.saturated)
+    total = len(state.angles)
+    elapsed = int(time.monotonic() - t0)
+    progress_msg = (
+        f"Progress: {saturated}/{total} angles saturated, "
+        f"phase={state.phase.value}, elapsed={elapsed}s, "
+        f"llm_calls={state.llm_call_count}, "
+        f"sources={len(state.registry.sources)}"
+    )
+    state.log("orchestrator", progress_msg)
+    # Promote to logger so docker logs are no longer blind; the rest of the
+    # pipeline emits via SSE only.
+    logger.info("[THEO] %s %s", request_id, progress_msg)
+    # Counters + recent debug_log to the DB, so the run is diagnosable from psql.
+    _flush_progress_to_db(state, request_id)
+    # Ghost-task guard (2026-06-29): the DB row's status is the source of truth.
+    # If the user cancelled via the API (or the watchdog deferred the run), this
+    # raises _CancelledByUser and _drive_cascade cancels the cascade. Live since
+    # the cascade runs as a task (2026-09-26); before, it never ran.
+    _check_external_cancellation(request_id)
+    spec_count = len({f.get("specialist_id", "unknown") for a in state.angles for f in a.findings})
+    emit(
+        {
+            "type": "progress",
+            "stage": "orchestrator",
+            "meta": {
+                "phase": state.phase.value,
+                "elapsed_s": elapsed,
+                "angles_saturated": saturated,
+                "angles_total": total,
+                "llm_calls": state.llm_call_count,
+                "sources_found": len(state.registry.sources),
+                "tools_used": spec_count,
+                "total_tokens": state.total_tokens,
+            },
+        }
+    )
+
+
+async def _settle_cascade(
+    state: ResearchState, cascade: asyncio.Task, done_event: asyncio.Event, request_id: str
+) -> None:
+    """Let a finished run's cascade unwind for a grace period, cancel everything else."""
+    if not cascade.done() and done_event.is_set() and not state.error:
+        await asyncio.wait({cascade}, timeout=_UNWIND_GRACE_S)
+    if not cascade.done():
+        cascade.cancel()
+    (outcome,) = await asyncio.gather(cascade, return_exceptions=True)
+    if (
+        done_event.is_set()
+        and isinstance(outcome, BaseException)
+        and not isinstance(outcome, asyncio.CancelledError)
+    ):
+        # The dossier is complete; an error while unwinding does not undo it,
+        # but it must be visible.
+        state.log("orchestrator", f"Cascade raised after the run was done: {outcome!r}")
+        logger.error("[THEO] %s cascade raised after the run was done: %r", request_id, outcome)
+
+
 def _flush_progress_to_db(state, request_id: str) -> None:
     """Persist in-flight counters + recent debug_log to research_requests.
 
-    Called periodically (every 30s, on each orchestrator deadline-loop tick)
-    so a stalled vs healthy run can be distinguished from psql alone instead
-    of guessing from SSE / docker logs. The final completion write in
-    theo_worker.py overwrites everything anyway, so partial values here
-    are safe to keep loose.
+    Called on every watch-loop tick (every 30s) and piggybacked on
+    EventBus.emit, so a stalled vs healthy run can be distinguished from psql
+    alone. The final write in theo_worker.py overwrites everything anyway, so
+    partial values here are safe to keep loose.
     """
     if not request_id:
         return
@@ -566,21 +539,18 @@ class _CancelledByUser(Exception):
 
     The worker writes status='cancelled' to the DB when a user cancels via
     DELETE /research/{id}, but the in-flight asyncio task has no direct
-    signal — it would otherwise keep burning tokens until the stall guard
-    fires (45min). The orchestrator polls the DB every 30s as part of its
-    progress flush; if status != 'running', raise this so the worker can
-    catch it cleanly and unwind credits.
+    signal. The watch loop polls the DB every 30s; if status != 'running',
+    this is raised so the worker can catch it cleanly and unwind credits.
     """
 
 
 def _check_external_cancellation(request_id: str) -> None:
     """Read research_requests.status for `request_id`. If it's no longer
     'running' (e.g. user cancelled via API, watchdog marked deferred, etc.),
-    raise ``_CancelledByUser`` so the orchestrator loop unwinds.
+    raise ``_CancelledByUser`` so the watch loop unwinds.
 
-    Called from the orchestrator's deadline loop every ~30s. Best-effort:
-    a transient DB error must NOT kill the pipeline — only a confirmed
-    non-'running' status triggers the cancel.
+    Called on every watch-loop tick. Best-effort: a transient DB error must NOT
+    kill the pipeline — only a confirmed non-'running' status triggers the cancel.
     """
     if not request_id:
         return
