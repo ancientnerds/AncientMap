@@ -28,6 +28,8 @@ import { empireSpotlightsScene } from './scenes/empire-spotlights.js'
 import { dataStoriesScene } from './scenes/data-stories.js'
 import { brollScene } from './scenes/b-roll.js'
 import { siteShortScenes } from './scenes/site-short.js'
+import { studioGlobeScenes } from './scenes/studio-globe.js'
+import { studioMapboxScenes } from './scenes/studio-mapbox.js'
 import { encodeScene } from './utils/encode.js'
 import { bindRecorderFunctions, injectTimeControl, StreamRecorder } from './utils/capture.js'
 
@@ -54,6 +56,11 @@ export interface SceneDefinition {
   frameYieldMs?: number
   /** Mapbox scenes: hold each frame until every tile of the current view is loaded. */
   waitForTiles?: boolean
+  /**
+   * The scene writes its own exact frames (scenes/studio-frames.ts) instead of the
+   * MediaRecorder stream: no WebM and no encode step here (studio captures).
+   */
+  grabsFrames?: boolean
   run: (ctx: SceneContext) => Promise<void>
 }
 
@@ -68,12 +75,15 @@ const ALL_SCENES: SceneDefinition[] = [
   ...dataStoriesScene,
   ...brollScene,
   ...siteShortScenes,
+  ...studioGlobeScenes,
+  ...studioMapboxScenes,
 ]
 
 /**
  * CLI flags. Positional = scene name.
  *   --portrait        1080×1920 viewport (site shorts)
- *   --input <path>    site.json for the site-short scenes (exposed as SITE_SHORT_INPUT)
+ *   --input <path>    site.json for the site-short scenes (exposed as SITE_SHORT_INPUT) or the
+ *                     studio scene input of pipeline/studio/capture/globe.py (STUDIO_SCENE_INPUT)
  *   --out <dir>       where the MP4s go (default: public/landing/video)
  *   --batch <path>    JSON [{input, out}, ...]: record many sites in ONE browser
  *                     session (saves the Vite start, the Chrome launch and the
@@ -103,7 +113,9 @@ const GLOBE_URL = `${DEV_SERVER_URL}/globe.html?demo=1`
 async function startDevServer(): Promise<ChildProcess> {
   console.log('Starting Vite dev server...')
 
-  const vite = spawn('npm', ['run', 'dev', '--', '--port', String(DEV_SERVER_PORT)], {
+  // --strictPort: a dev server left running on the port (an interrupted take) must fail this
+  // start, not silently serve the page from an older checkout while Vite moves to the next port
+  const vite = spawn('npm', ['run', 'dev', '--', '--port', String(DEV_SERVER_PORT), '--strictPort'], {
     cwd: join(__dirname, '..'),
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
@@ -282,7 +294,10 @@ function createDemoProxy(page: Page): DemoAPI {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const requestedScene = args.scene
-  if (args.input) process.env.SITE_SHORT_INPUT = args.input
+  if (args.input) {
+    process.env.SITE_SHORT_INPUT = args.input
+    process.env.STUDIO_SCENE_INPUT = args.input
+  }
 
   const baseDir = __dirname
   const outputDir = args.out ?? join(baseDir, '..', 'public', 'landing', 'video')
@@ -338,7 +353,10 @@ async function main() {
 
     for (let t = 0; t < targets.length; t++) {
       const target = targets[t]
-      if (target.input) process.env.SITE_SHORT_INPUT = target.input
+      if (target.input) {
+        process.env.SITE_SHORT_INPUT = target.input
+        process.env.STUDIO_SCENE_INPUT = target.input
+      }
       mkdirSync(target.out, { recursive: true })
       if (targets.length > 1) {
         console.log(`\n${'#'.repeat(60)}`)
@@ -380,6 +398,7 @@ async function main() {
 
         // Run the scene choreography + capture
         await scene.run(ctx)
+        if (scene.grabsFrames) continue
 
         // Stop recorder and save WebM
         const webmPath = join(webmDir, `${scene.name}.webm`)

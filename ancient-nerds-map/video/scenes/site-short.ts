@@ -27,7 +27,7 @@ import type { MapboxKeyframe } from '../../src/utils/demoApi'
 import { getCountryCode } from '../../src/utils/countryFlags'
 import { settle } from '../utils/helpers.js'
 
-interface SiteInput {
+export interface SiteInput {
   name: string
   lat: number
   lng: number
@@ -78,7 +78,7 @@ const SITE_ZOOM = 14.2 // default orbit zoom; site.json overrides per site type
 const ORBIT_PITCH = 62
 const ORBIT_BEARING_FROM = 20
 const ORBIT_BEARING_TO = 110
-const TERRAIN_EXAGGERATION = 1.4
+export const TERRAIN_EXAGGERATION = 1.4
 
 // Start 40° west and a little north so the first second visibly rotates onto the site.
 const START_LNG_OFFSET = -40
@@ -160,7 +160,7 @@ function returnPath(site: SiteInput): MapboxKeyframe[] {
 }
 
 /** Enter Mapbox with the recording look: labels, atmosphere, terrain, no clutter, no raster fades. */
-async function prepareMapbox(ctx: SceneContext, site: SiteInput): Promise<void> {
+export async function prepareMapbox(ctx: SceneContext, site: SiteInput): Promise<void> {
   const { page, demo } = ctx
   await demo.setAutoRotate(false)
   await demo.setSatellite(true)
@@ -183,9 +183,9 @@ async function prepareMapbox(ctx: SceneContext, site: SiteInput): Promise<void> 
   await demo.setTerrain(TERRAIN_EXAGGERATION)
 }
 
-/** Warm the tile/DEM cache along the path, reset to its first pose, then capture. */
-async function recordPath(ctx: SceneContext, path: MapboxKeyframe[], seconds: number): Promise<void> {
-  const { page, demo, fire, recorder } = ctx
+/** Warm the tile/DEM cache along the path and reset to its first pose (studio-mapbox.ts shares it). */
+export async function warmPath(ctx: SceneContext, path: MapboxKeyframe[], seconds: number): Promise<void> {
+  const { page, demo } = ctx
   const samples = Math.max(2, Math.round(seconds * WARMUP_SAMPLES_PER_S))
   for (let i = 0; i <= samples; i++) {
     await demo.mapboxJumpToPathPose(path, i / samples)
@@ -197,8 +197,13 @@ async function recordPath(ctx: SceneContext, path: MapboxKeyframe[], seconds: nu
   await demo.mapboxWaitIdle(15000)
   await realWait(500)
   await settle(page)
-  fire(`window.__DEMO.mapboxPath(${JSON.stringify(path)}, ${seconds * 1000})`)
-  await recorder.capture(page, seconds)
+}
+
+/** Warm the path, then fly it while the recorder captures. */
+async function recordPath(ctx: SceneContext, path: MapboxKeyframe[], seconds: number): Promise<void> {
+  await warmPath(ctx, path, seconds)
+  ctx.fire(`window.__DEMO.mapboxPath(${JSON.stringify(path)}, ${seconds * 1000})`)
+  await ctx.recorder.capture(ctx.page, seconds)
 }
 
 async function runOpening(ctx: SceneContext): Promise<void> {
