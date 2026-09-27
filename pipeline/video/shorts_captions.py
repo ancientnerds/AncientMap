@@ -152,11 +152,20 @@ def srt_text(words: list[Word]) -> str:
     return "\n\n".join(blocks) + "\n"
 
 
-def transcribe_words(audio: Path) -> list[tuple[str, float, float]]:
-    """Recognised words with timestamps from faster-whisper."""
+def transcribe_words(
+    audio: Path, *, device: str = "cpu", device_index: int = 0, compute_type: str = "int8"
+) -> list[tuple[str, float, float]]:
+    """Recognised words with timestamps from faster-whisper.
+
+    The site Shorts keep the CPU defaults. The studio passes device="cuda", device_index=0,
+    compute_type="float16" (spec 4.11: the NVIDIA RTX 3080 is CUDA device 0); CUDA libraries
+    that do not load are a setup error, never a silent CPU run.
+    """
     from faster_whisper import WhisperModel
 
-    model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
+    model = WhisperModel(
+        WHISPER_MODEL, device=device, device_index=device_index, compute_type=compute_type
+    )
     segments, _ = model.transcribe(str(audio), word_timestamps=True, language="en", beam_size=5)
     heard = [(w.word.strip(), float(w.start), float(w.end)) for seg in segments for w in seg.words]
     logger.info("whisper heard %d words in %s", len(heard), audio.name)
