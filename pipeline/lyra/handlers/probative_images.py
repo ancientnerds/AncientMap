@@ -376,7 +376,7 @@ async def embed_probative_images(
     *,
     settings=None,
     emit: Callable[[dict], None] | None = None,
-) -> tuple[str, list[dict], dict, dict[str, int]]:
+) -> tuple[str, list[dict], dict, dict[str, int], dict[str, int]]:
     """Embed probative images into a research paper.
 
     Used by the backfill CLI.
@@ -400,7 +400,7 @@ async def embed_probative_images(
 
     Returns
     -------
-    tuple of (new_paper_text, embedded_list, diversity_dict, strategy_counts).
+    tuple of (new_paper_text, embedded_list, diversity_dict, strategy_counts, skip_reasons).
     `strategy_counts` keys: exact, normalized, first_sentence, section_fallback,
     failed, skipped_fallback_cap. Useful telemetry for tuning the matcher.
     """
@@ -409,7 +409,7 @@ async def embed_probative_images(
 
     if not getattr(settings, "probative_images_enabled", True):
         print("[probative] disabled by config, skipping", flush=True)
-        return (paper_text, [], {})
+        return (paper_text, [], {}, {}, {})
 
     pool = image_candidate_pool or {}
     if not pool:
