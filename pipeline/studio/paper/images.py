@@ -10,18 +10,24 @@ URL, capped at MAX_CANDIDATES, downloaded into images/candidates/ (named by URL 
 content-deduplicated with probative_images._claim_image_content) and exported as image-check
 tasks. It builds the paper without images/selected.json (`build_paper(ws, with_images=False)`):
 it chooses the images for the current draft, so a selection a draft edit made stale does not
-stop it.
+stop it. export_report.json records, per opportunity, what it was exported for (subject,
+queries, section, paragraph) and what became of every candidate.
 
 The workflow (.claude/workflows/theo-image-check.js) looks at every image and writes
 images/verdicts.jsonl: {task_id, verdict: meaningful|weak|misleading|off_topic, depicts,
 subject_box: [x, y, w, h] (fractions of the image) | null, caption, answered_by,
 prompt_sha256}.
 
-import: per opportunity the best checked candidate (evidence before illustration,
-probative_images._limit_tagged), no picture twice in one paper, licence, attribution (artist
-or source name) and source URL present;
-re-encoded as JPEG under images/selected/s<sha8>_<name>.jpg (a changed picture always gets a
-new name) and embedded by `paper number` with theo_image_captions.image_markdown.
+import: an answer vouches only for the task it answered, so the import refuses while
+opportunities.json or draft.md changed since the export (an opportunity added, removed or
+given another subject, queries or paragraph): re-run `paper images-export`. Then, per
+opportunity, the first checked candidate in order (every meaningful one before every weak
+one, each group in rank order) that has licence, attribution (artist or source name) and
+source URL and is not a picture already placed in the paper; re-encoded as JPEG under
+images/selected/s<sha8>_<name>.jpg (a changed picture always gets a new name) and embedded
+by `paper number` with theo_image_captions.image_markdown. One image per opportunity, so
+probative_images._limit_tagged's one-illustration cap is not applied: it would drop the
+fallback illustrations a skipped first one needs.
 """
 
 from __future__ import annotations
@@ -46,7 +52,12 @@ from pipeline.lyra.image_gates import metadata_gate_passes, rank_by_metadata_ove
 from pipeline.lyra.theo_citations import contains_non_latin_script
 from pipeline.studio import handoff
 from pipeline.studio.errors import StudioError
-from pipeline.studio.paper.anchors import anchor_problem, matching_paragraphs, paragraphs
+from pipeline.studio.paper.anchors import (
+    Paragraph,
+    anchor_problem,
+    matching_paragraphs,
+    paragraphs,
+)
 from pipeline.studio.paper.numbering import build_paper, number
 from pipeline.studio.paper.workspace import (
     Dossier,
@@ -72,6 +83,8 @@ ANSWER_SPEC = handoff.AnswerSpec(
     enums={"verdict": VERDICTS},
 )
 OP_ID_RE = re.compile(r"^op-\d{2,}$")
+# The fields of an image task that come from its opportunity and the draft.
+TASK_BASIS = ("subject", "section", "paragraph")
 MAX_CANDIDATES = 8
 MIN_WIDTH = 320
 MAX_CAPTION_CHARS = 120
@@ -154,6 +167,59 @@ def opportunity_problems(ops: Any, report: str) -> list[str]:
     return problems
 
 
+def current_opportunities(ws: PaperWorkspace) -> list[tuple[dict[str, Any], Paragraph]]:
+    """images/opportunities.json checked against the current draft, each op with its paragraph.
+
+    Built without images/selected.json: the images are chosen for the current draft, so a
+    selection a draft edit made stale does not stop images-export or images-import.
+    """
+    built = build_paper(ws, with_images=False)
+    ops = read_json(ws.images_dir / "opportunities.json", "write images/opportunities.json")
+    problems = opportunity_problems(ops, built.markdown)
+    if problems:
+        raise StudioError("images/opportunities.json: " + "; ".join(problems))
+    paras = paragraphs(built.markdown)
+    return [(op, paras[matching_paragraphs(paras, op["anchor_text"])[0]]) for op in ops]
+
+
+def export_basis(op: dict[str, Any], para: Paragraph) -> dict[str, Any]:
+    """What an opportunity's image tasks are exported for: a change makes them stale."""
+    return {
+        "subject": op["subject"],
+        "queries": op["queries"],
+        "section": para.section,
+        "paragraph": para.text,
+    }
+
+
+def stale_opportunities(
+    current: list[tuple[dict[str, Any], Paragraph]],
+    exported: dict[str, dict[str, Any]],
+    rows: list[dict[str, Any]],
+) -> list[str]:
+    """The op ids whose exported tasks no longer match opportunities.json and the draft.
+
+    An op is stale when the export did not cover it, recorded another subject, queries,
+    section or paragraph for it, or one of its task rows carries another subject, section
+    or paragraph; an op the export covered but opportunities.json no longer names is stale
+    too (its tasks would still be demanded).
+    """
+    stale: list[str] = []
+    for op, para in current:
+        basis = export_basis(op, para)
+        record = exported.get(op["id"])
+        own = [r for r in rows if r["opportunity_id"] == op["id"]]
+        if (
+            record is None
+            or {k: record[k] for k in basis} != basis
+            or any(r[k] != basis[k] for r in own for k in TASK_BASIS)
+        ):
+            stale.append(op["id"])
+    named = {op["id"] for op, _para in current}
+    exported_ids = set(exported) | {r["opportunity_id"] for r in rows}
+    return stale + sorted(exported_ids - named)
+
+
 def pool_candidates(dossier: Dossier) -> list[ImageCandidate]:
     flat = [ImageCandidate.from_dict(c) for cands in dossier.data["images"].values() for c in cands]
     return deduplicate_candidates(flat)
@@ -230,22 +296,17 @@ def export_images(
 ) -> dict[str, int]:
     from pipeline.lyra.handlers.probative_images import _claim_image_content
 
-    built = build_paper(ws, with_images=False)
-    ops = read_json(ws.images_dir / "opportunities.json", "write images/opportunities.json")
-    problems = opportunity_problems(ops, built.markdown)
-    if problems:
-        raise StudioError("images/opportunities.json: " + "; ".join(problems))
+    current = current_opportunities(ws)
     dossier = load_dossier(ws)
     cand_dir = ws.images_dir / "candidates"
     cand_dir.mkdir(parents=True, exist_ok=True)
-    paras = paragraphs(built.markdown)
 
     async def run() -> tuple[list[handoff.Task], dict[str, Any]]:
+        ops = [op for op, _para in current]
         gathered, dropped = await _gather(ops, pool_candidates(dossier), search)
         tasks: list[handoff.Task] = []
         report: dict[str, Any] = {}
-        for op in ops:
-            para = paras[matching_paragraphs(paras, op["anchor_text"])[0]]
+        for op, para in current:
             state = _DedupState()
             rows: list[dict[str, str]] = []
             for rank, (cand, found_by) in enumerate(gathered[op["id"]]):
@@ -284,12 +345,14 @@ def export_images(
                 )
                 tasks.append(handoff.Task("image", prompt, payload))
             rows.extend({"url": url, "result": "metadata gate"} for url in dropped[op["id"]])
-            report[op["id"]] = rows
+            report[op["id"]] = {**export_basis(op, para), "candidates": rows}
         return tasks, report
 
     tasks, report = asyncio.run(run())
+    # The report after the tasks: an export that export_tasks refuses leaves both as they were.
+    counts = handoff.export_tasks(ws.images_dir, tasks)
     write_json(ws.images_dir / "export_report.json", report)
-    return handoff.export_tasks(ws.images_dir, tasks)
+    return counts
 
 
 def answer_check(answer: dict[str, Any], _task: dict[str, Any]) -> list[str]:
@@ -364,29 +427,43 @@ def _entry(
 
 
 def import_images(ws: PaperWorkspace) -> dict[str, Any]:
-    from pipeline.lyra.handlers.probative_images import _claim_image_content, _limit_tagged
+    """Merge the answers, refuse a stale export or unanswered tasks, then select and embed.
+
+    The answers are merged before the staleness check: each is keyed by the hash of the
+    exact prompt it answered, so a re-export keeps the answers of every unchanged task.
+    """
+    from pipeline.lyra.handlers.probative_images import _claim_image_content
 
     accepted = handoff.import_answers(ws.images_dir, ANSWER_SPEC, answer_check)
     rows = handoff.read_jsonl(ws.images_dir / handoff.TASKS_FILE)
+    current = current_opportunities(ws)
+    exported = read_json(ws.images_dir / "export_report.json", "run `paper images-export`")
+    stale = stale_opportunities(current, exported, rows)
+    if stale:
+        raise StudioError(
+            f"images/tasks.jsonl was exported for other opportunities or another draft: {stale} "
+            "(added, removed, or given another subject, queries or paragraph since). Run "
+            "`paper images-export` again, answer its pending tasks and run `paper images-import`"
+        )
     unanswered = [r["ref"] for r in rows if r["task_id"] not in accepted]
     if unanswered:
         raise StudioError(
             f"{len(unanswered)} image tasks have no accepted answer: {unanswered[:8]}"
         )
-    ops = read_json(ws.images_dir / "opportunities.json", "write images/opportunities.json")
     selected_dir = ws.images_dir / "selected"
     selected_dir.mkdir(parents=True, exist_ok=True)
     paper_state = _DedupState()
     chosen: list[dict[str, Any]] = []
     report: dict[str, str] = {}
-    for op in ops:
-        tagged = [
+    for op, _para in current:
+        kept = [
             (r, accepted[r["task_id"]]["verdict"] == "meaningful")
             for r in sorted(rows, key=lambda r: r["rank"])
             if r["opportunity_id"] == op["id"] and accepted[r["task_id"]]["verdict"] in KEEP
         ]
         picked = None
-        for row, _is_evidence in _limit_tagged(tagged, len(tagged)):
+        # Every meaningful candidate before every weak one, rank order kept within each.
+        for row, _is_evidence in sorted(kept, key=lambda t: not t[1]):
             cand = row["candidate"]
             attributed = cand["artist"].strip() or cand["source"].strip()
             if not cand["license"].strip() or not cand["url"].strip() or not attributed:
