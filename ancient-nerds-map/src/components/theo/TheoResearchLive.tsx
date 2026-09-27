@@ -18,22 +18,60 @@ import { NervLoadingBar } from '../NervLoadingBar'
 // ---------------------------------------------------------------------------
 
 // 'source_audit' removed 2026-08-05: no live SSE event ever carries that
-// stage id (see the matching removal in types/pipeline.ts), so it was
-// dead weight that also permanently capped doneCount one short of
-// totalCount in computeTheoProgress below.
+// stage id (see the matching removal in types/pipeline.ts).
+// Research-only since 2026-09-26: the run ends at the dossier and the paper
+// is written in a Claude session, so 'paper_assembly', 'quality_judge' and
+// 'image_generation' are gone with the M3 writing chain.
 const THEO_STAGE_WEIGHTS: Record<string, number> = {
   question_analysis: 5,
-  web_search: 20,
-  specialist_analysis: 30,
-  synthesis: 10,
-  debate: 10,
+  web_search: 25,
+  specialist_analysis: 35,
+  synthesis: 15,
+  debate: 15,
   moderator: 5,
-  paper_assembly: 10,
-  quality_judge: 5,
-  image_generation: 5,
 }
 
 const THEO_STAGE_ORDER = Object.keys(THEO_STAGE_WEIGHTS)
+
+// ---------------------------------------------------------------------------
+// Research phases — the strip across the top of the live view
+// ---------------------------------------------------------------------------
+
+export const THEO_PHASES = ['decomposing', 'exploring', 'cross_pollinating', 'synthesizing', 'debating', 'moderating', 'dossier'] as const
+type TheoPhase = (typeof THEO_PHASES)[number]
+
+const THEO_PHASE_LABELS: Record<TheoPhase, string> = {
+  decomposing: 'DECOMPOSE',
+  exploring: 'EXPLORE',
+  cross_pollinating: 'CROSS-POLL',
+  synthesizing: 'SYNTHESIZE',
+  debating: 'DEBATE',
+  moderating: 'MODERATE',
+  dossier: 'DOSSIER',
+}
+
+const PHASE_ORDER: readonly string[] = ['connecting', ...THEO_PHASES, 'done']
+
+/** The research phase a pipeline event moves the live view to, or null when it moves none. */
+export function phaseForStage(stage: string, status: string): string | null {
+  if (stage === 'decomposition') return status === 'done' ? 'exploring' : 'decomposing'
+  if (stage.startsWith('search_') || stage.startsWith('specialist_')) return 'exploring'
+  if (stage === 'cross_pollination') return status === 'done' ? 'exploring' : 'cross_pollinating'
+  if (stage === 'synthesis') return status === 'done' ? 'debating' : 'synthesizing'
+  if (stage === 'debate') return status === 'done' ? 'moderating' : 'debating'
+  if (stage === 'moderator') return status === 'done' ? 'dossier' : 'moderating'
+  if (stage === 'dossier') return status === 'done' ? 'done' : 'dossier'
+  return null
+}
+
+/** Sub-label of the finished progress bar, from the terminal 'done' event's status. */
+export function doneSublabel(status: string | null): string {
+  if (status === 'researched') return 'DOSSIER READY'
+  if (status === 'failed') return 'RESEARCH FAILED'
+  if (status === 'cancelled') return 'RESEARCH CANCELLED'
+  if (status === 'deferred') return 'RESEARCH DEFERRED'
+  return 'RESEARCH FINISHED'
+}
 
 // ---------------------------------------------------------------------------
 // Search connectors — display names for the backend adapter ids
@@ -128,7 +166,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [toolsUsed, setToolsUsed] = useState(0)
   const [specialistInfo, setSpecialistInfo] = useState('')
   const [debateRound, setDebateRound] = useState('')
-  const [qualityFlash, setQualityFlash] = useState<{ score: number; badge: string } | null>(null)
+  const [doneStatus, setDoneStatus] = useState<string | null>(null)
   const [subtaskProgress, setSubtaskProgress] = useState<{ done: number; total: number }>({ done: 0, total: 1 })
 
   // V2 angle tracking
@@ -273,10 +311,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
           if (data.stage === 'web_search' && data.status === 'done' && typeof meta.sources_found === 'number') {
             setSourcesFound(meta.sources_found)
           }
-          if (data.stage === 'quality_judge' && data.status === 'done' && typeof meta.score === 'number') {
-            setQualityFlash({ score: meta.score as number, badge: (meta.badge as string) || '' })
-            setTimeout(() => setQualityFlash(null), 8000)
-          }
         }
 
         // Subtask LED tracking — reset on stage start, fill on stage done
@@ -352,13 +386,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         }
 
         // Track research phase from pipeline stage names
-        if (stage === 'decomposition') setResearchPhase(data.status === 'done' ? 'exploring' : 'decomposing')
-        else if (stage.startsWith('search_') || stage.startsWith('specialist_')) setResearchPhase('exploring')
-        else if (stage === 'cross_pollination') setResearchPhase(data.status === 'done' ? 'exploring' : 'cross_pollinating')
-        else if (stage === 'synthesis') setResearchPhase(data.status === 'done' ? 'debating' : 'synthesizing')
-        else if (stage === 'debate') setResearchPhase(data.status === 'done' ? 'writing' : 'debating')
-        else if (stage === 'paper') setResearchPhase(data.status === 'done' ? 'judging' : 'writing')
-        else if (stage === 'quality_judge') setResearchPhase(data.status === 'done' ? 'done' : 'judging')
+        const nextPhase = phaseForStage(stage, data.status as string)
+        if (nextPhase) setResearchPhase(nextPhase)
 
         // Collect phase details for clickable drilldown
         if (data.status === 'done' && meta) {
@@ -367,7 +396,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             : stage === 'cross_pollination' ? 'cross_pollinating'
             : stage === 'synthesis' ? 'synthesizing'
             : stage === 'debate' ? 'debating'
-            : stage === 'quality_judge' ? 'judging'
+            : stage === 'moderator' ? 'moderating'
+            : stage === 'dossier' ? 'dossier'
             : stage.startsWith('search_') || stage.startsWith('specialist_') ? 'exploring'
             : null
           if (phaseKey) {
@@ -377,7 +407,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
             else if (stage === 'cross_pollination' && meta.enriched_angles) detail = `Enriched ${meta.enriched_angles} angles, ${meta.convergent_patterns || 0} convergent patterns`
             else if (stage === 'synthesis' && meta.consensus != null) detail = `${meta.consensus} consensus, ${meta.contested || 0} contested, ${meta.unique || 0} unique`
             else if (stage === 'debate' && meta.rounds) detail = `${meta.rounds} rounds, ${meta.challenges || 0} challenges, ${meta.defenses || 0} defenses`
-            else if (stage === 'quality_judge' && meta.score) detail = `Score: ${meta.score}/100 (${meta.badge || '?'})`
+            else if (stage === 'moderator' && meta.final_claims != null) detail = `${meta.final_claims} final, ${meta.revised_claims || 0} revised, ${meta.speculative_claims || 0} speculative claims`
+            else if (stage === 'dossier' && meta.cited_sources != null) detail = `${meta.full_text || 0} of ${meta.cited_sources} cited sources archived in full`
             if (detail) {
               setPhaseDetails(prev => ({ ...prev, [phaseKey]: [...(prev[phaseKey] || []), detail] }))
             }
@@ -441,6 +472,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         // Final sync to ensure complete text
         setDisplayText(reportTextRef.current)
         setDisplayThinking(thinkingRef.current)
+        setDoneStatus(typeof data.status === 'string' ? data.status : null)
         setDone(true)
         break
       case 'error':
@@ -576,11 +608,9 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         {/* Phase Indicator */}
         {!done && (
           <div className="theo-phase-strip">
-            {(['decomposing', 'exploring', 'cross_pollinating', 'synthesizing', 'debating', 'writing', 'judging'] as const).map(phase => {
-              const labels: Record<string, string> = { decomposing: 'DECOMPOSE', exploring: 'EXPLORE', cross_pollinating: 'CROSS-POLL', synthesizing: 'SYNTHESIZE', debating: 'DEBATE', writing: 'WRITE', judging: 'JUDGE' }
-              const phaseOrder = ['connecting', 'decomposing', 'exploring', 'cross_pollinating', 'synthesizing', 'debating', 'writing', 'judging', 'done']
-              const currentIdx = phaseOrder.indexOf(researchPhase)
-              const thisIdx = phaseOrder.indexOf(phase)
+            {THEO_PHASES.map(phase => {
+              const currentIdx = PHASE_ORDER.indexOf(researchPhase)
+              const thisIdx = PHASE_ORDER.indexOf(phase)
               const status = thisIdx < currentIdx ? 'done' : thisIdx === currentIdx ? 'active' : 'pending'
               const hasDetails = (phaseDetails[phase] || []).length > 0
               return (
@@ -589,7 +619,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                   className={`theo-phase-box theo-phase-box--${status}${selectedPhase === phase ? ' theo-phase-box--selected' : ''}${hasDetails ? ' theo-phase-box--has-detail' : ''}`}
                   onClick={() => setSelectedPhase(selectedPhase === phase ? null : phase)}
                 >
-                  {labels[phase]}
+                  {THEO_PHASE_LABELS[phase]}
                 </button>
               )
             })}
@@ -617,7 +647,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         {/* NERV Progress Bar */}
         <div className="theo-live-progress">
           {done ? (
-            <NervLoadingBar label="COMPLETE" sublabel="RESEARCH FINISHED" progress={100} counter={`${doneNodes.length || Object.keys(angles).length} stages`} ledsDone={totalCount || Object.keys(angles).length} ledsTotal={totalCount || Object.keys(angles).length} />
+            <NervLoadingBar label="COMPLETE" sublabel={doneSublabel(doneStatus)} progress={100} counter={`${doneNodes.length || Object.keys(angles).length} stages`} ledsDone={totalCount || Object.keys(angles).length} ledsTotal={totalCount || Object.keys(angles).length} />
           ) : Object.keys(angles).length > 0 ? (() => {
             const angleList = Object.values(angles)
             const saturatedCount = angleList.filter(a => a.saturated).length
@@ -688,12 +718,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 </span>
               </div>
             ))}
-          </div>
-        )}
-
-        {qualityFlash && (
-          <div className="theo-quality-flash">
-            Quality: {qualityFlash.score}/100 — {qualityFlash.badge}
           </div>
         )}
 
